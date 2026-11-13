@@ -12,8 +12,9 @@ guide:
     app_install(visit: true), and publishing and installing: app_publish,
     app_install, app_update, the gallery, an installed copy's independent data
     and borrowed connections, how it runs like the space's own apps and the
-    sandboxed setting, version pinning, and what an update does to the data
-    people saved.
+    sandboxed setting, version pinning, what an update does to the data
+    people saved, and sharing a skill: published, reviewed, installed and
+    updated with the same tools.
 ---
 
 # Access, Publishing and Installing
@@ -631,6 +632,32 @@ something common, such as a vote page, a chore chart or a signup sheet, check it
 first. Installing takes a second and gives them their own copy with their own
 data, and you can change their copy afterwards with `app_files`. An install
 costs only one of the space's app slots.
+
+## Sharing a skill
+
+A space keeps skills, the instructions its Operator and a person's connected
+Claude are offered. The same tools share one, with `skill` naming it where an
+app would be named:
+
+- **`app_publish(skill, name?, about?, space?)`** offers a skill the space keeps
+  under a platform-wide name, the skill's own title the first time. Only the
+  space's owner may. Each change to its text is a new version.
+- **Every version is reviewed before anyone may install it.** A skill is
+  instructions an agent follows, so yaks.app reads each version first: what it
+  fetches, reads or sends, and anything outside its subject. Until yaks.app
+  lists it, `app_install` refuses that version, and the answer says it is
+  awaiting review.
+- **`app_published()`** lists the skills anyone may install, beside the apps.
+  `app_published(name)` reads one skill in full.
+- **`app_install(name, as?, space?)`** keeps a copy in the installer's space,
+  under the skill's title or `as`. The copy stays at the version it took.
+- **`app_update(skill, space?)`** moves a copy to the newest reviewed version
+  and lists what changed: its description, and the lines of its instructions
+  removed (`-`) and added (`+`). A newer version still awaiting review leaves
+  the copy where it is.
+- **`app_unpublish(skill, space?)`** withdraws the offer. Every copy stays.
+
+A copy of somebody else's skill is not republished: it is theirs to offer.
 
 ---
 

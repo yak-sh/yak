@@ -4,18 +4,23 @@
 // session is (@yaks/harness `skillItems`, `skillRead`). A person's connected
 // Claude is offered those of every space they write in, through @yaks/mcp's
 // skills extension, beside the guide's pages.
-import type { Graph } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
 import type { SkillFiles } from '@yaks/mcp/skills'
 import { writes } from '@yaks/member'
 import { repoSkills } from '@yaks/persona/skills'
 import { renderSkill } from '@yaks/persona/skill-text'
 import { builderOf, SPACE } from './build-door.ts'
 import { caught } from './defects.ts'
-import { vouched } from './session.ts'
-import { asCaller, type Ctx } from './tool.ts'
+import { vouched, type Who } from './session.ts'
+import { asCaller, type Ctx, refuse } from './tool.ts'
+import type { Space } from './directory.ts'
 
 /** The Builder's route answering {@link kept}. */
 export let SKILLS = '/operator/skills'
+/** The Builder's route answering one skill, by title ({@link skillNamed}). */
+export let SKILL = '/operator/skill'
+/** The Builder's route keeping a copy of a shared skill ({@link keepCopy}). */
+export let KEEP = '/operator/skill/keep'
 
 // A skill's name as the Agent Skills format takes it, as @yaks/mcp checks
 // it: one row that is not is left out of the listing rather than refusing
@@ -73,4 +78,107 @@ export let spaceSkills = async (ctx: Ctx): Promise<SkillFiles> => {
     }
   }))
   return { scope: 'spaces', files: new Map(each.flat()) }
+}
+
+/** A skill as one space shares it and another keeps it: its name, the line
+ * saying when to use it, its instructions and its frontmatter. */
+export type SkillText = {
+  title: string
+  description: string
+  body: string
+  skill: Record<string, unknown>
+}
+
+let textOf = (b: Bundle): SkillText => ({
+  title: String((b.doc as { title?: string }).title ?? ''),
+  description: String((b.doc as { body?: string }).body ?? ''),
+  body: String((b.content as { body?: string } | undefined)?.body ?? ''),
+  skill: (b.skill ?? {}) as Record<string, unknown>,
+})
+
+/** The skill a store keeps under `title`, or none. */
+export let skillNamed = async (
+  g: Graph,
+  title: string,
+): Promise<Bundle | undefined> =>
+  (await repoSkills(g)).find((b) =>
+    (b.doc as { title?: string }).title == title
+  )
+
+/** One skill's text, as `g` reads it, or null. */
+export let skillText = async (g: Graph, title: string) => {
+  let b = await skillNamed(g, title)
+  return b
+    ? {
+      eid: b.entity.eid,
+      ...textOf(b),
+      installed: (b.installed ?? null) as
+        | { of?: string; version?: number }
+        | null,
+    }
+    : null
+}
+
+/** A shared skill's copy: its text and the offer and version it took. */
+export type Copy = SkillText & { of: string; version: number }
+
+/**
+ * Keep a copy of a shared skill under its title: a new row, or the text of
+ * the copy already kept from the same offer replaced, which is an update. A
+ * skill of the space's own, or one copied from another offer, under the same
+ * title is refused: a store keeps one skill per title. Answers the row and
+ * the text it held before, if any.
+ */
+export let keepCopy = async (
+  g: Graph,
+  copy: Copy,
+  by: string,
+): Promise<{ eid: string; was: SkillText | null }> => {
+  let held = await skillNamed(g, copy.title)
+  let of = (held?.installed as { of?: string } | undefined)?.of
+  if (held && of != copy.of) {
+    throw refuse(
+      'conflict',
+      `this space already keeps a skill called ${copy.title} — install ` +
+        'this one under another title (as: …)',
+    )
+  }
+  let eid = held?.entity.eid ?? crypto.randomUUID()
+  await g.apply([{
+    entity: { eid },
+    doc: { title: copy.title, body: copy.description },
+    content: { body: copy.body },
+    skill: copy.skill,
+    installed: { of: copy.of, version: copy.version },
+    $actor: { by },
+  }], { trusted: true })
+  return { eid, was: held ? textOf(held) : null }
+}
+
+/** Ask a space's Operator at one of its skill routes, as the caller with the
+ * role they hold there. A refusal there is the caller's refusal. */
+export let askSkills = async <T>(
+  ctx: Ctx,
+  space: Space,
+  role: Who['role'],
+  path: string,
+  body: Record<string, unknown>,
+): Promise<T> => {
+  let answer = await builderOf(ctx.env, space.eid)(() =>
+    new Request('https://builder' + path, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        [SPACE]: space.eid,
+        ...vouched(asCaller(ctx, role)),
+      },
+      body: JSON.stringify(body),
+    })
+  )
+  let said = await answer.json() as T & { code?: string; message?: string }
+  if (!answer.ok) {
+    if (said.code && said.message) throw refuse(said.code, said.message)
+    throw new Error(`${path} answered ${answer.status}`)
+  }
+  return said
 }

@@ -43,6 +43,7 @@ import { channeled } from './channel-move.ts'
 import { mailDoc } from '@yaks/mail/vocab'
 import { notifyDoc } from '@yaks/notify/vocab'
 import { operatorDoc } from './operator-vocab.ts'
+import { platformDoc } from '@yaks/platform/vocab'
 import { OWNERS, owning } from './operator-owner.ts'
 import { draftDoc, drafts } from '@yaks/draft'
 import { memoryDoc } from '@yaks/memory/vocab'
@@ -74,6 +75,9 @@ export let operatorVocab = loadVocab([
   artifactDoc,
   mailDoc,
   operatorDoc,
+  // A skill installed from another space keeps where it came from and the
+  // version it took (shared-skill.ts).
+  { $defs: { installed: platformDoc.$defs!.installed } },
   {
     $defs: Object.fromEntries(
       Object.entries(phoneDoc.$defs!).filter(([name]) =>

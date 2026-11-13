@@ -240,7 +240,7 @@
       "properties": {
         "of": {
           "type": "string",
-          "ref": "app",
+          "ref": "entity",
           "death": "detach"
         },
         "version": {
@@ -257,7 +257,7 @@
           "description": "the inverse sandbox mark kept in step for rollback readers"
         }
       },
-      "description": "a copy of somebody else\u2019s app, at the version it was copied from"
+      "description": "a copy of something somebody else shared (an app, a skill), at the version it was copied from"
     },
     "trend": {
       "component": true,
@@ -395,7 +395,7 @@
         "status": {
           "type": "string",
           "stamped": true,
-          "description": "that subscription's status as Stripe last said it (`active`, `past_due`, `canceled`, \u2026), mirrored by the webhook and never moved by anything here: Stripe's state machine, not ours"
+          "description": "that subscription's status as Stripe last said it (`active`, `past_due`, `canceled`, …), mirrored by the webhook and never moved by anything here: Stripe's state machine, not ours"
         },
         "until": {
           "type": "string",
@@ -458,9 +458,111 @@
         },
         "about": {
           "type": "string"
+        },
+        "space": {
+          "type": "string",
+          "ref": "space",
+          "death": "cascade",
+          "description": "the space that offers it, on a shared thing that does not say so itself; an app says by app.space"
         }
       },
-      "description": "the name and version this app appears under in the gallery"
+      "description": "the platform-wide name and version anything shared (an app, a skill) is offered under"
+    },
+    "gallery": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "asked_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when its publisher asked for it to be listed"
+        },
+        "listed_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when the platform listed it"
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when the last decision was made"
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "declined"
+          ],
+          "stamped": true
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who decided"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the session or credential the decision came through"
+        },
+        "reason": {
+          "type": "string",
+          "stamped": true,
+          "description": "why it was approved or declined"
+        }
+      },
+      "description": "whether something published asked to be listed on yaks.app and what the platform answered; server-owned, since a listing is the platform's word"
+    },
+    "code_review": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "approve",
+            "reject"
+          ],
+          "stamped": true
+        },
+        "findings": {
+          "type": "string",
+          "stamped": true,
+          "description": "what the review found"
+        },
+        "version": {
+          "type": "number",
+          "stamped": true,
+          "description": "the published version it read"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who reviewed it"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the session that reviewed it"
+        }
+      },
+      "description": "an agent's review of somebody else's published app or skill before the platform's owner decides its listing; server-owned"
     },
     "report": {
       "component": true,
@@ -687,7 +789,7 @@
           "description": "the immutable handle its storage uses, independent of its current address"
         }
       },
-      "description": "one customer\u2019s area of the platform, at its own slug",
+      "description": "one customer’s area of the platform, at its own slug",
       "before": [
         "doc"
       ]

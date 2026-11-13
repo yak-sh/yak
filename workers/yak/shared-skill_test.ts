@@ -1,0 +1,199 @@
+// A skill is shared as an app is (T-161782): published from a space under a
+// platform-wide name, reviewed before anyone may install it, installed as a
+// copy pinned to the version reviewed, and updated by pulling the next
+// reviewed version, which says what changed.
+import { test } from '@yaks/testing'
+import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
+import { platform } from './testing.ts'
+import { owned } from './directory-fixture.ts'
+import { directoryOf, META } from './directory.ts'
+import { operatorMemory } from './operator-testing.ts'
+import { operatorRequest } from './operator-host.ts'
+import { skillText } from './operator-skills.ts'
+import { SPACE } from './build-door.ts'
+import { replyTo } from './host.ts'
+import { INTERNAL } from './mail-config.ts'
+import type { Letter } from './mail.ts'
+import { call, type Ctx } from './tools.ts'
+
+// Each space's Operator store, answered at its routes as the Builder does.
+let stores = new Map<string, ReturnType<typeof operatorMemory>>()
+let never = (): never => {
+  throw new Error('nothing stops here')
+}
+let storeOf = (space: string) => {
+  if (!stores.has(space)) stores.set(space, operatorMemory())
+  return stores.get(space)!
+}
+let { env } = platform('shared-skill', {
+  MAIL_DEV: '1',
+  BUILDER: {
+    idFromName: (name: string) => name,
+    get: (id: string) => ({
+      fetch: async (request: Request) => {
+        let space = request.headers.get(SPACE) ?? String(id)
+        let store = storeOf(space)
+        let answer = await operatorRequest(
+          { store, named: () => Promise.resolve(null), stop: () => never() },
+          {
+            person: request.headers.get('x-yak-person')!,
+            role: request.headers.get('x-yak-role') as 'owner',
+            space,
+            administrative: false,
+          },
+          new URL(request.url).pathname,
+          await request.json(),
+          () => undefined,
+        )
+        return answer ?? new Response('', { status: 404 })
+      },
+    }),
+  },
+} as never)
+
+// The letters sent, as `MAIL_DEV` prints them.
+let sent: Letter[] = []
+let print = console.log
+console.log = (...said: unknown[]) => {
+  let m = String(said[0]).match(/^yak-mail (\{.*\})$/s)
+  m ? sent.push(JSON.parse(m[1])) : print(...said)
+}
+let letterTo = (to: string) => sent.findLast((l) => [l.to].flat().includes(to))
+
+let dir = directoryOf(env.STORE)
+let as = (person: string): Ctx => ({ env, dir, person })
+let maker = as(crypto.randomUUID())
+let taker = as(crypto.randomUUID())
+let kitchen = await owned(maker, 'kitchen')
+let shop = await owned(taker, 'shop')
+// The platform's admin is an owner of its meta space.
+let admin = as(crypto.randomUUID())
+await dir.apply({
+  entities: [{ entity: { eid: admin.person }, person: {} }, {
+    entity: { eid: crypto.randomUUID() },
+    member: {
+      person: admin.person,
+      space: (await dir.space(META.space))!.eid,
+      role: 'owner',
+    },
+  }],
+}, { 'x-yak-person': admin.person, 'x-yak-kernel': '1' })
+
+let skillIn = (space: string, title: string, body: string) =>
+  storeOf(space).g.apply([{
+    entity: { eid: crypto.randomUUID() },
+    skill: {},
+    doc: { title, body: 'Write a pitch for a product page' },
+    content: { body },
+  }])
+await skillIn(kitchen, 'pitch-copy', 'Lead with what the reader gets.\n')
+let run = async (ctx: Ctx, name: string, args: Record<string, unknown>) =>
+  (await call(ctx, name, args)).text
+let refused = async (
+  ctx: Ctx,
+  name: string,
+  args: Record<string, unknown>,
+  says: string,
+) =>
+  assertStringIncludes(
+    (await assertRejects(() => call(ctx, name, args), Error)).message,
+    says,
+  )
+// Both answers to a review: a stranger's skill is read by an agent first.
+let reviewed = async (verdict = 'approve') => {
+  await run(admin, 'gallery_code_review', {
+    skill: 'pitch-copy',
+    verdict,
+    findings: 'Writes copy and reaches nothing outside it.',
+  })
+  await run(admin, 'gallery_review', {
+    skill: 'pitch-copy',
+    decision: 'approve',
+  })
+}
+let copy = () => skillText(storeOf(shop).g, 'pitch-copy')
+
+test('a published skill is installable only once yaks.app has reviewed it', async () => {
+  assertStringIncludes(
+    await run(maker, 'app_publish', {
+      space: 'kitchen',
+      skill: 'pitch-copy',
+      about: 'Pitches that lead with the reader',
+    }),
+    'published the skill pitch-copy as pitch-copy v1 from kitchen',
+  )
+  assertStringIncludes(
+    letterTo(INTERNAL)!.body,
+    'app_published --name pitch-copy',
+  )
+  await refused(taker, 'app_install', {
+    space: 'shop',
+    name: 'pitch-copy',
+  }, 'awaiting review')
+  // Nobody browsing sees it yet; the admin, who reviews it, reads it whole.
+  assertEquals(
+    (await run(taker, 'app_published', {})).includes('pitch-copy'),
+    false,
+  )
+  assertStringIncludes(
+    await run(admin, 'app_published', { name: 'pitch-copy' }),
+    '    Lead with what the reader gets.',
+  )
+  await reviewed()
+  let letter = letterTo(replyTo(env))!
+  assertStringIncludes(letter.body, 'An agent reviewed it: approve.')
+  assertStringIncludes(letter.body, 'Lead with what the reader gets.')
+  assertStringIncludes(
+    await run(taker, 'app_published', {}),
+    '- pitch-copy v1 — skill pitch-copy: Pitches that lead with the reader',
+  )
+})
+
+test('an installed skill is a copy pinned to the version it took', async () => {
+  assertStringIncludes(
+    await run(taker, 'app_install', { space: 'shop', name: 'pitch-copy' }),
+    'installed the skill pitch-copy (pitch-copy v1) in shop',
+  )
+  let had = await copy()
+  assertEquals(had?.body, 'Lead with what the reader gets.\n')
+  assertEquals(had?.installed?.version, 1)
+  await refused(taker, 'app_publish', {
+    space: 'shop',
+    skill: 'pitch-copy',
+  }, 'theirs to offer')
+})
+
+test('a new version waits for review, and an update names what changed', async () => {
+  let [mine] = await storeOf(kitchen).g.read('.skill')
+  await storeOf(kitchen).g.apply([{
+    entity: { eid: mine.entity.eid },
+    content: { body: 'Lead with what the reader gets.\nEnd on one ask.\n' },
+  }])
+  assertStringIncludes(
+    await run(maker, 'app_publish', { space: 'kitchen', skill: 'pitch-copy' }),
+    'reader\nawaiting review',
+  )
+  assertStringIncludes(
+    await run(taker, 'app_update', { space: 'shop', skill: 'pitch-copy' }),
+    'v2 of pitch-copy is awaiting review; pitch-copy stays at v1',
+  )
+  await reviewed()
+  assertEquals(
+    await run(taker, 'app_update', { space: 'shop', skill: 'pitch-copy' }),
+    'updated pitch-copy from v1 to v2 of pitch-copy:\n+ End on one ask.',
+  )
+  assertEquals((await copy())?.installed?.version, 2)
+  assertStringIncludes(
+    await run(taker, 'app_update', { space: 'shop', skill: 'pitch-copy' }),
+    'already at v2',
+  )
+})
+
+test('a published name is one thing on the whole platform', async () => {
+  await skillIn(shop, 'pitches', 'Another way.\n')
+  await refused(taker, 'app_publish', {
+    space: 'shop',
+    skill: 'pitches',
+    name: 'pitch-copy',
+  }, "kitchen's skill pitch-copy")
+})

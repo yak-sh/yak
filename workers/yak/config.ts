@@ -211,8 +211,9 @@ export let directoryConfig: Config = {
       },
     },
     // The directory keeps the persona every Operator is worn on
-    // (operator-persona.ts).
-    ...machine(['person', 'persona']),
+    // (operator-persona.ts), and each skill a space publishes, at the version
+    // on offer (shared-skill.ts).
+    ...machine(['person', 'persona', 'skill']),
     '@yaks/id',
     ...addressed,
     '@yaks/doc',

@@ -61,6 +61,7 @@ import { opened, seal } from './lib/token.ts'
 import {
   type App,
   type Directory,
+  type Shared,
   type Space,
   stamp,
   url,
@@ -114,10 +115,10 @@ export let LIFE = 7 * 24 * 60 * 60_000
 // a decline into an approval by editing an address.
 export type Ticket = { app: string; list: boolean; exp: number }
 
-export let ticket = (app: App, list: boolean, secret: string) =>
+export let ticket = (shared: Shared, list: boolean, secret: string) =>
   seal(
     'review',
-    { app: app.eid, list, exp: Date.now() + LIFE } satisfies Ticket,
+    { app: shared.eid, list, exp: Date.now() + LIFE } satisfies Ticket,
     secret,
   )
 
@@ -646,6 +647,8 @@ let confirm = (at: {
   token: string
   why?: string
   status?: number
+  /** what is being listed: an app by default */
+  what?: 'app' | 'skill'
 }, env: Host) =>
   drawn(
     head(
@@ -656,7 +659,9 @@ let confirm = (at: {
       false,
     ),
     join(
-      at.list ? 'List this app?' : 'Decline this app?',
+      at.list
+        ? `List this ${at.what ?? 'app'}?`
+        : `Decline this ${at.what ?? 'app'}?`,
       at.why ? h(Notice, { mod: 'negative', role: 'alert' }, at.why) : null,
       note(
         h('b', null, at.title),
@@ -668,7 +673,11 @@ let confirm = (at: {
         `by ${at.owner}`,
       ),
       note(
-        at.list
+        at.what == 'skill'
+          ? at.list
+            ? 'Anyone on yaks.app will be able to install this version.'
+            : 'It stays published, and nobody may install it.'
+          : at.list
           ? 'This app will appear in the public gallery.'
           : 'The app stays published. Its owner can submit it again.',
       ),
@@ -697,12 +706,12 @@ let done = (env: Host, title: string, lead: string, status = 200) =>
 //
 // Both words are server-owned (vocab.ts), so both go through the kernel's own
 // door (directory.ts `stamp`) rather than a person's write — a listing is the
-// platform's word about an app, never the app's about itself.
+// platform's word about what is shared, never its own about itself.
 
-export let ask = (env: Env, app: App, now = new Date()) =>
+export let ask = (env: Env, shared: Shared, now = new Date()) =>
   stamp(env, {
     entities: [{
-      entity: { eid: app.eid },
+      entity: { eid: shared.eid },
       gallery: {
         asked_at: now.toISOString(),
         listed_at: null,
@@ -720,15 +729,15 @@ export let ask = (env: Env, app: App, now = new Date()) =>
  * ask that skips review. A decline clears the pending ask while retaining who
  * decided and why. */
 export let decision = (
-  app: App,
+  shared: Shared,
   approve: boolean,
   actor: Actor,
   reason = '',
   now = new Date(),
 ): Bundle => ({
-  entity: { eid: app.eid },
+  entity: { eid: shared.eid },
   gallery: {
-    asked_at: approve ? app.gallery?.askedAt || now.toISOString() : null,
+    asked_at: approve ? shared.gallery?.askedAt || now.toISOString() : null,
     listed_at: approve ? now.toISOString() : null,
     reviewed_at: now.toISOString(),
     decision: approve ? 'approved' : 'declined',
@@ -740,41 +749,47 @@ export let decision = (
 
 export let decide = (
   env: Env,
-  app: App,
+  shared: Shared,
   approve: boolean,
   actor: Actor,
   reason = '',
 ) =>
-  stamp(env, { entities: [decision(app, approve, actor, reason)] }, { actor })
+  stamp(env, { entities: [decision(shared, approve, actor, reason)] }, {
+    actor,
+  })
 
 /** The word off the row entirely: un-asked and un-listed at once, which is
  * what withdrawing means (`gallery: false`, app_unpublish). */
-export let drop = (env: Env, app: App) =>
+export let drop = (env: Env, shared: Shared) =>
   stamp(env, {
-    entities: [{ entity: { eid: app.eid }, gallery: null, code_review: null }],
+    entities: [{
+      entity: { eid: shared.eid },
+      gallery: null,
+      code_review: null,
+    }],
   })
 
 /** An agent's code review of the release asked about. A new ask or a
  * withdrawal clears it with the ask. */
 export let reviewed = (
-  app: App,
+  shared: Shared,
   code: Verdict,
   actor: Actor,
   now = new Date(),
 ): Bundle => ({
-  entity: { eid: app.eid },
+  entity: { eid: shared.eid },
   code_review: {
     verdict: code.verdict,
     findings: code.findings,
-    version: app.published?.version ?? 0,
+    version: shared.published?.version ?? 0,
     at: now.toISOString(),
     by: actor.by ?? null,
     via: actor.via ?? null,
   },
 })
 
-export let review = (env: Env, app: App, code: Verdict, actor: Actor) =>
-  stamp(env, { entities: [reviewed(app, code, actor)] }, { actor })
+export let review = (env: Env, shared: Shared, code: Verdict, actor: Actor) =>
+  stamp(env, { entities: [reviewed(shared, code, actor)] }, { actor })
 
 // ---- the doors ---------------------------------------------------------
 
@@ -844,28 +859,37 @@ export let answer = async (
   // away since the letter went is simply not there any more, and the answer
   // says so rather than stamping a row nothing points at.
   let at = await dir.offer(ok.app)
-  if (!at) {
+  // Or a skill (shared-skill.ts): the same door, the same two answers.
+  let skill = at ? null : await dir.skillOffered({ eid: ok.app })
+  if (!at && !skill) {
     return done(
       env,
-      'That app is no longer on offer.',
+      'That is no longer on offer.',
       'It has been unpublished, deleted, or is in the trash, so there is ' +
         'nothing to list. Nothing was changed.',
       409,
     )
   }
-  let owner = await dir.nameAt(await owned(dir, at.space)) ?? at.space.slug
+  let space = at?.space ?? skill!.space
+  let owner = await dir.nameAt(await owned(dir, space)) ?? space.slug
+  let title = at?.app.title ?? skill!.skill.title
   let said = {
-    title: at.app.title,
-    about: at.app.published!.about,
-    url: url(at.space, at.app, env),
+    title,
+    about: at ? at.app.published!.about : skill!.skill.published.about,
+    url: at
+      ? url(at.space, at.app, env)
+      : `the skill ${skill!.skill.published.name}, from ${space.slug}`,
     owner,
     list: ok.list,
     token: held,
+    what: at ? 'app' as const : 'skill' as const,
   }
   if (req.method != 'POST') return confirm(said, env)
   let session = await browserOf(req, env.SESSION_SECRET)
   await run({ env, dir, person: who }, 'gallery_review', {
-    app: `${at.space.slug}/${at.app.slug}`,
+    ...at
+      ? { app: `${at.space.slug}/${at.app.slug}` }
+      : { skill: skill!.skill.published.name },
     decision: ok.list ? 'approve' : 'decline',
     by: who,
     ...(session?.via ? { via: session.via } : {}),
@@ -873,14 +897,18 @@ export let answer = async (
   if (ok.list) {
     return done(
       env,
-      `${at.app.title} is in the gallery.`,
-      `You can find it at ${siteUrl(env, PATH)}.`,
+      at ? `${title} is in the gallery.` : `${title} is listed.`,
+      at
+        ? `You can find it at ${siteUrl(env, PATH)}.`
+        : `Anyone may install it as ${skill!.skill.published.name}.`,
     )
   }
   return done(
     env,
-    `${at.app.title} was not listed.`,
-    'The app stays published. Its owner can submit it again.',
+    `${title} was not listed.`,
+    at
+      ? 'The app stays published. Its owner can submit it again.'
+      : 'It stays published, and nobody may install it.',
   )
 }
 

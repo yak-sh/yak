@@ -570,6 +570,25 @@ export type Gallery = {
   reason?: string
 }
 
+/** Anything one space shares with the whole platform, as the gallery's
+ * verbs read it: an app, a skill. Its offer, and where the gallery stands. */
+export type Shared = {
+  eid: string
+  title: string
+  published: Offer | null
+  gallery: Gallery | null
+}
+
+/** A skill a space published (shared-skill.ts): the text on offer, at the
+ * version on offer, read off its directory row. */
+export type SkillOffer = Shared & {
+  published: Offer
+  space: string
+  description: string
+  body: string
+  skill: Record<string, unknown>
+}
+
 // That the app's store carries the data its files seed it with, and the
 // release that put it there (seed.ts, T-34327).
 export type Sowed = { at: string; version: number }
@@ -716,7 +735,10 @@ export type Row = {
     version?: number | null
     at?: string | null
     about?: string | null
+    space?: Id | null
   }
+  skill?: Record<string, unknown>
+  content?: { body?: string | null }
   installed?: {
     of?: Id | null
     version?: number | null
@@ -849,7 +871,7 @@ export type Row = {
   errored?: { at?: string | null }
   former?: { slug: string; slugs?: string | null }
   home?: { first?: string | null }
-  doc?: { title?: string }
+  doc?: { title?: string; body?: string }
   plan?: {
     tier?: Tier | null
     customer?: string | null
@@ -1454,6 +1476,45 @@ let unsaid = (app: string): Access => {
   return 'private'
 }
 
+let galleryOf = (r: Row): Gallery | null =>
+  r.gallery
+    ? {
+      askedAt: r.gallery.asked_at ?? '',
+      listedAt: r.gallery.listed_at ?? '',
+      ...(r.gallery.reviewed_at ? { reviewedAt: r.gallery.reviewed_at } : {}),
+      ...(r.gallery.decision ? { decision: r.gallery.decision } : {}),
+      ...(r.gallery.by ? { by: idOf(r.gallery.by) } : {}),
+      ...(r.gallery.via ? { via: idOf(r.gallery.via) } : {}),
+      ...(r.gallery.reason ? { reason: r.gallery.reason } : {}),
+    }
+    : null
+
+let offerOf = (r: Row): Offer | null =>
+  r.published?.name
+    ? {
+      name: r.published.name,
+      version: r.published.version ?? 0,
+      at: r.published.at ?? '',
+      about: r.published.about ?? '',
+    }
+    : null
+
+/** A skill offer's directory row, read back (shared-skill.ts). */
+export let skillOfferOf = (r: Row): SkillOffer | null => {
+  let published = offerOf(r)
+  if (!published || !r.skill || !r.published?.space) return null
+  return {
+    eid: r.entity.eid,
+    title: r.doc?.title ?? '',
+    description: r.doc?.body ?? '',
+    body: r.content?.body ?? '',
+    skill: r.skill,
+    space: idOf(r.published.space),
+    published,
+    gallery: galleryOf(r),
+  }
+}
+
 export let appAbout = (r: Row): AppInfo => ({
   eid: r.entity.eid,
   slug: r.app!.slug ?? r.former?.slug ?? '',
@@ -1477,14 +1538,7 @@ export let appAbout = (r: Row): AppInfo => ({
   home: r.home != null,
   first: firstOf(r.home),
   meter: meterOf(r),
-  published: r.published?.name
-    ? {
-      name: r.published.name,
-      version: r.published.version ?? 0,
-      at: r.published.at ?? '',
-      about: r.published.about ?? '',
-    }
-    : null,
+  published: offerOf(r),
   installed: r.installed
     ? {
       of: r.installed.of ? idOf(r.installed.of) : null,
@@ -1492,17 +1546,7 @@ export let appAbout = (r: Row): AppInfo => ({
       sandboxed: r.installed.sandboxed || null,
     }
     : null,
-  gallery: r.gallery
-    ? {
-      askedAt: r.gallery.asked_at ?? '',
-      listedAt: r.gallery.listed_at ?? '',
-      ...(r.gallery.reviewed_at ? { reviewedAt: r.gallery.reviewed_at } : {}),
-      ...(r.gallery.decision ? { decision: r.gallery.decision } : {}),
-      ...(r.gallery.by ? { by: idOf(r.gallery.by) } : {}),
-      ...(r.gallery.via ? { via: idOf(r.gallery.via) } : {}),
-      ...(r.gallery.reason ? { reason: r.gallery.reason } : {}),
-    }
-    : null,
+  gallery: galleryOf(r),
   screenshot: r.screenshot?.blob ?? null,
   preview: previewOf(r),
   seeded: r.seeded
@@ -2845,6 +2889,37 @@ export let directoryRows = (rows: {
     offered: async (name: string) => {
       let row = await one(`.published.name=${name}&.app`)
       return row?.app ? await self.appAt(row.entity.eid) : null
+    },
+    // The skill offered under a platform-wide name, or one by its eid, with
+    // the space it came from: a trashed space offers nothing, as `offering`
+    // screens it (shared-skill.ts).
+    skillOffered: async (
+      at: { name: string } | { eid: string },
+    ): Promise<{ space: Space; skill: SkillOffer } | null> => {
+      let key = 'name' in at
+        ? `.published.name=${at.name}`
+        : EID.test(at.eid)
+        ? `.entity.eid=${at.eid}&.published`
+        : null
+      if (!key) return null
+      let row = await one(`${key}&.skill&?doc&?content&?gallery`)
+      let skill = row ? skillOfferOf(row) : null
+      let space = skill ? await self.at(skill.space) : null
+      return skill && space && !space.trashed ? { space, skill } : null
+    },
+    // Every skill on offer, newest first, with its space.
+    skillOffers: async (): Promise<{ space: Space; skill: SkillOffer }[]> => {
+      let skills = (await query('.published&.skill&?doc&?content&?gallery'))
+        .flatMap((r) => skillOfferOf(r) ?? [])
+        .sort((a, b) => b.published.at.localeCompare(a.published.at))
+      let spaces = new Map<string, Space | null>()
+      for (let { space } of skills) {
+        if (!spaces.has(space)) spaces.set(space, await self.at(space))
+      }
+      return skills.flatMap((skill) => {
+        let space = spaces.get(skill.space)
+        return space && !space.trashed ? [{ space, skill }] : []
+      })
     },
     // Every offer standing, newest first — what a person's agent browses. Its
     // spaces are found from their published apps, so it reads rows in

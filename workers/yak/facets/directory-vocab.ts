@@ -307,49 +307,6 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { at: time, by: ref('keep') },
     },
-    // That this app's offer has been put forward for the gallery, and whether
-    // we said yes (gallery.ts, T-34476). Two stamps rather than a state word:
-    // `asked_at` is the owner of the app asking, `listed_at` is the platform
-    // answering, and a row wearing both is on https://yaks.app/gallery. The
-    // pair reads as one sentence in either direction — nothing is listed that
-    // was never asked for, and clearing the word un-asks and de-lists at once.
-    //
-    // The last review records its decision, actor, session and reason; a
-    // decline clears the ask and listing while retaining that record.
-    // Server-owned: the
-    // listing is on our site under our name (M-4522), so it may never be
-    // something a write can lift for itself. The tools stamp them through the
-    // kernel's own door (directory.ts `stamp`).
-    gallery: {
-      component: true,
-      type: 'object',
-      properties: {
-        asked_at: owned(time),
-        listed_at: owned(time),
-        reviewed_at: owned(time),
-        decision: owned({ type: 'string', enum: ['approved', 'declined'] }),
-        by: owned(ref('keep')),
-        via: owned(ref('keep')),
-        reason: owned(text),
-      },
-    },
-    // An agent's code review of somebody else's app asked into the gallery
-    // (gallery.ts): its verdict, what it found, the published version it
-    // read, and who reviewed it through which session. The platform's owner
-    // reads it in his review letter and decides; a new ask or a withdrawal
-    // clears it. Server-owned for the reason `gallery` is.
-    code_review: {
-      component: true,
-      type: 'object',
-      properties: {
-        verdict: owned({ type: 'string', enum: ['approve', 'reject'] }),
-        findings: owned(text),
-        version: owned(num),
-        at: owned(time),
-        by: owned(ref('keep')),
-        via: owned(ref('keep')),
-      },
-    },
     // An uploaded image the owner chose to represent this app. Its bytes and
     // attachment live in the app's store; only the content address lives here.
     screenshot: {

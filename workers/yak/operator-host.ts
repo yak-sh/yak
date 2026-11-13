@@ -10,6 +10,7 @@ import { sha256 } from '@yaks/graph/sha256'
 import { short } from '@yaks/id'
 import { ownerOf, owns } from './operator-access.ts'
 import type { Held } from './build-door.ts'
+import type { Copy } from './operator-skills.ts'
 import type { Operator } from './operator.ts'
 import type { Request } from './operator-channels.ts'
 import { askedAt, inputOf, rootAt, rootOf, titleAt } from './operator-root.ts'
@@ -1628,6 +1629,38 @@ export let operatorRequest = async (
     let { kept } = await import('./operator-skills.ts')
     let { seenBy } = await import('./operator-access.ts')
     return Response.json({ files: await kept(seenBy(store, person)) })
+  }
+  // One skill, to publish it, and a shared one kept as a copy, to install or
+  // update it (shared-skill.ts). Keeping one is a write: an editor's.
+  if (path == '/operator/skill') {
+    let { skillText } = await import('./operator-skills.ts')
+    let { seenBy } = await import('./operator-access.ts')
+    let found = await skillText(seenBy(store, person), String(args.title ?? ''))
+    return found ? Response.json(found) : Response.json({
+      code: 'missing',
+      message: `this space keeps no skill called ${args.title}`,
+    }, { status: 404 })
+  }
+  if (path == '/operator/skill/keep') {
+    let { keepCopy } = await import('./operator-skills.ts')
+    let { writes } = await import('@yaks/member')
+    let { CallError } = await import('@yaks/tools/errors')
+    if (!writes(held.role)) {
+      return Response.json({
+        code: 'access',
+        message: 'installing a skill is for the space’s owners and editors',
+      }, { status: 403 })
+    }
+    try {
+      return Response.json(
+        await keepCopy(store.g, args.copy as Copy, person),
+      )
+    } catch (e) {
+      if (!(e instanceof CallError)) throw e
+      return Response.json({ code: e.code, message: e.message }, {
+        status: 409,
+      })
+    }
   }
   if (path == '/operator/work') {
     return Response.json(await workOf(store, spaceId, person, everyone))

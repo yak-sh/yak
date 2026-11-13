@@ -125,6 +125,7 @@ import { sandboxed, sandboxing } from './installed.ts'
 import { watching } from './preview.ts'
 import { tools as previewTools } from './preview-tools.ts'
 import { demonstrate, ours } from './gallery-demo.ts'
+import * as shared from './shared-skill.ts'
 import { appFolder, landed, listing, sandboxPath } from './ship.ts'
 import {
   listCommands,
@@ -5770,11 +5771,12 @@ let OURS: Row[] = [
             "one, made from the published version's seed and never from " +
             "the app's own data",
         },
+        skill: shared.SKILL_ARG,
         ...SKIP,
       },
-      required: ['app'],
     },
     run: async (ctx, args) => {
+      if (args.skill != null) return await shared.published(ctx, args)
       let skip = await skipping(ctx, args)
       let { space, app, who } = await ownsApp(ctx, args, !!skip)
       // A name is claimed once. Publishing again with none said keeps the
@@ -5879,10 +5881,10 @@ let OURS: Row[] = [
     openWorld: true,
     input: {
       type: 'object',
-      properties: { space: SPACE, app: APP },
-      required: ['app'],
+      properties: { space: SPACE, app: APP, skill: shared.SKILL_ARG },
     },
     run: async (ctx, args) => {
+      if (args.skill != null) return await shared.unpublished(ctx, args)
       let { space, app, who } = await ownsApp(ctx, args)
       if (!app.published) {
         throw refuse('conflict', `${space.slug}/${app.slug} is not published`)
@@ -5925,11 +5927,28 @@ let OURS: Row[] = [
       properties: {
         words: str(
           'words that must all occur in the listing text: name, title, description, ' +
-            'origin or version details. Omit to list all published apps',
+            'origin or version details. Omit to list all published apps ' +
+            'and skills',
+        ),
+        name: str(
+          "one published skill's name, to read it in full: its description " +
+            'and instructions',
         ),
       },
     },
     run: async (ctx, args) => {
+      if (args.name != null) {
+        let name = text(args.name, 'name')
+        let one = await shared.reading(ctx, name)
+        if (!one) {
+          throw refuse(
+            'missing',
+            `no skill is installable as ${name} — app_published lists what ` +
+              'is on offer',
+          )
+        }
+        return { text: one }
+      }
       // One offer per app: an owner's own re-offered copy stands for the
       // offer it came from (shelf.ts).
       let offers = await listable(
@@ -5950,9 +5969,11 @@ let OURS: Row[] = [
         : []
       let found = offers.map((o) => ({ o, said: line(o).toLowerCase() }))
         .filter(({ said }) => words.every((w) => said.includes(w)))
+        .map(({ o }) => line(o))
+        .concat(await shared.listing(ctx, words))
       return {
         text: found.length
-          ? found.map(({ o }) => line(o)).join('\n')
+          ? found.join('\n')
           : words.length
           ? `nothing published says ${words.join(' ')} — ` +
             'app_published with no words lists every offer'
@@ -5971,7 +5992,8 @@ let OURS: Row[] = [
         as: str(
           "the new app slug; defaults to the source app's slug if free, " +
             'otherwise its published name, adding -2, -3, etc. if taken. ' +
-            'app_published lists both',
+            'app_published lists both. For a skill, the title it is kept ' +
+            'under; its own by default',
         ),
         visit: {
           type: 'boolean',
@@ -5989,6 +6011,8 @@ let OURS: Row[] = [
       // `offered` still names a trashed app, whose name stays claimed for the
       // trash's thirty days; it is not on offer until it is restored.
       let offer = await ctx.dir.offered(name)
+      let skill = offer ? null : await ctx.dir.skillOffered({ name })
+      if (skill) return await shared.installed(ctx, args, skill.skill)
       if (
         !offer?.app.published || offer.app.trashed || offer.space.trashed
       ) {
@@ -6208,10 +6232,10 @@ let OURS: Row[] = [
     idempotent: true,
     input: {
       type: 'object',
-      properties: { space: SPACE, app: APP },
-      required: ['app'],
+      properties: { space: SPACE, app: APP, skill: shared.SKILL_ARG },
     },
     run: async (ctx, args) => {
+      if (args.skill != null) return await shared.updated(ctx, args)
       let { space, app, who, store } = await inApp(ctx, args, true)
       if (!app.installed) {
         throw refuse(
@@ -6988,6 +7012,7 @@ let OURS: Row[] = [
       type: 'object',
       properties: {
         app: str('the published app to review, as space/app'),
+        skill: shared.SKILL_ARG,
         decision: { type: 'string', enum: ['approve', 'decline'] },
         by: str(
           "who the decision is recorded as: the platform's owner (his " +
@@ -6996,9 +7021,12 @@ let OURS: Row[] = [
         via: str('the session making the decision'),
         reason: str('why the app and listing were approved or declined'),
       },
-      required: ['app', 'decision'],
+      required: ['decision'],
     },
     run: async (ctx, args) => {
+      if (args.skill != null) {
+        return await shared.decided(ctx, args, await decider(ctx, args))
+      }
       if (!await admin(ctx)) {
         throw refuse('access', 'gallery review is the platform admin’s act')
       }
@@ -7039,14 +7067,18 @@ let OURS: Row[] = [
       type: 'object',
       properties: {
         app: str('the published app whose code was reviewed, as space/app'),
+        skill: shared.SKILL_ARG,
         verdict: { type: 'string', enum: ['approve', 'reject'] },
         findings: str('what the review found, as a few lines of text'),
         by: str('who reviewed it: your project eid; never a session'),
         via: str('the session that reviewed it'),
       },
-      required: ['app', 'verdict', 'findings'],
+      required: ['verdict', 'findings'],
     },
     run: async (ctx, args) => {
+      if (args.skill != null) {
+        return await shared.codeReviewed(ctx, args, await decider(ctx, args))
+      }
       if (!await admin(ctx)) {
         throw refuse('access', 'a gallery code review is the platform admin’s')
       }
