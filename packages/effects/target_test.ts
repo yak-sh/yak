@@ -71,9 +71,19 @@ let fixture = (target: string, ...seed: Bundle[][]) => {
   }
   let fx = effects(vocab)
   fx.handle({ note: (e) => seen.push(`${e.kind} ${e.entity.eid}`) })
-  let g: Graph = graph({ vocab, storage, plugins: [fx] })
+  let journaled: string[] = []
+  let journal = {
+    name: 'journal',
+    hooks: {
+      journal: (
+        b: Bundle[],
+      ) => (journaled.push(...b.map((r) => r.entity.eid)), b),
+    },
+  }
+  let g: Graph = graph({ vocab, storage, plugins: [fx, journal] })
   for (let batch of seed) g.apply(batch)
-  return { g, seen, reads: () => reads }
+  journaled.length = 0
+  return { g, seen, reads: () => reads, journaled }
 }
 
 let post = (eid: string, published: boolean) => ({
@@ -110,6 +120,12 @@ for (
       'changed guest-0',
       'changed outside',
     ])
+  })
+
+  let still = fixture(target, births)
+  test(`${kind} effect targets leave a subject written as it is stored unwritten`, () => {
+    still.g.apply([post('guest-0', true)])
+    assertEquals([still.seen, still.journaled], [['created guest-0'], []])
   })
 
   let gone = fixture(target, births, moves)

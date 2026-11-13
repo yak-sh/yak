@@ -1117,7 +1117,7 @@ test('a property that holds nothing may change its type', async () => {
     // A caller cannot turn off provenance with the trusted bookkeeping option.
     let changed = await post(store, '/apply?stamp=0', [{
       entity: { eid: CAKE },
-      recipe: { serves: 8 },
+      recipe: { serves: 10 },
     }], owner)
     assertEquals(changed.status, 200)
     let edited = await changed.json() as Bundle[]
@@ -1134,7 +1134,7 @@ test('a property that holds nothing may change its type', async () => {
       owner,
     )).json()
     assertEquals(read.length, 1)
-    assertEquals(read[0].recipe.serves, 8)
+    assertEquals(read[0].recipe.serves, 10)
     assertEquals(read[0].doc.title, 'Lemon drizzle')
     // @yaks/blob swapped the body for its address on the way in and back on
     // the way out; neither `doc` nor the app was told.

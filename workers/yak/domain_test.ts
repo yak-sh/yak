@@ -41,8 +41,8 @@ let mine: [string, string][] = [
 // The recipe box her domain will serve, made as the file loads: a person, her
 // space with two apps, and two releases of the box. The first is whole; the
 // second loads a script it never shipped, by an address it computes, which
-// the deploy cannot read (tools.ts `unfound`), and is live until a report from
-// a page that broke takes it back.
+// the deploy cannot read (tools.ts `unfound`), and is live until the test
+// rolls it back after a page that broke reports it.
 let box = await (async () => {
   let k = await kernel()
   let jeff9 = unique('jeff9')
@@ -99,8 +99,8 @@ test('a hostname finds its app, and only one app', async () => {
     }])
 
     // A page that broke on the domain is reported there, and reaches the
-    // app's store: the live release's script loads a file the release lacks,
-    // so the store takes it back to the release before.
+    // app's store: the live release's script loads a file the release lacks.
+    // The release stays live until an agent rolls it back (M-37965).
     let failed = await k.at(herbusiness101, '/api/report', {
       method: 'POST',
       body: JSON.stringify({
@@ -112,10 +112,14 @@ test('a hostname finds its app, and only one app', async () => {
     })
     assertEquals(failed.status, 204)
     await failed.body?.cancel()
+    let recipes = { space: jeff9, app: 'recipes' }
     assertStringIncludes(
-      await agent.tool('app_versions', { space: jeff9, app: 'recipes' }),
-      'v1 (live)',
+      await agent.tool('app_errors', recipes),
+      `recipes v2: page / — failed to load script https://${herbusiness101}/main.js`,
     )
+    assertStringIncludes(await agent.tool('app_versions', recipes), 'v2 (live)')
+    await agent.tool('app_rollback', recipes)
+    assertStringIncludes(await agent.tool('app_versions', recipes), 'v1 (live)')
 
     // The app's `/` is the domain's `/` — served, not redirected into a path.
     let root = await k.at(herbusiness101, '/', { redirect: 'manual' })
