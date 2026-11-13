@@ -954,12 +954,13 @@ must name the spool consumed by tracker intake. Reload the user manager after
 installing the drop-ins; use `yak restart` for a ready-first handover.
 
 `bin/limits` runs the servers in `yak.slice`, gives them the CPU before anything
-else on the box and caps the memory and disk for everything else, so neither
-sessions' tests nor bulk work can slow their reads. On the host it limits how
-much each process may leave dirty, by its memory, so a capped job's queue cannot
-hold the shared ext4 journal and a server waits only on its own writes. Each
-session gets 6 GB and all of them together 16 GB; a session over its cap loses
-its largest process.
+else on the box, keeps them an 8 GB floor of memory for the yak.db pages they
+read, and caps the memory and disk for everything else, so neither sessions'
+tests nor bulk work can slow their reads. On the host it limits how much each
+process may leave dirty, by its memory, so a capped job's queue cannot hold the
+shared ext4 journal and a server waits only on its own writes. Each session gets
+6 GB and all of them together 16 GB; a session over its cap loses its largest
+process.
 
 ```sh
 # Inside a systemd service's [Service] section:

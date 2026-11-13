@@ -21,8 +21,8 @@
 # server's child (a wrangler deploy under yak-web) cannot hold another's main
 # thread.
 #
-# The memory. Two caps, as for the disk below. app.slice's bounds every
-# session together, so yak.slice keeps the rest of the box's 24 GB. Each
+# The memory. Two caps, as for the disk below, and a floor for the servers.
+# app.slice's cap bounds every session together. Each
 # session's is lower, so a few fit together and one cannot take the slice: one
 # session's 48 type-checking `deno test` runs at once reached 15 GB with 7 GB
 # in swap, and yak-mail stalled 42 s for memory with yak.db's write lock held.
@@ -34,6 +34,21 @@
 # own included, and a runaway sits there frozen instead of failing. They go on
 # those two names, not scope.d, since a drop-in overrides a scope's own
 # properties and bin/capped's 512M must stand.
+#
+# A cap alone does not keep the servers' memory. Everything of user 1000 shares
+# the 21 GB its slice may hold, 3 GB under the container's 24 GB so root can
+# always ssh in. Sessions' 16 GB beside the servers' 4-5 GB fills it, and the
+# kernel then takes pages from every group by its size: the servers' page cache
+# of yak.db went with the sessions'. Their next reads waited on the disk 8-10 s
+# of 11 (T-165939). yak.slice's floor of 8 GB, the servers and the yak.db pages
+# they read, is never taken, so a full slice gives back the sessions' cache and
+# swaps their memory, and a session past that loses its largest process. The
+# floor is Min, not Low: beside the sessions' bulk work the kernel took
+# yak.slice under a Low of 10 GB two thousand times in two minutes, and under
+# Min it takes nothing. A floor counts only when each group above it holds one
+# as large, so user@.service and the user's slice carry it too. The user's slice
+# has no High, for the reason above: at its old High of 20 GB the kernel
+# throttled the servers along with the sessions.
 #
 # The disk. Two caps, because one is not enough. The slice's bounds the sum, and
 # so the servers' reads. Each job's is lower, so one job cannot fill the slice:
@@ -83,6 +98,8 @@ IOReadBandwidthMax=/ 150M"
 job="IOWriteBandwidthMax=/ 30M
 IOReadBandwidthMax=/ 100M"
 sessions="MemoryMax=16G"
+servers="MemoryMin=8G"
+user_max="MemoryMax=21G"
 session="MemoryMax=6G
 MemorySwapMax=2G
 OOMPolicy=continue"
@@ -92,11 +109,18 @@ volume=$(basename "$(findmnt -no SOURCE /)")
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 user="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 
-sudo mkdir -p /etc/systemd/system/user@.service.d /etc/systemd/system/cron.service.d
+system=/etc/systemd/system
+slice="$system/user-$(id -u).slice.d"
+sudo mkdir -p "$system/user@.service.d" "$system/cron.service.d" "$slice"
 printf '[Service]\nDelegate=pids memory cpu io\n' |
-  sudo tee /etc/systemd/system/user@.service.d/io.conf >/dev/null
+  sudo tee "$system/user@.service.d/io.conf" >/dev/null
+printf '[Service]\n%s\n' "$servers" |
+  sudo tee "$system/user@.service.d/memory.conf" >/dev/null
+printf '[Slice]\n%s\n%s\n' "$user_max" "$servers" |
+  sudo tee "$slice/memory.conf" >/dev/null
+sudo rm -f "$slice/override.conf"
 printf '[Service]\n%s\n' "$job" |
-  sudo tee /etc/systemd/system/cron.service.d/io.conf >/dev/null
+  sudo tee "$system/cron.service.d/io.conf" >/dev/null
 sudo systemctl daemon-reload
 systemctl --user daemon-reexec
 
@@ -108,7 +132,7 @@ for name in process- tmux-spawn-; do
   mkdir -p "$user/$name.scope.d"
   printf '[Scope]\n%s\n' "$session" >"$user/$name.scope.d/memory.conf"
 done
-printf '[Unit]\nDescription=the yak servers\n\n[Slice]\nCPUWeight=1000\n' >"$user/yak.slice"
+printf '[Unit]\nDescription=the yak servers\n\n[Slice]\nCPUWeight=1000\n%s\n' "$servers" >"$user/yak.slice"
 printf '[Service]\nSlice=yak.slice\n' >"$user/yak-.service.d/slice.conf"
 printf '[Service]\nCPUWeight=100\n' >"$user/yak-.service.d/cpu.conf"
 systemctl --user daemon-reload
