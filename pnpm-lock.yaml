@@ -5815,6 +5815,9 @@ importers:
       '@yaks/context':
         specifier: 0.2.23
         version: link:../../packages/context
+      '@yaks/copy':
+        specifier: 0.2.24
+        version: link:../../packages/copy
       '@yaks/d1':
         specifier: 0.2.23
         version: link:../../packages/d1

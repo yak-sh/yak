@@ -110,36 +110,47 @@ let missing = () =>
     headers: { 'content-type': 'text/plain; charset=utf-8', ...immutable },
   })
 
+// A release never gains or changes a file after its source is selected, so an
+// isolate keeps what it read of one, for the last few hundred releases it
+// served; anything else (a draft's state) is read each time. `kept` is the
+// caller's own map of what it read, by the release's prefix.
+let RELEASED = /\/\.releases\/[^/]+\/[^/]+$/
+let KEPT = 512
+export let ofRelease = <T>(
+  kept: Map<string, Promise<T>>,
+  prefix: string,
+  read: () => Promise<T>,
+): Promise<T> => {
+  let had = kept.get(prefix)
+  if (had) return had
+  let reading = read()
+  if (!RELEASED.test(prefix)) return reading
+  kept.set(prefix, reading)
+  reading.catch(() => kept.delete(prefix))
+  for (let old of kept.keys()) {
+    if (kept.size <= KEPT) break
+    kept.delete(old)
+  }
+  return reading
+}
+
 // What serving reads of an app's wrangler config: its server source (`main`,
 // never served) and the folder its addresses serve (`assets.directory`). Both
 // files are asked for at once; an app carries at most one, so the miss is
-// unavoidable and paying for it twice over is not. A release never changes,
-// so an isolate keeps what it read of one; anything else is read each time.
-let RELEASED = /\/\.releases\/[^/]+\/[^/]+$/
-let KEPT_CONFIGS = 512
+// unavoidable and paying for it twice over is not.
 let configs = new Map<string, Promise<Config>>()
 export let configOf = (
   blobs: Pick<Objects, 'read'>,
   prefix: string,
-): Promise<Config> => {
-  let kept = configs.get(prefix)
-  if (kept) return kept
-  let read = Promise.all([
-    blobs.read(`${prefix}/wrangler.jsonc`),
-    blobs.read(`${prefix}/wrangler.json`),
-  ]).then(([jsonc, json]) => {
-    let bytes = jsonc ?? json
-    return bytes ? parse(new TextDecoder().decode(bytes)).config : {}
-  })
-  if (!RELEASED.test(prefix)) return read
-  configs.set(prefix, read)
-  read.catch(() => configs.delete(prefix))
-  for (let old of configs.keys()) {
-    if (configs.size <= KEPT_CONFIGS) break
-    configs.delete(old)
-  }
-  return read
-}
+): Promise<Config> =>
+  ofRelease(configs, prefix, () =>
+    Promise.all([
+      blobs.read(`${prefix}/wrangler.jsonc`),
+      blobs.read(`${prefix}/wrangler.json`),
+    ]).then(([jsonc, json]) => {
+      let bytes = jsonc ?? json
+      return bytes ? parse(new TextDecoder().decode(bytes)).config : {}
+    }))
 
 /** Where an app's served files live: its folder `assets.directory` names,
  * else its root. Nothing outside it answers a request. */

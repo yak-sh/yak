@@ -27,6 +27,7 @@
     "@yaks/code-mode": "0.2.27",
     "@yaks/connections": "0.2.28",
     "@yaks/context": "0.2.23",
+    "@yaks/copy": "0.2.24",
     "@yaks/d1": "0.2.23",
     "@yaks/design": "0.2.28",
     "@yaks/doc": "0.2.24",

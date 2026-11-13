@@ -93,7 +93,10 @@ and setup; this is the map and the feel.
   the store the caller's standing, including its access mode (`x-yak-access`).
   Every HTML page leaving for a browser is woven the platform's inline scripts
   (`page-script.ts`): the reporter, the release listener, and on the free plan
-  the "Made with yaks.app" badge (`public/badge.js`). A platform page's parts
+  the "Made with yaks.app" badge (`public/badge.js`). Each is filled with its
+  app's copy first (`page-copy.ts`): an element marked `data-copy` shows its
+  snippet from the copy.json of the release it came from, or a preview's
+  draft, and an app with none is served as written. A platform page's parts
   are `ui-building`'s.
 - **The connector**: `mcp.ts` and `tools.ts`, the tools Claude and ChatGPT call;
   `prompts/` and `public/docs/` are what those assistants read.

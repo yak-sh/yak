@@ -5229,6 +5229,7 @@
             "npm:@yaks/code@0.2.23",
             "npm:@yaks/connections@0.2.28",
             "npm:@yaks/context@0.2.23",
+            "npm:@yaks/copy@0.2.24",
             "npm:@yaks/d1@0.2.23",
             "npm:@yaks/design@0.2.28",
             "npm:@yaks/doc@0.2.24",

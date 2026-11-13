@@ -19,7 +19,7 @@ import { appTools } from './tool-grammar.ts'
 import { appVocab, stated, VOCABS } from './vocab.ts'
 import { ACCEPTED } from './door.ts'
 import { declarationOf } from './declaration.ts'
-import { api, storing, unwritten, woven } from './apps.ts'
+import { api, copyFor, storing, unwritten, woven } from './apps.ts'
 import {
   type App,
   appStore,
@@ -813,6 +813,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       await storing(env, space, found.preview, who, mount),
       { badge: null, draft: found.link },
       baseOf(mount, res.headers.get('x-yak-file') ?? decoded.slice(1), false),
+      undefined,
+      // The draft's own copy, so a preview shows the copy as drafted.
+      await copyFor(env, space, app),
     )
     return privateResponse(
       new Response(req.method == 'HEAD' ? null : encode(html), {

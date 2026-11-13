@@ -51,6 +51,7 @@ import {
 import * as files from './files.ts'
 import { parse as parseRedirects, sentOn } from './redirects.ts'
 import { inside, prefixOf, VERSION } from './files.ts'
+import { appCopy, type Copy, filled } from './page-copy.ts'
 import { door as publicDoor, served as publicFile } from './public-files.ts'
 import { blobPrefix, servable, uploadPrefix } from './blob-key.ts'
 import {
@@ -1137,6 +1138,8 @@ let asset = async (
     ? redirected(req, env, app, prefix, decoded, at)
     : null
   gone?.catch(() => {})
+  // A page an app's worker asked for is filled with the worker's answer.
+  let copy = files.page(path) && !bearing(req) ? copyFor(env, space, app) : null
   let range = req.method == 'GET' ? req.headers.get('range') : null
   let got = await c.time(
     'bytes',
@@ -1212,6 +1215,7 @@ let asset = async (
       worn(req, space, app, env, who),
       base,
       req.headers.get(ADDRESS) ?? req.url,
+      await copy,
     ))
   if (sandbox) {
     return new Response(page, {
@@ -1237,13 +1241,22 @@ let asset = async (
   return new Response(req.method == 'HEAD' ? null : page, { headers })
 }
 
+// The copy an app's pages are filled from: the copy.json of the files it
+// serves, its release's, or in a preview its draft's (page-copy.ts). One that
+// could not be read is reported, and the page is served as written.
+export let copyFor = (env: Env, space: Space, app: App) =>
+  appCopy(env, app.eid, prefixOf(space, app), app.source ?? '').catch((e) => {
+    defect(e, { request: 'page copy', space: space.slug, app: app.slug })
+    return null
+  })
+
 // A page as the browser gets it: the app's address before its own first
 // relative URL, the tags a home screen needs, its release's asset addresses,
-// any tags the caller adds, and the platform's scripts (`worn`), left out when
-// `scripts` is null. The weaving is done here rather than
-// behind the cache because the same file is a different document at each
-// mount, and one cached copy of the bytes serving every mount beats one copy
-// per mount.
+// any tags the caller adds, its copy filled in (page-copy.ts), and the
+// platform's scripts (`worn`), left out when `scripts` is null. The weaving is
+// done here rather than behind the cache because the same file is a different
+// document at each mount, and one cached copy of the bytes serving every mount
+// beats one copy per mount.
 export let woven = async (
   env: Env,
   original: string,
@@ -1254,15 +1267,19 @@ export let woven = async (
   scripts: Scripts | null,
   base = at,
   address = hostUrl(env, at),
+  copy: Copy | null = null,
 ) => {
   let own = pinned(at, mapped(original, at, bare, app.source, base), app)
-  let page = released(
-    new Response(based(base, tags ? intoHead(own, tags) : own)),
-    original,
-    at,
-    bare,
-    app.source,
-    base,
+  let page = filled(
+    released(
+      new Response(based(base, tags ? intoHead(own, tags) : own)),
+      original,
+      at,
+      bare,
+      app.source,
+      base,
+    ),
+    copy,
   )
   if (scripts) {
     page = await reported(
@@ -2965,7 +2982,7 @@ let served = async (
       open = await reported(
         env,
         bare,
-        open,
+        filled(open, await copyFor(env, space!, app)),
         app.version ?? 0,
         badged(space, app, env),
         APP,
@@ -3133,7 +3150,7 @@ let served = async (
         page = await reported(
           env,
           '/',
-          page,
+          filled(page, await copyFor(env, space, early.app)),
           early.app.version ?? 0,
           badged(space, early.app, env),
           appPreview(early.app, '/'),
@@ -3414,6 +3431,8 @@ let served = async (
     )
     : null
   file?.catch(() => {})
+  // A worker's page is filled with its app's copy, read while it runs.
+  let copy = !itself && files.page(path) ? copyFor(env, space, app) : null
   let own = itself
     ? null
     : await c.time('worker', () => ran(env, space!, app!, req, who))
@@ -3447,7 +3466,7 @@ let served = async (
     page = await reported(
       env,
       at,
-      page,
+      filled(page, await (copy ?? copyFor(env, space, app))),
       app.version ?? 0,
       wearing(space, app, env, who),
       appPreview(app, bare),
