@@ -127,6 +127,16 @@ let section = (at: Section, collapsed: boolean) =>
       : h('p', { class: 'Sidebar_None' }, at.empty),
   )
 
+/** What opens the sidebar where it is folded away, on every page that has
+ * one: a phone's Menu. */
+export let menuButton = (cls?: string) =>
+  h(
+    Button,
+    { class: cls, href: '#menu', 'data-pane': '' },
+    glyph('menu'),
+    'Menu',
+  )
+
 export let Sidebar = (at: Sidebar) =>
   h(
     SideNav.Edge,
@@ -152,7 +162,8 @@ export let Sidebar = (at: Sidebar) =>
         h(
           Button,
           { class: 'Sidebar_Close', href: '#', 'data-pane': '' },
-          '✕ Close',
+          glyph('x'),
+          'Close',
         ),
       ),
       at.back

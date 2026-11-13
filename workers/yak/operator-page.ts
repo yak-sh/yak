@@ -38,6 +38,7 @@ import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
 import { esc, type Picked, script, shell } from './pages.ts'
 import { aboutPath, talkSide } from './talk-sidebar.ts'
+import { menuButton } from './sidebar.ts'
 import { spaceHost, url } from '@yaks/platform/host'
 import {
   backTo,
@@ -1591,7 +1592,12 @@ let canvas = (env: Env, space: Space, app: Making, operator: string) => {
     h(
       Toolbar,
       { mod: 'compact', 'data-part': 'head' },
-      h(Button, { href: '#', class: 'Talk_Back', 'data-pane': '' }, '← Chat'),
+      h(
+        Button,
+        { href: '#', class: 'Talk_Back', 'data-pane': '' },
+        h(Icon, { of: icons['arrow-left'] }),
+        'Chat',
+      ),
       h(Identity.Image, {
         src: `https://${host}/icon.png`,
         width: 24,
@@ -1798,12 +1804,7 @@ let talkPage = (
             h(
               Toolbar,
               { class: 'Talk_Bar' },
-              h(Button, {
-                href: '#menu',
-                class: 'Talk_Menu',
-                'data-pane': '',
-                'aria-label': 'Menu',
-              }, '☰'),
+              menuButton('Talk_Menu'),
               h(
                 Toolbar.Text,
                 {},
@@ -1853,7 +1854,8 @@ let helperBand = ({ parent, line }: HelperPage) =>
     h(
       Button,
       { href: parent.href, class: 'Talk_Out', mod: 'quiet' },
-      h(Toolbar.Label, {}, `← ${parentName(parent)}`),
+      h(Icon, { of: icons['arrow-left'] }),
+      h(Toolbar.Label, {}, parentName(parent)),
     ),
     h(Chip, null, 'Helper'),
     line ? h(Rows, null, h(Work, { work: line })) : null,
@@ -2125,12 +2127,17 @@ let composer = (
     },
     // Shown while the person has scrolled up from the newest entry, and
     // takes them back to it (public/follow.js).
-    h(Button, {
-      type: 'button',
-      class: 'Talk_Jump',
-      'data-jump': '',
-      hidden: true,
-    }, '↓ Newest'),
+    h(
+      Button,
+      {
+        type: 'button',
+        class: 'Talk_Jump',
+        'data-jump': '',
+        hidden: true,
+      },
+      h(Icon, { of: icons['arrow-down'] }),
+      'Newest',
+    ),
     h('input', { type: 'hidden', name: 'request', value: crypto.randomUUID() }),
     h('input', { type: 'hidden', name: 'page', value: here }),
     app ? h('input', { type: 'hidden', name: 'app', value: app.slug }) : null,
@@ -2160,7 +2167,8 @@ let composer = (
         h(
           Composer.Attach,
           { title: 'Add images or documents, or paste or drop them here' },
-          '＋ Add files',
+          h(Icon, { of: icons.plus }),
+          'Add files',
           h(Composer.File, {
             type: 'file',
             name: 'file',

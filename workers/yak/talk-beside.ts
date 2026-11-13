@@ -58,7 +58,12 @@ export let talkBeside = (lists: List[]) => {
     h(
       Toolbar,
       { class: 'Talk_BesideBar' },
-      h(Button, { href: '#', class: 'Talk_Close', 'data-pane': '' }, '✕ Close'),
+      h(
+        Button,
+        { href: '#', class: 'Talk_Close', 'data-pane': '' },
+        h(Icon, { of: icons.x }),
+        'Close',
+      ),
     ),
     h(
       'div',

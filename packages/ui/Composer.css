@@ -32,6 +32,9 @@
 }
 .Composer_Attach {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: .35em;
   color: var(--muted);
   font-size: var(--small);
   cursor: pointer;

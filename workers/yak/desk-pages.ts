@@ -3,6 +3,7 @@ import { Head, Skip, Toolbar } from '@yaks/ui/parts'
 // The dashboard's pages, apart from pages.ts so a page that only serves a
 // space never compiles them. Its sidebar is composed by desk-sidebar.ts.
 import { deskSide } from './desk-sidebar.ts'
+import { menuButton } from './sidebar.ts'
 import { spaceTile } from './space-picker.ts'
 import { Time } from '@yaks/ui/parts'
 import { agentSetup, pasteLink } from './signin-pages.ts'
@@ -216,7 +217,7 @@ export let deskFrame = (
   h(
     Toolbar,
     { class: 'Desk_Bar', mod: 'narrow' },
-    h(Button, { href: '#menu', 'data-pane': '' }, '☰ Menu'),
+    menuButton(),
     h(Toolbar.Text, { as: 'span' }, at.where),
   ),
   h(Skip, { href: '#content' }, 'Skip to content'),

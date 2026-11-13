@@ -6,6 +6,10 @@
 // JavaScript.
 import type { IconNode } from 'lucide'
 // @ts-types="@yaks/ui/lucide"
+import ArrowDown from 'lucide/dist/esm/icons/arrow-down.mjs'
+// @ts-types="@yaks/ui/lucide"
+import ArrowLeft from 'lucide/dist/esm/icons/arrow-left.mjs'
+// @ts-types="@yaks/ui/lucide"
 import Bell from 'lucide/dist/esm/icons/bell.mjs'
 // @ts-types="@yaks/ui/lucide"
 import Bot from 'lucide/dist/esm/icons/bot.mjs'
@@ -35,6 +39,8 @@ import Globe from 'lucide/dist/esm/icons/globe.mjs'
 import House from 'lucide/dist/esm/icons/house.mjs'
 // @ts-types="@yaks/ui/lucide"
 import LayoutGrid from 'lucide/dist/esm/icons/layout-grid.mjs'
+// @ts-types="@yaks/ui/lucide"
+import Menu from 'lucide/dist/esm/icons/menu.mjs'
 // @ts-types="@yaks/ui/lucide"
 import MessageCircle from 'lucide/dist/esm/icons/message-circle.mjs'
 // @ts-types="@yaks/ui/lucide"
@@ -110,6 +116,9 @@ export let icons = {
   'chevron-left': ChevronLeft,
   'chevron-right': ChevronRight,
   'chevrons-up-down': ChevronsUpDown,
+  'arrow-left': ArrowLeft,
+  'arrow-down': ArrowDown,
+  menu: Menu,
   'message-circle': MessageCircle,
   'message-square': MessageSquare,
   mail: Mail,

@@ -767,7 +767,7 @@ test('a helper’s page is zoomed in: held under the bar, the way back out, its 
   let out = band.querySelector('.Talk_Out')!
   assertEquals(
     [out.getAttribute('href'), out.textContent],
-    [theirs, '← Your conversation'],
+    [theirs, 'Your conversation'],
   )
   assertStringIncludes(band.textContent!, 'Helper')
   assertEquals(
@@ -882,10 +882,13 @@ test('what needs the person is beside every conversation, counted, beside the si
       '#needs',
       '1',
     ])
-    assertEquals(
-      document.querySelector('.Talk_Bar .Talk_Menu')?.getAttribute('href'),
+    let menu = document.querySelector('.Talk_Bar .Talk_Menu')!
+    // it reads as the desk's does (home_test.ts)
+    assertEquals([menu.getAttribute('href'), menu.textContent], [
       '#menu',
-    )
+      'Menu',
+    ])
+    assert(menu.querySelector('svg.Icon'), 'Menu wears the kit’s icon')
     // each layer opens and closes without a history entry (public/pane.js)
     for (let sel of ['.Talk_Menu', '.Talk_Waits', '#menu .Sidebar_Close']) {
       assert(document.querySelector(sel)?.hasAttribute('data-pane'), sel)

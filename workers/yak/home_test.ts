@@ -235,7 +235,7 @@ test('the selector names the space, not its address, and keeps the page when ano
     },
     {
       href: '/manage/grove/billing',
-      text: 'LLocust Grove✓',
+      text: 'LLocust Grove',
       here: true,
     },
     // A space they are a member of opens at its Operator.
@@ -292,7 +292,8 @@ test('the Operator page is drawn beside the side, which a member sees with only 
 test('on a phone, Menu opens the same side', async () => {
   let { document } = sides(await block({ view: 'people' }))
   let menu = document.querySelector('.Desk_Bar a')!
-  assertEquals(menu.textContent, '☰ Menu')
+  assertEquals(menu.textContent, 'Menu')
+  assert(menu.querySelector('svg.Icon'), 'Menu wears the kit’s icon')
   assertEquals(menu.getAttribute('href'), '#menu')
   assertEquals(document.querySelector('#menu')?.tagName, 'ASIDE')
   assertEquals(

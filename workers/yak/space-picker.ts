@@ -5,7 +5,8 @@ import { Icon, Menu } from '@yaks/ui/parts'
 import { icons } from './icons.ts'
 import type { Picked } from './pages.ts'
 let named = (s: Picked) => s.title || s.slug
-let glyph = (name: 'chevrons-up-down' | 'plus') => h(Icon, { of: icons[name] })
+let glyph = (name: 'chevrons-up-down' | 'plus' | 'check') =>
+  h(Icon, { of: icons[name] })
 
 /** A space's logo, or where it has none its first letter. */
 export let spaceTile = (s: Picked, mod?: string) =>
@@ -94,7 +95,7 @@ export let choice = (
               ? `${s.whose}’s space · you’re a member`
               : 'You’re a member',
           ),
-          s.slug == here.slug ? h(Identity.Mark, {}, '✓') : null,
+          s.slug == here.slug ? h(Identity.Mark, {}, glyph('check')) : null,
         )
       ),
       add ? h(Menu.Rule, {}) : null,

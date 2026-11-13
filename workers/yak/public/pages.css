@@ -1009,9 +1009,6 @@
     left: 50%;
     translate: -50% 0;
   }
-  .Talk_Jump[hidden] {
-    display: none;
-  }
 
   /* Where the conversation needs the whole width, and beside an app short
      of the widest windows, what waits is one press away: the bar's button

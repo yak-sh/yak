@@ -16,6 +16,15 @@
   min-height: var(--tap);
   white-space: nowrap;
 }
+/* an icon sits a little apart from its words */
+.Button:has(> .Icon) {
+  display: inline-flex;
+  align-items: center;
+  gap: .35em;
+}
+.Button[hidden] {
+  display: none;
+}
 .Button:hover {
   background: var(--soft);
 }
