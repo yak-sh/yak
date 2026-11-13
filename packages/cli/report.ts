@@ -40,6 +40,10 @@ export let command = (argv: readonly string[]): string => {
 }
 let WORD = /^[a-z][a-z-]*$/
 
+// What a report is told about its failure, or a promise of it while the
+// caller is still learning: the reporter's close waits for that too.
+type Told = Partial<Context> | Promise<Partial<Context>>
+
 // Callers name their invocation; a supervisor using this spool is not a yak
 // command merely because it shares the CLI's reporting boundary.
 export let reporter = (
@@ -48,14 +52,15 @@ export let reporter = (
   commit?: string | Promise<string | undefined>,
   tags: Context['tags'] = {},
 ): {
-  (error: unknown, context?: Partial<Context>): Promise<void>
+  (error: unknown, context?: Told): Promise<void>
   close: () => Promise<void>
 } => {
   let file = config.tracker
     ? spool(files(config.tracker.spool).append)
     : undefined
   let pending = new Set<Promise<void>>()
-  let report = async (error: unknown, context: Partial<Context> = {}) => {
+  let report = async (error: unknown, told: Told = {}) => {
+    let context = await told
     try {
       console.error(`${context.tags?.step ?? 'box'} failed —`, error)
     } catch { /* telemetry cannot break the caller */ }
@@ -83,7 +88,7 @@ export let reporter = (
         })),
     })
   }
-  return Object.assign((error: unknown, context?: Partial<Context>) => {
+  return Object.assign((error: unknown, context?: Told) => {
     let delivery = report(error, context)
     pending.add(delivery)
     void delivery.then(() => pending.delete(delivery))

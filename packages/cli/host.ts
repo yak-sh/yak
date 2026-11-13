@@ -471,12 +471,24 @@ let composed = async (
     })
   // A rejection nobody held is reported where it surfaced, and the host lives
   // on: one stray promise never ends the process and every request it serves.
+  // A script's top-level await that failed arrives the same way, and is the
+  // script's own end: said and reported as a failure it met (a refusal of
+  // what it asked is its runner's to read, and only said), then the process
+  // exits 1, as it would with no host.
   let stray = (event: PromiseRejectionEvent) => {
     event.preventDefault()
-    void report(event.reason, {
-      during: { process: selfEid() },
-      mechanism: 'onunhandledrejection',
-      tags: { step: 'unhandled rejection' },
+    let own = process.mainFailed(event.reason)
+    void report(
+      event.reason,
+      own.then((ended) =>
+        ended ? { tags: { step: 'main module' } } : {
+          during: { process: selfEid() },
+          mechanism: 'onunhandledrejection',
+          tags: { step: 'unhandled rejection' },
+        }
+      ),
+    ).then(async () => {
+      if (await own) process.exit(1)
     })
   }
   globalThis.addEventListener('unhandledrejection', stray)

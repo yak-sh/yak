@@ -33,6 +33,28 @@ export let execPath = (): string => process.execPath
 let deno = (globalThis as { Deno?: { mainModule: string } }).Deno
 export let mainModule: string = deno?.mainModule ??
   (process.argv[1] ? pathToFileURL(process.argv[1]).href : '')
+
+// Deno tells a main module whose top-level await rejected as an unhandled
+// rejection, the same way it tells a promise nobody held. Importing the main
+// module after it failed rejects with that same reason; an import made while
+// it still runs says nothing of how it ends, so each question imports anew. A
+// Worker has no `Deno.mainModule`, and its `argv[1]` names the main thread's
+// module, so a Worker never imports it.
+let NONE = Symbol('none')
+
+/** Whether `reason`, met as an unhandled rejection, is the main module's own
+ * failure (a top-level await that rejected) rather than a promise nobody
+ * held. Answers within `ms`. */
+export let mainFailed = async (reason: unknown, ms = 50): Promise<boolean> => {
+  if (!deno?.mainModule) return false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let failure = await Promise.race([
+    import(deno.mainModule).then(() => NONE, (failure) => failure),
+    new Promise((done) => timer = setTimeout(done, ms, NONE)),
+  ])
+  clearTimeout(timer)
+  return failure !== NONE && failure === reason
+}
 export let version = { ...process.versions }
 export let runtimeName = process.versions.deno ? 'deno' : 'node'
 export let runtimeVersion = process.versions.deno ?? process.versions.node
