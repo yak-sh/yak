@@ -216,10 +216,15 @@ backup() {
   night=$(date -u +%Y-%m-%dT%H%M%SZ)
   say "start $night"
   [ -f "$data/yak.db" ] || die "no graph in $data"
-  # Wait a minute at most: a lock still held past that is a stuck run, and
-  # queueing behind it is how runs stacked up before.
+  # A lock held is another run taking this night, not a failed one: this run
+  # stands aside and exits clean, unreported. The holder reports its own
+  # failure, and its bound (bin/backup-run.ts) ends a stuck one. Queueing
+  # behind it is how runs stacked up before.
   exec 9>"$data/backup.lock"
-  flock -w 60 -x 9 || die "another backup holds the lock"
+  if ! flock -n -x 9; then
+    say "another backup holds $data/backup.lock and takes this night"
+    exit 0
+  fi
 
   # The compressed copies go where YAK_BACKUP_SNAPSHOT_DIR says, by default
   # the system's temporary directory, one at a time: each is uploaded and
