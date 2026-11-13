@@ -20,6 +20,7 @@
     "@yaks/query": "0.2.32",
     "@yaks/sql": "0.2.30",
     "@yaks/tools": "0.2.30",
+    "@yaks/trace": "0.2.23",
     "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {

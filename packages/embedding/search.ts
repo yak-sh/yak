@@ -14,6 +14,24 @@ import { type Field, present, tablesIn } from './fields.ts'
 import { nearest } from './near.ts'
 import { sources } from './sweep.ts'
 import { screened, visibleVectors } from './visibility.ts'
+import { type Context, context, during } from '@yaks/trace'
+
+// One step of a search, as a phase of the span it runs under (./graph.ts
+// `meaning`), so a search that runs long says which step it was in. The
+// context is the one the search began in, which an await would otherwise
+// lose where the host installs no carrier.
+let phase = <T>(at: Context | undefined, name: string, run: () => T): T =>
+  at
+    ? during(
+      at.channel.begin({
+        kind: 'phase',
+        name,
+        package: '@yaks/embedding',
+        parent: at.parent,
+      }),
+      run,
+    )
+    : run()
 
 /** One match by meaning. Its excerpt is unmarked: the words need not occur. */
 export type Hit = {
@@ -63,6 +81,7 @@ export let meaning = async (
   opts: MeaningOpts = {},
 ): Promise<Hit[]> => {
   if (!words.trim() || !fields.length || (opts.limit ?? 20) <= 0) return []
+  let at = context()
   if (opts.visibility && !opts.vocab) {
     throw new Error('meaning search with visibility requires a vocabulary')
   }
@@ -77,18 +96,20 @@ export let meaning = async (
       absentFrom(v, tablesIn(db)),
     )
     : undefined
-  let vector = await embedder.embed(words)
-  let found = nearest(db, vector, {
-    model: embedder.model,
-    limit: opts.limit ?? 20,
-    floor: opts.floor,
-    within: screened(opts.screen?.(), visible),
-  })
+  let vector = await phase(at, 'embed', () => embedder.embed(words))
+  let found = phase(at, 'rank', () =>
+    nearest(db, vector, {
+      model: embedder.model,
+      limit: opts.limit ?? 20,
+      floor: opts.floor,
+      within: screened(opts.screen?.(), visible),
+    }))
   if (!found.length) return []
-  let text = new Map(
-    sources(db, fields, found.map((h) => h.owner))
-      .map((s) => [s.owner, excerpt(s.text)]),
-  )
+  let text = phase(at, 'excerpts', () =>
+    new Map(
+      sources(db, fields, found.map((h) => h.owner))
+        .map((s) => [s.owner, excerpt(s.text)]),
+    ))
   return found.map((h) => ({
     entity: h.entity,
     similarity: h.similarity,

@@ -19,6 +19,7 @@ import { open } from '@yaks/sqlite/db'
 import { extend, meaning, plugins, schema } from './graph.ts'
 import { TABLE } from './ddl.ts'
 import { mem, none, shop, stocked } from './testing.ts'
+import { record } from '@yaks/trace'
 
 let hash = { embedder: { provider: 'hash' } }
 // Databases are fixtures, built once: the tests below only read them. Raising
@@ -93,6 +94,21 @@ test('a phrase search sees an embedder that arrives after composition', async ()
   assertEquals(await find('dragon'), [])
   options.embedder = { provider: 'hash' }
   assert((await find('dragon')).length > 0)
+})
+
+test('a phrase search runs its steps and their statements under its span', async () => {
+  let graph = { get: () => [] }
+  let { spans } = await record(
+    graph,
+    () =>
+      meaning({ storage: { statements: db }, vocab: shop, graph }, hash)(
+        'dragon',
+      ),
+  )
+  let span = (name: string) => spans.find((s) => s.name == name)!
+  let steps = ['embed', 'rank', 'excerpts'].map((name) => span(name).parent)
+  assertEquals(steps, steps.map(() => span('meaning').id))
+  assert(spans.some((s) => s.kind == 'sql' && s.parent == span('rank').id))
 })
 
 // A storage's filter line, here a list of entity names: what it admits is its

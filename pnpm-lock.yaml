@@ -1814,6 +1814,9 @@ importers:
       '@yaks/tools':
         specifier: 0.2.30
         version: link:../tools
+      '@yaks/trace':
+        specifier: 0.2.23
+        version: link:../trace
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab

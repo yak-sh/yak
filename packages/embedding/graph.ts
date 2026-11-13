@@ -30,6 +30,7 @@ import { chosen, type Lent, type Options, ready, spaceOf } from './options.ts'
 import { type Hit, meaning as search, type MeaningOpts } from './search.ts'
 import { type Host, neighbours } from './neighbours.ts'
 import { hold } from './held.ts'
+import { context, during, peek, scope } from '@yaks/trace'
 
 /** The vector tables, which a writing host adds with the
  * rest of its composed schema. It contributes no rule to `apply()`: nothing a
@@ -108,23 +109,42 @@ export let meaning = (
     if (!screen) throw new Error('this storage cannot narrow a search')
     return () => screen(within)
   }
-  return async (words, opts = {}) => {
+  let find = async (
+    words: string,
+    opts: Pick<MeaningOpts, 'limit' | 'floor'> & { within?: string },
+  ) => {
     let { within, ...rest } = opts
+    let at = context()
     let now = await ready(host.vocab, options, host.graph, host.embedders)
-    return now.embedder
-      ? await search(
-        db,
-        resolved(now.text, host.derived),
-        now.embedder,
-        words,
-        {
-          ...rest,
-          vocab: host.vocab,
-          floor: rest.floor ?? options.floor,
-          ...(within ? { screen: among(within) } : {}),
-        },
-      )
+    let embedder = now.embedder
+    return embedder
+      ? await scope(at, () =>
+        search(
+          db,
+          resolved(now.text, host.derived),
+          embedder,
+          words,
+          {
+            ...rest,
+            vocab: host.vocab,
+            floor: rest.floor ?? options.floor,
+            ...(within ? { screen: among(within) } : {}),
+          },
+        ))
       : []
+  }
+  // A span on the graph's channel, so the statements a search runs and its
+  // embedding request are seen where the graph's own reads are: a read that
+  // runs long names the step it is in (@yaks/cli read_activity.ts).
+  return (words, opts = {}) => {
+    let c = peek(host.graph)
+    if (!c) return find(words, opts)
+    return during(
+      c.begin({ kind: 'query', name: 'meaning', package: '@yaks/embedding' }),
+      () => find(words, opts),
+      'ok',
+      (hits) => ({ rows: hits.length }),
+    )
   }
 }
 
