@@ -75,7 +75,7 @@ test('the base comes first, then the space persona worn on it, then where it is'
     "An app's icon",
     'Where they are',
     'Making a new app',
-    `${space.operator}, the Operator of home`,
+    space.operator,
     'Who you are',
   ])
   assertStringIncludes(
@@ -139,7 +139,7 @@ let again = await spaced(legacy.g.storage, space)
 test('separating a space topic from its Operator persona preserves authored text, holdings and sessions once', async () => {
   assertEquals(moved[0].persona, undefined)
   assertEquals(moved[1].doc, {
-    title: `${space.operator}, the Operator of home`,
+    title: space.operator,
     body: 'Keep my editable instructions.',
   })
   assertEquals(

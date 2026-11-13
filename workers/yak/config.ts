@@ -358,6 +358,8 @@ export let operatorConfig: Config = {
     // Its model calls, and the replies of the providers that answer them
     // (`operatorProviders`).
     { use: '@yaks/model', facets: ['vocab'] },
+    // How its persona speaks on a call (operator-persona.ts).
+    { use: '@yaks/speech', facets: ['vocab'] },
     { use: '@yaks/anthropic', facets: ['vocab'] },
     { use: '@yaks/openai', facets: ['vocab'] },
     { use: '@yaks/tools', facets: ['vocab'] },

@@ -691,6 +691,11 @@ provider's own `mark`, which @yaks/session calls with the dispatch instant
 and a provider that knows none records the expiry unknown. Existing asks without
 expiry remain cold, so no backfill is needed.
 
+A persona may ask for longer: `cache{retention}` on it is the seconds its
+conversations ask their provider to keep the cached prefix
+(`Request.cacheRetention`), in place of the provider's own. yaks.app's Operator
+reads it off its persona.
+
 ## Stalls
 
 Every provider stream fails as `stalled` (a `ModelError` coded `stalled`) once

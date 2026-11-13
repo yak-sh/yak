@@ -210,8 +210,9 @@ export let offered = (
   return { setup, voices, ways, paces: PACES, backends }
 }
 
-/** What an Operator may set its call settings to, one line a setting, in
- * the ids its `operator{}` holds: the choices its settings page offers. */
+/** What an Operator may set its call settings to, one line a property of
+ * its persona's `speech{}` (@yaks/speech), in the ids it holds: the choices
+ * its settings page offers. */
 export let choices = (
   env: Speaking,
   space: Pick<Space, 'voice' | 'voice_model' | 'voice_speed' | 'voice_backend'>,
@@ -221,9 +222,9 @@ export let choices = (
     xs.map((x) => `${x.id} (${x.name})`).join(', ')
   return [
     `voice: ${list(voices)}`,
-    `voice_speed: ${list(paces)}`,
-    `voice_model: ${list(ways.map((w) => ({ id: w.model, name: w.name })))}`,
-    `voice_backend: ${list(backends)}`,
+    `pace: ${list(paces)}`,
+    `model: ${list(ways.map((w) => ({ id: w.model, name: w.name })))}`,
+    `backend: ${list(backends)}`,
   ].join('\n')
 }
 

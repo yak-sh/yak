@@ -1,7 +1,6 @@
 // The directory’s Worker-owned words beside the package platform vocabulary.
 import { CORE_URI, type VocabDoc } from '@yaks/vocab'
 import { sweepDoc } from './sweep-vocab.ts'
-import { operatorDoc } from '../operator-vocab.ts'
 import { bool, num, owned, ref, text, time, unique } from './schema.ts'
 export let directoryDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
@@ -117,13 +116,6 @@ export let directoryDoc: VocabDoc = {
         by: owned(ref('keep')),
       },
     },
-    // The Operator's settings are its persona's, in its own store
-    // (operator-persona.ts `held`). The directory keeps a copy of its name,
-    // which the store's `operator_named` writes, for what reads a space
-    // without its store (lists, letters, christening). Its other properties
-    // are what the store copies from on its first read, until every store
-    // has copied them.
-    operator: operatorDoc.$defs!.operator,
     // The picture a space wears where its first letter stood (pages.ts
     // `choice`): the bytes at `sha` in the bucket under the space's
     // handle (apps.ts `LOGO`), and their image type. Its owner sets it in

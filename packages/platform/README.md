@@ -14,7 +14,10 @@ the space that shared it, and `upstream` where something someone outside the
 platform wrote came from and under which licence; `plan` is what is being paid
 for, a mirror of one Stripe subscription, and `meter` is the usage it is billed
 on; `signin` is a sign-in in progress, and `report` is an error a deployed app
-reported.
+reported. `operator{name}` on a space is what its Operator is called, a copy of
+its persona's title for what reads the space without the Operator's store; its
+other properties are retired, read only by a store moving its persona from
+before they were the persona's.
 
 yaks.app's directory (`workers/yak`) loads these declarations from this package.
 The Worker declares its own directory words alongside them.

@@ -128,3 +128,14 @@ argument; nothing here reads the environment.
 
 A refusal rejects with `SpeechError`, carrying the provider's HTTP `status` and
 its words; `retry` is true for a 429, a 5xx, or no answer at all.
+
+## How a persona speaks
+
+`@yaks/speech/vocab` declares `speech{voice, pace, model, backend}`, which any
+persona carries: the voice it speaks in (an id, which names its provider), how
+fast (by the host's name for a pace), the model that answers it on a call, and
+the larger model that model hands a hard request to. Each is an id the host
+knows. `speechFrom(persona, base, …)` reads it: each property is the first row's
+in the chain that holds it, so a persona without one takes its base persona's,
+and one none of them holds is absent, for the host to choose. yaks.app's
+Operator keeps its voice this way (workers/yak/operator-persona.ts).

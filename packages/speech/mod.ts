@@ -16,6 +16,7 @@ export {
   unbase64,
 } from './audio.ts'
 export { query } from './query.ts'
+export { type Speech, speechFrom } from './speech-from.ts'
 import { message } from '@yaks/model'
 import { muted, sounds, trimmed } from './audio.ts'
 

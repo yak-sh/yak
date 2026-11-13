@@ -3,7 +3,7 @@
 // is copied to the directory, which reads it without the store (T-151515).
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import type { Comp } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
 import { short } from '@yaks/id'
 import type { Item, Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
@@ -11,7 +11,7 @@ import { directoryOf } from './directory.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
-import { held, personaFor, setting } from './operator-persona.ts'
+import { BASE, held, personaFor, setting } from './operator-persona.ts'
 import { handleChannels, receive } from './operator-channels.ts'
 
 let owner = crypto.randomUUID()
@@ -46,7 +46,8 @@ let script = (req: Request): Item[] => {
         self: true,
         bundles: [{
           entity: { eid: persona },
-          operator: { name: renamed, voice: 'aura-2-pandora-en' },
+          doc: { title: renamed },
+          speech: { voice: 'aura-2-pandora-en' },
         }],
       }),
     }]
@@ -87,13 +88,13 @@ let [own] = await store.g.get([persona])
 test('asked, the Operator renames itself and changes its voice by writing its own persona', async () => {
   assertStringIncludes(
     String(asked[0].instructions),
-    `operator{name, voice, voice_speed, voice_model, voice_backend} on your persona ${
+    `on your persona ${
       short(persona)
-    }`,
+    } in your own graph: your name is its doc{title}, and how you speak on a call its speech{voice, pace, model, backend}`,
   )
   assertStringIncludes(String(asked[0].instructions), 'aura-2-pandora-en (')
-  assertEquals((own.operator as Comp).name, renamed)
-  assertEquals((own.operator as Comp).voice, 'aura-2-pandora-en')
+  assertEquals((own.doc as Comp).title, renamed)
+  assertEquals((own.speech as Comp).voice, 'aura-2-pandora-en')
   assertEquals(sent.at(-1), `I am ${renamed} now, speaking as Pandora.`)
   // The directory's copy of its name follows, for what reads it there.
   assertEquals((await dir.at(space.eid))!.operator, renamed)
@@ -102,24 +103,62 @@ test('asked, the Operator renames itself and changes its voice by writing its ow
 test('its page writes the same persona, as the person asked', async () => {
   assertEquals(
     await setting(store.g, space, owner, { voice_speed: 'brisk' }),
-    { name: renamed, voice: 'aura-2-pandora-en', voice_speed: 'brisk' },
+    {
+      name: renamed,
+      voice: 'aura-2-pandora-en',
+      voice_speed: 'brisk',
+      voice_model: null,
+      voice_backend: null,
+      cache_retention: null,
+    },
   )
   let [row] = await store.g.get([persona])
+  assertEquals(row.speech, { voice: 'aura-2-pandora-en', pace: 'brisk' })
   assertEquals((row.updated as Comp).by, owner)
+})
+
+// The persona as the store holds it: its settings and nothing else.
+let kept = (b: Bundle) => ({
+  doc: b.doc,
+  speech: b.speech,
+  cache: b.cache,
+  operator: b.operator,
 })
 
 test("a space's directory settings are copied onto its persona once, never over its own", async () => {
   let fresh = operatorMemory()
   let old = { ...space, voice: 'aura-2-draco-en', cache_retention: 3600 }
   let first = await held(fresh.g.storage, old)
-  assertEquals(first.copy.map((b) => b.operator), [{
-    name: space.operator,
-    voice: 'aura-2-draco-en',
-    cache_retention: 3600,
+  assertEquals(first.copy.map(kept), [{
+    doc: { title: space.operator },
+    speech: { voice: 'aura-2-draco-en' },
+    cache: { retention: 3600 },
+    operator: undefined,
   }])
   await fresh.g.apply(first.copy, { trusted: true })
   let again = await held(fresh.g.storage, { ...old, voice: 'aura-2-luna-en' })
   assertEquals(again.copy, [])
   assertEquals(again.space.voice, 'aura-2-draco-en')
   assertEquals(again.space.cache_retention, 3600)
+})
+
+test('a persona holding the retired operator{} moves onto its title, speech{} and cache{}, once', async () => {
+  let fresh = operatorMemory()
+  await fresh.g.apply([{
+    entity: { eid: persona },
+    doc: { title: `Kit, the Operator of ${space.slug}` },
+    persona: { base: BASE, home: space.eid },
+    operator: { name: 'Kit', voice_speed: 'relaxed', cache_retention: 600 },
+  }], { trusted: true })
+  let first = await held(fresh.g.storage, space)
+  assertEquals(first.space.operator, 'Kit')
+  await fresh.g.apply(first.copy, { trusted: true })
+  let [row] = await fresh.g.get([persona])
+  assertEquals(kept(row), {
+    doc: { title: 'Kit' },
+    speech: { pace: 'relaxed' },
+    cache: { retention: 600 },
+    operator: undefined,
+  })
+  assertEquals((await held(fresh.g.storage, space)).copy, [])
 })

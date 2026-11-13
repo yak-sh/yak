@@ -61,28 +61,29 @@ import * as eager0_56 from '@yaks/sandbox/vocab'
 import * as eager0_57 from '@yaks/secrets/vocab'
 import * as eager0_58 from '@yaks/session/vocab'
 import * as eager0_59 from '@yaks/spawn/vocab'
-import * as eager0_60 from '@yaks/spend/vocab'
-import * as eager0_61 from '@yaks/sqlite/vocab'
-import * as eager0_62 from '@yaks/task/vocab'
-import * as eager0_63 from '@yaks/timing/vocab'
-import * as eager0_64 from '@yaks/tmux/vocab'
-import * as eager0_65 from '@yaks/tools/vocab'
-import * as eager0_66 from '@yaks/topic/vocab'
-import * as eager0_67 from '@yaks/tracker/vocab'
-import * as eager0_68 from '@yaks/trial/vocab'
-import * as eager0_69 from '@yaks/tunnel/vocab'
-import * as eager0_70 from '@yaks/ux/vocab'
-import * as eager0_71 from '@yaks/visualize/vocab'
-import * as eager0_72 from '@yaks/vocab/vocab'
-import * as eager0_73 from '@yaks/wake/vocab'
-import * as eager0_74 from './facets/app-vocab.ts'
-import * as eager0_75 from './facets/attribution-vocab.ts'
-import * as eager0_76 from './facets/directory-vocab.ts'
-import * as eager0_77 from './facets/git-vocab.ts'
-import * as eager0_78 from './facets/meter-vocab.ts'
-import * as eager0_79 from './facets/models-vocab.ts'
-import * as eager0_80 from './facets/refusals-vocab.ts'
-import * as eager0_81 from './facets/trash-vocab.ts'
+import * as eager0_60 from '@yaks/speech/vocab'
+import * as eager0_61 from '@yaks/spend/vocab'
+import * as eager0_62 from '@yaks/sqlite/vocab'
+import * as eager0_63 from '@yaks/task/vocab'
+import * as eager0_64 from '@yaks/timing/vocab'
+import * as eager0_65 from '@yaks/tmux/vocab'
+import * as eager0_66 from '@yaks/tools/vocab'
+import * as eager0_67 from '@yaks/topic/vocab'
+import * as eager0_68 from '@yaks/tracker/vocab'
+import * as eager0_69 from '@yaks/trial/vocab'
+import * as eager0_70 from '@yaks/tunnel/vocab'
+import * as eager0_71 from '@yaks/ux/vocab'
+import * as eager0_72 from '@yaks/visualize/vocab'
+import * as eager0_73 from '@yaks/vocab/vocab'
+import * as eager0_74 from '@yaks/wake/vocab'
+import * as eager0_75 from './facets/app-vocab.ts'
+import * as eager0_76 from './facets/attribution-vocab.ts'
+import * as eager0_77 from './facets/directory-vocab.ts'
+import * as eager0_78 from './facets/git-vocab.ts'
+import * as eager0_79 from './facets/meter-vocab.ts'
+import * as eager0_80 from './facets/models-vocab.ts'
+import * as eager0_81 from './facets/refusals-vocab.ts'
+import * as eager0_82 from './facets/trash-vocab.ts'
 import * as eager1_0 from '@yaks/anthropic/provider'
 import * as eager1_1 from '@yaks/openai/provider'
 import * as eager1_2 from '@yaks/openrouter/provider'
@@ -150,28 +151,29 @@ export let vocabFacets: Record<string, VocabFacet> = {
   '@yaks/secrets': eager0_57,
   '@yaks/session': eager0_58,
   '@yaks/spawn': eager0_59,
-  '@yaks/spend': eager0_60,
-  '@yaks/sqlite': eager0_61,
-  '@yaks/task': eager0_62,
-  '@yaks/timing': eager0_63,
-  '@yaks/tmux': eager0_64,
-  '@yaks/tools': eager0_65,
-  '@yaks/topic': eager0_66,
-  '@yaks/tracker': eager0_67,
-  '@yaks/trial': eager0_68,
-  '@yaks/tunnel': eager0_69,
-  '@yaks/ux': eager0_70,
-  '@yaks/visualize': eager0_71,
-  '@yaks/vocab': eager0_72,
-  '@yaks/wake': eager0_73,
-  'yak/app': eager0_74,
-  'yak/attribution': eager0_75,
-  'yak/directory': eager0_76,
-  'yak/git': eager0_77,
-  'yak/meter': eager0_78,
-  'yak/models': eager0_79,
-  'yak/refusals': eager0_80,
-  'yak/trash': eager0_81,
+  '@yaks/speech': eager0_60,
+  '@yaks/spend': eager0_61,
+  '@yaks/sqlite': eager0_62,
+  '@yaks/task': eager0_63,
+  '@yaks/timing': eager0_64,
+  '@yaks/tmux': eager0_65,
+  '@yaks/tools': eager0_66,
+  '@yaks/topic': eager0_67,
+  '@yaks/tracker': eager0_68,
+  '@yaks/trial': eager0_69,
+  '@yaks/tunnel': eager0_70,
+  '@yaks/ux': eager0_71,
+  '@yaks/visualize': eager0_72,
+  '@yaks/vocab': eager0_73,
+  '@yaks/wake': eager0_74,
+  'yak/app': eager0_75,
+  'yak/attribution': eager0_76,
+  'yak/directory': eager0_77,
+  'yak/git': eager0_78,
+  'yak/meter': eager0_79,
+  'yak/models': eager0_80,
+  'yak/refusals': eager0_81,
+  'yak/trash': eager0_82,
 }
 /** The providers config.ts `providing` and `serving` name, by plugin. */
 export let providerFacets: Record<string, ProviderFacet> = {

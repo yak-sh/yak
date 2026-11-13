@@ -1312,14 +1312,14 @@ export let operating = (
         }
         reached('payer', space)
         // The space may ask its provider to keep the cached prefix longer than
-        // the default (`operator{cache_retention}` on its persona).
+        // the default (@yaks/model `cache{retention}` on its persona).
         let [[own], payer] = space
           ? await Promise.all([
-            g.get([personaFor(space)], ['operator']),
+            g.get([personaFor(space)], ['cache']),
             dir().at(space),
           ])
           : [[], null]
-        let kept = comp(own, 'operator')?.cache_retention as number | undefined
+        let kept = comp(own, 'cache')?.retention as number | undefined
         // A newcomer's Operator reads only the site they gave (newcomer.ts
         // `fetchable`).
         let sites = payer ? fetchable(payer) : undefined

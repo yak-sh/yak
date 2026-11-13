@@ -2,20 +2,16 @@ import type { VocabDoc } from '@yaks/vocab'
 
 export let operatorDoc: VocabDoc = {
   $defs: {
-    // The Operator's settings, on its persona (operator-persona.ts
-    // `personaFor`): what it is called (operator-name.ts), the voice it
-    // speaks in on a call (a @yaks/speech voice id, which names its provider
-    // too), how fast (speech.ts `PACES`), the model that answers it there
-    // and the larger one that model hands a hard request to (speech.ts
-    // `setupOf`); none, the platform's. `cache_retention` is how long, in
-    // seconds, its conversations ask the model's provider to keep their
-    // cached prefix (@yaks/model `Request.cacheRetention`). Its people change
-    // them on its settings page, and it changes them itself with graph_apply.
+    // Retired: the Operator's settings as its persona held them before
+    // its name was the persona's title, its voice @yaks/speech's `speech`
+    // and its cache @yaks/model's `cache`. The store moves them onto those on
+    // its first read of the persona (operator-persona.ts `held`), and this
+    // goes once every store has (T-164108).
     operator: {
       component: true,
       type: 'object',
       description:
-        "The Operator's settings: the name it goes by, the voice it speaks in on a call, how fast it speaks, the model that answers it on a call, the larger model that model hands a hard request to on the provider's side (none: the Operator), and how many seconds its model's provider keeps its conversations' cached prefix.",
+        "Retired: the Operator's settings from before they were its persona's title, speech{} and cache{}, which the store moves them onto on its first read.",
       properties: {
         name: { type: 'string' },
         voice: { type: 'string' },
@@ -417,13 +413,17 @@ export let operatorDoc: VocabDoc = {
       tries: 3,
       description: 'Deliver a kept answer through its originating channel.',
     },
+    // Declared here rather than beside @yaks/platform's `operator{name}`,
+    // which it writes, because only this store runs it: on the box every
+    // persona has a home, and nothing there would answer its runs.
     operator_named: {
       effect: true,
-      created: ['operator'],
-      changed: ['operator.name'],
+      target: '.persona.home',
+      created: ['doc'],
+      changed: ['doc.title'],
       tries: 5,
       description:
-        "Copy the Operator's name from its persona to its space's directory row, which lists, letters and pages read (operator-persona.ts `named`).",
+        "Copy the Operator's name, its persona's title, to its space's directory row, which lists, letters and pages read (operator-persona.ts `named`).",
     },
     operator_alert: {
       effect: true,

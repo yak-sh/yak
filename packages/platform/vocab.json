@@ -903,6 +903,37 @@
         "doc"
       ]
     },
+    "operator": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "what the space's Operator is called: a copy of its persona's doc{title}, for what reads a space without its store"
+        },
+        "voice": {
+          "type": "string",
+          "description": "retired: what a space's Operator store takes onto its persona's speech{} or cache{} on its first read, from before they were its persona's"
+        },
+        "voice_speed": {
+          "type": "string",
+          "description": "retired: what a space's Operator store takes onto its persona's speech{} or cache{} on its first read, from before they were its persona's"
+        },
+        "voice_model": {
+          "type": "string",
+          "description": "retired: what a space's Operator store takes onto its persona's speech{} or cache{} on its first read, from before they were its persona's"
+        },
+        "voice_backend": {
+          "type": "string",
+          "description": "retired: what a space's Operator store takes onto its persona's speech{} or cache{} on its first read, from before they were its persona's"
+        },
+        "cache_retention": {
+          "type": "number",
+          "description": "retired: what a space's Operator store takes onto its persona's speech{} or cache{} on its first read, from before they were its persona's"
+        }
+      },
+      "description": "a space's Operator, as the platform's directory knows it without the space's store"
+    },
     "written": {
       "component": true,
       "type": "object",

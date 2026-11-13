@@ -1,0 +1,31 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "speech",
+  "$defs": {
+    "speech": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "voice": {
+          "type": "string",
+          "description": "the voice it speaks in, by id; the id names its provider"
+        },
+        "pace": {
+          "type": "string",
+          "description": "how fast it speaks, by the host's name for a pace"
+        },
+        "model": {
+          "type": "string",
+          "description": "the model that answers it on a call"
+        },
+        "backend": {
+          "type": "string",
+          "description": "the larger model the talking model hands a hard request to on its provider's side"
+        }
+      },
+      "description": "how a persona speaks aloud: a property it lacks is its base persona's, then the host's"
+    }
+  }
+}

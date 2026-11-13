@@ -22,12 +22,13 @@ import * as eager0_18 from '@yaks/platform/vocab'
 import * as eager0_19 from '@yaks/project/vocab'
 import * as eager0_20 from '@yaks/provenance/vocab'
 import * as eager0_21 from '@yaks/session/vocab'
-import * as eager0_22 from '@yaks/task/vocab'
-import * as eager0_23 from '@yaks/tools/vocab'
-import * as eager0_24 from '@yaks/topic/vocab'
-import * as eager0_25 from '@yaks/trial/vocab'
-import * as eager0_26 from '@yaks/wake/vocab'
-import * as eager0_27 from './facets/operator-vocab.ts'
+import * as eager0_22 from '@yaks/speech/vocab'
+import * as eager0_23 from '@yaks/task/vocab'
+import * as eager0_24 from '@yaks/tools/vocab'
+import * as eager0_25 from '@yaks/topic/vocab'
+import * as eager0_26 from '@yaks/trial/vocab'
+import * as eager0_27 from '@yaks/wake/vocab'
+import * as eager0_28 from './facets/operator-vocab.ts'
 /** Each plugin's words, by plugin. */
 export let vocabFacets: Record<string, VocabFacet> = {
   '@yaks/alias': eager0_0,
@@ -52,12 +53,13 @@ export let vocabFacets: Record<string, VocabFacet> = {
   '@yaks/project': eager0_19,
   '@yaks/provenance': eager0_20,
   '@yaks/session': eager0_21,
-  '@yaks/task': eager0_22,
-  '@yaks/tools': eager0_23,
-  '@yaks/topic': eager0_24,
-  '@yaks/trial': eager0_25,
-  '@yaks/wake': eager0_26,
-  'yak/operator': eager0_27,
+  '@yaks/speech': eager0_22,
+  '@yaks/task': eager0_23,
+  '@yaks/tools': eager0_24,
+  '@yaks/topic': eager0_25,
+  '@yaks/trial': eager0_26,
+  '@yaks/wake': eager0_27,
+  'yak/operator': eager0_28,
 }
 let facets: Record<string, () => Promise<unknown>> = {
   '@yaks/alias/graph': () => import('@yaks/alias/graph'),

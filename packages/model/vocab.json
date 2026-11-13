@@ -99,6 +99,18 @@
         }
       }
     },
+    "cache": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "retention": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "seconds its sessions' model requests ask the provider to keep their cached prefix (`Request.cacheRetention`)"
+        }
+      },
+      "description": "how long a persona's conversations ask their model's provider to keep a cached prefix, in place of the provider's own"
+    },
     "model": {
       "component": true,
       "type": "object",
@@ -353,8 +365,12 @@
       "type": "object",
       "description": "the provider-neutral identity of a streamed text item, retained on its output entry for completed-result recovery",
       "properties": {
-        "index": { "type": "integer" },
-        "id": { "type": "string" }
+        "index": {
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        }
       }
     },
     "model_result": {

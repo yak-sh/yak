@@ -2,7 +2,8 @@
   "name": "@yaks/speech",
   "version": "0.2.33",
   "exports": {
-    ".": "./mod.ts"
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts"
   },
   "license": "Apache-2.0",
   "description": "Speech to text, text to speech and speech to speech, each provider given as data: Deepgram and OpenAI, their endpoints, models, voices and prices.",
@@ -12,6 +13,7 @@
     "@std/assert": "npm:@jsr/std__assert@^1.0.0"
   },
   "dependencies": {
-    "@yaks/model": "0.2.32"
+    "@yaks/model": "0.2.32",
+    "@yaks/vocab": "0.2.32"
   }
 }

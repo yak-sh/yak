@@ -4352,6 +4352,9 @@ importers:
       '@yaks/model':
         specifier: 0.2.32
         version: link:../model
+      '@yaks/vocab':
+        specifier: 0.2.32
+        version: link:../vocab
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
