@@ -2998,6 +2998,24 @@ let served = async (
   let calendarToken = /^\/calendar\/([a-zA-Z0-9_-]+)\.ics$/.exec(path)?.[1]
   if (path == '/calendar.ics' || calendarToken) {
     if (edge) return passed()
+    // The app's own worker answers its feed first, as it answers every other
+    // address of its own (rung 2): the township's adds its meetings. Its 404
+    // passes to the platform's feed of the app's `event` rows, as a page's
+    // passes to its files. Never the worker's own request coming back, which
+    // would ask it again, and a sandboxed app's worker hears no cookie's
+    // person: its page tokens are what open it.
+    let own = bearing(req) ? null : await c.time('worker', async () =>
+      ran(
+        env,
+        space!,
+        app!,
+        req,
+        walls
+          ? { person: null, role: null }
+          : await whoIs(req, env.SESSION_SECRET, seatOf, space!.eid),
+      ))
+    if (own && own.status != 404) return own
+    await own?.body?.cancel()
     let { calendarOut } = await import('./calendar.ts')
     return calendarOut(req, env, space, app, calendarToken)
   }

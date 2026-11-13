@@ -60,8 +60,10 @@ Google Calendar using “From URL”; the calendar provider refreshes it on its 
 schedule. Timed events with a zone use matching `TZID` values on `DTSTART` and
 `DTEND`; all-day events stay dates. The feed reads as an anonymous visitor,
 excluding person-owned rows and rows carrying `cancelled{at, by, via, reason}`.
-A private app has no public feed. Event expansion and feed serialization live in
-`@yaks/events`.
+A private app has no public feed. An app with a worker is asked first, as at
+every address of its own: a worker that draws its own feed answers
+`./calendar.ics` (and `./calendar/<token>.ics`), and its 404 passes to this one.
+Event expansion and feed serialization live in `@yaks/events`.
 
 **`feed`** — `person` (eid), `token` (text). A person's private calendar
 subscription, served at `./calendar/<token>.ics`, including on private apps. It

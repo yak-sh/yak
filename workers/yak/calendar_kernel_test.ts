@@ -108,6 +108,30 @@ await seeded.body?.cancel()
 let oldFeed = await k.at(host, `/${legacy}/calendar.ics`)
 let oldText = await oldFeed.text()
 
+// An app whose worker draws its own feed, and one whose worker passes. The
+// namespace is bound last, so every request above asked no worker.
+let drawn = `drawn${crypto.randomUUID().slice(0, 6)}`
+await agent.tool('app_new', { slug: drawn, title: 'Drawn', access: 'public' })
+let asked: string[] = []
+env.DISPATCH = {
+  get: () => ({
+    fetch: (r: Request) => {
+      let at = new URL(r.url).pathname
+      asked.push(at)
+      return Promise.resolve(
+        at == `/${drawn}/calendar.ics`
+          ? new Response('BEGIN:VCALENDAR\r\nX-DRAWN:worker\r\n', {
+            headers: { 'content-type': 'text/calendar' },
+          })
+          : new Response('not found', { status: 404 }),
+      )
+    },
+  }),
+} as unknown as Env['DISPATCH']
+let ownFeed = await (await k.at(host, `/${drawn}/calendar.ics`)).text()
+let passedFeed = await (await k.at(host, `/${legacy}/calendar.ics`)).text()
+delete (env as Partial<Env>).DISPATCH
+
 test('calendar.ics serves current graph events without cookies or a login', () => {
   equal(response.status, 200)
   equal(response.headers.get('content-type'), 'text/calendar; charset=utf-8')
@@ -141,4 +165,10 @@ test('calendar subscriptions support HEAD and refuse writes', async () => {
   equal(await head.text(), '')
   equal(post.status, 405)
   equal(post.headers.get('allow'), 'GET, HEAD')
+})
+
+test("an app's worker answers its own calendar.ics first; its 404 is the platform's feed", () => {
+  equal(ownFeed, 'BEGIN:VCALENDAR\r\nX-DRAWN:worker\r\n')
+  equal(asked, [`/${drawn}/calendar.ics`, `/${legacy}/calendar.ics`])
+  equal(passedFeed, oldText)
 })
