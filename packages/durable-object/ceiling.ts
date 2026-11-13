@@ -18,7 +18,11 @@
 // host must still write while stopped (keeping a person's write for later,
 // or a pool's word on how a run ended) it runs in `free`, synchronously or
 // across awaits, which counts against windows of its own: told past them,
-// it stops nothing, so work that must not stop leaves no stop behind it. A
+// it stops nothing, so work that must not stop leaves no stop behind it.
+// Work whose cost is the object's own size, once, is `take`n: a deploy's
+// schema, or an index over a table past what any window writes, which SQLite
+// builds in one statement no window can split. It stops nothing and is told
+// only as a scan, since it never runs away: it ends when the file is built. A
 // host asks `stopped` at its doors, so a stopped object answers there rather
 // than failing deep inside, and one whose stopping costs more than its rows
 // (every door reads it) is `spare`d: told, never refused.
@@ -195,6 +199,11 @@ export type Ceiling = {
    * those of the work it awaits until it settles. What they cost is told,
    * and stops nothing. */
   free: <T>(body: () => T) => T
+  /** Run work the object takes whatever it costs, once: its schema, an index
+   * no window can hold. Like {@link free} it stops nothing, across awaits;
+   * its rows count against no window and are never told as a runaway, only
+   * as a scan. Work it awaits that runs `free` is told as free work is. */
+  take: <T>(body: () => T) => T
   /** Refuse nothing from now on, and go on telling: for an object whose
    * stopping costs more than its rows. */
   spare: () => void
@@ -315,9 +324,10 @@ export let ceiling = (
   // The work running in `free`, and how many such are running: a statement
   // is free when it runs in one's async context while that work is open. A
   // timer or task the work leaves behind runs charged once it ends.
-  let freeing = new AsyncLocalStorage<{ open: boolean }>()
+  let freeing = new AsyncLocalStorage<{ open: boolean; taken?: boolean }>()
   let open = 0
   let freed = () => open > 0 && freeing.getStore()?.open == true
+  let taken = () => freed() && freeing.getStore()?.taken == true
   // The lane whose work is running, as `free` knows its own.
   let laning = new AsyncLocalStorage<{ name: string; open: boolean }>()
   // Runs `run` and closes `work` once it settles, across its awaits.
@@ -339,6 +349,12 @@ export let ceiling = (
     }
     if (!(out instanceof Promise)) return end(), out
     return out.finally(end) as T
+  }
+  // Runs `body` free, or taken: counted against no window at all.
+  let unstopped = <T>(body: () => T, taken: boolean): T => {
+    let work = { open: true, taken }
+    open++
+    return settled(work, () => freeing.run(work, body), () => open--)
   }
   let broken = false
   let say = (error: Scan | Runaway, told: Told) => {
@@ -390,7 +406,8 @@ export let ceiling = (
     let named = rowsRead + rowsWritten >= NAMED ? shape() : ''
     let cost: Cost = { calls: 1, rowsRead, rowsWritten }
     let tell: [Scan | Runaway, Told][] = []
-    let charged = !freed(), list = charged ? live() : loose, moved = false
+    let charged = !freed(), moved = false
+    let list = charged ? live() : taken() ? [] : loose
     let lane = charged ? laning.getStore() : undefined
     for (let i = 0; i < list.length; i++) {
       let s = list[i]
@@ -522,11 +539,8 @@ export let ceiling = (
     refusal,
     stopped: (writing) => refusal(writing)?.retry.after ?? 0,
     under,
-    free: (body) => {
-      let work = { open: true }
-      open++
-      return settled(work, () => freeing.run(work, body), () => open--)
-    },
+    free: (body) => unstopped(body, false),
+    take: (body) => unstopped(body, true),
     lane: (name, body) => {
       let work = { name, open: true }
       return settled(work, () => laning.run(work, body))

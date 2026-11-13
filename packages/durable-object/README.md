@@ -64,7 +64,11 @@ holds across the awaits of an asynchronous body until it settles and not for the
 timers it leaves; work that must not stop half way runs on
 `freely(ctx.storage)`, a driver that counts and never refuses. What runs free
 counts against windows of its own: it is told past them and stops nothing, so a
-relocation's new object takes writes once it serves. Work that can wait asks
+relocation's new object takes writes once it serves. Work whose cost is the
+object's own size, once, runs inside `take(body)`: a deploy's schema install, or
+an index over a table past what any window writes, which SQLite builds in one
+statement. It stops nothing, counts against no window and is told only as a
+scan, never as a runaway. Work that can wait asks
 `under(share, written?, lane?)` how long until the object has spent under that
 share of every window. Run as a lane's work (`lane(name, body)`, across awaits
 like `free`), the share is of that lane's own rows, so two kinds of background

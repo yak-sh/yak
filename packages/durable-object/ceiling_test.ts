@@ -154,6 +154,20 @@ test('work a stopped object runs free takes statements across its awaits, and wh
   assertThrows(() => c.admit(true), Stopped)
 })
 
+test('work an object takes stops nothing, spends no window and is told only as a scan', async () => {
+  let { c, told, ran } = bound({ refuse: true })
+  ran(0, 0, 1_001)
+  await c.take(async () => {
+    await Promise.resolve()
+    c.admit(true)
+    ran(0, 0, 1_000_000)
+    ran(200_000, 3)
+    c.free(() => ran(0, 0, 1_001))
+  })
+  equal(told.map((t) => t.split(' ')[0]), ['Runaway', 'Scan', 'Runaway'])
+  equal([c.spent()[0].read, c.spent()[0].written], [0, 1_001])
+})
+
 test('an object that does not refuse is told and goes on', () => {
   let { c, told, ran } = bound()
   ran(2_000_000)

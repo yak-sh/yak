@@ -3205,10 +3205,11 @@ export class Store extends Durable {
   }
 
   #installDeployment = async (): Promise<void> => {
-    // A deploy's schema is the store's to take whatever it costs, as a
-    // relocation's file is: run free, it is told past its windows and never
-    // stops the writes of the people the store serves (`#ceiling`).
-    this.ceiling.free(() => this.#graph.storage.install())
+    // A deploy's schema is the store's to take whatever it costs: its index
+    // builds and a spine's move write a row per entity, once, so it never
+    // stops the writes of the people the store serves and is never told as a
+    // runaway (@yaks/durable-object `take`).
+    this.ceiling.take(() => this.#graph.storage.install())
     this.#unanalyzed = null
     await watchEmbedding(statements(this.#sql), this.#texts.fields)
     // A deploy is where the model can change: where a stored vector was made

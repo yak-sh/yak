@@ -51,9 +51,10 @@ export let storage = (
   return Object.assign(store, {
     // Previewing a unit arms a host without running maintenance at boot.
     // A unit no window can hold (an index over a spine past its writes in a
-    // minute) runs free, told and never refused, as a deploy's install does:
-    // paced, it would wait for a window that never comes, and the object
-    // would serve without it for good.
+    // minute) is taken, as a deploy's install is: paced, it would wait for a
+    // window that never comes, and the object would serve without it for
+    // good. Its rows are the file's, once, so it stops nothing and is never
+    // told as a runaway (./ceiling.ts `take`).
     upkeep: (run = true) => {
       let wait = Infinity, huge = false
       let worked = store.maintain((written) => {
@@ -67,7 +68,7 @@ export let storage = (
         return run && next == 0
       })
       if (!worked && huge && run) {
-        worked = bound.free(() =>
+        worked = bound.take(() =>
           store.maintain((written) =>
             bound.under(share(written), written) == Infinity
           )

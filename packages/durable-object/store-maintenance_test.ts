@@ -215,8 +215,8 @@ test('a read does not force a reference index the object still owes, and uses it
 })
 
 // A spine past what any window may write: its owed index can never be paced
-// in, so it runs free (told, never refused), and no look at it reads the
-// spine whole.
+// in, so it is taken (never refused, never told as a runaway), and no look at
+// it reads the spine whole.
 let big = metered(), bigNow = 1_000, stops: Error[] = []
 let grown = storage(big.file, shop, { deferred: false })
 grown.install()
@@ -240,7 +240,7 @@ spine.install()
 // Its rows are classified already: only the index is owed.
 big.file.sql.exec("delete from server_meta where k='archetype:pending'")
 
-test('an index no window can hold is built free, and looking at it reads a row, not the spine', () => {
+test('an index no window can hold is taken, told nothing, and looking at it reads a row, not the spine', () => {
   let before = big.read()
   for (let n = 0; n < 10 && spine.upkeep(false) != null; n++) spine.upkeep()
   equal(spine.upkeep(false), null)
@@ -252,7 +252,7 @@ test('an index no window can hold is built free, and looking at it reads a row, 
     1,
   )
   equal(spine.read('.doc.title=big-499')[0].doc, { title: 'big-499' })
-  equal(stops.every((e) => /never stops/.test(e.message)), true)
+  equal(stops, [])
 })
 
 // A classified spine under its pointer index: a schema change reads only the
