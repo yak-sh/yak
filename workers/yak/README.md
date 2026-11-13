@@ -908,16 +908,17 @@ guide pages in `guide.ts`, and its connector rows in `tools.ts`. App pages call
 `views.ts` to record visits. Store anatomy observes the assembly and the
 Worker's host hooks, commands and effect registrations in `anatomy.ts`.
 
-`config.ts` selects the directory, app and git stores' plugins, facets and
-words. `gen.ts` writes `load.ts` from those configs and package exports, using
-literal imports for bundled graph, effects and tool facets. The connector lists
-the configured package tools with `space` and, for app stores, `app`;
-`package-tools.ts` forwards their calls to the selected Store's `/call` ledger
-and runner as the caller. Published names whose contracts differ remain
-translations in `published.ts`; their package contracts use a `store_` prefix.
-The shared directory selects the space-bound memory save/recall loop, with space
-supplied by its host, and connections validate the selected owner and app. The
-Worker's own store facets live under `facets/`.
+`config.ts` `worker.stores` selects the directory, app and git stores' plugins,
+facets and words, one config for each kind the Store object serves. `gen.ts`
+writes `load.ts` from those configs and package exports, using literal imports
+for bundled graph, effects and tool facets. The connector lists the configured
+package tools with `space` and, for app stores, `app`; `package-tools.ts`
+forwards their calls to the selected Store's `/call` ledger and runner as the
+caller. Published names whose contracts differ remain translations in
+`published.ts`; their package contracts use a `store_` prefix. The shared
+directory selects the space-bound memory save/recall loop, with space supplied
+by its host, and connections validate the selected owner and app. The Worker's
+own store facets live under `facets/`.
 
 `mcp_connect` configures a person's remote MCP server in the directory as
 `mcp_server{owner,name,url,machine,enabled,allow,client_id}`. `mcp-remote.ts`

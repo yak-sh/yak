@@ -23,8 +23,10 @@
 import type { FacetName } from '@yaks/host'
 import { type Config, facetsOf, used } from '@yaks/host/config'
 
-/** The module of `config`, exported as `config`, and its `./worker` facets,
- * exported as `facets` by plugin. A plugin `local` names is imported from
+/** The module of `config`'s plugins, exported as `config`, and their
+ * `./worker` facets, exported as `facets` by plugin. What else the config
+ * says (its `stores`) is read by the code that serves it, so the entry
+ * evaluates none of it. A plugin `local` names is imported from
  * that path, relative to the module; any other from its package's `./worker`
  * subpath. */
 export let written = (
@@ -39,8 +41,10 @@ export let written = (
     ...plugins.map((p, i) =>
       `import * as worker${i} from ${JSON.stringify(local[p] ?? `${p}/worker`)}`
     ),
-    "/** The Worker's config. */",
-    `export let config: Config = ${JSON.stringify(config)}`,
+    "/** The Worker's config, as far as composing it reads: its plugins. */",
+    `export let config: Config = ${
+      JSON.stringify({ plugins: config.plugins })
+    }`,
     "/** Each plugin's `./worker` facet, by plugin. */",
     'export let facets: Record<string, WorkerFacet> = {',
     ...plugins.map((p, i) => `${JSON.stringify(p)}: worker${i},`),

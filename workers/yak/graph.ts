@@ -338,7 +338,7 @@ import {
 } from '@yaks/host/assembly'
 import { type Host as PluginHost, type Load } from '@yaks/host'
 import { type Config, given, meet, used } from '@yaks/host/config'
-import { configs, posts } from './config.ts'
+import { posts, worker } from './config.ts'
 import { privacyRules } from './privacy-move.ts'
 import { COPY as READ_OUT, copying } from './store-copy.ts'
 import { freely } from '@yaks/durable-object/sql'
@@ -481,7 +481,7 @@ export let vocabOfStore = (name: string, declared: unknown = {}): Vocab =>
     ? gitVocab()
     : appVocab(declared)
 
-let storeKind = (name: string): keyof typeof configs =>
+let storeKind = (name: string): keyof typeof worker.stores =>
   name == PLATFORM_STORE ? 'directory' : name == GIT_STORE ? 'git' : 'app'
 // The components a store's journal keeps, as its config's @yaks/journal entry
 // names them (`with.components`); absent, every one its words keep.
@@ -506,7 +506,7 @@ let assemblyOf = (
     byShape.set(
       shape,
       plan = assemble(
-        configs[storeKind(name)],
+        worker.stores[storeKind(name)],
         ['graph', 'effects'],
         loading,
         facets,
@@ -517,12 +517,12 @@ let assemblyOf = (
   return plan
 }
 let prepared = new Map<string, Promise<Prepared>>()
-let preparing = (kind: keyof typeof configs): Promise<Prepared> => {
+let preparing = (kind: keyof typeof worker.stores): Promise<Prepared> => {
   let held = prepared.get(kind)
   if (!held) {
     prepared.set(
       kind,
-      held = prepare(configs[kind], ['graph', 'effects'], load),
+      held = prepare(worker.stores[kind], ['graph', 'effects'], load),
     )
   }
   return held
@@ -1157,7 +1157,7 @@ export class Store {
           kind,
           await (this.#load == load
             ? preparing(kind)
-            : prepare(configs[kind], ['graph', 'effects'], this.#load)),
+            : prepare(worker.stores[kind], ['graph', 'effects'], this.#load)),
         )
       })()
       this.#facetsLoading.set(kind, loading)
@@ -1490,7 +1490,7 @@ export class Store {
     // Where the directory keeps a connection's credential (vault.ts). A key
     // comes out of a write before anything else reads it, and is sealed once
     // the write commits, by the same plugin; an app's store keeps none.
-    let kind = storeKind(name), config = configs[kind]
+    let kind = storeKind(name), config = worker.stores[kind]
     let observed = workerAnatomy(config)
     let host!: PluginHost
     let env = () => meta ? { ...this.#bind, META: this.#meta } : this.#bind

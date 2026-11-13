@@ -53,6 +53,11 @@ export type Config = {
    * `words` takes its whole vocabulary; `[]` takes none of its definitions.
    * `facets` restricts which subpaths are imported; omitted takes all. */
   plugins?: Plug[]
+  /** the kinds of store one host serves, each by its own config: a Worker
+   * whose one object class opens a recipe app's store and the platform's
+   * directory alike gives each kind its own plugins. A store reads its
+   * kind's; the host's own `plugins` are what serves them. */
+  stores?: Record<string, Config>
   /** what `yak serve` listens on (default @yaks/api's `PORT`) */
   port?: number
   /** which interface it binds (default @yaks/api's `HOSTNAME`, this machine

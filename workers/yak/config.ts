@@ -552,9 +552,10 @@ export let embedding: Config = {
 }
 
 /** The Worker itself (index.ts, @yaks/workerd `compose`): each plugin's
- * `./worker` facet, in the order the router asks them. The deploy's version
- * answers first, before the kernel's router is loaded. */
-export let worker: Config = {
+ * `./worker` facet, in the order the router asks them, and the kinds of store
+ * its Store object serves, each by its own plugins (graph.ts `storeKind`).
+ * The deploy's version answers first, before the kernel's router is loaded. */
+export let worker = {
   plugins: [
     {
       use: '@yaks/workerd',
@@ -562,13 +563,12 @@ export let worker: Config = {
     },
     'yak/kernel',
   ],
-}
-
-export let configs = {
-  app: appConfig,
-  directory: directoryConfig,
-  git: gitConfig,
-}
+  stores: {
+    app: appConfig,
+    directory: directoryConfig,
+    git: gitConfig,
+  },
+} satisfies Config
 
 /** The mail providers the kernel Worker itself lends to its layers: letters
  * it sends (post.ts), the notices a provider posts about them

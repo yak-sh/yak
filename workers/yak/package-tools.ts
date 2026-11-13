@@ -9,7 +9,7 @@ import { chosen, facetsOf, given, used } from '@yaks/host/config'
 import { selected } from '@yaks/host/documents'
 import { once } from '@yaks/fp'
 import { toolsIn } from '@yaks/vocab/tools'
-import { configs } from './config.ts'
+import { worker } from './config.ts'
 import { load, vocabFacets } from './load.ts'
 import { type Door, storeOf } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
@@ -30,9 +30,9 @@ import {
   SPACE,
 } from './tool.ts'
 
-type Kind = keyof typeof configs
+type Kind = keyof typeof worker.stores
 let contributions = (kind: Kind) =>
-  (configs[kind].plugins ?? []).flatMap((p) => {
+  (worker.stores[kind].plugins ?? []).flatMap((p) => {
     let facets = facetsOf(p)
     if (facets && !facets.includes('tools')) return []
     let plugin = used(p)

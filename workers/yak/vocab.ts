@@ -36,7 +36,7 @@ import { parse } from '@yaks/query'
 import { docs as lensDocs } from '@yaks/lens/vocab'
 import { declaredLenses, lensPaths, retainedLenses } from './lenses.ts'
 import { sessionLens } from './session-lens.ts'
-import { configs } from './config.ts'
+import { worker } from './config.ts'
 import { chosen, facetsOf, given, used } from '@yaks/host/config'
 import {
   type Taken,
@@ -67,9 +67,9 @@ export let appKeywords: Keywords[] = [
 export let metaKeywords: Keywords[] = [idKeywords, ...appKeywords]
 let appOptions: WordsOpts = { implicit: false, keywords: appKeywords }
 let metaOptions: WordsOpts = { implicit: false, keywords: metaKeywords }
-export type StoreKind = keyof typeof configs
+export type StoreKind = keyof typeof worker.stores
 let configured = Object.fromEntries(
-  Object.entries(configs).map((
+  Object.entries(worker.stores).map((
     [kind, config],
   ) => [
     kind,

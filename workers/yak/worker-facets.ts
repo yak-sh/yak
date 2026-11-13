@@ -3,7 +3,7 @@ import type { Config } from '@yaks/host/config'
 import type { WorkerFacet } from '@yaks/workerd'
 import * as worker0 from '@yaks/workerd/worker'
 import * as worker1 from './facets/kernel-worker.ts'
-/** The Worker's config. */
+/** The Worker's config, as far as composing it reads: its plugins. */
 export let config: Config = {
   'plugins': [{
     'use': '@yaks/workerd',
