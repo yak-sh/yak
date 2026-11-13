@@ -45,19 +45,20 @@
 // The roster alone, not the package: its root carries the MCP SDK and zod,
 // which a Wire waking to pass a line along never runs (T-37977).
 import { rosterLine } from '@yaks/mcp/roster'
-import { VERSION } from './running.ts'
+import { owed as restart, type Restartable, VERSION } from './running.ts'
 import type { Env } from './env.ts'
 import { fetchOf } from './door.ts'
+import { caught } from './defects.ts'
 import { evicted, jittered } from '@yaks/durable-object/resets'
-import { behind, type Restartable } from './running.ts'
+import {
+  Durable,
+  type Spec,
+  type State as Durables,
+} from '@yaks/durable-object/object'
 
 // The slice of the Durable Object runtime this object touches, structurally,
 // so `deno check` reads it without @cloudflare/workers-types.
-type Kv = {
-  get<T>(key: string): Promise<T | undefined>
-  put(key: string, value: unknown): Promise<void>
-}
-type State = Restartable & { storage: Kv }
+type State = Durables & Restartable
 type Meta = { id?: string; timestamp?: string }
 
 // What one person's log holds: a notification says "your list moved", so many
@@ -166,8 +167,8 @@ export let stale = (was: Roster, now: Roster): string | undefined =>
 // a second time.
 let KEPT = 64
 
-export class Wire {
-  state: State
+export class Wire extends Durable {
+  declare ctx: State
   // The release marker a resumed stream compares (T-33013): Cloudflare's
   // per-deploy version id, which the runtime mints fresh on every `wrangler
   // deploy` — so a deploy moves it with no file edit, which is the point. The
@@ -178,7 +179,7 @@ export class Wire {
   // The streams open right now, oldest first. This is the only thing here
   // that does not survive the object being evicted — which is what the log
   // in storage is for.
-  open = new Set<Held>()
+  streams = new Set<Held>()
   beat: ReturnType<typeof setInterval> | undefined
   // The log, read from storage once and held while the object lives.
   news: News | undefined
@@ -188,13 +189,24 @@ export class Wire {
   meta: Meta | undefined
 
   constructor(state: State, env: { CF_VERSION_METADATA?: Meta }) {
-    this.state = state
+    super(state)
     this.meta = env?.CF_VERSION_METADATA
     this.mark = this.meta?.id ?? VERSION
   }
 
+  // What the package's object opens: the door below, and nothing else. A
+  // caller on a later deploy restarts it first; its streams are nothing a
+  // restart may not cut, since they drop and resume as they do at any
+  // release, onto the new code.
+  protected override specify = (): Spec => ({
+    open: () => Promise.resolve({ serve: (req) => this.#serve(req) }),
+    report: (e, entry) => caught(e, { request: `wire ${entry}` }),
+    behind: (req) => restart(req.headers, this.meta, this.ctx),
+    busy: () => false,
+  })
+
   async log(): Promise<News> {
-    return this.news ??= await this.state.storage.get<News>('news') ??
+    return this.news ??= await this.keys.get<News>('news') ??
       { seq: 0, lines: [] }
   }
 
@@ -202,8 +214,8 @@ export class Wire {
   warm() {
     if (this.beat != null) return
     this.beat = setInterval(() => {
-      if (!this.open.size) return this.cool()
-      for (let held of this.open) held.send(': beat\n\n')
+      if (!this.streams.size) return this.cool()
+      for (let held of this.streams) held.send(': beat\n\n')
     }, BEAT)
   }
 
@@ -214,9 +226,9 @@ export class Wire {
   }
 
   drop(held: Held) {
-    if (!this.open.delete(held)) return
+    if (!this.streams.delete(held)) return
     held.end()
-    if (!this.open.size) this.cool()
+    if (!this.streams.size) this.cool()
   }
 
   // A platform release replaces the Worker, restarts this object and drops
@@ -233,7 +245,7 @@ export class Wire {
   // for clients that cannot be told apart. The newest KEPT sessions are
   // what the map holds.
   async crossed(held: Held) {
-    let spoke = await this.state.storage.get<Record<string, string>>(
+    let spoke = await this.keys.get<Record<string, string>>(
       'spoke',
     ) ?? {}
     let was = spoke[held.session]
@@ -246,35 +258,7 @@ export class Wire {
     delete spoke[held.session]
     spoke[held.session] = this.mark
     for (let old of Object.keys(spoke).slice(0, -KEPT)) delete spoke[old]
-    await this.state.storage.put('spoke', spoke)
-  }
-
-  // A release nobody here has spoken for yet. `crossed` above catches a
-  // stream attaching after one; this catches a stream that was already open
-  // when the platform moved under it, which is possible whenever this object
-  // outlives the isolate that made it — a rolling deploy, where one request
-  // arrives from the new version while a stream opened under the old one is
-  // still held. A deploy that restarts this object finds `open` empty and
-  // only writes the marker; the streams then reconnect and `crossed` tells
-  // each of them.
-  async released() {
-    let was = await this.state.storage.get<string>('mark')
-    if (was == this.mark) return
-    await this.state.storage.put('mark', this.mark)
-    // Nothing has ever been spoken for here: a first boot moved nothing.
-    if (was == null || !this.open.size) return
-    let spoke = await this.state.storage.get<Record<string, string>>('spoke') ??
-      {}
-    let sent = new Set<string>()
-    for (let held of [...this.open].reverse()) {
-      if (held.session && sent.has(held.session)) continue
-      if (held.session) sent.add(held.session)
-      for (let list of LISTS) {
-        held.send(bare({ method: `notifications/${list}/list_changed` }))
-      }
-      spoke[held.session] = this.mark
-    }
-    await this.state.storage.put('spoke', spoke)
+    await this.keys.put('spoke', spoke)
   }
 
   // What one session is holding, against what this door lists now (T-34277),
@@ -299,7 +283,7 @@ export class Wire {
       await this.keep(all, asked)
     }
     if (asked.init) return {}
-    let notices = await this.state.storage.get<string[]>('pending') ?? []
+    let notices = await this.keys.get<string[]>('pending') ?? []
     let replies = owed(await this.replies(), asked.agent ?? '')
     let text = [
       ...notices,
@@ -321,14 +305,14 @@ export class Wire {
   // not this one again.
   async said(said: Said): Promise<void> {
     if (said.notices?.length) {
-      let pending = await this.state.storage.get<string[]>('pending') ?? []
-      await this.state.storage.put(
+      let pending = await this.keys.get<string[]>('pending') ?? []
+      await this.keys.put(
         'pending',
         pending.filter((n) => !said.notices!.includes(n)),
       )
     }
     if (said.replies?.length) {
-      await this.state.storage.put(
+      await this.keys.put(
         'replies',
         paid(await this.replies(), said.agent ?? '', said.replies),
       )
@@ -338,17 +322,17 @@ export class Wire {
   }
 
   async replies(): Promise<Reply[]> {
-    return await this.state.storage.get<Reply[]>('replies') ?? []
+    return await this.keys.get<Reply[]>('replies') ?? []
   }
 
   // A reply one of the person's agents is owed, kept until a reply to that
   // agent carries it.
   async owe(reply: Reply): Promise<void> {
-    await this.state.storage.put('replies', owing(await this.replies(), reply))
+    await this.keys.put('replies', owing(await this.replies(), reply))
   }
 
   async listed(): Promise<Record<string, Roster>> {
-    return await this.state.storage.get<Record<string, Roster>>('listed') ?? {}
+    return await this.keys.get<Record<string, Roster>>('listed') ?? {}
   }
 
   // One session's roster, recorded as the newest of the KEPT.
@@ -356,7 +340,7 @@ export class Wire {
     delete all[held.session]
     all[held.session] = { version: held.version, names: held.names }
     for (let old of Object.keys(all).slice(0, -KEPT)) delete all[old]
-    await this.state.storage.put('listed', all)
+    await this.keys.put('listed', all)
   }
 
   // A client attaching its stream: what it missed, then the line stays open.
@@ -385,7 +369,7 @@ export class Wire {
       },
       end: () => void out.close().catch(() => {}),
     }
-    this.open.add(held)
+    this.streams.add(held)
     this.warm()
     // A comment frame is nothing to a client and proof to the one holding it
     // that the stream is live.
@@ -410,19 +394,19 @@ export class Wire {
   // the log is what makes it arrive anyway.
   async tell(told: Told): Promise<Response> {
     if (told.reply) {
-      let pending = await this.state.storage.get<string[]>('pending') ?? []
-      await this.state.storage.put('pending', [...pending, told.reply])
+      let pending = await this.keys.get<string[]>('pending') ?? []
+      await this.keys.put('pending', [...pending, told.reply])
     }
     let news = await this.log()
     let id = ++news.seq
     news.lines.push({ id, frame: framed(id, told) })
     news.lines.splice(0, news.lines.length - DEEP)
-    await this.state.storage.put('news', news)
+    await this.keys.put('news', news)
     let frame = news.lines[news.lines.length - 1].frame
     let sent = new Set<string>()
     // Newest stream first, so a session that reconnected hears on the
     // connection it is actually holding.
-    for (let held of [...this.open].reverse()) {
+    for (let held of [...this.streams].reverse()) {
       if (held.session && sent.has(held.session)) continue
       if (held.session) sent.add(held.session)
       held.send(frame)
@@ -430,15 +414,8 @@ export class Wire {
     return Response.json({ id })
   }
 
-  async fetch(req: Request): Promise<Response> {
-    // A caller on a later deploy restarts this object first. Its streams drop
-    // and resume as they do at any release, onto the new code.
-    await behind(req.headers, this.meta, this.state)
+  async #serve(req: Request): Promise<Response> {
     let path = new URL(req.url).pathname
-    // Every way in passes the release check first: this object is the one
-    // place that sees both the deploy it is running and the streams held
-    // open, and either kind of request may be the first after a release.
-    await this.released()
     if (path == '/open') return this.attach(req)
     if (path == '/tell') return this.tell(await req.json() as Told)
     if (path == '/roster') {

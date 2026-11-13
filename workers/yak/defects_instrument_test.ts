@@ -4,7 +4,7 @@ import type { Bundle } from '@yaks/graph'
 import { instrument } from './defects-runtime.ts'
 import { caught } from './defects.ts'
 import {
-  behind,
+  owed,
   type Restartable,
   WORKER_VERSION,
   WORKER_VERSION_AT,
@@ -62,11 +62,11 @@ test('instrumentation reports constructor, lifecycle and escaping RPC failures',
 class Retiring {
   constructor(private state: Restartable, private env: unknown) {}
   async fetch(req: Request) {
-    await behind(
+    await owed(
       req.headers,
       { id: 'old', timestamp: '2026-10-12T16:00:00Z' },
       this.state,
-    )
+    )?.()
     return new Response('answered')
   }
 }

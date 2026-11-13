@@ -16,6 +16,7 @@ import { batch as trackerBatch } from '../tracker/queue.ts'
 import { scopeOf } from '../tracker/worker.ts'
 import type { Env, Inbound, Vars } from './env.ts'
 import { Wire as Wired } from './stream.ts'
+import { durable as raw } from '../../packages/durable-object/testing.ts'
 import type { Limiter } from '@yaks/workerd/rate'
 import { sha256 } from './versions.ts'
 import { workspaces } from './workspace-probe.ts'
@@ -397,7 +398,11 @@ export let bindings = (secret: string, vars: Vars = {}) => {
   let wires = new Map<string, Wired>()
   let wire = (name: string): Wired => {
     let held = wires.get(name)
-    if (!held) wires.set(name, held = new Wired({ storage: kvStorage() }, env))
+    if (!held) {
+      let storage = Object.assign(raw(), kvStorage())
+      let ctx = { storage, acceptWebSocket() {}, getWebSockets: () => [] }
+      wires.set(name, held = new Wired(ctx, env))
+    }
     return held
   }
   let trackers = new Map<string, ReturnType<typeof trackerStore>>()

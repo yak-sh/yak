@@ -13,8 +13,9 @@
 // (@yaks/durable-object `evicted`) then meets the new code. A restart is not
 // free: twice on 2026-11-07 the instance after one waited 21 and 32 s to run
 // its first line, where Cloudflare's own moves started in under a second
-// (T-150897). The Wire and the Builder restart before anything (`behind`). A
-// store still behind its caller after its restart answers a refusal as a
+// (T-150897). The Wire and the Builder restart before anything, when they are
+// idle (@yaks/durable-object `Durable`'s `behind`, given `owed`). A store
+// still behind its caller after its restart answers a refusal as a
 // failure the caller sends again, and reports it (`skewed`, T-140262).
 //
 // The version is the runtime's own (`CF_VERSION_METADATA`): a fresh id and
@@ -124,7 +125,7 @@ export let restarting = (state: object): boolean => retiring.has(state)
 // so every caller's retry already knows them (@yaks/durable-object `evicted`).
 let BEHIND = 'Durable Object reset because a newer deploy reached it:'
 
-/** The deploy this object last restarted for, as `behind` keeps it. A record
+/** The deploy this object last restarted for, as `owed` keeps it. A record
  * in any other shape says nothing. */
 export let restartedFor = async (
   storage: Restartable['storage'],
@@ -155,6 +156,30 @@ export let ran = async (
  * to be, and it serves every caller no newer than the deploy it last restarted
  * for, refusing a newer one nothing (`skewed`). Running the restart fails the
  * requests in flight in the runtime's own words.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let kept = new Map<string, unknown>(), restarts: string[] = []
+ * let ctx = {
+ *   abort: (why?: string) => void restarts.push(why ?? ''),
+ *   storage: {
+ *     get: <T>(k: string) => Promise.resolve(kept.get(k) as T | undefined),
+ *     put: (k: string, v: unknown) => Promise.resolve(void kept.set(k, v)),
+ *   },
+ * }
+ * let from = (id: string, at: string) =>
+ *   new Headers({ [WORKER_VERSION]: id, [WORKER_VERSION_AT]: at })
+ * let mine = { id: 'a', timestamp: '2026-10-12T16:00:00Z' }
+ * let b = from('b', '2026-10-12T16:30:00Z')
+ * let c = from('c', '2026-10-12T16:31:00Z')
+ * for (let them of [b, b, c, b, c]) await owed(them, mine, ctx)?.()
+ * assertEquals(owed(from('z', '2026-10-12T15:00:00Z'), mine, ctx), null)
+ * assertEquals(restarts.length, 2)
+ * assertEquals(await restartedFor(ctx.storage), {
+ *   id: 'c',
+ *   at: '2026-10-12T16:31:00Z',
+ * })
+ * ```
  */
 export let owed = (
   headers: Headers,
@@ -173,42 +198,6 @@ export let owed = (
     retiring.add(ctx)
     abort.call(ctx, `${BEHIND} ${theirs.id}`)
   }
-}
-
-/**
- * Restart this object, before it does anything for the request, when it owes
- * its caller a restart (`owed`).
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * let kept = new Map<string, unknown>(), restarts: string[] = []
- * let ctx = {
- *   abort: (why?: string) => void restarts.push(why ?? ''),
- *   storage: {
- *     get: <T>(k: string) => Promise.resolve(kept.get(k) as T | undefined),
- *     put: (k: string, v: unknown) => Promise.resolve(void kept.set(k, v)),
- *   },
- * }
- * let from = (id: string, at: string) =>
- *   new Headers({ [WORKER_VERSION]: id, [WORKER_VERSION_AT]: at })
- * let mine = { id: 'a', timestamp: '2026-10-12T16:00:00Z' }
- * let b = from('b', '2026-10-12T16:30:00Z')
- * let c = from('c', '2026-10-12T16:31:00Z')
- * for (let them of [b, b, c, b, c]) await behind(them, mine, ctx)
- * await behind(from('z', '2026-10-12T15:00:00Z'), mine, ctx)
- * assertEquals(restarts.length, 2)
- * assertEquals(await restartedFor(ctx.storage), {
- *   id: 'c',
- *   at: '2026-10-12T16:31:00Z',
- * })
- * ```
- */
-export let behind = async (
-  headers: Headers,
-  mine: Meta | null | undefined,
-  ctx: Restartable,
-): Promise<void> => {
-  await owed(headers, mine, ctx)?.()
 }
 
 /** Whether an answer refuses its caller: what an object on an older deploy
@@ -289,7 +278,7 @@ let SKEWED =
 /**
  * The failure a refusal is, when the object that answered it runs an older
  * deploy than its caller: the runtime started it again on that older code
- * after it restarted for the caller (`behind`), so what it refused may be
+ * after it restarted for the caller (`owed`), so what it refused may be
  * only what its code does not know yet, a row or a door the caller's deploy
  * added. That is no mistake of the caller's: it is a failure, retryable, and
  * the store reports it. Any other answer is null.

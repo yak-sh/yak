@@ -4,15 +4,15 @@
 // per-deploy version id (CF_VERSION_METADATA.id), or the human VERSION when
 // that binding is absent — and tells a stream that crossed a release its three
 // lists moved, once per session, directly, off the log. The object is a plain
-// class over a structural storage slice, so a test constructs it with a
-// Map and an injected env, and reads the SSE frames straight off the attach
+// subclass of @yaks/durable-object's `Durable` over a stand-in state, so a
+// test constructs it with a Map for its keys and an injected env, and reads the SSE frames straight off the attach
 // Response. Passing env {} exercises the VERSION fallback the workerd probes
 // take, since they have no version-metadata binding either.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { VERSION } from './running.ts'
 import { resumable, Wire } from './stream.ts'
-import { kvStorage } from './testing.ts'
+import { state } from './testing.ts'
 
 let attached = async (wire: Wire, session: string) => {
   let res = await wire.attach(
@@ -29,12 +29,12 @@ let attached = async (wire: Wire, session: string) => {
 }
 
 let drained = (wire: Wire) => {
-  for (let held of [...wire.open]) wire.drop(held)
+  for (let held of [...wire.streams]) wire.drop(held)
 }
 
 test('a retained owner notice survives eviction and rides one reply after reconnecting', async () => {
-  let storage = kvStorage()
-  let wire = new Wire({ storage }, {})
+  let ctx = state('', false)
+  let wire = new Wire(ctx, {})
   await wire.fetch(
     new Request('http://wire/tell', {
       method: 'POST',
@@ -45,7 +45,7 @@ test('a retained owner notice survives eviction and rides one reply after reconn
       }),
     }),
   )
-  wire = new Wire({ storage }, {})
+  wire = new Wire(ctx, {})
   let held = { session: 'fresh', version: 'same', names: [] }
   let ask = (init = false) => wire.roster({ ...held, init })
   assertEquals(await ask(true), {})
@@ -59,8 +59,8 @@ test('a retained owner notice survives eviction and rides one reply after reconn
 })
 
 test('a support reply waits for its own agent across reconnects, until a reply carries it', async () => {
-  let storage = kvStorage()
-  let wire = new Wire({ storage }, {})
+  let ctx = state('', false)
+  let wire = new Wire(ctx, {})
   let owe = (id: string, agent = 'claude-ai') =>
     wire.fetch(
       new Request('http://wire/owe', {
@@ -71,7 +71,7 @@ test('a support reply waits for its own agent across reconnects, until a reply c
   await owe('m1')
   await owe('m1')
   // Evicted, and asked by a new session of the same client.
-  wire = new Wire({ storage }, {})
+  wire = new Wire(ctx, {})
   let ask = (agent: string, session = 'fresh') =>
     wire.roster({ session, version: 'same', names: [], agent })
   let heard = { line: 'answered m1', replies: ['m1'] }
@@ -98,8 +98,8 @@ test('a support reply waits for its own agent across reconnects, until a reply c
 })
 
 test('a stream resuming across a release hears the lists moved', async () => {
-  let storage = kvStorage()
-  let wire = new Wire({ storage }, {})
+  let ctx = state('', false), storage = ctx.storage
+  let wire = new Wire(ctx, {})
   // The session last spoke under another release.
   storage.map.set('spoke', { abc: '0.0.0-before' })
   try {
@@ -127,8 +127,8 @@ test('a stream resuming across a release hears the lists moved', async () => {
 })
 
 test('a session never spoken for is remembered silently', async () => {
-  let storage = kvStorage()
-  let wire = new Wire({ storage }, {})
+  let ctx = state('', false), storage = ctx.storage
+  let wire = new Wire(ctx, {})
   try {
     let ear = await attached(wire, 'fresh')
     assertStringIncludes(await ear.read(), ': open')
@@ -145,10 +145,10 @@ test('a session never spoken for is remembered silently', async () => {
 })
 
 test('the deploy id drives the marker, not the human VERSION', async () => {
-  let storage = kvStorage()
+  let ctx = state('', false), storage = ctx.storage
   // Last spoke under an earlier deploy; VERSION never moved between them.
   storage.map.set('spoke', { abc: 'deploy-1' })
-  let wire = new Wire({ storage }, { CF_VERSION_METADATA: { id: 'deploy-2' } })
+  let wire = new Wire(ctx, { CF_VERSION_METADATA: { id: 'deploy-2' } })
   try {
     let ear = await attached(wire, 'abc')
     assertStringIncludes(await ear.read(), ': open')
@@ -171,7 +171,7 @@ test('the deploy id drives the marker, not the human VERSION', async () => {
 // compared on every later call, and the line said once per changed set — for
 // the client that holds no stream, or whose host ignores the notification.
 test('a session is told which tools moved, once per changed set', async () => {
-  let wire = new Wire({ storage: kvStorage() }, {})
+  let wire = new Wire(state('', false), {})
   let listed = (names: string[]) => ({
     session: 'abc',
     version: names.join(','),
@@ -206,41 +206,10 @@ test('a session is told which tools moved, once per changed set', async () => {
   )
 })
 
-// A release the object was already awake for (a rolling deploy, where a stream
-// opened under the old version is still held): whoever is listening hears it
-// now rather than at their next attach.
-test('a release reaches a stream that was already open', async () => {
-  let storage = kvStorage()
-  storage.map.set('mark', 'deploy-1')
-  let wire = new Wire({ storage }, { CF_VERSION_METADATA: { id: 'deploy-2' } })
-  try {
-    let ear = await attached(wire, 'abc')
-    assertStringIncludes(await ear.read(), ': open')
-    await wire.released()
-    for (let list of ['tools', 'resources', 'prompts']) {
-      assertStringIncludes(
-        await ear.read(),
-        `notifications/${list}/list_changed`,
-      )
-    }
-    // Said once: the session is marked as spoken for at this release, so its
-    // next attach is quiet.
-    assertEquals(
-      (storage.map.get('spoke') as Record<string, string>).abc,
-      'deploy-2',
-    )
-    await wire.released()
-    await wire.tell({ method: 'probe' })
-    assertStringIncludes(await ear.read(), 'probe')
-  } finally {
-    drained(wire)
-  }
-})
-
 test('the same deploy id stays quiet', async () => {
-  let storage = kvStorage()
+  let ctx = state('', false), storage = ctx.storage
   storage.map.set('spoke', { abc: 'deploy-2' })
-  let wire = new Wire({ storage }, { CF_VERSION_METADATA: { id: 'deploy-2' } })
+  let wire = new Wire(ctx, { CF_VERSION_METADATA: { id: 'deploy-2' } })
   try {
     let ear = await attached(wire, 'abc')
     assertStringIncludes(await ear.read(), ': open')

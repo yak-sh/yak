@@ -2,7 +2,7 @@
 // A store still on the code it started with restarts when a newer deploy
 // reaches it (running.ts, T-123372), and the caller's retry meets the restart.
 // The restart itself is the runtime's: here `abort` throws as workerd's does,
-// with the reason as the message. The decision is `behind`, tested on a bare
+// with the reason as the message. The decision is `owed`, tested on a bare
 // object; each kind of object is checked once to ask it at its door.
 import { clock, test } from '@yaks/testing'
 import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
@@ -13,8 +13,8 @@ import { Wire } from './stream.ts'
 import { Builder } from './build.ts'
 import type { Env } from './env.ts'
 import {
-  behind,
   learn,
+  owed,
   ran,
   WORKER_VERSION,
   WORKER_VERSION_AT,
@@ -43,6 +43,9 @@ let restartable = () => {
 // Retry decisions are exercised here, not the runtime's randomized pause: a
 // resend waits out none.
 let unpaused = () => Promise.resolve()
+// The restart a caller on `v` is owed, run.
+let restart = (h: Headers, mine: typeof A, ctx: Parameters<typeof owed>[2]) =>
+  Promise.resolve(owed(h, mine, ctx)?.())
 let object = () => {
   let r = restartable()
   return { ...r, ctx: { storage: kvStorage(), abort: r.abort } }
@@ -52,18 +55,18 @@ test('an object on an older deploy restarts once for a newer caller', async () =
   let o = object()
   // The request in flight fails in the runtime's own words, which every
   // caller already retries on.
-  let e = await assertRejects(() => behind(from(B), A, o.ctx))
+  let e = await assertRejects(() => restart(from(B), A, o.ctx))
   assert(evicted(e))
   assertEquals(o.restarts.length, 1)
   // Started again on the same older code, it is where the runtime means it to
   // be, and serves the newer caller rather than restarting forever.
-  await behind(from(B), A, o.ctx)
+  await restart(from(B), A, o.ctx)
   assertEquals(o.restarts.length, 1)
 })
 
 test('an older caller, the same deploy, or no version never restarts it', async () => {
   let o = object()
-  for (let v of [A, B, undefined]) await behind(from(v), B, o.ctx)
+  for (let v of [A, B, undefined]) await restart(from(v), B, o.ctx)
   assertEquals(o.restarts, [])
 })
 
@@ -149,7 +152,7 @@ test("a caller's door stamps its deploy, and a request's own claim is dropped", 
 
 test('an object says the version it runs and the deploy it restarted for', async () => {
   let o = object()
-  await assertRejects(() => behind(from(B), A, o.ctx))
+  await assertRejects(() => restart(from(B), A, o.ctx))
   assertEquals(await ran(A, o.ctx.storage), {
     version: { id: A.id, at: A.timestamp },
     restartedFor: { id: B.id, at: B.timestamp },
@@ -185,7 +188,7 @@ let through = (object: { fetch(req: Request): Promise<Response> }) =>
 test('a Wire on an older deploy restarts once for a newer caller', async () => {
   learn(B)
   let r = restartable()
-  let wire = new Wire({ storage: kvStorage(), abort: r.abort }, {
+  let wire = new Wire(Object.assign(state('', false), { abort: r.abort }), {
     CF_VERSION_METADATA: A,
   })
   let roster = () =>

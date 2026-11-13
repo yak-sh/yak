@@ -77,7 +77,6 @@ export let WIRE = [
   'cool',
   'drop',
   'crossed',
-  'released',
   'roster',
   'said',
   'replies',
@@ -87,6 +86,16 @@ export let WIRE = [
   'attach',
   'tell',
   'fetch',
+  // @yaks/durable-object `Durable`'s own.
+  'alarm',
+  'webSocketMessage',
+  'webSocketClose',
+  'webSocketError',
+  'specify',
+  'open',
+  'accept',
+  'enter',
+  'behind',
 ] as const
 export let BUILDER = [
   'said',
