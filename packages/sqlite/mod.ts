@@ -72,6 +72,7 @@ import type { Query } from './read.ts'
 import {
   analyzable,
   analyzed,
+  built,
   emptied,
   fit,
   grown,
@@ -1350,7 +1351,7 @@ export let storage = (
             ...unfit,
             ...build(
               driver,
-              holds(driver, vocab, indexed(vocab, true)),
+              holds(driver, vocab, built(driver, vocab)),
               base.sizes,
               base.deferred,
             ),

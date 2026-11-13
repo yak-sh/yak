@@ -95,7 +95,7 @@ import {
   type Write,
 } from '@yaks/sql'
 import { tables } from './layout.ts'
-import { required } from './physical.ts'
+import { required, sole } from './physical.ts'
 import { heldBy } from './archetype.ts'
 import { classed, spined } from './memo.ts'
 import { isJsonb, jsonb, jsonIn } from './jsonb.ts'
@@ -372,19 +372,6 @@ let unmoved = (driver: Driver): boolean => {
   }
   return held
 }
-
-// Whether the spine keeps `num` unique by itself.
-let sole = (driver: Driver): boolean =>
-  driver.query({ t: 'pragma', name: 'index_list', arg: 'entity' })
-    .filter((i) => Number(i.unique))
-    .some((i) => {
-      let cols = driver.query({
-        t: 'pragma',
-        name: 'index_info',
-        arg: String(i.name),
-      })
-      return cols.length == 1 && cols[0].name == 'num'
-    })
 
 // The last number a series gave: this write's, or the store's.
 let lastIn = (

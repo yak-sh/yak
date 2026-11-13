@@ -168,6 +168,26 @@ test('sqlite: a spine keeping its number unique on its own counts once, though e
   })
 })
 
+test('sqlite: the series index is built over a spine of series, never over one keeping its number unique on its own', () => {
+  let paired = (d: ReturnType<typeof mem>) =>
+    d.query({ t: 'pragma', name: 'index_list', arg: 'entity' })
+      .map((i) => String(i.name)).includes('entity_num_prefix')
+  let old = mem()
+  old.query({
+    t: 'create table',
+    name: 'entity',
+    cols: [
+      { name: 'id', type: 'integer', pk: true },
+      { name: 'eid', type: 'text', notNull: true, unique: true },
+      { name: 'num', type: 'integer', unique: true },
+    ],
+  })
+  let fresh = mem()
+  open('sqlite', { number: SERIES }, old)
+  open('sqlite', { number: SERIES }, fresh)
+  assertEquals([paired(old), paired(fresh)], [false, true])
+})
+
 for (let backend of ['sqlite', 'ram']) {
   test(`${backend}: by one count, a reference to nothing numbers nothing`, () =>
     open(backend, { number: true }).tx((tx) => {

@@ -3280,7 +3280,10 @@ export class Store extends Durable {
   }
 
   #installDeployment = async (): Promise<void> => {
-    this.#graph.storage.install()
+    // A deploy's schema is the store's to take whatever it costs, as a
+    // relocation's file is: run free, it is told past its windows and never
+    // stops the writes of the people the store serves (`#ceiling`).
+    this.ceiling.free(() => this.#graph.storage.install())
     this.#unanalyzed = null
     await watchEmbedding(statements(this.#sql), this.#texts.fields)
     // A deploy is where the model can change: where a stored vector was made

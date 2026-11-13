@@ -178,6 +178,20 @@ export let objects = (
     Object.entries(fields).every(([k, v]) => o[k as keyof typeof o] == v)
   )
 
+/** Whether the spine keeps `num` unique by itself, as every spine made
+ * before series had letters did (`num integer unique`). */
+export let sole = (driver: Driver): boolean =>
+  driver.query({ t: 'pragma', name: 'index_list', arg: 'entity' })
+    .filter((i) => Number(i.unique))
+    .some((i) => {
+      let cols = driver.query({
+        t: 'pragma',
+        name: 'index_info',
+        arg: String(i.name),
+      })
+      return cols.length == 1 && cols[0].name == 'num'
+    })
+
 /** A table's columns, in declaration order. */
 export let columns = (driver: Driver, name: string): string[] =>
   driver.query({ t: 'pragma', name: 'table_info', arg: name })

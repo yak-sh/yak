@@ -72,7 +72,14 @@ import {
   table,
   val,
 } from '@yaks/sql'
-import { checks, foreign, objects, type Stood, stood } from './physical.ts'
+import {
+  checks,
+  foreign,
+  objects,
+  sole,
+  type Stood,
+  stood,
+} from './physical.ts'
 import { unit } from './unit.ts'
 import { clocked, versioned } from './versions.ts'
 import { writtenDdl } from './written.ts'
@@ -479,6 +486,19 @@ let SERIES: CreateIndex = {
   cols: [col('num'), col('prefix')],
   unique: true,
   ifNot: true,
+}
+
+/** The storage indexes an install builds over a file: every one of
+ * {@link indexed}, but the series index over a spine that keeps `num` unique
+ * on its own (./physical.ts `sole`). That spine's own index already holds one
+ * entity to a number, so one to each pair, and finds a number without its
+ * letter, and the spine counts once (./write.ts `unmoved`); building the
+ * pair over it would only write a row per entity, in one statement past what
+ * an object may write in a minute once a store holds 100,000. A spine rebuilt
+ * without its own index builds it. */
+export let built = (driver: Driver, vocab: Vocab): readonly CreateIndex[] => {
+  let all = indexed(vocab, true)
+  return sole(driver) ? all.filter((i) => i != SERIES) : all
 }
 let indexing = (vocab: Vocab): CreateIndex[] => [
   // Bare schema adapters can still hold the legacy spine. A storage install
