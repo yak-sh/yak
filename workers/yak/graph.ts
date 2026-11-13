@@ -100,8 +100,9 @@ import {
 //                               the app's own vocab.json          (vocab.ts)
 //   storage(ctx.storage, vocab) the object's SQLite as @yaks/graph's Storage
 //                               (@yaks/durable-object → @yaks/sqlite)
-//   prepare(config, roles)      import this kind's graph and effect facets
-//   assemble(...).bind(...)     graph plugins over the Store's capabilities
+//   planned(config, load)       import this kind's graph and effect facets
+//                               once an isolate (@yaks/durable-object)
+//   (...)(words).bind(...)      graph plugins over the Store's capabilities
 //   subscriptions(graph)        a saved query that keeps answering (@yaks/api)
 //   api({graph, subs})          POST /apply, GET /query            (@yaks/api)
 //   sockets(subs, ctx)          /ws, over hibernatable sockets
@@ -331,13 +332,9 @@ import {
   type Row,
   screened,
 } from './listing.ts'
-import {
-  assemble,
-  type Assembly,
-  prepare,
-  type Prepared,
-} from '@yaks/host/assembly'
+import { type Assembling, lent, planned } from '@yaks/durable-object/compose'
 import { type Host as PluginHost, type Load } from '@yaks/host'
+import type { Words } from '@yaks/host/words'
 import { type Config, given, meet, used } from '@yaks/host/config'
 import { posts, worker } from './config.ts'
 import { privacyRules } from './privacy-move.ts'
@@ -490,42 +487,17 @@ let journaled = (config: Config): string[] | undefined => {
   let named = plug && given(plug).components
   return Array.isArray(named) ? named.map(String) : undefined
 }
-// Plans retain only declarations and modules. Each Store binds its own options,
-// capabilities and observation state to the plan for this kind and shape.
-let assemblies = new WeakMap<Prepared, WeakMap<Shape, Assembly>>()
-let assemblyOf = (
-  name: string,
-  shape: Shape,
-  facets: Prepared,
-  loading: Load,
-) => {
-  let byShape = assemblies.get(facets)
-  if (!byShape) assemblies.set(facets, byShape = new WeakMap())
-  let plan = byShape.get(shape)
-  if (!plan) {
-    byShape.set(
-      shape,
-      plan = assemble(
-        worker.stores[storeKind(name)],
-        ['graph', 'effects'],
-        loading,
-        facets,
-        { words: { ...shape.words, derived: shape.derived } },
-      ),
-    )
+// The words a shape's plan is assembled under: its own, read through what
+// its storage reads a stored value through. Plans retain only declarations
+// and modules (@yaks/durable-object `planned`), one a kind and words; each
+// Store binds its own options, capabilities and observation state to it.
+let shaped = new WeakMap<Shape, Words>()
+let wordsOf = (shape: Shape): Words => {
+  let words = shaped.get(shape)
+  if (!words) {
+    shaped.set(shape, words = { ...shape.words, derived: shape.derived })
   }
-  return plan
-}
-let prepared = new Map<string, Promise<Prepared>>()
-let preparing = (kind: keyof typeof worker.stores): Promise<Prepared> => {
-  let held = prepared.get(kind)
-  if (!held) {
-    prepared.set(
-      kind,
-      held = prepare(worker.stores[kind], ['graph', 'effects'], load),
-    )
-  }
-  return held
+  return words
 }
 
 /**
@@ -1098,8 +1070,8 @@ export class Store extends Durable {
 
   #started = once()
   #startedDormant = false
-  #facets = new Map<string, Prepared>()
-  #facetsLoading = new Map<string, Promise<void>>()
+  // Each kind's plan, once its facets are imported (`#prepare`).
+  #plans = new Map<string, Assembling>()
   #dormant: boolean | null = null
   #moveOnly = false
   #checking: Promise<boolean> | null = null
@@ -1144,21 +1116,10 @@ export class Store extends Durable {
 
   #prepare(name: string): Promise<void> {
     let kind = storeKind(name)
-    if (this.#facets.has(kind)) return Promise.resolve()
-    let loading = this.#facetsLoading.get(kind)
-    if (!loading) {
-      loading = (async () => {
-        this.#facets.set(
-          kind,
-          await (this.#load == load
-            ? preparing(kind)
-            : prepare(worker.stores[kind], ['graph', 'effects'], this.#load)),
-        )
-      })()
-      this.#facetsLoading.set(kind, loading)
-      loading.catch(() => this.#facetsLoading.delete(kind))
-    }
-    return loading
+    if (this.#plans.has(kind)) return Promise.resolve()
+    return planned(worker.stores[kind], this.#load)().then((plan) =>
+      void this.#plans.set(kind, plan)
+    )
   }
 
   // Dormancy is object metadata. Ordinary dormant requests never open SQL;
@@ -1506,7 +1467,7 @@ export class Store extends Durable {
         return kernel()
       },
     }
-    let plan = assemblyOf(name, shape, this.#facets.get(kind)!, this.#load)
+    let plan = this.#plans.get(kind)!(wordsOf(shape))
     // A store refuses a composition that lacks a plugin its data requires
     // (@yaks/host `meet`), and a named one records each plugin the rows this
     // composition writes will need. Asked where the fit moved, since a fit
@@ -1539,10 +1500,8 @@ export class Store extends Durable {
         return options
       },
       host: {
-        me: app ?? name,
+        ...lent(app ?? name, bytes),
         vault: vaultOf(this.#bind),
-        blobs: bytes,
-        artifacts: bytes,
         senders: {
           worker: metering(
             this.#bind,
@@ -1560,15 +1519,12 @@ export class Store extends Durable {
             () => this.#get('space'),
           ),
         },
-        stopping: new AbortController().signal,
         duties: async () => {
           await this.#effects.work(this.#stored(this.#graph).graph)
         },
         end: () => {
           throw new Error('a store does not host processes')
         },
-        bury: () => Promise.resolve([]),
-        gone: () => Promise.resolve(false),
         report: (error) => defect(error, { request: 'plugin', store: name }),
         meaning: ranking(() => this.#embedder(), this.#texts),
       },

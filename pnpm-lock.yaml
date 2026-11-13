@@ -1603,12 +1603,24 @@ importers:
       '@yaks/api':
         specifier: 0.2.29
         version: link:../api
+      '@yaks/blob':
+        specifier: 0.2.30
+        version: link:../blob
+      '@yaks/effects':
+        specifier: 0.2.33
+        version: link:../effects
       '@yaks/fp':
         specifier: 0.2.23
         version: link:../fp
       '@yaks/graph':
         specifier: 0.2.33
         version: link:../graph
+      '@yaks/host':
+        specifier: 0.2.29
+        version: link:../host
+      '@yaks/secrets':
+        specifier: 0.2.28
+        version: link:../secrets
       '@yaks/sql':
         specifier: 0.2.30
         version: link:../sql
@@ -1631,9 +1643,6 @@ importers:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0
         version: '@jsr/std__assert@1.0.19'
-      '@yaks/blob':
-        specifier: 0.2.30
-        version: link:../blob
       '@yaks/query':
         specifier: 0.2.32
         version: link:../query

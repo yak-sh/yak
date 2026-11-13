@@ -217,8 +217,9 @@ application schema migrations still require coordination.
 What differs between kinds is its spec, which a subclass hands to `super`, or
 answers from `specify()` where the spec names the subclass's own members:
 
-- `open()` composes what the object holds, once an instance: its door (`serve`),
-  the subscriptions its sockets serve (`subs`), and the works its alarm runs
+- `open(object)` composes what the object holds, once an instance, given the
+  object (its `ctx`, `clock` and `ceiling`): its door (`serve`), the
+  subscriptions its sockets serve (`subs`), and the works its alarm runs
   (`works`). An open that fails is tried again by the next entry. An object that
   holds nothing to open names none, and one with no door answers every
   request 404.
@@ -262,6 +263,38 @@ class Counter extends Durable {
       }),
       report: (error, entry) => console.error(entry, error),
     })
+  }
+}
+```
+
+## An object from a config
+
+An object whose graph is composed through [@yaks/host](../host/README.md)
+differs from another only by its plugins, so its spec is data:
+`composed(config, load, options?)` (`@yaks/durable-object/compose`).
+
+- Its graph is the config's plugins, their facets taken from `load`, over the
+  object's SQLite (`storage(ctx.storage, vocab, …)`), with schema and blobs
+  installed as it opens. `options.roles` are the roles it serves (`ROLES`: its
+  graph and effects); `options.words` the words it speaks, where it knows them
+  before its facets do.
+- Its door is `api({graph, subs})`, which hands `/ws` to its sockets.
+- Its works are the wakes due (@yaks/wake `tick`) and the effects pool, and a
+  write that moves a wake or owes a run arms the alarm.
+
+`planned(config, load, roles?)` is the plan behind it: the facets imported once
+an isolate (@yaks/host `prepare`), then assembled once a vocabulary
+(`assemble`). An object that binds its plan to capabilities of its own asks it
+and binds what it answers; `lent(me, blobs)` is what an object lends what it
+composes, hosting no process.
+
+```ts ignore
+import { Durable, type State } from '@yaks/durable-object'
+import { composed } from '@yaks/durable-object/compose'
+
+export class Shelf extends Durable {
+  constructor(ctx: State) {
+    super(ctx, composed({ plugins: ['@yaks/wake', 'shelf'] }, load))
   }
 }
 ```
@@ -421,6 +454,7 @@ dispatch it brings:
 | `stopped(error)`                                        | Whether a failure is a stop, here or across a stub  |
 | `Durable`, `Spec`, `Opened`, `State`                    | The object class and what makes one kind of object  |
 | `clock(ctx.storage, works, options?)`, `Work`           | The one alarm loop, in slices                       |
+| `composed(config, load, options?)`, `planned`, `lent`   | An object's spec, and its plan, from a config       |
 | `sockets(subs, ctx)`                                    | Returns `accept`, `message`, `close`, and `wake`    |
 | `stubOf(ns, name, hint?)`, `Namespace`, `Stub`          | An object's stub by name, placed by a hint          |
 | `doorOf(send, scrub?)`, `Door`, `Send`, `Call`          | A request built from scratch for every call         |

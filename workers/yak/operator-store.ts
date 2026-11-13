@@ -11,14 +11,13 @@ import { driver, type DurableStorage } from '@yaks/durable-object/sql'
 import { bounded } from '@yaks/durable-object/ceiling'
 import { storage } from '@yaks/durable-object/store'
 import { type Config, used } from '@yaks/host/config'
-import { assemble, type Assembly, prepare } from '@yaks/host/assembly'
+import type { Assembly } from '@yaks/host/assembly'
+import { lent, planned } from '@yaks/durable-object/compose'
 import { wordsOf } from '@yaks/host/words'
 import { trialDoc } from '@yaks/trial/vocab'
 import { deliverChild } from '@yaks/session'
 import { type Effects, effects, expireDaily, type Handler } from '@yaks/effects'
 import { type Blobs, blobSchema, memoryBlobs, sqliteBlobs } from '@yaks/blob'
-import { ramVault } from '@yaks/secrets/vault'
-import { once } from '@yaks/fp'
 import { prefixes } from '@yaks/id'
 import { phoneTexts } from './phone-move.ts'
 import { channeled } from './channel-move.ts'
@@ -79,19 +78,15 @@ let FITTING = 2
 // What it serves: its graph, whose effects the Operator's own code handles
 // (operator-channels.ts `handleChannels`), so no package's are loaded.
 let ROLES = ['graph'] as const
-let planned = (config: Config) =>
-  once(async (): Promise<Assembly> =>
-    assemble(config, ROLES, load, await prepare(config, ROLES, load), {
-      words,
-    })
-  )
+let plan = (config: Config) => async (): Promise<Assembly> =>
+  (await planned(config, load, ROLES)())(words)
 
 /** The Operator's store as its object composes it, made once an isolate. */
-export let operatorPlan = planned(operatorConfig)
+export let operatorPlan = plan(operatorConfig)
 
 /** The same composition over rows in memory, where a body stays the text it
  * was written as: nothing there reads an address back as its text. */
-export let memoryPlan = planned({
+export let memoryPlan = plan({
   plugins: operatorConfig.plugins!.map((plug) =>
     used(plug) == '@yaks/blob' ? { use: used(plug), facets: ['vocab'] } : plug
   ),
@@ -189,21 +184,10 @@ export type Bound = {
 /** The Operator's work graph, independent of its durable storage boundary:
  * `plan` bound to the storage `bound` lends. */
 export let operatorGraph = (plan: Assembly, bound: Bound) => {
-  let blobs = bound.blobs ?? memoryBlobs()
   // The store is no process host: nothing it composes runs a duty, holds a
   // secret or ends a process.
   let { host } = plan.bind({
-    host: {
-      me: 'operator',
-      vault: ramVault(),
-      blobs,
-      artifacts: blobs,
-      stopping: new AbortController().signal,
-      duties: () => Promise.resolve(),
-      end: () => Promise.resolve(),
-      bury: () => Promise.resolve([]),
-      gone: () => Promise.resolve(false),
-    },
+    host: lent('operator', bound.blobs ?? memoryBlobs()),
     storage: (_host, extend) => bound.storage(extend),
     extend: () => bound.extend ?? [],
     schema: () => bound.fit?.(),

@@ -92,6 +92,15 @@ export {
 } from './alarm.ts'
 export { Durable, type Opened, type Spec, type State } from './object.ts'
 export {
+  type Assembling,
+  composed,
+  type Composing,
+  type Kind,
+  lent,
+  planned,
+  ROLES,
+} from './compose.ts'
+export {
   type Call,
   type Door,
   doorOf,

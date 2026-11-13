@@ -101,8 +101,9 @@ export type Opened = {
 
 /** What makes one kind of object. */
 export type Spec = {
-  /** Compose what the object holds, once an instance; nothing by default. */
-  open?(): Promise<Opened>
+  /** Compose what the object holds, once an instance, given the object: its
+   * state, its clock and its ceiling; nothing by default. */
+  open?(object: Durable): Promise<Opened>
   /** A failure the object caught, by the entry it was caught in. */
   report(error: unknown, entry: string): unknown
   /** The row ceiling's options, refusing by default. Without them the
@@ -182,7 +183,7 @@ export class Durable {
   /** What the object holds, opened once an instance; its sockets woken. */
   async open(): Promise<Opened> {
     let open = this.spec.open ?? (() => Promise.resolve<Opened>({}))
-    this.#opened ??= open().then(
+    this.#opened ??= open(this).then(
       async (opened) => {
         this.ceiling
         // The sockets' plumbing is loaded only by an object that has some.
