@@ -19,13 +19,12 @@ let vocab = loadVocab([doc, idDoc], [idKeywords])
 
 // The store, as far as addressing is concerned: the entities numbered so far.
 let rows: Bundle[] = [
-  // A task is a doc too, so it answers to both letters — which is the point:
-  // whichever kind wins the display, the id a person typed still lands.
-  { entity: { eid: 'a', num: 7 }, task: {}, doc: {} },
-  { entity: { eid: 'b', num: 9 }, memory: {} },
+  { entity: { eid: 'a', num: 7, prefix: 'T' }, task: {}, doc: {} },
+  { entity: { eid: 'b', num: 9, prefix: 'M' }, memory: {} },
+  // A number stored without a letter, as a mirror told one holds it.
   { entity: { eid: 'bare', num: 11 } },
-  // Numbered by series: T-20 and M-20 are two entities, and T-21 shares its
-  // number with a row stored before series had letters.
+  // T-20 and M-20 are two entities, and T-21 shares its number with the
+  // unlettered row.
   { entity: { eid: 't20', num: 20, prefix: 'T' }, task: {} },
   { entity: { eid: 'm20', num: 20, prefix: 'M' }, memory: {} },
   { entity: { eid: 't21', num: 21, prefix: 'T' }, task: {} },
@@ -61,20 +60,14 @@ test('a human id is the entity wearing that number', async () => {
   assertEquals(await at('M-9'), { 'M-9': 'b' })
 })
 
-test('the number is the identity, whatever letter it was printed with', async () => {
-  assertEquals(await at('7', 't-7', 'D-7'), {
+test('an id names only the letter it was printed with; a bare number, its holder', async () => {
+  assertEquals(await at('7', 't-7', 'D-7', 'M-7'), {
     '7': 'a',
     't-7': 'a',
-    'D-7': 'a',
+    'D-7': null,
+    'M-7': null,
   })
-  // An id printed while entity 9 wore a component it no longer wears still
-  // names it, as does one printed for entity 11, which declares no letter and
-  // so now shows its handle.
-  assertEquals(await at('R-9', 'T-9', 'E-11'), {
-    'R-9': 'b',
-    'T-9': 'b',
-    'E-11': 'bare',
-  })
+  assertEquals(await at('11', 'E-11'), { '11': 'bare', 'E-11': null })
   assertEquals(human(vocab)(rows[2]), '#bare')
   assertEquals(await at('T-12', '12'), { 'T-12': null, '12': null })
 })
@@ -88,11 +81,11 @@ test('a lettered id names the entity holding its pair', async () => {
   assertEquals(human(vocab)(rows[3]), 'T-20')
 })
 
-test('a row stored without a letter answers under any other', async () => {
-  assertEquals(await at('T-21', 'M-21', 'V-21'), {
+test('a row stored without a letter answers under none', async () => {
+  assertEquals(await at('T-21', 'M-21', '21'), {
     'T-21': 't21',
-    'M-21': 'old21',
-    'V-21': 'old21',
+    'M-21': null,
+    '21': ['t21', 'old21'],
   })
 })
 

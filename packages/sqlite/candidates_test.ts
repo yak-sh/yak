@@ -10,11 +10,13 @@ import {
 import { ram } from '@yaks/ram'
 import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
+import { ID_URI, idKeywords } from '@yaks/id'
 import { preparedDriver, snapshot } from './testing.ts'
 import { storage as sqliteStorage } from './mod.ts'
 import { reader } from './reader.ts'
 
-let vocab = loadVocab({
+let vocab = loadVocab([{
+  $vocabulary: { 'https://yak.sh/vocab/core': true, [ID_URI]: true },
   $defs: {
     entity: {
       component: true,
@@ -22,14 +24,16 @@ let vocab = loadVocab({
     },
     post: {
       component: true,
+      prefix: 'P',
       properties: { title: { type: 'string' } },
     },
     comment: {
       component: true,
+      prefix: 'C',
       properties: { post: { type: 'string', ref: 'post' } },
     },
   },
-})
+}], [idKeywords])
 let seed = [
   { entity: { eid: 'parent' }, post: { title: 'Parent' } },
   { entity: { eid: 'guest-0' }, comment: { post: 'parent' } },
@@ -37,8 +41,8 @@ let seed = [
 ]
 let selected = { eids: ['guest-0'] } as ReadOpts
 let cases: [string, string, string][] = [
-  ['ram', '.entity.eid=C-2 .comment.post.post.title=Parent', 'guest-0'],
-  ['sqlite', '.entity.eid=C-2 .comment.post=parent', 'guest-0'],
+  ['ram', '.entity.eid=C-1 .comment.post.post.title=Parent', 'guest-0'],
+  ['sqlite', '.entity.eid=C-1 .comment.post=parent', 'guest-0'],
 ]
 for (let [name, query, eid] of cases) {
   let sqlite = name == 'sqlite' ? preparedDriver(snapshot(vocab)) : undefined

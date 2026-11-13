@@ -9,7 +9,7 @@ import { blog } from './testing.ts'
 let targets = [
   '.post.published=true',
   '.post.ready=true',
-  '.entity.eid=C-2 .comment.post.post.published=true',
+  '.entity.eid=C-1 .comment.post.post.published=true',
 ]
 let vocabularies = new Map(
   targets.map((target) => [
@@ -51,7 +51,7 @@ let fixture = (target: string, ...seed: Bundle[][]) => {
   let seen: string[] = []
   let reads = 0
   let base = ram(vocab, {
-    number: true,
+    number: { post: 'P', comment: 'C' },
     computed: {
       'post.ready': (b) => (b.post as { published?: boolean })?.published,
     },
@@ -140,7 +140,7 @@ for (
   })
 }
 
-let relational = '.entity.eid=C-2 .comment.post.post.published=true'
+let relational = '.entity.eid=C-1 .comment.post.post.published=true'
 let parent = [post('parent', true)]
 let comment = (text?: string) => ({
   entity: { eid: 'guest-0' },

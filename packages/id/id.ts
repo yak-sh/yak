@@ -6,10 +6,7 @@
 // The pair is stored, `entity{prefix, num}`: the letter is fixed when the
 // entity is first numbered, from the component that declared it, and never
 // follows the entity's components afterwards. Only a declared prefix numbers
-// an entity; one whose components declare none shows its short handle. A row
-// numbered before series had letters stores no prefix; it prints with the
-// letter its components declare, and it answers to its number under any
-// letter.
+// an entity; one whose components declare none shows its short handle.
 
 import type { Vocab } from '@yaks/vocab'
 
@@ -31,12 +28,12 @@ export let SHORT: RegExp = /^#[0-9a-f]{6,64}$/i
  * digits alone are a handle only where no entity carries that number. */
 export let BARE: RegExp = /^[0-9a-f]{8,64}$/i
 
-/** What an id is built from: the entity's eid, the number the store assigned
- * (absent until the entity is numbered) and the prefix stored with it, and the
- * kind whose declared letter a row stored without a prefix prints with. */
+/** What an id is built from: the entity's eid, and the number the store
+ * assigned (absent until the entity is numbered) with the prefix stored with
+ * it. A caller's `kind` rides along unread. */
 export type Named = {
   eid: string
-  kind: string
+  kind?: string
   num?: number | null
   prefix?: string | null
 }
@@ -133,17 +130,11 @@ export let parse = (id: string): Parsed | undefined => {
 /**
  * An entity's id as everything should display it: `B-7` once the store has
  * numbered it, and the short eid handle otherwise. The letter is the stored
- * prefix; a row stored without one prints with its kind's declared letter, and
- * shows its handle where the kind declares none. Config-first over a loaded
- * vocabulary — `let id = idOf(v)`, then `id(book)`.
+ * prefix. Config-first over a loaded vocabulary — `let id = idOf(v)`, then
+ * `id(book)`.
  */
-export let idOf = (v: Vocab): (e: Named) => string => {
-  let letter = prefixOf(v)
-  return (e) => {
-    let prefix = e.num ? e.prefix || letter(e.kind) : undefined
-    return prefix ? format(prefix, e.num!) : short(e.eid)
-  }
-}
+export let idOf = (_v: Vocab): (e: Named) => string => (e) =>
+  e.num && e.prefix ? format(e.prefix, e.num) : short(e.eid)
 
 /** A bundle, as this file reads one: the `entity` row, and the components
  * beside it — which is all {@link human} needs, and why it requires no
@@ -155,18 +146,13 @@ export type Wearing = {
 
 /**
  * The id of an entity read as a bundle: its `entity` row carries the eid, the
- * number and its prefix, and its components the letter of a row stored
- * without one, the one {@link seriesOf} picks. Use this to display a row just
- * read from the store — `let id = human(vocab)`, then `id(row)` — so that no
- * caller has to assemble a {@link Named} by hand.
+ * number and its prefix. Use this to display a row just read from the store —
+ * `let id = human(vocab)`, then `id(row)` — so that no caller has to assemble
+ * a {@link Named} by hand.
  */
 export let human = (v: Vocab): (b: Wearing) => string => {
-  let series = seriesOf(v)
-  return (b) => {
-    let { eid, num, prefix } = b.entity
-    let letter = num ? prefix || series(Object.keys(b)) : undefined
-    return letter ? format(letter, num!) : short(eid)
-  }
+  let id = idOf(v)
+  return (b) => id(b.entity)
 }
 
 /** A human id as typed, with its letter: `B-7`, `b-7`. A bare number parses
@@ -201,21 +187,20 @@ export let replaceIds = (text: string, f: (id: string) => string): string =>
 export let mentions = (text: string, id: string): boolean =>
   word(id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), '').test(text)
 
-/** Whether an id as typed names this entity: its number, and its letter where
- * both the id and the entity carry one. */
+/** Whether an id as typed names this entity: its number, and its letter
+ * unless the id was typed as a bare number. */
 export let names = (
   id: string,
   e: { num?: number | null; prefix?: string | null },
 ): boolean => {
   let p = parse(id)
   return !!p && !!e.num && p.num == e.num &&
-    (!p.prefix || !e.prefix || p.prefix == e.prefix)
+    (!p.prefix || p.prefix == e.prefix)
 }
 
 /**
  * Of the entities holding one number, those an id of that number with this
- * letter names (`''` for a bare number): the ones holding the pair, else the
- * ones stored without a prefix, which answer under any letter; for a bare
+ * letter names (`''` for a bare number): the ones holding the pair; for a bare
  * number, every holder. `entity` reads an item's `entity{prefix}`. A graph
  * resolves an id this way (`ids`), and so does a client over the rows it holds.
  */
@@ -223,11 +208,7 @@ export let answering = <T>(
   held: T[],
   prefix: string,
   entity: (t: T) => { prefix?: string | null },
-): T[] =>
-  !prefix ? held : [
-    held.filter((t) => entity(t).prefix == prefix),
-    held.filter((t) => !entity(t).prefix),
-  ].find((l) => l.length) ?? []
+): T[] => !prefix ? held : held.filter((t) => entity(t).prefix == prefix)
 
 /** A copied short handle, normalized before resolving it through the graph. */
 export let addressId = (id: string): string =>

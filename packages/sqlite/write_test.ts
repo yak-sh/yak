@@ -135,7 +135,7 @@ test('a tombstoned entity takes no patch until it is revived', async () => {
     [],
   )
   let [back] = (await s.tx((tx) => tx.get(['p1']))) as Bundle[]
-  assertEquals(back.entity, { eid: 'p1', num: 1 })
+  assertEquals(back.entity, { eid: 'p1', num: 1, prefix: 'D' })
   assertEquals(back.tombstone, undefined)
   assertEquals(c(back, 'doc').title, 'back')
 })
@@ -347,7 +347,7 @@ test('number:false reports explicit unnumbered births without consuming numbers'
   let numbered = storage(driver, shop, { number: true })
   assertEquals(
     await numbered.tx((tx) => tx.patch([{ entity: { eid: 'n' }, doc: {} }])),
-    [{ eid: 'n', num: 1 }],
+    [{ eid: 'n', num: 1, prefix: 'D' }],
   )
 })
 
@@ -449,9 +449,10 @@ test('a batch writes each table in one statement, however many entities it gives
       product: { price: i + 0.1 },
     }))
     let born = await write(s, [...reviews, ...products])
+    // Each review is born first, then the product it names, in its series.
     assertEquals(
-      born.map((e) => e.num),
-      Array.from({ length: 2 * n }, (_, i) => i + 1),
+      born.map((e) => `${e.prefix}-${e.num}`),
+      Array.from({ length: n }, (_, i) => [`R-${i + 1}`, `P-${i + 1}`]).flat(),
     )
     assertEquals((s.read('.review') as Bundle[]).length, n)
     let [r, p] = s.get([`r${n - 1}`, `p${n - 1}`])

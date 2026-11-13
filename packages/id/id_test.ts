@@ -75,39 +75,36 @@ test('the prefix table comes from the vocabulary', () => {
 test('id prefixes stay with their vocabulary and ignore edits to copied tables', () => {
   let copied = prefixes(v)
   copied.book = 'X'
-  let book = { eid, kind: 'book', num: 7 }
-  assertEquals(idOf(library)(book), 'L-7')
-  assertEquals(idOf(v)(book), 'B-7')
+  assertEquals(prefixOf(library)('book'), 'L')
+  assertEquals(prefixOf(v)('book'), 'B')
   assertEquals(prefixOf(library)('author'), 'A')
 })
 
-test('a numbered entity wears its human id', () => {
-  assertEquals(id({ eid, kind: 'book', num: 7 }), 'B-7')
-  assertEquals(id({ eid, kind: 'author', num: 12 }), 'A-12')
-})
-
-test('a row stored without a prefix prints with the letter its components declare', () => {
-  let row = { entity: { eid, num: 3 }, review: {}, book: {} }
-  assertEquals(human(v)(row), 'B-3')
+test('a numbered entity wears the pair it stores', () => {
+  assertEquals(id({ eid, num: 7, prefix: 'B' }), 'B-7')
+  assertEquals(id({ eid, num: 12, prefix: 'A' }), 'A-12')
+  // the letter is the one stored, whatever the components say now
   assertEquals(
     human(v)({ entity: { eid, num: 3, prefix: 'A' }, book: {} }),
     'A-3',
   )
-  // and one whose components declare none shows its handle
-  assertEquals(human(v)({ entity: { eid, num: 3 }, review: {} }), '#9f1c8d2a0b')
-  assertEquals(id({ eid, kind: 'review', num: 3 }), '#9f1c8d2a0b')
   assertEquals(seriesOf(v)(['review', 'author']), 'A')
 })
 
-test('every id a numbered entity wears parses back to its number', () => {
-  for (let kind of ['book', 'author']) {
-    assertEquals(parse(id({ eid, kind, num: 7 }))?.num, 7, kind)
+test('a number stored without a letter is no id, so it shows the handle', () => {
+  assertEquals(human(v)({ entity: { eid, num: 3 }, book: {} }), '#9f1c8d2a0b')
+  assertEquals(id({ eid, kind: 'book', num: 3 }), '#9f1c8d2a0b')
+})
+
+test('every id a numbered entity wears parses back to its pair', () => {
+  for (let prefix of ['B', 'A']) {
+    assertEquals(parse(id({ eid, num: 7, prefix })), { prefix, num: 7 })
   }
 })
 
 test('an unnumbered entity wears its short handle, with no letter', () => {
-  assertEquals(id({ eid, kind: 'book' }), '#9f1c8d2a0b')
-  assertEquals(id({ eid, kind: 'author', num: null }), '#9f1c8d2a0b')
+  assertEquals(id({ eid }), '#9f1c8d2a0b')
+  assertEquals(id({ eid, num: null, prefix: 'A' }), '#9f1c8d2a0b')
   assert(SHORT.test(short(eid)))
   assert(!SHORT.test('B#9f1c8d2a0b'))
 })
@@ -152,19 +149,19 @@ test('ids are found in prose only as words of their own', () => {
   assert(HUMAN.test('b-7') && !HUMAN.test('7') && !HUMAN.test('#a3f19c'))
 })
 
-test('an id names the entity holding its pair, or one stored without a prefix', () => {
+test('an id names the entity holding its pair', () => {
   let held = [{ e: 'b', prefix: 'B' }, { e: 'old' }, { e: 'a', prefix: 'A' }]
   let named = (prefix: string, among = held) =>
     answering(among, prefix, (h) => h).map((h) => h.e)
   assertEquals(
     [named('B'), named('T'), named(''), named('B', held.slice(2))],
-    [['b'], ['old'], ['b', 'old', 'a'], []],
+    [['b'], [], ['b', 'old', 'a'], []],
   )
   for (let typed of ['B-7', 'b-7', '7']) {
     assert(names(typed, { num: 7, prefix: 'B' }))
-    // A row stored without a prefix answers under any letter.
-    assert(names(typed, { num: 7 }))
   }
+  // a number stored without a letter answers only to the bare number
+  assert(names('7', { num: 7 }) && !names('B-7', { num: 7 }))
   assert(!names('A-7', { num: 7, prefix: 'B' }))
-  assert(!names('B-7', { num: 8 }) && !names('B-0', {}))
+  assert(!names('B-7', { num: 8, prefix: 'B' }) && !names('B-0', {}))
 })

@@ -13,6 +13,7 @@ export { Database } from './legacy.ts'
 import { open } from './db.ts'
 import { deserialize, driver, prepared, serialize } from './native.ts'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { ID_URI, idKeywords } from '@yaks/id'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import {
   type Column,
@@ -260,6 +261,7 @@ export let textual = (limits: Limits = {}, from?: Snapshot) => {
 
 // The shop vocabulary, authored as JSON Schema plus the yaks keywords.
 let doc: VocabDoc = {
+  $vocabulary: { 'https://yak.sh/vocab/core': true, [ID_URI]: true },
   $defs: {
     entity: {
       component: true,
@@ -272,6 +274,7 @@ let doc: VocabDoc = {
       component: true,
       type: 'object',
       kind: true,
+      prefix: 'D',
       properties: {
         title: { type: 'string' },
         body: { type: 'string' },
@@ -283,6 +286,7 @@ let doc: VocabDoc = {
       component: true,
       type: 'object',
       kind: true,
+      prefix: 'P',
       before: ['doc'],
       properties: {
         // The stock number, which no two products share — the property's own
@@ -314,6 +318,7 @@ let doc: VocabDoc = {
       component: true,
       type: 'object',
       kind: true,
+      prefix: 'R',
       properties: {
         stars: { type: 'number' },
         product: { type: 'string', ref: 'product', death: 'cascade' },
@@ -349,7 +354,7 @@ let doc: VocabDoc = {
   },
 }
 
-export let shop: Vocab = loadVocab(doc)
+export let shop: Vocab = loadVocab([doc], [idKeywords])
 
 // A recipe whose properties hold JSON values beside a plain one: an object, an
 // array, and a union that may be a string — the case a driver parsing JSON
@@ -394,11 +399,9 @@ export let PROJECTED_ROW = {
 
 // A ready store over a fresh in-memory database with the schema installed.
 // The shop numbers its entities: they are things a person refers to by number,
-// so the tests over it see the human-readable numbering an application opts
-// into.
-export let store = (): Store => {
-  return preparedStore(shop, { number: true })
-}
+// so the tests over it see the human-readable ids an application opts into, in
+// the series its vocabulary declares.
+export let store = (): Store => preparedStore(shop, { number: true })
 
 // Bundles written straight in, for a test that just needs data to read back.
 export let seed = (s: Store, bundles: Bundle[]): void => {

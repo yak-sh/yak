@@ -135,7 +135,7 @@ let both = [
 ]
 let handles = (...plugins: Plugin[]) => {
   let one = graph({
-    storage: ram(books, { number: true }),
+    storage: ram(books, { number: { doc: 'D' } }),
     vocab: books,
     plugins: [...plugins, ids(books)],
   })

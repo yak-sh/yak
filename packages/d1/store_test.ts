@@ -149,19 +149,6 @@ test('the whole write goes as one batch', async () => {
   assert(sizes.at(-1)! > 1, `the flush should carry the batch: ${sizes}`)
 })
 
-test('a number a refused batch reserved is handed out again', async () => {
-  let s = await store()
-  let g = graph({ storage: s, vocab: shop })
-  await assertRejects(() =>
-    Promise.resolve(g.apply([{ entity: { eid: 'x' }, doc: { title: 'boom' } }, {
-      entity: { eid: 'y' },
-      $was: { doc: { title: 'nope' } },
-    }]))
-  )
-  await g.apply([{ entity: { eid: 'z' }, doc: { title: 'Dune' } }])
-  assertEquals((await s.read('.kind=doc'))[0].entity.num, 1)
-})
-
 test('partial updates over D1 keep required columns and roll back late failures', async () => {
   let db = d1(), s = storage(db, shop)
   await s.install()

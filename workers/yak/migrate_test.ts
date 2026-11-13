@@ -180,7 +180,7 @@ test('a raw writer classifies its changed owner rather than owing a schema censu
   // Past every door, as a script or an older Store's own write could.
   ctx.storage.transactionSync(() => {
     run(ctx, insert('exception', { entity: two, value: 'report-2' }))
-    reclassify(d, [TWO], true)
+    reclassify(d, [TWO])
   })
   let reported = async () =>
     (await newer(ctx, PLATFORM_STORE).query('.exception'))

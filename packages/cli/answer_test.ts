@@ -50,12 +50,12 @@ let said = (...answer: Record<string, unknown>[]) =>
   printed(views, vocab, answer as never)
 
 let t9 = {
-  entity: { eid: '11111111-1111-4111-8111-111111111111', num: 9 },
+  entity: { eid: '11111111-1111-4111-8111-111111111111', num: 9, prefix: 'T' },
   doc: { title: 'Fix the bar' },
   task: {},
 }
 let t10 = {
-  entity: { eid: '22222222-2222-4222-8222-222222222222', num: 10 },
+  entity: { eid: '22222222-2222-4222-8222-222222222222', num: 10, prefix: 'T' },
   doc: { title: 'Ship it' },
   task: {},
   completed: {},
@@ -192,7 +192,11 @@ test('search excerpts strip raw controls and compact multiple kinds', () => {
     },
   }
   let b = {
-    entity: { eid: '33333333-3333-4333-8333-333333333333', num: 10 },
+    entity: {
+      eid: '33333333-3333-4333-8333-333333333333',
+      num: 10,
+      prefix: 'C',
+    },
     hit: { kind: 'comment', snippet: 'Near\nthis idea', source: 'meaning' },
   }
   let lines = said(a, b)
@@ -215,7 +219,11 @@ test('a lone entity is a line, and a page tool’s is shown whole', () => {
 
 test('a reference prints as the id of the entity looked up for it', () => {
   let t11 = {
-    entity: { eid: '33333333-3333-4333-8333-333333333333', num: 11 },
+    entity: {
+      eid: '33333333-3333-4333-8333-333333333333',
+      num: 11,
+      prefix: 'T',
+    },
     task: {},
   }
   let done = { ...t10, completed: { by: t11.entity.eid } }

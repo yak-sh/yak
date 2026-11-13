@@ -30,8 +30,7 @@ export { idOf }
 export type Row = {
   eid: string
   num: number
-  /** the letter of the series `num` is in, absent on a row numbered before
-   * series had letters (@yaks/id) */
+  /** the letter of the series `num` is in (@yaks/id) */
   prefix?: string
   kind: string
   comps: Record<string, Record<string, unknown>>

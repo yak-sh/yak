@@ -759,26 +759,15 @@ test('archetype: a delete touches only the tables its entities hold', () => {
   assertEquals([...new Set(cleared)].sort(), ['doc', 'link', 'task'])
 })
 
-// By one count a descriptor is numbered like any other entity, past the
-// persistent high-water mark; by series it is never, since no component of
-// its declares a letter.
-test('archetype: boot numbers descriptors past the persistent high-water mark', () => {
-  for (let numbered of [true, false]) {
+// A descriptor is never numbered: no component of its declares a letter.
+test('archetype: boot leaves descriptors unnumbered', () => {
+  for (let number of [true, { task: 'T' }]) {
     let d = mem()
-    let s = storage(d, vocab, { number: numbered ? true : { task: 'T' } })
+    let s = storage(d, vocab, { number })
     // A file an older install wrote, holding an owner nothing classified.
     for (let stmt of s.ddl()) d.query(stmt)
     d.query(insert('entity', { eid: 'owner' }))
     d.query(insert('doc', { entity: idOf(d, 'owner') }))
-    let num = (n: number | null) =>
-      d.query({
-        t: 'update',
-        table: 'entity',
-        set: { num: val(n) },
-        where: by({ eid: 'owner' }),
-      })
-    num(99)
-    num(null)
     s.install()
     let numbers = d.query(select({
       cols: [col('num', 'entity')],
@@ -791,7 +780,7 @@ test('archetype: boot numbers descriptors past the persistent high-water mark', 
       ],
     }))
     assert(numbers.length > 0)
-    assert(numbers.every((r) => numbered ? Number(r.num) > 99 : r.num == null))
+    assert(numbers.every((r) => r.num == null))
     assertEquals(backfill(d), { entities: 0, archetypes: 0, retired: 0 })
   }
 })

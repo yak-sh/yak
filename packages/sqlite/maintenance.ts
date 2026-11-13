@@ -37,7 +37,7 @@ let most = (driver: Driver, name: string) =>
     )[0]?.n ?? 0,
   )
 
-export let maintenance = (driver: Driver, number: () => boolean) => {
+export let maintenance = (driver: Driver) => {
   let marks = meta(driver)
   let classifying = () => marks.get(CLASSIFYING) != null
   let pending = () =>
@@ -79,7 +79,7 @@ export let maintenance = (driver: Driver, number: () => boolean) => {
         let n = most(driver, 'archetype')
         if (!admit((n + 2) * (indexes * 3 + 8))) return false
         unit(driver, () => {
-          backfill(driver, number(), false)
+          backfill(driver, false)
           marks.set(CLASSIFYING, '0')
         })
         return true
@@ -97,7 +97,6 @@ export let maintenance = (driver: Driver, number: () => boolean) => {
         classify(
           driver,
           rows.map((r) => String(r.eid)),
-          number(),
           (_, pointed) =>
             pointed?.every((t) => tables.has(t)) ? [...pointed] : undefined,
         )

@@ -50,7 +50,7 @@ export let vocab = loadVocab([
   trackerDoc,
   timingDoc,
 ], [kernelKeywords])
-export let options = { computed, derived: derived(), number: true }
+export let options = { computed, derived: derived() }
 /** Where a store keeps a few facts of its own beside the graph (@yaks/sqlite
  * `meta`): the tracker keeps its bugs' tag there. */
 export type Kept = {

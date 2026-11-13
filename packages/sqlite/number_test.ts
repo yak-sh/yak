@@ -19,7 +19,6 @@ import { population } from './population.ts'
 import { writtenDdl } from './written.ts'
 import { owe, owed, SIZES, work } from './owe.ts'
 import { idDoc, idKeywords } from '@yaks/id'
-import { ids } from '@yaks/id/graph'
 
 let vocab = loadVocab([idDoc, {
   $defs: {
@@ -152,34 +151,6 @@ test('sqlite: a series steps over a number kept as a name, until the name is rel
   })
 })
 
-test('sqlite: a store still holding unlettered numbers counts on past them', () => {
-  let d = mem()
-  open('sqlite', { number: true }, d).tx((tx) =>
-    tx.patch([mk('old'), mk('older', { memory: {} })])
-  )
-  let s = open('sqlite', { number: SERIES }, d)
-  s.tx((tx) => {
-    tx.patch([mk('new'), mk('saved', { memory: {} })])
-    assertEquals(idOf(tx, ['old', 'older', 'new', 'saved']), [
-      1,
-      2,
-      'T-3',
-      'M-4',
-    ])
-    // An unlettered number answers under any letter; a lettered one under
-    // its own.
-    assertEquals(
-      Object.fromEntries(
-        ids(vocab).address!(tx, ['T-1', 'M-1', 'T-3', 'M-3']) as Map<
-          string,
-          string | null
-        >,
-      ),
-      { 'T-1': 'old', 'M-1': 'old', 'T-3': 'new', 'M-3': null },
-    )
-  })
-})
-
 // A store kept with a spine made before series had letters, whose number is
 // unique on its own: `file` says whether the driver is a file's, `rows` what
 // it held before it numbered by series, `bare` how many spine rows it held
@@ -192,7 +163,6 @@ let lone = (
     bare = 0,
     sizes = SIZES,
     keyed = false,
-    number = false,
     d = mem(),
   } = {},
 ) => {
@@ -207,7 +177,7 @@ let lone = (
   })
   for (let i = 1; i <= bare; i++) entity(d, i, `e${i}`)
   if (rows.length) {
-    open('sqlite', { number }, d).tx((tx) => tx.patch(rows))
+    open('sqlite', { number: false }, d).tx((tx) => tx.patch(rows))
   }
   let query = d.query
   let driver = {
@@ -243,8 +213,11 @@ for (let keyed of [false, true]) {
   })
 
   test(`sqlite: a moved spine keeps each row's number and every reference to it${keyed ? ', its foreign keys on' : ''}`, () => {
-    let rows = [mk('kept'), mk('old', { task: { target: 'kept' } })]
-    let { s } = lone({ rows, keyed, number: true })
+    let rows = [
+      { entity: { eid: 'kept', num: 1 }, task: {} },
+      { entity: { eid: 'old', num: 2 }, task: { target: 'kept' } },
+    ]
+    let { s } = lone({ rows, keyed })
     s.tx((tx) => {
       assertEquals(idOf(tx, ['kept', 'old']), [1, 2])
       assertEquals(tx.get(['old'])[0].task, { target: 'kept' })
@@ -286,16 +259,11 @@ test('sqlite: a respined spine keeps every trigger that stood on it, and its num
   s.tx((tx) => assertEquals(idOf(tx, ['old', 'older']), [1, 2]))
 })
 
-test("sqlite: a file's spine is left as it stood, counts once, and builds no series index", () => {
+test("sqlite: a file's spine is left as it stood, and builds no series index", () => {
   let { d, s } = lone({ file: true })
   s.tx((tx) => {
-    tx.patch([mk('t'), mk('m', { memory: {} })])
-    let [t, m] = idOf(tx, ['t', 'm']) as string[]
-    assertEquals([t[0], m[0], Number(m.slice(2)) - Number(t.slice(2))], [
-      'T',
-      'M',
-      1,
-    ])
+    tx.patch([mk('t')])
+    assertEquals(idOf(tx, ['t']), ['T-1'])
   })
   assertEquals(paired(d), false)
 })
@@ -303,33 +271,6 @@ test("sqlite: a file's spine is left as it stood, counts once, and builds no ser
 test("sqlite: a spine past a window's copy is moved in its install", () => {
   let { d } = lone({ rows: [mk('a'), mk('b')], sizes: { ...SIZES, copy: 2 } })
   assertEquals(paired(d), true)
-})
-
-test('sqlite: a spine kept with its rows moved under their letters counts once', () => {
-  let { d, s } = lone({ file: true })
-  s.tx((tx) =>
-    tx.patch([
-      { entity: { eid: 'old', prefix: 'T', num: 1 }, task: {} },
-      { entity: { eid: 'older', prefix: 'M', num: 2 }, memory: {} },
-    ])
-  )
-  d.query({ t: 'update', table: 'entity_series', set: { high: lit(0) } })
-  s.tx((tx) => {
-    tx.patch([mk('saved', { memory: {} }), mk('new')])
-    assertEquals(idOf(tx, ['saved', 'new']), ['M-3', 'T-4'])
-  })
-})
-
-test('sqlite: a spine keeping its number unique on its own refuses a pair another letter holds', () => {
-  let { s } = lone({ file: true })
-  s.tx((tx) => {
-    tx.patch([{ entity: { eid: 'm', prefix: 'M', num: 1 }, memory: {} }])
-    assertThrows(
-      () => tx.patch([{ entity: { eid: 't', prefix: 'T', num: 1 }, task: {} }]),
-      Refused,
-      "T-1 is m's",
-    )
-  })
 })
 
 // The series index an install owed over a spine keeping its number unique on
@@ -369,8 +310,12 @@ let counted = (s: ReturnType<typeof lone>) => {
 }
 
 test('sqlite: a number taking its letter is one update of its letter, and pairs trading places still trade', () => {
-  let rows = [mk('a'), mk('b'), mk('c', { memory: {} })]
-  let s = lone({ file: true, rows, number: true })
+  let rows = [
+    { entity: { eid: 'a', num: 1 }, task: {} },
+    { entity: { eid: 'b', num: 2 }, task: {} },
+    { entity: { eid: 'c', num: 3 }, memory: {} },
+  ]
+  let s = lone({ file: true, rows })
   let updates = counted(s)
   let stated = (eid: string, prefix: string, num: number) => ({
     entity: { eid, prefix, num },
@@ -396,8 +341,8 @@ test('sqlite: a fresh spine builds the series index', () => {
 })
 
 for (let backend of ['sqlite', 'ram']) {
-  test(`${backend}: by one count, a reference to nothing numbers nothing`, () =>
-    open(backend, { number: true }).tx((tx) => {
+  test(`${backend}: a reference to nothing numbers nothing, and a target is numbered where first touched`, () =>
+    open(backend, { number: SERIES }).tx((tx) => {
       let born = (bs: Bundle[]) =>
         tx.patch(bs).map((e) => [e.eid, e.num ?? null])
       let target = (eid: string, at?: string) =>
@@ -416,42 +361,42 @@ for (let backend of ['sqlite', 'ram']) {
 
 test('a mint may state the number it is adopting', () => {
   // What a store seeded from another store's export needs: an entity read as
-  // 37574 there is 37574 here, and the sequence carries on past it rather than
-  // handing the next arrival a number already in use.
+  // T-37574 there is T-37574 here, and its series carries on past it rather
+  // than handing the next arrival a number already in use.
   let d = mem()
-  let s = open('sqlite', { number: true }, d)
+  let s = open('sqlite', { number: SERIES }, d)
   for (let [eid, n] of [['old', 37574], ['older', 12]] as const) {
-    d.query(mintSql(eid, n))
+    d.query(mintSql(eid, n, undefined, 'T'))
   }
-  d.query(mintSql('nameless', false))
+  d.query(mintSql('nameless'))
   s.tx((tx) => {
     tx.patch([mk('fresh')])
     assertEquals(idOf(tx, ['old', 'older', 'nameless', 'fresh']), [
-      37574,
-      12,
+      'T-37574',
+      'T-12',
       null,
-      37575,
+      'T-37575',
     ])
   })
 })
 
 // A number is a property like any other: a patch stating one gives it to a
-// new entity or one holding another, `null` clears it, and the sequence
+// new entity or one holding another, `null` clears it, and its series
 // carries on past every one given. A number another entity holds is that
 // entity's address, so it is refused, unless that entity moves off it in the
 // same batch. Each test's store is made beside it, and its patches run in one
 // transaction, so the test times only them.
 for (let backend of ['sqlite', 'ram']) {
   let fresh = () => {
-    let s = open(backend, { number: true })
+    let s = open(backend, { number: SERIES })
     s.tx((tx) =>
       tx.patch([
-        { entity: { eid: 'old', num: 37574 }, task: {} },
+        { entity: { eid: 'old', prefix: 'T', num: 37574 }, task: {} },
         { entity: { eid: 'made', num: null }, task: {} },
         mk('mine'),
       ])
     )
-    // A new entity takes a stated number, or none for null, and the sequence
+    // A new entity takes a stated number, or none for null, and its series
     // carries on past it.
     assertEquals(
       s.tx((tx) => tx.get(['old', 'made', 'mine']).map((b) => b.entity.num)),
@@ -473,7 +418,7 @@ for (let backend of ['sqlite', 'ram']) {
       tx.patch([
         { entity: { eid: 'old', num: 37575 } },
         { entity: { eid: 'mine', num: 37574 } },
-        { entity: { eid: 'made', num: 3 } },
+        { entity: { eid: 'made', prefix: 'T', num: 3 } },
       ])
       assertEquals(nums(), [37575, 3, 37574])
     }))
@@ -487,12 +432,12 @@ for (let backend of ['sqlite', 'ram']) {
   test(`${backend}: a number another entity holds is refused`, () =>
     refuses((tx, nums) => {
       assertThrows(
-        () => tx.patch([{ entity: { eid: 'made', num: 37574 } }]),
+        () => tx.patch([{ entity: { eid: 'made', prefix: 'T', num: 37574 } }]),
         Refused,
         'two entities cannot share an id',
       )
       assertThrows(
-        () => tx.patch([{ entity: { eid: 'made', num: 0 } }]),
+        () => tx.patch([{ entity: { eid: 'made', prefix: 'T', num: 0 } }]),
         Refused,
         'a whole number from 1',
       )

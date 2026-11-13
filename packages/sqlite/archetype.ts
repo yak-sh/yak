@@ -129,7 +129,6 @@ let minter = (
   driver: Driver,
   cache: Archetypes,
   ids: Map<string, number>,
-  number: boolean,
   counts: Backfill,
 ) => {
   let meta = cache.intern(['archetype'])
@@ -168,7 +167,7 @@ let minter = (
       if (!held) throw new Unpointed([eid])
       if (held.length) throw new Error(`Archetype identity is occupied: ${eid}`)
     }
-    driver.query(mintSql(eid, number))
+    driver.query(mintSql(eid))
     id = Number(
       run(
         select({ cols: [col('id')], from: table('entity'), where: byEid(eid) }),
@@ -227,14 +226,14 @@ let minter = (
  * unclassified ones: what a pass that wrote component tables directly, outside
  * the graph, leaves to do. Atomic, like {@link backfill}.
  */
-export let reclassifyAll = (driver: Driver, number = false): Backfill =>
+export let reclassifyAll = (driver: Driver): Backfill =>
   unit(driver, () => {
     driver.query({
       t: 'update',
       table: 'entity',
       set: { archetype: lit(null) },
     })
-    return backfill(driver, number)
+    return backfill(driver)
   })
 
 /**
@@ -247,7 +246,6 @@ export let reclassifyAll = (driver: Driver, number = false): Backfill =>
  */
 export function backfill(
   driver: Driver,
-  number = false,
   assignments = true,
 ): Backfill {
   let run: Run = (s) => driver.query(s)
@@ -363,7 +361,7 @@ export function backfill(
           owners,
           (c) => ({ where: oneOf(c, [...owners.keys()]) }),
         )
-        minter(run, driver, cache, ids, number, counts).assign(owners)
+        minter(run, driver, cache, ids, counts).assign(owners)
       }
       return counts
     }
@@ -389,7 +387,7 @@ export function backfill(
         where: and(eq(col('id', 'e'), c), isNull(col('archetype', 'e'))),
       }))
     }
-    minter(run, driver, cache, ids, number, counts).assign(owners)
+    minter(run, driver, cache, ids, counts).assign(owners)
     return counts
   })
 }
@@ -524,11 +522,11 @@ export function drift(driver: Driver, sample = 12): Drift {
  * holds the write lock for the whole pass: the repair for pointers a writer
  * past every door left behind. Returns how many moved.
  */
-export let mend = (driver: Driver, number = false): number => {
+export let mend = (driver: Driver): number => {
   let { sample } = drift(driver, Infinity)
   let moved = 0
   for (let i = 0; i < sample.length; i += 5000) {
-    moved += reclassify(driver, sample.slice(i, i + 5000), number)
+    moved += reclassify(driver, sample.slice(i, i + 5000))
       .filter((b) => b.archetype == null).length
   }
   return moved
@@ -604,7 +602,6 @@ export function heldBy(
 export function entomb(
   driver: Driver,
   eids: string[],
-  number = false,
 ): boolean {
   if (!eids.length) return false
   let run: Run = (s) => driver.query(s)
@@ -617,7 +614,6 @@ export function entomb(
       driver,
       cache,
       found.ids,
-      number,
       counts,
     )
     let dead = mint(cache.intern([TOMBSTONE]).eid)
@@ -638,10 +634,9 @@ export function entomb(
 export function reclassify(
   driver: Driver,
   eids: string[],
-  number = false,
 ): Bundle[] {
   return unit(driver, () => {
-    let { born, put } = sorted(driver, eids, number)
+    let { born, put } = sorted(driver, eids)
     return [
       ...born,
       ...put.flatMap(([owners, id]) => {
@@ -672,10 +667,9 @@ export function reclassify(
 export let classify = (
   driver: Driver,
   eids: string[],
-  number: boolean,
   known?: Known,
   learned?: Learned,
-): boolean => sorted(driver, eids, number, known, learned).born.length > 0
+): boolean => sorted(driver, eids, known, learned).born.length > 0
 
 type Known = (
   eid: string,
@@ -688,7 +682,6 @@ type Learned = (eid: string, tables: string[], id: number) => void
 let sorted = (
   driver: Driver,
   eids: string[],
-  number: boolean,
   known?: Known,
   learned?: Learned,
 ): { born: Bundle[]; put: [string[], number][] } => {
@@ -728,7 +721,6 @@ let sorted = (
     driver,
     cache,
     found.ids,
-    number,
     counts,
   )
   let put = assign(owners).map(([group, id, names]): [string[], number] => {

@@ -43,8 +43,8 @@ let store = (prose = true) => {
     plugins: [ids(vocab), ...prose ? plugins({ vocab }) : []] as Plugin[],
   })
   g.apply([
-    { entity: { eid: PROJECT }, project: {} },
-    { entity: { eid: TASK }, task: {} },
+    { entity: { eid: PROJECT, prefix: 'P', num: 1 }, project: {} },
+    { entity: { eid: TASK, prefix: 'T', num: 2 }, task: {} },
   ])
   return g
 }

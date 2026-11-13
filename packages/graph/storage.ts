@@ -363,8 +363,8 @@ export let detached = (storage: Storage): Tx => ({
  * the letters; a storage adapter takes them as data). */
 export type Series = Readonly<Record<string, string>>
 
-/** A human id's two halves as a store holds them: the series letter, `null`
- * on a row numbered before series had letters, and the number in it. */
+/** A human id's two halves as a store holds them: the series letter, and the
+ * number in it. A mirror told a number with no letter holds `null`. */
 export type Pair = { prefix: string | null; num: number }
 
 /** The letter an entity holding these components is numbered with
@@ -372,16 +372,9 @@ export type Pair = { prefix: string | null; num: number }
  * them imports @yaks/id. */
 export { seriesOf } from '@yaks/id'
 
-/** Whether two pairs name one id: the same number, and the same letter where
- * both carry one. A row stored without a letter holds its number in every
- * series. */
+/** Whether two pairs name one id: the same number and the same letter. */
 export let clash = (a: Pair, b: Pair): boolean =>
-  a.num == b.num && (!a.prefix || !b.prefix || a.prefix == b.prefix)
-
-/** Whether two pairs name one id in a store: {@link clash}, or the same
- * number alone where the store keeps a number unique on its own (`lone`). */
-export let meeting = (lone = false) => (a: Pair, b: Pair): boolean =>
-  lone ? a.num == b.num : clash(a, b)
+  a.num == b.num && (a.prefix ?? null) == (b.prefix ?? null)
 
 /**
  * The pair a bundle states for its entity, from what it held before (`now`):
@@ -414,9 +407,7 @@ export let stating = (
  * one entity. An entity moving off its pair in the same batch frees it, so two
  * entities may swap. `now` says an entity's pair before the batch (`undefined`
  * where it has no entity yet), and `holders` the entities holding each number
- * stated, any letter. `lone` says a store's numbers are unique whatever
- * their letter, as a spine made before series had letters keeps them: there
- * T-5 names the number M-5 holds. Answers the stated pairs that change
+ * stated, any letter. Answers the stated pairs that change
  * something; one that cannot be given is refused as the caller's own error.
  *
  * ```ts
@@ -433,16 +424,13 @@ export let stating = (
  * let no = (f: () => unknown) => { try { f() } catch (e) { return (e as Error).message } }
  * equal(no(() => changes([['a', t(2)]], [[2, ['b']]])), 'T-2 is b\'s: two entities cannot share an id')
  * equal(no(() => changes([['a', t(1.5)]], [])), 'entity.num is a whole number from 1, or null for none')
- * equal(no(() => renumbering(new Map([['c', t(1)]]), (e) => now.get(e), new Map([[1, [{ eid: 'm', prefix: 'M', num: 1 }]]]), true)), 'T-1 is m\'s: two entities cannot share an id')
  * ```
  */
 export let renumbering = (
   stated: ReadonlyMap<Eid, Pair | null>,
   now: (eid: Eid) => Pair | null | undefined,
   holders: ReadonlyMap<number, readonly ({ eid: Eid } & Pair)[]>,
-  lone = false,
 ): Map<Eid, Pair | null> => {
-  let meets = meeting(lone)
   let same = (a: Pair | null, b: Pair | null) =>
     a == b || (!!a && !!b && a.num == b.num && a.prefix == b.prefix)
   let changes = new Map(
@@ -465,13 +453,13 @@ export let renumbering = (
       })
     }
     let id = pair.prefix ? `${pair.prefix}-${pair.num}` : `number ${pair.num}`
-    let twin = given.find((g) => meets(g, pair))
+    let twin = given.find((g) => clash(g, pair))
     if (twin) {
       throw new Refused(`${twin.eid} and ${eid} are both given ${id}`, at)
     }
     given.push({ eid, ...pair })
     let holder = (holders.get(pair.num) ?? []).find((h) =>
-      h.eid != eid && !changes.has(h.eid) && meets(h, pair)
+      h.eid != eid && !changes.has(h.eid) && clash(h, pair)
     )
     if (holder) {
       throw new Refused(

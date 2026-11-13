@@ -69,7 +69,7 @@ for (let numbered of [false, true]) {
     put(3, 'wanted', { comment: { target: 2 } })
     put(4, 'own-comment', { comment: { target: 2 }, created: { via: 1 } })
     put(5, 'hidden-comment', { comment: { target: 2 }, hidden: {} })
-    reclassify(d, ids, numbered)
+    reclassify(d, ids)
     db.exec('ANALYZE')
     ids = []
     for (let i = 0; i < size; i++) {
@@ -79,7 +79,7 @@ for (let numbered of [false, true]) {
         created: { via: null },
       })
     }
-    reclassify(d, ids, numbered)
+    reclassify(d, ids)
     catalog(d)({ all: ['comment'] })
     for (let scoped of [false, true]) {
       let q = render(compile(

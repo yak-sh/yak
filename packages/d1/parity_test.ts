@@ -8,17 +8,18 @@
 // This is also where the sync pass-through is proved from the other side. The
 // same `parity()` returns `void` over two synchronous adapters (see
 // @yaks/ram and @yaks/durable-object) and a promise here, because one of the
-// two graphs is asynchronous — one apply(), threaded either way.
+// two graphs is asynchronous — one apply(), threaded either way. A D1 store
+// numbers nothing, so its reference numbers nothing either.
 
 import { test } from '@yaks/testing'
 import { assert } from '@std/assert'
 import { isPromise } from '@yaks/fp'
 import { answers, parity, rig } from '../sqlite/parity.ts'
-import { store as reference } from '../sqlite/testing.ts'
+import { preparedStore, shop } from '../sqlite/testing.ts'
 import { store } from './testing.ts'
 
 test('a d1 graph and a sqlite graph agree, batch for batch', async () => {
-  let out = parity(rig(await store()), rig(reference()))
+  let out = parity(rig(await store()), rig(preparedStore(shop)))
   assert(isPromise(out), 'the script should go async over D1')
   await out
 })

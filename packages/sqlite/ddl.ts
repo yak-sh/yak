@@ -92,14 +92,8 @@ export { META, tables } from './layout.ts'
 // A column that holds an entity's integer id, keyed to the spine.
 let ENTITY = { table: 'entity', cols: ['id'] }
 
-// The high-water mark a new number is taken past, raised by whatever wrote one:
-// the store's one count, and the count of the series a lettered number is in.
-let raise: Stmt = {
-  t: 'update',
-  table: 'entity_sequence',
-  set: { high: fn('max', col('high'), col('num', 'new')) },
-  where: eq(col('singleton'), lit(1)),
-}
+// The high-water mark a new number in a series is taken past, raised by
+// whatever wrote one.
 let raiseSeries: Stmt = {
   t: 'insert',
   into: 'entity_series',
@@ -139,54 +133,11 @@ let SPINE: Stmt[] = [
       { name: 'high', type: 'integer', notNull: true },
     ],
   },
-  {
-    t: 'create table',
-    name: 'entity_sequence',
-    ifNot: true,
-    cols: [
-      {
-        name: 'singleton',
-        type: 'integer',
-        pk: true,
-        check: eq(col('singleton'), lit(1)),
-      },
-      { name: 'high', type: 'integer', notNull: true },
-    ],
-  },
-  {
-    t: 'insert',
-    into: 'entity_sequence',
-    cols: ['singleton', 'high'],
-    q: select({
-      cols: [lit(1), fn('coalesce', fn('max', col('num')), lit(0))],
-      from: table('entity'),
-    }),
-    upsert: [{
-      on: [col('singleton')],
-      set: { high: fn('max', col('high'), col('high', 'excluded')) },
-    }],
-  },
-  {
-    t: 'create trigger',
-    name: 'entity_number_insert',
-    ifNot: true,
-    timing: 'after',
-    event: 'insert',
-    on: 'entity',
-    when: notNull(col('num', 'new')),
-    body: [raise],
-  },
-  {
-    t: 'create trigger',
-    name: 'entity_number_update',
-    ifNot: true,
-    timing: 'after',
-    event: 'update',
-    of: ['num'],
-    on: 'entity',
-    when: notNull(col('num', 'new')),
-    body: [raise],
-  },
+  // The one count every number was once taken from, before series had
+  // letters (T-164367).
+  { t: 'drop', kind: 'trigger', name: 'entity_number_insert', ifExists: true },
+  { t: 'drop', kind: 'trigger', name: 'entity_number_update', ifExists: true },
+  { t: 'drop', kind: 'table', name: 'entity_sequence', ifExists: true },
   {
     t: 'create trigger',
     name: 'entity_series_insert',
@@ -509,8 +460,8 @@ let SPINED_INDEXES = [SERIES, NUMBERED]
 /** Whether `index` is one of the number's indexes over a spine that keeps
  * `num` unique on its own (./physical.ts `sole`). That spine's own index
  * already holds one entity to a number, so one to each pair, finds a number
- * without its letter and reads the default order, and the spine counts once
- * (./write.ts `unmoved`); building either over it would only write a row per
+ * without its letter and reads the default order; building either over it
+ * would only write a row per
  * entity, in one statement past what an object may write in a minute once a
  * store holds 100,000. A spine rebuilt without its own index needs them. */
 export let needless = (driver: Driver, index: CreateIndex): boolean =>
@@ -936,8 +887,8 @@ export let RETIRED_NUM = 'retired_num'
 /**
  * The spine moved off a number unique on its own (./physical.ts `sole`), as
  * every spine made before series had letters keeps it: there T-5 and M-5
- * cannot both stand, so a store that numbers by series counts once until it
- * is moved. SQLite drops a column's `unique` only with its table, and
+ * cannot both stand, so a store that numbers by series moves it as it
+ * installs. SQLite drops a column's `unique` only with its table, and
  * dropping the spine with foreign keys on, as a Durable Object keeps them,
  * deletes each row and checks every table naming it, and putting the rows
  * back checks each again: a store's entities times the hundreds of

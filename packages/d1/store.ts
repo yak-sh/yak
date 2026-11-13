@@ -43,14 +43,9 @@
 // update that nothing detects, not a half-written batch; atomicity holds
 // either way.
 //
-// Assigning A number is not A read. An entity's `num` is SQLite's to pick, at
-// the moment
-// the insert runs and so inside the batch's own transaction — exact under a
-// concurrent writer, and nothing has to ask for a high-water mark first. The
-// price is that a number is not known until the batch lands: `patch` reports
-// each minted entity without one and `flush` fills it in from that insert's own
-// RETURNING. Nothing can observe it in between, because nothing outside sees
-// the entity until `tx()` settles, which is after the flush.
+// A D1 store numbers nothing: an entity is its eid. A number is given in its
+// series, past the last that series gave, which is a read before the write,
+// and a batch sent at once has no room for one.
 //
 // A nested `tx()` is a separate batch, since D1 has no savepoints. Nothing in
 // `apply()` nests one.
@@ -94,7 +89,6 @@ import {
   logged,
   minted,
   mintSql,
-  numberSql,
   patchSql,
   pointSql,
   projected,
@@ -189,13 +183,8 @@ let deadly = (v: Vocab): Set<string> =>
       .flatMap((word) => v.deaths(word).map(([comp]) => comp)),
   )
 
-/** What a D1 store is bound with: @yaks/sql's read options, plus whether new
- * spines get a human-readable number. A number is opt-IN, under the same option
- * name @yaks/sqlite uses: left unset, an entity is its eid and nothing else.
- * Numbers are one count here, with no letters: a series' next number is a
- * read before its write, which a batch sent at once has no room for. */
+/** What a D1 store is bound with: @yaks/sql's read options. */
 export type Opts = BindOpts & {
-  number?: boolean
   /** Where a failure the store outlives is told, as @yaks/sqlite's `report`:
    * one line on the console, by default. */
   report?: (error: Error) => void
@@ -358,27 +347,16 @@ export let storage = <S extends Prepared<S>>(
     let buried = (eid: Eid): boolean => known.get(eid)?.dead == true
 
     // Mint an identity for an eid that has none, so a reference may name a
-    // target created in the same batch, in any order. Nothing is asked: the
-    // number is SQLite's to pick when the insert runs, inside the batch's own
-    // transaction, and the statement returns it. So the entity handed out here
-    // has no `num` yet — `flush` fills it into this very object, before the
-    // transaction settles and before anything outside can read it.
-    let birth = (eid: Eid, numbered: boolean): Entity | undefined => {
+    // target created in the same batch, in any order. `flush` fills in what
+    // the statement returns, before the transaction settles and before
+    // anything outside can read it.
+    let birth = (eid: Eid): Entity | undefined => {
       if (known.get(eid)) return
       let entity: Entity = { eid }
       births.push({ at: pending.length, entity })
-      pending.push(mintSql(eid, numbered))
+      pending.push(mintSql(eid))
       known.set(eid, { dead: false })
       dirty.set(eid, { entity })
-      return entity
-    }
-
-    // Number a spine an earlier reference minted, now that a bundle of its own
-    // has arrived. The number comes back the way a mint's does.
-    let number = (eid: Eid): Entity => {
-      let entity: Entity = { eid }
-      births.push({ at: pending.length, entity })
-      pending.push(numberSql(eid, true))
       return entity
     }
 
@@ -495,35 +473,14 @@ export let storage = <S extends Prepared<S>>(
         moved ||= bs.some((b) => comps(b).some(([name]) => bears.has(name)))
         await learn(touched(vocab, bs))
         let born: Entity[] = []
-        let numbered = !!base.number
-        // An eid a reference only names gets a spine to hold the pointer and
-        // no number, until a bundle of its own arrives (@yaks/sqlite `patch`).
-        let own = new Set(
-          bs.filter((b) =>
-            !buried(b.entity.eid) && comps(b).some(([, c]) => c != null)
-          ).map((b) => b.entity.eid),
-        )
         // `touched` puts the bundle's own eid first, then what it points at, so
-        // numbers land in the same first-touch order every adapter uses.
+        // spines land in the same first-touch order every adapter uses.
         for (let b of bs) {
           if (buried(b.entity.eid)) continue
           for (let e of touched(vocab, [b])) {
-            let spine = birth(e, own.has(e) && numbered)
+            let spine = birth(e)
             if (spine) born.push(spine)
           }
-        }
-        // A spine an earlier reference minted is numbered now, if it still
-        // carries nothing: an unnumbered entity that carries something was
-        // left unnumbered on purpose.
-        let made = new Set(born.map((e) => e.eid))
-        for (let e of own) {
-          let k = known.get(e)
-          let b = at(e)
-          if (
-            made.has(e) || !k || k.dead || k.num != null || !numbered ||
-            !b || comps(b).length
-          ) continue
-          born.push(number(e))
         }
         for (let b of bs) {
           let eid = b.entity.eid

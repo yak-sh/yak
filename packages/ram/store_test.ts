@@ -22,9 +22,11 @@ import {
 } from '../match/testing.ts'
 import { ram, type RamOpts, type Store } from './mod.ts'
 
-// The shop numbers: its entities are things a person points at by number, and
-// the sqlite store these are held against is opened the same way.
-let shopRam = (opts: RamOpts = {}) => ram(shop, { number: true, ...opts })
+// The shop numbers: its entities are things a person points at by number, each
+// in the series of its kind, and the sqlite store these are held against is
+// opened the same way.
+let SERIES = { doc: 'D', product: 'P', review: 'R', bookmark: 'B' }
+let shopRam = (opts: RamOpts = {}) => ram(shop, { number: SERIES, ...opts })
 
 let put = (s: Store, ...bundles: Bundle[]) => s.tx((tx) => tx.patch(bundles))
 let at = (s: Store, eid: string) => s.tx((tx) => tx.get([eid]))[0]
@@ -38,9 +40,12 @@ test('a patch mints identity in first-touch order and says what it minted', () =
     { entity: { eid: 'p1' }, doc: { title: 'Mug' } },
     { entity: { eid: 'p2' }, doc: { title: 'Cup' } },
   )
-  assertEquals(born, [{ eid: 'p1', num: 1 }, { eid: 'p2', num: 2 }])
+  assertEquals(born, [
+    { eid: 'p1', num: 1, prefix: 'D' },
+    { eid: 'p2', num: 2, prefix: 'D' },
+  ])
   assertEquals(put(s, { entity: { eid: 'p1' }, doc: { title: 'Mug II' } }), [])
-  assertEquals(at(s, 'p1').entity, { eid: 'p1', num: 1 })
+  assertEquals(at(s, 'p1').entity, { eid: 'p1', num: 1, prefix: 'D' })
 })
 
 test('a patch touches only the properties it names; null clears one', () => {
@@ -95,7 +100,10 @@ test('a removed entity is tombstoned, and takes no patch after', () => {
   let s = shopRam()
   put(s, { entity: { eid: 'p1' }, doc: { title: 'Mug' } })
   s.tx((tx) => tx.remove([{ eid: 'p1' }]))
-  assertEquals(at(s, 'p1'), { entity: { eid: 'p1', num: 1 }, tombstone: {} })
+  assertEquals(at(s, 'p1'), {
+    entity: { eid: 'p1', num: 1, prefix: 'D' },
+    tombstone: {},
+  })
   put(s, {
     entity: { eid: 'p1' },
     product: { price: 1, maker: 'm9' },
@@ -111,10 +119,10 @@ test('a revived entity keeps its identity and takes patches again', () => {
   put(s, { entity: { eid: 'p1' }, doc: { title: 'Mug' } })
   s.tx((tx) => tx.remove([{ eid: 'p1' }]))
   s.tx((tx) => tx.revive(['p1']))
-  assertEquals(at(s, 'p1'), { entity: { eid: 'p1', num: 1 } })
+  assertEquals(at(s, 'p1'), { entity: { eid: 'p1', num: 1, prefix: 'D' } })
   put(s, { entity: { eid: 'p1' }, doc: { title: 'back' } })
   assertEquals(at(s, 'p1'), {
-    entity: { eid: 'p1', num: 1 },
+    entity: { eid: 'p1', num: 1, prefix: 'D' },
     doc: { title: 'back' },
   })
 })
@@ -142,8 +150,14 @@ test('a read is the query grammar, answered from the map', () => {
 // A read through the store's indexes selects what a scan of the same bundles
 // selects, for every line of the grammar the in-memory evaluator is held to
 // (@yaks/match's parity with @yaks/sqlite).
+// The fixture's numbers are one per bundle, in write order: one series that
+// every component it gives numbers in.
+let one = Object.fromEntries(
+  corpus.flatMap((b) => Object.keys(b)).filter((c) => c != 'entity')
+    .map((c) => [c, 'B']),
+)
 test('an indexed read answers every query the way a scan does', () => {
-  let s = ram(books, { number: true, now: NOW })
+  let s = ram(books, { number: one, now: NOW })
   s.tx((tx) => tx.patch(corpus))
   s.tx((tx) => tx.remove([{ eid: DEAD }]))
   let ids = (bs: Bundle[], q: string) => {
@@ -220,6 +234,7 @@ test('a throwing transaction leaves the map exactly as it was', () => {
   assertEquals(put(s, { entity: { eid: 'p3' }, product: {} }), [{
     eid: 'p3',
     num: 2,
+    prefix: 'P',
   }])
 })
 
@@ -285,8 +300,8 @@ test('a restored reference target keeps the number allocated in its batch', () =
     { entity: { eid: 'm1' }, doc: { title: 'Maker' } },
     { entity: { eid: 'p1' }, product: { maker: 'm1' } },
   )
-  assertEquals(born, [{ eid: 'm1', num: 2 }])
-  assertEquals(at(restored, 'm1').entity, { eid: 'm1', num: 2 })
+  assertEquals(born, [{ eid: 'm1', num: 1, prefix: 'D' }])
+  assertEquals(at(restored, 'm1').entity, { eid: 'm1', num: 1, prefix: 'D' })
 })
 
 test('physical eviction reserves identity and rolls back with nested transactions', () => {

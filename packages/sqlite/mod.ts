@@ -457,9 +457,9 @@ export type Opts = BindOpts & {
   partial?: boolean
   /** Give new spines a human-readable number. Opt-IN: left out, an entity is
    * its eid and nothing else, which is what a store whose entities nobody ever
-   * types the number of wants. `true` numbers every entity by one count; a
-   * table of letters numbers each entity in the series of the components it
-   * is given (./write.ts `Numbering`). Identity, and reporting which entities
+   * types the number of wants. A table of letters numbers each entity in the
+   * series of the components it is given, and `true` takes that table from
+   * the prefixes the vocabulary declares (./write.ts `Numbering`). Identity, and reporting which entities
    * were created, still belong to storage either way. */
   number?: Numbering
   /** Where an id kept as another entity's name lives (./write.ts `Names`),
@@ -586,7 +586,7 @@ export let storage = (
   let owing = () => book?.owed() ?? []
   // All handles on this connection see the open writer's rows, including a
   // graph's scope reads through the outer store rather than its tx handle.
-  let upkeep = maintenance(driver, () => numbered)
+  let upkeep = maintenance(driver)
   let migrating = () => !!base.deferred && upkeep.pending()
   let unindexed = Object.assign(() => undefined, {
     pending: { ids: [], matching: () => [] },
@@ -694,11 +694,9 @@ export let storage = (
     get(driver, vocab, eids, opts(), comps, unsettled)
   let report = base.report ?? logged
   // Whether this store's vocabulary declares archetypes, so its queries are
-  // planned by them and its reads show them, and whether their descriptors
-  // are numbered: by a store's one count, as any other entity is; by series,
-  // never, since no component of theirs declares a letter.
+  // planned by them and its reads show them. Their descriptors are never
+  // numbered: no component of theirs declares a letter.
   let classified = !!vocab.comp('archetype') && keeping
-  let numbered = !!vocab.comp('archetype') && base.number === true
   let memo = memoized(driver, vocab, base.derived, base.memory)
   // A query's rows, from memory while the tables its answer stands on are
   // unwritten (./memo.ts `answer`), in the one snapshot that decides both. A
@@ -1112,7 +1110,7 @@ export let storage = (
   let mend = (eids: string[]) => {
     if (!migrating()) lost(eids)
     memo.writes(
-      () => unit(driver, () => classify(driver, eids, numbered)),
+      () => unit(driver, () => classify(driver, eids)),
       () => eids,
       true,
     )
@@ -1197,8 +1195,8 @@ export let storage = (
       let unknown: string[] = []
       memo.writes(
         () => {
-          let buried = entomb(driver, dead, numbered)
-          let sorted = classify(driver, owed, numbered, (eid, pointed) => {
+          let buried = entomb(driver, dead)
+          let sorted = classify(driver, owed, (eid, pointed) => {
             let held = l.held(eid, pointed)
             if (!held) unknown.push(eid)
             return held
@@ -1300,16 +1298,13 @@ export let storage = (
   // (./follow.ts), never by an operation.
   // In-memory stores are private scratch values and may prepare themselves.
   let ready = false
-  let prepare = () =>
-    base.deferred ? upkeep.prepare() : backfill(driver, numbered)
+  let prepare = () => base.deferred ? upkeep.prepare() : backfill(driver)
   // A store numbering by series moves a spine that keeps a number unique on
   // its own (./ddl.ts `respine`), before the indexes on it are raised. The
   // move writes only the numbered rows, once each, and no reference to them
   // is checked, so a Durable Object's directory of 43,000 moves in its
-  // install. A file's spine is moved by its host's migration, and until then
-  // counts once (./write.ts `unmoved`).
-  let respining = () =>
-    typeof base.number == 'object' && !driver.file && sole(driver)
+  // install. A file's spine is moved by its host's migration.
+  let respining = () => !!base.number && !driver.file && sole(driver)
   let install = (beside: Stmt[] = []): Error[] => {
     let left: Error[] = []
     let mark = marked

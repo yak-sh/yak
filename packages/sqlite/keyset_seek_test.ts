@@ -2,17 +2,19 @@
 // in the order's column, the keyset bounds that column at the anchor's value,
 // and the walk seeks there instead of reading every row the cursor passed.
 import { equal, ok, test } from '@yaks/testing'
-import { idDoc, idKeywords } from '@yaks/id'
+import { ID_URI, idDoc, idKeywords } from '@yaks/id'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from './mod.ts'
 import { stepping } from './testing.ts'
 
 let vocab = loadVocab([idDoc, {
+  $vocabulary: { 'https://yak.sh/vocab/core': true, [ID_URI]: true },
   $defs: {
     entity: { component: true, properties: {} },
     thing: {
       component: true,
       kind: true,
+      prefix: 'T',
       properties: {
         rank: { type: 'number', index: true },
         note: { type: 'string', index: true },
@@ -42,9 +44,9 @@ let page = (q: string) => {
   return { eids, steps: steps() - before }
 }
 
-// A store mover's page: numbers without letters, newest first, 50 at a time.
+// A page of one series: newest first, 50 at a time.
 let mover = (depth: number) =>
-  page(`.entity.num&!entity.prefix&* .limit=50 .after=e${n - 1 - depth}`)
+  page(`.entity.num&entity.prefix=T&* .limit=50 .after=e${n - 1 - depth}`)
 
 test('a numbered page past its cursor reads its own rows however deep the cursor', () => {
   let [shallow, deep] = [mover(100), mover(5000)]

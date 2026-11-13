@@ -6,6 +6,7 @@ import { ids } from '@yaks/id/graph'
 import { storage } from '@yaks/sqlite'
 import { SIZES } from '@yaks/sqlite/owe'
 import { mem } from '@yaks/sqlite/testing'
+import { col, eq, val } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { letterRule, printed } from './letter-move.ts'
 import { numbered } from './vocab.ts'
@@ -26,7 +27,7 @@ let vocab = loadVocab([idDoc, {
 }], [idKeywords])
 
 // A directory as it stood: a spine whose number is unique on its own, and
-// every entity numbered by one count, with no letter.
+// every entity numbered by the one count it kept, with no letter.
 let d = mem()
 d.query({
   t: 'create table',
@@ -37,7 +38,7 @@ d.query({
     { name: 'num', type: 'integer', unique: true },
   ],
 })
-let old = storage(d, vocab, { number: true })
+let old = storage(d, vocab)
 old.install()
 old.tx((tx) =>
   tx.patch([
@@ -46,6 +47,14 @@ old.tx((tx) =>
     { entity: { eid: 'home' }, space: {} },
   ])
 )
+for (let [num, eid] of ['broke', 'kept', 'home'].entries()) {
+  d.query({
+    t: 'update',
+    table: 'entity',
+    set: { num: val(num + 1) },
+    where: eq(col('eid'), val(eid)),
+  })
+}
 // Too big to move at install, as the directory is (@yaks/sqlite `respined`):
 // its spine keeps the number unique on its own until its own migration.
 let store = storage(d, vocab, {
@@ -80,7 +89,7 @@ test('a number is copied under the letter it printed with, and opens what it ope
   assertEquals(await opened('M-1'), [])
 })
 
-test('after the move, only a declared prefix numbers, and the store counts once', async () => {
+test('after the move, only a declared prefix numbers, past the numbers its series holds', async () => {
   await g.apply([
     { entity: { eid: 'later' }, exception: {} },
     { entity: { eid: 'saved' }, memory: {} },
@@ -89,6 +98,6 @@ test('after the move, only a declared prefix numbers, and the store counts once'
   assertEquals([later.entity.num ?? null, saved.entity], [null, {
     ...saved.entity,
     prefix: 'M',
-    num: 4,
+    num: 3,
   }])
 })

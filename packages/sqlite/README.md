@@ -805,8 +805,7 @@ records the next survey.
 - `server_meta`: database metadata, separate from graph entities, among it
   `tables`, the component tables the file holds.
 - `entity_series` and triggers: each series' human-number high-water mark, by
-  its letter; `entity_sequence`, the one count of a store numbering without
-  letters.
+  its letter.
 - `entity_written` and triggers, in a file: which entity each write named, in
   commit order, for the other connections' memory (under Read).
 
@@ -1143,26 +1142,23 @@ try {
 
 ### Human numbering by series
 
-[Human numbering](../id/README.md) is opt-in. `{ number: true }` numbers every
-entity by one count, with no letters. A table of letters, component → letter
-(`{ number: { doc: 'D' } }`, @yaks/id `prefixes(vocab)`), numbers by series: an
-entity is numbered once, on the write that first gives it a component in the
-table, and holds `entity{prefix, num}`, so `D-1` and `M-1` are two entities.
-With two such components, the kind the vocabulary names picks the series
-(@yaks/id `seriesOf`). An entity given none is unnumbered and shows its short
-handle. Omitting `number` or setting it to false leaves new entities unnumbered.
-`@yaks/ram` accepts the same option.
+[Human numbering](../id/README.md) is opt-in. A table of letters, component →
+letter (`{ number: { doc: 'D' } }`), numbers by series, and `{ number: true }`
+takes the table from the prefixes the vocabulary declares (@yaks/id
+`prefixes(vocab)`). An entity is numbered once, on the write that first gives it
+a component in the table, and holds `entity{prefix, num}`, so `D-1` and `M-1`
+are two entities. With two such components, the kind the vocabulary names picks
+the series (@yaks/id `seriesOf`). An entity given none is unnumbered and shows
+its short handle. Omitting `number` or setting it to false leaves new entities
+unnumbered. `@yaks/ram` accepts the same option.
 
 Each series keeps its last number in `entity_series`, raised by insert/update
 triggers, and the next is the one after it, stepping over a number an entity
-already holds in the series, or holds without a letter. A store that still holds
-numbers given without letters, or whose spine was made keeping `num` unique on
-its own, gives each new one the store's one count (`entity_sequence`) instead,
-with its letter, so it is past all of them and no two series give the same one.
-`respine(driver)` moves such a spine without moving a row: the column keeping
-the old constraint is renamed `retired_num` and emptied, and a new `num` takes
-its numbers, so no reference to an entity is checked again. Only the numbered
-rows are written, and each trigger that stood on the spine is raised again.
+already holds in the series. A spine made keeping `num` unique on its own is
+moved by `respine(driver)` without moving a row: the column keeping the old
+constraint is renamed `retired_num` and emptied, and a new `num` takes its
+numbers, so no reference to an entity is checked again. Only the numbered rows
+are written, and each trigger that stood on the spine is raised again.
 
 A number given out before can stay the name of what it named once that entity is
 numbered again (@yaks/alias). `names`, `(prefix, num) => eid`, says where the

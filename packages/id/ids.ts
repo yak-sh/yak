@@ -3,13 +3,10 @@
 // resolving one is a read: find the entities carrying that number, and keep
 // the one in its series.
 //
-// A row numbered before series had letters stores no prefix. Its letter was
-// derived from its components, which change: a persona that wore a component
-// with its own prefix printed as `R-131280` and prints as `N-131280` once that
-// component is gone. The ids people hold keep the letter they were printed
-// with, so such a row answers to its number under any letter, after an entity
-// holding the pair itself. A bare number (`37580`) names the entity holding it
-// while there is one; several, and the graph refuses it, naming them.
+// A bare number (`37580`) names the entity holding it while there is one;
+// several, and the graph refuses it, naming them. An id given out under a
+// letter its entity no longer holds is kept as that entity's name
+// (@yaks/alias), which the graph asks after the numbers.
 //
 // This is a graph plugin's `address`, which @yaks/graph calls before a caller's
 // ids are used, so every entry point accepts the ids people type: the MCP
@@ -75,9 +72,8 @@ export let starting = (
 }
 
 /** Of the entities holding one number, the eids an id of that number with
- * this letter names: the one holding the pair, else one stored without a
- * prefix, which answers under any letter; for a bare number (`''`), every
- * holder. The living, where any are. */
+ * this letter names: the one holding the pair; for a bare number (`''`),
+ * every holder. The living, where any are. */
 let holding = (found: Bundle[], prefix: string): Eid[] => {
   let fit = answering(found, prefix, (b) => b.entity)
   let live = fit.filter((b) => !b.tombstone)

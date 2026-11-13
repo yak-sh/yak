@@ -31,7 +31,7 @@ test('a store holds its small series and draws each by its id', async () => {
   made('project', 'p2')
   assertEquals((await ids())('p2'), undefined)
   t = 10
-  assertEquals((await ids())('p2'), 'P-5')
+  assertEquals((await ids())('p2'), 'P-2')
 })
 
 // An id is drawn from the kind an entity wears first in kind order: of its
@@ -64,6 +64,6 @@ test('a held entity is drawn by the first series it is numbered in, and nothing 
     read: ((q: string) => (asked.push(q), g.read(q))) as typeof g.read,
   })()
   // an app declares no letter, so the project it also is numbers it
-  assertEquals(['a', 'pt', 't'].map(ids), ['P-1', 'P-2', 'T-3'])
+  assertEquals(['a', 'pt', 't'].map(ids), ['P-1', 'P-2', 'T-1'])
   assertEquals(asked.every((q) => q.includes('.fields=entity.')), true)
 })

@@ -49,7 +49,7 @@ let seeded = (archetypes: number) => {
   for (let i = 0; i < archetypes; i++) {
     put(10 + i, `shape-${i}`, WEARS.filter((_, k) => (i + 1) >> k & 1))
   }
-  reclassify(d, ids, false)
+  reclassify(d, ids)
   return { db, d }
 }
 

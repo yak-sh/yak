@@ -20,14 +20,14 @@ import { docDoc } from '@yaks/doc'
 import { notifyDoc } from '@yaks/notify'
 import { subsOf } from '@yaks/inbox'
 
-let row = (eid: string, comps: Row['comps'], num = 0): Row => ({
-  eid,
-  num,
-  kind: '',
-  comps,
-})
+let row = (
+  eid: string,
+  comps: Row['comps'],
+  num = 0,
+  prefix?: string,
+): Row => ({ eid, num, ...prefix ? { prefix } : {}, kind: '', comps })
 let all = [
-  row('t', { task: {}, doc: { title: 'Scribe desk' } }, 7),
+  row('t', { task: {}, doc: { title: 'Scribe desk' } }, 7, 'T'),
   row('k', { key: { of: 't', value: 'scribe-desk' }, alias: {} }),
   // a key of another kind is not a name
   row('x', { key: { of: 't', value: 'not-a-name' } }),

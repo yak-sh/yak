@@ -68,7 +68,7 @@ import { bindings } from './rules.ts'
 export type { Query }
 
 // What a rollback puts the numbering back to.
-type Counted = { next: number; highs: Map<string, number> }
+type Counted = { highs: Map<string, number> }
 
 /** Passed to every read of a store: the moment relative time phrases in a query
  * (`.released=today`) resolve against. A per-call `opts` overrides it. */
@@ -86,9 +86,9 @@ export type RamOpts = {
   adopt?: boolean
   /** Give new entities a human-readable number. Opt-IN, with the same option
    * name @yaks/sqlite uses: left out, an entity has its eid and nothing else.
-   * `true` numbers every entity by one count; a table of letters (component →
-   * letter) numbers each entity in the series of the components it is given,
-   * once, on the write that first gives it one. */
+   * A table of letters (component → letter), or `true` for the prefixes the
+   * vocabulary declares, numbers each entity in the series of the components
+   * it is given, once, on the write that first gives it one. */
   number?: boolean | Series
   /** `comp.prop` → the value for one bundle, for each property the vocabulary
    * declares computed and never stores: what `.task.status=open` is answered
@@ -161,11 +161,6 @@ export type Store = {
 // A deleted entity keeps its identity and a tombstone, and nothing else, until
 // `revive` brings it back.
 let buried = (b: Bundle | undefined): boolean => b?.[TOMBSTONE] != null
-// An entity that holds nothing yet: the record a reference made.
-let empty = (b: Bundle): boolean => {
-  for (let k in b) if (k != 'entity') return false
-  return true
-}
 let NONE: ReadonlyMap<Eid, Bundle> = new Map()
 let file = <K>(
   byKey: Map<K, Map<Eid, Bundle>>,
@@ -286,8 +281,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       ? undefined
       : JSON.stringify(values)
   }
-  // The store's one count, and each series' last number, by letter.
-  let next = 1
+  // Each series' last number, by letter.
   let highs = new Map<string, number>()
   // The entities each number was given to, any letter, a tombstone's and an
   // evicted payload's included. Never pruned: an entry is checked against the
@@ -322,10 +316,9 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       else cold.delete(eid)
       put(eid, rec)
     }
-    next = minted.next
     highs = minted.highs
   }
-  let counted = (): Counted => ({ next, highs: new Map(highs) })
+  let counted = (): Counted => ({ highs: new Map(highs) })
 
   // One entity's record replaced, or dropped, and every index moved with it.
   // Every write goes through here, a rollback's included, so an index never
@@ -612,12 +605,11 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
 
   // The series an entity is numbered in, where this store numbers by series
   // (@yaks/id `seriesOf`).
-  let series = typeof base.number == 'object'
-    ? seriesOf(vocab, base.number)
+  let series = base.number
+    ? seriesOf(vocab, base.number === true ? undefined : base.number)
     : undefined
-  let lettered = typeof base.number == 'object' ? Object.keys(base.number) : []
   // The next number in a series, past the last it gave, stepping over one an
-  // entity holds in it or without a letter.
+  // entity holds in it.
   let nextIn = (prefix: string): number => {
     let n = (highs.get(prefix) ?? 0) + 1
     while (holders(n).some((h) => clash(h, { prefix, num: n }))) n++
@@ -629,8 +621,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   // series, or none in a store mirroring another graph, which waits to be
   // told.
   let numbered = (held: string[]): Partial<Pair> => {
-    if (base.adopt) return {}
-    if (!series) return { num: next++ }
+    if (base.adopt || !series) return {}
     let prefix = series(held)
     return prefix ? { num: nextIn(prefix), prefix } : {}
   }
@@ -666,7 +657,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       if (pair == null) return {}
       if (pair.prefix) {
         highs.set(pair.prefix, Math.max(highs.get(pair.prefix) ?? 0, pair.num))
-      } else next = Math.max(next, pair.num + 1)
+      }
       return pair.prefix ? pair : { num: pair.num }
     }
     let unnumbered = ({ num: _, prefix: __, ...entity }: Entity): Entity =>
@@ -706,15 +697,10 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
           keep(eid, { ...rec, entity })
         } else if (
           // A record numbered nothing so far is numbered when a bundle of its
-          // own gives what numbers it: by one count, only one an earlier
-          // reference made that still carries nothing, since an unnumbered
-          // entity that carries something was left so on purpose; by series,
-          // the first component in its series.
-          !told && !base.adopt && own.has(eid) && !!base.number &&
+          // own gives the first component in its series.
+          !told && !base.adopt && own.has(eid) && !!series &&
           !buried(rec) && rec.entity.num == null &&
-          (series
-            ? (giving.get(eid) ?? []).some((c) => lettered.includes(c))
-            : empty(rec))
+          !!series(giving.get(eid) ?? [])
         ) {
           let entity = {
             ...rec.entity,

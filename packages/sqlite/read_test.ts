@@ -251,7 +251,11 @@ test('a gathered bundle carries the entity number storage minted', () => {
     { entity: { eid: 'p1' }, product: { price: 1 } },
     { entity: { eid: 'p2' }, product: { price: 2 } },
   ])
-  assertEquals(s.read('.product.price=2')[0].entity, { eid: 'p2', num: 2 })
+  assertEquals(s.read('.product.price=2')[0].entity, {
+    eid: 'p2',
+    num: 2,
+    prefix: 'P',
+  })
 })
 
 test('whole-set gathers are bounded by vocabulary, not the 100 entities; get preserves identity order', async () => {
@@ -402,14 +406,7 @@ test('a wide gather avoids compound SELECT limits', async () => {
   let driver = spy({ ...mem(), arms: undefined }, (sql) => void asked.push(sql))
   let vocab = loadVocab({
     $defs: {
-      entity: {
-        component: true,
-        type: 'object',
-        wire: false,
-        // Numbered, since the store below mints numbers: a spine that does not
-        // declare the property does not show one (read.ts `numbered`).
-        properties: { num: { type: 'number', stamped: true } },
-      },
+      entity: { component: true, type: 'object', wire: false },
       ...Object.fromEntries(
         Array.from({ length: 20 }, (_, i) => [`facet${i}`, {
           component: true,
@@ -419,7 +416,7 @@ test('a wide gather avoids compound SELECT limits', async () => {
       ),
     },
   })
-  let s = storage(driver, vocab, { number: true })
+  let s = storage(driver, vocab)
   s.install()
   seed(s, [
     {
@@ -432,7 +429,7 @@ test('a wide gather avoids compound SELECT limits', async () => {
   asked.length = 0
   // One or several eids take the same set gather.
   assertEquals(await s.tx((tx) => tx.get(['a'])), [{
-    entity: { eid: 'a', num: 1 },
+    entity: { eid: 'a' },
     facet0: { value: 'first' },
     facet19: { value: 'last' },
   }])

@@ -17,7 +17,9 @@ let vocab = loadVocab({
     },
   },
 })
-let names = schema(vocab).flatMap((s) => 'name' in s ? [s.name] : []).sort()
+// What the schema makes: a name it drops is not kept.
+let names = schema(vocab)
+  .flatMap((s) => s.t != 'drop' && 'name' in s ? [s.name] : []).sort()
 let empty = snapshot(vocab)
 let extra = [insert('entity', { eid: 'fixture' })]
 let seeded = snapshot(vocab, {}, extra)

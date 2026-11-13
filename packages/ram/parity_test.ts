@@ -10,15 +10,17 @@
 
 import { test } from '@yaks/testing'
 import { answers, parity, rig } from '../sqlite/parity.ts'
-import { shop, store } from '../sqlite/testing.ts'
+import { preparedStore, shop, store } from '../sqlite/testing.ts'
 import { ram } from './mod.ts'
 import { assert, assertEquals } from '@std/assert'
 import { parse } from '@yaks/query'
 
-let mine = () => rig(ram(shop, { number: true }))
+// Both number each entity in the series of its kind.
+let SERIES = { doc: 'D', product: 'P', review: 'R', bookmark: 'B' }
+let mine = () => rig(ram(shop, { number: SERIES }))
 
 test('a ram graph and a sqlite graph agree, batch for batch', () => {
-  parity(mine(), rig(store()))
+  parity(mine(), rig(preparedStore(shop, { number: SERIES })))
 })
 
 test('a ram graph selects what each query means', () => answers(mine()))
