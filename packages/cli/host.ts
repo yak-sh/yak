@@ -102,6 +102,8 @@ import { artifactsAt, type Backend, backend } from '@yaks/blob/backend'
 import { blobSchema, sqliteBlobs } from '@yaks/blob/sqlite'
 import type { Blobs } from '@yaks/blob'
 import { type Config, dbOf, given, used } from './config.ts'
+import { ALIAS, aliasEid } from '@yaks/alias'
+import { format } from '@yaks/id'
 import {
   configured,
   facetsOf,
@@ -766,6 +768,14 @@ let composed = async (
           backed,
           extend,
           number: numbering(vocab, config.numbers),
+          // A number given out before and kept as a name (@yaks/alias) is
+          // never given again.
+          ...vocab.comp(ALIAS)
+            ? {
+              names: (prefix: string, num: number) =>
+                aliasEid(format(prefix, num)),
+            }
+            : {},
           history,
           // A model turn reads its window again each step, a thousand lines
           // of a long transcript: more than a Durable Object's 4 MiB keeps.

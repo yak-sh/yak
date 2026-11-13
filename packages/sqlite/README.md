@@ -1161,11 +1161,17 @@ its own, gives each new one the store's one count (`entity_sequence`) instead,
 with its letter, so it is past all of them and no two series give the same one.
 `respine(driver)` moves such a spine without moving a row: the column keeping
 the old constraint is renamed `retired_num` and emptied, and a new `num` takes
-its numbers, so no reference to an entity is checked again. Clearing a number
-does not recycle it. A patch stating `entity{prefix, num}` gives its entity that
-id, born or not, or none for `num: null`; a `num` stated alone keeps the
-entity's prefix; an id another entity holds, a tombstone's included, is refused,
-since it is that entity's address (@yaks/graph `renumbering`).
+its numbers, so no reference to an entity is checked again. Only the numbered
+rows are written, and each trigger that stood on the spine is raised again.
+
+A number given out before can stay the name of what it named once that entity is
+numbered again (@yaks/alias). `names`, `(prefix, num) => eid`, says where the
+entity keeping such a name lives (`aliasEid(format(prefix, num))`), and a series
+steps over a number kept so while the name stands. Clearing a number does not
+recycle it. A patch stating `entity{prefix, num}` gives its entity that id, born
+or not, or none for `num: null`; a `num` stated alone keeps the entity's prefix;
+an id another entity holds, a tombstone's included, is refused, since it is that
+entity's address (@yaks/graph `renumbering`).
 
 ```ts
 import { open } from '@yaks/sqlite/db'

@@ -394,21 +394,47 @@ let lastIn = (
   )
 
 /**
+ * Where an id another entity keeps as a name lives: the eid of the entity that
+ * would keep `T-12` as one (@yaks/alias `aliasEid`). A number given out
+ * before and kept as the name of what it named, once its entity was numbered
+ * again, is never given out again while that name stands.
+ */
+export type Names = (prefix: string, num: number) => string
+
+// Of a window of numbers in a series, those kept as another entity's name: a
+// living spine at the eid `names` says keeps each (a released name's is a
+// tombstone).
+let asNames = (
+  driver: Driver,
+  prefix: string,
+  nums: number[],
+  names: Names,
+): number[] => {
+  let at = new Map(nums.map((k) => [names(prefix, k), k]))
+  return [...spines(driver, [...at.keys()])]
+    .filter(([, s]) => !s.dead)
+    .map(([eid]) => at.get(eid)!)
+}
+
+/**
  * The next number in a series, past the last it gave, stepping over one an
  * entity holds: in the series, or without a letter, which holds its number in
- * every series. `given` keeps what this write has given so far, by letter, so
- * the next asked is past it. Read a window of numbers at a time: a store
- * whose old rows hold most of the low ones steps over them in few reads.
+ * every series, and one kept as another entity's name (`names`). `given`
+ * keeps what this write has given so far, by letter, so the next asked is
+ * past it. Read a window of numbers at a time: a store whose old rows hold
+ * most of the low ones steps over them in few reads.
  */
 let nextIn = (
   driver: Driver,
   prefix: string,
   given: Map<string, number>,
+  names?: Names,
 ): number => {
   let n = lastIn(driver, prefix, given)
   for (let width = 64;; n += width) {
-    let held = new Set(
-      driver.query(select({
+    let window = Array.from({ length: width }, (_, i) => n + 1 + i)
+    let held = new Set([
+      ...driver.query(select({
         cols: [col('num')],
         from: table('entity'),
         where: and(
@@ -417,7 +443,8 @@ let nextIn = (
           or(eq(col('prefix'), val(prefix)), isNull(col('prefix'))),
         ),
       })).map((r) => Number(r.num)),
-    )
+      ...names ? asNames(driver, prefix, window, names) : [],
+    ])
     for (let k = n + 1; k <= n + width; k++) {
       if (!held.has(k)) {
         given.set(prefix, k)
@@ -948,6 +975,9 @@ type Take = false | { num: 'next' | number; prefix: string | null }
  *
  * `unsettled` says what an entity this transaction wrote holds, where the
  * patch reads one (./read.ts `Unsettled`).
+ *
+ * `names` says where an id kept as another entity's name lives, so a number
+ * kept so is stepped over ({@link Names}).
  */
 export let patch = (
   driver: Driver,
@@ -958,6 +988,7 @@ export let patch = (
   had?: Known,
   born?: Births,
   unsettled?: Unsettled,
+  names?: Names,
 ): Entity[] => {
   // A computed component's rows are another package's (@yaks/sql `Backing`):
   // there is no table here to write one to.
@@ -1061,7 +1092,7 @@ export let patch = (
     if (series && !prefix) return false
     return counted
       ? { num: 'next', prefix: prefix ?? null }
-      : { num: nextIn(driver, prefix!, given), prefix: prefix! }
+      : { num: nextIn(driver, prefix!, given, names), prefix: prefix! }
   }
   // The pointer each mint wrote, so the bundle naming it writes it once.
   let pointers = new Map<string, number>()

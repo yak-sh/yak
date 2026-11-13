@@ -82,7 +82,8 @@ import {
 } from './physical.ts'
 import { unit } from './unit.ts'
 import { clocked, versioned } from './versions.ts'
-import { writtenDdl } from './written.ts'
+import { telling, writtenDdl } from './written.ts'
+import { tallying } from './population.ts'
 
 import type { Counting, Statistics } from './meta.ts'
 import { META, tables } from './layout.ts'
@@ -880,6 +881,36 @@ let SPINED = SPINE.find((s): s is CreateTable =>
 )!
 let ON_SPINE = SPINE.filter((s) => s.t == 'create trigger' && s.on == 'entity')
 
+// Every trigger this package raises on the spine, by name: its own counts', the
+// archetype counts' (./population.ts) and the write log's (./written.ts).
+let SPUN = new Map(
+  [...ON_SPINE, ...tallying, ...telling('entity')]
+    .map((s) => [(s as { name: string }).name, s]),
+)
+
+// The triggers to raise again on a spine made anew: its own, and each other
+// that stood on it. One this package does not make would be lost, so it is
+// refused before anything moves.
+let spun = (driver: Driver): Stmt[] => {
+  let stood = objects(driver, { tbl_name: 'entity', type: 'trigger' })
+    .map((o) => o.name)
+  let alien = stood.filter((name) => !SPUN.has(name))
+  if (alien.length) {
+    throw new Error(
+      `the spine holds triggers this package does not make: ${
+        alien.join(', ')
+      }`,
+    )
+  }
+  let names = new Set(stood)
+  return [
+    ...ON_SPINE,
+    ...[...SPUN.values()].filter((s) =>
+      !ON_SPINE.includes(s) && names.has((s as { name: string }).name)
+    ),
+  ]
+}
+
 /** The column a spine's number moves out of when it stops being unique on its
  * own ({@link respined}): it keeps that old constraint, and no value. */
 export let RETIRED_NUM = 'retired_num'
@@ -900,6 +931,7 @@ export let RETIRED_NUM = 'retired_num'
  */
 export let respined = (driver: Driver): Stmt[] => {
   if (!sole(driver)) return []
+  let raised = spun(driver)
   let on = objects(driver, { tbl_name: 'entity' })
     .filter((o) => o.sql && (o.type == 'index' || o.type == 'trigger'))
   return [
@@ -922,8 +954,11 @@ export let respined = (driver: Driver): Stmt[] => {
       t: 'update',
       table: 'entity',
       set: { num: col(RETIRED_NUM), [RETIRED_NUM]: lit(null) },
+      // The numbered rows only, through the retired column's own index: the
+      // rest hold none to move, and on the box they are 97% of six million.
+      where: notNull(col(RETIRED_NUM)),
     },
-    ...ON_SPINE,
+    ...raised,
   ]
 }
 
@@ -931,9 +966,9 @@ export let respined = (driver: Driver): Stmt[] => {
  * ({@link respined}), in a unit of its own: one the engine refused is left as
  * it stood, and returned with the engine's reason. */
 export let respine = (driver: Driver): Error[] => {
-  let stmts = respined(driver)
-  if (!stmts.length) return []
   try {
+    let stmts = respined(driver)
+    if (!stmts.length) return []
     unit(driver, () => stmts.forEach((s) => driver.query(s)))
     return []
   } catch (e) {

@@ -133,6 +133,7 @@ import { maintenance } from './maintenance.ts'
 import { plan } from './plan.ts'
 import {
   births,
+  type Names,
   type Numbering,
   patch,
   prune,
@@ -233,6 +234,7 @@ export {
 } from './raise.ts'
 export {
   analyzed,
+  built,
   FIT,
   fit,
   fitting,
@@ -281,6 +283,7 @@ export {
   dropSql,
   minted,
   mintSql,
+  type Names,
   type Numbering,
   numberSql,
   patch,
@@ -467,6 +470,9 @@ export type Opts = BindOpts & {
    * is given (./write.ts `Numbering`). Identity, and reporting which entities
    * were created, still belong to storage either way. */
   number?: Numbering
+  /** Where an id kept as another entity's name lives (./write.ts `Names`),
+   * so a number given out before and kept as a name is never given again. */
+  names?: Names
   /** Where a failure the store outlives is told: a table that stood and could
    * not be fitted to the vocabulary, left as it was (ddl.ts `fit`). One
    * line on the console, by default (ddl.ts `logged`). */
@@ -1073,6 +1079,9 @@ export let storage = (
             base.number,
             undefined,
             known,
+            undefined,
+            undefined,
+            base.names,
           ),
       )
     },
@@ -1260,6 +1269,7 @@ export let storage = (
                 known,
                 born,
                 unsettled,
+                base.names,
               ),
           )
           for (let b of bundles) {

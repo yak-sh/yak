@@ -12,6 +12,7 @@ import {
   type Census,
   col,
   count,
+  type CreateTrigger,
   derivedOf,
   type Driver,
   eq,
@@ -52,6 +53,27 @@ let increment = (which: 'new' | 'old', n: number): Stmt => ({
   }),
   upsert: [{ on: [col('archetype')], set: { n: op('+', col('n'), lit(n)) } }],
 })
+
+/** The triggers on the spine that keep each archetype's count: one more for
+ * an entity born or moved into it, one fewer for one dropped or moved out. */
+export let tallying: CreateTrigger[] = (['insert', 'delete', 'update'] as const)
+  .map((event) => ({
+    t: 'create trigger',
+    name: `${POPULATION}_${event}`,
+    timing: 'after',
+    event,
+    on: 'entity',
+    ...event == 'update'
+      ? {
+        of: ['archetype'],
+        when: op('is not', col('archetype', 'old'), col('archetype', 'new')),
+      }
+      : {},
+    body: [
+      ...event != 'insert' ? [increment('old', -1)] : [],
+      ...event != 'delete' ? [increment('new', 1)] : [],
+    ] as Extract<Stmt, { t: 'insert' }>[],
+  }))
 
 /** Install once, after the entity schema and its archetype backfill stand.
  * Seeding and the triggers commit together; another opener sees both or none. */
@@ -138,25 +160,7 @@ export let population = (driver: Driver): void => {
       where: eq(col('archetype'), col('entity', 'old')),
     }],
   })
-  for (let event of ['insert', 'delete', 'update'] as const) {
-    driver.query({
-      t: 'create trigger',
-      name: `${POPULATION}_${event}`,
-      timing: 'after',
-      event,
-      on: 'entity',
-      ...event == 'update'
-        ? {
-          of: ['archetype'],
-          when: op('is not', col('archetype', 'old'), col('archetype', 'new')),
-        }
-        : {},
-      body: [
-        ...event != 'insert' ? [increment('old', -1)] : [],
-        ...event != 'delete' ? [increment('new', 1)] : [],
-      ] as Extract<Stmt, { t: 'insert' }>[],
-    })
-  }
+  for (let t of tallying) driver.query(t)
   // Graves can be written before classification (or by SQL extensions).
   // Their physical presence, not the eventual descriptor, decides liveness.
   for (let event of ['insert', 'delete'] as const) {

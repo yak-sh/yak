@@ -66,6 +66,10 @@ let told = (table: string, event: typeof events[number]): CreateTrigger => {
   }
 }
 
+/** The triggers on `table` that tell the log of each row written there. */
+export let telling = (table: string): CreateTrigger[] =>
+  events.map((event) => told(table, event))
+
 /** The log, and the triggers on the spine, the graves and each of `tables`
  * that write it. */
 export let writtenDdl = (tables: string[]): Stmt[] => [

@@ -3099,6 +3099,7 @@
           "dependencies": [
             "npm:@jsr/luca__esbuild-deno-loader@0.11.1",
             "npm:@jsr/std__assert@1",
+            "npm:@yaks/alias@0.2.24",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/blob@0.2.30",
             "npm:@yaks/code@0.2.23",

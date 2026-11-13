@@ -5,7 +5,9 @@ import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { col, type Driver, eq, lit, val } from '@yaks/sql'
 import { entity, mem, stepping } from './testing.ts'
-import { mintSql, storage } from './mod.ts'
+import { mintSql, objects, respine, storage } from './mod.ts'
+import { population } from './population.ts'
+import { writtenDdl } from './written.ts'
 import { owe, owed, SIZES, work } from './owe.ts'
 import { idDoc, idKeywords } from '@yaks/id'
 import { ids } from '@yaks/id/graph'
@@ -115,6 +117,29 @@ test('sqlite: a series fills its holes, stepping over a number held', () => {
   s.tx((tx) => {
     tx.patch([mk('a'), mk('b'), mk('c')])
     assertEquals(idOf(tx, ['a', 'b', 'c']), ['T-1', 'T-4', 'T-6'])
+  })
+})
+
+test('sqlite: a series steps over a number kept as a name, until the name is released', () => {
+  let names = (prefix: string, num: number) => `name:${prefix}-${num}`
+  let s = storage(mem(), vocab, { number: SERIES, names })
+  s.install()
+  s.tx((tx) => {
+    tx.patch([mk('name:T-2', { entry: { seq: 1 } })])
+    tx.patch([mk('a'), mk('b')])
+    assertEquals(idOf(tx, ['a', 'b']), ['T-1', 'T-3'])
+    tx.remove([{ eid: 'name:T-2' }])
+    tx.patch([mk('c')])
+    assertEquals(idOf(tx, ['c']), ['T-4'])
+  })
+  let d = mem()
+  let t = storage(d, vocab, { number: SERIES, names })
+  t.install()
+  t.tx((tx) => {
+    tx.patch([mk('name:T-1', { entry: { seq: 1 } })])
+    tx.remove([{ eid: 'name:T-1' }])
+    tx.patch([mk('a')])
+    assertEquals(idOf(tx, ['a']), ['T-1'])
   })
 })
 
@@ -231,6 +256,25 @@ test('sqlite: a spine is moved in steps that grow with its rows, its foreign key
   }
   let [one, two] = [cost(1000), cost(2000)]
   assert(two < 2.5 * one, `${one} then ${two} VM steps`)
+})
+
+test('sqlite: a respined spine keeps every trigger that stood on it, and its numbers', () => {
+  let { d, s } = lone({
+    file: true,
+    rows: [
+      { entity: { eid: 'old', num: 1 }, task: {} },
+      { entity: { eid: 'older', num: 2 }, memory: {} },
+    ],
+  })
+  population(d)
+  for (let stmt of writtenDdl([])) d.query(stmt)
+  let triggers = () =>
+    objects(d, { tbl_name: 'entity', type: 'trigger' }).map((o) => o.name)
+      .sort()
+  let stood = triggers()
+  assertEquals(respine(d), [])
+  assertEquals(triggers(), stood)
+  s.tx((tx) => assertEquals(idOf(tx, ['old', 'older']), [1, 2]))
 })
 
 test("sqlite: a file's spine, or one past a window's copy, is left as it stood, counts once, and builds no series index", () => {
