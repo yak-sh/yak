@@ -1484,6 +1484,13 @@ let PREFIX = 1024
 // index. A scalar subquery per column would look the target up, through its
 // visibility scope, once per column.
 //
+// The join is a cross join, which SQLite never reorders: the one target row
+// is the outer loop and each column's index is sought from it. SQLite plans
+// only the first arm knowing the target is one row; left to choose, every
+// later arm walked its table's whole index and probed the target per row,
+// 10.9 million steps and 41,000 pages for one task's backlinks on the box, 10 s
+// when cold (bug d592f5ae).
+//
 // A row is read as joined to an owner the spine admits (the dialect's
 // `joined`), with no scope of its own unless its component has one: the owner
 // it names is tested against the selection's spine, which already says what
@@ -1502,7 +1509,7 @@ let referrers = (ctx: Ctx, value: string): Frag | undefined => {
     ctx.d.unscoped?.('entity') ?? source(ctx, 'entity')
   } where eid = ?)`
   let term = ([c, props]: Arm) =>
-    `select ${ctx.d.ownerKey(c)} from "${name}" join ${
+    `select ${ctx.d.ownerKey(c)} from "${name}" cross join ${
       ctx.d.joined?.(c) ?? ctx.d.table(c)
     } on ` +
     props.map((p) => `${refKey(ctx, c, p)} = "${name}".id`).join(' or ')
