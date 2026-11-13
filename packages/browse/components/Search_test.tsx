@@ -22,6 +22,8 @@ import { extend } from './registry.ts'
 let hit = (num: number, kind: string, title: string) => ({
   eid: `${num}`,
   num,
+  prefix:
+    ({ task: 'T', memory: 'M', persona: 'N' } as Record<string, string>)[kind],
   kind,
   title,
 })
@@ -108,7 +110,7 @@ test('search sends only the settled query while typing', async () => {
 
 test('query page draws the inspector table through the shared registry', async () => {
   let read = reader([{
-    entity: { eid: 'sample', num: 1 },
+    entity: { eid: 'sample', num: 1, prefix: 'T' },
     task: {},
     doc: { title: 'A shared task' },
   }])

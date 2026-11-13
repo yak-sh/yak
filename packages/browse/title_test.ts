@@ -15,7 +15,7 @@ test('wake titles derive the recipient and relative clock', () => {
   assertEquals(
     wakeTitle(
       e,
-      () => ({ eid: 'project', kind: 'project', num: 19 }),
+      () => ({ eid: 'project', kind: 'project', num: 19, prefix: 'P' }),
       NOW,
     ),
     'wake P-19 · in 1 hour',
@@ -28,8 +28,8 @@ test('wake titles derive the recipient and relative clock', () => {
 
 test('wake lists show every pending clock in time order', () => {
   let refs = [
-    { eid: 'session', kind: 'session', num: 31 },
-    { eid: 'first-task', kind: 'task', num: 42 },
+    { eid: 'session', kind: 'session', num: 31, prefix: 'S' },
+    { eid: 'first-task', kind: 'task', num: 42, prefix: 'T' },
   ]
   let wakes = [
     {

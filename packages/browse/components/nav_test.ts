@@ -31,6 +31,7 @@ import { mount } from './mount.ts'
 let e: Ent = {
   eid: 'task',
   num: 7,
+  prefix: 'T',
   kind: 'task',
   refs: [],
   kids: [],
@@ -42,7 +43,7 @@ landSub({
   sub: 'pressed',
   replace: true,
   changes: ([['task', 7], ['other', 8]] as const).flatMap(([eid, num]) => [
-    { eid, name: 'entity', comp: { eid, num } },
+    { eid, name: 'entity', comp: { eid, num, prefix: 'T' } },
     { eid, name: 'task', comp: { eid } },
   ]),
 })
@@ -94,7 +95,7 @@ test('numeric routes resolve confirmed retained rows before a reopen frame', () 
         {
           eid: 'retained',
           name: 'entity',
-          comp: { eid: 'retained', num: 12345 },
+          comp: { eid: 'retained', num: 12345, prefix: 'T' },
         },
       ],
     })

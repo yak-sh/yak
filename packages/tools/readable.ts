@@ -30,7 +30,7 @@ export type { Ids }
  *   },
  * }, [idKeywords])
  * let eid = '0e513227-de00-4000-8000-000000000001'
- * let task = { entity: { eid, num: 12 }, task: {}, doc: { body: 'Me.' } }
+ * let task = { entity: { eid, num: 12, prefix: 'T' }, task: {}, doc: { body: 'Me.' } }
  * let note = { entity: { eid: 'n1' }, doc: { body: `See ${eid}.` } }
  * assertEquals(readable(vocab)([task, note])[1].doc, { body: 'See T-12.' })
  * assertEquals(readable(vocab)([note])[0].doc, { body: 'See #0e513227de.' })

@@ -50,12 +50,12 @@ let entryPage = (eid: string, limit = 200) => {
 test('session list Tile names its brief without exposing IDs', () => {
   cache.value = {
     actor: {
-      entity: { eid: 'actor', num: 1 },
+      entity: { eid: 'actor', num: 1, prefix: 'P' },
       doc: { eid: 'actor', title: 'Acme', body: '' },
       project: { eid: 'actor' },
     },
     session: {
-      entity: { eid: 'session', num: 2 },
+      entity: { eid: 'session', num: 2, prefix: 'S' },
       session: { eid: 'session', id: 'session-id', actor: 'actor' },
       brief: { eid: 'session', text: 'Ship the update' },
     },
@@ -82,7 +82,7 @@ test('session row names the first ask and keeps the brief beneath it', async () 
   let prior = useRoute(() => {})
   cache.value = {
     asking: {
-      entity: { eid: 'asking', num: 2 },
+      entity: { eid: 'asking', num: 2, prefix: 'S' },
       session: { eid: 'asking', id: 'opaque-run-id' },
       brief: { eid: 'asking', text: 'Found the cause' },
     },
@@ -123,12 +123,12 @@ test('session title names model and effort', () => {
   let gpt = identityEid('model', ['gpt-5.6'])
   cache.value = {
     session: {
-      entity: { eid: 'session', num: 2 },
+      entity: { eid: 'session', num: 2, prefix: 'S' },
       session: { eid: 'session', id: 'session-id' },
       using: { eid: 'session', model: gpt, effort: 'high' },
     },
     [gpt]: {
-      entity: { eid: gpt, num: 3 },
+      entity: { eid: gpt, num: 3, prefix: 'O' },
       model: { eid: gpt, name: 'gpt-5.6' },
     },
   }
@@ -249,7 +249,7 @@ test('session stderr is an error only for a non-zero exit', () => {
 test('session references dedupe entities and links in mention order', () => {
   cache.value = {
     task: {
-      entity: { eid: 'task', num: 2 },
+      entity: { eid: 'task', num: 2, prefix: 'T' },
       doc: { eid: 'task', title: 'The task', body: '' },
       task: { eid: 'task', status: 'open' },
       filed: { eid: 'task', priority: 1 },
@@ -302,7 +302,7 @@ test('graph-native session rows contribute references', () => {
 test('session references link commits with actor repository context', () => {
   cache.value = {
     project: {
-      entity: { eid: 'project', num: 1 },
+      entity: { eid: 'project', num: 1, prefix: 'P' },
       project: { eid: 'project' },
       repo: {
         eid: 'project',
@@ -312,7 +312,7 @@ test('session references link commits with actor repository context', () => {
       },
     },
     session: {
-      entity: { eid: 'session', num: 2 },
+      entity: { eid: 'session', num: 2, prefix: 'S' },
       session: { eid: 'session', id: 'run', actor: 'project' },
     },
   }
@@ -364,7 +364,7 @@ let referenceFace = (() => {
   let prior = cache.peek()
   cache.value = {
     task: {
-      entity: { eid: 'task', num: 2 },
+      entity: { eid: 'task', num: 2, prefix: 'T' },
       doc: { eid: 'task', title: 'The task', body: '' },
       task: { eid: 'task', status: 'open' },
       filed: { eid: 'task', priority: 1 },
@@ -453,7 +453,7 @@ test('SessionRow loads its task title when no peer delivered it', async () => {
   let prior = useRoute(() => {})
   cache.value = {
     'task-row-session': {
-      entity: { eid: 'task-row-session', num: 910 },
+      entity: { eid: 'task-row-session', num: 910, prefix: 'S' },
       session: { eid: 'task-row-session', id: 'native' },
     },
   }
@@ -507,16 +507,16 @@ test('session Tile names its work, model, and last activity without IDs', () => 
   let lastAt = '2026-08-15T11:00:00-04:00'
   cache.value = {
     persona: {
-      entity: { eid: 'persona', num: 1 },
+      entity: { eid: 'persona', num: 1, prefix: 'N' },
       doc: { eid: 'persona', title: 'Ada', body: '' },
       persona: { eid: 'persona' },
     },
     [model]: {
-      entity: { eid: model, num: 5 },
+      entity: { eid: model, num: 5, prefix: 'O' },
       model: { eid: model, name: 'gpt-5.6-sol' },
     },
     session: {
-      entity: { eid: 'session', num: 2 },
+      entity: { eid: 'session', num: 2, prefix: 'S' },
       session: { eid: 'session', id: 'session-id', actor: 'persona' },
       using: { eid: 'session', model, effort: 'high' },
       brief: { eid: 'session', text: 'Finished the first part' },
@@ -528,13 +528,13 @@ test('session Tile names its work, model, and last activity without IDs', () => 
       created: { eid: 'last-entry', at: lastAt },
     },
     one: {
-      entity: { eid: 'one', num: 3 },
+      entity: { eid: 'one', num: 3, prefix: 'T' },
       doc: { eid: 'one', title: 'First task', body: '' },
       task: { eid: 'one', status: 'done' },
       filed: { eid: 'one', priority: 1 },
     },
     two: {
-      entity: { eid: 'two', num: 4 },
+      entity: { eid: 'two', num: 4, prefix: 'T' },
       doc: { eid: 'two', title: 'Second task', body: '' },
       task: { eid: 'two', status: 'wip' },
       filed: { eid: 'two', priority: 1 },
@@ -608,14 +608,14 @@ test('session lifecycle shares the task summary lane', () => {
   })
   cache.value = {
     task: {
-      entity: { eid: 'task', num: 1 },
+      entity: { eid: 'task', num: 1, prefix: 'T' },
       doc: { eid: 'task', title: 'The task', body: '' },
       task: { eid: 'task' },
       filed: { eid: 'task', priority: 1 },
       claim: { eid: 'task', session: 'session' },
     },
     session: {
-      entity: { eid: 'session', num: 2 },
+      entity: { eid: 'session', num: 2, prefix: 'S' },
       session: { eid: 'session', id: 'session-id' },
     },
   }
@@ -644,7 +644,10 @@ test('a session is embedded on every page but its own', () => {
   let priorRoute = useRoute(() => {})
   let prior = route.value
   cache.value = {
-    s: { entity: { eid: 's', num: 7105 }, session: { eid: 's', id: 's' } },
+    s: {
+      entity: { eid: 's', num: 7105, prefix: 'S' },
+      session: { eid: 's', id: 's' },
+    },
   }
   resetSignals()
   let at = (path: string) => {
@@ -671,7 +674,7 @@ test('Session explains loading, ready-empty, rows, and read failure', async () =
   ) => {
     cache.value = {
       [eid]: {
-        entity: { eid, num },
+        entity: { eid, num, prefix: 'S' },
         session: { eid, id: eid, status },
       },
     }
@@ -866,7 +869,7 @@ test('Session hears a comment its transcript cites, on whatever it targets', asy
   let wire = host((ask) => ({ bundles: read(ask.subscribe) }))
   cache.value = {
     [s]: {
-      entity: { eid: s, num: 9000 },
+      entity: { eid: s, num: 9000, prefix: 'S' },
       session: { eid: s, id: s, status: 'settled' },
     },
   }

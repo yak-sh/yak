@@ -88,11 +88,13 @@ export let pooledBlog: Vocab = loadVocab([doc, effectDoc, owes])
  * the process that committed. */
 export let owingBlog: Vocab = loadVocab([doc, owes])
 
-/** A graph over a fresh Map, with whatever plugins a test brings. */
+/** A graph over a fresh Map, with whatever plugins a test brings. A post is
+ * numbered in the `P` series. */
 export let blogGraph = (
   plugins: Options['plugins'] = [],
   vocab: Vocab = blog,
-): Graph => graph({ storage: ram(vocab, { number: true }), vocab, plugins })
+): Graph =>
+  graph({ storage: ram(vocab, { number: { post: 'P' } }), vocab, plugins })
 
 /** The small post vocabularies used in the introductory README examples. */
 export let observerExample = loadVocab({

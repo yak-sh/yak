@@ -146,18 +146,24 @@ let rows: Bundle[] = [
 /** The eid of the entity that is deleted after the fixture is written. */
 export let DEAD = 'r9'
 
-/** The fixture as it is written to storage, in order. */
-export let corpus: Bundle[] = rows
+// The letter each kind is numbered with.
+let letter = (b: Bundle) => b.review ? 'R' : b.member ? 'M' : b.book ? 'B' : 'D'
+
+/** The fixture as it is written to storage, in order, each entity stating
+ * its id: the number of its place in the list, under its kind's letter, so
+ * `B-3` is the entity numbered 3. */
+export let corpus: Bundle[] = rows.map((b, i) => ({
+  ...b,
+  entity: { eid: b.entity.eid, num: i + 1, prefix: letter(b) },
+}))
 
 /**
- * The same fixture as a caller holds it in memory: the entity numbers storage
- * would assign (one per bundle, in write order), and the deleted entity as the
+ * The same fixture as a caller holds it in memory: the deleted entity as the
  * tombstone it becomes — its component rows gone, its identity kept.
  */
-export let bundles: Bundle[] = rows.map((b, i) => {
-  let entity = { eid: b.entity.eid, num: i + 1 }
-  return b.entity.eid == DEAD ? { entity, tombstone: {} } : { ...b, entity }
-})
+export let bundles: Bundle[] = corpus.map((b) =>
+  b.entity.eid == DEAD ? { entity: b.entity, tombstone: {} } : b
+)
 
 /**
  * Every query an evaluator must answer alike over the fixture — one line per

@@ -380,7 +380,7 @@ test('a collected pattern carries its members', () => {
 })
 
 test('a pattern over two entities needs a storage that answers bindings', () => {
-  let r = ram(blog, { number: true })
+  let r = ram(blog)
   let mute: Storage = {
     ...r,
     tx: (body) => r.tx((tx) => body({ ...tx, bindings: undefined })),

@@ -23,7 +23,7 @@ cache.value = {
     doc: { eid: 'doc', title: 'Page', body: '' },
   },
   task: {
-    entity: { eid: 'task', num: 2 },
+    entity: { eid: 'task', num: 2, prefix: 'T' },
     doc: { eid: 'task', title: 'unsafe', body: 'hidden' },
     task: { eid: 'task' },
     filed: { eid: 'task', priority: 0 },
@@ -105,7 +105,7 @@ test('release names the session by its chip id', () => {
     get: (eid) => {
       assertEquals(eid, 'session')
       return {
-        entity: { eid, num: 31 },
+        entity: { eid, num: 31, prefix: 'S' },
         session: { id: 'raw-session-uuid' },
       }
     },

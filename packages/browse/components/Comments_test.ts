@@ -30,7 +30,7 @@ let composerChanges = (...args: Parameters<typeof composerBundles>) =>
 test('viaName names a session by its chip id, never its harness uuid', () => {
   cache.value = {
     session: {
-      entity: { eid: 'session', num: 31 },
+      entity: { eid: 'session', num: 31, prefix: 'S' },
       session: { eid: 'session', id: 'raw-session-uuid' },
     },
     client: {
@@ -73,16 +73,16 @@ test('graph-native prose is one ordered input entry', () => {
 test('byline reads actor and instrument from the created stamp', () => {
   cache.value = {
     actor: {
-      entity: { eid: 'actor', num: 2 },
+      entity: { eid: 'actor', num: 2, prefix: 'U' },
       doc: { eid: 'actor', title: 'jeff', body: '' },
       person: { eid: 'actor' },
     },
     session: {
-      entity: { eid: 'session', num: 31 },
+      entity: { eid: 'session', num: 31, prefix: 'S' },
       session: { eid: 'session', id: 'raw-session-uuid' },
     },
     comment: {
-      entity: { eid: 'comment', num: 9 },
+      entity: { eid: 'comment', num: 9, prefix: 'C' },
       created: { eid: 'comment', at: '', by: 'actor', via: 'session' },
       comment: { eid: 'comment', target: 'target' },
     },
@@ -94,7 +94,7 @@ test('byline reads actor and instrument from the created stamp', () => {
 test('composer names an unnamed session by its chip id', () => {
   cache.value = {
     session: {
-      entity: { eid: 'session', num: 31 },
+      entity: { eid: 'session', num: 31, prefix: 'S' },
       session: { eid: 'session', id: 'raw-session-uuid', status: 'settled' },
     },
   }
@@ -108,11 +108,11 @@ test('composer names an unnamed session by its chip id', () => {
 test('composer greets a session by the persona it wears', () => {
   cache.value = {
     session: {
-      entity: { eid: 'session', num: 31 },
+      entity: { eid: 'session', num: 31, prefix: 'S' },
       session: { eid: 'session', id: 'raw', status: 'settled', persona: 'n' },
     },
     n: {
-      entity: { eid: 'n', num: 8 },
+      entity: { eid: 'n', num: 8, prefix: 'N' },
       persona: { eid: 'n' },
       doc: { eid: 'n', title: 'Oracle of yak herding', body: '' },
     },
@@ -142,19 +142,22 @@ test('a reply composer keeps its thread and its own draft place', () => {
 
 test('a thread shows answers under their question, not under unrelated notes', () => {
   cache.value = {
-    task: { entity: { eid: 'task', num: 1 }, task: { eid: 'task' } },
+    task: {
+      entity: { eid: 'task', num: 1, prefix: 'T' },
+      task: { eid: 'task' },
+    },
     ask: {
-      entity: { eid: 'ask', num: 2 },
+      entity: { eid: 'ask', num: 2, prefix: 'C' },
       comment: { eid: 'ask', target: 'task' },
       doc: { eid: 'ask', title: '', body: 'Which one?' },
     },
     other: {
-      entity: { eid: 'other', num: 3 },
+      entity: { eid: 'other', num: 3, prefix: 'C' },
       comment: { eid: 'other', target: 'task' },
       doc: { eid: 'other', title: '', body: 'Independent update' },
     },
     answer: {
-      entity: { eid: 'answer', num: 4 },
+      entity: { eid: 'answer', num: 4, prefix: 'C' },
       comment: { eid: 'answer', target: 'task', reply_to: 'ask' },
       doc: { eid: 'answer', title: '', body: 'First one' },
     },
@@ -188,11 +191,11 @@ test('a note names its writer and instrument on one line of plain links', () => 
       doc: { eid: 'jeff', title: 'Jeff', body: '' },
     },
     run: {
-      entity: { eid: 'run', num: 3 },
+      entity: { eid: 'run', num: 3, prefix: 'S' },
       session: { eid: 'run', id: 'run', status: 'settled' },
     },
     said: {
-      entity: { eid: 'said', num: 4 },
+      entity: { eid: 'said', num: 4, prefix: 'C' },
       comment: { eid: 'said', target: 'task' },
       doc: { eid: 'said', title: '', body: 'Lined up' },
       created: { eid: 'said', by: 'jeff', via: 'run' },

@@ -88,9 +88,12 @@ let doc: VocabDoc = {
 /** The bookshop vocabulary the package's tests read and write against. */
 export let shop: Vocab = loadVocab([doc, toolsDoc])
 
-/** A graph over a fresh in-memory store. */
+// The series each kind is numbered in.
+let SERIES = { doc: 'D', book: 'B', review: 'R' }
+
+/** A graph over a fresh in-memory store, numbering each kind in its series. */
 export let shopGraph = (): Graph =>
-  graph({ storage: ram(shop, { number: true }), vocab: shop })
+  graph({ storage: ram(shop, { number: SERIES }), vocab: shop })
 
 // The SDK's own validator, which checks an answer against its tool's output
 // schema as any client of the SDK does, compiling each schema once for every

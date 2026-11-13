@@ -103,7 +103,7 @@ let graph = () => {
       canvas: { eid: CANVAS },
     },
     [TASK]: {
-      entity: { eid: TASK, num: 7 },
+      entity: { eid: TASK, num: 7, prefix: 'T' },
       task: { eid: TASK },
       filed: { eid: TASK, priority: 0 },
       doc: { eid: TASK, title: 'a task' },

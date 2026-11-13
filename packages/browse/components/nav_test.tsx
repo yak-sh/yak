@@ -52,7 +52,7 @@ test('a native entity anchor opens its target menu', () => {
   let prevented = false
   let stopped = false
   cache.value = {
-    task: { entity: { eid: 'task', num: 7 } },
+    task: { entity: { eid: 'task', num: 7, prefix: 'T' } },
   }
   census.value = ['task']
 

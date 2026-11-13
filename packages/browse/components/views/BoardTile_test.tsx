@@ -16,7 +16,7 @@ import { BoardTile } from './BoardTile.tsx'
 
 let data = (query: string) => ({
   board: {
-    entity: { eid: 'board', num: 1 },
+    entity: { eid: 'board', num: 1, prefix: 'B' },
     doc: { eid: 'board', title: 'Work', body: '' },
     board: { eid: 'board', query },
   },

@@ -133,7 +133,7 @@ test('a spawn lands the session, the request and the lease', async () => {
   let { g } = host()
   await g.apply(shelf)
   let said = await through(g, 'session_spawn', {
-    task: 'T-3',
+    task: 'T-1',
     provider: P,
     model: M,
     effort: 'high',

@@ -19,6 +19,7 @@ import { modelDoc } from '@yaks/model/vocab'
 import { fileDoc } from '@yaks/file/vocab'
 import { machineDoc } from '@yaks/machine/vocab'
 import { edgeDoc, edgeKeywords } from '@yaks/edge/vocab'
+import { idKeywords } from '@yaks/id'
 import { sessionDoc } from './comp.ts'
 import { type SessionOpts, sessions } from './plugin.ts'
 import { statusComputed } from './state.ts'
@@ -29,7 +30,10 @@ let doc: VocabDoc = {
       component: true,
       type: 'object',
       wire: false,
-      properties: { num: { type: 'number', stamped: true } },
+      properties: {
+        num: { type: 'number', stamped: true },
+        prefix: { type: 'string', stamped: true },
+      },
     },
     person: {
       component: true,
@@ -41,6 +45,7 @@ let doc: VocabDoc = {
       component: true,
       type: 'object',
       kind: true,
+      prefix: 'P',
       properties: {
         title: { type: 'string' },
         text: { type: 'string' },
@@ -83,7 +88,7 @@ export let pages: Vocab = loadVocab([
   machineDoc,
   edgeDoc,
   doc,
-], [edgeKeywords])
+], [edgeKeywords, idKeywords])
 
 /** The ids the tests share: two people, two of their runs, a run the graph
  * never saw, two pages. */

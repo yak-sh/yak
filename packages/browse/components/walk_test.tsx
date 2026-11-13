@@ -49,11 +49,11 @@ let seen = await (async () => {
   globalThis.fetch = () => Promise.resolve(Response.json([]))
   let server = host(() => ({
     bundles: [{
-      entity: { eid: one, num: 1 },
+      entity: { eid: one, num: 1, prefix: 'T' },
       task: { eid: one },
       doc: { eid: one, title: 'One task', body: 'Words about T-2' },
     }, {
-      entity: { eid: two, num: 2 },
+      entity: { eid: two, num: 2, prefix: 'T' },
       task: { eid: two },
       doc: { eid: two, title: 'Two task', body: 'Two' },
     }],

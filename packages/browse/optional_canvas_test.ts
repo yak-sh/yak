@@ -16,23 +16,26 @@ let without = docs.filter((d) =>
 let fixture = () => {
   cache.value = {
     owner: {
-      entity: { eid: 'owner', num: 1 },
+      entity: { eid: 'owner', num: 1, prefix: 'U' },
       person: { eid: 'owner' },
       doc: { eid: 'owner', title: 'Owner' },
     },
     other: {
-      entity: { eid: 'other', num: 2 },
+      entity: { eid: 'other', num: 2, prefix: 'U' },
       person: { eid: 'other' },
       doc: { eid: 'other', title: 'Other' },
     },
     task: {
-      entity: { eid: 'task', num: 123 },
+      entity: { eid: 'task', num: 123, prefix: 'T' },
       task: { eid: 'task' },
       doc: { eid: 'task', title: 'Work' },
     },
-    canvas: { entity: { eid: 'canvas', num: 3 }, canvas: { eid: 'canvas' } },
+    canvas: {
+      entity: { eid: 'canvas', num: 3, prefix: 'L' },
+      canvas: { eid: 'canvas' },
+    },
     layout: {
-      entity: { eid: 'layout', num: 4 },
+      entity: { eid: 'layout', num: 4, prefix: 'L' },
       layout: { eid: 'layout', root: 'pane' },
       doc: { eid: 'layout', title: 'Tiles' },
     },

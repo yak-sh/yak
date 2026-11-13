@@ -105,10 +105,13 @@ let doc: VocabDoc = {
 /** The bookshop vocabulary the package's tests read and write against. */
 export let shop: Vocab = loadVocab(doc)
 
+// The series each kind is numbered in.
+let SERIES = { doc: 'D', book: 'B', review: 'R' }
+
 /** A graph over a fresh store in memory. Numbered entities: a person refers to
- * a book by its number. */
+ * a book by its id, `B-1`. */
 export let shopGraph = (): Graph =>
-  graph({ storage: ram(shop, { number: true }), vocab: shop })
+  graph({ storage: ram(shop, { number: SERIES }), vocab: shop })
 
 /** One component off a bundle, for a test that wants a property out of it. */
 export let comp = (b: Bundle, name: string): Record<string, unknown> => {

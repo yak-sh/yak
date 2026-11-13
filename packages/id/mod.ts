@@ -29,7 +29,7 @@
  * let v = loadVocab([{ $defs: { book } }], [idKeywords])
  * let id = idOf(v)
  *
- * assertEquals(id({ eid: mint(), kind: 'book', num: 7 }), 'B-7')
+ * assertEquals(id({ eid: mint(), kind: 'book', num: 7, prefix: 'B' }), 'B-7')
  * let eid = 'a3f19c02-4b00-4000-8000-000000000001'
  * assertEquals(id({ eid, kind: 'book' }), '#a3f19c024b')
  * assertEquals(parse('B-7'), { prefix: 'B', num: 7 })

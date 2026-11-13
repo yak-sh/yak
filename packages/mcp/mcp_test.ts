@@ -377,7 +377,7 @@ test('a host that draws prose sends no whole uuid in a body', async () => {
 
 test('graph_show reads an entity by whatever names it', async () => {
   let g = graph({
-    storage: ram(shop, { number: true }),
+    storage: ram(shop),
     vocab: shop,
     plugins: [{
       name: 'names',

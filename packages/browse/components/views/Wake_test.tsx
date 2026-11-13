@@ -14,19 +14,19 @@ import { Wake, WakeTitle } from './Wake.tsx'
 let at = new Date(Date.now() + 7_200_000).toISOString()
 let data = (by: string, outcome: Record<string, unknown> = {}) => ({
   wake: {
-    entity: { eid: 'wake', num: 1 },
+    entity: { eid: 'wake', num: 1, prefix: 'W' },
     wake: { eid: 'wake', at },
     deliver: { eid: 'wake', to: 'recipient' },
     created: { eid: 'wake', by },
     ...outcome,
   },
   recipient: {
-    entity: { eid: 'recipient', num: 2 },
+    entity: { eid: 'recipient', num: 2, prefix: 'P' },
     doc: { eid: 'recipient', title: 'Home', body: '' },
     project: { eid: 'recipient' },
   },
   creator: {
-    entity: { eid: 'creator', num: 3 },
+    entity: { eid: 'creator', num: 3, prefix: 'U' },
     doc: { eid: 'creator', title: 'Jeff', body: '' },
     person: { eid: 'creator' },
   },

@@ -61,7 +61,7 @@ let windowed = (globals: Record<string, unknown> = {}) => {
 test('task acceptance is a distinct Markdown section', () => {
   cache.value = {
     task: {
-      entity: { eid: 'task', num: 1 },
+      entity: { eid: 'task', num: 1, prefix: 'T' },
       doc: { eid: 'task', title: 'Ship it', body: 'Implementation notes' },
       task: { eid: 'task' },
       filed: { eid: 'task', priority: 1 },
@@ -150,13 +150,13 @@ test('the meta row renders its tally without reaching live', () => {
   })
   cache.value = {
     task: {
-      entity: { eid: 'task', num: 1 },
+      entity: { eid: 'task', num: 1, prefix: 'T' },
       doc: { eid: 'task', title: 'Talked about', body: '' },
       task: { eid: 'task' },
       filed: { eid: 'task', priority: 1 },
     },
     c1: {
-      entity: { eid: 'c1', num: 2 },
+      entity: { eid: 'c1', num: 2, prefix: 'C' },
       comment: { eid: 'c1', target: 'task' },
     },
   }
@@ -271,7 +271,7 @@ test('task meta carries both full facts and compact edge tallies', () => {
   let now = new Date().toISOString()
   cache.value = {
     task: {
-      entity: { eid: 'task', num: 1 },
+      entity: { eid: 'task', num: 1, prefix: 'T' },
       doc: { eid: 'task', title: 'Everything', body: '' },
       task: { eid: 'task' },
       filed: {
@@ -285,26 +285,26 @@ test('task meta carries both full facts and compact edge tallies', () => {
       created: { eid: 'task', at: now, by: person },
     },
     [project]: {
-      entity: { eid: project, num: 2 },
+      entity: { eid: project, num: 2, prefix: 'P' },
       doc: { eid: project, title: 'Task Graph', body: '' },
       project: { eid: project },
     },
     [person]: {
-      entity: { eid: person, num: 3 },
+      entity: { eid: person, num: 3, prefix: 'U' },
       doc: { eid: person, title: 'Jeff', body: '' },
       person: { eid: person },
     },
     [session]: {
-      entity: { eid: session, num: 4 },
+      entity: { eid: session, num: 4, prefix: 'S' },
       session: { eid: session, id: 'run' },
     },
     open: {
-      entity: { eid: 'open', num: 5 },
+      entity: { eid: 'open', num: 5, prefix: 'T' },
       task: { eid: 'open' },
       filed: { eid: 'open', priority: 1 },
     },
     done: {
-      entity: { eid: 'done', num: 6 },
+      entity: { eid: 'done', num: 6, prefix: 'T' },
       task: { eid: 'done' },
       filed: { eid: 'done', priority: 1 },
       completed: { eid: 'done' },
@@ -314,7 +314,7 @@ test('task meta carries both full facts and compact edge tallies', () => {
       doc: { eid: 'child', title: 'Part', body: '' },
     },
     comment: {
-      entity: { eid: 'comment', num: 8 },
+      entity: { eid: 'comment', num: 8, prefix: 'C' },
       doc: { eid: 'comment', title: '', body: 'Watching' },
       comment: { eid: 'comment', target: 'task' },
     },
@@ -387,7 +387,7 @@ test('task meta carries both full facts and compact edge tallies', () => {
 test('mail Full section shows its envelope and delivery receipt', () => {
   cache.value = {
     mail: {
-      entity: { eid: 'mail', num: 1 },
+      entity: { eid: 'mail', num: 1, prefix: 'E' },
       doc: { eid: 'mail', title: 'Hello', body: '' },
       mail: {
         eid: 'mail',
@@ -421,7 +421,7 @@ test('mail Full section shows its envelope and delivery receipt', () => {
 
   cache.value = {
     mail: {
-      entity: { eid: 'mail', num: 1 },
+      entity: { eid: 'mail', num: 1, prefix: 'E' },
       doc: { eid: 'mail', title: 'Hello', body: '' },
       mail: {
         eid: 'mail',
@@ -466,12 +466,12 @@ test('document meta names its creator and editor after their ages', () => {
       },
     },
     [jeff]: {
-      entity: { eid: jeff, num: 2 },
+      entity: { eid: jeff, num: 2, prefix: 'U' },
       doc: { eid: jeff, title: 'Jeff', body: '' },
       person: { eid: jeff },
     },
     [robin]: {
-      entity: { eid: robin, num: 3 },
+      entity: { eid: robin, num: 3, prefix: 'U' },
       doc: { eid: robin, title: 'Robin', body: '' },
       person: { eid: robin },
     },
@@ -638,7 +638,7 @@ let rows = await (async () => {
       doc: { eid: 'persona', title: 'Coder', body: '' },
     },
     memo: {
-      entity: { eid: 'memo', num: 2 },
+      entity: { eid: 'memo', num: 2, prefix: 'M' },
       doc: {
         eid: 'memo',
         title: 'Signal over noise',
@@ -689,7 +689,7 @@ preparedTest(
 let linking = await (async () => {
   cache.value = {
     task: {
-      entity: { eid: 'task', num: 1 },
+      entity: { eid: 'task', num: 1, prefix: 'T' },
       doc: { eid: 'task', title: 'Ship it', body: '' },
       task: { eid: 'task' },
     },
@@ -780,7 +780,7 @@ test('a view that throws fails in its own slot, and the page paints', async () =
 test('a board whose saved query cannot be read shows why', () => {
   cache.value = {
     b: {
-      entity: { eid: 'b', num: 1 },
+      entity: { eid: 'b', num: 1, prefix: 'B' },
       doc: { eid: 'b', title: 'Old board' },
       board: { eid: 'b', query: '.task&.limit=nope' },
     },
@@ -806,6 +806,7 @@ test('a board whose saved query cannot be read shows why', () => {
 let hooked: Ent = {
   eid: 'task',
   num: 1,
+  prefix: 'T',
   kind: 'task',
   refs: [],
   kids: [],
@@ -828,7 +829,7 @@ preparedTest('a hook-using renderer mounts through the helper', () => {
 test('comment dependencies lead with the entity commented on', () => {
   cache.value = {
     comment: {
-      entity: { eid: 'comment', num: 2 },
+      entity: { eid: 'comment', num: 2, prefix: 'C' },
       doc: { eid: 'comment', title: '', body: 'A note' },
       comment: { eid: 'comment', target: 'target' },
     },
@@ -870,7 +871,11 @@ test('claim chip loads its referenced session instead of painting a blank', asyn
         { comp: 'session', prop: 'id', wake: true },
       ],
       changes: [
-        { eid: 'cold-claimant', name: 'entity', comp: { num: 901 } },
+        {
+          eid: 'cold-claimant',
+          name: 'entity',
+          comp: { num: 901, prefix: 'S' },
+        },
         { eid: 'cold-claimant', name: 'session', comp: { id: 'native' } },
       ],
     })
@@ -893,7 +898,10 @@ test('Runs and Tasks ask only their typed memberships, not every reverse ref', (
   let restore = useRoute((f) => sent.push(f as typeof sent[number]))
   // A partial cache containing unrelated referrers is not either list.
   cache.value = {
-    [target]: { entity: { eid: target, num: 1 }, project: { eid: target } },
+    [target]: {
+      entity: { eid: target, num: 1, prefix: 'P' },
+      project: { eid: target },
+    },
     unrelated: { comment: { eid: 'unrelated', target } },
   }
   let free = () => {}

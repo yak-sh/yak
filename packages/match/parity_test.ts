@@ -568,7 +568,7 @@ let STATUS = [
 ]
 
 test("a task's status agrees on both sides, read from its ladder", () => {
-  let s = loaded(todo, ROWS)
+  let s = loaded(todo, todos)
   let select = (q: string) => matcher(q, todo, { now: NOW })
   for (let q of STATUS) {
     let mine = eids(select(q)(todos))

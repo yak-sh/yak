@@ -115,11 +115,14 @@ export let boxDoc: VocabDoc = {
 /** The recipe-box vocabulary this package's tests read and write against. */
 export let box: Vocab = loadVocab([boxDoc, apiDoc])
 
+// The series each kind is numbered in, on the server and on a client alike.
+let SERIES = { doc: 'D', recipe: 'R', note: 'N' }
+
 /** A graph over a fresh map. `adopt` is what a client store needs: the numbers
  * come from the server, not from this map. */
 export let boxGraph = (adopt = false): Graph =>
   graph({
-    storage: ram(box, { adopt, number: true }),
+    storage: ram(box, { adopt, number: SERIES }),
     vocab: box,
     // These tests drive `land` and `snapshot` at a graph with no sync plugin,
     // which is exactly what `marks` is for.
@@ -221,7 +224,7 @@ export let COOK = derivedEid('fixture:cook')
  * write's receipt is kept in. */
 export let server = (): Server => {
   let db = open(':memory:')
-  let store = storage(db, box, { number: true })
+  let store = storage(db, box, { number: SERIES })
   store.install()
   let g = graph({ storage: store, vocab: box, plugins: [marks] })
   let sockets: Fake[] = []

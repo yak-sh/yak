@@ -113,25 +113,25 @@ let holdCommentCount = (comments: string) => owned({ comments })
 clearForTest()
 cache.value = {
   assignee: {
-    entity: { eid: 'assignee', num: 1 },
+    entity: { eid: 'assignee', num: 1, prefix: 'U' },
     person: { eid: 'assignee' },
   },
   assigned: {
-    entity: { eid: 'assigned', num: 2 },
+    entity: { eid: 'assigned', num: 2, prefix: 'T' },
     task: { eid: 'assigned' },
     filed: { eid: 'assigned', priority: 1, assignee: 'assignee' },
   },
   reassigned: {
-    entity: { eid: 'reassigned', num: 3 },
+    entity: { eid: 'reassigned', num: 3, prefix: 'T' },
     task: { eid: 'reassigned' },
     filed: { eid: 'reassigned', priority: 1, assignee: 'other' },
   },
   sleeping: {
-    entity: { eid: 'sleeping', num: 4 },
+    entity: { eid: 'sleeping', num: 4, prefix: 'B' },
     board: { eid: 'sleeping', query: '.task.status=open' },
   },
   member: {
-    entity: { eid: 'member', num: 5 },
+    entity: { eid: 'member', num: 5, prefix: 'T' },
     task: { eid: 'member' },
     filed: { eid: 'member', priority: 1 },
   },
@@ -139,13 +139,13 @@ cache.value = {
     entity: { eid: 'outsider', num: 6 },
     doc: { eid: 'outsider', title: 'unrelated', body: '' },
   },
-  p1: { entity: { eid: 'p1', num: 7 }, project: { eid: 'p1' } },
+  p1: { entity: { eid: 'p1', num: 7, prefix: 'P' }, project: { eid: 'p1' } },
   s1: {
-    entity: { eid: 's1', num: 8 },
+    entity: { eid: 's1', num: 8, prefix: 'S' },
     session: { eid: 's1', id: 'x', actor: 'p1' },
   },
   t1: {
-    entity: { eid: 't1', num: 9 },
+    entity: { eid: 't1', num: 9, prefix: 'T' },
     task: { eid: 't1' },
     claim: { eid: 't1', session: 's1' },
   },
@@ -391,7 +391,7 @@ test('findEid does not scan or subscribe after indexing', () => {
   let scans = 0
   cache.value = new Proxy({
     indexed: {
-      entity: { eid: 'indexed', num: 41 },
+      entity: { eid: 'indexed', num: 41, prefix: 'T' },
     },
   }, {
     ownKeys: (target) => {
@@ -413,7 +413,7 @@ test('findEid does not scan or subscribe after indexing', () => {
     applyLocal([{
       eid: 'other',
       name: 'entity',
-      comp: { eid: 'other', num: 42 },
+      comp: { eid: 'other', num: 42, prefix: 'T' },
     }])
     assertEquals(runs, 1)
   } finally {
@@ -450,7 +450,11 @@ test('server-resolve: a cache hit never touches the wire', () => {
   clearResolved()
   cache.value = {
     'bbbbbbbb-0000-4000-8000-000000000031': {
-      entity: { eid: 'bbbbbbbb-0000-4000-8000-000000000031', num: 31 },
+      entity: {
+        eid: 'bbbbbbbb-0000-4000-8000-000000000031',
+        num: 31,
+        prefix: 'T',
+      },
     },
   }
   resetSignals()
@@ -468,7 +472,7 @@ test('server-resolve: a cache hit never touches the wire', () => {
 test('repoUrl follows task, comment, and session ownership', () => {
   cache.value = {
     project: {
-      entity: { eid: 'project', num: 1 },
+      entity: { eid: 'project', num: 1, prefix: 'P' },
       project: { eid: 'project' },
       repo: {
         eid: 'project',
@@ -478,16 +482,16 @@ test('repoUrl follows task, comment, and session ownership', () => {
       },
     },
     task: {
-      entity: { eid: 'task', num: 2 },
+      entity: { eid: 'task', num: 2, prefix: 'T' },
       task: { eid: 'task' },
       filed: { eid: 'task', priority: 1, project: 'project' },
     },
     session: {
-      entity: { eid: 'session', num: 3 },
+      entity: { eid: 'session', num: 3, prefix: 'S' },
       session: { eid: 'session', id: 'run', actor: 'project' },
     },
     comment: {
-      entity: { eid: 'comment', num: 4 },
+      entity: { eid: 'comment', num: 4, prefix: 'C' },
       comment: { eid: 'comment', target: 'session' },
     },
   }
@@ -499,7 +503,7 @@ test('repoUrl follows task, comment, and session ownership', () => {
 test('repoUrl follows a session actor', () => {
   cache.value = {
     project: {
-      entity: { eid: 'project', num: 1 },
+      entity: { eid: 'project', num: 1, prefix: 'P' },
       project: { eid: 'project' },
       repo: {
         eid: 'project',
@@ -509,7 +513,7 @@ test('repoUrl follows a session actor', () => {
       },
     },
     session: {
-      entity: { eid: 'session', num: 2 },
+      entity: { eid: 'session', num: 2, prefix: 'S' },
       session: { eid: 'session', id: 'run', actor: 'project' },
     },
   }
@@ -522,7 +526,7 @@ test('repoUrl follows a session actor', () => {
 test('repoUrl follows an entry through its session', () => {
   cache.value = {
     project: {
-      entity: { eid: 'project', num: 1 },
+      entity: { eid: 'project', num: 1, prefix: 'P' },
       project: { eid: 'project' },
       repo: {
         eid: 'project',
@@ -532,7 +536,7 @@ test('repoUrl follows an entry through its session', () => {
       },
     },
     session: {
-      entity: { eid: 'session', num: 2 },
+      entity: { eid: 'session', num: 2, prefix: 'S' },
       session: { eid: 'session', id: 'run', actor: 'project' },
     },
     entry: {
@@ -572,36 +576,36 @@ let fill = (rows: [string, string | null][]) => {
 test('facets: byComp derivation matches the whole-cache scan', () => {
   cache.value = {
     // projects, nums OUT of order so the num-sort is exercised
-    pB: { entity: { eid: 'pB', num: 9 }, project: { eid: 'pB' } },
-    pA: { entity: { eid: 'pA', num: 2 }, project: { eid: 'pA' } },
+    pB: { entity: { eid: 'pB', num: 9, prefix: 'P' }, project: { eid: 'pB' } },
+    pA: { entity: { eid: 'pA', num: 2, prefix: 'P' }, project: { eid: 'pA' } },
     // tasks: duplicate + distinct domains, and one with no domain
     t1: {
-      entity: { eid: 't1', num: 3 },
+      entity: { eid: 't1', num: 3, prefix: 'T' },
       task: { eid: 't1' },
       filed: { eid: 't1', priority: 1, domain: 'Ops' },
     },
     t2: {
-      entity: { eid: 't2', num: 4 },
+      entity: { eid: 't2', num: 4, prefix: 'T' },
       task: { eid: 't2' },
       filed: { eid: 't2', priority: 1, domain: 'Eng' },
     },
     t3: {
-      entity: { eid: 't3', num: 5 },
+      entity: { eid: 't3', num: 5, prefix: 'T' },
       task: { eid: 't3' },
       filed: { eid: 't3', priority: 1, domain: 'Ops' },
     },
     t4: {
-      entity: { eid: 't4', num: 6 },
+      entity: { eid: 't4', num: 6, prefix: 'T' },
       task: { eid: 't4' },
       filed: { eid: 't4', priority: 1, domain: null },
     },
     // sessions + an unrelated doc that must touch no facet
     s1: {
-      entity: { eid: 's1', num: 7 },
+      entity: { eid: 's1', num: 7, prefix: 'S' },
       session: { eid: 's1', id: 'r1' },
     },
     s2: {
-      entity: { eid: 's2', num: 8 },
+      entity: { eid: 's2', num: 8, prefix: 'S' },
       session: { eid: 's2', id: 'r2' },
     },
     d1: {
@@ -629,11 +633,11 @@ test('agreement diagnostics are inert until explicitly enabled', () => {
   config.agreement = false
   cache.value = {
     board: {
-      entity: { eid: 'board', num: 1 },
+      entity: { eid: 'board', num: 1, prefix: 'B' },
       board: { eid: 'board', query: '.task.status=open' },
     },
     task: {
-      entity: { eid: 'task', num: 2 },
+      entity: { eid: 'task', num: 2, prefix: 'T' },
       task: { eid: 'task' },
       filed: { eid: 'task', priority: 1 },
     },
@@ -666,11 +670,11 @@ test('agreement diagnostics are inert until explicitly enabled', () => {
 test('a board naming the lazy partition lists its entries', () => {
   cache.value = {
     lazyboard: {
-      entity: { eid: 'lazyboard', num: 1 },
+      entity: { eid: 'lazyboard', num: 1, prefix: 'B' },
       board: { eid: 'lazyboard', query: '.entry.session=sess' },
     },
     sess: {
-      entity: { eid: 'sess', num: 2 },
+      entity: { eid: 'sess', num: 2, prefix: 'S' },
       session: { eid: 'sess', id: 'abc' },
     },
     e1: {
@@ -878,11 +882,11 @@ test('comments: reverse-ref set, awake only for its own thread', () => {
 test('boardsOver: awake only when a board names or drops the target', () => {
   cache.value = {
     b1: {
-      entity: { eid: 'b1', num: 1 },
+      entity: { eid: 'b1', num: 1, prefix: 'B' },
       board: { eid: 'b1', query: '.filed.project=P-9' },
     },
     b2: {
-      entity: { eid: 'b2', num: 2 },
+      entity: { eid: 'b2', num: 2, prefix: 'B' },
       board: { eid: 'b2', query: '.task.status=open' },
     },
     plain: {
@@ -995,11 +999,11 @@ test('foldFor: query membership, live statuses off the row', () => {
 test('facet reads wake only their own membership', () => {
   cache.value = {
     proj: {
-      entity: { eid: 'proj', num: 1 },
+      entity: { eid: 'proj', num: 1, prefix: 'P' },
       project: { eid: 'proj' },
     },
     sess: {
-      entity: { eid: 'sess', num: 2 },
+      entity: { eid: 'sess', num: 2, prefix: 'S' },
       session: { eid: 'sess', id: 'sess' },
     },
     plain: {
@@ -1037,16 +1041,19 @@ test('facet reads wake only their own membership', () => {
 // the answer is the newest claim-bearing task the session holds — unchanged.
 test('jobOf: newest claimed task, off the reverse index', () => {
   cache.value = {
-    s1: { entity: { eid: 's1', num: 1 }, session: { eid: 's1', id: 'x' } },
+    s1: {
+      entity: { eid: 's1', num: 1, prefix: 'S' },
+      session: { eid: 's1', id: 'x' },
+    },
     // two claims by s1; the newer at wins regardless of cache order
     t_old: {
-      entity: { eid: 't_old', num: 2 },
+      entity: { eid: 't_old', num: 2, prefix: 'T' },
       task: { eid: 't_old' },
       filed: { eid: 't_old', priority: 1 },
       claim: { eid: 't_old', session: 's1', at: '2026-01-01' },
     },
     t_new: {
-      entity: { eid: 't_new', num: 3 },
+      entity: { eid: 't_new', num: 3, prefix: 'T' },
       task: { eid: 't_new' },
       filed: { eid: 't_new', priority: 1 },
       claim: { eid: 't_new', session: 's1', at: '2026-08-01' },
@@ -1058,9 +1065,12 @@ test('jobOf: newest claimed task, off the reverse index', () => {
       claim: { eid: 'd1', session: 's1', at: '2026-12-01' },
     },
     // a claim by another session must not leak in
-    s2: { entity: { eid: 's2', num: 5 }, session: { eid: 's2', id: 'y' } },
+    s2: {
+      entity: { eid: 's2', num: 5, prefix: 'S' },
+      session: { eid: 's2', id: 'y' },
+    },
     t_other: {
-      entity: { eid: 't_other', num: 6 },
+      entity: { eid: 't_other', num: 6, prefix: 'T' },
       task: { eid: 't_other' },
       filed: { eid: 't_other', priority: 1 },
       claim: { eid: 't_other', session: 's2', at: '2026-12-31' },
@@ -1080,7 +1090,7 @@ test("myMode: this actor's subscription, off the reverse index", () => {
       client: { eid: 'me_client', user_agent: 'probe', ip: '', actor: 'me' },
     },
     tgt: {
-      entity: { eid: 'tgt', num: 2 },
+      entity: { eid: 'tgt', num: 2, prefix: 'T' },
       task: { eid: 'tgt' },
       filed: { eid: 'tgt', priority: 1 },
     },
@@ -1119,7 +1129,7 @@ test("myMode: this actor's subscription, off the reverse index", () => {
 test('relationship indices wake only their affected targets', () => {
   cache.value = {
     index_target: {
-      entity: { eid: 'index_target', num: 1 },
+      entity: { eid: 'index_target', num: 1, prefix: 'T' },
       task: { eid: 'index_target' },
       filed: { eid: 'index_target', priority: 1 },
     },
@@ -1128,7 +1138,7 @@ test('relationship indices wake only their affected targets', () => {
       doc: { eid: 'index_other', title: 'other', body: '' },
     },
     index_session: {
-      entity: { eid: 'index_session', num: 3 },
+      entity: { eid: 'index_session', num: 3, prefix: 'S' },
       session: { eid: 'index_session', id: 'session' },
     },
   }
@@ -1294,11 +1304,11 @@ test('ent: refs put open work before settled work', () => {
 test('camera motion and card stacking stay off the graph signal', () => {
   cache.value = {
     board: {
-      entity: { eid: 'board', num: 1 },
+      entity: { eid: 'board', num: 1, prefix: 'B' },
       board: { eid: 'board', query: '.task.status=open' },
     },
     task: {
-      entity: { eid: 'task', num: 2 },
+      entity: { eid: 'task', num: 2, prefix: 'T' },
       task: { eid: 'task' },
       filed: { eid: 'task', priority: 1 },
     },
@@ -1416,7 +1426,7 @@ test('applyLocal: reports touched eids and edges', () => {
 test('applyLocal: an idempotent replay preserves cache identity', () => {
   cache.value = {
     a: {
-      entity: { eid: 'a', num: 1 },
+      entity: { eid: 'a', num: 1, prefix: 'T' },
       task: { eid: 'a' },
       filed: { eid: 'a', priority: 1 },
     },
@@ -1544,11 +1554,11 @@ test('narrow signals follow births, subscription eviction, and census', () => {
 test('board membership sleeps through an unrelated row patch', () => {
   cache.value = {
     board_narrow: {
-      entity: { eid: 'board_narrow', num: 1 },
+      entity: { eid: 'board_narrow', num: 1, prefix: 'B' },
       board: { eid: 'board_narrow', query: '.task.status=open' },
     },
     task_narrow: {
-      entity: { eid: 'task_narrow', num: 2 },
+      entity: { eid: 'task_narrow', num: 2, prefix: 'T' },
       task: { eid: 'task_narrow' },
       filed: { eid: 'task_narrow', priority: 1 },
     },
@@ -1585,11 +1595,11 @@ test('board membership sleeps through an unrelated row patch', () => {
 test('a hot board sleeps through card births and deaths', () => {
   cache.value = {
     board_hot: {
-      entity: { eid: 'board_hot', num: 1 },
+      entity: { eid: 'board_hot', num: 1, prefix: 'B' },
       board: { eid: 'board_hot', query: '.task.status=open&.order=hot' },
     },
     task_hot: {
-      entity: { eid: 'task_hot', num: 2 },
+      entity: { eid: 'task_hot', num: 2, prefix: 'T' },
       task: { eid: 'task_hot' },
       filed: { eid: 'task_hot', priority: 1 },
     },
@@ -1666,7 +1676,7 @@ test('applyLocal: entity death sweeps its edges into the report', () => {
 test('catch-up then live batch apply in arrival order', () => {
   cache.value = {
     x: {
-      entity: { eid: 'x', num: 1 },
+      entity: { eid: 'x', num: 1, prefix: 'T' },
       task: { eid: 'x' },
       filed: { eid: 'x', priority: 1, domain: null },
     },
@@ -1792,7 +1802,7 @@ test('pinned: the cache key is the eid, a cast comp carries none', () => {
 test('topZ: pinless rows never ride, whatever the canvas', () => {
   cache.value = {
     t1: {
-      entity: { eid: 't1', num: 1 },
+      entity: { eid: 't1', num: 1, prefix: 'T' },
       task: { eid: 't1' },
       filed: { eid: 't1', priority: 1, domain: null },
     },
@@ -2048,7 +2058,7 @@ test('serverQuery: a held membership query tracks its subscription', () => {
   ]
   try {
     cache.value = {
-      [P1]: { entity: { eid: P1, num: 1 }, project: { eid: P1 } },
+      [P1]: { entity: { eid: P1, num: 1, prefix: 'P' }, project: { eid: P1 } },
     }
     let preds = resolveRefs(parseQuery('.project'), findEid)
     let sub = `q:${JSON.stringify(preds)}`
@@ -2104,8 +2114,14 @@ test('commentCount shares one aggregate sub across targets (T-21283)', () => {
   let Y = 'cccc0000-0000-4000-8000-000000000002'
   cache.value = {
     [X]: { entity: { eid: X, num: 1 }, canvas: { eid: X } },
-    c1: { entity: { eid: 'c1', num: 2 }, comment: { eid: 'c1', target: X } },
-    c2: { entity: { eid: 'c2', num: 3 }, comment: { eid: 'c2', target: X } },
+    c1: {
+      entity: { eid: 'c1', num: 2, prefix: 'C' },
+      comment: { eid: 'c1', target: X },
+    },
+    c2: {
+      entity: { eid: 'c2', num: 3, prefix: 'C' },
+      comment: { eid: 'c2', target: X },
+    },
   }
   // Count every frame that leaves while the tallies are read: NOTHING may.
   let sent = 0
@@ -2147,7 +2163,10 @@ test('reverse subs: held per open card, torn down on close (T-21489)', () => {
   try {
     cache.value = {
       [X]: { entity: { eid: X, num: 1 }, canvas: { eid: X } },
-      c1: { entity: { eid: 'c1', num: 2 }, comment: { eid: 'c1', target: X } },
+      c1: {
+        entity: { eid: 'c1', num: 2, prefix: 'C' },
+        comment: { eid: 'c1', target: X },
+      },
       k1: { entity: { eid: 'k1', num: 3 }, claim: { eid: 'k1', session: X } },
     }
     let comments = resolveRefs(parseQuery(`.comment.target=${X}`), findEid)
@@ -2501,7 +2520,7 @@ test('findEid indexes human ids and short handles', () => {
   let one = 'abcdef10-0000-4000-8000-000000000001'
   let two = 'abcdef10-0000-4000-8000-000000000002'
   cache.value = {
-    [one]: { entity: { eid: one, num: 31 }, task: { eid: one } },
+    [one]: { entity: { eid: one, num: 31, prefix: 'T' }, task: { eid: one } },
   }
   assertEquals(findEid('T-31'), one)
   assertEquals(findEid('31'), one)
@@ -2517,14 +2536,15 @@ test('findEid reads an id as its prefix and number together', () => {
   cache.value = {
     t: { entity: { eid: 't', num: 7, prefix: 'T' } },
     m: { entity: { eid: 'm', num: 7, prefix: 'M' } },
-    old: { entity: { eid: 'old', num: 8 } }, // stored before series had letters
+    // a number stored without a letter answers only as a bare number
+    old: { entity: { eid: 'old', num: 8 } },
   }
   assertEquals(['T-7', 'm-7', 'Q-7', 'T-8', 'M-8', '8'].map(findEid), [
     't',
     'm',
     undefined,
-    'old',
-    'old',
+    undefined,
+    undefined,
     'old',
   ])
   assertThrows(() => findEid('7'), Error, 'ambiguous') // two series hold it
@@ -2755,15 +2775,15 @@ let pendingWakeQ = (session: string) =>
 test('queryEids resolves pending wakes off the reverse index, narrowly', () => {
   cache.value = {
     session: {
-      entity: { eid: 'session', num: 1 },
+      entity: { eid: 'session', num: 1, prefix: 'S' },
       session: { eid: 'session', id: 's' },
     },
     other_session: {
-      entity: { eid: 'other_session', num: 2 },
+      entity: { eid: 'other_session', num: 2, prefix: 'S' },
       session: { eid: 'other_session', id: 'o' },
     },
     wake: {
-      entity: { eid: 'wake', num: 3 },
+      entity: { eid: 'wake', num: 3, prefix: 'W' },
       wake: { eid: 'wake', at: SOON, target: 'session' },
     },
   }
@@ -2862,11 +2882,11 @@ test('domains: the server distinct wins over the working set', () => {
 test('a board cache prime opens no second unwindowed subscription', () => {
   cache.value = {
     board_prime: {
-      entity: { eid: 'board_prime', num: 1 },
+      entity: { eid: 'board_prime', num: 1, prefix: 'B' },
       board: { eid: 'board_prime', query: '.task' },
     },
     task_prime: {
-      entity: { eid: 'task_prime', num: 2 },
+      entity: { eid: 'task_prime', num: 2, prefix: 'T' },
       task: { eid: 'task_prime' },
       filed: { eid: 'task_prime', priority: 1 },
     },
@@ -2904,11 +2924,11 @@ test('the agreement counter counts when both doors answer', async () => {
   config.agreement = true
   cache.value = {
     board: {
-      entity: { eid: 'board', num: 1 },
+      entity: { eid: 'board', num: 1, prefix: 'B' },
       board: { eid: 'board', query: '.task.status=open' },
     },
     t1: {
-      entity: { eid: 't1', num: 2 },
+      entity: { eid: 't1', num: 2, prefix: 'T' },
       task: { eid: 't1' },
       filed: { eid: 't1', priority: 1 },
     },
@@ -2953,16 +2973,16 @@ test('the agreement counter counts when both doors answer', async () => {
 test('a board renders from the subscription and tracks joins and leaves', () => {
   cache.value = {
     board: {
-      entity: { eid: 'board', num: 1 },
+      entity: { eid: 'board', num: 1, prefix: 'B' },
       board: { eid: 'board', query: '.task.status=open' },
     },
     t1: {
-      entity: { eid: 't1', num: 2 },
+      entity: { eid: 't1', num: 2, prefix: 'T' },
       task: { eid: 't1' },
       filed: { eid: 't1', priority: 1 },
     },
     t2: {
-      entity: { eid: 't2', num: 3 },
+      entity: { eid: 't2', num: 3, prefix: 'T' },
       task: { eid: 't2' },
       filed: { eid: 't2', priority: 2 },
     },
@@ -3006,17 +3026,17 @@ test('a board renders from the subscription and tracks joins and leaves', () => 
 test('boardPost excludes chrome and self from the subscription members', () => {
   cache.value = {
     board: {
-      entity: { eid: 'board', num: 1 },
+      entity: { eid: 'board', num: 1, prefix: 'B' },
       doc: { eid: 'board', title: 'feed', body: '' },
       board: { eid: 'board', query: '.order=hot' },
     },
     task: {
-      entity: { eid: 'task', num: 2 },
+      entity: { eid: 'task', num: 2, prefix: 'T' },
       task: { eid: 'task' },
       filed: { eid: 'task', priority: 1 },
     },
     note: {
-      entity: { eid: 'note', num: 3 },
+      entity: { eid: 'note', num: 3, prefix: 'C' },
       comment: { eid: 'note', target: 'task' },
     },
     card: {
@@ -3119,7 +3139,10 @@ test('each aggregate frame replaces the whole tally', () => {
   let X = 'cccc0000-0000-4000-8000-000000000011'
   let Y = 'cccc0000-0000-4000-8000-000000000012'
   cache.value = {
-    c1: { entity: { eid: 'c1', num: 1 }, comment: { eid: 'c1', target: X } },
+    c1: {
+      entity: { eid: 'c1', num: 1, prefix: 'C' },
+      comment: { eid: 'c1', target: X },
+    },
   }
   let x = commentCount(X)
   let y = commentCount(Y)

@@ -3,6 +3,7 @@
 import { equal, ok, test, throws } from '@yaks/testing'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
+import { short } from '@yaks/id'
 import { ids as addresses } from '@yaks/id/graph'
 import { idDoc } from '@yaks/id/vocab'
 import { loadVocab } from '@yaks/vocab'
@@ -245,10 +246,10 @@ test('platform bug show reads retained occurrences without local ids or writes',
 let boxList = await ask('bug_list')
 let [boxBug] = rows(boxList)
 let boxShows = await Promise.all([
-  `B-${boxBug.entity.num}`,
+  short(boxBug.entity.eid),
   'box problem',
 ].map((bug) => ask('bug_show', { bug })))
-test('box bug reads still resolve numbered ids and titles locally', async () => {
+test('box bug reads still resolve short handles and titles locally', async () => {
   equal(valueIn(boxList)?.source, 'box')
   equal(boxBug.entity.eid, ids[4])
   for (let answer of boxShows) {
@@ -385,7 +386,7 @@ for (let [verb, name] of [['resolve', 'resolved'], ['archive', 'archived']]) {
   let [local] = await shared.box.get([ids[0]], ['entity'])
   // A configured box sends this mark once through the signed Worker door.
   let marked = await shared.call(`bug_${verb}`, {
-    bug: verb == 'resolve' ? `B-${local.entity.num}` : 'mark me',
+    bug: verb == 'resolve' ? local.entity.eid : 'mark me',
   })
   test(`box bug ${verb} marks both stores through the signed Worker door`, async () => {
     let answer = marked
@@ -616,8 +617,8 @@ let use = async (name: string, args: Record<string, unknown>) => {
   ) as Record<string, unknown>
 }
 let boxListed = await use('bug_list', {})
-let shown = await use('bug_show', { bug: `B-${held.entity.num}` })
-let resolved = await use('bug_resolve', { bug: `B-${held.entity.num}` })
+let shown = await use('bug_show', { bug: held.entity.eid })
+let resolved = await use('bug_resolve', { bug: held.entity.eid })
 let afterResolve = await tracker.box.read('.bug.status=resolved')
 let [signedBy] = await tracker.box.get([ids[0]], ['resolved'])
 await use('bug_reopen', { bug: 'mark me' })

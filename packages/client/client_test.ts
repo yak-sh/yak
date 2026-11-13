@@ -298,8 +298,8 @@ test('API component-selected socket snapshots preserve unrelated cached componen
 test('a read resolves the id a person types', () => {
   let c = client(box, [ids(box)], { vault: false })
   replicate(c.graph, [
-    { ...dal(), entity: { eid: 'r1', num: 7 } },
-    { ...note, entity: { eid: 'n1', num: 8 } },
+    { ...dal(), entity: { eid: 'r1', num: 7, prefix: 'R' } },
+    { ...note, entity: { eid: 'n1', num: 8, prefix: 'N' } },
   ])
   assertEquals(c.read('.note.recipe=R-7').map((b) => b.entity.eid), ['n1'])
   c.close()

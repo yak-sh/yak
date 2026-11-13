@@ -48,7 +48,7 @@ test('fix status links minted ids and follows the session lifecycle', async () =
   try {
     cache.value = {
       task: {
-        entity: { eid: 'task', num: 26 },
+        entity: { eid: 'task', num: 26, prefix: 'T' },
         task: { eid: 'task', status: 'open' },
         filed: { eid: 'task', priority: 0 },
       },
@@ -64,7 +64,7 @@ test('fix status links minted ids and follows the session lifecycle', async () =
       {
         eid: 'session',
         name: 'entity',
-        comp: { eid: 'session', num: 31 },
+        comp: { eid: 'session', num: 31, prefix: 'S' },
       },
       { eid: 'session', name: 'session', comp: { status: 'running' } },
     ])

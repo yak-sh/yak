@@ -16,7 +16,7 @@
         "prefix": {
           "type": "string",
           "pattern": "^[A-Z]$",
-          "description": "the letter of the series its number belongs to, fixed when it is first numbered: B-7 and A-7 are two entities. Absent on a row numbered before series had letters, which answers to its number under any letter"
+          "description": "the letter of the series its number belongs to, fixed when it is first numbered: B-7 and A-7 are two entities. A number stored without one answers to no letter"
         }
       }
     }

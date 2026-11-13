@@ -924,7 +924,8 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         let rec = rows.get(eid)
         if (!rec || buried(rec)) continue
         save(eid)
-        cold.set(eid, { eid, num: rec.entity.num })
+        let { num, prefix } = rec.entity
+        cold.set(eid, { eid, num, ...prefix == null ? {} : { prefix } })
         put(eid, undefined)
       }
     },

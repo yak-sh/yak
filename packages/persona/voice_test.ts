@@ -9,14 +9,14 @@ import { voice, type Worn } from './voice.ts'
 
 let says = (eid: string, num: number | null, title: string, body: string) =>
   ({
-    entity: { eid, num },
+    entity: { eid, num, prefix: num ? 'M' : null },
     doc: { title, body },
     memory: {},
   }) as Bundle
 
 let who = (over: Partial<Worn> = {}): Worn => ({
   persona: {
-    entity: { eid: 'n1', num: 1 },
+    entity: { eid: 'n1', prefix: 'N', num: 1 },
     doc: { title: 'TaskMaster', body: 'the voice itself' },
     persona: {},
   },

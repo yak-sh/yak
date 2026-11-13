@@ -168,7 +168,7 @@ test('a reference reads as one association row, a structure as a row per leaf', 
       doc: { eid: owner, title: 'Owner', body: '' },
     },
     [job]: {
-      entity: { eid: job, num: 8 },
+      entity: { eid: job, num: 8, prefix: 'T' },
       doc: { eid: job, title: 'Job', body: '' },
       task: { eid: job, status: 'open' },
       filed: { eid: job, priority: 1, assignee: owner },
@@ -216,7 +216,7 @@ test('project backlinks omit attribution and cap associations', () => {
   let project = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   cache.value = {
     [project]: {
-      entity: { eid: project, num: 19 },
+      entity: { eid: project, num: 19, prefix: 'P' },
       doc: { eid: project, title: 'Task Graph', body: '' },
       project: { eid: project },
     },
@@ -300,7 +300,7 @@ test('a full window of referrers links every reference in the inspector', () => 
   let project = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   let rows: typeof cache.value = {
     [project]: {
-      entity: { eid: project, num: 19 },
+      entity: { eid: project, num: 19, prefix: 'P' },
       doc: { eid: project, title: 'Task Graph', body: '' },
       project: { eid: project },
     },

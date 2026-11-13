@@ -463,10 +463,19 @@ test('trial: standing is the person and the notices that came more than once to 
 
 test('trial: a window names a row by its eid, its number or its short handle', () => {
   let names = naming([entry(5, 'see T-41 and #0123456789', { result: {} })])
-  let row = (eid: string, num?: number) => ({ entity: { eid, num } })
+  let row = (eid: string, num?: number, prefix = 'T') => ({
+    entity: { eid, num, prefix },
+  })
   assertEquals(
-    [row('x', 41), row('01234567-89ab'), row('e5'), row('y', 4)].map(names),
-    [true, true, true, false],
+    [
+      row('x', 41),
+      row('01234567-89ab'),
+      row('e5'),
+      row('y', 4),
+      row('z', 41, 'M'),
+    ]
+      .map(names),
+    [true, true, true, false, false],
   )
 })
 for (let person of ['9ea37f1a-1b2e-4cb4-848c-7c4b4510968f', 'owner']) {

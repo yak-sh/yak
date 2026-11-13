@@ -21,9 +21,8 @@ let broke = (
 // The words a caller may say, against a break on v2 at noon on the 14th.
 let hit = broke({ at: '2026-08-14T12:00:00.000Z', version: 2 })
 
-test('named: an id, either form, by its number whatever its letter', () => {
-  assert(named('E-84', hit))
-  assert(named('x-84', hit))
+test('named: an unlettered break by its bare number, never a letter', () => {
+  assert(!named('E-84', hit))
   assert(named('84', hit))
   assert(named(E, hit))
   assert(!named('E-85', hit))
@@ -32,6 +31,9 @@ test('named: an id, either form, by its number whatever its letter', () => {
   assert(!named('E-84-ish', hit))
   // and by the handle it prints with, since its facets declare no prefix
   assert(named('#e000000000', hit))
+  let lettered = { ...hit, entity: { eid: E, num: 84, prefix: 'E' } }
+  assert(named('E-84', lettered))
+  assert(!named('x-84', lettered))
 })
 
 test('line: a break numbered without a letter prints its short handle', () => {

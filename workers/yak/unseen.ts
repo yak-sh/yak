@@ -382,8 +382,9 @@ let idOf = (h: Hit) =>
 
 // Whether a word names a break: its eid, or its handle with or without its `#`
 // (`b2f4065d90`), as an agent copies it off a line. A break the directory
-// numbered was once printed by its number (`E-12`), and still answers to it,
-// whatever letter it is written with (`E-12`, `X-12`, `12`).
+// numbered answers to its stored pair (`E-12`), and to its bare number (`12`);
+// one numbered without a letter answers to its bare number alone (@yaks/id
+// `names`).
 let names = (word: string, h: Hit) =>
   word == h.entity.eid ||
   addressId(word) == short(h.entity.eid) ||

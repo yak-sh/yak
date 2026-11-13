@@ -214,7 +214,7 @@ let headed = (body: string) =>
 test('a session is told the rows of the saved queries its persona contains', async () => {
   assertEquals(headed(await told('plain')), [
     ['## claimed', 'nothing'],
-    ['## open', '- #m1 — one'],
+    ['## open', '- M-1 — one'],
   ])
   assertEquals(headed(await told('coder')), [['## claimed', 'nothing']])
 })
@@ -222,8 +222,8 @@ test('a session is told the rows of the saved queries its persona contains', asy
 test("an operator is told its operator persona's queries too", async () => {
   assertEquals(headed(await told('op')).slice(0, 3), [
     ['## claimed', 'nothing'],
-    ['## open', '- #m1 — one'],
-    ['## answered', '- #m2 — two'],
+    ['## open', '- M-1 — one'],
+    ['## answered', '- M-2 — two'],
   ])
 })
 
@@ -288,14 +288,17 @@ test('a session nobody has seen is minted, holding nothing', async () => {
 test('a session that exists is handed back what it was in the middle of', async () => {
   let rows = [
     row(
-      { entity: { eid: 's1', num: 3 }, session: { id: 'abc', actor: 'p1' } },
+      {
+        entity: { eid: 's1', prefix: 'S', num: 3 },
+        session: { id: 'abc', actor: 'p1' },
+      },
       'session.id',
     ),
     // Under lease, and still a task: `claim` is a kind too, and a task says
     // it sorts before one (@yaks/task's vocabulary), so the line reads T-7.
     row(
       {
-        entity: { eid: 't1', num: 7 },
+        entity: { eid: 't1', prefix: 'T', num: 7 },
         task: {},
         doc: { title: 'ship it' },
         claim: { session: 's1' },

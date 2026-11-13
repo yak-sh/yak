@@ -252,7 +252,7 @@ import { equal } from '@yaks/testing'
 const vocab = loadVocab({
   $defs: { book: { type: 'object', component: true, properties: {} } },
 })
-const store = ram(vocab, { number: true })
+const store = ram(vocab, { number: { book: 'B' } })
 const write = () =>
   store.tx((tx) =>
     tx.patch([
@@ -268,7 +268,7 @@ store.tx((tx) => tx.remove([{ eid: 'b1' }]))
 write()
 equal(store.get(['b1'])[0].tombstone, {})
 store.tx((tx) => tx.revive(['b1']))
-equal(store.get(['b1']), [{ entity: { eid: 'b1', num: 1 } }])
+equal(store.get(['b1']), [{ entity: { eid: 'b1', num: 1, prefix: 'B' } }])
 write()
 equal(store.read('.book').length, 1)
 ```

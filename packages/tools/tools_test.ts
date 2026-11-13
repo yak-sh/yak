@@ -228,7 +228,6 @@ test('a call is the transcript: the ask, the answer, the result beside it', asyn
   assertEquals(body(answer.find((b) => b.output)), 'hi 2')
   assertEquals(body(result), 'hi 2')
   assertEquals(typeof (result.result as Comp).ms, 'number')
-  assertEquals(typeof (await g.read('.call&*'))[0].entity.num, 'number')
   assertEquals(
     ((await g.read('.execution&*'))[0].execution as Comp).state,
     'done',

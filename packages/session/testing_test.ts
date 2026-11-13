@@ -11,10 +11,10 @@ test('session fixture stores keep their rows and numbering isolated', async () =
   for (let fresh of [second, store()]) {
     let rows = await fresh.get([ids.p1, ids.p2])
     equal(rows.map((b) => [b.entity.num, b.page]), [
-      [5, { title: 'Lemon cake', by: ids.ada }],
-      [6, { title: 'Potluck', by: ids.bo }],
+      [1, { title: 'Lemon cake', by: ids.ada }],
+      [2, { title: 'Potluck', by: ids.bo }],
     ])
     await fresh.tx((tx) => tx.patch([{ entity: { eid: 'next' }, page: {} }]))
-    equal((await fresh.get(['next']))[0].entity.num, 7)
+    equal((await fresh.get(['next']))[0].entity.num, 3)
   }
 })

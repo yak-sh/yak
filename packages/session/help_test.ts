@@ -282,7 +282,7 @@ test('a helper’s hand-up reaches the operator, and its own ending knocks nobod
   await o.knock('New bug: gate failed')
   let [h] = await o.helpers()
   await o.handUp(h.eid, 'needs your call')
-  equal(await o.heard(), ['T-7: needs your call'])
+  equal(await o.heard(), ['T-1: needs your call'])
   await o.exit(h.eid, 0)
   equal(await reported(o.g, h.eid), { tasks: [] })
   equal(await o.heard(), [])
@@ -302,10 +302,10 @@ test('a session opened on a topic hands up as a helper does, and any other sessi
   await o.handUp('head', 'two reverts would fix it, and which is yours')
   equal(await o.helpers(), [])
   equal(await o.heard(), [
-    'T-7: two reverts would fix it, and which is yours',
+    'T-1: two reverts would fix it, and which is yours',
   ])
   await o.handUp('worker', 'landed')
-  equal((await o.helpers()).map((h) => h.told), [['T-7: landed']])
+  equal((await o.helpers()).map((h) => h.told), [['T-1: landed']])
   equal(await o.heard(), [])
 })
 

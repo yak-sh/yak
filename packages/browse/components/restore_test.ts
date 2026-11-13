@@ -67,10 +67,16 @@ let context = (
   owner.value = 'person'
   offerPlaces({ home: { name: 'Desk', icon: 'lamp', view: 'Desk' } })
   cache.value = {
-    person: { entity: { eid: 'person', num: 2 }, person: { eid: 'person' } },
-    canvas: { entity: { eid: 'canvas', num: 1 }, canvas: { eid: 'canvas' } },
+    person: {
+      entity: { eid: 'person', num: 2, prefix: 'U' },
+      person: { eid: 'person' },
+    },
+    canvas: {
+      entity: { eid: 'canvas', num: 1, prefix: 'T' },
+      canvas: { eid: 'canvas' },
+    },
     task: {
-      entity: { eid: 'task', num: 7 },
+      entity: { eid: 'task', num: 7, prefix: 'T' },
       doc: { eid: 'task', title: 'Work' },
       task: { eid: 'task' },
     },

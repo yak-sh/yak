@@ -28,7 +28,7 @@ test('the answer is prose, and says which call it came from', async () => {
   let [said] = await asked(peopled(), { persona: 'n1' })
   let body = String((said.content as Comp).body)
   assert(body.startsWith('# N-1 TaskMaster\n\nthe voice'), body)
-  assert(body.includes('# M-2 one'), body)
+  assert(body.includes('# M-1 one'), body)
   assertEquals((said.output as Comp).source, 'c1')
 })
 

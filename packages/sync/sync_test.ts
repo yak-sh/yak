@@ -38,10 +38,11 @@ test('a local apply lands on the server, minus what is local-tier', async () => 
 // Capture the HTTP integrations at module load; cases check both the
 // optimistic image and the authoritative answer without timing server boot.
 let numberedServer = server()
-// Two entities the client knows nothing about: a number the client guessed
+// Two recipes the client knows nothing about: a number the client guessed
 // for the recipe would be one of theirs.
-numberedServer.graph.apply([{ entity: { eid: 'x1' } }, {
+numberedServer.graph.apply([{ entity: { eid: 'x1' }, recipe: {} }, {
   entity: { eid: 'x2' },
+  recipe: {},
 }])
 let numberedClient = client(numberedServer)
 
