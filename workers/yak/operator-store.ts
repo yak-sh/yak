@@ -2,7 +2,10 @@
 // Its store is composed from its config (config.ts `operatorConfig`) through
 // @yaks/host's assembly, as the Store object composes each kind it serves.
 import { statements } from '@yaks/sqlite'
-import type { Graph, Storage } from '@yaks/graph'
+import type { Bundle, Graph, Storage } from '@yaks/graph'
+import type { Vocab } from '@yaks/vocab'
+import { held } from '@yaks/id/graph'
+import { readable } from '@yaks/tools/readable'
 import type { Extension } from '@yaks/sql'
 import { driver, type DurableStorage } from '@yaks/durable-object/sql'
 import { bounded } from '@yaks/durable-object/ceiling'
@@ -16,6 +19,7 @@ import { type Effects, effects, expireDaily, type Handler } from '@yaks/effects'
 import { type Blobs, blobSchema, memoryBlobs, sqliteBlobs } from '@yaks/blob'
 import { ramVault } from '@yaks/secrets/vault'
 import { once } from '@yaks/fp'
+import { prefixes } from '@yaks/id'
 import { phoneTexts } from './phone-move.ts'
 import { channeled } from './channel-move.ts'
 import { operatorDoc } from './operator-vocab.ts'
@@ -36,6 +40,15 @@ let words = wordsOf(vocabsOf(operatorConfig, vocabFacets), undefined, {
   implicit: false,
 })
 export let operatorVocab = words.vocab
+
+/** How the store numbers what it keeps: each entity in the series of the
+ * letter its kind declares (@yaks/id `prefixes`), from 1, so a space's first
+ * task is T-1 and its first goal V-1. A kind that declares none is its eid. */
+export let NUMBERS = prefixes(operatorVocab)
+
+/** Where the file says every entity it kept before it numbered them has
+ * its number (number-move.ts). */
+export let NUMBERED = 'operator:numbered'
 
 /** Where the file keeps the print of the schema it was last fitted to. */
 export let FITTED = 'operator:fitted'
@@ -109,6 +122,7 @@ export let operatorStore = async (
       store = storage(durable, operatorVocab, {
         deferred: true,
         derived,
+        number: NUMBERS,
         extend,
         over: () => searching,
         report: (error) => caught(error, { request: 'operator store' }),
@@ -129,6 +143,8 @@ export let operatorStore = async (
       if (!left.length) marks.set(FITTED, print)
       // A new file holds nothing written before the rule that keeps owners.
       if (born) marks.set(OWNERS, 'done')
+      // Nor anything kept before it numbered what it keeps.
+      if (born) marks.set(NUMBERED, 'done')
     },
     // How a run ended is written while the object is stopped too, so a run
     // that finished never runs again (@yaks/durable-object `bounded`).
@@ -201,7 +217,30 @@ export let operatorGraph = (plan: Assembly, bound: Bound) => {
         ...bound.effects,
       }),
   })
-  return { g: host.graph, fx: host.fx, vocab: host.vocab }
+  return {
+    g: host.graph,
+    fx: host.fx,
+    vocab: host.vocab,
+    readable: drawing(host.vocab, host.graph),
+  }
+}
+
+/**
+ * A tool's answer from the store as its reader reads it (@yaks/tools
+ * `readable`): each eid its prose holds drawn as the entity's id, from the
+ * answer itself or the small series the store holds in memory (@yaks/id/graph
+ * `held`), else as its short handle. A read of the series that failed is
+ * reported, and the answer drawn with what the answer holds.
+ */
+let drawing = (vocab: Vocab, g: Graph) => {
+  let small = held(vocab, g)
+  let draw = readable(vocab)
+  return async (answer: Bundle[]): Promise<Bundle[]> => {
+    let ids = await small().catch((error) =>
+      void caught(error, { request: 'operator ids' })
+    )
+    return (ids ? readable(vocab, ids) : draw)(answer)
+  }
 }
 
 /**

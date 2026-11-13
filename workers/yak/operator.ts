@@ -416,8 +416,10 @@ export let operatorRoster = async (
       ].map(namedTool).map((t) => [t.name, t])
       : [],
   )
+  // What the model reads of an answer from the Operator's own store is drawn
+  // (operator-store.ts `readable`): an eid in its prose as the entity's id.
   let run =
-    (t: NamedTool, host: Graph, target: Graph): Tool['run'] =>
+    (t: NamedTool, host: Graph, target: Graph, own = false): Tool['run'] =>
     async (args, context) => {
       let call = context!.call
       let fault: unknown
@@ -456,10 +458,11 @@ export let operatorRoster = async (
         )
       }
       if (fault) throw fault
+      let said = own ? await work.readable(out) : out
       // Applied tools already wrote through their own store; generic writes
       // return patches and use the same graph application as the connector.
       return {
-        text: worded(out, Infinity) || JSON.stringify(out),
+        text: worded(said, Infinity) || JSON.stringify(said),
         with: {
           output: { source: call.entity.eid, value: resultValue(out, t) },
         },
@@ -503,7 +506,7 @@ export let operatorRoster = async (
       let ours = own.get(t.name)
       let there = run(t, g, landing)
       if (!ours) return { ...shaped(t), run: there }
-      let here = run(ours, self, self)
+      let here = run(ours, self, self, true)
       let tool = shaped(t)
       return {
         ...tool,
@@ -525,7 +528,7 @@ export let operatorRoster = async (
     ...[...own.values()]
       .filter((t) => mine.has(t.name) || workNames.has(t.name))
       .map((t) => {
-        let tool = { ...shaped(t), run: run(t, self, self) }
+        let tool = { ...shaped(t), run: run(t, self, self, true) }
         if (tasked && t.name == 'task_update') {
           return { ...tool, description: t.description + ON_TASK }
         }

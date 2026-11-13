@@ -42,7 +42,12 @@ export let called = (vocab: Vocab): (b: Bundle) => string => {
   let id = idOf(vocab)
   return (b) =>
     b.entity.num
-      ? id({ eid: b.entity.eid, kind: kindOf(vocab, b), num: b.entity.num })
+      ? id({
+        eid: b.entity.eid,
+        kind: kindOf(vocab, b),
+        num: b.entity.num,
+        prefix: b.entity.prefix,
+      })
       : b.entity.eid
 }
 

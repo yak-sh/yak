@@ -393,9 +393,13 @@ export let operatorConfig: Config = {
       words: ['notification', 'subscription'],
     },
     { use: '@yaks/draft', facets: ['vocab', 'graph'] },
-    // Its tools take back the `#id` its context names everything by; the
-    // store keeps no numbers.
-    { use: '@yaks/id', facets: ['graph'] },
+    // Its tasks, goals and memories are numbered, each in its letter's
+    // series from 1 (operator-store.ts `NUMBERS`), and its tools take back
+    // the id or the `#id` they were shown.
+    { use: '@yaks/id', facets: ['vocab', 'graph'] },
+    // Its prose keeps the eid each id typed in it names, drawn back as the
+    // id for whoever reads it (@yaks/markdown/graph).
+    { use: '@yaks/markdown', facets: ['graph'] },
     { use: '@yaks/key', facets: ['vocab', 'graph'] },
     { use: '@yaks/alias', facets: ['vocab', 'graph'] },
     { use: '@yaks/memory', facets: ['vocab'] },

@@ -1495,11 +1495,13 @@ export let operatorRequest = async (
     return Response.json(await operator.stop(String(args.task ?? ''), person))
   }
   // The space's tasks and goals, as the connector reaches them
-  // (operator-tasks.ts).
+  // (operator-tasks.ts), their prose drawn as its reader reads it.
   if (path == '/operator/tool') {
     let { working } = await import('./operator-tasks.ts')
     return Response.json(
-      await working(store, person, String(args.tool), args.args ?? {}),
+      await store.readable(
+        await working(store, person, String(args.tool), args.args ?? {}),
+      ),
     )
   }
   if (path == '/operator/archive') {

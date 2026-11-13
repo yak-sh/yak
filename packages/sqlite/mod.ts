@@ -78,6 +78,7 @@ import {
   grown,
   indexed,
   logged,
+  respine,
   retabled,
   retired,
   standing,
@@ -118,8 +119,16 @@ import {
   ledger,
   pendingShapes,
 } from './archetype.ts'
-import { componentTables, objects, shape } from './physical.ts'
-import { analyze, build, forgo, reshape, type Sizes } from './owe.ts'
+import { componentTables, objects, shape, sole } from './physical.ts'
+import {
+  analyze,
+  build,
+  forgo,
+  holds as holdsRows,
+  reshape,
+  SIZES,
+  type Sizes,
+} from './owe.ts'
 import { maintenance } from './maintenance.ts'
 import { plan } from './plan.ts'
 import {
@@ -230,6 +239,8 @@ export {
   logged,
   META,
   refit,
+  respine,
+  respined,
   retabled,
   retired,
   schema,
@@ -1287,6 +1298,14 @@ export let storage = (
   let ready = false
   let prepare = () =>
     base.deferred ? upkeep.prepare() : backfill(driver, numbered)
+  // A store numbering by series rebuilds a spine that keeps a number unique
+  // on its own (./ddl.ts `respine`), before the indexes on it are raised,
+  // where the rebuild is one window's copy (./owe.ts `COPY`): it writes each
+  // row twice. A file's spine, or a larger one, is moved by its own
+  // migration, and until then counts once (./write.ts `unmoved`).
+  let respining = () =>
+    typeof base.number == 'object' && !driver.file && sole(driver) &&
+    !holdsRows(driver, 'entity', (base.sizes ?? SIZES).copy)
   let install = (beside: Stmt[] = []): Error[] => {
     let left: Error[] = []
     let mark = marked
@@ -1295,7 +1314,7 @@ export let storage = (
     let matches = () => {
       receipt = installation(driver)
       let was = receipt?.schema
-      return was == mark(was?.split(' ').slice(2) ?? [])
+      return was == mark(was?.split(' ').slice(2) ?? []) && !respining()
     }
     // The fast path only reads. A changed file is inspected again *after*
     // taking its write lock, and tables, growth and indexes commit together.
@@ -1349,6 +1368,7 @@ export let storage = (
           forgo(driver, kept)
           left = [
             ...unfit,
+            ...respining() ? respine(driver) : [],
             ...build(
               driver,
               holds(driver, vocab, built(driver, vocab)),

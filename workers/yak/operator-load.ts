@@ -9,26 +9,27 @@ import * as eager0_5 from '@yaks/draft/vocab'
 import * as eager0_6 from '@yaks/edge/vocab'
 import * as eager0_7 from '@yaks/effects/vocab'
 import * as eager0_8 from '@yaks/goal/vocab'
-import * as eager0_9 from '@yaks/kernel/vocab'
-import * as eager0_10 from '@yaks/key/vocab'
-import * as eager0_11 from '@yaks/mail/vocab'
-import * as eager0_12 from '@yaks/memory/vocab'
-import * as eager0_13 from '@yaks/model/vocab'
-import * as eager0_14 from '@yaks/notify/vocab'
-import * as eager0_15 from '@yaks/openai/vocab'
-import * as eager0_16 from '@yaks/persona/vocab'
-import * as eager0_17 from '@yaks/phone/vocab'
-import * as eager0_18 from '@yaks/platform/vocab'
-import * as eager0_19 from '@yaks/project/vocab'
-import * as eager0_20 from '@yaks/provenance/vocab'
-import * as eager0_21 from '@yaks/session/vocab'
-import * as eager0_22 from '@yaks/speech/vocab'
-import * as eager0_23 from '@yaks/task/vocab'
-import * as eager0_24 from '@yaks/tools/vocab'
-import * as eager0_25 from '@yaks/topic/vocab'
-import * as eager0_26 from '@yaks/trial/vocab'
-import * as eager0_27 from '@yaks/wake/vocab'
-import * as eager0_28 from './facets/operator-vocab.ts'
+import * as eager0_9 from '@yaks/id/vocab'
+import * as eager0_10 from '@yaks/kernel/vocab'
+import * as eager0_11 from '@yaks/key/vocab'
+import * as eager0_12 from '@yaks/mail/vocab'
+import * as eager0_13 from '@yaks/memory/vocab'
+import * as eager0_14 from '@yaks/model/vocab'
+import * as eager0_15 from '@yaks/notify/vocab'
+import * as eager0_16 from '@yaks/openai/vocab'
+import * as eager0_17 from '@yaks/persona/vocab'
+import * as eager0_18 from '@yaks/phone/vocab'
+import * as eager0_19 from '@yaks/platform/vocab'
+import * as eager0_20 from '@yaks/project/vocab'
+import * as eager0_21 from '@yaks/provenance/vocab'
+import * as eager0_22 from '@yaks/session/vocab'
+import * as eager0_23 from '@yaks/speech/vocab'
+import * as eager0_24 from '@yaks/task/vocab'
+import * as eager0_25 from '@yaks/tools/vocab'
+import * as eager0_26 from '@yaks/topic/vocab'
+import * as eager0_27 from '@yaks/trial/vocab'
+import * as eager0_28 from '@yaks/wake/vocab'
+import * as eager0_29 from './facets/operator-vocab.ts'
 /** Each plugin's words, by plugin. */
 export let vocabFacets: Record<string, VocabFacet> = {
   '@yaks/alias': eager0_0,
@@ -40,26 +41,27 @@ export let vocabFacets: Record<string, VocabFacet> = {
   '@yaks/edge': eager0_6,
   '@yaks/effects': eager0_7,
   '@yaks/goal': eager0_8,
-  '@yaks/kernel': eager0_9,
-  '@yaks/key': eager0_10,
-  '@yaks/mail': eager0_11,
-  '@yaks/memory': eager0_12,
-  '@yaks/model': eager0_13,
-  '@yaks/notify': eager0_14,
-  '@yaks/openai': eager0_15,
-  '@yaks/persona': eager0_16,
-  '@yaks/phone': eager0_17,
-  '@yaks/platform': eager0_18,
-  '@yaks/project': eager0_19,
-  '@yaks/provenance': eager0_20,
-  '@yaks/session': eager0_21,
-  '@yaks/speech': eager0_22,
-  '@yaks/task': eager0_23,
-  '@yaks/tools': eager0_24,
-  '@yaks/topic': eager0_25,
-  '@yaks/trial': eager0_26,
-  '@yaks/wake': eager0_27,
-  'yak/operator': eager0_28,
+  '@yaks/id': eager0_9,
+  '@yaks/kernel': eager0_10,
+  '@yaks/key': eager0_11,
+  '@yaks/mail': eager0_12,
+  '@yaks/memory': eager0_13,
+  '@yaks/model': eager0_14,
+  '@yaks/notify': eager0_15,
+  '@yaks/openai': eager0_16,
+  '@yaks/persona': eager0_17,
+  '@yaks/phone': eager0_18,
+  '@yaks/platform': eager0_19,
+  '@yaks/project': eager0_20,
+  '@yaks/provenance': eager0_21,
+  '@yaks/session': eager0_22,
+  '@yaks/speech': eager0_23,
+  '@yaks/task': eager0_24,
+  '@yaks/tools': eager0_25,
+  '@yaks/topic': eager0_26,
+  '@yaks/trial': eager0_27,
+  '@yaks/wake': eager0_28,
+  'yak/operator': eager0_29,
 }
 let facets: Record<string, () => Promise<unknown>> = {
   '@yaks/alias/graph': () => import('@yaks/alias/graph'),
@@ -67,6 +69,7 @@ let facets: Record<string, () => Promise<unknown>> = {
   '@yaks/draft/graph': () => import('@yaks/draft/graph'),
   '@yaks/id/graph': () => import('@yaks/id/graph'),
   '@yaks/key/graph': () => import('@yaks/key/graph'),
+  '@yaks/markdown/graph': () => import('@yaks/markdown/graph'),
   '@yaks/model/graph': () => import('@yaks/model/graph'),
   '@yaks/session/graph': () => import('@yaks/session/graph'),
   '@yaks/topic/graph': () => import('@yaks/topic/graph'),

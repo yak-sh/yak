@@ -993,6 +993,10 @@ export class Builder extends Durable {
             let { ownerBackfill } = await import('./owner-move.ts')
             return backfill(ownerBackfill(store))
           },
+          numbers: async () => {
+            let { numberBackfill } = await import('./number-move.ts')
+            return backfill(numberBackfill(store))
+          },
           drain: async (until) => {
             let { drain } = await import('./operator-store.ts')
             this.#draining = true

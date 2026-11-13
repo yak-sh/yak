@@ -6,6 +6,7 @@ import { ram } from '@yaks/ram'
 import { col, eq, lit, val } from '@yaks/sql'
 import { mem } from './testing.ts'
 import { mintSql, storage } from './mod.ts'
+import { SIZES } from './owe.ts'
 import { idDoc, idKeywords } from '@yaks/id'
 import { ids } from '@yaks/id/graph'
 
@@ -24,7 +25,10 @@ let vocab = loadVocab([idDoc, {
 }], [idKeywords])
 let SERIES = { task: 'T', memory: 'M' }
 
-type Opts = { number: boolean | Record<string, string> }
+type Opts = {
+  number: boolean | Record<string, string>
+  sizes?: typeof SIZES
+}
 let open = (backend: string, opts: Opts, d = mem()) => {
   let s = backend == 'sqlite' ? storage(d, vocab, opts) : ram(vocab, opts)
   s.install()
@@ -142,8 +146,12 @@ test('sqlite: a store still holding unlettered numbers counts on past them', () 
   })
 })
 
-test('sqlite: a spine keeping its number unique on its own counts once, though every row is lettered', () => {
-  // A spine made before series had letters, its rows moved under them.
+// A store kept with a spine made before series had letters, whose number is
+// unique on its own: `file` says whether the driver is a file's, and `rows`
+// what it held before it numbered by series.
+let lone = (
+  { file = false, rows = [] as Bundle[], sizes = SIZES } = {},
+) => {
   let d = mem()
   d.query({
     t: 'create table',
@@ -154,7 +162,49 @@ test('sqlite: a spine keeping its number unique on its own counts once, though e
       { name: 'num', type: 'integer', unique: true },
     ],
   })
-  let s = open('sqlite', { number: SERIES }, d)
+  if (rows.length) {
+    open('sqlite', { number: false }, d).tx((tx) => tx.patch(rows))
+  }
+  let driver = file ? { ...d, file } : d
+  return { d: driver, s: open('sqlite', { number: SERIES, sizes }, driver) }
+}
+let paired = (d: ReturnType<typeof mem>) =>
+  d.query({ t: 'pragma', name: 'index_list', arg: 'entity' })
+    .map((i) => String(i.name)).includes('entity_num_prefix')
+
+test('sqlite: a spine keeping its number unique on its own is rebuilt, and each series counts on its own', () => {
+  let { d, s } = lone({ rows: [mk('old', { task: { target: 'kept' } })] })
+  s.tx((tx) => {
+    tx.patch([mk('t'), mk('m', { memory: {} })])
+    assertEquals(idOf(tx, ['old', 'kept', 't', 'm']), [
+      null,
+      null,
+      'T-1',
+      'M-1',
+    ])
+    assertEquals(tx.get(['old'])[0].task, { target: 'kept' })
+  })
+  assertEquals(paired(d), true)
+})
+
+test("sqlite: a file's spine, or one past a window's copy, is left as it stood, counts once, and builds no series index", () => {
+  let big = { rows: [mk('a'), mk('b')], sizes: { ...SIZES, copy: 2 } }
+  for (let { d, s } of [lone({ file: true }), lone(big)]) {
+    s.tx((tx) => {
+      tx.patch([mk('t'), mk('m', { memory: {} })])
+      let [t, m] = idOf(tx, ['t', 'm']) as string[]
+      assertEquals([t[0], m[0], Number(m.slice(2)) - Number(t.slice(2))], [
+        'T',
+        'M',
+        1,
+      ])
+    })
+    assertEquals(paired(d), false)
+  }
+})
+
+test('sqlite: a spine kept with its rows moved under their letters counts once', () => {
+  let { d, s } = lone({ file: true })
   s.tx((tx) =>
     tx.patch([
       { entity: { eid: 'old', prefix: 'T', num: 1 }, task: {} },
@@ -168,24 +218,10 @@ test('sqlite: a spine keeping its number unique on its own counts once, though e
   })
 })
 
-test('sqlite: the series index is built over a spine of series, never over one keeping its number unique on its own', () => {
-  let paired = (d: ReturnType<typeof mem>) =>
-    d.query({ t: 'pragma', name: 'index_list', arg: 'entity' })
-      .map((i) => String(i.name)).includes('entity_num_prefix')
-  let old = mem()
-  old.query({
-    t: 'create table',
-    name: 'entity',
-    cols: [
-      { name: 'id', type: 'integer', pk: true },
-      { name: 'eid', type: 'text', notNull: true, unique: true },
-      { name: 'num', type: 'integer', unique: true },
-    ],
-  })
+test('sqlite: a fresh spine builds the series index', () => {
   let fresh = mem()
-  open('sqlite', { number: SERIES }, old)
   open('sqlite', { number: SERIES }, fresh)
-  assertEquals([paired(old), paired(fresh)], [false, true])
+  assertEquals(paired(fresh), true)
 })
 
 for (let backend of ['sqlite', 'ram']) {

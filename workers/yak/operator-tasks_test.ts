@@ -4,7 +4,9 @@ import { equal, test } from '@yaks/testing'
 import { assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { CallError } from '@yaks/tools/errors'
+import { human } from '@yaks/id'
 import { operatorMemory } from './operator-testing.ts'
+import { operatorVocab } from './operator-store.ts'
 import { working } from './operator-tasks.ts'
 import { invokePackage, packageTools } from './package-tools.ts'
 import { owned } from './directory-fixture.ts'
@@ -17,6 +19,7 @@ let person = crypto.randomUUID()
 let work = (name: string, args: Record<string, unknown>) =>
   working(store, person, name, args)
 let titles = (rows: Bundle[]) => rows.map((b) => (b.doc as Comp).title)
+let id = human(operatorVocab)
 
 let [task] = await work('task_new', { title: 'Order the hymnals' })
 let [goal] = await work('goal_new', {
@@ -36,6 +39,25 @@ test('a finished task leaves the open list and is done', async () => {
   equal(await work('task_list', {}), [])
   let [done] = await work('task_list', { query: '.task.status=done' })
   equal((done.task as Comp).status, 'done')
+})
+
+test('a task and a goal are numbered from 1, each in its series', () => {
+  equal([task, goal].map(id), ['T-1', 'V-1'])
+})
+
+test('their ids in prose are kept as eids and read back as the ids', async () => {
+  let [note] = await work('task_new', {
+    title: 'Print the bulletin',
+    body: 'For V-1, after T-1, not `T-1`.',
+  })
+  let [kept] = await store.g.get([note.entity.eid])
+  equal(
+    (kept.doc as Comp).body,
+    `For ${goal.entity.eid}, after ${task.entity.eid}, not \`T-1\`.`,
+  )
+  let [read] = await store.readable([kept])
+  equal((read.doc as Comp).body, 'For V-1, after T-1, not `T-1`.')
+  await work('task_update', { task: id(note), status: 'cancelled' })
 })
 
 test('a question the Operator asks the person is not a shared tool', async () => {

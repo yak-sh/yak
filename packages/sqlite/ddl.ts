@@ -870,6 +870,54 @@ export let grown = (vocab: Vocab, was: Standing): Stmt[] => [
   }),
 ]
 
+// The spine as it is declared, and what is raised on it.
+let SPINED = SPINE.find((s): s is CreateTable =>
+  s.t == 'create table' && s.name == 'entity'
+)!
+let ON_SPINE = SPINE.filter((s) => s.t == 'create trigger' && s.on == 'entity')
+
+/**
+ * The spine rebuilt as it is declared now, where its number is unique on its
+ * own (./physical.ts `sole`), as every spine made before series had letters
+ * is, and nothing elsewhere: there T-5 and M-5 cannot both stand, so a store
+ * that numbers by series counts once until it is rebuilt. Its rows set aside,
+ * the table
+ * made again, every row put back under its own `id`, so each reference to it
+ * still names the entity it named, and its triggers raised again. Indexes on
+ * it are the install's to raise after. Run with foreign keys off, as every
+ * rebuild is, and in one unit: the table is dropped and made again.
+ */
+export let respined = (driver: Driver): Stmt[] => {
+  if (!sole(driver)) return []
+  let aside = 'entity__respine'
+  let cols = SPINED.cols.map((c) => c.name)
+  let all = (from: string) =>
+    select({ cols: cols.map((c) => col(c)), from: table(from) })
+  return [
+    { t: 'create table', name: aside, cols: cols.map((name) => ({ name })) },
+    { t: 'insert', into: aside, cols, q: all('entity') },
+    { t: 'drop', kind: 'table', name: 'entity' },
+    { ...SPINED, ifNot: false },
+    { t: 'insert', into: 'entity', cols, q: all(aside) },
+    { t: 'drop', kind: 'table', name: aside },
+    ...ON_SPINE,
+  ]
+}
+
+/** The spine rebuilt where it keeps a number unique on its own
+ * ({@link respined}), in a unit of its own: one the engine refused is left as
+ * it stood, and returned with the engine's reason. */
+export let respine = (driver: Driver): Error[] => {
+  let stmts = respined(driver)
+  if (!stmts.length) return []
+  try {
+    unit(driver, () => stmts.forEach((s) => driver.query(s)))
+    return []
+  } catch (e) {
+    return [unfit('entity', e)]
+  }
+}
+
 /**
  * Bring the tables that stood to the vocabulary, through a driver that answers
  * at once: the columns they lack ({@link grown}), then a rebuild of each whose

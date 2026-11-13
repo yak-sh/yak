@@ -7,6 +7,7 @@ import { executionComputed } from '@yaks/tools'
 import {
   type Bound,
   memoryPlan,
+  NUMBERS,
   operatorGraph,
   operatorVocab,
 } from './operator-store.ts'
@@ -76,6 +77,7 @@ let plan = await memoryPlan()
 /** Session decisions use the same graph composition over rows in memory. */
 export let operatorMemory = (
   storage: Storage = ram(operatorVocab, {
+    number: NUMBERS,
     computed: { ...statusComputed, ...attemptComputed, ...executionComputed },
   }),
   options: Bound['effects'] = {},

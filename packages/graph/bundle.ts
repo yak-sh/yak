@@ -255,12 +255,14 @@ let folded = (bundles: Bundle[]) => {
     if (!one) by.set(eid, one = { entity: { eid } })
     if (!b.$quiet) said.add(eid)
     // The identity is merged rather than replaced: only the phase that created
-    // it knows the `num`, and only the caller's own bundle carries the alias.
-    // The first number wins, so a batch spread across several stores reads
-    // the way a query over them does — a num is one store's own counter, while
-    // the eid identifies the entity everywhere.
+    // it knows the `num` and its `prefix`, and only the caller's own bundle
+    // carries the alias. The first number wins, with its letter, so a batch
+    // spread across several stores reads the way a query over them does — a
+    // num is one store's own counter, while the eid identifies the entity
+    // everywhere.
     if (b.entity.num !== undefined && one.entity.num == null) {
-      one.entity = { ...one.entity, num: b.entity.num }
+      let { prefix } = b.entity
+      one.entity = { ...one.entity, num: b.entity.num, ...prefix && { prefix } }
     }
     if (b.entity.archetype !== undefined) {
       one.entity.archetype = b.entity.archetype
