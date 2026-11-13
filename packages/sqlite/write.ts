@@ -977,9 +977,10 @@ export let patch = (
 
   // What each bundle states its entity's pair to be: one to take, or `null`
   // for none, born or not, checked against the pairs every other entity
-  // holds, a tombstone's included (@yaks/graph `renumbering`). A vocabulary
-  // that declares no number (@yaks/id) reads none back, and a stated one says
-  // nothing to it.
+  // holds, a tombstone's included (@yaks/graph `renumbering`), whatever its
+  // letter on a spine that keeps a number unique on its own (`sole`). A
+  // vocabulary that declares no number (@yaks/id) reads none back, and a
+  // stated one says nothing to it.
   let stated = new Map<string, Pair | null>()
   for (let b of vocab.prop('entity', 'num') ? alive : []) {
     let pair = stating(b.entity, pairOf(b.entity.eid))
@@ -990,6 +991,7 @@ export let patch = (
       stated,
       pairOf,
       holders(driver, [...stated.values()].flatMap((p) => p ? [p.num] : [])),
+      sole(driver),
     )
     : new Map<string, Pair | null>()
   // An entity moving off its number lets go of it before any is given, so a

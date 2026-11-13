@@ -231,6 +231,18 @@ test('sqlite: a spine kept with its rows moved under their letters counts once',
   })
 })
 
+test('sqlite: a spine keeping its number unique on its own refuses a pair another letter holds', () => {
+  let { s } = lone({ file: true })
+  s.tx((tx) => {
+    tx.patch([{ entity: { eid: 'm', prefix: 'M', num: 1 }, memory: {} }])
+    assertThrows(
+      () => tx.patch([{ entity: { eid: 't', prefix: 'T', num: 1 }, task: {} }]),
+      Refused,
+      "T-1 is m's",
+    )
+  })
+})
+
 test('sqlite: a fresh spine builds the series index', () => {
   let fresh = mem()
   open('sqlite', { number: SERIES }, fresh)

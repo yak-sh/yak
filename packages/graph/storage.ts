@@ -409,8 +409,10 @@ export let stating = (
  * one entity. An entity moving off its pair in the same batch frees it, so two
  * entities may swap. `now` says an entity's pair before the batch (`undefined`
  * where it has no entity yet), and `holders` the entities holding each number
- * stated, any letter. Answers the stated pairs that change something; one that
- * cannot be given is refused as the caller's own error.
+ * stated, any letter. `lone` says a store's numbers are unique whatever
+ * their letter, as a spine made before series had letters keeps them: there
+ * T-5 names the number M-5 holds. Answers the stated pairs that change
+ * something; one that cannot be given is refused as the caller's own error.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -426,13 +428,16 @@ export let stating = (
  * let no = (f: () => unknown) => { try { f() } catch (e) { return (e as Error).message } }
  * equal(no(() => changes([['a', t(2)]], [[2, ['b']]])), 'T-2 is b\'s: two entities cannot share an id')
  * equal(no(() => changes([['a', t(1.5)]], [])), 'entity.num is a whole number from 1, or null for none')
+ * equal(no(() => renumbering(new Map([['c', t(1)]]), (e) => now.get(e), new Map([[1, [{ eid: 'm', prefix: 'M', num: 1 }]]]), true)), 'T-1 is m\'s: two entities cannot share an id')
  * ```
  */
 export let renumbering = (
   stated: ReadonlyMap<Eid, Pair | null>,
   now: (eid: Eid) => Pair | null | undefined,
   holders: ReadonlyMap<number, readonly ({ eid: Eid } & Pair)[]>,
+  lone = false,
 ): Map<Eid, Pair | null> => {
+  let meets = (a: Pair, b: Pair) => lone ? a.num == b.num : clash(a, b)
   let same = (a: Pair | null, b: Pair | null) =>
     a == b || (!!a && !!b && a.num == b.num && a.prefix == b.prefix)
   let changes = new Map(
@@ -455,13 +460,13 @@ export let renumbering = (
       })
     }
     let id = pair.prefix ? `${pair.prefix}-${pair.num}` : `number ${pair.num}`
-    let twin = given.find((g) => clash(g, pair))
+    let twin = given.find((g) => meets(g, pair))
     if (twin) {
       throw new Refused(`${twin.eid} and ${eid} are both given ${id}`, at)
     }
     given.push({ eid, ...pair })
     let holder = (holders.get(pair.num) ?? []).find((h) =>
-      h.eid != eid && !changes.has(h.eid) && clash(h, pair)
+      h.eid != eid && !changes.has(h.eid) && meets(h, pair)
     )
     if (holder) {
       throw new Refused(
