@@ -1,10 +1,10 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, Refused, type Tx } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { col, eq, lit, val } from '@yaks/sql'
-import { mem } from './testing.ts'
+import { entity, mem, stepping } from './testing.ts'
 import { mintSql, storage } from './mod.ts'
 import { SIZES } from './owe.ts'
 import { idDoc, idKeywords } from '@yaks/id'
@@ -148,18 +148,20 @@ test('sqlite: a store still holding unlettered numbers counts on past them', () 
 
 // A store kept with a spine made before series had letters, whose number is
 // unique on its own: `file` says whether the driver is a file's, `rows` what
-// it held before it numbered by series, and `keyed` whether its foreign keys
-// stay on through an install, as a Durable Object's do.
+// it held before it numbered by series, `bare` how many spine rows it held
+// before it pointed at archetypes, and `keyed` whether its foreign keys stay
+// on through an install, as a Durable Object's do.
 let lone = (
   {
     file = false,
     rows = [] as Bundle[],
+    bare = 0,
     sizes = SIZES,
     keyed = false,
     number = false,
+    d = mem(),
   } = {},
 ) => {
-  let d = mem()
   d.query({
     t: 'create table',
     name: 'entity',
@@ -169,6 +171,7 @@ let lone = (
       { name: 'num', type: 'integer', unique: true },
     ],
   })
+  for (let i = 1; i <= bare; i++) entity(d, i, `e${i}`)
   if (rows.length) {
     open('sqlite', { number }, d).tx((tx) => tx.patch(rows))
   }
@@ -214,6 +217,21 @@ for (let keyed of [false, true]) {
     })
   })
 }
+
+// With foreign keys on, a spine dropped and refilled checks what references
+// each row, its own `archetype` among them, unindexed on a spine that gained
+// it in the same install: twice the rows cost four times the steps. A spine
+// moved in place checks nothing, and twice the rows cost twice the steps.
+test('sqlite: a spine is moved in steps that grow with its rows, its foreign keys on', () => {
+  let cost = (bare: number) => {
+    let { driver, steps } = stepping()
+    lone({ bare, keyed: true, d: driver })
+    assertEquals(paired(driver), true)
+    return steps()
+  }
+  let [one, two] = [cost(1000), cost(2000)]
+  assert(two < 2.5 * one, `${one} then ${two} VM steps`)
+})
 
 test("sqlite: a file's spine, or one past a window's copy, is left as it stood, counts once, and builds no series index", () => {
   let big = { rows: [mk('a'), mk('b')], sizes: { ...SIZES, copy: 2 } }
