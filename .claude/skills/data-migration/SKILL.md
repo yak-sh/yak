@@ -110,6 +110,18 @@ have stopped before the drop. A drop the engine refuses because an owed
 rebuild's triggers name the column waits for `work` (@yaks/sqlite/owe) to
 finish it.
 
+Moving the rows while everything serves means each transaction the script
+holds on the live file ends within seconds. Every other writer waits a minute
+for the write lock (packages/graph/enter.ts `PATIENCE`, the file's
+`busy_timeout`), then fails with `database is locked`, and whatever it was
+writing is lost: an effect pass, a mail role's write, a session hook.
+bin/series-move.ts rebuilt the spine in one unit that held the lock for over a minute, and
+`yak serve` and both `yak-work@` workers failed at once. Work that grows with
+rows goes in windows: schema work is owed (@yaks/sqlite/owe, a tenth of a
+second a window), and rows move a batch per unit. A step that can only be
+atomic is timed on a `bin/copy-db` copy first. If it holds the lock for more
+than a few seconds, it is split up.
+
 A patch keeps what it omits. A repair that puts a component back to an older
 value names every property, `null` for one the older value lacks, or what the
 bad write added stays.
