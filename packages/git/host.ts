@@ -866,6 +866,59 @@ export let reclaim = async (
   return undefined
 }
 
+/** The size of an untracked file too large to commit when shelving: a
+ * megabyte. A checkout holding one is kept, as an asset never goes in Git. */
+export let LARGE = 1_000_000
+
+/** Put a worktree its agent left on its shelf: its uncommitted files are
+ * committed onto its branch, a detached HEAD gets a `shelf/` branch of its
+ * own, and the checkout is removed while the branch stays. Every commit stays
+ * on a branch, so `restore` cuts it again where it stood once `onBranch` (run
+ * with the work committed and the checkout still there) has recorded it.
+ * Returns what kept it, or nothing: `dirty` for an untracked file of
+ * {@link LARGE} or more, `failed` when Git refused a step. */
+export let shelve = async (
+  path: string,
+  onBranch: () => Promise<unknown> = async () => {},
+): Promise<Held | undefined> => {
+  if (await lost(path)) return 'unlanded'
+  let at = await standing(path)
+  if (!at) return 'unlanded'
+  if (at.dirty) {
+    let untracked = (await quiet(path, [
+      'ls-files',
+      '--others',
+      '--exclude-standard',
+      '-z',
+    ]) ?? '').split('\0').filter(Boolean)
+    for (let file of untracked) {
+      let size = await io.lstat(`${path}/${file}`).then((s) => s.size, () => 0)
+      if (size >= LARGE) return 'dirty'
+    }
+    let shelved = await quiet(path, ['add', '-A']) != null &&
+      await quiet(path, [
+          '-c',
+          'core.hooksPath=/dev/null',
+          'commit',
+          '--no-verify',
+          '--quiet',
+          '-m',
+          `Shelved: what was left uncommitted in ${path}`,
+        ]) != null
+    if (!shelved) return 'failed'
+  }
+  if (!at.branch) {
+    let name = 'shelf/' + path.replace(/\/+$/, '').split('/').at(-1)
+    if (await quiet(path, ['switch', '--quiet', '-c', name]) == null) {
+      return 'failed'
+    }
+  }
+  await onBranch()
+  return await quiet(path, ['worktree', 'remove', path]) == null
+    ? 'failed'
+    : undefined
+}
+
 /** The path this worktree is checked out at, creating it again if it was
  * removed — same path, same branch, at the commit its row recorded — so work
  * taken back by `reclaim` comes back where it stood. Nothing new has to be

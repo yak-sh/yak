@@ -11,7 +11,8 @@
  * kernel's cache, so the next goes faster.
  *
  * Each pass also tells the host of a disk newly below its floor, and every
- * `AGAIN` prunes the configured mirror caches (./upkeep.ts).
+ * `AGAIN` prunes the configured mirror caches and drops each configured cache
+ * file past its budget (./upkeep.ts).
  *
  * @module
  */
@@ -21,7 +22,7 @@ import type { Graph } from '@yaks/graph'
 import { sleep } from '@yaks/fp'
 import { volumeOf } from './mod.ts'
 import { here } from './local.ts'
-import { lows, prune } from './upkeep.ts'
+import { lows, prune, trim } from './upkeep.ts'
 import {
   type Disk,
   due,
@@ -110,6 +111,10 @@ export type Options = {
    * such as Deno's `gen/file`, pruned of directories whose files are gone
    * every `AGAIN` */
   mirrors?: string[]
+  /** cache files a program builds again when they are gone, such as Deno's
+   * `v8_code_cache_v2`, each with the most bytes it may hold; every `AGAIN`
+   * one past its budget is removed */
+  caches?: Record<string, number>
 }
 
 /** Look, then look again every `every`, until the signal aborts. An already
@@ -141,6 +146,9 @@ export let service = async (
       pruned = Date.now()
       for (let mirror of options.mirrors ?? []) {
         await prune(mirror, stopping).catch((e) => report(e, 'cache prune'))
+      }
+      for (let [cache, most] of Object.entries(options.caches ?? {})) {
+        await trim(cache, most).catch((e) => report(e, 'cache trim'))
       }
     }
     await pass(host.graph, computer, Date.now(), stopping)

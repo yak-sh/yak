@@ -75,7 +75,12 @@ telemetry, once each time it falls: a full disk fails every write on it. The
 option names caches laid out by the absolute paths of the files they were made
 from, such as Deno's emit cache at `~/.cache/deno/gen/file`. Every hour the duty
 removes each of their directories whose own directory is gone, such as a
-worktree's after it was taken back.
+worktree's after it was taken back. The `caches` option gives cache files a
+program builds again when they are gone, each with the most bytes it may hold,
+such as `{ "~/.cache/deno/v8_code_cache_v2": 2000000000 }` (an absolute path).
+Every hour the duty removes each one past its budget, with the files named after
+it (`v8_code_cache_v2-wal`). Deno keys its code and dependency caches by each
+module's path, so every checkout adds a copy, and Deno never evicts one.
 
 The walk lists every directory and file holding at least a thousandth of the
 volume. The day's `occupancy` row keeps those paths beside the filesystem's

@@ -625,8 +625,14 @@ observations, foreign filesystem contexts and unknown placement never authorize
 removal. It checks idle time, dirty files, unlanded commits, session homes,
 launch workspaces and local process paths. A session's home keeps its checkout
 until the session settles, stops or fails. A home change alone does not remove
-files. Managed observations remain available to `restore`. The `idle` and
-`every` options set the idle threshold and pass interval.
+files. A worktree that still holds work (uncommitted files or unlanded commits)
+once Git has left it alone for `stale` (three days) is shelved by `shelve`: its
+uncommitted files are committed onto its branch, a detached HEAD gets a
+`shelf/<name>` branch, and the checkout is removed while the branch stays. One
+holding an untracked file of a megabyte or more is kept. Managed observations
+remain available to `restore`, which cuts a shelved checkout again from its
+branch. The `idle`, `stale` and `every` options set the idle threshold, the
+shelving threshold and the pass interval.
 
 `locate(cwd)` reads the canonical checkout root, common Git directory and
 worktree Git directory without writing to the graph. It returns no observation

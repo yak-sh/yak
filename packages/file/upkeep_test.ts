@@ -1,6 +1,6 @@
 import { equal, test } from '@yaks/testing'
 import type { FileInfo } from './io.ts'
-import { lows, prune, type Pruning } from './upkeep.ts'
+import { lows, prune, type Pruning, trim } from './upkeep.ts'
 import type { Disk } from './occupancy.ts'
 
 let G = 1e9
@@ -68,4 +68,28 @@ test('prune removes the mirror of each directory that is gone, and only it', asy
 
 test('a mirror that is not there prunes nothing', async () => {
   equal(await prune('/nowhere', undefined, computer([], []).fs), 0)
+})
+
+// A directory holding the files `sizes`, by name.
+let cached = (sizes: Record<string, number>) => {
+  let removed: string[] = []
+  let fs: Pruning = {
+    lstat: (path) =>
+      Promise.resolve({ size: sizes[String(path).slice(3)] } as FileInfo),
+    readDir: async function* () {
+      for (let name of Object.keys(sizes)) {
+        yield { name, isDirectory: false, isFile: true, isSymlink: false }
+      }
+    },
+    remove: (path) => (removed.push(String(path)), Promise.resolve()),
+  }
+  return { fs, removed }
+}
+
+test('trim removes a cache past its budget, with the files named after it', async () => {
+  let sizes = { c: 3 * G, 'c-wal': G, 'c-shm': 1, cc: 9 * G, other: 9 * G }
+  let { fs, removed } = cached(sizes)
+  equal(await trim('/d/c', 2 * G, fs), 4 * G + 1)
+  equal(removed, ['/d/c', '/d/c-wal', '/d/c-shm'])
+  equal(await trim('/d/c', 5 * G, cached(sizes).fs), 0)
 })

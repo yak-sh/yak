@@ -1,9 +1,18 @@
-/** Keeping a disk clear of full: telling when one runs low, and taking back
- * what a cache keeps for files that are gone. */
+/** Keeping a disk clear of full: telling when one runs low, taking back
+ * what a cache keeps for files that are gone, and dropping a cache that has
+ * grown past its budget. */
 import * as disk from './io.ts'
 import type { Disk } from './occupancy.ts'
 
 export type Pruning = Pick<typeof disk, 'lstat' | 'readDir' | 'remove'>
+
+/// partOf('v8_code_cache_v2', 'v8_code_cache_v2-wal') -> true
+/// partOf('v8_code_cache_v2', 'v8_code_cache_v2') -> true
+/// partOf('v8_code_cache_v2', 'v8_code_cache_v3') -> false
+/** Whether the file `name` is part of the cache file `cache`: the file
+ * itself, or one named after it, as a database's `-wal` and `-shm` are. */
+export let partOf = (cache: string, name: string): boolean =>
+  name == cache || name.startsWith(cache + '-')
 
 /// floorOf({ mount: '/', size: 1000, used: 0, free: 1000 }) -> 100
 /// floorOf({ mount: '/', size: 1000, used: 0, free: 1000 }, 300) -> 300
@@ -75,4 +84,38 @@ export let prune = async (
   }
   await visit('')
   return removed
+}
+
+/** Remove `cache`, a file its program builds again when it is gone (Deno's
+ * V8 code cache, keyed by each module's path, so every checkout adds a copy),
+ * with the files named after it, once together they hold more than `most`
+ * bytes. Returns the bytes removed. A process with it open keeps writing to
+ * what it opened, and the next one starts a new cache. */
+export let trim = async (
+  cache: string,
+  most: number,
+  fs: Pruning = disk,
+): Promise<number> => {
+  let slash = cache.lastIndexOf('/')
+  let dir = cache.slice(0, slash) || '/', name = cache.slice(slash + 1)
+  let parts: { path: string; size: number }[] = []
+  try {
+    for await (let entry of fs.readDir(dir)) {
+      if (!entry.isFile || !partOf(name, entry.name)) continue
+      let path = dir.replace(/\/+$/, '') + '/' + entry.name
+      let size = await fs.lstat(path).then((s) => s.size, () => 0)
+      parts.push({ path, size })
+    }
+  } catch (error) {
+    if (disk.isNotFound(error)) return 0
+    throw error
+  }
+  let held = parts.reduce((sum, p) => sum + p.size, 0)
+  if (held <= most) return 0
+  for (let { path } of parts) {
+    await fs.remove(path).catch((error) => {
+      if (!disk.isNotFound(error)) throw error
+    })
+  }
+  return held
 }
