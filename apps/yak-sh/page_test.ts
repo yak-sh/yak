@@ -108,7 +108,7 @@ test('the story types into the prompt and the drawing draws what it made', async
   match(screen, /\$ yak task new 'Add the sign-up page'/)
   match(screen, /agent → task_update/)
   let sheet = root.querySelector('.Figure_Sheet')!.innerHTML
-  for (let id of ['U-1', 'T-2', 'T-3', 'T-4', 'N-5', 'C-6']) {
+  for (let id of ['U-1', 'T-1', 'T-2', 'T-3', 'N-1', 'C-1']) {
     match(sheet, new RegExp(`>${id}<`))
   }
   match(sheet, />Build the checkout</)
@@ -139,7 +139,7 @@ test('each interface in the doors band makes its own change to the one graph, dr
     ['web', 'mcp', 'sh'],
   )
   let shown = doors.querySelector('.Window.is-last')!
-  match(shown.textContent!, /T-7 Fix the failing build open/)
+  match(shown.textContent!, /T-4 Fix the failing build open/)
   // The band draws what the top draws, and marks what the open window wrote.
   let drawn = (in_: Element, sel: string) =>
     [...in_.querySelectorAll(`${sel} .Diagram_Node`)]
@@ -152,7 +152,7 @@ test('each interface in the doors band makes its own change to the one graph, dr
   equal(!!doors.querySelector('.Doors_Wire path'), true)
   fire(doors.querySelector('.Window[data-door="mcp"]')!, 'click')
   await settle()
-  equal(root.querySelector('.Editor .Editor_Bar b')?.textContent, 'N-5')
+  equal(root.querySelector('.Editor .Editor_Bar b')?.textContent, 'N-1')
   fire(root.querySelector('.Editor .Editor_Bar button')!, 'click')
   await settle()
 })
@@ -203,8 +203,8 @@ test('in the rules band your inbox writes a question that holds up the build as 
   }
   let letters = () => page.yak.graph.read('.mail.target.decision .deliver *')
   let asked = await reach(1)
-  // The bands above ran first, so the build's fix is T-7 and this is T-8.
-  match(asked.said, /T-8 Which payments key should the build use\? open/)
+  // The bands above ran first, so the build's fix is T-4 and this is T-5.
+  match(asked.said, /T-5 Which payments key should the build use\? open/)
   equal(await letters(), [])
   await reach(2)
   let [letter] = await letters()
@@ -268,7 +268,7 @@ test('in the rules band your inbox writes a question that holds up the build as 
   )
   match(
     replied.said,
-    /Re: Which payments key.*The test key.*T-8 answered: The test key/,
+    /Re: Which payments key.*The test key.*T-5 answered: The test key/,
   )
   equal(
     [text(question, 'task', 'status'), text(question, 'decided', 'choice')],
@@ -302,7 +302,7 @@ test("in the memory band your words become a memory your agent's persona carries
     ['web', 'mcp', 'mcp', 'session'],
   )
   let started = memory.querySelector('.Window.is-last')!
-  match(started.textContent!, /wears N-5# N-5 Your agent.*# C-9/)
+  match(started.textContent!, /wears N-1# N-1 Your agent.*# C-3/)
   match(started.textContent!, new RegExp(said))
   equal(
     memory.querySelector('.is-told')?.getAttribute('data-key'),
@@ -401,10 +401,10 @@ test('an entity clicked in the drawing opens in the editor, and a value changed 
   )
   await settle()
   let editor = () => root.querySelector('.Editor')!
-  equal(editor().querySelector('.Editor_Bar b')?.textContent, 'T-3')
+  equal(editor().querySelector('.Editor_Bar b')?.textContent, 'T-2')
   match(editor().textContent!, /doc\{title, body\}/)
   let screen = () => root.querySelector('.Prompt_Screen')!.textContent!
-  match(screen(), /\$ graph show T-3/)
+  match(screen(), /\$ graph show T-2/)
   let title = editor().querySelector(
     '[aria-label="doc.title"]',
   ) as unknown as HTMLInputElement
@@ -416,13 +416,13 @@ test('an entity clicked in the drawing opens in the editor, and a value changed 
     (page.yak.row(account.entity.eid)!.doc as { title: string }).title,
     `Sign up for Ada's "payments"`,
   )
-  match(screen(), /\$ graph apply T-3 /)
+  match(screen(), /\$ graph apply T-2 /)
   let id = [...root.querySelectorAll('.Prompt_Id')].find((b) =>
-    b.textContent == 'T-2'
+    b.textContent == 'T-1'
   )!
   fire(id, 'click')
   await settle()
-  equal(editor().querySelector('.Editor_Bar b')?.textContent, 'T-2')
+  equal(editor().querySelector('.Editor_Bar b')?.textContent, 'T-1')
   fire(editor().querySelector('.Editor_Bar button')!, 'click')
   await settle()
   equal(root.querySelector('.Editor'), null)
@@ -435,7 +435,7 @@ test('an entity clicked in the drawing opens in the editor, and a value changed 
     await opened(root.querySelector('.Doors_Drawing .Diagram_Node text')!),
     'U-1',
   )
-  equal(await opened(root.querySelector('.Source .R[data-row] .c')!), 'T-3')
+  equal(await opened(root.querySelector('.Source .R[data-row] .c')!), 'T-2')
   page.page.close()
 })
 
@@ -465,7 +465,7 @@ test('the apply() band sends its letter as the source of its bundle, beside the 
   let source = stack.querySelector('.Source')!.textContent!
   match(source, /title: "Can you sign up for payments\?"/)
   match(source, /from: "hello@example.com"/)
-  match(source, /message_id: "outbox-1"/)
+  match(source, /message_id: "<1@outbox.yak.sh>"/)
   match(stack.querySelector('.Call')!.textContent!, /agent → graph_apply/)
   equal(
     [...stack.querySelectorAll('.Outbox li')].map((l) =>

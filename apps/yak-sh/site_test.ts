@@ -56,7 +56,7 @@ test('the story runs every step in order, typed and called, and the graph holds 
   equal((await y.graph.read('.requires .edge')).length, 1)
   let [comment] = await y.graph.read('.comment *')
   equal(at(comment, 'created.by'), y.agent)
-  match(printed(t), /T-3 Sign up for payments open/)
+  match(printed(t), /T-2 Sign up for payments open/)
   equal(at(y.row(SELF), 'doc.title'), 'This page is a graph you can change')
 })
 

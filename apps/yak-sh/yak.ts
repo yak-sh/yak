@@ -21,7 +21,7 @@ import {
 } from '@yaks/cli/grammar'
 import { registry } from '@yaks/cli/answer'
 import { show } from '@yaks/cli/terminal'
-import { human } from '@yaks/id'
+import { human, prefixes } from '@yaks/id'
 import * as kernelVocab from '@yaks/kernel/vocab'
 import * as kernelGraph from '@yaks/kernel/graph'
 import * as kernelTools from '@yaks/kernel/tools'
@@ -230,7 +230,13 @@ export let yak = async (
       report: (error) => globalThis.reportError(error),
     },
     actor: { by: you },
-    storage: (host) => ram(host.vocab, { number: { except: UNNUMBERED } }),
+    storage: (host) =>
+      ram(host.vocab, {
+        number: Object.fromEntries(
+          Object.entries(prefixes(host.vocab))
+            .filter(([c]) => !UNNUMBERED.includes(c)),
+        ),
+      }),
     effects: (host, disabled) =>
       effects(host.vocab, {
         disabled,
