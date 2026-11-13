@@ -38,6 +38,7 @@ import { sign } from './lib/token.ts'
 import { manage } from './manage.ts'
 import { operatorStore } from './operator-store.ts'
 import { endpoints } from './endpoints.ts'
+import { draftEid } from '@yaks/draft'
 
 let SECRET = 'a probe secret'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -671,4 +672,50 @@ test('an object takes the space and seat the kernel read, and reads them itself 
     await ask(seated(o.space, { person: ADA, role: 'viewer' })),
     await ask({}),
   ], [[200, 0], [403, 0], [200, 1]])
+})
+
+// The Operator page's own doors onto its store (operator-api.ts), through the
+// kernel as the person signed in: what one member writes there, another who
+// shares the space never reads.
+test('the Operator page reads and writes its store through the kernel as the person signed in', async () => {
+  let o = await seeded()
+  let BEA = crypto.randomUUID()
+  await dirOf(o.env).apply({
+    entities: [
+      { entity: { eid: BEA }, person: {} },
+      {
+        entity: { eid: crypto.randomUUID() },
+        member: { space: o.space.eid, person: BEA, role: 'editor' },
+      },
+    ],
+  }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
+  o.env.BUILDER = {
+    idFromName: (name) => name,
+    get: () => ({ fetch: (req: Request) => o.object.fetch(req) }),
+  }
+  let door = async (person: string, path: string, init: RequestInit = {}) =>
+    await manage(
+      new Request(`https://yaks.app/manage/ada/operator/${path}`, {
+        ...init,
+        headers: { cookie: await as(person), origin: 'https://yaks.app' },
+      }),
+      o.env,
+    )
+  let eid = draftEid(ADA, 'operator')
+  let wrote = await door(ADA, 'apply', {
+    method: 'POST',
+    body: JSON.stringify([{
+      entity: { eid },
+      draft: { by: ADA, place: 'operator', text: 'Plan the bake sale' },
+      typed: { over: '' },
+    }]),
+  })
+  let drafts = async (person: string) =>
+    (await (await door(person, 'query?q=.draft')).json() as {
+      draft: { text: string }
+    }[]).map((b) => b.draft.text)
+  assertEquals(wrote.status, 200)
+  await wrote.body?.cancel()
+  assertEquals(await drafts(ADA), ['Plan the bake sale'])
+  assertEquals(await drafts(BEA), [])
 })

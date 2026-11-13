@@ -101,6 +101,7 @@ import {
   NOBODY,
   NOT_A_WRITER,
   OWED,
+  paged,
   sayer,
   saying,
   seatOf,
@@ -223,9 +224,12 @@ export class Builder extends Durable {
   #sql: Driver
   #env: Env
   #operator?: Promise<import('./operator.ts').Operator>
-  // What a read of the Operator needs, made without it (`#stored`).
+  // What a read of the Operator needs, made without it (`#stored`), and its
+  // store's @yaks/api door (operator-api.ts).
   #store?: Promise<
-    Pick<import('./operator.ts').Operator, 'store' | 'named' | 'stop'>
+    Pick<import('./operator.ts').Operator, 'store' | 'named' | 'stop'> & {
+      door: ReturnType<typeof import('./operator-api.ts').operatorApi>
+    }
   >
   // What the pages watching the Operator are told, once it is at work.
   #frames?: ReturnType<typeof import('./operator-host.ts').operatorFrames>
@@ -624,7 +628,10 @@ export class Builder extends Durable {
         )
       }
     }
-    if (url.pathname.startsWith('/operator/')) {
+    // The Operator's store as its page reads it, through @yaks/api
+    // (operator-api.ts), asked as a person in the space, as `#operate` reads
+    // them.
+    if (url.pathname.startsWith('/operator/') || API.test(url.pathname)) {
       try {
         // A reply to the Operator's letter is the kernel's to bring (inbox.ts),
         // and is asked by no person.
@@ -728,6 +735,9 @@ export class Builder extends Durable {
       return this.#accept({ browser: true, person, space: spaceId }, request)
     }
     let read = await reading
+    if (API.test(new URL(request.url).pathname)) {
+      return read.door.answer(request, { person, space: spaceId })
+    }
     if (new URL(request.url).pathname == '/operator/call') {
       let { answering } = await import('./operator-calls.ts')
       return answering(
@@ -872,6 +882,16 @@ export class Builder extends Durable {
           () => this.#ctx.getWebSockets(),
           named,
         )
+        // Its pages' reads and writes through @yaks/api, whose sockets the
+        // runtime kept while the object was away are watching again.
+        let { operatorApi } = await import('./operator-api.ts')
+        let door = operatorApi(
+          store,
+          this.#ctx,
+          (e) => caught(e, { request: 'operator socket' }),
+        )
+        let woke = door.wake()
+        if (woke) woke.catch((e) => caught(e, { request: 'operator socket' }))
         // An incarnation takes up what the one before it left: a step a deploy
         // reset under its reply runs again at once, on the wake its first
         // request's caller sends once it has the answer (a page reconnecting,
@@ -882,6 +902,7 @@ export class Builder extends Durable {
         return {
           store,
           named,
+          door,
           // Stopping a task is the Operator's own.
           stop: async (task: string, by: string) =>
             (await this.#work()).stop(task, by),
@@ -931,14 +952,15 @@ export class Builder extends Durable {
   }
 
   // The sockets of pages watching a build (pages.ts `chat`), not the
-  // Operator's: a page watching the Operator, or a browser lent to it, is cut
-  // by a restart and joins again, and never holds this object on old code.
+  // Operator's: a page watching the Operator or reading its store, or a
+  // browser lent to it, is cut by a restart and joins again, and never holds
+  // this object on old code.
   #builds() {
     return this.#ctx.getWebSockets().filter((ws) => {
       let held = ws.deserializeAttachment() as
         | { operator?: boolean; browser?: boolean }
         | null
-      return !held?.operator && !held?.browser
+      return !held?.operator && !held?.browser && !paged(held)
     })
   }
 
@@ -1090,6 +1112,11 @@ export class Builder extends Durable {
   /** A frame from a page. The only one it may send is `{say}`. */
   override webSocketMessage(ws: Wire, data: string | ArrayBuffer): void {
     let held = ws.deserializeAttachment() as Socket | null
+    // A page reading the Operator's store through @yaks/api.
+    if (paged(held)) {
+      return void this.#stored().then(({ door }) => door.message(ws, data))
+        .catch((e) => caught(e, { request: 'operator socket' }))
+    }
     // A lent browser answers the calls asked of it (operator-browser.ts).
     if (held && 'browser' in held) return this.#lent.heard(held, data)
     // A page watching the Operator says nothing on its socket.
@@ -1109,6 +1136,10 @@ export class Builder extends Durable {
    * waiting out the person. */
   override webSocketClose(ws: Wire): void {
     let held = ws.deserializeAttachment() as Socket | null
+    if (paged(held)) {
+      return void this.#stored().then(({ door }) => door.close(ws))
+        .catch((e) => caught(e, { request: 'operator socket' }))
+    }
     if (held && 'browser' in held) this.#lent.gone(ws)
   }
 }
@@ -1133,6 +1164,11 @@ let unstopped = <T>(forget: () => void, make: () => Promise<T>): Promise<T> => {
   made.catch((e) => stopped(e) && forget())
   return made
 }
+
+// The doors of the Operator's store's @yaks/api (operator-api.ts), outside
+// `/operator/`: an object on code from before them reads none of them as an
+// Operator request it would run.
+let API = /^\/api\/(apply|query|ws)$/
 
 let no = (status: number, message: string) =>
   Response.json({ error: 'Refused', message }, { status })

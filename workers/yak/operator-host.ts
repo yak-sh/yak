@@ -8,7 +8,7 @@ import { enqueue } from '@yaks/effects'
 import { derivedEid } from '@yaks/graph/identity'
 import { sha256 } from '@yaks/graph/sha256'
 import { short } from '@yaks/id'
-import { ownerOf, owns } from './operator-access.ts'
+import { ownerOf, owns, placed } from './operator-access.ts'
 import type { Held } from './build-door.ts'
 import type { Copy } from './operator-skills.ts'
 import type { Operator } from './operator.ts'
@@ -1473,11 +1473,9 @@ export let operatorRequest = async (
       status: 404,
     })
   let allowedDrafts = async (bundles: Bundle[]) => {
-    let allowed = await Promise.all(bundles.map(async (b) => {
-      let place = placeOf(b)
-      return place == 'operator' || place == 'operator:new' ||
-        await own(place.slice('operator:'.length))
-    }))
+    let allowed = await Promise.all(
+      bundles.map((b) => placed(store, placeOf(b), held)),
+    )
     return bundles.filter((_, i) => allowed[i])
   }
   // The platform's admin, inspecting: every person's conversations, each

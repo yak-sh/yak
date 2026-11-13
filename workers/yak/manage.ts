@@ -210,7 +210,7 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     person,
     view == 'operator' || view == 'updates',
   )
-  if (req.method == 'GET' || req.method == 'HEAD') {
+  if ((req.method == 'GET' || req.method == 'HEAD') && !at.door) {
     // The page drawn on the dashboard, not a conversation in the chat app
     // or one of the space's files.
     let drawn = !at.open && !at.logo && !at.manifest
@@ -260,7 +260,7 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
   // Any other page of the space wakes its Operator for a member who talks to
   // it, so the chat they open next finds it up (build-door.ts `woken`); the
   // chat and Updates ask it themselves.
-  let asks = view == 'updates' || view == 'operator' && at.open
+  let asks = view == 'updates' || view == 'operator' && (at.open || at.door)
   if (
     reading && !asks && writes(who.role) && !administrative && !space.trashed
   ) {
@@ -276,7 +276,10 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     return updatesPage(env, space, who, await beside(dir, space, who))
   }
   if (view == 'operator' && writes(who.role) && !space.trashed) {
-    let { chatPage, operatorAnswer } = await import('./operator-page.ts')
+    let { chatPage, operatorAnswer, storeAnswer } = await import(
+      './operator-page.ts'
+    )
+    if (at.door) return storeAnswer(req, env, space, who, at.door)
     if (at.open && !new URL(req.url).searchParams.has('attachment')) {
       return reading
         ? chatPage(

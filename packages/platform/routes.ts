@@ -140,15 +140,32 @@ let MANIFEST = 'manifest.webmanifest'
  * `installing`). */
 export let manifestPath = (space: string) =>
   `${MANAGE}/${encodeURIComponent(space)}/${MANIFEST}`
+/** The doors of a space's Operator store, as @yaks/api names them, under its
+ * Operator's own path: `/manage/<space>/operator/query`.
+ *
+ * ```ts
+ * import { managed } from '@yaks/platform/routes'
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(managed('/manage/ada/operator/ws'), {
+ *   space: 'ada',
+ *   view: 'operator',
+ *   door: 'ws',
+ * })
+ * ```
+ */
+export type StoreDoor = 'apply' | 'query' | 'ws'
+let STORE_DOORS: string[] = ['apply', 'query', 'ws'] satisfies StoreDoor[]
 /** What a manage path asks for: an account page, a space's page (a new chat
- * with its Operator when none is named), its logo's bytes, or an address from
- * before T-136122 (`legacy`), to be sent on. Null is no page. */
+ * with its Operator when none is named), a door of its Operator's store, its
+ * logo's bytes, or an address from before T-136122 (`legacy`), to be sent
+ * on. Null is no page. */
 export type Managed =
   | { account: AccountView }
   | {
     space: string
     view: SpaceView
     open?: string
+    door?: StoreDoor
     logo?: string
     manifest?: true
   }
@@ -158,8 +175,12 @@ export let managed = (path: string): Managed | null => {
   if (!(path == MANAGE || path.startsWith(`${MANAGE}/`))) return null
   let [one, two, ...rest] = path.slice(MANAGE.length).split('/')
     .filter(Boolean)
-  // An Operator conversation, on a page of its own (`chatPath`).
+  // An Operator conversation, on a page of its own (`chatPath`), or a door
+  // of its store.
   if (two == 'operator' && rest.length == 1 && SLUG.test(one)) {
+    if (STORE_DOORS.includes(rest[0])) {
+      return { space: one, view: 'operator', door: rest[0] as StoreDoor }
+    }
     return OPEN.test(rest[0])
       ? { space: one, view: 'operator', open: rest[0] }
       : null

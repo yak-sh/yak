@@ -1,4 +1,5 @@
-import type { Graph, ReadOpts } from '@yaks/graph'
+import type { Bundle, Graph, ReadOpts } from '@yaks/graph'
+import { draftEid } from '@yaks/draft'
 import type { Meta } from '@yaks/sqlite'
 import { absent, and, eq, or } from '@yaks/query/core'
 import { MADE, ON, OWNED, OWNERS } from './operator-owner.ts'
@@ -129,19 +130,25 @@ export let owned = (store: { g: Graph; marks?: Pick<Meta, 'get'> }) => {
   return true
 }
 
-/** The Operator's store as `person` reads it: what is another person's
- * there is out of sight, wherever a read reaches it from. The memories, tasks
- * and persona nobody owns stay in view. Only its reads are narrowed; a write
- * goes to the store as it stands. A store whose owners are not all written
- * yet is read by the paths they are named on. */
+/** What `person` reads the Operator's store with: what is another person's
+ * there is out of sight, wherever a read reaches it from, and the memories,
+ * tasks and persona nobody owns stay in view. A store whose owners are not
+ * all written yet is read by the paths they are named on. */
+export let sight = (
+  store: { g: Graph; marks?: Pick<Meta, 'get'> },
+  person: string,
+): ReadOpts => ({
+  visibility: { entity: owned(store) ? theirs(person) : claimed(person) },
+})
+
+/** The Operator's store as `person` reads it (`sight`). Only its reads are
+ * narrowed; a write goes to the store as it stands. */
 export let seenBy = (
   store: { g: Graph; marks?: Pick<Meta, 'get'> },
   person: string,
 ): Graph => {
   let { g } = store
-  let visibility = {
-    entity: owned(store) ? theirs(person) : claimed(person),
-  }
+  let { visibility } = sight(store, person)
   let narrow = (opts?: ReadOpts): ReadOpts => ({ ...opts, visibility })
   return {
     ...g,
@@ -149,5 +156,57 @@ export let seenBy = (
     rows: (query, opts) => g.rows(query, narrow(opts)),
     get: (eids, comps, opts) => g.get(eids, comps, narrow(opts)),
     view: (query, opts) => g.view(query, narrow(opts)),
+  }
+}
+
+/** A write a person may not make, answered 403 (@yaks/graph `STATUS`). */
+export class Denied extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'Denied'
+  }
+}
+
+/** Whether `place` keeps a draft of `who`'s: their conversation, a new one,
+ * or one of theirs by its key (`operator:<conversation>`). */
+export let placed = async (store: Store, place: string, who: Owner) =>
+  place == 'operator' || place == 'operator:new' ||
+  place.startsWith('operator:') &&
+    await owns(store, place.slice('operator:'.length), who)
+
+// Whether a bundle carries nothing beside its entity, its writer, its
+// preconditions and these components.
+let only = (b: Bundle, ...names: string[]) =>
+  Object.keys(b).every((k) =>
+    k == 'entity' || k == '$actor' || k == '$was' || names.includes(k)
+  )
+
+/**
+ * What `who` may write to the Operator's store themselves, the rest of it
+ * being the Operator's to write: their own draft (@yaks/draft, at its eid for
+ * them and its place) where it is theirs to keep (`placed`), and the archive
+ * mark on a line of a conversation of theirs. Anything else refuses the whole
+ * batch, alike whether what it names is there or not.
+ */
+export let mayWrite = async (store: Store, who: Owner, bundles: Bundle[]) => {
+  let one = async (b: Bundle) => {
+    let draft = b.draft as { by?: unknown; place?: unknown } | undefined
+    if (draft && only(b, 'draft', 'typed')) {
+      let place = String(draft.place ?? '')
+      return draft.by == who.person &&
+        b.entity.eid == draftEid(who.person, place) &&
+        await placed(store, place, who)
+    }
+    if (b.archived !== undefined && only(b, 'archived')) {
+      let [line] = await store.g.get([b.entity.eid], ['entry'])
+      return !!line?.entry && await owns(store, b.entity.eid, who)
+    }
+    return false
+  }
+  if (!(await Promise.all(bundles.map(one))).every(Boolean)) {
+    throw new Denied(
+      'Only your own drafts, and the archive marks on the lines of your own ' +
+        'conversations, are yours to write here.',
+    )
   }
 }

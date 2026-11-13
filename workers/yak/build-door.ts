@@ -23,6 +23,12 @@ export type Held = {
   opens?: string
 }
 
+/** Whether a socket's attachment is one its Operator store's @yaks/api door
+ * holds (operator-api.ts): the read it was opened with, as
+ * @yaks/durable-object's `sockets` keeps it, rather than a `Held`. */
+export let paged = (attached: unknown): boolean =>
+  !!attached && typeof attached == 'object' && 'read' in attached
+
 /** The header the kernel names the space with at the handshake — the object's
  * own name is that eid, and this is how it learns it. */
 export let SPACE = 'x-space-eid'

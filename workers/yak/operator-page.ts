@@ -47,6 +47,7 @@ import {
   MANAGE,
   managePath,
   manifestPath,
+  type StoreDoor,
 } from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
 import { PLATFORM_BACKGROUND } from './apps.ts'
@@ -1000,6 +1001,55 @@ let socketTo = (
     }
     return out
   })
+
+/**
+ * A door of the space's Operator store as @yaks/api answers it, `/apply`,
+ * `/query` or `/ws` under the Operator's path, asked by its page as `who`:
+ * carried to the space's object with the kernel's vouch on it, as a socket is
+ * (`socketTo`), where the store reads to them only what is theirs
+ * (operator-api.ts). A write is read whole first, so the door can send it
+ * again across a reset. An object still on the code before these doors
+ * answers them as missing for a moment after a deploy, which is said as a
+ * wait to ask again.
+ */
+export let storeAnswer = async (
+  req: globalThis.Request,
+  env: Env,
+  space: Space,
+  who: Who,
+  door: StoreDoor,
+): Promise<Response> => {
+  let path = '/api/' + door + new URL(req.url).search
+  if (door == 'ws') {
+    return upgrading(req)
+      ? socketTo(env, space, req, who, path)
+      : new Response("This is the Operator store's WebSocket.", {
+        status: 426,
+      })
+  }
+  let body = req.method == 'POST' ? await req.text() : undefined
+  let answer = await builderOf(env, space.eid)(() => {
+    let { method, headers } = req
+    let out = carried(
+      `https://builder${path}`,
+      new Request(req.url, { method, headers, body }),
+    )
+    for (let [h, v] of Object.entries(seated(space, who))) {
+      out.headers.set(h, v)
+    }
+    return out
+  })
+  if (answer.status != 404) {
+    let kept = new Response(answer.body, answer)
+    kept.headers.set('cache-control', 'private, no-store')
+    return kept
+  }
+  await answer.body?.cancel()
+  return Response.json({
+    error: 'Unavailable',
+    message: 'Your Operator is starting on new code. Ask again in a moment.',
+  }, { status: 503, headers: { 'retry-after': '5' } })
+}
 
 /** One conversation, opened by its task or a request: its sessions as they
  * ran (operator-view.ts `talk`), or the request alone while no session has
