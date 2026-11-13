@@ -135,6 +135,21 @@ test('a variable binds through references to what they reach', () => {
   )
 })
 
+test("an entity's eid binds as a plain value, as text that names it does", () => {
+  let { driver, s } = floor()
+  // A review names its product's eid as text in its title, and the product's
+  // reference meets it through the eid it reaches.
+  s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, doc: { title: 'p1' } }]))
+  assertEquals(
+    matched(
+      driver,
+      match('$r .review, doc.title=$p; .review, review.product.entity.eid=$p'),
+      shop,
+    ).map((row) => row.vars),
+    [{ r: 'r1', p: 'p1' }],
+  )
+})
+
 test('a top-level collection has one outer binding, even when empty', () => {
   let { driver } = floor()
   assertEquals(matched(driver, match('[.review.stars>10]'), shop), [{

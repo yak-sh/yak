@@ -201,7 +201,10 @@ export let rule = (
       let hops = vocab.aim(path)
       let leaf = hops[hops.length - 1]
       if (!leaf?.prop) throw new Error(`$${b.name} names no property: .${path}`)
-      let def = vocab.prop(leaf.comp, leaf.prop)
+      // An entity's eid is a plain value, so a variable that names one as
+      // text (`document.blob`, say) meets it there.
+      let eid = leaf.comp == 'entity' && leaf.prop == 'eid'
+      let def = eid ? { category: 'value' } : vocab.prop(leaf.comp, leaf.prop)
       if (!def) {
         throw new Error(`no property ${leaf.comp}.${leaf.prop} for $${b.name}`)
       }
