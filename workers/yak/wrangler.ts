@@ -25,6 +25,7 @@ import { from as sources, plan } from './sheet-assets.ts'
 import { once, sleep } from '@yaks/fp'
 import {
   command,
+  DEPLOY_ATTEMPTS,
   noted,
   retried,
   type StepResult,
@@ -182,7 +183,8 @@ let deploying = (args: string[]) =>
 
 /** Run one Wrangler step, keeping its arguments and exit code. The command
  * boundary supplies diagnostics; the timer and signal belong to the caller.
- * Deploys get three attempts; permanent failures and other commands get one.
+ * Deploys get {@link DEPLOY_ATTEMPTS}; permanent failures and other commands
+ * get one.
  * Each attempt that would change what serves first asks `allowed`, the deploy
  * guard as it stands then; one it refuses deploys nothing and exits 0. */
 export let runStep = async (
@@ -199,7 +201,7 @@ export let runStep = async (
     if (signal?.aborted) return { code: 130, output: '' }
     if (promotes && allowed && !await allowed()) return { code: 0, output: '' }
     return await execute(args)
-  }, { wait, signal, attempts: deploying(args) ? 3 : 1 })
+  }, { wait, signal, attempts: deploying(args) ? DEPLOY_ATTEMPTS : 1 })
   return code
 }
 
@@ -1495,7 +1497,10 @@ if (import.meta.main) {
       ? stagedDeploy(
         args,
         (args) =>
-          retried(args, () => spawned(args), { signal: stopped.signal }),
+          retried(args, () => spawned(args), {
+            signal: stopped.signal,
+            attempts: DEPLOY_ATTEMPTS,
+          }),
         run,
         door.declined,
       )

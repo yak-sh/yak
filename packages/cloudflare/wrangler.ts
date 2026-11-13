@@ -101,6 +101,13 @@ export let failure = (args: string[], result: StepResult): Error => {
   )
 }
 
+/** How many times a deploy runs Wrangler through a Cloudflare API outage.
+ * The waits between them double from 1 s and add up to 8.5 minutes, and a
+ * failing upload takes about 35 s more each, so a deploy outlasts an outage
+ * of about 14 minutes, inside the Workers Build's 20. Cloudflare's versions
+ * endpoint has answered 10013 for longer than 8 minutes at a time. */
+export let DEPLOY_ATTEMPTS = 10
+
 /** Run Wrangler until it succeeds, fails for good, or a passing Cloudflare
  * API outage outlasts `attempts`, each retry waiting longer than the last. An
  * interrupted run (130, 143) is never retried; `execute` sees an aborted

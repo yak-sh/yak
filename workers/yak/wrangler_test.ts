@@ -65,6 +65,26 @@ test('a Wrangler step retries a Cloudflare gateway failure with the same upload 
   assert(waits.length == 1 && waits[0] > 0)
 })
 
+test('a Wrangler deploy outlasts minutes of Cloudflare API failures, and another command tries once', async () => {
+  let run = async (args: string[], fails: number) => {
+    let calls = 0, waited = 0
+    let code = await runStep(args, () =>
+      Promise.resolve({
+        code: ++calls <= fails ? 1 : 0,
+        output: apiFailure,
+        log: `${responseLog(500)}\n${apiFailure}`,
+      }), {
+      wait: (ms) => {
+        waited += ms
+        return Promise.resolve()
+      },
+    })
+    return { code, calls, minutes: Math.floor(waited / 60_000) }
+  }
+  assertEquals(await run(['deploy'], 9), { code: 0, calls: 10, minutes: 8 })
+  assertEquals(await run(['whoami'], 1), { code: 1, calls: 1, minutes: 0 })
+})
+
 for (let status of [500, 502, 503, 504, 524, 599]) {
   test(`a Wrangler deploy retries a JSON API ${status} with no HTTP status on the console`, async () => {
     let calls = 0
@@ -234,9 +254,9 @@ test('persistent API failure stops after bounded waits and returns the final exi
       return Promise.resolve()
     },
   })
-  assertEquals({ code, calls }, { code: 9, calls: 3 })
-  assertEquals(waits.length, 2)
-  assert(waits.every((ms) => ms > 0) && waits[1] > waits[0])
+  assertEquals({ code, calls }, { code: 16, calls: 10 })
+  assertEquals(waits.length, 9)
+  assert(waits.every((ms, i) => ms > (waits[i - 1] ?? 0)))
 })
 
 test('each retry uses only its own diagnostics and a permanent second failure stops the step', async () => {
