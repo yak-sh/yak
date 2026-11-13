@@ -12,6 +12,7 @@ import { starter } from '../packages/cli/init.ts'
 import { lifecycle } from '../packages/session/hooks.ts'
 import { sessionEid } from '../packages/session/who.ts'
 import { PATH } from '../packages/session/routes.ts'
+import { human } from '../packages/id/id.ts'
 import { selected } from './selected.ts'
 
 export let HOOK_WAITS = [
@@ -76,6 +77,7 @@ export async function measure(
     await Deno.writeTextFile(configPath, JSON.stringify(config))
     host = await compose(read(configPath), ['graph', 'web'])
     let graph = host.graph
+    let id = human(host.vocab)
     await graph.apply([{
       entity: { eid: person },
       person: {},
@@ -165,9 +167,10 @@ export async function measure(
               [sessionEid('bench-child', f.runner)],
               ['session', 'spawned'],
             )
+            // The reply names the child as everything displays it: S-18.
             if (
               (child?.spawned as Comp)?.parent != f.session ||
-              !JSON.stringify(answer).includes('bench-child')
+              !JSON.stringify(answer).includes(id(child))
             ) {
               throw new Error(
                 'SubagentStart did not create and return its child session',
