@@ -224,7 +224,9 @@ export let Cost = () => (
   </section>
 )
 
-let arrow = (glyph: string) => <span aria-hidden='true'>{glyph}</span>
+/** A link's arrow, which a screen reader skips: the slot `arrow` of a
+ * snippet. */
+export let arrow = (glyph: string) => <span aria-hidden='true'>{glyph}</span>
 
 export let Home = () => (
   <Page

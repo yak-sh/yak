@@ -158,6 +158,46 @@
     "description": "Describe the app you need, like a sign-up sheet, a price list or a member directory, and yaks.app builds it and puts it online at its own address. Free to start.",
     "examples": {
       "note": "Each of these apps runs on yaks.app. Open one to try it, or get a copy of your own and ask for changes. %{gallery}."
+    },
+    "hello": {
+      "kicker": "Web apps, built for you",
+      "title": "Describe the app you need, and yaks.app builds it.",
+      "lead": "Like a sign-up sheet, a price list or a member directory. It works on any phone, and you share it with a link.",
+      "hint": "What do you need, and who is it for?",
+      "note": "Free for 5 apps. %{examples}"
+    },
+    "does": {
+      "title": "What every app can do",
+      "saves": {
+        "term": "It saves what people enter",
+        "detail": "Names, notes and photos are kept, and everyone sees the same thing on any phone or computer."
+      },
+      "opens": {
+        "term": "You choose who can open it",
+        "detail": "Share it with anyone who has the link, or make it private, so only the people you invite can sign in. Inviting people is free."
+      },
+      "yours": {
+        "term": "What is in it stays yours",
+        "detail": "Ask for everything in an app as a spreadsheet, or delete it, whenever you like."
+      }
+    },
+    "how": {
+      "describe": {
+        "name": "Describe it",
+        "detail": "Type what you need in the box above."
+      },
+      "builds": {
+        "name": "Your Operator builds it",
+        "detail": "Your Operator is an AI helper that does the work. It builds the app and puts it online while you watch. Open it on your phone or computer, or send its link to the people it's for."
+      },
+      "change": {
+        "name": "Change it by asking",
+        "detail": "Want a new column, a new page or a fix? Tell your Operator in plain words, by chat on yaks.app or by email. Give it your mobile number, and you can text it or call it."
+      }
+    },
+    "join": {
+      "title": "What app do you need?",
+      "go": "Describe it"
     }
   },
   "operator": {
@@ -166,6 +206,68 @@
     "description": "Get an Operator that builds apps for you. Tell it what you need, and it builds the app and puts it online at your own address.",
     "examples": {
       "note": "Your Operator can make apps like these. Open one to try it. %{gallery}."
+    },
+    "hello": {
+      "kicker": "An Operator that does things for you",
+      "note": "Tell it what you need, and it builds the app and puts it online at your own address. Free to start, or %{price} for more.",
+      "price": "$9 a month"
+    },
+    "text": {
+      "label": "Enter your mobile number to get an Operator that builds apps for you.",
+      "placeholder": "269-555-0142",
+      "send": "Text me a code",
+      "hint": "We'll text a sign-in code to this number. Msg & data rates may apply. Reply STOP to opt out, HELP for help. Terms: %{terms} Privacy: %{privacy}",
+      "terms": "yaks.app/terms",
+      "privacy": "yaks.app/privacy",
+      "first": {
+        "name": "We text you a code",
+        "detail": "Type its six digits on the next page. There is no password to make and nothing to install."
+      },
+      "again": "Start with your number"
+    },
+    "email": {
+      "label": "Enter your email to get an Operator that builds apps for you.",
+      "placeholder": "you@example.com",
+      "send": "Email me a code",
+      "hint": "We email you a six-digit code. There is no password to make.",
+      "first": {
+        "name": "We email you a code",
+        "detail": "Type its six digits on the next page, or press the link in the email. There is no password to make and nothing to install."
+      },
+      "again": "Start with your email"
+    },
+    "how": {
+      "title": "From your first step to your first app",
+      "meet": {
+        "name": "You meet your Operator",
+        "detail": "You land in your own space, an address like %{yours} where your apps live, in a chat with your Operator."
+      },
+      "ask": {
+        "name": "Ask for the app you want",
+        "detail": "Like a chore chart for your household. Your Operator builds it and puts it online. Open it on any phone or computer, or send its link to the people it's for."
+      }
+    },
+    "does": {
+      "title": "What your Operator does for you",
+      "changes": {
+        "term": "It changes and fixes your apps",
+        "detail": "Ask for a new feature or a fix any time, and your Operator makes the change."
+      },
+      "calls": {
+        "term": "You can text it or call it",
+        "detail": "Agree to texts in its settings, then text or call your Operator from your phone. It texts you when it finishes a change or needs an answer from you."
+      },
+      "share": {
+        "term": "Share anything it does or builds",
+        "detail": "Keep an app to yourself, share it with a link, or invite people to view or edit it, free."
+      }
+    },
+    "cost": {
+      "title": "Free to start, $9 a month for more",
+      "note": "Your first space is free, with 5 apps and your Operator. The Plus plan is $9 a month for each space, with unlimited apps and your own domain. %{plans}."
+    },
+    "join": {
+      "title": "What would you like your Operator to make?"
     }
   },
   "churches": {
@@ -375,7 +477,108 @@
   "townships": {
     "name": "AI for townships — a Michigan township website that drafts the board's minutes as it meets",
     "title": "AI for townships — a Michigan township website that drafts the board's minutes as it meets",
-    "description": "A website for a Michigan township: meetings, documents and notices, proposed minutes drafted from the meeting as it happens, and the dates the Open Meetings Act makes them due. Work out any meeting's notice and minutes deadlines on the page."
+    "description": "A website for a Michigan township: meetings, documents and notices, proposed minutes drafted from the meeting as it happens, and the dates the Open Meetings Act makes them due. Work out any meeting's notice and minutes deadlines on the page.",
+    "hello": {
+      "kicker": "For Michigan townships",
+      "title": "A township website that drafts the board's minutes as it meets",
+      "lead": "Meetings, documents and notices for residents, and proposed minutes ready for the clerk to correct a few minutes after the board adjourns.",
+      "get": "Get your township's copy",
+      "sample": "See a sample township's site %{arrow}",
+      "note": "Free to start. It is a new site at an address of its own, and the site your township has now isn't changed."
+    },
+    "dues": {
+      "title": "When a meeting's notice and minutes are due",
+      "note": "Michigan's Open Meetings Act sets three dates:",
+      "law": {
+        "proposed": "Proposed minutes are available to the public within 8 business days after the meeting (%{cite}).",
+        "approved": "Approved minutes are available within 5 business days after the meeting that approves them (%{cite}).",
+        "notice": "A special meeting, or a regular one moved to a new date, is noticed at least 18 hours before it starts (%{cite})."
+      },
+      "cite": {
+        "minutes": "MCL 15.269",
+        "notice": "MCL 15.265"
+      },
+      "ask": "Type a meeting's date to see its dates",
+      "day": "The meeting's date",
+      "time": "The time it starts %{optional}",
+      "optional": "(for its notice)",
+      "zone": "Time zone",
+      "zones": {
+        "eastern": "Eastern",
+        "central": "Central"
+      },
+      "special": "It is a special meeting, or a regular one moved to a new date",
+      "hint": "Business days skip weekends and Michigan's legal holidays. These are the dates the township site works out on every meeting's page, by the same calculation, and nothing you type here is sent to us.",
+      "said": {
+        "proposed": "Proposed minutes: available by %{day}, 8 business days after the meeting (MCL 15.269).",
+        "approved": "Minutes this meeting approves: available by %{day}, 5 business days after it (MCL 15.269).",
+        "notice": "Notice: posted by %{hour}, 18 hours before the meeting starts (MCL 15.265).",
+        "untimed": "Notice: type the time it starts to see when it must be posted."
+      }
+    },
+    "site": {
+      "title": "What residents find on the site",
+      "meetings": {
+        "term": "Every board's meetings",
+        "detail": "Each with its agenda and minutes beside it, on a calendar residents can add to their own phones."
+      },
+      "search": {
+        "term": "Search inside the documents",
+        "detail": "Agendas, minutes, budgets and ordinances as PDFs, and a search that reads inside them and opens the page a word is on."
+      },
+      "notices": {
+        "term": "Notices",
+        "detail": "Special meetings and notices on the home page, and the board's minutes emailed to residents who ask for them. %{sample}"
+      },
+      "sample": "Open the sample site %{arrow}"
+    },
+    "how": {
+      "title": "Minutes drafted as the board meets",
+      "record": {
+        "name": "Press Record when the meeting starts",
+        "detail": "Press it on the meeting's page, on a laptop or phone in the room. The words appear as they are said. Pause during a closed session: nothing is heard or kept while paused. A meeting recorded on something else can be uploaded afterwards."
+      },
+      "draft": {
+        "name": "The draft fills in as the meeting goes",
+        "detail": "Each motion, who moved and seconded it and how it ended, and each member's vote on a roll call. Name the voices, and the draft says who spoke. Whatever the recording doesn't make plain is left blank and marked unsure."
+      },
+      "post": {
+        "name": "The clerk corrects it and posts it",
+        "detail": "Play any line back from the recording, fix what needs it, and post the draft as the proposed minutes: residents read them on the meeting's page, and those who asked are emailed them. Once the board approves them, the clerk marks them approved. Nothing is posted without the clerk."
+      },
+      "keep": {
+        "name": "The recording is kept as long as the law says",
+        "detail": "Michigan's records schedule for townships keeps a recording made for minutes until they are approved, plus one day (General Schedule 25, item 25.201). Then the page offers to delete it, and nothing is deleted unless the clerk chooses to."
+      },
+      "note": "Only the township's editors hear the recordings and see the drafts."
+    },
+    "clerk": {
+      "title": "Due dates on every meeting, and an assistant for the rest",
+      "due": {
+        "term": "Each meeting's page says what is due",
+        "detail": "“Proposed minutes due Friday, Nov 20”, counted from the meeting, and “posted” once they are."
+      },
+      "reminder": {
+        "term": "A reminder before a date is missed",
+        "detail": "Three business days before minutes are due and not yet posted, the township's assistant emails the clerk. It reminds, and blocks nothing."
+      },
+      "assistant": {
+        "term": "An assistant that keeps the site",
+        "detail": "Email or chat with it to put a meeting on the calendar, call one off, post a notice or add minutes someone sent as a file. It makes the change and writes back. On yaks.app it is called the Operator."
+      }
+    },
+    "cost": {
+      "title": "Free to start, with your own domain on a plan",
+      "space": "Your township's copy lives in a space: its address on yaks.app, like %{yours}, its apps and the people you invite to edit them. The site, the minutes and the reminders work on the free plan. Your own domain, like %{domain}, is on the Plus plan at $9 a month. The Pro plan, at $49 a month or $490 a year, adds a larger AI budget and support.",
+      "domain": "yourtownship.org",
+      "meeting": "Recording a two-hour meeting live uses about $1.25 of AI, from the space's monthly AI budget: $20 on the free plan and $60 on the Pro plan. Nothing is charged beyond the plan's price unless the space's owner buys more AI credit on the Pro plan, up to a monthly cap they set.",
+      "links": "%{plans}. %{behind}.",
+      "behind": "Who is behind yaks.app, and who fixes its mistakes"
+    },
+    "join": {
+      "title": "Start your township's site",
+      "note": "Free to start, with a sign-in by email."
+    }
   },
   "pricing": {
     "name": "Pricing: your first space is free, and the Plus plan is $9 a month",

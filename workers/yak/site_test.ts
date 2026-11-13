@@ -930,6 +930,21 @@ test('the townships page installs the township app and counts with its own funct
   ) assertStringIncludes(text, said)
 })
 
+// The pages a home page is split with say the free plan's apps and the Plus
+// plan's price in their own copy, as the code holds a space to them.
+test('the split home pages quote the free apps and the Plus price the code holds', () => {
+  let apps = `${FREE.apps} apps`, plus = `$${PRICE.plus} a month`
+  for (
+    let [key, said] of [
+      ['build.hello.note', `Free for ${apps}.`],
+      ['operator.hello.price', plus],
+      ['operator.cost.title', plus],
+      ['operator.cost.note', `with ${apps}`],
+      ['operator.cost.note', `The Plus plan is ${plus}`],
+    ]
+  ) assertStringIncludes(copied(key), said, key)
+})
+
 test('the plan pages quote the prices the offers name, and no other', () => {
   let charged = new Set([...Object.values(PRICE), ...Object.values(YEARLY)])
   for (

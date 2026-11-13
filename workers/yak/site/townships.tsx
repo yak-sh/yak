@@ -16,8 +16,9 @@
 // search and the notices in its site.js.
 import { Button, Card, Check, Field, Form } from '@yaks/ui'
 import { installAt } from '@yaks/platform/routes'
-import { BUDGET, PRICE, YEARLY } from '../meter.ts'
+import { type Slots, text } from './copy.ts'
 import { Page, Yours } from './frame.tsx'
+import { arrow } from './home.tsx'
 
 /** Where the page lives. */
 export let PATH = '/townships'
@@ -35,7 +36,8 @@ export let DUES = `${SAMPLE}deadlines.js`
 /** About what recording a two-hour meeting live costs in AI, in dollars:
  * Deepgram's Nova-3 hearing it with its speakers told apart, $0.0097 a
  * minute (@yaks/speech DEEPGRAM), $1.16 for two hours, and the drafts of its
- * minutes made as it goes. */
+ * minutes made as it goes. The page says it in its copy
+ * (`townships.cost.meeting`), which site_test.ts holds to this. */
 export let MEETING = 1.25
 
 /** The statutes the page cites, where the state publishes them. */
@@ -44,9 +46,38 @@ let LAW = {
   notice: 'https://www.legislature.mi.gov/Laws/MCL?objectName=mcl-15-265',
 }
 
-let Cite = ({ law, said }: { law: keyof typeof LAW; said: string }) => (
-  <a href={LAW[law]}>{said}</a>
+/** The dates the Open Meetings Act sets, each by the statute that sets it. */
+let RULES = {
+  proposed: 'minutes',
+  approved: 'minutes',
+  notice: 'notice',
+} as const
+
+// A statute, linked to where the state publishes it.
+let cite = (law: keyof typeof LAW) => (
+  <a href={LAW[law]} {...text(`townships.dues.cite.${law}`)} />
 )
+
+// What the app does for a township, each a term and its detail under
+// `townships.<group>.<item>`, filling the detail's slots.
+let Terms = (
+  { group, items }: { group: string; items: Record<string, Slots> },
+) => (
+  <dl class='Yours_List'>
+    {Object.entries(items).map(([item, slots]) => (
+      <div>
+        <dt class='Yours_Term' {...text(`townships.${group}.${item}.term`)} />
+        <dd
+          class='Yours_Detail'
+          {...text(`townships.${group}.${item}.detail`, slots)}
+        />
+      </div>
+    ))}
+  </dl>
+)
+
+// A link to the sample township's site, its arrow after its words.
+let sample = (key: string) => text(key, { arrow: arrow('↗') })
 
 export let Townships = () => (
   <Page
@@ -62,228 +93,168 @@ export let Townships = () => (
   >
     <section class='Hello' aria-labelledby='hello'>
       <div class='Hello_Copy'>
-        <p class='Hello_Kicker'>For Michigan townships</p>
-        <h1 class='Title Title-hero' id='hello'>
-          A township website that drafts the board's minutes as it meets
-        </h1>
-        <p class='Note'>
-          Meetings, documents and notices for residents, and proposed minutes
-          ready for the clerk to correct a few minutes after the board adjourns.
-        </p>
+        <p class='Hello_Kicker' {...text('townships.hello.kicker')} />
+        <h1
+          class='Title Title-hero'
+          id='hello'
+          {...text('townships.hello.title')}
+        />
+        <p class='Note' {...text('townships.hello.lead')} />
         <p class='Join_Doors'>
-          <Button mod='go' href={installAt(APP)} data-cta='start'>
-            Get your township's copy
-          </Button>{' '}
-          <Button href={SAMPLE} data-cta='examples'>
-            See a sample township's site <span aria-hidden='true'>↗</span>
-          </Button>
+          <Button
+            mod='go'
+            href={installAt(APP)}
+            data-cta='start'
+            {...text('townships.hello.get')}
+          />{' '}
+          <Button
+            href={SAMPLE}
+            data-cta='examples'
+            {...sample('townships.hello.sample')}
+          />
         </p>
-        <p class='Note Note-small'>
-          Free to start. It is a new site at an address of its own, and the site
-          your township has now isn't changed.
-        </p>
+        <p class='Note Note-small' {...text('townships.hello.note')} />
       </div>
     </section>
     <section aria-labelledby='dues'>
-      <h2 class='Title' id='dues'>
-        When a meeting's notice and minutes are due
-      </h2>
-      <p class='Note'>Michigan's Open Meetings Act sets three dates:</p>
+      <h2 class='Title' id='dues' {...text('townships.dues.title')} />
+      <p class='Note' {...text('townships.dues.note')} />
       <ul class='Plan_List'>
-        <li class='Plan_Item'>
-          Proposed minutes are available to the public within 8 business days
-          after the meeting (<Cite law='minutes' said='MCL 15.269' />).
-        </li>
-        <li class='Plan_Item'>
-          Approved minutes are available within 5 business days after the
-          meeting that approves them (<Cite law='minutes' said='MCL 15.269' />).
-        </li>
-        <li class='Plan_Item'>
-          A special meeting, or a regular one moved to a new date, is noticed at
-          least 18 hours before it starts (<Cite
-            law='notice'
-            said='MCL 15.265'
-          />).
-        </li>
+        {Object.entries(RULES).map(([rule, law]) => (
+          <li
+            class='Plan_Item'
+            {...text(`townships.dues.law.${rule}`, { cite: cite(law) })}
+          />
+        ))}
       </ul>
       <Form as='div' class='Dues' data-dues={DUES} hidden>
-        <p class='Form_Label' id='meeting'>
-          Type a meeting's date to see its dates
-        </p>
+        <p class='Form_Label' id='meeting' {...text('townships.dues.ask')} />
         <div class='Dues_Fields' role='group' aria-labelledby='meeting'>
           <Form.Field>
-            <Form.Label for='dues-day'>The meeting's date</Form.Label>
+            <Form.Label for='dues-day' {...text('townships.dues.day')} />
             <Field id='dues-day' type='date' />
           </Form.Field>
           <Form.Field>
-            <Form.Label for='dues-time'>
-              The time it starts <Form.Optional>(for its notice)</Form.Optional>
-            </Form.Label>
+            <Form.Label
+              for='dues-time'
+              {...text('townships.dues.time', {
+                optional: (
+                  <Form.Optional {...text('townships.dues.optional')} />
+                ),
+              })}
+            />
             <Field id='dues-time' type='time' />
           </Form.Field>
           <Form.Field>
-            <Form.Label for='dues-zone'>Time zone</Form.Label>
+            <Form.Label for='dues-zone' {...text('townships.dues.zone')} />
             <Field id='dues-zone' choose>
-              <option value='America/Detroit' selected>Eastern</option>
-              <option value='America/Chicago'>Central</option>
+              <option
+                value='America/Detroit'
+                selected
+                {...text('townships.dues.zones.eastern')}
+              />
+              <option
+                value='America/Chicago'
+                {...text('townships.dues.zones.central')}
+              />
             </Field>
           </Form.Field>
         </div>
         <Check>
           <Check.Input type='checkbox' id='dues-special' />
-          It is a special meeting, or a regular one moved to a new date
+          <span {...text('townships.dues.special')} />
         </Check>
         <div class='Dues_Said' role='status' aria-live='polite' />
-        <Form.Hint>
-          Business days skip weekends and Michigan's legal holidays. These are
-          the dates the township site works out on every meeting's page, by the
-          same calculation, and nothing you type here is sent to us.
-        </Form.Hint>
+        {
+          /* The lines the script says a meeting's dates in, each with a place
+            for its date (public/township-dues.js). */
+        }
+        <template class='Dues_Lines'>
+          {Object.entries<Slots>({
+            proposed: { day: <span data-at='' /> },
+            approved: { day: <span data-at='' /> },
+            notice: { hour: <span data-at='' /> },
+            untimed: {},
+          }).map(([due, slots]) => (
+            <li
+              class='Plan_Item'
+              data-due={due}
+              {...text(`townships.dues.said.${due}`, slots)}
+            />
+          ))}
+        </template>
+        <Form.Hint {...text('townships.dues.hint')} />
       </Form>
     </section>
     <section class='Yours' aria-labelledby='site'>
-      <h2 class='Title' id='site'>What residents find on the site</h2>
-      <dl class='Yours_List'>
-        <div>
-          <dt class='Yours_Term'>Every board's meetings</dt>
-          <dd class='Yours_Detail'>
-            Each with its agenda and minutes beside it, on a calendar residents
-            can add to their own phones.
-          </dd>
-        </div>
-        <div>
-          <dt class='Yours_Term'>Search inside the documents</dt>
-          <dd class='Yours_Detail'>
-            Agendas, minutes, budgets and ordinances as PDFs, and a search that
-            reads inside them and opens the page a word is on.
-          </dd>
-        </div>
-        <div>
-          <dt class='Yours_Term'>Notices</dt>
-          <dd class='Yours_Detail'>
-            Special meetings and notices on the home page, and the board's
-            minutes emailed to residents who ask for them.{' '}
-            <a href={SAMPLE} data-cta='examples'>
-              Open the sample site <span aria-hidden='true'>↗</span>
-            </a>
-          </dd>
-        </div>
-      </dl>
+      <h2 class='Title' id='site' {...text('townships.site.title')} />
+      <Terms
+        group='site'
+        items={{
+          meetings: {},
+          search: {},
+          notices: {
+            sample: (
+              <a
+                href={SAMPLE}
+                data-cta='examples'
+                {...sample('townships.site.sample')}
+              />
+            ),
+          },
+        }}
+      />
     </section>
     <section class='How' aria-labelledby='how'>
-      <h2 class='Title' id='how'>Minutes drafted as the board meets</h2>
+      <h2 class='Title' id='how' {...text('townships.how.title')} />
       <ol class='Steps'>
-        <li class='Steps_Item'>
-          <h3 class='Step_Name'>Press Record when the meeting starts</h3>
-          <p class='Note'>
-            Press it on the meeting's page, on a laptop or phone in the room.
-            The words appear as they are said. Pause during a closed session:
-            nothing is heard or kept while paused. A meeting recorded on
-            something else can be uploaded afterwards.
-          </p>
-        </li>
-        <li class='Steps_Item'>
-          <h3 class='Step_Name'>The draft fills in as the meeting goes</h3>
-          <p class='Note'>
-            Each motion, who moved and seconded it and how it ended, and each
-            member's vote on a roll call. Name the voices, and the draft says
-            who spoke. Whatever the recording doesn't make plain is left blank
-            and marked unsure.
-          </p>
-        </li>
-        <li class='Steps_Item'>
-          <h3 class='Step_Name'>The clerk corrects it and posts it</h3>
-          <p class='Note'>
-            Play any line back from the recording, fix what needs it, and post
-            the draft as the proposed minutes: residents read them on the
-            meeting's page, and those who asked are emailed them. Once the board
-            approves them, the clerk marks them approved. Nothing is posted
-            without the clerk.
-          </p>
-        </li>
-        <li class='Steps_Item'>
-          <h3 class='Step_Name'>
-            The recording is kept as long as the law says
-          </h3>
-          <p class='Note'>
-            Michigan's records schedule for townships keeps a recording made for
-            minutes until they are approved, plus one day (General Schedule 25,
-            item 25.201). Then the page offers to delete it, and nothing is
-            deleted unless the clerk chooses to.
-          </p>
-        </li>
+        {['record', 'draft', 'post', 'keep'].map((step) => (
+          <li class='Steps_Item'>
+            <h3 class='Step_Name' {...text(`townships.how.${step}.name`)} />
+            <p class='Note' {...text(`townships.how.${step}.detail`)} />
+          </li>
+        ))}
       </ol>
-      <p class='Note Note-small'>
-        Only the township's editors hear the recordings and see the drafts.
-      </p>
+      <p class='Note Note-small' {...text('townships.how.note')} />
     </section>
     <section class='Yours' aria-labelledby='clerk'>
-      <h2 class='Title' id='clerk'>
-        Due dates on every meeting, and an assistant for the rest
-      </h2>
-      <dl class='Yours_List'>
-        <div>
-          <dt class='Yours_Term'>Each meeting's page says what is due</dt>
-          <dd class='Yours_Detail'>
-            “Proposed minutes due Friday, Nov 20”, counted from the meeting, and
-            “posted” once they are.
-          </dd>
-        </div>
-        <div>
-          <dt class='Yours_Term'>A reminder before a date is missed</dt>
-          <dd class='Yours_Detail'>
-            Three business days before minutes are due and not yet posted, the
-            township's assistant emails the clerk. It reminds, and blocks
-            nothing.
-          </dd>
-        </div>
-        <div>
-          <dt class='Yours_Term'>An assistant that keeps the site</dt>
-          <dd class='Yours_Detail'>
-            Email or chat with it to put a meeting on the calendar, call one
-            off, post a notice or add minutes someone sent as a file. It makes
-            the change and writes back. On yaks.app it is called the Operator.
-          </dd>
-        </div>
-      </dl>
+      <h2 class='Title' id='clerk' {...text('townships.clerk.title')} />
+      <Terms group='clerk' items={{ due: {}, reminder: {}, assistant: {} }} />
     </section>
     <section class='Cost' aria-labelledby='cost'>
-      <h2 class='Title' id='cost'>
-        Free to start, with your own domain on a plan
-      </h2>
-      <p class='Note'>
-        Your township's copy lives in a space: its address on yaks.app, like
-        {' '}
-        <Yours name='yourtownship' path='/township' />, its apps and the people
-        you invite to edit them. The site, the minutes and the reminders work on
-        the free plan. Your own domain, like{' '}
-        <b>yourtownship.org</b>, is on the Plus plan at ${PRICE.plus}{' '}
-        a month. The Pro plan, at ${PRICE.pro} a month or ${YEARLY.pro}{' '}
-        a year, adds a larger AI budget and support.
-      </p>
-      <p class='Note'>
-        Recording a two-hour meeting live uses about ${MEETING.toFixed(2)}{' '}
-        of AI, from the space's monthly AI budget: ${BUDGET.free}{' '}
-        on the free plan and ${BUDGET.pro}{' '}
-        on the Pro plan. Nothing is charged beyond the plan's price unless the
-        space's owner buys more AI credit on the Pro plan, up to a monthly cap
-        they set.
-      </p>
-      <p class='Note Note-small'>
-        <a href='/pricing'>Compare plans and limits</a>.{' '}
-        <a href='/organizations#behind'>
-          Who is behind yaks.app, and who fixes its mistakes
-        </a>.
-      </p>
+      <h2 class='Title' id='cost' {...text('townships.cost.title')} />
+      <p
+        class='Note'
+        {...text('townships.cost.space', {
+          yours: <Yours name='yourtownship' path='/township' />,
+          domain: <b {...text('townships.cost.domain')} />,
+        })}
+      />
+      <p class='Note' {...text('townships.cost.meeting')} />
+      <p
+        class='Note Note-small'
+        {...text('townships.cost.links', {
+          plans: <a href='/pricing' {...text('home.cost.plans')} />,
+          behind: (
+            <a
+              href='/organizations#behind'
+              {...text('townships.cost.behind')}
+            />
+          ),
+        })}
+      />
     </section>
     <Card class='Join' aria-labelledby='join'>
-      <h2 class='Title' id='join'>Start your township's site</h2>
+      <h2 class='Title' id='join' {...text('townships.join.title')} />
       <p class='Join_Doors'>
-        <Button mod='go' href={installAt(APP)} data-cta='join'>
-          Get your township's copy
-        </Button>
+        <Button
+          mod='go'
+          href={installAt(APP)}
+          data-cta='join'
+          {...text('townships.hello.get')}
+        />
       </p>
-      <p class='Note Note-small'>Free to start, with a sign-in by email.</p>
+      <p class='Note Note-small' {...text('townships.join.note')} />
     </Card>
   </Page>
 )

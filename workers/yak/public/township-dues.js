@@ -3,9 +3,10 @@
 // deadlines.js in `data-dues`, which is imported as the page runs, and the
 // block is hidden until it has loaded. A meeting's date, the time it starts,
 // whether it is special and its time zone go in; the days its minutes are
-// due and the hour its notice must be up by come out. Nothing typed leaves
-// the page. Where the import fails, the block stays hidden, and the page
-// still says the rules it counts by.
+// due and the hour its notice must be up by come out, each said in a line of
+// the block's template, the page's copy, with its date in the line's place
+// for one (`data-at`). Nothing typed leaves the page. Where the import fails,
+// the block stays hidden, and the page still says the rules it counts by.
 for (let block of document.querySelectorAll('[data-dues]')) {
   import(block.dataset.dues).then(({ dues }) => {
     let field = (name) => block.querySelector(`#dues-${name}`)
@@ -48,10 +49,11 @@ for (let block of document.querySelectorAll('[data-dues]')) {
       return new Date(read - ahead(read - ahead(read, zone), zone))
         .toISOString()
     }
-    let line = (text) => {
-      let li = document.createElement('li')
-      li.className = 'Plan_Item'
-      li.textContent = text
+    let lines = block.querySelector('.Dues_Lines').content
+    let line = (due, at) => {
+      let li = lines.querySelector(`[data-due="${due}"]`).cloneNode(true)
+      let place = li.querySelector('[data-at]')
+      if (place) place.textContent = at
       return li
     }
     let said = () => {
@@ -60,22 +62,17 @@ for (let block of document.querySelectorAll('[data-dues]')) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return []
       let due = dues(instant(key, time || '12:00', zone), zone)
       return [
-        `Proposed minutes: available by ${day(due.proposed)}, ` +
-        '8 business days after the meeting (MCL 15.269).',
-        `Minutes this meeting approves: available by ${day(due.approved)}, ` +
-        '5 business days after it (MCL 15.269).',
-        ...!special ? [] : time
-          ? [
-            `Notice: posted by ${hour(due.notice, zone)}, ` +
-            '18 hours before the meeting starts (MCL 15.265).',
-          ]
-          : ['Notice: type the time it starts to see when it must be posted.'],
+        line('proposed', day(due.proposed)),
+        line('approved', day(due.approved)),
+        ...!special
+          ? []
+          : [time ? line('notice', hour(due.notice, zone)) : line('untimed')],
       ]
     }
     let show = () => {
       let list = document.createElement('ul')
       list.className = 'Plan_List'
-      list.append(...said().map(line))
+      list.append(...said())
       out.replaceChildren(...list.childNodes.length ? [list] : [])
     }
     block.addEventListener('input', show)
