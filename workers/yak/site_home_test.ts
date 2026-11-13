@@ -12,6 +12,7 @@ import { listingAt } from './kept-page.ts'
 import { ADA, ADA_OWNS as OWNS, platform } from './serving-probe.ts'
 import { fetch as siteFetch, HOME } from './site.ts'
 import { edged } from './apps.ts'
+import { unfound } from './asset_url.ts'
 import { aim } from '@yaks/platform/routes'
 
 let html = (body: string) =>
@@ -170,4 +171,16 @@ test("before the home app is there, every page is the Worker's own, kept", () =>
     assertStringIncludes(before[i].text, `the Worker's ${path}`)
     assertEquals(before[i].tags, 'site')
   }
+})
+
+// The app's own files, as `yak admin push apps/home` sends them.
+let dir = new URL('../../apps/home/', import.meta.url)
+let held = [...Deno.readDirSync(dir)].map((e) => e.name)
+let missing = await unfound(
+  held,
+  (path) => Deno.readTextFile(new URL(path, dir)).catch(() => null),
+)
+
+test("the home app's pages load nothing its release lacks: the site's files are yaks.app's", () => {
+  assertEquals(missing, [])
 })

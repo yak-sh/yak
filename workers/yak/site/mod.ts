@@ -64,10 +64,17 @@ export let HOME = new URL('../../../apps/home/', import.meta.url)
 export let page = (name: string) =>
   `<!doctype html>\n${renderToString(h(PAGES[name], {}))}\n`
 
+// The site's files a page loads (its sheet, its scripts, the mascot) are
+// yaks.app's, not the app's, so the app's pages name yaks.app as their base:
+// they load the same files at its own address as at the apex, and its release
+// holds none of them.
+let based = (html: string) =>
+  html.replace('<head>', '<head><base href="https://yaks.app/">')
+
 /** The home app's pages, each by its file's name. Its copy.json is the
  * source of their words, and never drawn here. */
 export let drawn = () =>
-  Object.fromEntries(APP.map((name) => [name, page(name)]))
+  Object.fromEntries(APP.map((name) => [name, based(page(name))]))
 
 /** Write every page into public/, the Worker's own. */
 export let deployed = (to = new URL('../public/', import.meta.url).pathname) =>
