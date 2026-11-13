@@ -18,15 +18,18 @@ import {
   type Format,
   hear,
   heard,
+  type Keyed,
+  type Open,
   OPENAI,
   type Provider,
+  type Socket,
   speak,
   spoken,
   talkerOf,
   type Voice,
 } from '@yaks/speech'
 import type { Answer } from './apps.ts'
-import { caught } from './defects.ts'
+import { bound, caught } from './defects.ts'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { onHold } from './model-spend.ts'
@@ -467,17 +470,71 @@ export let hearing = async (
   return await charged(
     env,
     space,
-    heard(on.provider, 10),
+    heard(on.provider.hear, 10),
     undefined,
     () => hear({ ...on, audio, type }),
   )
 }
 
+// What a failure in a socket's listener is reported with.
+type Tags = Record<string, string>
+
+/** A socket the runtime hands a Worker, which carries frames once accepted. */
+export type Upgraded = Socket & { accept: () => void }
+
+/** `socket`, each of its listeners run, and reporting with `tags`, in the
+ * invocation that opened it: its events come from the runtime after the
+ * request was answered. */
+export let tied = (socket: Socket, tags: Tags): Socket => ({
+  send: (data) => socket.send(data),
+  close: (code, reason) => socket.close(code, reason),
+  addEventListener: (type, f) => socket.addEventListener(type, bound(f, tags)),
+})
+
+/**
+ * A provider's stream as Workers open one: a fetch with `Upgrade`, which also
+ * carries the key as the request's Authorization rather than subprotocols,
+ * its events tied to the invocation with `tags`. What is sent before it opens
+ * waits in @yaks/speech's stream.
+ */
+export let upgrading =
+  (tags: Tags): Open => (url: string, { authorization }: Keyed) => {
+    let on: Record<string, ((event: { data?: unknown }) => void)[]> = {}
+    let fire = (type: string, event: { data?: unknown } = {}) =>
+      on[type]?.forEach((f) => f(event))
+    let ws: Upgraded | undefined
+    // Closed before it opened: closed as it opens.
+    let closed: [number?, string?] | undefined
+    fetch(url.replace(/^wss:/, 'https:'), {
+      headers: { upgrade: 'websocket', authorization },
+    }).then((res) => {
+      let socket = (res as Response & { webSocket?: Upgraded }).webSocket
+      if (!socket) throw new Error(`the stream answered ${res.status}`)
+      socket.accept()
+      if (closed) return socket.close(...closed)
+      ws = socket
+      for (let type of ['message', 'close', 'error'] as const) {
+        socket.addEventListener(
+          type,
+          (event) => fire(type, event as { data?: unknown }),
+        )
+      }
+      fire('open')
+    }).catch(() => fire('error'))
+    return tied({
+      send: (data) => ws?.send(data),
+      close: (code, reason) =>
+        ws ? ws.close(code, reason) : void (closed = [code, reason]),
+      addEventListener: (type, f) => void (on[type] ??= []).push(f),
+    }, tags)
+  }
+
 let MAX_TEXT = 2000
 let MAX_AUDIO = 25 * 1024 * 1024
 
 /**
- * `./api/speech/speak` and `./api/speech/hear`: an app's page or worker turns
+ * `./api/speech/speak` and `./api/speech/hear` (and `./api/speech/listen`,
+ * listen.ts, beside it): an app's page or worker turns
  * text into an MP3 (`{"text", "voice"?}` answered `audio/mpeg`) or a
  * recording into words (the audio posted as it is, answered `{"text",
  * "seconds"}`). Asked by whoever may ask the app's models, and charged to

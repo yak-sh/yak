@@ -221,6 +221,51 @@ test('a stream sends what it heard once open, tells turns, and prices its second
   equal(told, ['start', { speaker: 0, text: 'Book it', from: 0.25, to: 1 }])
 })
 
+test('a meeting’s stream tells its speakers apart, and the turns it still heard once ended', async () => {
+  let s = socket()
+  let told: unknown[] = []
+  let stream = turns({
+    provider: DEEPGRAM,
+    key: 'k1',
+    model: 'nova-3',
+    format: { encoding: 'linear16', rate: 16000 },
+    open: s.open,
+    told: { end: (turn) => told.push(turn), lost: (why) => told.push(why) },
+  })
+  equal(
+    s.opened[0].url,
+    'wss://api.deepgram.com/v1/listen?model=nova-3&encoding=linear16&sample_rate=16000&smart_format=true&diarize_model=latest&endpointing=1000',
+  )
+  s.fire('open')
+  stream.send(new Uint8Array(64000))
+  let words = (...ws: [string, number, number, number][]) =>
+    JSON.stringify({
+      type: 'Results',
+      is_final: true,
+      channel: {
+        alternatives: [{
+          words: ws.map(([w, speaker, start, end]) => ({
+            word: w,
+            speaker,
+            start,
+            end,
+          })),
+        }],
+      },
+    })
+  s.fire('message', words(['Motion', 0, 0, 0.5], ['carried', 1, 1, 1.5]))
+  let ended = stream.end()
+  equal(s.sent.at(-1), '{"type":"CloseStream"}')
+  s.fire('message', words(['Adjourned', 1, 1.6, 2]))
+  s.fire('message', '{"type":"Metadata","duration":2}')
+  s.fire('close', undefined, 1000)
+  equal(await ended, { seconds: 2, dollars: 2 / 60 * 0.0097 })
+  equal(told, [
+    { speaker: 0, text: 'Motion', from: 0, to: 0.5 },
+    { speaker: 1, text: 'carried Adjourned', from: 1, to: 2 },
+  ])
+})
+
 test('a stream that drops says so once', () => {
   let s = socket()
   let told: string[] = []

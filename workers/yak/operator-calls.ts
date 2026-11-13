@@ -35,7 +35,6 @@ import type { Frame, Line, Ring } from '@yaks/phone'
 import {
   type Backend,
   first,
-  type Keyed,
   type Provider,
   type Setup,
   type Socket,
@@ -49,7 +48,7 @@ import {
 } from '@yaks/speech'
 import { directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { bound, defect } from './defects.ts'
+import { defect } from './defects.ts'
 import { opened, seal } from './lib/token.ts'
 import { apex } from './host.ts'
 import { countedSpend } from './meter.ts'
@@ -61,6 +60,9 @@ import {
   setupOf,
   speaking,
   speechOf,
+  tied,
+  type Upgraded,
+  upgrading,
 } from './speech.ts'
 import type { Operator } from './operator.ts'
 import { ownerOf } from './operator-access.ts'
@@ -338,10 +340,14 @@ export type Around = {
   time?: Clock
 }
 
+// What a call hears with: it closes its stream, never waiting on the turns
+// it was still hearing.
+type Heard = Omit<Turns, 'end'>
+
 /** A call heard and spoken around the Operator's own model. */
 export type Talk = Around & {
   /** audio heard a turn at a time */
-  listen: (told: Told) => Turns
+  listen: (told: Told) => Heard
   /** text spoken as raw samples in the line's format */
   say: (text: string) => Promise<ReadableStream<Uint8Array>>
   /** what is said, one after another, when a caller's turn has had no
@@ -426,11 +432,7 @@ let reporter = (o: Around) => o.report ?? ((e: unknown) => defect(e, CALL))
 
 // A socket's events come from the runtime after the call's request was
 // answered: each listener runs, and reports, in the call's invocation.
-let held = (socket: Socket): Socket => ({
-  send: (data) => socket.send(data),
-  close: (code, reason) => socket.close(code, reason),
-  addEventListener: (type, f) => socket.addEventListener(type, bound(f, CALL)),
-})
+let held = (socket: Socket) => tied(socket, CALL)
 
 // What every call shares: the caller's audio taken off the wire (`hear`),
 // audio played to them, each turn timed from their last word, the time
@@ -596,7 +598,7 @@ export let converse = (o: Talk): Call => {
   // Each barge-in starts a new generation; speech of an older one is dropped.
   let generation = 0
   let chain = Promise.resolve()
-  let stream: Turns | undefined
+  let stream: Heard | undefined
   // The call's greeting plays before the caller is heard: what they say
   // over it, a hello or the sound of picking up, starts no turn, which
   // would stop the greeting and have the Operator answer with its own.
@@ -941,43 +943,9 @@ export let stepped = async (
   session: string,
 ) => (await waitingOn(store, session))?.paused()
 
-type Upgraded = Socket & { accept: () => void }
-
-/**
- * A client socket as Workers open one: a fetch with `Upgrade`, which also
- * carries the key as the request's Authorization rather than subprotocols.
- * What is sent before it opens waits in @yaks/speech's stream.
- */
-export let upgraded = (url: string, { authorization }: Keyed): Socket => {
-  let on: Record<string, ((event: { data?: unknown }) => void)[]> = {}
-  let fire = (type: string, event: { data?: unknown } = {}) =>
-    on[type]?.forEach((f) => f(event))
-  let ws: Upgraded | undefined
-  // Closed before it opened: closed as it opens.
-  let closed: [number?, string?] | undefined
-  fetch(url.replace(/^wss:/, 'https:'), {
-    headers: { upgrade: 'websocket', authorization },
-  }).then((res) => {
-    let socket = (res as Response & { webSocket?: Upgraded }).webSocket
-    if (!socket) throw new Error(`the stream answered ${res.status}`)
-    socket.accept()
-    if (closed) return socket.close(...closed)
-    ws = socket
-    for (let type of ['message', 'close', 'error'] as const) {
-      socket.addEventListener(
-        type,
-        (event) => fire(type, event as { data?: unknown }),
-      )
-    }
-    fire('open')
-  }).catch(() => fire('error'))
-  return held({
-    send: (data) => ws?.send(data),
-    close: (code, reason) =>
-      ws ? ws.close(code, reason) : void (closed = [code, reason]),
-    addEventListener: (type, f) => void (on[type] ??= []).push(f),
-  })
-}
+/** A client socket as Workers open one, its events run in the call's
+ * invocation (speech.ts `upgrading`). */
+export let upgraded = upgrading(CALL)
 
 // The WebSocket pair the runtime makes, declared structurally as build.ts does.
 declare let WebSocketPair: { new (): { 0: unknown; 1: Upgraded } }

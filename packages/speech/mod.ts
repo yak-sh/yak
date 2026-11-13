@@ -58,9 +58,9 @@ export type Ask = (path: string, init?: RequestInit) => Promise<Response>
  * where the provider says. */
 export type Turn = { speaker: number; text: string; from?: number; to?: number }
 
-/** What one message on a turns stream means: the speaker started a turn, or
- * ended one (`end`), or the stream failed. */
-export type Cue = { start?: true; end?: Turn; error?: string }
+/** What one message on a turns stream means: the speaker started a turn,
+ * turns ended (`ended`, in order), or the stream failed. */
+export type Cue = { start?: true; ended?: Turn[]; error?: string }
 
 /** What one message on a talk stream means. */
 export type Said = {
@@ -157,21 +157,9 @@ export type Provider = {
      * says */
     read: (said: unknown) => { text: string; seconds?: number; turns?: Turn[] }
   }
-  /** audio heard as it streams, told back a turn at a time */
-  turns: {
-    model: string
-    perMinute: number
-    /** whether it tells one speaker from another */
-    speakers: boolean
-    path: (format: Raw, model: string) => string
-    /** what is sent once the stream opens, before any audio */
-    opening: (format: Raw, model: string) => string[]
-    /** raw samples as the stream carries them */
-    audio: (bytes: Uint8Array) => string | Uint8Array
-    read: (data: unknown) => Cue
-    /** what ends the stream before it closes */
-    closing?: string
-  }
+  /** the models that hear audio as it streams, the first unless another
+   * is asked for (`streamOf`) */
+  turns: Stream[]
   /** text spoken, priced by the thousand characters, in `voice` unless
    * another of `voices` is asked for */
   speak: {
@@ -195,6 +183,44 @@ export type Provider = {
   talk?: Talker[]
   /** the account's credit left, in dollars, where the provider says */
   balance?: (ask: Ask) => Promise<number>
+}
+
+/** A model that hears audio as it streams, told back a turn at a time, as
+ * its provider words it. */
+export type Stream = {
+  model: string
+  perMinute: number
+  /** whether it tells one speaker from another */
+  speakers: boolean
+  path: (format: Raw, model: string) => string
+  /** what is sent once the stream opens, before any audio */
+  opening: (format: Raw, model: string) => string[]
+  /** raw samples as the stream carries them */
+  audio: (bytes: Uint8Array) => string | Uint8Array
+  /** what reads one stream's messages, made as it opens, so a provider that
+   * tells a turn over several messages keeps its words until it ends */
+  reader: () => (data: unknown) => Cue
+  /** what ends the stream: the provider tells what it still heard, then
+   * closes */
+  closing?: string
+}
+
+/** The entry of `provider`'s that streams with `model`, or its first when
+ * none is given.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { DEEPGRAM, streamOf } from '@yaks/speech'
+ * equal(streamOf(DEEPGRAM).model, 'flux-general-en')
+ * equal(streamOf(DEEPGRAM, 'nova-3').speakers, true)
+ * ```
+ */
+export let streamOf = (provider: Provider, model?: string): Stream => {
+  let s = model == undefined
+    ? provider.turns[0]
+    : provider.turns.find((t) => t.model == model)
+  if (!s) throw new Error(`${provider.name} streams no model ${model}`)
+  return s
 }
 
 /** Models that hear and speak in one stream, as their provider words it. */
@@ -285,12 +311,12 @@ export let perSecond = (format: Format): number | undefined =>
 export let spoken = (provider: Provider, text: string): number =>
   text.length / 1000 * provider.speak.perThousand
 
-/** What hearing `seconds` of audio costs, in dollars, whole or streamed. */
+/** What hearing `seconds` of audio costs, in dollars, on a model priced by
+ * the minute: a provider's `hear`, or one of its `turns`. */
 export let heard = (
-  provider: Provider,
+  priced: { perMinute: number },
   seconds: number,
-  as: 'hear' | 'turns' = 'hear',
-): number => seconds / 60 * provider[as].perMinute
+): number => seconds / 60 * priced.perMinute
 
 /** A provider's refusal: `status` is its HTTP status, and `retry` says a
  * later try may go through (a 429 or 5xx, or no answer at all). */
@@ -320,12 +346,19 @@ export type Heard = {
   dollars: number
 }
 
+/** The seconds a stream heard, and what they cost. */
+export type Spent = { seconds: number; dollars: number }
+
 /** A stream being heard. */
 export type Turns = {
   send: (audio: Uint8Array) => void
   /** the seconds heard so far, and what they cost */
-  spent: () => { seconds: number; dollars: number }
-  close: () => { seconds: number; dollars: number }
+  spent: () => Spent
+  /** ends the stream at once: what it was still hearing is not told */
+  close: () => Spent
+  /** ends the stream once the provider has told every turn it heard, which
+   * it does before it closes */
+  end: () => Promise<Spent>
 }
 
 /** What a call to the provider needs. */
@@ -458,7 +491,7 @@ export let hear = async (
     text: said.text,
     turns: said.turns ?? alone(said.text),
     seconds,
-    dollars: heard(o.provider, seconds),
+    dollars: heard(hear, seconds),
   }
 }
 
@@ -488,7 +521,9 @@ let browser: Open = (url, { protocols }) =>
   new WebSocket(url, protocols) as unknown as Socket
 
 // A socket to `url` that holds what is sent until it opens, sends `opening`
-// first, and says once if it fails or closes before `close` is asked.
+// first, and says once if it fails or closes before `close` or `end` is
+// asked. `end` sends `last` and waits for the other side to close, its
+// messages heard until then.
 let stream = (
   o: { provider: Provider; key: string; open?: Open },
   url: string,
@@ -502,6 +537,8 @@ let stream = (
   })
   let ready = false, closing = false
   let waiting: (string | Uint8Array)[] = [...opening]
+  let shut: () => void
+  let gone = new Promise<void>((resolve) => shut = resolve)
   socket.addEventListener('open', () => {
     ready = true
     for (let part of waiting.splice(0)) socket.send(part)
@@ -510,9 +547,21 @@ let stream = (
   let dropped = (reason: string) => (event?: { code?: number }) => {
     if (!closing) lost(reason, event?.code == 1000 || event?.code == 1001)
     closing = true
+    shut()
   }
   socket.addEventListener('close', dropped('the stream closed'))
   socket.addEventListener('error', dropped('the stream failed'))
+  let close = (last?: string) => {
+    if (closing) return
+    closing = true
+    try {
+      if (ready && last) socket.send(last)
+      socket.close(1000)
+    } catch {
+      // A socket already gone has nothing more to close.
+    }
+    shut()
+  }
   return {
     closed: () => closing,
     send: (data: string | Uint8Array) => {
@@ -520,15 +569,13 @@ let stream = (
       if (ready) socket.send(data)
       else waiting.push(data)
     },
-    close: (last?: string) => {
-      if (closing) return
+    close,
+    end: (last: string) => {
+      if (closing) return gone
       closing = true
-      try {
-        if (ready && last) socket.send(last)
-        socket.close(1000)
-      } catch {
-        // A socket already gone has nothing more to close.
-      }
+      if (ready) socket.send(last)
+      else waiting.push(last)
+      return gone
     },
   }
 }
@@ -544,10 +591,13 @@ export type Told = {
 }
 
 /**
- * Audio heard as it streams, told back a turn at a time (`told`). `send`
- * takes raw samples in `format`; `close` ends the stream and answers how many
- * seconds were heard and what they cost. `open` makes the socket, the
- * platform's WebSocket by default, offering the key as subprotocols.
+ * Audio heard as it streams, told back a turn at a time (`told`), by
+ * `model`, one of the provider's `turns` (its first by default). `send`
+ * takes raw samples in `format`; `close` ends the stream and answers how
+ * many seconds were heard and what they cost, and `end` answers the same
+ * once the provider has told the turns it was still hearing. `open` makes
+ * the socket, the platform's WebSocket by default, offering the key as
+ * subprotocols.
  */
 export let turns = (
   o: {
@@ -555,26 +605,30 @@ export let turns = (
     key: string
     format: Raw
     told: Told
+    model?: string
     open?: Open
   },
 ): Turns => {
-  let { turns: t, live } = o.provider
+  let t = streamOf(o.provider, o.model)
+  let read = t.reader()
   let bytes = 0
   let s = stream(
     o,
-    live + t.path(o.format, t.model),
+    o.provider.live + t.path(o.format, t.model),
     t.opening(o.format, t.model),
     (data) => {
-      let cue = t.read(data)
+      let cue = read(data)
       if (cue.start) o.told.start?.()
-      if (cue.end?.text) o.told.end(cue.end)
+      for (let turn of cue.ended ?? []) {
+        if (turn.text) o.told.end(turn)
+      }
       if (cue.error) o.told.lost?.(cue.error)
     },
     (reason) => o.told.lost?.(reason),
   )
   let spent = () => {
     let seconds = bytes / perSecond(o.format)!
-    return { seconds, dollars: heard(o.provider, seconds, 'turns') }
+    return { seconds, dollars: heard(t, seconds) }
   }
   return {
     send: (audio) => {
@@ -585,6 +639,11 @@ export let turns = (
     spent,
     close: () => {
       s.close(t.closing)
+      return spent()
+    },
+    end: async () => {
+      if (t.closing) await s.end(t.closing)
+      else s.close()
       return spent()
     },
   }

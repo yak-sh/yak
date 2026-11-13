@@ -115,14 +115,14 @@ let parsed = (data: unknown): Event => {
  * ```ts
  * import { equal } from '@yaks/testing'
  * import { OPENAI } from '@yaks/speech'
- * let read = OPENAI.turns.read
+ * let read = OPENAI.turns[0].reader()
  * equal(read('{"type":"input_audio_buffer.speech_started"}'), { start: true })
  * equal(
  *   read(JSON.stringify({
  *     type: 'conversation.item.input_audio_transcription.completed',
  *     transcript: ' Book it ',
  *   })),
- *   { end: { speaker: 0, text: 'Book it' } },
+ *   { ended: [{ speaker: 0, text: 'Book it' }] },
  * )
  * ```
  */
@@ -130,7 +130,7 @@ let cueOf = (data: unknown): Cue => {
   let e = parsed(data)
   if (e.type == 'input_audio_buffer.speech_started') return { start: true }
   if (e.type == 'conversation.item.input_audio_transcription.completed') {
-    return { end: { speaker: 0, text: e.transcript?.trim() ?? '' } }
+    return { ended: [{ speaker: 0, text: e.transcript?.trim() ?? '' }] }
   }
   if (e.type == 'error') return { error: String(e.error?.message) }
   return {}
@@ -172,7 +172,7 @@ export let OPENAI: Provider = {
       return { text: text ?? '', seconds: usage?.seconds }
     },
   },
-  turns: {
+  turns: [{
     // gpt-live-transcribe takes no turn detection, refusing the session, so
     // it cannot say when a caller's turn ends.
     model: 'gpt-transcribe',
@@ -197,8 +197,8 @@ export let OPENAI: Provider = {
         type: 'input_audio_buffer.append',
         audio: base64(bytes),
       }),
-    read: cueOf,
-  },
+    reader: () => cueOf,
+  }],
   speak: {
     voice: 'cedar',
     voices: [

@@ -32,15 +32,22 @@ argument; nothing here reads the environment.
 - A turn is what one speaker said up to a pause or another's voice:
   `{speaker, text, from?, to?}`, `from` and `to` the seconds into the audio it
   took, where the provider says. `speaker` numbers the voices a provider tells
-  apart from 0; `provider.hear.speakers` and `provider.turns.speakers` say
-  whether it tells them apart, and one that does not answers every turn as
-  speaker 0 (a recording's words as one turn). Nova-3 tells a recording's
-  speakers apart; Flux and OpenAI's models tell none apart.
-- `turns({provider, key, format, told})` hears audio as it streams. `send` takes
-  raw samples; `told.start()` fires when the speaker starts a turn (stop
-  whatever is playing to them), `told.end(turn)` when they finish one, and
-  `told.lost(reason)` when the stream drops. `spent()` answers the seconds heard
-  so far and their cost, and `close()` ends the stream answering the same.
+  apart from 0; `provider.hear.speakers` and each of `provider.turns`'
+  `speakers` say whether it tells them apart, and one that does not answers
+  every turn as speaker 0 (a recording's words as one turn). Nova-3 tells a
+  recording's and a stream's speakers apart; Flux and OpenAI's models tell none
+  apart. `heard(entry, seconds)` prices seconds on any of them.
+- `turns({provider, key, format, told, model?})` hears audio as it streams, on
+  one of `provider.turns` (`streamOf(provider, model)`, the first by default:
+  Flux on Deepgram, the quickest to tell a call's turn has ended; Nova-3 there
+  tells speakers apart). `send` takes raw samples; `told.start()` fires when the
+  speaker starts a turn (stop whatever is playing to them), `told.end(turn)`
+  when they finish one, and `told.lost(reason)` when the stream drops. `spent()`
+  answers the seconds heard so far and their cost, `close()` ends the stream at
+  once answering the same, and `end()` answers it once the provider has told the
+  turns it was still hearing and closed. Each entry's `reader()` makes what
+  reads one stream's messages, so Nova-3 keeps a turn's words until a pause or
+  another speaker ends it.
 - `talk({provider, key, format, instructions, tools?, model?, voice?, speed?, opens?, told})`
   is a model that hears and speaks itself, `model` one of a `provider.talk`
   entry's (`talkerOf(provider, model)`; the first by default), which is `Turned`

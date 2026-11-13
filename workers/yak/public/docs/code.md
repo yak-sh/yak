@@ -261,8 +261,9 @@ This has two consequences:
     ([AI Models](models.md)). `ai/recover` takes `{call}` and asks the store to
     recover that model call. `choose` takes `{output}` and picks a retained
     build output, as `store_builder_choose` does.
-  - `speech/speak`, `speech/hear`: text spoken as an MP3, and a recording's
-    words ([AI Models](models.md)).
+  - `speech/speak`, `speech/hear`, `speech/listen`: text spoken as an MP3, a
+    recording's words, and a microphone heard live over a WebSocket, a turn and
+    its speaker at a time ([AI Models](models.md)).
   - `rtc/*`: voice calls between the people in the app
     ([Voice Calls](voice.md)).
   - `stats`: page-view counts, for the app's members

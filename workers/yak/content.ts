@@ -115,7 +115,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'models',
     'title': 'AI Models',
     'description':
-      "Calling AI models (LLMs) from an app with no API key: a page writes a transcript entry naming a model, the app's store calls the model, and the reply is written as rows in the same transcript for any subscribed page to receive. Instructions, typed questions answered as rows (a choice, a yes-or-no, a score), image generation with OpenAI's GPT Image models, audio from a connected model, builders over stored rows, a single synchronous call through ./api/ai/run or a worker's AI binding, image input, the commands a model may call, who may call a model, and model prices and how platform and connected models are paid for.",
+      "Calling AI models (LLMs) from an app with no API key: a page writes a transcript entry naming a model, the app's store calls the model, and the reply is written as rows in the same transcript for any subscribed page to receive. Instructions, typed questions answered as rows (a choice, a yes-or-no, a score), image generation with OpenAI's GPT Image models, audio from a connected model, builders over stored rows, a single synchronous call through ./api/ai/run or a worker's AI binding, speech spoken and heard through ./api/speech (a recording, or a microphone heard live over a WebSocket with each speaker's turns), image input, the commands a model may call, who may call a model, and model prices and how platform and connected models are paid for.",
     'brief': 'calling AI models from an app, with the answers written as rows',
   },
   'notes': {

@@ -269,7 +269,13 @@ let DOORS = new Map<string, () => Promise<Answer>>([
     let { modelRun, recovery } = await import('./models.ts')
     return async (asked) => await modelRun(asked) ?? await recovery(asked)
   }],
-  ['speech', async () => (await import('./speech.ts')).speechDoor],
+  ['speech', async () => {
+    let [{ speechDoor }, { listenDoor }] = await Promise.all([
+      import('./speech.ts'),
+      import('./listen.ts'),
+    ])
+    return async (asked) => await listenDoor(asked) ?? await speechDoor(asked)
+  }],
   ['rtc', async () => (await import('./rtc.ts')).voice],
   ['notices', async () => (await import('./notices.ts')).notices],
   ['form', async () => (await import('./forms.ts')).forms],

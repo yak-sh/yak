@@ -1,15 +1,18 @@
-// Deepgram: Nova-3 hears a recording and tells its speakers apart, Flux
-// hears a call and knows when a speaker's turn ends, Aura-2 speaks. It has no
-// model that talks, so a call runs on it as hearing and speaking around
-// another model. Flux tells no speakers apart. Prices are its pay-as-you-go
-// list, 2026-11-05; telling a recording's speakers apart is in its price.
+// Deepgram: Nova-3 hears a recording or a stream and tells its speakers
+// apart, Flux hears a call and knows when a speaker's turn ends, Aura-2
+// speaks. It has no model that talks, so a call runs on it as hearing and
+// speaking around another model. Flux tells no speakers apart. Prices are its
+// pay-as-you-go list, 2026-11-05; telling a recording's speakers apart is in
+// its price, a stream's is $0.0020 a minute more (2026-11-13).
 // https://developers.deepgram.com/reference/speech-to-text/listen-pre-recorded
 // https://developers.deepgram.com/docs/diarization
 // https://developers.deepgram.com/docs/utterances
 // https://developers.deepgram.com/reference/text-to-speech/speak-request
 // https://developers.deepgram.com/docs/flux/quickstart
 // https://developers.deepgram.com/reference/speech-to-text/listen-flux
-import type { Cue, Format, Provider } from './mod.ts'
+// https://developers.deepgram.com/reference/speech-to-text/listen-streaming
+// https://deepgram.com/pricing
+import type { Cue, Format, Provider, Turn } from './mod.ts'
 import { query } from './query.ts'
 
 let encoded = (format: Format) =>
@@ -46,7 +49,7 @@ type Info = {
  * ```ts
  * import { equal } from '@yaks/testing'
  * import { DEEPGRAM } from '@yaks/speech'
- * let read = DEEPGRAM.turns.read
+ * let read = DEEPGRAM.turns[0].reader()
  * equal(
  *   read(JSON.stringify({
  *     type: 'TurnInfo',
@@ -55,7 +58,7 @@ type Info = {
  *     audio_window_start: '1.5',
  *     audio_window_end: '2.25',
  *   })),
- *   { end: { speaker: 0, text: 'Hi', from: 1.5, to: 2.25 } },
+ *   { ended: [{ speaker: 0, text: 'Hi', from: 1.5, to: 2.25 }] },
  * )
  * equal(read('{"type":"TurnInfo","event":"StartOfTurn"}'), { start: true })
  * equal(read('{"type":"TurnInfo","event":"Update"}'), {})
@@ -75,7 +78,94 @@ let cueOf = (data: unknown): Cue => {
   // Flux words the seconds of the stream a turn took as strings.
   let from = Number(info.audio_window_start), to = Number(info.audio_window_end)
   let end = { speaker: 0, text: info.transcript?.trim() ?? '' }
-  return { end: isNaN(from + to) ? end : { ...end, from, to } }
+  return { ended: [isNaN(from + to) ? end : { ...end, from, to }] }
+}
+
+type Word = {
+  word: string
+  punctuated_word?: string
+  start: number
+  end: number
+  speaker?: number
+}
+
+type Results = {
+  type?: string
+  description?: string
+  is_final?: boolean
+  speech_final?: boolean
+  from_finalize?: boolean
+  channel?: { alternatives?: { words?: Word[] }[] }
+}
+
+// Words in a row, a turn each time the speaker changes.
+let spoken = (words: Word[]): Turn[] =>
+  words.reduce((turns: Turn[], w) => {
+    let speaker = w.speaker ?? 0, text = w.punctuated_word ?? w.word
+    let last = turns.at(-1)
+    if (last?.speaker == speaker) {
+      last.text += ' ' + text
+      last.to = w.end
+    } else turns.push({ speaker, text, from: w.start, to: w.end })
+    return turns
+  }, [])
+
+/**
+ * What reads one Nova-3 stream: its final words are kept until a pause ends
+ * them (`speech_final`), or the stream is flushed or ends, and a speaker's
+ * turn ends sooner when another starts.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { DEEPGRAM, streamOf } from '@yaks/speech'
+ * let read = streamOf(DEEPGRAM, 'nova-3').reader()
+ * let said = (words: [string, number, number, number][], end = false) =>
+ *   JSON.stringify({
+ *     type: 'Results',
+ *     is_final: true,
+ *     speech_final: end,
+ *     channel: {
+ *       alternatives: [{
+ *         words: words.map(([w, speaker, start, end]) => ({
+ *           word: w.toLowerCase(),
+ *           punctuated_word: w,
+ *           speaker,
+ *           start,
+ *           end,
+ *         })),
+ *       }],
+ *     },
+ *   })
+ * equal(read(said([['I', 0, 0, 0.2], ['move', 0, 0.2, 0.5]])), { ended: [] })
+ * equal(read(said([['approval.', 0, 0.5, 1], ['Second.', 1, 1.5, 2]])), {
+ *   ended: [{ speaker: 0, text: 'I move approval.', from: 0, to: 1 }],
+ * })
+ * equal(read(said([], true)), {
+ *   ended: [{ speaker: 1, text: 'Second.', from: 1.5, to: 2 }],
+ * })
+ * ```
+ */
+let listening = () => {
+  let held: Word[] = []
+  return (data: unknown): Cue => {
+    let r: Results
+    try {
+      r = JSON.parse(String(data))
+    } catch {
+      return {}
+    }
+    if (r.type == 'Error') return { error: String(r.description) }
+    if (r.type == 'Metadata') return { ended: spoken(held.splice(0)) }
+    if (r.type != 'Results' || !r.is_final) return {}
+    held.push(...r.channel?.alternatives?.[0]?.words ?? [])
+    if (r.speech_final || r.from_finalize) {
+      return { ended: spoken(held.splice(0)) }
+    }
+    // Every speaker before the one still talking has finished.
+    let talking = held.at(-1)?.speaker
+    let since = held.findLastIndex((w) => w.speaker != talking) + 1
+    return { ended: spoken(held.splice(0, since)) }
+  }
 }
 
 export let DEEPGRAM: Provider = {
@@ -115,7 +205,7 @@ export let DEEPGRAM: Provider = {
       }
     },
   },
-  turns: {
+  turns: [{
     model: 'flux-general-en',
     perMinute: 0.0077,
     speakers: false,
@@ -126,9 +216,30 @@ export let DEEPGRAM: Provider = {
       `/v2/listen?${query({ model, ...encoded(format), eot_threshold: 0.5 })}`,
     opening: () => [],
     audio: (bytes) => bytes,
-    read: cueOf,
+    reader: () => cueOf,
     closing: JSON.stringify({ type: 'CloseStream' }),
-  },
+  }, {
+    // A meeting's: Nova-3 tells its speakers apart, at its listed $0.0077 a
+    // minute (a promotion has it at $0.0048 for now) and $0.0020 for the
+    // speakers, and a turn ends at a second's pause or another's voice.
+    model: 'nova-3',
+    perMinute: 0.0097,
+    speakers: true,
+    path: (format, model) =>
+      `/v1/listen?${
+        query({
+          model,
+          ...encoded(format),
+          smart_format: 'true',
+          diarize_model: 'latest',
+          endpointing: 1000,
+        })
+      }`,
+    opening: () => [],
+    audio: (bytes) => bytes,
+    reader: listening,
+    closing: JSON.stringify({ type: 'CloseStream' }),
+  }],
   speak: {
     voice: 'aura-2-thalia-en',
     // Aura-2's English voices, as its voice list describes them.

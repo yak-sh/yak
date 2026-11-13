@@ -12,7 +12,9 @@ guide:
     yes-or-no, a score), image generation with OpenAI's GPT Image models,
     audio from a connected model, builders over stored
     rows, a single synchronous call through ./api/ai/run or a worker's AI
-    binding, image input, the commands a model may call, who may call a model,
+    binding, speech spoken and heard through ./api/speech (a recording, or a
+    microphone heard live over a WebSocket with each speaker's turns), image
+    input, the commands a model may call, who may call a model,
     and model prices and how platform and connected models are paid for.
 ---
 
@@ -349,6 +351,107 @@ The same people who may call a model may use speech, and it spends the same
 space budget: $0.030 a thousand characters spoken, and $0.0043 a minute heard. A
 refusal is `{error: {code, message}}`: `402` past the budget, `503` while speech
 is paused.
+
+### Hearing as it is spoken: `./api/speech/listen`
+
+A page hears a microphone live through a WebSocket at `./api/speech/listen`: it
+sends raw audio as binary messages and is told each turn as it ends, one
+speaker's words up to a pause or another voice. Deepgram's Nova-3 hears it and
+tells the speakers apart, at $0.0097 a minute heard, from the same space budget.
+
+The query says what the audio is: `encoding` is `linear16` (16-bit little-endian
+PCM, the default) or `mulaw`, `rate` its samples a second, 8000 to 48000 (16000
+by default), one channel. `at` is the second of the recording the first audio
+sent starts at, 0 by default; every second the door tells is counted from the
+recording's start, so a stream opened again goes on counting.
+
+The door sends JSON messages:
+
+- `{"type": "ready", "at": 0, "speakers": true}`: the stream is heard from `at`.
+  `speakers` says whether its turns tell speakers apart. Audio sent before it
+  waits and is heard.
+- `{"type": "turn", "speaker": 0, "text": "I move we adopt the budget.", "from": 12.5, "to": 15.1}`:
+  a turn that ended, with its seconds in the recording. `speaker` numbers the
+  voices from 0 within one stream; a stream opened again numbers them afresh.
+- `{"type": "done", "at": 3612.4}`: the page sent `{"type": "end"}`, every turn
+  the audio held has been told, and the socket closes (code 1000). `at` is the
+  second the recording reached.
+- `{"type": "error", "code": "limit", "message": "...", "at": 15.1}`: the stream
+  stopped, and the socket closes. `limit` (code 1008) is the space's budget
+  spent; `speech_failed` (1011) is the provider lost; `speech_off` is speech
+  paused here; `bad_request` (1008) is a query the door can't hear.
+
+Ending a recording, or pausing it, is `{"type": "end"}`: the door tells what the
+audio still held, then `done`. Closing the socket instead drops what was not yet
+told.
+
+Nothing is kept on the door's side, and a socket can drop at any time: a lost
+network, or a deploy. Nothing already heard is lost if the page keeps the audio
+since the last turn it was told: it opens the door again with `at` the `to` of
+that turn (or the `at` it last opened with) and sends its audio from that second
+on. `at` in an `error` says the same second. Audio after it is heard again, and
+charged again.
+
+The microphone's samples come from an `AudioWorklet`, a file of the app's own
+(`pcm.js`) that hands on each tenth of a second as 16-bit PCM:
+
+    registerProcessor('pcm', class extends AudioWorkletProcessor {
+      held = []
+      process([input]) {
+        let samples = input[0]
+        if (samples) this.held.push(...samples)
+        if (this.held.length >= sampleRate / 10) {
+          let pcm = Int16Array.from(this.held, (x) =>
+            Math.max(-1, Math.min(1, x)) * 0x7fff)
+          this.held = []
+          this.port.postMessage(pcm.buffer, [pcm.buffer])
+        }
+        return true
+      }
+    })
+
+The page streams it, keeps what was not yet told, and opens the door again where
+it stands:
+
+    let ctx = new AudioContext()
+    let mic = await navigator.mediaDevices.getUserMedia({ audio: true })
+    await ctx.audioWorklet.addModule('./pcm.js')
+    let node = new AudioWorkletNode(ctx, 'pcm')
+    // Connected on to the speakers, which it plays nothing to, so it runs.
+    ctx.createMediaStreamSource(mic).connect(node).connect(ctx.destination)
+
+    let rate = ctx.sampleRate, recorded = 0, kept = [], ws
+    let seconds = (chunk) => chunk.byteLength / 2 / rate
+    let listen = (at) => {
+      let url = new URL(`./api/speech/listen?rate=${rate}&at=${at}`, location.href)
+      url.protocol = url.protocol.replace('http', 'ws')
+      ws = new WebSocket(url)
+      ws.binaryType = 'arraybuffer'
+      ws.onopen = () => {
+        for (let c of kept) if (c.at >= at) ws.send(c.data)
+      }
+      ws.onmessage = ({ data }) => {
+        let m = JSON.parse(data)
+        if (m.type == 'turn') {
+          said(m) // the app's own: written as a row, say
+          kept = kept.filter((c) => c.at + seconds(c.data) > m.to)
+        }
+        // Only a lost stream is opened again.
+        if (m.type == 'done' || m.type == 'error' && m.code != 'speech_failed') {
+          ws.onclose = null
+        }
+      }
+      ws.onclose = () => setTimeout(() => listen(kept[0]?.at ?? recorded), 1000)
+    }
+    node.port.onmessage = ({ data }) => {
+      kept.push({ at: recorded, data })
+      recorded += seconds(data)
+      if (ws.readyState == 1) ws.send(data)
+    }
+    listen(0)
+
+The same people who may call a model may listen. One who may not is refused
+before the socket opens, with the HTTP refusal every endpoint uses.
 
 ## Image input (vision models)
 
