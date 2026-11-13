@@ -206,6 +206,15 @@ test('prose is stored with each id it names as that eid, and the rest as typed',
       ],
       ['#ffcc00 is a colour', '#ffcc00 is a colour'],
       [`${TASK} stays`, `${TASK} stays`],
+      ['in /tmp/T-12-proof; T-12 holds', `in /tmp/T-12-proof; ${TASK} holds`],
+      [
+        '- one\n  T-12 on\n- `T-12` P-1',
+        `- one\n  ${TASK} on\n- \`T-12\` ${PROJECT}`,
+      ],
+      [
+        '| a | b |\n|---|---|\n| T-12 | `P-1` |',
+        `| a | b |\n|---|---|\n| ${TASK} | \`P-1\` |`,
+      ],
     ]
   ) assertEquals(stored(source, eids), want, source)
 })
@@ -216,6 +225,17 @@ test('the ids typed in prose are listed once each, never from code', () => {
     ['T-12', 'P-1', '#0e513227de'],
   )
   assertEquals(typed(`no ids but ${TASK}`), [])
+})
+
+test('a long text has every id in it found, wherever it falls', () => {
+  let words = (n: number) => 'word, '.repeat(n)
+  for (
+    let [source, want] of [
+      [`${words(2000)}T-12 ${words(2000)}`, ['T-12']],
+      [`${words(681)}wordT-12 T-34 ${words(2000)}`, ['T-34']],
+      [`${'x'.repeat(5000)} P-7 ${words(10)}`, ['P-7']],
+    ] as [string, string[]][]
+  ) assertEquals(typed(source), want)
 })
 
 test('what a document points at is read the way it is drawn', () => {

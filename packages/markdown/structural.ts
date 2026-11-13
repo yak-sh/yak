@@ -46,12 +46,29 @@ export let named = (href: string): boolean =>
 export let shown = (id: string, ids?: Ids): string =>
   EID.test(id) ? ids?.(id.toLowerCase()) ?? short(id) : id
 
+// Where the next id may start. Marked asks before every run of plain text,
+// about all the text left, so a search of all of it made a long text with few
+// ids quadratic: a 1 MB body took 21 seconds. The search looks a window ahead
+// instead, and with no id in it answers the last space well short of its end,
+// where cutting the text changes nothing (marked joins adjacent text) and no
+// id the window cut short can have begun.
+let AHEAD = 4096
+let REACH = 128
+let next = (src: string): number | undefined => {
+  if (src.length <= AHEAD) return src.match(START)?.index
+  let head = src.slice(0, AHEAD)
+  let i = head.match(START)?.index
+  if (i != null) return i
+  let space = head.lastIndexOf(' ', AHEAD - REACH)
+  return space > 0 ? space : src.match(START)?.index
+}
+
 let lexer = new Marked({
   gfm: true,
   extensions: [{
     name: 'ref',
     level: 'inline',
-    start: (src: string) => src.match(START)?.index,
+    start: next,
     // `start` is asked about the text after a line's first character, so it
     // cannot see that character: the token before says what the id follows,
     // and one glued to a word (`xT-12`) is no id.
@@ -109,44 +126,52 @@ export let mentions = (tokens: Token[]): Mention[] => {
 
 // Prose rewritten id by id, still as text: each id written bare or as a link's
 // target is given to `f`, and replaced by what it answers. Code keeps its ids
-// literal, and a link keeps its own words. Marked keeps no offsets, but every
-// leaf's raw text stands in the source in reading order, so each is found
-// from where the last one ended.
+// literal, and a link keeps its own words. Marked keeps no offsets, but a
+// token's raw text stands in the source inside its parent's, after its elder
+// sibling's, so each is found there: an id is swapped where it is read, never
+// where the same letters stand inside another word earlier on
+// (`/tmp/T-12-proof … T-12`). A token whose raw the lexer reshaped (a list
+// item's indented lines) is not found, and its children are looked for in
+// what is left of its parent.
 let rewritten = (
   source: string,
   f: (id: string) => string | undefined,
 ): string => {
   let edits: [number, number, string][] = []
-  let at = 0
-  let found = (raw: string) => {
-    let i = source.indexOf(raw, at)
-    return i < 0 ? undefined : i
-  }
-  lexer.walkTokens(parse(source, { breaks: false }), (t) => {
-    if (t.type == 'code' || t.type == 'codespan') {
-      let i = found(t.raw)
-      if (i != null) at = i + t.raw.length
-    } else if (t.type == 'ref') {
-      let i = found(t.raw)
-      if (i == null) return
-      let word = f(t.raw)
-      if (word != null && word != t.raw) {
-        edits.push([i, i + t.raw.length, word])
+  let kids = (t: Token): Token[] =>
+    t.type == 'list'
+      ? (t as Tokens.List).items
+      : t.type == 'table'
+      ? [(t as Tokens.Table).header, ...(t as Tokens.Table).rows]
+        .flatMap((row) => row.flatMap((cell) => cell.tokens))
+      : (t as { tokens?: Token[] }).tokens ?? []
+  let walk = (tokens: Token[], from: number, to: number): number => {
+    let at = from
+    for (let t of tokens) {
+      let i = source.slice(at, to).indexOf(t.raw)
+      if (i < 0) {
+        if (t.type != 'ref') at = walk(kids(t), at, to)
+        continue
       }
-      at = i + t.raw.length
-    } else if (t.type == 'link' && named((t as Tokens.Link).href)) {
-      let { href } = t as Tokens.Link
-      let i = found(t.raw)
-      if (i == null) return
-      let word = f(href)
-      if (word != null && word != href) {
+      i += at
+      let end = i + t.raw.length
+      if (t.type == 'ref') {
+        let word = f(t.raw)
+        if (word != null && word != t.raw) edits.push([i, end, word])
+      } else if (t.type == 'link' && named((t as Tokens.Link).href)) {
+        let { href } = t as Tokens.Link
         let j = i + t.raw.lastIndexOf(href)
-        edits.push([j, j + href.length, word])
+        let word = f(href)
+        if (word != null && word != href) edits.push([j, j + href.length, word])
+        walk(kids(t), i + 1, j)
+      } else if (t.type != 'code' && t.type != 'codespan') {
+        walk(kids(t), i, end)
       }
-      // The link's words come next, and may hold ids of their own.
-      at = i + 1
+      at = end
     }
-  })
+    return at
+  }
+  walk(parse(source, { breaks: false }), 0, source.length)
   return edits.sort((a, b) => b[0] - a[0]).reduce(
     (text, [from, to, word]) => text.slice(0, from) + word + text.slice(to),
     source,
