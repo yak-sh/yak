@@ -8,82 +8,10 @@ import {
   assetMaps,
   assetPath,
   assetUrl,
-  failedScript,
   releaseId,
   unfound,
 } from './asset_url.ts'
 import { platformPath } from './router.ts'
-
-test("a script failure is the release's when it lacks the refused file, the platform's when it holds it", () => {
-  let id = '3c92f71b-848e-4492-95e7-c73402b90ffc'
-  let release = {
-    version: 2,
-    source: `ada/.releases/app/${id}`,
-    files: { 'main.js': 'sha', 'lib.js': 'sha' },
-  }
-  let request = 'https://ada.yaks.app/cookbook/api/report'
-  let check = (
-    src: string,
-    file?: string,
-    version: number | null = 2,
-    mount = '/cookbook/',
-  ) =>
-    failedScript(
-      { version, message: `failed to load script ${src}`, file },
-      release,
-      request,
-      mount,
-    )
-  let lacks = { script: 'main.js', missing: 'missing.js' }
-  let gone = '/cookbook/missing.js'
-  assertEquals(check('https://ada.yaks.app/cookbook/main.js', gone), lacks)
-  assertEquals(
-    check(
-      `/cookbook/api/assets/${id}/main.js?v=1`,
-      `/cookbook/api/assets/${id}/missing.js`,
-    ),
-    lacks,
-  )
-  assertEquals(check(`/api/assets/${id}/main.js`, '/missing.js', 2, '/'), lacks)
-  assertEquals(
-    check(
-      `/cookbook/~ticket/api/assets/${id}/main.js`,
-      `/cookbook/~ticket/api/assets/${id}/missing.js`,
-      2,
-      '/cookbook/~ticket/',
-    ),
-    lacks,
-  )
-  // Every file it loads is in the release: the platform refused its own.
-  for (let file of [undefined, '/cookbook/main.js', '/cookbook/lib.js']) {
-    assertEquals(check('/cookbook/main.js', file), null)
-  }
-  // Not the release's own files.
-  for (
-    let src of [
-      'https://elsewhere.test/cookbook/main.js',
-      '/another/main.js',
-      '/cookbook/api/client.js',
-      '/cookbook/missing.js',
-      '/cookbook/api/assets/00000000-0000-4000-8000-000000000000/main.js',
-      '/cookbook/%ZZ.js',
-    ]
-  ) {
-    assertEquals(check(src, gone), null)
-    if (src != gone) assertEquals(check('/cookbook/main.js', src), null)
-  }
-  assertEquals(check('/cookbook/main.js', gone, 1), null)
-  assertEquals(check('/cookbook/main.js', gone, null), null)
-  assertEquals(
-    failedScript(
-      { version: 2, message: 'x is not a function', file: gone },
-      release,
-      request,
-      '/cookbook/',
-    ),
-    null,
-  )
-})
 
 test('release URLs keep local assets under their mount', () => {
   let id = '3c92f71b-848e-4492-95e7-c73402b90ffc'
@@ -126,24 +54,6 @@ test('release URLs keep local assets under their mount', () => {
   assertEquals(about('../styles/main.css'), file)
   assertEquals(about('./me.png'), `${at}api/assets/${id}/about/me.png`)
   assertEquals(about('../../elsewhere.js'), '../../elsewhere.js')
-})
-
-test("a script failure in a served folder is that folder's file", () => {
-  let release = { version: 2, files: { 'dist/assets/app.js': 'sha' } }
-  assertEquals(
-    failedScript(
-      {
-        version: 2,
-        message: 'failed to load script /vite/assets/app.js',
-        file: '/vite/assets/chunk.js',
-      },
-      release,
-      'https://ada.yaks.app/vite/api/report',
-      '/vite/',
-      'dist',
-    ),
-    { script: 'dist/assets/app.js', missing: 'dist/assets/chunk.js' },
-  )
 })
 
 test('local import-map values, URL keys, and scopes follow a release', () => {

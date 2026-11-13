@@ -221,8 +221,8 @@
       // edge injects, blocked in the visitor's browser, is the platform's news
       // and not this app's.
       if (where && !mine(where)) return
-      // A module names its entry, so its release can be put back (yaks.app
-      // `failedScript`), and `url` the file that was refused.
+      // A module names its entry, and `url` the file that was refused: the
+      // entry loads it, and whoever fixes the break needs both.
       let miss = (url = src) =>
         broke({
           message: `failed to load ${el.tagName.toLowerCase()}${

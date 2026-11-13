@@ -1856,9 +1856,9 @@ export let api = async (
     // A page a verified bot renders, nobody is looking at (@yaks/platform/bots). It
     // loads on budgets and through proxies of its own, which drop loads our
     // doors answered, so a miss it reports is the bot's: filed, it reads as
-    // the app's break, and a module it cut off would roll the release back
-    // (tools.ts `recoverRelease`). Taken before the flood ceiling, so a bot's
-    // render never spends the reports a person's page may need.
+    // the app's break and sends its Operator to fix what is not broken. Taken
+    // before the flood ceiling, so a bot's render never spends the reports a
+    // person's page may need.
     if (isVerifiedBot(req)) {
       await req.body?.cancel()
       return new Response(null, { status: 204 })
@@ -1879,22 +1879,6 @@ export let api = async (
         { ...broke, version: broke.version ?? version },
         { env, space, app, request: req },
       )
-      try {
-        await (await import('./tools.ts')).recoverRelease(
-          { env, dir, person: '' },
-          space,
-          app,
-          broke,
-          req.headers.get(ADDRESS) ?? req.url,
-          mount,
-        )
-      } catch (e) {
-        caught(e, {
-          request: 'recover release',
-          space: space.slug,
-          app: app.slug,
-        })
-      }
     }
     return new Response(null, { status: 204 })
   }

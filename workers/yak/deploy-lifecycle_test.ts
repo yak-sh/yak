@@ -403,88 +403,34 @@ let rollback = await (async () => {
   return { scenario, f, before }
 })()
 
-test('rollback selects kept bytes without minting or changing deploys, then deploy allocates above history', async () => {
+test('a broken release stays live until someone rolls it back, rollback selects kept bytes, then deploy allocates above history', async () => {
   await using scenario = rollback.scenario
   let { f, before } = rollback
-  let notices: unknown[] = []
-  let wire = scenario.env.WIRE as unknown as Namespace
-  let env = {
-    ...scenario.env,
-    WIRE: {
-      idFromName: (name: string) => wire.idFromName(name),
-      get: (id: Parameters<Namespace['get']>[0]) => ({
-        fetch: async (req: Request) => {
-          if (new URL(req.url).pathname == '/tell') {
-            notices.push(await req.clone().json())
-          }
-          return wire.get(id).fetch(req)
-        },
+  // v2's page loads a file v2 does not have. Its report is a break for an
+  // agent to decide on; nothing puts v1 back by itself (M-37965).
+  let res = await apps.fetch(
+    new Request('https://ada.yaks.app/recipes/api/report', {
+      method: 'POST',
+      body: JSON.stringify({
+        version: 2,
+        page: 'https://ada.yaks.app/recipes/',
+        url: 'https://ada.yaks.app/recipes/missing.js',
+        message: 'failed to load script https://ada.yaks.app/recipes/main.js',
       }),
-    },
-  } as Env
-  // The reporter names the page, and the file refused beside the script.
-  let missing = 'https://ada.yaks.app/recipes/missing.js'
-  let report = async (
-    version: number | null,
-    src: string,
-    message = `failed to load script ${src}`,
-    file = missing,
-  ) => {
-    let res = await apps.fetch(
-      new Request('https://ada.yaks.app/recipes/api/report', {
-        method: 'POST',
-        body: JSON.stringify({
-          version,
-          page: 'https://ada.yaks.app/recipes/',
-          url: file,
-          message,
-        }),
-      }),
-      env,
-    )
-    assertEquals(res.status, 204)
-    await res.body?.cancel()
-  }
-  let src = 'https://ada.yaks.app/recipes/main.js'
-  for (
-    let [version, address, message, file] of [
-      [1, src],
-      [null, src],
-      [2, 'https://elsewhere.test/recipes/main.js'],
-      [2, 'https://ada.yaks.app/another/main.js'],
-      [2, 'https://ada.yaks.app/recipes/api/client.js'],
-      [2, src, 'x is not a function'],
-      // v2 holds the file it was refused: the platform failed to serve it,
-      // and putting v2 back would blame the app for it (T-136081).
-      [2, src, undefined, src],
-    ] as [number | null, string, string?, string?][]
-  ) {
-    await report(version, address, message, file)
-  }
+    }),
+    scenario.env,
+  )
+  assertEquals(res.status, 204)
+  await res.body?.cancel()
   let space = (await f.dir.space('ada'))!
-  assertEquals((await f.dir.app(space, 'recipes'))!.version, 2)
-  let releaseId = before[0].source!.split('/').at(-1)
-  await report(
-    2,
-    `https://ada.yaks.app/recipes/api/assets/${releaseId}/main.js`,
-  )
-  assertEquals((await f.dir.app(space, 'recipes'))!.version, 1)
-  assertEquals(await f.history(), before)
-  assertEquals(
-    notices.some((n) =>
-      JSON.stringify(n).includes(
-        'automatically rolled back v2 to v1: its script main.js loads missing.js, which v2 does not have',
-      )
-    ),
-    true,
-  )
-  // Repeated reports from the old page do not move the pointer again.
-  await report(2, src)
-  assertEquals((await f.dir.app(space, 'recipes'))!.version, 1)
+  let live = async () => (await f.dir.app(space, 'recipes'))!.version
+  assertEquals(await live(), 2)
+  await call(f.ctx, 'app_rollback', f.args)
+  assertEquals(await live(), 1)
   await call(f.ctx, 'app_rollback', { ...f.args, version: 2 })
   await call(f.ctx, 'app_rollback', f.args)
   assertEquals(await f.history(), before)
-  assertEquals((await f.dir.app(space, 'recipes'))!.version, 1)
+  assertEquals(await live(), 1)
   let list = (await call(f.ctx, 'app_versions', f.args)).text
   assertEquals(list.includes('v1 (live)'), true)
   assertEquals(list.includes('moved v2 → v1'), true)
@@ -494,17 +440,12 @@ test('rollback selects kept bytes without minting or changing deploys, then depl
   assertEquals(await f.history(), before)
   await call(f.ctx, 'app_rollback', { ...f.args, version: 1 })
   await f.write('three')
-  await call(f.ctx, 'app_files', {
-    ...f.args,
-    path: 'main.js',
-    content: "import './missing.js'",
-  })
   await call(f.ctx, 'app_deploy', f.args)
   assertEquals((await f.history()).map((v) => v.version), [3, 2, 1])
   assertEquals((await f.history()).slice(1), before)
   // The preceding live version was v1, even though v2 is the prior deploy.
-  await report(3, src)
-  assertEquals((await f.dir.app(space, 'recipes'))!.version, 1)
+  await call(f.ctx, 'app_rollback', f.args)
+  assertEquals(await live(), 1)
 })
 
 test('worker errors after rollback and an in-flight pointer move name the routed bytes', async () => {

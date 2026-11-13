@@ -80,7 +80,6 @@ import { mode } from '@yaks/member'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { Props, Sheet } from './csv.ts'
 import {
-  configOf,
   mimeOf,
   prefixOf,
   seedy,
@@ -91,8 +90,7 @@ import {
 } from './files.ts'
 import { perusal, peruse } from './files_read.ts'
 import { drawn, ICON_SVG } from './raster.ts'
-import { failedScript, type Unfound, unfound } from './asset_url.ts'
-import { told as notify } from './stream.ts'
+import { type Unfound, unfound } from './asset_url.ts'
 import {
   type Access,
   addresses,
@@ -1883,62 +1881,6 @@ let released = async (
     return out
   } finally {
     if (!released) await unfenced(ctx.dir, standing, fence, who)
-  }
-}
-
-/** Recover from the browser failure just accepted by the app_errors intake:
- * a release whose script loads a file the release lacks is put back to the
- * one before, and its owners are told which file. A file it holds that was
- * refused anyway is the platform's failure, filed to the platform's tracker
- * by the intake, and moves nothing (asset_url.ts `failedScript`). Intake is
- * queued, so rereading the tracker here could miss that occurrence. */
-export let recoverRelease = async (
-  ctx: Ctx,
-  space: Space,
-  app: App,
-  report: { version: number | null; message: string; file?: string },
-  request: string,
-  mount: string,
-) => {
-  if (
-    report.version == null ||
-    !report.message.startsWith('failed to load script ')
-  ) return
-  let current = await ctx.dir.app(space, app.slug)
-  if (
-    !current || current.eid != app.eid || current.version != report.version ||
-    current.fence
-  ) return
-  let all = await versions(ctx.dir, current)
-  let live = all[0]
-  if (!live || live.version != report.version) return
-  let folder = live.source
-    ? (await configOf(r2Objects(ctx.env.BLOBS), live.source)).assets?.directory
-    : undefined
-  let failed = failedScript(report, live, request, mount, folder)
-  if (!failed) return
-  let target = deployedOver(all, await ctx.dir.switches(current), live)
-  if (!target) return
-  let who: Who = { person: null, role: 'owner', administrative: true }
-  await released(
-    ctx,
-    space,
-    current,
-    who,
-    appStore(ctx.env.STORE, space, current, ctx.env),
-    {
-      target,
-      expectedVersion: live.version,
-    },
-  )
-  for (let person of await ctx.dir.owners(space)) {
-    let data =
-      `${space.slug}/${app.slug} automatically rolled back v${live.version} to v${target.version}: its script ${failed.script} loads ${failed.missing}, which v${live.version} does not have`
-    await notify(ctx.env, person, 'notifications/message', {
-      level: 'warning',
-      logger: `${space.slug}/${app.slug}`,
-      data,
-    }, data)
   }
 }
 
