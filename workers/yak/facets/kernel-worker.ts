@@ -138,6 +138,7 @@ export let PUBLIC_DIRECTORY = [
 ] as const
 export let PURGER = ['purge', ...DURABLE] as const
 export let OUTLAST = ['call', ...DURABLE] as const
+export let LEXICON = ['admit', 'grow', 'put', 'forget', ...DURABLE] as const
 
 // An entrypoint or object whose every call enters the tracker's boundary as
 // `<Name> <method>`, answered by what `make` returns from its context and env.
@@ -233,9 +234,9 @@ export let classes: Record<string, Deferred> = {
   // anything in, asked instead of the stores themselves.
   Lexicon: entered(
     DurableObject,
-    ['admit', 'grow', 'put', 'forget'],
-    async (ctx: { storage: never }) =>
-      (await import('../lexicon.ts')).lexicon(ctx.storage),
+    LEXICON,
+    async (ctx: never, env) =>
+      new (await import('../lexicon.ts')).LexiconStore(ctx, env),
   ),
   // The kernel's cached file entrypoint (cache.ts, wrangler.toml
   // `[exports.Files]`). The default entrypoint is the gateway: it runs on

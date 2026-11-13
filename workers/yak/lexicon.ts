@@ -31,6 +31,7 @@ import type { Env } from './env.ts'
 import type { Reach } from './reach.ts'
 import { appVocab } from './vocab.ts'
 import { caught } from './defects.ts'
+import { Durable, type State } from '@yaks/durable-object/object'
 
 /** Entries a lexicon keeps before it admits everything. */
 export let LIMIT = 16_000
@@ -110,6 +111,31 @@ export let lexicon = (storage: Kept): Lexicon => {
       held.delete(store)
       await storage.delete(store)
     },
+  }
+}
+
+/** The one object (index.ts `Lexicon`): it holds no graph, only one key per
+ * store in its counted keys, which every app store's writes `grow`, and each
+ * of its methods is an entry of its own. */
+export class LexiconStore extends Durable implements Lexicon {
+  #held: Lexicon
+  constructor(ctx: State, _env: Env) {
+    super(ctx, {
+      report: (e, entry) => caught(e, { request: `lexicon ${entry}` }),
+    })
+    this.#held = lexicon(this.keys)
+  }
+  admit(asked: { store: string; fields: string }[], words: string) {
+    return this.enter('admit', () => this.#held.admit(asked, words))
+  }
+  grow(store: string, fields: string, words: string[]) {
+    return this.enter('grow', () => this.#held.grow(store, fields, words))
+  }
+  put(store: string, fields: string, words: string[]) {
+    return this.enter('put', () => this.#held.put(store, fields, words))
+  }
+  forget(store: string) {
+    return this.enter('forget', () => this.#held.forget(store))
   }
 }
 
