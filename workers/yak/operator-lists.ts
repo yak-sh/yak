@@ -339,8 +339,12 @@ let row = (
     h(
       Rows.Main,
       null,
-      h(Rows.Name, { title: a.title }, a.title),
-      a.ask && a.ask != a.title ? h(Rows.Meta, { title: a.ask }, a.ask) : null,
+      // a line for what it is and a line for what it asks, each cut where
+      // it runs out of room, its title saying the rest
+      h(Rows.Name, { mod: 'line', title: a.title }, a.title),
+      a.ask && a.ask != a.title
+        ? h(Rows.Meta, { mod: 'line', title: a.ask }, a.ask)
+        : null,
     ),
     h(
       Rows.Actions,
@@ -423,7 +427,11 @@ export let listOf = (listed: Listed, action: string, back: string): List => {
           Rows,
           { as: 'ul', class: 'Asks' },
           lines.map((l) =>
-            h(Rows.Item, { as: 'li' }, h(Rows.Name, { title: l }, l))
+            h(
+              Rows.Item,
+              { as: 'li' },
+              h(Rows.Name, { mod: 'line', title: l }, l),
+            )
           ),
         ),
       )

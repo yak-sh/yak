@@ -164,7 +164,7 @@ test('the next message, by any channel, is the same conversation, and files no t
 test('the chat app lists the conversation first and the work it started, and opens either', () => {
   assertEquals(listed.map((w) => w.open), [root, fork.entity.eid])
   assertEquals(listed[1].title, 'Add a dentist reminder, Tuesday 3pm')
-  assertEquals(listed[1].state, 'Done')
+  assertEquals(listed[1].standing, 'done')
   assertEquals(byRequest.task, root)
   assertStringIncludes(byRequest.html, 'title="By text"')
   assertStringIncludes(byRequest.html, '</span>Remind me about the dentist')

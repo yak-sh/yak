@@ -865,7 +865,9 @@ test(
       await until(() => reported.length == 2)
       assertEquals(
         [...page.document.querySelectorAll('[data-rows] > *')]
-          .slice(0, 2).map((r) => r.textContent),
+          .slice(0, 2).map((r) =>
+            r.querySelector('.Transcript_Bubble')?.textContent
+          ),
         words,
       )
       assertEquals(
@@ -956,11 +958,24 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
   let theirs = await load(storage(), false, park)
   let text = (page: typeof own, at: string) =>
     page.document.querySelector(at)?.textContent ?? ''
-  let row = `#help-${helper}`
-  let drawn = () => [
-    text(own, '[data-turn]').replace(/\d+s$/, 'Ns'),
-    text(theirs, row).replace(/\d+s$/, 'Ns'),
-  ]
+  let row = `[data-helping] [data-help="${helper}"]`
+  // The helper reads the same wherever it is drawn: in the aside, in the
+  // step that started it, and in the band on its own page.
+  let alike: string[][] = []
+  let drawn = () => {
+    let at = `[data-help="${helper}"] .Rows_Meta`
+    alike.push(
+      [
+        text(theirs, `[data-helping] ${at}`),
+        text(theirs, `[data-conversation] ${at}`),
+        text(own, `.Talk_Helper ${at}`),
+      ].map((t) => t.replace(/\d+s$/, 'Ns')),
+    )
+    return [
+      text(own, '[data-turn]').replace(/\d+s$/, 'Ns'),
+      text(theirs, row).replace(/\d+s$/, 'Ns'),
+    ]
+  }
   let first = drawn()
   let link = theirs.document.querySelector(`${row} a`)?.getAttribute('href')
   // The Builder object's frames, to both pages' sockets.
@@ -1008,6 +1023,11 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
   assertEquals(ended, [
     'Nothing running',
     'Import the people CSVDone · just now',
+  ])
+  assertEquals(alike, [
+    Array(3).fill('Running · Thinking · Ns'),
+    alike[1].map(() => alike[1][0]),
+    Array(3).fill('Done · just now'),
   ])
   assertEquals(
     theirs.document.querySelector(`${row} a`)?.getAttribute('href'),

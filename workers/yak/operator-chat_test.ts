@@ -745,7 +745,7 @@ test('the Voice card shows back the voice, speed and model each save picked', as
   })
 })
 
-test('a helper’s page is zoomed in: held under the bar, the way back out, where words go, and Stop while it works', async () => {
+test('a helper’s page is zoomed in: held under the bar, the way back out, its row, and where words go', async () => {
   let helper = crypto.randomUUID()
   await service.store.g.apply([
     {
@@ -763,8 +763,7 @@ test('a helper’s page is zoomed in: held under the bar, the way back out, wher
   let { document } = await sided('owner', helper)
   let theirs = `${managePath('operator', space.slug)}/${task}`
   assert(document.querySelector('.Talk')!.classList.contains('Talk-zoomed'))
-  let band = document.querySelector('.Talk_Top > [data-helper]')!
-  assertEquals(band.getAttribute('data-helper'), helper)
+  let band = document.querySelector('.Talk_Top > .Talk_Helper')!
   let out = band.querySelector('.Talk_Out')!
   assertEquals(
     [out.getAttribute('href'), out.textContent],
@@ -772,8 +771,12 @@ test('a helper’s page is zoomed in: held under the bar, the way back out, wher
   )
   assertStringIncludes(band.textContent!, 'Helper')
   assertEquals(
-    band.querySelector('[data-stop-helper]')?.textContent,
-    'Stop this helper',
+    band.querySelector('.Rows_Meta .State')?.textContent,
+    'Running',
+  )
+  assertEquals(
+    band.querySelector('[data-help] a')?.getAttribute('href'),
+    `${managePath('operator', space.slug)}/${helper}`,
   )
   let to = document.querySelector('#ask .Composer_To')!
   assertStringIncludes(to.textContent!, 'To your conversation with')
@@ -785,7 +788,7 @@ test('a helper’s page is zoomed in: held under the bar, the way back out, wher
   )
   // Their conversation is not zoomed and says nothing of where words go.
   let root = (await sided('owner')).document
-  assertEquals(root.querySelector('[data-helper], .Composer_To'), null)
+  assertEquals(root.querySelector('.Talk_Helper, .Composer_To'), null)
   assert(!root.querySelector('.Talk')!.classList.contains('Talk-zoomed'))
 })
 

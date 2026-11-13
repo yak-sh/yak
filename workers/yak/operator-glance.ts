@@ -9,6 +9,7 @@ import type { Directory } from './directory.ts'
 import { moment } from './html.ts'
 import { rootAt } from './operator-root.ts'
 import { type Helping, helpingOf } from './operator-host.ts'
+import { word } from './operator-aside.ts'
 import type { operatorStore } from './operator-store.ts'
 import { updatesOf } from './operator-updates.ts'
 import { message } from '@yaks/model'
@@ -71,8 +72,8 @@ export let recentOf = async (g: Glance, most = RECENT) => {
 // since when, and while it works what it is doing and how far it got.
 let workLine = (w: Helping) =>
   [
-    `- ${cut(w.title, 160)}: ${w.state}, ${moment(w.at)}`,
-    w.now && `  doing now: ${w.now}`,
+    `- ${cut(w.title, 160)}: ${word(w.standing)}, ${moment(w.at)}`,
+    w.standing == 'running' && w.step && `  doing now: ${w.step}`,
     w.wrote && `  latest it wrote: ${cut(w.wrote)}`,
   ].filter(Boolean).join('\n')
 

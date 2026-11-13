@@ -770,15 +770,6 @@
     gap: .75rem;
     padding-block: 1rem .25rem;
   }
-  /* A list beside the conversation (operator-lists.ts): each a line for what it is
-     and a line for what it asks, cut where it runs out of room, its title
-     saying the rest. */
-  .Asks :is(.Rows_Name, .Rows_Meta) {
-    display: block;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
   .Asks .Rows_Actions {
     flex-wrap: wrap;
   }
@@ -818,17 +809,8 @@
     min-width: 0;
     max-width: 100%;
   }
-  .Talk_Helper [data-stop-helper] {
-    margin-left: auto;
-  }
-  .Talk_Helper [data-helper-said] {
-    flex-basis: 100%;
-    margin: 0;
-    color: var(--muted);
-    font-size: var(--fine, var(--small));
-  }
-  .Talk_Helper [data-helper-said]:empty {
-    display: none;
+  .Talk_Helper > .Rows {
+    flex: 1 1 12rem;
   }
   @media (prefers-reduced-motion: no-preference) {
     .Talk-zoomed .Talk_Column {

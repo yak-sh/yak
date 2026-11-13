@@ -10,7 +10,7 @@ import { platform } from './directory-rows-probe.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { rootAt } from './operator-root.ts'
 import { conversationOf } from './operator-host.ts'
-import { helperHtml } from './operator-aside.ts'
+import { helperHtml } from './operator-rows.ts'
 import { call, type Ctx } from './tools.ts'
 
 let person = crypto.randomUUID()

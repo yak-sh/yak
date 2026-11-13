@@ -1,5 +1,4 @@
 import { Transcript } from '@yaks/ui/parts'
-import { Time } from '@yaks/ui/parts'
 // What the Operator's chat app shows of its work (operator-page.ts
 // `chatPage`): each task as one conversation, its lines drawn by
 // operator-draw.ts under a line for what it is doing now, and the list of
@@ -38,7 +37,13 @@ import {
   wire,
 } from './operator-draw.ts'
 import { drawn, type Row, rowsOf } from './operator-rows.ts'
-import type { HelperLine, Standing, Turn } from './operator-aside.ts'
+import {
+  going,
+  type HelperLine,
+  type Standing,
+  type Turn,
+  Work,
+} from './operator-aside.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -243,12 +248,18 @@ export let turnOf = (entries: Bundle[], names: Names): Turn | null => {
  * helpers work. */
 export type Place = 'queued' | 'waiting' | 'active' | null
 
-// How a session that ended stands, by its status.
+// How a session that is not at work stands, by its status.
 let STANDING: Record<string, Standing> = {
   settled: 'done',
   failed: 'failed',
   stopped: 'stopped',
+  empty: 'waiting',
 }
+
+/** How a session stands, by its lines: waiting to start, running, or how
+ * it ended. */
+export let standingIn = (entries: Bundle[]): Standing =>
+  atWork(entries) ? 'running' : STANDING[statusOf(entries)] ?? 'done'
 
 /**
  * A helper as the aside lists it, from its newest lines: how it stands, its
@@ -267,6 +278,9 @@ let STANDING: Record<string, Standing> = {
  * let of = { session: 'h', title: 'Import the CSV', since: '2026-11-08T15:00:00.000Z' }
  * equal(helping({ ...of, entries: [...begun, line(3, { call: { to: 'shell' } })] }, names), {
  *   ...of, standing: 'running', step: 'Running shell…',
+ * })
+ * equal(helping({ ...of, entries: [] }, names), {
+ *   ...of, standing: 'waiting', step: 'Waiting to start',
  * })
  * equal(helping({ ...of, entries: begun, place: 'queued' }, names), {
  *   ...of, standing: 'waiting', step: 'Waiting for a place to run',
@@ -290,29 +304,28 @@ export let helping = (
   names: Names,
 ): HelperLine => {
   let { entries, place, ...of } = helper
-  let status = statusOf(entries)
-  let [standing, step]: [Standing, string] = status == 'empty'
+  let stands = standingIn(entries)
+  let [standing, step]: [Standing, string] = stands == 'waiting'
     ? ['waiting', 'Waiting to start']
-    : !atWork(entries)
+    : stands == 'failed'
     ? [
-      STANDING[status] ?? 'done',
-      status == 'failed'
-        ? String(comp(entries.at(-1), 'content')?.body ?? '').split('\n')[0]
-          .slice(0, 120)
-        : '',
+      'failed',
+      String(comp(entries.at(-1), 'content')?.body ?? '').split('\n')[0]
+        .slice(0, 120),
     ]
+    : stands != 'running'
+    ? [stands, '']
     : place == 'queued'
     ? ['waiting', 'Waiting for a place to run']
     : place == 'waiting'
     ? ['waiting', 'Waiting on its helpers']
     : ['running', now(entries, names)]
-  let ended = !['running', 'waiting'].includes(standing)
   let recap = standing == 'done' ? recapOf(entries) : ''
   return {
     ...of,
     standing,
     step,
-    ...ended ? { until: at(entries.at(-1)) } : {},
+    ...going({ standing }) ? {} : { until: at(entries.at(-1)) },
     ...recap ? { recap } : {},
   }
 }
@@ -522,13 +535,15 @@ export type Underway = Changed & { started: boolean }
 
 /** One task's frame: the lines a step changed, as the entries each draws
  * (operator-draw.ts `Lines`), what it is doing now, the apps it changed,
- * worked on and started, and what it says aloud. */
+ * worked on and started, what it says aloud, and for a helper's own
+ * conversation, its row (`helping`). */
 export let frame = (
   task: string,
   entries: Bundle[],
   names: Names,
   from: number,
   seen: Seen = {},
+  line?: HelperLine,
 ) => ({
   operator: {
     task,
@@ -538,6 +553,7 @@ export let frame = (
     started: started(entries, from),
     said: aloud(entries, names, from),
     ...doingNow(entries, names),
+    ...line ? { helping: line } : {},
   },
 })
 
@@ -545,8 +561,8 @@ export let frame = (
  * that started it (that step drawn again) or, for a helper no step drawn
  * started, on its own; the apps it changed, worked on and started, and the
  * changes it landed said aloud, never its replies, which are the Operator's
- * to hear; what the Operator that started it is doing now; and the helper
- * as the aside lists it (`helping`). */
+ * to hear; what the Operator that started it is doing now; and the
+ * helper's row (`helping`), which the step that started it draws too. */
 export let helperFrame = (
   task: string,
   helper: Helper,
@@ -554,7 +570,6 @@ export let helperFrame = (
   names: Names,
   from: number,
   seen: Seen = {},
-  listed?: HelperLine,
 ) => {
   let seq = (id: string) =>
     Number(
@@ -578,7 +593,7 @@ export let helperFrame = (
       started: started(helper.entries, from),
       said: aloud(helper.entries.filter((b) => !b.output), names, from),
       ...doingNow(entries, names),
-      ...listed ? { helping: listed } : {},
+      ...helper.line ? { helping: helper.line } : {},
     },
   }
 }
@@ -614,57 +629,36 @@ export let talk = (
   ))
 }
 
-/** A piece of the Operator's work as its lists show it, in plain words. */
-export type Worked = {
-  /** what the page opens it by: a task, or a request no task has taken yet */
+/** A piece of the Operator's work as its lists show it, drawn by the row
+ * every piece of work is (operator-aside.ts `Work`): what the page opens it
+ * by (a task, a session, or a request no task has taken yet), when it last
+ * changed, and for a helper, the title of the conversation that started
+ * it. */
+export type Worked = Omit<Work, 'session' | 'href'> & {
   open: string
-  title: string
-  state: string
   at: string
-  busy: boolean
-  /** for a helper, the title of the conversation that started it */
   from?: string
-}
-
-// What a task's newest session says of it, in the words its list shows.
-export let stateOf = (entries: Bundle[], done: boolean) => {
-  let status = statusOf(entries)
-  if (status == 'failed') return 'Could not finish'
-  if (status == 'stopped') return 'Stopped'
-  if (status == 'settled') return done ? 'Done' : 'Answered'
-  return status == 'empty' ? 'Waiting to start' : 'Working on it'
 }
 
 /** A conversation as a list shows it, with where it is when the list holds
  * more than one space's. */
 export type Listed = Worked & { where?: string }
 
-// A list across spaces says when each last changed, to the minute.
-let meta = (w: Listed) =>
-  [
-    w.where,
-    w.from && `Helper of the ${w.from[0].toLowerCase()}${w.from.slice(1)}`,
-    w.state,
-    h(Time, { at: w.at }),
-  ].filter(Boolean).flatMap((part, i) => i ? [' · ', part] : [part])
-
 /** The Operator's conversations as rows, newest first, each a link to the
- * page `href` gives it. */
+ * page `href` gives it, saying first where it is and whose helper it is. */
 export let listed = <W extends Listed>(items: W[], href: (w: W) => string) =>
   renderToString(h(
     Rows,
     null,
     items.map((w) =>
-      h(
-        Rows.Item,
-        { 'data-pending': w.busy ? '' : undefined },
-        h(
-          Rows.Main,
-          null,
-          h(Rows.Name, { href: href(w) }, w.title),
-          h(Rows.Meta, null, meta(w)),
-        ),
-      )
+      h(Work, {
+        work: { ...w, session: w.open, href: href(w) },
+        about: [
+          w.where,
+          w.from &&
+          `Helper of the ${w.from[0].toLowerCase()}${w.from.slice(1)}`,
+        ].filter(Boolean),
+      })
     ),
   ))
 

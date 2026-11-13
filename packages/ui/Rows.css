@@ -125,8 +125,11 @@
   color: var(--text);
   font-weight: 700;
 }
-/* A name kept to one line, cut short where it runs past. */
-.Rows_Name-line {
+/* A name or what describes it kept to one line, cut short where it runs
+   past. */
+.Rows_Name-line,
+.Rows_Meta-line {
+  display: block;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;

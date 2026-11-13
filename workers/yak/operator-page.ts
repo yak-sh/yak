@@ -21,6 +21,7 @@ import {
   Field,
   Form,
   Icon,
+  Rows,
   TabSet,
 } from '@yaks/ui/parts'
 import type { Env } from './env.ts'
@@ -94,7 +95,7 @@ import { CallError } from '@yaks/tools/errors'
 import { type Changed, talks, type Underway } from './operator-view.ts'
 import type { HelperPage } from './operator-host.ts'
 import { inputOf, outcomeOf } from './operator-root.ts'
-import { Aside, type Aside as Asided, going, Stands } from './operator-aside.ts'
+import { Aside, type Aside as Asided, Work } from './operator-aside.ts'
 import {
   framed,
   input,
@@ -1842,28 +1843,20 @@ let starts = (operator: string, apps: Beside['apps'] = []) =>
 
 // A helper's page is zoomed in from the conversation that started it: held
 // under the bar as the conversation scrolls, the way back out to that
-// conversation, that it is a helper and how it stands, and, while it works,
-// Stop, which that conversation hears as the person's own (operator.ts
-// `stop`).
+// conversation, that it is a helper, and its row, as that conversation draws
+// it. The box's Stop stops it while it works, which that conversation hears
+// as the person's own (operator.ts `stop`).
 let helperBand = ({ parent, line }: HelperPage) =>
   h(
     'div',
-    { class: 'Talk_Helper', 'data-helper': line?.session ?? '' },
+    { class: 'Talk_Helper' },
     h(
       Button,
       { href: parent.href, class: 'Talk_Out', mod: 'quiet' },
       h(Toolbar.Label, {}, `← ${parentName(parent)}`),
     ),
     h(Chip, null, 'Helper'),
-    line ? h(Stands, { standing: line.standing }) : null,
-    line && going(line)
-      ? h(
-        Button,
-        { type: 'button', 'data-stop-helper': '' },
-        'Stop this helper',
-      )
-      : null,
-    h('p', { role: 'status', 'data-helper-said': '' }),
+    line ? h(Rows, null, h(Work, { work: line })) : null,
   )
 
 // The conversation a helper's page zooms out to.
@@ -2459,21 +2452,17 @@ let turning = (turn) => {
   if (at) at.replaceWith(drawn(turnHtml(happening.turn)))
   shown()
 }
-// The helper this page shows (\`helperCard\`): Stop goes once it ends.
-let ended = (helper) => {
-  let card = document.querySelector('[data-helper]')
-  if (card?.dataset.helper != helper.session || ['running', 'waiting'].includes(helper.standing)) return
-  card.querySelector('[data-stop-helper]')?.remove()
-}
+// A helper's row, put in place wherever the page draws it (operator-aside.ts
+// \`Work\`): in the Helpers box, in the step that started it, and in the band
+// on its own page, whose Helpers box lists only the helpers it started.
 let helped = (helper) => {
-  ended(helper)
+  let at = '[data-help="' + helper.session + '"]'
+  for (let row of document.querySelectorAll(at)) row.replaceWith(drawn(helperHtml(helper)))
+  if (helper.session == thread()?.dataset.task) return
   happening.helpers = ordered([helper, ...happening.helpers.filter((h) => h.session != helper.session)])
   let list = aside()?.querySelector('[data-helping]')
   if (!list) return
-  let row = drawn(helperHtml(helper))
-  let at = document.getElementById(row.id)
-  if (at) at.replaceWith(row)
-  else list.prepend(row)
+  if (!list.querySelector(at)) list.prepend(drawn(helperHtml(helper)))
   shown()
 }
 document.addEventListener('click', (e) => {
@@ -2554,28 +2543,6 @@ document.addEventListener('click', async (e) => {
     if (!response.ok) throw new Error('These entries could not be changed. Try again.')
     await read()
   } catch (error) { said(error); button.disabled = false }
-})
-// Stop on a helper's page stops that helper, and the conversation that
-// started it hears that the person did (operator.ts \`stop\`).
-document.addEventListener('click', async (e) => {
-  let button = e.target.closest?.('[data-stop-helper]')
-  if (!button) return
-  let card = button.closest('[data-helper]'), told = card.querySelector('[data-helper-said]')
-  button.disabled = true
-  try {
-    let response = await fetch('${at}?stop=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task: card.dataset.helper }) })
-    if (!response.ok) throw new Error('It could not be stopped. Try again.')
-    let { stopped } = await response.json()
-    button.remove()
-    told.textContent = stopped ? ${
-    script(
-      `Stopped. ${space.operator} hears that you stopped it, and leaves it stopped until you talk.`,
-    )
-  } : 'It had already finished.'
-  } catch (error) {
-    button.disabled = false
-    told.textContent = error.message
-  }
 })
 // Stop takes effect on the page at once; the Operator's own word follows.
 document.addEventListener('click', async (e) => {

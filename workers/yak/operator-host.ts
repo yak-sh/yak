@@ -27,14 +27,20 @@ import {
   making,
   now,
   type Place,
-  stateOf,
+  standingIn,
   talk,
   turnOf,
   type Underway,
   withRows,
   type Worked,
 } from './operator-view.ts'
-import { type Aside, type HelperLine, ordered } from './operator-aside.ts'
+import {
+  type Aside,
+  going,
+  type HelperLine,
+  ordered,
+  type Standing,
+} from './operator-aside.ts'
 import { type Spending, spent } from './operator-spending.ts'
 import { metadata } from './operator-metadata.ts'
 import {
@@ -278,20 +284,23 @@ let helperPage = async (
   }
 }
 
-// The aside a conversation draws (operator-aside.ts): its turn under way,
-// and its helpers, those at work first.
-let asideOf = async (
+// These helpers, each with its row (`listedOf`).
+let lined = (
   store: Store,
-  entries: Bundle[],
   helpers: Helper[],
   names: Names,
   opens?: string,
-): Promise<Aside> => ({
+): Promise<Helper[]> =>
+  Promise.all(helpers.map(async (h) => {
+    let line = await listedOf(store, h, names, opens)
+    return line ? { ...h, line } : h
+  }))
+
+// The aside a conversation draws (operator-aside.ts): its turn under way,
+// and its helpers' rows, those at work first.
+let asideOf = (entries: Bundle[], helpers: Helper[], names: Names): Aside => ({
   turn: turnOf(entries, names),
-  helpers: ordered(
-    (await Promise.all(helpers.map((h) => listedOf(store, h, names, opens))))
-      .filter((h): h is HelperLine => !!h),
-  ),
+  helpers: ordered(helpers.flatMap((h) => h.line ? [h.line] : [])),
 })
 
 // The newest lines a conversation draws: a long one is read from its end.
@@ -359,6 +368,7 @@ let threadsOf = async (
     let helped = await seenOf(store, [row], own)
     let naming = await namingOf(store, withHelpers(own, helped.helpers), named)
     let seen = { ...helped, ...naming, called, opens }
+    seen.helpers = await lined(store, seen.helpers, namer(seen), opens)
     let from = own.find((b) => comp(b, 'entry')?.from)
     let who = String(comp(from, 'entry')?.from ?? 'An outside agent')
     return [
@@ -460,8 +470,24 @@ let taken = (requests: Bundle[]) =>
 /** What the chat app calls a person's conversation with the Operator. */
 export let CONVERSATION = 'Conversation'
 
-let busy = (state: string) =>
-  state == 'Working on it' || state == 'Waiting to start'
+// A conversation, a task or a request as its work is listed, standing as
+// `standing` says: while it works, since its turn under way began (of its
+// newest lines), and once it ended, when it last changed (`at`).
+let workAt = (
+  open: string,
+  title: string,
+  entries: Bundle[],
+  at: string,
+  standing?: Standing,
+): Worked => ({
+  open,
+  title,
+  ...standing ? { standing } : {},
+  step: '',
+  since: turnOf(entries, namer({}))?.since ?? at,
+  ...going({ standing }) ? {} : { until: at },
+  at,
+})
 
 // The conversations these list: `person`'s own, or, for the platform's admin
 // (`everyone`), every person's with this space's Operator, each called by
@@ -497,32 +523,35 @@ let whose = async (session: Bundle, named: Named) =>
       'someone'
   }`
 
-// A helper the Operator started, as its work is listed, and its newest lines.
-let helperOf = async (store: Store, helper: Bundle) => {
-  let eid = helper.entity.eid
-  let lines = await linesOf(store, eid, TAIL)
-  let state = stateOf(lines, true)
-  let worked: Worked = {
-    open: eid,
+// A helper the Operator started, as its work is listed (operator-view.ts
+// `helping`), its step named while it works, and its newest lines.
+let helperOf = async (store: Store, helper: Bundle, named: Named) => {
+  let lines = await linesOf(store, helper.entity.eid, TAIL)
+  let names = namer(
+    going({ standing: standingIn(lines) })
+      ? await namingOf(store, lines, named)
+      : {},
+  )
+  let { session, ...line } = helping({
+    session: helper.entity.eid,
     title: await titleAt(store, helper),
-    state,
-    at: String(
-      comp(lines.at(-1), 'created')?.at ?? comp(helper, 'created')?.at ?? '',
-    ),
-    busy: busy(state),
-  }
+    since: String(comp(helper, 'created')?.at ?? ''),
+    entries: lines,
+  }, names)
+  let at = String(comp(lines.at(-1), 'created')?.at ?? line.since)
+  let worked: Worked & { standing: Standing } = { ...line, open: session, at }
   return { worked, lines }
 }
 
-/** A piece of work as `helpingOf` tells it: while it works, the step under
- * way and the newest words it wrote. */
-export type Helping = Worked & { now?: string; wrote?: string }
+/** A piece of work as `helpingOf` tells it: a helper, and while it works,
+ * the newest words it wrote. */
+export type Helping = Worked & { standing: Standing; wrote?: string }
 
 /**
  * The work a person's conversation set going, newest first, at most `most`:
- * each helper as `workOf` lists it and, while it works, the step under way
- * (operator-view.ts `now`) and the newest words it wrote, how far it got. A
- * call's voice is told it (operator-glance.ts).
+ * each helper as `workOf` lists it, its step under way, and while it works,
+ * the newest words it wrote, how far it got. A call's voice is told it
+ * (operator-glance.ts).
  */
 export let helpingOf = async (
   store: Store,
@@ -539,12 +568,11 @@ export let helpingOf = async (
     )} ?created ?doc .order=-created.at .limit=${most}`,
   )
   return await Promise.all(helpers.map(async (helper) => {
-    let { worked, lines } = await helperOf(store, helper)
-    if (!worked.busy) return worked
+    let { worked, lines } = await helperOf(store, helper, named)
+    if (!going(worked)) return worked
     let wrote = lines.findLast((b) => b.output && !b.notice && b.content)
     return {
       ...worked,
-      now: now(lines, namer(await namingOf(store, lines, named))),
       ...wrote ? { wrote: String(comp(wrote, 'content')!.body) } : {},
     }
   }))
@@ -589,44 +617,42 @@ export let workOf = async (
       store,
       (await sessionsOf(store, task.entity.eid)).slice(-1),
     )
-    let state = stateOf(entries, comp(task, 'task')?.status == 'done')
-    return {
-      open: task.entity.eid,
-      title: String(comp(task, 'doc')?.title ?? 'A request'),
-      state,
-      at: String(comp(task, 'updated')?.at ?? comp(task, 'created')?.at ?? ''),
-      busy: busy(state),
-    }
+    return workAt(
+      task.entity.eid,
+      String(comp(task, 'doc')?.title ?? 'A request'),
+      entries,
+      String(comp(task, 'updated')?.at ?? comp(task, 'created')?.at ?? ''),
+      standingIn(entries),
+    )
   }))
   let titles = new Map(conversations.map((c) => [c.root, c.title]))
   let work = await Promise.all(
     helpers.filter((b) => !comp(b, 'spawned')?.notice).map(async (helper) => ({
-      ...(await helperOf(store, helper)).worked,
+      ...(await helperOf(store, helper, everyone ?? nameless)).worked,
       from: titles.get(String(comp(helper, 'spawned')?.parent)),
     })),
   )
-  let waiting = taken(await own(requests)).map((r) => {
-    let failed = r.failed ?? r.bounced
-    return {
-      open: r.entity.eid,
-      title: firstLine(r),
-      state: failed ? 'Could not finish' : 'Waiting to start',
-      at: String(comp(r, 'created')?.at ?? ''),
-      busy: !failed,
-    }
-  })
+  let waiting = taken(await own(requests)).map((r) =>
+    workAt(
+      r.entity.eid,
+      firstLine(r),
+      [],
+      String(comp(r, 'created')?.at ?? ''),
+      r.failed ?? r.bounced ? 'failed' : 'waiting',
+    )
+  )
+  // A conversation no one has spoken in yet stands no way.
   let talking = await Promise.all(conversations.map(async ({ root, title }) => {
     let entries = await linesOf(store, root, TAIL)
-    let state = entries.every((b) => b.notice || b.prompt)
-      ? 'Ready'
-      : stateOf(entries, false)
-    return {
-      open: root,
+    return workAt(
+      root,
       title,
-      state,
-      at: String(comp(entries.at(-1), 'created')?.at ?? ''),
-      busy: busy(state),
-    }
+      entries,
+      String(comp(entries.at(-1), 'created')?.at ?? ''),
+      entries.every((b) => b.notice || b.prompt)
+        ? undefined
+        : standingIn(entries),
+    )
   }))
   return [
     ...talking,
@@ -949,6 +975,7 @@ export let conversationOf = async (
       ...await namingOf(store, withHelpers(entries, helped.helpers), named),
     }
     let names = namer(seen)
+    seen.helpers = await lined(store, seen.helpers, names, opens)
     let shown = helper
       ? entries
       : [...entries, ...await arriving(store, row, entries)]
@@ -956,7 +983,7 @@ export let conversationOf = async (
       ...helper
         ? { helper: await helperPage(store, row, entries, names, opens) }
         : {},
-      aside: await asideOf(store, entries, seen.helpers, names, opens),
+      aside: asideOf(entries, seen.helpers, names),
       task: eid,
       begun: open,
       title: helper
@@ -1018,8 +1045,9 @@ export let conversationOf = async (
     ...await namingOf(store, withHelpers(entries, helped.helpers), named),
   }
   let names = namer(seen)
+  seen.helpers = await lined(store, seen.helpers, names, opens)
   return {
-    aside: await asideOf(store, entries, seen.helpers, names, opens),
+    aside: asideOf(entries, seen.helpers, names),
     task,
     begun: asked[0]?.entity.eid ?? task,
     title: String(comp(held, 'doc')?.title ?? 'A request'),
@@ -1036,8 +1064,8 @@ export let conversationOf = async (
  * What a session's step changed, as its conversation's frame for the page's
  * socket: the lines past `from` (by `entry.seq`, the last 30 when unknown),
  * and the newest seq it covers, to start the next from. A helper's step
- * shows in the conversation that started it (`frame`), with the helper as
- * that conversation's aside lists it, and on the helper's own page (`own`);
+ * shows in the conversation that started it (`frame`), and on the helper's
+ * own page (`own`), each with the helper's row (operator-aside.ts `Work`);
  * `opens` is where a conversation opens by its id. Only a step past a known
  * `from` says anything aloud: the lines drawn when it is unknown are old
  * news.
@@ -1063,7 +1091,7 @@ export let frameOf = async (
   )
   // The session's own conversation: the steps it changed that started
   // helpers are drawn with what each was told inside.
-  let own = async () => {
+  let own = async (line?: HelperLine) => {
     let since = from ?? seq - 30
     let changed = entries.filter((b) =>
       Number(comp(b, 'entry')?.seq ?? 0) > since
@@ -1079,16 +1107,17 @@ export let frameOf = async (
     )
     let helpers = await helpersBy(store, calls)
     let naming = await namingOf(store, entries, named)
+    let names = namer(naming)
     return hushed(
       from,
-      frame(await keyOf(store, session), entries, namer(naming), since, {
-        helpers,
+      frame(await keyOf(store, session), entries, names, since, {
+        helpers: await lined(store, helpers, names, opens),
         threads: await threadsOf(store, changed, named, called, opens),
         offers: await offersOf(store, withHelpers(entries, helpers)),
         called,
         opens,
         ...naming,
-      }),
+      }, line),
     )
   }
   let parent = String(comp(row, 'spawned')?.parent ?? '')
@@ -1103,7 +1132,7 @@ export let frameOf = async (
     entries.some((b) =>
       (b.ask || b.prompt) && Number(comp(b, 'entry')?.seq ?? 0) > from
     )
-  let helper = {
+  let lines = {
     session,
     call,
     entries: told && call ? await linesOf(store, session, SHOWN) : entries,
@@ -1115,8 +1144,10 @@ export let frameOf = async (
     if (comp(step, 'entry')?.session == parent) started.unshift(step)
   }
   // its own steps named as well as the one that started it
-  let naming = await namingOf(store, [...started, ...helper.entries], named)
+  let naming = await namingOf(store, [...started, ...lines.entries], named)
   let names = namer(naming)
+  let line = await listedOf(store, lines, names, opens) ?? undefined
+  let helper = { ...lines, line }
   return {
     seq,
     frame: hushed(
@@ -1133,10 +1164,9 @@ export let frameOf = async (
           opens,
           ...naming,
         },
-        await listedOf(store, helper, names, opens) ?? undefined,
       ),
     ),
-    own: await own(),
+    own: await own(line),
   }
 }
 

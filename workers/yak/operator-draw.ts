@@ -13,7 +13,8 @@ import { type Step, stepOf, type Steps } from '@yaks/tools/title'
 import { blocks, Host, type Options, parse } from '@yaks/markdown'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import { useContext } from 'preact/hooks'
-import { Body, Drop, Icon, Menu, More } from '@yaks/ui/parts'
+import { Body, Drop, Icon, Menu, More, Rows } from '@yaks/ui/parts'
+import { type HelperLine, Work } from './operator-aside.ts'
 import { type IconName, icons } from './icons.ts'
 import { pretty } from '@yaks/ui/relative'
 import { PART } from '@yaks/persona/part'
@@ -610,8 +611,13 @@ let briefed = (
 type Told = { id: string; uses: string[]; draw: () => Node }
 
 /** A helper the Operator started: its session, the call that started it,
- * when one did, and its transcript. */
-export type Helper = { session?: string; call?: string; entries: Bundle[] }
+ * when one did, its transcript, and its row (operator-aside.ts `Work`). */
+export type Helper = {
+  session?: string
+  call?: string
+  entries: Bundle[]
+  line?: HelperLine
+}
 
 /** What a conversation draws beside its own transcript: the helpers it
  * started, the tool offers its asks name, what its Operator is called, and
@@ -762,21 +768,11 @@ export let lines = (
   // above it: a line drawing what a helper was told reads that ask too, so
   // drawn alone it says the same is above where the page does.
   let before: string[] = []
-  // What each helper a step started was told, under a link to its own
-  // conversation.
+  // What each helper a step started was told, under its row, which opens
+  // its own conversation.
   let under = (call: string) =>
     helpers.filter((one) => one.call == call).flatMap((one) => [
-      opens && one.session
-        ? h(
-          'p',
-          null,
-          h(
-            'a',
-            { href: `${opens}/${one.session}` },
-            'Open the helper’s conversation',
-          ),
-        )
-        : null,
+      one.line ? h(Rows, null, h(Work, { work: one.line })) : null,
       rows(context(one)),
     ])
   // A helper's context, each line of it framed as the conversation's are.

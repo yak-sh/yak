@@ -117,7 +117,7 @@ test("a space's admin page opens on its Operator's conversations, every person's
   assertEquals(list.status, 200)
   assertEquals(texts(list.document, '.Rows_Name'), ['Conversation with Jeff'])
   assertEquals(
-    list.document.querySelector('.Rows_Name')!.getAttribute('href'),
+    list.document.querySelector('.Rows_Name a')!.getAttribute('href'),
     `${at}/${rootOf(eid, jeff)}`,
   )
 })
@@ -175,7 +175,7 @@ let calendar = await receive(
 )
 let sessions = await get('/admin/sessions')
 let opened = await Promise.all(
-  [...sessions.document.querySelectorAll('.Rows_Name')].map((a) =>
+  [...sessions.document.querySelectorAll('.Rows_Name a')].map((a) =>
     get(a.getAttribute('href')!)
   ),
 )
@@ -191,7 +191,8 @@ test("the sessions page lists every space's Operator conversations, each by its 
     [[200, ['Add a calendar.']], [200, ['Conversation with Jeff']]],
   )
   assertEquals(
-    sessions.document.querySelectorAll('.Rows_Name')[1]!.getAttribute('href'),
+    sessions.document.querySelector('.Rows_Item:last-child .Rows_Name a')!
+      .getAttribute('href'),
     `${at}/${rootOf(eid, jeff)}`,
   )
   // Each says its space, its state, and when it last changed.
@@ -203,12 +204,11 @@ test("the sessions page lists every space's Operator conversations, each by its 
         true,
       )
       assertEquals(!!time.textContent, true)
-      assertEquals(!!time.getAttribute('data-tip'), true)
       let copy = meta.cloneNode(true) as Element
       copy.querySelector('time')!.textContent = 'when'
       return copy.textContent
     }),
-    ['clerk · Waiting to start · when', 'clerk · Answered · when'],
+    ['clerk · Waiting · when', 'clerk · Done · when'],
   )
   assertEquals(notYours.status, 404)
 })

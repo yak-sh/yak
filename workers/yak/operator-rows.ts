@@ -6,6 +6,14 @@ import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { Host } from '@yaks/markdown'
 import { drawLines, type Line, type Lines, opening } from './operator-draw.ts'
+import {
+  Aside,
+  Glance,
+  type HelperLine,
+  type Turn,
+  TurnNow,
+  Work,
+} from './operator-aside.ts'
 
 /** A drawn line of a transcript: what it shows, under the id it is put by. */
 export type Row = { id: string; html: string }
@@ -25,14 +33,23 @@ export let rowsOf = (sent: Lines, mentions?: string): Row[] =>
   drawLines(sent).map((line) => drawn(line, mentions))
 
 // The aside beside the lines, drawn the same way (operator-aside.ts).
-export {
-  asideHtml,
-  glanceHtml,
-  helperHtml,
-  lasted,
-  ordered,
-  turnHtml,
-} from './operator-aside.ts'
+export { lasted, ordered } from './operator-aside.ts'
+
+/** The aside as HTML, its list shown or not. */
+export let asideHtml = (aside: Aside, open = false, now = Date.now()) =>
+  renderToString(h(Aside, { aside, now, open }))
+
+/** The summary's button as HTML. */
+export let glanceHtml = (aside: Aside, open = false) =>
+  renderToString(h(Glance, { aside, open }))
+
+/** The turn's line as HTML. */
+export let turnHtml = (turn: Turn | null, now = Date.now()) =>
+  renderToString(h(TurnNow, { turn, now }))
+
+/** A helper's row as HTML, as every place on the page draws it. */
+export let helperHtml = (helper: HelperLine, now = Date.now()) =>
+  renderToString(h(Work, { work: helper, now }))
 export { relative } from '@yaks/ui/relative'
 
 export { menus, tips } from '@yaks/ui/parts'

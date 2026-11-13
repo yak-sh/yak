@@ -77,7 +77,7 @@ let g: Glance = {
 }
 
 let WORK = [
-  '- Build a recipe box app: Working on it, Nov 6th, 2026, 8:08 PM UTC',
+  '- Build a recipe box app: Running, Nov 6th, 2026, 8:08 PM UTC',
   '  doing now: Writing files…',
   '  latest it wrote: Writing its files.',
   '- Check the hall booking: Done, Nov 6th, 2026, 8:05 PM UTC',

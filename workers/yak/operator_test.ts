@@ -194,10 +194,10 @@ test('operator_read lists the conversations and reads one by its session, as its
   )
   assertEquals(talked.entries, history.entries)
 })
-test('the Operator page lists its work in plain words, each opening on a page of its own', () => {
-  assertEquals(work.map((w) => [w.open, w.state, w.busy]), [
-    [rootOf(f.space.eid, f.held.person), 'Ready', false],
-    [out.task, 'Done', false],
+test('the Operator page lists its work by how each stands, each opening on a page of its own', () => {
+  assertEquals(work.map((w) => [w.open, w.standing]), [
+    [rootOf(f.space.eid, f.held.person), undefined],
+    [out.task, 'done'],
   ])
 })
 test("a piece of the Operator's work draws its task as its session ran: the words, each tool with what it sent and got in words, and the reply", () => {

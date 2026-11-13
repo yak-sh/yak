@@ -1,4 +1,3 @@
-import { Popover } from '@yaks/ui/parts'
 // The aside in the chat's header (operator-page.ts `talkPage`): what the
 // conversation is doing now, and the helpers it set going, each with its
 // title, how it stands and, while it works, its step and how long it has
@@ -11,38 +10,44 @@ import { Popover } from '@yaks/ui/parts'
 // drawing and in the browser as `_talk.js` (operator-rows.ts) for each frame,
 // and says how long each has lasted, which the page keeps current. A helper
 // that ended leaves the list a day later (`KEPT`); its place in the
-// conversation still opens it.
-import { h } from 'preact'
-import { renderToString } from 'preact-render-to-string'
-import { Card, Dot, Rows, State } from '@yaks/ui/parts'
+// conversation still opens it. A helper's row (`Work`) is the one every
+// place on the page draws it with: the Helpers box, the step that started
+// it, the band on its own page, and the admin's list of the Operator's work.
+import { type ComponentChildren as Node, h } from 'preact'
+import { Card, Dot, Popover, Rows, State } from '@yaks/ui/parts'
 import { relative } from '@yaks/ui/relative'
 
 /** What a conversation's turn is doing while it runs, and since when. */
 export type Turn = { what: string; since: string }
 
-/** How a helper stands. */
+/** How a piece of work stands. */
 export type Standing = 'running' | 'waiting' | 'done' | 'failed' | 'stopped'
 
-/** A helper as the aside lists it: the run it opens, its title, how it
- * stands, its step under way, when it began, when it ended, and the line its
- * final reply opens with, what it found or did. */
-export type HelperLine = {
+/** A piece of work as its row draws it: the session it is, the page it
+ * opens, its title, how it stands (nothing yet for a conversation no one
+ * has spoken in), its step under way, when it began, when it ended, and the
+ * line its final reply opens with, what it found or did. */
+export type Work = {
   session: string
   href?: string
   title: string
-  standing: Standing
+  standing?: Standing
   step: string
   since: string
   until?: string
   recap?: string
 }
 
+/** A helper as the aside lists it: a piece of work, which always stands
+ * some way. */
+export type HelperLine = Work & { standing: Standing }
+
 /** What the aside holds: the turn under way, and the helpers. */
 export type Aside = { turn: Turn | null; helpers: HelperLine[] }
 
-/** Whether a helper is still at it. */
-export let going = (h: Pick<HelperLine, 'standing'>) =>
-  h.standing == 'running' || h.standing == 'waiting'
+/** Whether a piece of work is still at it. */
+export let going = ({ standing }: { standing?: Standing }) =>
+  standing == 'running' || standing == 'waiting'
 
 /**
  * How long something has lasted, from `since` to `until` or `now`, in the
@@ -91,6 +96,10 @@ let TONE: Record<Standing, string | string[] | undefined> = {
   stopped: WORD.stopped[1],
 }
 
+/** How a piece of work stands, in a word, wherever it is said: on the
+ * page, and to a call's voice (operator-glance.ts). */
+export let word = (standing: Standing) => WORD[standing][0]
+
 // How long, kept current by the page (`[data-since]`).
 let For = (
   { since, until, now }: { since: string; until?: string; now: number },
@@ -117,24 +126,28 @@ export let TurnNow = ({ turn, now }: { turn: Turn | null; now: number }) =>
   )
 
 /** How a helper stands, in a word in its tone. */
-export let Stands = ({ standing }: { standing: Standing }) => {
-  let [word, tone] = WORD[standing]
-  return h(State, { mod: tone }, word)
-}
+export let Stands = ({ standing }: { standing: Standing }) =>
+  h(State, { mod: WORD[standing][1] }, word(standing))
 
 // How long ago, kept current by the page (`[data-ago]`).
 let Ago = ({ at, now }: { at: string; now: number }) =>
   h(Popover.Time, { 'data-ago': at, dateTime: at }, relative(at, now))
 
-/** A helper as a row: its title in a line, linked to its run, its recap on
- * hover, over how it stands and, while it works, its step and how long it
- * has taken, or once it ended, how long ago. */
-export let Helper = (
-  { helper: x, now }: { helper: HelperLine; now: number },
+/** A piece of work as a row, wherever it is drawn: its title in a line,
+ * linked to its page, its recap on hover, over what `about` says of it
+ * first, how it stands and, while it works, its step and how long it has
+ * taken, or once it ended, how long ago. The page puts a newer drawing of a
+ * helper in place of each by its session (`[data-help]`). */
+export let Work = (
+  { work: x, about = [], now = Date.now() }: {
+    work: Work
+    about?: Node[]
+    now?: number
+  },
 ) =>
   h(
     Rows.Item,
-    { id: `help-${x.session}`, 'data-going': going(x) ? '' : undefined },
+    { 'data-help': x.session, 'data-going': going(x) ? '' : undefined },
     h(
       Rows.Main,
       null,
@@ -146,12 +159,14 @@ export let Helper = (
       h(
         Rows.Meta,
         null,
-        h(Stands, { standing: x.standing }),
-        x.step ? ` · ${x.step.replace(/…$/, '')}` : null,
-        ' · ',
-        x.until && !going(x)
-          ? h(Ago, { at: x.until, now })
-          : h(For, { since: x.since, now }),
+        [
+          ...about,
+          x.standing && h(Stands, { standing: x.standing }),
+          x.step.replace(/…$/, ''),
+          x.until && !going(x)
+            ? h(Ago, { at: x.until, now })
+            : h(For, { since: x.since, now }),
+        ].filter(Boolean).flatMap((part, i) => i ? [' · ', part] : [part]),
       ),
     ),
   )
@@ -256,27 +271,11 @@ export let Aside = (
         h(
           Rows,
           { 'data-helping': '' },
-          aside.helpers.map((helper) => h(Helper, { helper, now })),
+          aside.helpers.map((helper) => h(Work, { work: helper, now })),
         ),
       ),
     ),
   )
-
-/** The aside as HTML, its list shown or not. */
-export let asideHtml = (aside: Aside, open = false, now = Date.now()) =>
-  renderToString(h(Aside, { aside, now, open }))
-
-/** The summary's button as HTML. */
-export let glanceHtml = (aside: Aside, open = false) =>
-  renderToString(h(Glance, { aside, open }))
-
-/** The turn's line as HTML. */
-export let turnHtml = (turn: Turn | null, now = Date.now()) =>
-  renderToString(h(TurnNow, { turn, now }))
-
-/** A helper's row as HTML. */
-export let helperHtml = (helper: HelperLine, now = Date.now()) =>
-  renderToString(h(Helper, { helper, now }))
 
 /** How long a helper stays listed once it ended, in milliseconds. */
 export let KEPT = 86_400_000
