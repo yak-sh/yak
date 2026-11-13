@@ -7,10 +7,10 @@
 // sees it. `upgrade` is the only step no web standard covers, so a runtime
 // other than Deno supplies its own.
 
-import type { Actor, Graph, ReadOpts } from '@yaks/graph'
+import type { Actor, ReadOpts } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { type Authenticate } from './actor.ts'
-import { ask, write, type WriteContext } from './doors.ts'
+import { applier, type Applying, ask } from './doors.ts'
 import { denoUpgrade } from './deno.ts'
 import { json } from './refuse.ts'
 import { type Report, served } from './request.ts'
@@ -48,23 +48,13 @@ export type Told = (
   request: Request,
 ) => string | undefined | Promise<string | undefined>
 
-/** How a handler is built: the graph it serves, and the callbacks the
- * application supplies. */
-export type Options = {
-  /** the graph this API reads and writes */
-  graph: Graph
+/** How a handler is built: the graph it serves, the callbacks the
+ * application supplies, and what its apply door is made of ({@link Applying}). */
+export type Options = Applying & {
   /** Caller read context for queries, write replies and socket frames. */
   read?: (
     request: Request,
   ) => ReadOpts | undefined | Promise<ReadOpts | undefined>
-  /** Caller write context, applied to JSON batches and every import chunk. */
-  write?: WriteContext
-  /** Additional apply query parameters interpreted by this host. */
-  writeParams?: string[]
-  /** Runtime activity stays keyed by the composed graph, not a read overlay. */
-  activity?: object
-  /** who is writing (default: nobody — writes are stored unattributed) */
-  authenticate?: Authenticate
   /** the runtime's WebSocket upgrade (default: Deno's) */
   upgrade?: Upgrade
   /** schedule socket relay batches (default: setTimeout) */
@@ -101,30 +91,23 @@ export let api = (opts: Options): Handler => {
     subscriptions(graph, { activity: opts.activity ?? graph })
   let authenticate = opts.authenticate ?? nobody
   let upgrade = opts.upgrade ?? denoUpgrade
+  let apply = applier(opts)
   let no = (message: string, code: number) =>
     json({ error: code == 404 ? 'NotFound' : 'NotAllowed', message }, code)
 
   let door: Handler = async (request) => {
     let path = new URL(request.url).pathname
+    // The apply door names its own writer: a request its host trusts names
+    // none here.
+    if (path == '/apply' && request.method == 'POST') {
+      return await apply.apply(request)
+    }
     let who = await authenticate(request)
-    let context = opts.read &&
-        (path == '/query' || path == '/ws' || path == '/apply')
+    if (path == '/apply') return no('/apply takes POST', 405)
+    let context = opts.read && (path == '/query' || path == '/ws')
       ? await opts.read(request)
       : undefined
     let readOpts: ReadOpts = { ...context, person: who?.by ?? null }
-    if (path == '/apply') {
-      return request.method == 'POST'
-        ? await write(
-          graph,
-          request,
-          who,
-          opts.activity ?? graph,
-          opts.write,
-          readOpts,
-          opts.writeParams,
-        )
-        : no('/apply takes POST', 405)
-    }
     if (path == '/query') {
       if (request.method != 'GET' && request.method != 'POST') {
         return no('/query takes GET or POST', 405)

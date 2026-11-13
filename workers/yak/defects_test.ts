@@ -173,7 +173,7 @@ test('a failure one object answers another with is filed once, where it was caug
   let { rows, time, env } = recorded()
   let stop = faults((error, where) => caught(error, { request: where }))
   try {
-    // A store's write catch (graph.ts `#commit`), answered to its caller.
+    // A store's write catch (@yaks/api `applier`), answered to its caller.
     let filed = await within(env, {}, () => {
       let lost = said(new Error('Directory write lost its serving fence'))
       caught(lost, { request: 'write' })

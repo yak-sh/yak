@@ -10,20 +10,26 @@
 // changes is that neither the request body nor the response body is ever
 // whole in memory.
 
-import type { Bundle, Graph, ReadOpts } from '@yaks/graph'
+import type { Actor, ApplyOpts, Bundle, Graph, ReadOpts } from '@yaks/graph'
 import { aggregate, reduced } from '@yaks/graph/read'
 import { knownOptions, Refused } from '@yaks/graph/errors'
-import type { Actor } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { during, parent, peek, scope } from '@yaks/trace'
-import { signed } from './actor.ts'
+import { type Authenticate, signed } from './actor.ts'
 import { readBody, receiveBody } from './body.ts'
-import { fault, json, refusal } from './refuse.ts'
+import { fault, json, refusal, refuse } from './refuse.ts'
 import { published } from './publish.ts'
-import { IDEMPOTENCY } from './log.ts'
-import { received } from './receipts.ts'
+import {
+  binaryHeaders,
+  constrained,
+  decoded,
+  durable,
+  IDEMPOTENCY,
+  taken,
+} from './log.ts'
+import { type Door, type Mark, received } from './receipts.ts'
 import { admit } from './requests.ts'
-import { BINARY, decode, stringify, unpack } from '@yaks/vocab/wire'
+import { decode, stringify } from '@yaks/vocab/wire'
 
 /** The HTTP write options, checked before a body or stream can commit. */
 export let writeOptions = (
@@ -246,6 +252,57 @@ export let pour = (
   })
 }
 
+/** A request its host trusts, such as the platform's own bookkeeping: who it
+ * writes as, and the graph it writes through, which admits the server-owned
+ * properties and stands the caller's guards down. Only a trusted write may
+ * keep the last write's provenance (`?stamp=0`). */
+export type Trusted = { graph: Graph; actor: Actor | null }
+
+/** What an apply door is built of: the graph a caller writes and how they
+ * read it, and what its host decides around a commit, given as data. Each is
+ * read as a request needs it, so a host whose graph is built again with each
+ * incarnation lends one door for all of them. */
+export type Applying = {
+  /** the graph a caller writes */
+  graph: Graph
+  /** Runtime activity stays keyed by the composed graph, not a read overlay. */
+  activity?: object
+  /** who is writing (default: nobody) */
+  authenticate?: Authenticate
+  /** The caller's view of the graph, which a write's answer is read in. A
+   * `person` here outranks the one `authenticate` names. */
+  read?: (
+    request: Request,
+  ) => ReadOpts | undefined | Promise<ReadOpts | undefined>
+  /** Caller write context, applied to JSON batches and every import chunk. */
+  write?: WriteContext
+  /** Additional apply query parameters interpreted by this host. */
+  writeParams?: string[]
+  /** Which requests the host trusts, and how ({@link Trusted}); `undefined`
+   * for every other, which `authenticate` signs. */
+  trust?: (request: Request) => Trusted | undefined
+  /** Today's authority to write, which throws for a caller who may not: asked
+   * of a durable outbox write before a kept answer is told without the graph
+   * deciding again (default: `authenticate`). A trusted request holds it. */
+  authorize?: (request: Request) => unknown
+  /** The host's write log (./receipts.ts `door`), which keeps its receipts.
+   * A door without one keeps them in its graph (./receipts.ts `received`). */
+  log?: Pick<Door, 'bound' | 'applying'>
+}
+
+/** A host's apply door ({@link applier}). */
+export type Applier = {
+  /** `POST /apply`: a batch in, as applied out, in the caller's view, or as
+   * the log keeps it when `mark` names the write to the log. It never throws:
+   * a refusal is answered at its status, and a constraint the batch broke is
+   * its refusal. */
+  apply: (request: Request, mark?: Mark) => Promise<Response>
+  /** Today's authority to write ({@link Applying} `authorize`). */
+  authorize: (request: Request) => Promise<void>
+  /** A canonical answer as its caller sees it: a kept write's, told again. */
+  answer: (request: Request, response: Response) => Promise<Response>
+}
+
 /**
  * `POST /apply` — a JSON array of bundles in, that array as applied out. The
  * response body is the array `apply()` returned, including server-written
@@ -255,57 +312,134 @@ export let pour = (
  * and the transaction is rolled back, so nothing is written and no effect
  * observes it, while a refusal is still a refusal. That is what lets one batch be spread over several graphs — ask them all, then commit.
  *
- * `content-type: application/x-ndjson` is the same endpoint for an import too
- * big to hold in memory — see {@link pour}.
+ * A binary envelope is decoded in the graph's words, whether it came as sent
+ * or as a write log keeps it (./log.ts `taken`). `content-type:
+ * application/x-ndjson` is the same endpoint for an import too big to hold in
+ * memory — see {@link pour}.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { applier } from './doors.ts'
+ * let vocab = loadVocab({ $defs: { doc: { component: true, type: 'object',
+ *   properties: { title: { type: 'string' } } } } })
+ * let g = graph({ vocab, storage: ram(vocab) })
+ * let door = applier({ graph: g })
+ * let sent = (body: unknown) => new Request('http://g/apply', {
+ *   method: 'POST', body: JSON.stringify(body),
+ * })
+ * let r = await door.apply(sent([{ entity: { eid: 'a' }, doc: { title: 'A' } }]))
+ * equal(r.status, 200)
+ * equal((await door.apply(sent({}))).status, 400)
+ * ```
  */
-export let write = async (
-  graph: Graph,
-  request: Request,
-  who: Actor | null,
-  activity: object = graph,
-  context?: WriteContext,
-  opts?: ReadOpts,
-  params: string[] = [],
-): Promise<Response> => {
-  let { check } = writeOptions(request, params)
-  let key = request.headers.get(IDEMPOTENCY)
-  if (poured(request)) {
-    if (key?.startsWith('outbox:')) {
-      throw new Refused('Durable outbox keys require a JSON apply')
-    }
-    return pour(graph, request, who, activity, context, opts, params)
-  }
-  let text: string
-  let body: unknown
-  if (request.headers.get('content-type')?.split(';')[0].trim() == BINARY) {
-    let raw = await receiveBody(request, () => request.arrayBuffer())
-    let packet = unpack(raw)
-    body = decode(graph.vocab, packet.value, packet.payload)
-    text = stringify(body)
-  } else {
-    text = await readBody(request)
-    body = decode(graph.vocab, JSON.parse(text))
-  }
-  if (!Array.isArray(body)) {
-    throw new Refused('/apply takes a JSON array of bundles')
-  }
-  let cause = peek(activity) ? parent(activity, request) : undefined
-  let batch = signed(context ? context(request, body) : body, who)
-  let options = { check, ...(cause && { parent: cause }) }
-  let applied = key && !check
-    ? await received(graph, key, text, who, batch, options)
-    : await graph.apply(batch, options)
-  return json(
-    published(
+export let applier = (o: Applying): Applier => {
+  let authenticate: Authenticate = (request) =>
+    o.authenticate ? o.authenticate(request) : null
+  let view = async (request: Request, who?: Actor | null) => ({
+    person: who?.by ?? null,
+    ...await o.read?.(request),
+  })
+  let seen = async (request: Request, rows: Bundle[], who?: Actor | null) => {
+    let { graph } = o
+    return published(
       graph.vocab,
-      opts
-        ? await graph.answer(published(graph.vocab, applied), {
-          ...opts,
-          patch: true,
-        })
-        : applied,
-    ),
-  )
+      await graph.answer(published(graph.vocab, rows), {
+        ...await view(request, who),
+        patch: true,
+      }),
+    )
+  }
+
+  let apply = async (sent: Request, mark: Mark = null): Promise<Response> => {
+    let request = sent
+    try {
+      let { graph } = o
+      let activity = o.activity ?? graph
+      let params = [...(o.writeParams ?? []), ...(o.trust ? ['stamp'] : [])]
+      let { check } = writeOptions(request, params)
+      let trusted = o.trust?.(request)
+      let writer = trusted?.graph ?? graph
+      let key = request.headers.get(IDEMPOTENCY)
+      let cause = peek(activity) ? parent(activity, request) : undefined
+      if (poured(request)) {
+        if (durable(key)) {
+          throw new Refused('Durable outbox keys require a JSON apply')
+        }
+        let who = trusted ? trusted.actor : await authenticate(request)
+        return pour(
+          writer,
+          request,
+          who,
+          activity,
+          o.write,
+          await view(request, who),
+          params,
+        )
+      }
+      let { body: text } = await taken(request)
+      let body = decoded(graph.vocab, request.headers, text)
+      if (!Array.isArray(body)) {
+        throw new Refused('/apply takes a JSON array of bundles')
+      }
+      let who = trusted ? trusted.actor : await authenticate(request)
+      if (o.log) {
+        let bound = await o.log.bound(request, text, check)
+        if (bound instanceof Response) return bound
+        request = bound
+      }
+      let batch = signed(o.write ? o.write(request, body) : body, who)
+      let options: ApplyOpts = {
+        check,
+        ...(trusted && new URL(request.url).searchParams.get('stamp') == '0'
+          ? { stamp: false }
+          : {}),
+        ...(cause && { parent: cause }),
+      }
+      let applied: Bundle[]
+      if (o.log) {
+        let out = o.log.applying(
+          request,
+          mark,
+          () => writer.apply(batch, options),
+        )
+        if (out instanceof Response) return out
+        applied = await out
+      } else if (key && !check) {
+        // A receipt is of the batch as decoded: a binary one's envelope is
+        // not what it says.
+        let said = binaryHeaders(request.headers) ? stringify(body) : text
+        applied = await received(writer, key, said, who, batch, options)
+      } else applied = await writer.apply(batch, options)
+      // The log keeps canonical patches; each caller, a resend included, is
+      // told its own view.
+      return json(
+        mark == null
+          ? await seen(request, applied, who)
+          : published(graph.vocab, applied),
+      )
+    } catch (e) {
+      return refuse(constrained(e), sent)
+    }
+  }
+
+  return {
+    apply,
+    async authorize(request) {
+      if (o.trust?.(request)) return
+      await (o.authorize ?? authenticate)(request)
+    },
+    async answer(request, response) {
+      if (
+        response.status != 200 ||
+        response.headers.get('content-type')?.includes('ndjson')
+      ) return response
+      let rows = decode(o.graph.vocab, await response.json()) as Bundle[]
+      return new Response(stringify(await seen(request, rows)), response)
+    },
+  }
 }
 
 // The query string a request carries: `?q=` on a GET, and on a POST either a

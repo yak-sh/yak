@@ -64,8 +64,9 @@ import {
   table,
   val,
 } from '@yaks/sql'
-import { BINARY, stringify, unpack } from '@yaks/vocab/wire'
-import { readBody } from './body.ts'
+import type { Vocab } from '@yaks/vocab'
+import { BINARY, decode, stringify, unpack } from '@yaks/vocab/wire'
+import { readBody, receiveBody } from './body.ts'
 
 /** The header a caller names one write by, across its sends. */
 export let IDEMPOTENCY = 'idempotency-key'
@@ -79,9 +80,6 @@ export let IDEMPOTENCY = 'idempotency-key'
 /** Whether headers say their body is a binary envelope. */
 export let binaryHeaders = (headers: Headers): boolean =>
   headers.get('content-type')?.split(';')[0].trim() == BINARY
-
-let isBinaryApply = (request: Request): boolean =>
-  binaryHeaders(request.headers) && new URL(request.url).pathname == '/apply'
 
 /** A write's body as the log keeps it, and its bundles as it says them before
  * any decoding, which is what a secret is looked for in. A JSON body is its
@@ -106,11 +104,13 @@ let isBinaryApply = (request: Request): boolean =>
 export let taken = async (
   request: Request,
 ): Promise<{ body: string; told: string }> => {
-  if (!isBinaryApply(request)) {
+  if (!binaryHeaders(request.headers)) {
     let body = await readBody(request)
     return { body, told: body }
   }
-  let raw = new Uint8Array(await request.arrayBuffer())
+  let raw = new Uint8Array(
+    await receiveBody(request, () => request.arrayBuffer()),
+  )
   return { body: toBase64(raw), told: JSON.stringify(unpack(raw).value) }
 }
 
@@ -121,6 +121,36 @@ export let opened = (
   body: string,
 ): string | Uint8Array<ArrayBuffer> =>
   binaryHeaders(headers) ? fromBase64(body) : body
+
+/** What a kept body says once its words are known: a binary one's envelope
+ * decoded in them, as a JSON one's base64 values are. Only declared binary
+ * properties interpret payload references.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { binary, BINARY } from '@yaks/vocab/wire'
+ * import { decoded, taken } from './log.ts'
+ * let vocab = loadVocab({ $defs: { photo: { component: true, type: 'object',
+ *   properties: { bytes: { type: 'string', contentEncoding: 'base64' } } } } })
+ * let bundle = { entity: { eid: 'a' }, photo: { bytes: Uint8Array.of(7) } }
+ * let { body } = await taken(new Request('http://store/apply', {
+ *   method: 'POST', headers: { 'content-type': BINARY }, body: binary([bundle]),
+ * }))
+ * equal(decoded(vocab, new Headers({ 'content-type': BINARY }), body), [bundle])
+ * equal(decoded(vocab, new Headers(), '[{"photo":{"bytes":{"$bytes":"Bw==","encoding":"base64"}}}]'),
+ *   [{ photo: { bytes: Uint8Array.of(7) } }])
+ * ```
+ */
+export let decoded = (
+  vocab: Pick<Vocab, 'def'>,
+  headers: Headers,
+  body: string,
+): unknown => {
+  if (!binaryHeaders(headers)) return decode(vocab, JSON.parse(body))
+  let packed = unpack(fromBase64(body))
+  return decode(vocab, packed.value, packed.payload)
+}
 
 // ---- the log ----------------------------------------------------------------
 
@@ -724,8 +754,8 @@ export let dead = (db: Driver, seq: number, why: string): void =>
   })
 
 /** The request a kept write was, to send `at` its door again (a Store's
- * `/apply` unless said): a binary one's envelope as it came (binary.ts
- * `sealed`). */
+ * `/apply` unless said): a binary one's envelope as it came, which its
+ * apply door decodes ({@link decoded}). */
 export let replayed = (k: Kept, at = 'http://store/apply'): Request => {
   let headers = new Headers(JSON.parse(k.headers))
   return new Request(at, {

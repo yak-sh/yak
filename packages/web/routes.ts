@@ -22,7 +22,7 @@ import { type Application, application } from './app.ts'
 // `received`) and hands each break to the host's own telemetry.
 
 import { queryRedirect } from '@yaks/query'
-import { type Authenticate, type Route, write } from '@yaks/api'
+import { applier, type Authenticate, type Route } from '@yaks/api'
 import type { Graph, ReadOpts } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { addressId } from '@yaks/id'
@@ -246,7 +246,9 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
           )
         }
         let via = await host.who?.(request)
-        return write(host.graph, request, { by, via: via?.via ?? via?.by })
+        let writer = { by, via: via?.via ?? via?.by }
+        return applier({ graph: host.graph, authenticate: () => writer })
+          .apply(request)
       },
     },
     {

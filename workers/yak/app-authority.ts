@@ -1,10 +1,11 @@
 // App authority is the kernel's vouch and the graph's membership policy.
 // The Store and other app graph hosts compose these same functions.
 import { type Authenticate, Unauthorized } from '@yaks/api'
-import type { Plugin } from '@yaks/graph'
+import type { Actor, Plugin } from '@yaks/graph'
 import { DELIVER } from '@yaks/mail'
 import {
   Denied,
+  edits,
   type Floor,
   type Floors,
   isFloor,
@@ -98,12 +99,7 @@ export let authenticating = (
 async (req) => {
   let v = vouchOf(req)
   heard(v)
-  let who = v.person || v.via
-    ? {
-      ...(v.person ? { by: v.actor ?? v.person } : {}),
-      ...(v.via ? { via: v.via } : {}),
-    }
-    : null
+  let who = signer(v)
   let held = app()
   if (!held) return who
   let m = await may.modeOf(held)
@@ -114,6 +110,52 @@ async (req) => {
   // the address already did.
   if (!v.person) throw new Unauthorized('sign in to read this app')
   throw new Denied(v.person, held, 'viewer', 'read')
+}
+
+/** Who a vouch's write is signed as: the actor for its person, and the
+ * instrument it came through. Nobody at all is `null`.
+ *
+ * ```ts
+ * import { signer, vouchOf } from './app-authority.ts'
+ * import { assertEquals } from '@std/assert'
+ * let said = (headers: Record<string, string>) =>
+ *   signer(vouchOf(new Request('http://store', { headers })))
+ * assertEquals(said({ 'x-yak-person': 'p', 'x-yak-actor': 'a' }), { by: 'a' })
+ * assertEquals(said({}), null)
+ * ```
+ */
+export let signer = (v: Vouch): Actor | null =>
+  v.person || v.via
+    ? {
+      ...(v.person ? { by: v.actor ?? v.person } : {}),
+      ...(v.via ? { via: v.via } : {}),
+    }
+    : null
+
+/**
+ * Today's authority to write the app: the caller {@link authenticating}
+ * admits, who also holds the level the app's mode asks of an editor. Asked of
+ * a durable outbox write before its kept answer is told (@yaks/api
+ * `authorize`), since a cached acceptance is still a write answer: today's
+ * authority, not the one held when the receipt was committed, controls its
+ * disclosure. Every other write is refused, if it is, inside the transaction
+ * by @yaks/member's guard.
+ */
+export let editing = (
+  may: Policy,
+  app: () => string | null,
+  read: Authenticate,
+): (req: Request) => Promise<void> =>
+async (req) => {
+  await read(req)
+  let held = app()
+  if (!held) return
+  let v = vouchOf(req)
+  let m = await may.modeOf(held)
+  let has = v.level ?? await may.levelOf(v.person, held)
+  if (edits(m, has)) return
+  if (!v.person) throw new Unauthorized('sign in to write this app')
+  throw new Denied(v.person, held, 'editor')
 }
 
 /**

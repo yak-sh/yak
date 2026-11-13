@@ -45,6 +45,8 @@ import { storageDoor } from './page-storage.ts'
 import {
   appGuard,
   authenticating,
+  editing,
+  signer,
   type Vouch,
   vouchOf,
 } from './app-authority.ts'
@@ -163,13 +165,15 @@ import {
 // the batch reaches it and a refused batch takes the rows back with it.
 import {
   api,
+  type Applier,
+  applier,
+  type Applying,
   type Authenticate,
   decode,
   type Handler,
   json,
   type PeerWriter,
   poured,
-  published,
   readBody,
   refuse,
   served,
@@ -177,7 +181,6 @@ import {
   type Subs,
   subscriptions,
   type Timer,
-  Unauthorized,
   writeOptions,
 } from '@yaks/api'
 import { blobRead, sqliteBlobs } from '@yaks/blob'
@@ -248,7 +251,6 @@ import {
   type Context,
   context,
   during,
-  type Event,
   installContext,
   outcome,
   peek,
@@ -294,7 +296,6 @@ import { formsOptions } from './forms-host.ts'
 import { calendarIn } from './calendar.ts'
 import {
   Denied,
-  edits,
   level,
   type Mode,
   mode,
@@ -315,8 +316,6 @@ import {
   want,
 } from '@yaks/query'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { decode as fromWire, stringify } from '@yaks/vocab/wire'
-import { decoded } from './binary.ts'
 import { type Anatomy, anatomy } from '@yaks/code/anatomy'
 import { workerAnatomy } from './anatomy.ts'
 import { answerOf, toolEid } from '@yaks/tools/result'
@@ -359,7 +358,7 @@ import {
   WAKE,
   WARM,
 } from './door.ts'
-import { IDEMPOTENCY, type Namespace } from '@yaks/durable-object/door'
+import type { Namespace } from '@yaks/durable-object/door'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { type Mark, type Stamp, type Standing } from '@yaks/platform/mover'
 import { borrows } from '@yaks/reach'
@@ -410,8 +409,7 @@ import { instrumentActor, instrumentEid } from './instrument.ts'
 import { commandAt, commandReply } from './app-command.ts'
 import { vaultOf } from './vault.ts'
 import {
-  constrained,
-  durable,
+  decoded,
   interrupted,
   kept,
   logged,
@@ -419,11 +417,10 @@ import {
   replayed,
   retry,
   revived,
-  taken,
   waiting,
   writes,
 } from '@yaks/api/log'
-import { type Door, door, type Mark as Landing } from '@yaks/api/receipts'
+import { type Door, door } from '@yaks/api/receipts'
 import { keyed } from './writes.ts'
 import { apex, url } from '@yaks/platform/host'
 import { install, retire, shed } from './migrate.ts'
@@ -967,16 +964,47 @@ export class Store extends Durable {
       },
       ready: (request) => store.#ready(request),
       serve: (request) => store.#serve(request),
-      commit: (request, mark) => store.#commit(request, mark),
-      authorize: (request) => store.#outboxAuthority(request),
+      commit: (request, mark) => store.#apply.apply(request, mark),
+      authorize: (request) => store.#apply.authorize(request),
       keeps: (told) => !keyed(told),
-      answer: (request, response) => store.#callerResponse(request, response),
+      answer: (request, response) => store.#apply.answer(request, response),
       refused: () => store.#refused,
       arm: (at, why) => store.#arm(at, why),
       report: (e, request) => defect(e, { request, store: store.#name() }),
       stage: (name, work) => store.#stage(name, work, name != 'settle'),
       retry: Store.RETRY,
     }))(this)
+  // The apply door (@yaks/api `applier`): `#route`'s `/apply`, and what the
+  // write log commits each write it lands through, over the graph of the
+  // incarnation that asks. `x-yak-kernel` is the platform writing about its
+  // own data: the server-owned properties are admitted and @yaks/member's
+  // guard stands down (`#kernelGraph`). The flag is the kernel's by
+  // construction: a store is only ever reached through a request the Worker
+  // builds from scratch, and door.ts `storeOf` strips the whole vouch set from
+  // any request it is handed, so it can never arrive from outside.
+  #applying: Applying = ((store: Store) => ({
+    get graph() {
+      return store.#graph
+    },
+    authenticate: (request) => store.#auth(request),
+    read: (request) => store.#callerRead(request),
+    write: (request, rows) => store.#spokenWrites(request, rows),
+    trust: (request) =>
+      request.headers.get('x-yak-kernel') == '1'
+        ? {
+          graph: store.#kernelGraph(store.#graph),
+          actor: signer(vouchOf(request)),
+        }
+        : undefined,
+    authorize: (request) =>
+      editing(
+        policy(store.#graph.storage, { ignore: store.#staleGrant }),
+        () => store.#get('app'),
+        store.#auth,
+      )(request),
+    log: store.#log,
+  }))(this)
+  #apply: Applier = applier(this.#applying)
   // The object's own memory (`yak_kv`), as this incarnation last read or
   // wrote it. Only this object writes that table, so once a word is read the
   // copy here is what the table says, and a request that asks it again costs
@@ -1925,18 +1953,7 @@ export class Store extends Durable {
       () => this.#get('app'),
       (v) => this.#vouch(v),
     )
-    this.#route = api({
-      graph: g,
-      subs,
-      authenticate: this.#auth,
-      read: (request) => this.#callerRead(request),
-      ...(!own || declaredLenses(declaration)
-        ? {
-          write: (request: Request, rows: Bundle[]) =>
-            this.#spokenWrites(request, rows),
-        }
-        : {}),
-    })
+    this.#route = api({ ...this.#applying, graph: g, subs })
     this.#reading = appRead({
       graph: g,
       vocab,
@@ -4260,35 +4277,6 @@ export class Store extends Durable {
 
   #name = () => this.#said('name')
 
-  async #callerResponse(
-    request: Request,
-    response: Response,
-  ): Promise<Response> {
-    if (
-      response.status != 200 ||
-      response.headers.get('content-type')?.includes('ndjson')
-    ) return response
-    let bundles = await response.json() as Bundle[]
-    return new Response(
-      stringify(
-        await this.#callerAnswer(request, fromWire(this.#vocab, bundles)),
-      ),
-      response,
-    )
-  }
-
-  async #callerAnswer(
-    request: Request,
-    rows: Bundle[],
-  ): Promise<Bundle[]> {
-    let opts = this.#callerRead(request)
-    let visible = published(this.#vocab, rows)
-    return published(
-      this.#vocab,
-      await this.#graph.answer(visible, { ...opts, patch: true }),
-    )
-  }
-
   #callerRead(request: Request): ReadOpts {
     let { person, level } = vouchOf(request)
     return {
@@ -4302,115 +4290,6 @@ export class Store extends Durable {
   #spokenWrites(request: Request, rows: Bundle[]): Bundle[] {
     let speaks = spoken(request).speaks
     return speaks ? rows.map((b) => ({ ...b, $speaks: speaks })) : rows
-  }
-
-  // Cached acceptance is still a write answer: today's authority, not the
-  // authority held when the receipt was committed, controls its disclosure.
-  async #outboxAuthority(request: Request) {
-    if (request.headers.get('x-yak-kernel') == '1') return
-    await this.#auth(request)
-    let app = this.#get('app')
-    if (!app) return
-    let may = policy(this.#graph.storage, { ignore: this.#staleGrant })
-    let v = vouchOf(request)
-    let m = await may.modeOf(app)
-    let has = v.level ?? await may.levelOf(v.person, app)
-    if (!edits(m, has)) {
-      if (!v.person) throw new Unauthorized('sign in to write this app')
-      throw new Denied(v.person, app, 'editor')
-    }
-  }
-
-  /**
-   * One batch in at `/apply`, the kernel's or a caller's. The graph's own
-   * `apply()` is called in one synchronous step with `mark` naming the write
-   * it lands (`#log` `applying`), so the log's hook takes exactly that write
-   * out of the log in the transaction that commits its batch: never one
-   * without the other, and so never applied twice.
-   *
-   * `x-yak-kernel` is the platform writing about its own data: the server-
-   * owned properties are admitted and @yaks/member's guard stands down
-   * (`#trust`). The flag is the kernel's by construction: a store is only
-   * ever reached through a request the Worker builds from scratch, and
-   * door.ts `storeOf` strips the whole vouch set from any request it is
-   * handed, so it can never arrive from outside. An NDJSON import is
-   * @yaks/api's `pour`, chunk by chunk, and a binary envelope is decoded
-   * here, in the words it lands in.
-   */
-  async #commit(
-    request: Request,
-    mark: Landing = null,
-    opts: ApplyOpts = {},
-    spans?: Event[],
-  ): Promise<Response> {
-    try {
-      writeOptions(request, ['stamp'])
-    } catch (e) {
-      return refuse(e)
-    }
-    if (poured(request)) {
-      if (opts.check) {
-        return refuse(new Refused('streaming writes cannot be dry-run'))
-      }
-      return await this.#route(request)
-    }
-    let failed = (e: unknown) => {
-      let no = constrained(e)
-      caught(no, { request: 'write', store: this.#name() })
-      return refuse(no)
-    }
-    try {
-      let text = (await taken(request)).body
-      let body = decoded(this.#vocab, request.headers, text)
-      if (!Array.isArray(body)) {
-        throw new Refused('/apply takes a JSON array of bundles')
-      }
-      let kernel = request.headers.get('x-yak-kernel') == '1'
-      // Only trusted bookkeeping may preserve the last write's provenance.
-      if (kernel && new URL(request.url).searchParams.get('stamp') == '0') {
-        opts = { ...opts, stamp: false }
-      }
-      let who = kernel ? null : await this.#auth(request)
-      let bound = await this.#log.bound(request, text, opts.check)
-      if (bound instanceof Response) return bound
-      request = bound
-      body = this.#spokenWrites(request, body)
-      let apply = async () => {
-        try {
-          let out = this.#log.applying(
-            request,
-            mark,
-            () =>
-              kernel
-                ? this.#trust(body as Bundle[], {
-                  by: vouchOf(request).actor ?? vouchOf(request).person ??
-                    undefined,
-                  via: vouchOf(request).via ?? undefined,
-                }, opts)
-                : this.#graph.apply(signed(body as Bundle[], who), opts),
-          )
-          if (out instanceof Response) return out
-          let applied = published(this.#vocab, await out)
-          // The durable log and internal effects keep canonical patches. Each
-          // caller, including a keyed resend, receives its own vocabulary view.
-          return json(
-            mark == null ? await this.#callerAnswer(request, applied) : applied,
-          )
-        } catch (e) {
-          return failed(e)
-        }
-      }
-      if (!spans) return apply()
-      // Parsing and auth have settled; the apply root begins inside record,
-      // before its callback yields. Refusals are responses, so their spans stay.
-      let captured = await record(this.#graph, apply, {
-        parent: context()?.parent,
-      })
-      spans.push(...captured.spans)
-      return captured.result
-    } catch (e) {
-      return failed(e)
-    }
   }
 
   /** Every door but the write log's, for an object that is ready. */
@@ -4712,8 +4591,23 @@ export class Store extends Durable {
         )
       )
       let physical = inspectStorage(this.#sql, 160, names)
-      let spans: Event[] = []
-      let answer = await this.#commit(original, null, { check: true }, spans)
+      let checked = new URL(original.url)
+      checked.searchParams.set('check', '1')
+      // The dry run is one span, begun as the recording starts, and every
+      // phase its apply runs is beneath it.
+      let { result: answer, spans } = await record(
+        this.#graph,
+        () =>
+          during(
+            peek(this.#graph)?.begin({
+              kind: 'request',
+              name: 'dry run',
+              package: 'worker/store',
+            }),
+            () => this.#apply.apply(new Request(checked, original)),
+          ),
+        { parent: context()?.parent },
+      )
       let applied = answer.ok ? (await answer.json() as Bundle[]).length : null
       return Response.json({
         physical,
@@ -4991,16 +4885,6 @@ export class Store extends Durable {
       }
       let read = this.#callerRead(request)
       return this.#live.accept(request, read, { actor, speaks: read.speaks })
-    }
-    // A batch is applied here, whoever sent it; a dry run is @yaks/api's.
-    if (
-      path == '/apply' && request.method == 'POST' &&
-      (kernel || logged(request) ||
-        durable(request.headers.get(IDEMPOTENCY)))
-    ) {
-      return this.#commit(request, null, {
-        check: new URL(request.url).searchParams.has('check'),
-      })
     }
     if (path == '/query') return await this.#paged(request)
     if (path == READS && this.#get('name') == PLATFORM_STORE) {

@@ -70,11 +70,14 @@ export { asking, type Authenticate, signed, VIA } from './actor.ts'
 export type { PeerWriter } from './save.ts'
 export type { Timer } from './relay.ts'
 export {
+  type Applier,
+  applier,
+  type Applying,
   ask,
   CHUNK,
   pour,
   poured,
-  write,
+  type Trusted,
   type WriteContext,
   writeOptions,
 } from './doors.ts'
