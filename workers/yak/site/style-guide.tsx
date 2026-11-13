@@ -1,4 +1,3 @@
-import { day } from '@yaks/ui/relative'
 /** @jsxImportSource preact */
 import {
   Button,
@@ -14,21 +13,27 @@ import {
 } from '@yaks/ui'
 import type { ComponentChildren } from 'preact'
 import { WORN } from '../sheet-assets.ts'
+import { attr, said, type Slots, text } from './copy.ts'
 import { Page, Yours } from './frame.tsx'
 
 // What a person copies or types, in the line.
-let Code = ({ children }: { children: ComponentChildren }) => (
-  <Chip as='code' mod='code'>{children}</Chip>
-)
+let Code = (
+  { children, ...rest }: { children: ComponentChildren; [x: string]: unknown },
+) => <Chip as='code' mod='code' {...rest}>{children}</Chip>
 
 // The kit as these pages wear it, and its parts but the document's defaults,
 // which are this page's own type.
 let drawn: Composition = { kits, theme: linen, skin: pencil }
 let PARTS = WORN.filter((part) => part != 'base')
 
+// The props of an element showing this page's snippet at `key`.
+let say = (key: string, slots?: Slots) => text(`style-guide.${key}`, slots)
+
 // What an app's preview shows, inside its window.
 let PREVIEW =
-  "<!doctype html><html lang='en'><meta name='color-scheme' content='dark'><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#33493c;color:#f1e6d8;font:600 1rem/1.5 system-ui,sans-serif}p{padding:2rem;text-align:center}</style><body><p>A working app appears inside this frame.</p></body></html>"
+  `<!doctype html><html lang='en'><meta name='color-scheme' content='dark'><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#33493c;color:#f1e6d8;font:600 1rem/1.5 system-ui,sans-serif}p{padding:2rem;text-align:center}</style><body><p>${
+    said('style-guide.components.window.preview')
+  }</p></body></html>`
 
 // The theme picker, and each token's value as the page is painted.
 let PICK = `
@@ -73,6 +78,104 @@ let PICK = `
     choose()
     `
 
+// The page's parts, by the id each one's heading has; its snippets are under
+// that id, and the chip linking to it under `nav`.
+let SECTIONS = [
+  'how-to',
+  'voice',
+  'language',
+  'theme-roles',
+  'page-paints',
+  'type',
+  'space',
+  'components',
+  'kit',
+  'sections',
+]
+
+// The theme's colour roles, and what only these pages paint.
+let ROLES = [
+  '--bg',
+  '--surface',
+  '--card',
+  '--border',
+  '--border2',
+  '--text',
+  '--muted',
+  '--dim',
+  '--accent',
+  '--link',
+  '--heading',
+  '--info',
+  '--active',
+  '--positive',
+  '--negative',
+  '--caution',
+  '--special',
+]
+let PAINTS = ['--mine', '--theirs', '--preview', '--well']
+let GAPS = ['--quarter-gap', '--half-gap', '--gap', '--wide-gap']
+
+// One part of the page under its heading, the snippet at `<id>.title`.
+let Part = ({ id, children }: { id: string; children: ComponentChildren }) => (
+  <section class='Guide_Part' aria-labelledby={id}>
+    <h2 class='Title' id={id} {...say(`${id}.title`)} />
+    {children}
+  </section>
+)
+
+// Rules, each the snippet at `<at>.<rule>.rule` led by its name in bold, at
+// `<at>.<rule>.name`, with the slots it has besides.
+let Rules = ({ at, rules }: { at: string; rules: Record<string, Slots> }) => (
+  <ul class='Guide_Rules'>
+    {Object.entries(rules).map(([rule, slots]) => (
+      <li
+        key={rule}
+        {...say(`${at}.${rule}.rule`, {
+          name: <b {...say(`${at}.${rule}.name`)} />,
+          ...slots,
+        })}
+      />
+    ))}
+  </ul>
+)
+
+// A colour token: its paint, its name and its value as painted.
+let Swatch = ({ token }: { token: string }) => (
+  <li class='Guide_Swatch' data-token={token}>
+    <span class='Guide_Chip' style={`--swatch: var(${token})`} />{' '}
+    <code class='Guide_Name'>{token}</code> <span class='Guide_Value' />
+  </li>
+)
+
+// A spacing token: its name, its value and a bar as long.
+let Size = ({ token }: { token: string }) => (
+  <li class='Guide_Size' data-token={token}>
+    <span>
+      <code class='Guide_Name'>{token}</code> <span class='Guide_Value' />
+    </span>{' '}
+    <span class='Guide_Bar' style={`--bar: var(${token})`} />
+  </li>
+)
+
+// A token's name and its value, as slots of the sentence about it.
+let token = (name: string, Name: 'span' | 'code' = 'span') => ({
+  name: <Name class='Guide_Name'>{name}</Name>,
+  value: <span class='Guide_Value' />,
+})
+
+// What a person copies or types, each its own slot.
+let code = (words: Record<string, string>): Slots =>
+  Object.fromEntries(
+    Object.entries(words).map((
+      [slot, typed],
+    ) => [slot, <Code key={slot}>{typed}</Code>]),
+  )
+
+// Class names in bold, each the slot of its own name.
+let classes = (...names: string[]): Slots =>
+  Object.fromEntries(names.map((name) => [name, <b key={name}>.{name}</b>]))
+
 export let StyleGuide = () => (
   <Page
     copy='style-guide'
@@ -88,326 +191,114 @@ export let StyleGuide = () => (
     }
   >
     <div class='Prose_Head'>
-      <h1 class='Title Title-page'>Style guide</h1>
-      <p class='Note Note-lead'>
-        This page renders the shared tokens and components used across yaks.app.
-        Use it to check a change against the rest of the site.
-      </p>
+      <h1 class='Title Title-page' {...say('head.title')} />
+      <p class='Note Note-lead' {...say('head.lead')} />
       <p>
-        <label class='Note Note-small' for='theme'>Preview theme</label>{' '}
+        <label class='Note Note-small' for='theme' {...say('head.theme')} />
+        {' '}
         <Field choose id='theme' name='theme'>
-          <option value='system'>System</option>
-          <option value='light'>Light</option>
-          <option value='dark'>Dark</option>
+          {['system', 'light', 'dark'].map((theme) => (
+            <option
+              key={theme}
+              value={theme}
+              {...say(`head.themes.${theme}`)}
+            />
+          ))}
         </Field>
       </p>
-      <nav aria-label='On this page'>
+      <nav {...attr('aria-label', 'style-guide.head.nav')}>
         <Chips as='ul'>
-          <li>
-            <Chip href='#how-to'>Using the system</Chip>
-          </li>
-          <li>
-            <Chip href='#voice'>Layout and voice</Chip>
-          </li>
-          <li>
-            <Chip href='#language'>One design language</Chip>
-          </li>
-          <li>
-            <Chip href='#theme-roles'>The theme</Chip>
-          </li>
-          <li>
-            <Chip href='#page-paints'>Page paints</Chip>
-          </li>
-          <li>
-            <Chip href='#type'>Type</Chip>
-          </li>
-          <li>
-            <Chip href='#space'>Space and shape</Chip>
-          </li>
-          <li>
-            <Chip href='#components'>Components</Chip>
-          </li>
-          <li>
-            <Chip href='#kit'>The kit's parts</Chip>
-          </li>
-          <li>
-            <Chip href='#sections'>Sections</Chip>
-          </li>
+          {SECTIONS.map((id) => (
+            <li key={id}>
+              <Chip href={`#${id}`} {...say(`nav.${id}`)} />
+            </li>
+          ))}
         </Chips>
       </nav>
     </div>
-    <section class='Guide_Part' aria-labelledby='how-to'>
-      <h2 class='Title' id='how-to'>Using the system</h2>
-      <p class='Note'>
-        No build step of ours, four declared layers — tokens, base, components,
-        and sections. Later layers take precedence. Every part below is one of
-        the @yaks/ui kit's, in its <Code>linen</Code> theme and drawn by its
-        {' '}
-        <Code>pencil</Code> skin: the deploy composes them as{' '}
-        <Code>_ui.css</Code> (sheet-assets.ts names the parts the pages wear).
-        {' '}
-        <Code>site.css</Code>{' '}
-        adds the face and what only these pages paint. The management pages'
-        {' '}
-        <Code>pages.css</Code> and the site's <Code>style.css</Code>{' '}
-        load both and lay out their pages. Follow these rules when adding a page
-        or component:
-      </p>
-      <ul class='Guide_Rules'>
-        <li>
-          <b>Use an existing part before writing new CSS.</b>{' '}
-          A part a page lacks goes into the kit, drawn by pencil, with an
-          example here. The available titles, notes, chips, buttons, fields,
-          tabs, sidebars, bubbles, windows, cards, rows, forms, and prose styles
-          are shown below, and the rules they follow are under One design
-          language.
-        </li>
-        <li>
-          <b>Use colour roles, never a colour.</b> Write{' '}
-          <Code>var(--text)</Code>, never{' '}
-          <Code>#523828</Code>. The theme gives each role a light and a dark
-          paint; a colour written down follows neither.
-        </li>
-        <li>
-          <b>Implement variants with custom properties.</b>{' '}
-          <Code>.Chip-quiet</Code> sets <Code>--chip-fill</Code>{' '}
-          instead of repeating the component's padding and border.
-        </li>
-        <li>
-          <b>Keep page-specific layout in the sections layer.</b>{' '}
-          Reusable UI belongs in the components layer; layout used in one place
-          does not.
-        </li>
-      </ul>
-      <p class='Note Note-small'>
-        When adding a component, add a working example here so this guide
-        remains complete.
-      </p>
-    </section>
-    <section class='Guide_Part' aria-labelledby='voice'>
-      <h2 class='Title' id='voice'>Layout and voice</h2>
-      <ul class='Guide_Rules'>
-        <li>
-          <b>Draw in pencil on paper, and keep surfaces flat.</b>{' '}
-          A card, a button, a window and a linked chip are drawn: a graphite
-          line around it with slightly rounded corners. A field is drawn the
-          same way around a well: a fill a little darker than the paper, pressed
-          in, and what is typed in it stays crisp. What can be pressed sits on a
-          hatch, so a hatch always means a press. One grain of paper lies over
-          every page.
-        </li>
-        <li>
-          <b>Make selection visible in the shape.</b>{' '}
-          A selected tab joins its panel, a pressed button slides onto its
-          hatch, and the current sidebar tab joins the page along its right
-          edge. Keep these cues in shared components so they work consistently
-          in light and dark themes.
-        </li>
-        <li>
-          <b>Keep prose narrow.</b> Articles, help, and legal pages use{' '}
-          <Code>--measure</Code>. Use <Code>--wide-measure</Code>{' '}
-          only when a grid, preview, or comparison needs the extra width.
-        </li>
-        <li>
-          <b>Name the subject and the action.</b>{' '}
-          Write “Claude builds the app” or “yaks.app hosts it,” not “it gets
-          built” or “the idea comes to life.”
-        </li>
-        <li>
-          <b>Use specific nouns.</b>{' '}
-          Name recipes, files, invitations, and links instead of “things,”
-          “bits,” or “what you need.”
-        </li>
-        <li>
-          <b>Remove filler.</b>{' '}
-          Cut phrases such as “a little something” and “brought to life.” State
-          the feature, limit, or next step. Contractions and questions are fine
-          when they help the reader.
-        </li>
-        <li>
-          <b>Use concrete actions for links and buttons.</b>{' '}
-          “Connect Claude,” “View pricing,” and “Open the recipe box” tell
-          people what happens next.
-        </li>
-        <li>
-          <b>Make only claims the product can guarantee.</b>{' '}
-          Distinguish an app hosted by yaks.app from ownership of a domain,
-          source code, or exported data.
-        </li>
-      </ul>
-    </section>
-    <section class='Guide_Part' aria-labelledby='language'>
-      <h2 class='Title' id='language'>One design language</h2>
-      <p class='Note'>
-        Every page yaks.app draws, the dashboard's tabs and the site's own pages
-        alike, is built from the same few parts in the same way. A person who
-        learns one page has learned them all.
-      </p>
-      <ul class='Guide_Rules'>
-        <li>
-          <b>A card holds one thing.</b>{' '}
-          A connection, a plan, the people in a space, one app's visits: each is
-          one{' '}
-          <Code>.Card</Code>. Cards stack one gap apart, and a run of cards that
-          belong together sits under a <Code>.Group</Code> heading.
-        </li>
-        <li>
-          <b>A card's head says what it is and holds what acts on it.</b>{' '}
-          The head runs across the top: a mark, the title, its status, then its
-          actions at the right. Disconnect, Restore, Manage billing and Connect
-          go there, a size smaller than a form's button, so a head stays one
-          line.
-        </li>
-        <li>
-          <b>Hierarchy is four steps of type.</b>{' '}
-          The page title; a card's title at 1rem; what a thing says at{' '}
-          <Code>--small</Code>{' '}
-          or the body size; and what describes it (a hint, a status, a count, a
-          date) at <Code>--fine</Code> in{' '}
-          <Code>--muted</Code>. The mono face is only for what a person copies
-          or types.
-        </li>
-        <li>
-          <b>Like things are rows.</b>{' '}
-          The apps using a connection, the people in a space, the agents
-          connected, the apps in the trash: <Code>.Rows</Code>{' '}
-          in a card, hairlines between them, each row's actions at its right.
-        </li>
-        <li>
-          <b>A field sits under its label, never at the end of a sentence.</b>
-          {' '}
-          Every field (
-          <Code>.Form_Field</Code>) is its label, its control and its hint, on
-          one left edge and at most 34rem wide, in a form or alone in a card.
-          One field and its button share a line (
-          <Code>.Form_Line</Code>); a longer form ends with its button. What
-          only a few people change folds under <b>Advanced options</b> (
-          <Code>.More</Code>) with a sensible default already in place.
-        </li>
-        <li>
-          <b>Space comes from the container.</b>{' '}
-          Cards, forms and rows set the gap between what they hold; nothing
-          inside carries a margin of its own. A card's parts are .75rem apart,
-          cards one gap, groups two.
-        </li>
-        <li>
-          <b>Nothing overlaps at any width.</b>{' '}
-          A name too long for its column is cut with an ellipsis and keeps its
-          whole text as a title; a number is never cut and never wraps; a row
-          that runs out of room wraps its actions under it.
-        </li>
-      </ul>
-    </section>
-    <section class='Guide_Part' aria-labelledby='theme-roles'>
-      <h2 class='Title' id='theme-roles'>The theme</h2>
-      <p class='Note'>
-        yaks.app wears{' '}
-        <Code>linen</Code>, a theme of the @yaks/ui kit: every colour a part
-        reads is one of its roles, and each role is a light and a dark paint.
-        Values reflect the selected theme.
-      </p>
+    <Part id='how-to'>
+      <p
+        class='Note'
+        {...say(
+          'how-to.note',
+          code({
+            linen: 'linen',
+            pencil: 'pencil',
+            ui: '_ui.css',
+            site: 'site.css',
+            pages: 'pages.css',
+            style: 'style.css',
+          }),
+        )}
+      />
+      <Rules
+        at='how-to'
+        rules={{
+          existing: {},
+          roles: code({ role: 'var(--text)', colour: '#523828' }),
+          variants: code({ variant: '.Chip-quiet', fill: '--chip-fill' }),
+          layers: {},
+        }}
+      />
+      <p class='Note Note-small' {...say('how-to.complete')} />
+    </Part>
+    <Part id='voice'>
+      <Rules
+        at='voice'
+        rules={{
+          pencil: {},
+          selection: {},
+          narrow: code({ measure: '--measure', wide: '--wide-measure' }),
+          subject: {},
+          nouns: {},
+          filler: {},
+          actions: {},
+          claims: {},
+        }}
+      />
+    </Part>
+    <Part id='language'>
+      <p class='Note' {...say('language.note')} />
+      <Rules
+        at='language'
+        rules={{
+          card: code({ card: '.Card', group: '.Group' }),
+          head: {},
+          hierarchy: code({
+            small: '--small',
+            fine: '--fine',
+            muted: '--muted',
+          }),
+          rows: code({ rows: '.Rows' }),
+          field: {
+            ...code({
+              field: '.Form_Field',
+              line: '.Form_Line',
+              more: '.More',
+            }),
+            advanced: <b {...say('language.field.advanced')} />,
+          },
+          space: {},
+          overlap: {},
+        }}
+      />
+    </Part>
+    <Part id='theme-roles'>
+      <p class='Note' {...say('theme-roles.note', code({ linen: 'linen' }))} />
       <ul class='Guide_Swatches'>
-        <li class='Guide_Swatch' data-token='--bg'>
-          <span class='Guide_Chip' style='--swatch: var(--bg)' />{' '}
-          <code class='Guide_Name'>--bg</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--surface'>
-          <span class='Guide_Chip' style='--swatch: var(--surface)' />{' '}
-          <code class='Guide_Name'>--surface</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--card'>
-          <span class='Guide_Chip' style='--swatch: var(--card)' />{' '}
-          <code class='Guide_Name'>--card</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--border'>
-          <span class='Guide_Chip' style='--swatch: var(--border)' />{' '}
-          <code class='Guide_Name'>--border</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--border2'>
-          <span class='Guide_Chip' style='--swatch: var(--border2)' />{' '}
-          <code class='Guide_Name'>--border2</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--text'>
-          <span class='Guide_Chip' style='--swatch: var(--text)' />{' '}
-          <code class='Guide_Name'>--text</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--muted'>
-          <span class='Guide_Chip' style='--swatch: var(--muted)' />{' '}
-          <code class='Guide_Name'>--muted</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--dim'>
-          <span class='Guide_Chip' style='--swatch: var(--dim)' />{' '}
-          <code class='Guide_Name'>--dim</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--accent'>
-          <span class='Guide_Chip' style='--swatch: var(--accent)' />{' '}
-          <code class='Guide_Name'>--accent</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--link'>
-          <span class='Guide_Chip' style='--swatch: var(--link)' />{' '}
-          <code class='Guide_Name'>--link</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--heading'>
-          <span class='Guide_Chip' style='--swatch: var(--heading)' />{' '}
-          <code class='Guide_Name'>--heading</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--info'>
-          <span class='Guide_Chip' style='--swatch: var(--info)' />{' '}
-          <code class='Guide_Name'>--info</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--active'>
-          <span class='Guide_Chip' style='--swatch: var(--active)' />{' '}
-          <code class='Guide_Name'>--active</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--positive'>
-          <span class='Guide_Chip' style='--swatch: var(--positive)' />{' '}
-          <code class='Guide_Name'>--positive</code>{' '}
-          <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--negative'>
-          <span class='Guide_Chip' style='--swatch: var(--negative)' />{' '}
-          <code class='Guide_Name'>--negative</code>{' '}
-          <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--caution'>
-          <span class='Guide_Chip' style='--swatch: var(--caution)' />{' '}
-          <code class='Guide_Name'>--caution</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--special'>
-          <span class='Guide_Chip' style='--swatch: var(--special)' />{' '}
-          <code class='Guide_Name'>--special</code> <span class='Guide_Value' />
-        </li>
+        {ROLES.map((role) => <Swatch key={role} token={role} />)}
       </ul>
-    </section>
-    <section class='Guide_Part' aria-labelledby='page-paints'>
-      <h2 class='Title' id='page-paints'>Page paints</h2>
-      <p class='Note'>
-        What only yaks.app's pages paint, and no theme names: the person's
-        bubble, the assistant's, an embedded app's ground and a field's well.
-        They are declared in{' '}
-        <Code>site.css</Code>, from the theme's roles where they can be.
-      </p>
+    </Part>
+    <Part id='page-paints'>
+      <p
+        class='Note'
+        {...say('page-paints.note', code({ site: 'site.css' }))}
+      />
       <ul class='Guide_Swatches'>
-        <li class='Guide_Swatch' data-token='--mine'>
-          <span class='Guide_Chip' style='--swatch: var(--mine)' />{' '}
-          <code class='Guide_Name'>--mine</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--theirs'>
-          <span class='Guide_Chip' style='--swatch: var(--theirs)' />{' '}
-          <code class='Guide_Name'>--theirs</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--preview'>
-          <span class='Guide_Chip' style='--swatch: var(--preview)' />{' '}
-          <code class='Guide_Name'>--preview</code> <span class='Guide_Value' />
-        </li>
-        <li class='Guide_Swatch' data-token='--well'>
-          <span class='Guide_Chip' style='--swatch: var(--well)' />{' '}
-          <code class='Guide_Name'>--well</code> <span class='Guide_Value' />
-        </li>
+        {PAINTS.map((paint) => <Swatch key={paint} token={paint} />)}
       </ul>
-    </section>
-    <section class='Guide_Part' aria-labelledby='type'>
-      <h2 class='Title' id='type'>Type</h2>
+    </Part>
+    <Part id='type'>
       <Card as='div' class='Guide_Demo'>
         <p data-token='--font'>
           <span class='Guide_Name'>--font</span> <span class='Guide_Value' />
@@ -415,92 +306,41 @@ export let StyleGuide = () => (
         <p data-token='--mono' style='font-family: var(--mono)'>
           <span class='Guide_Name'>--mono</span> <span class='Guide_Value' />
         </p>
-        <p data-token='--size' style='font-size: var(--size)'>
-          <span class='Guide_Name'>--size</span> <span class='Guide_Value' />
-          {' '}
-          — body text.
-        </p>
-        <p data-token='--lead' style='font-size: var(--lead)'>
-          <span class='Guide_Name'>--lead</span> <span class='Guide_Value' />
-          {' '}
-          — introductory text.
-        </p>
-        <p data-token='--small' style='font-size: var(--small)'>
-          <span class='Guide_Name'>--small</span> <span class='Guide_Value' />
-          {' '}
-          — captions, footers, and what a card says.
-        </p>
-        <p data-token='--fine' style='font-size: var(--fine)'>
-          <span class='Guide_Name'>--fine</span> <span class='Guide_Value' />
-          {' '}
-          — what describes a thing: a hint, a status, a count, a date.
-        </p>
+        {['size', 'lead', 'small', 'fine'].map((size) => (
+          <p
+            key={size}
+            data-token={`--${size}`}
+            style={`font-size: var(--${size})`}
+            {...say(`type.${size}`, token(`--${size}`))}
+          />
+        ))}
       </Card>
-    </section>
-    <section class='Guide_Part' aria-labelledby='space'>
-      <h2 class='Title' id='space'>Space and shape</h2>
-      <p class='Note'>
-        Spacing tokens derive from <Code>--gap</Code>.
-      </p>
+    </Part>
+    <Part id='space'>
+      <p class='Note' {...say('space.note', code({ gap: '--gap' }))} />
       <ul class='Guide_Sizes'>
-        <li class='Guide_Size' data-token='--quarter-gap'>
-          <span>
-            <code class='Guide_Name'>--quarter-gap</code>{' '}
-            <span class='Guide_Value' />
-          </span>{' '}
-          <span class='Guide_Bar' style='--bar: var(--quarter-gap)' />
-        </li>
-        <li class='Guide_Size' data-token='--half-gap'>
-          <span>
-            <code class='Guide_Name'>--half-gap</code>{' '}
-            <span class='Guide_Value' />
-          </span>{' '}
-          <span class='Guide_Bar' style='--bar: var(--half-gap)' />
-        </li>
-        <li class='Guide_Size' data-token='--gap'>
-          <span>
-            <code class='Guide_Name'>--gap</code> <span class='Guide_Value' />
-          </span>{' '}
-          <span class='Guide_Bar' style='--bar: var(--gap)' />
-        </li>
-        <li class='Guide_Size' data-token='--wide-gap'>
-          <span>
-            <code class='Guide_Name'>--wide-gap</code>{' '}
-            <span class='Guide_Value' />
-          </span>{' '}
-          <span class='Guide_Bar' style='--bar: var(--wide-gap)' />
-        </li>
+        {GAPS.map((gap) => <Size key={gap} token={gap} />)}
       </ul>
-      <p class='Note Note-small' data-token='--measure'>
-        <code class='Guide_Name'>--measure</code> — the maximum width for prose:
-        {' '}
-        <span class='Guide_Value' /> in this context.
-      </p>
-      <p class='Note Note-small' data-token='--wide-measure'>
-        <code class='Guide_Name'>--wide-measure</code>{' '}
-        — the maximum width for grids and previews:{' '}
-        <span class='Guide_Value' />.
-      </p>
-      <p class='Note Note-small'>
-        <code class='Guide_Name'>--side</code> and{' '}
-        <code class='Guide_Name'>--aside</code>{' '}
-        add a sidebar before the reading column and a gutter after it, and{' '}
-        <code class='Guide_Name'>--rhythm</code>{' '}
-        says how far apart the page's sections sit. A page kind sets all four on
-        its{' '}
-        <Code>body</Code>, and the header, the page and the footer are framed by
-        the sum.
-      </p>
-      <p class='Note Note-small'>
-        Shape is pencil and paper: the colour and weight of a drawn line, how
-        round its corners are, and how far a button sits off its hatch.
-      </p>
+      {['measure', 'wide-measure'].map((measure) => (
+        <p
+          key={measure}
+          class='Note Note-small'
+          data-token={`--${measure}`}
+          {...say(`space.${measure}`, token(`--${measure}`, 'code'))}
+        />
+      ))}
+      <p
+        class='Note Note-small'
+        {...say('space.frame', {
+          side: <code class='Guide_Name'>--side</code>,
+          aside: <code class='Guide_Name'>--aside</code>,
+          rhythm: <code class='Guide_Name'>--rhythm</code>,
+          ...code({ body: 'body' }),
+        })}
+      />
+      <p class='Note Note-small' {...say('space.shape')} />
       <ul class='Guide_Swatches'>
-        <li class='Guide_Swatch' data-token='--graphite'>
-          <span class='Guide_Chip' style='--swatch: var(--graphite)' />{' '}
-          <code class='Guide_Name'>--graphite</code>{' '}
-          <span class='Guide_Value' />
-        </li>
+        <Swatch token='--graphite' />
         <li class='Guide_Swatch' data-token='--stroke'>
           <span
             class='Guide_Chip'
@@ -526,24 +366,20 @@ export let StyleGuide = () => (
           <code class='Guide_Name'>--lift</code> <span class='Guide_Value' />
         </li>
       </ul>
-    </section>
-    <section class='Guide_Part' aria-labelledby='components'>
-      <h2 class='Title' id='components'>Components</h2>
-      <p class='Note'>
-        Each reusable component appears beside its class name. Dashed borders
-        mark examples and are not part of the component.
-      </p>
+    </Part>
+    <Part id='components'>
+      <p class='Note' {...say('components.about')} />
       <Card as='div' class='Guide_Demo'>
         <p class='Guide_Name'>.Title · .Title-hero · .Title-page</p>
-        <p class='Title Title-hero'>Build an app by asking Claude</p>
-        <p class='Title Title-page'>The title of a page</p>
-        <p class='Title'>The heading of one section</p>
+        <p class='Title Title-hero' {...say('components.titles.hero')} />
+        <p class='Title Title-page' {...say('components.titles.page')} />
+        <p class='Title' {...say('components.titles.section')} />
       </Card>
       <Card as='div' class='Guide_Demo'>
         <p class='Guide_Name'>.Note · .Note-lead · .Note-small</p>
-        <p class='Note Note-lead'>Introductory copy below a page title.</p>
-        <p class='Note'>Supporting copy at the page's body size.</p>
-        <p class='Note Note-small'>A caption, a footnote, a date.</p>
+        <p class='Note Note-lead' {...say('components.notes.lead')} />
+        <p class='Note' {...say('components.notes.body')} />
+        <p class='Note Note-small' {...say('components.notes.small')} />
       </Card>
       <Card as='div' class='Guide_Demo'>
         <p class='Guide_Name'>
@@ -551,31 +387,34 @@ export let StyleGuide = () => (
           .Chat_Bubble-them
         </p>
         <Card as='div' class='Chat'>
-          <h3 class='Chat_Who Chat_Who-you'>You ask.</h3>
-          <p class='Chat_Bubble Chat_Bubble-you'>
-            Could you make me a recipe box?
-          </p>
-          <h3 class='Chat_Who'>It gets built.</h3>
-          <p class='Chat_Bubble Chat_Bubble-them'>Sure, give me a minute.</p>
-          <p class='Note Note-small'>A caption at the foot of the exchange.</p>
+          <h3 class='Chat_Who Chat_Who-you' {...say('components.chat.you')} />
+          <p
+            class='Chat_Bubble Chat_Bubble-you'
+            {...say('components.chat.ask')}
+          />
+          <h3 class='Chat_Who' {...say('components.chat.them')} />
+          <p
+            class='Chat_Bubble Chat_Bubble-them'
+            {...say('components.chat.answer')}
+          />
+          <p class='Note Note-small' {...say('components.chat.caption')} />
         </Card>
       </Card>
       <Card as='div' class='Guide_Demo'>
         <p class='Guide_Name'>.Said</p>
-        <p class='Note'>
-          Use <Code>{'<q>'}</Code>{' '}
-          for words a person says to an assistant. The element remains a
-          quotation without CSS, and the background continues across line
-          breaks:{' '}
-          <q class='Said'>
-            invite ana@example.com to the recipe box, say it's for Saturday, and
-            put the newest recipes first
-          </q>.
-        </p>
-        <p class='Note'>
-          Short ones sit in the line the same way:{' '}
-          <q class='Said'>take Ana out.</q>
-        </p>
+        <p
+          class='Note'
+          {...say('components.said.long', {
+            ...code({ q: '<q>' }),
+            said: <q class='Said' {...say('components.said.invite')} />,
+          })}
+        />
+        <p
+          class='Note'
+          {...say('components.said.short', {
+            said: <q class='Said' {...say('components.said.out')} />,
+          })}
+        />
       </Card>
       <Card as='div' class='Guide_Demo'>
         <p class='Guide_Name'>
@@ -589,16 +428,24 @@ export let StyleGuide = () => (
             </Chip>
           </div>
           <div class='Window_Body'>
-            <p class='Window_Heading'>Our recipe box</p>
+            <p class='Window_Heading' {...say('components.window.heading')} />
             <ul class='Window_List'>
-              <li class='Window_Item'>Grandma's lemon cake</li>
-              <li class='Window_Item'>Tuesday soup</li>
+              {['cake', 'soup'].map((recipe) => (
+                <li
+                  key={recipe}
+                  class='Window_Item'
+                  {...say(`components.window.${recipe}`)}
+                />
+              ))}
             </ul>
-            <p class='Note Note-small'>
-              A note on{' '}
-              <span class='Window_On'>Tuesday soup</span>: “Taste for salt
-              twice.”
-            </p>
+            <p
+              class='Note Note-small'
+              {...say('components.window.note', {
+                on: (
+                  <span class='Window_On' {...say('components.window.soup')} />
+                ),
+              })}
+            />
           </div>
         </div>
         <div class='Window'>
@@ -610,7 +457,7 @@ export let StyleGuide = () => (
           <div class='Window_Body Window_Body-frame'>
             <iframe
               class='Window_Frame'
-              title='Example app preview'
+              {...attr('title', 'style-guide.components.window.title')}
               srcdoc={PREVIEW}
             />
           </div>
@@ -621,100 +468,116 @@ export let StyleGuide = () => (
         <p>
           <img class='Yak Yak-small' src='yak.webp' alt='' />
         </p>{' '}
-        <img class='Yak Yak-big' src='yak.webp' alt='The yak, drawn big' />{' '}
-        <p class='Note Note-small'>
-          One transparent drawing, in{' '}
-          <Code>yak.webp</Code>, serves both sizes. Square exports provide the
-          favicon, home-screen icon, and future app-icon sizes.
-        </p>
+        <img
+          class='Yak Yak-big'
+          src='yak.webp'
+          {...attr('alt', 'style-guide.components.yak.alt')}
+        />{' '}
+        <p
+          class='Note Note-small'
+          {...say('components.yak.note', code({ file: 'yak.webp' }))}
+        />
       </Card>
       <Card as='div' class='Guide_Demo'>
         <p class='Guide_Name'>.Prose · .Prose_Head · .Prose_When</p>
         <div class='Prose'>
           <div class='Prose_Head'>
-            <h3 class='Title Title-page'>Cookies</h3>
-            <p class='Prose_When Prose_Text'>
-              Last updated {day('2026-09-03', 'UTC')}
-            </p>
+            <h3 class='Title Title-page' {...say('components.prose.title')} />
+            <p
+              class='Prose_When Prose_Text'
+              {...say('components.prose.when')}
+            />
           </div>
           <section class='Prose_Section'>
-            <h2 class='Prose_Heading'>What Prose styles</h2>
-            <p class='Prose_Text'>
-              Prose styles its named paragraphs, lists, links,{' '}
-              <code class='Prose_Code'>code</code>, and addresses. Elements with
-              a component class keep their component styles.
-            </p>
+            <h2 class='Prose_Heading' {...say('components.prose.heading')} />
+            <p
+              class='Prose_Text'
+              {...say('components.prose.text', {
+                code: (
+                  <code class='Prose_Code' {...say('components.prose.code')} />
+                ),
+              })}
+            />
             <ul class='Prose_List'>
-              <li class='Prose_Item'>Plain paragraphs go quiet, in --muted.</li>
-              <li class='Prose_Item'>
-                A <a class='Prose_Link' href='#components'>link</a>{' '}
-                takes the accent.
-              </li>
+              <li class='Prose_Item' {...say('components.prose.quiet')} />
+              <li
+                class='Prose_Item'
+                {...say('components.prose.accent', {
+                  link: (
+                    <a
+                      class='Prose_Link'
+                      href='#components'
+                      {...say('components.prose.link')}
+                    />
+                  ),
+                })}
+              />
             </ul>
-            <address class='Prose_Address'>Yak Shaving LLC</address>
+            <address
+              class='Prose_Address'
+              {...say('components.prose.address')}
+            />
           </section>
         </div>
       </Card>
-    </section>
-    <section class='Guide_Part' aria-labelledby='kit'>
-      <h2 class='Title' id='kit'>The kit's parts</h2>
-      <p class='Note'>
-        Every @yaks/ui part these pages wear, in every variant, as the linen
-        theme and the pencil skin draw it. The examples are the kit's own.
-      </p>
+    </Part>
+    <Part id='kit'>
+      <p class='Note' {...say('kit.note')} />
       <Worn parts={PARTS} composition={drawn} />
-    </section>
-    <section class='Guide_Part' aria-labelledby='sections'>
-      <h2 class='Title' id='sections'>Page-specific sections</h2>
-      <p class='Note'>
-        The sections layer contains layout used in one place. Do not reuse a
-        section class as a general component.
-      </p>
+    </Part>
+    <Part id='sections'>
+      <p class='Note' {...say('sections.note')} />
       <ul class='Guide_Rules'>
-        <li>
-          <b>.Top</b>, <b>.Top_Name</b>{' '}
-          — the shared site header. It is as wide as the page under it:{' '}
-          <b>.Top</b>, <b>.Page</b> and <b>.Foot</b>{' '}
-          all read the frame the page asked for. The home page shows the yak in
-          its hero instead of beside the site name.
-        </li>
-        <li>
-          <b>.Page</b>{' '}
-          — the centred reading column and the two slots beside it. A page kind
-          on the <Code>body</Code> says how wide it all is, by re-pointing{' '}
-          <Code>--measure</Code>, <Code>--side</Code> and{' '}
-          <Code>--aside</Code>, and how far apart its sections sit, with{' '}
-          <Code>--rhythm</Code>. Pages that contain grids or previews may use
-          {' '}
-          <Code>--wide-measure</Code>.
-        </li>
-        <li>
-          <b>.Home</b> — the home page's frame, asked for on its{' '}
-          <Code>body</Code>.
-        </li>
-        <li>
-          <b>.Hello</b>, <b>.Hello_Copy</b>, <b>.Hello_Yak</b>,{' '}
-          <b>.Hello_Ask</b>, <b>.Demo</b>, <b>.Demo_Title</b>,{' '}
-          <b>.Demo_Slides</b>, <b>.Demo_Controls</b>, <b>.Demo_Dots</b>,{' '}
-          <b>.Demo_Dot</b>, <b>.Demo_Step</b>, <b>.Demo_Pause</b>{' '}
-          (the examples' carousel), <b>.Yours</b>, <b>.Yours_List</b>,{' '}
-          <b>.Make</b>, <b>.Make_Intro</b>, <b>.Make_List</b>, <b>.Make_Card</b>
-          {' '}
-          (a <b>.Card</b> an app is), <b>.Make_Shot</b>, <b>.How</b>,{' '}
-          <b>.Steps</b>, <b>.Step_Name</b>, <b>.Join</b>, <b>.Join_Doors</b>
-          {' '}
-          — home page sections and their layout elements. Pricing also uses{' '}
-          <b>.Hello</b>, <b>.Yours</b>, and{' '}
-          <b>.Join</b>; homepage-specific overrides stay under{' '}
-          <Code>.Home</Code>.
-        </li>
-        <li>
-          <b>.Foot</b>, <b>.Foot_Links</b> — the shared site footer.
-        </li>
-        <li>
-          <b>.Guide</b> and its elements — layout for this reference page.
-        </li>
+        {Object.entries<Slots>({
+          top: classes('Top', 'Top_Name', 'Page', 'Foot'),
+          page: {
+            ...classes('Page'),
+            ...code({
+              body: 'body',
+              measure: '--measure',
+              side: '--side',
+              aside: '--aside',
+              rhythm: '--rhythm',
+              wide: '--wide-measure',
+            }),
+          },
+          home: { ...classes('Home'), ...code({ body: 'body' }) },
+          hello: {
+            ...classes(
+              'Hello',
+              'Hello_Copy',
+              'Hello_Yak',
+              'Hello_Ask',
+              'Demo',
+              'Demo_Title',
+              'Demo_Slides',
+              'Demo_Controls',
+              'Demo_Dots',
+              'Demo_Dot',
+              'Demo_Step',
+              'Demo_Pause',
+              'Yours',
+              'Yours_List',
+              'Make',
+              'Make_Intro',
+              'Make_List',
+              'Make_Card',
+              'Card',
+              'Make_Shot',
+              'How',
+              'Steps',
+              'Step_Name',
+              'Join',
+              'Join_Doors',
+            ),
+            ...code({ home: '.Home' }),
+          },
+          foot: classes('Foot', 'Foot_Links'),
+          guide: classes('Guide'),
+        }).map(([part, slots]) => (
+          <li key={part} {...say(`sections.${part}`, slots)} />
+        ))}
       </ul>
-    </section>
+    </Part>
   </Page>
 )

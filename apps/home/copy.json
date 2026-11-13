@@ -1006,6 +1006,205 @@
   "style-guide": {
     "name": "Style guide",
     "title": "Style guide · yaks.app",
-    "description": "Reference for the yaks.app design tokens, components, layout, and writing style."
+    "description": "Reference for the yaks.app design tokens, components, layout, and writing style.",
+    "head": {
+      "title": "Style guide",
+      "lead": "This page renders the shared tokens and components used across yaks.app. Use it to check a change against the rest of the site.",
+      "theme": "Preview theme",
+      "themes": {
+        "system": "System",
+        "light": "Light",
+        "dark": "Dark"
+      },
+      "nav": "On this page"
+    },
+    "nav": {
+      "how-to": "Using the system",
+      "voice": "Layout and voice",
+      "language": "One design language",
+      "theme-roles": "The theme",
+      "page-paints": "Page paints",
+      "type": "Type",
+      "space": "Space and shape",
+      "components": "Components",
+      "kit": "The kit's parts",
+      "sections": "Sections"
+    },
+    "how-to": {
+      "title": "Using the system",
+      "note": "No build step of ours, four declared layers — tokens, base, components, and sections. Later layers take precedence. Every part below is one of the @yaks/ui kit's, in its %{linen} theme and drawn by its %{pencil} skin: the deploy composes them as %{ui} (sheet-assets.ts names the parts the pages wear). %{site} adds the face and what only these pages paint. The management pages' %{pages} and the site's %{style} load both and lay out their pages. Follow these rules when adding a page or component:",
+      "existing": {
+        "name": "Use an existing part before writing new CSS.",
+        "rule": "%{name} A part a page lacks goes into the kit, drawn by pencil, with an example here. The available titles, notes, chips, buttons, fields, tabs, sidebars, bubbles, windows, cards, rows, forms, and prose styles are shown below, and the rules they follow are under One design language."
+      },
+      "roles": {
+        "name": "Use colour roles, never a colour.",
+        "rule": "%{name} Write %{role}, never %{colour}. The theme gives each role a light and a dark paint; a colour written down follows neither."
+      },
+      "variants": {
+        "name": "Implement variants with custom properties.",
+        "rule": "%{name} %{variant} sets %{fill} instead of repeating the component's padding and border."
+      },
+      "layers": {
+        "name": "Keep page-specific layout in the sections layer.",
+        "rule": "%{name} Reusable UI belongs in the components layer; layout used in one place does not."
+      },
+      "complete": "When adding a component, add a working example here so this guide remains complete."
+    },
+    "voice": {
+      "title": "Layout and voice",
+      "pencil": {
+        "name": "Draw in pencil on paper, and keep surfaces flat.",
+        "rule": "%{name} A card, a button, a window and a linked chip are drawn: a graphite line around it with slightly rounded corners. A field is drawn the same way around a well: a fill a little darker than the paper, pressed in, and what is typed in it stays crisp. What can be pressed sits on a hatch, so a hatch always means a press. One grain of paper lies over every page."
+      },
+      "selection": {
+        "name": "Make selection visible in the shape.",
+        "rule": "%{name} A selected tab joins its panel, a pressed button slides onto its hatch, and the current sidebar tab joins the page along its right edge. Keep these cues in shared components so they work consistently in light and dark themes."
+      },
+      "narrow": {
+        "name": "Keep prose narrow.",
+        "rule": "%{name} Articles, help, and legal pages use %{measure}. Use %{wide} only when a grid, preview, or comparison needs the extra width."
+      },
+      "subject": {
+        "name": "Name the subject and the action.",
+        "rule": "%{name} Write “Claude builds the app” or “yaks.app hosts it,” not “it gets built” or “the idea comes to life.”"
+      },
+      "nouns": {
+        "name": "Use specific nouns.",
+        "rule": "%{name} Name recipes, files, invitations, and links instead of “things,” “bits,” or “what you need.”"
+      },
+      "filler": {
+        "name": "Remove filler.",
+        "rule": "%{name} Cut phrases such as “a little something” and “brought to life.” State the feature, limit, or next step. Contractions and questions are fine when they help the reader."
+      },
+      "actions": {
+        "name": "Use concrete actions for links and buttons.",
+        "rule": "%{name} “Connect Claude,” “View pricing,” and “Open the recipe box” tell people what happens next."
+      },
+      "claims": {
+        "name": "Make only claims the product can guarantee.",
+        "rule": "%{name} Distinguish an app hosted by yaks.app from ownership of a domain, source code, or exported data."
+      }
+    },
+    "language": {
+      "title": "One design language",
+      "note": "Every page yaks.app draws, the dashboard's tabs and the site's own pages alike, is built from the same few parts in the same way. A person who learns one page has learned them all.",
+      "card": {
+        "name": "A card holds one thing.",
+        "rule": "%{name} A connection, a plan, the people in a space, one app's visits: each is one %{card}. Cards stack one gap apart, and a run of cards that belong together sits under a %{group} heading."
+      },
+      "head": {
+        "name": "A card's head says what it is and holds what acts on it.",
+        "rule": "%{name} The head runs across the top: a mark, the title, its status, then its actions at the right. Disconnect, Restore, Manage billing and Connect go there, a size smaller than a form's button, so a head stays one line."
+      },
+      "hierarchy": {
+        "name": "Hierarchy is four steps of type.",
+        "rule": "%{name} The page title; a card's title at 1rem; what a thing says at %{small} or the body size; and what describes it (a hint, a status, a count, a date) at %{fine} in %{muted}. The mono face is only for what a person copies or types."
+      },
+      "rows": {
+        "name": "Like things are rows.",
+        "rule": "%{name} The apps using a connection, the people in a space, the agents connected, the apps in the trash: %{rows} in a card, hairlines between them, each row's actions at its right."
+      },
+      "field": {
+        "name": "A field sits under its label, never at the end of a sentence.",
+        "rule": "%{name} Every field (%{field}) is its label, its control and its hint, on one left edge and at most 34rem wide, in a form or alone in a card. One field and its button share a line (%{line}); a longer form ends with its button. What only a few people change folds under %{advanced} (%{more}) with a sensible default already in place.",
+        "advanced": "Advanced options"
+      },
+      "space": {
+        "name": "Space comes from the container.",
+        "rule": "%{name} Cards, forms and rows set the gap between what they hold; nothing inside carries a margin of its own. A card's parts are .75rem apart, cards one gap, groups two."
+      },
+      "overlap": {
+        "name": "Nothing overlaps at any width.",
+        "rule": "%{name} A name too long for its column is cut with an ellipsis and keeps its whole text as a title; a number is never cut and never wraps; a row that runs out of room wraps its actions under it."
+      }
+    },
+    "theme-roles": {
+      "title": "The theme",
+      "note": "yaks.app wears %{linen}, a theme of the @yaks/ui kit: every colour a part reads is one of its roles, and each role is a light and a dark paint. Values reflect the selected theme."
+    },
+    "page-paints": {
+      "title": "Page paints",
+      "note": "What only yaks.app's pages paint, and no theme names: the person's bubble, the assistant's, an embedded app's ground and a field's well. They are declared in %{site}, from the theme's roles where they can be."
+    },
+    "type": {
+      "title": "Type",
+      "size": "%{name} %{value} — body text.",
+      "lead": "%{name} %{value} — introductory text.",
+      "small": "%{name} %{value} — captions, footers, and what a card says.",
+      "fine": "%{name} %{value} — what describes a thing: a hint, a status, a count, a date."
+    },
+    "space": {
+      "title": "Space and shape",
+      "note": "Spacing tokens derive from %{gap}.",
+      "measure": "%{name} — the maximum width for prose: %{value} in this context.",
+      "wide-measure": "%{name} — the maximum width for grids and previews: %{value}.",
+      "frame": "%{side} and %{aside} add a sidebar before the reading column and a gutter after it, and %{rhythm} says how far apart the page's sections sit. A page kind sets all four on its %{body}, and the header, the page and the footer are framed by the sum.",
+      "shape": "Shape is pencil and paper: the colour and weight of a drawn line, how round its corners are, and how far a button sits off its hatch."
+    },
+    "components": {
+      "title": "Components",
+      "notes": {
+        "lead": "Introductory copy below a page title.",
+        "body": "Supporting copy at the page's body size.",
+        "small": "A caption, a footnote, a date."
+      },
+      "about": "Each reusable component appears beside its class name. Dashed borders mark examples and are not part of the component.",
+      "titles": {
+        "hero": "Build an app by asking Claude",
+        "page": "The title of a page",
+        "section": "The heading of one section"
+      },
+      "chat": {
+        "you": "You ask.",
+        "ask": "Could you make me a recipe box?",
+        "them": "It gets built.",
+        "answer": "Sure, give me a minute.",
+        "caption": "A caption at the foot of the exchange."
+      },
+      "said": {
+        "long": "Use %{q} for words a person says to an assistant. The element remains a quotation without CSS, and the background continues across line breaks: %{said}.",
+        "invite": "invite ana@example.com to the recipe box, say it's for Saturday, and put the newest recipes first",
+        "short": "Short ones sit in the line the same way: %{said}",
+        "out": "take Ana out."
+      },
+      "window": {
+        "heading": "Our recipe box",
+        "cake": "Grandma's lemon cake",
+        "soup": "Tuesday soup",
+        "note": "A note on %{on}: “Taste for salt twice.”",
+        "title": "Example app preview",
+        "preview": "A working app appears inside this frame."
+      },
+      "yak": {
+        "alt": "The yak, drawn big",
+        "note": "One transparent drawing, in %{file}, serves both sizes. Square exports provide the favicon, home-screen icon, and future app-icon sizes."
+      },
+      "prose": {
+        "title": "Cookies",
+        "when": "Last updated Sep 3rd, 2026",
+        "heading": "What Prose styles",
+        "text": "Prose styles its named paragraphs, lists, links, %{code}, and addresses. Elements with a component class keep their component styles.",
+        "code": "code",
+        "quiet": "Plain paragraphs go quiet, in --muted.",
+        "accent": "A %{link} takes the accent.",
+        "link": "link",
+        "address": "Yak Shaving LLC"
+      }
+    },
+    "kit": {
+      "title": "The kit's parts",
+      "note": "Every @yaks/ui part these pages wear, in every variant, as the linen theme and the pencil skin draw it. The examples are the kit's own."
+    },
+    "sections": {
+      "title": "Page-specific sections",
+      "note": "The sections layer contains layout used in one place. Do not reuse a section class as a general component.",
+      "top": "%{Top}, %{Top_Name} — the shared site header. It is as wide as the page under it: %{Top}, %{Page} and %{Foot} all read the frame the page asked for. The home page shows the yak in its hero instead of beside the site name.",
+      "page": "%{Page} — the centred reading column and the two slots beside it. A page kind on the %{body} says how wide it all is, by re-pointing %{measure}, %{side} and %{aside}, and how far apart its sections sit, with %{rhythm}. Pages that contain grids or previews may use %{wide}.",
+      "home": "%{Home} — the home page's frame, asked for on its %{body}.",
+      "hello": "%{Hello}, %{Hello_Copy}, %{Hello_Yak}, %{Hello_Ask}, %{Demo}, %{Demo_Title}, %{Demo_Slides}, %{Demo_Controls}, %{Demo_Dots}, %{Demo_Dot}, %{Demo_Step}, %{Demo_Pause} (the examples' carousel), %{Yours}, %{Yours_List}, %{Make}, %{Make_Intro}, %{Make_List}, %{Make_Card} (a %{Card} an app is), %{Make_Shot}, %{How}, %{Steps}, %{Step_Name}, %{Join}, %{Join_Doors} — home page sections and their layout elements. Pricing also uses %{Hello}, %{Yours}, and %{Join}; homepage-specific overrides stay under %{home}.",
+      "foot": "%{Foot}, %{Foot_Links} — the shared site footer.",
+      "guide": "%{Guide} and its elements — layout for this reference page."
+    }
   }
 }
