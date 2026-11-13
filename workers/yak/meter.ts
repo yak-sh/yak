@@ -1306,6 +1306,29 @@ async (call) => {
   return result
 }
 
+/** Why a request's most cost cannot be known before it runs, or null: its
+ * model has no listed price, its provider lists no context window to bound
+ * the input by, or it asks for output that is not priced by the token. Such a
+ * call is refused before anything is held, saying which. */
+let unboundable = (
+  req: Parameters<Model>[0],
+  tariff: Price | undefined | null | false,
+  window: number | undefined,
+) => {
+  let cannot = `so the most this call could cost can't be known, and it is ` +
+    `not made`
+  let other = req.modalities?.filter((m) => m != 'text')
+  if (other?.length) {
+    return `${req.model} is asked for ${other.join(' and ')} output, which ` +
+      `is not priced by the token, ${cannot}`
+  }
+  if (!tariff) return `${req.model} has no listed price, ${cannot}`
+  if (window == null) {
+    return `${req.model}'s provider lists no context window for it, ${cannot}`
+  }
+  return null
+}
+
 /** A hosted provider spends from the same space budget as every other door.
  * Costs are supplied by the adapter, never guessed from media JSON. A call
  * `visiting` names a visitor for is held to their share as well, and counted
@@ -1336,6 +1359,10 @@ export let accounted = (
       let listed = reached('priced', info?.price ?? await price?.(req.model))
       // Held and charged at what the request can be billed.
       let tariff = listed && retained(listed, req.cacheRetention)
+      let window = info?.context ??
+        (tariff && Object.values(tariff).every((p) => p == 0) ? 0 : undefined)
+      let unbounded = !own && unboundable(req, tariff, window)
+      if (unbounded) throw new ModelError('limit', unbounded)
       let call = req.call ?? mint()
       let visitor = await visiting?.(req)
       let hold = await reserved(
@@ -1343,25 +1370,16 @@ export let accounted = (
         space,
         (remaining) => {
           if (own) return model.quote!(req, remaining) ?? null
-          if (
-            req.modalities?.some((m) => m != 'text')
-          ) return null
-          let window = info?.context ??
-            (tariff && Object.values(tariff).every((p) => p == 0)
-              ? 0
-              : undefined)
           let output = req.questions ? window : outputTokens(info, req.tokens)
           // What the provider's own tools may add is reserved beside it.
           let extra = model.hosted
-          let quote = tariff && window != null
-            ? affordable(
-              tariff,
-              requestBound(req, window) + (extra?.input ?? 0),
-              remaining,
-              output,
-              extra?.searches,
-            )
-            : null
+          let quote = affordable(
+            tariff!,
+            requestBound(req, window!) + (extra?.input ?? 0),
+            remaining,
+            output,
+            extra?.searches,
+          )
           return req.questions && quote?.tokens != output ? null : quote
         },
         call,

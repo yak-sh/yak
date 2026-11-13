@@ -1,4 +1,9 @@
-import { assertAlmostEquals, assertEquals, assertRejects } from '@std/assert'
+import {
+  assertAlmostEquals,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import { mint } from '@yaks/graph'
 import {
   type Model,
@@ -72,6 +77,37 @@ for (
     }, { info: async () => ({ ...await info(), output }) })
     await withModel(space, raw)({ ...req, tokens: requested })
     assertEquals(seen, expected)
+  })
+}
+
+for (
+  let [what, listed, ask, says] of [
+    [
+      'no context window',
+      { price: { input: 1, output: 1 } },
+      {},
+      'lists no context window',
+    ],
+    ['no price', { context: 1000 }, {}, 'has no listed price'],
+    ['speech', { context: 1000, price: { input: 1, output: 1 } }, {
+      modalities: ['speech'],
+    }, 'speech output'],
+  ] as const
+) {
+  let { space, used } = await fixture()
+  test(`a model with ${what} is refused saying why, before anything is held`, async () => {
+    let asked = 0
+    let raw: Model = Object.assign(() => {
+      asked++
+      throw new Error('not reached')
+    }, { info: () => Promise.resolve({ name: 'bounded', ...listed }) })
+    let no = await assertRejects(
+      () => withModel(space, raw)({ ...req, ...ask } as Parameters<Model>[0]),
+      ModelError,
+    )
+    assertStringIncludes(no.message, says)
+    assertStringIncludes(no.message, "can't be known")
+    assertEquals([asked, await used()], [0, 0])
   })
 }
 
