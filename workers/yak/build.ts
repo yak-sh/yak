@@ -87,7 +87,7 @@ import type { Who } from './session.ts'
 import { caught, refusing, stopped } from './defects.ts'
 import { refuse } from '@yaks/api/refuse'
 import { reported, type Tally, tallying } from './lib/hops.ts'
-import * as log from './writes.ts'
+import * as log from '@yaks/api/log'
 import { headed } from './timing.ts'
 import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
@@ -491,7 +491,7 @@ export class Builder extends Durable {
   // The lines kept (`#hold`), taken up behind the alarm or the build that
   // ended, since a build takes minutes. A stopped object's wait for them is
   // its alarm's. A log that holds none is looked at once an incarnation
-  // (writes.ts `next`), and stands from the store's fitting
+  // (@yaks/api/log `next`), and stands from the store's fitting
   // (operator-store.ts), so the look runs no DDL.
   #replay() {
     if (this.#replaying || this.ceiling.stopped(true)) return

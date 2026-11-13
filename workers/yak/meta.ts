@@ -26,7 +26,7 @@ import { type Door, type Namespace } from '@yaks/durable-object/door'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { jittered } from '@yaks/durable-object/resets'
 import type { Clock } from '@yaks/fp'
-import { Pending, said } from './writes.ts'
+import { Pending, said } from '@yaks/api/log'
 import { reported } from './defects.ts'
 import { FILED } from '@yaks/api/refuse'
 
@@ -107,7 +107,7 @@ export let written = async (r: Response): Promise<Bundle[]> => {
     let s = await r.json() as Stale
     throw new Stale(s.eid, s.comp, s.prop, s.current)
   }
-  // Kept by the store's write log and applied later (writes.ts): the batch as
+  // Kept by the store's write log and applied later (@yaks/api/log): the batch as
   // applied does not exist yet, so there is nothing to return, but how long
   // a stopped store keeps it waiting.
   if (r.status == 202) {

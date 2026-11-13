@@ -27,7 +27,7 @@ import { KERNEL, type Meta } from './meta.ts'
 import type { Who } from './session.ts'
 import { fullFiles } from './usage.ts'
 import { sha256 } from './versions.ts'
-import { Pending } from './writes.ts'
+import { Pending } from '@yaks/api/log'
 
 // The bytes' own name (versions.ts `sha256`, the content address a version's
 // manifest is made of) is the object's key and the entity's eid here, so the
@@ -263,7 +263,7 @@ export let uploaded = async (
   try {
     await graph.apply(file.bundles, KERNEL)
   } catch (e) {
-    // Kept by the store's write log (writes.ts): the bytes are stored and their
+    // Kept by the store's write log (@yaks/api/log): the bytes are stored and their
     // row lands when the app recovers, so the upload is not told it failed.
     if (!(e instanceof Pending)) throw e
   }

@@ -1758,7 +1758,7 @@ test('a rule writing outside its *write set takes the batch with it', async () =
       recipe: { serves: 8 },
     }], owner)
     // A rule that breaks is the platform's fault, not the caller's: the write
-    // is kept for code that works (writes.ts), and none of it lands now.
+    // is kept for code that works (@yaks/api/log), and none of it lands now.
     assertEquals(no.status, 202)
     assertStringIncludes((await no.json()).message, 'write set')
     // The refusal is a rollback: the batch it fired on is not in the store.

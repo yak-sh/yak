@@ -10,6 +10,7 @@
 // the request in whatever else the caller always says. Nothing here knows what
 // the object is for.
 
+import { IDEMPOTENCY } from '@yaks/api/log'
 import { evicted, killed, opaque, retried, starved } from './resets.ts'
 
 /** A Durable Object stub: one object, reachable by fetch. */
@@ -109,9 +110,9 @@ export let doorOf = (send: Send, scrub: string[] = []): Door => {
   })
 }
 
-/** The header that makes a resend safe: an object that applied a key answers
- * the next send of it as it answered the first (@yaks/api receipts). */
-export let IDEMPOTENCY = 'idempotency-key'
+// The header that makes a resend safe: an object that applied a key answers
+// the next send of it as it answered the first (@yaks/api/receipts).
+export { IDEMPOTENCY } from '@yaks/api/log'
 
 /**
  * The reset an answer carries, as the runtime throws it, or null. An object

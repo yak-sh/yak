@@ -21,7 +21,7 @@ import type { Load } from '@yaks/host'
 import { appConfig } from './config.ts'
 import { load } from './load.ts'
 import { HAS_NOTES } from './standing.ts'
-import { ROOM } from './writes.ts'
+import { ROOM } from '@yaks/api/log'
 import { HELLO } from './mcp-probe.ts'
 
 // And a bundle the store refuses refuses the deploy, naming the file and the
@@ -409,7 +409,7 @@ test('store_load writes a load too big for one batch a part at a time', async ()
   }
 })
 
-// A write the store's log keeps for fixed code (writes.ts) has not landed, and
+// A write the store's log keeps for fixed code (@yaks/api/log) has not landed, and
 // a load that says it did sends the person looking for rows that are not
 // there. A rule that breaks is such a failure, the platform's and not theirs.
 test('a load the store keeps for later is pending, not loaded', async () => {

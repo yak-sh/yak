@@ -20,6 +20,7 @@ import { signed } from './actor.ts'
 import { readBody, receiveBody } from './body.ts'
 import { fault, json, refusal } from './refuse.ts'
 import { published } from './publish.ts'
+import { IDEMPOTENCY } from './log.ts'
 import { received } from './receipts.ts'
 import { admit } from './requests.ts'
 import { BINARY, decode, stringify, unpack } from '@yaks/vocab/wire'
@@ -267,7 +268,7 @@ export let write = async (
   params: string[] = [],
 ): Promise<Response> => {
   let { check } = writeOptions(request, params)
-  let key = request.headers.get('idempotency-key')
+  let key = request.headers.get(IDEMPOTENCY)
   if (poured(request)) {
     if (key?.startsWith('outbox:')) {
       throw new Refused('Durable outbox keys require a JSON apply')

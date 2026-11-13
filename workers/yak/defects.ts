@@ -20,7 +20,7 @@ import {
 } from '@yaks/tracker/report'
 import type { Env } from './env.ts'
 import { isTestAddress } from '@yaks/platform/bots'
-import { Pending } from './writes.ts'
+import { Pending } from '@yaks/api/log'
 import { moved } from '@yaks/durable-object/resets'
 import { stopped } from '@yaks/durable-object/ceiling'
 import type { Ctx } from './tools.ts'

@@ -18,7 +18,7 @@ import { answered, type Meta, metaOf } from './meta.ts'
 import { doorOf, STATIC_QUERY } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { EPOCH } from './directory-copy.ts'
-import { Pending } from './writes.ts'
+import { Pending } from '@yaks/api/log'
 
 let fixture = (store: Meta) => {
   let fetch = dirPart.over(store)

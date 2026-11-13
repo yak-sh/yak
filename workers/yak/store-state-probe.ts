@@ -7,7 +7,7 @@ import { type Snapshot, snapshot } from '../../packages/sqlite/testing.ts'
 import { GIT_STORE, PLATFORM_OBJECT } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { KV, shapeOf } from './store-schema.ts'
-import { schema as writeSchema } from './writes.ts'
+import { schema as writeSchema } from '@yaks/api/log'
 import { texts } from './embedding.ts'
 
 // A new test object's installed schema is the production shape, including the

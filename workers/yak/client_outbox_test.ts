@@ -34,7 +34,7 @@ let settled = async (ready: () => boolean) => {
 let base = 'https://outbox-client.test/notes/api/'
 
 // A store past the rows it may write keeps the write and says how long to
-// wait (graph.ts `#kept`): the outbox sends it again no sooner.
+// wait (@yaks/api/receipts `door`): the outbox sends it again no sooner.
 let waitsAsAsked = await (async () => {
   let calls = 0
   let time = clock()

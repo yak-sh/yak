@@ -287,7 +287,7 @@ import {
   span,
   type Text,
 } from './seed.ts'
-import { said as sentence } from './writes.ts'
+import { said as sentence } from '@yaks/api/log'
 import { archive, breaks, folds, line, serve, trackedIn } from './unseen.ts'
 import { scheduleUse, start } from './used.ts'
 import {

@@ -26,7 +26,7 @@ import {
   STINT,
 } from './seed.ts'
 import { seedy } from './files.ts'
-import { fits, ROOM } from './writes.ts'
+import { fits, ROOM } from '@yaks/api/log'
 
 let file = (path: string, bundles: unknown[]) => ({
   path,

@@ -40,7 +40,7 @@ import { read } from '@yaks/yaml'
 import { type Sheet, sheet } from './csv.ts'
 import { refuse } from './tool.ts'
 import { seedy } from './files.ts'
-import { Pending, ROOM } from './writes.ts'
+import { Pending, ROOM } from '@yaks/api/log'
 
 /** What a seed is written in: YAML first — the warm path (M-34605) — then
  * JSON, which YAML reads anyway, and a spreadsheet (csv.ts). */
@@ -166,7 +166,7 @@ let utf8 = new TextEncoder()
 /**
  * The batches a load is written in, in order: each at most {@link PART}
  * bundles, and small enough for the store's write log to keep before it
- * applies it (writes.ts `ROOM`), so a reset mid-write loses nothing and a
+ * applies it (@yaks/api/log `ROOM`), so a reset mid-write loses nothing and a
  * resend is not applied twice. A bundle bigger than the log is a part of its
  * own.
  */
@@ -191,7 +191,7 @@ export let parts = (all: Sown[]): Sown[][] => {
 /** The door a seed is written through: a batch in, the refusal's own sentence
  * out, or null when the store took it. `check` asks only whether it would —
  * every phase runs and the transaction rolls back. A batch the store kept but
- * has not applied yet throws (writes.ts `Pending`): it is neither taken nor
+ * has not applied yet throws (@yaks/api/log `Pending`): it is neither taken nor
  * refused, and sending it again would only wait beside it. */
 export type Applying = (
   bundles: Bundle[],
@@ -267,7 +267,7 @@ export let span = (from: number, last: number) =>
  * once it is more than one. So a part that fails says what its predecessors
  * in this call already wrote, and where the load goes on: from the refused
  * part once the file is fixed, or from the part after one the store kept to
- * apply later (writes.ts `Pending`).
+ * apply later (@yaks/api/log `Pending`).
  */
 export let loadParts = async (
   cut: Sown[][],

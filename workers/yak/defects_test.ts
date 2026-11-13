@@ -15,7 +15,7 @@ import {
   responding,
   within,
 } from './defects.ts'
-import { Pending } from './writes.ts'
+import { Pending } from '@yaks/api/log'
 import { written } from './meta.ts'
 import { faults, refuse as answer } from '@yaks/api/refuse'
 import { type Own, replaced } from '@yaks/durable-object'

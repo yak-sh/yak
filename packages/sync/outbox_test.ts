@@ -155,7 +155,7 @@ test('outbox retains unknown outcomes and automatically retries the same key and
 })
 
 // A store past the rows it may write for now keeps the write and says how
-// long to wait (workers/yak graph.ts `#kept`).
+// long to wait (@yaks/api/receipts `door`).
 let stopped = Object.assign(new Error('kept until the window ends'), {
   retry: { after: 5_000 },
 })

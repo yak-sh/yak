@@ -12,7 +12,7 @@ import type { Bundle } from '@yaks/graph'
 import { requested } from '@yaks/graph/bundle'
 import { sha256 } from '@yaks/graph'
 import { IDEMPOTENCY } from '@yaks/durable-object/door'
-import { durable, INTENT } from './writes.ts'
+import { durable, INTENT } from '@yaks/api/log'
 import { misfit } from '@yaks/graph/errors'
 import {
   type App,
@@ -40,7 +40,7 @@ import { type Ask, type Member, reach as composition } from '@yaks/reach'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { refuse, rejected } from './tool.ts'
 import { caught } from './defects.ts'
-import { said as told } from './writes.ts'
+import { said as told } from '@yaks/api/log'
 import { answered } from './meta.ts'
 import { sandboxed } from './installed.ts'
 
@@ -155,7 +155,7 @@ let memberOf = (
     }
     let door = appStore(env.STORE, r.space, r.app, env)
     return door.consume(`/apply${check ? '?check=1' : ''}`, async (res) => {
-      // A write the store's log kept (writes.ts) lands later, in order: the
+      // A write the store's log kept (@yaks/api/log) lands later, in order: the
       // agent is told so rather than that it failed, so it does not send it
       // twice.
       if (res.status == 202) {

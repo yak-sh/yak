@@ -87,7 +87,7 @@ import {
 import { contentType } from '@yaks/blob/identify'
 import { declarationOf } from './declaration.ts'
 import { KERNEL, type Meta, metaOf, minted } from './meta.ts'
-import { Pending } from './writes.ts'
+import { Pending } from '@yaks/api/log'
 import {
   acceptsOf,
   admit,
@@ -1424,7 +1424,7 @@ let recorded = async (
   try {
     await graph.apply(file.bundles, KERNEL)
   } catch (e) {
-    // Kept by the store's write log (writes.ts): the bytes are stored and their
+    // Kept by the store's write log (@yaks/api/log): the bytes are stored and their
     // row lands when the app recovers, so the upload is not told it failed.
     if (!(e instanceof Pending)) return rejection(e, tags)
   }
@@ -2293,7 +2293,7 @@ export let api = async (
       }, { ...headers, ...(await named(env, who, app)) })
     }
     // A page that sends the write again after a 202 names it, and the store
-    // answers the resend as it answered the first (writes.ts `first`) rather
+    // answers the resend as it answered the first (@yaks/api/log `first`) rather
     // than keeping a second copy that its guards refuse once the first lands.
     // Each wire in, the same wire out (wire.ts): the page's envelope is
     // answered `{ok, aliases, bundles}`, and the Store's bare array, which a
@@ -2320,7 +2320,7 @@ export let api = async (
         receipt(sent, applied),
       )
     } catch (e) {
-      // Kept by the store's write log (writes.ts): the page's edit is safe
+      // Kept by the store's write log (@yaks/api/log): the page's edit is safe
       // and lands when the app recovers, so it is not told it failed. Nothing
       // is applied yet, so the Store's wire hears an empty batch.
       if (e instanceof Pending) {

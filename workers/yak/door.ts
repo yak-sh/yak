@@ -163,7 +163,7 @@ export let STATIC_QUERY = 'x-yak-static-query'
 // rather than a hope about its callers.
 //
 // The idempotency key is among them because the store answers a key it has
-// seen with the answer it gave (writes.ts): only the kernel mints one.
+// seen with the answer it gave (@yaks/api/log): only the kernel mints one.
 let VOUCH = [
   IDEMPOTENCY,
   ACCEPTED,

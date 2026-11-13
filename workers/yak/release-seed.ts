@@ -5,7 +5,7 @@ import type { Door } from '@yaks/durable-object/door'
 import type { Env } from './env.ts'
 import type { Reach } from './reach.ts'
 import type { Applying } from './seed.ts'
-import { Pending, said } from './writes.ts'
+import { Pending, said } from '@yaks/api/log'
 
 export let applying =
   (store: Door, head: Record<string, string>, path = '/apply'): Applying =>

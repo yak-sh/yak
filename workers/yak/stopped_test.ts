@@ -16,7 +16,7 @@ import type { Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { WAKE } from './door.ts'
 import { db, state, titling } from './testing.ts'
-import { Pending } from './writes.ts'
+import { Pending } from '@yaks/api/log'
 import { BINARY, binary } from '@yaks/vocab/wire'
 
 let NAME = 'ada/notes'

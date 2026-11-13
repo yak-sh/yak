@@ -316,7 +316,7 @@ import {
 } from '@yaks/query'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { decode as fromWire, stringify } from '@yaks/vocab/wire'
-import { decoded, opened, taken } from './binary.ts'
+import { decoded } from './binary.ts'
 import { type Anatomy, anatomy } from '@yaks/code/anatomy'
 import { workerAnatomy } from './anatomy.ts'
 import { answerOf, toolEid } from '@yaks/tools/result'
@@ -410,41 +410,21 @@ import { instrumentActor, instrumentEid } from './instrument.ts'
 import { commandAt, commandReply } from './app-command.ts'
 import { vaultOf } from './vault.ts'
 import {
-  aside,
   constrained,
-  dead,
-  done,
   durable,
-  fingerprinted,
-  first,
-  fits,
-  held,
   interrupted,
-  keep,
-  type Kept,
   kept,
-  keyed,
-  landed,
   logged,
-  next,
-  parked,
   raise,
-  type Receipt,
-  received,
-  remembered,
   replayed,
   retry,
   revived,
-  said,
-  type Sent,
-  started,
-  unstarted,
+  taken,
   waiting,
   writes,
-} from './writes.ts'
-
-// A JSON answer's headers, for one the write log kept as text.
-let JSONED = { headers: { 'content-type': 'application/json' } }
+} from '@yaks/api/log'
+import { type Door, door, type Mark as Landing } from '@yaks/api/receipts'
+import { keyed } from './writes.ts'
 import { apex, url } from '@yaks/platform/host'
 import { install, retire, shed } from './migrate.ts'
 import {
@@ -966,14 +946,37 @@ export class Store extends Durable {
   #analyze: (tables: number) => number = () => 0
   #unanalyzed: boolean | null = null
   #host!: PluginHost
-  // The write log's replay (writes.ts). `#landing` names a held write or
-  // live receipt; the `yak/writes` hook completes it in the graph transaction; `#draining` is the replay in
-  // progress, one at a time; `#stuck` says the last one stopped because the
-  // log itself failed, and only the alarm or the next incarnation tries again.
-  #landing: number | Receipt | null = null
-  #draining: Promise<void> | null = null
-  #callers = new Map<number, (answer: Response) => void>()
-  #stuck = false
+  // The write log's door (@yaks/api/receipts `door`): what this object could
+  // not commit is kept beside the graph and replayed in order, one replay at
+  // a time, and its hook completes each write in its batch's transaction.
+  // What it reads of this object is read as it is needed: each incarnation
+  // opens storage and words of its own.
+  #log: Door = ((store: Store) =>
+    door({
+      get db() {
+        return store.#sql
+      },
+      get vocab() {
+        return store.#vocab
+      },
+      now: () => store.#now(),
+      window: {
+        refusal: () => store.ceiling.refusal(true),
+        free: (body) => store.ceiling.free(body),
+        stops: stopped,
+      },
+      ready: (request) => store.#ready(request),
+      serve: (request) => store.#serve(request),
+      commit: (request, mark) => store.#commit(request, mark),
+      authorize: (request) => store.#outboxAuthority(request),
+      keeps: (told) => !keyed(told),
+      answer: (request, response) => store.#callerResponse(request, response),
+      refused: () => store.#refused,
+      arm: (at, why) => store.#arm(at, why),
+      report: (e, request) => defect(e, { request, store: store.#name() }),
+      stage: (name, work) => store.#stage(name, work, name != 'settle'),
+      retry: Store.RETRY,
+    }))(this)
   // The object's own memory (`yak_kv`), as this incarnation last read or
   // wrote it. Only this object writes that table, so once a word is read the
   // copy here is what the table says, and a request that asks it again costs
@@ -1156,7 +1159,7 @@ export class Store extends Durable {
     this.#sql = driver(ctx.storage, undefined, this.#measure)
     this.#sql.query(KV)
     // The write log, before anything that can refuse the object: a store
-    // whose graph cannot boot still keeps what it is sent (writes.ts). What
+    // whose graph cannot boot still keeps what it is sent (@yaks/api/log). What
     // the last incarnation set aside waits again, for this one's code.
     raise(this.#sql)
     if (!this.#dormant) {
@@ -1723,8 +1726,8 @@ export class Store extends Durable {
               ? [{ name: 'yak/lexicon', hooks: { effect: this.#telling } }]
               : []),
             // Last, so the answer a keyed write keeps is the batch as every other
-            // commit hook left it (`#logging`).
-            this.#logging,
+            // commit hook left it (`#log`).
+            this.#log.plugin,
             ...(own ? [] : [admitSchema(vocab)]),
           ],
         })
@@ -2919,7 +2922,7 @@ export class Store extends Durable {
     // A stopped object's wakes fire once its window ends, from the alarm.
     let wait = this.ceiling.stopped(true)
     if (wait) {
-      await this.#later(wait)
+      await this.#arm(this.#now() + wait, 'stopped')
       return { fired: [], refused: [] }
     }
     await this.#ensureStarted()
@@ -3065,10 +3068,7 @@ export class Store extends Durable {
     replay: this.#own(async () => {
       let kept = waiting(this.#sql)
       if (this.#refused) return kept ? this.#now() + Store.RETRY : null
-      if (kept) {
-        this.#stuck = false
-        await this.#drain()
-      }
+      if (kept) await this.#log.mend()
       return null
     }, () => !this.#dormant),
     deploy: this.#own(async () => {
@@ -4147,7 +4147,7 @@ export class Store extends Durable {
         let leave = await this.#enter(base != null)
         let answer: Response
         try {
-          if (logged(request)) answer = await this.#write(request)
+          if (logged(request)) answer = await this.#log.write(request)
           else {
             let no = await elapsed('ready_wait', () => this.#ready(request))
             if (no) answer = no
@@ -4158,7 +4158,10 @@ export class Store extends Durable {
               if (
                 !['/writes', '/inspect'].includes(new URL(request.url).pathname)
               ) {
-                await elapsed('settle_wait', async () => await this.#settle())
+                await elapsed(
+                  'settle_wait',
+                  async () => await this.#log.settle(),
+                )
               }
               answer = await elapsed('serve_wait', () => this.#serve(request))
             }
@@ -4245,290 +4248,7 @@ export class Store extends Durable {
     return null
   }
 
-  // ---- the write log (T-37968, writes.ts) ----------------------------------
-
-  /**
-   * A live keyed write commits its mutation and successful receipt together,
-   * with no transient log stages. Inputs that cannot commit are kept and
-   * replayed in order by the one drain that runs at a time. A write that finds the object refusing to start, or
-   * the log itself failing, is answered 202 and waits in the log. A resend
-   * (its idempotency key already in the log) is the write it repeats: told
-   * what that one was told, or waiting beside it.
-   */
-  async #write(request: Request): Promise<Response> {
-    // A binary write is kept as it came, since decoding it needs a start
-    // that may not run (binary.ts), and is decoded as it lands (`#commit`).
-    let { body, told } = await taken(request)
-    let sent = () =>
-      new Request(request, { body: opened(request.headers, body) })
-    let key = request.headers.get(IDEMPOTENCY)
-    let seq: number
-    let was: Sent | null
-    let unkept = async () => {
-      let req = sent()
-      return await this.#ready(req) ?? this.#serve(req)
-    }
-    if (!fits(body) || keyed(told)) {
-      // A browser keeps retrying its intent until acceptance. Never apply it
-      // without the receipt that makes a later resend safe.
-      if (durable(key)) {
-        return refuse(
-          new Refused(
-            'outbox writes must fit in the write log and cannot carry secret values',
-          ),
-        )
-      }
-      return unkept()
-    }
-    // Authority is the replay's to check (`#commit`), as for every kept write.
-    let stop = this.ceiling.refusal(true)
-    if (stop) return this.#kept(fingerprinted(request, body), body, stop)
-    if (durable(key)) {
-      try {
-        await this.#outboxAuthority(request)
-        request = fingerprinted(request, body)
-      } catch (e) {
-        if (stopped(e)) return this.#kept(fingerprinted(request, body), body, e)
-        return refuse(e)
-      }
-    }
-    try {
-      was = key ? first(this.#sql, key, request) : null
-      // No pending/running row for a successful live write. Readiness may
-      // yield, so check the key again afterwards and inside #commit, immediately
-      // before synchronous apply. Concurrent same-key requests cannot mutate twice.
-      if (!was && key) {
-        let no = await this.#ready(request)
-        was = key ? first(this.#sql, key, request) : null
-        if (
-          !was && !no && !this.#stuck && !this.#draining && !waiting(this.#sql)
-        ) {
-          let r = await this.#commit(sent(), { request })
-          // Its transaction unwound when the ceiling refused it mid-way.
-          let stop = r.status == 429 ? this.ceiling.refusal(true) : null
-          if (stop) return this.#kept(request, body, stop)
-          if (r.status < 500) return this.#callerResponse(request, r)
-          // An error after the transaction must not enqueue its mutation again.
-          let committed = key ? first(this.#sql, key, request) : null
-          if (committed?.state == 'applied') {
-            return this.#callerResponse(
-              request,
-              new Response(committed.answer, JSONED),
-            )
-          }
-          seq = keep(this.#sql, request, body, this.#now)
-          aside(this.#sql, seq, await said(r.clone()))
-          return this.#park(seq, await said(r))
-        }
-      }
-      seq = was?.seq ?? keep(this.#sql, request, body, this.#now)
-    } catch (e) {
-      if (e instanceof Refused) {
-        return (e as Refused & { status?: number }).status == 503
-          ? json({ error: e.name, message: e.message }, 503)
-          : refuse(e)
-      }
-      if (stopped(e)) return this.#kept(request, body, e)
-      defect(e, { request: 'write log', store: this.#name() })
-      // Readiness can throw too. Keep that input if storage still works;
-      // never bypass a keyed receipt after an error and risk a second mutation.
-      if (key) {
-        try {
-          let was = first(this.#sql, key, request)
-          if (was?.state == 'applied') {
-            return this.#callerResponse(
-              request,
-              new Response(was.answer, JSONED),
-            )
-          }
-          let seq = was?.seq ?? keep(this.#sql, request, body, this.#now)
-          aside(this.#sql, seq, String(e))
-          return this.#park(seq, String(e))
-        } catch {
-          return refuse(e)
-        }
-      }
-      return unkept()
-    }
-    if (was?.state == 'applied') {
-      return this.#callerResponse(request, new Response(was.answer, JSONED))
-    }
-    if (was?.state == 'refused') return refuse(new Refused(was.why))
-    if (was?.state == 'failed') return parked(seq, was.why, was.audit)
-    if (was?.state == 'interrupted' || was?.state == 'unreviewed') {
-      return parked(seq, was.why, true)
-    }
-    // A startup effect may call this store and drain its log while #ready
-    // waits on another object. Register the live caller before yielding, so
-    // that replay delivers its answer and treats refusals as live refusals.
-    let answer = new Promise<Response>((r) => {
-      let other = this.#callers.get(seq)
-      this.#callers.set(seq, other ? (a) => (other(a.clone()), r(a)) : r)
-    })
-    let no = await this.#ready(request)
-    if (no || this.#stuck) {
-      let caller = this.#callers.get(seq)
-      this.#callers.delete(seq)
-      caller?.(this.#park(
-        seq,
-        no
-          ? this.#refused ?? 'this app could not start'
-          : 'earlier writes to this app are still waiting',
-      ))
-    } else void this.#drain()
-    return answer.then((response) => this.#callerResponse(request, response))
-  }
-
-  /** A write that arrives while this object may not write (`#ceiling`): kept
-   * in the log, which the ceiling lets through (`free`), as `pending`, and
-   * told when to look again. The alarm, armed for the window's end, replays
-   * it. A resend of one kept so is told the same; one of a write the log
-   * already settled waits, and hears what it was once the object writes. */
-  #kept(
-    request: Request,
-    body: string,
-    stop: Error & { retry: { after: number } },
-  ): Response {
-    let { free } = this.ceiling, sql = this.#sql
-    let key = request.headers.get(IDEMPOTENCY)
-    let was = free(() => key ? first(sql, key, request) : null)
-    if (was && was.state != 'pending' && was.state != 'running') {
-      return refuse(stop)
-    }
-    let seq = was?.seq ?? free(() => keep(sql, request, body, this.#now))
-    return this.#waiting(seq, stop.retry.after)
-  }
-
-  /** The answer for a write kept while this object is stopped, `wait` ms
-   * more, and the alarm that comes back for it then. */
-  #waiting(seq: number, wait: number): Response {
-    void this.#later(wait)
-    let s = Math.ceil(wait / 1000)
-    let answer = parked(
-      seq,
-      `this app is past the rows it may write for ${s} s`,
-    )
-    answer.headers.set('retry-after', String(s))
-    return answer
-  }
-
-  // The alarm, `wait` ms from now: when this object's window ends.
-  #later = (wait: number) => this.#arm(this.#now() + wait, 'stopped')
-
-  /** The log from its oldest waiting write to its newest, one at a time. A
-   * write that fails is set aside (`#land`) and the ones behind it go on;
-   * only the log itself failing stops the pass, and then the alarm or the
-   * next incarnation starts another. Each write whose caller is still waiting
-   * (`#callers`) is answered as it lands; the ones left waiting are told they
-   * are kept. */
-  #drain(): Promise<void> {
-    if (this.#draining) return this.#draining
-    let sql = this.#sql
-    let run = async () => {
-      // Yield once, so `#draining` is set before the loop can end and clear
-      // it: a write that arrives in between must find the loop running.
-      await null
-      let at: Kept | null = null
-      try {
-        for (let k = at = next(sql); k; k = at = next(sql, k.seq)) {
-          let live = this.#callers.has(k.seq)
-          started(sql, k.seq)
-          let r = await this.#land(k, live)
-          // Stopped before it applied (`#ceiling`): it waits again as it was,
-          // and every write behind it with it, until the window ends.
-          let wait = r.status == 429 ? this.ceiling.stopped(true) : 0
-          if (wait) {
-            this.ceiling.free(() => unstarted(sql, k.seq))
-            let caller = this.#callers.get(k.seq)
-            this.#callers.delete(k.seq)
-            caller?.(this.#waiting(k.seq, wait))
-            break
-          }
-          let kept = r.status >= 500 && held(sql, k.seq)
-          let answer = kept ? parked(k.seq, await said(r)) : r
-          // A storage failure can escape even the write log's error handler.
-          // Keep the live caller reachable until every response read is done,
-          // so the failure cleanup below can still answer it.
-          let caller = this.#callers.get(k.seq)
-          this.#callers.delete(k.seq)
-          caller?.(answer)
-        }
-      } catch (e) {
-        if (stopped(e)) {
-          let seq = at?.seq
-          if (seq != null) this.ceiling.free(() => unstarted(sql, seq))
-        } else {
-          this.#stuck = true
-          defect(e, { request: 'write replay', store: this.#name() })
-        }
-      }
-      // Synchronously after the last look at the log: nothing can be kept
-      // between that look and this line without finding the loop gone.
-      this.#draining = null
-      let wait = this.ceiling.stopped(true)
-      for (let [seq, caller] of this.#callers) {
-        caller(
-          wait
-            ? this.#waiting(seq, wait)
-            : this.#park(seq, 'earlier writes to this app are still waiting'),
-        )
-      }
-      if (wait && !this.#callers.size) void this.#later(wait)
-      this.#callers.clear()
-    }
-    return this.#draining = this.#stage('replay', run)
-  }
-
-  /** One kept write, applied: out of the log when it commits or is refused
-   * as asked, and set aside when it fails (writes.ts `aside`), its failure
-   * reported where `#commit` caught it. `live` is a write whose caller is
-   * still here to be told its refusal; a replay's refusal has nobody to tell,
-   * so it stays in the log with its reason and is reported. */
-  async #land(k: Kept, live: boolean): Promise<Response> {
-    let sql = this.#sql
-    try {
-      let r = await this.#commit(replayed(k), k.seq)
-      // The ceiling's to wait out (`#drain`), never the write's refusal.
-      if (r.status == 429 && this.ceiling.stopped(true)) return r
-      if (r.status < 300) done(sql, k.seq)
-      else if (r.status >= 500) aside(sql, k.seq, await said(r.clone()))
-      else if (live) done(sql, k.seq)
-      else {
-        let why = await said(r.clone())
-        dead(sql, k.seq, why)
-        defect(new Error(`a kept write no longer applies: ${why}`), {
-          request: 'write replay',
-          store: this.#name(),
-        })
-      }
-      return r
-    } catch (e) {
-      if (stopped(e)) throw e
-      defect(e, { request: 'write replay', store: this.#name() })
-      if (held(sql, k.seq)) aside(sql, k.seq, String(e))
-      return refuse(e)
-    }
-  }
-
-  /** The log first, for a request that reads: unless the log itself failed,
-   * which the alarm owns, or a replay is already running. */
-  #settle(): Promise<unknown> | void {
-    let draining = this.#draining
-    if (draining) return this.#stage('settle', () => draining, false)
-    // While stopped, what the log holds waits for the alarm (`#kept`).
-    if (this.ceiling.stopped(true)) return
-    if (!this.#stuck && waiting(this.#sql)) return this.#drain()
-  }
-
-  /** The caller's answer for a kept write, and the alarm that comes back for
-   * it. */
-  #park(seq: number, why: string): Response {
-    void this.#retry()
-    return parked(seq, why)
-  }
-
-  #retry = () => this.#arm(this.#now() + Store.RETRY)
-
+  // ---- the write log's door (T-37968, @yaks/api/receipts `door`) -----------
   // A word, for a report from an object that may be too broken to say it.
   #said(k: Word): string | null {
     try {
@@ -4603,10 +4323,10 @@ export class Store extends Durable {
 
   /**
    * One batch in at `/apply`, the kernel's or a caller's. The graph's own
-   * `apply()` is called in one synchronous step after `#landing` names the
-   * kept write, so the `yak/writes` hook below takes exactly that write out
-   * of the log in the transaction that commits its batch: never one without
-   * the other, and so never applied twice.
+   * `apply()` is called in one synchronous step with `mark` naming the write
+   * it lands (`#log` `applying`), so the log's hook takes exactly that write
+   * out of the log in the transaction that commits its batch: never one
+   * without the other, and so never applied twice.
    *
    * `x-yak-kernel` is the platform writing about its own data: the server-
    * owned properties are admitted and @yaks/member's guard stands down
@@ -4619,10 +4339,10 @@ export class Store extends Durable {
    */
   async #commit(
     request: Request,
-    seq: number | Receipt | null = null,
+    mark: Landing = null,
     opts: ApplyOpts = {},
     spans?: Event[],
-  ) {
+  ): Promise<Response> {
     try {
       writeOptions(request, ['stamp'])
     } catch (e) {
@@ -4651,46 +4371,30 @@ export class Store extends Durable {
         opts = { ...opts, stamp: false }
       }
       let who = kernel ? null : await this.#auth(request)
-      let key = request.headers.get(IDEMPOTENCY)
-      if (durable(key)) {
-        await this.#outboxAuthority(request)
-        request = fingerprinted(request, text)
-        // Only a matching durable receipt may substitute for rehearsal. A
-        // fresh rehearsal still runs every guard and never writes a receipt.
-        if (opts.check) {
-          let answer = remembered(this.#sql, key!, request)
-          if (answer) return this.#callerResponse(request, answer)
-        }
-      }
+      let bound = await this.#log.bound(request, text, opts.check)
+      if (bound instanceof Response) return bound
+      request = bound
       body = this.#spokenWrites(request, body)
       let apply = async () => {
         try {
-          if (seq != null && typeof seq != 'number') {
-            let key = seq.request.headers.get(IDEMPOTENCY)
-            let was = key ? first(this.#sql, key, request) : null
-            if (was?.state == 'applied') {
-              return new Response(was.answer, JSONED)
-            }
-            if (was) return parked(was.seq, was.why, was.audit)
-          }
-          let out
-          this.#landing = seq
-          try {
-            out = kernel
-              ? this.#trust(body as Bundle[], {
-                by: vouchOf(request).actor ?? vouchOf(request).person ??
-                  undefined,
-                via: vouchOf(request).via ?? undefined,
-              }, opts)
-              : this.#graph.apply(signed(body as Bundle[], who), opts)
-          } finally {
-            this.#landing = null
-          }
+          let out = this.#log.applying(
+            request,
+            mark,
+            () =>
+              kernel
+                ? this.#trust(body as Bundle[], {
+                  by: vouchOf(request).actor ?? vouchOf(request).person ??
+                    undefined,
+                  via: vouchOf(request).via ?? undefined,
+                }, opts)
+                : this.#graph.apply(signed(body as Bundle[], who), opts),
+          )
+          if (out instanceof Response) return out
           let applied = published(this.#vocab, await out)
           // The durable log and internal effects keep canonical patches. Each
           // caller, including a keyed resend, receives its own vocabulary view.
           return json(
-            seq == null ? await this.#callerAnswer(request, applied) : applied,
+            mark == null ? await this.#callerAnswer(request, applied) : applied,
           )
         } catch (e) {
           return failed(e)
@@ -4707,27 +4411,6 @@ export class Store extends Durable {
     } catch (e) {
       return failed(e)
     }
-  }
-
-  // The commit hook inserts a live receipt or completes a held write inside
-  // the mutation's transaction. A resend cannot observe one without the other. Every other batch — an effect's, a tick's,
-  // one applied after an await — finds `#landing` empty.
-  #logging: Plugin = {
-    name: 'yak/writes',
-    // Logging follows a successful write and adds no admission refusal.
-    admission: () => true,
-    hooks: {
-      commit: (bundles) => {
-        if (this.#landing != null) {
-          let answer = () => published(this.#vocab, bundles)
-          if (typeof this.#landing == 'number') {
-            landed(this.#sql, this.#landing, answer, this.#now)
-          } else received(this.#sql, this.#landing, answer, this.#now)
-          this.#landing = null
-        }
-        return bundles
-      },
-    },
   }
 
   /** Every door but the write log's, for an object that is ready. */
@@ -5061,8 +4744,7 @@ export class Store extends Durable {
       if (!retry(this.#sql, seq)) {
         return refuse(new Refused(`write ${seq} is not held for review`))
       }
-      this.#stuck = false
-      await this.#drain()
+      await this.#log.mend()
       return Response.json({ seq, writes: writes(this.#sql, seq) })
     }
     // Failed effect runs back to pending with a fresh allowance, for

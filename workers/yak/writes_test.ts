@@ -1,4 +1,4 @@
-// The write log (writes.ts) over one store's storage, woken as new
+// The write log (@yaks/api/log) over one store's storage, woken as new
 // incarnations the way a deploy wakes it: writes kept while the store refuses
 // to start, then replayed in order, once, by the alarm alone.
 import { clock, test, until } from '@yaks/testing'
@@ -16,14 +16,14 @@ import {
   fingerprinted,
   first,
   keep as keepWrite,
-  keyed,
   landed,
   Pending,
   received,
   remembered,
   retry as retryWrite,
   ROOM,
-} from './writes.ts'
+} from '@yaks/api/log'
+import { keyed } from './writes.ts'
 
 let NAME = 'ada/notes'
 
