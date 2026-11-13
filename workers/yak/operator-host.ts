@@ -776,13 +776,17 @@ export let spendingOf = async (
  * What an id opens, found one way for the chat app, the admin page and
  * operator_read: a conversation's session (a request's, when a session took
  * it up), the task a request or task is worked under, or the request alone
- * (`answering`) while no session has taken it.
+ * (`answering`) while no session has taken it. A line opens the conversation
+ * it is in, so an id read off any line of one finds it.
  */
 export let openedOf = async (
   store: Store,
-  open: string,
+  opened: string,
 ): Promise<{ session?: Bundle; task?: Bundle; waiting?: Bundle[] }> => {
-  let [row] = await store.g.get([open])
+  let [named] = await store.g.get([opened])
+  let line = comp(named, 'entry')?.session
+  let [row] = line ? await store.g.get([String(line)]) : [named]
+  let open = row?.entity.eid ?? opened
   if (row?.session) return { session: row }
   let waiting = row?.operator_request ? await answering(store, [row]) : []
   let task = row?.task
@@ -1773,8 +1777,18 @@ export let operatorRequest = async (
     let { readOperator } = await import('./operator.ts')
     // The platform's admin reads every person's, as on the admin page.
     let readable = (id: string) => access.administrative === true || own(id)
-    let open = typeof args.task == 'string' ? args.task : ''
-    if (open && !await readable(open)) return missing()
+    // Not found and not theirs read alike, and say what `task` takes.
+    let unread = () =>
+      Response.json({
+        message:
+          'That conversation is missing. task takes the id of a task or a ' +
+          "conversation's session that operator_read with no task lists, or " +
+          'of any line in one.',
+      }, { status: 404 })
+    let [open = ''] = typeof args.task == 'string' && args.task
+      ? await addressed(store.g, [args.task])
+      : []
+    if (open && !await readable(open)) return unread()
     if (!open) {
       let { tasks = [], conversations = [] } = await readOperator(store)
       let mine = async (rows: Bundle[]) => {
@@ -1795,7 +1809,7 @@ export let operatorRequest = async (
     if (!read) {
       return found.waiting
         ? Response.json({ waiting: found.waiting })
-        : missing()
+        : unread()
     }
     return Response.json(
       await readOperator(store, read.entity.eid, {

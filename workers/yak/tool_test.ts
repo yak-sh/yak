@@ -5,7 +5,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { CallError } from '@yaks/tools'
-import { type Ctx, ownSpace, rejected } from './tool.ts'
+import { type Ctx, ownSpace, rejected, seatIn } from './tool.ts'
 import type { Directory, Space } from './directory.ts'
 import { narrowed } from './grants.ts'
 
@@ -76,5 +76,38 @@ test('a call naming no space means the app’s, the Operator’s, the only one',
       means(mine([jeff, work]), 'garden'),
     ]),
     ['jeff', 'other', 'jeff', 'space: name one of jeff, work', 'work', 'other'],
+  )
+})
+
+// A space named wrong is often a guess at the caller's own, so its refusal
+// names theirs; one that moved names where it went (tool.ts `named`).
+test('a space that is not there is refused with the spaces the caller has', async () => {
+  let spaces = ['peterson', 'nottawatownship'].map((slug) => ({
+    eid: `e-${slug}`,
+    slug,
+  })) as unknown as Space[]
+  let dir = (seated: Space[]) =>
+    ({
+      space: () => Promise.resolve(null),
+      formerly: (slug: string) =>
+        Promise.resolve(slug == 'old' ? spaces[0] : null),
+      seats: () => Promise.resolve(seated.map((space) => ({ space }))),
+    }) as unknown as Directory
+  let said = (d: Directory, slug: string) =>
+    seatIn({ dir: d, person: 'p' } as unknown as Ctx, slug).then(
+      () => '',
+      (e) => e.message,
+    )
+  assertEquals(
+    await Promise.all([
+      said(dir(spaces), 'nottawa'),
+      said(dir([]), 'nottawa'),
+      said(dir(spaces), 'old'),
+    ]),
+    [
+      'no space nottawa — your spaces are nottawatownship, peterson',
+      'no space nottawa — you are a member of no space yet',
+      'no space old — it moved to peterson; name it that',
+    ],
   )
 })

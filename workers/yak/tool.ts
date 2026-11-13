@@ -191,16 +191,15 @@ let listed = (names: string[]) => [...names].sort().join(', ')
 export let notMember = async (
   ctx: Pick<Ctx, 'dir' | 'person'>,
   space: Space,
-) => {
+) => refuse('access', `not a member of ${space.slug} — ${await yours(ctx)}`)
+
+// The spaces the caller holds a seat in, as a refusal names the next call's
+// choice from them.
+let yours = async (ctx: Pick<Ctx, 'dir' | 'person'>) => {
   let mine = ctx.person ? await ctx.dir.seats(ctx.person) : []
-  return refuse(
-    'access',
-    `not a member of ${space.slug} — ${
-      mine.length
-        ? `your spaces are ${listed(mine.map((s) => s.space.slug))}`
-        : 'you are a member of no space yet'
-    }`,
-  )
+  return mine.length
+    ? `your spaces are ${listed(mine.map((s) => s.space.slug))}`
+    : 'you are a member of no space yet'
 }
 
 /** The refusal of an app a space does not hold, naming the ones it does. Said
@@ -439,16 +438,20 @@ let entered = async (
 // The space a call names by its address. An assistant remembers a space by
 // the name it last used, and where that space went is what its old
 // hostname's redirect says to anybody, so the refusal says it too and the
-// next call names the space where it lives (D-131924).
+// next call names the space where it lives (D-131924). A name that never
+// was one is often a guess at the caller's own (`nottawa` for
+// `nottawatownship`), so the refusal names theirs, as `notMember` does.
 let named = async (ctx: Ctx, slug: string) => {
   let space = await ctx.dir.space(slug)
   if (space) return space
   let moved = await ctx.dir.formerly(slug)
-  throw refuse(
-    'missing',
-    `no space ${slug}` +
-      (moved ? ` — it moved to ${moved.slug}; name it that` : ''),
-  )
+  if (moved) {
+    throw refuse(
+      'missing',
+      `no space ${slug} — it moved to ${moved.slug}; name it that`,
+    )
+  }
+  throw refuse('missing', `no space ${slug} — ${await yours(ctx)}`)
 }
 
 // The caller in the space: a member reads, an owner or editor writes.

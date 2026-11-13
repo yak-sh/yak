@@ -4,7 +4,7 @@
 
 import { test } from '@yaks/testing'
 import { identityEid } from '@yaks/graph/identity'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { answer } from './admin.ts'
 import { directoryOf, META } from './directory.ts'
@@ -232,6 +232,7 @@ let read = async (task: string, more = {}) => {
 let talked = await read(rootOf(eid, jeff))
 let waits = await read(calendar)
 let nothing = await read(crypto.randomUUID())
+let byLine = await read(talked.value.entries.at(-1).entity.eid)
 test("operator_read reads any person's conversation for the admin, a request no session has taken included", () => {
   assertEquals(talked.status, 200)
   assertEquals(talked.value.entries.length > 0, true)
@@ -241,6 +242,11 @@ test("operator_read reads any person's conversation for the admin, a request no 
     ['Add a calendar.'],
   )
   assertEquals(nothing.status, 404)
+  assertStringIncludes(nothing.value.message, 'operator_read with no task')
+})
+test('operator_read given any line of a conversation reads that conversation', () => {
+  assertEquals(byLine.status, 200)
+  assertEquals(byLine.value.entries, talked.value.entries)
 })
 
 // A long conversation reads back a page at a time from its newest 64, each
