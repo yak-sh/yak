@@ -88,7 +88,17 @@
 # waits in balance_dirty_pages for the pages it writes: beside a session's bench
 # the tracker's waited 32.8 s and yak-work's 10.6 s (T-133091).
 #
-# The limit is the host's, for every guest on it, since the container cannot
+# The servers' floor, set on the host too. The host's own reclaim, when its
+# 46 GB run short, starts above the container, and a floor counts only when
+# each group above it holds one: the host's lxc group, the container's, and
+# user.slice inside it hold 8 GB as well. With the floor only inside, the
+# host's reclaim still took 740 MB of yak.slice's pages in 20 s. The host keeps
+# no cgroup files across a start, so /usr/local/bin/yak-floor writes its two
+# after each start of the container, from a drop-in on pve-container@<id>; a
+# hook in the container's own config is refused by Proxmox. To undo it, delete
+# the drop-in and the script, and write 0 to both memory.min files.
+#
+# The dirty limit is the host's, for every guest on it, since the container cannot
 # write sysctls. This also clears the strict_limit an earlier version set on
 # the volume. To undo it, delete /etc/sysctl.d/61-yak-dirty.conf on the host and
 # set vm.dirty_ratio=20 and vm.dirty_background_ratio=10.
@@ -98,7 +108,8 @@ IOReadBandwidthMax=/ 150M"
 job="IOWriteBandwidthMax=/ 30M
 IOReadBandwidthMax=/ 100M"
 sessions="MemoryMax=16G"
-servers="MemoryMin=8G"
+floor=8G
+servers="MemoryMin=$floor"
 user_max="MemoryMax=21G"
 session="MemoryMax=6G
 MemorySwapMax=2G
@@ -111,7 +122,8 @@ user="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 
 system=/etc/systemd/system
 slice="$system/user-$(id -u).slice.d"
-sudo mkdir -p "$system/user@.service.d" "$system/cron.service.d" "$slice"
+sudo mkdir -p "$system/user@.service.d" "$system/cron.service.d" "$slice" \
+  "$system/user.slice.d"
 printf '[Service]\nDelegate=pids memory cpu io\n' |
   sudo tee "$system/user@.service.d/io.conf" >/dev/null
 printf '[Service]\n%s\n' "$servers" |
@@ -119,6 +131,7 @@ printf '[Service]\n%s\n' "$servers" |
 printf '[Slice]\n%s\n%s\n' "$user_max" "$servers" |
   sudo tee "$slice/memory.conf" >/dev/null
 sudo rm -f "$slice/override.conf"
+printf '[Slice]\n%s\n' "$servers" | sudo tee "$system/user.slice.d/memory.conf" >/dev/null
 printf '[Service]\n%s\n' "$job" |
   sudo tee "$system/cron.service.d/io.conf" >/dev/null
 sudo systemctl daemon-reload
@@ -137,7 +150,7 @@ printf '[Service]\nSlice=yak.slice\n' >"$user/yak-.service.d/slice.conf"
 printf '[Service]\nCPUWeight=100\n' >"$user/yak-.service.d/cpu.conf"
 systemctl --user daemon-reload
 
-ssh "$host" sh -s "$volume" "$dirty" <<'EOF'
+ssh "$host" sh -s "$volume" "$dirty" "$floor" <<'EOF'
 set -eu
 rm -f /etc/udev/rules.d/61-yak-dirty.rules
 udevadm control --reload
@@ -147,4 +160,18 @@ echo 100 >"$bdi/max_ratio"
 printf 'vm.dirty_bytes = %s\nvm.dirty_background_bytes = %s\n' "$2" $(($2 / 4)) \
   >/etc/sysctl.d/61-yak-dirty.conf
 sysctl -q -p /etc/sysctl.d/61-yak-dirty.conf
+id=$(echo "$1" | sed -n 's/^pve-vm--\([0-9]*\)--disk.*/\1/p')
+floor=/usr/local/bin/yak-floor
+cat >"$floor" <<FLOOR
+#!/bin/sh
+# The yak servers' memory floor in container $id (bin/limits in the yaks repo).
+for i in \$(seq 60); do [ -d /sys/fs/cgroup/lxc/$id ] && break; sleep 1; done
+for d in lxc lxc/$id; do echo $3 >/sys/fs/cgroup/\$d/memory.min; done
+FLOOR
+chmod +x "$floor"
+mkdir -p "/etc/systemd/system/pve-container@$id.service.d"
+printf '[Service]\nExecStartPost=%s\n' "$floor" \
+  >"/etc/systemd/system/pve-container@$id.service.d/yak-floor.conf"
+systemctl daemon-reload
+"$floor"
 EOF
