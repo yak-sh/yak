@@ -5,7 +5,7 @@ import type { ServingCopies } from './directory-copy.ts'
 // Cloudflare name.
 //
 // Each part of the kernel is a module exporting a plain `fetch(req, env)`
-// (identity.ts, mcp.ts, directory.ts, apps.ts), and the router (index.ts)
+// (identity.ts, mcp.ts, directory.ts, apps.ts), and the router (kernel.ts)
 // composes them by calling those handlers. The optional service bindings
 // below are the seam for moving a part into its own Worker: declare the
 // binding in wrangler.toml and the router calls it instead of the module,
@@ -30,7 +30,7 @@ import type { Strip } from '@yaks/esbuild'
 // define (door.ts) so that a Store object can hold one without holding this.
 export type { Fetcher }
 
-// One inbound message, as Email Routing hands it to `email()` (index.ts).
+// One inbound message, as Email Routing hands it to `email()` (facets/kernel-worker.ts).
 // The slice we read: who the envelope said it was from and for, the letter's
 // own headers and bytes (inbox.ts parses the MIME), and the one way to refuse
 // it — a refusal bounces to the sender, where a drop is silence.
@@ -307,7 +307,7 @@ export type Env = {
   BROWSER?: Fetcher
   WORKSPACES?: Workspaces
   // The single static token OpenAI's apps directory fetches to verify the
-  // domain (index.ts serves it at /.well-known/openai-apps-challenge). A
+  // domain (apex.ts serves it at /.well-known/openai-apps-challenge). A
   // secret so the open-source repo carries no token; unset, that path 404s.
   OPENAI_APPS_CHALLENGE?: string
   // Meta's Conversions API (meta-ads.ts): the dataset a page seen and a
@@ -328,7 +328,7 @@ export type Env = {
   DIRECTORY?: Fetcher
   APPS?: Fetcher
   // The one binding that is not a part waiting to be split out: `Files` is a
-  // second entrypoint of this same Worker (index.ts), bound here so that
+  // second entrypoint of this same Worker (facets/kernel-worker.ts), bound here so that
   // Cloudflare's cache sits between the gateway and the bucket (cache.ts,
   // T-33197). Absent in a test run; there, and wherever Cloudflare
   // refuses the hop, files.ts `door` reads the module in-process and nothing
@@ -339,15 +339,15 @@ export type Env = {
   // pages out of its cache (purge.ts); the in-process stand-in has none, and
   // no cache either.
   SITE?: Fetcher & Partial<Purges>
-  // The one object every purge of Site's cache goes through (index.ts
+  // The one object every purge of Site's cache goes through (facets/kernel-worker.ts
   // `Purger`), keeping the account's purge budget. Bound where Site's cache
   // is on; a test run binds none, so nothing is purged.
   PURGER?: Purgers
-  // The objects a call that outlasts its caller runs in (outlast.ts, index.ts
+  // The objects a call that outlasts its caller runs in (outlast.ts, facets/kernel-worker.ts
   // `Outlast`). A test run binds none, so every call runs in its request.
   OUTLAST?: Outlasts
   // The object holding every app store's lexicon, which a search asks before
-  // waking stores (lexicon.ts, index.ts `Lexicon`). A test run binds none
+  // waking stores (lexicon.ts, facets/kernel-worker.ts `Lexicon`). A test run binds none
   // unless it asks, and then every store is asked.
   LEXICON?: Lexicons
   // yak-esbuild, whose container compiles an app's TypeScript and npm imports

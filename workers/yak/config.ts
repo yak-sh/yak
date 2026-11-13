@@ -551,6 +551,19 @@ export let embedding: Config = {
   }],
 }
 
+/** The Worker itself (index.ts, @yaks/workerd `compose`): each plugin's
+ * `./worker` facet, in the order the router asks them. The deploy's version
+ * answers first, before the kernel's router is loaded. */
+export let worker: Config = {
+  plugins: [
+    {
+      use: '@yaks/workerd',
+      with: { name: 'kernel', version: { binding: 'CF_VERSION_METADATA' } },
+    },
+    'yak/kernel',
+  ],
+}
+
 export let configs = {
   app: appConfig,
   directory: directoryConfig,
@@ -606,6 +619,7 @@ export let ARRIVAL = 'cloudflare'
 
 /** Worker domains export the same store facets as packages, at local paths. */
 export let domains = {
+  'yak/kernel': { worker: './facets/kernel-worker.ts' },
   'yak/app': {
     vocab: './facets/app-vocab.ts',
     graph: './facets/app-graph.ts',

@@ -1,9 +1,11 @@
 # @yaks/workerd
 
-Cloudflare Workers integration for [@yaks/api](../api/README.md). It provides a
-Worker fetch entrypoint, WebSocket upgrades through `WebSocketPair`, request
-authentication helpers, and request forwarding to Durable Objects. Applications
-provide the graph, storage adapter, and authorization policy.
+Cloudflare Workers integration. It makes a Worker from a plugin config: its
+routes, letters and queue batches, and the Durable Object and entrypoint classes
+it defines, each loaded on its first call. For [@yaks/api](../api/README.md) it
+provides a Worker fetch entrypoint, WebSocket upgrades through `WebSocketPair`,
+request authentication helpers, and request forwarding to Durable Objects.
+Applications provide the graph, storage adapter, and authorization policy.
 
 This package creates no database, component tables, or persistent records.
 `worker()` caches API handlers in memory; each graph's storage adapter
@@ -24,11 +26,78 @@ All exports are available from `@yaks/workerd`:
 
 | Exports                                         | Purpose                                                     |
 | ----------------------------------------------- | ----------------------------------------------------------- |
+| `compose`, `WorkerFacet`, `Deferred`, `Entry`   | Make a Worker module from a config's `./worker` facets      |
+| `deferred`, `Made`, `Around`                    | A class made at once whose object loads on its first call   |
+| `VERSION`                                       | The path a composed Worker says its deploy at               |
 | `worker`, `Options`, `Worker`, `Env`, `Context` | Build and type a Worker fetch entrypoint                    |
 | `door`, `Door`                                  | Build an authentication callback from a credential verifier |
 | `cookies`, `bearer`                             | Read cookies or a bearer token from a request               |
 | `workerUpgrade`, `Accepting`                    | Accept a Workers WebSocket and return the upgrade response  |
 | `forward`, `Namespace`, `Stub`                  | Forward a request to a named Durable Object                 |
+
+Three subpaths serve a Worker made from a config:
+
+| Subpath                 | Purpose                                                                  |
+| ----------------------- | ------------------------------------------------------------------------ |
+| `@yaks/workerd/compose` | `compose` alone, importing nothing of `@yaks/api` but its route matching |
+| `@yaks/workerd/worker`  | this package's own `./worker` facet: the deploy's version route          |
+| `@yaks/workerd/gen`     | `written`, the module of a config and its plugins' facets                |
+
+## A Worker from a config
+
+A Worker's config is the shape `yak` reads from `yak.json`: a list of plugins,
+each with options. Each plugin contributes a `./worker` facet (`WorkerFacet`):
+
+- `routes(options, env)`: the paths it answers. The router asks the plugins in
+  the config's order, and a request takes the first route that matches it. A
+  request no route matches is answered 404.
+- `email(options, env)` and `queue(options, env)`: what handles a letter Email
+  Routing hands the Worker, and a batch a queue delivers. At most one plugin
+  gives each.
+- `classes`: the Durable Object and entrypoint classes it defines, by the name
+  `wrangler.toml` binds. Each is made at once and loads its code on its first
+  call, so a cold isolate evaluates only what woke it. A class marked `entered`
+  runs each call inside the Worker's entry as `<Name> <method>`.
+- `entry`: the boundary every invocation enters (a tracker's), loaded with the
+  first. At most one plugin gives it.
+
+Options are read from the Worker's env the way a host reads them:
+`{"binding":
+"AI"}` is the binding and `{"secret": "KEY"}` the secret, read each
+time they are accessed. What a factory builds from one env object is kept for as
+long as that object is.
+
+A Worker resolves no module at run time, so a build step writes the facets'
+imports out (`@yaks/workerd/gen` `written`), with the config beside them as
+data, and the entry hands both to `compose`:
+
+```ts ignore
+// worker.ts
+import { compose } from '@yaks/workerd/compose'
+import { config, facets } from './worker-facets.ts' // written from the config
+
+let shop = compose(config, facets)
+export default shop.default
+export let { Shop } = shop.classes
+```
+
+A config naming this package first answers `/_yak/version` with the deploy
+before any other plugin loads:
+
+```json
+{
+  "plugins": [
+    {
+      "use": "@yaks/workerd",
+      "with": {
+        "name": "shop",
+        "version": { "binding": "CF_VERSION_METADATA" }
+      }
+    },
+    "@acme/shop"
+  ]
+}
+```
 
 ## Worker entrypoint
 
@@ -179,8 +248,8 @@ rights.
 The WebSocket integration requires Cloudflare Workers APIs. Other interfaces are
 structurally typed, so importing the package does not require a Cloudflare
 global or package import. `conform.ts` checks those interfaces against
-`@cloudflare/workers-types`. Runtime dependencies are `@yaks/api` and
-`@yaks/graph`.
+`@cloudflare/workers-types`. Runtime dependencies are `@yaks/api`, `@yaks/graph`
+and `@yaks/host`.
 
 ## Related packages
 

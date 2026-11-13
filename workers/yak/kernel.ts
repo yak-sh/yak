@@ -11,8 +11,8 @@
 // connector and API doors and as a page elsewhere (unseen.ts `refusal`).
 //
 // It imports nothing only the runtime can load, so a test serves it under
-// Deno over the in-memory platform (probe.ts `kernel`) exactly as index.ts
-// hands it to the runtime.
+// Deno over the in-memory platform (probe.ts `kernel`) exactly as the
+// kernel's `./worker` facet (facets/kernel-worker.ts) hands it to the runtime.
 //
 // One thing beyond routing happens here, and it is here because nowhere else
 // still knows it: a write, or a request at a graph door, whose `Origin` names

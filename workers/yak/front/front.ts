@@ -52,7 +52,10 @@ import {
 import * as variant from '../variant.ts'
 import type { Clock } from '@yaks/fp'
 import { overdue, watch } from '../lib/watch.ts'
-import { DEPLOYMENT, FRONT_VERSION } from '../deployment.ts'
+import { VERSION } from '@yaks/workerd/worker'
+
+/** The header the front's own deploy is said in, beside the kernel's. */
+export let FRONT_VERSION = 'x-yak-front-version'
 
 export type Lent = { waitUntil: (work: Promise<unknown>) => void }
 
@@ -294,7 +297,7 @@ let serving = async (
   }
   waiting('kernel_wait')
   let res = await env.KERNEL.fetch(req)
-  if (new URL(req.url).pathname == DEPLOYMENT) {
+  if (new URL(req.url).pathname == VERSION) {
     let out = new Response(res.body, res)
     out.headers.set(FRONT_VERSION, env.CF_VERSION_METADATA?.id ?? '')
     out.headers.set('cache-control', 'no-store')

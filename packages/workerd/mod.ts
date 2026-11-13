@@ -1,6 +1,13 @@
 /**
- * @yaks/workerd — the Cloudflare Workers adapter that serves
- * {@link https://jsr.io/@yaks/api | @yaks/api} from a Worker.
+ * @yaks/workerd — the Cloudflare Workers adapter: a Worker made from a plugin
+ * config ({@link compose}), and {@link https://jsr.io/@yaks/api | @yaks/api}
+ * served from a Worker.
+ *
+ * `compose(config, facets)` makes a Worker module from the plugins a config
+ * names, each through its `./worker` facet: the routes it answers, the
+ * letters and queue batches it handles, the Durable Object and entrypoint
+ * classes it defines, loaded on their first call, and the boundary every
+ * invocation enters.
  *
  * `@yaks/api` is a plain `Request` → `Response` handler that knows nothing
  * about the runtime it is served from. Three things are specific to Cloudflare,
@@ -48,3 +55,13 @@ export {
   worker,
 } from './worker.ts'
 export { forward, type Namespace, type Stub } from './stub.ts'
+export {
+  compose,
+  type Composed,
+  type Deferred,
+  type Entry,
+  type Handling,
+  type WorkerFacet,
+} from './compose.ts'
+export { type Around, deferred, type Made } from './deferred.ts'
+export { VERSION } from './version.ts'

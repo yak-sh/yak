@@ -5590,6 +5590,9 @@ importers:
       '@yaks/graph':
         specifier: 0.2.33
         version: link:../graph
+      '@yaks/host':
+        specifier: 0.2.29
+        version: link:../host
     devDependencies:
       '@std/assert':
         specifier: npm:@jsr/std__assert@^1.0.0

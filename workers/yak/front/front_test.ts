@@ -2,11 +2,11 @@
 // and every failure of its own reach the kernel unchanged.
 import { clock, test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { type FrontEnv, serve, settled } from './front.ts'
+import { FRONT_VERSION, type FrontEnv, serve, settled } from './front.ts'
 import { pageAt, personal, SEEN } from '../kept-page.ts'
 import type { Conversion } from '../arrival.ts'
 import { COOKIE } from '../variant.ts'
-import { DEPLOYMENT, deployment, FRONT_VERSION } from '../deployment.ts'
+import { routes, VERSION } from '@yaks/workerd/worker'
 
 // A visitor who already holds today's home page, where the home page is split
 // (variant.ts).
@@ -564,12 +564,12 @@ test('the public deployment response names its stateless kernel and front withou
       throw Error('deployment observations must bypass Site')
     },
     () =>
-      deployment(new Request(`https://yaks.app${DEPLOYMENT}`), {
-        id: 'kernel-v2',
-      })!,
+      routes({ name: 'kernel', version: { id: 'kernel-v2' } })[0].handle(
+        new Request(`https://yaks.app${VERSION}`),
+      ),
   )
   f.env.CF_VERSION_METADATA = { id: 'front-v3' }
-  let res = await f.go(`https://yaks.app${DEPLOYMENT}`)
+  let res = await f.go(`https://yaks.app${VERSION}`)
   assertEquals(await res.json(), { kernel: 'kernel-v2' })
   assertEquals(res.headers.get(FRONT_VERSION), 'front-v3')
   assertEquals(res.headers.get('cache-control'), 'no-store')

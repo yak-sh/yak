@@ -14,19 +14,13 @@ let loader = (failing = 0) => {
   let load = () => {
     seen.loads++
     if (failing-- > 0) return Promise.reject(Error('not loaded'))
-    return Promise.resolve(
-      class {
-        constructor(...args: unknown[]) {
-          seen.made.push(args)
-        }
-        hello(name: string) {
-          return `hello ${name}`
-        }
-        later() {
-          return Promise.resolve('later')
-        }
-      },
-    )
+    return Promise.resolve((...args: unknown[]) => {
+      seen.made.push(args)
+      return {
+        hello: (name: string) => `hello ${name}`,
+        later: () => Promise.resolve('later'),
+      }
+    })
   }
   return { seen, load }
 }
@@ -48,4 +42,21 @@ test('a load that fails is tried again by the next call', async () => {
   await throws(() => o.hello('ada'), 'not loaded')
   equal(await o.hello('ada'), 'hello ada')
   equal(seen.loads, 2)
+})
+
+test('each call runs inside around, given the constructor arguments', async () => {
+  let { load } = loader()
+  let runs: unknown[] = []
+  let Lazy = deferred(
+    Base,
+    load,
+    ['hello'],
+    async (args, method, call, given) => {
+      runs.push([args, method, given])
+      return `(${await call()})`
+    },
+  )
+  let o = new Lazy('ctx', 'env') as Said
+  equal(await o.hello('ada'), '(hello ada)')
+  equal(runs, [[['ctx', 'env'], 'hello', ['ada']]])
 })

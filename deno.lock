@@ -5133,6 +5133,7 @@
             "npm:@jsr/std__assert@1",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/graph@0.2.33",
+            "npm:@yaks/host@0.2.29",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/vocab@0.2.32"

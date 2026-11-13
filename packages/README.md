@@ -630,10 +630,12 @@ grouped approximately by function, **not** by dependency order.
   authorization state and draft recovery files also use the filesystem. It
   starts no HTTP server by default and does not require synchronization.
 
-- **[@yaks/workerd](./workerd)** — that handler as a Cloudflare Worker: the
-  `WebSocketPair` upgrade that `/ws` needs, the `fetch` entrypoint a Worker
-  exports, authentication from a cookie or a bearer token, and the forwarding to
-  a Durable Object when the graph lives in one.
+- **[@yaks/workerd](./workerd)** — a Cloudflare Worker made from a plugin config
+  (`compose`, each plugin's `./worker` facet: routes, letters, queue batches,
+  Durable Object and entrypoint classes loaded on first call), and that handler
+  as a Worker: the `WebSocketPair` upgrade that `/ws` needs, the `fetch`
+  entrypoint a Worker exports, authentication from a cookie or a bearer token,
+  and the forwarding to a Durable Object when the graph lives in one.
 - **[@yaks/durable-object](./durable-object)** — the storage adapter inside that
   Durable Object: its embedded SQLite driven through `@yaks/sqlite`, plus the
   adapter that passes a hibernatable WebSocket's frames to `@yaks/api`'s
