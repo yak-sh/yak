@@ -26,7 +26,10 @@ import {
   OWED,
   saying,
   seated,
+  STUCK,
 } from './build-door.ts'
+import { transcript } from './pages.ts'
+import { renderToString } from 'preact-render-to-string'
 import { bounded } from '@yaks/durable-object/ceiling'
 import { freely } from '@yaks/durable-object/sql'
 import * as log from '@yaks/api/log'
@@ -158,8 +161,15 @@ let kinds = (sent: Frame[]) =>
       ? 'done'
       : 'busy' in f
       ? 'busy'
+      : 'taken' in f
+      ? 'taken'
       : 'ready'
   )
+
+// The page those frames draw (pages.ts `transcript`, which public/build.js
+// draws alike), and how many times it says `text`.
+let drawn = (sent: Frame[]) => renderToString(transcript(sent))
+let times = (sent: Frame[], text: string) => drawn(sent).split(text).length - 1
 
 // A whole build: three tools, a worker upload, and — since T-34950 — the
 // commit a deploy mints in the git object store, which is another object
@@ -255,8 +265,11 @@ test('a second line during a build is kept, and answered once it ends', async ()
   while (o.ctx.pending.size) await Promise.all(o.ctx.pending)
   let said = o.object.said().map((l) => l.text)
   assertEquals(said.slice(-2), ['and a garden one', 'A garden too.'])
-  let told = ws.sent.filter((f) => 'said' in f && f.text == 'and a garden one')
-  assertEquals(told.length, 1)
+  // The page says it once, where it was answered, and its note is gone.
+  assertEquals(
+    [times(ws.sent, 'and a garden one'), drawn(ws.sent).includes('Chat_Note')],
+    [1, false],
+  )
 })
 
 // Ada's object over storage as a new one has it, on a window of a second
@@ -323,7 +336,12 @@ test('a line said to a stopped Builder is kept, and answered once the window end
   await o.ring(500)
   assertEquals([kinds(ws.sent).length, o.lines()], [3, []])
   await o.ring(1_000)
-  assertEquals(kinds(ws.sent).slice(3), ['said:builder', 'done'])
+  assertEquals(kinds(ws.sent).slice(3), [
+    'taken',
+    'said:person',
+    'said:builder',
+    'done',
+  ])
   assertEquals(o.lines(), ['a recipe box', 'Sure.'])
 })
 
@@ -377,13 +395,53 @@ test('a kept line whose turn broke before it heard it stays kept, and is taken u
   assertEquals([o.lines(), o.kept()], [['a recipe box', 'Sure.'], 0])
 })
 
+let stuck = await paused()
+test('a kept line whose turn keeps breaking is said to wait, and why, until it gives way to its answer', async () => {
+  let o = stuck
+  let ws = joined(o)
+  o.stop()
+  o.object.webSocketMessage(ws, JSON.stringify({ say: 'a recipe box' }))
+  let back = unreachable(o)
+  let tries = async (from: number, n: number) => {
+    for (let t = from; t < from + n; t++) await o.ring(t * 1_000)
+  }
+  // A try or two, and it is only taken up in a moment.
+  await tries(1, 2)
+  assertEquals(times(ws.sent, STUCK(2)), 0)
+  // A few, and whoever watches is told, as is a page that joins now.
+  await tries(3, 2)
+  let now = joined(o)
+  assertEquals(
+    [times(ws.sent, STUCK(4)), times(now.sent, STUCK(4))],
+    [1, 1],
+  )
+  assertEquals(
+    [times(now.sent, 'a recipe box'), drawn(now.sent).includes('Chat_Note-no')],
+    [1, true],
+  )
+  // It is never dropped: back, its next try answers it, and the note goes.
+  back()
+  await tries(5, 1)
+  for (let sent of [ws.sent, joined(o).sent]) {
+    assertEquals(
+      [times(sent, 'a recipe box'), times(sent, 'Sure.')],
+      [1, 1],
+    )
+    assert(!drawn(sent).includes('Chat_Note'))
+  }
+})
+
 let formed = await paused()
 test('a form posted to a stopped Builder is answered the line it kept', async () => {
   let o = formed
   o.stop()
   let r = await o.object.fetch(saying(o.held, 'a recipe box'))
   let { frames } = await r.json() as { frames: Frame[] }
-  assertEquals([r.status, kinds(frames)], [200, ['said:person', 'busy']])
+  assertEquals(r.status, 200)
+  assertEquals(
+    [times(frames, 'a recipe box'), times(frames, 'Building is paused')],
+    [1, 1],
+  )
 })
 
 test('a socket with nobody on it never opens', async () => {

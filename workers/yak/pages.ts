@@ -506,8 +506,10 @@ if (deploy) {
 //
 // One renderer, drawn twice. The frames below are build.ts's wire, whole, and
 // the rules here are the rules the script keeps: a tool is one row that turns
-// into its own result, the address is a card, `busy` is a line, and `done`
-// draws nothing because the sentence it carries is already a line above it.
+// into its own result, the address is a card, `busy` is a line, a kept line
+// and its note are one each at their place, the newest standing, until
+// `taken` clears them, and `done` draws nothing because the sentence it
+// carries is already a line above it.
 
 // A https address inside a sentence the builder said — the app it just made,
 // the pricing page a refusal ends with — as a link. Refused by shape, not by a
@@ -548,15 +550,26 @@ let toolRow = (name: string, line: string, ok: boolean | null) =>
 export let transcript = (frames: Frame[]) => {
   let rows: Kids[] = []
   let at = new Map<string, number>()
+  // The rows of each line kept in the builder's log, its bubble and its
+  // note, by their place there.
+  let kept = new Map<string, number>()
+  let put = (row: Kids, place?: number, part?: string) => {
+    let was = place == null ? undefined : kept.get(`${place} ${part}`)
+    if (was != null) return void (rows[was] = row)
+    if (place != null) kept.set(`${place} ${part}`, rows.length)
+    rows.push(row)
+  }
   for (let f of frames) {
     if ('said' in f) {
       if (!f.text) continue
-      rows.push(
+      put(
         h('p', {
           class: `Chat_Bubble Chat_Bubble-${
             f.said == 'person' ? 'you' : 'them'
           }`,
         }, linked(f.text)),
+        f.kept,
+        'line',
       )
     } else if ('tool' in f) {
       at.set(f.call, rows.length)
@@ -576,7 +589,14 @@ export let transcript = (frames: Frame[]) => {
         ),
       )
     } else if ('busy' in f) {
-      rows.push(h('p', { class: 'Chat_Note' }, f.busy))
+      let note = f.stuck ? 'Chat_Note Chat_Note-no' : 'Chat_Note'
+      put(h('p', { class: note }, f.busy), f.kept, 'note')
+    } else if ('taken' in f) {
+      for (let part of ['line', 'note']) {
+        let was = kept.get(`${f.taken} ${part}`)
+        if (was != null) rows[was] = null
+        kept.delete(`${f.taken} ${part}`)
+      }
     }
   }
   return h('div', { class: 'Chat_Said' }, rows)

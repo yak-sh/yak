@@ -802,6 +802,39 @@ export let held = (db: Driver, seq: number): boolean =>
     where: and(at(seq), or(PENDING, FAILED, RUNNING)),
   })).length > 0
 
+/** Every write still in the log, oldest first: waiting, under way or set
+ * aside, and how many times each was tried. What a host that keeps a
+ * person's own words shows them of those words (a Builder's kept lines).
+ * One read a state, each on its own index: a log also keeps receipts, and
+ * an outbox's for good.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { open } from '@yaks/sqlite/db'
+ * import { aside, keep, raise, started, unanswered } from './log.ts'
+ * let db = open(':memory:')
+ * raise(db)
+ * let sent = new Request('http://builder/say', { method: 'POST' })
+ * let one = keep(db, sent, 'one'), two = keep(db, sent, 'two')
+ * started(db, one)
+ * aside(db, one, 'unreachable')
+ * equal(unanswered(db).map((k) => [k.seq, k.body, k.tries]), [[one, 'one', 1], [two, 'two', 0]])
+ * ```
+ */
+export let unanswered = (db: Driver): (Kept & { tries: number })[] =>
+  [PENDING, RUNNING, FAILED].flatMap((where) =>
+    db.query(select({
+      cols: [col('seq'), col('headers'), col('body'), col('tries')],
+      from: table(LOG),
+      where,
+    }))
+  ).map((r) => ({
+    seq: Number(r.seq),
+    headers: String(r.headers),
+    body: String(r.body),
+    tries: Number(r.tries),
+  })).sort((a, b) => a.seq - b.seq)
+
 /** A kept write, as the door that sent it hears it (meta.ts): not applied
  * yet, and not lost. The failure that held it back was reported where it
  * happened, so this is not a defect of its own (defects.ts `refused`). A

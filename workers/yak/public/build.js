@@ -13,8 +13,9 @@
 //
 // The frames are build.ts's wire, and the rules are pages.ts's, kept twice on
 // purpose: one row per tool, which its own result replaces; the address as a
-// card; `busy` as a line; and `done` drawing nothing, because the sentence it
-// carries has already arrived as a line of its own.
+// card; `busy` as a line; a kept line and its note one each at their place,
+// the newest standing, until `taken` clears them; and `done` drawing nothing,
+// because the sentence it carries has already arrived as a line of its own.
 //
 // Every write to the page is textContent, a class, or an href this file built
 // from an address it matched by shape — the page never speaks HTML on the
@@ -78,6 +79,17 @@ let add = (node) => {
   node.scrollIntoView({ block: 'nearest' })
 }
 
+// A row of the line kept at `at` in the builder's log, its bubble or its
+// note (`part`): it takes the place of the one drawn there before, if any.
+let kept = (at, part) => said.querySelector(`[data-kept="${at} ${part}"]`)
+let put = (node, at, part) => {
+  if (at == null) return add(node)
+  node.dataset.kept = `${at} ${part}`
+  let was = kept(at, part)
+  if (was) was.replaceWith(node)
+  else add(node)
+}
+
 // Whether the builder is busy, said to whoever is typing: the yak at its
 // keyboard and "Building…" over a button that waits.
 let waiting = (yes) => {
@@ -94,7 +106,7 @@ let draw = (f) => {
       `Chat_Bubble Chat_Bubble-${f.said == 'person' ? 'you' : 'them'}`,
     )
     says(p, f.text)
-    add(p)
+    put(p, f.kept, 'line')
   } else if ('tool' in f) {
     let row = toolRow(f.tool, f.line, null)
     rows.set(f.call, row)
@@ -108,8 +120,11 @@ let draw = (f) => {
   } else if ('built' in f) {
     add(built(f.built))
   } else if ('busy' in f) {
-    add(el('p', 'Chat_Note', f.busy))
+    let note = el('p', f.stuck ? 'Chat_Note Chat_Note-no' : 'Chat_Note', f.busy)
+    put(note, f.kept, 'note')
     waiting(false)
+  } else if ('taken' in f) {
+    for (let part of ['line', 'note']) kept(f.taken, part)?.remove()
   } else if ('ready' in f) {
     waiting(!!f.building)
   } else if ('done' in f) {

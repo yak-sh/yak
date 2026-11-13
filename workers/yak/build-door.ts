@@ -86,6 +86,18 @@ export let HELD = (s: number) =>
   `Building is paused here for ${s} s. I have kept what you said, and I ` +
   'will take it up then.'
 
+/** A kept line nothing holds back now (build.ts `#note`): its turn is next,
+ * or comes again once a try that broke has waited its minute. */
+export let SOON =
+  'I have kept what you said, and I will take it up in a moment.'
+
+/** A kept line whose turn broke before it could start, `tries` times
+ * (build.ts `#note`): still kept, and tried again every minute. */
+export let STUCK = (tries: number) =>
+  `I have tried ${tries} times to start on what you said, and each time I ` +
+  'could not read this space to begin. I have kept it, and I will try ' +
+  'again every minute until it goes through.'
+
 /** A person's line to a space's Builder, as its `/say` door takes it: what
  * the form with no script posts (`posting`), and what the Builder keeps of a
  * line it cannot answer yet (build.ts `#hold`). */
@@ -115,15 +127,21 @@ export let sayer = (headers: Headers): Held => {
 export let NOBODY = 'sign in to build here'
 export let NOT_A_WRITER = 'only a member who writes can build here'
 
-/** A frame, as it goes down the socket. One key names it. */
+/** A frame, as it goes down the socket. One key names it. A person's line
+ * the Builder kept and has not taken up yet is `kept` at its place in the
+ * write log, as is the note that says why it waits: a later note for the
+ * same place takes the earlier one's, and `stuck` is one whose turn keeps
+ * breaking. `taken` is the kept line at that place leaving them both, as it
+ * becomes a line of the conversation. */
 export type Frame =
-  | { said: 'person' | 'builder'; text: string }
+  | { said: 'person' | 'builder'; text: string; kept?: number }
   | { tool: string; call: string; line: string }
   | { ran: string; call: string; line: string; ok: boolean }
   | { built: string }
   | { done: string; refused?: string }
   | { ready: true; building: boolean }
-  | { busy: string }
+  | { busy: string; kept?: number; stuck?: true }
+  | { taken: number }
 
 /** The header an answer says its object owes work in: what an incarnation
  * takes up from the one before it (build.ts `#owed`), which the object starts

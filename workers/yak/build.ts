@@ -53,10 +53,12 @@
 //                   {ready, building}            the replay is over
 //                   {busy}                       a build is already running,
 //                                                or the line is kept for later
+//                   {taken}                      a kept line, taken up
 //
 // A page that reconnects hears the whole conversation again as those same
-// frames, in order, then `{ready}` — so a reload costs nothing and the page
-// has one renderer for a live build and a replayed one.
+// frames, in order, then each line still kept with why it waits, then
+// `{ready}` — so a reload costs nothing and the page has one renderer for a
+// live build and a replayed one.
 //
 // And the same frames with no socket at all. A browser that ran no script
 // posts one line to `/api/build` and is answered a page (pages.ts `building`,
@@ -106,7 +108,9 @@ import {
   sayer,
   saying,
   seatOf,
+  SOON,
   SPACE,
+  STUCK,
   WAIT,
 } from './build-door.ts'
 
@@ -144,8 +148,10 @@ type Socket = Watching | Lent
 // row.
 let CUT = 120
 
-// How long a kept line no turn could take up waits before it is tried again.
+// How long a kept line no turn could take up waits before it is tried again,
+// and how many such tries its person is told of (`#note`).
 let AGAIN = 60_000
+let FEW = 3
 
 export let line = (text: string): string => {
   let first = text.trim().split('\n')[0] ?? ''
@@ -303,10 +309,13 @@ export class Builder extends Durable {
     this.#lent = browsers(() => ctx.getWebSockets(), env.CLOCK)
   }
 
-  // The build's conversation's table, made when it is first asked about
-  // (`#raised`).
+  // The build's conversation's tables, made when it is first asked about
+  // (`#raised`): what was said, and the write log the lines kept meanwhile
+  // wait in (`#hold`).
   #table() {
-    if (!this.#raised) this.#sql.query(SAID)
+    if (!this.#raised) {
+      for (let stmt of [SAID, ...log.schema()]) this.#sql.query(stmt)
+    }
     this.#raised = true
   }
 
@@ -374,13 +383,44 @@ export class Builder extends Durable {
 
   /**
    * A socket, accepted: what a page hears the moment it joins. The whole
-   * conversation as frames, then `ready` — so a reload replays and a first
-   * visit hears nothing but `ready`.
+   * conversation as frames, each line still kept after it with why it
+   * waits, then `ready` — so a reload replays and a first visit hears
+   * nothing but `ready`.
    */
   joined(ws: Wire, held: Held) {
     ws.serializeAttachment(held)
-    for (let f of frames(this.said())) ws.send(JSON.stringify(f))
+    for (let f of this.#heard()) ws.send(JSON.stringify(f))
     ws.send(JSON.stringify({ ready: true, building: !!this.#building }))
+  }
+
+  // The conversation as a page hears it: what was said, then each line kept
+  // and not yet taken up (`#hold`), with why it waits.
+  #heard(): Frame[] {
+    let said = frames(this.said())
+    return [
+      ...said,
+      ...log.unanswered(this.#sql).flatMap((k): Frame[] => [
+        { said: 'person', text: JSON.parse(k.body).say, kept: k.seq },
+        this.#note(k.seq, k.tries),
+      ]),
+    ]
+  }
+
+  // Why the line kept at `kept` waits, the turns that broke before they
+  // could start on it `tries`: once those are a few, that is the reason;
+  // until then, what holds it back now.
+  #note(
+    kept: number,
+    tries: number,
+    stop = this.ceiling.refusal(true),
+  ): Frame {
+    if (tries >= FEW) return { busy: STUCK(tries), kept, stuck: true }
+    let busy = stop
+      ? HELD(Math.ceil(stop.retry.after / 1000))
+      : this.#building
+      ? WAIT
+      : SOON
+    return { busy, kept }
   }
 
   /** The space this object is for, read fresh — its tier and its month's
@@ -444,7 +484,12 @@ export class Builder extends Durable {
         })
       }
       heard = true
-      if (kept == null) this.#tell([{ said: 'person', text }])
+      // A kept line leaves its place among the waiting, note and all, and is
+      // said where the conversation now has it.
+      this.#tell([
+        ...(kept == null ? [] : [{ taken: kept }]),
+        { said: 'person', text },
+      ])
       let end: Frame = { done: '' }
       // The loop and its tools load with the first build, not with every
       // isolate that wakes this object (T-37977).
@@ -495,13 +540,17 @@ export class Builder extends Durable {
     text: string,
     stop: Stopped | null,
   ): Promise<Frame[]> {
-    this.ceiling.free(() => {
-      for (let stmt of log.schema()) this.#sql.query(stmt)
-      log.keep(this.#sql, saying(held, text), JSON.stringify({ say: text }))
+    let kept = this.ceiling.free(() => {
+      this.#table()
+      return log.keep(
+        this.#sql,
+        saying(held, text),
+        JSON.stringify({ say: text }),
+      )
     })
     let told = this.#say([
-      { said: 'person', text },
-      { busy: stop ? HELD(Math.ceil(stop.retry.after / 1000)) : WAIT },
+      { said: 'person', text, kept },
+      this.#note(kept, 0, stop),
     ])
     await this.#rest(stop ? stop.retry.after : AGAIN)
     if (!stop) this.#take()
@@ -537,7 +586,9 @@ export class Builder extends Durable {
   // running. A window that stops it leaves it waiting, and every line behind
   // it with it, until the alarm at its end; a turn that broke before it
   // heard the line (its directory unreachable) leaves it set aside, and it
-  // is taken up again a minute on.
+  // is taken up again a minute on, for as long as that takes. Whoever is
+  // watching is told why it waits now, which after a few such tries is
+  // those (`#note`).
   async #taken(request: Request, seq: number): Promise<Response> {
     let { say } = await request.json() as { say: string }
     while (this.#building) await this.#building.catch(() => {})
@@ -548,6 +599,8 @@ export class Builder extends Durable {
       if (!stopped(e)) {
         this.#stale ??= 'aside'
         void this.#rest(AGAIN)
+        let [k] = this.ceiling.free(() => log.writes(this.#sql, seq))
+        this.#tell([this.#note(seq, Number(k?.tries ?? 0))])
       }
       throw e
     }
@@ -1090,7 +1143,8 @@ export class Builder extends Durable {
   /**
    * A line from a browser with no socket: the round waited for, and the whole
    * conversation answered as the frames a page draws — the replay a socket
-   * would have heard, plus the `{done}` or `{busy}` this line came to. The
+   * would have heard, plus the `{done}` or `{busy}` this line came to (a
+   * line kept is in both, and drawn once: its frames name its place). The
    * page is pages.ts's; this is the same wire, said once instead of streamed.
    * A stopped object's conversation waits with it, and the page shows the
    * line it kept.
@@ -1100,7 +1154,7 @@ export class Builder extends Durable {
     let text = typeof asked.say == 'string' ? asked.say.trim() : ''
     if (!text) return no(400, 'say what you want built')
     let end = await this.say(held, text)
-    let before = this.ceiling.stopped(false) ? [] : frames(this.said())
+    let before = this.ceiling.stopped(false) ? [] : this.#heard()
     return Response.json({ frames: [...before, ...end] })
   }
 
