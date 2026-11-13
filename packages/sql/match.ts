@@ -52,8 +52,7 @@ import {
   table,
 } from './ast.ts'
 import { q } from './render.ts'
-import { type BindOpts, bound, readAt } from './bind.ts'
-import { derivedOf } from './derived.ts'
+import { type BindOpts, boundReads } from './bind.ts'
 import type { Extension } from './extend.ts'
 import { type Dialect, refEqAt, sqlite } from './sqlite.ts'
 
@@ -191,26 +190,36 @@ export let rule = (
     if (p.makes) return
     let pre = `p${i}_`
     let d = prefixed(pre, at)
-    // A bound column has to be joined, and a bind implies the component is
-    // there — so a presence clause is added for the component the path starts
-    // on, and the binder makes the join it always would. A component the
-    // filter already named is joined once: the binder keeps its tables in a
-    // set. The hops past the first are the referenced entities' own (below).
-    let needs = p.binds.map((b) => vocab.aim(b.path.join('.'))[0])
-      .filter((hop) => hop?.prop)
+    // A bind implies the component its path starts from is there, as the
+    // in-memory matcher has it, so a presence clause is added and the binder
+    // makes the join it always would. A component the filter already named is
+    // joined once: the binder keeps its tables in a set. A path through
+    // references (`.speaker.recording.meeting`) is read from the entity it
+    // reaches, as any query reads one: the root need not wear its far end.
+    let binds = p.binds.map((b) => {
+      let path = b.path.join('.')
+      let hops = vocab.aim(path)
+      let leaf = hops[hops.length - 1]
+      if (!leaf?.prop) throw new Error(`$${b.name} names no property: .${path}`)
+      let def = vocab.prop(leaf.comp, leaf.prop)
+      if (!def) {
+        throw new Error(`no property ${leaf.comp}.${leaf.prop} for $${b.name}`)
+      }
+      return { ...b, path, hops, ref: def.category == 'ref' }
+    })
     let filter = {
       ...p.filter,
       clauses: [
         ...p.filter.clauses,
-        ...needs.map((hop) => present(hop.comp)),
+        ...binds.map((b) => present(b.hops[0].comp)),
       ],
     }
-    let r = bound(
+    let { select: r, fields } = boundReads(
       filter,
       vocab,
       { ...opts, extend, archetypes: undefined },
       d,
-      needs.map((hop) => `${hop.comp}.${hop.prop}`),
+      binds.map((b) => b.path),
     )
     ctes.push(...r.with ?? [])
     froms.push(...[r.from ?? []].flat())
@@ -237,46 +246,21 @@ export let rule = (
         read: `${q(pre + 'entity')}."eid"`,
       })
     }
-    p.binds.forEach((b, k) => {
-      let hops = vocab.aim(b.path.join('.'))
-      let hop = hops[hops.length - 1]
-      if (!hop?.prop) {
-        throw new Error(`$${b.name} names no property: .${b.path.join('.')}`)
-      }
-      let c = vocab.prop(hop.comp, hop.prop)
-      if (!c) {
-        throw new Error(`no property ${hop.comp}.${hop.prop} for $${b.name}`)
-      }
-      // A path through references reads its last property on the entity it
-      // reaches: each hop past the first joins the component it names on the
-      // entity the hop before points at, under names of this bind's own.
-      let end = hops.slice(1).reduce((on, next, i) => {
-        let via = on.refCol!(hops[i].comp, hops[i].prop!)
-        let there = prefixed(`${pre}b${k}h${i + 1}_`, at)
-        joins.push({
-          how: 'join',
-          src: raw(there.table(next.comp)),
-          on: raw(`${there.ownerKey(next.comp)} = ${via}`),
-        })
-        return there
-      }, d)
-      let read = readAt(
-        vocab,
-        end,
-        derivedOf(vocab, opts.derived),
-        hop.comp,
-        hop.prop,
-        end.ownerKey(hop.comp),
-      )
-      if (!read) {
-        throw new Error(`no read for ${hop.comp}.${hop.prop} in $${b.name}`)
+    // A reference joins by the integer id it stores, a plain value by itself.
+    for (let b of binds) {
+      let { expr, key } = fields.get(b.path)!
+      let leaf = b.hops[b.hops.length - 1]
+      let id = key ??
+        (b.hops.length == 1 ? d.refCol!(leaf.comp, leaf.prop) : undefined)
+      if (b.ref && !id) {
+        throw new Error(`$${b.name} reads .${b.path}, which stores no id`)
       }
       slot(b.name, {
-        kind: c.category == 'ref' ? 'id' : 'value',
-        sql: c.category == 'ref' ? end.refCol!(hop.comp, hop.prop) : read.expr,
-        read: read.expr,
+        kind: b.ref ? 'id' : 'value',
+        sql: b.ref ? id! : expr,
+        read: expr,
       })
-    })
+    }
   })
 
   // The anchor. A rule is about a batch, not about the whole database: without

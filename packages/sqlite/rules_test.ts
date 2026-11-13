@@ -72,6 +72,21 @@ test('two patterns share a variable, and that is the join', () => {
   assert(!render(rule(m, shop)).sql.includes(';'))
 })
 
+test('a variable reads through references from the entity its path reaches', () => {
+  let { driver } = floor()
+  // The review wears neither `product` nor the maker's `doc`: each path is
+  // read from the entity it reaches, a value as itself and a reference as the
+  // id it stores, which joins the maker's pattern.
+  let m = match(
+    '.review, review.product.product.price=$price, ' +
+      'review.product.product.maker=$m; $m .doc',
+  )
+  let hits = matched(driver, m, shop)
+  assertEquals(hits.map((h) => [h.entities, h.vars]), [
+    [['r1', 'm1'], { price: 9, m: 'm1' }],
+  ])
+})
+
 test('a collection keeps every correlated member under one outer binding', () => {
   let { driver } = floor()
   let found = matched(

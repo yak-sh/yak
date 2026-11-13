@@ -330,6 +330,9 @@ export let rarest = (
 type Ctx = {
   v: Vocab
   d: Dialect
+  /** where the columns a caller asked to read beside the filter are handed
+   * back, by path (`boundReads`) */
+  fields?: Map<string, Field>
   derived: Derived
   /** the components the file holds no table for (./absent.ts) */
   absent?: readonly string[]
@@ -2950,7 +2953,7 @@ let screenFor = (
 // A reference's value is the eid it names, and `key` is the integer it stores
 // beside it: one key names one entity, so an aggregate groups by the key and
 // reads each group's eid once, rather than every row's.
-type Field = { expr: string; tag: Tag; key?: string }
+export type Field = { expr: string; tag: Tag; key?: string }
 let resolveField = (
   ctx: Ctx,
   pathStr: string,
@@ -3616,6 +3619,27 @@ export let bound = (
   scope?: Scope,
 ): Select => prepared(ast, vocab, opts, d, reads, scope).lower()
 
+/**
+ * A query bound with the paths `reads` names read beside its filter, through
+ * the joins the statement makes: each path's value, and for a stored
+ * reference the integer id it holds (`key`). A path reaches through
+ * references the way a `.fields` projection does
+ * (`speaker.recording.meeting`), so a rule's variables (./match.ts) are read
+ * exactly as every other query reads them.
+ */
+export let boundReads = (
+  ast: And,
+  vocab: Vocab,
+  opts: BindOpts,
+  d: Dialect,
+  reads: string[],
+): { select: Select; fields: Map<string, Field> } => {
+  let fields = new Map<string, Field>()
+  let select = prepared(ast, vocab, opts, d, reads, undefined, opts, fields)
+    .lower()
+  return { select, fields }
+}
+
 // An entity's own reference to a row of the store's bookkeeping
 // (`BindOpts.bookkeeping`) reads as nothing, as that row does: a store whose
 // vocabulary declares no archetypes has no `entity.archetype` to show.
@@ -3677,6 +3701,7 @@ export let prepared = (
   reads: string[] = [],
   scope?: Scope,
   heard: Heard = opts,
+  fields?: Map<string, Field>,
 ): Prepared => {
   let vacant = empty(ast, vocab, opts)
   if (vacant && !reads.length) {
@@ -3724,6 +3749,7 @@ export let prepared = (
       scope?.screening,
       scope?.correlated,
       heard,
+      fields,
     )
   }
   let simple = !reads.length && simplePresence(ast, vocab, opts, d)
@@ -3741,6 +3767,7 @@ export let prepared = (
   let tagged = new Set<string>()
   let ctx: Ctx = {
     v: vocab,
+    fields,
     d: backedDialect(d, vocab, backed, tags, (c) => tagged.add(c), spine),
     // A property computed from a component's rows reads one with no table
     // as worn by nobody, as the dialect does.
@@ -4448,7 +4475,9 @@ let lower = (
   )
   // Callers that read columns beside the filter ask for their joins here. A
   // derived value can depend on another component even when no filter does.
-  for (let path of reads) resolveField(ctx, path)
+  for (let path of reads) {
+    ctx.fields?.set(path, resolveField(ctx, path, undefined, true))
+  }
 
   let distinct = find<Distinct>(cs, 'distinct')
   let tally = find<Tally>(cs, 'tally')
@@ -5593,6 +5622,7 @@ let visible = (
   screening = false,
   correlated = false,
   heard: Heard = opts,
+  fields?: Map<string, Field>,
 ): Prepared => {
   let visibility = opts.visibility!
   let plain = {
@@ -5881,6 +5911,7 @@ let visible = (
       numbered: heard.numbered,
       rarest: heard.rarest,
     },
+    fields,
   )
   return {
     ...inner,
