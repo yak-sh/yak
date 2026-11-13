@@ -1,5 +1,6 @@
 import { equal, ok, test, throws } from '@yaks/testing'
-import { appStore } from './directory.ts'
+import { appStore, releaseOf } from './directory.ts'
+import { declarationOf, keepDeclaration } from './declaration.ts'
 import { handler } from './kernel.ts'
 import { fetch as preview, viewport } from './preview.ts'
 import { tools } from './preview-tools.ts'
@@ -400,6 +401,38 @@ test("an open link rides through a deploy: its pages hear the release and see wh
         .value!.url,
     ),
     link,
+  )
+})
+
+// The platform declares `event` (@yaks/events). An app that declared it first
+// keeps it (vocab.ts `unsaid`), in its draft's link as in its deploys.
+test('a draft keeps a platform word its app held before the platform declared it, and a new app may not take it', async () => {
+  let event = { properties: { starts: { type: 'string' } } }
+  let vocab = {
+    path: 'vocab.json',
+    content: JSON.stringify({ $defs: { event } }),
+  }
+  let page = { path: 'index.html', content: '<html><body>Held</body></html>' }
+  for (let slug of ['held', 'taker']) {
+    await run('app_new', { slug, title: slug, access: 'public' })
+    await run('app_files', { app: slug, files: [page] })
+    await run('app_deploy', { app: slug })
+  }
+  let held = (await dir.app(space, 'held'))!
+  let was = await declarationOf(env, space, held)
+  await keepDeclaration(env, space, held, releaseOf(held), {
+    ...was,
+    vocab: { $defs: { ...was.vocab.$defs, event } },
+  })
+  let shown = async (slug: string) => {
+    await run('app_files', { app: slug, files: [vocab] })
+    let out = await tools[0].run(ctx, { app: slug, screenshot: false })
+    return kernel(new Request(String(out.value!.url)), env)
+  }
+  equal((await shown('held')).status, 200)
+  await throws(
+    () => shown('taker'),
+    'event is a component the platform already declares',
   )
 })
 

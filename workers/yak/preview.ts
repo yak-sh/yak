@@ -17,6 +17,8 @@ import { writes } from '@yaks/member'
 import { derivedEid } from '@yaks/graph/identity'
 import { appTools } from './tool-grammar.ts'
 import { appVocab, stated, VOCABS } from './vocab.ts'
+import { ACCEPTED } from './door.ts'
+import { declarationOf } from './declaration.ts'
 import { api, storing, unwritten, woven } from './apps.ts'
 import {
   type App,
@@ -150,6 +152,7 @@ let post = (
   path: string,
   value: unknown,
   who: Who,
+  headers: Record<string, string> = {},
 ) =>
   store.consume(
     path,
@@ -167,6 +170,7 @@ let post = (
       ...vouched(who),
       'content-type': 'application/json',
       'x-yak-kernel': '1',
+      ...headers,
     },
   )
 
@@ -326,7 +330,12 @@ let built = async (
       vocabFile,
       decode(await read('package.json')) ?? undefined,
     )
-    await post(store, '/vocab', doc, who)
+    // A word the app's release already declares stays the app's here as in
+    // its deploys (vocab.ts `unsaid`), though the link's store never held it.
+    let held = Object.keys(
+      (await declarationOf(ctx.env, space, app)).vocab.$defs ?? {},
+    )
+    await post(store, '/vocab', doc, who, { [ACCEPTED]: JSON.stringify(held) })
     await post(
       store,
       '/tools',
