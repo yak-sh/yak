@@ -281,25 +281,13 @@ export type Window = {
   stops: (error: unknown) => error is Halt
 }
 
-/** What a host lends its write log's door. */
-export type Host = Beside & {
+/** What a host lends its write log's replay ({@link replays}). */
+export type Replayer = {
+  readonly db: Driver
+  now: () => number
   readonly window: Window
-  /** The object brought up for a request: its refusal, if it can't be. */
-  ready: (request: Request) => Promise<Response | null>
-  /** Every other door, for a write the log does not keep. */
-  serve: (request: Request) => Promise<Response>
-  /** One batch applied, `mark` naming it to {@link landing}. */
+  /** One kept write applied, `mark` naming it to {@link landing}. */
   commit: (request: Request, mark: Mark) => Promise<Response>
-  /** Today's authority to write, asked of a durable outbox write before its
-   * receipt is told: a cached acceptance is still a write answer. */
-  authorize: (request: Request) => Promise<void>
-  /** Whether the log may keep a body, as said before decoding: one carrying
-   * a secret's value it may not. */
-  keeps: (told: string) => boolean
-  /** The caller's own view of an answer. */
-  answer: (request: Request, response: Response) => Promise<Response>
-  /** Why the object could not start, once it could not. */
-  refused: () => string | null
   /** The object's alarm at `at`; `why` says what for. */
   arm: (at: number, why?: string) => unknown
   /** A failure, where it happened. */
@@ -313,16 +301,44 @@ export type Host = Beside & {
   retry?: number
 }
 
+/** What a host lends its write log's door. */
+export type Host = Beside & Replayer & {
+  /** The object brought up for a request: its refusal, if it can't be. */
+  ready: (request: Request) => Promise<Response | null>
+  /** Every other door, for a write the log does not keep. */
+  serve: (request: Request) => Promise<Response>
+  /** Today's authority to write, asked of a durable outbox write before its
+   * receipt is told: a cached acceptance is still a write answer. */
+  authorize: (request: Request) => Promise<void>
+  /** Whether the log may keep a body, as said before decoding: one carrying
+   * a secret's value it may not. */
+  keeps: (told: string) => boolean
+  /** The caller's own view of an answer. */
+  answer: (request: Request, response: Response) => Promise<Response>
+  /** Why the object could not start, once it could not. */
+  refused: () => string | null
+}
+
+/** The replay of a host's write log ({@link replays}). */
+export type Replays = {
+  /** The log, from its oldest waiting write, one replay at a time. */
+  drain: () => Promise<void>
+  /** The log first, for a request that reads: unless the log itself failed,
+   * which the alarm owns, or a replay is already running. */
+  settle: () => Promise<unknown> | void
+  /** A replay asked for anew, by the alarm or a person's retry: the log that
+   * failed last time may stand now. */
+  mend: () => Promise<void>
+}
+
 /** A host's write door over its log ({@link door}). */
-export type Door = {
+export type Door = Replays & {
   /** The hook that lands each write in its batch's transaction: last among
    * the graph's, so the answer a keyed write keeps is the batch as every
    * other commit hook left it. */
   plugin: Plugin
   /** A write in at `/apply`. */
   write: (request: Request) => Promise<Response>
-  /** The log, from its oldest waiting write, one replay at a time. */
-  drain: () => Promise<void>
   /** A durable outbox write as its commit begins: today's authority asked
    * first, then the request bound to its body. Only a matching durable
    * receipt may stand in for a rehearsal (`check`), which is told what the
@@ -338,28 +354,20 @@ export type Door = {
    * write is looked for once more right before it, and one already in the
    * log is told what that one was told. */
   applying: <T>(request: Request, mark: Mark, apply: () => T) => T | Response
-  /** The log first, for a request that reads: unless the log itself failed,
-   * which the alarm owns, or a replay is already running. */
-  settle: () => Promise<unknown> | void
-  /** A replay asked for anew, by the alarm or a person's retry: the log that
-   * failed last time may stand now. */
-  mend: () => Promise<void>
 }
 
 // A JSON answer's headers, for one the write log kept as text.
 let JSONED = { headers: { 'content-type': 'application/json' } }
 
 /**
- * A host's write door over its log. A live keyed write commits its mutation
- * and successful receipt together, with no transient log stages. Input that
- * cannot commit is kept and replayed in order by the one drain that runs at a
- * time. A write that finds the object stopped is kept and told when to look
- * again, and the alarm armed for the window's end replays it. One that finds
- * the object refusing to start, or the log itself failing, is answered 202
- * and waits in the log. A resend (its idempotency key already in the log) is
- * the write it repeats: told what that one was told, or waiting beside it.
+ * The one drain of a host's write log, from its oldest waiting write, and
+ * the live callers it answers as each lands. What it leaves `running` (a
+ * reset cut it off) or `failed` is the host's to take up, since only the
+ * host knows whether a write it started may be tried again: a Store asks for
+ * review (log.ts `interrupted`), a Builder hears a line in the transaction
+ * that lands it, so it replays one again.
  */
-export let door = (host: Host): Door => {
+let replaying = (host: Replayer) => {
   let { now, report } = host
   let retry = host.retry ?? 60_000
   let stage = host.stage ?? ((_name, work) => work())
@@ -397,22 +405,6 @@ export let door = (host: Host): Door => {
   let park = (seq: number, why: string): Response => {
     void host.arm(now() + retry)
     return parked(seq, why)
-  }
-
-  /** A write that arrives while this object may not write: kept in the log,
-   * which the window lets through (`free`), as `pending`, and told when to
-   * look again. A resend of one kept so is told the same; one of a write the
-   * log already settled waits, and hears what it was once the object
-   * writes. */
-  let hold = (request: Request, body: string, stop: Halt): Response => {
-    let key = request.headers.get(IDEMPOTENCY)
-    let was = host.window.free(() => key ? first(host.db, key, request) : null)
-    if (was && was.state != 'pending' && was.state != 'running') {
-      return refuse(stop)
-    }
-    let seq = was?.seq ??
-      host.window.free(() => keep(host.db, request, body, now))
-    return waits(seq, stop.retry.after)
   }
 
   /** One kept write, applied: out of the log when it commits or is refused
@@ -504,6 +496,102 @@ export let door = (host: Host): Door => {
     return draining = stage('replay', run)
   }
 
+  return {
+    drain,
+    tell,
+    waits,
+    park,
+    /** Whether a replay may start now: none is running, and the log did
+     * not fail last time. */
+    idle: () => !stuck && !draining,
+    stuck: () => stuck,
+    /** What a live caller is told once its kept write lands. */
+    heard: (seq: number): Promise<Response> =>
+      new Promise<Response>((r) => {
+        let other = callers.get(seq)
+        callers.set(seq, other ? (a) => (other(a.clone()), r(a)) : r)
+      }),
+    settle(): Promise<unknown> | void {
+      let going = draining
+      if (going) return stage('settle', () => going)
+      // While stopped, what the log holds waits for the alarm.
+      if (wait()) return
+      if (!stuck && waiting(host.db)) return drain()
+    },
+    mend(): Promise<void> {
+      stuck = false
+      return drain()
+    },
+  }
+}
+
+/**
+ * The replay of a host's write log, for a host whose input comes in at a
+ * door of its own and is kept there (log.ts `keep`): a space's Builder keeps
+ * a person's lines so, and replays them one turn at a time.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { open } from '@yaks/sqlite/db'
+ * import { keep, next, raise } from './log.ts'
+ * import { replays } from './receipts.ts'
+ * let db = open(':memory:')
+ * raise(db)
+ * let heard: string[] = []
+ * let log = replays({
+ *   db,
+ *   now: Date.now,
+ *   arm: () => {},
+ *   report: () => {},
+ *   window: {
+ *     refusal: () => null,
+ *     free: (body) => body(),
+ *     stops: (_e): _e is never => false,
+ *   },
+ *   commit: async (r) => (heard.push(await r.text()), new Response('[]')),
+ * })
+ * keep(db, new Request('http://builder/say', { method: 'POST' }), 'hello')
+ * await log.drain()
+ * equal([heard, next(db)], [['hello'], null])
+ * ```
+ */
+export let replays = (host: Replayer): Replays => {
+  let { drain, settle, mend } = replaying(host)
+  return { drain, settle, mend }
+}
+
+/**
+ * A host's write door over its log. A live keyed write commits its mutation
+ * and successful receipt together, with no transient log stages. Input that
+ * cannot commit is kept and replayed in order by the one drain that runs at a
+ * time ({@link replays}). A write that finds the object stopped is kept and
+ * told when to look again, and the alarm armed for the window's end replays
+ * it. One that finds the object refusing to start, or the log itself
+ * failing, is answered 202 and waits in the log. A resend (its idempotency
+ * key already in the log) is the write it repeats: told what that one was
+ * told, or waiting beside it.
+ */
+export let door = (host: Host): Door => {
+  let { now, report } = host
+  let { drain, tell, waits, park, idle, stuck, heard, settle, mend } =
+    replaying(host)
+
+  /** A write that arrives while this object may not write: kept in the log,
+   * which the window lets through (`free`), as `pending`, and told when to
+   * look again. A resend of one kept so is told the same; one of a write the
+   * log already settled waits, and hears what it was once the object
+   * writes. */
+  let hold = (request: Request, body: string, stop: Halt): Response => {
+    let key = request.headers.get(IDEMPOTENCY)
+    let was = host.window.free(() => key ? first(host.db, key, request) : null)
+    if (was && was.state != 'pending' && was.state != 'running') {
+      return refuse(stop)
+    }
+    let seq = was?.seq ??
+      host.window.free(() => keep(host.db, request, body, now))
+    return waits(seq, stop.retry.after)
+  }
+
   /** A write in at `/apply`. */
   let write = async (request: Request): Promise<Response> => {
     // A binary write is kept as it came, since decoding it needs a start
@@ -554,7 +642,7 @@ export let door = (host: Host): Door => {
       if (!was && key) {
         let no = await host.ready(request)
         was = key ? first(host.db, key, request) : null
-        if (!was && !no && !stuck && !draining && !waiting(host.db)) {
+        if (!was && !no && idle() && !waiting(host.db)) {
           let r = await host.commit(sent(), { request })
           // Its transaction unwound when the window refused it mid-way.
           let stop = r.status == 429 ? host.window.refusal() : null
@@ -606,15 +694,11 @@ export let door = (host: Host): Door => {
     if (was?.state == 'interrupted' || was?.state == 'unreviewed') {
       return parked(seq, was.why, true)
     }
-    // A startup effect may call this store and drain its log while `ready`
-    // waits on another object. Register the live caller before yielding, so
-    // that replay delivers its answer and treats refusals as live refusals.
-    let answer = new Promise<Response>((r) => {
-      let other = callers.get(seq)
-      callers.set(seq, other ? (a) => (other(a.clone()), r(a)) : r)
-    })
+    // Heard before yielding, so a replay a startup effect drains meanwhile
+    // answers it and treats its refusal as a live one.
+    let answer = heard(seq)
     let no = await host.ready(request)
-    if (no || stuck) {
+    if (no || stuck()) {
       tell(
         seq,
         park(
@@ -655,16 +739,7 @@ export let door = (host: Host): Door => {
       }
       return during(mark, apply)
     },
-    settle(): Promise<unknown> | void {
-      let going = draining
-      if (going) return stage('settle', () => going)
-      // While stopped, what the log holds waits for the alarm (`hold`).
-      if (wait()) return
-      if (!stuck && waiting(host.db)) return drain()
-    },
-    mend(): Promise<void> {
-      stuck = false
-      return drain()
-    },
+    settle,
+    mend,
   }
 }

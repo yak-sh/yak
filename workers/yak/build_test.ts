@@ -28,6 +28,8 @@ import {
   seated,
 } from './build-door.ts'
 import { bounded } from '@yaks/durable-object/ceiling'
+import { freely } from '@yaks/durable-object/sql'
+import * as log from '@yaks/api/log'
 import { WAKE } from './door.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -259,7 +261,8 @@ test('a second line during a build is kept, and answered once it ends', async ()
 
 // Ada's object over storage as a new one has it, on a window of a second
 // the case moves, and the rows it may write in it, spent (@yaks/durable-object
-// `bounded`); then an alarm the runtime rings, and what it left running.
+// `bounded`); then an alarm the runtime rings, and what it left running; and
+// the object its storage wakes as next (`woken`).
 let paused = async () => {
   let o = await seeded([{ text: 'Sure.' }])
   let ctx = state('', false)
@@ -276,14 +279,32 @@ let paused = async () => {
       rowsWritten: 11,
       returned: 0,
     })
-  let object = new Builder(ctx, o.env)
-  let ring = async (t: number) => {
-    at.t = t
-    await object.alarm()
-    while (ctx.pending.size) await Promise.all(ctx.pending)
+  let p = {
+    ...o,
+    ctx,
+    object: new Builder(ctx, o.env),
+    stop,
+    ring: async (t: number) => {
+      at.t = t
+      await p.object.alarm()
+      while (ctx.pending.size) await Promise.all(ctx.pending)
+    },
+    lines: () => p.object.said().map((l) => l.text),
+    woken: () => void (p.object = new Builder(ctx, o.env)),
+    // How many lines the log still holds.
+    kept: () => log.writes(freely(ctx.storage)).length,
   }
-  let lines = () => object.said().map((l) => l.text)
-  return { ...o, ctx, object, stop, ring, lines }
+  return p
+}
+
+// The directory, out of reach of the object's reads until it is back.
+let unreachable = (o: { env: Env }) => {
+  let { STORE } = o.env
+  o.env.STORE = {
+    ...STORE,
+    get: () => ({ fetch: () => Promise.reject(new Error('unreachable')) }),
+  } as unknown as Env['STORE']
+  return () => void (o.env.STORE = STORE)
 }
 
 let idle = await paused()
@@ -327,6 +348,33 @@ test('a reply made as the window passes is kept with the line it answers', async
     'a recipe box',
     'Sure.',
   ]])
+})
+
+let cut = await paused()
+test('a line a reset cut off before its turn heard it is taken up by the next incarnation', async () => {
+  let o = cut
+  o.stop()
+  await o.object.say(o.held, 'a recipe box')
+  // The replay started it, and the object went away before its turn read
+  // the space.
+  let sql = freely(o.ctx.storage)
+  log.started(sql, log.next(sql)!.seq)
+  o.woken()
+  await o.ring(1_000)
+  assertEquals([o.lines(), o.kept()], [['a recipe box', 'Sure.'], 0])
+})
+
+let broke = await paused()
+test('a kept line whose turn broke before it heard it stays kept, and is taken up at the next alarm', async () => {
+  let o = broke
+  o.stop()
+  await o.object.say(o.held, 'a recipe box')
+  let back = unreachable(o)
+  await o.ring(1_000)
+  assertEquals([o.lines(), o.kept()], [[], 1])
+  back()
+  await o.ring(2_000)
+  assertEquals([o.lines(), o.kept()], [['a recipe box', 'Sure.'], 0])
 })
 
 let formed = await paused()

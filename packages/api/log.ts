@@ -281,15 +281,18 @@ export let started = (db: Driver, seq: number): void =>
   })
 
 /** A started write its store stopped before it could apply it
- * (`./receipts.ts` `door`): waiting again, its try not counted, so the replay after the wait
- * takes it as it was. Its transaction unwound, so nothing of it landed. */
-export let unstarted = (db: Driver, seq: number): void => {
+ * (`./receipts.ts` `replays`): waiting again, its try not counted, so the
+ * replay after the wait takes it as it was. Its transaction unwound, so
+ * nothing of it landed. Without `seq`, every write a reset cut off, for a
+ * host that hears a write only in the transaction that lands it, so a reset
+ * left nothing of one it started (a Builder's line). */
+export let unstarted = (db: Driver, seq?: number): void => {
   idle.delete(of(db))
   db.query({
     t: 'update',
     table: LOG,
     set: { state: lit('pending'), tries: op('-', col('tries'), lit(1)) },
-    where: and(at(seq), RUNNING),
+    where: seq == null ? RUNNING : and(at(seq), RUNNING),
   })
 }
 

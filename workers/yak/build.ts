@@ -88,6 +88,7 @@ import { caught, refusing, stopped } from './defects.ts'
 import { refuse } from '@yaks/api/refuse'
 import { reported, type Tally, tallying } from './lib/hops.ts'
 import * as log from '@yaks/api/log'
+import { type Replays, replays } from '@yaks/api/receipts'
 import { headed } from './timing.ts'
 import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
@@ -237,10 +238,15 @@ export class Builder extends Durable {
   // purpose: an object that was evicted has no build running, and a flag in
   // storage would outlive the loop it stands for and lock the space forever.
   #building?: Promise<unknown>
-  // The kept lines being taken up, one turn at a time, and whether a line
-  // was kept while a build ran, for its end to take up.
-  #replaying?: Promise<void>
-  #queued = false
+  // The lines kept while this object could not answer them (`#hold`), taken
+  // up one turn at a time (`#taken`) by the one replay of its write log
+  // (@yaks/api/receipts `replays`). A turn that never heard its line leaves
+  // it `running` when a reset cut it off, and `failed` when it broke; what
+  // the log holds so waits again before the replay next takes it up
+  // (`#stale`): at this incarnation's first look, everything the last one
+  // left, and after a turn set one aside, that one.
+  #log: Replays
+  #stale: 'woke' | 'aside' | null = 'woke'
   #arming?: Promise<void>
   // The Operator's pool, once this incarnation has made it (`#work`).
   #fx?: { running(): unknown[] }
@@ -270,12 +276,30 @@ export class Builder extends Durable {
     // What it opens is the Operator, whose works its alarm runs; what its
     // statements may cost before it stops until a window ends is its
     // storage's ceiling: a line said meanwhile is kept (`#hold`), and taken
-    // up once the window ends (`#replay`).
+    // up once the window ends (`#take`).
     super(ctx)
     this.#ctx = ctx
     this.ceiling
     this.#sql = driver(ctx.storage)
     this.#env = env
+    this.#log = replays({
+      db: this.#sql,
+      now: Date.now,
+      window: {
+        refusal: () => this.ceiling.refusal(true),
+        free: (body) => this.ceiling.free(body),
+        stops: stopped,
+      },
+      commit: (request, seq) => this.#taken(request, seq as number),
+      arm: (at) => this.clock.arm(at),
+      report: (e, request) => caught(e, { request }),
+      // Held by the object, which nobody waits on.
+      stage: (_name, work) => {
+        let going = work()
+        ctx.waitUntil?.(going)
+        return going
+      },
+    })
     this.#lent = browsers(() => ctx.getWebSockets(), env.CLOCK)
   }
 
@@ -390,16 +414,12 @@ export class Builder extends Durable {
     return await this.#turn(held, text)
   }
 
-  // A build, raised as `#building` until it ends, when what was said while
-  // it ran is taken up. A kept line names its place in the log (`kept`),
-  // which it leaves as the conversation takes it.
+  // A build, raised as `#building` until it ends. A kept line names its
+  // place in the log (`kept`), which it leaves as the conversation takes it.
   #turn(held: Held, text: string, kept?: number): Promise<Frame[]> {
     let turn = this.#build(held, text, kept)
     this.#building = turn
-    return turn.finally(() => {
-      this.#building = undefined
-      if (this.#queued) this.#replay()
-    })
+    return turn.finally(() => this.#building = undefined)
   }
 
   async #build(held: Held, text: string, kept?: number): Promise<Frame[]> {
@@ -444,11 +464,10 @@ export class Builder extends Durable {
       this.ceiling.free(() => this.#keep(reply))
       return [end]
     } catch (e) {
-      // Stopped before the conversation took the line, it is kept, or a kept
-      // one stays where it is (`#replays`).
-      if (stopped(e) && !heard) {
-        return kept == null ? await this.#hold(held, text, e) : []
-      }
+      // A kept line the conversation never took is the replay's (`#taken`).
+      if (kept != null && !heard) throw e
+      // Stopped before the conversation took the line, it is kept.
+      if (stopped(e) && !heard) return await this.#hold(held, text, e)
       // The loop answers its own refusals in sentences; anything that reaches
       // here is ours breaking, and the person is owed a sentence for that too.
       caught(e, { request: 'build', space: held.space })
@@ -467,10 +486,10 @@ export class Builder extends Durable {
 
   /** A line this object can't answer now: said while it may not write
    * (`#ceiling`, `stop`), or while a build runs. Kept in the write log, which
-   * the ceiling lets through (`free`), and taken up as a turn of its own once
-   * the window ends, by the alarm armed for then, or once the build ends
-   * (`#replay`), with the alarm a minute on in case this object dies under
-   * it. Everyone watching sees it said, and when it will be answered. */
+   * the ceiling lets through (`free`), and taken up as a turn of its own:
+   * once the window ends, by the alarm armed for then, or behind the build
+   * (`#take`), with the alarm a minute on in case this object dies under it.
+   * Everyone watching sees it said, and when it will be answered. */
   async #hold(
     held: Held,
     text: string,
@@ -480,50 +499,57 @@ export class Builder extends Durable {
       for (let stmt of log.schema()) this.#sql.query(stmt)
       log.keep(this.#sql, saying(held, text), JSON.stringify({ say: text }))
     })
-    this.#queued ||= !stop
     let told = this.#say([
       { said: 'person', text },
       { busy: stop ? HELD(Math.ceil(stop.retry.after / 1000)) : WAIT },
     ])
     await this.#rest(stop ? stop.retry.after : AGAIN)
+    if (!stop) this.#take()
     return told
   }
 
   // The alarm, `ms` from now, or sooner where another need armed it so.
   #rest = (ms: number) => this.clock.arm(Date.now() + ms)
 
-  // The lines kept (`#hold`), taken up behind the alarm or the build that
-  // ended, since a build takes minutes. A stopped object's wait for them is
-  // its alarm's. A log that holds none is looked at once an incarnation
-  // (@yaks/api/log `next`), and stands from the store's fitting
-  // (operator-store.ts), so the look runs no DDL.
-  #replay() {
-    if (this.#replaying || this.ceiling.stopped(true)) return
-    this.#queued = false
-    let going = this.#replaying = (async () => {
-      if (log.waiting(this.#sql)) await this.#replays()
-    })()
-      .catch((e) => caught(e, { request: 'build replay' }))
-      .finally(() => this.#replaying = undefined)
-    this.#ctx.waitUntil?.(going)
+  // The kept lines, taken up by the replay, which nobody waits on: a build
+  // takes minutes. What no replay is taking up waits again first
+  // (`#stale`); a reset that cut a turn off before it heard its line left
+  // nothing of it, since the conversation takes a kept line in the
+  // transaction that lands it (`#build`). A log that holds none is looked at
+  // once an incarnation (@yaks/api/log `next`), and stands from the store's
+  // fitting (operator-store.ts), so the look runs no DDL. Stopped, the
+  // lines wait for the alarm at the window's end.
+  #take() {
+    void (async () => {
+      let stale = this.#stale
+      if (stale == 'woke') log.unstarted(this.#sql)
+      if (stale) log.revived(this.#sql)
+      this.#stale = null
+      await this.#log.mend()
+    })().catch((e) =>
+      stopped(e)
+        ? this.#rest(e.retry.after)
+        : caught(e, { request: 'build replay' })
+    )
   }
 
-  // Oldest first, a turn each once no other build is running. One the
-  // window stops waits for its end, and every line behind it with it; one no
-  // turn took up (its directory unreachable) waits a minute.
-  async #replays() {
-    let last: number | undefined
-    for (let k = log.next(this.#sql); k; k = log.next(this.#sql)) {
-      if (k.seq == last) return await this.#rest(AGAIN)
-      last = k.seq
-      let asked = log.replayed(k, 'http://builder/say')
-      let { say } = await asked.json() as { say: string }
-      while (this.#building) await this.#building.catch(() => {})
-      if (!this.ceiling.stopped(true)) {
-        await this.#turn(sayer(asked.headers), say, k.seq)
+  // One kept line, the replay's commit: its own turn once no other build is
+  // running. A window that stops it leaves it waiting, and every line behind
+  // it with it, until the alarm at its end; a turn that broke before it
+  // heard the line (its directory unreachable) leaves it set aside, and it
+  // is taken up again a minute on.
+  async #taken(request: Request, seq: number): Promise<Response> {
+    let { say } = await request.json() as { say: string }
+    while (this.#building) await this.#building.catch(() => {})
+    try {
+      await this.#turn(sayer(request.headers), say, seq)
+      return new Response(null, { status: 204 })
+    } catch (e) {
+      if (!stopped(e)) {
+        this.#stale ??= 'aside'
+        void this.#rest(AGAIN)
       }
-      let wait = this.ceiling.stopped(true)
-      if (wait) return await this.#rest(wait)
+      throw e
     }
   }
 
@@ -1010,7 +1036,7 @@ export class Builder extends Durable {
           // answer.
           owed: () => {
             this.#resume()
-            this.#replay()
+            this.#take()
             return null
           },
           attachments: async () => {

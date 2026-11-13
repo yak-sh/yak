@@ -68,7 +68,7 @@ let text = indexed(operatorVocab)
 let searching = ftsSchema(text, derived)
 // The write log the object's Builder keeps a person's line in while it is
 // stopped (build.ts `#hold`), fitted with the store, so the alarm that takes
-// the lines up (`#replay`) finds the log standing and runs no DDL to look.
+// the lines up (`#take`) finds the log standing and runs no DDL to look.
 let beside = () => [...blobSchema(), ...logSchema()]
 let print: string | undefined
 
