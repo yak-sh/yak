@@ -27,6 +27,10 @@ let fixture = async () => {
   await Deno.writeTextFile(`${root}/.gitignore`, 'node_modules\n')
   await Deno.writeTextFile(`${root}/packages/a/mod.ts`, 'export let a = 1\n')
   await Deno.writeTextFile(`${root}/packages/a/node_modules/installed`, 'local')
+  await Deno.writeTextFile(
+    `${root}/packages/a/.README.md.plan.4242.example.ts`,
+    '',
+  )
   return root
 }
 let concurrent = await fixture()
@@ -44,6 +48,10 @@ test('parallel publication reads private workspaces and never restores over sour
     first = root
     assertEquals(JSON.parse(await read(root, manifest)).name, '@yaks/a')
     assertEquals(await exists(`${root}/packages/a/node_modules`), false)
+    assertEquals(
+      await exists(`${root}/packages/a/.README.md.plan.4242.example.ts`),
+      false,
+    )
     assertEquals(await read(concurrent, manifest), original)
     await Deno.writeTextFile(`${root}/packages/a/mod.ts`, 'private')
     await ready.promise

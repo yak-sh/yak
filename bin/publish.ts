@@ -28,6 +28,7 @@ import { cp } from 'node:fs/promises'
 import pinned from '../packages/cli/release.json' with { type: 'json' }
 import { members } from '@yaks/cli/dependencies'
 import { publishing } from './release.ts'
+import { written } from '@yaks/testing/find'
 
 let root = new URL('../', import.meta.url).pathname
 
@@ -107,6 +108,17 @@ export let jsr = (pkg: Record<string, unknown>, config: Config): Config => {
   }
 }
 
+/// copied('mod.ts') -> true
+/// copied('node_modules') -> false
+/// copied('.README.md.plan.4242.example.ts') -> false
+/** Whether a publication workspace copies a file by its name: not another
+ * project's code, and not an example a running test writes beside its page
+ * and removes (@yaks/testing/find `written`), which can be gone between the
+ * copy listing it and reading it. */
+export let copied = (name: string): boolean =>
+  !['node_modules', '.git', '.wrangler'].includes(name) &&
+  written(name) == null
+
 /** Run against an independent publication workspace, removed even if the
  * publisher fails. Both source files and generated manifests belong to that
  * invocation, so neither a publisher nor its cleanup can change another run.
@@ -121,10 +133,7 @@ export let project = async <T>(
     let copy = (path: string) =>
       cp(`${source}/${path}`, `${target}/${path}`, {
         recursive: true,
-        filter: (path) =>
-          !['node_modules', '.git', '.wrangler'].includes(
-            path.split('/').at(-1)!,
-          ),
+        filter: (path) => copied(path.split('/').at(-1)!),
       })
     await Promise.all(
       ['package.json', 'deno.lock', '.gitignore', ...dirs].map(copy),
