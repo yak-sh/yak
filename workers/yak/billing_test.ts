@@ -8,7 +8,9 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Subscription } from '@yaks/host/payments'
 import {
+  badTo,
   bought,
+  DUE,
   elsewhere,
   freeThrough,
   lost,
@@ -90,6 +92,26 @@ test('the plan card offers the Pro plan by what is priced', async () => {
     ['month'],
   )
   assertEquals(planCard(lent, space).tier, 'free')
+})
+
+test('the yearly Pro plan may be paid by invoice wherever it is priced', async () => {
+  let space = { tier: null, plan: null } as never
+  assertEquals(planCard(lent, space).invoice, DUE)
+  let unpriced = await plans({ ...ENV, STRIPE_PRICE_PRO_YEAR: undefined })
+  assertEquals(planCard(unpriced, space).invoice, undefined)
+})
+
+test('an invoice goes to an email address, made out to a name of reasonable length', () => {
+  let to = (email: string, name = '') => badTo({ email, name })
+  assertEquals(to('clerk@township.test', 'Hollow Township'), null)
+  assertEquals(to('clerk@township.test'), null)
+  for (let bad of ['', 'clerk', 'clerk@', 'a b@c.d', '@c.d']) {
+    assertEquals(to(bad), 'The invoice needs an email address to go to', bad)
+  }
+  assertEquals(
+    to('clerk@township.test', 'x'.repeat(201)),
+    'An organization’s name is 200 characters at most',
+  )
 })
 
 // --- the Plus plan given free ---------------------------------------------

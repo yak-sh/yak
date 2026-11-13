@@ -24,6 +24,7 @@ import {
   billedTo,
   buy,
   checkout,
+  invoice,
   planCard,
   portal,
   setCap,
@@ -128,8 +129,12 @@ let visits = async (env: Env, apps: App[]): Promise<Visits[] | null> => {
 // finished or not (connections.ts `callback`), or an agent was disconnected
 // (identity.ts).
 let returned = (q: URLSearchParams) =>
-  q.has('saved')
-    ? { say: 'Saved.', no: false }
+  q.has('saved') ? { say: 'Saved.', no: false } : q.has('invoiced')
+    ? {
+      say: 'The Pro plan has started. Its invoice reaches the address you ' +
+        'gave within the hour.',
+      no: false,
+    }
     : q.has('sent')
     ? { say: 'Sent again.', no: false }
     : q.has('invited')
@@ -966,6 +971,23 @@ let saved = async (
     return checkout(env, req, space, wanted(form))
   }
   if (form.get('billing') == 'portal') return portal(env, req, space)
+  // The plan card's pay-by-invoice form: a plain form like the cap's, since
+  // nothing leaves for the provider's page.
+  if (form.get('billing') == 'invoice') {
+    let no = await invoice(env, req, space, {
+      email: String(form.get('email') ?? '').trim(),
+      name: String(form.get('name') ?? '').trim(),
+    })
+    if (no) {
+      return desk(req, env, dir, space, who, 'billing', {
+        say: sentence(no),
+        no: true,
+      })
+    }
+    let to = sentFrom(req, env)
+    to.searchParams.set('invoiced', '1')
+    return redirect(to.href, 303)
+  }
   if (form.get('billing') == 'credit') return buy(env, req, space)
   // The plan card's cap on AI credit: a plain form, so it lands back on the
   // page saying it saved, or why not.

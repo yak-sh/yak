@@ -42,16 +42,21 @@ customer. Checkout is a subscription session under Managed Payments, which
 Stripe sells as merchant of record, so it sends none of the parameters Stripe
 controls there; the tags ride the session's and the subscription's `metadata`,
 the reference its `client_reference_id`, and time given free a `trial_end` no
-sooner than two days away. The portal is a billing portal session. A
-subscription reads its tier off its item's price (the first tier listing it,
-else the first tier), its period end off the item or the subscription, whichever
-the API version sends, and its standing off its status: `active` and `trialing`
-pay, `past_due` owes, `canceled` and `incomplete_expired` have ended, and the
-rest have lapsed. Postponing sets the trial to end later, prorating nothing.
-`changed(options)(event)` reads a verified event as a subscription changed: a
-`customer.subscription.*` event carries its subscription, and a checkout session
-or an invoice names one, read on asking; one Stripe does not hold reads as
-`null`.
+sooner than two days away. A plan paid by invoice is a subscription made
+directly with `collection_method: send_invoice` and `days_until_due`, under the
+caller's idempotency key, after the customer's email and name are set to where
+the invoices go. Managed Payments covers no subscription made outside Checkout,
+so on these the account is the seller, and the invoice offers the payment
+methods the account's invoice settings allow. The portal is a billing portal
+session. A subscription reads its tier off its item's price (the first tier
+listing it, else the first tier), its period end off the item or the
+subscription, whichever the API version sends, and its standing off its status:
+`active` and `trialing` pay, `past_due` owes, `canceled` and
+`incomplete_expired` have ended, and the rest have lapsed. Postponing sets the
+trial to end later, prorating nothing. `changed(options)(event)` reads a
+verified event as a subscription changed: a `customer.subscription.*` event
+carries its subscription, and a checkout session or an invoice names one, read
+on asking; one Stripe does not hold reads as `null`.
 
 ## Shops
 

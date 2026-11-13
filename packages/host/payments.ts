@@ -57,6 +57,30 @@ export type Checkout = {
   trial?: string | null
 }
 
+/** A subscription to a plan paid by invoice rather than at a checkout: the
+ * provider sends `to` an invoice for each period, payable `due` days after
+ * it is sent, by bank transfer or by a check the seller records as paid. */
+export type Invoice = {
+  payer: string
+  tier: string
+  per: Per
+  /** where the invoices go, and the name they are made out to */
+  to: { email: string; name: string }
+  /** days from an invoice being sent to its falling due */
+  due: number
+  /** A durable request identity: the same key asked twice subscribes
+   * once. */
+  key: string
+  /** carried on the subscription, as {@link Checkout.tags} */
+  tags: Tags
+  /** as {@link Checkout.trial}: the first invoice is sent when it ends */
+  trial?: string | null
+}
+
+/** A subscription as one call made it, and when the provider made it, which
+ * orders it among the events about it that follow. */
+export type Subscribed = { subscription: Subscription; at: string }
+
 /** A hosted checkout for one thing paid for once, such as a block of
  * credit: its price whole, in the currency's smallest unit, tax included,
  * and what the buyer reads it as. Paid before anything is given for it. */
@@ -124,6 +148,9 @@ export type Plans = {
   billed: (payer: string) => Promise<{ email: string; name: string } | null>
   /** the address of a hosted checkout */
   checkout: (asked: Checkout) => Promise<string>
+  /** a subscription billed by invoice, made now: it holds its plan from
+   * the start, and its first invoice is sent within the hour */
+  invoice: (asked: Invoice) => Promise<Subscribed>
   /** the address of a hosted checkout for something paid for once */
   once: (asked: Once) => Promise<string>
   /** the address of the hosted portal where a payer manages what it pays,

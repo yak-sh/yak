@@ -1710,6 +1710,11 @@ export let plan = (
       : []),
     y.plan.known ? billButton('portal', 'Manage billing', target) : null,
   ].filter(Boolean)
+  // An organization that pays by check or bank transfer asks for an invoice
+  // instead, where the plan card posts to a settings page.
+  let invoiced = target && y.plan.invoice && (tier == 'free' || y.plan.free)
+    ? byInvoice(target, y.plan.invoice)
+    : null
   // Where the Pro plan has no price yet, a free space still hears
   // how to get it: the pricing page offers it everywhere.
   let ask = tier == 'free' && !y.plan.pro?.length
@@ -1733,6 +1738,7 @@ export let plan = (
     head,
     billedLine(y.plan, y.payer, y.provider),
     target && y.plan.credit ? credit(y.plan.credit, space, target) : null,
+    invoiced,
     ask,
     y.paid
       ? h(
@@ -1744,6 +1750,52 @@ export let plan = (
     h(Notice, { class: 'Bill_Say', role: 'status' }),
   )
 }
+
+// The plan card's invoice (T-163754): the Pro plan for a year, invoiced to
+// the address typed here and paid by bank transfer or check. A plain form to
+// the settings page, like the cap, since nothing leaves for the provider's
+// page: the plan starts when it is sent, and the invoice follows by email.
+let byInvoice = (target: string, due: number) =>
+  h(
+    More,
+    null,
+    h(More.Summary, null, 'Pay by invoice instead'),
+    h(
+      More.Body,
+      null,
+      h(
+        Form,
+        { class: 'Page_Form', method: 'post', action: target },
+        h('input', { type: 'hidden', name: 'billing', value: 'invoice' }),
+        labeled(
+          'invoice-email',
+          'Send the invoice to',
+          h(Field, {
+            id: 'invoice-email',
+            name: 'email',
+            type: 'email',
+            autocomplete: 'email',
+            required: true,
+          }),
+          `For an organization that pays by check or bank transfer: ${NAMES.pro} for a year, ${
+            priced({ tier: 'pro', per: 'year' })
+          }, due ${due} days after each invoice is sent. The plan starts now, and each year's invoice comes as the year turns.`,
+        ),
+        labeled(
+          'invoice-name',
+          'Made out to',
+          h(Field, {
+            id: 'invoice-name',
+            name: 'name',
+            maxlength: 200,
+            autocomplete: 'organization',
+          }),
+          'Your organization’s name, as the invoice should show it.',
+        ),
+        h(Button, { type: 'submit', mod: 'go' }, 'Send the invoice'),
+      ),
+    ),
+  )
 
 // The plan card's AI credit (D-134567): past its monthly budget a space
 // spends credit bought in blocks, up to the cap its owner types here, which

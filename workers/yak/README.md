@@ -461,6 +461,8 @@ already hold them (staging: the `[env.staging]` copies, `yak-*-staging` names).
 | Product + recurring price      | Product catalog; the price id is `STRIPE_PRICE`                                           | checkout has nothing to sell                                   |
 | Pro plan product               | Product catalog: $49 monthly and $490 yearly prices, `STRIPE_PRICE_PRO{,_YEAR}`           | the Pro plan is not offered                                    |
 | Customer portal configuration  | Settings → Billing → Customer portal, save a configuration once                           | the portal door is refused by Stripe, and the refusal is filed |
+| Invoice payment methods        | Settings → Payment methods: turn on bank transfer (and ACH) for invoices                  | an invoiced plan is payable by card or check only              |
+| Invoices sent to customers     | Settings → Billing → Subscriptions and emails: what an invoice unpaid past due does       | Stripe's default decides when an unpaid invoiced plan ends     |
 | Billing webhook, five events   | the billing section below                                                                 | plan changes never land                                        |
 | Connect webhook, six v1 events | the Connect section below                                                                 | seller account changes, refunds and disputes go unseen         |
 
@@ -792,6 +794,21 @@ The dashboard steps are the Connect ones below with these differences:
 | 4    | Select these six v1 events, and only these: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed` |
 | 6    | Endpoint URL: `https://yaks.app/stripe/webhook`                                                                                                                                                                                  |
 | 8    | `npx wrangler secret put STRIPE_WEBHOOK_SECRET`                                                                                                                                                                                  |
+
+## A plan paid by invoice
+
+An organization that pays by check or bank transfer asks for the yearly Pro plan
+by invoice from the plan card on its Billing page (billing.ts `invoice`). Stripe
+emails each invoice to the address given, due 60 days after it is sent; the
+first goes out within the hour, and each renewal's the day the year turns. The
+plan starts when the invoice is asked for and holds while it is owed. These
+subscriptions are made outside Checkout, so Managed Payments does not cover
+them: the account is the seller, and Managed Payments collects no tax on them.
+
+- A bank transfer is reconciled by Stripe on its own.
+- A check is recorded by hand when it arrives: Dashboard → Invoices, open the
+  invoice, then **Mark as paid**. That posts `invoice.paid` to the billing door
+  like any payment.
 
 ## STRIPE_CONNECT_WEBHOOK_SECRET — the selling door's own secret
 

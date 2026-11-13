@@ -763,6 +763,26 @@ test('the plan card offers the Pro plan only where it is on sale', async () => {
   assertEquals(both.includes('not on sale'), false)
 })
 
+test('the Billing page offers a free space the yearly Pro plan by invoice, where it may be', async () => {
+  let card = (plan: Partial<DeskPage['plan']>, view = 'billing' as const) =>
+    desk({
+      ...page,
+      view,
+      plan: { tier: 'free', ends: '', known: false, pro: ['year'], ...plan },
+    }, env).text()
+  let offered = await card({ invoice: 60 })
+  assertStringIncludes(offered, 'Pay by invoice instead')
+  assertStringIncludes(offered, 'name="billing" value="invoice"')
+  assertStringIncludes(offered, '$490 a year, due 60 days after each invoice')
+  assertEquals((await card({})).includes('Pay by invoice'), false)
+  assertEquals(
+    (await card({ tier: 'pro', known: true, invoice: 60 }))
+      .includes('Pay by invoice'),
+    false,
+    'not to a space already paying',
+  )
+})
+
 // The Billing page (T-131895): the space's allowances and its use of each,
 // and whom it is billed to.
 test('billing shows each allowance and whom it bills', async () => {

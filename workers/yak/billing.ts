@@ -31,6 +31,13 @@
 // is reported to the tracker (unseen.ts `fault`), not a line on a log nobody
 // opens.
 //
+// An organization that pays by check or bank transfer asks for its yearly plan
+// by invoice instead (`invoice`, T-163754): the provider sends the invoices,
+// and the plan follows the subscription that makes them as it does one paid
+// at checkout. Its first row is written from the subscription made, since a
+// subscription made outside checkout says nothing at the webhook until money
+// or a status moves.
+//
 // A block of AI credit (D-134567) is the one thing sold here once rather than
 // by subscription: a checkout in payment mode, paid before it is spent, and
 // credited by the event that says its money arrived (`credited`). The
@@ -262,6 +269,9 @@ export type Card = {
   /** the day the Plus plan given free runs through, while it does */
   free?: string
   pro?: Want['per'][]
+  /** the days an invoice gives to pay, where the yearly plan may be paid by
+   * invoice */
+  invoice?: number
   /** its AI credit, where its plan buys credit or it holds some: the cap,
    * what is left to spend this month, what this month drew, and whether a
    * block may be bought now */
@@ -288,6 +298,7 @@ export let planCard = (lent: Plans, space: Space, now = new Date()): Card => {
     known: !!space.plan?.customer,
     ...(free ? { free } : {}),
     pro: (['month', 'year'] as const).filter((per) => lent.offers('pro', per)),
+    ...lent.offers(INVOICED.tier, INVOICED.per) ? { invoice: DUE } : {},
     ...credits
       ? {
         credit: {
@@ -393,6 +404,80 @@ export let checkout = async (
       'checkout_failed',
       "we couldn't start that — it's been logged, try again in a minute",
     )
+  }
+}
+
+// ---- by invoice ------------------------------------------------------------
+
+/** The plan an organization pays for by invoice: the Pro plan by the year,
+ * since a body that pays by check approves a payment once, not monthly. */
+export let INVOICED: Want = { tier: 'pro', per: 'year' }
+
+/** Days an invoice gives its organization to pay: two meetings of a board
+ * that meets monthly, the renewal's as much as the first's. The plan holds
+ * meanwhile, and past the day it is owed rather than gone. */
+export let DUE = 60
+
+/** Whom an invoice is made out to, as its owner typed it on the plan card. */
+export type To = { email: string; name: string }
+
+/** Why an address typed for an invoice is not one, or null where it is. */
+export let badTo = (to: To) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.email)
+    ? to.name.length > 200
+      ? 'An organization’s name is 200 characters at most'
+      : null
+    : 'The invoice needs an email address to go to'
+
+/** An invoiced plan asked for: the provider sends `to` a yearly invoice for
+ * the Pro plan, payable by bank transfer or check, and the plan starts now,
+ * written from the subscription made rather than waiting on an event. An
+ * error a person reads where it is refused, as `setCap`. The key names the
+ * plan row the ask saw, so a form sent twice makes one subscription, and an
+ * ask after that subscription ends makes another. */
+export let invoice = async (env: Env, req: Request, space: Space, to: To) => {
+  let person = await buyer(env, req)
+  if (!person) return 'Sign in first'
+  let lent = await plans(env)
+  if (!lent.offers(INVOICED.tier, INVOICED.per)) {
+    return `${planName(INVOICED.tier)} is not on sale here by the year`
+  }
+  let dir = dirOf(env)
+  if (await dir.role(space, person) != 'owner') {
+    return `Only ${space.slug}'s owner may pay for it`
+  }
+  let free = freeThrough(space)
+  if (paid(space.tier) && !free) {
+    return `${space.slug} is already on ${
+      planName(space.tier!)
+    }; Manage billing changes it`
+  }
+  let bad = badTo(to)
+  if (bad) return bad
+  let email = await dir.emailAt(person) ?? ''
+  let seen = space.plan
+  try {
+    let made = await lent.invoice({
+      payer: await payerFor(env, lent, space, email),
+      ...INVOICED,
+      to,
+      due: DUE,
+      key: `invoice|${space.eid}|${seen?.subscription ?? ''}|${seen?.at ?? ''}`,
+      tags: tagsOf(env, space),
+      trial: free,
+    })
+    step(env, 'checkout', req, { who: email })
+    await follow(
+      env,
+      dir,
+      space,
+      planOf(made.subscription, made.at, lent.standing),
+      lent.standing,
+    )
+    return null
+  } catch (e) {
+    await fault(env, 'POST billing invoice', e)
+    return "We couldn't send that invoice. It's been logged; try again in a minute"
   }
 }
 
@@ -635,7 +720,20 @@ export let apply = async (env: Env, heard: Changed) => {
     )
     return 'unattributed'
   }
-  if (stale(space.plan, next, lent.standing)) return 'stale'
+  return await follow(env, dir, space, next, lent.standing)
+}
+
+// A space's plan moved to the row one subscription derives, unless that row
+// is stale, writing only what moved: the end of every event heard, and of an
+// invoiced plan made here.
+let follow = async (
+  env: Env,
+  dir: Dir,
+  space: Space,
+  next: Plan,
+  stands: Stands,
+) => {
+  if (stale(space.plan, next, stands)) return 'stale'
   let changed = moved(space.plan, next)
   if (!Object.keys(changed).length) return 'unchanged'
   await stamp(env, {

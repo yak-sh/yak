@@ -37,7 +37,12 @@ let at = (unix: number) => new Date(unix * 1000).toISOString()
 
 // Stripe, answering each call with `answer(path)`, and the calls it heard.
 let stripe = (answer: (path: string) => Response) => {
-  let asked: { path: string; method: string; body: URLSearchParams }[] = []
+  let asked: {
+    path: string
+    method: string
+    body: URLSearchParams
+    key?: string
+  }[] = []
   let fetch = stub(
     globalThis,
     'fetch',
@@ -47,6 +52,7 @@ let stripe = (answer: (path: string) => Response) => {
         path,
         method: init?.method ?? 'GET',
         body: new URLSearchParams(String(init?.body ?? '')),
+        key: (init?.headers as Record<string, string>)?.['idempotency-key'],
       })
       return Promise.resolve(answer(path))
     },
@@ -155,6 +161,70 @@ test('checkout is a Managed Payments subscription carrying the tags and the tria
     'managed_payments[enabled]': 'true',
     allow_promotion_codes: 'true',
   })
+})
+
+test('an invoiced plan is a subscription sent its invoices, to the address asked, under the key asked', async () => {
+  using s = stripe((path) =>
+    Response.json(
+      path == '/v1/subscriptions'
+        ? priced(PRO[1], { created: 1_780_000_000 })
+        : { id: 'cus_1' },
+    )
+  )
+  let made = await lent.invoice({
+    payer: 'cus_1',
+    tier: 'pro',
+    per: 'year',
+    to: { email: 'clerk@township.test', name: 'Hollow Township' },
+    due: 60,
+    key: 'invoice|space-eid||',
+    tags: { space: 'space-eid', apex: 'yaks.fyi' },
+  })
+  equal(made, {
+    subscription: read(priced(PRO[1]), PRICES),
+    at: at(1_780_000_000),
+  })
+  equal(made.subscription.tier, 'pro')
+  equal(s.asked.map((a) => a.path), [
+    '/v1/customers/cus_1',
+    '/v1/subscriptions',
+  ])
+  equal(Object.fromEntries(s.asked[0].body), {
+    email: 'clerk@township.test',
+    name: 'Hollow Township',
+  })
+  // No payment method is named and nothing of Managed Payments is sent: the
+  // invoice offers what the account's invoice settings do.
+  equal(Object.fromEntries(s.asked[1].body), {
+    customer: 'cus_1',
+    'items[0][price]': PRO[1],
+    'items[0][quantity]': '1',
+    collection_method: 'send_invoice',
+    days_until_due: '60',
+    'metadata[space]': 'space-eid',
+    'metadata[apex]': 'yaks.fyi',
+  })
+  equal(s.asked[1].key, 'invoice|space-eid||')
+})
+
+test('an invoiced plan with no name keeps the customer’s, and refuses a tier with no price', async () => {
+  using s = stripe((path) =>
+    Response.json(path == '/v1/subscriptions' ? priced(PRO[1]) : {})
+  )
+  let ask = {
+    payer: 'cus_1',
+    tier: 'pro',
+    per: 'year' as const,
+    to: { email: 'clerk@township.test', name: '' },
+    due: 60,
+    key: 'k',
+    tags: {},
+  }
+  await lent.invoice(ask)
+  equal(Object.fromEntries(s.asked[0].body), { email: 'clerk@township.test' })
+  let refused = await lent.invoice({ ...ask, tier: 'plus', per: 'year' })
+    .then(() => '', (e) => e.message)
+  equal(refused, 'stripe has no price for plus by the year')
 })
 
 test('a one-off checkout is Managed Payments in payment mode, its price inline and tax included', async () => {

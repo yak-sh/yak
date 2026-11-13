@@ -8,6 +8,10 @@
 // it sells, collects and remits the tax, and the parameters it controls
 // (automatic_tax, payment_method_types, tax_id_collection, customer_update,
 // invoice_creation) must not be sent at all, so none of them appear below.
+// A plan paid by invoice (`invoice`) cannot be: Managed Payments covers no
+// subscription made outside Checkout, so on those the account itself is the
+// seller. Its invoices take whatever the account's invoice settings allow
+// (card, bank transfer), and a check is marked paid in the Dashboard.
 //
 // Which tier a subscription buys is read off its price, never off metadata a
 // checkout wrote: a plan changed in the portal moves the price and nothing
@@ -38,6 +42,7 @@ export type Sub = {
   id?: string
   customer?: string | { id?: string }
   status?: string
+  created?: number
   metadata?: Record<string, string>
   cancel_at?: number | null
   cancel_at_period_end?: boolean
@@ -244,6 +249,45 @@ export let plans = (options: Options): Plans => {
       let url = String(made.url ?? '')
       if (!url) throw new Error('stripe made a checkout session with no url')
       return url
+    },
+    // A subscription sent its invoices rather than charged, made here and not
+    // at Checkout: the invoices go to the customer's email, so the address
+    // asked for becomes the customer's, and its name the organization's
+    // where one is given. No payment method is named, so the invoice offers
+    // what the account's invoice settings do. Stripe finalizes the first
+    // invoice within the hour and emails it; each renewal's is sent the day
+    // the period turns, due `due` days on.
+    invoice: async (asked) => {
+      let bought = price(asked.tier, asked.per)
+      if (!bought) {
+        throw new Error(
+          `stripe has no price for ${asked.tier} by the ${asked.per}`,
+        )
+      }
+      await ask(options, `/v1/customers/${encodeURIComponent(asked.payer)}`, {
+        email: asked.to.email,
+        name: asked.to.name || undefined,
+      })
+      let made = await ask(
+        options,
+        '/v1/subscriptions',
+        {
+          customer: asked.payer,
+          items: { 0: { price: bought, quantity: 1 } },
+          collection_method: 'send_invoice',
+          days_until_due: asked.due,
+          metadata: asked.tags,
+          ...trialFor(asked.trial, now()),
+        },
+        undefined,
+        'POST',
+        asked.key,
+      ) as Sub
+      if (!made.id) throw new Error('stripe made a subscription with no id')
+      return {
+        subscription: read(made, options.prices),
+        at: when(made.created) ?? new Date(now()).toISOString(),
+      }
     },
     // Payment mode under Managed Payments, the price made inline with its
     // tax code and tax included, as every price here is: no dashboard price
