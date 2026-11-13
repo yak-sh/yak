@@ -21,6 +21,13 @@ export let effects = (_host: unknown, options: Options): Handlers => {
     document_extract: maintenance((event, _tx, _write, attempt) =>
       extraction(at, event.entity.eid, attempt)
     ),
+    // Loaded as a store first hears, not as every store wakes.
+    speech_hear: async (event, _tx, _write, attempt) =>
+      await (await import('../hearings.ts')).hearWhole(
+        at,
+        event.entity.eid,
+        attempt,
+      ),
     builder_install: maintenance(async () => {
       let writes: Bundle[] = []
       if (at.graph.vocab.comp('builder')) {

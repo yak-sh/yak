@@ -104,6 +104,51 @@ export let kernelDoc: VocabDoc = {
       description:
         'Extract stored documents once into searchable pages, reading scanned pages too.',
     },
+    // A recording the app keeps, heard whole (hearings.ts): the speech door
+    // asks with `hearing` on the upload's own entity, the one its
+    // `attachment` is on, and the store's effect hears it and writes each
+    // turn, then `heard`, or `failed` with why. Only the door asks, so only
+    // whoever may ask the app's models spends its space's budget on it.
+    hearing: {
+      component: true,
+      type: 'object',
+      description: 'An upload asked to be heard through ./api/speech/hear.',
+      properties: { at: owned(time) },
+    },
+    heard: {
+      component: true,
+      type: 'object',
+      description:
+        'An upload heard whole: its seconds, its turns and whether they tell speakers apart.',
+      properties: {
+        seconds: owned(num),
+        turns: owned(num),
+        speakers: owned({ type: 'boolean' }),
+      },
+    },
+    heard_turn: {
+      component: true,
+      type: 'object',
+      description:
+        'What one speaker said in a heard upload, and its seconds in the recording.',
+      properties: {
+        // Not stamped, so deleting the upload deletes its turns: a cascade
+        // never follows a stamped reference (@yaks/vocab `deaths`).
+        recording: ref('cascade'),
+        speaker: owned(num),
+        text: owned(text),
+        from: owned(num),
+        to: owned(num),
+      },
+    },
+    speech_hear: {
+      effect: true,
+      created: ['hearing'],
+      changed: ['hearing.at'],
+      target: '.hearing',
+      description:
+        'Hear an upload whole once asked, writing each turn and charging its minutes.',
+    },
     delete_upload: {
       effect: true,
       removed: ['blob'],

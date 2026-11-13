@@ -7,6 +7,7 @@
 // https://developers.deepgram.com/reference/speech-to-text/listen-pre-recorded
 // https://developers.deepgram.com/docs/diarization
 // https://developers.deepgram.com/docs/utterances
+// https://developers.deepgram.com/docs/nova-quickstart
 // https://developers.deepgram.com/reference/text-to-speech/speak-request
 // https://developers.deepgram.com/docs/flux/quickstart
 // https://developers.deepgram.com/reference/speech-to-text/listen-flux
@@ -179,6 +180,8 @@ export let DEEPGRAM: Provider = {
     model: 'nova-3',
     perMinute: 0.0043,
     speakers: true,
+    // Its pre-recorded limit. The body may be a stream, sent as it is read.
+    bytes: 2 * 1024 ** 3,
     // Each of its utterances is one speaker's words up to a pause.
     request: (audio, type, model) => ({
       path: `/v1/listen?${

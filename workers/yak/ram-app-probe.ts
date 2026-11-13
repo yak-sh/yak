@@ -4,6 +4,7 @@ import { type Graph, graph } from '@yaks/graph'
 import { aliases } from '@yaks/alias'
 import { keys } from '@yaks/key'
 import { personal } from '@yaks/member'
+import { THROUGH } from './config.ts'
 import { ram, type Store } from '@yaks/ram'
 import type { Vocab } from '@yaks/vocab'
 
@@ -27,7 +28,7 @@ export let ramApp = () => {
       plugins: [
         keys(vocab),
         aliases(),
-        personal(vocab, {}, { document_page: 'document' }),
+        personal(vocab, {}, THROUGH),
       ],
     })
     stores.set(g, rows)

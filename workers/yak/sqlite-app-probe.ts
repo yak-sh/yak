@@ -5,6 +5,7 @@ import { blobRead, blobs, blobSchema, sqliteBlobs } from '@yaks/blob'
 import { find, indexed, schema as ftsSchema, search } from '@yaks/fts'
 import { type Graph, graph, type ReadOpts } from '@yaks/graph'
 import { personal } from '@yaks/member'
+import { THROUGH } from './config.ts'
 import { aliases } from '@yaks/alias'
 import { keys } from '@yaks/key'
 import { storage } from '@yaks/sqlite'
@@ -82,7 +83,7 @@ export let sqliteApp = (
         keys(vocab),
         aliases(),
         blobs(vocab, sqliteBlobs(rows.statements)),
-        personal(vocab, {}, { document_page: 'document' }),
+        personal(vocab, {}, THROUGH),
       ],
     })
     drivers.set(g, driver)

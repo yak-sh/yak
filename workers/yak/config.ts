@@ -4,6 +4,10 @@ import type { Config, Plug } from '@yaks/host/config'
 import type { FacetName } from '@yaks/host'
 import { memoryDoc } from '@yaks/memory/vocab'
 
+/** The rows each read as the entity they name does (@yaks/member
+ * `through`): a document's pages, and a heard recording's turns. */
+export let THROUGH = { document_page: 'document', heard_turn: 'recording' }
+
 let storeFacets: FacetName[] = ['vocab', 'graph', 'effects']
 let toolFacets: FacetName[] = [...storeFacets, 'tools']
 let storePlugins = (plugins: Plug[]): Plug[] =>
@@ -75,7 +79,7 @@ export let appConfig: Config = {
     { use: '@yaks/people', facets: ['graph'] },
     '@yaks/events',
     '@yaks/draft',
-    { use: '@yaks/member', with: { through: { document_page: 'document' } } },
+    { use: '@yaks/member', with: { through: THROUGH } },
     {
       use: '@yaks/task',
       facets: ['vocab'],

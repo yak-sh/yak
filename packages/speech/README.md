@@ -28,7 +28,9 @@ argument; nothing here reads the environment.
   (`paced(speeds, speed)`): Aura-2 0.7 to 1.5, gpt-4o-mini-tts 0.25 to 4, the
   realtime models 0.25 to 1.5; gpt-live-1 has only its own.
 - `hear({provider, key, audio, type})` answers a recording's `text`, its
-  `turns`, its length in `seconds`, and `dollars`.
+  `turns`, its length in `seconds`, and `dollars`. `provider.hear.bytes` is the
+  largest recording it hears: 2 GB on Nova-3, whose `audio` may be a stream sent
+  as it is read, and 25 MB on gpt-transcribe.
 - A turn is what one speaker said up to a pause or another's voice:
   `{speaker, text, from?, to?}`, `from` and `to` the seconds into the audio it
   took, where the provider says. `speaker` numbers the voices a provider tells

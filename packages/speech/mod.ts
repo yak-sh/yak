@@ -152,6 +152,8 @@ export type Provider = {
     perMinute: number
     /** whether it tells one speaker from another */
     speakers: boolean
+    /** the largest recording it hears, in bytes */
+    bytes: number
     request: (audio: BodyInit, type: string, model: string) => Asked
     /** the words in its answer, the seconds heard and its turns, where it
      * says */

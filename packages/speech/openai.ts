@@ -155,6 +155,8 @@ export let OPENAI: Provider = {
     model: 'gpt-transcribe',
     perMinute: 0.0045,
     speakers: false,
+    // Its transcriptions' limit, a file sent in a form.
+    bytes: 25 * 1024 ** 2,
     request: (audio, type, model) => {
       let form = new FormData()
       form.set('model', model)

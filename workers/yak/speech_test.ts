@@ -95,7 +95,11 @@ test('a member’s text is spoken and a recording heard, each charged to the spa
   equal(spoke.headers.get('content-type'), 'audio/mpeg')
   equal([...new Uint8Array(await spoke.arrayBuffer())], [1, 2, 3])
   let heard = await ask('/speech/hear', new Uint8Array([9]), 'audio/webm')
-  equal(await heard.json(), { text: 'Book Friday', seconds: 120 })
+  equal(await heard.json(), {
+    text: 'Book Friday',
+    turns: [{ speaker: 0, text: 'Book Friday' }],
+    seconds: 120,
+  })
   // 11 characters at $0.030 a thousand, and two minutes at $0.0043.
   equal(budget(await space()).spent.toFixed(6), '0.008930')
 })

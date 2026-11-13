@@ -31,8 +31,10 @@ import {
 import type { Answer } from './apps.ts'
 import { bound, caught } from './defects.ts'
 import type { Space } from './directory.ts'
+import type { Namespace } from './door.ts'
 import type { Env } from './env.ts'
 import { onHold } from './model-spend.ts'
+import { size } from './meter.ts'
 import { modelAccess } from './models.ts'
 
 /** The providers yaks.app hears and speaks through, and the secret each
@@ -323,6 +325,10 @@ export type Speaking =
   & Pick<Env, 'SPEECH_FLOOR' | 'SPEECH_API'>
   & Partial<Record<keyof Env, unknown>>
 
+/** What speech is charged from: its keys, and the directory that holds the
+ * space's budget. */
+export type Charging = Speaking & { STORE: Namespace }
+
 /** `provider` and its key, or null where it is off. */
 export let speechOf = (env: Speaking, provider: Provider = PROVIDER) => {
   let key = env[SECRETS.get(provider)!]
@@ -417,7 +423,7 @@ export let unread = () => {
 // cost: the space's budget refuses it in the directory's own transaction
 // (model-spend.ts `onHold`), and it is charged what it cost.
 let charged = async <T extends { dollars: number }>(
-  env: Env,
+  env: Charging,
   space: Space,
   most: number,
   provider: Provider | undefined,
@@ -458,19 +464,22 @@ export let speaking = async (
   )
 }
 
-/** A recording heard for `space`, its minutes charged once heard. */
+/** A recording heard for `space`, its minutes charged once heard, on a hold
+ * of `seconds` of them (ten, unless the caller guesses longer) until the
+ * provider says how long it was. `audio` may be a stream, sent as it is read. */
 export let hearing = async (
-  env: Env,
+  env: Charging,
   space: Space,
-  audio: Uint8Array<ArrayBuffer>,
+  audio: BodyInit,
   type: string,
+  seconds = 10,
 ) => {
-  let on = speechOf(env)!
-  // Ten seconds' worth held before the provider says how long it was.
+  let on = speechOf(env)
+  if (!on) throw new ModelError('speech_off', 'Speech is not switched on here.')
   return await charged(
     env,
     space,
-    heard(on.provider.hear, 10),
+    heard(on.provider.hear, seconds),
     undefined,
     () => hear({ ...on, audio, type }),
   )
@@ -529,16 +538,24 @@ export let upgrading =
     }, tags)
   }
 
+// What a recording posted past `most` bytes is told.
+let posted = (most: number) =>
+  `post a recording of up to ${size(most)}, or keep a longer one at ` +
+  './api/blob and post {"blob": "<its url>"}'
+
 let MAX_TEXT = 2000
+// The most of a recording posted to the door it reads whole, which a
+// recording kept at ./api/blob is not (hearings.ts).
 let MAX_AUDIO = 25 * 1024 * 1024
 
 /**
  * `./api/speech/speak` and `./api/speech/hear` (and `./api/speech/listen`,
  * listen.ts, beside it): an app's page or worker turns
  * text into an MP3 (`{"text", "voice"?}` answered `audio/mpeg`) or a
- * recording into words (the audio posted as it is, answered `{"text",
- * "seconds"}`). Asked by whoever may ask the app's models, and charged to
- * its space.
+ * recording into words: the audio posted as it is, answered `{"text",
+ * "turns", "seconds"}`, or `{"blob"}` the address of one the app keeps, heard
+ * in its store (hearings.ts `asking`). Asked by whoever may ask the app's
+ * models, and charged to its space.
  */
 export let speechDoor: Answer = async (asked) => {
   let { env, req, path, space, app, json } = asked
@@ -570,15 +587,27 @@ export let speechDoor: Answer = async (asked) => {
       return new Response(said.body, { headers: { 'content-type': said.type } })
     }
     let type = req.headers.get('content-type') ?? ''
-    let audio = new Uint8Array(await req.arrayBuffer())
+    if (type.startsWith('application/json')) {
+      let { asking } = await import('./hearings.ts')
+      let body = await req.json().catch(() => null) as { blob?: unknown }
+      return await asking(asked, body?.blob)
+    }
     if (!type.startsWith('audio/') && !type.startsWith('video/')) {
       return json(400, 'bad_request', 'post the recording with its audio type')
     }
-    if (!audio.length || audio.length > MAX_AUDIO) {
-      return json(400, 'bad_request', 'post a recording of up to 25 MB')
+    let most = Math.min(MAX_AUDIO, speechOf(env)!.provider.hear.bytes)
+    if (Number(req.headers.get('content-length') ?? 0) > most) {
+      return json(413, 'too_large', posted(most))
     }
+    let audio = new Uint8Array(await req.arrayBuffer())
+    if (audio.length > most) return json(413, 'too_large', posted(most))
+    if (!audio.length) return json(400, 'bad_request', 'post a recording')
     let got = await hearing(env, space, audio, type)
-    return Response.json({ text: got.text, seconds: got.seconds })
+    return Response.json({
+      text: got.text,
+      turns: got.turns,
+      seconds: got.seconds,
+    })
   } catch (error) {
     if (error instanceof ModelError) {
       return json(error.code == 'limit' ? 402 : 503, error.code, error.message)

@@ -12,8 +12,9 @@ guide:
     yes-or-no, a score), image generation with OpenAI's GPT Image models,
     audio from a connected model, builders over stored
     rows, a single synchronous call through ./api/ai/run or a worker's AI
-    binding, speech spoken and heard through ./api/speech (a recording, or a
-    microphone heard live over a WebSocket with each speaker's turns), image
+    binding, speech spoken and heard through ./api/speech (a recording posted
+    or kept at ./api/blob and heard whole, or a microphone heard live over a
+    WebSocket, each with its speakers' turns), image
     input, the commands a model may call, who may call a model,
     and model prices and how platform and connected models are paid for.
 ---
@@ -340,17 +341,67 @@ recording to `./api/speech/hear` and gets its words:
       headers: { 'content-type': recording.type },
       body: recording,
     })
-    let { text, seconds } = await heard.json()
+    let { text, turns, seconds } = await heard.json()
 
 `text` is up to 2,000 characters, and `voice` names another Aura-2 voice
 (<https://developers.deepgram.com/docs/tts-models>), or one of OpenAI's
 (`cedar`, `marin`, `alloy`, `ash`, `ballad`, `coral`, `echo`, `sage`, `shimmer`,
 `verse`, `fable`, `nova` or `onyx`), spoken at $0.015 a thousand characters. A
-recording is up to 25 MB in any audio type a browser's `MediaRecorder` makes.
-The same people who may call a model may use speech, and it spends the same
-space budget: $0.030 a thousand characters spoken, and $0.0043 a minute heard. A
-refusal is `{error: {code, message}}`: `402` past the budget, `503` while speech
-is paused.
+recording posted is up to 25 MB in any audio type a browser's `MediaRecorder`
+makes; a longer one is kept at `./api/blob` and heard from there (below).
+`turns` are what each speaker said, `{speaker, text, from, to}`, with `from` and
+`to` its seconds in the recording and `speaker` numbering the voices from 0. The
+same people who may call a model may use speech, and it spends the same space
+budget: $0.030 a thousand characters spoken, and $0.0043 a minute heard. A
+refusal is `{error: {code, message}}`: `402` past the budget, `413` a recording
+too large, `503` while speech is paused.
+
+### Hearing a long recording: `{"blob"}`
+
+A recording the app keeps at `./api/blob` is heard whole, up to 2 GB: a two-hour
+meeting is about 100 MB as an MP3, and costs about $0.52. The page uploads it
+(`upload` on [Files and Uploads](/docs/files), in parts and resumed for a large
+file), then POSTs its `url` as `blob`:
+
+    import { query, subscribe, upload } from './api/client.js'
+
+    let file = await upload(input.files[0])
+    let asked = await fetch('./api/speech/hear', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ blob: file.url }),
+    })
+    let { recording } = await asked.json()
+
+`recording` is the upload's own row, the one `file.attachment` names. Hearing
+outlasts the request: the door answers `202` at once, and the app's store hears
+the file and writes what it heard as rows, which a page subscribed to them
+receives:
+
+- `heard_turn{recording, speaker, text, from, to}`, one row a turn.
+- `heard{seconds, turns, speakers}` on the recording once every turn is written:
+  its length, how many turns, and whether they tell speakers apart.
+- `failed{reason}` on the recording if it could not be heard, the budget spent
+  meanwhile, say.
+
+<!-- -->
+
+    subscribe(`id=${recording}&?heard&?failed`, async ([r]) => {
+      if (r?.failed) return show(r.failed.reason)
+      if (!r?.heard) return show('Listening…')
+      let turns = (await query(`.heard_turn.recording=${recording}`))
+        .map((t) => t.heard_turn).toSorted((a, b) => a.from - b.from)
+      said(turns) // the app's own: written as its rows, say
+    })
+
+Asking again for a recording already heard answers `200` with its `heard` and
+charges nothing; one being heard answers `202` again; one that failed is heard
+again. Its minutes are charged to the space once heard. It is refused before
+anything is heard with `413` past 2 GB ("Speech hears a recording of up to 2 GB;
+this one is 3 GB."), `404` for an address the app keeps no file at, and `402`
+when the budget can't cover a recording of its size. The rows read as the upload
+does, so whoever may read the file may read what it said, and deleting the
+upload deletes them.
 
 ### Hearing as it is spoken: `./api/speech/listen`
 
