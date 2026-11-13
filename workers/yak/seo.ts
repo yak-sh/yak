@@ -113,12 +113,14 @@ export let RENDERED = [GALLERY, INTEGRATIONS, DOCS, TECH, AGENT]
 // then the same documentation as the markdown it is drawn from — every page's
 // own address plus `.md` (docs.ts `MARKDOWN`), which is what the connector
 // hands an agent (guide.ts). They are markdown rather than HTML and they are
-// indexed anyway, which is the point of publishing them at a URL.
-export let addresses = (env: Host = {}) => [
+// indexed anyway, which is the point of publishing them at a URL. Last, the
+// pages read from the directory: each listed skill's (skill-page.ts).
+export let addresses = (env: Host = {}, listed: string[] = []) => [
   ...SITE.map((path) => at(path, env)),
   ...RENDERED.map((p) => at(p.path, env)),
   ...DRAWN.map((path) => at(path, env)),
   ...MARKDOWN.map((path) => at(path, env)),
+  ...listed,
 ]
 
 export let ADDRESSES = addresses()
@@ -206,11 +208,15 @@ export let deployed = (env: Env) => env.CF_VERSION_METADATA?.timestamp ?? null
 let escaped = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-export let sitemap = (lastmod: string | null, env: Host = {}) =>
+export let sitemap = (
+  lastmod: string | null,
+  env: Host = {},
+  listed: string[] = [],
+) =>
   [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-    ...addresses(env).map((url) =>
+    ...addresses(env, listed).map((url) =>
       `  <url><loc>${escaped(url)}</loc>${
         lastmod ? `<lastmod>${escaped(lastmod)}</lastmod>` : ''
       }</url>`
@@ -301,6 +307,7 @@ export let answer = async (
   req: Request,
   path: string,
   env: Env,
+  drawnFrom: () => Promise<string[]> = () => Promise.resolve([]),
 ): Promise<Response | null> => {
   if (req.method != 'GET' && req.method != 'HEAD') return null
   if (path == '/robots.txt') {
@@ -318,11 +325,16 @@ export let answer = async (
     )
   }
   if (path == '/sitemap.xml') {
+    // The pages read from the directory are part of what the etag stands
+    // for, so a newly listed skill is a new sitemap.
+    let listed = await drawnFrom()
     return await publicPage(
       req,
       env,
       path,
-      () => text(sitemap(deployed(env), env), 'application/xml'),
+      () => text(sitemap(deployed(env), env, listed), 'application/xml'),
+      300,
+      listed.length ? await digest(listed.join('\n')) : '',
     )
   }
   if (path == '/llms.txt') {
@@ -356,3 +368,10 @@ let text = (body: string, type = 'text/plain') =>
   new Response(body, {
     headers: { 'content-type': `${type}; charset=utf-8` },
   })
+
+let digest = async (s: string) =>
+  [
+    ...new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)),
+    ),
+  ].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('')

@@ -47,7 +47,9 @@
       "properties": {
         "skill": {
           "type": "string",
-          "description": "the name of the skill the round develops, `copywriting`; a round file's variants and cases are named under it (`variant:copywriting:none`)"
+          "ref": "skill",
+          "death": "detach",
+          "description": "the skill the round develops, a @yaks/persona `skill{…}` row. A round file names it by its title (`copywriting`), found again as `skill:copywriting`, and its variants and cases are named under that title (`variant:copywriting:none`)"
         },
         "parts": {
           "type": "array",

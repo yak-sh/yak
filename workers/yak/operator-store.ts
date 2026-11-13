@@ -50,6 +50,7 @@ import { memoryDoc } from '@yaks/memory/vocab'
 import { topicDoc } from '@yaks/topic'
 import { topics } from '@yaks/topic/graph'
 import { wakeDoc } from '@yaks/wake/vocab'
+import { trialDoc } from '@yaks/trial/vocab'
 import { due, soonest, tick, wakes } from '@yaks/wake'
 import { caught, stopped } from './defects.ts'
 import { adopt, indexed, schema as ftsSchema, search } from '@yaks/fts'
@@ -78,6 +79,9 @@ export let operatorVocab = loadVocab([
   // A skill installed from another space keeps where it came from and the
   // version it took (shared-skill.ts).
   { $defs: { installed: platformDoc.$defs!.installed } },
+  // The rounds a skill is compared and improved in, which its public page
+  // shows (skill-page.ts).
+  trialDoc,
   {
     $defs: Object.fromEntries(
       Object.entries(phoneDoc.$defs!).filter(([name]) =>

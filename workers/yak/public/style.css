@@ -1039,6 +1039,25 @@
     margin-top: var(--gap);
   }
 
+  /* A published skill's page (skill-page.ts): its instructions, then each
+     round it was measured in, a case at a time with every output under it. */
+  .Measured {
+    display: grid;
+    gap: var(--half-gap);
+  }
+
+  .Measured_Text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: 24rem;
+    overflow: auto;
+  }
+
+  .Measured_Output {
+    border-top: var(--stroke) solid var(--graphite);
+    padding-top: var(--half-gap);
+  }
+
   /* The integration directory (integrations.ts): a card a service, its head
      the service and the way to add it, then what it is, where its key goes
      and how to get one. */

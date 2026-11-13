@@ -659,6 +659,14 @@ app would be named:
 
 A copy of somebody else's skill is not republished: it is theirs to offer.
 
+Once yaks.app lists a version, the skill has its own public page at
+`https://yaks.app/skills/<name>`, in the sitemap. It shows the skill's
+instructions and what its rounds measured: the variants it was compared with,
+the cases they were tried on, every output, how many people picked and which
+variant won, and each version the skill became. Only rounds yaks.app ran count,
+and a round shows once a person has picked between two of its outputs.
+Publishing a skill makes the cases and outputs of its rounds public with it.
+
 ---
 
 The whole guide: <https://yaks.app/docs.md>

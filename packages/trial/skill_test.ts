@@ -16,6 +16,7 @@ import { loadVocab } from '@yaks/vocab'
 import { drop, find, gather, load } from './round.ts'
 import { answers, deck, examples, type RoundFile, tally } from './skill.ts'
 import { runs } from './tools.ts'
+import { measured, versions } from './measured.ts'
 import { trialDoc } from './vocab.ts'
 
 let vocab = loadVocab([keyDoc, aliasDoc, docDoc, modelDoc, trialDoc, {
@@ -26,6 +27,7 @@ let vocab = loadVocab([keyDoc, aliasDoc, docDoc, modelDoc, trialDoc, {
       properties: { by: { type: 'string' }, at: { type: 'string' } },
     },
     persona: { component: true, type: 'object' },
+    skill: { component: true, type: 'object' },
   },
 }], [keyKeywords])
 
@@ -124,7 +126,12 @@ test('a round loaded twice holds its rows once, and a dropped pair goes', async 
   let again = await load(g, file)
   equal(again.round, first.round)
   equal(await find(g, 'r1'), first.round)
+  // The round refers to its skill, found again by the file's title.
+  let [skill] = await g.read('.skill ?doc')
+  equal(skill.doc, { title: 'copy' })
   let all: Any[] = await gather(g, first.round)
+  equal(all.find((x) => x.round).round.skill, skill.entity.eid)
+  ok(tally(all).startsWith('Round one (skill: copy)'))
   equal(kinds(all), {
     round: 1,
     variant: 3,
@@ -530,4 +537,30 @@ test('every judge sits the known answers unmarked, and one that fails is shown a
     '',
     "By variant: over 3 variants, Spearman's rho between the share a person preferred and its mean guesses until right is -1.00: the variants preferred are guessed sooner (they agree).",
   ])
+})
+
+test("a skill's page shows what a person picked, never what the platform didn't run", async () => {
+  let g = await open()
+  let { round } = await load(g, file)
+  let all: Any[] = await gather(g, round)
+  equal(measured(all).measured, false)
+  let at = (headline: string) =>
+    all.find((x) => x.writing?.output?.headline == headline).entity.eid
+  let tap = (eid: string, by: string, first: string, second: string) => ({
+    entity: { eid },
+    created: { by, at: eid },
+    preference: { first: at(first), second: at(second), chose: at(second) },
+  })
+  await g.apply([tap('t1', 'ann', 'A', 'B'), tap('t2', 'bo', 'C', 'B')])
+  all = await gather(g, round)
+  let m = measured(all)
+  equal([m.measured, m.people, m.picks], [true, 2, 2])
+  equal(m.outputs.length, 6)
+  let plain = m.variants.find((v) => v.title == 'plain')!
+  equal([plain.shown, plain.preferred, m.winner], [2, 2, plain.eid])
+  equal(versions([m]).map((v) => v.variant.title), ['plain'])
+
+  // An attempt the platform did not run is left out, with each tap on it.
+  let other = measured(all, (a: Any) => a.writing.output.headline != 'B')
+  equal([other.measured, other.winner, other.outputs.length], [false, null, 5])
 })

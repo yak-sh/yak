@@ -38,8 +38,8 @@ export let unreturned = (b: Bundle): boolean =>
 
 /** Everything a round's deck and tally read: the round, its attempts, their
  * variants and cases, its pairs, each preference, mark and guess aimed at
- * one of its attempts, the judges those name, and the title of whoever set
- * the round's passing share. An attempt or a guess still to be returned is
+ * one of its attempts, the judges those name, the skill it develops, and the
+ * title of whoever set the round's passing share. An attempt or a guess still to be returned is
  * no attempt or guess yet, and is left out unless `planned` asks for them. */
 export let gather = async (
   g: Graph,
@@ -64,9 +64,11 @@ export let gather = async (
   let judges = [...new Set([...named('preference'), ...named('guess')])]
     .filter((e) => e).map(String)
   let by = (head[0]?.passing as { by?: unknown })?.by
+  let skill = (head[0]?.round as { skill?: unknown })?.skill
   let more = await Promise.all([
     g.get(judges),
     by ? g.get([String(by)], ['doc']) : [],
+    skill ? g.get([String(skill)], ['skill', 'doc']) : [],
   ])
   return [...head, ...more.flat()].filter((b) => b)
     .concat(attempts, aimed)
@@ -79,8 +81,11 @@ export let keyed = async (
   g: Graph,
   all: Bundle[],
 ): Promise<(b: Bundle) => string> => {
+  let eid = (all.find((b) => b.round)?.round as { skill?: unknown })?.skill
   let skill = String(
-    (all.find((b) => b.round)?.round as { skill?: unknown })?.skill ?? '',
+    (all.find((b) => b.skill && b.entity.eid == eid)?.doc as {
+      title?: unknown
+    })?.title ?? '',
   )
   let keys = new Map<Eid, string>()
   await Promise.all(

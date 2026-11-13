@@ -9,7 +9,8 @@ import { owned } from './directory-fixture.ts'
 import { directoryOf, META } from './directory.ts'
 import { operatorMemory } from './operator-testing.ts'
 import { operatorRequest } from './operator-host.ts'
-import { skillText } from './operator-skills.ts'
+import { RESULTS, results, skillText } from './operator-skills.ts'
+import * as skillPage from './skill-page.ts'
 import { SPACE } from './build-door.ts'
 import { replyTo } from './host.ts'
 import { INTERNAL } from './mail-config.ts'
@@ -33,6 +34,10 @@ let { env } = platform('shared-skill', {
       fetch: async (request: Request) => {
         let space = request.headers.get(SPACE) ?? String(id)
         let store = storeOf(space)
+        if (new URL(request.url).pathname == RESULTS) {
+          let { skill } = await request.json()
+          return Response.json(await results(store.g, skill, space))
+        }
         let answer = await operatorRequest(
           { store, named: () => Promise.resolve(null), stop: () => never() },
           {
@@ -147,6 +152,81 @@ test('a published skill is installable only once yaks.app has reviewed it', asyn
     await run(taker, 'app_published', {}),
     '- pitch-copy v1 — skill pitch-copy: Pitches that lead with the reader',
   )
+})
+
+test("a listed skill's page shows its text, and what a person picked in the platform's runs of it", async () => {
+  let page = async (name: string) => {
+    let path = `${skillPage.PATH}${name}`
+    let answer = await skillPage.answer(
+      new Request(`https://yaks.app${path}`),
+      env,
+      path,
+      dir,
+    )
+    return { status: answer.status, html: await answer.text() }
+  }
+  assertEquals((await page('nothing-here')).status, 404)
+  let before = await page('pitch-copy')
+  assertEquals(before.status, 200)
+  assertStringIncludes(before.html, 'Lead with what the reader gets.')
+  assertStringIncludes(before.html, 'Not measured yet.')
+
+  // A round of the skill the platform ran, a row it did not, and a pick.
+  let g = storeOf(kitchen).g
+  let [mine] = await g.read('.skill')
+  let [round, none, lead, office, plain, led, forged] = Array.from(
+    { length: 7 },
+    () => crypto.randomUUID(),
+  )
+  let ran = { $actor: { by: kitchen } }
+  let wrote = (eid: string, variant: string, headline: string) => ({
+    entity: { eid },
+    writing: { round, case: office, variant, output: { headline } },
+  })
+  await g.apply([
+    {
+      entity: { eid: round },
+      round: { skill: mine.entity.eid, parts: ['headline'] },
+      doc: { title: 'Round one' },
+      ...ran,
+    },
+    {
+      entity: { eid: none },
+      variant: { body: '' },
+      doc: { title: 'No skill' },
+    },
+    {
+      entity: { eid: lead },
+      variant: { body: 'Lead.', theory: 'the reader first' },
+      doc: { title: 'Lead with the reader' },
+    },
+    {
+      entity: { eid: office },
+      case: { body: 'A desk for small offices' },
+      doc: { title: 'The office' },
+    },
+    { ...wrote(plain, none, 'A desk.'), ...ran },
+    { ...wrote(led, lead, 'Your office, sorted.'), ...ran },
+    { ...wrote(forged, lead, 'Forged headline'), $actor: { by: maker.person } },
+  ], { trusted: true })
+  let tap = (second: string) => ({
+    entity: { eid: crypto.randomUUID() },
+    preference: { first: plain, second, chose: second },
+    $actor: { by: maker.person },
+  })
+  await g.apply([tap(led), tap(forged)], { trusted: true })
+  let after = (await page('pitch-copy')).html
+  assertStringIncludes(after, '1 pick by 1 person')
+  assertStringIncludes(after, 'Lead with the reader')
+  assertStringIncludes(after, ' (won)')
+  assertStringIncludes(after, 'Your office, sorted.')
+  assertStringIncludes(after, 'A desk for small offices')
+  assertEquals(after.includes('Forged headline'), false)
+
+  // Every listed skill's page is in the sitemap.
+  assertEquals(await skillPage.addresses(dir, env), [
+    skillPage.skillAt('pitch-copy', env),
+  ])
 })
 
 test('an installed skill is a copy pinned to the version it took', async () => {

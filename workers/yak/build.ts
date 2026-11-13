@@ -603,6 +603,17 @@ export class Builder {
       if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
       return copying(freely(this.#ctx.storage), await request.json())
     }
+    // What a published skill's rounds measured, for its public page
+    // (skill-page.ts): the kernel's to ask, by no person.
+    if (url.pathname == '/skill/results') {
+      if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
+      let space = request.headers.get(SPACE)
+      if (!space) return no(403, NOBODY)
+      let { results } = await import('./operator-skills.ts')
+      let { store } = await this.#stored()
+      let { skill } = await request.json() as { skill?: unknown }
+      return Response.json(await results(store.g, String(skill ?? ''), space))
+    }
     if (url.pathname.startsWith('/result/')) {
       if (
         request.headers.get('x-yak-kernel') != '1' ||

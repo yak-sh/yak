@@ -100,7 +100,7 @@ the writers writes a round file; everything after that is rows.
 
 | on an entity                                                                         | what it is                                                                                                                  |
 | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| `round{skill, parts}` + `doc{title}`                                                 | one round: the skill it develops and the parts every attempt returns                                                        |
+| `round{skill, parts}` + `doc{title}`                                                 | one round: the skill it develops (a @yaks/persona `skill{…}` row) and the parts every attempt returns                       |
 | `writers{task, skilled, rule}`                                                       | on a round: the wording its writers are given                                                                               |
 | `using{provider, model, effort}`                                                     | on a round or a judge: the model asked (@yaks/session)                                                                      |
 | `variant{body, theory, source, licence, from}` + `doc{title}`                        | a candidate text of the skill, installed nowhere                                                                            |
@@ -140,9 +140,11 @@ A round file is JSON: `key`, `title`, `skill`, `output` (the parts), `persona`
 (the id of the persona a `persona: true` writer carried), then `variants`,
 `cases`, `attempts`, `judges`, `pairs`, `known` and `guesses`, each naming the
 others by `key`, and for a round still to be run `using`, `writers` and `plan`
-(`RoundFile` in ./skill.ts). The round is found again as `round:<key>`, a
-variant as `variant:<skill>:<key>`, a case as `case:<skill>:<key>` and a judge
-as `judge:<skill>:<key>` (@yaks/alias), so a later round's file reuses one by
+(`RoundFile` in ./skill.ts). The file names its skill by title, and the load
+refers the round to the skill row found again as `skill:<title>`, making one
+where none is. The round is found again as `round:<key>`, a variant as
+`variant:<skill>:<key>`, a case as `case:<skill>:<key>` and a judge as
+`judge:<skill>:<key>` (@yaks/alias), so a later round's file reuses one by
 naming its key, and one that restates it replaces its text. Give a changed
 variant a new key and say what it came `from`. Attempts, pairs and guesses are
 on eids derived from the round's key and their own. A guess that names no judge
@@ -286,6 +288,19 @@ true}`), so those taps cannot test it.
 written before the taps and is the same on every run. `examples(all, person)` is
 what a selector is handed: that person's taps less every held-out pair's. A
 taught judge is scored only on planted pairs and on taps of held-out pairs.
+
+### What a skill's page shows
+
+`@yaks/trial/measured` reads one round's rows (`gather`) as a public page shows
+them: the variants compared, with how often a person chose each; the cases,
+leaving out the title and text of one that is something its maker published;
+every output; how many people picked and how many picks; the automated judges
+that passed the round's known answers; and the variant people preferred most,
+when one led. A round is measured once a person has chosen between two of its
+attempts. `measured(all, ran)` leaves out an attempt a model wrote that `ran`
+rejects, with every tap on it, so a page shows only the platform's own runs.
+`versions(rounds)` is each round's winner, oldest first, with the variant it was
+changed from.
 
 ### The tally
 

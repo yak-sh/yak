@@ -9,6 +9,8 @@ import type { SkillFiles } from '@yaks/mcp/skills'
 import { writes } from '@yaks/member'
 import { repoSkills } from '@yaks/persona/skills'
 import { renderSkill } from '@yaks/persona/skill-text'
+import { gather } from '@yaks/trial/round'
+import { type Measured, measured } from '@yaks/trial/measured'
 import { builderOf, SPACE } from './build-door.ts'
 import { caught } from './defects.ts'
 import { vouched, type Who } from './session.ts'
@@ -21,6 +23,9 @@ export let SKILLS = '/operator/skills'
 export let SKILL = '/operator/skill'
 /** The Builder's route keeping a copy of a shared skill ({@link keepCopy}). */
 export let KEEP = '/operator/skill/keep'
+/** The Builder's route answering what a skill's rounds measured
+ * ({@link results}), the kernel's to ask for its public page. */
+export let RESULTS = '/skill/results'
 
 // A skill's name as the Agent Skills format takes it, as @yaks/mcp checks
 // it: one row that is not is left out of the listing rather than refusing
@@ -181,4 +186,25 @@ export let askSkills = async <T>(
     throw new Error(`${path} answered ${answer.status}`)
   }
   return said
+}
+
+/**
+ * What the rounds of the store's skill `skill` measured, oldest round first
+ * (@yaks/trial/measured). Only the platform's own runs count: an attempt a
+ * model wrote is one the space wrote (`created.by`, as the Operator writes
+ * its own rows), never a row a person or their agent wrote in.
+ */
+export let results = async (
+  g: Graph,
+  skill: string,
+  space: string,
+): Promise<Measured[]> => {
+  let rounds = await g.read(`.round.skill=${JSON.stringify(skill)} ?created`)
+  let at = (b: Bundle) => String((b.created as { at?: string })?.at ?? '')
+  let ran = (b: Bundle) => (b.created as { by?: string })?.by == space
+  return await Promise.all(
+    rounds.sort((a, b) => at(a).localeCompare(at(b))).map(async (r) =>
+      measured(await gather(g, r.entity.eid), ran)
+    ),
+  )
 }

@@ -37,8 +37,8 @@
  *     persona: false, run: 1, output: { headline: 'Hello' },
  *   }],
  * })
- * equal(made.length, 4) // the round, its variant, its case, the attempt
- * equal(made[0].round, { skill: 'copywriting', parts: ['headline'] })
+ * equal(made.length, 5) // the skill, the round, its variant, its case, the attempt
+ * equal(made[1].round, { skill: '$skill', parts: ['headline'] })
  * ```
  *
  * @module
@@ -51,7 +51,8 @@ import { derivedEid } from '@yaks/graph/identity'
 export type RoundFile = {
   key: string
   title: string
-  /** the skill being developed; variants and cases are named under it */
+  /** the title of the skill being developed, found again as
+   * `skill:<title>`; variants and cases are named under it */
   skill: string
   /** the parts every attempt returns, in order */
   output: string[]
@@ -146,6 +147,7 @@ export type RoundFile = {
  * a second load lands on the rows of the first. */
 export let named = {
   round: (key: string): string => `round:${key}`,
+  skill: (title: string): string => `skill:${title}`,
   variant: (skill: string, key: string): string => `variant:${skill}:${key}`,
   case: (skill: string, key: string): string => `case:${skill}:${key}`,
   judge: (skill: string, key: string): string => `judge:${skill}:${key}`,
@@ -248,10 +250,17 @@ export let rows = (file: RoundFile): Bundle[] => {
   ]
   let nth = new Map<string, number>()
   return [
+    // The skill, found again by its title: a load makes it where none is.
+    {
+      entity: { eid: '$skill' },
+      alias: { name: named.skill(file.skill) },
+      skill: {},
+      doc: { title: file.skill },
+    },
     {
       entity: { eid: '$round' },
       alias: { name: named.round(file.key) },
-      round: { skill: file.skill, parts: file.output },
+      round: { skill: '$skill', parts: file.output },
       doc: { title: file.title },
       ...file.writers ? { writers: some(file.writers) } : {},
       ...file.using
@@ -690,6 +699,52 @@ export let picker = (
   }
 }
 
+/** One automated judge of a round, held to its known answers: what it
+ * compared and guessed, its pick of a pair, how many known answers it `sat`
+ * and `agreed` on, and its `result` against the round's passing share. */
+export type Standing = {
+  eid: Eid
+  taught: boolean
+  compared: Row[]
+  guessed: Row[]
+  pick: (a: Eid, b: Eid) => Eid | null | undefined
+  sat: number
+  agreed: number
+  result: 'passed' | 'failed' | 'untested' | 'no passing share'
+}
+
+/** Every automated judge that gave a round a verdict, and where it stands.
+ * A taught judge sits only planted pairs and held-out taps. */
+export let standings = (all: Bundle[]): Standing[] => {
+  let named = byEid(all), known = answers(all)
+  let verdicts = wearing(all, 'preference').map((p) => comp(p, 'preference'))
+    .filter((p) => p.judge)
+  let guesses = wearing(all, 'guess').map((g) => comp(g, 'guess'))
+  let share = comp(wearing(all, 'round')[0], 'passing').share
+  let bar = share == null ? undefined : Number(share)
+  return [
+    ...new Set([...verdicts, ...guesses].map((v) => str(v.judge))),
+  ].map((eid) => {
+    let taught = !!comp(named.get(eid), 'judge').taught
+    let mine = (v: Row) => str(v.judge) == eid
+    let compared = verdicts.filter(mine), guessed = guesses.filter(mine)
+    let pick = picker(compared, guessed)
+    let picks = [...known.values()]
+      .filter((k) => !taught || !k.tapped || k.held)
+      .map((k) => [pick(k.winner, k.other), k.winner])
+      .filter(([p]) => p !== undefined)
+    let sat = picks.length, agreed = picks.filter(([p, w]) => p == w).length
+    let result: Standing['result'] = !sat
+      ? 'untested'
+      : bar == undefined
+      ? 'no passing share'
+      : agreed / sat >= bar
+      ? 'passed'
+      : 'failed'
+    return { eid, taught, compared, guessed, pick, sat, agreed, result }
+  })
+}
+
 type Count = {
   shown: number
   preferred: number
@@ -877,8 +932,6 @@ export let tally = (
 
   let known = answers(all)
   let pairs = wearing(all, 'pair')
-  let verdicts = wearing(all, 'preference').map((p) => comp(p, 'preference'))
-    .filter((p) => p.judge)
   let guesses = wearing(all, 'guess').map((g) => comp(g, 'guess'))
   let passing = comp(round, 'passing')
   let bar = passing.share == null ? undefined : Number(passing.share)
@@ -906,18 +959,9 @@ export let tally = (
           : 'no clear relation'
       }.`
   }
-  let judges = [
-    ...new Set([...verdicts, ...guesses].map((v) => str(v.judge))),
-  ].map((eid) => {
-    let taught = !!comp(named.get(eid), 'judge').taught
-    let mine = (v: Row) => str(v.judge) == eid
-    let compared = verdicts.filter(mine), guessed = guesses.filter(mine)
-    let pick = picker(compared, guessed)
-    let picks = [...known.values()]
-      .filter((k) => !taught || !k.tapped || k.held)
-      .map((k) => [pick(k.winner, k.other), k.winner])
-      .filter(([p]) => p !== undefined)
-    let sat = picks.length, agreed = picks.filter(([p, w]) => p == w).length
+  let judges = standings(all).map((
+    { eid, taught, compared, guessed, pick, sat, agreed, result },
+  ) => {
     let [counts, add] = counting()
     let unknown = new Map<string, [Eid, Eid]>()
     for (let p of pairs) {
@@ -944,13 +988,6 @@ export let tally = (
           g.form == 'among' ? 1 - off(g) : off(g),
         ))
     }
-    let result = !sat
-      ? 'untested'
-      : bar == undefined
-      ? 'no passing share'
-      : agreed / sat >= bar
-      ? 'passed'
-      : 'failed'
     let title = (eid ? titled(eid) : '(no judge named)') +
       (taught ? ' (taught)' : '')
     let stands = result == 'passed'
@@ -1005,7 +1042,7 @@ export let tally = (
   let whys = preferences.filter((p) => p.why)
   return [
     `${str(comp(round, 'doc').title)} (skill: ${
-      str(comp(round, 'round').skill)
+      titled(comp(round, 'round').skill)
     })`,
     [
       many(attempts.size, 'attempt'),

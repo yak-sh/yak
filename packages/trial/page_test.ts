@@ -60,6 +60,7 @@ let open = async () => {
         '@yaks/api',
         '@yaks/web',
         '@yaks/model',
+        '@yaks/persona',
         '@yaks/trial',
       ],
     },

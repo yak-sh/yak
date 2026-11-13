@@ -14,6 +14,7 @@ import { copyOf } from './directory-copy.ts'
 import { identity, mcp } from './doors.ts'
 import { bound, type Env } from './env.ts'
 import * as gallery from './gallery.ts'
+import * as skillPage from './skill-page.ts'
 import { PAGE } from './gallery-row.ts'
 import * as install from './install.ts'
 import * as appPage from './app-page.ts'
@@ -180,7 +181,15 @@ let atApex = async (req: Request, env: Env, path: string) => {
   }
   // Crawlers, connection callbacks and the catalog's logos are the apex's
   // own doors.
-  let said = await seo(req, path, env) ??
+  let said = await seo(req, path, env, () =>
+    skillPage.addresses(
+      directory(bound(env.DIRECTORY, dirPart.fetch, env), {
+        copy: copyOf(env),
+        time: env.CLOCK,
+        public: true,
+      }),
+      env,
+    )) ??
     await callback({ env, req, path, space: null }) ??
     await logoDoor(env, path)
   if (said) return said
@@ -201,6 +210,10 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // visit, so an unpublished app's page is gone the moment it is.
   if (path.startsWith(PAGE)) {
     return appPage.answer(req, env, path, dir)
+  }
+  // A listed skill's page (skill-page.ts), read the same way.
+  if (path.startsWith(skillPage.PATH)) {
+    return skillPage.answer(req, env, path, dir)
   }
   if (path == gallery.REVIEW) {
     let shown = await gallery.answer(req, env, path, dir, call)
