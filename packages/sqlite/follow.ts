@@ -4,8 +4,9 @@
 // the `server_meta` row `schema:<print>`; an opener whose print is recorded
 // opens with no DDL and no write lock, and one whose print is missing runs the
 // pass that brings the file to it, then records it. A recorded print stays
-// recorded, so a process still running the vocabulary a landing replaced finds
-// its own print and changes nothing.
+// recorded while the file only grows, so a process still running the
+// vocabulary a landing replaced finds its own print and changes nothing; a
+// pass that sheds what its vocabulary stopped naming forgets the others.
 //
 // Two openers that find the same print missing both run the pass: every step
 // of it reads the file under the write lock before it changes anything, so the
@@ -21,16 +22,26 @@ import {
   type SchemaObject,
   type Stmt,
 } from '@yaks/sql/core'
-import { type Derived, field, lit, tagOf } from '@yaks/sql'
+import {
+  col,
+  type Derived,
+  field,
+  lit,
+  notNull,
+  select,
+  table,
+  tagOf,
+} from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { sha256 } from '@yaks/graph/sha256'
-import { installed, meta, PRINTED, printed } from './meta.ts'
+import { installed, meta, PRINTED, printed, prints } from './meta.ts'
 import { unit } from './unit.ts'
-import { build } from './owe.ts'
+import { build, holds as rowed } from './owe.ts'
 import { plan, planned } from './plan.ts'
 import { behind, declares, exact } from './ddl.ts'
 import { tables } from './layout.ts'
-import { unraised } from './raise.ts'
+import { recorded, unraised } from './raise.ts'
+import { columns, componentTables, words } from './physical.ts'
 
 /** The print of a composed schema: a store's own print (`Store.print`) and
  * every further statement the file needs, rendered. */
@@ -116,17 +127,98 @@ export let add = (driver: Driver, stmts: Stmt[]): Error[] =>
     return left
   })
 
+/** What a composed schema names, for {@link follow} to shed what a file holds
+ * beyond it: the tables and columns the store of `vocab` makes, and the tables
+ * `beside` makes. */
+export type Named = { vocab: Vocab; beside?: readonly Stmt[] }
+
+// Whether any row of `name` holds a value in its column `c`.
+let valued = (driver: Driver, name: string, c: string): boolean =>
+  driver.query(select({
+    cols: [lit(1)],
+    from: table(name),
+    where: notNull(col(c)),
+    limit: lit(1),
+  })).length > 0
+
+/** The statements dropping what a file holds that `named` stopped naming: a
+ * component table (./physical.ts `componentTables`) no statement makes and no
+ * word names, once it holds no rows, and a column the statement making its
+ * table lacks, once no row holds a value in it, after each index, trigger and
+ * view that names it. A table that holds a row, and a column that holds a
+ * value, stay as they stand. */
+export let shed = (driver: Driver, { vocab, beside = [] }: Named): Stmt[] => {
+  let made = new Map<string, Set<string>>()
+  for (let s of [...plan(vocab, {}, !!driver.file).raised, ...beside]) {
+    if (s.t != 'create table') continue
+    let cols = made.get(s.name) ?? new Set()
+    for (let c of s.cols) cols.add(c.name.toLowerCase())
+    made.set(s.name, cols)
+  }
+  let gone = componentTables(driver, [...made.keys(), ...vocab.all])
+    .filter((name) => !rowed(driver, name, 1))
+  let unnamed = componentTables(driver, [], [...made.keys()]).flatMap((name) =>
+    columns(driver, name)
+      .filter((c) =>
+        !made.get(name)!.has(c.toLowerCase()) && !valued(driver, name, c)
+      )
+      .map((c) => [name, c] as const)
+  )
+  let naming = catalogue(driver).filter((o) => {
+    if (o.type == 'table' || o.sql == null) return false
+    let said = words(o.sql)
+    return unnamed.some(([t, c]) =>
+      said.has(t.toLowerCase()) && said.has(c.toLowerCase())
+    )
+  })
+  return [
+    ...gone.map((name): Stmt => ({ t: 'drop', kind: 'table', name })),
+    ...naming.map((o): Stmt => ({
+      t: 'drop',
+      kind: o.type as 'index' | 'trigger' | 'view',
+      name: o.name,
+      ifExists: true,
+    })),
+    ...unnamed.map(([name, c]): Stmt => ({
+      t: 'alter table',
+      table: name,
+      drop: c,
+    })),
+  ]
+}
+
 /** Bring a file to the composed schema `print` names: nothing, where the file
  * has recorded it; otherwise `pass`, which adds what is missing, and then the
  * record. A pass that left something it could not do (a table it could not
  * fit) answers false, and the print stays unrecorded so the next opener tries
- * again. True when the pass ran. */
+ * again. True when the pass ran.
+ *
+ * Given what the schema names, the pass first sheds what the file holds
+ * beyond it ({@link shed}), which the pass makes again where the schema still
+ * wants it (a view or a trigger that named a column shed with it). A file
+ * that shed something no longer stands at any other print it recorded, so
+ * those are forgotten: an opener of the vocabulary that named it runs its pass
+ * again. A host whose vocabulary may shrink for a while and grow back (an
+ * application's older release, a rollback away) gives nothing, and the file
+ * keeps all it holds. */
 export let follow = (
   driver: Driver,
   print: string,
   pass: () => boolean | void,
+  named?: Named,
 ): boolean => {
   if (printed(driver, print)) return false
+  if (named) {
+    unit(driver, () => {
+      let drops = shed(driver, named)
+      if (!drops.length) return
+      for (let s of drops) driver.query(s)
+      recorded(driver)
+      for (let p of prints(driver)) {
+        if (p != print) meta(driver).del(PRINTED + p)
+      }
+    })
+  }
   if (pass() === false) return true
   unit(
     driver,

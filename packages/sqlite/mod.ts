@@ -1591,8 +1591,10 @@ export {
   forget,
   grow,
   lacking,
+  type Named,
   printFor,
   printOf,
+  shed,
 } from './follow.ts'
 
 export { doom } from './doom.ts'

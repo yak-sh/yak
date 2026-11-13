@@ -85,6 +85,11 @@ let TOKEN =
 let norm = (t: string): string =>
   t[0] == "'" ? t : (/^["`[]/.test(t) ? t.slice(1, -1) : t).toLowerCase()
 
+/** Every name and keyword a definition says, as SQLite compares them: what
+ * tells which tables and columns an index, a trigger or a view names. */
+export let words = (sql: string): Set<string> =>
+  new Set((sql.match(TOKEN) ?? []).map(norm))
+
 // The index of the parenthesis that closes the one at `at`.
 let close = (tokens: string[], at: number): number => {
   for (let i = at, depth = 0; i < tokens.length; i++) {

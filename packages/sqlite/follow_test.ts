@@ -1,10 +1,16 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { col, type CreateTable, insert, lit, select, table } from '@yaks/sql'
-import { columns } from './physical.ts'
-import { classified, preparedDriver, snapshot } from './testing.ts'
-import { add, follow, forget, lacking, printOf } from './follow.ts'
+import { columns, objects } from './physical.ts'
+import {
+  classified,
+  preparedDriver,
+  type Snapshot,
+  snapshot,
+} from './testing.ts'
+import { add, follow, forget, lacking, type Named, printOf } from './follow.ts'
 import { storage as readStore } from './read-store.ts'
+import { storage } from './mod.ts'
 import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 
@@ -91,6 +97,80 @@ test('an unfinished pass leaves its print for the next opener, and so does forge
   forget(db, print)
   assertEquals([at(true), passes], [true, 3])
 })
+
+// A file a wider vocabulary was installed in: of the components `vocab` no
+// longer names, `pin` was never worn and `jot` still is, and of the
+// properties, `note.mood` was given once and `note.tone` never, though an
+// index and a view name it. `queue` is a host's table beside the store's.
+let wide = loadVocab({
+  $defs: {
+    note: {
+      component: true,
+      properties: Object.fromEntries(
+        ['text', 'mood', 'tone'].map((p) => [p, { type: 'string' }]),
+      ),
+    },
+    pin: { component: true, properties: { at: { type: 'string' } } },
+    jot: { component: true, properties: { at: { type: 'string' } } },
+  },
+})
+let queue: CreateTable = {
+  t: 'create table',
+  name: 'queue',
+  ifNot: true,
+  cols: [{ name: 'entity', type: 'integer', pk: true }],
+}
+let wider = classified(snapshot(wide, {}, [
+  insert('entity', { id: 1, eid: 'n1', num: 1 }),
+  insert('entity', { id: 2, eid: 'j1', num: 2 }),
+  insert('note', { entity: 1, text: 'hi', mood: 'glad' }),
+  insert('jot', { entity: 2, at: 'now' }),
+  { t: 'create index', name: 'by_tone', on: 'note', cols: [col('tone')] },
+  {
+    t: 'create view',
+    name: 'tones',
+    q: select({ cols: [col('tone')], from: table('note') }),
+  },
+  queue,
+]))
+let narrow: Named = { vocab, beside: [queue] }
+// What of the wider file stands: the note's columns, and which of the objects
+// beside them.
+let stands = (db: ReturnType<typeof fresh>) => [
+  columns(db, 'note'),
+  ['pin', 'jot', 'queue', 'by_tone', 'tones'].filter((name) =>
+    objects(db, { name }).length
+  ),
+]
+
+test('a file sheds what its vocabulary stopped naming and holds nothing in', () => {
+  let db = preparedDriver(wider)
+  follow(db, a, () => {})
+  assertEquals(stands(db), [
+    ['entity', 'text', 'mood', 'tone'],
+    ['pin', 'jot', 'queue', 'by_tone', 'tones'],
+  ])
+  let store = storage(db, vocab)
+  follow(db, b, () => void store.install(), narrow)
+  assertEquals(stands(db), [['entity', 'text', 'mood'], ['jot', 'queue']])
+  assertEquals(store.get(['n1'])[0].note, { text: 'hi' })
+})
+
+for (
+  let [what, from, want] of [
+    ['forgets the other prints it recorded', wider, [true, 3]],
+    ['with nothing to shed keeps the prints it recorded', image, [false, 2]],
+  ] as [string, Snapshot, [boolean, number]][]
+) {
+  test(`a file that follows what its schema names ${what}`, () => {
+    let db = preparedDriver(from), passes = 0
+    let at = (print: string, named?: Named) =>
+      follow(db, print, () => void passes++, named)
+    at(a)
+    at(b, narrow)
+    assertEquals([at(a), passes], want)
+  })
+}
 
 // A vocabulary that gained a column and a component after the file was made,
 // read by a reader no writer has caught up with.

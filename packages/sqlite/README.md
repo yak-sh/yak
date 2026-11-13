@@ -748,11 +748,32 @@ the print (`printed(driver, print)`, a `server_meta` row `schema:<print>`), and
 otherwise runs `pass` and records the print, unless `pass` answers false for
 something it left undone. `add(driver, stmts)` is the pass for statements that
 only add. `forget(driver, print)` makes the next opener run the pass again, for
-a host whose file something that keeps no print may have changed. A reader binds
-`lacking(driver, vocab)`: its `derived` reads a column the file does not have
-yet as absent properties, and its `absent` names the component tables the file
-does not have yet, which read as worn by no entity (@yaks/sql's `absent`
-option).
+a host whose file something that keeps no print may have changed.
+
+A host whose vocabulary is the whole of what its file holds also gives `follow`
+what the schema names, `follow(driver, print, pass, { vocab, beside })`. Before
+the pass, the file then sheds what it holds beyond that (`shed`): a component
+table that neither `vocab` nor a statement of `beside` makes, once it holds no
+rows, and a column the statement making its table lacks, once no row holds a
+value in it, with each index, trigger and view that names the column. The pass
+makes such an index, trigger or view again where the schema still wants it. A
+file that shed something forgets every other print it recorded, so an opener of
+a vocabulary that still named it runs its pass again and adds it back. A host
+whose vocabulary may shrink for a while and grow back, such as an application
+whose older release is a rollback away, gives nothing, and its file keeps
+everything.
+
+A table that still holds rows is never dropped. It stands as it was, rows,
+indexes and all; nothing the vocabulary declares reads it, and an entity that
+wears it keeps the archetype that says so. Once a migration has moved or deleted
+its rows, the next pass drops it: the first print the file follows after that,
+or sooner where the host forgets the print it stands at. A column that still
+holds a value stays the same way, and fitting keeps it through a rebuild.
+
+A reader binds `lacking(driver, vocab)`: its `derived` reads a column the file
+does not have yet as absent properties, and its `absent` names the component
+tables the file does not have yet, which read as worn by no entity (@yaks/sql's
+`absent` option).
 
 Finding that out reads the whole of `sqlite_schema`, so a writer records it.
 `survey(driver, vocab, derived?)` (`@yaks/sqlite/survey`) writes what a look at

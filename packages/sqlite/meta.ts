@@ -117,6 +117,18 @@ export let PRINTED = 'schema:'
 export let printed = (driver: Driver, print: string): boolean =>
   kept(driver, PRINTED + print) != null
 
+// The first key past every `schema:` key.
+let PAST = PRINTED.slice(0, -1) + ';'
+
+/** Every composed schema's print this file has recorded: one range read of
+ * `server_meta`. */
+export let prints = (driver: Driver): string[] =>
+  driver.query(select({
+    cols: [col('k')],
+    from: table(META),
+    where: and(ge(col('k'), val(PRINTED)), lt(col('k'), val(PAST))),
+  })).map((r) => String(r.k).slice(PRINTED.length))
+
 /** The prefix of the key a file records each survey of a store's schema under
  * (./survey.ts): `surveyed:<print>`, the store's print. */
 export let SURVEYED = 'surveyed:'
