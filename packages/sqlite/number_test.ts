@@ -277,20 +277,23 @@ test('sqlite: a respined spine keeps every trigger that stood on it, and its num
   s.tx((tx) => assertEquals(idOf(tx, ['old', 'older']), [1, 2]))
 })
 
-test("sqlite: a file's spine, or one past a window's copy, is left as it stood, counts once, and builds no series index", () => {
-  let big = { rows: [mk('a'), mk('b')], sizes: { ...SIZES, copy: 2 } }
-  for (let { d, s } of [lone({ file: true }), lone(big)]) {
-    s.tx((tx) => {
-      tx.patch([mk('t'), mk('m', { memory: {} })])
-      let [t, m] = idOf(tx, ['t', 'm']) as string[]
-      assertEquals([t[0], m[0], Number(m.slice(2)) - Number(t.slice(2))], [
-        'T',
-        'M',
-        1,
-      ])
-    })
-    assertEquals(paired(d), false)
-  }
+test("sqlite: a file's spine is left as it stood, counts once, and builds no series index", () => {
+  let { d, s } = lone({ file: true })
+  s.tx((tx) => {
+    tx.patch([mk('t'), mk('m', { memory: {} })])
+    let [t, m] = idOf(tx, ['t', 'm']) as string[]
+    assertEquals([t[0], m[0], Number(m.slice(2)) - Number(t.slice(2))], [
+      'T',
+      'M',
+      1,
+    ])
+  })
+  assertEquals(paired(d), false)
+})
+
+test("sqlite: a spine past a window's copy is moved in its install", () => {
+  let { d } = lone({ rows: [mk('a'), mk('b')], sizes: { ...SIZES, copy: 2 } })
+  assertEquals(paired(d), true)
 })
 
 test('sqlite: a spine kept with its rows moved under their letters counts once', () => {

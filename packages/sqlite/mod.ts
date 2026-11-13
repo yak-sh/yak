@@ -120,15 +120,7 @@ import {
   pendingShapes,
 } from './archetype.ts'
 import { componentTables, objects, shape, sole } from './physical.ts'
-import {
-  analyze,
-  build,
-  forgo,
-  holds as holdsRows,
-  reshape,
-  SIZES,
-  type Sizes,
-} from './owe.ts'
+import { analyze, build, forgo, reshape, type Sizes } from './owe.ts'
 import { maintenance } from './maintenance.ts'
 import { plan } from './plan.ts'
 import {
@@ -1311,13 +1303,13 @@ export let storage = (
   let prepare = () =>
     base.deferred ? upkeep.prepare() : backfill(driver, numbered)
   // A store numbering by series moves a spine that keeps a number unique on
-  // its own (./ddl.ts `respine`), before the indexes on it are raised, where
-  // the move is one window's copy (./owe.ts `COPY`): it writes each row once.
-  // A file's spine, or a larger one, is moved by its own migration, and until
-  // then counts once (./write.ts `unmoved`).
+  // its own (./ddl.ts `respine`), before the indexes on it are raised. The
+  // move writes only the numbered rows, once each, and no reference to them
+  // is checked, so a Durable Object's directory of 43,000 moves in its
+  // install. A file's spine is moved by its host's migration, and until then
+  // counts once (./write.ts `unmoved`).
   let respining = () =>
-    typeof base.number == 'object' && !driver.file && sole(driver) &&
-    !holdsRows(driver, 'entity', (base.sizes ?? SIZES).copy)
+    typeof base.number == 'object' && !driver.file && sole(driver)
   let install = (beside: Stmt[] = []): Error[] => {
     let left: Error[] = []
     let mark = marked
