@@ -17,6 +17,7 @@ import {
   val,
 } from '@yaks/sql'
 import { backfill, classify, pointable, presence, strays } from './archetype.ts'
+import { needless } from './ddl.ts'
 import { meta } from './meta.ts'
 import { componentTables, objects } from './physical.ts'
 import { OWED, owed } from './owe.ts'
@@ -105,11 +106,14 @@ export let maintenance = (driver: Driver, number: () => boolean) => {
       })
       return true
     }
+    // An index owed before the install stopped building it (./ddl.ts
+    // `needless`) is forgotten unbuilt: built, it writes a row per entity.
     for (let w of owed(driver)) {
       if (w.kind != 'index') continue
-      if (!admit(most(driver, w.stmt.on) + 4)) continue
+      let needed = !needless(driver, w.stmt)
+      if (needed && !admit(most(driver, w.stmt.on) + 4)) continue
       unit(driver, () => {
-        driver.query(w.stmt)
+        if (needed) driver.query(w.stmt)
         marks.del(`${OWED}${w.kind}:${w.name}`)
       })
       return true

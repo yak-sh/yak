@@ -488,18 +488,22 @@ let SERIES: CreateIndex = {
   ifNot: true,
 }
 
-/** The storage indexes an install builds over a file: every one of
- * {@link indexed}, but the series index over a spine that keeps `num` unique
+/** Whether `index` is the series index over a spine that keeps `num` unique
  * on its own (./physical.ts `sole`). That spine's own index already holds one
  * entity to a number, so one to each pair, and finds a number without its
  * letter, and the spine counts once (./write.ts `unmoved`); building the
  * pair over it would only write a row per entity, in one statement past what
  * an object may write in a minute once a store holds 100,000. A spine rebuilt
- * without its own index builds it. */
-export let built = (driver: Driver, vocab: Vocab): readonly CreateIndex[] => {
-  let all = indexed(vocab, true)
-  return sole(driver) ? all.filter((i) => i != SERIES) : all
-}
+ * without its own index needs it. */
+export let needless = (driver: Driver, index: CreateIndex): boolean =>
+  index.name == SERIES.name && index.on == SERIES.on && sole(driver)
+
+/** The storage indexes an install builds over a file: every one of
+ * {@link indexed} but a {@link needless} one. An index owed before it became
+ * needless is forgotten where it is worked off (./owe.ts, ./maintenance.ts),
+ * since an install whose schema stands as it was never looks again. */
+export let built = (driver: Driver, vocab: Vocab): readonly CreateIndex[] =>
+  indexed(vocab, true).filter((i) => !needless(driver, i))
 let indexing = (vocab: Vocab): CreateIndex[] => [
   // Bare schema adapters can still hold the legacy spine. A storage install
   // asks for its internal pointer index after adding the column.

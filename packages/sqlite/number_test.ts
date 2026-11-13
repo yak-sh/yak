@@ -3,10 +3,10 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, Refused, type Tx } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
-import { col, eq, lit, val } from '@yaks/sql'
+import { col, type Driver, eq, lit, val } from '@yaks/sql'
 import { entity, mem, stepping } from './testing.ts'
 import { mintSql, storage } from './mod.ts'
-import { SIZES } from './owe.ts'
+import { owe, owed, SIZES, work } from './owe.ts'
 import { idDoc, idKeywords } from '@yaks/id'
 import { ids } from '@yaks/id/graph'
 
@@ -274,6 +274,30 @@ test('sqlite: a spine keeping its number unique on its own refuses a pair anothe
       "T-1 is m's",
     )
   })
+})
+
+// The series index an install owed over a spine keeping its number unique on
+// its own, before installs stopped building it there: whichever upkeep works
+// it off forgets it, building nothing.
+test('sqlite: a series index owed over a spine keeping its number unique on its own is forgotten, unbuilt', () => {
+  let stmt = {
+    t: 'create index' as const,
+    name: 'entity_num_prefix',
+    on: 'entity',
+    cols: [col('num'), col('prefix')],
+    unique: true,
+    ifNot: true,
+  }
+  let upkeeps = [
+    (d: Driver) => work(d),
+    (d: Driver) => storage(d, vocab, { number: SERIES }).maintain(() => true),
+  ]
+  for (let upkeep of upkeeps) {
+    let { d } = lone({ file: true })
+    owe(d, { kind: 'index', name: stmt.name, stmt })
+    upkeep(d)
+    assertEquals([owed(d), paired(d)], [[], false])
+  }
 })
 
 test('sqlite: a fresh spine builds the series index', () => {

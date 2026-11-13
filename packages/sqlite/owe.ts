@@ -59,6 +59,7 @@ import {
   analyzing,
   carried,
   counted,
+  needless,
   type Refitting,
   tallied,
   tally,
@@ -619,8 +620,11 @@ let windows: {
   ) => boolean
 } = {
   index: (driver, w, here) => {
-    // A table a later vocabulary dropped takes its owed index with it.
-    if (here.has(w.stmt.on)) driver.query({ ...w.stmt, ifNot: true })
+    // A table a later vocabulary dropped takes its owed index with it, and
+    // one owed before the install stopped building it is forgotten.
+    if (here.has(w.stmt.on) && !needless(driver, w.stmt)) {
+      driver.query({ ...w.stmt, ifNot: true })
+    }
     return true
   },
   fill: (driver, w, here, { fill, fillText }) => {
