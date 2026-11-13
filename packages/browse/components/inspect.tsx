@@ -25,7 +25,7 @@ import {
 } from '../live.ts'
 import { parseQuery, type Pred, resolveRefs } from '../query.ts'
 import { findEid } from '../live.ts'
-import { EID, idOf, kindOf, vocab } from '../types.ts'
+import { EID, idIn, idOf, kindOf, vocab } from '../types.ts'
 import { entityPath, searchPath } from '../url.ts'
 import {
   bundle,
@@ -150,8 +150,7 @@ export let inspectIo: Io = {
   past: (eid, tx) => `${pathOf(eid)}?at=${tx}`,
   find: searchPath,
   go: (href) => navigate(href),
-  id: (b) =>
-    idOf({ eid: b.entity.eid, num: Number(b.entity.num), kind: kindOf(b) }),
+  id: (b) => idIn(b.entity.eid, b),
   kind: kindOf,
   name: named,
   when: ago,

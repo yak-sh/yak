@@ -24,7 +24,7 @@ import type { Cand, Source } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { cache, type Comps } from '../live.ts'
 import { RANKS } from '../query.ts'
-import { idOf, kindOf, vocab } from '../types.ts'
+import { idIn, kindOf, vocab } from '../types.ts'
 import { Float as Floating } from '@yaks/ui'
 import { wellOf, wells } from './wells.ts'
 import { drafts } from '@yaks/draft/input'
@@ -48,7 +48,7 @@ let held = () => {
     listed = {
       of: now,
       ids: Object.entries(now).map(([eid, comps]) => ({
-        text: idOf({ eid, kind: kindOf(comps), num: comps.entity?.num }),
+        text: idIn(eid, comps),
         kind: kindOf(comps),
       })),
     }

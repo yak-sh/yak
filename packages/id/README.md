@@ -123,21 +123,22 @@ letter, a hyphen and digits, for a grammar that composes it with other patterns
 (@yaks/markdown). `idsIn()` lists the ids written in a text, each a word of its
 own, so neither `COVID-19` nor the `T-14429` inside `T-144294` is one;
 `replaceIds()` rewrites them; `mentions()` asks whether a text names one id
-whole. `key()` is what a map of ids is kept by: the pair in capitals, from an id
-as typed or from an entity's row, or the bare number for a number typed alone
-and for a row stored without a prefix. `keys()` lists both keys a typed id may
-be filed under. `names()` asks whether a typed id names an entity: the same
-number, and the same letter where both carry one.
+whole. `names()` asks whether a typed id names an entity: the same number, and
+the same letter where both carry one. `answering()` picks, among the entities
+holding a number, those an id of that number names: the one holding its pair,
+else one stored without a prefix; for a bare number, every holder. A client
+resolving ids over the rows it holds keeps them by number and asks it.
 
 ```ts
-import { idsIn, key, keys, mentions, names, replaceIds } from '@yaks/id'
+import { answering, idsIn, mentions, names, replaceIds } from '@yaks/id'
 import { equal } from '@yaks/testing'
 
 equal(idsIn('T-12 needs M-3, not COVID-19'), ['T-12', 'M-3'])
 equal(replaceIds('T-12 failed', () => '#'), '# failed')
 equal(mentions('see T-144294', 'T-14429'), false)
-equal([key('b-7'), key({ num: 7, prefix: 'B' }), key('7')], ['B-7', 'B-7', '7'])
-equal(keys('B-7'), ['B-7', '7'])
+let held = [{ eid: 'b', prefix: 'B' }, { eid: 'old' }]
+equal(answering(held, 'B', (e) => e), [held[0]])
+equal(answering(held, 'A', (e) => e), [held[1]])
 equal(names('A-7', { num: 7, prefix: 'B' }), false)
 equal(names('A-7', { num: 7 }), true)
 ```

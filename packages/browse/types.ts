@@ -442,6 +442,20 @@ export let kindOf = (has: Record<string, unknown>) => {
   return kind
 }
 
+// The id of an entity read as its components, its `entity` row among them:
+// the number and the prefix stored there, the kind's letter for a row stored
+// without one.
+export let idIn = (
+  eid: string,
+  has: { entity?: { num?: number | null; prefix?: string | null } },
+) =>
+  idOf({
+    eid,
+    kind: kindOf(has),
+    num: has.entity?.num,
+    prefix: has.entity?.prefix,
+  })
+
 // Kinds are singular in the graph and plural in the mouth — a listing is
 // asked for `projects`, never `project`. Derived, so a new kind gets its
 // listing word the moment it joins kindOrder.

@@ -27,8 +27,8 @@ import {
   comps,
   EID,
   IdError,
+  idIn,
   idOf,
-  kindOf,
   type PropType,
   typeName,
   vocab,
@@ -382,7 +382,7 @@ let Where = ({ inEid, likeEid }: { inEid?: string; likeEid?: string }) =>
 let madeId = (applied: Bundle[], alias?: string) => {
   let b = applied.find((x) => x.$alias == alias)
   return b &&
-    idOf({ eid: b.entity.eid, kind: kindOf(b), num: Number(b.entity.num) })
+    idIn(b.entity.eid, b)
 }
 
 // The entity to open once the batch is made: the sketch's own, else the one

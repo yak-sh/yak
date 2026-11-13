@@ -16,7 +16,7 @@ import {
 // upstream. Retention lets reopens paint; ready separates loading from absent.
 // Never restore whole-db sync or an unbounded cache.
 import { IdError } from './types.ts'
-import { key, keys } from '@yaks/id'
+import { answering, parse } from '@yaks/id'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import {
   batch,
@@ -351,7 +351,7 @@ let noRelations: Dep[] = []
 // Human ids are a hot lookup vocabulary, not a query. Keep them beside the
 // cache so rendering one reference never scans or subscribes to the graph.
 let idGraph = paint.peek()
-let numEids = new Map<string, string>()
+let numEids = new Map<number, Set<string>>() // by number, every series
 let aliasEids = new Map<string, string>()
 let shortEids = new Map<string, Set<string>>()
 // The cache's derived indexes (index.ts) — the reverse `{eid}` views, by-
@@ -783,8 +783,8 @@ let refsTo = (value: string): Pred => ({
 
 let indexId = (eid: string, r?: Comps) => {
   if (!r) return
-  let k = r.entity && key(r.entity)
-  if (k) numEids.set(k, eid)
+  let num = r.entity?.num
+  if (num) numEids.set(num, (numEids.get(num) ?? new Set()).add(eid))
   let a = aliasOf(r)
   if (a) aliasEids.set(a.name, a.eid)
   let hex = eid.replaceAll('-', '').toLowerCase()
@@ -798,8 +798,9 @@ let indexId = (eid: string, r?: Comps) => {
 
 let unindexId = (eid: string, r?: Comps) => {
   if (!r) return
-  let k = r.entity && key(r.entity)
-  if (k && numEids.get(k) == eid) numEids.delete(k)
+  let num = r.entity?.num
+  let held = num ? numEids.get(num) : undefined
+  if (held?.delete(eid) && !held.size) numEids.delete(num!)
   let a = aliasOf(r)
   if (a && aliasEids.get(a.name) == a.eid) aliasEids.delete(a.name)
   let hex = eid.replaceAll('-', '').toLowerCase()
@@ -2301,8 +2302,10 @@ let listed = (d: Dep) => d.type != UNLISTED
 // entity only to draw its id; one it does not hold draws as its handle.
 export let heldId = (eid: string): string | undefined => {
   let held = cache.peek()[eid] as Comps | undefined
-  let num = (held?.entity as { num?: number } | undefined)?.num
-  return held && num ? idOf({ eid, kind: kindOf(held), num }) : undefined
+  let { num, prefix } = held?.entity ?? {}
+  return held && num
+    ? idOf({ eid, kind: kindOf(held), num, prefix })
+    : undefined
 }
 
 // The whole entity, assembled for a renderer: spine, components present,
@@ -2360,8 +2363,18 @@ export let repoUrl = (start: Ent): string | undefined => repoTrace(start).url
 
 export let findEid = (id: string): string | undefined => {
   syncIds()
-  let ks = keys(id)
-  if (ks.length) return ks.map((k) => numEids.get(k)).find(Boolean)
+  let p = parse(id)
+  if (p) {
+    let eids = answering(
+      [...numEids.get(p.num) ?? []],
+      p.prefix,
+      (eid) => idGraph[eid]?.entity ?? {},
+    )
+    if (eids.length > 1) {
+      throw new IdError(`${id} is an ambiguous id — matches ${eids.join(', ')}`)
+    }
+    return eids[0]
+  }
   if (cached(id.toLowerCase())) return id.toLowerCase()
   let hex = shortHex(id)
   if (hex) {

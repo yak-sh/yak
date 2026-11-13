@@ -38,7 +38,7 @@
 // ./number.ts.
 
 import type { Bundle, Eid, Plugin, Tx } from './types.ts'
-import { LETTERED, parse, type Parsed, SHORT } from './id.ts'
+import { answering, LETTERED, parse, type Parsed, SHORT } from './id.ts'
 import type { Vocab } from '@yaks/vocab'
 import { groupBy } from '@yaks/fp'
 
@@ -79,10 +79,7 @@ export let starting = (
  * prefix, which answers under any letter; for a bare number (`''`), every
  * holder. The living, where any are. */
 let holding = (found: Bundle[], prefix: string): Eid[] => {
-  let fit = !prefix ? found : [
-    found.filter((b) => b.entity.prefix == prefix),
-    found.filter((b) => !b.entity.prefix),
-  ].find((l) => l.length) ?? []
+  let fit = answering(found, prefix, (b) => b.entity)
   let live = fit.filter((b) => !b.tombstone)
   return (live.length ? live : fit).map((b) => b.entity.eid)
 }

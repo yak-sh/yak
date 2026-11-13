@@ -201,32 +201,6 @@ export let replaceIds = (text: string, f: (id: string) => string): string =>
 export let mentions = (text: string, id: string): boolean =>
   word(id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), '').test(text)
 
-/** What a map of ids is keyed by, from an id as typed or from an entity's row:
- * the pair, `B-7`, in capitals, so every case of one spelling meets. A bare
- * number keys as itself, and so does a row stored without a prefix, which
- * answers to its number under any letter: look such an id up under
- * {@link keys}. Undefined for what is not a human id and for an entity the
- * store has not numbered. */
-export let key = (
-  id: string | { num?: number | null; prefix?: string | null },
-): string | undefined => {
-  let p = typeof id == 'string'
-    ? parse(id)
-    : id.num
-    ? { prefix: id.prefix ?? '', num: id.num }
-    : undefined
-  return p ? p.prefix ? format(p.prefix, p.num) : String(p.num) : undefined
-}
-
-/** Every key an id as typed may be filed under ({@link key}): its pair, then
- * its bare number, which a row stored without a prefix is filed under. */
-export let keys = (id: string): string[] => {
-  let p = parse(id)
-  return !p ? [] : p.prefix ? [format(p.prefix, p.num), String(p.num)] : [
-    String(p.num),
-  ]
-}
-
 /** Whether an id as typed names this entity: its number, and its letter where
  * both the id and the entity carry one. */
 export let names = (
@@ -237,6 +211,23 @@ export let names = (
   return !!p && !!e.num && p.num == e.num &&
     (!p.prefix || !e.prefix || p.prefix == e.prefix)
 }
+
+/**
+ * Of the entities holding one number, those an id of that number with this
+ * letter names (`''` for a bare number): the ones holding the pair, else the
+ * ones stored without a prefix, which answer under any letter; for a bare
+ * number, every holder. `entity` reads an item's `entity{prefix}`. A graph
+ * resolves an id this way (`ids`), and so does a client over the rows it holds.
+ */
+export let answering = <T>(
+  held: T[],
+  prefix: string,
+  entity: (t: T) => { prefix?: string | null },
+): T[] =>
+  !prefix ? held : [
+    held.filter((t) => entity(t).prefix == prefix),
+    held.filter((t) => !entity(t).prefix),
+  ].find((l) => l.length) ?? []
 
 /** A copied short handle, normalized before resolving it through the graph. */
 export let addressId = (id: string): string =>

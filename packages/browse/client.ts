@@ -5,7 +5,7 @@
 // `.doc.title=Hello` sets doc.title; a property is always named with its
 // component. Values that look like numbers become numbers.
 import { IdError } from './types.ts'
-import { key, names } from '@yaks/id'
+import { answering, parse } from '@yaks/id'
 import { identityEid } from '@yaks/graph/identity'
 import { ownsSessionBranch } from './session_worktree.ts'
 import {
@@ -425,10 +425,22 @@ export let aliasNames = (all: Row[]) =>
   }))
 
 // Resolve 'T-3' / a bare num / a full eid / a SHORT-eid handle / an alias to a
-// row among these. Num first, then exact eid, then a sigilled hex prefix
-// (unique or it throws), then an alias key's name.
+// row among these. A human id first, as @yaks/id's `answering` reads it, then
+// exact eid, then a sigilled hex prefix, then an alias key's name. An id or a
+// handle several rows answer to throws, naming them.
 export let find = (all: Row[], id: string) => {
-  if (key(id)) return all.find((r) => names(id, r))
+  let p = parse(id)
+  if (p) {
+    let held = answering(all.filter((r) => r.num == p.num), p.prefix, (r) => r)
+    if (held.length > 1) {
+      throw new IdError(
+        `${id} is an ambiguous id — matches ${
+          held.map((r) => `${idOf(r)} (${r.eid})`).join(', ')
+        }`,
+      )
+    }
+    return held[0]
+  }
   let exact = all.find((r) => r.eid == id.toLowerCase())
   if (exact) return exact
   let hex = shortHex(id)

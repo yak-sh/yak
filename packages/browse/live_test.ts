@@ -2513,6 +2513,25 @@ test('findEid indexes human ids and short handles', () => {
   assertEquals(findEid('#abcdef'), one)
 })
 
+test('findEid reads an id as its prefix and number together', () => {
+  cache.value = {
+    t: { entity: { eid: 't', num: 7, prefix: 'T' } },
+    m: { entity: { eid: 'm', num: 7, prefix: 'M' } },
+    old: { entity: { eid: 'old', num: 8 } }, // stored before series had letters
+  }
+  assertEquals(['T-7', 'm-7', 'Q-7', 'T-8', 'M-8', '8'].map(findEid), [
+    't',
+    'm',
+    undefined,
+    'old',
+    'old',
+    'old',
+  ])
+  assertThrows(() => findEid('7'), Error, 'ambiguous') // two series hold it
+  applyLocal([{ eid: 'm', name: 'entity', comp: null }])
+  assertEquals(findEid('7'), 't')
+})
+
 test('server-resolve: an unloaded id resolves through one addressed sub', async () => {
   clearResolved()
   cache.value = {}

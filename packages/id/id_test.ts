@@ -6,13 +6,12 @@ import { assert, assertEquals } from '@std/assert'
 import { extendMeta, loadVocab, type VocabDoc } from '@yaks/vocab'
 import { ID_URI, idKeywords } from './keywords.ts'
 import {
+  answering,
   format,
   HUMAN,
   human,
   idOf,
   idsIn,
-  key,
-  keys,
   mentions,
   names,
   parse,
@@ -153,20 +152,19 @@ test('ids are found in prose only as words of their own', () => {
   assert(HUMAN.test('b-7') && !HUMAN.test('7') && !HUMAN.test('#a3f19c'))
 })
 
-test('an id keys by its pair, and names the entity holding it', () => {
-  assertEquals(['B-7', 'b-7', '7'].map((id) => key(id)), ['B-7', 'B-7', '7'])
-  assertEquals([key({ num: 7, prefix: 'B' }), key({ num: 7 })], ['B-7', '7'])
-  assertEquals([keys('b-7'), keys('7')], [['B-7', '7'], ['7']])
+test('an id names the entity holding its pair, or one stored without a prefix', () => {
+  let held = [{ e: 'b', prefix: 'B' }, { e: 'old' }, { e: 'a', prefix: 'A' }]
+  let named = (prefix: string, among = held) =>
+    answering(among, prefix, (h) => h).map((h) => h.e)
+  assertEquals(
+    [named('B'), named('T'), named(''), named('B', held.slice(2))],
+    [['b'], ['old'], ['b', 'old', 'a'], []],
+  )
   for (let typed of ['B-7', 'b-7', '7']) {
     assert(names(typed, { num: 7, prefix: 'B' }))
     // A row stored without a prefix answers under any letter.
     assert(names(typed, { num: 7 }))
   }
   assert(!names('A-7', { num: 7, prefix: 'B' }))
-  assertEquals([key('#a3f19c'), key({ num: null }), key({})], [
-    undefined,
-    undefined,
-    undefined,
-  ])
   assert(!names('B-7', { num: 8 }) && !names('B-0', {}))
 })

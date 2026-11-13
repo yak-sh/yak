@@ -40,7 +40,7 @@ import {
 import { useRows } from './subscriptions.ts'
 import { names as edgeNames } from '@yaks/edge'
 import { and, present } from '@yaks/query'
-import { type Ent, idOf, kindOf, statusOf, vocab } from '../types.ts'
+import { type Ent, idIn, idOf, kindOf, statusOf, vocab } from '../types.ts'
 import { entityPath } from '../url.ts'
 import { archetypeTables, rememberArchetype } from '../live_archetypes.ts'
 import { markup } from './Markdown.tsx'
@@ -293,8 +293,7 @@ export let ux: Host = {
   drafts,
   write,
   name: named,
-  id: (b) =>
-    idOf({ eid: b.entity.eid, kind: kindOf(b), num: Number(b.entity.num) }),
+  id: (b) => idIn(b.entity.eid, b),
   kind: (b) => kindOf(b),
   when: (at) => ago(at),
   find: rows,
