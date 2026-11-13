@@ -31,6 +31,8 @@ import {
   type MatchOpts,
 } from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
+import { Unknown } from '@yaks/vocab/runtime'
+import { Refused } from '@yaks/graph/errors'
 
 // Where a variable is filled from: an `id` (a pattern's entity, or a
 // reference) or a plain `value`, and how to read it off a bundle. A slot on one
@@ -54,18 +56,26 @@ let reader = (comp: string, prop: string, opts: MatchOpts) => {
       : (b[comp] as Record<string, unknown> | undefined)?.[prop] ?? null
 }
 
-// A bound property, followed through the references before its leaf.
+// A bound property, followed through the references before its leaf. A path
+// ending `entity.eid` reads the eid of the entity it reaches, a plain value.
 let slot = (v: Vocab, bind: Bind, opts: MatchOpts): Slot => {
   let path = bind.path.join('.')
   let hops = v.aim(path)
   let leaf = hops[hops.length - 1]
-  if (!leaf?.prop) throw new Error(`$${bind.name} names no property: .${path}`)
-  let prop = v.prop(leaf.comp, leaf.prop)
-  if (!prop) throw new Error(`no property ${leaf.comp}.${leaf.prop}`)
+  if (!leaf?.prop) {
+    throw new Unknown(path, `$${bind.name} names no property: .${path}`)
+  }
+  let spine = leaf.comp == 'entity' && leaf.prop == 'eid'
+  let prop = spine ? undefined : v.prop(leaf.comp, leaf.prop)
+  if (!prop && !spine) {
+    throw new Unknown(path, `no property ${path} for $${bind.name}`)
+  }
   let reads = hops.map((h) => reader(h.comp, h.prop, opts))
-  let kind: Slot['kind'] = prop.category == 'ref' ? 'id' : 'value'
+  let kind: Slot['kind'] = prop?.category == 'ref' ? 'id' : 'value'
   if (hops.length == 1) {
-    let at: Slot['at'] = prop.computed ? undefined : [leaf.comp, leaf.prop]
+    let at: Slot['at'] = !prop || prop.computed
+      ? undefined
+      : [leaf.comp, leaf.prop]
     return { kind, read: reads[0], at }
   }
   return {
@@ -135,12 +145,14 @@ let level = (
 ): Binding[] => {
   let pats = plan.patterns.map((p) => p.makes ? null : compiled(p, v, opts))
   // An id and a value are not comparable, so a variable that is an entity in
-  // one place and a plain value in another is refused rather than coerced.
+  // one place and a plain value in another is refused rather than coerced:
+  // the query is the caller's.
   let kinds = new Map<string, Slot['kind']>()
   for (let [name, s] of pats.flatMap((p) => p?.slots ?? [])) {
     if ((kinds.get(name) ?? s.kind) != s.kind) {
-      throw new Error(
-        `$${name} is an entity in one place and a plain value in another`,
+      throw new Refused(
+        `$${name} is an entity in one place and a plain value in another; ` +
+          `end the entity's path in .entity.eid to compare its eid as a value`,
       )
     }
     kinds.set(name, s.kind)

@@ -34,6 +34,7 @@
 
 import { field } from './sqlite.ts'
 import type { Vocab } from '@yaks/vocab'
+import { Unknown } from '@yaks/vocab/runtime'
 import { type And, present } from '@yaks/query/core'
 import {
   among,
@@ -55,6 +56,22 @@ import { q } from './render.ts'
 import { type BindOpts, boundReads } from './bind.ts'
 import type { Extension } from './extend.ts'
 import { type Dialect, refEqAt, sqlite } from './sqlite.ts'
+
+// The spine's own id, `entity.eid`, as a hop.
+let spine = (hop: { comp: string; prop: string }) =>
+  hop.comp == 'entity' && hop.prop == 'eid'
+
+// The refusal of a variable that is an entity in one pattern and a plain value
+// in another. The query is the caller's, so it is a `Refused` (by name:
+// @yaks/graph sits above this package), and it says how to compare the two.
+let mixed = (name: string): Error => {
+  let no = new Error(
+    `$${name} is an entity in one place and a plain value in another; ` +
+      `end the entity's path in .entity.eid to compare its eid as a value`,
+  )
+  no.name = 'Refused'
+  return no
+}
 
 /** A rule's match as this statement reads it — @yaks/graph's `Match`, named
  * here by its shape because @yaks/graph sits above this package. */
@@ -195,26 +212,29 @@ export let rule = (
     // makes the join it always would. A component the filter already named is
     // joined once: the binder keeps its tables in a set. A path through
     // references (`.speaker.recording.meeting`) is read from the entity it
-    // reaches, as any query reads one: the root need not wear its far end.
+    // reaches, as any query reads one: the root need not wear its far end. A
+    // path ending `entity.eid` reads the eid of the entity it reaches, as a
+    // plain value: what a string property holding an eid compares with.
     let binds = p.binds.map((b) => {
       let path = b.path.join('.')
       let hops = vocab.aim(path)
       let leaf = hops[hops.length - 1]
-      if (!leaf?.prop) throw new Error(`$${b.name} names no property: .${path}`)
-      // An entity's eid is a plain value, so a variable that names one as
-      // text (`document.blob`, say) meets it there.
-      let eid = leaf.comp == 'entity' && leaf.prop == 'eid'
-      let def = eid ? { category: 'value' } : vocab.prop(leaf.comp, leaf.prop)
-      if (!def) {
-        throw new Error(`no property ${leaf.comp}.${leaf.prop} for $${b.name}`)
+      if (!leaf?.prop) {
+        throw new Unknown(path, `$${b.name} names no property: .${path}`)
       }
-      return { ...b, path, hops, ref: def.category == 'ref' }
+      let def = spine(leaf) ? undefined : vocab.prop(leaf.comp, leaf.prop)
+      if (!def && !spine(leaf)) {
+        throw new Unknown(path, `no property ${path} for $${b.name}`)
+      }
+      return { ...b, path, hops, ref: def?.category == 'ref' }
     })
     let filter = {
       ...p.filter,
       clauses: [
         ...p.filter.clauses,
-        ...binds.map((b) => present(b.hops[0].comp)),
+        ...binds.flatMap((b) =>
+          spine(b.hops[0]) ? [] : [present(b.hops[0].comp)]
+        ),
       ],
     }
     let { select: r, fields } = boundReads(
@@ -296,14 +316,9 @@ export let rule = (
 
   // The join proper: every slot of a variable is the same value. An id and a
   // value are not comparable — a reference stores an integer, a scalar stores
-  // itself — so mixing them throws rather than compiling.
+  // itself — so the query mixing them is refused rather than compiled.
   for (let [name, held] of slots) {
-    let kinds = new Set(held.map((s) => s.kind))
-    if (kinds.size > 1) {
-      throw new Error(
-        `$${name} is an entity in one place and a plain value in another`,
-      )
-    }
+    if (new Set(held.map((s) => s.kind)).size > 1) throw mixed(name)
     for (let other of held.slice(1)) {
       conds.push(raw(`${held[0].sql} = ${other.sql}`))
     }

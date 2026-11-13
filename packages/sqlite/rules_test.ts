@@ -148,6 +148,11 @@ test("an entity's eid binds as a plain value, as text that names it does", () =>
     ).map((row) => row.vars),
     [{ r: 'r1', p: 'p1' }],
   )
+  assertEquals(
+    matched(driver, match('.product.price>5, entity.eid=$e'), shop)
+      .map((row) => row.vars),
+    [{ e: 'p1' }],
+  )
 })
 
 test('a top-level collection has one outer binding, even when empty', () => {
@@ -207,11 +212,13 @@ test('a variable can tie two plain properties together', () => {
 })
 
 test('an entity variable and a plain value are not the same slot', () => {
-  assertThrows(
+  // The query is the caller's mistake, so it is refused, not a fault.
+  let no = assertThrows(
     () => render(rule(match('$x .product; .doc.title=$x'), shop)),
     Error,
     'entity in one place',
   )
+  assertEquals(no.name, 'Refused')
 })
 
 test('the same statement reads a batch that has not landed', () => {
