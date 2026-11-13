@@ -696,52 +696,75 @@ export let lines = (
     ])
   let calls = new Set(entries.map((b) => b.entity.eid))
   let inside = asked(entries)
-  let folds = new Map<
-    string,
-    { of: string[]; uses: string[]; nodes: Node[] }
-  >()
-  return [
-    ...entries.flatMap((b): Line[] => {
-      let id = b.entity.eid
-      let body = String(comp(b, 'content')?.body ?? '')
-      let told = prompts.get(id)
-      let result = results.get(id)
-      let helping = b.call && helpers.some((one) => one.call == id)
-      let thread = threads[id]
-      let drawn: Line[] = thread
-        ? [{ id, uses: [id], ...threaded(thread) }]
-        : told
-        ? [{ id, uses: told.uses, node: told.draw() }]
-        : b.call
-        ? [{
+  let folds = new Map<string, Fold>()
+  let drawn: (Line | Fold)[] = []
+  let byId = new Map(entries.map((b) => [b.entity.eid, b]))
+  let said = (id: string) => !!comp(byId.get(id), 'operator_call')?.said
+  let wrap = (line: Line, rows: Bundle[]) => {
+    let row = archivable(line, rows)
+    return { ...row, node: measured(row.node, metadata?.[line.id]) }
+  }
+  for (let b of entries) {
+    let id = b.entity.eid
+    let body = String(comp(b, 'content')?.body ?? '')
+    let told = prompts.get(id)
+    let result = results.get(id)
+    let helping = b.call && helpers.some((one) => one.call == id)
+    let thread = threads[id]
+    let unwrapped: Line[] = thread
+      ? [{ id, uses: [id], ...threaded(thread) }]
+      : told
+      ? [{ id, uses: told.uses, node: told.draw() }]
+      : b.call
+      ? [{
+        id,
+        uses: [
+          ...helping ? before : [],
           id,
-          uses: [
-            ...helping ? before : [],
-            id,
-            ...result ? [result.entity.eid] : [],
-          ],
-          ...tool(b, names, result, under(id)),
-        }]
-        : line(b, id, body, opens)
-      drawn = drawn.map((line) => {
-        let row = archivable(line, result ? [b, result] : [b])
-        return { ...row, node: measured(row.node, metadata?.[id]) }
-      })
-      before = sources.get(id) ?? before
-      let at = inside.get(id)
-      if (!at) return drawn
-      let fold = folds.get(at)
-      let uses = drawn.flatMap((l) => l.uses)
-      if (fold) {
-        fold.of.push(id)
-        fold.uses.push(id, ...uses)
-        fold.nodes.push(...drawn.map((l) => l.node))
-        return []
+          ...result ? [result.entity.eid] : [],
+        ],
+        ...tool(b, names, result, under(id)),
+      }]
+      : line(b, id, body, opens)
+    let these = unwrapped.map((l) => wrap(l, result ? [b, result] : [b]))
+    before = sources.get(id) ?? before
+    let at = inside.get(id)
+    let fold = at && folds.get(at)
+    if (fold) {
+      fold.of.push(id)
+      fold.uses.push(id, ...these.flatMap((l) => l.uses))
+      fold.nodes.push(...these.map((l) => l.node))
+    } else if (at) {
+      // The request opens under the caller's words before it, past what the
+      // voice said since, which say it; with none, its own words stand for
+      // them.
+      let back = drawn.findLastIndex((l) => 'nodes' in l || !said(l.id))
+      let last = drawn[back]
+      let by = last && !('nodes' in last) && heard(byId.get(last.id)) ||
+        { b, said: spoken(b, body) }
+      fold = {
+        ...by,
+        of: [...new Set([by.b.entity.eid, id])],
+        uses: [...new Set([by.b.entity.eid, id])],
+        nodes: [],
       }
-      fold = { of: [id], uses: [id, ...uses], nodes: drawn.map((l) => l.node) }
       folds.set(at, fold)
-      return [{ id, of: fold.of, uses: fold.uses, node: h(Asked, fold) }]
-    }),
+      if (by.b == b) drawn.push(fold)
+      else drawn[back] = fold
+    } else drawn.push(...these)
+  }
+  return [
+    ...drawn.map((l) =>
+      'nodes' in l
+        ? wrap({
+          id: l.of[0],
+          of: l.of,
+          uses: l.uses,
+          node: h(Called, l),
+          text: l.said,
+        }, [l.b])
+        : l
+    ),
     // A helper no step of these started (one given a task) closes the list.
     ...helpers.filter((h) => !h.call || !calls.has(h.call))
       .flatMap((h) => helped(h, offers, page))
@@ -775,16 +798,44 @@ export let asked = (entries: Bundle[]) => {
   return inside
 }
 
-// The exchange folded behind a small mark between what the caller said and
-// what they heard: their request and the Operator's work and answer.
-let Asked = ({ nodes }: { nodes: Node[] }) =>
+// A turn of a call: the caller's words (`said`, of `b`), and folded under
+// them the request their talking model made of them, the Operator's work
+// and its written answer, `of` and `uses` the ids it is drawn from.
+type Fold = {
+  b: Bundle
+  said: string
+  of: string[]
+  uses: string[]
+  nodes: Node[]
+}
+
+// The caller's words on a call, as they were heard.
+let heard = (b?: Bundle) => {
+  let called = comp(b, 'operator_call')
+  if (!b || !called || called.said || called.began || !b.notice) return
+  let said = spoken(b, String(comp(b, 'content')?.body ?? ''))
+  return said ? { b, said } : undefined
+}
+
+// The caller's words, whose phone mark opens what the Operator was asked of
+// them and did, under them.
+let Called = ({ said, nodes }: Fold) =>
   h(
     More.Branch,
     {},
-    h(More.Mark, {
-      title: 'What was asked of the Operator',
-      'aria-label': 'What was asked of the Operator',
-    }, h(Icon, { of: icons['message-circle'] })),
+    h(
+      More.Mark,
+      {},
+      h(
+        Transcript.Bubble,
+        {},
+        h(Transcript.Via, {
+          title: 'By phone: what the Operator did with it',
+          'aria-label': 'By phone: what the Operator did with it',
+        }, h(Icon, { of: icons.phone })),
+        said,
+      ),
+    ),
     h(More.Children, {}, ...nodes),
   )
 

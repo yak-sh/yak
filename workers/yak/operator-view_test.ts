@@ -225,18 +225,20 @@ test('a person sees only their words, marked with the channel they came by, unle
   )
 })
 
-test("a call's turn draws the caller's words and what they heard, the request and its answer folded behind a mark, redrawn as the answer comes", () => {
+test("a call's turn draws the caller's words, whose phone mark opens the Operator's work and answer under them, and what they heard", () => {
+  let words = entry('h', 1, {
+    content: { body: `${HEARD}Any errors?` },
+    notice: {},
+    operator_call: { call: 'c' },
+    operator_channel: { channel: 'voice', framing: HEARD },
+  })
+  let request = entry('r', 2, {
+    content: { body: 'User asks: any errors?' },
+    operator_call: { call: 'c', asked: true },
+  })
   let turn = [
-    entry('h', 1, {
-      content: { body: `${HEARD}Any errors?` },
-      notice: {},
-      operator_call: { call: 'c' },
-      operator_channel: { channel: 'voice', framing: HEARD },
-    }),
-    entry('r', 2, {
-      content: { body: 'User asks: any errors?' },
-      operator_call: { call: 'c', asked: true },
-    }),
+    words,
+    request,
     entry('ask', 3, { ask: { to: 'm', through: 'r' } }),
     entry('call', 4, { call: { to: 'tool', args: {} } }),
     entry('back', 5, { content: { body: '[]' }, result: { call: 'call' } }),
@@ -248,26 +250,29 @@ test("a call's turn draws the caller's words and what they heard, the request an
     }),
     entry('next', 8, { content: { body: 'Thanks' } }),
   ]
-  let { document } = parseHTML(
-    `<main>${rows(turn, names).map((r) => r.html).join('')}</main>`,
-  )
-  let texts = (q: string) =>
-    [...document.querySelectorAll(q)].map((e) => e.textContent!.trim())
-  assertEquals(texts('.Transcript_Bubble:not(.More_Branch *)'), [
-    'Any errors?',
-    'Thanks',
-  ])
-  assertEquals(texts('.More_Branch .Transcript_Bubble'), [
-    'User asks: any errors?',
-  ])
-  assertEquals(texts('.More_Branch .Transcript_Reply'), ['None.'])
-  assertEquals(texts('.More_Branch .More_Inline > summary'), ['Did tool'])
+  let drawn = (entries: typeof turn) => {
+    let { document } = parseHTML(
+      `<main>${rows(entries, names).map((r) => r.html).join('')}</main>`,
+    )
+    return (q: string) =>
+      [...document.querySelectorAll(q)].map((e) => e.textContent!.trim())
+  }
+  let texts = drawn(turn)
+  assertEquals(texts('.Transcript_Bubble'), ['Any errors?', 'Thanks'])
+  assertEquals(texts('.More_Branch > .More_Mark .Transcript_Via[title]'), [''])
+  assertEquals(texts('.More_Branch > .More_Mark'), ['Any errors?'])
+  assertEquals(texts('.More_Children .Transcript_Reply'), ['None.'])
+  assertEquals(texts('.More_Children .More_Inline > summary'), ['Did tool'])
   assertEquals(
-    texts('.Transcript_Reply:not(.More_Branch *)'),
+    texts('.Transcript_Reply:not(.More_Children *)'),
     ['No errors at all.'],
   )
-  // The answer coming back redraws the fold, under its request's id.
-  assertEquals(touched(turn, names, 5).map((r) => r.id), ['r', 's', 'next'])
+  // The answer coming back redraws the caller's words and what is under them.
+  assertEquals(touched(turn, names, 5).map((r) => r.id), ['h', 's', 'next'])
+  // A request with no words of the caller's before it stands for them.
+  assertEquals(drawn(turn.slice(1))('.More_Branch > .More_Mark'), [
+    'User asks: any errors?',
+  ])
 })
 
 test("words the platform wrote read as the system's in one closed line, never as the person's", () => {

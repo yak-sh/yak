@@ -129,7 +129,6 @@ test('each line sent alone draws from its own entries what the conversation draw
     'c4',
     'ask2',
     'h',
-    'q',
     'no',
     'gask',
   ])

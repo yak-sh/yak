@@ -938,7 +938,7 @@ test("a talking model's backend calls the Operator's own tools: their refusal is
   await c.call.ended
 })
 
-test("a recorded call is the caller's conversation: their words theirs, its voice's the Operator's own, and what its voice asked folded behind a mark", async () => {
+test("a recorded call is the caller's conversation: their words theirs, its voice's the Operator's own, and what its voice asked folded under the caller's words", async () => {
   let { env } = platform('call-notes')
   let person = crypto.randomUUID()
   let dir = directoryOf(env.STORE)
@@ -1012,15 +1012,18 @@ test("a recorded call is the caller's conversation: their words theirs, its voic
   let root = rootOf(space.eid, person)
   equal((await workOf(store, space.eid, person)).map((w) => w.open), [root])
 
-  // The conversation: the caller's words and what they heard, the request
-  // and the Operator's written answer only behind the mark between them.
+  // The conversation: the caller's words and what they heard, the Operator's
+  // written answer folded under the words it answers, opened by their mark.
   let { html } = await conversationOf(store, '/at', root)
   let { document } = parseHTML(`<div>${html}</div>`)
   let texts = (q: string) =>
     [...document.querySelectorAll(q)].map((e) => e.textContent!.trim())
-  let open = ':not(.More_Branch *)'
+  let open = ':not(.More_Children *)'
   equal(texts(`.Transcript_Bubble${open}`), [
     'Hi Ellihu, how are you this evening?',
+    'Hi, Ellahu, do any of my apps have errors right now?',
+  ])
+  equal(texts('.More_Branch > .More_Mark'), [
     'Hi, Ellahu, do any of my apps have errors right now?',
   ])
   equal(texts(`.Transcript_Reply${open}`), [
@@ -1029,10 +1032,8 @@ test("a recorded call is the caller's conversation: their words theirs, its voic
     'Certainly, one moment.',
     'You have one open error in Mossvale.',
   ])
-  equal(texts('.More_Branch .Transcript_Bubble'), [
-    'Hi Elihu, do any of my apps have errors right now?',
-  ])
-  equal(texts('.More_Branch .Transcript_Reply'), [
+  equal(texts('.More_Children .Transcript_Bubble'), [])
+  equal(texts('.More_Children .Transcript_Reply'), [
     'Mossvale has one open error.',
   ])
   equal(
