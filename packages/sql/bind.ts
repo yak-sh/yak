@@ -2242,8 +2242,14 @@ let few = (ctx: Ctx, clauses: Clause[]): Pred | undefined =>
 
 // A stored reference presence test needs only its owner's key. Its root
 // lookup and every following hop remain scoped inside the compiled condition.
+// So does a reverse association's presence, absence or count, one index search
+// of the child's reference column: `.call .execution !results` tested each of
+// the box's 514,000 claimed calls for visibility before the 447 without a
+// result were kept, 10 s on a cold page cache (T-165505).
 let keyTest = (ctx: Ctx, c: Clause): boolean => {
-  if (c.kind != 'pred' || c.not || c.where || c.path.length < 3) return false
+  if (c.kind != 'pred' || c.not || c.where) return false
+  if (c.path.length == 1 && ctx.v.assoc(c.path[0])) return true
+  if (c.path.length < 3) return false
   let hops = aimed(ctx, c)
   return !!hops && !hops.at(-1)!.prop && hops[0].comp != 'entity' &&
     ['', EXISTS].includes(opOf(c)) &&
