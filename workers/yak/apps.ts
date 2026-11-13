@@ -1143,6 +1143,9 @@ let asset = async (
   // without it — what a manifest names, since a home screen keeps it.
   at: string,
   c: Clock,
+  // The app's copy its page is filled with, read beside the page's bytes, or
+  // null when it fills none (not a page, or a page its own worker asked for).
+  copy: Promise<Copy | null> | null,
   bare = at,
   // A sandboxed app's page is woven these tags too: its storage (installed.ts
   // `stored`), asked for only once the file turns out to be a page.
@@ -1156,8 +1159,6 @@ let asset = async (
     ? redirected(req, env, app, prefix, decoded, at)
     : null
   gone?.catch(() => {})
-  // A page an app's worker asked for is filled with the worker's answer.
-  let copy = files.page(path) && !bearing(req) ? copyFor(env, space, app) : null
   let range = req.method == 'GET' ? req.headers.get('range') : null
   let got = await c.time(
     'bytes',
@@ -3433,6 +3434,10 @@ let served = async (
   // The wasted read is the rare case — an app whose worker answers — and it
   // is one small GET. The `catch` is there because a promise nobody awaits
   // must not surface as an unhandled rejection.
+  // The page's copy, read once for whichever answers it: the files' page, or
+  // the worker's, while it runs. A page the worker asked for is filled with
+  // the worker's answer, so it is read none.
+  let copy = !itself && files.page(path) ? copyFor(env, space, app) : null
   let file = mayRead
     ? asset(
       req,
@@ -3443,13 +3448,12 @@ let served = async (
       path,
       at,
       c,
+      copy,
       bare,
       walls ? () => storing(env, space!, app!, who, at) : undefined,
     )
     : null
   file?.catch(() => {})
-  // A worker's page is filled with its app's copy, read while it runs.
-  let copy = !itself && files.page(path) ? copyFor(env, space, app) : null
   let own = itself
     ? null
     : await c.time('worker', () => ran(env, space!, app!, req, who))
