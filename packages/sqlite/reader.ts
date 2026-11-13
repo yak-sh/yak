@@ -53,19 +53,23 @@ export let options = <T extends BindOpts>(
   return () => {
     let current = revision(driver, 'schema')
     if (tagged && schema == current) return tagged
+    // The schema is taken as seen only once its look is done: a look that
+    // failed (the storage refused a read) is looked again by the next.
+    let seen = (options: T) => {
+      schema = current
+      return tagged = options
+    }
     // A component nothing has written yet has no table (./raise.ts), which
     // the file says without a look at its whole schema.
     let unwritten = unraised(driver, vocab)
-    let was = schema
-    schema = current
     // Where only first writes moved the schema since the last look, what it
     // found stands, but for the tables they made.
-    if (found && was !== undefined && raisedOnly(driver, was, current)) {
-      return tagged = bound({ ...found, absent: [] }, unwritten)
+    if (found && schema !== undefined && raisedOnly(driver, schema, current)) {
+      return seen(bound({ ...found, absent: [] }, unwritten))
     }
-    let inspect = !!driver.file || was !== undefined
+    let inspect = !!driver.file || schema !== undefined
     if (!inspect && !base.backed) {
-      return tagged = unwritten.length ? absented(vocab, base, unwritten) : base
+      return seen(unwritten.length ? absented(vocab, base, unwritten) : base)
     }
     // What a writer found when it last looked, where the schema has not
     // moved since (./survey.ts), or else a look at the file now.
@@ -73,7 +77,7 @@ export let options = <T extends BindOpts>(
       ? surveyed(driver, vocab, base.derived) ??
         glance(driver, vocab, base.derived)
       : { lacking: [], absent: [], unindexed: [] }
-    return tagged = bound(found, unwritten)
+    return seen(bound(found, unwritten))
   }
 }
 

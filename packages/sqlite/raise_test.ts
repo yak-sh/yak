@@ -195,6 +195,21 @@ test('a table a first write makes is owed its statistics once it holds rows', ()
   equal([analyzed('tag'), analyzed('doc')], [true, true])
 })
 
+test('a look at the raised tables the storage refused is taken again', async () => {
+  let d = mem(), s = made(d), refusing = false
+  let query = d.query
+  d.query = (stmt) => {
+    if (refusing) throw new Error('SQLITE_IOERR')
+    return query(stmt)
+  }
+  equal(s.read('.doc'), [])
+  await s.tx((tx) => tx.patch([{ entity: { eid: 'a' }, doc: { title: 'Hi' } }]))
+  refusing = true
+  await throws(() => s.read('.doc'))
+  refusing = false
+  equal(s.read('.doc')[0].doc, { title: 'Hi' })
+})
+
 test('a reader of a file sees the tables another connection raised', () => {
   let path = Deno.makeTempFileSync({ suffix: '.db' })
   let w = open(path), r = open(path)
