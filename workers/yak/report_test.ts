@@ -15,6 +15,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { fetch as fileFetch } from './files.ts'
+import { COPY } from './page-copy.ts'
 import { test, tick, until } from '@yaks/testing'
 import type { Bundle, Comp } from '@yaks/graph'
 import {
@@ -672,7 +673,10 @@ test("the platform's own scripts are never the app's break", async () => {
 // one seam (dispatch.ts `ran`), which files its own breaks, so nothing that
 // escapes to the catch-all was ever the app's. The break staged here is one
 // file service call while serving a page — and it proves what an eviction would:
-// our code fell over on the app's address, with no app code near it.
+// our code fell over on the app's address, with no app code near it. Only the
+// page's own: a copy.json that cannot be read is reported at its read and the
+// page served as written (apps.ts `copyFor`), and the catch-all's report of
+// the same fault would then wait out the reporter's window as its repeat.
 let platformBreak = await (async () => {
   let captured: Bundle[] = [], failing = ''
   let k = await fresh({
@@ -686,7 +690,10 @@ let platformBreak = await (async () => {
     let files = env.FILES
     env.FILES = {
       fetch: (req) => {
-        if (failing == 'files') throw new Error('file service unavailable')
+        let page = !new URL(req.url).pathname.endsWith(`/${COPY}`)
+        if (failing == 'files' && page) {
+          throw new Error('file service unavailable')
+        }
         return files ? files.fetch(req) : fileFetch(req, env)
       },
     }

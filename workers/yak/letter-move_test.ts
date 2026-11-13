@@ -4,6 +4,7 @@ import { type Bundle, graph, Refused } from '@yaks/graph'
 import { idDoc, idKeywords } from '@yaks/id'
 import { ids } from '@yaks/id/graph'
 import { storage } from '@yaks/sqlite'
+import { SIZES } from '@yaks/sqlite/owe'
 import { mem } from '@yaks/sqlite/testing'
 import { loadVocab } from '@yaks/vocab'
 import { letterRule, printed } from './letter-move.ts'
@@ -45,7 +46,12 @@ old.tx((tx) =>
     { entity: { eid: 'home' }, space: {} },
   ])
 )
-let store = storage(d, vocab, { number: numbered(vocab) })
+// Too big to move at install, as the directory is (@yaks/sqlite `respined`):
+// its spine keeps the number unique on its own until its own migration.
+let store = storage(d, vocab, {
+  number: numbered(vocab),
+  sizes: { ...SIZES, copy: 3 },
+})
 store.install()
 let g = graph({ storage: store, vocab, plugins: [ids(vocab)] })
 let find = async () => (await g.read(letterRule.find)) as Bundle[]

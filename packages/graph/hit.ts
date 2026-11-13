@@ -6,7 +6,7 @@
 // structured content keep every component.
 import type { Bundle, Comp } from './bundle.ts'
 import type { Vocab } from '@yaks/vocab'
-import { idOf } from '@yaks/id'
+import { format, prefixOf } from '@yaks/id'
 
 /** A search row's line: which row it is, what it is, what it is called, the
  * words around the match, and that words found it. */
@@ -36,19 +36,16 @@ let kindOf = (vocab: Vocab, b: Bundle): string => vocab.kindOf(b) || 'entity'
  * let say = called(loadVocab({ $defs: { project } }))
  * equal(say({ entity: { eid: 'e1', num: 45602, prefix: 'P' }, project: {} }), 'P-45602')
  * equal(say({ entity: { eid: 'e1' }, project: {} }), 'e1')
+ * equal(say({ entity: { eid: 'e1', num: 7 }, note: {} }), 'e1')
  * ```
  */
 export let called = (vocab: Vocab): (b: Bundle) => string => {
-  let id = idOf(vocab)
-  return (b) =>
-    b.entity.num
-      ? id({
-        eid: b.entity.eid,
-        kind: kindOf(vocab, b),
-        num: b.entity.num,
-        prefix: b.entity.prefix,
-      })
-      : b.entity.eid
+  let letter = prefixOf(vocab)
+  return (b) => {
+    let { eid, num, prefix } = b.entity
+    let series = num ? prefix || letter(kindOf(vocab, b)) : undefined
+    return series ? format(series, num!) : eid
+  }
 }
 
 // How much of a text a snippet keeps before and after its first match.

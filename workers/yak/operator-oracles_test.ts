@@ -4,7 +4,7 @@ import type { Comp } from '@yaks/graph'
 import { parseTools } from '@yaks/tools/declared'
 import type { Item, Request } from '@yaks/model'
 import { ORACLE } from '@yaks/topic'
-import { human, short } from '@yaks/id'
+import { short } from '@yaks/id'
 import { platform } from './directory-rows-probe.ts'
 import { declared } from './directory-fixture.ts'
 import { directoryOf, stamp } from './directory.ts'
@@ -78,11 +78,11 @@ let call = (name: string, args: object): Item[] => {
   return [{ kind: 'call', id, name, args: JSON.stringify(args) }]
 }
 let say = (text: string): Item[] => [{ kind: 'assistant', text }]
+// The oracle's ask is the one its persona heads, under whatever id it has.
+let ORACLED = /^# \S+ Oracle$/m
 let script = (req: Request): Item[] => {
   let text = String(req.instructions)
-  let oracle = text.includes(
-    `# ${human(store.vocab)({ entity: { eid: ORACLE } })} Oracle`,
-  )
+  let oracle = ORACLED.test(text)
   let fork = JSON.stringify(req.items).includes('fork of the')
   let last = req.items.at(-1)!
   let outcome = last.kind == 'user'
@@ -164,11 +164,7 @@ let rootAsk = asked[0]
 let forkAsk = asked.find((r) =>
   JSON.stringify(r.items).includes('fork of the')
 )!
-let oracleAsk = asked.find((r) =>
-  String(r.instructions).includes(
-    `# ${human(store.vocab)({ entity: { eid: ORACLE } })} Oracle`,
-  )
-)!
+let oracleAsk = asked.find((r) => ORACLED.test(String(r.instructions)))!
 let [learned] = await store.g.get([app.eid])
 let drawn = await conversationOf(store, '/at', started.session)
 
