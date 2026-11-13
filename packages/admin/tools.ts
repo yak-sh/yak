@@ -2,7 +2,6 @@
 // connections computes the person's own account, else the oldest sign-in.
 
 import * as fs from '@yaks/file/io'
-import * as systemProcess from '@yaks/process/system'
 import { checkout } from './checkout.ts'
 import { basename, dirname } from 'node:path'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
@@ -67,7 +66,7 @@ import { gateway } from './gateway.ts'
 import { erase } from './erase.ts'
 import { select, sweep } from './move.ts'
 import { relocate } from './relocate.ts'
-import { push, type PushProgress, read, versions } from './push.ts'
+import { homeOf, push, type PushProgress, read, versions } from './push.ts'
 import { errors, tail } from './logs.ts'
 import { revert } from './revert.ts'
 
@@ -559,9 +558,7 @@ export let runs = (
         title: word(a, 'title'),
       }
       let known = await versions(
-        host.config.db && host.config.db != ':memory:'
-          ? dirname(host.config.db)
-          : `${systemProcess.env.get('HOME')}/.yak`,
+        homeOf(host.config.db),
         JSON.stringify([
           zone(),
           at.address,

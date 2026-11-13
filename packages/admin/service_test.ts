@@ -6,14 +6,15 @@
 // slower deploys, or a home page that does not answer, are reported.
 import { equal, match, ok, test } from '@yaks/testing'
 import { system } from '@yaks/fp'
-import { graph } from '@yaks/graph'
+import { type Graph, graph } from '@yaks/graph'
+import type { Host } from '@yaks/host'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { Interrupted } from '@yaks/tools/errors'
 import { BOUND, type Build, firstShown, LATE, SLOW, WINDOW } from './catchup.ts'
 import { adminDoc } from './vocab.ts'
-import { type Doors, pass, service } from './service.ts'
+import { type Doors, pass, releases, service } from './service.ts'
 import { Unavailable } from '@yaks/cloudflare/api'
 import { PENDING } from '@yaks/cloudflare/hook'
 import { versionMessage } from '@yaks/cloudflare/wrangler'
@@ -64,6 +65,8 @@ let fixture = (
       started++
       return Promise.resolve('build aa194fb5 queued')
     },
+    tree: () => Promise.resolve(undefined),
+    release: () => Promise.resolve([]),
     now: () => at.now,
     wait: () => Promise.resolve(),
   }
@@ -94,6 +97,12 @@ let fixture = (
     },
   }
 }
+
+// The service's host: its doors are given, so it signs in to nothing.
+let host = (g: Graph, report: Host['report']) =>
+  ({ graph: g, report, vault: {}, config: {} }) as unknown as Parameters<
+    typeof service
+  >[0]
 
 let beforeBound = fixture()
 beforeBound.at.now = landed + LATE - MIN
@@ -349,7 +358,7 @@ test('the service reads a settled head no more, and a failing look once', async 
     return main()
   }
   await service(
-    { graph: f.g, report: (error) => void reports.push(error) },
+    host(f.g, (error) => void reports.push(error)),
     { every: 0 },
     stop.signal,
     f.doors,
@@ -382,15 +391,12 @@ let watched = async (fails: ('down' | 'refused')[]) => {
   console.warn = () => {}
   try {
     await service(
-      {
-        graph: f.g,
-        report: (error, context) => {
-          let { message, cause } = error as Error
-          if (context?.tags?.duty == 'usage watch') {
-            reports.push(cause ? `${message} (${cause})` : message)
-          }
-        },
-      },
+      host(f.g, (error, context) => {
+        let { message, cause } = error as Error
+        if (context?.tags?.duty == 'usage watch') {
+          reports.push(cause ? `${message} (${cause})` : message)
+        }
+      }),
       { every: 0, account: 'a', analytics: 't' },
       stop.signal,
       f.doors,
@@ -427,7 +433,7 @@ test('a look cut off by shutdown is not reported', async () => {
     return main()
   }
   await service(
-    { graph: f.g, report: (error) => void reports.push(error) },
+    host(f.g, (error) => void reports.push(error)),
     { every: 0 },
     stop.signal,
     f.doors,
@@ -442,4 +448,31 @@ test("a head's clock starts when it is first shown and holds until the head move
   t = 60_000
   equal(shown('a'), { sha: 'a', at: 0 })
   equal(shown('b'), { sha: 'b', at: 60_000 })
+})
+
+// A release of each tree the live commit's apps/home has: one push, none for
+// a commit that left it alone, and a failed push tried again at each look and
+// reported once.
+test('the home app is released once for each tree main puts live, and a failing release is retried', async () => {
+  let trees: Record<string, string> = { a: 't1', b: 't1', c: 't2', d: 't3' }
+  let pushed: string[] = []
+  let fails = 0
+  let reports: string[] = []
+  let release = releases({
+    tree: (sha) => Promise.resolve(trees[sha]),
+    release: (sha, to) => {
+      if (sha == 'd' && fails++ < 2) return Promise.reject(new Error('503'))
+      pushed.push(`${sha}:${to.app}`)
+      return Promise.resolve([])
+    },
+  }, (error, context) => void reports.push(`${context?.fault}: ${error}`))
+  let log = console.log
+  console.log = () => {}
+  try {
+    for (let sha of ['a', 'a', 'b', 'c', 'd', 'd', 'd', 'd']) await release(sha)
+  } finally {
+    console.log = log
+  }
+  equal(pushed, ['a:home', 'c:home', 'd:home'])
+  equal(reports, ['release:home: Error: 503'])
 })

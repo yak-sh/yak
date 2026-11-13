@@ -257,8 +257,8 @@ the assistants' connector directories for those who already use one.
   and names or quotes a customer only once they have said we may, in their own
   words (T-157489; nobody has yet). The home page is workers/yak/site/home.tsx,
   drawn from the kit's parts into the `home` app in the `yak` space (apps/home,
-  `deno task content`, then `yak admin push apps/home --space yak --as
-  admin@bot.yak.sh`), which the apex answers it from. It carries a
+  written by `deno task content` and released by the box's deploy catch-up once
+  main's head is live), which the apex answers it from. It carries a
   JSON-LD copy of the plans and a card for each of the three, as
   site/pricing.tsx has; a plan on sale is a card on both pages, never a note
   under them. Next to it are site/pricing.tsx, site/help.tsx and the Limits

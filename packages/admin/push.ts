@@ -28,6 +28,8 @@
 // and a push that changes nothing deploys nothing.
 
 import * as fs from '@yaks/file/io'
+import * as systemProcess from '@yaks/process/system'
+import { dirname } from 'node:path'
 
 import { merge } from '@yaks/copy'
 import { CallError } from '@yaks/tools/errors'
@@ -76,10 +78,11 @@ export type PushProgress =
   }
 
 /** The checkout a push reads from: each earlier text git has of a file,
- * newest first, and writing a file back into it. */
+ * newest first, and writing a file back into it where it has a working tree
+ * (a release from a commit has none). */
 export type Checkout = {
   earlier: (path: string) => AsyncIterable<string>
-  write: (path: string, content: string) => Promise<void>
+  write?: (path: string, content: string) => Promise<void>
 }
 
 /** A push's base version, confirmation and progress, its bounded wait for
@@ -372,10 +375,14 @@ export let push = async (
   ) {
     let content = await copied(ask, at, ours.content, opts.checkout)
     if (content != ours.content) {
-      await opts.checkout?.write(COPY, content)
+      let write = opts.checkout?.write
+      await write?.(COPY, content)
       local = local.with(copyAt, { path: COPY, content })
       hashes[copyAt] = await shaOf(local[copyAt])
-      said.push(`${COPY}: kept the edits made on the page, in the checkout too`)
+      said.push(
+        `${COPY}: kept the edits made on the page` +
+          (write ? ', in the checkout too' : ''),
+      )
     }
   }
   let changed = local.filter((f, i) => held.held.get(f.path) != hashes[i])
@@ -454,6 +461,11 @@ export let push = async (
   opts.progress?.({ phase: 'deploy', state: 'done', deployed: value.deployed })
   return said
 }
+
+/** Where the box keeps its push bases: beside its graph, or in ~/.yak for a
+ * graph kept in memory. */
+export let homeOf = (db?: string): string =>
+  db && db != ':memory:' ? dirname(db) : `${systemProcess.env.get('HOME')}/.yak`
 
 /** A checkout's last read or deployed version for one target. Each target has
  * its own file beside the box's graph; it stays independent of other checkouts

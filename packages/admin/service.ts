@@ -28,8 +28,19 @@
 // wait is Cloudflare's, nothing this repo can make faster. yaks.app's home
 // page is asked a few times apart, since a fresh deploy can leave it cold for
 // seconds.
+//
+// Once main's head is live, the apps main keeps in git (`RELEASED`) are pushed
+// as the head holds them (push.ts `push`, from git's blobs rather than a
+// working tree), signed in as the admin, once for each tree their directory
+// has.
 
 import { checkout } from './checkout.ts'
+import { account } from './account.ts'
+import { rpc, zone } from './api.ts'
+import { type File, fileOf, homeOf, push, versions } from './push.ts'
+import { output } from './subprocess.ts'
+import { ADMIN } from '@yaks/platform/bots'
+import { posix } from 'node:path'
 import type { Comp, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
@@ -104,6 +115,16 @@ export type Options = {
   account?: string
 }
 
+/** An app main keeps in git, released as the admin once main's head is live:
+ * the directory it is drawn from, and the app and space it is pushed to. */
+export type Release = { dir: string; app: string; space: string }
+
+/** The apps main releases: yaks.app's own pages, which the apex answers from
+ * the `home` app (workers/yak site.ts `HOME`). */
+export let RELEASED: Release[] = [
+  { dir: 'apps/home', app: 'home', space: 'yak' },
+]
+
 /** A commit's first deployment: its sha, when it went live (ms), and the
  * version it served. */
 export type Debut = { sha: string; at: number; version: string }
@@ -129,6 +150,10 @@ export type Doors = {
   build: (sha: string) => Promise<Build>
   /** start main's build, and say what Builds answered */
   start: () => Promise<string>
+  /** the git tree a directory is at a commit, or nothing where it has none */
+  tree: (sha: string, dir: string) => Promise<string | undefined>
+  /** push an app's files as a commit holds them, and say what was done */
+  release: (sha: string, to: Release) => Promise<string[]>
   now: () => number
   /** the pause between looks, cut short by shutdown */
   wait: (ms: number, signal: AbortSignal) => Promise<void>
@@ -165,14 +190,28 @@ let home = async (go: typeof fetch, stopping: AbortSignal) => {
   }
 }
 
-/** The box's doors: origin and this checkout's git, wrangler, the hook. */
+/** The box's doors: origin and this checkout's git, wrangler, the hook, and
+ * the host's yaks.app sign-in as the admin. */
 export let box = (
   options: Options,
   stopping: AbortSignal,
+  host: Pick<Host, 'graph' | 'vault' | 'config'>,
   dir = checkout,
   go: typeof fetch = fetch,
 ): Doors => {
   let run = (args: string[]) => needGit(dir, args, stopping)
+  let blob = async (spec: string) => {
+    let r = await output('git', {
+      cwd: dir,
+      args: ['cat-file', 'blob', spec],
+      stdout: 'piped',
+      stderr: 'piped',
+    }, stopping)
+    if (!r.success) {
+      throw new Error(`git cat-file blob ${spec} exited ${r.code}`)
+    }
+    return r.stdout
+  }
   let wrangled = async (args: string[]) =>
     JSON.parse(await wrangler(dir, [...args, '--json'], stopping))
   // A commit this checkout lacks comes with its trees, never its blobs.
@@ -291,9 +330,82 @@ export let box = (
         return 'the deploy hook could not be reached'
       }
     },
+    tree: async (sha, path) => {
+      let r = await git(
+        dir,
+        ['rev-parse', '--verify', '--quiet', `${sha}:${path}`],
+        stopping,
+      )
+      return r.ok ? r.out.trim() : undefined
+    },
+    release: async (sha, to) => {
+      let at = await account(host)(ADMIN)
+      let files = await filesAt(run, blob, sha, to.dir)
+      let key = JSON.stringify([zone(), at.address, 'main', to.space, to.app])
+      return await push(rpc(at.bearer), files, to, {
+        ...await versions(homeOf(host.config.db), key),
+        checkout: {
+          earlier: async function* (path) {
+            let log = await run([
+              'log',
+              '--format=%H',
+              sha,
+              '--',
+              `${to.dir}/${path}`,
+            ])
+            // A commit that deleted the file has no text of it.
+            for (let c of log.match(SHAS) ?? []) {
+              let text = await blob(`${c}:${to.dir}/${path}`).catch(() => null)
+              if (text) yield new TextDecoder().decode(text)
+            }
+          },
+        },
+      })
+    },
     now: Date.now,
     wait: sleep,
   }
+}
+
+/** Every file under `dir` as commit `sha` holds it, the way push.ts `read`
+ * reads a checkout: paths relative to `dir`, dotfiles left out, sorted, and a
+ * link to a file read as that file. Pictures and fonts git does not keep are
+ * absent, so the app keeps the copies it holds. */
+export let filesAt = async (
+  run: (args: string[]) => Promise<string>,
+  blob: (spec: string) => Promise<Uint8Array>,
+  sha: string,
+  dir: string,
+): Promise<File[]> => {
+  let listed = await run([
+    'ls-tree',
+    '-r',
+    '-z',
+    '--full-tree',
+    sha,
+    '--',
+    `${dir}/`,
+  ])
+  let files: File[] = []
+  for (let entry of listed.split('\0').filter(Boolean)) {
+    let [, mode, oid, path] = entry.match(/^(\d+) blob (\w+)\t(.+)$/s) ?? []
+    if (!path) continue
+    let rel = path.slice(dir.length + 1)
+    if (rel.split('/').some((part) => part.startsWith('.'))) continue
+    let bytes = await blob(oid)
+    if (mode == '120000') {
+      let target = posix.normalize(posix.join(
+        posix.dirname(path),
+        new TextDecoder().decode(bytes),
+      ))
+      let kind = await run(['cat-file', '-t', `${sha}:${target}`])
+        .catch(() => undefined)
+      if (kind != 'blob') continue
+      bytes = await blob(`${sha}:${target}`)
+    }
+    files.push(fileOf(rel, bytes))
+  }
+  return files.sort((a, b) => a.path < b.path ? -1 : 1)
 }
 
 let time = (c?: Comp) => c?.at ? Date.parse(String(c.at)) : undefined
@@ -446,10 +558,10 @@ let SETTLED: Step[] = ['live', 'held', 'done']
  * hour, until shutdown; or each once with an aborted signal, the way a
  * one-shot command runs a service. */
 export let service = async (
-  host: { graph: Graph } & Pick<Host, 'report'>,
+  host: Pick<Host, 'graph' | 'vault' | 'config' | 'report'>,
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
-  doors: Doors = box(options, signal),
+  doors: Doors = box(options, signal, host),
   usage: Usage = analytics(options),
 ): Promise<void> => {
   let report: Report = async (error, context) => {
@@ -472,11 +584,15 @@ let catchUp = async (
   report: Report,
 ) => {
   let settled: string | undefined
+  let live: string | undefined
   let failing = false
+  let releasing = releases(doors, report)
   for (;;) {
     try {
       let done = await pass(g, doors, report, options, settled)
       if (SETTLED.includes(done.step)) settled = done.sha
+      if (done.step == 'live') live = done.sha
+      if (live) await releasing(live)
       failing = false
     } catch (error) {
       // A look cut off by shutdown has not failed. A dead wrangler sign-in is
@@ -491,6 +607,43 @@ let catchUp = async (
     if (signal.aborted) return
     await doors.wait(options.every ?? EVERY, signal)
     if (signal.aborted) return
+  }
+}
+
+/** Releases each app in {@link RELEASED} from the commit live on yaks.app,
+ * once for each tree its directory has there: a push of an unchanged app
+ * still asks for its file list, and a commit that left the app alone keeps
+ * its tree. A release that fails is tried again at each look, and reported
+ * once for its tree. */
+export let releases = (
+  doors: Pick<Doors, 'tree' | 'release'>,
+  report: Report,
+) => {
+  let done = new Map<string, string>()
+  let told = new Set<string>()
+  return async (sha: string) => {
+    for (let to of RELEASED) {
+      let tree = await doors.tree(sha, to.dir)
+      if (!tree || done.get(to.dir) == tree) continue
+      try {
+        let said = await doors.release(sha, to)
+        done.set(to.dir, tree)
+        console.log(
+          `@yaks/admin — released ${to.dir} at ${sha.slice(0, 8)}: ${
+            said.join('; ')
+          }`,
+        )
+      } catch (error) {
+        if (error instanceof Interrupted) throw error
+        if (told.has(tree)) continue
+        told.add(tree)
+        await report(error, {
+          fault: `release:${to.app}`,
+          commit: sha,
+          tags: { app: to.app, space: to.space },
+        })
+      }
+    }
   }
 }
 

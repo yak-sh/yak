@@ -5,7 +5,8 @@
 // They are the files of the home app (apps/home, workers/yak site.ts `HOME`),
 // which answers them at the apex: `deno task content` writes them there
 // (`drawn`, gen.ts), they are committed with the change that drew them, and
-// `yak admin push apps/home --as admin@bot.yak.sh` releases them. The deploy's
+// the box's deploy catch-up releases them once main's head is live
+// (packages/admin service.ts `RELEASED`). The deploy's
 // build (client-assets.ts) writes them into public/ too, with the style
 // guide, which is no page of the app's (`deployed`): the Worker's own file
 // answers a page until the app does, and whenever it can't (site.ts
