@@ -296,10 +296,8 @@ export let Home = () => (
           </Button>
         </form>
         <p class='Note Note-small'>
-          Free, with no sign-up to start. Your app goes online at your own
-          address, for any phone or computer. <a href='#cost'>$9 a month</a>
-          {' '}
-          for unlimited apps.{' '}
+          Free to start. Your app goes online at your own address, for any phone
+          or computer. <a href='#cost'>$9 a month</a> for unlimited apps.{' '}
           <a href='#examples' data-cta='examples'>
             See examples <span aria-hidden='true'>↓</span>
           </a>

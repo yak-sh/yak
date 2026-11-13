@@ -412,7 +412,7 @@ export let Organizations = () => (
       <p class='Join_Doors'>
         <Button mod='go' href='#say' data-cta='join'>Type its address</Button>
       </p>
-      <p class='Note Note-small'>Free to try, with no sign-up.</p>
+      <p class='Note Note-small'>Free to try.</p>
     </Card>
   </Page>
 )

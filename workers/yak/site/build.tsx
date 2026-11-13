@@ -56,7 +56,7 @@ export let Build = () => (
           </Button>
         </form>
         <p class='Note Note-small'>
-          Free for {FREE.apps} apps, with no sign-up to start.{' '}
+          Free for {FREE.apps} apps.{' '}
           <a href='#examples' data-cta='examples'>
             See examples <span aria-hidden='true'>↓</span>
           </a>

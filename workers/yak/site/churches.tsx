@@ -65,9 +65,9 @@ export let Churches = () => (
           </Button>
         </form>
         <p class='Note Note-small'>
-          Free to try, with no sign-up. yaks.app reads the site at that address
-          and builds a preview of it that only you can open, marked on every
-          page as a preview. It takes about {MINUTES}{' '}
+          Free to try. yaks.app reads the site at that address and builds a
+          preview of it that only you can open, marked on every page as a
+          preview. It takes about {MINUTES}{' '}
           minutes, and the site you have now isn't changed. It goes online only
           once you sign up and connect your church's web address, which shows
           the site is yours. No website yet? Type what your church needs
@@ -209,7 +209,7 @@ export let Churches = () => (
       <p class='Join_Doors'>
         <Button mod='go' href='#say' data-cta='join'>Type its address</Button>
       </p>
-      <p class='Note Note-small'>Free to try, with no sign-up.</p>
+      <p class='Note Note-small'>Free to try.</p>
     </Card>
   </Page>
 )
