@@ -18,6 +18,7 @@ import {
 import { loadTools } from '@yaks/graph/tools'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { platformDoc } from '@yaks/platform/vocab'
 import { provisionalDoc } from '@yaks/effects'
 import { edgeDoc, edgeEid, edgeKeywords, edges } from '@yaks/edge'
 import {
@@ -87,7 +88,8 @@ let TEXTS: Integration = { name: 'texts', hosts: ['api.texts.example'] }
 let REDIRECT = 'https://yourname.yaks.app/_yaks/connections/back'
 let NOW = 1_000_000
 
-// A credential on its way to the vault wears @yaks/effects' `provisional`.
+// A credential on its way to the vault wears @yaks/effects' `provisional`,
+// and an integration in the directory @yaks/platform's `published`.
 let vocab = loadVocab(
   [
     kernelDoc,
@@ -96,6 +98,7 @@ let vocab = loadVocab(
     edgeDoc,
     secretsDoc,
     provisionalDoc,
+    { $defs: { published: platformDoc.$defs!.published } },
     connectionsDoc,
   ],
   [edgeKeywords],
@@ -530,7 +533,7 @@ test('the integration directory: every built one but those in testing, and each 
     'voip.ms',
   ])
   let [esv] = await listing(g.read, 'API.ESV.org esv')
-  assert(esv.listed && esv.instructions == undefined)
+  assert(esv.published && esv.instructions == undefined)
 })
 
 test('its owner takes a listed one out, and listing it twice is once', async () => {

@@ -6,7 +6,7 @@ import {
   CONNECTION,
   integrationEid,
   known,
-  LISTED,
+  PUBLISHED,
   publishService,
   set,
   USES,
@@ -303,7 +303,7 @@ let CONNECTIONS: Row[] = [
       if (bundles.length) await c.graph.apply(bundles)
       let i = await known(c.graph.read, name)
       let shown = (await c.graph.read(
-        `.entity.eid=${integrationEid(name)}&.${LISTED}`,
+        `.entity.eid=${integrationEid(name)}&.${PUBLISHED}`,
       )).length > 0
       let said = (['title', 'tagline', 'site'] as const)
         .filter((k) => i?.[k]).map((k) => `${k} ${i![k]}`).join('; ')

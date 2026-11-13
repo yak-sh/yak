@@ -79,9 +79,10 @@ let UNSEEN = [
 let DRAFT = ['draft', 'fence', 'followed']
 // A space's routing: which app answers which path, and whether any does.
 let ROUTING = ['home', 'trashed', 'former']
-// What the kept apex pages show beside apps: the listings, and the platform's
-// fee, which /pricing quotes (sell.ts `priceAt`).
-let LISTED = ['gallery', 'screenshot', 'integration', 'listed', 'fee']
+// What the kept apex pages show beside apps: the listings (an integration's
+// among them, which `published` puts in the integration directory), and the
+// platform's fee, which /pricing quotes (sell.ts `priceAt`).
+let LISTED = ['gallery', 'screenshot', 'integration', 'published', 'fee']
 // What home and /gallery show of a published app beside its listing
 // (gallery.ts `shown`): its offer, its title, where it answers, and who may
 // open it. A release changes none of these, so it leaves them in the cache.
@@ -297,7 +298,9 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => {
       )
       return applied
     },
-    { keys: [...PARTS, ...LISTED, 'member', ...DOMAIN, TOMBSTONE] },
+    {
+      keys: [...new Set([...PARTS, ...LISTED, 'member', ...DOMAIN, TOMBSTONE])],
+    },
   )
   return [{
     name: 'yak/pages',

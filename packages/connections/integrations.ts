@@ -191,10 +191,15 @@ export let told = (
   return out
 }
 
-/** The mark on a custom integration shown in the integration directory. */
-export let LISTED = 'listed'
+/** What a custom integration shown in the integration directory wears:
+ * @yaks/platform's `published{at}`, as anything shared on a platform does. */
+export let PUBLISHED = 'published'
 
-/** An integration's owner changing what is said about it, or listing it in
+/** The patch publishing a shared thing now, or taking it out. */
+export let publishing = (on: boolean): { at: string } | null =>
+  on ? { at: new Date().toISOString() } : null
+
+/** An integration's owner changing what is said about it, or publishing it in
  * the integration directory (`listed`) or taking it out. A built one is the
  * host's, and one with no owner (made before owners were kept, or whose owner
  * is gone) is nobody's to change. */
@@ -204,7 +209,7 @@ export let set = async (
 ): Promise<Bundle[]> => {
   let name = a.integration
   let [held] = await read(
-    `.entity.eid=${integrationEid(name)}&.${INTEGRATION}&?${LISTED}`,
+    `.entity.eid=${integrationEid(name)}&.${INTEGRATION}&?${PUBLISHED}`,
   )
   let i = held?.[INTEGRATION] as Integration | undefined
   if (!i) {
@@ -220,10 +225,10 @@ export let set = async (
     throw new CallError('owner', `only the space that made ${name} changes it`)
   }
   let patch = told(a)
-  // Listed again, it keeps the moment it was first listed.
-  let listing = a.listed == null || a.listed == !!held[LISTED]
+  // Published again, it keeps the moment it was first published.
+  let listing = a.listed == null || a.listed == !!held[PUBLISHED]
     ? {}
-    : { [LISTED]: a.listed ? {} : null }
+    : { [PUBLISHED]: publishing(a.listed) }
   return Object.keys(patch).length || Object.keys(listing).length
     ? [{
       entity: { eid: integrationEid(name) },
@@ -235,8 +240,8 @@ export let set = async (
 }
 
 /** An integration in the integration directory, and since when a custom one
- * is listed there. */
-export type Listed = Integration & { listed?: string; unchecked?: boolean }
+ * is published there. */
+export type Listed = Integration & { published?: string; unchecked?: boolean }
 
 /**
  * The integration directory: host catalog services outside testing and custom
@@ -245,16 +250,16 @@ export type Listed = Integration & { listed?: string; unchecked?: boolean }
  */
 export let listing = async (read: Read, words = ''): Promise<Listed[]> => {
   let terms = words.toLowerCase().split(/\s+/).filter(Boolean)
-  let all = (await read(`.${INTEGRATION}&?${LISTED}&?unchecked`)).flatMap(
+  let all = (await read(`.${INTEGRATION}&?${PUBLISHED}&?unchecked`)).flatMap(
     (b) => {
       let i = b[INTEGRATION] as Integration
-      let at = (b[LISTED] as { at?: string } | undefined)?.at
+      let at = (b[PUBLISHED] as { at?: string } | undefined)?.at
       // A listing whose owner is gone is nobody's to keep, or take down.
       return (!i.testing && !i.owner &&
-          (i.built || Array.isArray(i.categories))) || (b[LISTED] && i.owner)
+          (i.built || Array.isArray(i.categories))) || (b[PUBLISHED] && i.owner)
         ? [{
           ...i,
-          ...at ? { listed: at } : {},
+          ...at ? { published: at } : {},
           ...b.unchecked ? { unchecked: true } : {},
         }]
         : []

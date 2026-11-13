@@ -494,7 +494,7 @@
           "description": "the space that offers it, on a shared thing that does not say so itself; an app says by app.space"
         }
       },
-      "description": "the platform-wide name and version anything shared (an app, a skill) is offered under"
+      "description": "anything shared on the platform: an app or a skill under its platform-wide name and version, or a custom integration in the integration directory, since `at`"
     },
     "gallery": {
       "component": true,

@@ -46,10 +46,11 @@ them.
   used: a key kept with none is sent nowhere, and its owner names them once,
   after which nobody changes them. A built integration has no owner, and one
   whose owner is gone is nobody's to change.
-- `listed{at, by, via}` marks a custom integration its owner listed in the
-  **integration directory**, which anyone may read and add to a space of their
-  own apart from any app; taking the mark off takes it out. Every built
-  integration is in the directory without it.
+- A custom integration its owner listed in the **integration directory**, which
+  anyone may read and add to a space of their own apart from any app, wears
+  @yaks/platform's `published{at}`, as anything shared on a platform does;
+  taking it off takes it out. Every built integration is in the directory
+  without it.
 - `connection{integration, owner, account, scopes, status, broker}` names its
   integration, the space or person that `owner`s it (and is deleted with them),
   the outside account, the scopes asked for or granted, and `status`: `needed`
@@ -152,16 +153,17 @@ a new `binding`, renames that binding. The key stays in the vault.
 
 `set(read, {owner, integration, title?, tagline?, site?, instructions?, listed?})`
 plans an owner's change to what is said about a custom integration: each
-property given, trimmed, and an empty one cleared; `listed` lists it in the
-integration directory or takes it out, and listing it again keeps the moment it
-was first listed. It refuses a built integration, an owner other than the one
-the integration names, and a `site` that is not an https address, and it never
-touches `hosts`. As with `attach`, the host checks that the actor may act for
-that owner. `through(read, bundles)` is the integrations the connections among
-`bundles` go through, but for those already among them. `listing(read, words?)`
-is the integration directory: every built integration but one in its service's
-testing mode, and every listed custom one, by title, and with `words` only those
-whose name, title, tagline, site, hosts or instructions hold every word.
+property given, trimmed, and an empty one cleared; `listed` publishes it in the
+integration directory or takes it out, and publishing it again while it is
+published keeps the moment it was first published. It refuses a built
+integration, an owner other than the one the integration names, and a `site`
+that is not an https address, and it never touches `hosts`. As with `attach`,
+the host checks that the actor may act for that owner. `through(read, bundles)`
+is the integrations the connections among `bundles` go through, but for those
+already among them. `listing(read, words?)` is the integration directory: every
+built integration but one in its service's testing mode, and every listed custom
+one, by title, and with `words` only those whose name, title, tagline, site,
+hosts or instructions hold every word.
 
 `carry(read, {source, app, owner})` plans what a copy of an app asks for: a
 `needed` connection owned by `owner`, the copy's space or person, for each

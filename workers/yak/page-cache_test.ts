@@ -380,7 +380,7 @@ test('a signed-in API read and a private page never receive a shared page', asyn
 
 test('listing changes purge the apex through the same tagged cache', async () => {
   for (
-    let part of ['gallery', 'published', 'screenshot', 'integration', 'listed']
+    let part of ['gallery', 'published', 'screenshot', 'integration']
   ) {
     assertStringIncludes(
       (await owes({ entity: { eid: 'a' }, [part]: {} })).join(','),

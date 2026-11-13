@@ -5,12 +5,13 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel'
 import { provenanceDoc } from '@yaks/provenance'
+import { platformDoc } from '@yaks/platform/vocab'
 import { connectionsDoc } from './vocab.ts'
 import { listing } from './integrations.ts'
 import { publishService } from './services.ts'
 
 test('service publication updates one identity and withdrawal preserves customer connections', async () => {
-  let vocab = loadVocab([kernelDoc, provenanceDoc, connectionsDoc])
+  let vocab = loadVocab([kernelDoc, provenanceDoc, platformDoc, connectionsDoc])
   let g = graph({ vocab, storage: ram(vocab) })
   let app = mint(), owner = mint(), customer = mint(), order = mint()
   let offer = {

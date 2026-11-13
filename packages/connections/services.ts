@@ -6,6 +6,8 @@ import { integrationEid } from './identity.ts'
 import {
   type About,
   type Integration,
+  PUBLISHED,
+  publishing,
   type Read,
   told,
 } from './integrations.ts'
@@ -25,7 +27,7 @@ export let publishService = async (
 ): Promise<Bundle[]> => {
   let name = serviceName(a.app)
   let eid = integrationEid(name)
-  let [held] = await read(`.entity.eid=${eid}&.integration&?listed`)
+  let [held] = await read(`.entity.eid=${eid}&.integration&?${PUBLISHED}`)
   let i = held?.integration as Integration | undefined
   if (i && (i.owner != a.owner || i.service?.app != a.app)) {
     throw new CallError(
@@ -43,7 +45,9 @@ export let publishService = async (
       ...told(a),
       ...a.description == null ? {} : { description: a.description },
     },
-    ...a.listed == !!held?.listed ? {} : { listed: a.listed ? {} : null },
+    ...a.listed == !!held?.[PUBLISHED]
+      ? {}
+      : { [PUBLISHED]: publishing(a.listed) },
     ...i ? { $was: { integration: { owner: token(i.owner) } } } : {},
   }]
 }
