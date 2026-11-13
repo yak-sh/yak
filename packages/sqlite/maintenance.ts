@@ -1,6 +1,8 @@
 // Row-dependent installation is a sequence of units, separate from opening.
 // The persisted cursor makes a reset resume primary-key pages, even before the
 // pointer index exists. Ordinary reads use the component tables until it ends.
+// Once that index stands, a pass reads only the owners it names as strays
+// (./archetype.ts `strays`): a schema change leaves a classified spine alone.
 import {
   as,
   col,
@@ -13,7 +15,7 @@ import {
   table,
   val,
 } from '@yaks/sql'
-import { backfill, classify, presence } from './archetype.ts'
+import { backfill, classify, pointable, presence, strays } from './archetype.ts'
 import { meta } from './meta.ts'
 import { componentTables, objects } from './physical.ts'
 import { OWED, owed } from './owe.ts'
@@ -21,6 +23,9 @@ import { unit } from './unit.ts'
 
 export let CLASSIFYING = 'archetype:pending'
 let PAGE = 512
+// The mark's value past `metadata` when the pointer index stands: pages are
+// strays, not a cursor through the spine.
+let STRAYS = 'strays'
 
 // How many rows a table holds at most: its last rowid, one row read. A
 // Durable Object bills `count(*)` every row it counts, so a look at an owed
@@ -50,8 +55,14 @@ export let maintenance = (driver: Driver, number: () => boolean) => {
       order: [col('id')],
       limit: lit(limit),
     }))
+  // A pass is owed by a spine the pointer index does not cover yet, or by the
+  // strays it names: every install whose schema moved prepares, and one that
+  // only added a table leaves a classified spine unread.
   let prepare = () => {
-    if (!classifying() && page(0, 1).length) marks.set(CLASSIFYING, 'metadata')
+    if (classifying() || !page(0, 1).length) return
+    if (!pointable(driver) || strays(driver, 1).length) {
+      marks.set(CLASSIFYING, 'metadata')
+    }
   }
   let held = (ids: number[]) =>
     presence(
@@ -70,11 +81,11 @@ export let maintenance = (driver: Driver, number: () => boolean) => {
         if (!admit((n + 2) * (indexes * 3 + 8))) return false
         unit(driver, () => {
           backfill(driver, number(), false)
-          marks.set(CLASSIFYING, '0')
+          marks.set(CLASSIFYING, pointable(driver) ? STRAYS : '0')
         })
         return true
       }
-      let rows = page(Number(at))
+      let rows = at == STRAYS ? strays(driver, PAGE) : page(Number(at))
       let tables = new Set(componentTables(driver))
       // Worst case: every owner has a distinct set, requiring a descriptor,
       // its spine and pointer, as well as the owner's indexed pointer write.
@@ -88,7 +99,7 @@ export let maintenance = (driver: Driver, number: () => boolean) => {
             pointed?.every((t) => tables.has(t)) ? [...pointed] : undefined,
         )
         if (rows.length < PAGE) marks.del(CLASSIFYING)
-        else marks.set(CLASSIFYING, String(rows.at(-1)!.id))
+        else if (at != STRAYS) marks.set(CLASSIFYING, String(rows.at(-1)!.id))
       })
       return true
     }

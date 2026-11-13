@@ -255,14 +255,7 @@ export function backfill(
   return unit(driver, () => {
     // The catalog's missing-pointer lookup must seek even while a new store
     // is being classified. This index is part of classification's repair.
-    if (
-      assignments &&
-      !catalogue(driver).some((o) =>
-        o.name == pointerIndex.name || o.name == `${pointerIndex.name}_num`
-      )
-    ) {
-      driver.query(pointerIndex)
-    }
+    if (assignments && !pointable(driver)) driver.query(pointerIndex)
     let cache = new Archetypes()
     // What the file holds is read once, and only when something is asked of
     // it: a fresh file reads nothing, and a file with descriptors reads which
@@ -420,6 +413,41 @@ let owned = (which: Expr) =>
     ],
     where: and(isNull(col('entity', 'a')), which),
   })
+
+/** Whether the file holds the pointer index, through which the owners of a
+ * pointer are found without reading the spine. */
+export let pointable = (driver: Driver): boolean =>
+  catalogue(driver).some((o) =>
+    o.name == pointerIndex.name || o.name == `${pointerIndex.name}_num`
+  )
+
+/**
+ * Up to `limit` owners whose pointer says nothing true of them: none at all,
+ * or a descriptor naming a table the file no longer holds. Each is a seek on
+ * the pointer index ({@link pointable}), so a classified file answers none
+ * without reading its spine. Classifying one always moves it out, since what
+ * an owner holds names only tables the file holds.
+ */
+export let strays = (driver: Driver, limit: number): Row[] => {
+  let present = new Set(componentTables(driver))
+  let gone = driver.query(select({
+    cols: [col('entity'), col('tables')],
+    from: table('archetype'),
+  })).filter((r) => tablesOf(r.tables).some((t) => !present.has(t)))
+    .map((r) => Number(r.entity))
+  let some = (which: Expr, n: number) =>
+    driver.query({ ...owned(which), limit: lit(n) })
+  let rows = some(isNull(col('archetype', 'e')), limit)
+  for (let i = 0; i < gone.length && rows.length < limit; i += 512) {
+    rows.push(
+      ...some(
+        oneOf(col('archetype', 'e'), gone.slice(i, i + 512)),
+        limit - rows.length,
+      ),
+    )
+  }
+  return rows
+}
 
 /** An audit's tally: owners read, pointers that disagree, and a few names. */
 export type Drift = { checked: number; drifted: number; sample: string[] }

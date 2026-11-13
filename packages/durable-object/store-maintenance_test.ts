@@ -254,3 +254,46 @@ test('an index no window can hold is built free, and looking at it reads a row, 
   equal(spine.read('.doc.title=big-499')[0].doc, { title: 'big-499' })
   equal(stops.every((e) => /never stops/.test(e.message)), true)
 })
+
+// A classified spine under its pointer index: a schema change reads only the
+// owners whose pointer is missing or names a table the file no longer holds.
+let reinstalled = async (stray?: number) => {
+  let f = metered(), first = storage(f.file, shop, { deferred: false })
+  first.install()
+  await first.tx((tx) =>
+    tx.patch(Array.from({ length: 2000 }, (_, i) => ({
+      entity: { eid: `kept-${i}` },
+      doc: { title: `kept-${i}` },
+    })))
+  )
+  if (stray) {
+    f.file.beneath(insert('entity', { id: stray, eid: `stray-${stray}` }))
+    f.file.beneath(insert('doc', { entity: stray, title: `stray-${stray}` }))
+  }
+  f.file.sql.exec("delete from server_meta where k='schema'")
+  let store = storage(f.file, shop, { deferred: true }), before = f.read()
+  store.install()
+  let pending = f.file.sql.exec(
+    "select v from server_meta where k='archetype:pending'",
+  ).toArray().length
+  for (let n = 0; n < 20 && store.upkeep() != null; n++) { /* finish */ }
+  let unpointed = f.file.sql.exec(
+    'select count(*) as n from entity where archetype is null',
+  ).toArray()[0].n
+  return { store, pending, unpointed, read: f.read() - before }
+}
+let unread = await reinstalled(), strayed = await reinstalled(90_000)
+
+test('a schema change leaves a classified spine unread', () => {
+  equal([unread.pending, unread.unpointed, unread.read < 500], [0, 0, true])
+  equal(unread.store.read('.doc.title=kept-1999')[0].doc, {
+    title: 'kept-1999',
+  })
+})
+
+test('a schema change classifies a stray without reading the spine', () => {
+  equal([strayed.pending, strayed.unpointed, strayed.read < 500], [1, 0, true])
+  equal(strayed.store.read('.doc.title=stray-90000')[0].doc, {
+    title: 'stray-90000',
+  })
+})
