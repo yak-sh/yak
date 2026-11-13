@@ -100,7 +100,7 @@ export let Build = () => (
         <li class='Steps_Item'>
           <h3 class='Step_Name'>Describe it</h3>
           <p class='Note'>
-            Type what you need in the box above. There is nothing to install.
+            Type what you need in the box above.
           </p>
         </li>
         <li class='Steps_Item'>

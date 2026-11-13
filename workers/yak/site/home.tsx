@@ -345,7 +345,6 @@ export let Home = () => (
           <h3 class='Step_Name'>Say what you need</h3>
           <p class='Note'>
             Type it in the box above, like a chore chart for your household.
-            There is nothing to install.
           </p>
         </li>
         <li class='Steps_Item'>
