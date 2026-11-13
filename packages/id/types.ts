@@ -37,7 +37,8 @@ export type Bundle = {
 /** A transaction, as these plugins use one: read entities by id, or by query,
  * the deleted too where `graves` asks for them. */
 export type Tx = {
-  get: (eids: Eid[]) => Bundle[] | Promise<Bundle[]>
+  /** the entities, with only `comps` (and their `entity` row) where named */
+  get: (eids: Eid[], comps?: string[]) => Bundle[] | Promise<Bundle[]>
   read: (
     query: string,
     opts?: { graves?: boolean },

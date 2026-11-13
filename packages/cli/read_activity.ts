@@ -3,9 +3,15 @@
 // without waiting for that worker's event loop or a queued message.
 import { channel, type Event } from '@yaks/trace'
 
-export let readActivity = (buffer = new SharedArrayBuffer(16_392)) => {
+/** A worker's current operation and when it entered it, by `clock` (ms since
+ * the epoch, the one clock both threads share). */
+export let readActivity = (
+  buffer = new SharedArrayBuffer(16_400),
+  clock = Date.now,
+) => {
   let head = new Int32Array(buffer, 0, 2)
-  let bytes = new Uint8Array(buffer, 8)
+  let since = new Float64Array(buffer, 8, 1)
+  let bytes = new Uint8Array(buffer, 16)
   let encoder = new TextEncoder(), decoder = new TextDecoder()
   return {
     buffer,
@@ -13,15 +19,19 @@ export let readActivity = (buffer = new SharedArrayBuffer(16_392)) => {
       Atomics.add(head, 0, 1)
       let { written } = encoder.encodeInto(text, bytes)
       Atomics.store(head, 1, written)
+      since[0] = clock()
       Atomics.add(head, 0, 1)
     },
-    read: (): string | undefined => {
+    /** the operation, and how long the worker has been in it */
+    read: (): { text: string; ms: number } | undefined => {
       // A concurrent update is retried a bounded number of times.
       for (let i = 0; i < 3; i++) {
         let version = Atomics.load(head, 0)
         if (version % 2) continue
-        let value = bytes.slice(0, Atomics.load(head, 1))
-        if (version == Atomics.load(head, 0)) return decoder.decode(value)
+        let value = bytes.slice(0, Atomics.load(head, 1)), at = since[0]
+        if (version == Atomics.load(head, 0)) {
+          return { text: decoder.decode(value), ms: clock() - at }
+        }
       }
     },
   }

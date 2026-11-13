@@ -124,13 +124,14 @@ export let readThread = (
     grace = 10_000,
     slow = 10_000,
     timer = later,
-    now = () => performance.now(),
+    now = Date.now,
     measure = spent,
   }: {
     grace?: number
     slow?: number
     /** schedule `fn` after `ms` and return its cancellation */
     timer?: (fn: () => void, ms: number) => () => void
+    /** ms since the epoch: the clock the worker stamps its operations by */
     now?: () => number
     /** what a worker's thread has spent, by where it is */
     measure?: (thread: string) => Spent | undefined
@@ -220,7 +221,7 @@ export let readThread = (
     let worker = new Worker(new URL('./read_worker.ts', import.meta.url), {
       type: 'module',
     })
-    let activity = readActivity()
+    let activity = readActivity(undefined, now)
     activity.say('waiting for the worker to receive its configuration')
     let lane: Lane = { worker, activity, key: crypto.randomUUID() }
     lanes.add(lane)
@@ -240,6 +241,16 @@ export let readThread = (
     )
     return lane
   }
+  // The worker's operation, and how long it had been in it, so a report
+  // tells a slow query from a slow reply.
+  let doing = (lane: Lane) => {
+    let op = lane.activity.read()
+    return `worker operation: ${
+      op
+        ? `${op.text}, for ${(op.ms / 1000).toFixed(1)} s`
+        : 'changing while sampled'
+    }`
+  }
   let spentBy = (lane: Lane) => lane.thread ? measure(lane.thread) : undefined
   // What a read past `slow` waited on, as far as this thread can see: how its
   // worker spent the time, a worker that never answered was still loading,
@@ -247,7 +258,7 @@ export let readThread = (
   let waited = (lane: Lane, ran: number, s?: Spent): string =>
     [
       how('its worker', ran, s),
-      `worker operation: ${lane.activity.read() ?? 'changing while sampled'}`,
+      doing(lane),
       lane.thread ? blocked(lane.thread) : '',
       lane.heard ? '' : 'its worker had not answered a read yet',
       ...[...lanes].flatMap((l) =>

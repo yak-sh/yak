@@ -132,7 +132,7 @@ let fakes = () => {
       },
     ) {
       if (data.activity) {
-        readActivity(data.activity).say('waiting in a read operation')
+        readActivity(data.activity, () => 0).say('waiting in a read operation')
       }
       if (data.id) this.jobs.push({ ...data, id: data.id })
     }
@@ -287,7 +287,7 @@ test('a read is told when its own time passes slow', async () => {
     [['5000', 'answer', '30000'], []],
     [['10000 9 0.5', '11000 9.5 0.5', '30000'], [
       slow + '(in 11.0 s its worker ran 9.5 s on a CPU, waited 0.5 s for one ' +
-      'and was off one 1.0 s; worker operation: waiting in a read operation; its worker had not answered a read yet)',
+      'and was off one 1.0 s; worker operation: waiting in a read operation, for 11.0 s; its worker had not answered a read yet)',
     ]],
     // The main thread came free just before an on-time check; the answer was
     // waiting behind it.
@@ -296,13 +296,13 @@ test('a read is told when its own time passes slow', async () => {
     [['15800 0 0', 'answer', '30000'], []],
     [['15800 9 0', '16800 9.5 0'], [
       slow + '(in 16.8 s its worker ran 9.5 s on a CPU, waited 0.0 s for one ' +
-      'and was off one 7.3 s; worker operation: waiting in a read operation; its worker had not answered a read yet)',
+      'and was off one 7.3 s; worker operation: waiting in a read operation, for 16.8 s; its worker had not answered a read yet)',
     ]],
     // The box kept the worker waiting for a CPU: slow only on its own time.
     [['10000 2 7', 'answer', '30000'], []],
     [['10000 2 7', '17000 4 7'], [
       slow + '(in 17.0 s its worker ran 4.0 s on a CPU, waited 7.0 s for one ' +
-      'and was off one 6.0 s; worker operation: waiting in a read operation; its worker had not answered a read yet)',
+      'and was off one 6.0 s; worker operation: waiting in a read operation, for 17.0 s; its worker had not answered a read yet)',
     ]],
   ]
   for (let [steps, told] of cases) assertEquals(await watched(...steps), told)
