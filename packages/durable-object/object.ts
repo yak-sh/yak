@@ -16,7 +16,8 @@
  *   the object inherited from hibernation, so a write made by the request
  *   that woke it reaches them. A failure is reported, by its entry.
  * - The object's row ceiling (`./ceiling.ts`) is made before any statement,
- *   with the spec's report. A door's statement past a window is answered as
+ *   with the spec's report. Its async key-value calls, through `keys`, count
+ *   against it as statements do. A door's statement past a window is answered as
  *   `Stopped` with how long to wait; an alarm past one rings again then.
  * - A new deploy restarts the object idle: nothing runs at the first entry on
  *   a new `version` but arming the alarm, which takes up what is owed.
@@ -62,6 +63,7 @@ import {
   type Options as Limits,
   stopped,
 } from './ceiling.ts'
+import { type Keys, keys } from './keys.ts'
 import type { Hibernation, Sockets, Wire } from './sockets.ts'
 import type { DurableStorage } from './sql.ts'
 
@@ -139,6 +141,7 @@ export class Durable {
   #spec?: Spec
   #ceiling?: Ceiling
   #clock?: Clock
+  #keys?: Keys
   #opened?: Promise<Opened>
   #held?: Opened
   #live?: Sockets
@@ -174,6 +177,15 @@ export class Durable {
     return this.#ceiling ??= named
       ? bounded(this.ctx.storage, { refuse: true, ...named })
       : bounded(this.ctx.storage)
+  }
+
+  /** The object's async key-value storage, each call counted against its
+   * ceiling as a statement is (`./keys.ts`). */
+  get keys(): Keys {
+    this.ceiling
+    // Every SQLite-backed object's storage has them; `State` leaves them to
+    // the stand-ins of objects that keep none.
+    return this.#keys ??= keys(this.ctx.storage as State['storage'] & Keys)
   }
 
   /** The object's alarm: a write that owes work arms it. */

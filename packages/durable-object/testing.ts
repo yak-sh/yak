@@ -121,6 +121,8 @@ export let durable = (from?: Snapshot): DurableStorage & {
   deleteAll(): Promise<void>
   get<T>(key: string): Promise<T | undefined>
   put(key: string, value: unknown): Promise<void>
+  delete(key: string): Promise<boolean>
+  list<T>(options?: { prefix?: string }): Promise<Map<string, T>>
   kv: Kv
   getAlarm(): Promise<number | null>
   setAlarm(at: number): Promise<void>
@@ -190,6 +192,15 @@ export let durable = (from?: Snapshot): DurableStorage & {
       kept.set(key, structuredClone(value))
       return Promise.resolve()
     },
+    delete: (key: string) => Promise.resolve(kept.delete(key)),
+    list: <T>({ prefix = '' } = {}) =>
+      Promise.resolve(
+        new Map(
+          [...kept].filter(([key]) => key.startsWith(prefix))
+            .sort(([a], [b]) => a < b ? -1 : 1)
+            .map(([key, value]) => [key, structuredClone(value) as T]),
+        ),
+      ),
     // Empty, all of it — tables, indexes and the virtual tables a full-text
     // index is made of. The runtime throws the whole object's storage away;
     // this drops everything in the schema, which over one in-memory database

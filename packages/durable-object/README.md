@@ -49,17 +49,20 @@ hour (`WINDOWS`). Two failures are reported as they happen:
 
 A host names where the reports go once, before its first driver:
 `bounded(ctx.storage, { report, refuse })`. Every driver over that storage
-counts against the same ceiling. With `refuse`, a statement past a window is
-refused as `Stopped` (status 429, `retry.after` in milliseconds, `retry.defer`)
-until the window ends: past its written rows the object still reads, and past
-its read rows it takes nothing. A host asks `stopped(writing)` (the wait in
-milliseconds, 0 when a statement is admitted) or `refusal(writing)` at its
-doors, so a stopped object answers there rather than failing deep inside.
-Statements a stopped object must still take, such as keeping a person's write
-for later or an effect pool's word on how a run ended, run inside the ceiling's
-`free(body)`, which holds across the awaits of an asynchronous body until it
-settles and not for the timers it leaves; work that must not stop half way runs
-on `freely(ctx.storage)`, a driver that counts and never refuses. What runs free
+counts against the same ceiling, and so does `keys(ctx.storage)`, the object's
+async key-value calls (`get`, `put`, `delete`, `list`): Cloudflare bills a key
+read as a row read and a key put or deleted as a row written, and a `Durable`
+object's `keys` are these. With `refuse`, a statement past a window is refused
+as `Stopped` (status 429, `retry.after` in milliseconds, `retry.defer`) until
+the window ends: past its written rows the object still reads, and past its read
+rows it takes nothing. A host asks `stopped(writing)` (the wait in milliseconds,
+0 when a statement is admitted) or `refusal(writing)` at its doors, so a stopped
+object answers there rather than failing deep inside. Statements a stopped
+object must still take, such as keeping a person's write for later or an effect
+pool's word on how a run ended, run inside the ceiling's `free(body)`, which
+holds across the awaits of an asynchronous body until it settles and not for the
+timers it leaves; work that must not stop half way runs on
+`freely(ctx.storage)`, a driver that counts and never refuses. What runs free
 counts against windows of its own: it is told past them and stops nothing, so a
 relocation's new object takes writes once it serves. Work that can wait asks
 `under(share, written?, lane?)` how long until the object has spent under that
@@ -447,14 +450,15 @@ on every request (workers/yak/door.ts).
 `@yaks/durable-object` exports everything below. A reader of the object's
 storage that holds no socket imports `@yaks/durable-object/sql` (`driver`),
 `/store` (`storage`), `/resets` (the reset helpers), `/door` (the door to an
-object), `/ceiling` or `/alarm` alone, without `sockets` and the `@yaks/api`
-dispatch it brings:
+object), `/ceiling`, `/keys` or `/alarm` alone, without `sockets` and the
+`@yaks/api` dispatch it brings:
 
 | Export                                                  | Purpose                                             |
 | ------------------------------------------------------- | --------------------------------------------------- |
 | `storage(ctx.storage, vocab, base?)`                    | Creates an `@yaks/sqlite` `Store`                   |
 | `driver(ctx.storage, observe?)`                         | Creates the underlying synchronous SQLite `Driver`  |
 | `freely(ctx.storage, observe?)`                         | A `driver` the ceiling counts and never refuses     |
+| `keys(ctx.storage)`                                     | The async key-value calls, counted by the ceiling   |
 | `profile(emit)`                                         | Aggregates cursor costs into bounded summaries      |
 | `bounded(ctx.storage, options?)`, `ceiling(options?)`   | Report a scan or a runaway, and stop the object     |
 | `stopped(error)`                                        | Whether a failure is a stop, here or across a stub  |

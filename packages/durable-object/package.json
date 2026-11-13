@@ -8,6 +8,7 @@
     "./store": "./store.ts",
     "./resets": "./resets.ts",
     "./ceiling": "./ceiling.ts",
+    "./keys": "./keys.ts",
     "./alarm": "./alarm.ts",
     "./object": "./object.ts",
     "./door": "./door.ts",
