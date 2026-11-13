@@ -8,6 +8,7 @@ import { comp } from './model.ts'
 import { group, grouped } from './group.ts'
 import { fixture } from './fixture_test.ts'
 import { intake } from './service.ts'
+import { ingest } from './intake.ts'
 
 let broken = Object.assign(new Error('no such table: ref'), {
   stack: 'Error: no such table: ref\n    at query (/app/query.ts:7:3)',
@@ -181,4 +182,60 @@ test('grouping adds a flood count once when its sample is retried', async () => 
   await group(counted, eid)
   let [bug] = await counted.read('.bug *')
   equal(comp(bug, 'bug').hits, 130_000)
+})
+
+// A fault's occurrences as intake and grouping see them, at seconds past a
+// start, its bug keeping three.
+let stream = () => {
+  let g = fixture(), start = Date.parse('2026-10-02T00:00:00Z')
+  let send = async (seconds: number[], commit = 'a') => {
+    for (let s of seconds) {
+      await ingest(
+        g,
+        capture(broken, {
+          sink: () => {},
+          at: new Date(start + s * 1000).toISOString(),
+          commit: commit.repeat(40),
+        }),
+        3,
+      )
+      for (let row of await g.read('.error !error.bug')) {
+        await group(g, row.entity.eid)
+      }
+    }
+  }
+  let kept = async () => (await g.read('.error')).length
+  let hits = async () => comp((await g.read('.bug *'))[0], 'bug').hits
+  return { g, send, kept, hits }
+}
+
+test('a flood past what its bug keeps is counted at intake, one a minute kept', async () => {
+  let s = stream()
+  await s.send([0, 1, 2])
+  equal([await s.kept(), await s.hits()], [3, 3])
+  await s.send([3, 4, 5, 6, 30, 61])
+  equal([await s.kept(), await s.hits()], [3, 9])
+  await s.send([62])
+  equal([await s.kept(), await s.hits()], [4, 10])
+  let [bug] = await s.g.read('.bug *')
+  equal(comp(bug, 'bug').last, '2026-10-02T00:01:02.000Z')
+})
+
+test('a flood keeps what grouping decides by: a new release, and any after a resolution', async () => {
+  let s = stream()
+  await s.send([0, 1, 2, 3])
+  await s.send([4], 'b')
+  equal([await s.kept(), await s.hits()], [4, 5])
+  let [bug] = await s.g.read('.bug')
+  await s.g.apply([{
+    entity: bug.entity,
+    resolved: { cause: 'fixed', recur: 'no' },
+  }], { trusted: true })
+  await s.send([5], 'b')
+  equal(await s.hits(), 6)
+  let [back] = await s.g.read('.bug *')
+  equal([!!back.regressed, !!back.resolved], [false, true])
+  await s.send([20, 21], 'c')
+  let [again] = await s.g.read('.bug *')
+  equal([!!again.regressed, !!again.resolved], [true, false])
 })

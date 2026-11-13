@@ -1,4 +1,5 @@
-// The three downstream jobs. Intake never groups or notifies in its transaction.
+// The downstream jobs. Intake never groups or notifies in its transaction; it
+// only counts a flood's occurrences past what their bug keeps.
 // Notifications use a deterministic mail eid, so retry cannot send a second letter.
 
 import type { Bundle, Graph } from '@yaks/graph'

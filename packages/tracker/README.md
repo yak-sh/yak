@@ -158,11 +158,17 @@ occasion's letter has its `delivered` mark; an earlier occasion's delivery
 cannot mark a later regression notified. Space replies own their own notified
 mark. Archived bugs still count but never notify. Retention keeps the newest
 hundred plus the first occurrence of each commit (or version without a commit).
-Grouping and retention read only what they decide by: grouping reads its bug's
-counters, and an earlier occurrence only after a resolution, to ask whether one
-shares its release; trimming reads each occurrence's time and release, and none
-while the bug's hits are within the newest it keeps. Reframing writes a bug's
-culprit or spot only where it moved.
+Past that, intake counts a flood instead of keeping it: an occurrence of an open
+bug that already keeps its hundred, of a release the bug keeps, and less than a
+minute after the newest it keeps adds its hits to the bug and is never stored,
+so a flood of one fault keeps one occurrence a minute and writes its count, not
+each occurrence to group and trim away. A resend of a counted occurrence counts
+again, since nothing of it is kept to know it by. Grouping and retention read
+only what they decide by: grouping reads its bug's counters, and an earlier
+occurrence only after a resolution, to ask whether one shares its release;
+trimming reads each occurrence's time and release, and none while the bug's hits
+are within the newest it keeps. Reframing writes a bug's culprit or spot only
+where it moved.
 
 An occurrence regresses a resolved bug when its `error.at` is later than
 `resolved.at`, unless its commit (or version without a commit) was already seen

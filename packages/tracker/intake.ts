@@ -1,8 +1,11 @@
 // Intake keeps immutable reporter bundles once. Grouping adds its receipt to
-// that same occurrence, which a redelivery must never erase.
+// that same occurrence, which a redelivery must never erase. A flood's
+// occurrences past what their bug keeps are counted here and not kept
+// (./group.ts `counted`).
 
 import type { Bundle, Graph } from '@yaks/graph'
-import { Refused } from '@yaks/graph/errors'
+import { Refused, Stale } from '@yaks/graph/errors'
+import { counted } from './group.ts'
 
 export type Record = {
   rows: Bundle[]
@@ -16,18 +19,31 @@ export type Record = {
 }
 export type Source = () => AsyncIterable<Record>
 
-export let ingest = async (g: Graph, rows: Bundle[]): Promise<void> => {
+export let ingest = async (
+  g: Graph,
+  rows: Bundle[],
+  retain?: number,
+): Promise<void> => {
   let unique = [...new Map(rows.map((row) => [row.entity.eid, row])).values()]
-  // References can mint bare entity spines before a queued record arrives.
-  // Those are not delivered records: admitting their later components is the
-  // first intake, while a redelivery must still preserve an existing receipt.
-  let known = new Set(
-    (await g.get(unique.map((row) => row.entity.eid)))
-      .filter((row) => Object.keys(row).some((name) => name != 'entity'))
-      .map((row) => row.entity.eid),
-  )
-  let fresh = unique.filter((row) => !known.has(row.entity.eid))
-  if (fresh.length) await g.apply(fresh, { trusted: true })
+  // A count raced by grouping's is guarded, and counted again on its news.
+  for (;;) {
+    // References can mint bare entity spines before a queued record arrives.
+    // Those are not delivered records: admitting their later components is
+    // the first intake, while a redelivery must still preserve a receipt.
+    let known = new Set(
+      (await g.get(unique.map((row) => row.entity.eid)))
+        .filter((row) => Object.keys(row).some((name) => name != 'entity'))
+        .map((row) => row.entity.eid),
+    )
+    let fresh = unique.filter((row) => !known.has(row.entity.eid))
+    if (!fresh.length) return
+    let { kept, counts } = await counted(g, fresh, retain)
+    try {
+      return void await g.apply([...kept, ...counts], { trusted: true })
+    } catch (error) {
+      if (!(error instanceof Stale)) throw error
+    }
+  }
 }
 
 /** Passes over a source, each failure contained to its own record, then throws

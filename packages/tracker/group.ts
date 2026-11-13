@@ -1,5 +1,6 @@
 // Grouping decides patches from records; graph admission commits them together.
-// The occurrence link is the receipt: resends and retried effects never count twice.
+// The occurrence link is the receipt: resends and retried effects never count
+// twice. A flood past what its bug keeps is counted at intake (`counted`).
 
 import { type ByDay, kept } from '@yaks/ui/chart'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -7,7 +8,17 @@ import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { after, same } from '@yaks/fp'
-import { absent, and, eq, fields, limit, lt, present, want } from '@yaks/query'
+import {
+  absent,
+  and,
+  eq,
+  fields,
+  limit,
+  lt,
+  order,
+  present,
+  want,
+} from '@yaks/query'
 import { faultOf, stablePlace } from './fault.ts'
 import { enrichFrames } from './frames.ts'
 import { comp, type Desk, type Frame, str, title } from './model.ts'
@@ -78,6 +89,17 @@ let placed = (frames: Frame[]): Comp => {
       }`,
     }
     : {}
+}
+
+// What an occurrence adds to its bug's counters, `old` holding them.
+let counts = (old: Comp, e: Comp): Comp => {
+  let at = str(e.at), hits = Number(e.hits ?? 1)
+  return {
+    first: str(old.first) && str(old.first) < at ? old.first : at,
+    last: str(old.last) > at ? old.last : at,
+    hits: Number(old.hits ?? 0) + hits,
+    days: kept(old.days as ByDay, hits, Date.parse(at) || Date.now()),
+  }
 }
 
 // The session whose work opened the bug, and the work it was doing: a new
@@ -155,14 +177,7 @@ export let grouped = (
             ...placed(frames),
           }
           : {},
-        first: str(old.first) && str(old.first) < at ? old.first : at,
-        last: str(old.last) > at ? old.last : at,
-        hits: Number(old.hits ?? 0) + Number(e.hits ?? 1),
-        days: kept(
-          old.days as ByDay,
-          Number(e.hits ?? 1),
-          Date.parse(at) || Date.now(),
-        ),
+        ...counts(old, e),
       },
       ...marks,
       ...!bug || back ? whose(context, !!bug) : {},
@@ -233,15 +248,98 @@ let earlier = (
   let of = eq('error.bug', bug.entity.eid)
   if (imported(row)) return g.read(and(of, ...MARKS.map((m) => want(m))))
   if (!past(row, bug) || !release(row)) return []
+  return sharing(g, bug.entity.eid, row)
+}
+
+/** One occurrence of a bug that shares this one's release, if any is kept. */
+let sharing = (g: Desk, bug: string, row: Bundle) => {
   let e = comp(row, 'error')
   return g.read(and(
-    of,
+    eq('error.bug', bug),
     ...e.commit
       ? [eq('error.commit', str(e.commit))]
       : [absent('error.commit'), eq('error.version', Number(e.version))],
     fields('error.commit', 'error.version'),
     limit(1),
   ))
+}
+
+/** How many occurrences a bug keeps, besides the first of each release. */
+export let RETAIN = 100
+// Past what its bug keeps, an occurrence nearer than this to the newest kept
+// is counted and not kept, so a flood still keeps one a minute.
+let SAMPLE = 60_000
+let at = (row: Bundle) => str(comp(row, 'error').at)
+
+/** Intake's new rows, split into those it keeps and the counts of those it
+ * only counts. An occurrence is only counted when its bug is open and already
+ * keeps its `count` (`trim`), its release is one the bug keeps, and it is
+ * less than a minute after the newest the bug keeps: a flood of one fault
+ * then writes its count, not each occurrence to group and trim away. Every
+ * other occurrence is kept and grouped. A resend of a counted occurrence
+ * counts again, since nothing of it is kept to know it by. */
+export let counted = async (
+  g: Desk,
+  rows: Bundle[],
+  count = RETAIN,
+): Promise<{ kept: Bundle[]; counts: Bundle[] }> => {
+  let kept: Bundle[] = [], faults = new Map<string, Bundle[]>()
+  for (let row of rows) {
+    if (
+      !row.error || row.refusal || row.probe || comp(row, 'error').bug ||
+      imported(row)
+    ) {
+      kept.push(row)
+      continue
+    }
+    let key = JSON.stringify([str(comp(row, 'during').app), faultOf(row)])
+    faults.set(key, [...faults.get(key) ?? [], row])
+  }
+  let tallies: Bundle[] = []
+  for (let [key, group] of faults) {
+    let [app, fault] = JSON.parse(key) as [string, string]
+    let bug = await joined(g, group[0], fault, app)
+    let held = bug && !bug.resolved
+      ? await g.read(and(
+        eq('error.bug', bug.entity.eid),
+        fields('error.at', 'error.commit', 'error.version'),
+        order('-error.at'),
+        limit(count),
+      ))
+      : []
+    if (!bug || held.length < count) {
+      kept.push(...group)
+      continue
+    }
+    let releases = new Set(held.map(release))
+    let newest = Date.parse(at(held[0]))
+    let old = comp(bug, 'bug'), sum: Comp = old, more = 0
+    for (let row of group.toSorted((a, b) => at(a).localeCompare(at(b)))) {
+      let r = release(row)
+      if (!releases.has(r)) {
+        releases.add(r)
+        if (!(await sharing(g, bug.entity.eid, row)).length) {
+          kept.push(row)
+          continue
+        }
+      }
+      if (!(Date.parse(at(row)) - newest < SAMPLE)) {
+        kept.push(row)
+        newest = Date.parse(at(row))
+        continue
+      }
+      sum = counts(sum, comp(row, 'error'))
+      more++
+    }
+    if (more) {
+      tallies.push({
+        entity: { eid: bug.entity.eid },
+        $was: { bug: { hits: token(old.hits) } },
+        bug: sum,
+      })
+    }
+  }
+  return { kept, counts: tallies }
 }
 
 // How long a probe's receipt is kept for its sender to read.
@@ -306,7 +404,7 @@ export let group = async (
 }
 
 /** Newest hundred, plus the first occurrence of each release. */
-export let retained = (rows: Bundle[], count = 100): Set<string> => {
+export let retained = (rows: Bundle[], count = RETAIN): Set<string> => {
   let sorted = [...rows].sort((a, b) =>
     str(comp(a, 'error').at).localeCompare(str(comp(b, 'error').at)) ||
     a.entity.eid.localeCompare(b.entity.eid)
@@ -325,7 +423,11 @@ export let retained = (rows: Bundle[], count = 100): Set<string> => {
 /** Deletes the occurrences of a bug that retention no longer keeps, reading
  * only each one's time and release, and none while the bug's hits, which
  * count every occurrence it ever grouped, are within the newest it keeps. */
-export let trim = async (g: Desk, bug: string, count = 100): Promise<void> => {
+export let trim = async (
+  g: Desk,
+  bug: string,
+  count = RETAIN,
+): Promise<void> => {
   let [held] = await g.read(
     and(eq('entity.eid', bug), present('bug'), fields('bug.hits')),
   )

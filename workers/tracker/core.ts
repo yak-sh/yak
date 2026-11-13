@@ -278,7 +278,7 @@ export let store = (storage: Storage, config: Config) => {
     /** The entities that moved since a tag of this store, the latest last,
      * or undefined when the store no longer knows. */
     since: tags.since,
-    ingest: (rows: Bundle[]) => ingest(g, rows),
+    ingest: (rows: Bundle[]) => ingest(g, rows, config.retain),
     // One aborted pool pass handles a bounded window. Several passes let
     // grouping's newly owed notifications finish in this wake too, and work
     // a backlog off: at four passes a wake the object grouped five
