@@ -1131,8 +1131,9 @@ handle. Omitting `number` or setting it to false leaves new entities unnumbered.
 Each series keeps its last number in `entity_series`, raised by insert/update
 triggers, and the next is the one after it, stepping over a number an entity
 already holds in the series, or holds without a letter. A store that still holds
-numbers given without letters gives each new one the store's one count
-(`entity_sequence`) instead, with its letter, so it is past all of them.
+numbers given without letters, or whose spine was made keeping `num` unique on
+its own, gives each new one the store's one count (`entity_sequence`) instead,
+with its letter, so it is past all of them and no two series give the same one.
 Clearing a number does not recycle it. A patch stating `entity{prefix, num}`
 gives its entity that id, born or not, or none for `num: null`; a `num` stated
 alone keeps the entity's prefix; an id another entity holds, a tombstone's

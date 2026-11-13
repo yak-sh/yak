@@ -352,14 +352,17 @@ export let minted = (rows: Row[]): Entity | undefined =>
     }
     : undefined
 
-// Whether this store still holds a number given before series had letters:
-// until its rows are moved, each one given takes the store's one count, so
-// it is past every number those rows hold, whatever series it is in.
+// Whether this store still counts once for every series: it holds a number
+// given before series had letters, or its spine still keeps a number unique
+// on its own, as a spine made before series did (`num integer unique`). Until
+// its rows are moved and its spine rebuilt, each number given takes the
+// store's one count, so it is past every number held, whatever series it is
+// in, and no two series give the same one.
 let counting = new WeakMap<Driver, boolean>()
 let unmoved = (driver: Driver): boolean => {
   let held = counting.get(driver)
   if (held == null) {
-    held = !!driver.query(select({
+    held = sole(driver) || !!driver.query(select({
       cols: [lit(1)],
       from: table('entity'),
       where: and(notNull(col('num')), isNull(col('prefix'))),
@@ -369,6 +372,19 @@ let unmoved = (driver: Driver): boolean => {
   }
   return held
 }
+
+// Whether the spine keeps `num` unique by itself.
+let sole = (driver: Driver): boolean =>
+  driver.query({ t: 'pragma', name: 'index_list', arg: 'entity' })
+    .filter((i) => Number(i.unique))
+    .some((i) => {
+      let cols = driver.query({
+        t: 'pragma',
+        name: 'index_info',
+        arg: String(i.name),
+      })
+      return cols.length == 1 && cols[0].name == 'num'
+    })
 
 // The last number a series gave: this write's, or the store's.
 let lastIn = (

@@ -3432,6 +3432,7 @@ export class Store extends Durable {
       speaks: (comp, prop) =>
         prop ? !!words.prop(comp, prop) : !!words.comp(comp) ||
           !!words.assoc(comp),
+      words,
       apply: (patch) => {
         let was = this.#kernelling
         this.#kernelling = true

@@ -142,6 +142,32 @@ test('sqlite: a store still holding unlettered numbers counts on past them', () 
   })
 })
 
+test('sqlite: a spine keeping its number unique on its own counts once, though every row is lettered', () => {
+  // A spine made before series had letters, its rows moved under them.
+  let d = mem()
+  d.query({
+    t: 'create table',
+    name: 'entity',
+    cols: [
+      { name: 'id', type: 'integer', pk: true },
+      { name: 'eid', type: 'text', notNull: true, unique: true },
+      { name: 'num', type: 'integer', unique: true },
+    ],
+  })
+  let s = open('sqlite', { number: SERIES }, d)
+  s.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'old', prefix: 'T', num: 1 }, task: {} },
+      { entity: { eid: 'older', prefix: 'M', num: 2 }, memory: {} },
+    ])
+  )
+  d.query({ t: 'update', table: 'entity_series', set: { high: lit(0) } })
+  s.tx((tx) => {
+    tx.patch([mk('saved', { memory: {} }), mk('new')])
+    assertEquals(idOf(tx, ['saved', 'new']), ['M-3', 'T-4'])
+  })
+})
+
 for (let backend of ['sqlite', 'ram']) {
   test(`${backend}: by one count, a reference to nothing numbers nothing`, () =>
     open(backend, { number: true }).tx((tx) => {

@@ -28,7 +28,8 @@ import {
   permitted,
   unowned,
 } from '@yaks/member'
-import { idKeywords } from '@yaks/id'
+import { idKeywords, prefixes } from '@yaks/id'
+import type { Series } from '@yaks/graph/storage'
 import { derived as builds } from '@yaks/builders/vocab'
 import { sessionDerived } from '@yaks/session/status'
 import { read } from '@yaks/yaml'
@@ -960,10 +961,12 @@ export let appWords = (source: unknown = {}): Words => {
 export let appVocab = (source: unknown = {}): Vocab => appWords(source).vocab
 
 /**
- * Whether this store numbers its entities, read off the vocabulary it woke
- * with: @yaks/id's document is the one place `entity.num` is declared, so a
- * store that loaded it has numbers and one that did not has none. The storage
- * adapter is told this (graph.ts), so there is one answer rather than a
- * vocabulary saying one thing and the writer doing another.
+ * How this store numbers its entities, read off the vocabulary it woke with:
+ * @yaks/id's document is the one place `entity.num` is declared, so a store
+ * that loaded it numbers each entity holding a component that declares a
+ * `prefix`, in that letter's series, and one that did not numbers nothing.
+ * The storage adapter is told this (graph.ts), so there is one answer rather
+ * than a vocabulary saying one thing and the writer doing another.
  */
-export let numbered = (v: Vocab): boolean => !!v.prop('entity', 'num')
+export let numbered = (v: Vocab): false | Series =>
+  !!v.prop('entity', 'num') && prefixes(v)
