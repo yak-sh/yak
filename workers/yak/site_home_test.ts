@@ -9,9 +9,10 @@ import { assets } from './binding-probe.ts'
 import { declared } from './directory-fixture.ts'
 import { directory, fetch as directoryDoor } from './directory.ts'
 import { listingAt } from './kept-page.ts'
-import { ADA, ADA_OWNS as OWNS, platform } from './serving-probe.ts'
-import { fetch as siteFetch, HOME } from './site.ts'
-import { edged } from './apps.ts'
+import { ADA, ADA_OWNS as OWNS, as, platform } from './serving-probe.ts'
+import { fetch as siteFetch, forward, HOME } from './site.ts'
+import { answer } from './apex.ts'
+import { edged, fetch as appsFetch } from './apps.ts'
 import { unfound } from './asset_url.ts'
 import { aim } from '@yaks/platform/routes'
 
@@ -43,8 +44,12 @@ let site = async (files?: Record<string, string>) => {
     // The directory's first write seeds the platform's own space.
     await dir.apply({ entities: [{ entity: { eid: ADA }, person: {} }] }, OWNS)
     let space = (await dir.space('yak'))!
+    // Ada owns the platform's own space, so she may write its home app.
     await dir.apply({
       entities: [{
+        entity: { eid: '$seat' },
+        member: { space: space.eid, person: ADA, role: 'owner' },
+      }, {
         entity: { eid: '$app' },
         doc: { title: 'yaks.app' },
         app: {
@@ -160,6 +165,71 @@ test("an app at a domain's root names its report door at that domain", () => {
     carried.headers.get('reporting-endpoints'),
     'yak="https://her.com/api/report"',
   )
+})
+
+// A visit to the apex as the gateway forwards it, by whoever `cookie` signs in.
+let visit = async (path: string, cookie?: string) => {
+  let got = await forward(
+    new Request(
+      `https://yaks.app${path}`,
+      cookie ? { headers: { cookie } } : {},
+    ),
+    home.env,
+    path,
+  )
+  return {
+    kept: got.headers.get('cache-control') ?? '',
+    tags: got.headers.get('cache-tag'),
+    text: await got.text(),
+  }
+}
+let owner = await as(ADA)
+let [mine, myPricing, strangers, outsiders] = await Promise.all([
+  visit('/', owner),
+  visit('/pricing', owner),
+  visit('/'),
+  visit('/', await as(crypto.randomUUID())),
+])
+
+test('a member who may write the home app is served its pages at the apex wearing the pencil, never kept', () => {
+  for (let page of [mine, myPricing]) {
+    assertStringIncludes(page.text, 'data-yak-edit=')
+    // Its doors are the app's own `api/`, which the apex's `/api/` is not.
+    assertStringIncludes(page.text, 'data-yak-api="/home/"')
+    assertEquals(page.kept, 'private, no-store')
+    assertEquals(page.tags, null)
+  }
+  assertStringIncludes(mine.text, 'the app says hello')
+  assertStringIncludes(myPricing.text, 'the app prices')
+})
+
+test('a stranger and a person with no seat are answered the page everyone is', () => {
+  for (let page of [strangers, outsiders]) {
+    assertStringIncludes(page.text, 'the app says hello')
+    assert(!page.text.includes('data-yak-edit='), page.text)
+    assertStringIncludes(page.kept, 'public')
+  }
+})
+
+// A module of the app's own `api/`, at the apex and at the app's address.
+let door = 'api/storage.js'
+let [atApex, atApp] = await Promise.all([
+  answer(
+    new Request(`https://yaks.app/home/${door}`, {
+      headers: { cookie: owner },
+    }),
+    home.env,
+    `/home/${door}`,
+  ),
+  appsFetch(new Request(`https://yak.yaks.app/home/${door}`), home.env),
+].map(async (got) => {
+  let res = await got
+  return { status: res.status, text: await res.text() }
+}))
+
+test("the pencil's doors at the apex are the home app's own", () => {
+  assertEquals(atApex.status, 200)
+  assertEquals(atApex, atApp)
 })
 
 let none = await site()

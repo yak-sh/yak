@@ -25,7 +25,8 @@ import { lost } from './pages.ts'
 import { callback } from './connections.ts'
 import { logoDoor } from './catalog.ts'
 import { answer as seo } from './seo.ts'
-import { LOGOUT, MANAGE } from '@yaks/platform/routes'
+import { aim, LOGOUT, MANAGE } from '@yaks/platform/routes'
+import { apex } from '@yaks/platform/host'
 import { START } from './newcomer.ts'
 import * as pageReport from './page-report.ts'
 import { paymentDoor } from './payment-doors.ts'
@@ -76,6 +77,15 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // The dashboard (apps.ts `manage`): the part that draws a space's pages.
   if (path == MANAGE || path.startsWith(`${MANAGE}/`)) {
     return bound(env.APPS, apps.fetch, env).fetch(req)
+  }
+  // The home app's own doors (site.ts `HOME_API`): its pages are the apex's,
+  // and its `api/` the address it has on its space's hostname, where the
+  // request is carried and served as any app's door is, the pencil's
+  // drafts and saves among them.
+  if (path.startsWith(`${site.HOME_API}api/`)) {
+    return bound(env.APPS, apps.fetch, env).fetch(
+      aim(req, apex(env), { space: site.HOME.space, app: null }, env),
+    )
   }
   // A TV paired by a code (screen.ts): its page, and the phone's.
   if (path == '/tv' || path.startsWith('/tv/')) {

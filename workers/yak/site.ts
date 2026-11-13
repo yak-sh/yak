@@ -7,8 +7,9 @@ import { copyOf } from './directory-copy.ts'
 // and every public page an
 // app serves (page-cache.ts), keyed by the address it answers. The uncached gateway sends only canonical,
 // uncredentialed requests here.
-import { edged } from './apps.ts'
+import { edged, editing } from './apps.ts'
 import {
+  homed,
   isListing,
   isStatic,
   KEEP,
@@ -25,7 +26,15 @@ import {
 } from './kept-page.ts'
 import { kept, passed } from './page-cache.ts'
 import { caught } from './defects.ts'
-import { aim, foreign, handedOff, hostOf, ready } from '@yaks/platform/routes'
+import {
+  aim,
+  API_AT,
+  foreign,
+  handedOff,
+  hostOf,
+  ready,
+} from '@yaks/platform/routes'
+import { COOKIE, cookieValue } from '@yaks/platform/cookie'
 import { r2Objects } from './lib/objects.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -58,8 +67,12 @@ let uncached = (page: Response) => {
 export let at = (env: Host, path: string) => listingAt(apex(env), path)
 
 // The gateway's anonymous subrequest; a credentialed request renders in-process
-// and takes no copied listing.
-export let forward = (req: Request, env: Env, path: string) => {
+// and takes no copied listing, and so does a page of the home app for a person
+// who may write it (`theirs`).
+export let forward = async (req: Request, env: Env, path: string) => {
+  if (homed(path) && await editing(req, env, HOME)) {
+    return theirs(req, env, path)
+  }
   let anonymous = shareable(req)
   return listing(
     req,
@@ -112,14 +125,46 @@ let atDomain = async (asked: Request, env: Env, host: string) => {
  * its release holds. */
 export let HOME = { space: { slug: 'yak' }, app: { slug: 'home' } }
 
+/** Where the home app's own `api/` is at the apex, the address it has on its
+ * space's hostname: its pages are mounted at `/`, where `/api/` is the
+ * apex's (apex.ts), so the pencil's doors are here (@yaks/platform/routes
+ * `API_AT`), carried to the app as any `<space>.yaks.app/<app>/api/` is. */
+export let HOME_API = `/${HOME.app.slug}/`
+
+// A page of the home app for a person who may write it (apps.ts `editing`),
+// rendered here around the app's page as they are served it, which wears the
+// pencil (`fromHome`), and never kept.
+let theirs = (req: Request, env: Env, path: string) =>
+  listing(
+    req,
+    bound(undefined, (asked: Request) => {
+      let c = clock()
+      return c.counting(() => rendered(asked, env, path, c, req))
+    }, env),
+    apex(env),
+    path,
+    true,
+  )
+
 // The home app's page at `path` as anyone is served it, with the tags a
 // release of it purges (`KEEP`), or none where it has none to give: the
 // platform's own space holds no `home` yet (a 404 that names no app, as on
 // a box or staging with no such app), a release of it is under way (a pass
-// for now, `NOW`), or anything else, which is a failure.
-let fromHome = async (env: Env, path: string, dir: dirPart.Directory) => {
+// for now, `NOW`), or anything else, which is a failure. A `visitor` who may
+// write it is served it as themselves, by their session alone (as Site
+// serves a session's own key, kept-page.ts `visitor`), and it is theirs:
+// never kept.
+let fromHome = async (
+  env: Env,
+  path: string,
+  dir: dirPart.Directory,
+  visitor?: Request,
+) => {
+  let session = visitor && cookieValue(visitor.headers.get('cookie'))
+  let headers = new Headers({ [API_AT]: HOME_API })
+  if (session) headers.set('cookie', `${COOKIE}=${session}`)
   let page = await edged(
-    aim(new Request(url(env, path)), apex(env), HOME, env),
+    aim(new Request(url(env, path), { headers }), apex(env), HOME, env),
     env,
     dir,
   )
@@ -130,7 +175,7 @@ let fromHome = async (env: Env, path: string, dir: dirPart.Directory) => {
     for (let name of [SEEN, 'nel', 'reporting-endpoints']) {
       page.headers.delete(name)
     }
-    return { page }
+    return { page: session ? uncached(page) : page }
   }
   await page.body?.cancel()
   let absent = page.status == 404 && !seen.app
@@ -150,8 +195,9 @@ let sitePage = async (
   path: string,
   req: Request,
   dir: dirPart.Directory,
+  visitor?: Request,
 ) => {
-  let home = await fromHome(env, path, dir)
+  let home = await fromHome(env, path, dir, visitor)
   if (home.page) return home.page
   let file = await env.ASSETS.fetch(req)
   return home.kept ? file : uncached(file)
@@ -198,12 +244,14 @@ let unconditional = (req: Request) => {
 /** An apex path no door of the kernel's claims: the guide's pages (docs.ts,
  * T-37752) and the 301s the addresses it moved from answer, else this
  * deploy's files. The kernel answers every such path with it, and Site the
- * static pages it keeps (kept-page.ts `isStatic`). */
+ * static pages it keeps (kept-page.ts `isStatic`), or a `visitor` who may
+ * write the home app their own (`theirs`). */
 export let statics = async (
   req: Request,
   env: Env,
   path: string,
   dir: dirPart.Directory,
+  visitor?: Request,
 ): Promise<Response> => {
   // Before the assets, which serve the same markdown as files at those pages'
   // `.md` addresses — the whole rule (T-37793).
@@ -212,7 +260,7 @@ export let statics = async (
   // A page's bytes are this file's with the head's links swapped (sheets.ts), so
   // the file's etag says nothing about them: `worn` below answers for a page.
   let page = STATICS.includes(path)
-    ? await sitePage(env, path, unconditional(req), dir)
+    ? await sitePage(env, path, unconditional(req), dir, visitor)
     : await env.ASSETS.fetch(/\.\w+$/.test(path) ? req : unconditional(req))
   if (page.status == 404) {
     // A page held from before a deploy names the sheet that deploy replaced.
@@ -253,6 +301,7 @@ let rendered = async (
   env: Env,
   path: string,
   c: Clock,
+  visitor?: Request,
 ): Promise<Response> => {
   let dir = directory(
     bound(env.DIRECTORY, dirPart.fetch, env),
@@ -284,13 +333,13 @@ let rendered = async (
   } else if (isStatic(path)) {
     page = await c.time(
       'static',
-      () => statics(new Request(url(env, path)), env, path, dir),
+      () => statics(new Request(url(env, path)), env, path, dir, visitor),
     )
   } else {
     // A home page variant (variant.ts): its own file, with the showcase.
     let file = await c.time('page', async () => {
       let at = await drawn(env, path)
-      return sitePage(env, at, new Request(url(env, at)), dir)
+      return sitePage(env, at, new Request(url(env, at)), dir, visitor)
     })
     page = file.status == 404
       ? lost(env)

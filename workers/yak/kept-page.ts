@@ -297,6 +297,13 @@ export let STATICS = [
 ]
 let GUIDE = /^\/docs(?:\/[\w-]+)?$/
 
+/** Whether this apex path is a page the home app answers (site.ts `HOME`):
+ * each home page variant and the static pages, not the files beside them. A
+ * person signed in may be one who writes it, whose page wears the pencil
+ * (site.ts `forward`), so theirs is the kernel's to serve. */
+export let homed = (path: string) =>
+  (PATHS.includes(path) || STATICS.includes(path)) && !/\.\w+$/.test(path)
+
 /** Whether this apex path is one of those pages. */
 export let isStatic = (path: string) =>
   STATICS.includes(path) || GUIDE.test(path)

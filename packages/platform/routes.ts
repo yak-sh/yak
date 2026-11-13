@@ -379,6 +379,13 @@ export let spaceDoor = (path: string): boolean =>
 /** The browser-facing URL retained when the router aims a custom domain. */
 export let ADDRESS = 'x-yak-address'
 
+/** Where an app's own `api/` is for the browser that asked, where it is not
+ * under the app's mount (`MOUNT`): the home app's at the apex (workers/yak
+ * site.ts `HOME`), whose pages are mounted at `/`, where `/api/` is the
+ * apex's own doors. The pencil reads its doors there (page-script.ts). Set
+ * by the router alone, as `MOUNT` is. */
+export let API_AT = 'x-yak-api-at'
+
 export type Route = {
   // null at the apex
   space: string | null
@@ -772,9 +779,10 @@ let without = (req: Request, names: string[]): Request => {
 }
 
 /** A request with the headers only the router writes ({@link MOUNT},
- * {@link ADDRESS}) taken off: whatever a client sent under those names is
- * gone before anything reads it. */
-export let unmounted = (req: Request): Request => without(req, [MOUNT, ADDRESS])
+ * {@link ADDRESS}, {@link API_AT}) taken off: whatever a client sent under
+ * those names is gone before anything reads it. */
+export let unmounted = (req: Request): Request =>
+  without(req, [MOUNT, ADDRESS, API_AT])
 
 // A page on somebody else's address, writing or at one of our graph doors
 // (`sameOrigin`, `guarded`). It is refused in the shape every other api

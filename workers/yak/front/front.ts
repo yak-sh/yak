@@ -18,6 +18,7 @@ import { sealed } from '../cache.ts'
 import { apex, type Host } from '@yaks/platform/host'
 import {
   asked,
+  homed,
   isListing,
   listed,
   listing,
@@ -181,7 +182,10 @@ export let kept = (
     !settled(req)
   ) return null
   if (host == apex(env)) {
-    if (!isListing(path) || (path == LOGIN && !stranger(req))) return null
+    if (
+      !isListing(path) || (path == LOGIN && !stranger(req)) ||
+      (homed(path) && session(req))
+    ) return null
     return listing(req, env.SITE, apex(env), listed(req, path)).then(
       async (page) => {
         if (page.status >= 500) return null

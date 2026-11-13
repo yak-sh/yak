@@ -112,6 +112,7 @@ import {
 } from './pages.ts'
 import { join, joinable } from './join.ts'
 import {
+  API_AT,
   chatPath,
   hostOf,
   MANAGE,
@@ -1043,19 +1044,27 @@ export let worn = (
   app: App,
   env: Host,
   who: Who,
-): Scripts | null => bearing(req) ? null : wearing(space, app, env, who)
+): Scripts | null => bearing(req) ? null : wearing(req, space, app, env, who)
 
-// What every page the door serves this caller wears.
+// What every page the door serves this caller wears. The pencil's doors are
+// the app's own `api/` under its mount, unless the router said they are
+// elsewhere for this browser (@yaks/platform/routes `API_AT`).
 export let wearing = (
+  req: Request,
   space: Space,
   app: App,
   env: Host,
   who: Who,
-): Scripts => ({
-  ...badged(space, app, env),
-  edit: editOf(space, app, env, who),
-  bar: barOf(env, app, who),
-})
+): Scripts => {
+  let edit = editOf(space, app, env, who)
+  let api = edit && req.headers.get(API_AT)
+  return {
+    ...badged(space, app, env),
+    edit,
+    ...api ? { api } : {},
+    bar: barOf(env, app, who),
+  }
+}
 
 /** The Operator's chat for this app, which the pencil on its pages offers
  * (public/edit.js), or null where it wears no pencil: for whoever the file
@@ -1066,6 +1075,31 @@ export let editOf = (space: Space, app: App, env: Host, who: Who) =>
       encodeURIComponent(app.slug)
     }`
     : null
+
+/** Whether the person `req`'s session names would wear the pencil on the app
+ * at `at` (`editOf`), from one read of the directory, the read a page of it
+ * makes: Site serves such a person a page of the home app as it is served
+ * them (site.ts `forward`), and everyone else the page it keeps. */
+export let editing = async (
+  req: Request,
+  env: Env,
+  at: { space: { slug: string }; app: { slug: string } },
+) => {
+  let person = await sessionPerson(req, env.SESSION_SECRET)
+  if (!person) return false
+  let { space, app, role } = await directory(
+    bound(env.DIRECTORY, dirPart.fetch, env),
+    { copy: copyOf(env), time: env.CLOCK },
+  ).page(at.space.slug, at.app.slug, person)
+  if (!space || !app) return false
+  let who = await whoIs(
+    req,
+    env.SESSION_SECRET,
+    () => Promise.resolve(role ?? null),
+    space.eid,
+  )
+  return !!editOf(space, app, env, who)
+}
 
 /** Whom a page is the same for, where it is not everyone (page-cache.ts
  * `keep`): every stranger, or every person signed in with no seat here, who
@@ -3532,7 +3566,7 @@ let served = async (
       at,
       filled(page, await (copy ?? copyFor(env, space, app))),
       app.version ?? 0,
-      wearing(space, app, env, who),
+      wearing(req, space, app, env, who),
       appPreview(app, bare),
       req.headers.get(ADDRESS) ?? req.url,
     )

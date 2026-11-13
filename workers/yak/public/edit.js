@@ -9,7 +9,9 @@
 // of its own beside <body>, which the page's styles cannot reach and an app
 // redrawing its body leaves standing. Where the badge shows in the same
 // corner, the pencil rides above it. Its tag says where the Operator's chat
-// for this app is (`data-yak-edit`).
+// for this app is (`data-yak-edit`), and where the app's own `api/` is when it
+// is not under the mount (`data-yak-api`): the home app's at yaks.app, whose
+// `/api/` is the platform's.
 ;(() => {
   let CSS = `
 :host {
@@ -89,6 +91,7 @@ svg { width: 18px; height: 18px }
 
   let script = document.currentScript
   let at = script?.dataset.yakAt || '/'
+  let api = script?.dataset.yakApi || at
   let ask = script?.dataset.yakEdit || 'https://yaks.app/'
   let KEPT = 'yaks:editing:' + at
   let host = document.createElement('yaks-edit')
@@ -131,12 +134,12 @@ svg { width: 18px; height: 18px }
     pencil.disabled = true
     try {
       let [client, edit] = await Promise.all([
-        import(at + 'api/client.js'),
-        import(at + 'api/_edit.js'),
+        import(api + 'api/client.js'),
+        import(api + 'api/_edit.js'),
       ])
       mode = edit.editMode(document, client.drafts(), {
         panel,
-        at,
+        at: api,
         ask,
         done: close,
       })

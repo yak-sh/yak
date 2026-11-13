@@ -471,6 +471,28 @@ test("a listing an ad's click opened keeps its arrival and hands the kernel the 
   assertEquals(plain.told, [])
 })
 
+// A person signed in may be one who writes the home app, whose pages wear
+// them the pencil (site.ts `forward`), which only the kernel can tell.
+test("the home app's pages at the apex answer a browser from the edge, and go to the kernel for a person", async () => {
+  let browser = `yak_session=${body({ via: 'v', exp: days(80) })}`
+  let person = `yak_session=${
+    body({ person: 'p', space: null, via: 'v', exp: days(80) })
+  }`
+  let answered = async (path: string, cookie: string) =>
+    await (await front(() => page()).go(`https://yaks.app${path}`, {
+      headers: { cookie },
+    })).text()
+  assertEquals(
+    await Promise.all([
+      answered('/', browser),
+      answered('/', person),
+      answered('/pricing', person),
+      answered('/gallery', person),
+    ]),
+    ['<body>kept</body>', 'kernel', 'kernel', '<body>kept</body>'],
+  )
+})
+
 test('a cookie that owes something from the kernel routes there', () => {
   let asked = (cookie?: string) =>
     settled(

@@ -31,6 +31,8 @@
 //     /                       the home page and its variants, pricing, help
 //                             and the legal pages: the home app's (site.ts
 //                             `HOME`), else ./public
+//     /home/api/*             the home app's own doors (site.ts `HOME_API`),
+//                             which its pencil uses
 //     /login, /login/code     identity.ts: the email-code sign-in
 //     /manage, /manage/*      apps.ts: the dashboard, one space's at a time
 //     /admin, /admin/*        admin.ts: the directory, for the platform admin
