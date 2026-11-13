@@ -11,9 +11,10 @@
  *   subscriptions its sockets serve, and the works its alarm runs. One that
  *   fails is opened again by the next entry; a failed open never leaves the
  *   object rejecting every call.
- * - Every entry (`fetch`, `alarm`, a socket's frame) opens first and wakes
- *   the sockets the object inherited from hibernation, so a write made by the
- *   request that woke it reaches them.
+ * - Every entry (`fetch`, `alarm`, a socket's frame, and a subclass's own
+ *   through `enter`, such as an RPC method) opens first and wakes the sockets
+ *   the object inherited from hibernation, so a write made by the request
+ *   that woke it reaches them. A failure is reported, by its entry.
  * - The object's row ceiling (`./ceiling.ts`) is made before any statement,
  *   with the spec's report. A door's statement past a window is answered as
  *   `Stopped` with how long to wait; an alarm past one rings again then.
@@ -71,8 +72,10 @@ export type State = Hibernation & {
 /** What an object opened: its door, its subscriptions and its works. */
 export type Opened = {
   /** Every request the object is sent. A socket is accepted here, through
-   * the object's {@link Durable.accept}, after whatever the door checks. */
-  serve(request: Request): Response | Promise<Response>
+   * the object's {@link Durable.accept}, after whatever the door checks. An
+   * object with no door, called only through its own entries, answers every
+   * request 404. */
+  serve?(request: Request): Response | Promise<Response>
   /** The subscriptions its sockets serve; without them it takes none. */
   subs?: Subs
   /** What its alarm works, in order (`./alarm.ts`). */
@@ -98,8 +101,8 @@ export type Opened = {
 
 /** What makes one kind of object. */
 export type Spec = {
-  /** Compose what the object holds, once an instance. */
-  open(): Promise<Opened>
+  /** Compose what the object holds, once an instance; nothing by default. */
+  open?(): Promise<Opened>
   /** A failure the object caught, by the entry it was caught in. */
   report(error: unknown, entry: string): unknown
   /** The row ceiling's options, refusing by default. Without them the
@@ -178,18 +181,22 @@ export class Durable {
 
   /** What the object holds, opened once an instance; its sockets woken. */
   async open(): Promise<Opened> {
-    this.#opened ??= this.spec.open().then(async (opened) => {
-      this.ceiling
-      // The sockets' plumbing is loaded only by an object that has some.
-      if (opened.subs) {
-        let { sockets } = await import('./sockets.ts')
-        this.#live = sockets(opened.subs, this.ctx)
-      }
-      return this.#held = opened
-    }, (e) => {
-      this.#opened = undefined
-      throw e
-    })
+    let open = this.spec.open ?? (() => Promise.resolve<Opened>({}))
+    this.#opened ??= open().then(
+      async (opened) => {
+        this.ceiling
+        // The sockets' plumbing is loaded only by an object that has some.
+        if (opened.subs) {
+          let { sockets } = await import('./sockets.ts')
+          this.#live = sockets(opened.subs, this.ctx)
+        }
+        return this.#held = opened
+      },
+      (e) => {
+        this.#opened = undefined
+        throw e
+      },
+    )
     let opened = await this.#opened
     await this.#live?.wake()
     await this.#restart()
@@ -220,16 +227,48 @@ export class Durable {
    * 503 for a failure the door did not answer, which is reported. */
   fetch(request: Request): Promise<Response> {
     let { pathname } = new URL(request.url)
-    return this.#around(`${request.method} ${pathname}`, async () => {
+    return this.#enter(
+      `${request.method} ${pathname}`,
+      'fetch',
+      (opened) =>
+        opened.serve
+          ? opened.serve(request)
+          : Response.json({ error: 'not found' }, { status: 404 }),
+    ).catch((error) =>
+      stopped(error)
+        ? refuse(error)
+        : Response.json({ error: 'temporarily unavailable' }, { status: 503 })
+    )
+  }
+
+  /** An entry of the subclass's own, such as an RPC method: `work`, given
+   * what the object opened, inside `around` as `entry`. What it throws is
+   * thrown on to its caller, and a failure other than the ceiling's
+   * `Stopped` is reported by `entry` first, as a request's is. */
+  protected enter<T>(
+    entry: string,
+    work: (opened: Opened) => T | Promise<T>,
+  ): Promise<T> {
+    return this.#enter(entry, entry, work)
+  }
+
+  // An entry, named `name` to `around` and `entry` to `report`: opened, its
+  // sockets woken, and a failure reported, with the alarm a second on to
+  // take up what the object owes.
+  #enter<T>(
+    name: string,
+    entry: string,
+    work: (opened: Opened) => T | Promise<T>,
+  ): Promise<T> {
+    return this.#around(name, async () => {
       try {
-        return await (await this.open()).serve(request)
+        return await work(await this.open())
       } catch (error) {
-        if (stopped(error)) return refuse(error)
-        await this.spec.report(error, 'fetch')
-        await this.#later(1000)
-        return Response.json({ error: 'temporarily unavailable' }, {
-          status: 503,
-        })
+        if (!stopped(error)) {
+          await this.spec.report(error, entry)
+          await this.#later(1000)
+        }
+        throw error
       }
     })
   }

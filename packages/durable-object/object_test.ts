@@ -4,14 +4,14 @@
 // its alarm, and arms the alarm at the first entry on a new deploy.
 
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import { Durable, type Opened, type Spec } from './object.ts'
 import { Stopped } from './ceiling.ts'
 import { durable } from './testing.ts'
 
 // An object at instant 1000 over the stand-in's storage, whose spec is
 // `spec` with what it reported kept.
-let object = (spec: Partial<Spec> & Pick<Spec, 'open'>) => {
+let object = (spec: Partial<Spec>) => {
   let storage = durable(), reported: string[] = []
   let ctx = { storage, acceptWebSocket() {}, getWebSockets: () => [] }
   let made = new Durable(ctx, {
@@ -89,6 +89,47 @@ test('the first entry on a new deploy arms the alarm, once', async () => {
   assertEquals(await storage.getAlarm(), null)
   await get(deploy('b', storage))
   assertEquals(await storage.getAlarm(), 1000)
+})
+
+test('an object with no door opens nothing and answers a request 404', async () => {
+  let { made } = object({})
+  assertEquals((await get(made)).status, 404)
+})
+
+// An object answering an RPC method of its own, `call`, which runs `work`.
+class Called extends Durable {
+  call<T>(work: () => T) {
+    return this.enter('call', work)
+  }
+}
+
+test('an entry of its own opens first, and throws on a failure, reporting all but a stop', async () => {
+  let opens = 0, reported: string[] = []
+  let ctx = {
+    storage: durable(),
+    acceptWebSocket() {},
+    getWebSockets: () => [],
+  }
+  let made = new Called(ctx, {
+    open: () => (opens++, Promise.resolve({})),
+    report: (e, entry) => void reported.push(`${entry} ${e}`),
+    alarm: { now: () => 1000 },
+  })
+  assertEquals(await made.call(() => 'ok'), 'ok')
+  await assertRejects(() =>
+    made.call(() => {
+      throw new Stopped(5000, 'read')
+    }), Stopped)
+  await assertRejects(
+    () =>
+      made.call(() => {
+        throw Error('no')
+      }),
+    Error,
+    'no',
+  )
+  assertEquals([opens, reported], [1, ['call Error: no']])
+  assertEquals(await ctx.storage.getAlarm(), 2000)
 })
 
 // A socket at the object, with what it was sent and how it was closed.

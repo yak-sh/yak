@@ -219,16 +219,21 @@ answers from `specify()` where the spec names the subclass's own members:
 
 - `open()` composes what the object holds, once an instance: its door (`serve`),
   the subscriptions its sockets serve (`subs`), and the works its alarm runs
-  (`works`). An open that fails is tried again by the next entry.
+  (`works`). An open that fails is tried again by the next entry. An object that
+  holds nothing to open names none, and one with no door answers every
+  request 404.
 - `report(error, entry)` takes every failure the object catches.
 - `ceiling` is the row ceiling's options, refusing by default; `version` is the
   deploy the object runs.
 
-Every entry opens first and wakes the sockets the object inherited. A door's
-statement past the ceiling is answered `Stopped`, with how long to wait. A
-socket is the door's to accept, through `accept(request)`, after whatever the
-door checks. The first entry on a new `version` arms the alarm, which takes up
-what the object owes: a deploy restarts it idle.
+Every entry opens first and wakes the sockets the object inherited: `fetch`,
+`alarm`, a socket's frame, and the subclass's own, `enter(name, work)`, which
+its RPC methods call. A failure is reported by its entry, and the alarm rings a
+second on. A door's statement past the ceiling is answered `Stopped`, with how
+long to wait; an RPC method throws it on, its wait with it, unreported. A socket
+is the door's to accept, through `accept(request)`, after whatever the door
+checks. The first entry on a new `version` arms the alarm, which takes up what
+the object owes: a deploy restarts it idle.
 
 A socket's frame or close is the object's to `admit` first: one it does not is
 let go unanswered. A clock probe is answered next, before the sockets are asked.

@@ -620,7 +620,7 @@ export class Tracker extends Durable {
         return json(this.traceBudget())
       }
       let serve = async () => {
-        let answer = await (await this.open()).serve(request)
+        let answer = await (await this.open()).serve!(request)
         // A mark or a retry owes runs the pool works on its alarm, not a
         // minute later on the monitor's.
         if (request.method == 'POST' && answer.ok) await this.#owe()
