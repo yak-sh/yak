@@ -125,6 +125,12 @@
   color: var(--text);
   font-weight: 700;
 }
+/* A name kept to one line, cut short where it runs past. */
+.Rows_Name-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .Rows_Meta {
   color: var(--muted);
   font-size: var(--small);

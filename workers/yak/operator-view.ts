@@ -250,7 +250,7 @@ let STANDING: Record<string, Standing> = {
 /**
  * A helper as the aside lists it, from its newest lines: how it stands, its
  * step under way (or, once it failed, why), when it began and, once it ended,
- * when.
+ * when, and the line its final reply opens with, what it found or did.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -268,8 +268,8 @@ let STANDING: Record<string, Standing> = {
  * equal(helping({ ...of, entries: begun, place: 'queued' }, names), {
  *   ...of, standing: 'waiting', step: 'Waiting for a place to run',
  * })
- * equal(helping({ ...of, entries: [...begun, line(3, { output: {}, content: { body: 'Imported.' } })] }, names), {
- *   ...of, standing: 'done', step: '', until: '2026-11-08T15:00:03.000Z',
+ * equal(helping({ ...of, entries: [...begun, line(3, { output: {}, content: { body: '**Imported 40 rows.**\n\nThe rest were there.' } })] }, names), {
+ *   ...of, standing: 'done', step: '', until: '2026-11-08T15:00:03.000Z', recap: 'Imported 40 rows.',
  * })
  * equal(helping({ ...of, entries: [...begun, line(3, { exception: {}, content: { body: 'The sandbox stopped.\nat …' } })] }, names).step,
  *   'The sandbox stopped.')
@@ -304,13 +304,23 @@ export let helping = (
     ? ['waiting', 'Waiting on its helpers']
     : ['running', now(entries, names)]
   let ended = !['running', 'waiting'].includes(standing)
+  let recap = standing == 'done' ? recapOf(entries) : ''
   return {
     ...of,
     standing,
     step,
     ...ended ? { until: at(entries.at(-1)) } : {},
+    ...recap ? { recap } : {},
   }
 }
+
+// The first line of a helper's final reply, its markup's marks taken off.
+let recapOf = (entries: Bundle[]) =>
+  String(
+    comp(entries.findLast((b) => b.output && b.content && !b.notice), 'content')
+      ?.body ?? '',
+  ).split('\n').map((l) => l.replace(/^[\s#>*_-]+|[\s*_]+$/g, ''))
+    .find(Boolean)?.slice(0, 200) ?? ''
 
 /** What the session is doing as its yak shows it (mascot.ts `MOVES`):
  * thinking or using a tool while it works, done or failed as it ends, and

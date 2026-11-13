@@ -2193,7 +2193,7 @@ import { browserDrafts } from '/_draft.js'
 import { follow } from '/follow.js'
 import { frames } from '/frames.js'
 import { redraw } from '/redraw.js'
-import { asideHtml, glanceHtml, helperHtml, lasted, mention, menus, ordered, rowsOf, turnHtml } from '/_talk.js'
+import { asideHtml, glanceHtml, helperHtml, lasted, mention, menus, ordered, relative, rowsOf, turnHtml } from '/_talk.js'
 import { voice } from '/voice.js'
 let open = ${JSON.stringify(open)}
 let root = ${JSON.stringify(root)}
@@ -2464,6 +2464,7 @@ document.addEventListener('keydown', (e) => {
 })
 let lasting = () => {
   for (let t of document.querySelectorAll('[data-since]')) t.textContent = lasted(t.dataset.since, t.dataset.until)
+  for (let t of document.querySelectorAll('[data-ago]')) t.textContent = relative(t.dataset.ago)
 }
 setInterval(lasting, 1000)
 // The yak beside the box shows what the Operator is doing (mascot.ts

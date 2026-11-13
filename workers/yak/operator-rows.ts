@@ -27,6 +27,7 @@ export {
   ordered,
   turnHtml,
 } from './operator-aside.ts'
+export { relative } from '@yaks/ui/relative'
 
 export { menus, tips } from '@yaks/ui/parts'
 

@@ -32,8 +32,8 @@ export let rootAt = async (store: Store, space: string, person: string) => {
     : mine
 }
 
-/** What the helper `session` was asked, in a line: the first words it was
- * started with, from its first lines. */
+/** What the helper `session` was asked, in a line: the first sentence it
+ * was started with, from its first lines (`briefly`). */
 export let askedAt = async (store: Store, session: string) => {
   let opening = await store.g.read(
     `.entry.session=${session}&.order=entry.seq&.limit=3&*`,
@@ -41,6 +41,37 @@ export let askedAt = async (store: Store, session: string) => {
   let first = opening.find((b) => !b.prompt && b.content)?.content as
     | { body?: unknown }
     | undefined
-  return String(first?.body ?? '').split('\n')[0].slice(0, 80) ||
-    'A piece of work'
+  return briefly(String(first?.body ?? '')) || 'A piece of work'
+}
+
+/** What a helper is called: the title it was started with (`doc{title}`),
+ * else what it was asked (`askedAt`). */
+export let titleAt = async (
+  store: Store,
+  row: { entity: { eid: string }; doc?: unknown },
+) =>
+  String((row.doc as { title?: unknown } | undefined)?.title ?? '') ||
+  await askedAt(store, row.entity.eid)
+
+/**
+ * The first sentence of `text`, cut at a word once it runs past `most`.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { briefly } from './operator-root.ts'
+ * equal(briefly('Check the calendar. Then tell me.'), 'Check the calendar.')
+ * equal(
+ *   briefly("Check for recent app errors across Jeffrey's apps in space jeff, using app_list with each."),
+ *   "Check for recent app errors across Jeffrey's apps in space…",
+ * )
+ * equal(briefly('  \n'), '')
+ * ```
+ */
+export let briefly = (text: string, most = 60) => {
+  let line = text.trim().split(/\n|(?<=[.!?])\s/)[0] ?? ''
+  if (line.length <= most) return line
+  let cut = line.slice(0, most + 1)
+  let at = cut.lastIndexOf(' ')
+  return (at > most / 2 ? cut.slice(0, at) : line.slice(0, most))
+    .replace(/[\s,;:.\u2013\u2014-]+$/, '') + '…'
 }

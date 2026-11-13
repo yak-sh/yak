@@ -9,6 +9,8 @@ import { directoryOf } from './directory.ts'
 import { platform } from './directory-rows-probe.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { rootAt } from './operator-root.ts'
+import { conversationOf } from './operator-host.ts'
+import { helperHtml } from './operator-aside.ts'
 import { call, type Ctx } from './tools.ts'
 
 let person = crypto.randomUUID()
@@ -35,7 +37,10 @@ let service = operatorService(
           kind: 'call',
           id: crypto.randomUUID(),
           name: 'spawn',
-          args: JSON.stringify({ prompt: 'NATIVE_REPORT: Check Friday.' }),
+          args: JSON.stringify({
+            title: 'Friday schedule check',
+            prompt: 'NATIVE_REPORT: Check Friday.',
+          }),
         }]
         : question && req.items.at(-1)?.kind != 'result'
         ? [{
@@ -72,6 +77,7 @@ let before = await transcript(service.store.g, root)
 let queued = (await call(ctx, 'helper_spawn', {
   space: 'home',
   task,
+  title: 'Tuesday schedule check',
   brief: 'Check Tuesday.',
   model: 'helper-model',
 })).value!
@@ -97,6 +103,7 @@ test('helper_spawn returns a queued child of the caller chat; its passive report
   assertEquals((pending.dispatch as Comp).state, 'queued')
   assertEquals((pending.spawned as Comp).parent, parent)
   assertEquals((pending.spawned as Comp).notice, true)
+  assertEquals((pending.doc as Comp).title, 'Tuesday schedule check')
   assertEquals((finished.operator_session as Comp).person, person)
   assertEquals((finished.operator_session as Comp).administrative, undefined)
   assertEquals(reports.length, 1)
@@ -192,6 +199,23 @@ test('the Operator’s own spawn tool also reports passively inside an outside c
   assertEquals((nativeChild.spawned as Comp).notice, true)
   assertEquals(nativeReports.length, 1)
   assertEquals((nativeReports[0].notice as Comp).child, nativeChild.entity.eid)
+})
+
+let listed = (
+  await conversationOf(service.store, '/operator', String(nativeChat.session))
+).aside!
+  .helpers
+let done = listed.find((h) => h.session == nativeChild.entity.eid)!
+test('the chat’s aside lists a helper by its title, with its recap and how long ago it ended', () => {
+  assertEquals(done.title, 'Friday schedule check')
+  assertEquals(done.recap, 'Helper checked the schedule; Tuesday is free.')
+  let html = helperHtml(done, Date.parse(done.until!) + 2 * 86_400_000)
+  assertStringIncludes(html, 'Done</')
+  assertStringIncludes(html, '2 days ago')
+  assertStringIncludes(
+    html,
+    'title="Helper checked the schedule; Tuesday is free."',
+  )
 })
 
 let failing = (await call(ctx, 'helper_spawn', {

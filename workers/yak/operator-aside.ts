@@ -1,17 +1,21 @@
 import { Popover } from '@yaks/ui/parts'
 // The aside in the chat's header (operator-page.ts `talkPage`): what the
-// conversation is doing now, and the helpers it set going, each with how it
-// stands, its step and how long it has taken. In the right margin where the
+// conversation is doing now, and the helpers it set going, each with its
+// title, how it stands and, while it works, its step and how long it has
+// taken, or once it ended, how long ago. In the right margin where the
 // page is wide enough; elsewhere, a phone among them, a summary at the
 // header's right end, a dot for the turn and for each helper and a "+N" past
 // `DOTS`, that a press opens to the whole list. The Builder object works out
 // what it holds (operator-view.ts `turnOf`, `helping`) and sends it on the
 // page's socket as data; this draws it, in the Builder for the page's first
 // drawing and in the browser as `_talk.js` (operator-rows.ts) for each frame,
-// and says how long each has lasted, which the page keeps current.
+// and says how long each has lasted, which the page keeps current. A helper
+// that ended leaves the list a day later (`KEPT`); its place in the
+// conversation still opens it.
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { Card, Dot, Rows, State } from '@yaks/ui/parts'
+import { relative } from '@yaks/ui/relative'
 
 /** What a conversation's turn is doing while it runs, and since when. */
 export type Turn = { what: string; since: string }
@@ -19,8 +23,9 @@ export type Turn = { what: string; since: string }
 /** How a helper stands. */
 export type Standing = 'running' | 'waiting' | 'done' | 'failed' | 'stopped'
 
-/** A helper as the aside lists it: the run it opens, what it was asked, how
- * it stands, its step under way, when it began, and when it ended. */
+/** A helper as the aside lists it: the run it opens, its title, how it
+ * stands, its step under way, when it began, when it ended, and the line its
+ * final reply opens with, what it found or did. */
 export type HelperLine = {
   session: string
   href?: string
@@ -29,6 +34,7 @@ export type HelperLine = {
   step: string
   since: string
   until?: string
+  recap?: string
 }
 
 /** What the aside holds: the turn under way, and the helpers. */
@@ -116,8 +122,13 @@ export let Stands = ({ standing }: { standing: Standing }) => {
   return h(State, { mod: tone }, word)
 }
 
-/** A helper as a row: what it was asked, linked to its run, over how it
- * stands, its step and how long it took. */
+// How long ago, kept current by the page (`[data-ago]`).
+let Ago = ({ at, now }: { at: string; now: number }) =>
+  h(Popover.Time, { 'data-ago': at, dateTime: at }, relative(at, now))
+
+/** A helper as a row: its title in a line, linked to its run, its recap on
+ * hover, over how it stands and, while it works, its step and how long it
+ * has taken, or once it ended, how long ago. */
 export let Helper = (
   { helper: x, now }: { helper: HelperLine; now: number },
 ) =>
@@ -127,14 +138,20 @@ export let Helper = (
     h(
       Rows.Main,
       null,
-      h(Rows.Name, null, x.href ? h('a', { href: x.href }, x.title) : x.title),
+      h(
+        Rows.Name,
+        { mod: 'line', title: x.recap ?? x.title },
+        x.href ? h('a', { href: x.href }, x.title) : x.title,
+      ),
       h(
         Rows.Meta,
         null,
         h(Stands, { standing: x.standing }),
         x.step ? ` · ${x.step.replace(/…$/, '')}` : null,
         ' · ',
-        h(For, { since: x.since, until: x.until, now }),
+        x.until && !going(x)
+          ? h(Ago, { at: x.until, now })
+          : h(For, { since: x.since, now }),
       ),
     ),
   )
@@ -261,9 +278,29 @@ export let turnHtml = (turn: Turn | null, now = Date.now()) =>
 export let helperHtml = (helper: HelperLine, now = Date.now()) =>
   renderToString(h(Helper, { helper, now }))
 
-/** The helpers to list, those at work first, then the newest: at most
- * `most`. */
-export let ordered = (helpers: HelperLine[], most = 8) =>
-  helpers.toSorted((a, b) =>
+/** How long a helper stays listed once it ended, in milliseconds. */
+export let KEPT = 86_400_000
+
+/**
+ * The helpers to list: those at work first, then the newest, without those
+ * that ended more than `KEPT` before `now`; at most `most`.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { ordered, type HelperLine } from './operator-aside.ts'
+ * let now = Date.parse('2026-11-13T12:00:00Z')
+ * let helper = (session: string, standing: HelperLine['standing'], since: string, until?: string): HelperLine =>
+ *   ({ session, title: '', standing, step: '', since, ...until ? { until } : {} })
+ * equal(ordered([
+ *   helper('old', 'done', '2026-11-10T09:00:00Z', '2026-11-10T09:01:00Z'),
+ *   helper('new', 'done', '2026-11-13T09:00:00Z', '2026-11-13T09:01:00Z'),
+ *   helper('long', 'running', '2026-11-09T09:00:00Z'),
+ * ], 8, now).map((h) => h.session), ['long', 'new'])
+ * ```
+ */
+export let ordered = (helpers: HelperLine[], most = 8, now = Date.now()) =>
+  helpers.filter((x) =>
+    going(x) || !x.until || !(now - Date.parse(x.until) >= KEPT)
+  ).toSorted((a, b) =>
     Number(going(b)) - Number(going(a)) || b.since.localeCompare(a.since)
   ).slice(0, most)

@@ -842,7 +842,7 @@ export let WORDS: Record<string, Words> = {
   'helper_spawn': {
     'title': 'Start a helper in your operator chat',
     'description':
-      "Start a helper with brief and an optional model under the private task or session returned by operator_chat, named by task. Returns its session id immediately. It acts with your permissions and charges the space's shared budget. Its report is a passive notice to that chat, included in the chat's closing notice. Only failures or choices needing the person reach the main conversation directly. operator_read and operator_stop accept the helper's session id.",
+      "Start a helper with brief, a short title naming the job (3 to 6 words) and an optional model under the private task or session returned by operator_chat, named by task. Returns its session id immediately. It acts with your permissions and charges the space's shared budget. Its report is a passive notice to that chat, included in the chat's closing notice. Only failures or choices needing the person reach the main conversation directly. operator_read and operator_stop accept the helper's session id.",
   },
   'operator_read': {
     'title': "Read your operator's work",

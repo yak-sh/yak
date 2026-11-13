@@ -12,7 +12,7 @@ import { ownerOf, owns } from './operator-access.ts'
 import type { Held } from './build-door.ts'
 import type { Operator } from './operator.ts'
 import type { Request } from './operator-channels.ts'
-import { askedAt, inputOf, rootAt, rootOf } from './operator-root.ts'
+import { askedAt, inputOf, rootAt, rootOf, titleAt } from './operator-root.ts'
 import { phoneTexts } from './phone-move.ts'
 import { channeled } from './channel-move.ts'
 import type { operatorStore } from './operator-store.ts'
@@ -234,14 +234,11 @@ let listedOf = async (
 ): Promise<HelperLine | null> => {
   let session = helper.session
   if (!session) return null
-  let [[row], title] = await Promise.all([
-    store.g.get([session]),
-    askedAt(store, session),
-  ])
+  let [row] = await store.g.get([session])
   if (!row) return null
   return helping({
     session,
-    title,
+    title: await titleAt(store, row),
     since: String(comp(row, 'created')?.at ?? ''),
     entries: helper.entries,
     place: (dispatchStatus(row) ?? null) as Place,
@@ -268,13 +265,13 @@ let helperPage = async (
 ): Promise<HelperPage> => {
   let parent = String(comp(row, 'spawned')?.parent ?? '')
   let [[above], line] = await Promise.all([
-    store.g.get([parent], ['spawned']),
+    store.g.get([parent], ['spawned', 'doc']),
     listedOf(store, { session: row.entity.eid, entries }, names, opens),
   ])
   return {
     parent: {
       href: `${opens}/${parent}`,
-      ...above?.spawned ? { asked: await askedAt(store, parent) } : {},
+      ...above?.spawned ? { asked: await titleAt(store, above) } : {},
     },
     line,
   }
@@ -506,7 +503,7 @@ let helperOf = async (store: Store, helper: Bundle) => {
   let state = stateOf(lines, true)
   let worked: Worked = {
     open: eid,
-    title: await askedAt(store, eid),
+    title: await titleAt(store, helper),
     state,
     at: String(
       comp(lines.at(-1), 'created')?.at ?? comp(helper, 'created')?.at ?? '',
@@ -538,7 +535,7 @@ export let helpingOf = async (
       store,
       space,
       person,
-    )} ?created .order=-created.at .limit=${most}`,
+    )} ?created ?doc .order=-created.at .limit=${most}`,
   )
   return await Promise.all(helpers.map(async (helper) => {
     let { worked, lines } = await helperOf(store, helper)
@@ -575,7 +572,7 @@ export let workOf = async (
       ? store.g.read(
         `.spawned.parent=${
           conversations.map((c) => c.root).join(',')
-        } ?created .order=-created.at .limit=50`,
+        } ?created ?doc .order=-created.at .limit=50`,
       )
       : [],
   ])
@@ -960,7 +957,7 @@ export let conversationOf = async (
       task: eid,
       begun: open,
       title: helper
-        ? await askedAt(store, eid)
+        ? await titleAt(store, row)
         : comp(row, 'session')?.source
         ? 'Context summary'
         : everyone

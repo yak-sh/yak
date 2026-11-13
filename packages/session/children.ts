@@ -111,6 +111,13 @@ let caller = (ctx?: ToolContext): ToolContext => {
   return ctx
 }
 
+// The name a child was given (`title`), as its own `doc{title}`, which
+// names it wherever a session is named (./name.ts `sessionName`).
+let named = (g: Graph, title: unknown) =>
+  typeof title == 'string' && title.trim() && g.vocab.comp('doc')
+    ? { doc: { title: title.trim().replace(/\s+/g, ' ') } }
+    : {}
+
 /** One admission/write path for model delegation and user-created tasks. */
 let delegation = (
   g: Graph,
@@ -129,6 +136,11 @@ let delegation = (
     properties: {
       ...limits.childProperties,
       prompt: { type: 'string' },
+      title: {
+        type: 'string',
+        description:
+          'A short name for the job, 3 to 6 words, as a person would name it. Lists of helpers show it.',
+      },
       task: { type: 'string', description: 'task entity id or T-id' },
       instructions: { type: 'string' },
       model: {
@@ -331,6 +343,7 @@ let delegation = (
             ...minted || submitted ? {} : { call: ctx.call.entity.eid },
           },
           ...fork && anchor ? { fork: { from: anchor.entity.eid } } : {},
+          ...named(g, args.title),
         },
         {
           entity: { eid: derivedEid(`${eid}:input`) },

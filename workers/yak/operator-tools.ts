@@ -81,6 +81,9 @@ export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
       properties: {
         space: SPACE,
         task: str('The private task or session returned by operator_chat.'),
+        title: str(
+          'A short name for the job, 3 to 6 words, as a person would name it. The chat’s list of helpers shows it.',
+        ),
         brief: str('The work for the helper to do, with the context it needs.'),
         model: str('The model to use. Omit for the Operator’s default model.'),
       },
