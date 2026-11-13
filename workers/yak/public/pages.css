@@ -659,9 +659,11 @@
     overflow: hidden;
   }
   /* The app is a window onto another site. Keep the page's grain below
-     its column, including when that column fills the screen on a phone. */
+     its column, including when that column fills the screen on a phone,
+     and over everything else: the side (z-index 1, before the grain in the
+     page) and the current tab where it reaches across onto the page. */
   html:has(.Talk_Page)::after {
-    z-index: 0;
+    z-index: 1;
   }
   .Talk_PageMain {
     max-width: none;
@@ -957,7 +959,7 @@
   .Talk_App {
     position: sticky;
     top: 0;
-    z-index: 1;
+    z-index: 2;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
     height: 100dvh;
@@ -1278,6 +1280,11 @@
   @media (min-width: 701px) {
     .Sidebar {
       width: 15rem;
+    }
+    /* The current tab opens into the page beside the side, so it is
+       filled with the page's own paper. */
+    .Sidebar_Nav {
+      --nav-panel: var(--bg);
     }
     .Sidebar-rail {
       --sidebar-padding: .5rem;
