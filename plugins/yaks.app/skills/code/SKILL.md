@@ -162,6 +162,11 @@ A `"platform"` dependency is never fetched from npm. The compile gives the page
 the copy that the current release of yaks.app runs, so the page and the store it
 talks to always use the same version.
 
+A platform package is not the store client. `apply`, `query`, `subscribe` and
+the rest of what a page reads and writes its store with come from
+`./api/client.js` ([Frontend Data](store.md)); `@yaks/client` exports `client`,
+which assembles a graph of its own.
+
 The package's components are added to the app's store as well. From the deploy
 that names a `"platform"` dependency, the store keeps and relays every component
 the dependency declares, the same as the app's own components: a page saves

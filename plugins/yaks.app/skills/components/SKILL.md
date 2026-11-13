@@ -828,11 +828,14 @@ The complete list of reserved names:
     upstream usage uses using verified visit visitor_build visitor_calls
     visitor_share volume waitlisted wake wants web worked worktree written
 
-When your first choice is reserved, name the component for its specific purpose:
-the reserved name is the general one, and yours is the specific one. Not
-`comment` but `review`, not `plan` but `menu`, not `gallery` but `album`, not
-`home` but `listing`. A prefix such as `book_note` also works, but a distinct
-name reads better in a query, which is where you use it most.
+A reserved name listed under Platform components above is in your store already,
+and the refusal names its properties: when it means what you meant, such as
+`event` for a calendar event, use it as it is and leave it out of `vocab.json`.
+Otherwise name the component for its specific purpose: the reserved name is the
+general one, and yours is the specific one. Not `comment` but `review`, not
+`plan` but `menu`, not `gallery` but `album`, not `home` but `listing`. A prefix
+such as `book_note` also works, but a distinct name reads better in a query,
+which is where you use it most.
 
 ## Choosing between a property and `doc.body`
 

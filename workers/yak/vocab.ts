@@ -787,15 +787,33 @@ export let unsaid = (
       !accepted.includes(n)
     )
   if (taken.length) {
+    let had = taken.flatMap((n) => {
+      let props = shapeOf(n)
+      return props ? [`${n}{${props.join(', ')}}`] : []
+    })
     throw refuse(
       'arguments',
       `${file}: ${taken.join(', ')} ${
         taken.length == 1 ? 'is a component' : 'are components'
-      } the platform already declares — pick another name; the whole list is ` +
-        `in the guide under "Reserved component names" (${GUIDE})`,
+      } the platform already declares — pick another name` +
+        (had.length
+          ? `, or use ${had.join(', ')} as every app's store already has ${
+            had.length == 1 ? 'it' : 'them'
+          }, leaving ${had.length == 1 ? 'it' : 'them'} out of ${file}`
+          : '') +
+        `; the whole list is in the guide under "Reserved component names" (${GUIDE})`,
     )
   }
   return doc
+}
+
+// The properties of a component every app's store already has, or nothing
+// for a word only the platform's own stores speak.
+let shapeOf = (name: string): string[] | undefined => {
+  let def = coreDocs().find((d) => d.reserved !== false && d.$defs?.[name])
+    ?.$defs?.[name]
+  if (!def || def.tool === true || def.lens === true) return
+  return Object.keys(def.properties ?? {})
 }
 
 /**

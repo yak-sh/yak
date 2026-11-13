@@ -468,9 +468,10 @@ export let external = (urls: Shared['urls']): Options['external'] => (spec) => {
 }
 
 /// unexported('import{a,b as c}from"https://o/__packages/h/e.js"', { '__packages/h/e.js': 'let a,x;export{a,x as b}' }, 'https://o') -> []
-/// unexported('import{show}from"https://o/__packages/h/e.js"', { '__packages/h/e.js': 'export*from"./c.js"', '__packages/h/c.js': 'export let a' }, 'https://o', { '@yaks/cli/answer': 'https://o/__packages/h/e.js' }) -> ['imports show from @yaks/cli/answer, which does not export it']
+/// unexported('import{show}from"https://o/__packages/h/e.js"', { '__packages/h/e.js': 'export*from"./c.js"', '__packages/h/c.js': 'export let a,b' }, 'https://o', { '@yaks/cli/answer': 'https://o/__packages/h/e.js' }) -> ['imports show from @yaks/cli/answer, which does not export it; it exports a, b']
 /** The names a compiled page imports from shared modules that those modules
- * do not export, each as an error line. esbuild leaves a shared import
+ * do not export, each as an error line naming what the module does export, so
+ * the caller can pick the name it meant. esbuild leaves a shared import
  * external and never checks it, and a browser refuses to link a page naming
  * one, so the whole page's script stops; the compile refuses it instead, and
  * the last release keeps serving. A namespace or dynamic import names
@@ -514,9 +515,11 @@ export let unexported = (
         .filter(Boolean),
     ]
     let has = exportsOf(url)
+    let them = [...has].sort((a, b) => a.localeCompare(b)).join(', ')
     return names.filter((n) => !has.has(n))
       .map((n) =>
-        `imports ${n} from ${specs.get(url) ?? url}, which does not export it`
+        `imports ${n} from ${specs.get(url) ?? url}, which does not export it` +
+        (them ? `; it exports ${them}` : '')
       )
   })
 }

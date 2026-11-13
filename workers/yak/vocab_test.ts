@@ -264,6 +264,13 @@ test('a manifest is refused in the words that fix it', () => {
     Error,
     'comment, email are components the platform already declares',
   )
+  // A word every app's store has is offered as it is, by its properties.
+  assertThrows(
+    () => unsaid(appDoc(says({ event: {}, tool_refusal: {} }))),
+    Error,
+    "or use event{starts, ends, repeats, place, zone} as every app's store " +
+      'already has it, leaving it out of vocab.json',
+  )
   // A word the store already declares stays the app's, and a stored manifest
   // is read whatever the list has become since.
   let held = appDoc(says({ gallery: {} }))
