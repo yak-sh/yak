@@ -105,7 +105,9 @@ let inputOf = (schema: unknown, env: Host): unknown => {
  * something to read in the answer (the files a list names, the roster `about`
  * serves), the tool answers it as data too, and it rides as `output{value}`:
  * the words are for a person and carry more than the answer, so nothing reads
- * them as data (@yaks/tools `valueIn`). The bundle is the one output schema
+ * them as data (@yaks/tools `valueIn`). A tool whose answer is its value
+ * alone says no words, and the bundle is `output{value}` without a body, so
+ * a reader of either form reads it once. The bundle is the one output schema
  * every tool declares (@yaks/mcp `answerSchema`).
  *
  * What is unseen in the space it worked in (unseen.ts) rides on the sentence —
@@ -164,26 +166,24 @@ export let answered = async (
       caught(e, { request: `reply ${stage}`, space: space!.slug })
       return ''
     })
-  let text = !space || !ctx.person || readOnly
-    ? out.text
-    : out.text + (await Promise.all([
-      riding('breaks', async () => {
-        let who = currentWho ??
-          { person: ctx.person, role: await ctx.dir.role(space, ctx.person) }
-        return unseenBlock(
-          await serve(
-            ctx.env,
-            space,
-            who,
-            undefined,
-            false,
-            undefined,
-            roster ? () => roster : undefined,
-          ),
-        )
-      }),
-      riding('ceiling', () => ceiling(ctx.env, space, roster)),
-    ])).join('')
+  let news = !space || !ctx.person || readOnly ? '' : (await Promise.all([
+    riding('breaks', async () => {
+      let who = currentWho ??
+        { person: ctx.person, role: await ctx.dir.role(space, ctx.person) }
+      return unseenBlock(
+        await serve(
+          ctx.env,
+          space,
+          who,
+          undefined,
+          false,
+          undefined,
+          roster ? () => roster : undefined,
+        ),
+      )
+    }),
+    riding('ceiling', () => ceiling(ctx.env, space, roster)),
+  ])).join('')
   // A call to say it came from, where there is one: the builder runs these
   // same tools in its own loop (builder.ts), with nothing to point at.
   let output = {
@@ -191,11 +191,18 @@ export let answered = async (
     ...(out.value ? { value: out.value } : {}),
     ...(out.images?.length ? { images: out.images } : {}),
   }
-  return [{
+  // An answer that is its value alone carries it once, as the value; the
+  // text door words it (@yaks/tools `worded`), and the news is words of its
+  // own beside it.
+  let alone = !out.text && out.value != null
+  let answer = {
     entity: { eid: '$said' },
-    content: { body: text },
+    ...(alone ? {} : { content: { body: out.text + news } }),
     ...(Object.keys(output).length ? { output } : {}),
-  }]
+  }
+  return alone && news
+    ? [answer, { entity: { eid: '$said' }, content: { body: news.trim() } }]
+    : [answer]
 }
 
 /**

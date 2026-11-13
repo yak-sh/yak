@@ -44,8 +44,10 @@ for (let name of ['operator_chat', 'operator_run']) {
     assertEquals(request.headers.get('x-yak-person'), ctx.person)
     assertEquals(request.headers.get('x-yak-role'), 'owner')
     assertEquals(request.headers.get('x-space-eid'), space)
-    assertEquals(out.value, answer)
-    assertEquals(out.text, answer.text)
+    // The words are said once, as the text; the value holds the rest.
+    let { text, ...rest } = answer
+    assertEquals(out.value, rest)
+    assertEquals(out.text, text)
   })
 
   test(`${name} refuses a caller who cannot write the space before reaching the Operator`, async () => {

@@ -394,6 +394,19 @@ test('tool answers preserve image bytes beside words and structured data', async
   })
 })
 
+test('a tool answer that is its value alone carries it once', async () => {
+  let result = await answered(
+    readOnly.ctx,
+    { text: '', value: { tasks: [] } },
+    'read-call',
+    true,
+  )
+  equal(result, [{
+    entity: { eid: '$said' },
+    output: { source: 'read-call', value: { tasks: [] } },
+  }])
+})
+
 let unreachable = fixture()
 unreachable.env.TRACKER_SECRET = 'tracker-secret'
 unreachable.env.TRACKER = {

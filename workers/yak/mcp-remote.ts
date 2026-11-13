@@ -359,7 +359,7 @@ export let remoteCommands = (
       let tools = await c.list()
       if (!tools.some((t) => t.name == name)) {
         let commands = described(s, tools)
-        return { text: JSON.stringify(commands), value: { commands } }
+        return { text: '', value: { commands } }
       }
     }
     let reply: Awaited<ReturnType<typeof c.call>>
@@ -372,9 +372,13 @@ export let remoteCommands = (
       }
       throw e
     }
-    let text = reply.content.filter((b) => b.type == 'text')
-      .map((b) => b.text).join('\n') || unsaid(reply) || ''
-    return { text, value: reply }
+    // The reply's text blocks are its words; the value keeps the rest of the
+    // reply (its structured answer, isError, images) so the words ride once.
+    let blocks = reply.content as { type: string; text?: string }[]
+    let words = blocks.filter((b) => b.type == 'text')
+    let text = words.map((b) => b.text).join('\n') || unsaid(reply) || ''
+    let content = blocks.filter((b) => b.type != 'text')
+    return { text, value: { ...reply, content } }
   }
   // What an ask that failed answers: a sign-in, a server that is away, or
   // the failure itself.

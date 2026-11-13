@@ -4513,7 +4513,7 @@ let OURS: Row[] = [
         method: 'POST',
         body: JSON.stringify({ next, rate }),
       }, KERNEL)
-      return { text: JSON.stringify(value), value, space }
+      return { text: '', value, space }
     },
   },
   {
@@ -4551,11 +4551,7 @@ let OURS: Row[] = [
           }
           : {}),
       })
-      return {
-        text: JSON.stringify(result),
-        value: result,
-        space,
-      }
+      return { text: '', value: result, space }
     },
   },
   {

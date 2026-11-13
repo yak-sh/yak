@@ -193,6 +193,6 @@ export let mcpConnect: Row = {
         ? { mentions: args.mentions.trim() || null }
         : {},
     })
-    return { text: JSON.stringify(value), value }
+    return { text: '', value }
   },
 }

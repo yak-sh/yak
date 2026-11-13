@@ -30,7 +30,12 @@ let ask = async (
   if (!response.ok) {
     throw rejected(response.status, String(value.message ?? value.error))
   }
-  return { space, text: String(value.text ?? JSON.stringify(value)), value }
+  // A request's answer is words, said once beside the rest of its value; a
+  // conversation's read is its value alone.
+  let { text, ...rest } = value
+  return typeof text == 'string'
+    ? { space, text, value: rest }
+    : { space, text: '', value }
 }
 
 /** A tool on the space's tasks and goals, run in its Operator's store

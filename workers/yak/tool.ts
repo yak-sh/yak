@@ -122,7 +122,9 @@ export type Args = Record<string, unknown>
 // append what is unseen there), and, where code has something to read, the
 // same answer as data. The text is for a person and may carry more than the
 // answer (the unseen block); the value rides beside it as the answer's
-// `output{value}` (agent.ts `answered`), which is what a program reads.
+// `output{value}` (agent.ts `answered`), which is what a program reads. A
+// tool whose answer is its value alone says no words (`''`): the value is
+// worded for whoever reads words, so the answer carries it once.
 export type Out = {
   text: string
   space?: Space
