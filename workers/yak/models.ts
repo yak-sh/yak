@@ -24,6 +24,7 @@ import {
   type Price,
 } from '@yaks/model'
 import { records } from '@yaks/secrets'
+import { after } from '@yaks/fp'
 
 import type { Plug } from '@yaks/host/config'
 import type { VocabDoc } from '@yaks/vocab'
@@ -53,18 +54,23 @@ export let guess = (sent: unknown) =>
   Math.ceil(JSON.stringify(sent ?? '').length / 4)
 
 // Only providers are installed. Model rows stay as history and are never retired
-// because a newer release or a code list stopped naming them.
-export let planting = async (
+// because a newer release or a code list stopped naming them. A store that
+// reads synchronously is answered synchronously, so a seed applied while a
+// release is selected can stand them up first (graph.ts `#providing`).
+export let planting = (
   read: Stored['graph']['read'],
   at: Pick<Stored, 'meta' | 'app' | 'env'>,
-): Promise<Bundle[]> => {
+): Bundle[] | Promise<Bundle[]> => {
   if (at.meta || !at.app) return []
-  let held = await read('.provider&*')
-  return names(at.env, serving).flatMap((name): Bundle[] =>
-    held.some((b) => (b.provider as Comp).name == name) ? [] : [{
-      entity: { eid: identityEid('provider', [name]) },
-      provider: { name, transport: 'http', offered: true },
-    }]
+  return after(
+    read('.provider&*'),
+    (held) =>
+      names(at.env, serving).flatMap((name): Bundle[] =>
+        held.some((b) => (b.provider as Comp).name == name) ? [] : [{
+          entity: { eid: identityEid('provider', [name]) },
+          provider: { name, transport: 'http', offered: true },
+        }]
+      ),
   )
 }
 

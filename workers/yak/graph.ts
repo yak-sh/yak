@@ -73,7 +73,7 @@ import {
   sessionStep,
 } from './session-lens.ts'
 import { statements } from '@yaks/sqlite'
-import { recovering } from './models.ts'
+import { planting, recovering } from './models.ts'
 import { hits as documentHits } from './document-search.ts'
 import { metered as meteredModel } from './meter.ts'
 import { attributed } from './attribution.ts'
@@ -2160,10 +2160,12 @@ export class Store {
       deployed: () => this.#deployedOnce(),
       prepare: (next) => this.#prepared(next),
       bind: () => this.#build(),
-      seed: (bundles, actor, effects) =>
-        this.#asIs(signed(this.#unseeded(bundles), actor), {
+      seed: (bundles, actor, effects) => {
+        this.#providing()
+        return this.#asIs(signed(this.#unseeded(bundles), actor), {
           deferEffects: (run) => effects.push(run),
-        }),
+        })
+      },
       atomic: (run, failed) => this.#atomic(run, failed),
       failed: (error, release) => {
         defect(error, {
@@ -5701,6 +5703,24 @@ export class Store {
     }
   }
 
+  // The platform's providers, stood up before a seed is checked or applied.
+  // A seed names one by name (`using.provider: "workers-ai"`), which names
+  // only a provider row that stands (@yaks/model `addressed`, @yaks/session
+  // `naming`), and a fresh store holds none until a release's start-up
+  // effect (`models_install`) or its first model turn plants them, both
+  // after the seed.
+  #providing(): void {
+    let rows = planting(this.#graph.read, {
+      meta: this.#get('name') == PLATFORM_STORE,
+      app: this.#get('app'),
+      env: this.#bind,
+    })
+    if (rows instanceof Promise) {
+      throw new Error('a staged seed must read synchronously')
+    }
+    if (rows.length) this.#asIs(rows)
+  }
+
   // A fixed seed identity may already live in a shared home. Keep what the
   // person has written, including a deletion, when another app comes furnished.
   #unseeded(bundles: Bundle[]): Bundle[] {
@@ -5729,6 +5749,7 @@ export class Store {
           if (!next) throw new Refused('candidate vocabulary is not staged')
           this.#put('vocab', this.#prepared(next))
           this.#build()
+          this.#providing()
           let result = this.#graph.apply(
             signed(this.#unseeded(bundles), actor),
             {

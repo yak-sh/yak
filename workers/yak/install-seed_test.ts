@@ -1,5 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
+import { identityEid } from '@yaks/graph/identity'
+import { modelToolEid } from '@yaks/builders/model'
 import { connector, kernel, signIn, txt, unique, vocabFile } from './probe.ts'
 
 let k = await kernel()
@@ -82,6 +84,36 @@ await publisher.tool('app_files', {
 })
 let diary = await publisher.tool('app_deploy', { app: 'diary' })
   .catch((e: Error) => e.message)
+// A fresh store holds no provider row until a model turn or a release's
+// start-up work plants one, and a seed names its model's provider by name.
+let using = { provider: 'workers-ai', model: '@cf/zai-org/glm-5.3-flash' }
+let tales = unique('seeded-tales')
+await publisher.tool('app_new', { slug: 'tales', title: 'Tales' })
+await publisher.tool('app_files', {
+  app: 'tales',
+  files: [
+    { path: 'index.html', content: '<h1>Tales</h1>' },
+    { path: 'vocab.json', content: vocabFile({ tale: { body: txt } }) },
+    {
+      path: 'seed.json',
+      content: JSON.stringify([{
+        entity: { eid: '$retell' },
+        content: { body: 'Retell $body.' },
+        using,
+        builder: { query: '$tale .tale, tale.body=$body', to: modelToolEid() },
+        staged: {},
+      }]),
+    },
+  ],
+})
+let told = await publisher.tool('app_deploy', { app: 'tales' })
+  .catch((e: Error) => e.message)
+await publisher.tool('app_publish', { app: 'tales', name: tales })
+await installer.tool('app_install', { name: tales })
+let builders = (as: typeof publisher) =>
+  as.tool('graph_query', { app: 'tales', q: '.builder&.using' })
+    .then(JSON.parse)
+let usings = [await builders(publisher), await builders(installer)]
 await k.stop()
 
 test('a second install seeds its component home and preserves the first copy’s edits', () => {
@@ -111,4 +143,14 @@ test('borrowed seed rows remain writable through either copy and are seeded once
 
 test('a seed of embedded text deploys', () => {
   assertStringIncludes(diary, 'deployed')
+})
+
+test('a seed naming its model and provider by name deploys and installs', () => {
+  assertStringIncludes(told, 'seeded 1 entity')
+  for (let rows of usings) {
+    assertEquals(rows.map((r: { using: unknown }) => r.using), [{
+      provider: identityEid('provider', [using.provider]),
+      model: identityEid('model', [using.model]),
+    }])
+  }
 })
