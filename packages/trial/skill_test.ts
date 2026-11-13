@@ -558,7 +558,15 @@ test("a skill's page shows what a person picked, never what the platform didn't 
   equal(m.outputs.length, 6)
   let plain = m.variants.find((v) => v.title == 'plain')!
   equal([plain.shown, plain.preferred, m.winner], [2, 2, plain.eid])
-  equal(versions([m]).map((v) => v.variant.title), ['plain'])
+  // A winner is no version until it becomes the skill's text.
+  equal(versions([m]), [])
+  let made = versions([{
+    ...m,
+    variants: m.variants.map((v) =>
+      v == plain ? { ...v, adopted: '2026-11-13T00:00:00Z' } : v
+    ),
+  }])
+  equal(made.map((v) => [v.variant.title, v.won]), [['plain', m.title]])
 
   // An attempt the platform did not run is left out, with each tap on it.
   let other = measured(all, (a: Any) => a.writing.output.headline != 'B')

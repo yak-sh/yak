@@ -3,21 +3,23 @@
  * and each guess still to be made of a judge, and what comes back is written
  * on the row that planned it.
  *
- * A writer and a judge are each a session asked once and offered no tools
- * (`sending{tools: []}`), which whatever answers sessions on this graph starts
- * with nothing of its machine (@yaks/spawn: a bare run). The arm that carries
- * a persona differs by one thing, the persona its session selects. This
- * module starts no process and names no provider: it writes the request,
- * waits for the session to be over, and reads what it said and what it cost.
+ * Who answers is the run's one boundary (`Asking`). On a machine that runs
+ * sessions, a writer and a judge are each a session asked once and offered
+ * no tools (`sending{tools: []}`), which whatever answers sessions on this
+ * graph starts with nothing of its machine (@yaks/spawn: a bare run); the
+ * arm that carries a persona differs by one thing, the persona its session
+ * selects (`sessions`). A host that runs none asks a model directly, with no
+ * tools either (`asking`). This module starts no process and names no
+ * provider.
  *
  * The words are the round's. `writers{task, skilled, rule}` on the round is
  * what a writer is asked, `judge{form, shown, question, cap}` what a judge
  * is, and `using{provider, model, effort}` who answers. A reply is read as
  * its last ```json block.
  *
- * A row names its session in the write that asks, so a run stopped part way
- * loses nothing: the next one reads what each session said since, and asks
- * again only what never answered.
+ * Under sessions, a row names its session in the write that asks, so a run
+ * stopped part way loses nothing: the next one reads what each session said
+ * since, and asks again only what never answered.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -33,6 +35,8 @@
  */
 import type { Bundle, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
+import { type Model, ModelError, type Price, weigh } from '@yaks/model'
+import { CallError } from '@yaks/tools/errors'
 import { entryStatus, saidOf, textOf } from '@yaks/session'
 import { over } from '@yaks/spawn/tools'
 import { unreturned } from './round.ts'
@@ -364,40 +368,42 @@ export let costs = async (
   }
 }
 
-/** How a run goes, all but `cap` optional. */
-export type Opts = {
-  /** the dollars it may spend at list price; it asks nothing more once what
-   * it spent, with what the calls going are expected to, would pass it */
-  cap: number
-  /** how many calls go at once (default 6) */
-  jobs?: number
-  /** each line of progress */
-  out?: (line: string) => void
-  /** names a variant, a case or a judge in a line */
-  label?: Label
-  /** waits between looks at a session (default: a second) */
-  pause?: () => Promise<unknown>
-  /** stops asking; calls already going are left to their sessions */
-  signal?: AbortSignal
-  /** mints a session's and an entry's eid (default a uuid) */
-  mint?: () => Eid
+/** What one call came back with: everything its model said, the model that
+ * answered, what it cost and used. `why` is what it said instead of an
+ * answer, where it stopped short. */
+export type Said = {
+  reply: string
+  why?: string
+  model?: string
+  cost?: number
+  /** the cost is every dollar its provider said, not one weighed at a price */
+  reported?: boolean
+  usage?: Row
 }
 
-/** What a run did: calls asked, rows returned, calls that came back with
- * nothing readable, calls left unasked, and the dollars it spent. */
-export type Ran = {
-  asked: number
-  returned: number
-  failed: number
-  left: number
-  spent: number
+/** Nothing more can be asked, and why: the budget refused it, or no model
+ * answers the round's `using`. */
+export type Stop = { stop: string }
+
+/**
+ * Who answers a run's calls: the one boundary a run has with the world. A
+ * run asks through it and writes what comes back; it never knows whether a
+ * session on this machine answered ({@link sessions}) or a model was asked
+ * directly ({@link asking}).
+ */
+export type Asking = {
+  /** asks one call and waits for what it said: nothing when the run was
+   * stopped first, a {@link Stop} when nothing more can be asked */
+  ask: (c: Call) => Promise<Said | Stop | undefined>
+  /** what a call an earlier run asked (`Call.session`) has said since,
+   * waiting for it; absent where nothing an earlier run asked lasts */
+  again?: (c: Call) => Promise<Said | undefined>
+  /** the most a call costs, where no earlier row says */
+  quote?: (c: Call) => Promise<number | undefined>
 }
 
-let dollars = (n: number) => `$${n.toFixed(2)}`
-
-// A session over, as its row and what it said, cost and used; nothing while
-// it runs.
-let ended = async (g: Graph, session: Eid) => {
+// A session over, as what it said, cost and used; nothing while it runs.
+let ended = async (g: Graph, session: Eid): Promise<Said | undefined> => {
   let [row] = await g.get([session])
   if (!row || !await over(g, row, await entryStatus(g, session))) return
   let s = JSON.stringify(session)
@@ -413,7 +419,9 @@ let ended = async (g: Graph, session: Eid) => {
   }
   return {
     // The model that answered, where its requests say (`ask.to`).
-    model: paid.map((b) => comp(b, 'ask').to).findLast((m) => m),
+    model: paid.map((b) => comp(b, 'ask').to).findLast((m) => m) as
+      | string
+      | undefined,
     reply: said && !said.stop ? textOf(said) : '',
     why: said?.stop ? textOf(said) : '',
     cost: sum('cost', 'dollars'),
@@ -428,31 +436,260 @@ let ended = async (g: Graph, session: Eid) => {
 }
 
 /**
- * Run what a round still owes. It says first what that will cost, from what
- * earlier rows cost, then asks `jobs` calls at a time: writers, then the
- * judges of what was written. Each row is written the moment its session is
- * over. It stops asking at the cap, and a call that returns nothing readable
- * keeps its session and is asked again by the next run.
+ * Calls answered by sessions on this graph: each is a session asked once and
+ * offered no tools, which whatever answers sessions here starts bare
+ * (@yaks/spawn). The row names its session in the write that asks, so a run
+ * stopped part way loses nothing: the next reads what each session said
+ * since.
  */
-export let run = async (g: Graph, round: Eid, o: Opts): Promise<Ran> => {
-  let out = o.out ?? (() => {})
+export let sessions = (
+  g: Graph,
+  o: Pick<Opts, 'pause' | 'signal' | 'mint'> = {},
+): Asking => {
   let mint = o.mint ?? (() => crypto.randomUUID() as string)
   let pause = o.pause ?? (() => new Promise((go) => setTimeout(go, 1000)))
-  let cost = await costs(g)
-  let ran: Ran = { asked: 0, returned: 0, failed: 0, left: 0, spent: 0 }
-  let held = 0
-
-  // Write what a session said on the row that asked it. Answers whether the
-  // row is returned.
-  let settle = async (c: Call, session: Eid, began?: number) => {
+  let wait = async (session: Eid) => {
     let end = await ended(g, session)
     while (!end) {
       if (o.signal?.aborted) return undefined
       await pause()
       end = await ended(g, session)
     }
+    return end
+  }
+  return {
+    ask: async (c) => {
+      let session = mint()
+      await g.apply([
+        {
+          entity: { eid: session },
+          session: c.persona ? { persona: c.persona } : {},
+        },
+        {
+          entity: { eid: mint() },
+          entry: { session },
+          content: { body: c.text },
+          using: c.using,
+          sending: { tools: [] },
+        },
+        { entity: { eid: c.row }, [c.comp]: { session } },
+      ])
+      return await wait(session)
+    },
+    again: (c) => wait(c.session!),
+  }
+}
+
+/** A model to ask, by the names a round's `using` gives: the model that
+ * answers, the name it is asked by, and its price where it lists one. */
+export type Answering = (
+  names: { provider?: string; model?: string },
+) => Promise<{ model: Model; name: string; price?: Price }>
+
+/** The most a reply may write (`Request.tokens`) when asked directly. */
+export let TOKENS = 4000
+
+/**
+ * Calls answered by asking a model directly, as a host that runs no sessions
+ * does: one request, the call's words as the person's turn, no tools. A
+ * refusal (`CallError`, or a `ModelError` that will not pass) stops the run,
+ * since it would refuse every call after it; one that may pass is that call
+ * saying nothing readable, asked again by the next run. Nothing an earlier
+ * run asked lasts, so a call it left is asked again.
+ */
+export let asking = (
+  g: Graph,
+  answering: Answering,
+  tokens = TOKENS,
+): Asking => {
+  let found = new Map<string, ReturnType<Answering>>()
+  let names = async (using: Row) => {
+    let ids = [using.provider, using.model].map(str)
+    let rows = await g.get(ids.filter((e) => e))
+    let name = (eid: string, of: string) =>
+      eid
+        ? str(comp(rows.find((b) => b?.entity.eid == eid), of).name) ||
+          undefined
+        : undefined
+    return { provider: name(ids[0], 'provider'), model: name(ids[1], 'model') }
+  }
+  let answerer = async (c: Call) => {
+    let said = await names(c.using)
+    let key = JSON.stringify(said)
+    let held = found.get(key) ?? answering(said)
+    found.set(key, held)
+    held.catch(() => found.delete(key))
+    return await held
+  }
+  let refusal = (e: unknown): Stop | Said | undefined => {
+    if (e instanceof ModelError && e.retry) {
+      return { reply: '', why: `${e.code}: ${e.message}` }
+    }
+    if (e instanceof ModelError || e instanceof CallError) {
+      return { stop: e.message }
+    }
+  }
+  return {
+    ask: async (c) => {
+      try {
+        let { model, name, price } = await answerer(c)
+        let reply = await model({
+          model: name,
+          items: [{ kind: 'user', text: c.text }],
+          tools: [],
+          tokens,
+        })
+        let usage = some({
+          input_tokens: reply.usage?.input_tokens,
+          output_tokens: reply.usage?.output_tokens,
+        })
+        let cost = reply.cost ??
+          (price && reply.usage ? weigh(price, reply.usage) : undefined)
+        // The row names the model that answered by its row, where one is
+        // kept; the one asked otherwise.
+        let [answered] = reply.model == name ? [] : await g.read(
+          `.model.name=${
+            JSON.stringify(reply.model)
+          } .limit=1 .fields=entity.eid`,
+        )
+        return {
+          reply: reply.items.flatMap((i) =>
+            i.kind == 'assistant' ? [i.text] : []
+          )
+            .join('\n'),
+          model: answered?.entity.eid,
+          cost,
+          reported: reply.cost != null && reply.costReported !== false,
+          usage,
+        }
+      } catch (e) {
+        let said = refusal(e)
+        if (said) return said
+        throw e
+      }
+    },
+    quote: async (c) => {
+      let price = await answerer(c).then((a) => a.price, () => undefined)
+      return price && weigh(price, {
+        input_tokens: Math.ceil(c.text.length / 4),
+        output_tokens: tokens,
+      })
+    },
+  }
+}
+
+/** How a run goes, all but `cap` optional. */
+export type Opts = {
+  /** the dollars it may spend at list price; it asks nothing more once what
+   * it spent, with what the calls going are expected to, would pass it */
+  cap: number
+  /** who answers its calls (default {@link sessions} on the graph) */
+  asking?: Asking
+  /** how many calls go at once (default 6) */
+  jobs?: number
+  /** each line of progress */
+  out?: (line: string) => void
+  /** names a variant, a case or a judge in a line */
+  label?: Label
+  /** with the default `asking`: waits between looks at a session (default
+   * a second) */
+  pause?: () => Promise<unknown>
+  /** stops asking; calls already going are left to their sessions */
+  signal?: AbortSignal
+  /** with the default `asking`: mints a session's and an entry's eid
+   * (default a uuid) */
+  mint?: () => Eid
+}
+
+/** What a run did: calls asked, rows returned, calls that came back with
+ * nothing readable, calls left unasked, and the dollars it spent. `stopped`
+ * says why it left calls unasked, where it did: the cap, or the refusal that
+ * stopped it. */
+export type Ran = {
+  asked: number
+  returned: number
+  failed: number
+  left: number
+  spent: number
+  stopped?: string
+}
+
+let dollars = (n: number) => `$${n.toFixed(2)}`
+
+/** What a round still owes and what that will cost: writers and judges to
+ * ask, and the dollars at list price, by what earlier rows of each kind cost
+ * and else the most a call can (`Asking.quote`). `dollars` is absent when
+ * nothing says what any call costs. */
+export type Owed = {
+  calls: Call[]
+  writers: number
+  judges: number
+  dollars?: number
+  /** what each call is expected to cost */
+  each: Map<Call, number>
+}
+
+/** What `round` still owes, priced. */
+export let owing = async (
+  g: Graph,
+  round: Eid,
+  o: { asking?: Asking; label?: Label } = {},
+): Promise<Owed> => {
+  let [calls, cost] = await Promise.all([owed(g, round, o.label), costs(g)])
+  let each = new Map<Call, number>()
+  for (let c of calls) {
+    let n = cost(c) ?? await o.asking?.quote?.(c)
+    if (n != null) each.set(c, n)
+  }
+  let count = (name: string) => calls.filter((c) => c.comp == name).length
+  return {
+    calls,
+    writers: count('writing'),
+    judges: count('guess'),
+    ...each.size
+      ? { dollars: [...each.values()].reduce((a, b) => a + b, 0) }
+      : {},
+    each,
+  }
+}
+
+/// owes({ writers: 4, judges: 8, dollars: 0.12 }) -> '4 writers and 8 judges to ask, about $0.12 at list price'
+/** What a round owes, in a line. */
+export let owes = (o: Pick<Owed, 'writers' | 'judges' | 'dollars'>): string =>
+  `${o.writers} writers and ${o.judges} judges to ask` +
+  (o.dollars != null
+    ? `, about ${dollars(o.dollars)} at list price`
+    : ', and nothing says what one costs')
+
+/** The dollars a round's calls have cost so far: every attempt and guess of
+ * it that carries a cost. */
+export let spent = async (g: Graph, round: Eid): Promise<number> => {
+  let r = JSON.stringify(round)
+  let rows = (await Promise.all([
+    g.read(`.writing.round=${r} .cost .fields=cost.dollars`),
+    g.read(`.guess.attempt.writing.round=${r} .cost .fields=cost.dollars`),
+  ])).flat()
+  let n = rows.reduce((a, b) => a + (Number(comp(b, 'cost').dollars) || 0), 0)
+  return Math.round(n * 1e6) / 1e6
+}
+
+/**
+ * Run what a round still owes. It says first what that will cost, from what
+ * earlier rows cost, then asks `jobs` calls at a time: writers, then the
+ * judges of what was written. Each row is written the moment its call
+ * returns. It stops asking at the cap or at a refusal, and a call that
+ * returns nothing readable is asked again by the next run.
+ */
+export let run = async (g: Graph, round: Eid, o: Opts): Promise<Ran> => {
+  let out = o.out ?? (() => {})
+  let answers = o.asking ?? sessions(g, o)
+  let ran: Ran = { asked: 0, returned: 0, failed: 0, left: 0, spent: 0 }
+  let held = 0
+
+  // Write what a call said on the row that asked it. Answers whether the
+  // row is returned.
+  let settle = async (c: Call, end: Said, ms?: number) => {
     let read = end.reply ? c.read(end.reply) : undefined
-    let ms = began == null ? undefined : Date.now() - began
     await g.apply([{
       entity: { eid: c.row },
       [c.comp]: some({
@@ -461,10 +698,10 @@ export let run = async (g: Graph, round: Eid, o: Opts): Promise<Ran> => {
         model: end.model ?? c.using.model,
         ...c.comp == 'writing' ? { at: new Date().toISOString(), ms } : {},
       }),
-      ...Object.keys(end.usage).length ? { usage: end.usage } : {},
+      ...Object.keys(end.usage ?? {}).length ? { usage: end.usage } : {},
       ...end.cost == null
         ? {}
-        : { cost: { dollars: end.cost, reported: end.reported } },
+        : { cost: { dollars: end.cost, reported: !!end.reported } },
     }])
     out(
       `${c.label}: ${
@@ -482,23 +719,10 @@ export let run = async (g: Graph, round: Eid, o: Opts): Promise<Ran> => {
   }
 
   let ask = async (c: Call) => {
-    let session = mint()
     let began = Date.now()
-    await g.apply([
-      {
-        entity: { eid: session },
-        session: c.persona ? { persona: c.persona } : {},
-      },
-      {
-        entity: { eid: mint() },
-        entry: { session },
-        content: { body: c.text },
-        using: c.using,
-        sending: { tools: [] },
-      },
-      { entity: { eid: c.row }, [c.comp]: { session } },
-    ])
-    return await settle(c, session, began)
+    let end = await answers.ask(c)
+    if (!end || 'stop' in end) return end
+    return await settle(c, end, Date.now() - began)
   }
 
   // Every call of `calls`, `jobs` at a time, until the cap or the signal.
@@ -511,40 +735,40 @@ export let run = async (g: Graph, round: Eid, o: Opts): Promise<Ran> => {
     )
   }
 
-  let first = await owed(g, round, o.label)
-  let total = first.reduce((n, c) => n + (cost(c) ?? 0), 0)
-  let count = (name: string) => first.filter((c) => c.comp == name).length
-  out(
-    `${count('writing')} writers and ${count('guess')} judges to ask` +
-      (first.some((c) => cost(c) != null)
-        ? `, about ${dollars(total)} at list price by what earlier rows cost`
-        : ', and no earlier row says what one costs') +
-      `. Cap ${dollars(o.cap)}.`,
-  )
-  let stopped = false
+  let first = await owing(g, round, { asking: answers, label: o.label })
+  out(`${owes(first)}. Cap ${dollars(o.cap)}.`)
   // Two looks: the writers and the judges of what was already written, then
   // the judges of what the first look wrote.
   for (let look of [first, undefined]) {
-    let calls = (look ??
-      (await owed(g, round, o.label)).filter((c) => c.comp == 'guess'))
-      .filter((c) => !c.waits)
+    let { calls, each } = look ??
+      await owing(g, round, { asking: answers, label: o.label })
+    calls = calls.filter((c) => !c.waits && (look || c.comp == 'guess'))
     // What an earlier run asked is read first, and costs this run nothing.
     let again: Call[] = []
-    await work(calls.filter((c) => c.session), async (c) => {
-      let did = await settle(c, c.session!)
+    let earlier = answers.again ? calls.filter((c) => c.session) : []
+    await work(earlier, async (c) => {
+      let end = await answers.again!(c)
+      let did = end && await settle(c, end)
       if (did?.returned) ran.returned++
       else if (did) again.push(c)
     })
-    await work([...calls.filter((c) => !c.session), ...again], async (c) => {
-      let est = cost(c) ?? 0
-      if (stopped || ran.spent + held + est > o.cap || ran.spent >= o.cap) {
-        stopped = true
+    let fresh = calls.filter((c) => !earlier.includes(c))
+    await work([...fresh, ...again], async (c) => {
+      let est = each.get(c) ?? 0
+      if (ran.stopped || ran.spent + held + est > o.cap || ran.spent >= o.cap) {
+        ran.stopped ??= 'the cap'
         ran.left++
         return
       }
       held += est
       ran.asked++
       let did = await ask(c).finally(() => held -= est)
+      if (did && 'stop' in did) {
+        ran.stopped ??= did.stop
+        ran.asked--
+        ran.left++
+        return
+      }
       ran.spent += did?.cost ?? (did ? est : 0)
       if (did?.returned) ran.returned++
       else if (did) ran.failed++
@@ -554,7 +778,7 @@ export let run = async (g: Graph, round: Eid, o: Opts): Promise<Ran> => {
   ran.spent = Math.round(ran.spent * 1e6) / 1e6
   out(
     `${ran.asked} asked, ${ran.returned} returned, ${ran.failed} with nothing readable, ${ran.left} left unasked${
-      stopped ? ' at the cap' : ''
+      ran.stopped ? `, stopped by ${ran.stopped}` : ''
     }; spent ${dollars(ran.spent)}.`,
   )
   return ran

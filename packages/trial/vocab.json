@@ -114,6 +114,39 @@
         }
       }
     },
+    "capped": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "on a round: the most its writers' and judges' calls may cost in all, in dollars at list price, counting every call of it that carries a cost. Setting it runs the round (`round_run`): each call it still owes is asked until what they cost would pass it. Set by someone of the space that pays (`trial_cap`)",
+      "properties": {
+        "dollars": {
+          "type": "number",
+          "minimum": 0,
+          "description": "the cap: `2` for two dollars"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was set"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who set it, and on yaks.app the space whose budget pays"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the session or client the write came in on"
+        }
+      }
+    },
     "judge": {
       "component": true,
       "type": "object",
@@ -172,6 +205,40 @@
           "ref": "variant",
           "death": "detach",
           "description": "the variant this one was changed from, in a later round"
+        }
+      }
+    },
+    "adopted": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "on a variant: it became its skill's text, the skill's next version. Each adopted variant is a version, oldest first, and what it came `from` is the version before",
+      "properties": {
+        "skill": {
+          "type": "string",
+          "ref": "skill",
+          "death": "cascade",
+          "description": "the skill whose text it became"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it became the skill's text"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who made it the skill's text"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the session or client the write came in on"
         }
       }
     },
@@ -568,6 +635,79 @@
       "readOnly": true,
       "positional": [
         "round"
+      ]
+    },
+    "round_run": {
+      "effect": true,
+      "created": [
+        "capped"
+      ],
+      "description": "ask the writers and judges a round still owes, until what its calls cost in all would pass its cap"
+    },
+    "trial_plan": {
+      "tool": true,
+      "noun": "trial",
+      "verb": "plan",
+      "title": "Plan a round of a skill trial",
+      "description": "Write a round of a skill trial from its file, to improve a skill on cases its users bring: the skill it develops (found by its title, made where there is none), the variants (candidate texts of the skill; give the skill's current text as one, and say what each later one came `from`), the cases writers are handed, the wording writers are given, the model asked, judges and a `plan` of what to write. With `plan.paired`, every two variants' attempts at one case, arm and run are a pair to compare. Planning again with the same key replaces what the plan no longer holds. It writes no results: an attempt with an `output` or a guess with `guesses` is refused, since only a run writes those. Nothing is asked until trial_cap.",
+      "input": {
+        "round": {
+          "type": "object",
+          "description": "the round's file (`RoundFile` in @yaks/trial/skill): `key`, `title`, `skill`, `output` (the parts every attempt returns), `using` ({provider, model}), `writers` ({task, skilled, rule}: `$case`, `$skill` and `$rule` are filled in), `variants`, `cases`, `judges`, `known` and `plan` ({variants, cases, personas: [false], runs, judges, paired})"
+        }
+      },
+      "required": [
+        "round"
+      ]
+    },
+    "trial_cap": {
+      "tool": true,
+      "noun": "trial",
+      "verb": "cap",
+      "title": "Set a round's cap, which runs it",
+      "description": "Say what a round still owes and what it will cost, then, with a cap above what its calls have cost so far, set the cap and start asking: every writer, then each judge of what was written, until what the round's calls cost in all would pass the cap. Ask with cap 0 first and tell whoever pays what it will cost; set only a cap they gave. The run goes on after this answers; trial_tally reads what came back.",
+      "input": {
+        "round": {
+          "type": "string",
+          "description": "the round: its key as loaded (`copy-r1`), its id or its eid"
+        },
+        "cap": {
+          "type": "number",
+          "description": "the most the round's calls may cost in all, in dollars, counting what they have cost already: `2`; 0 to only hear the cost"
+        }
+      },
+      "required": [
+        "round",
+        "cap"
+      ],
+      "positional": [
+        "round",
+        "cap"
+      ]
+    },
+    "trial_adopt": {
+      "tool": true,
+      "noun": "trial",
+      "verb": "adopt",
+      "title": "Make a variant its skill's next version",
+      "description": "Make one of a round's variants the text of the skill the round develops: the skill's instructions become the variant's text, and the variant is marked as the skill's next version. Choose the winner people preferred (trial_tally names it). Where the skill is published, its listing keeps the version it published until it is published again, which asks for the new version's review.",
+      "input": {
+        "round": {
+          "type": "string",
+          "description": "the round: its key as loaded (`copy-r1`), its id or its eid"
+        },
+        "variant": {
+          "type": "string",
+          "description": "the variant: its key in the round's file (`plain`), its id or its eid"
+        }
+      },
+      "required": [
+        "round",
+        "variant"
+      ],
+      "positional": [
+        "round",
+        "variant"
       ]
     }
   }

@@ -51,6 +51,8 @@ import { topicDoc } from '@yaks/topic'
 import { topics } from '@yaks/topic/graph'
 import { wakeDoc } from '@yaks/wake/vocab'
 import { trialDoc } from '@yaks/trial/vocab'
+import { keyDoc, keyKeywords, keys } from '@yaks/key'
+import { aliasDoc, aliases } from '@yaks/alias'
 import { due, soonest, tick, wakes } from '@yaks/wake'
 import { caught, stopped } from './defects.ts'
 import { adopt, indexed, schema as ftsSchema, search } from '@yaks/fts'
@@ -79,9 +81,12 @@ export let operatorVocab = loadVocab([
   // A skill installed from another space keeps where it came from and the
   // version it took (shared-skill.ts).
   { $defs: { installed: platformDoc.$defs!.installed } },
-  // The rounds a skill is compared and improved in, which its public page
-  // shows (skill-page.ts).
+  // The rounds a skill is compared and improved in (operator-trials.ts),
+  // which its public page shows (skill-page.ts), and the names a round's
+  // file finds its rows again by.
   trialDoc,
+  keyDoc,
+  aliasDoc,
   {
     $defs: Object.fromEntries(
       Object.entries(phoneDoc.$defs!).filter(([name]) =>
@@ -104,7 +109,7 @@ export let operatorVocab = loadVocab([
   // The wake-ups the Operator sets for the people it works for
   // (operator-wakes.ts).
   wakeDoc,
-], [kernelKeywords, edgeKeywords, blobKeywords])
+], [kernelKeywords, edgeKeywords, blobKeywords, keyKeywords])
 
 /** Where the file keeps the print of the schema it was last fitted to. */
 export let FITTED = 'operator:fitted'
@@ -221,6 +226,8 @@ export let operatorGraph = (
       owning(),
       drafts(),
       ids(vocab),
+      keys(vocab),
+      aliases(),
       wakes(),
       topics(),
       ...plugins,
@@ -231,7 +238,8 @@ export let operatorGraph = (
 }
 
 /**
- * The Operator's own effects (operator-vocab.ts), owed by every write from
+ * The Operator's own effects (operator-vocab.ts), and a trial round's run,
+ * owed by every write from
  * the moment its store is made, before the Operator whose code runs them
  * (operator-channels.ts `handleChannels`) is: a commit owes runs only for
  * effects with code, so a request a new incarnation received before it had
@@ -240,9 +248,12 @@ export let operatorGraph = (
  * then makes the Operator (`made`) and runs on its handler.
  */
 export let owing = (fx: Effects, made: () => Promise<unknown>) => {
-  let own = Object.entries(operatorDoc.$defs ?? {})
-    .filter(([, def]) => (def as { effect?: boolean }).effect)
-    .map(([id]) => id)
+  // A trial round's run is the Operator's too (operator-trials.ts).
+  let own = [operatorDoc, trialDoc].flatMap((doc) =>
+    Object.entries(doc.$defs ?? {})
+      .filter(([, def]) => (def as { effect?: boolean }).effect)
+      .map(([id]) => id)
+  )
   fx.handle(Object.fromEntries(own.map((id) => {
     let stand: Handler = async (...args) => {
       await made()

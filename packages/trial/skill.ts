@@ -71,6 +71,8 @@ export type RoundFile = {
     personas: boolean[]
     runs?: number
     judges?: string[]
+    /** every two variants' attempts at one case, arm and run are a pair */
+    paired?: boolean
   }
   variants?: {
     key: string
@@ -163,21 +165,34 @@ let some = (o: Record<string, unknown>): Record<string, unknown> =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v != null))
 
 /// planned({ variants: ['none'], cases: ['office'], personas: [false, true] }).attempts.map((a) => a.key) -> ['office.none.blank.1', 'office.none.persona.1']
+/// planned({ variants: ['a', 'b'], cases: ['office'], personas: [false], paired: true }).pairs -> [['office.a.blank.1', 'office.b.blank.1']]
 /** A plan written out: one attempt still to be written for each case,
- * variant, arm and run, and one guess still to be asked for each of them and
- * each judge the plan names. */
+ * variant, arm and run, one guess still to be asked for each of them and
+ * each judge the plan names, and, `paired`, a pair of every two variants'
+ * attempts at one case, arm and run. */
 export let planned = (
   plan: NonNullable<RoundFile['plan']>,
-): Required<Pick<RoundFile, 'attempts' | 'guesses'>> => {
+): Required<Pick<RoundFile, 'attempts' | 'guesses' | 'pairs'>> => {
+  let key = (kase: string, variant: string, persona: boolean, run: number) =>
+    `${kase}.${variant}.${persona ? 'persona' : 'blank'}.${run}`
+  let runs = Array.from({ length: plan.runs ?? 1 }, (_, i) => i + 1)
+  let each = <T>(
+    made: (kase: string, persona: boolean, run: number) => T[],
+  ) =>
+    plan.cases.flatMap((kase) =>
+      plan.personas.flatMap((persona) =>
+        runs.flatMap((run) => made(kase, persona, run))
+      )
+    )
   let attempts = plan.cases.flatMap((kase) =>
     plan.variants.flatMap((variant) =>
       plan.personas.flatMap((persona) =>
-        Array.from({ length: plan.runs ?? 1 }, (_, i) => ({
-          key: `${kase}.${variant}.${persona ? 'persona' : 'blank'}.${i + 1}`,
+        runs.map((run) => ({
+          key: key(kase, variant, persona, run),
           case: kase,
           variant,
           persona,
-          run: i + 1,
+          run,
         }))
       )
     )
@@ -187,6 +202,16 @@ export let planned = (
     guesses: attempts.flatMap((a) =>
       (plan.judges ?? []).map((judge) => ({ attempt: a.key, judge }))
     ),
+    pairs: plan.paired
+      ? each((kase, persona, run) =>
+        plan.variants.flatMap((a, i) =>
+          plan.variants.slice(i + 1).map((b): [string, string] => [
+            key(kase, a, persona, run),
+            key(kase, b, persona, run),
+          ])
+        )
+      )
+      : [],
   }
 }
 
@@ -198,11 +223,14 @@ export let planned = (
  * former round loaded.
  */
 export let rows = (file: RoundFile): Bundle[] => {
-  let plan = file.plan ? planned(file.plan) : { attempts: [], guesses: [] }
+  let plan = file.plan
+    ? planned(file.plan)
+    : { attempts: [], guesses: [], pairs: [] }
   file = {
     ...file,
     attempts: [...file.attempts ?? [], ...plan.attempts],
     guesses: [...file.guesses ?? [], ...plan.guesses],
+    pairs: [...file.pairs ?? [], ...plan.pairs],
   }
   let held = (keys: { key: string }[] = []) => new Set(keys.map((k) => k.key))
   let variants = held(file.variants), cases = held(file.cases)

@@ -143,7 +143,7 @@ export let page = (
 ) => {
   let { space, skill } = at
   let shown = (rounds ?? []).filter((r) => r.measured)
-  let became = versions(shown)
+  let became = versions(rounds ?? [])
   return drawn(
     head(
       env,
@@ -184,6 +184,9 @@ export let page = (
           : note(
             'Not measured yet. A skill shows results here once a person has picked between outputs written with it and without it.',
           ),
+        small(
+          'Writers in these trials are offered no tools, so what a skill does for an agent that uses tools is not measured here.',
+        ),
         became.length
           ? [
             h('h2', null, 'Versions'),
@@ -195,7 +198,7 @@ export let page = (
                   'li',
                   null,
                   h('strong', null, v.variant.title),
-                  ` won ${v.round}`,
+                  v.won ? `, which won ${v.won}` : '',
                   v.from ? `, changed from ${v.from}` : '',
                   v.variant.theory ? ` — ${v.variant.theory}` : '',
                 )

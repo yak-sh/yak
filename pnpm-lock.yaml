@@ -5126,6 +5126,9 @@ importers:
       '@yaks/cli':
         specifier: 0.2.33
         version: link:../cli
+      '@yaks/effects':
+        specifier: 0.2.33
+        version: link:../effects
       '@yaks/embedding':
         specifier: 0.2.30
         version: link:../embedding

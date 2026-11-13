@@ -1,7 +1,8 @@
 /**
  * What a skill's rounds measured, as a public page shows it: for each round,
  * what was compared (its variants), on which cases, every output, who judged
- * and what won; and, across rounds, each version the skill became.
+ * and what won; and, across rounds, each version the skill became: each
+ * variant made its text.
  *
  * A round counts as measured once a person has chosen between two of its
  * attempts. Automated judges are named only when they passed the round's
@@ -34,6 +35,8 @@ export type Variant = {
   shown: number
   /** of those, how many they chose it in */
   preferred: number
+  /** when it became the skill's text, its next version (`adopted`) */
+  adopted: string | null
 }
 
 /** One round of a skill, as its page shows it. */
@@ -118,6 +121,7 @@ export let measured = (
       licence: str(v.licence),
       from: v.from ? str(v.from) : null,
       ...tally.get(b.entity.eid) ?? { shown: 0, preferred: 0 },
+      adopted: b.adopted ? str(comp(b, 'adopted').at) : null,
     }
   })
   let rate = (v: Variant) => v.shown ? v.preferred / v.shown : -1
@@ -157,22 +161,24 @@ export let measured = (
   }
 }
 
-/** Each version the skill became, oldest first: the winner of each measured
- * round, with the title of the variant it was changed from. */
+/** Each version the skill became, oldest first: each variant that became
+ * its text (`adopted`), with the title of the variant it was changed from
+ * and the round it won, where it won one. */
 export let versions = (
   rounds: Measured[],
-): { round: string; variant: Variant; from: string | null }[] => {
-  let titles = new Map(
-    rounds.flatMap((r) => r.variants.map((v) => [v.eid, v.title] as const)),
+): { variant: Variant; from: string | null; won: string | null }[] => {
+  let all = new Map(rounds.flatMap((r) => r.variants.map((v) => [v.eid, v])))
+  let won = new Map(
+    rounds.filter((r) => r.measured && r.winner).map((r) => [
+      r.winner!,
+      r.title,
+    ]),
   )
-  return rounds.flatMap((r) => {
-    let won = r.measured && r.variants.find((v) => v.eid == r.winner)
-    return won
-      ? [{
-        round: r.title,
-        variant: won,
-        from: won.from ? titles.get(won.from) ?? null : null,
-      }]
-      : []
-  })
+  return [...all.values()].filter((v) => v.adopted)
+    .sort((a, b) => a.adopted!.localeCompare(b.adopted!))
+    .map((variant) => ({
+      variant,
+      from: variant.from ? all.get(variant.from)?.title ?? null : null,
+      won: won.get(variant.eid) ?? null,
+    }))
 }

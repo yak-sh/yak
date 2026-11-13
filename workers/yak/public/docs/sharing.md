@@ -667,6 +667,25 @@ variant won, and each version the skill became. Only rounds yaks.app ran count,
 and a round shows once a person has picked between two of its outputs.
 Publishing a skill makes the cases and outputs of its rounds public with it.
 
+### Improving a skill by trials
+
+A member asks their Operator to improve one of the space's skills, and brings a
+few cases: work the skill is for. The Operator writes candidate texts of the
+skill beside the one it has and plans a round with them. Before it asks any
+model, it says what the round will cost, and the round runs only with the cap
+the member gives, spent from the space's budget like every other model call.
+Each candidate is asked to write each case, with no tools, and any judges the
+round names score what came back. Judges count only once they get enough of the
+answers already settled right.
+
+The member then picks between pairs of outputs, never told which candidate wrote
+which. The candidate people preferred becomes the skill's next version when the
+member says so. A published skill keeps offering the version it published until
+it is published again, and each version is reviewed first.
+
+A skill that drives an agent's tool use is not measured this way yet, since
+writers are offered no tools.
+
 ---
 
 The whole guide: <https://yaks.app/docs.md>

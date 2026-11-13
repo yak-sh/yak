@@ -222,6 +222,18 @@ test("a listed skill's page shows its text, and what a person picked in the plat
   assertStringIncludes(after, 'Your office, sorted.')
   assertStringIncludes(after, 'A desk for small offices')
   assertEquals(after.includes('Forged headline'), false)
+  assertStringIncludes(after, 'offered no tools')
+  // A winner is a version once it became the skill's text.
+  assertEquals(after.includes('Versions'), false)
+  await g.apply([{
+    entity: { eid: lead },
+    adopted: { skill: mine.entity.eid },
+    ...ran,
+  }], { trusted: true })
+  assertStringIncludes(
+    (await page('pitch-copy')).html,
+    'Lead with the reader</strong>, which won Round one',
+  )
 
   // Every listed skill's page is in the sitemap.
   assertEquals(await skillPage.addresses(dir, env), [

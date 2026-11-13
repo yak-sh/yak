@@ -130,6 +130,7 @@ row always names one.
 ```sh
 yak trial load rounds/r1/round.json  # rows; loading again replaces them
 yak trial run copy-r2 --cap 20       # ask the writers and judges it still owes
+yak trial adopt copy-r2 plain        # the variant becomes the skill's text
 yak trial tally copy-r1              # what the round's rows say, as text
 yak trial pass copy-r1 0.8           # what a judge must get right; a person's to set
 yak trial hold copy-r1 0.25          # keep a quarter of the pairs from selectors
@@ -155,8 +156,11 @@ is given the round's own guessing game in its form (`<round>.guess-open`).
 A round's file can plan what nobody has written yet. An attempt with no `output`
 and a guess with no `guesses` are planned rows, and `plan` writes them out: one
 attempt for each case, variant, arm and run, and one guess of each for every
-judge it names. A planned row is no attempt yet: the page and the tally leave it
-out until it returns.
+judge it names. With `paired: true` it also plans a pair of every two variants'
+attempts at one case, arm and run. A planned row is no attempt yet: the page and
+the tally leave it out until it returns. A skill the graph keeps under the
+file's title, never trialled yet, is the one the round develops: the load names
+it `skill:<title>` rather than making another.
 
 ````jsonc
 {
@@ -202,20 +206,47 @@ at a time (six by default): the writers, then the judges of what was written.
   `` ```json `` block: an object with a key for each of the round's parts from a
   writer, `{"guesses": [names]}` from an `open` judge, `{"ranking": [letters]}`
   from one choosing `among`.
-- **Each call is a session**, asked once and offered no tools
-  (`sending{tools: []}`). @yaks/spawn starts such a run bare: none of its
-  provider's tools, settings, instruction files, skills or MCP servers, in an
-  empty directory. The persona arm differs by one thing: its session selects the
-  round's persona, which reaches the provider through its instruction flag.
+- **Who answers is the run's one boundary** (`Asking` in ./run.ts). On a machine
+  that runs sessions (`sessions`), each call is a session, asked once and
+  offered no tools (`sending{tools: []}`). @yaks/spawn starts such a run bare:
+  none of its provider's tools, settings, instruction files, skills or MCP
+  servers, in an empty directory. The persona arm differs by one thing: its
+  session selects the round's persona, which reaches the provider through its
+  instruction flag. A host that runs no sessions asks a model directly
+  (`asking`): one request, the call's words as the person's turn, no tools, at
+  most `TOKENS` written. A refusal there (a spent budget, an unknown model)
+  stops the run; a failure that may pass leaves its call for the next.
 - **It says the cost first**: the mean of what earlier rows of the kind cost (a
-  writer by arm, a judge by form) for each call owed, at list price. It asks
-  nothing more once what it spent, with what the calls going are expected to,
-  would pass the cap. `--cap 0` says the cost and asks nothing.
-- **A row is written as its session ends**, with `usage` and `cost` summed from
-  the session's requests. The row names its session in the write that asks, so a
-  run stopped part way loses nothing: the next reads what each session said
-  since and asks only what never returned. A reply with nothing readable is kept
-  on the attempt as `reply`, and the next run asks again.
+  writer by arm, a judge by form) for each call owed, at list price, and where
+  no row says, the most a call can cost at its model's price. It asks nothing
+  more once what it spent, with what the calls going are expected to, would pass
+  the cap. `--cap 0` says the cost and asks nothing.
+- **A row is written as its call returns**, with `usage` and `cost`. Under
+  sessions, the row names its session in the write that asks, so a run stopped
+  part way loses nothing: the next reads what each session said since and asks
+  only what never returned. A reply with nothing readable is kept on the attempt
+  as `reply`, and the next run asks again.
+
+### Running a round as an effect
+
+A round's cap, `capped{dollars, at, by, via}`, is the most its calls may cost in
+all, counting every call of it that carries a cost. Setting it owes `round_run`
+(./effects.ts), which runs the round to the cap: a run cut off part way is run
+again by the pool, asks only what is left, and counts what was spent against the
+cap, so a cap is never spent twice. Runs of one round go one after another, each
+reading the cap as it starts.
+
+`running(g, asking)` is the handler, over whatever `Asking` the host gives each
+round; the `./effects` facet gives the box its own, sessions on this graph.
+yaks.app gives a space's Operator store one that asks the space's providers,
+charged to the space that set the cap. `yak trial run` is the same run in the
+foreground, with a cap on that run alone.
+
+| tool          | what it does                                                                                               |
+| ------------- | ---------------------------------------------------------------------------------------------------------- |
+| `trial_plan`  | plans a round from its file, refusing any attempt or guess with results: only a run writes those           |
+| `trial_cap`   | says what the round owes and has cost so far; with a cap above that, sets `capped` and the round runs      |
+| `trial_adopt` | makes a variant the skill's text (`content{body}`) and marks it `adopted{skill}`: the skill's next version |
 
 ### The page
 
@@ -299,8 +330,9 @@ that passed the round's known answers; and the variant people preferred most,
 when one led. A round is measured once a person has chosen between two of its
 attempts. `measured(all, ran)` leaves out an attempt a model wrote that `ran`
 rejects, with every tap on it, so a page shows only the platform's own runs.
-`versions(rounds)` is each round's winner, oldest first, with the variant it was
-changed from.
+`versions(rounds)` is each variant that became the skill's text (`adopted`),
+oldest first, with the variant it was changed from and the round it won, where
+it won one. A winner nobody adopted is no version.
 
 ### The tally
 

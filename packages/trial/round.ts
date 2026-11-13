@@ -5,7 +5,8 @@
  *
  * @module
  */
-import type { Bundle, Eid, Graph } from '@yaks/graph'
+import type { Actor, Bundle, Eid, Graph } from '@yaks/graph'
+import { signed } from '@yaks/graph/provenance'
 import { Refused } from '@yaks/graph/errors'
 import { named, type RoundFile, rows } from './skill.ts'
 
@@ -14,16 +15,9 @@ let attempt = (b: Bundle) => (b.writing ?? {}) as Record<string, unknown>
 /** The round a word names: the key it was loaded under (`copy-r1`), or any
  * id the graph resolves. */
 export let find = async (g: Graph, word: string): Promise<Eid> => {
-  let names = [named.round(word), word]
-  let found = new Map<string, Eid>()
-  for (let name of names) {
-    // A word no plugin resolves is refused; it may still be an eid.
-    try {
-      let eid = (await g.address([name])).get(name)
-      if (eid) found.set(name, eid)
-    } catch { /* not a name */ }
-  }
-  let eid = names.map((n) => found.get(n)).find((e) => e) ?? word
+  // A word no plugin resolves is refused; it may still be an eid.
+  let eid = await address(g, named.round(word)) ?? await address(g, word) ??
+    word
   let [round] = await g.get([eid], ['round'])
   if (!round?.round) throw new Refused(`no round is named ${word}`)
   return round.entity.eid
@@ -103,16 +97,45 @@ export let keyed = async (
     keys.get(b.entity.eid) ?? String((b.doc as { title?: unknown })?.title)
 }
 
+// The eid a word names, or nothing where no plugin resolves it.
+let address = async (g: Graph, word: string): Promise<Eid | undefined> => {
+  try {
+    return (await g.address([word])).get(word)
+  } catch { /* not a name */ }
+}
+
+/** Gives the skill a round file names by its title a name to land on: a
+ * skill kept under that title and never trialled yet is given the name
+ * `skill:<title>`, so the round develops it rather than a new one. */
+let titled = async (
+  g: Graph,
+  title: string,
+  apply: (bundles: Bundle[]) => unknown,
+) => {
+  let name = named.skill(title)
+  if (await address(g, name)) return
+  let [kept] = await g.read(
+    `.skill .doc.title=${JSON.stringify(title)} .limit=1 .fields=entity.eid`,
+  )
+  if (kept) await apply([{ entity: kept.entity, alias: { name } }])
+}
+
 /** Loads a round's file: every row written, and the round's pairs and guesses
  * the file no longer holds deleted, so loading again replaces what the first
  * load wrote. An attempt the file dropped is left, since a person's taps may
- * rest on it; `left` counts them. */
+ * rest on it; `left` counts them. A skill the graph keeps under the file's
+ * title is the one it develops. */
 export let load = async (
   g: Graph,
   file: RoundFile,
+  /** who the rows are written as, where not the graph's own writer */
+  actor?: Actor,
 ): Promise<{ round: Eid; rows: number; removed: number; left: number }> => {
+  let apply = (bundles: Bundle[]) =>
+    g.apply(actor ? signed(bundles, actor) : bundles)
   let made = rows(file)
-  let patches = await g.apply(made)
+  await titled(g, file.skill, apply)
+  let patches = await apply(made)
   let round = patches.find((p) => p.round)?.entity.eid ??
     await find(g, file.key)
   let now = new Set(made.map((b) => b.entity.eid))
@@ -122,7 +145,7 @@ export let load = async (
   // An attempt nobody wrote has nothing resting on it, and goes with the plan.
   let gone = stale.filter((b) => !b.writing || unreturned(b))
   if (gone.length) {
-    await g.apply(gone.map((b) => ({ entity: b.entity, $delete: true })))
+    await apply(gone.map((b) => ({ entity: b.entity, $delete: true })))
   }
   return {
     round,

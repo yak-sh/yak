@@ -61,6 +61,9 @@ import { CallError, invoke } from '@yaks/tools'
 import { loadTools, textSearch } from '@yaks/graph/tools'
 import { earlier } from '@yaks/memory/earlier'
 import { memoryDoc } from '@yaks/memory/vocab'
+import { trialDoc } from '@yaks/trial/vocab'
+import { type Options as Trials, runs as trialRuns } from '@yaks/trial/tools'
+import { asking } from '@yaks/trial/run'
 import { ORACLE } from '@yaks/topic'
 import { runs as memoryRuns } from '@yaks/memory/tools'
 import { held, workNames } from './operator-tasks.ts'
@@ -127,6 +130,12 @@ import { phoneNumbers, phoneSend } from './operator-line.ts'
 import { imageNew } from './operator-images.ts'
 import { googleAccounts, googleTold, googleTools } from './operator-google.ts'
 import { notification } from './operator-updates.ts'
+import {
+  answering,
+  type Lending,
+  pickTools,
+  trialRunning,
+} from './operator-trials.ts'
 import { wakeTools } from './operator-wakes.ts'
 import {
   finished as workFinished,
@@ -308,6 +317,8 @@ let mine = new Set([
   'memory_recall',
   'memory_around',
   skillRead.name,
+  // A space improves its skills by trials there (operator-trials.ts).
+  ...Object.keys(trialRuns()),
 ])
 // The connector's tools the Operator holds as its own: memory_save and
 // memory_recall are its own memories (the space's are store_memory_save and
@@ -351,11 +362,13 @@ let BULK: Record<string, string> = {
 export let operatorRoster = async (
   ctx: Ctx,
   work: Store,
-  { space, tasked = false, member = true, session, connecting }: {
+  { space, tasked = false, member = true, session, connecting, trials }: {
     space: string
     tasked?: boolean
     member?: boolean
     session?: string
+    /** who would answer a trial's calls, which prices a round */
+    trials?: Trials
     // The person's servers, when the step already asked for them.
     connecting?: ReturnType<typeof connectedTools>
   },
@@ -383,6 +396,7 @@ export let operatorRoster = async (
       ? [
         ...listing({ graph: self, search: textSearch(self) }),
         ...loadTools([memoryDoc], memoryRuns()),
+        ...loadTools([trialDoc], trialRuns(trials)),
         ...held(),
         skillRead,
       ].map(namedTool).map((t) => [t.name, t])
@@ -1162,6 +1176,12 @@ export let operating = (
     options.price && from == provider
       ? Promise.resolve(options.price)
       : listed(model, from).then((info) => info?.price)
+  // A space's trials are asked of its providers, charged to it.
+  let lending: Lending = { models: implementations, priced, provider, name }
+  trialRunning(store, env, lending)
+  let trials: Trials = {
+    asking: (round) => asking(g, answering(env, lending, round)),
+  }
   let catalogue = async <T>(
     from: string,
     read: () => T | Promise<T>,
@@ -1697,6 +1717,7 @@ export let operating = (
         member,
         session,
         connecting,
+        trials,
       })
         .then((r) => reached('roster', r)),
       member ? accounts.then((t) => reached('google', t)) : [],
@@ -1742,6 +1763,7 @@ export let operating = (
           phoneSend(env, ctx, space, store),
           phoneNumbers(env, ctx, space, store),
           imageNew(env, space),
+          ...pickTools(store, ctx.person!),
           ...wakeTools(store, space),
           ...subscriptionTools(store, space, watching),
           ...google,
