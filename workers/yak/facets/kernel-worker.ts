@@ -21,7 +21,6 @@ import type { Inference, InferenceReceipt, Mark } from '@yaks/model'
 import type { Env, Inbound } from '../env.ts'
 import type { Lent } from '../kernel.ts'
 import type { Purged } from '../purge.ts'
-import type { Asked } from '../outlast.ts'
 import type { Conversion } from '../arrival.ts'
 import type { builds } from '../builds.ts'
 
@@ -138,6 +137,7 @@ export let PUBLIC_DIRECTORY = [
   ...DURABLE,
 ] as const
 export let PURGER = ['purge', ...DURABLE] as const
+export let OUTLAST = ['call', ...DURABLE] as const
 
 // An entrypoint or object whose every call enters the tracker's boundary as
 // `<Name> <method>`, answered by what `make` returns from its context and env.
@@ -223,13 +223,12 @@ export let classes: Record<string, Deferred> = {
   // A call that outlasts its caller (outlast.ts, outlast-object.ts): one
   // object per caller, tool and target, which finishes the call after the
   // door answered that it is still running.
-  Outlast: entered(DurableObject, ['call'], async (ctx: never, env) => {
-    let call = (await import('../outlast-object.ts')).outlast(
-      (ctx as { storage: never }).storage,
-      env,
-    )
-    return { call: (asked: Asked) => call(asked) }
-  }),
+  Outlast: entered(
+    DurableObject,
+    OUTLAST,
+    async (ctx: never, env) =>
+      new (await import('../outlast-object.ts')).Outlast(ctx, env),
+  ),
   // Every app store's lexicon (lexicon.ts): which stores a search could find
   // anything in, asked instead of the stores themselves.
   Lexicon: entered(

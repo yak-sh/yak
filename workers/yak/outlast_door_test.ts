@@ -3,28 +3,22 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { connector, fresh, seed, unique } from './probe.ts'
-import { outlast } from './outlast-object.ts'
-import type { Asked, Keep, Outlasts } from './outlast.ts'
+import { Outlast } from './outlast-object.ts'
+import type { Outlasts } from './outlast.ts'
+import { durable } from '../../packages/durable-object/testing.ts'
 
 test('app_deploy through the door runs in its object and answers its release', async () => {
   let keys: string[] = []
   let k = await fresh({}, (env) => {
-    let objects = new Map<
-      string,
-      (asked: Asked) => ReturnType<ReturnType<typeof outlast>>
-    >()
-    let held = new Map<string, unknown>()
-    let keep: Keep = {
-      get: <T>(key: string) => Promise.resolve(held.get(key) as T | undefined),
-      put: (key, value) => Promise.resolve(void held.set(key, value)),
-      delete: (key) => Promise.resolve(held.delete(key)),
-    }
+    let objects = new Map<string, Outlast>()
+    let storage = durable()
+    let ctx = { storage, acceptWebSocket() {}, getWebSockets: () => [] }
     env.OUTLAST = {
       idFromName: (name) => (keys.push(name), name),
       get: (id) => {
         let name = id as string
-        if (!objects.has(name)) objects.set(name, outlast(keep, env))
-        return { call: (asked) => objects.get(name)!(asked) }
+        if (!objects.has(name)) objects.set(name, new Outlast(ctx, env))
+        return objects.get(name)!
       },
     } satisfies Outlasts
   })

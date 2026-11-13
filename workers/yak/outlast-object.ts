@@ -3,6 +3,7 @@
 // would, as the person and through the credential the door verified, with
 // the directory opened afresh as mcp.ts opens it.
 import { CallError } from '@yaks/tools/errors'
+import { Durable, type State } from '@yaks/durable-object/object'
 import { running } from './agent.ts'
 import { caught } from './defects.ts'
 import { copyOf } from './directory-copy.ts'
@@ -10,7 +11,7 @@ import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { narrowed } from './grants.ts'
-import { type Asked, type Ended, type Keep, outlasting } from './outlast.ts'
+import { type Asked, type Ended, type Heard, outlasting } from './outlast.ts'
 import type { Ctx } from './tool.ts'
 import { TOOLS } from './tools.ts'
 
@@ -50,8 +51,20 @@ let ran = async (env: Env, asked: Asked): Promise<Ended> => {
   }
 }
 
-/** The object's one method: this key's call, joined or begun. */
-export let outlast = (keep: Keep, env: Env) => {
-  let once = outlasting(keep)
-  return (asked: Asked) => once(() => ran(env, asked))
+/** The object: it holds no graph, only the answer nobody heard, in its
+ * counted keys, and its one entry is `call`, this key's call joined or
+ * begun. */
+export class Outlast extends Durable {
+  #once: ReturnType<typeof outlasting>
+  #env: Env
+  constructor(ctx: State, env: Env) {
+    super(ctx, {
+      report: (e, entry) => caught(e, { request: `outlast ${entry}` }),
+    })
+    this.#once = outlasting(this.keys)
+    this.#env = env
+  }
+  call(asked: Asked): Promise<Heard> {
+    return this.enter('call', () => this.#once(() => ran(this.#env, asked)))
+  }
 }
