@@ -936,8 +936,9 @@ export let hangup = (o: Calling & { call: string }): Promise<void> =>
  * (`Said.aside`) would be the words a second time.
  *
  * A `Duplex` model takes its own turns and hands its work to
- * `told.delegate`: everything below is for a `Turned` one, which takes a
- * turn as it is told here.
+ * `told.delegate`; what it is asked to `say` while the caller talks is sent
+ * once they are `QUIET`. Everything below is for a `Turned` one, which
+ * takes a turn as it is told here.
  *
  * A caller who talks over the model stops it (`over`) once their words say
  * something (`meant`): an "okay", a laugh, or a noise, lets it go on. The
@@ -1192,6 +1193,9 @@ let duplexed = (o: Talks, t: Talker & Duplex): Talk => {
   // Whether the caller made a sound since the model last began to, and for
   // how many seconds they have been quiet.
   let spoke = false, quiet = 0
+  // What the model is asked to say while the caller talks, sent once they
+  // are `QUIET`: appended over their words, it can go unsaid.
+  let talking = false, unsaid: string[] = []
   let heard = () => {
     let text = hearing.trim()
     hearing = ''
@@ -1285,10 +1289,17 @@ let duplexed = (o: Talks, t: Talker & Duplex): Talk => {
       }
       if (opens) audio = muted(audio, format)
       send(t.audio(audio))
-      if (sounds(audio, format)) spoke = true, quiet = 0
+      if (sounds(audio, format)) spoke = talking = true, quiet = 0
       else quiet += audio.length / perSecond(format)!
+      if (talking && quiet >= QUIET) {
+        talking = false
+        unsaid.splice(0).forEach(send)
+      }
     },
-    say: (text, from) => t.say(wording(text, from)).forEach(send),
+    say: (text, from) => {
+      let m = t.say(wording(text, from))
+      talking ? unsaid.push(...m) : m.forEach(send)
+    },
     tell: (text, from) => t.tell(wording(text, from)).forEach(send),
     spent,
     close: () => {

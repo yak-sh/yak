@@ -1074,6 +1074,37 @@ test('GPT-Live hands its work to a larger model on OpenAI’s side, whose tool c
   equal(stream.close().dollars.toFixed(6), '0.000315')
 })
 
+test('GPT-Live is asked to say what comes while the caller talks once they are quiet', () => {
+  let s = socket()
+  let stream = talk({
+    provider: OPENAI,
+    key: 'k1',
+    model: 'gpt-live-1',
+    format: MULAW,
+    instructions: 'Be brief.',
+    open: s.open,
+    told: { audio: () => {}, call: () => Promise.resolve('') },
+  })
+  let caller = line(s, stream)
+  let says = () =>
+    s.json().filter((m) => m.type == 'session.commentary.append')
+      .map((m) => m.content)
+  s.fire('open')
+  s.fire('message', JSON.stringify({ type: 'session.started' }))
+  stream.say('Before.', 'the Operator')
+  caller.say(1)
+  stream.say('Shipped three.', 'the Operator')
+  caller.hush(0.5)
+  caller.say(0.5)
+  equal(says(), ['From the Operator:\nBefore.'])
+  caller.hush(0.7)
+  equal(says(), [
+    'From the Operator:\nBefore.',
+    'From the Operator:\nShipped three.',
+  ])
+  stream.close()
+})
+
 test('GPT-Live hands work only to a larger model it has', () => {
   let s = socket()
   let opened = () =>
