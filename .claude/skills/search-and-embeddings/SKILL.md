@@ -178,6 +178,13 @@ a caller may read. The `search` tool merges it with full-text hits.
   every instance of every word in rows of 20k tokens (median). No word is in
   half the rows, so every one moves the order: ranking by the distinctive
   words alone kept 4 of the top 21 (T-134349). Cut elsewhere, not the rank.
+- **A `.near` read is three reads.** The anchor's vector, the ranking among
+  the screen, and the statement over the few owners it named; any of them can
+  be the slow one. Time each statement on a `bin/copy-db` copy before choosing.
+  The last read the eight by key only because `.near` is one of the
+  extension's `few` clauses (@yaks/sql `Extension.few`); without it,
+  `(!entry|.created.by.person)` beside it selected millions of owners to find
+  the eight among them, 7 s warm.
 - **Open:** 1-bit codes for the box's scan (T-59519), `.near` on D1 (T-59333),
   embedding calls spending from an account's budget (T-59279).
 

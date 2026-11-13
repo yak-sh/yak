@@ -614,6 +614,12 @@ equal(compile(parse('poetry'), loadVocab({}), { extend: [labels] }).params, [
 ])
 ```
 
+`few` optionally lists the clause kinds an Extension compiles to a short list of
+owners in hand, as `.near` compiles to the ids of its nearest few. A statement
+that must hold one is answered from those owners: every other clause tests each
+of them, as it would a few eids named (`.entity.eid=a,b`), rather than selecting
+owners of its own for the list to be found among.
+
 `order(value, site)` optionally handles `.order=` values that name no property.
 It receives the value without a leading `-`. Its expression renders with
 literals, and the hook runs again for an `.after` anchor's owner.

@@ -373,6 +373,11 @@ near <new eid>: <eid> Fix the login page crash on submit · task open (meaning)
 3. Compile the selected integer entity IDs into the SQL condition and a `CASE`
    expression for `.order=similar`.
 
+The extension declares `.near` one of its `few` clauses (@yaks/sql
+`Extension.few`), so the statement reads those few owners by key and tests the
+rest of the query on each, rather than selecting every owner the other filters
+admit to find them among.
+
 The default limit is eight neighbors and the target itself is excluded. A target
 without a vector selects nothing. A custom `rank` implementation receives the
 same candidate filter and must honor it before limiting results.

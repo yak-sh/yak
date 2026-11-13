@@ -160,13 +160,20 @@ export type Contains = (
 export type Found = { owners?: Query; few: boolean }
 
 // A named contribution: which clause kinds it claims, how each of them
-// compiles, and optionally how it writes an ORDER BY, where a page in that
-// order lies, which order a window that states none takes, and which owners a
-// substring test can read. A kind that is not in the map is left entirely to
-// the binder.
+// compiles, and optionally which of them name a few owners, how it writes an
+// ORDER BY, where a page in that order lies, which order a window that states
+// none takes, and which owners a substring test can read. A kind that is not
+// in the map is left entirely to the binder.
+//
+// `few` lists the kinds whose condition is a short list of owners in hand, the
+// way `.near` compiles to the ids of its nearest few. A statement that must
+// hold one is answered from those owners: every other clause tests each of
+// them, as it would a few eids named (`.entity.eid=a,b`), rather than
+// selecting owners of its own for the list to be found among.
 export type Extension = {
   name: string
   compile: Partial<Record<Clause['kind'], Compile>>
+  few?: readonly Clause['kind'][]
   order?: OrderBy
   lead?: Lead
   ranks?: Ranks

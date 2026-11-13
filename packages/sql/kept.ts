@@ -284,6 +284,9 @@ let view = (e: Extension, begins: boolean): Extension => {
         get compile() {
           return hooks(e.compile)
         },
+        get few() {
+          return e.few
+        },
         get order() {
           let order = e.order
           return order && ((value: string, s: Site) => mark(order(value, s)))

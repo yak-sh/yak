@@ -2214,6 +2214,16 @@ let owners = (
   }
 }
 
+// A mandatory clause an extension compiles to a few owners in hand
+// (./extend.ts `Extension.few`): `.near` names its nearest eight, which the
+// statement reads by key. Beside `(!entry|.created.by.person)` the box's graph
+// otherwise selected every owner either arm admits, millions, to find the
+// eight among them: 7 s warm on a copy of it.
+let named = (ctx: Ctx, clauses: Clause[]): boolean =>
+  flattened(clauses).some((c) =>
+    ctx.ext.some((e) => e.compile[c.kind] && e.few?.includes(c.kind))
+  )
+
 // A mandatory value filter on a stored property narrows the outer rows before
 // any derived one is read (`.session.operator=true` leaves 876 of 18,503
 // sessions), so a derived equality beside it tests each of those rows rather
@@ -2907,7 +2917,7 @@ let beginning = (
   screening = false,
 ) => {
   let finite = owners(ctx, ast.clauses)
-  ctx.bounded = finite != null
+  ctx.bounded = finite != null || named(ctx, ast.clauses)
   ctx.narrowed = narrowed(ctx, ast.clauses)
   ctx.few = few(ctx, ast.clauses)
   for (let e of ctx.ext) {
