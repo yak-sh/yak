@@ -46,17 +46,14 @@ import {
   serving,
   worker,
 } from './config.ts'
-import { written } from '@yaks/workerd/gen'
 import {
   imports,
-  lenders,
   loader,
   type Manifest,
-  providers,
-  vocabs,
-  worded,
-  worder,
-} from './load-gen.ts'
+  named,
+  written,
+} from '@yaks/workerd/gen'
+import { vocabs, worded, worder } from './load-gen.ts'
 
 let HERE = new URL('.', import.meta.url)
 let TARGET = new URL('content.ts', HERE)
@@ -406,12 +403,28 @@ let loaded = await formatted(
           manifests,
         ),
         ...vocabs(manifests),
-        ...providers(providing, manifests),
-        ...providers(serving, manifests),
       ]),
     ],
     local,
-    lenders(embedding, manifests),
+    [{
+      name: 'providerFacets',
+      type: 'ProviderFacet',
+      using: ['ProviderFacet', '@yaks/model'],
+      specifiers: [
+        ...new Set([
+          ...named(providing, manifests, 'provider'),
+          ...named(serving, manifests, 'provider'),
+        ]),
+      ].sort(),
+      says:
+        'The providers config.ts `providing` and `serving` name, by plugin.',
+    }, {
+      name: 'lenderFacets',
+      type: "Facets['graph']",
+      using: ['Facets', '@yaks/host'],
+      specifiers: named(embedding, manifests, 'graph'),
+      says: 'The graph facets config.ts `embedding` names, by plugin.',
+    }],
   ),
 )
 let spoken = await formatted(worder(worded(providing, manifests)))

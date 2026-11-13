@@ -1,6 +1,15 @@
 // A config imports only the store facets its packages export, once per facet.
 import { equal, test, throws } from '@yaks/testing'
-import { imports, lenders, loader, providers } from './load-gen.ts'
+import { type Eager, imports, loader, named } from './gen.ts'
+
+// One eager table of `specifiers`.
+let table = (name: string, specifiers: string[]): Eager[] => [{
+  name,
+  type: 'unknown',
+  using: ['X', 'x'],
+  specifiers,
+  says: name,
+}]
 
 test('store import generation resolves options and deduplicates configs', async () => {
   equal(
@@ -42,7 +51,7 @@ test('store loader generation imports vocabulary eagerly and code lazily', () =>
     ['b/graph', './domain-effects.ts'],
   )
   equal(
-    [...source.matchAll(/import \* as vocab\d+ from ("[^"\n]+")/g)].map((m) =>
+    [...source.matchAll(/import \* as eager0_\d+ from ("[^"\n]+")/g)].map((m) =>
       JSON.parse(m[1])
     ),
     ['a/vocab', './domain-vocab.ts'],
@@ -72,43 +81,30 @@ test('store import generation takes the union of explicitly selected facets', ()
   )
 })
 
-test('provider generation imports each named provider eagerly and refuses one serving none', async () => {
+test('a named facet is imported eagerly, and a plugin exporting none is refused', async () => {
   let manifests = [
     { name: 'p', exports: { './provider': './provider.ts' } },
     { name: 'q', exports: './mod.ts' },
   ]
   equal(
-    providers({ plugins: [{ use: 'p', with: { k: 1 } }, 'p'] }, manifests),
+    named(
+      { plugins: [{ use: 'p', with: { k: 1 } }, 'p'] },
+      manifests,
+      'provider',
+    ),
     [
       'p/provider',
     ],
   )
   await throws(
-    () => providers({ plugins: ['q'] }, manifests),
+    () => named({ plugins: ['q'] }, manifests, 'provider'),
     'q exports no ./provider',
   )
-  let eager = /import \* as provider\d+ from ("[^"\n]+")/g
+  let eager = /import \* as eager1_\d+ from ("[^"\n]+")/g
   equal(
-    [...loader(['p/provider']).matchAll(eager)].map((m) => JSON.parse(m[1])),
+    [...loader([], {}, table('providers', ['p/provider'])).matchAll(eager)].map(
+      (m) => JSON.parse(m[1]),
+    ),
     ['p/provider'],
   )
-})
-
-test('lender generation imports each named graph facet eagerly', async () => {
-  let manifests = [{ name: 'e', exports: { './graph': './graph.ts' } }]
-  equal(lenders({ plugins: [{ use: 'e', with: { ai: 1 } }] }, manifests), [
-    'e/graph',
-  ])
-  await throws(
-    () => lenders({ plugins: ['e'] }, [{ name: 'e', exports: './mod.ts' }]),
-    'e exports no ./graph',
-  )
-  let source = loader([], {}, ['e/graph'])
-  equal(
-    [...source.matchAll(/import \* as lender\d+ from ("[^"\n]+")/g)].map((m) =>
-      JSON.parse(m[1])
-    ),
-    ['e/graph'],
-  )
-  equal(source.includes('"e": lender0'), true)
 })

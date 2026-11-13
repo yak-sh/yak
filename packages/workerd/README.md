@@ -37,12 +37,12 @@ All exports are available from `@yaks/workerd`:
 
 Four subpaths serve a Worker made from a config:
 
-| Subpath                 | Purpose                                                                             |
-| ----------------------- | ----------------------------------------------------------------------------------- |
-| `@yaks/workerd/compose` | `compose` alone, importing nothing of `@yaks/api` but its route matching            |
-| `@yaks/workerd/worker`  | this package's own `./worker` facet: the deploy's version route                     |
-| `@yaks/workerd/gen`     | `written`, the module of a config and its plugins' facets                           |
-| `@yaks/workerd/rate`    | `within`, `source`, `tooMany`: a door's per-source ceiling, a Rate Limiting binding |
+| Subpath                 | Purpose                                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/workerd/compose` | `compose` alone, importing nothing of `@yaks/api` but its route matching                                                        |
+| `@yaks/workerd/worker`  | this package's own `./worker` facet: the deploy's version route                                                                 |
+| `@yaks/workerd/gen`     | `written`, the module of a config and its plugins' facets; `loader` and `imports`, the module its stores load their facets from |
+| `@yaks/workerd/rate`    | `within`, `source`, `tooMany`: a door's per-source ceiling, a Rate Limiting binding                                             |
 
 ## A Worker from a config
 
