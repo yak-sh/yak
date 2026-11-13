@@ -26,6 +26,7 @@
 
 import {
   type Authenticate,
+  cutOf,
   type Handler,
   json,
   reads,
@@ -667,6 +668,7 @@ export let mcp = (opts: MountOptions): Handler => {
         runner: running(),
         text: drawing(request),
         reading: () => reads(request),
+        cut: cutOf(request),
       }),
       opts,
       exchange,

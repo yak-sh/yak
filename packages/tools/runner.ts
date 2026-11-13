@@ -197,12 +197,33 @@ export let became = (vocab: Vocab, b: Bundle): string | undefined => {
   })
 }
 
+// A reply, or nothing once `cut` aborts: what it is still reading is
+// nobody's, and the reader's close ends it.
+let dropped = (
+  reply: Promise<Bundle[]>,
+  cut?: AbortSignal,
+): Promise<Bundle[]> => {
+  if (!cut) return reply
+  let off!: () => void
+  let gone = new Promise<Bundle[]>((done) => {
+    off = () => done([])
+    if (cut.aborted) off()
+    else cut.addEventListener('abort', off, { once: true })
+  })
+  return Promise.race([reply, gone]).finally(() =>
+    cut.removeEventListener('abort', off)
+  )
+}
+
 /** One admitted call, retaining its tool through execution while registration
  * advertises the provider's current declaration at the stable tool identity. */
 export type Invocation = {
   tool: NamedTool
   ensure: () => Promise<Bundle[]>
-  call: () => Promise<Bundle[]>
+  /** Run it recorded. Once `cut` aborts, a call whose answer is kept is
+   * answered without its {@link Reply}: the write stands, and only the extras
+   * read beside it are dropped, as a stopping server drops its reads. */
+  call: (o?: { cut?: AbortSignal }) => Promise<Bundle[]>
   read: () => Promise<Bundle[]>
 }
 
@@ -444,7 +465,11 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   // own bundle: the call is the caller's, the claim is the runner's
   // bookkeeping and carries no identity. A call somebody claimed first (only
   // a named one can be) reads the way `run` reads it.
-  let born = (asked: Bundle, admitted?: NamedTool): Promise<Bundle[]> => {
+  let born = (
+    asked: Bundle,
+    admitted?: NamedTool,
+    cut?: AbortSignal,
+  ): Promise<Bundle[]> => {
     let id = asked.entity.eid.startsWith('$') ? mint() : asked.entity.eid
     let call = { ...asked, entity: { ...asked.entity, eid: id } }
     let tool = admitted ?? toolOf(call)
@@ -464,7 +489,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         throw error
       }
       let [stored] = await g.get([id])
-      return execute(stored, tool, true)
+      return execute(stored, tool, true, false, cut)
     })
   }
 
@@ -536,6 +561,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     tool: NamedTool,
     direct = false,
     unrecorded = false,
+    cut?: AbortSignal,
   ): Promise<Bundle[]> => {
     let id = call.entity.eid
     let started = now()
@@ -604,11 +630,11 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     } finally {
       held.delete(id)
     }
-    if (unrecorded || !direct || !opts.reply) return answered
+    if (unrecorded || !direct || !opts.reply || cut?.aborted) return answered
     try {
       return [
         ...answered,
-        ...await opts.reply(call, answerOf(answered, id), wrote),
+        ...await dropped(opts.reply(call, answerOf(answered, id), wrote), cut),
       ]
     } catch (error) {
       await opts.report?.(error, call, tool.name)
@@ -729,7 +755,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       return tool && {
         tool,
         ensure: () => ensure([catalog().get(tool.name) ?? tool]),
-        call: () => born(asked, tool),
+        call: (o) => born(asked, tool, o?.cut),
         read: () => read(asked, tool),
       }
     },

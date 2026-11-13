@@ -83,7 +83,7 @@ export {
 } from './doors.ts'
 export { published } from './publish.ts'
 export { readBody } from './body.ts'
-export { reads } from './requests.ts'
+export { cutOf, reads } from './requests.ts'
 export {
   fault,
   faults,

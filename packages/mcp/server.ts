@@ -125,6 +125,9 @@ export type Options = {
    * tool: the HTTP door's, so a stopping server lets it go with its reads
    * (@yaks/api `reads`) */
   reading?: () => void
+  /** aborted when a stopping server's grace is up (@yaks/api `cutOf`): a
+   * write still reading its reply is answered without it */
+  cut?: AbortSignal
   /** Optional local file input: callers opt in with `_files: true`. Hosted
    * servers without a reader keep literal inputs and their exact schemas. */
   readFile?: ReadFile
@@ -624,7 +627,8 @@ export let server = (
       }
       if (t.readOnly) opts.reading?.()
       else await admitted.ensure()
-      let landed = await (t.readOnly ? admitted.read() : admitted.call())
+      let landed =
+        await (t.readOnly ? admitted.read() : admitted.call({ cut: opts.cut }))
       let answer = answerOf(landed, id)
       if (opts.readable) answer = await opts.readable(answer)
       let isError = faulted(landed, id)

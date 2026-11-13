@@ -287,6 +287,27 @@ test('a direct tool reply carries what its caller is owed beside its data', asyn
   assertEquals(replies, 1)
 })
 
+test('a cut call is answered without the reply it is still reading', async () => {
+  let vocab = words()
+  let g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
+  let data: Tool = {
+    ...echo,
+    run: () => [{ entity: { eid: 'datum' }, person: {} }],
+  }
+  let cut = new AbortController()
+  let r = runner(g, {
+    tools: [data],
+    reply: () => (cut.abort(), new Promise<Bundle[]>(() => {})),
+  })
+  await r.ensure()
+  let asked = called('example_echo', { value: 'hi' })
+  let answer = answerOf(
+    await r.admit(asked)!.call({ cut: cut.signal }),
+    asked.entity.eid,
+  )
+  assertEquals(answer.map((b) => b.entity.eid), ['datum'])
+})
+
 test('a rehearsal keeps its answer in the call graph', async () => {
   let { g } = world()
   let host = {

@@ -2,7 +2,7 @@
 // Request owners end before their reader closes; admitted writes keep going.
 import { equal, test } from '@yaks/testing'
 import { served } from './request.ts'
-import { reads, requests } from './requests.ts'
+import { cutOf, reads, requests } from './requests.ts'
 import { faults, refuse } from './refuse.ts'
 
 let read = (() => {
@@ -129,6 +129,17 @@ test('a POST said to only read is answered 499 at the cut and not drained', asyn
   let write = stuck(false)
   await new Promise((done) => setTimeout(done, 0))
   equal(write.drained(), false)
+})
+
+test("a write's request is told of the cut, a read's is not", async () => {
+  let told: (AbortSignal | undefined)[] = []
+  let active = requests((request) => (
+    told.push(cutOf(request)), Promise.resolve(new Response('ok'))
+  ))
+  await active.handle(new Request('http://test/', { method: 'GET' }))
+  await active.handle(new Request('http://test/mcp', { method: 'POST' }))
+  active.cancel()
+  equal(told.map((signal) => signal?.aborted), [undefined, true])
 })
 
 test('shutdown surfaces an unexpected response cancellation failure', async () => {

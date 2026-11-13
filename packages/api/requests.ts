@@ -25,6 +25,14 @@ let readers = new WeakMap<Request, () => void>()
  * as it does a GET, and the drain no longer waits for it. */
 export let reads = (request: Request): void => readers.get(request)?.()
 
+let cuts = new WeakMap<Request, AbortSignal>()
+
+/** The cut at the end of a grace, for a write's request: what its admitted
+ * work may still drop once its write is kept, such as the extras an MCP call
+ * reads beside its answer (@yaks/tools `Invocation.call`). */
+export let cutOf = (request: Request): AbortSignal | undefined =>
+  cuts.get(request)
+
 /** A cancelled read has no caller waiting for its answer. A write remains
  * admitted even if its connection goes away after the body was received. */
 export let receive = async <T>(
@@ -196,6 +204,7 @@ export let requests = (handler: Handler) => {
         ended()
         gone.resolve(new Response(null, { status: 499 }))
       }
+      cuts.set(request, cut.signal)
       readers.set(request, () => {
         read = true
         leave()

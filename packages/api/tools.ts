@@ -199,7 +199,10 @@ export let runs = (host: Serving): Runs => ({
     }
     // Stopping: no new connection, every socket closed, and the requests in
     // flight let finish until the grace is up. Reads and streamed answers are
-    // then cut; admitted writes finish before the listener and graph close.
+    // then cut, and so is a kept write's reply (@yaks/api `cutOf`): a reply
+    // waiting on a read the graph's close alone would end held the drain past
+    // systemd's stop timeout. Admitted writes finish before the listener and
+    // graph close.
     let cut = false
     let timer: ReturnType<typeof setTimeout> | undefined
     let graced = new Promise<void>((done) => {
