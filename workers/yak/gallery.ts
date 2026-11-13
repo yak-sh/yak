@@ -67,7 +67,13 @@ import {
   url,
 } from './directory.ts'
 import type { Env } from './env.ts'
-import { type Standing } from './gallery-row.ts'
+import {
+  type Reputation,
+  reputation,
+  reputationOf,
+  reputed,
+  type Standing,
+} from './gallery-row.ts'
 import { configOf, keyed, prefixOf, rootOf } from './files.ts'
 import type { Letter } from './mail.ts'
 import { INTERNAL } from './mail-config.ts'
@@ -167,6 +173,8 @@ export type Shown = {
   space: Space
   app: App
   shot?: string
+  /** what yaks.app says of it (gallery-row.ts), where a listing read it */
+  reputation?: Reputation
 }
 
 let shownOf = (space: Space, app: App, env: Host): Shown => ({
@@ -203,14 +211,32 @@ export let shown = async (
   })
 }
 
-// Every app on the gallery, newest listing first.
+/** Each listing with what yaks.app says of it: its review, its installs,
+ * counted in one read, and whether we feature it or its space. */
+export let reputing = async (
+  dir: Directory,
+  all: Shown[],
+): Promise<Shown[]> => {
+  let n = await dir.installCounts(
+    all.map((a) => ({ of: a.app.eid, maker: a.space.eid })),
+  )
+  return all.map((a) => ({
+    ...a,
+    reputation: reputation(a.app, n.get(a.app.eid) ?? 0, a.space),
+  }))
+}
+
+// Every app on the gallery, newest listing first, each with its reputation.
 export let listed = async (
   dir: Directory,
   env: Host = {},
 ): Promise<Shown[]> =>
-  (await shown(dir, env))
-    .filter(({ app }) => app.gallery?.listedAt)
-    .sort((a, b) => b.since.localeCompare(a.since))
+  reputing(
+    dir,
+    (await shown(dir, env))
+      .filter(({ app }) => app.gallery?.listedAt)
+      .sort((a, b) => b.since.localeCompare(a.since)),
+  )
 
 // The line an agent runs to give somebody their own copy. It is the whole
 // point of a listing: a gallery you cannot install from is a picture of apps.
@@ -255,8 +281,8 @@ export let said = (hits: Shown[], asked: string, env: Host = {}) =>
   hits.length
     ? hits.map((a) =>
       `- ${a.title}${a.about ? ` — ${a.about}` : ''}\n  ${a.at}\n  ${
-        install(a)
-      }`
+        a.reputation ? `${reputed(a.reputation).join('; ')}\n  ` : ''
+      }${install(a)}`
     ).join('\n')
     : `nothing in the gallery answers ${
       asked ? `"${asked}"` : 'that'
@@ -454,6 +480,7 @@ export let card = (a: Shown) =>
         }),
     ),
     a.about ? h(Card.Sub, null, a.about) : null,
+    a.reputation ? reputationOf(a.reputation) : null,
   )
 
 // The card a gallery page stands on: its heading, what it says, and what
@@ -791,6 +818,27 @@ export let reviewed = (
 export let review = (env: Env, shared: Shared, code: Verdict, actor: Actor) =>
   stamp(env, { entities: [reviewed(shared, code, actor)] }, { actor })
 
+/** The platform's featured mark on something shared or on a space, or the
+ * mark taken off (`gallery_feature`, T-160642). */
+export let featuring = (
+  eid: string,
+  on: boolean,
+  actor: Actor,
+  now = new Date(),
+): Bundle => ({
+  entity: { eid },
+  featured: on
+    ? {
+      at: now.toISOString(),
+      by: actor.by ?? null,
+      via: actor.via ?? null,
+    }
+    : null,
+})
+
+export let feature = (env: Env, eid: string, on: boolean, actor: Actor) =>
+  stamp(env, { entities: [featuring(eid, on, actor)] }, { actor })
+
 // ---- the doors ---------------------------------------------------------
 
 // The space's owner, for the byline in the letter and on the review page. The
@@ -914,10 +962,10 @@ export let answer = async (
 
 // ---- the home page's examples ------------------------------------------
 
-// The apps the platform features: every app a home page shows (demos.ts).
-// Gallery approval and listing recency do not decide which they are.
+// Whether the platform features an app: its own `featured` mark, or its
+// space's (T-160642). Gallery approval and listing recency do not decide it.
 export let featured = (space: Space, app: App) =>
-  space.slug == DEMO && DEMOS.includes(app.slug)
+  !!app.featured || !!space.featured
 
 /** The demo space's apps at these addresses, in this order, as cards; none
  * unless every one is published. */

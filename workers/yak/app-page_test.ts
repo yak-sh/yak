@@ -22,7 +22,11 @@ let visit = async (
   path = '/apps/recipes',
   method = 'GET',
 ) => {
-  let dir = { offers: () => Promise.resolve(offers) } as unknown as Directory
+  let dir = {
+    offers: () => Promise.resolve(offers),
+    installCounts: (made: { of: string }[]) =>
+      Promise.resolve(new Map(made.map(({ of }) => [of, 2]))),
+  } as unknown as Directory
   let res = await answer(
     new Request(`https://yaks.app${path}`, { method }),
     {} as Env,
@@ -55,6 +59,8 @@ test('a published app has a page that opens it first and offers a copy second', 
   assertEquals(document.querySelector('h1')!.textContent, 'Recipe box')
   assertStringIncludes(html, 'Somewhere to keep recipes')
   assertStringIncludes(html, 'Made at jeff.yaks.app')
+  // What yaks.app says of it: its installs, here two other spaces'.
+  assertStringIncludes(html, 'Installed by 2 other spaces')
   assertStringIncludes(html, screenshot(space(), app({ screenshot: 'shot' })))
   // Opening is the filled button; the copy is a plain one after it, sent to
   // the install door.

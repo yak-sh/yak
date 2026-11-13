@@ -28,7 +28,7 @@ import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import * as docs from './docs.ts'
 import * as gallery from './gallery.ts'
-import { INTEGRATIONS, page as integrations } from './integrations.ts'
+import { INTEGRATIONS, page as integrations, rating } from './integrations.ts'
 import { apex, type Host, hosted, url } from '@yaks/platform/host'
 import { lost } from './pages.ts'
 import { askEmail } from './signin-pages.ts'
@@ -212,6 +212,7 @@ let rendered = async (
     page = gallery.page(gallery.pictures(listed, env), env)
   } else if (path == INTEGRATIONS.path) {
     page = await c.time('listed', () => dir.integrations())
+      .then((all) => rating(dir, all))
       .then((all) => integrations(all, env))
   } else if (path == LOGIN) {
     // The card identity.ts shows someone not signed in, with nowhere to go back.

@@ -531,6 +531,7 @@ test('the gallery is a page of this site, drawn rather than filed', async () => 
 // The integration directory (T-132636) is drawn too, from what is listed: a
 // built service someone signs in to, and one a space added, its owner's words
 // drawn as theirs.
+let unrated = { reviewed: null, installs: 0, featured: false }
 let directoryPage = await (await integrationsPage([
   {
     name: 'openrouter',
@@ -540,6 +541,7 @@ let directoryPage = await (await integrationsPage([
     token: 'https://openrouter.ai/api/v1/auth/keys',
     hosts: ['openrouter.ai'],
     built: true,
+    reputation: { ...unrated, installs: 4, featured: true },
   },
   {
     name: 'ESV',
@@ -549,6 +551,7 @@ let directoryPage = await (await integrationsPage([
     instructions: 'Sign up at [api.esv.org](https://api.esv.org).',
     owner: 'ada',
     published: '2026-10-25T00:00:00.000Z',
+    reputation: unrated,
   },
 ])).text()
 
@@ -563,6 +566,12 @@ test('the integration directory is a page of this site, saying what each service
       'Its key is only ever sent to <code>api.esv.org</code>.',
       '<a href="https://api.esv.org" rel="nofollow ugc">api.esv.org</a>',
       'Connected by signing in to OpenRouter',
+      // What yaks.app says of each: who stands behind it, its installs, and
+      // the featured mark where we put one.
+      'Built by yaks.app',
+      'Featured by yaks.app',
+      'Installed by 4 other spaces',
+      'Listed by its owner, not reviewed by yaks.app',
     ]
   ) assertStringIncludes(one, text)
   // Each card's one button adds its service to a space of the reader's.

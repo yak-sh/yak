@@ -824,6 +824,11 @@ export let WORDS: Record<string, Words> = {
     'description':
       "Approve or decline a submitted gallery listing as the platform admin. Every submission goes to the platform's owner for review, so decide one only when he asks you to, and record him: by is his address, via is the session, reason records why. app names the offer as space/app. A decline leaves the app published and lets its owner submit again. Listing an app without review, which also waits for him to ask, is app_set(app, gallery: true, review: false).",
   },
+  'gallery_feature': {
+    'title': 'Feature something shared on yaks.app',
+    'description':
+      "Put the platform's featured mark on a published app (space/app), a published skill (its published name), an integration in the directory (its name) or a space (its slug, so everything it shares shows the mark), or take it off with featured false. The mark shows on the gallery, each page, the integration directory and what app_published, gallery_search, app_install and integration_list answer. Only the platform admin features, and only when the platform's owner asks: by is his address, via the session.",
+  },
   'gallery_code_review': {
     'title': "Review a gallery app's code",
     'description':

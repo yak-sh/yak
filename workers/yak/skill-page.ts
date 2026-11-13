@@ -22,7 +22,12 @@
 import type { Directory, SkillOffer, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
-import { standing } from './gallery-row.ts'
+import {
+  type Reputation,
+  reputation,
+  reputationOf,
+  standing,
+} from './gallery-row.ts'
 import { builderOf, SPACE } from './build-door.ts'
 import { RESULTS } from './operator-skills.ts'
 import { type ComponentChildren, h } from 'preact'
@@ -183,6 +188,7 @@ export let page = (
   at: { space: Space; skill: SkillOffer },
   rounds: Measured[] | null,
   env: Host = {},
+  said?: Reputation,
 ) => {
   let { space, skill } = at
   let shown = (rounds ?? []).filter((r) => r.measured)
@@ -218,6 +224,7 @@ export let page = (
               ? ''
               : ` To use it, ask your Operator to install the skill ${skill.published.name}.`,
           ),
+          said ? reputationOf(said) : null,
         ),
         h('h2', null, 'When to use it'),
         note(skill.description),
@@ -284,5 +291,11 @@ export let answer = async (
     caught(e, { request: 'skill page results', space: found.space.eid })
     return null
   })
-  return page(found, rounds, env)
+  let installs = await dir.installs(found.skill.eid, found.skill.space)
+  return page(
+    found,
+    rounds,
+    env,
+    reputation(found.skill, installs, found.space),
+  )
 }

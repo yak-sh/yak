@@ -375,6 +375,11 @@ export let BOUNDARIES = [
   // Every person and relation a sign-up created is kept to the app's editors
   // (form-guest-move.ts, T-159339).
   'yak/store/form-guest/1',
+  // What is featured is the platform's `featured` mark, never an
+  // integration's own property or the home pages' list (featured-move.ts,
+  // T-160642).
+  'yak/store/integration-featured/1',
+  'yak/store/demo-featured/1',
 ]
 
 /** A column dropped from a table. */

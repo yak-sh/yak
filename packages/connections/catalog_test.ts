@@ -132,8 +132,8 @@ test('the catalog is direct first: a built integration stands in for its listing
   assertEquals(at.abyssale.broker, undefined)
   assertEquals(at.abyssale.instructions, '- **Key**: yours')
   assertEquals(at.hubspot.tagline, 'CRM')
-  // Written once connected: built, its logo the SVG fetched, nothing of the
-  // catalog's own.
+  // Written once connected: built, its logo the SVG fetched, and never
+  // featured, which is the platform's mark rather than the row's.
   assertEquals(adopted(at.hubspot, '<svg/>'), {
     name: 'hubspot',
     title: 'Hubspot',
@@ -141,7 +141,6 @@ test('the catalog is direct first: a built integration stands in for its listing
     connects: 'signin',
     categories: ['crm'],
     image: 'https://logos.example/hubspot.svg',
-    featured: true,
     hosts: ['api.hubspot.example'],
     broker: { name: 'nango', integration: 'hubspot' },
     logo: '<svg/>',

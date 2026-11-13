@@ -616,6 +616,33 @@
       },
       "description": "an agent's review of somebody else's published app or skill before the platform's owner decides its listing; server-owned"
     },
+    "featured": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when the platform featured it"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who featured it; none for the platform itself"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the session or credential it was featured through"
+        }
+      },
+      "description": "the platform's mark that something shared, or the space that shares it, is featured on yaks.app; server-owned, since featuring is the platform's word"
+    },
     "report": {
       "component": true,
       "journal": false,

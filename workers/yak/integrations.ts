@@ -25,6 +25,8 @@ import { type Host, url } from '@yaks/platform/host'
 import { managePath } from '@yaks/platform/routes'
 import { drawn, head } from './shell.ts'
 import { drawn as theirs } from './theirs.ts'
+import type { Directory } from './directory.ts'
+import { type Reputation, reputationOf, reputed } from './gallery-row.ts'
 
 /** The page's own words, read by seo.ts for the sitemap and llms.txt. */
 export let INTEGRATIONS = {
@@ -35,6 +37,37 @@ export let INTEGRATIONS = {
     'Add one to your space; yaks.app keeps the key and sends it only to the ' +
     "service's own address.",
 }
+
+/** An entry with what yaks.app says of it (gallery-row.ts): how many other
+ * spaces connected it and whether we feature it. Nothing in the directory is
+ * reviewed, so none says a review. */
+export type Rated = Listed & { reputation: Reputation }
+
+/** Each entry, rated, its installs counted in one read. */
+export let rating = async (
+  dir: Pick<Directory, 'integrationInstalls'>,
+  all: Listed[],
+): Promise<Rated[]> => {
+  let n = await dir.integrationInstalls(all)
+  return all.map((i) => ({
+    ...i,
+    reputation: {
+      reviewed: null,
+      installs: n.get(i.name) ?? 0,
+      featured: !!i.featured,
+    },
+  }))
+}
+
+// Who stands behind an entry: yaks.app for a built one, its owner for a
+// custom one, which nobody reviews before it is listed.
+let behind = (i: Listed) =>
+  i.built
+    ? 'Built by yaks.app'
+    : 'Listed by its owner, not reviewed by yaks.app'
+
+/** What an agent is told of an entry, the phrases a card shows. */
+let rated = (i: Rated) => [behind(i), ...reputed(i.reputation)]
 
 /** Where a person adds an integration to a space of their own: their
  * connections page, offering it. */
@@ -73,7 +106,7 @@ let hostsOf = (i: Listed) =>
 // One service, as a card: its head the service and the way to add it, then
 // what it is, where its key goes, and how to get one. How to get its key is
 // its owner's Markdown, drawn as theirs (theirs.ts).
-let card = async (i: Listed, env: Host) => {
+let card = async (i: Rated, env: Host) => {
   let title = i.title || i.name
   let how = await theirs(i.instructions)
   let where = site(i)
@@ -92,6 +125,7 @@ let card = async (i: Listed, env: Host) => {
       ),
     ),
     i.tagline ? h(Card.Sub, null, i.tagline) : null,
+    reputationOf(i.reputation, [behind(i)]),
     small(
       where,
       where && i.hosts.length ? ' · ' : null,
@@ -117,7 +151,7 @@ let card = async (i: Listed, env: Host) => {
 }
 
 /** The integration directory's page: every entry, then how to add your own. */
-export let page = async (all: Listed[], env: Host = {}) =>
+export let page = async (all: Rated[], env: Host = {}) =>
   drawn(
     head(
       env,
@@ -173,13 +207,14 @@ export let page = async (all: Listed[], env: Host = {}) =>
 
 /** What `integration_list` answers: each entry found, with how to get its key
  * and how to add it. */
-export let said = (all: Listed[], words: string, env: Host = {}) =>
+export let said = (all: Rated[], words: string, env: Host = {}) =>
   all.length
     ? all.map((i) =>
       [
         `${i.title || i.name} (integration: '${i.name}')${
           i.tagline ? `: ${i.tagline}` : ''
         }`,
+        `  ${rated(i).join('; ')}`,
         i.description ? `  service: ${i.description}` : '',
         i.details ? `  integration: ${i.details}` : '',
         i.site ? `  site: ${i.site}` : '',

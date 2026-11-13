@@ -183,6 +183,7 @@ import {
   release,
 } from './domains.ts'
 import { bound, type Env } from './env.ts'
+import { integrationEid } from '@yaks/connections'
 // The gallery is its own part (gallery.ts): the two stamps, the letter that
 // carries the decision, and the listing every door here reads.
 import {
@@ -191,6 +192,7 @@ import {
   decide as decideGallery,
   door as galleryDoor,
   drop as unGallery,
+  feature,
   letter as galleryLetter,
   owned as ownerOf,
   pictureOf,
@@ -200,7 +202,13 @@ import {
   ticket as ticketFor,
   type Verdict,
 } from './gallery.ts'
-import { pageAt, type Standing, standing as onGallery } from './gallery-row.ts'
+import {
+  pageAt,
+  reputation,
+  reputed,
+  type Standing,
+  standing as onGallery,
+} from './gallery-row.ts'
 import type { Caller } from './asking.ts'
 import {
   DEFAULT,
@@ -5957,12 +5965,20 @@ let OURS: Row[] = [
         await ctx.dir.offers(),
         (s) => ctx.dir.owners(s),
       )
+      // What yaks.app says of each, as its page and the gallery say it.
+      let installs = await ctx.dir.installCounts(
+        offers.map(({ space, app }) => ({ of: app.eid, maker: space.eid })),
+      )
       let line = ({ space, app }: (typeof offers)[number]) =>
         `- ${app.published!.name} v${app.published!.version} — ` +
         `${app.title}${
           app.published!.about ? `: ${app.published!.about}` : ''
         } (from ${space.slug}/${app.slug}, installs as ${app.slug}, ` +
-        `published ${app.published!.at.slice(0, 10)})`
+        `published ${app.published!.at.slice(0, 10)}; ${
+          reputed(
+            reputation(app, installs.get(app.eid) ?? 0, space),
+          ).join('; ')
+        })`
       // Every word said, anywhere in the line the reader is about to see:
       // the gallery is a list of a few dozen sentences, so the search is the
       // sentences themselves rather than an index to keep in step with them.
@@ -6225,7 +6241,16 @@ let OURS: Row[] = [
               : 'its own store and its own data'
           }, pinned to that version (app_update moves ` +
           'it)' + asked.said + out.said +
-          (previews ? '. ' + HELD(previews.site) : ''),
+          (previews ? '. ' + HELD(previews.site) : '') +
+          `. What yaks.app says of ${name}: ${
+            reputed(
+              reputation(
+                offer.app,
+                await ctx.dir.installs(offer.app.eid, offer.space.eid),
+                offer.space,
+              ),
+            ).join('; ')
+          }`,
         value: { app: app.slug, url: url(space, app, ctx.env), version },
         space,
       }
@@ -7069,6 +7094,76 @@ let OURS: Row[] = [
             ? saying('listed', ctx.env)
             : 'declined; the app stays published'
         }`,
+      }
+    },
+  },
+  {
+    name: 'gallery_feature',
+    idempotent: true,
+    destructive: false,
+    input: {
+      type: 'object',
+      properties: {
+        app: str('a published app to feature, as space/app'),
+        skill: str('a published skill to feature, by its published name'),
+        integration: str('an integration in the directory, by its name'),
+        space: str(
+          'a space to feature as a publisher, by its slug: everything it ' +
+            'shares shows the mark',
+        ),
+        featured: {
+          type: 'boolean',
+          description: 'true to feature it, false to take the mark off',
+        },
+        by: str(
+          "who the mark is recorded as: the platform's owner (his address) " +
+            'when he asked for this exact act; never a session',
+        ),
+        via: str('the session featuring it'),
+      },
+      required: ['featured'],
+    },
+    run: async (ctx, args) => {
+      if (!await admin(ctx)) {
+        throw refuse('access', 'featuring is the platform admin’s act')
+      }
+      let on = flag(args.featured, 'featured')
+      let named = (['app', 'skill', 'integration', 'space'] as const)
+        .filter((k) => args[k] != null)
+      if (named.length != 1) {
+        throw refuse(
+          'arguments',
+          'name one of app, skill, integration or space to feature',
+        )
+      }
+      let what = named[0]
+      let name = text(args[what], what)
+      let eid = what == 'app'
+        ? (await ctx.dir.offers()).find(({ space, app }) =>
+          `${space.slug}/${app.slug}` == name
+        )?.app.eid
+        : what == 'skill'
+        ? (await ctx.dir.skillOffered({ name }))?.skill.eid
+        : what == 'integration'
+        ? (await ctx.dir.integrations()).some((i) => i.name == name)
+          ? integrationEid(name)
+          : undefined
+        : (await ctx.dir.space(name))?.eid
+      if (!eid) {
+        throw refuse(
+          'missing',
+          what == 'space'
+            ? `no space is called ${name}`
+            : what == 'integration'
+            ? `${name} is not in the integration directory`
+            : `${name} is not on offer`,
+        )
+      }
+      await feature(ctx.env, eid, on, await decider(ctx, args))
+      return {
+        text: `the ${what} ${name} ${
+          on ? 'is featured' : 'is no longer featured'
+        } on yaks.app`,
       }
     },
   },

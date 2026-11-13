@@ -1,8 +1,9 @@
 // The apps the home pages show (site/home.tsx, site/build.tsx): each one's
 // address in the demo space (gallery-demo.ts `DEMO`), its name and what it is
-// for. A page names its demos in its file, and the gallery serves the picture
-// of any app one of these lists, so a page can show no demo whose picture is
-// refused (gallery.ts `featured`).
+// for. A page names its demos in its file. Each wears the platform's
+// `featured` mark (featured-move.ts), which is what lets the gallery serve a
+// private one's picture (gallery.ts `featured`); an app added here is featured
+// with `gallery_feature` so its card has its picture.
 
 /** One example: its address, its name, and what it is for. */
 export type Example = [slug: string, title: string, sub: string]

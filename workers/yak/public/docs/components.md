@@ -809,12 +809,12 @@ The complete list of reserved names:
     content conversation cost counted created credit credit_block delegates
     delete_upload deliver delivered demo deploy desk_sidebar dispatch doc
     document_extract document_page document_text draft edge effect email
-    entity entry error event exception execution failed favorite fee feed
-    feedback file filed finding fired form form_guest form_mail form_phone
-    form_post former gallery gitobj grant grants_listed heard heard_turn
-    hearing held home hook hostname image inference install installed
-    integration integration_install interrupted invite inviting key
-    last_deploy lease lines mail mail_answered mail_dismissed mail_post
+    entity entry error event exception execution failed favorite featured
+    fee feed feedback file filed finding fired form form_guest form_mail
+    form_phone form_post former gallery gitobj grant grants_listed heard
+    heard_turn hearing held home hook hostname image inference install
+    installed integration integration_install interrupted invite inviting
+    key last_deploy lease lines mail mail_answered mail_dismissed mail_post
     mail_task mcp_list mcp_server member memory mentions meter miss model
     model_reservation model_result newcomer newcomer_builds notice
     notice_confirmed notice_letter notice_posted notice_subscription

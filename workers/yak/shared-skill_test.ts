@@ -258,6 +258,48 @@ test('an installed skill is a copy pinned to the version it took', async () => {
   }, 'theirs to offer')
 })
 
+test('what yaks.app says of a skill, and its featured mark, shows to a person and to an agent', async () => {
+  let reviewedOn = `Reviewed by yaks.app on ${
+    new Date().toISOString().slice(0, 10)
+  }, version 1`
+  let { html } = await page('pitch-copy')
+  assertStringIncludes(html, reviewedOn)
+  assertStringIncludes(html, 'Installed by 1 other space')
+  let listed = () => run(taker, 'app_published', { words: 'pitch-copy' })
+  assertStringIncludes(await listed(), reviewedOn)
+  // Only the platform admin features, and featuring its space features it.
+  await refused(taker, 'gallery_feature', {
+    skill: 'pitch-copy',
+    featured: true,
+  }, 'platform admin')
+  await run(admin, 'gallery_feature', { space: 'kitchen', featured: true })
+  assertStringIncludes(await listed(), 'Featured by yaks.app')
+  assertStringIncludes((await page('pitch-copy')).html, 'Featured by yaks.app')
+  await run(admin, 'gallery_feature', { space: 'kitchen', featured: false })
+  assertEquals((await listed()).includes('Featured'), false)
+  await run(admin, 'gallery_feature', { skill: 'pitch-copy', featured: true })
+  assertStringIncludes(await listed(), 'Featured by yaks.app')
+  await run(admin, 'gallery_feature', { skill: 'pitch-copy', featured: false })
+  assertEquals((await listed()).includes('Featured'), false)
+  await refused(admin, 'gallery_feature', {
+    integration: 'nothing-here',
+    featured: true,
+  }, 'not in the integration directory')
+  // An integration in the directory says the same signals.
+  await run(admin, 'gallery_feature', {
+    integration: 'openrouter',
+    featured: true,
+  })
+  let said = await run(taker, 'integration_list', { words: 'openrouter' })
+  for (
+    let line of [
+      'Built by yaks.app',
+      'Featured by yaks.app',
+      'Installed by 0 other spaces',
+    ]
+  ) assertStringIncludes(said, line)
+})
+
 test('a new version waits for review, and an update names what changed', async () => {
   let [mine] = await storeOf(kitchen).g.read('.skill')
   await storeOf(kitchen).g.apply([{

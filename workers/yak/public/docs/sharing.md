@@ -297,7 +297,8 @@ available again. Refused if the app was not published.
 **`app_published()`** — lists published apps, newest first, one line each:
 
     - tally v1 — Tally: Count the votes (from yourname/tally, installs as
-      tally, published 2026-08-14)
+      tally, published 2026-08-14; Reviewed by yaks.app on 2026-08-15;
+      Installed by 3 other spaces)
 
 Read it before you build something somebody may already have made.
 
@@ -484,7 +485,27 @@ before building something from scratch.
 
     - Tally — Count the votes
       https://yourname.yaks.app/tally/
+      Reviewed by yaks.app on 2026-08-15; Installed by 3 other spaces
       app_install(name: 'tally')
+
+## What yaks.app says of something shared
+
+Everything shared shows the same few signals, to a person and to an agent: on
+its gallery card, on its own page (`/apps/<name>`, `/skills/<name>`), in the
+integration directory (`/integrations`), and in what `app_published`,
+`gallery_search`, `app_install` and `integration_list` answer.
+
+- **Featured by yaks.app**: the platform features it, or the space that shares
+  it. The platform admin puts the mark on, or takes it off, with
+  **`gallery_feature(app | skill | integration | space, featured, by, via)`**,
+  and only when yaks.app's owner asks.
+- **Reviewed by yaks.app on a date**, and the version the code review read when
+  there was one: an app or a skill we listed. Nothing in the integration
+  directory is reviewed: a built one says it is built by yaks.app, and a custom
+  one that its owner listed it without our review.
+- **Installed by N other spaces**: the spaces that installed a copy, or for an
+  integration connected it, other than the one that shares it. Counted when
+  read, never stored.
 
 ## What an installed copy shares
 

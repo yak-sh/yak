@@ -18,7 +18,7 @@ import { APP, inApp, inSpace, refuse, SPACE, str, text } from './tool.ts'
 import { type Row, worded } from './tool-words.ts'
 import { serviceOffer } from './app-services.ts'
 import { declarationOf } from './declaration.ts'
-import { INTEGRATIONS, said } from './integrations.ts'
+import { INTEGRATIONS, rating, said } from './integrations.ts'
 import { EITHER } from './preauth.ts'
 import {
   barred,
@@ -360,7 +360,7 @@ let CONNECTIONS: Row[] = [
         ...services.filter((i) => i != null),
       ].filter(matches)
       return {
-        text: said(all, words, ctx.env) +
+        text: said(await rating(ctx.dir, all), words, ctx.env) +
           services.filter((i) => i != null).filter(matches).map((i) =>
             `\n\n${i.name} operations: ${JSON.stringify(i.commands)}`
           ).join(''),

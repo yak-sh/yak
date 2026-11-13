@@ -316,6 +316,9 @@ export type Space = {
   cache_retention?: number | null
   // The picture it wears in place of its first letter, or null for none.
   logo?: { sha: string; type: string } | null
+  // Whether the platform features this space as a publisher (`featured`,
+  // T-160642): everything it shares shows the mark.
+  featured?: boolean
   sender?: import('@yaks/phone').Transport
   // What this space pays (D-32751). Null for a space the sweep has not
   // reached yet, which means free — the terms every space is on today.
@@ -457,6 +460,8 @@ export type AppInfo = {
   // Where this offer stands with the gallery (gallery.ts, T-34476): null for
   // every app that never asked, which is almost all of them.
   gallery: Gallery | null
+  // Whether the platform features it (`featured`, T-160642).
+  featured?: boolean
   // The app's uploaded image chosen by its owner for listings.
   screenshot: string | null
   // The site somebody else may own that this app was rebuilt from
@@ -565,6 +570,8 @@ export type Gallery = {
   askedAt: string
   listedAt: string
   reviewedAt?: string
+  /** the published version an agent's code review read (`code_review`) */
+  version?: number
   decision?: 'approved' | 'declined'
   by?: string
   via?: string
@@ -578,6 +585,8 @@ export type Shared = {
   title: string
   published: Offer | null
   gallery: Gallery | null
+  /** whether the platform features it (`featured`, T-160642) */
+  featured?: boolean
 }
 
 /** A skill a space published (shared-skill.ts): the text on offer, at the
@@ -766,6 +775,8 @@ export type Row = {
     via?: Id | null
     reason?: string
   }
+  code_review?: { version?: number | null }
+  featured?: { at?: string | null }
   screenshot?: { blob?: string | null }
   seeded?: { at?: string | null; version?: number | null }
   demo?: {
@@ -1263,6 +1274,8 @@ export let APP_PARTS = [
   'published',
   'installed',
   'gallery',
+  'code_review',
+  'featured',
   'screenshot',
   'preview',
   'seeded',
@@ -1297,6 +1310,7 @@ export let SPACE_PARTS = [
   'comp',
   'space_logo',
   'preview',
+  'featured',
 ]
 let SPACE_ABOUT = SPACE_PARTS.map((part) => `?${part}`).join('&')
 
@@ -1396,6 +1410,7 @@ export let spaceOf = (r: Row): Space => ({
   logo: r.space_logo?.sha
     ? { sha: r.space_logo.sha, type: r.space_logo.type ?? '' }
     : null,
+  ...(r.featured ? { featured: true } : {}),
   ...(r.sender
     ? {
       sender: { ...r.sender, ...(r.phone ? { number: r.phone.number } : {}) },
@@ -1495,6 +1510,9 @@ let galleryOf = (r: Row): Gallery | null =>
       askedAt: r.gallery.asked_at ?? '',
       listedAt: r.gallery.listed_at ?? '',
       ...(r.gallery.reviewed_at ? { reviewedAt: r.gallery.reviewed_at } : {}),
+      ...(r.code_review?.version != null
+        ? { version: r.code_review.version }
+        : {}),
       ...(r.gallery.decision ? { decision: r.gallery.decision } : {}),
       ...(r.gallery.by ? { by: idOf(r.gallery.by) } : {}),
       ...(r.gallery.via ? { via: idOf(r.gallery.via) } : {}),
@@ -1525,6 +1543,7 @@ export let skillOfferOf = (r: Row): SkillOffer | null => {
     space: idOf(r.published.space),
     published,
     gallery: galleryOf(r),
+    featured: !!r.featured,
     upstream: upstreamOf(r.upstream),
   }
 }
@@ -1561,6 +1580,7 @@ export let appAbout = (r: Row): AppInfo => ({
     }
     : null,
   gallery: galleryOf(r),
+  featured: !!r.featured,
   screenshot: r.screenshot?.blob ?? null,
   preview: previewOf(r),
   seeded: r.seeded
@@ -2916,17 +2936,20 @@ export let directoryRows = (rows: {
         ? `.entity.eid=${at.eid}&.published`
         : null
       if (!key) return null
-      let row = await one(`${key}&.skill&?doc&?content&?gallery&?upstream`)
+      let row = await one(
+        `${key}&.skill&?doc&?content&?gallery&?upstream&?code_review&?featured`,
+      )
       let skill = row ? skillOfferOf(row) : null
       let space = skill ? await self.at(skill.space) : null
       return skill && space && !space.trashed ? { space, skill } : null
     },
     // Every skill on offer, newest first, with its space.
     skillOffers: async (): Promise<{ space: Space; skill: SkillOffer }[]> => {
-      let skills =
-        (await query('.published&.skill&?doc&?content&?gallery&?upstream'))
-          .flatMap((r) => skillOfferOf(r) ?? [])
-          .sort((a, b) => b.published.at.localeCompare(a.published.at))
+      let skills = (await query(
+        '.published&.skill&?doc&?content&?gallery&?upstream&?code_review&?featured',
+      ))
+        .flatMap((r) => skillOfferOf(r) ?? [])
+        .sort((a, b) => b.published.at.localeCompare(a.published.at))
       let spaces = new Map<string, Space | null>()
       for (let { space } of skills) {
         if (!spaces.has(space)) spaces.set(space, await self.at(space))
@@ -2941,17 +2964,67 @@ export let directoryRows = (rows: {
     // space with an `install` row for it, and for an app each space holding a
     // copy, which also answers for copies made before installs were recorded.
     // A space counts once, however often it installs or deletes its copy.
-    installs: async (of: string, maker: string): Promise<number> => {
-      if (!EID.test(of)) return 0
-      let rows = await query(
-        `(.install.of=${of})|(.installed.of=${of}&.app)`,
-      )
-      let spaces = new Set(rows.flatMap((r) => {
-        let at = r.install?.space ?? r.app?.space
-        return at ? [idOf(at)] : []
+    installs: async (of: string, maker: string): Promise<number> =>
+      (await self.installCounts([{ of, maker }])).get(of) ?? 0,
+    // The same for many at once, in one read: each `of`'s count by its eid,
+    // as a listing shows them (T-160642).
+    installCounts: async (
+      made: { of: string; maker: string }[],
+    ): Promise<Map<string, number>> => {
+      let ofs = [...new Set(made.map((m) => m.of).filter((of) => EID.test(of)))]
+      let spaces = new Map(ofs.map((of) => [of, new Set<string>()]))
+      if (ofs.length) {
+        let list = ofs.join(',')
+        for (
+          let r of await query(
+            `(.install.of=${list})|(.installed.of=${list}&.app)`,
+          )
+        ) {
+          let of = r.install?.of ?? r.installed?.of
+          let at = r.install?.space ?? r.app?.space
+          if (of && at) spaces.get(idOf(of))?.add(idOf(at))
+        }
+      }
+      return new Map(made.map(({ of, maker }) => {
+        let all = spaces.get(of) ?? new Set()
+        return [of, all.size - (all.has(maker) ? 1 : 0)]
       }))
-      spaces.delete(maker)
-      return spaces.size
+    },
+    // How many spaces other than its owner's hold a connection through each
+    // integration named (T-160642): an integration's installs.
+    integrationInstalls: async (
+      all: { name: string; owner?: string | null }[],
+    ): Promise<Map<string, number>> => {
+      // A name is somebody's words, which a line would have to quote, so only
+      // a plain name is asked by; the connections are compared after the read.
+      let names = all.map((i) => i.name).filter((n) => /^[\w.-]+$/.test(n))
+      let spaces = new Map(all.map((i) => [i.name, new Set<string>()]))
+      if (names.length) {
+        for (
+          let r of await query(`.connection.integration=${names.join(',')}`)
+        ) {
+          let c = (r as Row & {
+            connection?: { integration?: string; owner?: Id | null }
+          }).connection
+          if (c?.integration && c.owner) {
+            spaces.get(c.integration)?.add(idOf(c.owner))
+          }
+        }
+      }
+      // A person's own connection is no space's install.
+      let owners = [...new Set([...spaces.values()].flatMap((s) => [...s]))]
+        .filter((eid) => EID.test(eid))
+      let spaced = new Set(
+        owners.length
+          ? (await query(`.entity.eid=${owners.join(',')}&.space`))
+            .map((r) => r.entity.eid)
+          : [],
+      )
+      return new Map(all.map(({ name, owner }) => {
+        let held = [...spaces.get(name) ?? []]
+          .filter((at) => spaced.has(at) && at != owner)
+        return [name, held.length]
+      }))
     },
     // Record that `space` installed `of` ({@link installOf}).
     install: (of: string, space: string, headers = {}) =>

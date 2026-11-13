@@ -44,7 +44,7 @@ import {
 import { ours } from './gallery-demo.ts'
 import { mail } from './mail.ts'
 import { SLUG } from '@yaks/platform/names'
-import { installedBy, standing } from './gallery-row.ts'
+import { reputation, reputed, standing } from './gallery-row.ts'
 import type { Letter } from './mail.ts'
 import { INTERNAL } from './mail-config.ts'
 import {
@@ -291,8 +291,12 @@ export let changes = (was: SkillText, now: SkillText, most = 12): string[] => {
   return said
 }
 
-/** One skill offer, as `app_published` lists it. */
-export let line = ({ space, skill }: { space: Space; skill: SkillOffer }) =>
+/** One skill offer, as `app_published` lists it, with how many other spaces
+ * installed it. */
+export let line = (
+  { space, skill }: { space: Space; skill: SkillOffer },
+  installs = 0,
+) =>
   `- ${skill.published.name} v${skill.published.version} — skill ` +
   `${skill.title}${
     skill.published.about ? `: ${skill.published.about}` : ''
@@ -302,7 +306,9 @@ export let line = ({ space, skill }: { space: Space; skill: SkillOffer }) =>
     linked(skill)
       ? 'a link: read it at its source'
       : `installs as ${skill.title}`
-  }, published ${skill.published.at.slice(0, 10)})`
+  }, published ${skill.published.at.slice(0, 10)}; ${
+    reputed(reputation(skill, installs, space)).join('; ')
+  })`
 
 // A skill's instructions as an offer holds them: its text and the notice a
 // copy keeps, or the link to them.
@@ -323,8 +329,8 @@ let instructions = (skill: SkillOffer) =>
         : '')
 
 /** One skill offer in full, for whoever reviews or installs it. */
-export let full = (at: { space: Space; skill: SkillOffer }) =>
-  `${line(at)}\n\n${
+export let full = (at: { space: Space; skill: SkillOffer }, installs = 0) =>
+  `${line(at, installs)}\n\n${
     standing(at.skill) == 'listed' ? '' : 'awaiting review\n\n'
   }` +
   `description: ${at.skill.description}\n` +
@@ -515,12 +521,20 @@ export let installed = async (
   // Credited to the space that shared it (T-131912), once the copy is kept.
   if (space.eid != offer.space) await ctx.dir.install(offer.eid, space.eid)
   let as = title ?? offer.title
+  let said = reputed(
+    reputation(
+      offer,
+      await ctx.dir.installs(offer.eid, offer.space),
+      await ctx.dir.at(offer.space) ?? undefined,
+    ),
+  )
   return {
     text: `installed the skill ${as} (${offer.published.name} ` +
       `v${offer.published.version}) in ${space.slug}` +
       (kept.was ? ', over the copy it already kept' : '') +
       ': its Operator and your connected Claude are offered it. It stays ' +
-      `at that version; app_update(skill: '${as}') takes a newer reviewed one`,
+      `at that version; app_update(skill: '${as}') takes a newer reviewed ` +
+      `one. What yaks.app says of it: ${said.join('; ')}`,
     value: { skill: as, version: offer.published.version },
     space,
   }
@@ -662,9 +676,12 @@ export let codeReviewed = async (
  * platform admin, who reviews them, those awaiting review too. */
 export let listing = async (ctx: Ctx, words: string[]): Promise<string[]> => {
   let all = await admin(ctx)
-  return (await ctx.dir.skillOffers())
+  let shown = (await ctx.dir.skillOffers())
     .filter(({ skill }) => all || standing(skill) == 'listed')
-    .map(line)
+  let installs = await ctx.dir.installCounts(
+    shown.map(({ skill }) => ({ of: skill.eid, maker: skill.space })),
+  )
+  return shown.map((at) => line(at, installs.get(at.skill.eid) ?? 0))
     .filter((l) => words.every((w) => l.toLowerCase().includes(w)))
 }
 
@@ -672,6 +689,5 @@ export let listing = async (ctx: Ctx, words: string[]): Promise<string[]> => {
 export let reading = async (ctx: Ctx, name: string) => {
   let at = await ctx.dir.skillOffered({ name })
   if (!at || (standing(at.skill) != 'listed' && !await admin(ctx))) return null
-  let n = await ctx.dir.installs(at.skill.eid, at.skill.space)
-  return `${full(at)}\n\n${installedBy(n)}`
+  return full(at, await ctx.dir.installs(at.skill.eid, at.skill.space))
 }

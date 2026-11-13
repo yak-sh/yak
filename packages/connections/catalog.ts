@@ -17,15 +17,14 @@
 
 import { cmp } from '@yaks/fp'
 import type { Listing } from './brokers.ts'
-import type { Integration } from './integrations.ts'
+import type { Integration, Marked } from './integrations.ts'
 
 /** A service as the catalog offers it: the integration it is or would be,
  * the kinds of service it is, the address of its logo where it has no SVG of
  * its own, and whether it is featured. */
-export type Offer = Integration & {
+export type Offer = Marked & {
   categories: string[]
   image?: string
-  featured?: boolean
 }
 
 // A kind of service as a person reads it: "crm" as CRM, "dev-tools" as Dev
@@ -70,7 +69,7 @@ export let offerOf = (l: Listing, broker: string): Offer => ({
  * where the broker features it, by title. A built integration takes the kinds
  * of the listing it stands in for. */
 export let catalogue = (
-  integrations: Integration[],
+  integrations: Marked[],
   listings: Listing[],
   broker: string,
 ): Offer[] => {
@@ -142,9 +141,11 @@ export let kinds = (offers: Offer[]): string[] => {
 
 /** The integration an offer is written as once someone connects it, with
  * its logo as an SVG document where one was fetched: only the host writes
- * it, so it is `built`. */
+ * it, so it is `built`. Whether it is featured is the platform's mark, never
+ * the integration's own word. */
 export let adopted = (o: Offer, logo?: string): Integration => {
-  return { ...o, ...logo ? { logo } : {}, built: true }
+  let { featured: _, ...i } = o
+  return { ...i, ...logo ? { logo } : {}, built: true }
 }
 
 // What may stand before an SVG document's root: a byte-order mark, space, an

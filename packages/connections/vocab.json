@@ -209,10 +209,6 @@
           "format": "uri",
           "description": "the address of the service logo, served through the host image door where no SVG is kept on the row"
         },
-        "featured": {
-          "type": "boolean",
-          "description": "featured among the services the host catalog offers"
-        },
         "service": {
           "type": "object",
           "description": "a hosted app service, whose operations are the service-marked commands in its current release declaration",

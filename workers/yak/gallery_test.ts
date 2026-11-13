@@ -28,6 +28,8 @@ import {
   made,
   page,
   pictured,
+  reputing,
+  said,
   screenshot,
   searched,
   showcase,
@@ -35,8 +37,8 @@ import {
   ticket,
   ticketed,
 } from './gallery.ts'
-import { standing } from './gallery-row.ts'
-import { BUILD, DEMOS, HOME } from './demos.ts'
+import { reputed, standing } from './gallery-row.ts'
+import { DEMOS } from './demos.ts'
 import type { Env } from './env.ts'
 import { markup } from './html.ts'
 import { app, cards, space } from './testing.ts'
@@ -56,7 +58,7 @@ test('the two stamps distinguish unsubmitted, pending and listed apps', () => {
 test('the listing is the approved offers', async () => {
   let at = (over: Partial<App>) => ({ space: space(), app: app(over) })
   let dir = (offers: { space: Space; app: App }[]) => // deno-lint-ignore no-explicit-any
-  ({ offers: () => Promise.resolve(offers) } as any)
+  ({ offers: () => Promise.resolve(offers), installCounts: counted() } as any)
   let all = await listed(dir([
     at({ eid: 'never', gallery: null }),
     at({ eid: 'waiting', gallery: asked }),
@@ -78,7 +80,10 @@ test('a private listing visits its public demo and installs its private source',
     { space: space(), app: source },
     { space: space({ slug: 'yourname' }), app: demo },
   ]
-  let dir = { offers: () => Promise.resolve(offers) } as unknown as Directory
+  let dir = {
+    offers: () => Promise.resolve(offers),
+    installCounts: counted(),
+  } as unknown as Directory
   let shown = await listed(dir)
   assertEquals(shown.length, 1)
   assertEquals(shown[0].eid, source.eid)
@@ -147,21 +152,54 @@ test('an offered app exposes only its currently selected image, a private one on
   assertEquals(reads.length, 2)
 })
 
-test('a private app the home page features shows its image without a listing', async () => {
-  let shown = (slug: string, at: string) => {
-    let current = app({ access: 'private', slug, screenshot: 'chosen' })
-    let dir = offering([{ space: space({ slug: at }), app: current }])
+test('a private app the platform features, or whose space it features, shows its image without a listing', async () => {
+  let shown = (over: Partial<App>, at: Partial<Space> = {}) => {
+    let current = app({ access: 'private', screenshot: 'chosen', ...over })
+    let dir = offering([{ space: space(at), app: current }])
     let bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
     let objects = { read: () => Promise.resolve(bytes) }
     let path = `${IMAGE}${current.eid}/chosen`
     return image(dir, objects, path).then((r) => r.status)
   }
-  // Every app a home page shows, whichever page names it.
-  for (let [slug] of [...HOME, ...BUILD]) {
-    assertEquals(await shown(slug, 'yourname'), 200, slug)
+  assertEquals(await shown({ featured: true }), 200)
+  assertEquals(await shown({}, { featured: true }), 200)
+  assertEquals(await shown({}), 404)
+})
+
+// Installs counted as a directory would: none, unless the test says.
+let counted = (n: Record<string, number> = {}) => (made: { of: string }[]) =>
+  Promise.resolve(new Map(made.map(({ of }) => [of, n[of] ?? 0])))
+
+test('a listing says our review, its installs and the featured mark, on its card and to an agent', async () => {
+  let reviewed = {
+    ...live,
+    reviewedAt: '2026-09-07T09:00:00.000Z',
+    decision: 'approved' as const,
+    version: 4,
   }
-  assertEquals(await shown('housebook', 'jeff'), 404)
-  assertEquals(await shown('ledger', 'yourname'), 404)
+  let dir = {
+    offers: () =>
+      Promise.resolve([
+        { space: space(), app: app({ gallery: reviewed, featured: true }) },
+      ]),
+    installCounts: counted({ 'app-eid': 3 }),
+  } as unknown as Directory
+  let [one] = await listed(dir)
+  let lines = [
+    'Featured by yaks.app',
+    'Reviewed by yaks.app on 2026-09-07, version 4',
+    'Installed by 3 other spaces',
+  ]
+  assertEquals(reputed(one.reputation!), lines)
+  let drawn = markup(card(one))
+  for (let line of lines) assertStringIncludes(drawn, line)
+  assertStringIncludes(said([one], ''), lines.join('; '))
+  // A listing nobody reviewed says only what it has.
+  let [plain] = await reputing(
+    { installCounts: counted() } as unknown as Directory,
+    [shown()],
+  )
+  assertEquals(reputed(plain.reputation!), ['Installed by 0 other spaces'])
 })
 
 let shown = (over: Partial<Shown> = {}): Shown => ({
@@ -258,6 +296,7 @@ test('staging gallery listings, reviews and mail stay on its own host', async ()
   let dir = {
     offers: () =>
       Promise.resolve([{ space: space(), app: app({ gallery: live }) }]),
+    installCounts: counted(),
   } as unknown as Directory
   let all = await listed(dir, env)
   assertEquals(all[0].at, 'https://jeff.yaks.fyi/recipes/')

@@ -17,8 +17,8 @@
 import { type Directory, url as appUrl } from './directory.ts'
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
-import { pictureOf, type Shown, shown } from './gallery.ts'
-import { PAGE, pageAt } from './gallery-row.ts'
+import { pictureOf, reputing, type Shown, shown } from './gallery.ts'
+import { PAGE, pageAt, reputationOf } from './gallery-row.ts'
 import { h } from 'preact'
 import { Button, Card } from '@yaks/ui/parts'
 import { type Host, spaceHost } from '@yaks/platform/host'
@@ -55,6 +55,7 @@ export let page = (a: Shown, env: Host = {}) => {
           h('h1', { id: 'app', class: 'Title' }, a.title),
           a.about ? h('p', { class: 'Note Note-lead' }, a.about) : null,
           small(`Made at ${spaceHost(env, a.space.slug)}`),
+          a.reputation ? reputationOf(a.reputation) : null,
         ),
         shot
           ? h(
@@ -120,6 +121,7 @@ export let answer = async (
     ? (await shown(dir, env)).find((a) => a.name == name)
     : null
   if (!found) return lost(env)
+  ;[found] = await reputing(dir, [found])
   let shot = await pictureOf(env, found.space, found.app).catch((e) => {
     caught(e, { request: 'app page picture' })
     return ''

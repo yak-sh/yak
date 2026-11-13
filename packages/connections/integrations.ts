@@ -46,7 +46,6 @@ export type Integration = {
   connects?: 'key' | 'signin' | 'client'
   categories?: string[]
   image?: string
-  featured?: boolean
   /** its mark, as an SVG document, drawn as an image */
   logo?: string
   /** where a person grants access (OAuth) */
@@ -159,9 +158,21 @@ export let installed = async (read: Read): Promise<Integration[]> =>
     b[INTEGRATION] as Integration
   )
 
+/** The platform's mark that an integration is featured (@yaks/platform). */
+export let FEATURED = 'featured'
+
+/** An integration as the catalog and the directory read it: with whether the
+ * platform featured it, which is the platform's mark rather than its own. */
+export type Marked = Integration & { featured?: boolean }
+
+let marked = (b: Bundle): Marked => ({
+  ...b[INTEGRATION] as Integration,
+  ...b[FEATURED] ? { featured: true } : {},
+})
+
 /** The host catalog's rows, including integrations not connected yet. */
-export let catalogued = async (read: Read): Promise<Integration[]> =>
-  (await read(`.${INTEGRATION}`)).map((b) => b[INTEGRATION] as Integration)
+export let catalogued = async (read: Read): Promise<Marked[]> =>
+  (await read(`.${INTEGRATION}&?${FEATURED}`)).map(marked)
     .filter((i) => !i.owner && (i.built || Array.isArray(i.categories)))
 
 /** What a person reads about an integration, which its owner may change:
@@ -241,7 +252,7 @@ export let set = async (
 
 /** An integration in the integration directory, and since when a custom one
  * is published there. */
-export type Listed = Integration & { published?: string; unchecked?: boolean }
+export type Listed = Marked & { published?: string; unchecked?: boolean }
 
 /**
  * The integration directory: host catalog services outside testing and custom
@@ -250,9 +261,11 @@ export type Listed = Integration & { published?: string; unchecked?: boolean }
  */
 export let listing = async (read: Read, words = ''): Promise<Listed[]> => {
   let terms = words.toLowerCase().split(/\s+/).filter(Boolean)
-  let all = (await read(`.${INTEGRATION}&?${PUBLISHED}&?unchecked`)).flatMap(
+  let all = (await read(
+    `.${INTEGRATION}&?${PUBLISHED}&?unchecked&?${FEATURED}`,
+  )).flatMap(
     (b) => {
-      let i = b[INTEGRATION] as Integration
+      let i = marked(b)
       let at = (b[PUBLISHED] as { at?: string } | undefined)?.at
       // A listing whose owner is gone is nobody's to keep, or take down.
       return (!i.testing && !i.owner &&
@@ -309,7 +322,6 @@ let EDITORIAL = [
   'docs',
   'categories',
   'image',
-  'featured',
 ]
 
 /**

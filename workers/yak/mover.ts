@@ -63,6 +63,7 @@ import { sellerRule } from './seller-move.ts'
 import { describedRule } from './described-move.ts'
 import { proRule } from './pro-move.ts'
 import { recipientRule } from './recipient-move.ts'
+import { demoFeaturedRule, integrationFeaturedRule } from './featured-move.ts'
 export type MoveContext = { store: string; app?: string; space?: string }
 
 export type Rule = {
@@ -196,6 +197,8 @@ export let RULES: Rule[] = [
   describedRule,
   proRule,
   recipientRule,
+  integrationFeaturedRule,
+  demoFeaturedRule,
 ]
 
 /** The store as the mover reaches it, all of it synchronous: a batch is one

@@ -320,15 +320,18 @@ connect that hands back no access token is left out.
   Only `signin` and `client` listings are brokered. A listing whose hosts depend
   on the account (`${connectionConfig.subdomain}`) names none and is left out.
 - An `Offer` is the integration it would be, plus its `categories`, its logo's
-  address (`image`) and whether it is `featured`. `find(offers, words)` ranks a
+  address (`image`) and whether it is `featured`: built, featured by its broker,
+  or wearing the platform's `featured{at, by, via}` mark (@yaks/platform), which
+  `catalogued` and `listing` read beside the row. `find(offers, words)` ranks a
   title starting with each word first, then a word of the title, then its name
   or kinds, then featured. `kinds` lists the kinds by how many hold them.
 - `Broker.enable(integration, connects)` makes the broker ready to sign people
   in to one service: for Nango, an integration made once, through its own app
   for a sign-in.
 - `adopted(offer, logo)` is the integration an offer is written as once someone
-  connects it: `built`, since only the host writes it, its logo the SVG fetched.
-  From then on it is an integration like any other.
+  connects it: `built`, since only the host writes it, its logo the SVG fetched,
+  and never `featured`, which is the platform's mark and not the row's. From
+  then on it is an integration like any other.
 - A logo is fetched from `logoSources(address)`, the listing's own first, then
   where the broker also keeps it (Nango's repository, since Nango's CDN can
   answer a missing logo with its web app's page). Only a body `isSvg` holds is a
