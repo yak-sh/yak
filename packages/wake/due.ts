@@ -63,7 +63,10 @@ export let due = (
   storage: Pick<Storage, 'read'>,
   now: number = Date.now(),
 ): Bundle[] | Promise<Bundle[]> =>
-  storage.read(`.${WAKE}.at<=${iso(now)}&?${WATCH}&.order=${WAKE}.at`, { now })
+  storage.read(`${owed(now)}&.order=${WAKE}.at`, { now })
+
+/** The query clauses a wake due at `now` matches, with what it watches. */
+export let owed = (now: number): string => `.${WAKE}.at<=${iso(now)}&?${WATCH}`
 
 /**
  * The next ISO instant after `now`, computed from a recurrence string or from a

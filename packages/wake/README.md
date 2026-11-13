@@ -141,8 +141,11 @@ updates or clears `wake.at`; `#Now` contains the same instant. A rule using
 Each wake has its own transaction. A precondition checks the `wake.at`,
 `wake.every` and `wake.while` values read by the scheduler, preventing
 concurrent drivers from consuming one occurrence twice or overwriting an edited
-schedule. One rejected transaction does not stop other wakes. The result
-contains `fired: Bundle[]` and `refused: { wake: Bundle; error: unknown }[]`.
+schedule. A wake another writer moved since it was read is read again: if it is
+still due it fires as it now stands, and if not, the other writer's instant
+stands. Only a wake that keeps moving under three reads is refused for it. One
+rejected transaction does not stop other wakes. The result contains
+`fired: Bundle[]` and `refused: { wake: Bundle; error: unknown }[]`.
 
 Effect failures are reported after commit; they do not roll back the firing.
 After downtime, an overdue recurring wake fires once and advances beyond `now`.

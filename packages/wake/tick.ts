@@ -3,18 +3,24 @@
 // code. Each wake is written in its own transaction: one rejection leaves that
 // occurrence due without rolling back the others. The precondition makes two
 // processes reading the same occurrence compete at the graph's transaction
-// boundary instead of both firing it.
+// boundary instead of both firing it, and the one that loses reads the wake
+// again rather than calling the other's write a failure.
 
 import type { Bundle, Graph } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { WAKE } from './comp.ts'
-import { due, next, ring, wakeOf } from './due.ts'
+import { due, next, owed, ring, wakeOf } from './due.ts'
 import { cadence, matches } from './while.ts'
 import { look, type Watching, watchOf } from './watch.ts'
 
 /** The part of the graph API a driver needs, also satisfied by a client for a
  * remote graph over HTTP. */
 export type Driver = Pick<Graph, 'read' | 'apply'>
+
+// How many times a wake another writer keeps moving is read before it is
+// left due and refused.
+let TRIES = 3
 
 /** A committed firing and a rejected attempt are separate outcomes. Effect
  * failures are reported through the graph's error reporter instead: their
@@ -70,40 +76,55 @@ export let tick = async (
       chosen.push({ wake, error })
     }
   }
+  // A wake another writer moved since it was read is read again: still due,
+  // it fires from what it holds now; no longer due, that writer's instant
+  // stands. Only a wake that keeps moving under every read is refused.
+  let fire = async (wake: Bundle, every: string | null | undefined) => {
+    for (let tries = 1;; tries++) {
+      try {
+        return await once(wake, every)
+      } catch (error) {
+        if (!(error instanceof Stale) || tries == TRIES) throw error
+      }
+      let [fresh] = await graph.read(
+        `.entity.eid=${wake.entity.eid}&${owed(now)}`,
+        { now },
+      )
+      if (!fresh) return []
+      wake = fresh
+      every = (await cadence(graph, wakeOf(wake) ?? {}, now, holds)) ??
+        wakeOf(wake)?.every
+    }
+  }
+  let once = async (wake: Bundle, every: string | null | undefined) => {
+    let w = wakeOf(wake) ?? {}
+    let watch = watchOf(wake)
+    let looked = watch &&
+      await look(watch.seen ?? {}, await watching(wake, watch))
+    let firing = looked && !looked.changes
+      ? { entity: wake.entity, [WAKE]: { at: next({ ...w, every }, now) } }
+      : { ...ring(wake, now, {}, every), ...looked ? { watch: looked } : {} }
+    let applied = await graph.apply([{
+      ...firing,
+      $was: {
+        wake: {
+          at: token(w.at),
+          every: token(w.every),
+          while: token(w.while),
+        },
+      },
+    }], { now: at })
+    if (looked && !looked.changes) return []
+    return applied.filter((b) => b.entity.eid == wake.entity.eid)
+  }
   for (let choice of chosen) {
     let { wake } = choice
     if ('error' in choice) {
       result.refused.push({ wake, error: choice.error })
       continue
     }
-    let w = wakeOf(wake) ?? {}
     try {
-      let watch = watchOf(wake)
-      let looked = watch &&
-        await look(watch.seen ?? {}, await watching(wake, watch))
-      let firing = looked && !looked.changes
-        ? {
-          entity: wake.entity,
-          [WAKE]: { at: next({ ...w, every: choice.every }, now) },
-        }
-        : {
-          ...ring(wake, now, {}, choice.every),
-          ...looked ? { watch: looked } : {},
-        }
-      let applied = await graph.apply([{
-        ...firing,
-        $was: {
-          wake: {
-            at: token(w.at),
-            every: token(w.every),
-            while: token(w.while),
-          },
-        },
-      }], { now: at })
-      if (looked && !looked.changes) continue
-      result.fired.push(
-        ...applied.filter((b) => b.entity.eid == wake.entity.eid),
-      )
+      result.fired.push(...await fire(wake, choice.every))
     } catch (error) {
       result.refused.push({ wake, error })
     }
