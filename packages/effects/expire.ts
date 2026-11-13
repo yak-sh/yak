@@ -5,7 +5,15 @@
 // a tombstone goes as a `$prune` (@yaks/graph prune.ts), which erases an
 // identity only while nothing refers to it.
 import { expireOf } from '@yaks/vocab'
-import { and, type Clause, parse, present } from '@yaks/query'
+import {
+  after as past,
+  and,
+  type Clause,
+  fields,
+  limit,
+  parse,
+  present,
+} from '@yaks/query'
 import type { Access, Bundle, Comp } from '@yaks/graph'
 import { comps } from '@yaks/graph/bundle'
 import { Refused, Stale } from '@yaks/graph/errors'
@@ -31,13 +39,17 @@ export let expire = async (
   opts: {
     batch?: number
     now?: number
+    page?: number
     signal?: AbortSignal
     tombstones?: number
   } = {},
 ): Promise<number> => {
   let batch = opts.batch ?? 100
-  if (!Number.isInteger(batch) || batch < 1) {
-    throw Error('expire batch must be a positive integer')
+  let page = opts.page ?? PAGE
+  for (let [name, n] of [['batch', batch], ['page', page]] as const) {
+    if (!Number.isInteger(n) || n < 1) {
+      throw Error(`expire ${name} must be a positive integer`)
+    }
   }
   let paced = pacer(opts.signal)
   let removed = 0
@@ -52,46 +64,30 @@ export let expire = async (
     if (!query.clauses.every(filters)) {
       throw Error(`${comp} expire must be a filter query`)
     }
-    while (!opts.signal?.aborted) {
-      let rows = await g.read(
-        and(
-          present(comp),
-          query,
-          { kind: 'limit', n: batch },
-        ),
-        // Every match goes, so any `batch` of them will do: no backlog sorted.
-        { now: opts.now, unordered: true },
-      )
-      if (!rows.length) break
-      let bundles: Bundle[] = rows.map((b) => {
-        // Guard the values the selection read, not just the age of the
-        // expiring row. A concurrent completion/revival is not expired on
-        // the strength of a stale read. A refusal reselects the batch.
-        let was: NonNullable<Bundle['$was']> = {}
-        for (let [c, v] of comps(b)) {
-          if (v == null) continue
-          let props = g.vocab.props(c).filter((p) =>
-            !g.vocab.prop(c, p)?.computed
-          )
-          if (props.length) {
-            was[c] = Object.fromEntries(
-              props.map((p) => [p, token((v as Comp)[p] ?? null)]),
-            )
-          }
-        }
-        return { entity: b.entity, [comp]: null, $was: was }
-      })
-      try {
-        let applied = await paced(() =>
-          g.apply(bundles, { trusted: true, expiring: true })
+    for await (let eids of owners(g, comp, page, paced, opts.signal)) {
+      // A refusal reselects the page: what it refused may still expire.
+      for (let left = eids; left.length && !opts.signal?.aborted;) {
+        let rows = await paced(() =>
+          g.read(and(present(comp), query), { now: opts.now, eids: left })
         )
-        let selected = new Set(rows.map((b) => b.entity.eid))
-        removed += applied.filter((b) =>
-          selected.has(b.entity.eid) &&
-          (b[comp] === null || b.tombstone != null)
-        ).length
-      } catch (err) {
-        if (!(err instanceof Stale)) throw err
+        if (!rows.length) break
+        let some = rows.slice(0, batch)
+        try {
+          let applied = await paced(() =>
+            g.apply(some.map((b) => removal(g, comp, b)), {
+              trusted: true,
+              expiring: true,
+            })
+          )
+          let selected = new Set(some.map((b) => b.entity.eid))
+          removed += applied.filter((b) =>
+            selected.has(b.entity.eid) &&
+            (b[comp] === null || b.tombstone != null)
+          ).length
+          left = rows.slice(batch).map((b) => b.entity.eid)
+        } catch (err) {
+          if (!(err instanceof Stale)) throw err
+        }
       }
     }
   }
@@ -101,6 +97,61 @@ export let expire = async (
       .toISOString(),
     signal: opts.signal,
   })
+}
+
+// A row's removal, guarded by the values the selection read, not just the age
+// of the expiring row: a concurrent completion or revival is not expired on
+// the strength of a stale read.
+let removal = (g: Access, comp: string, b: Bundle): Bundle => {
+  let was: NonNullable<Bundle['$was']> = {}
+  for (let [c, v] of comps(b)) {
+    if (v == null) continue
+    let props = g.vocab.props(c).filter((p) => !g.vocab.prop(c, p)?.computed)
+    if (props.length) {
+      was[c] = Object.fromEntries(
+        props.map((p) => [p, token((v as Comp)[p] ?? null)]),
+      )
+    }
+  }
+  return { entity: b.entity, [comp]: null, $was: was }
+}
+
+/** How many of a component's owners one read of a sweep walks past. */
+export let PAGE = 1000
+
+// A component's owners, a page at a time in the order its rows were stored.
+// A declaration's query is tested against one page's owners at a time, so a
+// read costs a page however large the table and however few of its rows
+// expire: one read of the whole test walks every row in a single statement,
+// and holds a read lane for as long as that takes on a cold disk. The cursor
+// is the page's last owner, which a removal leaves standing (its tombstone
+// outlives the pass), so the walk never loses its place.
+async function* owners(
+  g: Access,
+  comp: string,
+  page: number,
+  paced: ReturnType<typeof pacer>,
+  signal?: AbortSignal,
+): AsyncGenerator<string[]> {
+  let after: string | undefined
+  while (!signal?.aborted) {
+    let rows = await paced(() =>
+      g.read(
+        and(
+          present(comp),
+          fields('entity.eid'),
+          limit(page),
+          ...after ? [past(after)] : [],
+        ),
+        { storageOrder: true },
+      )
+    )
+    if (!rows.length) return
+    let eids = rows.map((b) => b.entity.eid)
+    after = eids.at(-1)
+    yield eids
+    if (rows.length < page) return
+  }
 }
 
 // A pass's batches each hold the write lock while they apply, and its pages of

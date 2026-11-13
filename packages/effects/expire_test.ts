@@ -4,6 +4,7 @@ import { equal, ok, test } from '@yaks/testing'
 import { type Access, type Bundle, type Comp, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
+import { preparedStore } from '@yaks/sqlite/testing'
 import {
   DAY,
   expiration,
@@ -97,6 +98,31 @@ test('expire batches matching rows; preserves live runs, other components and un
   equal((await g.get(['cache']))[0].cache, undefined)
   equal(await expire(door, { now }), 0)
 })
+
+// A page's last owner expiring must not lose the walk its place, and no read
+// asks about more owners than a page holds.
+for (let [store, open] of [['ram', ram], ['sqlite', preparedStore]] as const) {
+  test(`${store}: expire walks owners a page at a time past expired cursors`, async () => {
+    let g = graph({ vocab, storage: open(vocab) })
+    let eids = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
+    await g.apply(
+      eids.map((eid, i) => run(eid, 'done', i % 3 == 1 ? recent : old)),
+      { trusted: true },
+    )
+    let asked: number[] = []
+    let door: Access = {
+      ...g,
+      read: (q, o) => {
+        asked.push(o?.eids?.length ?? 0)
+        return g.read(q, o)
+      },
+    }
+    equal(await expire(door, { batch: 1, page: 2, now }), 5)
+    ok(asked.every((n) => n <= 2))
+    let kept = await g.get(eids)
+    equal(kept.filter((b) => b.effect).map((b) => b.entity.eid), ['b', 'e'])
+  })
+}
 
 test('expire reselects if a matched run is revived between reading and applying', async () => {
   let g = make()

@@ -591,11 +591,13 @@ A relay without `save` only hands values on.
 
 **expire** is a component's query selecting its rows to remove. A component that
 declares none expires nothing. The [effects worker](../effects/README.md) sweeps
-every declaration in the composed vocabulary on startup and daily, removing
-matching components in batches through `apply()`. Other components on the entity
-remain; the graph deletes an entity left with only `created` and `updated`
-provenance stamps. An expired value is kept for no one: a body's bytes go with
-it unless another row names them
+every declaration in the composed vocabulary on startup and daily. It walks the
+component's rows a page at a time in storage order, tests each page against the
+query, and removes the matches in batches through `apply()`, so no read of the
+sweep costs more than a page however large the table. Other components on the
+entity remain; the graph deletes an entity left with only `created` and
+`updated` provenance stamps. An expired value is kept for no one: a body's bytes
+go with it unless another row names them
 ([@yaks/blob](../blob/README.md#expiring-bodies)), while the journal keeps its
 record of the write, an address in a body's case.
 
