@@ -57,8 +57,10 @@ test('an entity an inspector view links to opens on its own page, not Debug', as
     { view: 'Full', match: parse('.effect'), Render: own },
   ])
   try {
+    // A trace never travels the wire, so it opens from the cache, by the
+    // pair its store gave it.
     await opens({
-      entity: { eid: 't', num: 7 },
+      entity: { eid: 't', num: 7, prefix: 'T' },
       trace: { op: 'effect', name: 'session_run' },
     })
     // One with no number is addressed by its short eid, as a vocabulary

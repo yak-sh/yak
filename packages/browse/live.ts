@@ -16,7 +16,7 @@ import {
 // upstream. Retention lets reopens paint; ready separates loading from absent.
 // Never restore whole-db sync or an unbounded cache.
 import { IdError } from './types.ts'
-import { key } from '@yaks/id'
+import { key, keys } from '@yaks/id'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import {
   batch,
@@ -2360,8 +2360,8 @@ export let repoUrl = (start: Ent): string | undefined => repoTrace(start).url
 
 export let findEid = (id: string): string | undefined => {
   syncIds()
-  let k = key(id)
-  if (k) return numEids.get(k)
+  let ks = keys(id)
+  if (ks.length) return ks.map((k) => numEids.get(k)).find(Boolean)
   if (cached(id.toLowerCase())) return id.toLowerCase()
   let hex = shortHex(id)
   if (hex) {
