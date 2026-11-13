@@ -10,6 +10,7 @@ import { appStore, directoryOf } from './directory.ts'
 import { connectionsOf } from './connections.ts'
 import { KERNEL, meta } from './meta.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
+import { WINDOW } from './model-probe.ts'
 import { operating } from './operator.ts'
 import { drain } from './operator-store.ts'
 import { handleChannels, receive } from './operator-channels.ts'
@@ -209,7 +210,7 @@ let operator = operating(
       items,
       cost: 0.001,
     })
-  }, { context: 100_000, output: 32_000 }),
+  }, { context: WINDOW, output: 32_000 }),
 )
 handleChannels(operator, env)
 await receive(store, { space: spaceId, person, channel: 'chat' }, message)

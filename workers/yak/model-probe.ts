@@ -29,7 +29,14 @@ export let embeds = <A extends Runs>(ai: A): A => ({
       : ai.run(model, input, options),
 })
 
-export let modelPage = (input: number, output: number, context = 100_000) =>
+/** The window of the models the Operator asks (GLM-5.3 and its Flash on
+ * Workers AI), so the instructions and tools every Operator request carries
+ * fit a test's model as they fit those on yaks.app. */
+export let WINDOW = 1_048_576
+
+/** A model's page in the Workers AI catalogue, as models.ts reads it: its
+ * window and prices. */
+export let modelPage = (input: number, output: number, context = WINDOW) =>
   new Response(
     `Context Window ${context} tokens\n$${input} per M input tokens, $${output} per M output tokens`,
   )
