@@ -1,6 +1,14 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { col, type CreateTable, insert, lit, select, table } from '@yaks/sql'
+import {
+  col,
+  type CreateTable,
+  insert,
+  lit,
+  notNull,
+  select,
+  table,
+} from '@yaks/sql'
 import { columns, objects } from './physical.ts'
 import {
   classified,
@@ -154,6 +162,33 @@ test('a file sheds what its vocabulary stopped naming and holds nothing in', () 
   follow(db, b, () => void store.install(), narrow)
   assertEquals(stands(db), [['entity', 'text', 'mood'], ['jot', 'queue']])
   assertEquals(store.get(['n1'])[0].note, { text: 'hi' })
+})
+
+test('a file keeps a column SQLite will not drop, and sheds the rest', () => {
+  // `slot` is unique, `step`'s check names `lane`, and a view stands over a
+  // table that is gone, which SQLite refuses any column's drop for.
+  let held: CreateTable = {
+    ...queue,
+    cols: [
+      ...queue.cols,
+      { name: 'slot', type: 'text', unique: true },
+      { name: 'lane', type: 'text' },
+      { name: 'step', type: 'text', check: notNull(col('lane')) },
+      { name: 'gap', type: 'text' },
+    ],
+  }
+  let stray = {
+    t: 'create view' as const,
+    name: 'stray',
+    q: select({ cols: [col('x')], from: table('gone') }),
+  }
+  let db = preparedDriver(classified(snapshot(vocab, {}, [held, stray])))
+  let passes = 0
+  follow(db, a, () => void passes++, narrow)
+  assertEquals(
+    [columns(db, 'queue'), objects(db, { name: 'stray' }), passes],
+    [['entity', 'slot', 'lane'], [], 1],
+  )
 })
 
 for (

@@ -34,14 +34,23 @@ import {
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { sha256 } from '@yaks/graph/sha256'
-import { installed, meta, PRINTED, printed, prints } from './meta.ts'
+import {
+  analyzedAt,
+  installation,
+  installed,
+  meta,
+  PRINTED,
+  printed,
+  prints,
+  SCHEMA,
+} from './meta.ts'
 import { unit } from './unit.ts'
 import { build, holds as rowed } from './owe.ts'
 import { plan, planned } from './plan.ts'
 import { behind, declares, exact } from './ddl.ts'
 import { tables } from './layout.ts'
 import { recorded, unraised } from './raise.ts'
-import { columns, componentTables, words } from './physical.ts'
+import { columns, componentTables, pinned, words } from './physical.ts'
 
 /** The print of a composed schema: a store's own print (`Store.print`) and
  * every further statement the file needs, rendered. */
@@ -141,13 +150,97 @@ let valued = (driver: Driver, name: string, c: string): boolean =>
     limit: lit(1),
   })).length > 0
 
-/** The statements dropping what a file holds that `named` stopped naming: a
- * component table (./physical.ts `componentTables`) no statement makes and no
- * word names, once it holds no rows, and a column the statement making its
- * table lacks, once no row holds a value in it, after each index, trigger and
- * view that names it. A table that holds a row, and a column that holds a
- * value, stay as they stand. */
-export let shed = (driver: Driver, { vocab, beside = [] }: Named): Stmt[] => {
+/** A component's table, or a table and one of its columns. */
+export type Seat = readonly [table: string, column?: string]
+
+type Kind = 'index' | 'trigger' | 'view'
+let dropOf = (kind: Kind, name: string): Stmt => ({
+  t: 'drop',
+  kind,
+  name,
+  ifExists: true,
+})
+
+// The statements dropping `seat`: each view and trigger naming its table, or
+// each index, trigger and view naming the table and its column, which SQLite
+// refuses a column's drop for while they stand and a table's drop leaves
+// standing over nothing, and then the table or the column.
+let unseating = (driver: Driver, [t, c]: Seat): Stmt[] => [
+  ...catalogue(driver).flatMap((o) => {
+    if (o.type == 'table' || o.sql == null || !c && o.type == 'index') {
+      return []
+    }
+    let said = words(o.sql)
+    let names = said.has(t.toLowerCase()) && (!c || said.has(c.toLowerCase()))
+    return names ? [dropOf(o.type as Kind, o.name)] : []
+  }),
+  c
+    ? { t: 'alter table', table: t, drop: c }
+    : { t: 'drop', kind: 'table', name: t, ifExists: true },
+]
+
+// The view or trigger SQLite says will not stand once a column goes, which a
+// reading of the file did not find naming it: one over a table that is gone,
+// or one that names the column in a way its words do not show.
+let blocker = (e: unknown): Stmt | undefined => {
+  let said = e instanceof Error ? e.message : String(e)
+  let [, kind, name] = said.match(/error in (view|trigger) ([^\s:]+)/i) ?? []
+  return kind ? dropOf(kind.toLowerCase() as Kind, name) : undefined
+}
+
+// Run `stmts` in one unit; where SQLite names a view or a trigger that stops
+// them, run them again with it dropped first, once for each such.
+let run = (driver: Driver, stmts: Stmt[]): void => {
+  for (let first: Stmt[] = [];;) {
+    try {
+      return unit(driver, () => {
+        for (let s of [...first, ...stmts]) driver.query(s)
+      })
+    } catch (e) {
+      let more = blocker(e)
+      let again = more && first.some((s) => render(s).sql == render(more).sql)
+      if (!more || again) throw e
+      first = [...first, more]
+    }
+  }
+}
+
+// Where something may have changed what a store's install made (a drop that
+// took an index, a trigger or a view, or a writer that keeps no print), the
+// schema its receipt says goes, so the next install looks at the file rather
+// than taking it as it left it. The planner statistics it keeps beside stay.
+let unreceipted = (driver: Driver) => {
+  let held = installation(driver)
+  if (!held?.schema) return
+  if (held.statistics) analyzedAt(driver, '', held.statistics)
+  else meta(driver).del(SCHEMA)
+}
+
+/** Drop each of `seats` the file holds, a component's table or a column,
+ * whatever it holds, in one unit: for a host contracting what its words
+ * decided to let go of. Each view and trigger naming a table goes with it,
+ * and each index, trigger and view naming a column, which SQLite refuses the
+ * drop for while they stand; the next pass (`install`) makes again what the
+ * schema still wants of those. */
+export let unseat = (driver: Driver, seats: readonly Seat[]): void => {
+  let held = seats.filter(([t, c]) => {
+    let cols = columns(driver, t)
+    return c ? cols.includes(c) : cols.length > 0
+  })
+  if (!held.length) return
+  unit(driver, () => {
+    for (let seat of held) run(driver, unseating(driver, seat))
+    unreceipted(driver)
+  })
+}
+
+/** The drops of what a file holds that `named` stopped naming ({@link
+ * unseat}): a component table (./physical.ts `componentTables`) no statement
+ * makes and no word names, once it holds no rows, and a column the statement
+ * making its table lacks, once no row holds a value in it. A table that holds
+ * a row, a column that holds a value, and a column its table's own definition
+ * holds in place (./physical.ts `pinned`) stay as they stand. */
+export let shed = (driver: Driver, { vocab, beside = [] }: Named): Seat[] => {
   let made = new Map<string, Set<string>>()
   for (let s of [...plan(vocab, {}, !!driver.file).raised, ...beside]) {
     if (s.t != 'create table') continue
@@ -157,34 +250,32 @@ export let shed = (driver: Driver, { vocab, beside = [] }: Named): Stmt[] => {
   }
   let gone = componentTables(driver, [...made.keys(), ...vocab.all])
     .filter((name) => !rowed(driver, name, 1))
-  let unnamed = componentTables(driver, [], [...made.keys()]).flatMap((name) =>
-    columns(driver, name)
-      .filter((c) =>
-        !made.get(name)!.has(c.toLowerCase()) && !valued(driver, name, c)
-      )
-      .map((c) => [name, c] as const)
+  let defined = new Map(catalogue(driver).map((o) => [o.name, o.sql ?? '']))
+  let unnamed = componentTables(driver, [], [...made.keys()]).flatMap(
+    (name) => {
+      let held = pinned(defined.get(name) ?? '')
+      return columns(driver, name)
+        .filter((c) => {
+          let low = c.toLowerCase()
+          return !made.get(name)!.has(low) && !held.has(low) &&
+            !valued(driver, name, c)
+        })
+        .map((c): Seat => [name, c])
+    },
   )
-  let naming = catalogue(driver).filter((o) => {
-    if (o.type == 'table' || o.sql == null) return false
-    let said = words(o.sql)
-    return unnamed.some(([t, c]) =>
-      said.has(t.toLowerCase()) && said.has(c.toLowerCase())
-    )
-  })
-  return [
-    ...gone.map((name): Stmt => ({ t: 'drop', kind: 'table', name })),
-    ...naming.map((o): Stmt => ({
-      t: 'drop',
-      kind: o.type as 'index' | 'trigger' | 'view',
-      name: o.name,
-      ifExists: true,
-    })),
-    ...unnamed.map(([name, c]): Stmt => ({
-      t: 'alter table',
-      table: name,
-      drop: c,
-    })),
-  ]
+  return [...gone.map((name): Seat => [name]), ...unnamed]
+}
+
+// Drop one seat whole, or, where SQLite refuses it (a key, a unique column, a
+// check on another column naming it), leave it standing. Whether it went.
+let shedding = (driver: Driver, seat: Seat): boolean => {
+  try {
+    run(driver, unseating(driver, seat))
+    return true
+  } catch (e) {
+    if (/cannot drop|error in table/i.test(String(e))) return false
+    throw e
+  }
 }
 
 /** Bring a file to the composed schema `print` names: nothing, where the file
@@ -195,7 +286,8 @@ export let shed = (driver: Driver, { vocab, beside = [] }: Named): Stmt[] => {
  *
  * Given what the schema names, the pass first sheds what the file holds
  * beyond it ({@link shed}), which the pass makes again where the schema still
- * wants it (a view or a trigger that named a column shed with it). A file
+ * wants it (a view or a trigger that named a column shed with it). What SQLite
+ * refuses to drop stands, and the pass runs over it. A file
  * that shed something no longer stands at any other print it recorded, so
  * those are forgotten: an opener of the vocabulary that named it runs its pass
  * again. A host whose vocabulary may shrink for a while and grow back (an
@@ -210,10 +302,10 @@ export let follow = (
   if (printed(driver, print)) return false
   if (named) {
     unit(driver, () => {
-      let drops = shed(driver, named)
+      let drops = shed(driver, named).filter((seat) => shedding(driver, seat))
       if (!drops.length) return
-      for (let s of drops) driver.query(s)
       recorded(driver)
+      unreceipted(driver)
       for (let p of prints(driver)) {
         if (p != print) meta(driver).del(PRINTED + p)
       }
@@ -230,11 +322,14 @@ export let follow = (
 /** Forget that a file stands at `print`, so its next opener runs the pass
  * again: for a host whose file something that keeps no print may have changed,
  * the way a yaks.app store's older release, still a rollback away, installs
- * over whatever a print stands for. */
+ * over whatever a print stands for. The store's own install receipt is
+ * forgotten with it, so that install looks at the file again too. */
 export let forget = (driver: Driver, print: string): void => {
-  if (printed(driver, print)) {
-    unit(driver, () => meta(driver).del(PRINTED + print))
-  }
+  if (!printed(driver, print) && !installed(driver)) return
+  unit(driver, () => {
+    meta(driver).del(PRINTED + print)
+    unreceipted(driver)
+  })
 }
 
 /**

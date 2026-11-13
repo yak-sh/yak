@@ -20,7 +20,8 @@ import { mem } from '../../packages/sqlite/testing.ts'
 import { ddl as journalDdl } from '@yaks/journal'
 import { Store } from './graph.ts'
 import { loadVocab } from '@yaks/vocab'
-import { documented, install, respelled, unholed, unworded } from './migrate.ts'
+import { documented, respelled, unholed, unworded } from './migrate.ts'
+import { passed } from './store-schema.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { db, keep, slot } from './testing.ts'
 
@@ -747,6 +748,19 @@ let remainingWords = loadVocab({
     kept: { component: true, properties: { name: { type: 'string' } } },
   },
 })
+// A wake's schema pass over `words`, an app's or, `own`, one of the
+// platform's two stores. Each names a print and a stamp of its own, so every
+// one runs.
+let woke = 0
+let install = (d: typeof departed, words: typeof removedWords, own = false) =>
+  passed(d, {
+    vocab: words,
+    derived: {},
+    beside: [],
+    print: `wake ${++woke}`,
+    stamp: `stamp ${woke}`,
+    own,
+  }, null).left
 // An install, and the tables the store over the file would make by the first
 // write naming them, for rows written past it.
 let installed = (d: typeof departed, words: typeof removedWords) => {
@@ -758,18 +772,44 @@ departed.query(insert('entity', { eid: 'departed' }))
 departed.query(insert('lapsed', { entity: 1, agent: 'browser' }))
 departed.query(insert('kept', { entity: 1, name: 'survives' }))
 
-let departure = install(departed, remainingWords, {}, true)
+let departure = install(departed, remainingWords, true)
 let held = catalogue(departed, { name: 'lapsed' }).length
   ? scan(departed, 'lapsed')
   : []
 if (held.length) departed.query({ t: 'delete', from: 'lapsed' })
-let emptied = install(departed, remainingWords, {}, true)
+let emptied = install(departed, remainingWords, true)
 
 test('a removed component keeps its rows for a migration, and its table goes once empty', () => {
   equal([departure, emptied], [[], []])
   equal(held, [{ entity: 1, agent: 'browser' }])
   equal(catalogue(departed, { name: 'lapsed' }), [])
   equal(scan(departed, 'kept').map((r) => r.name), ['survives'])
+})
+
+// What of `kept` stands once a wake's words stop naming `note` and `mood`, of
+// which a row holds a value only in `mood`.
+let narrowed = (own: boolean) => {
+  let d = mem(), string = { type: 'string' }
+  installed(
+    d,
+    loadVocab({
+      $defs: {
+        kept: {
+          component: true,
+          properties: { name: string, note: string, mood: string },
+        },
+      },
+    }),
+  )
+  d.query(insert('entity', { eid: 'kept' }))
+  d.query(insert('kept', { entity: 1, name: 'n', mood: 'glad' }))
+  install(d, remainingWords, own)
+  return columns(d, 'kept')
+}
+
+test('a platform wake sheds a column its words stopped naming once no row holds a value there, and an app wake keeps it', () => {
+  equal(narrowed(true), ['entity', 'name', 'mood'])
+  equal(narrowed(false), ['entity', 'name', 'note', 'mood'])
 })
 
 let wakeDeparture = await (async () => {

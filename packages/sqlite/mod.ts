@@ -214,6 +214,7 @@ export {
   defined,
   heard,
   objects,
+  pinned,
   sole,
   type Stood,
 } from './physical.ts'
@@ -1595,7 +1596,9 @@ export {
   type Named,
   printFor,
   printOf,
+  type Seat,
   shed,
+  unseat,
 } from './follow.ts'
 
 export { doom } from './doom.ts'

@@ -4,8 +4,7 @@ import { insert } from '@yaks/sql'
 import { objects as catalogue, storage } from '@yaks/sqlite'
 import { preparedDriver, snapshot } from '../../packages/sqlite/testing.ts'
 import { loadVocab } from '@yaks/vocab'
-import { install, passed } from './migrate.ts'
-import { fitSchema } from './store-schema.ts'
+import { fitSchema, install, passed } from './store-schema.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 
 let ONE = '10000000-0000-4000-8000-000000000001'
@@ -28,8 +27,11 @@ let pass = (left: Error[] = []) => {
 let file = preparedDriver(snapshot(loadVocab({})))
 let shape = (print: string) => ({
   vocab: loadVocab({}),
+  derived: {},
+  beside: [],
   print,
   stamp: 'stamp',
+  own: false,
 })
 
 let older = shape('older'), first = pass(), again = pass(), same = pass()
@@ -59,7 +61,7 @@ let unfit = async () => {
       },
     })
   let d = preparedDriver(snapshot(words(false))), vocab = words(true)
-  install(d, words(false))
+  install(d, { vocab: words(false), derived: {}, beside: [] })
   for (let [i, eid] of [ONE, TWO].entries()) {
     d.query(insert('entity', { id: i + 1, eid }))
     d.query(insert('space', { entity: i + 1, slug: 'same' }))
@@ -72,6 +74,8 @@ let unfit = async () => {
       d,
       {
         vocab,
+        derived: {},
+        beside: [],
         print: 'unsatisfiable',
         stamp: 'stamp',
         own: false,

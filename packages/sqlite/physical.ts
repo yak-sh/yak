@@ -173,6 +173,35 @@ export let checks = (sql: string): Record<string, string> => {
   )
 }
 
+/**
+ * The columns a table's own definition holds in place, which SQLite refuses
+ * to drop: one its definition makes a key or unique, and every one a table
+ * constraint names. A column whose own check is all that names it drops with
+ * its check.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { pinned } from '@yaks/sqlite'
+ *
+ * let held = pinned(`create table t (entity integer primary key,
+ *   "Slug" text unique, a text, b text check (b > ''), c text, check (a > ''))`)
+ * assertEquals(
+ *   ['entity', 'slug', 'a', 'b', 'c'].filter((c) => held.has(c)),
+ *   ['entity', 'slug', 'a'],
+ * )
+ * ```
+ */
+export let pinned = (sql: string): Set<string> =>
+  new Set(
+    defs(sql.match(TOKEN) ?? []).flatMap((def) => {
+      let said = def.map(norm).filter((w) => /^[\w$]/.test(w))
+      if (CONSTRAINT.has(said[0] ?? '')) return said
+      return said.includes('primary') || said.includes('unique')
+        ? [said[0]]
+        : []
+    }),
+  )
+
 /** What the file's schema holds — each table, index, view and trigger, with
  * the table it is on and its definition — or the entries these fields name. */
 export let objects = (

@@ -1,51 +1,23 @@
-// What a Store's own storage is brought to at each wake (graph.ts): the schema
-// its vocabulary implies, raised over whatever the object holds ({@link
-// install}), changed definitions installed when that schema moves, a column
-// its vocabulary stopped naming dropped ({@link shed}), a journal its words no
-// longer keep dropped ({@link unjournaled}), and each slot the object
-// remembers rewritten into the one shape a deploy takes now ({@link
-// documented}, {@link unholed}, {@link unworded}, {@link respelled}).
-// {@link BOUNDARIES} names the stored shapes this code reads, for `yak admin
-// deploys`.
-import { adopt, indexed as textFields } from '@yaks/fts'
-import { blobRead, blobSchema } from '@yaks/blob'
-import { ddl as journalDdl, dropDdl as journalDrop } from '@yaks/journal'
-import {
-  rekey,
-  schema as vectorSchema,
-  watch as watchEmbedding,
-} from '@yaks/embedding'
-import { texts } from './embedding-read.ts'
-import { reserved } from '@yaks/durable-object/sql'
+// What an older release left in a Store that the code a deploy takes now no
+// longer reads, moved out of the way at each wake: a journal its words no
+// longer keep ({@link unjournaled}), a column a finished contract emptied
+// ({@link lifecycleColumns}), and each slot the object remembers rewritten
+// into the one shape a deploy takes now ({@link documented}, {@link unholed},
+// {@link unworded}, {@link respelled}). The schema its words compose is
+// store-schema.ts's. {@link BOUNDARIES} names the stored shapes this code
+// reads, for `yak admin deploys`.
+import { dropDdl as journalDrop } from '@yaks/journal'
 import {
   catalogue,
   col,
-  type Derived,
   type Driver,
-  erect,
-  indexName,
   lit,
   notNull,
   select,
   table,
 } from '@yaks/sql'
-import {
-  backfill,
-  componentTables,
-  epoch,
-  epochAt,
-  fit,
-  follow,
-  forget,
-  holds,
-  indexed,
-  recorded,
-  retabled,
-  retired,
-  statements,
-} from '@yaks/sqlite'
-import { build, holds as rowed } from '@yaks/sqlite/owe'
-import type { Index, Vocab } from '@yaks/vocab'
+import { columns, unseat } from '@yaks/sqlite'
+import type { Vocab } from '@yaks/vocab'
 
 import type { Bundle, Comp } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
@@ -385,207 +357,23 @@ export let BOUNDARIES = [
   'yak/store/number-letter/1',
 ]
 
-/** A column dropped from a table. */
-let unseat = (name: string, column: string) => ({
-  t: 'alter table' as const,
-  table: name,
-  drop: column,
-})
-
-/**
- * Every definition of one type that is this object's — the single place this
- * file learns what tables there are.
- *
- * `reserved` (@yaks/durable-object) is what it is not: SQLite's catalogue and
- * Cloudflare's own tables. The runtime lists `_cf_KV` here like any other and
- * then refuses to read it — which is how a pass that took `sqlite_master` at
- * its word threw `SQLITE_AUTH` in every deployed object and none of the local
- * ones, where nothing creates that table (T-34019).
- */
-let named = (d: Driver, type: string): { name: string; sql: string }[] =>
-  catalogue(d)
-    .filter((t) => t.type == type && !reserved(t.name))
-    .map((t) => ({ name: t.name, sql: t.sql ?? '' }))
-
-let columns = (d: Driver, name: string): string[] =>
-  d.query({ t: 'pragma', name: 'table_info', arg: name })
-    .map((r) => String(r.name))
-
-/**
- * Every definition this object stands on, dropped: its views, its triggers and
- * its full-text indexes.
- *
- * They hold no rows of their own — a view is a query, a trigger is a rule, and
- * an external-content FTS5 index is an inverted copy of rows that live
- * somewhere else — and `create ... if not exists` says nothing about one that is
- * already standing. This is only for explicit column contraction: definitions
- * may still name the column being shed. Installation recreates the missing
- * definitions and refills affected indexes. Ordinary release fitting keeps
- * unchanged definitions. Dropping a virtual table takes its shadow tables.
- */
-export let recut = (d: Driver) => {
-  let drop = (kind: 'table' | 'index' | 'view' | 'trigger', name: string) =>
-    d.query({ t: 'drop', kind, name, ifExists: true })
-  for (let t of named(d, 'trigger')) drop('trigger', t.name)
-  for (let v of named(d, 'view')) drop('view', v.name)
-  for (let f of shadowed(d)) drop('table', f)
-}
-
-let sameIndex = (a: Index, b: Index) =>
-  a.unique == b.unique &&
-  a.props.join('\0') == b.props.join('\0') &&
-  (a.present ?? []).join('\0') == (b.present ?? []).join('\0')
-
-/** Retire indexes whose declaration or name changed before raising the next
- * schema: a component the next one adds may take an index's old name. A
- * release candidate calls this inside a transaction it rolls back; the serving
- * store calls it when the directory selects that release. */
-export let retire = (d: Driver, before: Vocab, after: Vocab) => {
-  for (let comp of before.all) {
-    let kept = after.indexes(comp)
-    for (let old of before.indexes(comp)) {
-      let name = indexName(before, comp, old.props)
-      if (
-        kept.some((now) =>
-          sameIndex(old, now) && indexName(after, comp, now.props) == name
-        )
-      ) continue
-      d.query({ t: 'drop', kind: 'index', name, ifExists: true })
-    }
-  }
-}
-
-/**
- * A column its vocabulary stopped naming, dropped (vocab.ts `grew`). SQLite
- * refuses to drop a column an index, a trigger or a view names, so `recut()`
- * runs first and indexes no longer declared, changed, or naming the column go
- * with it. The vocabularies say which indexes remain; `install()` must not
- * mistake an unchanged unique constraint for a new one after this column is
- * shed. Returns whether the column was dropped.
- */
-export let shed = (
-  d: Driver,
-  before: Vocab,
-  after: Vocab,
-  name: string,
-  prop: string,
-) => {
-  if (!columns(d, name).includes(prop)) return false
-  recut(d)
-  let indexes = catalogue(d).filter((i) =>
-    i.type == 'index' && i.tbl_name == name && i.sql != null
-  )
-  let kept = new Set(
-    before.indexes(name)
-      .filter((old) =>
-        ![...old.props, ...(old.present ?? [])].includes(prop) &&
-        after.indexes(name).some((now) => sameIndex(old, now))
-      )
-      .map((i) => indexName(before, name, i.props)),
-  )
-  for (let i of indexes) {
-    if (kept.has(i.name)) continue
-    d.query({ t: 'drop', kind: 'index', name: i.name, ifExists: true })
-  }
-  d.query(unseat(name, prop))
-  return true
-}
-
-/** The schema a vocabulary implies, raised over whatever the object holds.
- * Only the tables that stood before it can be behind their vocabulary
- * (@yaks/sqlite `fit`), so a fresh object is asked nothing about its columns,
- * keys or checks. What it had to leave undone comes back for the caller to
- * report, and the store serves the shape it holds: a table `fit` left as it
- * stood, and a new unique index the rows already there break (@yaks/sqlite
- * `build`). */
-export let install = (
-  d: Driver,
-  vocab: Vocab,
-  derived: Derived = {},
-  own = false,
-): Error[] => {
-  // Retired first: a component may take a name an index held. A component's
-  // own table, indexes and search are made by its first write
-  // (@yaks/sqlite `raise`), so only what stands is raised here.
-  for (let stmt of retired(d, vocab)) d.query(stmt)
-  erect(d, holds(d, vocab, retabled(d, vocab, derived)))
-  let unfit = fit(d, vocab)
-  unfit.push(...build(d, holds(d, vocab, indexed(vocab))))
-  // Search is app composition, after all indexed columns have been raised:
-  // the full-text indexes, and the table the vectors are kept in beside the
-  // triggers that note which of them changed (@yaks/embedding). The triggers
-  // that queue text to embed are the sweep's own (graph.ts `#embedding`).
-  adopt(d, textFields(vocab), derived, { heal: false })
-  rekey(statements(d))
-  erect(d, vectorSchema())
-  // Only the platform owns the complete vocabulary of its own stores. An
-  // app declaration can shrink without contracting its data (old releases,
-  // restored vocab keys): only its explicit contract door may remove rows.
-  // A removed platform word's table goes once it is empty: until a mover rule
-  // has moved or deleted its rows, they are the rule's to read, and a release
-  // rolled back reads them again. Discover component tables structurally, not
-  // by name: the object also holds infrastructure, search shadows and
-  // migration work which are not vocabulary.
-  let departed = own ? componentTables(d, [...vocab.all, 'tombstone']) : []
-  for (let name of departed.filter((name) => !rowed(d, name, 1))) {
-    d.query({ t: 'drop', kind: 'table', name })
-  }
-  if (vocab.comp('archetype')) {
-    backfill(d, false)
-  }
-  // Which component tables stand, for every reader to know from one row.
-  recorded(d)
-  // The physical schema stamp establishes the adapter's readiness. Mint
-  // lineage on installation only; later reads can trust the stamp without
-  // asking the adapter to inspect signatures or write missing metadata.
-  if (!unfit.length && !epochAt(d)) epoch(d)
-  return unfit
-}
-
-// A full-text index is several tables — the virtual one and its shadows — and
-// the shadows are derived bytes nobody restores from. The virtual table's own
-// name prefixes every one of them, which is how they are told apart.
-let shadowed = (d: Driver): string[] =>
-  named(d, 'table').filter((t) => /using\s+fts\d/i.test(t.sql)).map((t) =>
-    t.name
-  )
-
-/** The interruption contract emptied these cells before making them computed. */
+/** The column the interruption contract emptied before `attempt.state` and
+ * `execution.state` became computed (3ec6d595e), dropped where no row holds a
+ * value in it. An app's store keeps a column its words stopped naming, so
+ * this is the one such column every store loses. A value still there stays,
+ * read by nothing, since the words compute the state. */
 export let lifecycleColumns = (d: Driver, vocab: Vocab) => {
-  for (let name of ['attempt', 'execution']) {
-    if (
-      !vocab.prop(name, 'state')?.computed ||
-      !columns(d, name).includes('state')
-    ) continue
-    let [held] = d.query(
-      select({
-        cols: [lit(1)],
-        from: table(name),
-        where: notNull(col('state')),
-        limit: lit(1),
-      }),
-    )
-    if (held) throw new Error(`${name}.state contract has not completed`)
-    shed(d, vocab, vocab, name, 'state')
-  }
-}
-
-/** The schema a vocabulary implies, raised over what the object holds and
- * its search watched. Only changed definitions are installed: unrelated words
- * must not discard search indexes or audit every entity on the request that
- * discovers them. What it had to leave undone comes back. */
-export let raised = (d: Driver, vocab: Vocab, own = false): Error[] => {
-  lifecycleColumns(d, vocab)
-  erect(d, blobSchema())
-  if (vocab.comp('_tx')) erect(d, journalDdl())
-  let left = [
-    ...unjournaled(d, vocab),
-    ...install(d, vocab, blobRead(vocab), own),
-  ]
-  if (!left.length) {
-    watchEmbedding(statements(d), texts(vocab, blobRead(vocab)))
-  }
-  return left
+  let emptied = ['attempt', 'execution'].filter((name) =>
+    vocab.prop(name, 'state')?.computed &&
+    columns(d, name).includes('state') &&
+    !d.query(select({
+      cols: [lit(1)],
+      from: table(name),
+      where: notNull(col('state')),
+      limit: lit(1),
+    })).length
+  )
+  unseat(d, emptied.map((name) => [name, 'state'] as const))
 }
 
 /** The journal's tables dropped from a store whose words keep no journal:
@@ -607,42 +395,4 @@ export let unjournaled = (d: Driver, vocab: Vocab): Error[] => {
         return [e as Error]
       }
     })
-}
-
-// Installation semantics participate in the Store print even when its words
-// did not change (for example, a component removed by an earlier release, the
-// journal an app store no longer keeps, or a component's table made by its
-// first write rather than here, @yaks/sqlite `raise`, which code that made
-// every table here must find a store still owes it).
-export let INSTALL = 5
-
-/** One wake's schema pass, for the print a vocabulary renders to and the
- * stamp an older release kept. The stamp decides when the pass (`raise`) runs
- * while that release can still run (a rollback): where the store holds
- * another, the print is forgotten and the pass runs again; where it holds this
- * one, a print the store lacks is recorded with no pass. A pass that leaves
- * something undone leaves the print unrecorded, so the next wake tries again,
- * and `stamp` is what the store is to record as its own once the pass ran
- * clean. */
-export let passed = (
-  d: Driver,
-  { vocab, print, stamp, own = false }: {
-    vocab: Vocab
-    print: string
-    stamp: string
-    own?: boolean
-  },
-  held: string | null,
-  raise = raised,
-): { left: Error[]; stamp: string | null } => {
-  let left: Error[] = []
-  let ran = false
-  if (held && held != stamp) forget(d, print)
-  follow(d, print, () => {
-    if (held == stamp) return
-    left = raise(d, vocab, own)
-    if (left.length) return false
-    ran = true
-  })
-  return { left, stamp: ran ? stamp : null }
 }

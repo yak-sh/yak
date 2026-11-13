@@ -2,8 +2,10 @@ import { formatted } from './query-text.ts'
 export { formatted } from './query-text.ts'
 import { servingAuthority } from './app-serving-authority.ts'
 import {
+  contract,
   fitOf,
   fitSchema,
+  install,
   KV,
   ownStore,
   reshapeSlots,
@@ -423,7 +425,7 @@ import {
 import { type Door, door } from '@yaks/api/receipts'
 import { keyed } from './writes.ts'
 import { apex, url } from '@yaks/platform/host'
-import { install, retire, shed } from './migrate.ts'
+
 import {
   appDerived,
   appDoc,
@@ -2104,21 +2106,7 @@ export class Store extends Durable {
       appDoc(next),
       (name, prop) => this.#rows(name, prop),
     )
-    let before = appVocab(was)
-    let after = appVocab(changed.doc)
-    retire(this.#sql, before, after)
-    for (let name of [...changed.dropped, ...changed.retyped]) {
-      let [comp, prop] = name.split('.')
-      if (prop) shed(this.#sql, before, after, comp, prop)
-      else {
-        this.#sql.query({
-          t: 'drop',
-          kind: 'table',
-          name: comp,
-          ifExists: true,
-        })
-      }
-    }
+    contract(this.#sql, [...changed.dropped, ...changed.retyped])
     return JSON.stringify(changed.doc)
   }
 
@@ -3420,33 +3408,25 @@ export class Store extends Durable {
       },
       tx: (body) => this.#tx(body),
       drop: (paths) => {
-        let contracted = false
-        let retained = paths.filter((path) => {
+        // A property its words no longer declare goes at once; a component,
+        // or a property they still declare, leaves an app's declaration.
+        let declared = (path: string) => {
           let [comp, prop] = path.split('.')
-          if (!prop || this.#vocab.prop(comp, prop)) return true
-          contracted = shed(this.#sql, this.#vocab, this.#vocab, comp, prop) ||
-            contracted
-          return false
-        })
-        if (contracted) {
-          let errors = install(this.#sql, this.#vocab, blobRead(this.#vocab))
-          if (errors.length) throw errors[0]
-          watchEmbedding(statements(this.#sql), this.#texts.fields)
+          return !prop || !!this.#vocab.prop(comp, prop)
         }
-        if (!retained.length) return
-        paths = retained
+        let undeclared = paths.filter((path) => !declared(path))
+        if (undeclared.length) {
+          contract(this.#sql, undeclared.map((p) => p.split('.', 2).join('.')))
+          let [error] = install(
+            this.#sql,
+            shapeOf(this.#get('name') ?? '', this.#get('vocab')),
+          )
+          if (error) throw error
+        }
+        paths = paths.filter(declared)
+        if (!paths.length) return
         if (ownStore(this.#get('name') ?? '')) {
-          for (let path of paths) {
-            let [comp, prop, extra] = path.split('.')
-            if (!prop || extra || this.#vocab.prop(comp, prop)) {
-              throw new Error(`cannot contract declared core property ${path}`)
-            }
-            shed(this.#sql, this.#vocab, this.#vocab, comp, prop)
-          }
-          let errors = install(this.#sql, this.#vocab, blobRead(this.#vocab))
-          if (errors.length) throw errors[0]
-          watchEmbedding(statements(this.#sql), this.#texts.fields)
-          return
+          throw new Error(`cannot contract declared core property ${paths[0]}`)
         }
         let was = appDoc(this.#get('vocab') ?? '{}')
         this.#put(
@@ -5345,23 +5325,7 @@ export class Store extends Durable {
           body,
           (name, prop) => this.#rows(name, prop),
         )
-        let before = appVocab(was)
-        let after = appVocab(doc)
-        let prepare = () => {
-          retire(this.#sql, before, after)
-          for (let name of [...dropped, ...retyped]) {
-            let [comp, prop] = name.split('.')
-            if (prop) shed(this.#sql, before, after, comp, prop)
-            else {
-              this.#sql.query({
-                t: 'drop',
-                kind: 'table',
-                name: comp,
-                ifExists: true,
-              })
-            }
-          }
-        }
+        let prepare = () => contract(this.#sql, [...dropped, ...retyped])
         if (candidate) {
           // A draft is validated against the serving rows, but its schema
           // changes roll back. Only the declaration is kept for selection when

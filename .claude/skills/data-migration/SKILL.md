@@ -96,10 +96,11 @@ will do; otherwise run `bin/backup` before the migration.
 No schema install drops what a migration has yet to move, so the order is
 expand, move, contract, and nothing needs fencing. A table rebuild keeps every
 column its vocabulary stopped naming (packages/sqlite/ddl.ts `refitting`), and
-a platform store keeps a retired component's table until it is empty
-(workers/yak/migrate.ts `install`). So land the code that reads the new shape
-first: any process's install, on old code or new, leaves the old column and
-its values standing. Then move the rows while everything serves; a
+a platform store sheds a retired component's table, or a column its words
+stopped naming, only once nothing is held there (@yaks/sqlite `follow`, given
+what its schema names; workers/yak/store-schema.ts `passed`). So land the code
+that reads the new shape first: any process's install, on old code or new,
+leaves the old column and its values standing. Then move the rows while everything serves; a
 `yak restart` meanwhile starts new code, which never writes the old shape.
 Contraction, the script dropping the emptied column, is the one step with an
 order: it waits until every old-code process has exited, since one still
