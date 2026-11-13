@@ -262,6 +262,21 @@ let messageKind = (msg: unknown): SocketKind => {
   return 'other'
 }
 
+/** Answer a client's clock probe, `received` at the object's door: true
+ * when the frame was one, on a socket still open. Nothing else is read or
+ * written, so an object answers one before it opens anything. */
+export let probed = (
+  ws: Wire,
+  data: unknown,
+  received: number = Date.now(),
+): boolean => open(ws) && answered(ws, decode(data), received)
+
+let answered = (
+  ws: Wire,
+  input: ReturnType<typeof decode>,
+  received: number,
+) => clockReply(ws, 'value' in input ? input.value : null, received)
+
 /**
  * Wire a Durable Object's sockets to a subscription registry. The object keeps
  * one of these and calls it from its three handlers:
@@ -631,9 +646,7 @@ export let sockets = (
       if (!open(ws)) return
       let received = Date.now()
       let input = decode(data)
-      if (clockReply(ws, 'value' in input ? input.value : null, received)) {
-        return
-      }
+      if (answered(ws, input, received)) return
       let run = () => {
         let held = ws.deserializeAttachment() as Held | null
         let msg = 'value' in input ? input.value : undefined

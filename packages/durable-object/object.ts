@@ -77,9 +77,23 @@ export type Opened = {
   subs?: Subs
   /** What its alarm works, in order (`./alarm.ts`). */
   works?: Record<string, Work>
-  /** A frame from one of its sockets: the sockets' own `message` unless the
-   * object reads frames first. */
-  frame?(ws: Wire, data: string | ArrayBuffer): unknown
+  /** Whether the object takes a socket's frame or close now. One it does
+   * not is let go unanswered, before anything is asked of its sockets, a
+   * clock probe included. */
+  admit?(ws: Wire): boolean | Promise<boolean>
+  /** The sockets serving now, where the object makes its own over
+   * subscriptions it remakes (`subs` makes them once), asked once a frame or
+   * close is admitted and a clock probe answered. None hangs a frame's
+   * socket up: the page must open another. */
+  live?(): Sockets | undefined | Promise<Sockets | undefined>
+  /** A frame from one of its sockets, given `take`, the sockets' own reading
+   * of it, which answers whether they took it: the object reads frames
+   * itself, or around them. */
+  frame?(
+    ws: Wire,
+    data: string | ArrayBuffer,
+    take: () => Promise<boolean>,
+  ): unknown
 }
 
 /** What makes one kind of object. */
@@ -244,14 +258,41 @@ export class Durable {
     })
   }
 
-  /** A frame from one of the object's sockets. */
+  // What a socket's entry finds: what the object opened, if it takes the
+  // socket now.
+  async #admitted(ws: Wire): Promise<Opened | undefined> {
+    let opened = await this.open()
+    if (!opened.admit || await opened.admit(ws)) return opened
+  }
+
+  // The sockets serving now.
+  #sockets(opened: Opened) {
+    return opened.live ? opened.live() : this.#live
+  }
+
+  /** A frame from one of the object's sockets. A clock probe is answered
+   * once the frame is admitted, before the sockets are asked; each frame
+   * they read runs inside `around`, as `ws <kind>`. */
   webSocketMessage(ws: Wire, data: string | ArrayBuffer): void | Promise<void> {
+    let received = Date.now()
     return this.#around('socket', async () => {
       try {
-        let opened = await this.open()
-        await (opened.frame
-          ? opened.frame(ws, data)
-          : this.#live?.message(ws, data))
+        let opened = await this.#admitted(ws)
+        if (!opened) return
+        let { probed } = await import('./sockets.ts')
+        if (probed(ws, data, received)) return
+        let take = async () => {
+          let live = await this.#sockets(opened)
+          if (!live) return hangUp(ws)
+          await live.message(
+            ws,
+            data,
+            (kind, work) =>
+              this.#around(`ws ${kind}`, async () => await work()),
+          )
+          return true
+        }
+        await (opened.frame ? opened.frame(ws, data, take) : take())
       } catch (error) {
         await this.spec.report(error, 'webSocketMessage')
       }
@@ -260,6 +301,27 @@ export class Durable {
 
   /** One of its sockets went away. */
   webSocketClose(ws: Wire): void | Promise<void> {
-    return this.#live?.close(ws)
+    return this.#around('socket close', async () => {
+      try {
+        let opened = await this.#admitted(ws)
+        if (opened) await (await this.#sockets(opened))?.close(ws)
+      } catch (error) {
+        await this.spec.report(error, 'webSocketClose')
+      }
+    })
   }
+
+  /** One of its sockets failed, which is it going away. */
+  webSocketError(ws: Wire, _error: unknown): void | Promise<void> {
+    return this.webSocketClose(ws)
+  }
+}
+
+// A socket the object will not serve, closed for the page to open another:
+// it was not taken.
+let hangUp = (ws: Wire) => {
+  try {
+    ws.close?.(1012, 'refused')
+  } catch { /* already gone */ }
+  return false
 }

@@ -230,6 +230,13 @@ socket is the door's to accept, through `accept(request)`, after whatever the
 door checks. The first entry on a new `version` arms the alarm, which takes up
 what the object owes: a deploy restarts it idle.
 
+A socket's frame or close is the object's to `admit` first: one it does not is
+let go unanswered. A clock probe is answered next, before the sockets are asked.
+An object that makes its own sockets, over subscriptions it remakes, answers
+them from `live()`; none closes a frame's socket, for the page to open another.
+`frame(ws, data, take)` reads a frame itself, or around `take`, the sockets' own
+reading. A socket's error is its close.
+
 `clock(ctx.storage, works, options?)` is the alarm loop the class runs. Each
 ring gives every work one slice (`SLICE`, ten seconds), and each answers when it
 is next owed; the alarm is set for the soonest. While a slice runs the alarm

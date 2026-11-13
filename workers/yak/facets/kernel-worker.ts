@@ -96,6 +96,7 @@ export let BUILDER = [
   'webSocketMessage',
   'webSocketClose',
   // @yaks/durable-object `Durable`'s own.
+  'webSocketError',
   'specify',
   'open',
   'accept',

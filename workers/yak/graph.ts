@@ -163,7 +163,6 @@ import {
 import {
   api,
   type Authenticate,
-  clockReply,
   decode,
   type Handler,
   json,
@@ -3058,23 +3057,64 @@ export class Store extends Durable {
       Promise.resolve({
         serve: (request: Request) => this.fetch(request),
         works: this.#works,
+        // A dormant store hears no socket, and answers no clock probe.
+        admit: () => this.#awake(),
+        live: this.#listening,
+        frame: this.#framed,
       }),
     report: (error, entry) =>
       defect(error, { request: entry, store: this.#name() }),
     alarm: { now: this.#now, retry: Store.RETRY },
-    around: (entry, work) =>
-      entry == 'alarm'
-        ? this.#traced('alarm', async () => {
+    around: <T>(entry: string, work: () => Promise<T>) => {
+      let profiled = (kind: string) =>
+        this.#profile ? this.#profile.run(kind, work) : work()
+      let flushed = (traced: string, kind?: string) =>
+        this.#traced(traced, async () => {
           try {
-            return await (this.#profile
-              ? this.#profile.run('alarm', work)
-              : work())
+            return await (kind ? profiled(kind) : work())
           } finally {
             this.#profile?.flush()
           }
         })
-        : work(),
+      if (entry == 'alarm') return flushed('alarm', 'alarm')
+      if (entry == 'socket') return flushed('ws message')
+      if (entry == 'socket close') return profiled('ws close')
+      return entry.startsWith('ws ') ? profiled(entry) : work()
+    },
   })
+
+  // The sockets serving now, once the store is started and no draft is
+  // being prepared. A hibernated socket outlives a deploy, so one can wake
+  // an object whose schema refused to stand: it has none, and the page must
+  // reopen the socket.
+  #listening = async (): Promise<Sockets | undefined> => {
+    await this.#ensureStarted()
+    while (this.#draft) await this.#draft
+    return this.#refused == null ? this.#live : undefined
+  }
+
+  // A frame the sockets took, as this store notes it: a query in a retired
+  // spelling (`#spoke`), and an app's page asking or relaying, which is its
+  // use (`#used`).
+  #framed = async (
+    ws: Wire,
+    data: string | ArrayBuffer,
+    take: () => Promise<boolean>,
+  ) => {
+    if (!await take()) return
+    let input = decode(data)
+    let message = 'value' in input ? input.value : null
+    if (!message || typeof message != 'object') return
+    if ('subscribe' in message) this.#spoke(message.subscribe)
+    if ('ask' in message) this.#spoke(message.ask)
+    let held = ws.deserializeAttachment() as { read?: ReadOpts } | null
+    let active = storeKind(this.#get('name') ?? '') == 'app' &&
+      !held?.read?.administrative &&
+      (('ask' in message && typeof message.ask == 'string') ||
+        ('relay' in message && Array.isArray(message.relay) &&
+          message.relay.length))
+    if (active && ws.readyState == 1) this.#used()
+  }
 
   // A work of the store's own: worked once it is awake and started, inside
   // the draft gate (`#enter`), and only while `may` holds. A dormant store
@@ -5944,95 +5984,5 @@ export class Store extends Durable {
     } catch {
       return 0
     }
-  }
-
-  /** A frame from a client: a subscription opened or closed. */
-  override webSocketMessage(
-    ws: Wire,
-    data: string | ArrayBuffer,
-  ): Promise<void> {
-    let received = this.#now()
-    return this.#traced(
-      'ws message',
-      () => this.#socketMessage(ws, data, received),
-    )
-  }
-
-  #socketMessage(
-    ws: Wire,
-    data: string | ArrayBuffer,
-    received: number,
-  ): void | Promise<void> {
-    let run = async (): Promise<void> => {
-      let input = decode(data)
-      // Keep the dormancy gate below, but answer clock probes before booting
-      // the graph or recovering any subscription/ack attachments.
-      if (
-        ws.readyState == 1 &&
-        clockReply(ws, 'value' in input ? input.value : null, received)
-      ) return
-      await this.#ensureStarted()
-      if (this.#draft) {
-        return this.#draft.then(() => this.#socketMessage(ws, data, received))
-      }
-      // A hibernated socket outlives a deploy, so one can wake an object
-      // whose schema refused to stand. The page must reopen the socket.
-      if (this.#unbuilt) return void this.#hangUp(ws)
-      try {
-        let prof = this.#profile
-        let message = 'value' in input ? input.value : null
-        if (message && typeof message == 'object') {
-          if ('subscribe' in message) this.#spoke(message.subscribe)
-          if ('ask' in message) this.#spoke(message.ask)
-        }
-        let held = ws.deserializeAttachment() as { read?: ReadOpts } | null
-        let active = storeKind(this.#get('name') ?? '') == 'app' &&
-          !held?.read?.administrative && message &&
-          typeof message == 'object' &&
-          (('ask' in message && typeof message.ask == 'string') ||
-            ('relay' in message && Array.isArray(message.relay) &&
-              message.relay.length))
-        await this.#live.message(
-          ws,
-          data,
-          prof ? (kind, work) => prof.run(`ws ${kind}`, work) : undefined,
-        )
-        if (active && ws.readyState == 1) this.#used()
-      } finally {
-        this.#profile?.flush()
-      }
-    }
-    return after(this.#awake(), (awake) => awake ? run() : undefined)
-  }
-
-  /** That client went away. */
-  override webSocketClose(ws: Wire): void | Promise<void> {
-    let run = async (): Promise<void> => {
-      await this.#ensureStarted()
-      if (this.#draft) return this.#draft.then(() => this.webSocketClose(ws))
-      if (!this.#unbuilt) return this.#live.close(ws)
-    }
-    return after(
-      this.#awake(),
-      (awake) =>
-        awake
-          ? (this.#profile ? this.#profile.run('ws close', run) : run())
-          : undefined,
-    )
-  }
-
-  webSocketError(ws: Wire, _error: unknown): void | Promise<void> {
-    return this.webSocketClose(ws)
-  }
-
-  /** Whether the boot refused, so nothing above the storage was raised. */
-  get #unbuilt(): boolean {
-    return this.#refused != null
-  }
-
-  #hangUp(ws: Wire) {
-    try {
-      ;(ws as Closable).close?.(1012, 'refused')
-    } catch { /* already gone */ }
   }
 }
