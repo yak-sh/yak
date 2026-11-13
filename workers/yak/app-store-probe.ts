@@ -19,6 +19,8 @@ import { type Hibernation, sockets } from '@yaks/durable-object'
 import { runner } from '@yaks/tools'
 import { answerOf, toolEid } from '@yaks/tools/result'
 import { ram } from '@yaks/ram'
+import type { Driver } from '@yaks/sql'
+import { open } from '@yaks/sqlite/db'
 import { cleanup } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
@@ -43,10 +45,19 @@ export type Composition = {
   tools?: (vocab: Vocab) => Tool[]
   found?: (graph: Graph, text: string, opts: ReadOpts, limit: number) => Hit[]
   sockets?: Hibernation
+  /** The store's write log, which keeps its keyed writes' receipts: its own
+   * SQLite where it has one, or SQLite beside rows kept in RAM (`beside`). */
+  db?: () => Driver
 }
+
+/** A write log beside a store whose rows are in RAM, as a Store keeps its log
+ * beside its graph. RAM's transactions are not SQLite's, so here a receipt
+ * and its write do not commit as one. */
+export let beside = (): Driver => open(':memory:')
 
 export let appWire = (vocab: Vocab, name: string, composition: Composition) => {
   let g = composition.graph?.(vocab) ?? graph({ vocab, storage: ram(vocab) })
+  let db = composition.db?.() ?? beside()
   let request = new AsyncLocalStorage<Request>()
   let ignore = (row: Bundle) =>
     staleGrant(row, (person) => {
@@ -117,6 +128,7 @@ export let appWire = (vocab: Vocab, name: string, composition: Composition) => {
     administrative: req.headers.get('x-yak-administrative') == '1',
   })
   let serve = api({
+    db,
     graph: view,
     subs,
     authenticate,
@@ -205,10 +217,10 @@ export let appWire = (vocab: Vocab, name: string, composition: Composition) => {
   return { graph: g, subs, fetch, authenticate, live, write }
 }
 
-/** The graph API's receipt words beside the app's declared vocabulary. */
+/** The graph API's own words beside the app's declared vocabulary. */
 let wires = new WeakMap<Vocab, Vocab>()
 export let wireVocab = (words: Vocab) => {
-  if (words.comp('apply_receipt')) return words
+  if (words.comp('request')) return words
   let held = wires.get(words)
   if (!held) {
     wires.set(words, held = loadVocab([...words.docs, apiDoc], words.keywords))

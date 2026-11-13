@@ -75,25 +75,6 @@
           "description": "seconds a stopping server lets requests in flight finish before it stops anyway (default 10)"
         }
       }
-    },
-    "apply_receipt": {
-      "component": true,
-      "type": "object",
-      "sync": "none",
-      "journal": false,
-      "description": "A successful keyed API write as a graph kept it before receipts moved into the write log (yak_writes): read for its resend until it is moved there, and hidden from graph reads by the API graph plugin.",
-      "properties": {
-        "answer": {
-          "type": "string",
-          "stamped": true,
-          "description": "The canonical applied bundles as JSON, before caller answer projection."
-        },
-        "digest": {
-          "type": "string",
-          "stamped": true,
-          "description": "The SHA-256 digest of the exact JSON request body bound to this key and authenticated writer."
-        }
-      }
     }
   }
 }

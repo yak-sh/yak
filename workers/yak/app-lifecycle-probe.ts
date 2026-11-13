@@ -21,7 +21,7 @@ import {
   stageDeclaration,
   unseeded,
 } from './app-declarations.ts'
-import { appWire, wireVocab } from './app-store-probe.ts'
+import { appWire, beside, wireVocab } from './app-store-probe.ts'
 import { broadcast, drafted, released } from './page-notice.ts'
 import { expiring } from './expires.ts'
 import { storageDoor } from './page-storage.ts'
@@ -80,6 +80,8 @@ export let lifecycleStores = (
     let physical: Physical | undefined
     let persistence = () => physical ?? memory
     let sql: (Driver & Disposable) | undefined
+    // Its write log while its rows are in RAM, kept across its graphs.
+    let log: Driver | undefined
     let backend: Backend = storage || restored
       ? sqliteApp(
         (dispose) => disposals.add(dispose),
@@ -158,6 +160,7 @@ export let lifecycleStores = (
           : {}),
         graph: () => g,
         found: backend.found,
+        db: () => sql ?? (log ??= beside()),
       })
       if (physical) {
         g.use({

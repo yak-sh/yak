@@ -3,18 +3,15 @@
 // connection (./receipts.ts).
 import { equal, test } from '@yaks/testing'
 import { graph, token } from '@yaks/graph'
-import { derivedEid } from '@yaks/graph/identity'
-import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import type { Driver } from '@yaks/sql'
 import { api } from './route.ts'
-import { apiDoc } from './vocab.ts'
 import { shop } from './testing.ts'
 import { writes } from './log.ts'
-import { receiptOf, receipts } from './receipts.ts'
+import { receipts } from './receipts.ts'
 
-let vocab = loadVocab([...shop.docs, apiDoc])
+let vocab = shop
 let request = (key: string, text: string, path = '/apply') =>
   new Request(`http://local${path}`, {
     method: 'POST',
@@ -154,30 +151,4 @@ test('receipt keys are actor-scoped and dry runs do not consume them', () => {
     afterCheckAnswer.status,
   ], [200, 200, 200, 200])
   equal(scopedAnswers[0][0].entity.eid == scopedAnswers[1][0].entity.eid, false)
-})
-test('a receipt is named by its writer and key, as its graph entity was', () => {
-  equal(
-    receiptOf({ by: 'alice' }, 'k'),
-    derivedEid(`api receipt|${token(['alice', null, 'k'])}`),
-  )
-})
-
-// A receipt kept in the graph before receipts moved into the log, still
-// answering its resend until it is moved.
-let legacy = await opened()
-let answer = JSON.stringify([{
-  entity: { eid: 'kept' },
-  doc: { title: 'Kept' },
-}])
-await legacy.g.apply([{
-  entity: { eid: receiptOf(null, 'outbox:old') },
-  apply_receipt: { digest: token(simple), answer },
-}], { trusted: true })
-let resent = await legacy.door(request('outbox:old', simple))
-let resentText = await resent.text()
-let legacyDocs = await legacy.g.read('.doc')
-let hidden = await legacy.g.read('.apply_receipt')
-test('a receipt kept in the graph before the log answers its resend, hidden from reads', () => {
-  equal([resent.status, JSON.parse(resentText)[0].doc.title], [200, 'Kept'])
-  equal([legacyDocs.length, hidden.length], [0, 0])
 })

@@ -3,7 +3,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { type Bundle, graph } from '@yaks/graph'
 import { apiDoc } from '@yaks/api/vocab'
-import { receipts } from '../api/receipts.ts'
+import type { Plugin } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { sessionDoc } from '@yaks/session'
 import { sessionDerived } from '../session/status.ts'
@@ -36,6 +36,9 @@ let vocab = loadVocab([
     },
   },
 ], [kernelKeywords])
+// A mandatory scope, as a plugin hiding the server's request records holds.
+let hiding: Plugin = { name: 'hidden', scope: () => ({ entity: '!request' }) }
+
 let fixture = (path = ':memory:', overrides = {}, options = {}) => {
   let d = open(path)
   let s = storage(d, vocab, {
@@ -43,7 +46,7 @@ let fixture = (path = ':memory:', overrides = {}, options = {}) => {
     ...options,
   })
   s.install()
-  let g = graph({ storage: s, vocab, plugins: [archetypes(), receipts(d)] })
+  let g = graph({ storage: s, vocab, plugins: [archetypes(), hiding] })
   let query = d.query, n = 0
   d.query = (stmt) => {
     if (stmt.t == 'select' || stmt.t == 'raw') n++
@@ -181,7 +184,7 @@ let text = {
 let d = open(':memory:')
 let store = storage(d, vocab, { derived: sessionDerived(vocab, text) })
 store.install()
-let g = graph({ storage: store, vocab, plugins: [archetypes(), receipts(d)] })
+let g = graph({ storage: store, vocab, plugins: [archetypes(), hiding] })
 await g.apply([
   { entity: { eid: 'owner' }, session: {} },
   {
@@ -245,7 +248,7 @@ let policies: Record<string, string>[] = [
   {},
 ]
 for (let components of policies) {
-  let visibility = { entity: '!apply_receipt', components }
+  let visibility = { entity: '!request', components }
   for (let n = 0; n < 3; n++) {
     masked.push(await masks.g.get(['owner'], undefined, { visibility }))
     fresh.push(masks.s.get(['owner'], undefined, {
@@ -345,7 +348,7 @@ await pending.s.tx(async (tx) => {
     identities.push(await pending.g.get(['later']))
     pendingRows.push(tx.read('.session'))
     pendingViews.push(tx.read('.session', {
-      visibility: { entity: '!apply_receipt' },
+      visibility: { entity: '!request' },
     }))
   }
   let before = pending.reads()

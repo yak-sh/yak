@@ -18,7 +18,6 @@
  * @module
  */
 import { decode } from '@yaks/vocab/wire'
-import { after } from '@yaks/fp'
 import {
   type Actor,
   type Bundle,
@@ -61,16 +60,9 @@ import {
   waiting,
 } from './log.ts'
 
-type Stored = { digest: string; answer: string }
-// A keyed write on its way to the graph: the name it is kept under in the
-// log (`named`), the digest of its body, and the entity a receipt kept in the
-// graph before the log had it (`legacy`).
-type Asked = {
-  eid: string
-  digest: string
-  receipt: Request
-  empty: boolean
-}
+// A keyed write on its way to the graph: the request its receipt is kept
+// under in the log (log.ts `named`), and whether it carried no bundles.
+type Asked = { receipt: Request; empty: boolean }
 let pending = new Map<string, Asked>()
 let requestKey = '$apiReceipt'
 
@@ -94,64 +86,32 @@ let standing = (db: Driver) => {
 
 /** API-owned graph hooks over the host's write log (`db`), also loaded by
  * the box's graph facet: a keyed write's receipt is inserted in the
- * transaction that commits it, and a resend is told what it was told.
- *
- * TODO(T-165786): `legacy` reads a receipt kept as an `apply_receipt` entity
- * before receipts moved into the log, and keeps those entities hidden and
- * server-owned, until every box has moved them; then the component, its
- * scope and its guards go. */
+ * transaction that commits it, and a resend is told what it was told. */
 export let receipts = (db: Driver): Plugin => {
   let writes = new WeakMap<object, Asked>()
   return {
     name: '@yaks/api/receipts',
     requests: [requestKey],
-    // Mandatory scope applies before predicates/aggregates and to subscriptions.
-    // Transaction hooks use tx.get directly, not a caller-scoped graph read.
-    scope: () => ({ entity: '!apply_receipt' }),
-    authorize: (bundles, tx, _error, context) => {
-      if (!context?.trusted && bundles.some((b) => 'apply_receipt' in b)) {
-        throw new Refused('apply_receipt is server-owned')
+    authorize: (bundles, _tx, _error, context) => {
+      let marked = bundles.find((b) => requestKey in b)
+      if (!marked) return bundles
+      let key = marked[requestKey]
+      let held = typeof key == 'string' ? pending.get(key) : undefined
+      if (!held || !context?.transaction) {
+        throw new Refused('invalid API receipt capability')
       }
-      let deleted = bundles.filter((b) => b.$delete).map((b) => b.entity.eid)
-      let protect = deleted.length && !context?.trusted
-        ? tx.get(deleted, ['apply_receipt'])
-        : []
-      return after(protect, (rows) => {
-        if (rows.some((b) => b.apply_receipt)) {
-          throw new Refused('apply_receipt is server-owned')
-        }
-        let marked = bundles.find((b) => requestKey in b)
-        if (!marked) return bundles
-        let key = marked[requestKey]
-        let held = typeof key == 'string' ? pending.get(key) : undefined
-        if (!held || !context?.transaction) {
-          throw new Refused('invalid API receipt capability')
-        }
+      let name = held.receipt.headers.get(IDEMPOTENCY)!
+      // Its body bound: another body under the same key is refused here.
+      let was = first(db, name, held.receipt)
+      if (was?.state == 'applied') {
         let vocab = (context.graph as Graph).vocab
-        let told = (answer: string) => {
-          throw new Replay(decode(vocab, JSON.parse(answer)))
-        }
-        let name = held.receipt.headers.get(IDEMPOTENCY)!
-        // Its body bound: another body under the same key is refused here.
-        let was = first(db, name, held.receipt)
-        if (was?.state == 'applied') told(was.answer)
-        return after(tx.get([held.eid], ['apply_receipt']), (found) => {
-          let legacy = found[0]?.apply_receipt as Stored | undefined
-          if (legacy) {
-            if (legacy.digest != held.digest) {
-              throw new Refused(
-                'Idempotency-Key already used with a different body',
-              )
-            }
-            told(legacy.answer)
-          }
-          writes.set(context.transaction!, held)
-          return bundles.flatMap((b) => {
-            if (!(requestKey in b)) return [b]
-            let { [requestKey]: _key, ...rest } = b
-            return held.empty ? [] : [rest as Bundle]
-          })
-        })
+        throw new Replay(decode(vocab, JSON.parse(was.answer)))
+      }
+      writes.set(context.transaction, held)
+      return bundles.flatMap((b) => {
+        if (!(requestKey in b)) return [b]
+        let { [requestKey]: _key, ...rest } = b
+        return held.empty ? [] : [rest as Bundle]
       })
     },
     hooks: {
@@ -167,9 +127,8 @@ export let receipts = (db: Driver): Plugin => {
 }
 
 /** The name a writer's keyed write is kept under: the writer and its key as
- * one id, so one writer's key never reads another's receipt. It is the eid a
- * receipt kept in the graph had. */
-export let receiptOf = (actor: Actor | null, key: string): string =>
+ * one id, so one writer's key never reads another's receipt. */
+let nameOf = (actor: Actor | null, key: string): string =>
   derivedEid(
     `api receipt|${token([actor?.by ?? null, actor?.via ?? null, key])}`,
   )
@@ -198,12 +157,8 @@ export let received = async (
     throw new Refused('invalid API receipt capability')
   }
   let capability = crypto.randomUUID()
-  let eid = receiptOf(actor, key)
-  let digest = token(body)!
   pending.set(capability, {
-    eid,
-    digest,
-    receipt: named(eid, digest),
+    receipt: named(nameOf(actor, key), token(body)!),
     empty: !bundles.length,
   })
   try {
