@@ -1,7 +1,21 @@
 // Preact components over the shared structural Markdown renderer.
-import { type ComponentChildren, h, type VNode } from 'preact'
+import {
+  type ComponentChildren,
+  type Context,
+  createContext,
+  h,
+  type VNode,
+} from 'preact'
+import { useContext } from 'preact/hooks'
 import type { H } from '@yaks/render'
-import { blocks, parse, parseInline, render, safeHref } from './structural.ts'
+import {
+  blocks,
+  type Options,
+  parse,
+  parseInline,
+  render,
+  safeHref,
+} from './structural.ts'
 export * from './structural.ts'
 
 type Props = { children?: ComponentChildren }
@@ -39,13 +53,26 @@ export let Link = (
     class: 'Body_Link',
   }, children)
 
-/** Preact component shared by browser DOM and the terminal's Preact DOM. */
+/** What the host gives every `Markdown` beneath it: where an entity id leads
+ * for this reader, and how code is coloured. The browse app gives its own
+ * routes; a page whose reader cannot open entities gives none, and ids stay
+ * words. */
+export let Host: Context<Options> = createContext<Options>({})
+
+/** Preact component shared by browser DOM and the terminal's Preact DOM.
+ * `breaks: false` reads a document whose prose wraps across source lines. */
 export let Markdown = (
-  { source }: { source: string },
-): VNode => render(parse(source), h as H<ReturnType<typeof h>>)
+  { source, breaks }: { source: string; breaks?: boolean },
+): VNode =>
+  render(
+    parse(source, { breaks }),
+    h as H<ReturnType<typeof h>>,
+    useContext(Host),
+  )
 
 /** A line of Markdown in the line it stands in, such as a label in a button:
- * its inline markup, in a `span`. */
+ * its inline markup, in a `span`. Its ids stay words, since the line it
+ * stands in is usually itself the thing pressed. */
 export let MarkdownInline = (
   { source }: { source: string },
 ): VNode => h('span', null, ...blocks(parseInline(source), h as H<VNode>))

@@ -5,9 +5,11 @@ import { assert, assertEquals } from '@std/assert'
 import {
   blocks,
   headings,
+  Host,
   Markdown,
   MarkdownInline,
   parse,
+  refs,
   render,
   safeHref,
 } from './mod.ts'
@@ -83,12 +85,84 @@ test('a document is its blocks in an element of its own', () => {
 })
 
 test('Preact component produces ordinary web-compatible elements', () => {
-  let doc = Markdown({ source: '**hello**' })
-  assertEquals(doc.type, 'div')
+  let ui = mount(h(Markdown, { source: '**hello**' }))
+  try {
+    assertEquals(
+      ui.root.querySelector('div.Markdown strong')?.textContent,
+      'hello',
+    )
+  } finally {
+    ui.free()
+  }
+})
+
+// What a reader sees of the ids in some prose: each link as `[words](href)`,
+// the rest as its text, under a host that opens every id at `/id` but the ones
+// named `X-…`, which this reader cannot open.
+let opens = (id: string) => id.startsWith('X-') ? undefined : '/' + id
+let seen = (
+  source: string,
+  host: { refs?: typeof opens } = { refs: opens },
+) => {
+  let ui = mount(h(Host.Provider, { value: host }, h(Markdown, { source })))
+  try {
+    let p = ui.root.querySelector('.Markdown')!
+    for (let a of [...p.querySelectorAll('a')]) {
+      a.replaceWith(
+        `[${a.textContent}](${a.getAttribute('href')}${
+          a.getAttribute('data-ref') ? '' : ' unnamed'
+        })`,
+      )
+    }
+    return p.textContent
+  } finally {
+    ui.free()
+  }
+}
+
+test('an entity id in prose links where the host can open it', () => {
+  let uuid = '352e9920-08ae-436c-94e2-14bd02a37b2d'
+  let sha = '83f7b7460'.padEnd(40, 'a')
+  for (
+    let [source, want] of [
+      ['see T-123 and D-4.', 'see [T-123](/T-123) and [D-4](/D-4).'],
+      ['short #18bc9a78d1 here', 'short [#18bc9a78d1](/#18bc9a78d1) here'],
+      [`full ${uuid}`, `full [${uuid}](/${uuid})`],
+      [`commit ${sha}`, `commit [${sha}](/${sha})`],
+      ['[the plan](M-31946)', '[the plan](/M-31946)'],
+      ['quoted `83f7b74`', 'quoted [83f7b74](/83f7b74)'],
+      ['**C-9** in bold', '[C-9](/C-9) in bold'],
+      ['not X-1 for you', 'not X-1 for you'],
+      ['UTF-8, SHA-256, AT-1x, `T-5`', 'UTF-8, SHA-256, AT-1x, T-5'],
+      ['`decafed` and decafbad', '[decafed](/decafed) and decafbad'],
+      ['[out](https://a.b/T-1)', '[out](https://a.b/T-1 unnamed)'],
+    ]
+  ) assertEquals(seen(source), want, source)
+  // A host that gives no way to open entities leaves every id as its words.
+  assertEquals(seen('T-1 and [it](T-2)', {}), 'T-1 and it')
+})
+
+test('the ids a document names are read the way it links them', () => {
   assertEquals(
-    (doc.props as unknown as Record<string, unknown>).class,
-    'Markdown',
+    refs(parse('T-1, `T-2`, [plan](D-3), [web](https://x/T-4) and #abcdef')),
+    ['T-1', 'D-3', '#abcdef'],
   )
+})
+
+test('a host colours code as runs of classed text', () => {
+  let tokens = parse('```ts\nlet x\n```')
+  let code = (text: string, lang?: string) => [
+    { text: text.slice(0, 3), classes: ['hl-' + lang] },
+    { text: text.slice(3), classes: [] },
+  ]
+  let json = JSON.stringify(render(tokens, tree, { code }))
+  assert(
+    json.includes(
+      '{"tag":"span","props":{"class":"hl-ts"},"children":["let"]}',
+    ),
+    json,
+  )
+  assert(json.includes('" x"'), json)
 })
 
 test('Markdown mounts as safe semantic browser DOM', () => {

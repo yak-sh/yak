@@ -40,10 +40,19 @@ stay dim).
 
 The terminal lays out tables with aligned columns, wrapping, and subtle borders.
 Narrow tables switch to stacked header/value records. Markdown column alignment
-is preserved in the shared semantic cells. Code is styled but not syntax
-highlighted. Graph-entity linkification and repository-specific commit links are
-not provided. Applications can add those behaviors separately. Rendering does
-not fetch images or other remote content.
+is preserved in the shared semantic cells. Rendering does not fetch images or
+other remote content.
+
+Entity ids in prose are part of the grammar: a bare `T-123`, `#a1b2c3`, UUID or
+whole SHA parses as a `ref` token, and `[words](T-123)` is a link to one. The
+host says where each leads through `Refs`, `(id) => href | undefined`, passed as
+`{ refs }` to `render`/`blocks` or, for `Markdown`, given by the `Host` context.
+An id the host can open is an `a.Body_Ref` carrying `data-ref`; one it cannot
+open stays its words, and with no host every id is words. A code span holding a
+hex word (`` `1a2b3c4` ``) is asked about too, the way a commit is quoted. Code
+stays literal. `refs(tokens)` lists the ids a document names. The same options
+take `code(text, language)`, which colours a fenced block as runs of
+`{ text, classes }`; without it code is plain.
 
 Run `deno task test packages/markdown` from the repository root for parser,
 structural rendering and URL-safety tests.

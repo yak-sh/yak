@@ -1,23 +1,74 @@
 /** Markdown as structural nodes, never generated HTML or terminal escapes.
  * Uses the same GFM parser/version as the older canvas markdown renderer.
  */
-import { Lexer, type Token, type Tokens } from 'marked'
+import { Marked, type Token, type Tokens } from 'marked'
 import type { Child, H } from '@yaks/render'
 
 export { type Token } from 'marked'
 
+/** Where an entity id named in prose leads: an href for a reader who can open
+ * the entity, or nothing, and then the id stays words. The host gives it, since
+ * only the host knows its routes and its reader. It is asked for an id written
+ * bare (T-123, #a1b2c3, a UUID, a 40- or 64-hex SHA), for a link written to one
+ * ([the plan](T-123)), and for a code span holding a hex word, the way a commit
+ * is quoted (`1a2b3c4`), where a bare word like "decafed" never is. */
+export type Refs = (id: string) => string | undefined
+
+// An id is a word of its own: a T-123 at a boundary, whatever its letter (the
+// number names the entity), a #hex short id, a UUID or a whole SHA. UTF-8 and
+// SHA-256 stay words because their letters sit mid-word.
+let UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+let ID = `[A-Z]-\\d+|#[0-9a-fA-F]{6,64}|${UUID}|[0-9a-f]{64}|[0-9a-f]{40}`
+let START = new RegExp(`(?<![\\w#-])(?:${ID})(?![\\w-])`)
+let REF = new RegExp(`^(?:${ID})(?![\\w-])`)
+let NAMED = new RegExp(
+  `^(?:[A-Za-z]+-\\d+|#[0-9a-fA-F]{6,64}|${UUID}|[0-9a-f]{40}|[0-9a-f]{64})$`,
+)
+let HEX = /^[0-9a-f]{7,64}$/i
+
+/** Whether a link's target is an entity id rather than an address. */
+export let named = (href: string): boolean => NAMED.test(href)
+
+let lexer = new Marked({
+  gfm: true,
+  extensions: [{
+    name: 'ref',
+    level: 'inline',
+    start: (src: string) => src.match(START)?.index,
+    tokenizer: (src: string) => {
+      let m = REF.exec(src)
+      return m ? { type: 'ref', raw: m[0], text: m[0], id: m[0] } : undefined
+    },
+  }],
+})
+
 /** Parse GFM. `breaks` turns a single newline into a line break, which is what
  * a chat message or a terminal line wants and what a document does not: prose
- * wrapped at 80 columns would keep every one of those wraps. */
+ * wrapped at 80 columns would keep every one of those wraps. An entity id in
+ * the prose is a `ref` token of its own; code keeps its ids literal. */
 export let parse = (
   source: string,
   { breaks = true }: { breaks?: boolean } = {},
-): Token[] => Lexer.lex(source, { gfm: true, breaks })
+): Token[] => lexer.lexer(source, { ...lexer.defaults, breaks })
 
 /** Parse a line of GFM, such as a label or a title: its inline markup only,
  * with no paragraph around it. */
 export let parseInline = (source: string): Token[] =>
-  Lexer.lexInline(source, { gfm: true })
+  lexer.Lexer.lexInline(source, lexer.defaults)
+
+/** The entity ids a document names, in reading order: the same reading that
+ * decides what becomes a link, so code stays literal and a link written to an
+ * id counts as the id. */
+export let refs = (tokens: Token[]): string[] => {
+  let out: string[] = []
+  lexer.walkTokens(tokens, (t) => {
+    if (t.type == 'ref') out.push(String((t as Tokens.Generic).id))
+    else if (t.type == 'link' && named((t as Tokens.Link).href)) {
+      out.push((t as Tokens.Link).href)
+    }
+  })
+  return out
+}
 
 /** The words a heading is made of, with the markup dropped: a reader sees
  * these words, so the anchor is named after them. */
@@ -106,14 +157,40 @@ let bodyClass = (tag: string) =>
   `Body_${parts[tag]}` +
   (/^h[1-6]$/.test(tag) ? ` Body_Heading-${tag.slice(1)}` : '')
 
-/** The same semantic elements can be used outside a Markdown document. */
+/** What a host gives the renderer: where an entity id leads (`Refs`), and how
+ * a fenced block's code is coloured, as runs of text each with its classes. */
+export type Options = {
+  refs?: Refs
+  code?: (text: string, language?: string) => Run[]
+}
+
+/** A run of code text and the classes it is coloured with. */
+export type Run = { text: string; classes: string[] }
+
 /** The parsed tree's blocks through any @yaks/render host (including
  * Preact), for a caller that holds them in an element of its own, such as a
  * page's `Body`. HTML tokens remain text. Images are descriptive links, never
  * remote fetches.
  */
-export let blocks = <Node>(tokens: Token[], host: H<Node>): Child<Node>[] => {
+export let blocks = <Node>(
+  tokens: Token[],
+  host: H<Node>,
+  { refs, code }: Options = {},
+): Child<Node>[] => {
   let name = slugs()
+  // An id the host can open is an anchor carrying the id, so a host can give
+  // it its own click; one it cannot open is the words it was written as.
+  let ref = (id: string, ...words: Child<Node>[]): Child<Node>[] => {
+    let href = refs?.(id)
+    let link = href == null ? undefined : safeHref(href)
+    return link == null ? words : [
+      element(
+        'a',
+        { href: link, 'data-ref': id, class: 'Body_Ref' },
+        ...words,
+      ),
+    ]
+  }
   let element = (
     tag: string,
     props: Record<string, unknown> | null,
@@ -150,17 +227,34 @@ export let blocks = <Node>(tokens: Token[], host: H<Node>): Child<Node>[] => {
         return [element('em', null, ...children((t as Tokens.Em).tokens))]
       case 'del':
         return [element('del', null, ...children((t as Tokens.Del).tokens))]
-      case 'codespan':
-        return [element('code', null, (t as Tokens.Codespan).text)]
+      case 'codespan': {
+        let { text } = t as Tokens.Codespan
+        let quoted = element('code', null, text)
+        return HEX.test(text) ? ref(text, quoted) : [quoted]
+      }
+      case 'ref': {
+        let { id } = t as Tokens.Generic
+        return ref(String(id), String(id))
+      }
       case 'code': {
         let v = t as Tokens.Code
+        let lang = v.lang?.split(/\s/)[0] || undefined
+        let runs = code?.(v.text, lang)
         return [
           element(
             'pre',
             null,
-            element('code', {
-              class: v.lang ? 'language-' + v.lang.split(/\s/)[0] : undefined,
-            }, v.text),
+            element(
+              'code',
+              { class: lang ? 'language-' + lang : undefined },
+              ...runs
+                ? runs.map((r) =>
+                  r.classes.length
+                    ? host('span', { class: r.classes.join(' ') }, r.text)
+                    : r.text
+                )
+                : [v.text],
+            ),
           ),
         ]
       }
@@ -199,6 +293,7 @@ export let blocks = <Node>(tokens: Token[], host: H<Node>): Child<Node>[] => {
       }
       case 'link': {
         let v = t as Tokens.Link
+        if (named(v.href)) return ref(v.href, ...children(v.tokens))
         return [
           element(
             'a',
@@ -284,5 +379,13 @@ export let blocks = <Node>(tokens: Token[], host: H<Node>): Child<Node>[] => {
 
 /** Render the parsed tree through any @yaks/render host: its blocks, in the
  * document's own element. */
-export let render = <Node>(tokens: Token[], host: H<Node>): Node =>
-  host('div', { class: 'Markdown', wrap: '1' }, ...blocks(tokens, host))
+export let render = <Node>(
+  tokens: Token[],
+  host: H<Node>,
+  options?: Options,
+): Node =>
+  host(
+    'div',
+    { class: 'Markdown', wrap: '1' },
+    ...blocks(tokens, host, options),
+  )
