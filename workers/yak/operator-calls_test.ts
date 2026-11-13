@@ -1020,12 +1020,12 @@ test("a recorded call is the caller's conversation: their words theirs, its voic
   let { document } = parseHTML(`<div>${html}</div>`)
   let texts = (q: string) =>
     [...document.querySelectorAll(q)].map((e) => e.textContent!.trim())
-  let open = ':not(.More_Children *)'
+  let open = ':not(.More_Body *)'
   equal(texts(`.Transcript_Bubble${open}`), [
     'Hi Ellihu, how are you this evening?',
     'Hi, Ellahu, do any of my apps have errors right now?',
   ])
-  equal(texts('.More_Branch > .Transcript_Bubble'), [
+  equal(texts('div.More > .Transcript_Bubble'), [
     'Hi, Ellahu, do any of my apps have errors right now?',
   ])
   equal(texts(`.Transcript_Reply${open}`), [
@@ -1034,8 +1034,8 @@ test("a recorded call is the caller's conversation: their words theirs, its voic
     'Certainly, one moment.',
     'You have one open error in Mossvale.',
   ])
-  equal(texts('.More_Children .Transcript_Bubble'), [])
-  equal(texts('.More_Children .Transcript_Reply'), [
+  equal(texts('.More_Body .Transcript_Bubble'), [])
+  equal(texts('.More_Body .Transcript_Reply'), [
     'Mossvale has one open error.',
   ])
   equal(

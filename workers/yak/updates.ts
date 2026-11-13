@@ -12,7 +12,7 @@ import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
 import { type ComponentChildren, Fragment, h } from 'preact'
-import { Button, Card, Field, State } from '@yaks/ui/parts'
+import { Button, Card, Field, More, State } from '@yaks/ui/parts'
 import { operatorDoor } from './build-door.ts'
 import { chatPath, managePath } from './route.ts'
 import { spaceHost } from './host.ts'
@@ -139,20 +139,24 @@ export let needsList = (space: Space, { updates }: Updates): List => {
 // A way to send the Operator words about an update, opened in place.
 let replying = (space: Space, u: Update) =>
   h(
-    'details',
-    { class: 'Update_Reply' },
-    h('summary', { class: 'Update_Summary' }, `Ask ${space.operator} about it`),
-    form(
-      space,
-      [['reply', u.eid]],
-      h(Field, {
-        class: 'Update_Input',
-        lines: true,
-        name: 'say',
-        required: true,
-        'aria-label': `Your words to ${space.operator}`,
-      }),
-      h(Button, { mod: 'go', type: 'submit' }, 'Send'),
+    More,
+    { mod: 'quiet', class: 'Update_Reply' },
+    h(More.Summary, {}, `Ask ${space.operator} about it`),
+    h(
+      More.Body,
+      {},
+      form(
+        space,
+        [['reply', u.eid]],
+        h(Field, {
+          class: 'Update_Input',
+          lines: true,
+          name: 'say',
+          required: true,
+          'aria-label': `Your words to ${space.operator}`,
+        }),
+        h(Button, { mod: 'go', type: 'submit' }, 'Send'),
+      ),
     ),
   )
 

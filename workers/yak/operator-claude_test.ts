@@ -108,17 +108,18 @@ test('the conversation shows the context the Operator and each helper were given
   )
   let { document } = parseHTML(`<main>${html}</main>`)
   let named = (d: Element) => d.querySelector(':scope > summary')!.textContent
-  let layers = (d: Element) => [...d.querySelectorAll(':scope > .More_Framed')]
-  let [operator, helper, ...more] = [
-    ...document.querySelectorAll('.More_Framed:not(.More_Framed .More_Framed)'),
+  let layers = (d: Element) => [
+    ...d.querySelectorAll(':scope > .More_Body > .More'),
   ]
+  let [operator, helper, ...more] = [...document.querySelectorAll('.More')]
+    .filter((d) => named(d)!.startsWith('The context'))
   assertEquals(more, [])
   assertEquals(named(operator), `The context ${space.operator} was given`)
   assertEquals(named(helper), 'The context the helper was given')
   let first = (m: string) => asked.find((r) => r.model == m)!
   let shown = (at: Element) =>
-    [...at.children].find((c) => c.classList.contains('More_Text'))
-      ?.innerHTML ?? at.querySelector(':scope > p')?.textContent
+    at.querySelector(':scope > .More_Body > .Body')?.outerHTML ??
+      at.querySelector(':scope > .More_Body > p')?.textContent
   let drawn = (md: string) =>
     parseHTML(renderToString(reply(md))).document.querySelector(
       '.Transcript_Reply',
@@ -160,12 +161,12 @@ test('the conversation shows the context the Operator and each helper were given
     first(m).tools.map((t) => JSON.stringify(t))
   )
   assertEquals(
-    document.querySelectorAll('.More_Framed details > pre').length,
+    [operator, helper].flatMap((d) => layers(layers(d).at(-1)!)).length,
     new Set(offers).size,
   )
   // Each tool by its name, opening on its description and its schema.
   let spawn = first(SONNET).tools.find((t) => t.name == 'spawn')!
-  let tool = [...layers(operator).at(-1)!.querySelectorAll('details')].find(
+  let tool = layers(layers(operator).at(-1)!).find(
     (d) => named(d) == 'spawn',
   )!
   assertEquals(shown(tool), drawn(spawn.description))
@@ -174,12 +175,14 @@ test('the conversation shows the context the Operator and each helper were given
     JSON.stringify(spawn.parameters, null, 2),
   )
   // The helper's context sits inside the step that started it.
-  let step = helper.closest('.More_Inline')!
+  let step = helper.parentElement!.closest('.More')!
   assertEquals(named(step), 'Started a helper')
   let words = document.querySelectorAll(
     '.Transcript_Bubble, .Transcript_Reply, .Transcript_Error',
   )
-  for (let w of words) assertEquals(w.querySelector('.More_Framed'), null)
+  for (let w of words) {
+    assertEquals(w.textContent!.includes('The context'), false)
+  }
   let live = await frameOf(store, child.entity.eid)
   assertEquals(live!.frame.operator.task, out.session)
   // A helper's step brings the page that step, live, its context inside.
@@ -222,11 +225,11 @@ test("a helper's end is the Operator's step in the conversation, never the perso
     let { all } = await talked(refused)
     assertEquals(all('.Transcript_Bubble'), ['The page is broken; fix it.'])
     assertEquals(
-      all('.More_Inline > summary').at(-1),
+      all('.More:not(.Transcript_Error > *) > summary').at(-1),
       refused ? 'A helper could not finish' : 'Heard back from a helper',
     )
     if (refused) {
-      assertEquals(all('.More_Inline-no .Transcript_Error > p'), [
+      assertEquals(all('.More-no .Transcript_Error > p'), [
         'A helper the Operator started could not finish, so the Operator went on without it.',
       ])
       assertStringIncludes(all('.Transcript_Error pre').join(), REFUSED)

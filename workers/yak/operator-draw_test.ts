@@ -241,12 +241,12 @@ test('an outside agent’s chat is a step named for whom it was with, holding th
   }
   let [row] = rows([notice], namer({}), { threads })
   let fold = parseHTML(row.html).document.querySelector('details')!
-  assertEquals(fold.className, 'More_Inline')
+  assertEquals(fold.className, 'More More-quiet')
   assertEquals(
-    fold.querySelector('.More_Toggle')!.textContent,
+    fold.querySelector(':scope > summary')!.textContent,
     'Chatted with an outside agent for Jeff',
   )
-  let inset = fold.querySelector('.More_Inset')!
+  let inset = fold.querySelector(':scope > .More_Body')!
   assertEquals(
     inset.querySelector('a')!.getAttribute('href'),
     '/operator/chat',

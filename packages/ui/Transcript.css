@@ -28,7 +28,7 @@
   vertical-align: -.1em;
 }
 .Transcript_Entry:has(> .Transcript_Bubble),
-.More_Branch:has(> .Transcript_Bubble) {
+.More:has(> .Transcript_Bubble) {
   display: grid;
 }
 .Transcript_Meta {
@@ -39,7 +39,7 @@
   color: var(--muted);
   font-size: var(--fine, var(--small));
 }
-.Transcript_Entry:has(> .Transcript_Bubble, > .Attachments, > .More_Branch > .Transcript_Bubble) > .Transcript_Meta {
+.Transcript_Entry:has(> .Transcript_Bubble, > .Attachments, > .More > .Transcript_Bubble) > .Transcript_Meta {
   justify-content: end;
 }
 .Transcript_Entry-hidden {
@@ -56,8 +56,8 @@
   align-items: baseline;
   gap: .35rem .9rem;
 }
-.Transcript_Lines[data-rows] > :not(:has(> .Transcript_Entry > .More_Inline)),
-.Transcript_Lines[data-rows] > :has(> .Transcript_Entry > .More_Inline[open]) {
+.Transcript_Lines[data-rows] > :not(:has(> .Transcript_Entry > .More-quiet > .More_Summary)),
+.Transcript_Lines[data-rows] > :has(> .Transcript_Entry > .More-quiet[open]) {
   flex-basis: 100%;
   margin-block: .325rem;
 }

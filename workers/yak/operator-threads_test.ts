@@ -130,7 +130,7 @@ test('a sub-thread appears once at its closing notice, a step named for whom it 
   let fold = foldOf(first.html)
   assertEquals(fold.hasAttribute('open'), false)
   assertEquals(
-    fold.querySelector('.More_Toggle')!.textContent,
+    fold.querySelector(':scope > summary')!.textContent,
     'Chatted with an outside agent for Ada',
   )
   assertEquals(fold.textContent!.includes(closed), false)
@@ -139,11 +139,11 @@ test('a sub-thread appears once at its closing notice, a step named for whom it 
     true,
   )
   assertStringIncludes(
-    fold.querySelector('.More_Inset')!.textContent!,
+    fold.querySelector(':scope > .More_Body')!.textContent!,
     'Check the calendar.',
   )
   assertStringIncludes(
-    fold.querySelector('.More_Inset')!.textContent!,
+    fold.querySelector(':scope > .More_Body')!.textContent!,
     'Tuesday is free.',
   )
   assertEquals(

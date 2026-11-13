@@ -205,11 +205,15 @@ test('a conversation opens in the chat app: its words, each step in plain words,
   ])
   // Each step said from the person's side, as what it did for them, or
   // tried to: the step names the app and the person it acted on.
-  assertEquals(text('.More_Inline > summary'), [
-    'Read the schema',
-    'Tried listing the files of notices',
-    'Tried texting Jeff',
-  ])
+  assertEquals(
+    text('.More:not(.Transcript_Error > *, .More_Body *) > summary'),
+    [
+      'The context the Operator was given',
+      'Read the schema',
+      'Tried listing the files of notices',
+      'Tried texting Jeff',
+    ],
+  )
   assertEquals(
     page.document.querySelector('.Transcript_Reply strong')?.textContent,
     'posted',
@@ -226,16 +230,17 @@ test('a conversation opens in the chat app: its words, each step in plain words,
   let said = page.document.querySelector('[data-conversation]')!.cloneNode(
     true,
   ) as Element
-  said.querySelectorAll('.Transcript_Error details, .More_Framed').forEach((
-    d,
-  ) => d.remove())
+  said.querySelectorAll('.More').forEach((d) =>
+    /^(Details|The context)/.test(d.querySelector('summary')!.textContent!) &&
+    d.remove()
+  )
   assertEquals(said.innerHTML.includes('<pre'), false)
   assertEquals(said.innerHTML.includes('&quot;'), false)
   assertEquals(text('.Transcript_Error > p'), [
     'This step did not work, so the Operator went on without it.',
     'This step did not work, so the Operator went on without it.',
   ])
-  assertEquals(text('.More_Inline-no .Pairs-nested dt'), ['Op', 'App', 'Text'])
+  assertEquals(text('.More-no .Pairs-nested dt'), ['Op', 'App', 'Text'])
   // Done: nothing is said to be under way, and Stop is not offered.
   assertEquals(page.document.querySelector('[data-pending]'), null)
   assertEquals(

@@ -272,22 +272,18 @@ export let trouble = (said: string, detail?: unknown) =>
     detail == null || detail === '' ||
       (typeof detail == 'object' && !Object.keys(detail).length)
       ? null
-      : h(
-        'details',
-        null,
-        h(More.Summary, { mod: 'quiet' }, 'Details'),
-        h(Body.Source, { mod: 'detail' }, laid(detail)),
-      ),
+      : step('Details', '', h(Body.Source, { mod: 'detail' }, laid(detail))),
   )
 
-// A step, by what it did, opening on what it holds: `on` while it runs,
-// `no` once it did not work.
-let step = (name: string, mod: '' | 'on' | 'no', ...inside: Node[]) =>
+// The one way the chat draws anything that opens: a step, by what it did,
+// opening on what it holds; `on` while it runs, `no` once it did not work. A
+// fold in a fold is the same fold.
+let step = (name: Node, mod: '' | 'on' | 'no', ...inside: Node[]) =>
   h(
-    More.Inline,
-    { mod },
-    h(More.Toggle, {}, name),
-    h(More.Inset, {}, ...inside),
+    More,
+    { mod: ['quiet', mod] },
+    h(More.Summary, {}, name),
+    h(More.Body, {}, ...inside),
   )
 
 // A step that did not work: "Tried texting Jeff".
@@ -366,12 +362,11 @@ let helper = (b: Bundle, body: string) => {
 }
 
 // What a model was told before anything was said to it, closed until
-// opened, and drawn apart from the words, the replies and the errors.
-let instructed = (said: string, ...inside: Node[]) =>
-  h(More.Framed, {}, h(More.Legend, {}, said), ...inside)
+// opened.
+let instructed = (said: string, ...inside: Node[]) => step(said, '', ...inside)
 
 // What a model was told is Markdown, drawn the way a reply is.
-let written = (body: string) => h(More.Text, {}, markdown(body))
+let written = markdown
 
 // What a page has drawn of what its models were told: each layer and each
 // tool, by its text. One drawn above is not drawn again: a conversation's
@@ -388,12 +383,15 @@ let offered = (tools: Tool[], page: Drawn) => {
   let rest = tools.length - shown.length
   return [
     ...shown.map((t) =>
-      h(
-        'details',
-        null,
-        h('summary', null, t.name),
+      step(
+        t.name,
+        '',
         written(t.description),
-        h(More.Source, {}, JSON.stringify(t.parameters, null, 2)),
+        h(
+          Body.Source,
+          { mod: 'detail' },
+          JSON.stringify(t.parameters, null, 2),
+        ),
       )
     ),
     !rest
@@ -459,7 +457,10 @@ let change = (now: Layer | undefined, before: Layer | undefined) => {
     (a?.lines ?? []).filter((l) => !b?.lines.includes(l))
   let lines = (said: string, list: string[]) =>
     list.length
-      ? [h(More.Label, {}, said), h(More.Source, {}, list.join('\n'))]
+      ? [
+        h(More.Label, {}, said),
+        h(Body.Source, { mod: 'detail' }, list.join('\n')),
+      ]
       : []
   return !before ? now!.inside(new Set()) : [
     ...lines('Taken out', gone(before, now)),
@@ -883,8 +884,8 @@ let heard = (b?: Bundle) => {
 // them and did, under them.
 let Called = ({ said, nodes }: Fold) =>
   h(
-    More.Branch,
-    {},
+    More,
+    { as: 'div', mod: 'quiet' },
     h(
       Transcript.Bubble,
       {},
@@ -898,7 +899,7 @@ let Called = ({ said, nodes }: Fold) =>
       ),
       said,
     ),
-    h(More.Children, {}, ...nodes),
+    h(More.Body, {}, ...nodes),
   )
 
 // Any other line: a refusal, a reply, a helper's end, a failure, a stop, or a
@@ -990,15 +991,9 @@ let line = (
 // error to fix. Never the person's: one quiet line, its words when opened.
 let system = (b: Bundle, body: string) => {
   let [, label] = VIA[String(comp(b, 'operator_channel')?.channel)] ?? []
-  return h(
-    More.Framed,
-    { mod: 'system' },
-    h(
-      More.Legend,
-      {},
-      `${label ?? 'From the system'}: `,
-      cut(spoken(b, body).split('\n')[0], 80),
-    ),
+  return step(
+    `${label ?? 'From the system'}: ${cut(spoken(b, body).split('\n')[0], 80)}`,
+    '',
     written(spoken(b, body)),
   )
 }

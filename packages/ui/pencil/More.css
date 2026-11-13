@@ -1,32 +1,6 @@
 /* Pencil's fold: yaks.app's spacing, and markdown someone wrote in it (a
    Body, theirs.ts in yaks.app), such as how to get a key, set close and
    ending where the body does. */
-.More_Summary {
-  display: inline-flex;
-  align-items: center;
-  gap: .45rem;
-  color: var(--accent);
-  font-size: var(--small);
-  font-weight: 700;
-  cursor: pointer;
-  list-style: none;
-}
-.More_Summary::-webkit-details-marker {
-  display: none;
-}
-.More_Summary::before {
-  content: '';
-  flex: none;
-  width: .4rem;
-  height: .4rem;
-  border: solid currentColor;
-  border-width: 0 2px 2px 0;
-  transform: rotate(-45deg);
-  transition: transform .15s;
-}
-.More[open] > .More_Summary::before {
-  transform: rotate(45deg);
-}
 .More_Body {
   display: grid;
   gap: .875rem;

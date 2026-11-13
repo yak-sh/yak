@@ -34,68 +34,55 @@
 .More_Body > * {
   margin: 0;
 }
-
-.More_Children > :not(:has(> .More_Inline)),
-.More_Children > :has(> .More_Inline[open]) {
-  flex-basis: 100%;
-  margin-block: .125rem;
-}
-.More_Toggle {
-  display: inline-flex;
-  gap: .4rem;
-  align-items: baseline;
-  color: var(--muted);
-  font-size: var(--small);
-  cursor: pointer;
-  list-style: none;
-}
-.More_Toggle::-webkit-details-marker {
-  display: none;
-}
-.More_Toggle::after {
-  content: '›';
-  transition: transform .15s;
-}
-.More_Inline[open] > .More_Toggle::after {
-  transform: rotate(90deg);
-}
-.More_Inline-on > .More_Toggle {
-  color: var(--accent);
-}
-.More_Inline-no > .More_Toggle {
-  color: var(--negative);
-}
-.More_Inset {
-  margin: .4rem 0 0;
-  padding: .6rem .8rem;
-  border-left: 2px solid var(--border2);
-  font-size: var(--small);
-}
 .More_Label {
-  margin: .4rem 0 .2rem;
   font-weight: 700;
 }
-.More_Label:first-child {
-  margin-top: 0;
-}
-.More_Inset > .More_Value {
-  display: block;
+.More_Value {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.More_Summary-quiet {
+
+/* A step: a muted line with `›` after it that turns as it opens, accent
+   while it runs and negative once it did not work, and what it holds under a
+   rule at the size it is drawn. */
+.More-quiet > .More_Summary {
+  align-items: baseline;
+  gap: .4rem;
   color: var(--muted);
-  font-size: var(--small);
-  cursor: pointer;
+  font-weight: normal;
 }
+.More-quiet > .More_Summary::before {
+  content: none;
+}
+.More-quiet > .More_Summary::after {
+  content: '›';
+  transition: transform .15s;
+}
+.More-quiet[open] > .More_Summary::after {
+  transform: rotate(90deg);
+}
+.More-on > .More_Summary {
+  color: var(--accent);
+}
+.More-no > .More_Summary {
+  color: var(--negative);
+}
+.More-quiet > .More_Body {
+  gap: .6rem;
+  margin-top: .4rem;
+  padding: .6rem .8rem;
+  border-left: 2px solid var(--border2);
+}
+
+/* A fold that is not a details opens from its mark: the box the mark flips
+   is out of sight, the mark shows its focus and, open, the accent, and the
+   fold's body shows while it is checked. A mark inside the body is a fold of
+   its own. */
 .More_Mark {
   display: inline-flex;
   color: var(--muted);
   cursor: pointer;
-  list-style: none;
 }
-/* The box a mark flips is out of sight; the mark shows its focus and, open,
-   the accent. A branch whose own mark is not checked hides its children. */
 .More_Open {
   position: absolute;
   width: 1px;
@@ -110,55 +97,6 @@
 .More_Mark:has(> .More_Open:checked) {
   color: var(--accent);
 }
-.More_Branch:not(:has(> .More_Mark > .More_Open:checked, > :not(.More_Children) .More_Mark > .More_Open:checked)) > .More_Children {
+.More:not(details):not(:has(> .More_Mark > .More_Open:checked, > :not(.More_Body) .More_Mark > .More_Open:checked)) > .More_Body {
   display: none;
-}
-.More_Mark .Icon {
-  width: 1em;
-  height: 1em;
-}
-.More_Children {
-  display: flex;
-  flex-direction: column;
-  gap: .6rem;
-  margin: .4rem 0 0;
-  padding: .6rem .8rem;
-  border-left: 2px solid var(--border2);
-}
-.More_Framed {
-  padding: .4rem .8rem;
-  border: 1px dashed var(--border2);
-  border-radius: .6rem;
-  font-size: var(--small);
-}
-.More_Legend {
-  color: var(--muted);
-  cursor: pointer;
-}
-.More_Text {
-  max-height: 60vh;
-  margin: .4rem 0 0;
-  overflow: auto;
-  overflow-wrap: anywhere;
-}
-.More_Framed .Body_Source,
-.More_Source {
-  max-height: 60vh;
-  margin: .4rem 0 0;
-  overflow: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.More_Summary.More_Summary-quiet {
-  display: list-item;
-  color: var(--muted);
-  font-weight: normal;
-  list-style: revert;
-}
-.More_Summary.More_Summary-quiet::before {
-  content: none;
-}
-.More_Summary.More_Summary-quiet::-webkit-details-marker {
-  display: revert;
 }
