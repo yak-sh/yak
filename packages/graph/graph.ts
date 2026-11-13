@@ -1065,8 +1065,9 @@ export let graph = (opts: Options): Graph => {
       return isPromise(done) ? done.then(raise) : raise()
     }
 
-    // The bundles that would have changed nothing (./unchanged.ts): out of
-    // the run, and back in its answer where the caller put them.
+    // What would have changed nothing, whole bundles and the components that
+    // left a changed one (./unchanged.ts): out of the run, and back in its
+    // answer where the caller put them.
     let idle: Bundle[] = []
     let asked: Bundle[] = []
     let answer = (b: Bundle[]): Bundle[] => {

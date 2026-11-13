@@ -14,9 +14,10 @@
 // not the truth: a page's write goes to the server whatever the page held
 // (@yaks/sync).
 //
-// The entities that leave are the caller's still: `apply()` hands them back
-// where the caller put them in its return value, so a caller that writes what
-// is stored learns it is stored.
+// What leaves is the caller's still: `apply()` hands each entity, and each
+// component that left a changed one, back where the caller put it in its
+// return value, so a caller that writes what is stored learns it is stored.
+// An entity's components leave the same way whatever else the batch holds.
 
 import { after, same } from '@yaks/fp'
 import type { Bundle, Comp, Eid } from './bundle.ts'
@@ -45,27 +46,33 @@ let bookkeeping = new Set(['$actor', '$at', '$was', '$quiet', '$before'])
 let asks = (b: Bundle): boolean =>
   Object.keys(b).some((k) => k[0] == '$' && !bookkeeping.has(k))
 
-// What of a bundle changes its stored row: the bundle without the components
-// that would leave it as it is, or nothing when nothing would change.
-let changes = (b: Bundle, row: Bundle | undefined): Bundle | undefined => {
-  if (dead(b) || b.$prune || b.$touch || !alive(row)) return b
+// What of a bundle changes its stored row, and what would leave it as it is:
+// the bundle without its idle components and those components on their own,
+// or nothing to keep when nothing would change.
+let changes = (
+  b: Bundle,
+  row: Bundle | undefined,
+): [Bundle | undefined, Bundle | undefined] => {
+  if (dead(b) || b.$prune || b.$touch || !alive(row)) return [b, undefined]
   let still = comps(b).filter(([c, patch]) => idle(patch, row[c] as Comp))
-  if (!still.length) return b
+  if (!still.length) return [b, undefined]
   let moves = (k: 'num' | 'archetype') =>
     b.entity[k] !== undefined && b.entity[k] !== (row.entity[k] ?? null)
   if (
     still.length == comps(b).length && !moves('num') && !moves('archetype') &&
     !asks(b)
-  ) return undefined
+  ) return [undefined, b]
   let out = { ...b }
-  for (let [c] of still) delete out[c]
-  return out
+  let part: Bundle = { entity: { eid: b.entity.eid } }
+  for (let [c, patch] of still) delete out[c], part[c] = patch
+  return [out, part]
 }
 
 /**
- * The batch without what it would not change, read through `tx`, and the
- * bundles that left it whole. A bundle that leaves takes no writer with it:
- * every entity still in the batch keeps the one it had.
+ * The batch without what it would not change, read through `tx`, and what
+ * left it: the bundles that left whole and the components that left a kept
+ * one. A bundle that leaves takes no writer with it: every entity still in
+ * the batch keeps the one it had.
  */
 export let unchanged = (
   bundles: Bundle[],
@@ -91,26 +98,28 @@ export let unchanged = (
     let held = new Map(rows.map((r) => [r.entity.eid, r]))
     let kept: Bundle[] = []
     let left: Bundle[] = []
+    let parts: Bundle[] = []
     for (let b of bundles) {
       let eid = b.entity.eid
       let row = held.get(eid)
-      let out = changes(b, row)
+      let [out, part] = changes(b, row)
       if (!out) {
         left.push(b)
         continue
       }
       kept.push(out)
+      if (part) parts.push(part)
       if (dead(out)) held.delete(eid)
       else if (alive(row)) held.set(eid, merged(row, out))
     }
-    if (!left.length) return { kept: bundles, idle: [] }
-    if (!left.some((b) => b.$actor)) return { kept, idle: left }
+    let gone = [...left, ...parts]
+    if (!left.some((b) => b.$actor)) return { kept, idle: gone }
     let writer = writers(bundles)
     return {
       kept: kept.map((b) =>
         b.$actor ? b : { ...b, $actor: writer(b.entity.eid) }
       ),
-      idle: left,
+      idle: gone,
     }
   })
 }

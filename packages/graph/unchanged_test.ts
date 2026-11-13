@@ -104,6 +104,22 @@ for (let async of [false, true]) {
     equal(out.map((b) => b.entity.eid), ['d1', 'b1'])
   })
 
+  test(`an idle component leaves a changed entity, alone or beside an idle one (${async})`, async () => {
+    let dune = {
+      entity: { eid: 'b1' },
+      doc: { title: 'Dune' },
+      book: { pages: 4 },
+    }
+    let notes = { entity: { eid: 'd1' }, doc: { title: 'Notes' } }
+    for (let batch of [[dune], [notes, dune]]) {
+      let { write, heard } = await shelf(async)
+      let { out, rows } = await write(...batch)
+      equal(heard.journal, ['b1.book'])
+      equal(rows.b1.doc, { title: 'Dune' })
+      equal(out.find((b) => b.entity.eid == 'b1')?.doc, { title: 'Dune' })
+    }
+  })
+
   test(`a mark removed and given again in one batch is stamped anew (${async})`, async () => {
     let { write } = await shelf(async)
     await write({ entity: { eid: 'd1' }, sold: {} })

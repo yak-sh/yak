@@ -243,7 +243,10 @@ export let secrets = (
               args: walk(called, () => hs[i++]),
             },
           },
-          ...mark ? { [PROVISIONAL]: { note: SAVING } } : {},
+          // The graph keeps the handle and the vault the value, so a new
+          // value behind a handle the graph already holds is still a write
+          // (`$touch`, @yaks/graph unchanged.ts): the seal reads it.
+          ...mark ? { [PROVISIONAL]: { note: SAVING }, $touch: true } : {},
         }
       },
     )
