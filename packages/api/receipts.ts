@@ -2,20 +2,22 @@
  * A keyed write and its receipt: committed once, and every resend told what
  * the first send was told.
  *
- * - A host whose graph is its only storage keeps each receipt in the graph,
- *   as an `apply_receipt` committed in the mutation's transaction
- *   ({@link receipts}, {@link received}). The request token is an in-process
- *   capability, not client input.
- * - A host with SQLite beside its graph keeps them in its write log
- *   (`./log.ts`), with the input it could not commit yet: while its row
- *   ceiling stopped it, while it could not start, or while it failed. Its
- *   door ({@link door}) keeps that input and replays it in order once the
- *   object may write again, and {@link landing} completes each write in the
- *   transaction that commits it.
+ * Every host keeps its receipts in one place, its write log (`./log.ts`),
+ * plain SQLite tables on the graph's own connection, and inserts each in the
+ * transaction that commits its write.
+ *
+ * - At @yaks/api's own door a receipt is named by its writer and key, and
+ *   bound to its body ({@link receipts}, {@link received}). The request token
+ *   is an in-process capability, not client input.
+ * - A host's door over the log ({@link door}) also keeps the input it could
+ *   not commit yet: while its row ceiling stopped it, while it could not
+ *   start, or while it failed, and replays it in order once the object may
+ *   write again; {@link landing} completes each write in the transaction
+ *   that commits it.
  *
  * @module
  */
-import { decode, stringify } from '@yaks/vocab/wire'
+import { decode } from '@yaks/vocab/wire'
 import { after } from '@yaks/fp'
 import {
   type Actor,
@@ -25,7 +27,6 @@ import {
   token,
 } from '@yaks/graph'
 import type { Driver } from '@yaks/sql'
-import { composed } from '@yaks/graph/bundle'
 import { derivedEid } from '@yaks/graph/identity'
 import { Refused } from '@yaks/graph/errors'
 import { published } from './publish.ts'
@@ -43,9 +44,11 @@ import {
   keep,
   type Kept,
   landed,
+  named,
   next,
   opened,
   parked,
+  raise,
   type Receipt,
   received as logged,
   remembered,
@@ -59,7 +62,15 @@ import {
 } from './log.ts'
 
 type Stored = { digest: string; answer: string }
-type Asked = { eid: string; digest: string; empty: boolean }
+// A keyed write on its way to the graph: the name it is kept under in the
+// log (`named`), the digest of its body, and the entity a receipt kept in the
+// graph before the log had it (`legacy`).
+type Asked = {
+  eid: string
+  digest: string
+  receipt: Request
+  empty: boolean
+}
 let pending = new Map<string, Asked>()
 let requestKey = '$apiReceipt'
 
@@ -70,8 +81,26 @@ class Replay extends Error {
   }
 }
 
-/** API-owned graph hooks, also loaded by the box's graph facet. */
-export let receipts = (): Plugin => {
+// The log, raised once a connection (log.ts `raise`): a host whose schema
+// names it stands already, and one that does not gains it at its first
+// keyed write.
+let raised = new WeakSet<object>()
+let standing = (db: Driver) => {
+  let at = db.connection ?? db
+  if (raised.has(at)) return
+  raise(db)
+  raised.add(at)
+}
+
+/** API-owned graph hooks over the host's write log (`db`), also loaded by
+ * the box's graph facet: a keyed write's receipt is inserted in the
+ * transaction that commits it, and a resend is told what it was told.
+ *
+ * TODO(T-165786): `legacy` reads a receipt kept as an `apply_receipt` entity
+ * before receipts moved into the log, and keeps those entities hidden and
+ * server-owned, until every box has moved them; then the component, its
+ * scope and its guards go. */
+export let receipts = (db: Driver): Plugin => {
   let writes = new WeakMap<object, Asked>()
   return {
     name: '@yaks/api/receipts',
@@ -98,20 +127,23 @@ export let receipts = (): Plugin => {
         if (!held || !context?.transaction) {
           throw new Refused('invalid API receipt capability')
         }
+        let vocab = (context.graph as Graph).vocab
+        let told = (answer: string) => {
+          throw new Replay(decode(vocab, JSON.parse(answer)))
+        }
+        let name = held.receipt.headers.get(IDEMPOTENCY)!
+        // Its body bound: another body under the same key is refused here.
+        let was = first(db, name, held.receipt)
+        if (was?.state == 'applied') told(was.answer)
         return after(tx.get([held.eid], ['apply_receipt']), (found) => {
-          let receipt = found[0]?.apply_receipt as Stored | undefined
-          if (receipt) {
-            if (receipt.digest != held.digest) {
+          let legacy = found[0]?.apply_receipt as Stored | undefined
+          if (legacy) {
+            if (legacy.digest != held.digest) {
               throw new Refused(
                 'Idempotency-Key already used with a different body',
               )
             }
-            throw new Replay(
-              decode(
-                (context!.graph as Graph).vocab,
-                JSON.parse(receipt.answer),
-              ),
-            )
+            told(legacy.answer)
           }
           writes.set(context.transaction!, held)
           return bundles.flatMap((b) => {
@@ -123,49 +155,55 @@ export let receipts = (): Plugin => {
       })
     },
     hooks: {
-      commit: (bundles, tx, _error, context) => {
+      commit: (bundles, _tx, _error, context) => {
         let held = context?.transaction && writes.get(context.transaction)
         if (!held) return bundles
-        let answer = stringify(
-          published((context!.graph as Graph).vocab, composed(bundles)),
-        )
-        return after(
-          tx.patch([{
-            entity: { eid: held.eid },
-            apply_receipt: { digest: held.digest, answer },
-          }]),
-          () => bundles,
-        )
+        let vocab = (context!.graph as Graph).vocab
+        logged(db, { request: held.receipt }, () => published(vocab, bundles))
+        return bundles
       },
     },
   }
 }
 
-/** Apply with an indefinite, exact-body-bound receipt scoped to the writer.
- * No time expiry: a durable browser outbox may replay after an arbitrary delay. */
+/** The name a writer's keyed write is kept under: the writer and its key as
+ * one id, so one writer's key never reads another's receipt. It is the eid a
+ * receipt kept in the graph had. */
+export let receiptOf = (actor: Actor | null, key: string): string =>
+  derivedEid(
+    `api receipt|${token([actor?.by ?? null, actor?.via ?? null, key])}`,
+  )
+
+/** Apply with an indefinite, exact-body-bound receipt scoped to the writer,
+ * kept in the host's write log (`db`) in the write's own transaction, so the
+ * log must be the graph's own connection. No time expiry: a durable browser
+ * outbox may replay after an arbitrary delay. A host with no log refuses a
+ * keyed write rather than apply it without the receipt that makes a resend
+ * safe. */
 export let received = async (
   graph: Graph,
+  db: Driver | undefined,
   key: string,
   body: string,
   actor: Actor | null,
   bundles: Bundle[],
   options: Parameters<Graph['apply']>[1],
 ): Promise<Bundle[]> => {
-  if (!graph.vocab.comp('apply_receipt')) {
-    throw new Refused('Idempotency-Key needs the @yaks/api receipt vocabulary')
-  }
+  if (!db) throw new Refused('Idempotency-Key needs a host with a write log')
+  standing(db)
   if (!graph.plugins.some((p) => p.name == '@yaks/api/receipts')) {
-    graph.use(receipts())
+    graph.use(receipts(db))
   }
   if (bundles.some((b) => requestKey in b)) {
     throw new Refused('invalid API receipt capability')
   }
   let capability = crypto.randomUUID()
+  let eid = receiptOf(actor, key)
+  let digest = token(body)!
   pending.set(capability, {
-    eid: derivedEid(
-      `api receipt|${token([actor?.by ?? null, actor?.via ?? null, key])}`,
-    ),
-    digest: token(body)!,
+    eid,
+    digest,
+    receipt: named(eid, digest),
     empty: !bundles.length,
   })
   try {

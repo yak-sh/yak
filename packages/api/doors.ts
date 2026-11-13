@@ -12,6 +12,7 @@
 
 import type { Actor, ApplyOpts, Bundle, Graph, ReadOpts } from '@yaks/graph'
 import { aggregate, reduced } from '@yaks/graph/read'
+import type { Driver } from '@yaks/sql'
 import { knownOptions, Refused } from '@yaks/graph/errors'
 import { parse } from '@yaks/query'
 import { during, parent, peek, scope } from '@yaks/trace'
@@ -285,9 +286,14 @@ export type Applying = {
    * of a durable outbox write before a kept answer is told without the graph
    * deciding again (default: `authenticate`). A trusted request holds it. */
   authorize?: (request: Request) => unknown
-  /** The host's write log (./receipts.ts `door`), which keeps its receipts.
-   * A door without one keeps them in its graph (./receipts.ts `received`). */
+  /** The host's door over its write log (./receipts.ts `door`), which keeps
+   * its receipts with the input it could not commit yet. */
   log?: Pick<Door, 'bound' | 'applying'>
+  /** The host's write log, for a door with no door over it: SQL on the
+   * graph's own connection, where a keyed write's receipt is inserted in the
+   * transaction that commits it (./receipts.ts `received`). A door with
+   * neither refuses a keyed write. */
+  db?: Driver
 }
 
 /** A host's apply door ({@link applier}). */
@@ -411,7 +417,7 @@ export let applier = (o: Applying): Applier => {
         // A receipt is of the batch as decoded: a binary one's envelope is
         // not what it says.
         let said = binaryHeaders(request.headers) ? stringify(body) : text
-        applied = await received(writer, key, said, who, batch, options)
+        applied = await received(writer, o.db, key, said, who, batch, options)
       } else applied = await writer.apply(batch, options)
       // The log keeps canonical patches; each caller, a resend included, is
       // told its own view.

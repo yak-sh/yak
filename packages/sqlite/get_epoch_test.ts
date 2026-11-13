@@ -43,7 +43,7 @@ let fixture = (path = ':memory:', overrides = {}, options = {}) => {
     ...options,
   })
   s.install()
-  let g = graph({ storage: s, vocab, plugins: [archetypes(), receipts()] })
+  let g = graph({ storage: s, vocab, plugins: [archetypes(), receipts(d)] })
   let query = d.query, n = 0
   d.query = (stmt) => {
     if (stmt.t == 'select' || stmt.t == 'raw') n++
@@ -181,7 +181,7 @@ let text = {
 let d = open(':memory:')
 let store = storage(d, vocab, { derived: sessionDerived(vocab, text) })
 store.install()
-let g = graph({ storage: store, vocab, plugins: [archetypes(), receipts()] })
+let g = graph({ storage: store, vocab, plugins: [archetypes(), receipts(d)] })
 await g.apply([
   { entity: { eid: 'owner' }, session: {} },
   {

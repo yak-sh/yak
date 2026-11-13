@@ -19,10 +19,10 @@
  *
  * The tables belong to no vocabulary or app migration. Their place beside
  * the graph makes the receipt and the mutation atomic even when the graph
- * above storage cannot stand. A Store keeps its batches here, and a space's
- * Builder the lines a person said while it could not answer them. A host
- * with no SQL of its own keeps receipts in its graph instead (`./receipts.ts`
- * `receipts`).
+ * above storage cannot stand. A Store keeps its batches here, a space's
+ * Builder the lines a person said while it could not answer them, and every
+ * door of @yaks/api its keyed writes' receipts, each named by its writer
+ * (`./receipts.ts` `received`).
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -525,6 +525,15 @@ export let fingerprinted = (request: Request, body: string): Request => {
   )
   return new Request(request, { headers, body: opened(headers, body) })
 }
+
+/** The request a door that names its writes itself keeps a receipt under
+ * (`./receipts.ts` `received`): its `name` for the write, kept for good and
+ * bound to the body `digest` names, as an outbox key's is. */
+export let named = (name: string, digest: string): Request =>
+  new Request('http://receipt/apply', {
+    method: 'POST',
+    headers: { [IDEMPOTENCY]: `outbox:receipt:${name}`, [FINGERPRINT]: digest },
+  })
 
 /** A write the log already holds under an idempotency key. */
 export type Sent = {

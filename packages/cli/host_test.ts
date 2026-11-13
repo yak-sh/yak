@@ -37,7 +37,8 @@ import {
 } from './host.ts'
 import { type Facets, type Load } from '@yaks/host'
 import { sealed } from '@yaks/secrets'
-import { lit } from '@yaks/sql'
+import { col, lit, select, table } from '@yaks/sql'
+import { writes } from '@yaks/api/log'
 import { open } from '@yaks/sqlite/db'
 import { meta, REQUIRED } from '@yaks/sqlite/meta'
 import { signer } from './local.ts'
@@ -301,6 +302,37 @@ test('compose takes each facet from its own subpath, and mounts the doors', asyn
     assertEquals(missing.status, 404)
   } finally {
     host.close()
+  }
+})
+
+test("a keyed write at a box's door keeps its receipt in the file's write log, and a resend after a reopen is told the same", async () => {
+  let dir = await Deno.makeTempDir()
+  let config = { db: `${dir}/box.db`, plugins: ['shop', ...HTTP] }
+  let send = async () => {
+    let host = await compose(config, only({ shop }))
+    try {
+      let r = await serving(host)(
+        new Request('http://h/apply', {
+          method: 'POST',
+          headers: { 'idempotency-key': 'outbox:once' },
+          body: '[{"entity":{"eid":"$b"},"book":{"title":"Once"}}]',
+        }),
+      )
+      return [r.status, await r.text()]
+    } finally {
+      await host.close()
+    }
+  }
+  try {
+    let first = await send()
+    assertEquals(await send(), first)
+    let db = open(config.db)
+    let kept = writes(db, undefined, true).length
+    let books = db.query(select({ cols: [col('entity')], from: table('book') }))
+    db.close()
+    assertEquals([first[0], kept, books.length], [200, 1, 1])
+  } finally {
+    await Deno.remove(dir, { recursive: true })
   }
 })
 

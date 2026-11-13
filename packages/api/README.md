@@ -103,16 +103,25 @@ curl -X POST http://localhost:3000/apply \
 Receipts have no expiry, including `outbox:` keys: durable outboxes may replay
 after any offline interval. Only a SHA-256 digest binds the request body; the
 body itself is not retained. The canonical answer is retained before caller
-answer projection and projected again when replayed. Receipt rows are
-server-owned, `sync: none`, and hidden from graph reads and aggregates by
-`@yaks/api/graph`. The box composes that facet with the API vocabulary. A custom
-graph must include `apiDoc` from `@yaks/api/vocab` when loading its vocabulary,
-with `loadVocab([apiDoc, domainDoc])`; the HTTP door installs receipt hooks when
-first needed. This includes custom servers used with `@yaks/sync` or
-`@yaks/client`, whose ordinary writes carry idempotency keys. A keyed write to a
-graph without the receipt vocabulary is refused, not retried as an unkeyed
-write. Dry runs (`?check`) do not consume keys. Keyed NDJSON imports are refused
-because they span transactions; unkeyed requests keep their ordinary behavior.
+answer projection and projected again when replayed.
+
+Receipts are kept in the host's write log (`@yaks/api/log`): plain SQLite tables
+beside the graph, never graph rows, inserted in the transaction that commits the
+write. So the log must be the graph's own connection, handed to the door as
+`db`:
+
+```ts ignore
+let db = open('graph.db')
+let graph = graph({ vocab, storage: storage(db, vocab) })
+Deno.serve(api({ graph, db }))
+```
+
+A composed host hands its store's connection to `@yaks/api/graph` and
+`@yaks/api/routes` itself. This includes custom servers used with `@yaks/sync`
+or `@yaks/client`, whose ordinary writes carry idempotency keys. A keyed write
+to a door with no `db` is refused, not retried as an unkeyed write. Dry runs
+(`?check`) do not consume keys. Keyed NDJSON imports are refused because they
+span transactions; unkeyed requests keep their ordinary behavior.
 
 A host decides what surrounds a commit and gives it to the apply door as data
 (`Applying`, which `api` takes too, or `applier` alone): `trust`, the requests

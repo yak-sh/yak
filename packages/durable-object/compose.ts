@@ -144,7 +144,8 @@ export type Composing = {
 /**
  * The spec of an object composed from `config`, with facets from `load`: its
  * graph over the object's SQLite, schema and blobs installed as it opens; its
- * door `api({graph, subs})`, which hands `/ws` to its sockets; and as its
+ * door `api({graph, subs, db})`, which keeps its receipts in the object's
+ * SQLite and hands `/ws` to its sockets; and as its
  * works, the wakes due (@yaks/wake `tick`) and the effects pool, each
  * answering when it is next owed. A write that moves a wake or owes a run arms
  * the alarm.
@@ -167,7 +168,7 @@ export let composed = (
       // The door, loaded only by an object that opens one.
       let { api, subscriptions } = await import('@yaks/api')
       let subs = subscriptions(g)
-      let door = api({ graph: g, subs })
+      let door = api({ graph: g, subs, db: host.storage.statements })
       let wakes = !!host.vocab.comp('wake'), runs = !!host.vocab.comp('effect')
       return {
         serve: (request) =>

@@ -81,7 +81,7 @@
       "type": "object",
       "sync": "none",
       "journal": false,
-      "description": "A successful keyed API write, retained indefinitely in the mutation transaction with its request digest and canonical answer. Hidden from graph reads by the API graph plugin.",
+      "description": "A successful keyed API write as a graph kept it before receipts moved into the write log (yak_writes): read for its resend until it is moved there, and hidden from graph reads by the API graph plugin.",
       "properties": {
         "answer": {
           "type": "string",

@@ -894,6 +894,9 @@ importers:
       '@yaks/spawn':
         specifier: 0.2.28
         version: link:../spawn
+      '@yaks/sqlite':
+        specifier: 0.2.30
+        version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing
@@ -4681,6 +4684,9 @@ importers:
       '@yaks/ram':
         specifier: 0.2.24
         version: link:../ram
+      '@yaks/sqlite':
+        specifier: 0.2.30
+        version: link:../sqlite
       '@yaks/testing':
         specifier: 0.2.30
         version: link:../testing

@@ -1,7 +1,8 @@
 import './testing.ts'
 import { equal, match, test } from '@yaks/testing'
 import { type Bundle, graph, token } from '@yaks/graph'
-import { ram } from '@yaks/ram'
+import { storage } from '@yaks/sqlite'
+import { open as opened } from '@yaks/sqlite/db'
 import { api } from '@yaks/api'
 import type { OutboxStore, Pending } from '@yaks/sync'
 import { liveClient, quiet } from './live_client.ts'
@@ -32,8 +33,12 @@ let open = (scope: string): OutboxStore<Bundle[]> => {
 let keep = (key: string, at: number, sent: Bundle[]) =>
   open(FORMER).put({ key, sent, state: 'pending', at })
 
-let g = graph({ vocab, storage: ram(vocab) })
-let server = api({ graph: g })
+// The box's graph over SQLite, whose connection keeps its receipts.
+let db = opened(':memory:')
+let store = storage(db, vocab)
+store.install()
+let g = graph({ vocab, storage: store })
+let server = api({ graph: g, db })
 let moved = crypto.randomUUID()
 await g.apply([{ entity: { eid: moved }, doc: { title: 'Since edited' } }])
 let unsent = [{ entity: { eid: '$new' }, doc: { title: 'Typed, never sent' } }]

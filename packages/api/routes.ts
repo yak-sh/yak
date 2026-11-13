@@ -13,6 +13,7 @@
 // unlike `authenticate` beside it, which is asked for before anything is open.
 
 import type { Bundle, Graph, News, Storage } from '@yaks/graph'
+import type { Driver } from '@yaks/sql'
 import type { Authenticate } from './actor.ts'
 import {
   api,
@@ -52,7 +53,10 @@ let socketing = (request: Request) =>
  * well as this graph's own. */
 export type Hosting = {
   graph: Graph
-  storage?: Pick<Storage, 'revision'>
+  storage?: Pick<Storage, 'revision'> & {
+    /** The store's own connection, which keeps the write log (./graph.ts). */
+    statements?: Driver
+  }
   stopping?: AbortSignal
   who: Authenticate
   routes: Route[]
@@ -143,6 +147,7 @@ export let handler = (host: Hosting, options: {
     : undefined
   let door = api({
     graph,
+    db: host.storage?.statements,
     authenticate: host.who,
     subs,
     report,

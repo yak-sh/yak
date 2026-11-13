@@ -12,6 +12,8 @@
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, derivedEid, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
+import { storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
 import { api, type Handler, subscriptions } from '@yaks/api'
 import { apiDoc } from '@yaks/api/vocab'
 import { marks } from './mark.ts'
@@ -214,9 +216,14 @@ export type Server = {
  * read. */
 export let COOK = derivedEid('fixture:cook')
 
-/** A server graph behind a @yaks/api handler, upgrading to stand-in sockets. */
+/** A server graph behind a @yaks/api handler, upgrading to stand-in sockets.
+ * Its graph is SQLite in memory, whose connection keeps the write log a keyed
+ * write's receipt is kept in. */
 export let server = (): Server => {
-  let g = boxGraph()
+  let db = open(':memory:')
+  let store = storage(db, box, { number: true })
+  store.install()
+  let g = graph({ storage: store, vocab: box, plugins: [marks] })
   let sockets: Fake[] = []
   let waiting: Fake[] = []
   let now = 0
@@ -232,6 +239,7 @@ export let server = (): Server => {
   }
   let handler = api({
     graph: g,
+    db,
     // The registry batches peer fan-out too; it must use this fixture's clock,
     // not leave a real timer running after idle() has returned.
     subs: subscriptions(g, {
