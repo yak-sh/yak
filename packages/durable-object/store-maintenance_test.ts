@@ -257,7 +257,7 @@ test('an index no window can hold is built free, and looking at it reads a row, 
 
 // A classified spine under its pointer index: a schema change reads only the
 // owners whose pointer is missing or names a table the file no longer holds.
-let reinstalled = async (stray?: number) => {
+let reinstalled = async (stray?: number, cursor?: string) => {
   let f = metered(), first = storage(f.file, shop, { deferred: false })
   first.install()
   await first.tx((tx) =>
@@ -273,6 +273,12 @@ let reinstalled = async (stray?: number) => {
   f.file.sql.exec("delete from server_meta where k='schema'")
   let store = storage(f.file, shop, { deferred: true }), before = f.read()
   store.install()
+  if (cursor) {
+    f.file.sql.exec(
+      "insert or replace into server_meta (k, v) values ('archetype:pending', ?)",
+      cursor,
+    )
+  }
   let pending = f.file.sql.exec(
     "select v from server_meta where k='archetype:pending'",
   ).toArray().length
@@ -283,6 +289,7 @@ let reinstalled = async (stray?: number) => {
   return { store, pending, unpointed, read: f.read() - before }
 }
 let unread = await reinstalled(), strayed = await reinstalled(90_000)
+let passing = await reinstalled(undefined, '512')
 
 test('a schema change leaves a classified spine unread', () => {
   equal([unread.pending, unread.unpointed, unread.read < 500], [0, 0, true])
@@ -296,4 +303,8 @@ test('a schema change classifies a stray without reading the spine', () => {
   equal(strayed.store.read('.doc.title=stray-90000')[0].doc, {
     title: 'stray-90000',
   })
+})
+
+test('a pass part way through a classified spine stops paging it', () => {
+  equal([passing.pending, passing.unpointed, passing.read < 500], [1, 0, true])
 })

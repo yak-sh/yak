@@ -2,7 +2,8 @@
 // The persisted cursor makes a reset resume primary-key pages, even before the
 // pointer index exists. Ordinary reads use the component tables until it ends.
 // Once that index stands, a pass reads only the owners it names as strays
-// (./archetype.ts `strays`): a schema change leaves a classified spine alone.
+// (./archetype.ts `strays`), and a cursor already part way through the spine
+// stops there: a schema change leaves a classified spine alone.
 import {
   as,
   col,
@@ -23,9 +24,6 @@ import { unit } from './unit.ts'
 
 export let CLASSIFYING = 'archetype:pending'
 let PAGE = 512
-// The mark's value past `metadata` when the pointer index stands: pages are
-// strays, not a cursor through the spine.
-let STRAYS = 'strays'
 
 // How many rows a table holds at most: its last rowid, one row read. A
 // Durable Object bills `count(*)` every row it counts, so a look at an owed
@@ -81,11 +79,15 @@ export let maintenance = (driver: Driver, number: () => boolean) => {
         if (!admit((n + 2) * (indexes * 3 + 8))) return false
         unit(driver, () => {
           backfill(driver, number(), false)
-          marks.set(CLASSIFYING, pointable(driver) ? STRAYS : '0')
+          marks.set(CLASSIFYING, '0')
         })
         return true
       }
-      let rows = at == STRAYS ? strays(driver, PAGE) : page(Number(at))
+      // Under the pointer index a page is the strays it names, which
+      // classifying moves out; without it, the primary-key page past the
+      // cursor.
+      let pointed = pointable(driver)
+      let rows = pointed ? strays(driver, PAGE) : page(Number(at))
       let tables = new Set(componentTables(driver))
       // Worst case: every owner has a distinct set, requiring a descriptor,
       // its spine and pointer, as well as the owner's indexed pointer write.
@@ -99,7 +101,7 @@ export let maintenance = (driver: Driver, number: () => boolean) => {
             pointed?.every((t) => tables.has(t)) ? [...pointed] : undefined,
         )
         if (rows.length < PAGE) marks.del(CLASSIFYING)
-        else if (at != STRAYS) marks.set(CLASSIFYING, String(rows.at(-1)!.id))
+        else if (!pointed) marks.set(CLASSIFYING, String(rows.at(-1)!.id))
       })
       return true
     }
