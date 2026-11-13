@@ -3,6 +3,7 @@
 import { createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { basename, dirname, join } from 'node:path'
+import { HUMAN, idsIn, parse } from '@yaks/id'
 
 let operator = 'ac7184a3-f341-4697-a8a7-b4ea0984c0db'
 export let options = (args: string[]) => ({
@@ -162,6 +163,9 @@ export let prefer = (prior: Json, next: Json) =>
     (next.message.usage.output_tokens > prior.message.usage.output_tokens ||
       (next.message.usage.output_tokens === prior.message.usage.output_tokens &&
         !(next.path.endsWith('.output') && !prior.path.endsWith('.output')))))
+// A task's id: the T series, as the task component declares it.
+let task = (id?: string): id is string =>
+  !!id && HUMAN.test(id) && parse(id)?.prefix == 'T'
 export let taskIds = (r: Json): string[] => {
   let m = r.message, ids = new Set<string>()
   let blocks = typeof m?.content === 'string'
@@ -169,10 +173,10 @@ export let taskIds = (r: Json): string[] => {
     : m?.content ?? []
   for (let b of blocks) {
     if (
-      r.type === 'user' && b.type === 'text' && /^Work(?: on)? T-/.test(b.text)
+      r.type === 'user' && b.type === 'text' && /^Work(?: on)? /.test(b.text)
     ) {
-      for (let id of b.text.split(/[.\n]/, 1)[0].matchAll(/T-\d+/g)) {
-        ids.add(id[0])
+      for (let id of idsIn(b.text.split(/[.\n]/, 1)[0])) {
+        if (task(id)) ids.add(id)
       }
     }
     if (r.type !== 'assistant' || b.type !== 'tool_use') continue
@@ -182,12 +186,15 @@ export let taskIds = (r: Json): string[] => {
       : b.name === 'mcp__tasks__task_update' && input.status === 'done'
       ? input.task
       : ''
-    if (/^T-\d+$/.test(target ?? '')) ids.add(target)
+    if (task(target)) ids.add(target)
     for (
       let match of (input.command ?? '').matchAll(
-        /\byak (?:task (?:claim|done|close)|claim take)\s+(T-\d+)/g,
+        /\byak (?:task (?:claim|done|close)|claim take)\s+(\S+)/g,
       )
-    ) ids.add(match[1])
+    ) {
+      let id = idsIn(match[1])[0]
+      if (task(id)) ids.add(id)
+    }
   }
   return [...ids]
 }

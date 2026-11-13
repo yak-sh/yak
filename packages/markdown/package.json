@@ -9,6 +9,7 @@
   "license": "Apache-2.0",
   "description": "Parses GitHub Flavored Markdown into structural renderer nodes rather than HTML strings or terminal escape sequences.",
   "dependencies": {
+    "@yaks/id": "0.2.23",
     "@yaks/render": "0.2.24",
     "marked": "18.0.6",
     "preact": "10.29.7"

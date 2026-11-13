@@ -58,11 +58,11 @@ deno add jsr:@yaks/id
 
 ## Exports
 
-| Import           | Exports                                                                                                                                             |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/id`       | `idKeywords`, `ID_URI`, `short`, `SHORT`, `BARE`, `prefixes`, `prefixOf`, `format`, `parse`, `idOf`, `human`; `Named`, `Parsed`, `Wearing`; `idDoc` |
-| `@yaks/id/vocab` | `idDoc`, `docs`, `idKeywords`, `keywords`, `description`                                                                                            |
-| `@yaks/id/graph` | `numbers`, `ids`, `starting`, `plugins`                                                                                                             |
+| Import           | Exports                                                                                                                                                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/id`       | `idKeywords`, `ID_URI`, `short`, `SHORT`, `BARE`, `HUMAN`, `LETTERED`, `WRITTEN`, `prefixes`, `prefixOf`, `initial`, `format`, `parse`, `idOf`, `human`, `idsIn`, `replaceIds`, `mentions`, `key`, `names`; `Named`, `Parsed`, `Wearing`; `idDoc` |
+| `@yaks/id/vocab` | `idDoc`, `docs`, `idKeywords`, `keywords`, `description`                                                                                                                                                                                          |
+| `@yaks/id/graph` | `numbers`, `ids`, `starting`, `plugins`                                                                                                                                                                                                           |
 
 ## Prefixes and short handles
 
@@ -104,6 +104,29 @@ equal(BARE.test('facade'), false)
 
 The keyword schema requires one uppercase letter. Formatting a prefix does not
 allocate a number.
+
+## Ids in text and in maps
+
+Every door that prints, parses or matches a human id does it here, so the shape
+of an id is decided in one package. `HUMAN` recognizes an id as typed with its
+letter, in either case. `WRITTEN` is the pattern of an id in prose, one capital
+letter, a hyphen and digits, for a grammar that composes it with other patterns
+(@yaks/markdown). `idsIn()` lists the ids written in a text, each a word of its
+own, so neither `COVID-19` nor the `T-14429` inside `T-144294` is one;
+`replaceIds()` rewrites them; `mentions()` asks whether a text names one id
+whole. `key()` is what a map of ids is kept by, the same for every spelling that
+names one entity, and `names()` asks whether a typed id names an entity.
+
+```ts
+import { idsIn, key, mentions, names, replaceIds } from '@yaks/id'
+import { equal } from '@yaks/testing'
+
+equal(idsIn('T-12 needs M-3, not COVID-19'), ['T-12', 'M-3'])
+equal(replaceIds('T-12 failed', () => '#'), '# failed')
+equal(mentions('see T-144294', 'T-14429'), false)
+equal([key('B-7'), key('7'), key({ num: 7 })], ['7', '7', '7'])
+equal(names('A-7', { num: 7 }), true)
+```
 
 ## Allocate numbers and resolve ids
 

@@ -37,12 +37,8 @@
 // ./number.ts.
 
 import type { Bundle, Eid, Plugin, Tx } from './types.ts'
-import { parse, SHORT } from './id.ts'
+import { LETTERED, parse, SHORT } from './id.ts'
 import type { Vocab } from '@yaks/vocab'
-
-/** A short handle with a letter in front of its `#`, as handles were once
- * written. */
-let LETTERED = /^[a-z]+#[0-9a-f]{6,64}$/i
 
 /** A handle's hex with a uuid's dashes put back where they fall. */
 let dashed = (hex: string): string =>

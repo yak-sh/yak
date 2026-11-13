@@ -3063,6 +3063,9 @@ importers:
 
   packages/markdown:
     dependencies:
+      '@yaks/id':
+        specifier: 0.2.23
+        version: link:../id
       '@yaks/render':
         specifier: 0.2.24
         version: link:../render
@@ -3862,6 +3865,9 @@ importers:
       '@yaks/fp':
         specifier: 0.2.23
         version: link:../fp
+      '@yaks/id':
+        specifier: 0.2.23
+        version: link:../id
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab

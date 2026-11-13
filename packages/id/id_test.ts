@@ -5,7 +5,21 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { extendMeta, loadVocab, type VocabDoc } from '@yaks/vocab'
 import { ID_URI, idKeywords } from './keywords.ts'
-import { format, idOf, parse, prefixes, prefixOf, SHORT, short } from './id.ts'
+import {
+  format,
+  HUMAN,
+  idOf,
+  idsIn,
+  key,
+  mentions,
+  names,
+  parse,
+  prefixes,
+  prefixOf,
+  replaceIds,
+  SHORT,
+  short,
+} from './id.ts'
 
 let catalog: VocabDoc = {
   $vocabulary: { 'https://yak.sh/vocab/core': true, [ID_URI]: true },
@@ -110,4 +124,29 @@ test('the keyword is registered, so the loader carries it', () => {
     '^[A-Z]$',
   )
   assertEquals(meta.$vocabulary[ID_URI], true)
+})
+
+test('ids are found in prose only as words of their own', () => {
+  let text = 'T-12 needs M-3, not T-123x, COVID-19, #T-4 or `T-5-6`; (P-7).'
+  assertEquals(idsIn(text), ['T-12', 'M-3', 'P-7'])
+  assertEquals(
+    replaceIds(text, (id) => `[${id}]`).slice(0, 15),
+    '[T-12] needs [M',
+  )
+  assert(mentions('see T-14429.', 'T-14429'))
+  assert(!mentions('see T-144294', 'T-14429'))
+  assert(HUMAN.test('b-7') && !HUMAN.test('7') && !HUMAN.test('#a3f19c'))
+})
+
+test('every spelling of an id keys and names the same entity', () => {
+  for (let typed of ['B-7', 'a-7', '7']) {
+    assertEquals(key(typed), '7')
+    assert(names(typed, { num: 7 }))
+  }
+  assertEquals([key('#a3f19c'), key({ num: null }), key({})], [
+    undefined,
+    undefined,
+    undefined,
+  ])
+  assert(!names('B-7', { num: 8 }) && !names('B-0', {}))
 })

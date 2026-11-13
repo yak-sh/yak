@@ -3992,6 +3992,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@yaks/id@0.2.23",
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.30",
             "npm:marked@18.0.6",
@@ -4380,6 +4381,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@yaks/fp@0.2.23",
+            "npm:@yaks/id@0.2.23",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/vocab@0.2.32"
           ]

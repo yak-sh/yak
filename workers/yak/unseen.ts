@@ -11,7 +11,7 @@
 // rows are the `app_errors` answer, one line each.
 import type { Bundle } from '@yaks/graph'
 import { cmp } from '@yaks/fp'
-import { addressId, parse, short } from '@yaks/id'
+import { addressId, format, initial, names as numbered, short } from '@yaks/id'
 import { derivedEid } from '@yaks/graph/identity'
 import * as dirPart from './directory.ts'
 import {
@@ -379,7 +379,7 @@ type Hit = {
 // (exception, error).
 let idOf = (h: Hit) =>
   h.entity.num && !h.tracked
-    ? `${h.kind.slice(0, 1).toUpperCase()}-${h.entity.num}`
+    ? format(initial(h.kind), h.entity.num)
     : short(h.entity.eid)
 
 // Whether a word names a break: its eid, or the handle it is read by. A
@@ -389,7 +389,7 @@ let idOf = (h: Hit) =>
 let names = (word: string, h: Hit) =>
   word == h.entity.eid ||
   (h.entity.num && !h.tracked
-    ? parse(word)?.num == h.entity.num
+    ? numbered(word, h.entity)
     : addressId(word) == short(h.entity.eid))
 
 // One open item and the app it broke in — what serve() hands back, so a

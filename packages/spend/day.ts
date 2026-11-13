@@ -12,7 +12,7 @@ import { env } from '@yaks/process/env'
  */
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
-import { parse } from '@yaks/id'
+import { idsIn, parse } from '@yaks/id'
 import { accountEid, listPrice, type Price } from '@yaks/model'
 import { type Home, home } from '@yaks/session/files'
 import { absolute } from '@yaks/file/local'
@@ -210,8 +210,8 @@ let briefed = async (
     let [first] = await g.rows(
       `.entry.session=${s} .content .order=entry.seq .limit=1 .fields=content.body`,
     ) as Record<string, unknown>[]
-    let nums = (str(first?.['content.body']).match(/\b[A-Z]-\d+\b/g) ?? [])
-      .map((id) => parse(id)?.num).filter((n): n is number => n != null)
+    let nums = idsIn(str(first?.['content.body']))
+      .map((id) => parse(id)!.num)
     if (nums.length) named.set(s, [...new Set(nums)])
   }
   let all = [...new Set([...named.values()].flat())]

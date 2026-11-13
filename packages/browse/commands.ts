@@ -19,7 +19,7 @@ import { vocab } from './types.ts'
 // board query does (query.ts). Platform-local verbs (the TUI's :q, the
 // web's :zoom) ride in run()'s `local` table — the shared list is the
 // language both faces speak, and each adds only what the other can't do.
-import { SHORT } from '@yaks/id'
+import { HUMAN, SHORT } from '@yaks/id'
 import { EID } from './types.ts'
 import { type Change, type Dep, idOf, uuid } from './types.ts'
 import {
@@ -491,7 +491,7 @@ export let commands: Record<string, Command> = {
         return { spawn: r.eid, msg: `${idOf(r)} → agent` }
       }
       if (
-        (/^[A-Za-z]+-\d+$/.test(text) || SHORT.test(text) || EID.test(text))
+        HUMAN.test(text) || SHORT.test(text) || EID.test(text)
       ) {
         let r = g.find(text)
         if (!r?.comps.task) throw new Error(`no such task: ${text}`)

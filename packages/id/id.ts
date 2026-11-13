@@ -42,7 +42,10 @@ export type Parsed = { prefix: string; num: number }
 // reads `E`, since `parse` reads a prefix of letters and an `_` would make an
 // id nothing resolves. Two components sharing an initial share a series —
 // harmless, since the number is what identifies an entity.
-let initial = (kind: string) => (kind.match(/[a-z]/i)?.[0] ?? '').toUpperCase()
+/** The letter a component that declares no prefix prints its ids with: its
+ * name's first letter, uppercased. */
+export let initial = (kind: string): string =>
+  (kind.match(/[a-z]/i)?.[0] ?? '').toUpperCase()
 
 /**
  * Every prefix the vocabulary declares, as component name → letter. Reads the
@@ -121,6 +124,56 @@ export type Wearing = {
 export let human = (v: Vocab): (b: Wearing) => string => {
   let id = idOf(v)
   return (b) => id({ eid: b.entity.eid, kind: v.kindOf(b), num: b.entity.num })
+}
+
+/** A human id as typed, with its letter: `B-7`, `b-7`. A bare number parses
+ * (`parse`) but is not written with its series. */
+export let HUMAN: RegExp = /^[A-Za-z]+-\d+$/
+
+/** A short handle with a letter in front of its `#`, as handles were once
+ * written (`T#47e9678bdf`). It names nothing. */
+export let LETTERED: RegExp = /^[a-z]+#[0-9a-f]{6,64}$/i
+
+/** A human id as prose writes one, as a pattern's source for a grammar that
+ * composes it with others: one capital letter, a hyphen and digits. Read as a
+ * word of its own ({@link idsIn}), so one whose letters run on before the
+ * hyphen (COVID-19, UTF-8) is not an id. */
+export let WRITTEN = '[A-Z]-\\d+'
+
+// A human id written as a word of its own: nothing word-like, no `#` and no
+// hyphen on either side, so `T-14429` is not found in `T-144294`.
+let word = (source: string, flags = 'g') =>
+  new RegExp(`(?<![\\w#-])(?:${source})(?![\\w-])`, flags)
+
+/** Every human id written in a text, in order, each a word of its own. */
+export let idsIn = (text: string): string[] =>
+  [...text.matchAll(word(WRITTEN))].map((m) => m[0])
+
+/** The text with each human id written in it replaced by what `f` says. */
+export let replaceIds = (text: string, f: (id: string) => string): string =>
+  text.replace(word(WRITTEN), f)
+
+/** Whether a text mentions `id` as a whole id: `T-14429` is not mentioned by
+ * `T-144294`. */
+export let mentions = (text: string, id: string): boolean =>
+  word(id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), '').test(text)
+
+/** What a map of ids is keyed by: the same for every spelling that names one
+ * entity, from an id as typed or from an entity's row. Today that is the
+ * number, since the number is the identity. Undefined for what is not a human
+ * id and for an entity the store has not numbered. */
+export let key = (
+  id: string | { num?: number | null },
+): string | undefined => {
+  let num = typeof id == 'string' ? parse(id)?.num : id.num
+  return num ? String(num) : undefined
+}
+
+/** Whether an id as typed names this entity: the same number, whatever letter
+ * it is written with. */
+export let names = (id: string, e: { num?: number | null }): boolean => {
+  let k = key(id)
+  return k != null && k == key(e)
 }
 
 /** A copied short handle, normalized before resolving it through the graph. */

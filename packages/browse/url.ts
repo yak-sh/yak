@@ -2,7 +2,7 @@ import { localPath, pagePath, webOrigin } from './hosting.ts'
 // Human-facing graph addresses. Transport stays local through TASKS_HOST;
 // anything handed to a person uses the board's stable public door.
 
-import { addressId, SHORT } from '@yaks/id'
+import { addressId, HUMAN, SHORT } from '@yaks/id'
 import { EID } from './types.ts'
 import { queryAt, querySearch } from '@yaks/query'
 
@@ -34,9 +34,7 @@ export let entityId = (raw: string): string | undefined => {
   } catch {
     return undefined
   }
-  return /^[A-Za-z]+-\d+$/.test(id) || SHORT.test(id) || EID.test(id)
-    ? id
-    : undefined
+  return HUMAN.test(id) || SHORT.test(id) || EID.test(id) ? id : undefined
 }
 
 // ONE canonical spelling for a page address. A page filed from a browser

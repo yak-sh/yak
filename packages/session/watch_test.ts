@@ -24,7 +24,8 @@ import { sessionDoc } from './comp.ts'
 import { statusComputed } from './state.ts'
 import { running } from './run.ts'
 import { hear } from './listen.ts'
-import { mentions, watch } from './watch.ts'
+import { watch } from './watch.ts'
+import { mentions } from '@yaks/id'
 
 let vocab = loadVocab([
   kernelDoc,
@@ -468,5 +469,5 @@ test('an id is mentioned whole, never as the start of a longer one', () =>
     ['T-7 done', 'see (T-7).', 'T-77', 'XT-7', 'T-7a'].map((t) =>
       mentions(t, 'T-7')
     ),
-    [true, true, false, false, true],
+    [true, true, false, false, false],
   ))

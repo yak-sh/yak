@@ -7,7 +7,7 @@ import { door } from './hosting.ts'
 // known eid, or shaped like a task, does the obvious; anything else becomes
 // a task — first line title, rest body.
 import { base, cache, capable, findEid, uuid } from './live.ts'
-import { SHORT } from '@yaks/id'
+import { HUMAN, LETTERED, SHORT } from '@yaks/id'
 import { type Change, EID } from './types.ts'
 
 // What a paste resolves to: comps to mint (none for existing entities),
@@ -85,8 +85,8 @@ export let pasted = (raw: string, clock: Clock = system): Pasted | null => {
   // A handle written with a letter (`T#3f9a1c`) is an id too, so it is refused
   // by the finder rather than filed as a task titled with it.
   if (
-    EID.test(text) || SHORT.test(text) || /^[A-Za-z]+-\d+$/.test(text) ||
-    /^[A-Za-z]+#[0-9a-f]{6,64}$/i.test(text)
+    EID.test(text) || SHORT.test(text) || HUMAN.test(text) ||
+    LETTERED.test(text)
   ) {
     let eid = findEid(text)
     return eid ? { changes: [], target: eid } : null

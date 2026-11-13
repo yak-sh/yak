@@ -16,6 +16,7 @@ import {
 // upstream. Retention lets reopens paint; ready separates loading from absent.
 // Never restore whole-db sync or an unbounded cache.
 import { IdError } from './types.ts'
+import { key } from '@yaks/id'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import {
   batch,
@@ -350,7 +351,7 @@ let noRelations: Dep[] = []
 // Human ids are a hot lookup vocabulary, not a query. Keep them beside the
 // cache so rendering one reference never scans or subscribes to the graph.
 let idGraph = paint.peek()
-let numEids = new Map<number, string>()
+let numEids = new Map<string, string>()
 let aliasEids = new Map<string, string>()
 let shortEids = new Map<string, Set<string>>()
 // The cache's derived indexes (index.ts) — the reverse `{eid}` views, by-
@@ -782,7 +783,8 @@ let refsTo = (value: string): Pred => ({
 
 let indexId = (eid: string, r?: Comps) => {
   if (!r) return
-  if (r.entity?.num) numEids.set(r.entity.num, eid)
+  let k = r.entity && key(r.entity)
+  if (k) numEids.set(k, eid)
   let a = aliasOf(r)
   if (a) aliasEids.set(a.name, a.eid)
   let hex = eid.replaceAll('-', '').toLowerCase()
@@ -796,8 +798,8 @@ let indexId = (eid: string, r?: Comps) => {
 
 let unindexId = (eid: string, r?: Comps) => {
   if (!r) return
-  let num = r.entity?.num
-  if (num && numEids.get(num) == eid) numEids.delete(num)
+  let k = r.entity && key(r.entity)
+  if (k && numEids.get(k) == eid) numEids.delete(k)
   let a = aliasOf(r)
   if (a && aliasEids.get(a.name) == a.eid) aliasEids.delete(a.name)
   let hex = eid.replaceAll('-', '').toLowerCase()
@@ -2348,8 +2350,8 @@ export let repoUrl = (start: Ent): string | undefined => repoTrace(start).url
 
 export let findEid = (id: string): string | undefined => {
   syncIds()
-  let num = id.match(/^[A-Za-z]+-(\d+)$/)?.[1] ?? id.match(/^(\d+)$/)?.[1]
-  if (num) return numEids.get(+num)
+  let k = key(id)
+  if (k) return numEids.get(k)
   if (cached(id.toLowerCase())) return id.toLowerCase()
   let hex = shortHex(id)
   if (hex) {

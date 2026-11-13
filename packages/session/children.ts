@@ -11,7 +11,7 @@ import { aside, dispatchStatus, tail } from './admission.ts'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
-import { parse } from '@yaks/id'
+import { format, parse, prefixOf } from '@yaks/id'
 import { done, statusComps, statusOf as taskStatus } from '@yaks/task'
 import {
   type Tool,
@@ -62,8 +62,7 @@ let taskRow = async (
   comps?: string[],
 ): Promise<Bundle> => {
   let b = await row(g, id, comps)
-  let num = parse(id)?.num
-  if (!b && num != null) [b] = await g.read(`.task .entity.num=${num} *`)
+  if (!b && parse(id)) [b] = await g.read(`.task .entity.eid=${id} *`)
   if (!b?.task) throw new ToolError('task', `not a task: ${id}`)
   return b
 }
@@ -610,7 +609,9 @@ export let deliverChild = async (
   if (await row(g, eid)) return
   let message = announceTask
     ? `task ${
-      task!.entity.num != null ? `T-${task!.entity.num}` : task!.entity.eid
+      task!.entity.num != null
+        ? format(prefixOf(g.vocab)('task'), task!.entity.num)
+        : task!.entity.eid
     } ${taskStatus(g.vocab, task!)}`
     : `child ${child} ${status}`
   let notice = await row(g, derivedEid('notice:' + child))

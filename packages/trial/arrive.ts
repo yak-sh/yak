@@ -33,7 +33,7 @@
  */
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { called } from '@yaks/graph/hit'
-import { human, short } from '@yaks/id'
+import { human, idsIn, mentions, names, short } from '@yaks/id'
 import type { Meaning } from '@yaks/host'
 import { bearing, clip, earlier, titleOf } from '@yaks/memory/earlier'
 import { textOf } from '@yaks/memory/graph'
@@ -292,11 +292,10 @@ let dayBefore = (at: string): string =>
  * letter ("T-153687") or its short handle. */
 export let naming = (had: Bundle[]): (b: Bundle) => boolean => {
   let text = had.map((b) => JSON.stringify(b)).join('\n')
-  let word = (source: string) =>
-    new RegExp(`(?<![\\w#-])${source}(?![\\w-])`).test(text)
-  return ({ entity: { eid, num } }) =>
-    word(RegExp.escape(eid)) || word(RegExp.escape(short(eid))) ||
-    (num != null && word(`[A-Z]-${num}`))
+  let said = idsIn(text)
+  return ({ entity }) =>
+    mentions(text, entity.eid) || mentions(text, short(entity.eid)) ||
+    said.some((id) => names(id, entity))
 }
 
 let lines = (door: Part['door'], rows: [Bundle, string][]): Part[] =>

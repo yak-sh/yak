@@ -27,7 +27,7 @@ import { argsOf } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
 import { and, present, want } from '@yaks/query'
-import { human } from '@yaks/id'
+import { human, idsIn, parse, prefixOf } from '@yaks/id'
 import { verify as entityVerify } from '@yaks/kernel'
 import { once } from '@yaks/fp'
 import type { Finding, Level } from '@yaks/tools'
@@ -133,9 +133,6 @@ let verdict = (
     ? ['warn', 'never checked']
     : ['warn', `no answer: ${got.why}`]
 
-// The tasks a commit message names (T-12), as the graph addresses them.
-let TASK = /\bT-\d+\b/
-
 /** Landing with Git supplied at the effect boundary. Each commit that landed
  * is recorded as `commit{target, message}`, its eid the sha, created through
  * the caller's session; its target is the task its first line names. */
@@ -162,7 +159,11 @@ export let landing =
     }
     // A graph without commit vocabulary records nothing.
     let landed = graph?.vocab.comp('commit') ? outcome.commits : []
-    let named = landed.map((c) => c.message.split('\n')[0].match(TASK)?.[0])
+    // The task a commit's first line names (T-12), as the graph addresses it.
+    let series = landed.length ? prefixOf(graph!.vocab)('task') : ''
+    let named = landed.map((c) =>
+      idsIn(c.message.split('\n')[0]).find((id) => parse(id)?.prefix == series)
+    )
     let ids = [...new Set(named.filter((id): id is string => !!id))]
     let at = ids.length ? await graph!.address(ids) : new Map<string, string>()
     return [

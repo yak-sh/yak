@@ -11,6 +11,7 @@ import { Attachments, Notice, Pairs, Transcript } from '@yaks/ui/parts'
 import type { Bundle, Comp } from '@yaks/graph/bundle'
 import { type Step, stepOf, type Steps } from '@yaks/tools/title'
 import { blocks, Host, type Options, parse } from '@yaks/markdown'
+import { HUMAN } from '@yaks/id'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import { useContext } from 'preact/hooks'
 import { Body, Drop, Icon, Menu, More, Rows } from '@yaks/ui/parts'
@@ -478,8 +479,13 @@ let change = (now: Layer | undefined, before: Layer | undefined) => {
 
 // What a part a persona voiced is called: its heading, without the id before
 // its title (@yaks/persona `voice`).
-let heading = (part: string) =>
-  part.match(/^#+ (?:(?:#\S+|[A-Z]+-\d+) )?(.*)\n?/)
+let heading = (part: string) => {
+  let m = part.match(/^#+ (.*)\n?/)
+  if (!m) return undefined
+  let [first, ...rest] = m[1].split(' ')
+  let id = rest.length > 0 && (HUMAN.test(first) || first.startsWith('#'))
+  return { length: m[0].length, name: id ? rest.join(' ') : m[1] }
+}
 
 // The layers of a system prompt: each document its persona wears, by its
 // title, base first, and what its host added after them (@yaks/persona
@@ -494,9 +500,9 @@ let voiced = (said: string): Layer[] =>
         return parts
       }
       return [...parts, {
-        name: head?.[1].trim() ||
+        name: head?.name.trim() ||
           (i ? 'Its spaces, apps and connections' : 'Its instructions'),
-        text: head ? part.slice(head[0].length) : part,
+        text: head ? part.slice(head.length) : part,
       }]
     },
     [],

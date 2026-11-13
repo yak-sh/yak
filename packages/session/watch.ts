@@ -49,7 +49,7 @@ import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { addressed, argsOf } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
-import { human } from '@yaks/id'
+import { HUMAN, human, mentions } from '@yaks/id'
 import { CLAIM, SESSION } from './comp.ts'
 import { ended, type Projects, projects, taken } from './listen.ts'
 
@@ -65,20 +65,13 @@ let fold = (text: string, max = 200): string => {
   return line.length > max ? `${line.slice(0, max - 1)}…` : line
 }
 
-// A human id worth looking for in text: a prefix and a number. A bare hash is
-// not how anyone mentions a task.
-let NUMBERED = /^[A-Z]+-\d+$/
-
-/** Whether `text` mentions `id` as a whole id, not the start of a longer one:
- * `T-14429` is not mentioned by `T-144294`. */
-export let mentions = (text: string, id: string): boolean =>
-  new RegExp(`(^|[^A-Za-z0-9-])${id}(?![0-9])`).test(text)
-
 /** The sessions and actors that mention the task `id` names: the sessions
  * whose own entries do, and the writer of each other entity whose `doc.body`
  * does, by the session it came through or else the actor. */
 let mentioners = async (g: G, task: Eid, id: string): Promise<Eid[]> => {
-  if (!NUMBERED.test(id)) return []
+  // A human id, a prefix and a number: a bare hash is not how anyone
+  // mentions a task.
+  if (!HUMAN.test(id)) return []
   let said = g.vocab.prop('content', 'body') && g.vocab.comp('entry')
     ? await g.read(
       `.content.body~=${id}&.entry&!result&!notice` +

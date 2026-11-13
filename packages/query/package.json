@@ -10,6 +10,7 @@
   "description": "Parses query strings into a serializable AST, builds the same AST from code, and completes query text against a loaded vocabulary.",
   "dependencies": {
     "@yaks/fp": "0.2.23",
+    "@yaks/id": "0.2.23",
     "@yaks/vocab": "0.2.32"
   },
   "devDependencies": {

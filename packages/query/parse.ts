@@ -41,6 +41,7 @@ import {
 } from './ast.ts'
 import { OPERATORS } from './teach.ts'
 import { frozen } from '@yaks/fp'
+import { parse as parseId } from '@yaks/id'
 
 // ---- values ----
 
@@ -285,10 +286,7 @@ let ABSENCE: Record<string, Clause> = {
 // refuses a cursor it cannot read rather than silently restarting from the
 // front. `.after=` and an HTTP endpoint's own `after=` parameter are read by
 // this one function.
-export let cursor = (val: string): number | undefined => {
-  let m = val.match(/^(?:[A-Za-z]+-)?(\d+)$/)
-  return m ? Number(m[1]) : undefined
-}
+export let cursor = (val: string): number | undefined => parseId(val)?.num
 
 // A component name with a prefix character, or null when the token has none.
 // `!comp` and `.comp` are ordinary predicates — absence and presence are

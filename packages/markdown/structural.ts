@@ -3,6 +3,7 @@
  */
 import { Marked, type Token, type Tokens } from 'marked'
 import type { Child, H } from '@yaks/render'
+import { HUMAN, WRITTEN } from '@yaks/id'
 
 export { type Token } from 'marked'
 
@@ -18,16 +19,17 @@ export type Refs = (id: string) => string | undefined
 // number names the entity), a #hex short id, a UUID or a whole SHA. UTF-8 and
 // SHA-256 stay words because their letters sit mid-word.
 let UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
-let ID = `[A-Z]-\\d+|#[0-9a-fA-F]{6,64}|${UUID}|[0-9a-f]{64}|[0-9a-f]{40}`
+let ID = `${WRITTEN}|#[0-9a-fA-F]{6,64}|${UUID}|[0-9a-f]{64}|[0-9a-f]{40}`
 let START = new RegExp(`(?<![\\w#-])(?:${ID})(?![\\w-])`)
 let REF = new RegExp(`^(?:${ID})(?![\\w-])`)
 let NAMED = new RegExp(
-  `^(?:[A-Za-z]+-\\d+|#[0-9a-fA-F]{6,64}|${UUID}|[0-9a-f]{40}|[0-9a-f]{64})$`,
+  `^(?:#[0-9a-fA-F]{6,64}|${UUID}|[0-9a-f]{40}|[0-9a-f]{64})$`,
 )
 let HEX = /^[0-9a-f]{7,64}$/i
 
 /** Whether a link's target is an entity id rather than an address. */
-export let named = (href: string): boolean => NAMED.test(href)
+export let named = (href: string): boolean =>
+  HUMAN.test(href) || NAMED.test(href)
 
 let lexer = new Marked({
   gfm: true,

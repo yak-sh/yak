@@ -1,6 +1,7 @@
 // Fault grouping, independent of storage and the reporter.
 
 import type { Bundle } from '@yaks/graph'
+import { replaceIds } from '@yaks/id'
 import { comp, str, title } from './model.ts'
 
 // Cloudflare names each of its runtime's internal failures with a reference.
@@ -25,7 +26,7 @@ export let stablePlace = (text: string): string =>
  * ```
  */
 export let normalize = (text: string): string =>
-  stablePlace(text)
+  replaceIds(stablePlace(text), () => '#') // human ids: T-3, S-45
     .toLowerCase()
     .replace(
       /\b(sub|cus|cs|pi|si|in|evt|pm|seti|ch|acct|price|prod)_(?:(?:test|live)_)?[a-z0-9]{12,}\b/g,
@@ -37,7 +38,6 @@ export let normalize = (text: string): string =>
       /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
       '#',
     )
-    .replace(/\b[a-z]-\d+\b/g, '#') // human ids: T-3, S-45
     .replace(/\d{4}-\d{2}-\d{2}t[\d:.]+z?/g, '#') // iso timestamps
     .replace(/\/[^\s:]+/g, '#') // absolute paths
     .replace(/:\d+(:\d+)?/g, '#') // :line:col

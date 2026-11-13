@@ -24,6 +24,7 @@
 // the native runner) or after it (Codex).
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
+import { HUMAN, SHORT } from '@yaks/id'
 import { and, type Clause, eq, present } from '@yaks/query/core'
 import {
   attribute,
@@ -335,7 +336,7 @@ export let instructionParts = (body: string, name = 'instructions'): Part[] => {
     let head = s.match(/^#{1,2} (\S+)/m)?.[1] ?? ''
     let key = head == 'Reads'
       ? 'persona reads'
-      : /^([A-Z]+-\d+|#[0-9a-f]+)$/.test(head)
+      : HUMAN.test(head) || SHORT.test(head)
       ? `persona ${head}`
       : name
     out.set(key, (out.get(key) ?? 0) + s.length)

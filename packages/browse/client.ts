@@ -5,6 +5,7 @@
 // `.doc.title=Hello` sets doc.title; a property is always named with its
 // component. Values that look like numbers become numbers.
 import { IdError } from './types.ts'
+import { key, names } from '@yaks/id'
 import { identityEid } from '@yaks/graph/identity'
 import { ownsSessionBranch } from './session_worktree.ts'
 import {
@@ -422,8 +423,7 @@ export let aliasNames = (all: Row[]) =>
 // row among these. Num first, then exact eid, then a sigilled hex prefix
 // (unique or it throws), then an alias key's name.
 export let find = (all: Row[], id: string) => {
-  let m = id.match(/^[A-Za-z]+-(\d+)$/) ?? id.match(/^(\d+)$/)
-  if (m) return all.find((r) => r.num == +m![1])
+  if (key(id)) return all.find((r) => names(id, r))
   let exact = all.find((r) => r.eid == id.toLowerCase())
   if (exact) return exact
   let hex = shortHex(id)
