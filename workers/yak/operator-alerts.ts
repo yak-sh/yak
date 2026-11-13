@@ -29,9 +29,9 @@ import { askAnchor, listsOf, needCount } from './operator-lists.ts'
 import { caught } from './defects.ts'
 import { type Ctx, refuse } from './tool.ts'
 import type { Texting } from './operator-texts.ts'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 
-type Store = ReturnType<typeof operatorStore>
+type Store = OperatorStore
 
 /** The ways a person may choose to be alerted. */
 export let ALERTING = ['push', 'text', 'email', 'updates'] as const

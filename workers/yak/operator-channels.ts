@@ -26,7 +26,7 @@ import { fullFiles } from './usage.ts'
 import type { Operator } from './operator.ts'
 import { phoneTexts } from './phone-move.ts'
 import type { Declared } from './operator-persona.ts'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 import { onPage } from './operator-view.ts'
 import { REBUILDING } from './newcomer.ts'
 import { unsaid } from './operator-draw.ts'
@@ -39,7 +39,7 @@ import { kindOf } from './operator-escalate.ts'
 export let TROUBLE =
   'Something went wrong, and the Operator could not start on this. Your request is kept; send it again to try once more.'
 
-type Store = ReturnType<typeof operatorStore>
+type Store = OperatorStore
 export type File = { name: string; mime: string; key: string; size?: number }
 
 /** The most bytes of files shown to the model as they are in one request:

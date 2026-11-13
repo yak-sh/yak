@@ -50,9 +50,9 @@ import { ctxOf, ownConnection, pageOf } from './connections.ts'
 import { apex } from '@yaks/platform/host'
 import { opened, seal } from './lib/token.ts'
 import { meta } from './meta.ts'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 
-type Store = ReturnType<typeof operatorStore>
+type Store = OperatorStore
 
 let comp = (b: Bundle | undefined, name: string) => (b?.[name] ?? {}) as Comp
 

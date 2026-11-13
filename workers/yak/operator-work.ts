@@ -7,9 +7,9 @@ import { answerOf, faulted, runner, worded } from '@yaks/tools'
 import { caught, defect } from './defects.ts'
 import { type Ask, fire, receive } from './operator-channels.ts'
 import { notification } from './operator-updates.ts'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 
-type Store = ReturnType<typeof operatorStore>
+type Store = OperatorStore
 type Work = {
   schedule: string
   at: string

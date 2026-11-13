@@ -11,7 +11,7 @@ import { rootOf } from './operator-root.ts'
 
 let space = crypto.randomUUID()
 let [person, other] = [crypto.randomUUID(), crypto.randomUUID()]
-let store = operatorStore(durable())
+let store = await operatorStore(durable())
 let [root, theirs] = [rootOf(space, person), rootOf(space, other)]
 let one = (b: Omit<Bundle, 'entity'>): Bundle => ({
   entity: { eid: crypto.randomUUID() },

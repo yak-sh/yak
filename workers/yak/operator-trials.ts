@@ -33,10 +33,10 @@ import { skillAt } from './skill-page.ts'
 import { accounted } from './meter.ts'
 import { MACHINE } from './operator-machine.ts'
 import { notification } from './operator-updates.ts'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 import { refuse } from './tool.ts'
 
-type Store = ReturnType<typeof operatorStore>
+type Store = OperatorStore
 
 /** What the Operator lends a space's trials: its providers, their prices,
  * and the model a round that names none is asked. */

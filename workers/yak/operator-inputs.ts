@@ -4,7 +4,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { type Item, type Model, modelReads } from '@yaks/model'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 import { owns } from './operator-access.ts'
 import { attachmentKey } from './attachments.ts'
 import {
@@ -16,7 +16,7 @@ import {
 } from './operator-channels.ts'
 import { refuse } from './tool.ts'
 
-type Store = ReturnType<typeof operatorStore>
+type Store = OperatorStore
 let comp = (row: Bundle | undefined, name: string) =>
   row?.[name] as Comp | undefined
 let textKey = (file: File) => JSON.stringify([file.key, file.mime, file.name])

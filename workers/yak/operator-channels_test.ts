@@ -33,11 +33,11 @@ import {
 } from './operator-channels.ts'
 import { operating, operatorContext } from './operator.ts'
 import { answering, operatorRequest } from './operator-host.ts'
-import { drain, type operatorStore as Stored } from './operator-store.ts'
+import { drain, type OperatorStore } from './operator-store.ts'
 
 // One Operator per store, as the Builder object keeps, answered by `model`.
 let operatorOf = (
-  store: ReturnType<typeof Stored>,
+  store: OperatorStore,
   env: Parameters<typeof operating>[1],
   model: Model,
   dir: Directory,
@@ -194,7 +194,7 @@ let id = await receive(f.store, {
 }, 'Post a special meeting Thursday at 7 about the road millage.')
 await drain(f.store)
 // A request with the newest answer it was given, as the page reads it.
-let answerOf = async (store: ReturnType<typeof Stored>, id: string) =>
+let answerOf = async (store: OperatorStore, id: string) =>
   (await answering(store, await store.g.get([id])))[0]
 let result = await answerOf(f.store, id)
 

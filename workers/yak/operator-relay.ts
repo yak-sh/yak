@@ -17,7 +17,7 @@ import { nameOf } from '@yaks/mcp-client'
 import { kindOf, textOf, type Tool } from '@yaks/session'
 import { type Calling, runConnectedCommand } from './connected-mcp.ts'
 import { spoken } from './operator-draw.ts'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 import { type Ctx, refuse } from './tool.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
@@ -25,7 +25,7 @@ let comp = (b: Bundle | undefined, name: string) =>
     | Comp
     | undefined
 
-type Store = ReturnType<typeof operatorStore>
+type Store = OperatorStore
 
 /**
  * The words of a conversation's line as `person` gave them, or undefined for

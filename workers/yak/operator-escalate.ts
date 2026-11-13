@@ -15,11 +15,11 @@ import type { Tool, ToolContext } from '@yaks/session'
 import type { Space } from './directory.ts'
 import type { Request } from './operator-channels.ts'
 import { rootAt } from './operator-root.ts'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 import { whoseOf } from './operator-wakes.ts'
 import { type Ctx, refuse } from './tool.ts'
 
-type Store = ReturnType<typeof operatorStore>
+type Store = OperatorStore
 let part = <T>(b: Bundle | undefined, name: string) => b?.[name] as T
 
 /** The channels a reply to the Operator's letter or text comes on. */

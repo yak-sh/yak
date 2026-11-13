@@ -16,7 +16,7 @@ import type { Request } from './operator-channels.ts'
 import { askedAt, inputOf, rootAt, rootOf, titleAt } from './operator-root.ts'
 import { phoneTexts } from './phone-move.ts'
 import { channeled } from './channel-move.ts'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 import { transcript } from '@yaks/session/transcript'
 import { dispatchStatus } from '@yaks/session/admission'
 import type { Tool } from '@yaks/model'
@@ -56,7 +56,7 @@ import {
   wire,
 } from './operator-draw.ts'
 
-type Store = ReturnType<typeof operatorStore>
+type Store = OperatorStore
 // What the channels take a person's words in with: loaded by the request that
 // sends some, not by every read (operator-channels.ts).
 let channels = () => import('./operator-channels.ts')

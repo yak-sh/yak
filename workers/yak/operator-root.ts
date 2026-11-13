@@ -2,9 +2,9 @@
 // first, apart from the channels that take in what they send
 // (operator-channels.ts).
 import { derivedEid } from '@yaks/graph/identity'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 
-type Store = ReturnType<typeof operatorStore>
+type Store = OperatorStore
 
 /** The one conversation a person has with a space's Operator: every message
  * they send it, by chat, email or text, is the next input of this session,

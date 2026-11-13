@@ -15,7 +15,7 @@ import { recentOf } from './operator-glance.ts'
 import { rootOf } from './operator-root.ts'
 
 let space = crypto.randomUUID(), person = crypto.randomUUID()
-let store = operatorStore(durable())
+let store = await operatorStore(durable())
 let root = rootOf(space, person), other = crypto.randomUUID()
 let ids: string[] = [crypto.randomUUID(), crypto.randomUUID()]
 let foreign = crypto.randomUUID()

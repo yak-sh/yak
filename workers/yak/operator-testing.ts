@@ -4,7 +4,12 @@ import { ram } from '@yaks/ram'
 import { statusComputed } from '@yaks/session/status'
 import { attemptComputed } from '../../packages/session/attempt.ts'
 import { executionComputed } from '@yaks/tools'
-import { operatorGraph, operatorVocab } from './operator-store.ts'
+import {
+  type Bound,
+  memoryPlan,
+  operatorGraph,
+  operatorVocab,
+} from './operator-store.ts'
 import type { Listed, Model } from '@yaks/model'
 import { assertEquals } from '@std/assert'
 import { refusing } from './defects.ts'
@@ -58,13 +63,21 @@ let clock: Clock = {
   },
 }
 
+let plan = await memoryPlan()
+
 /** Session decisions use the same graph composition over rows in memory. */
 export let operatorMemory = (
   storage: Storage = ram(operatorVocab, {
     computed: { ...statusComputed, ...attemptComputed, ...executionComputed },
   }),
-  options: Parameters<typeof operatorGraph>[2] = {},
-) => ({ ...operatorGraph(storage, [], { clock, ...options }), storage })
+  options: Bound['effects'] = {},
+) => ({
+  ...operatorGraph(plan, {
+    storage: () => storage,
+    effects: { clock, ...options },
+  }),
+  storage,
+})
 
 /** The Operator's HTTP and page-frame handlers over a private RAM graph, or
  * over `store`, for what a RAM graph lacks (ranked text search). */

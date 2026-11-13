@@ -37,7 +37,7 @@ import { docs as lensDocs } from '@yaks/lens/vocab'
 import { declaredLenses, lensPaths, retainedLenses } from './lenses.ts'
 import { sessionLens } from './session-lens.ts'
 import { worker } from './config.ts'
-import { chosen, facetsOf, given, used } from '@yaks/host/config'
+import { vocabsOf } from './vocabs.ts'
 import {
   type Taken,
   type Words,
@@ -69,17 +69,9 @@ let appOptions: WordsOpts = { implicit: false, keywords: appKeywords }
 let metaOptions: WordsOpts = { implicit: false, keywords: metaKeywords }
 export type StoreKind = keyof typeof worker.stores
 let configured = Object.fromEntries(
-  Object.entries(worker.stores).map((
-    [kind, config],
-  ) => [
+  Object.entries(worker.stores).map(([kind, config]) => [
     kind,
-    (config.plugins ?? []).flatMap((plug): Taken<'vocab'> => {
-      // A plugin that declares no words (yak/pages, which only purges).
-      if (facetsOf(plug)?.includes('vocab') === false) return []
-      let plugin = used(plug), facet = vocabFacets[plugin]
-      if (!facet) throw new Error(`no vocabulary facet for ${plugin}`)
-      return [[facet, given(plug), plugin, chosen(plug), facetsOf(plug)]]
-    }),
+    vocabsOf(config, vocabFacets),
   ]),
 ) as Record<StoreKind, Taken<'vocab'>>
 /** The configured declarations, with an optional graph-owned vocabulary. */

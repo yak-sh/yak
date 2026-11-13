@@ -14,11 +14,11 @@ import type { Tool } from '@yaks/session'
 import { next, span } from '@yaks/wake'
 import type { Space } from './directory.ts'
 import { type Ask, fire } from './operator-channels.ts'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 import { whoseOf } from './operator-wakes.ts'
 import { refuse } from './tool.ts'
 
-type Store = Pick<ReturnType<typeof operatorStore>, 'g'>
+type Store = Pick<OperatorStore, 'g'>
 
 /** A subscription's query read as the person who set it: over the space
  * through their reach, or, when `mine`, over the Operator's own store. */

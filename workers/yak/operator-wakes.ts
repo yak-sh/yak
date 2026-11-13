@@ -12,10 +12,10 @@ import { next, span, type Wake } from '@yaks/wake'
 import { toolEid } from '@yaks/tools'
 import type { Space } from './directory.ts'
 import type { Ask } from './operator-channels.ts'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 import { refuse } from './tool.ts'
 
-type Store = Pick<ReturnType<typeof operatorStore>, 'g'>
+type Store = Pick<OperatorStore, 'g'>
 
 /** Whose a call's wake-ups are: the person the session works for. */
 export let whoseOf = async (store: Store, context?: ToolContext) => {

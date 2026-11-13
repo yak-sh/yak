@@ -36,7 +36,7 @@ let service = operatorService(
       cost: 0.001,
     })
   }),
-  operatorStore(durable()),
+  await operatorStore(durable()),
 )
 env.BUILDER = service.binding
 let { store } = service

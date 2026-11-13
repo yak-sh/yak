@@ -869,7 +869,7 @@ export class Builder {
               .catch((e) => caught(e, { request: 'operator effects' })),
           )
         }
-        let store = operatorStore(this.#ctx.storage, {
+        let store = await operatorStore(this.#ctx.storage, {
           version: this.#env.CF_VERSION_METADATA?.id,
           report: (e, where) =>
             caught(e, { request: 'operator effects', handler: where.handler }),

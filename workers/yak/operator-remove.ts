@@ -6,9 +6,9 @@
 // Updates.
 import type { Bundle, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 
-type Store = ReturnType<typeof operatorStore>
+type Store = OperatorStore
 type Reader = Pick<Graph, 'get' | 'read'>
 
 /** The eids that go with `ids`, each once, the named ones first. */

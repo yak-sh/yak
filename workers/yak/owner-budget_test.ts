@@ -18,7 +18,7 @@ test('owner backfill pauses before spending the serving window and resumes its p
     windows: [{ ms: 60_000, read: 50e6, written: 1500 }],
     report: (e) => void failures.push(e),
   })
-  let store = operatorStore(file)
+  let store = await operatorStore(file)
   let person = crypto.randomUUID(), space = crypto.randomUUID()
   let eids = Array.from({ length: 200 }, () => crypto.randomUUID())
   await store.g.apply(

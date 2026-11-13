@@ -170,7 +170,7 @@ test('a store kept before its owners is read by the paths until its pass is done
 })
 
 test('a person reads every session of the Operator’s store under workerd’s SQLite', async () => {
-  let at = operatorStore(durable())
+  let at = await operatorStore(durable())
   await at.g.apply([
     session(ada, root),
     session(bea, helper),

@@ -3,9 +3,9 @@ import type { Meta } from '@yaks/sqlite'
 import { absent, and, eq, or } from '@yaks/query/core'
 import { MADE, ON, OWNED, OWNERS } from './operator-owner.ts'
 import type { Held } from './build-door.ts'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 
-type Store = ReturnType<typeof operatorStore>
+type Store = OperatorStore
 type Owner = Pick<Held, 'person' | 'space'>
 
 // What ownership is read by. A session's row is never read whole: its status

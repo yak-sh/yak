@@ -338,6 +338,73 @@ export let gitConfig: Config = {
   ]),
 }
 
+/**
+ * The Operator's store (operator-store.ts): a session's store, the
+ * conversations a person has with their Operator and the work it does for
+ * them. The Builder object composes it beside its builds, and a person's
+ * session on the box names the same list (T-163657).
+ */
+export let operatorConfig: Config = {
+  plugins: [
+    { use: '@yaks/kernel', facets: ['vocab'] },
+    provenance,
+    { use: '@yaks/doc', facets: ['vocab'] },
+    { use: '@yaks/task', facets: ['vocab'] },
+    // The space's goals and the work that serves them (operator-tasks.ts).
+    { use: '@yaks/goal', facets: ['vocab'] },
+    { use: '@yaks/project', facets: ['vocab'] },
+    { use: '@yaks/persona', facets: ['vocab'] },
+    { use: '@yaks/session', facets: ['vocab', 'graph'] },
+    // Its model calls, and the replies of the providers that answer them
+    // (`operatorProviders`).
+    { use: '@yaks/model', facets: ['vocab'] },
+    { use: '@yaks/anthropic', facets: ['vocab'] },
+    { use: '@yaks/openai', facets: ['vocab'] },
+    { use: '@yaks/tools', facets: ['vocab'] },
+    { use: '@yaks/context', facets: ['vocab'] },
+    { use: '@yaks/effects', facets: ['vocab'] },
+    { use: '@yaks/edge', facets: ['vocab'] },
+    { use: '@yaks/mail', facets: ['vocab'] },
+    // Its own words, and the `owner{person}` a person's reads are screened
+    // by, which no package owns yet (T-163656).
+    { use: 'yak/operator', facets: ['vocab', 'graph'] },
+    // A skill installed from another space keeps where it came from and the
+    // version it took, and one someone outside yaks.app wrote keeps its
+    // source and licence notice (shared-skill.ts).
+    {
+      use: '@yaks/platform',
+      facets: ['vocab'],
+      words: ['installed', 'upstream'],
+    },
+    // The rounds a skill is compared and improved in (operator-trials.ts),
+    // which its public page shows (skill-page.ts), and the names a round's
+    // file finds its rows again by.
+    { use: '@yaks/trial', facets: ['vocab'] },
+    // The texts it sends and receives for a person (operator-texts.ts).
+    { use: '@yaks/phone', facets: ['vocab'], words: ['text', 'sender'] },
+    // A person's Updates from the Operator (operator-updates.ts): what it
+    // tells them, and what each has read.
+    {
+      use: '@yaks/notify',
+      facets: ['vocab'],
+      words: ['notification', 'subscription'],
+    },
+    { use: '@yaks/draft', facets: ['vocab', 'graph'] },
+    // Its tools take back the `#id` its context names everything by; the
+    // store keeps no numbers.
+    { use: '@yaks/id', facets: ['graph'] },
+    { use: '@yaks/key', facets: ['vocab', 'graph'] },
+    { use: '@yaks/alias', facets: ['vocab', 'graph'] },
+    { use: '@yaks/memory', facets: ['vocab'] },
+    // The wake-ups the Operator sets for the people it works for
+    // (operator-wakes.ts).
+    { use: '@yaks/wake', facets: ['vocab', 'graph'] },
+    { use: '@yaks/topic', facets: ['vocab', 'graph'] },
+    // Bodies kept once by their address, in the store's own file.
+    { use: '@yaks/blob', facets: ['vocab', 'graph'] },
+  ],
+}
+
 // A provider plugin's options, with the secrets in the Worker's environment
 // that its credentials are kept in.
 let phone = (use: string, options: Record<string, unknown>): Plug => ({
@@ -657,6 +724,10 @@ export let domains = {
     vocab: './facets/git-vocab.ts',
     graph: './facets/git-graph.ts',
     effects: './facets/git-effects.ts',
+  },
+  'yak/operator': {
+    vocab: './facets/operator-vocab.ts',
+    graph: './facets/operator-graph.ts',
   },
   'yak/wrap': { graph: './facets/wrap-graph.ts' },
   'yak/remake': { graph: './facets/remake-graph.ts' },

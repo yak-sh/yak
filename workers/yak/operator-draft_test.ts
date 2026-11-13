@@ -746,7 +746,7 @@ test('opening the chat app reads the conversation once, with the page', async ()
 })
 
 test('archive and restore while disconnected refresh the conversation once on reconnect', async () => {
-  let store = operatorStore(p.states.get(`builder ${eid}`)!.storage)
+  let store = await operatorStore(p.states.get(`builder ${eid}`)!.storage)
   let id = ''
   for (let archived of [true, false]) {
     let page = await load(storage(), false, park)
@@ -888,7 +888,7 @@ test(
 // conversation stands as the conversation's own lines do.
 test('a helper’s line landing before the socket opens is read, once', async () => {
   // The Builder object's store, beside the object, as another write lands.
-  let store = operatorStore(p.states.get(`builder ${eid}`)!.storage)
+  let store = await operatorStore(p.states.get(`builder ${eid}`)!.storage)
   let { g } = store
   let { session } = await openedOf(store, park)
   let parent = session!.entity.eid
@@ -934,7 +934,7 @@ test('a helper’s line landing before the socket opens is read, once', async ()
 // the conversation that started it lists it with how it stands, linked to
 // its run.
 test('a helper’s page and its conversation’s aside follow its steps as they land', async () => {
-  let store = operatorStore(p.states.get(`builder ${eid}`)!.storage)
+  let store = await operatorStore(p.states.get(`builder ${eid}`)!.storage)
   let { g } = store
   let { session } = await openedOf(store, park)
   let parent = session!.entity.eid
@@ -1039,7 +1039,7 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
 // the bar's right end: a dot for the turn and each helper, how many more past
 // four, and the whole list under the bar while it is open.
 test('the aside’s summary in the bar shows a dot for each, “+N” past four, and opens to the list', async () => {
-  let store = operatorStore(p.states.get(`builder ${eid}`)!.storage)
+  let store = await operatorStore(p.states.get(`builder ${eid}`)!.storage)
   let { g } = store
   let { session } = await openedOf(store, park)
   let parent = session!.entity.eid
@@ -1178,7 +1178,7 @@ test('words said to the chat are its draft as they are heard, and once sent, wha
 
 // A refresh keeps the range this page opened with even after enough new
 // steps would move the latest-entry window past its oldest words.
-let growingStore = operatorStore(p.states.get(`builder ${eid}`)!.storage)
+let growingStore = await operatorStore(p.states.get(`builder ${eid}`)!.storage)
 let growing = crypto.randomUUID()
 let oldWords = ['Book the pavilion', 'And the north shelter']
 let growingEntry = (text: string, output = false) => ({

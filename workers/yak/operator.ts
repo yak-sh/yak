@@ -110,7 +110,7 @@ import {
   tallying,
   traced,
 } from './lib/hops.ts'
-import { drain, type operatorStore } from './operator-store.ts'
+import { drain, type OperatorStore } from './operator-store.ts'
 import {
   type File,
   mailSend,
@@ -161,7 +161,7 @@ import {
   topicOf,
 } from './operator-oracles.ts'
 
-type Store = ReturnType<typeof operatorStore>
+type Store = OperatorStore
 export type Options = {
   directory?: () => Directory
   model?: Model

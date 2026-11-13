@@ -10,14 +10,14 @@ import { moment } from './html.ts'
 import { rootAt } from './operator-root.ts'
 import { type Helping, helpingOf } from './operator-host.ts'
 import { word } from './operator-aside.ts'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 import { updatesOf } from './operator-updates.ts'
 import { message } from '@yaks/model'
 import { kindOf, ordered, source, textOf } from '@yaks/session'
 import type { Comp } from '@yaks/graph'
 import { inputSource } from './operator-provenance.ts'
 
-type Store = ReturnType<typeof operatorStore>
+type Store = OperatorStore
 
 /** Whose Operator a call's voice speaks for, and where it reads. */
 export type Glance = {

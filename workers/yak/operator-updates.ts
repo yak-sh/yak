@@ -18,13 +18,13 @@ import type { Thread } from '@yaks/inbox'
 import { markAttention } from '@yaks/notify/attention'
 import type { Choice } from '@yaks/task'
 import { refuse } from './tool.ts'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { caught } from './defects.ts'
 import { builderOf, SPACE } from './build-door.ts'
 
-type Store = ReturnType<typeof operatorStore>
+type Store = OperatorStore
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 

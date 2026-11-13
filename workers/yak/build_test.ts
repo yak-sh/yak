@@ -406,7 +406,7 @@ test('the inline contact form reaches the Builder’s contact confirmation comma
     source = crypto.randomUUID(),
     contact = crypto.randomUUID(),
     number = '+12695550142'
-  let store = operatorStore(o.ctx.storage)
+  let store = await operatorStore(o.ctx.storage)
   await store.g.apply([
     {
       entity: { eid: session },

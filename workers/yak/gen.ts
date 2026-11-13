@@ -38,6 +38,7 @@ import { members } from '@yaks/cli/dependencies'
 import {
   domains,
   embedding,
+  operatorConfig,
   payments,
   phoneConfig,
   posts,
@@ -52,12 +53,12 @@ import {
   named,
   written,
 } from '@yaks/workerd/gen'
-import { vocabs, worded, worder } from './load-gen.ts'
+import { vocabs } from './load-gen.ts'
 
 let HERE = new URL('.', import.meta.url)
 let TARGET = new URL('content.ts', HERE)
 let LOAD = new URL('load.ts', HERE)
-let WORDED = new URL('provider-vocab.ts', HERE)
+let OPERATED = new URL('operator-load.ts', HERE)
 let WORKER = new URL('worker-facets.ts', HERE)
 let PLUGIN = new URL('../../plugins/yaks.app/', HERE)
 
@@ -426,7 +427,11 @@ let loaded = await formatted(
     }],
   ),
 )
-let spoken = await formatted(worder(worded(providing, manifests)))
+// The Operator's store loads only its own config's facets (operator-store.ts),
+// not load.ts's every vocabulary: a chat page's first visit wakes it.
+let operated = await formatted(
+  loader(imports([operatorConfig], manifests), local),
+)
 let composed = await formatted(
   written(
     worker,
@@ -441,7 +446,7 @@ let checking = system.args.includes('--check')
 for (
   let [at, text] of [
     [LOAD, loaded],
-    [WORDED, spoken],
+    [OPERATED, operated],
     [WORKER, composed],
   ] as const
 ) {

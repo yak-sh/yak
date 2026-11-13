@@ -26,9 +26,9 @@ import type { Meta } from './meta.ts'
 import { ownOf, type Row, seatsLine } from './directory.ts'
 import { type Message, noted, read, type Thread, told } from './support.ts'
 import type { Telling } from './operator-updates.ts'
-import type { operatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 
-type Store = ReturnType<typeof operatorStore>
+type Store = OperatorStore
 
 /** What a space's Builder is handed to keep: the note for the Operator
  * conversation `session` names, if it is `person`'s, and their Update. */

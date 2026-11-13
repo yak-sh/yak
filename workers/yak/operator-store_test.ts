@@ -4,17 +4,16 @@
 // so one a reset cuts off holds back no other.
 import { assertEquals } from '@std/assert'
 import { test, until } from '@yaks/testing'
-import { ram } from '@yaks/ram'
 import {
   BACKSTOP,
   drain,
   FITTED,
-  operatorGraph,
+  type OperatorStore,
   operatorStore,
-  operatorVocab,
   waking,
 } from './operator-store.ts'
 import { durable } from '../../packages/durable-object/testing.ts'
+import { operatorMemory } from './operator-testing.ts'
 
 let storage = () => {
   let at: number | null = null
@@ -105,7 +104,7 @@ test('a drain past its slice starts nothing and answers now; the next works on',
     entity: { eid: crypto.randomUUID() },
     operator_request: { channel: String(n) },
   })
-  let store = operatorGraph(ram(operatorVocab), [])
+  let store = operatorMemory()
   store.fx.handle({
     operator_receive: async (e) => {
       let n = Number(e.comp?.channel)
@@ -124,7 +123,7 @@ test('a drain past its slice starts nothing and answers now; the next works on',
 // The store keeps its vocabulary's retention, as a local host's daily duty
 // does: a row past its declared expiry goes on the next wake.
 test('a drain expires what the vocabulary declares expired', async () => {
-  let store = operatorGraph(ram(operatorVocab), [])
+  let store = operatorMemory()
   let row = (at: string) => ({
     announced: { call: crypto.randomUUID() },
     created: { at },
@@ -140,28 +139,28 @@ test('a drain expires what the vocabulary declares expired', async () => {
 // What a wake asks of its file beyond reading it: the schema's DDL and every
 // write, any of which holds the object's answer until storage confirms it.
 let fitted = durable()
-operatorStore(fitted, { version: 'v1' })
-let written = (version: string) => {
+await operatorStore(fitted, { version: 'v1' })
+let written = async (version: string) => {
   let said: string[] = []
   let exec = fitted.sql.exec
   fitted.sql.exec = (query, ...bindings) => (
     said.push(query), exec(query, ...bindings)
   )
   try {
-    operatorStore(fitted, { version })
+    await operatorStore(fitted, { version })
   } finally {
     fitted.sql.exec = exec
   }
   return said.filter((q) => !/^\s*(select|pragma|savepoint|release)\b/i.test(q))
 }
 
-test('a wake whose schema its store was fitted to runs no DDL and writes nothing, under any Worker version, and one fitted to another schema fits it again', () => {
-  assertEquals(written('v1'), [])
-  assertEquals(written('v2'), [])
+test('a wake whose schema its store was fitted to runs no DDL and writes nothing, under any Worker version, and one fitted to another schema fits it again', async () => {
+  assertEquals(await written('v1'), [])
+  assertEquals(await written('v2'), [])
   // What a release that fitted once a Worker version recorded.
   fitted.sql.exec(`update server_meta set v = 'v1' where k = '${FITTED}'`)
-  assertEquals(written('v2').length > 0, true)
-  assertEquals(written('v3'), [])
+  assertEquals((await written('v2')).length > 0, true)
+  assertEquals(await written('v3'), [])
 })
 
 // The Operator's `search` tool reads a bare word through the search indexes.
@@ -176,18 +175,18 @@ let said = (body: string) => {
     content: { body },
   }]
 }
-let found = async (g: ReturnType<typeof operatorStore>['g'], word: string) =>
+let found = async (g: OperatorStore['g'], word: string) =>
   (await g.read(word)).map((b) => (b.content as { body: string }).body)
 
 test('a word is found in an entry written after its store was fitted', async () => {
-  let { g } = operatorStore(durable())
+  let { g } = await operatorStore(durable())
   await g.apply(said('the wyrmling hatched'), { trusted: true })
   assertEquals(await found(g, 'wyrmling'), ['the wyrmling hatched'])
 })
 
 test('a file fitted with no index over its entries makes and fills one on its next wake', async () => {
   let file = durable()
-  let { g } = operatorStore(file)
+  let { g } = await operatorStore(file)
   await g.apply(said('the wyrmling hatched'), { trusted: true })
   for (
     let [type, name] of file.sql.exec(
@@ -199,7 +198,7 @@ test('a file fitted with no index over its entries makes and fills one on its ne
     }
   }
   file.sql.exec(`update server_meta set v = 'before' where k = '${FITTED}'`)
-  assertEquals(await found(operatorStore(file).g, 'wyrmling'), [
+  assertEquals(await found((await operatorStore(file)).g, 'wyrmling'), [
     'the wyrmling hatched',
   ])
 })
