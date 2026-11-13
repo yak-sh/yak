@@ -380,6 +380,9 @@ export let BOUNDARIES = [
   // T-160642).
   'yak/store/integration-featured/1',
   'yak/store/demo-featured/1',
+  // The directory's and the git store's numbers hold their letters
+  // (letter-move.ts, T-164365).
+  'yak/store/number-letter/1',
 ]
 
 /** A column dropped from a table. */

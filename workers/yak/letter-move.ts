@@ -23,6 +23,7 @@ export let letterRule: Rule = {
   mark: 'yak/store/number-letter/1',
   stores: [PLATFORM_STORE, GIT_STORE],
   find: '.entity.num&!entity.prefix&*',
+  live: 'all',
   move: (row, _read, words) => {
     if (!words) throw new Error('a number takes its letter from the words')
     return [{ entity: { eid: row.entity.eid, prefix: printed(words, row) } }]
