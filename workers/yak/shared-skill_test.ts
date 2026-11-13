@@ -105,18 +105,25 @@ let refused = async (
     says,
   )
 // Both answers to a review: a stranger's skill is read by an agent first.
-let reviewed = async (verdict = 'approve') => {
+let reviewed = async (skill = 'pitch-copy') => {
   await run(admin, 'gallery_code_review', {
-    skill: 'pitch-copy',
-    verdict,
+    skill,
+    verdict: 'approve',
     findings: 'Writes copy and reaches nothing outside it.',
   })
-  await run(admin, 'gallery_review', {
-    skill: 'pitch-copy',
-    decision: 'approve',
-  })
+  await run(admin, 'gallery_review', { skill, decision: 'approve' })
 }
-let copy = () => skillText(storeOf(shop).g, 'pitch-copy')
+let copy = (title = 'pitch-copy') => skillText(storeOf(shop).g, title)
+let page = async (name: string) => {
+  let path = `${skillPage.PATH}${name}`
+  let answer = await skillPage.answer(
+    new Request(`https://yaks.app${path}`),
+    env,
+    path,
+    dir,
+  )
+  return { status: answer.status, html: await answer.text() }
+}
 
 test('a published skill is installable only once yaks.app has reviewed it', async () => {
   assertStringIncludes(
@@ -155,16 +162,6 @@ test('a published skill is installable only once yaks.app has reviewed it', asyn
 })
 
 test("a listed skill's page shows its text, and what a person picked in the platform's runs of it", async () => {
-  let page = async (name: string) => {
-    let path = `${skillPage.PATH}${name}`
-    let answer = await skillPage.answer(
-      new Request(`https://yaks.app${path}`),
-      env,
-      path,
-      dir,
-    )
-    return { status: answer.status, html: await answer.text() }
-  }
   assertEquals((await page('nothing-here')).status, 404)
   let before = await page('pitch-copy')
   assertEquals(before.status, 200)
@@ -288,4 +285,73 @@ test('a published name is one thing on the whole platform', async () => {
     skill: 'pitches',
     name: 'pitch-copy',
   }, "kitchen's skill pitch-copy")
+})
+
+// Someone else's skill, kept in kitchen as it was found (T-161785).
+let found = async (title: string, upstream: Record<string, string>) => {
+  await skillIn(kitchen, title, `The ${title} way.\n`)
+  let [b] = await storeOf(kitchen).g.read(`.skill&.doc.title=${title}`)
+  await storeOf(kitchen).g.apply([{ entity: b.entity, upstream }])
+}
+let at = { source: 'https://github.com/ann/skills', commit: 'abc123' }
+
+test("someone else's skill under a licence that allows copies is hosted with its notice", async () => {
+  await found('terse', { ...at, author: 'Ann', licence: 'MIT' })
+  await refused(maker, 'app_publish', {
+    space: 'kitchen',
+    skill: 'terse',
+  }, 'set upstream.notice')
+  await found('terse', {
+    ...at,
+    author: 'Ann',
+    licence: 'MIT',
+    notice: 'Copyright (c) 2026 Ann',
+  })
+  await run(maker, 'app_publish', { space: 'kitchen', skill: 'terse' })
+  await reviewed('terse')
+  assertStringIncludes(
+    await run(taker, 'app_published', {}),
+    'terse v1 — skill terse (from kitchen, written by Ann, from ' +
+      'https://github.com/ann/skills at abc123, under MIT, installs as terse',
+  )
+  await run(taker, 'app_install', { space: 'shop', name: 'terse' })
+  assertEquals((await copy('terse'))?.body, 'The terse way.\n')
+  assertEquals(
+    (await copy('terse'))?.upstream?.notice,
+    'Copyright (c) 2026 Ann',
+  )
+  let { html } = await page('terse')
+  assertStringIncludes(html, 'Written by Ann, at ')
+  assertStringIncludes(html, 'The terse way.')
+  assertStringIncludes(html, 'Copyright (c) 2026 Ann')
+})
+
+test("someone else's skill with no licence is listed as a link, holding none of its text", async () => {
+  await found('loud', { ...at, author: 'Bo' })
+  await found('nameless', { ...at, licence: 'MIT' })
+  await refused(maker, 'app_publish', {
+    space: 'kitchen',
+    skill: 'nameless',
+  }, 'set upstream.author')
+  assertStringIncludes(
+    await run(maker, 'app_publish', { space: 'kitchen', skill: 'loud' }),
+    'listed as a link once yaks.app has read it',
+  )
+  assertStringIncludes(
+    await run(admin, 'app_published', { name: 'loud' }),
+    'Its instructions are not hosted on yaks.app: with no licence, its ' +
+      'author allows no copy. Read them at https://github.com/ann/skills',
+  )
+  await reviewed('loud')
+  let offer = (await dir.skillOffered({ name: 'loud' }))!.skill
+  assertEquals(offer.body, '')
+  await refused(taker, 'app_install', {
+    space: 'shop',
+    name: 'loud',
+  }, 'listed as a link')
+  let { html } = await page('loud')
+  assertEquals(html.includes('The loud way.'), false)
+  assertStringIncludes(html, 'Read its instructions at its source')
+  assertStringIncludes(html, 'lists it as a link')
+  assertEquals(html.includes('ask your Operator to install'), false)
 })

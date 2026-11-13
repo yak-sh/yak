@@ -79,8 +79,14 @@ export let operatorVocab = loadVocab([
   mailDoc,
   operatorDoc,
   // A skill installed from another space keeps where it came from and the
-  // version it took (shared-skill.ts).
-  { $defs: { installed: platformDoc.$defs!.installed } },
+  // version it took, and one someone outside yaks.app wrote keeps its source
+  // and licence notice (shared-skill.ts).
+  {
+    $defs: {
+      installed: platformDoc.$defs!.installed,
+      upstream: platformDoc.$defs!.upstream,
+    },
+  },
   // The rounds a skill is compared and improved in (operator-trials.ts),
   // which its public page shows (skill-page.ts), and the names a round's
   // file finds its rows again by.

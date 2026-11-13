@@ -9,9 +9,11 @@ implementation.
 `space` is what a customer owns; `app` is what lives in it; `deploy` is one
 release of that app, and `published` is the name it was released under;
 `hostname` is a domain pointed at a space or an app, and `installed` records the
-source app and version of a copy; `plan` is what is being paid for, a mirror of
-one Stripe subscription, and `meter` is the usage it is billed on; `signin` is a
-sign-in in progress, and `report` is an error a deployed app reported.
+source app and version of a copy, and `upstream` where something someone outside
+the platform wrote came from and under which licence; `plan` is what is being
+paid for, a mirror of one Stripe subscription, and `meter` is the usage it is
+billed on; `signin` is a sign-in in progress, and `report` is an error a
+deployed app reported.
 
 yaks.app's directory (`workers/yak`) loads these declarations from this package.
 The Worker declares its own directory words alongside them.
@@ -56,16 +58,17 @@ ordinary client writes.
 The kernel (`workers/yak`) and `yak admin` (@yaks/admin) both import these, so
 neither restates the other's names. Each is pure.
 
-| export                  | holds                                                                                                                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/platform/names`  | `PLATFORM`, the platform's own host; `SLUG`, a space's or an app's slug; `PLATFORM_STORE`, the store the directory lives in; `LINK` and `INVITE`, the sign-in link's and an invitation's paths    |
-| `@yaks/platform/cookie` | `COOKIE`, the cookie a platform session rides in, and `cookieValue(header, name?)`, one cookie out of a `Cookie` header                                                                           |
-| `@yaks/platform/bots`   | which accounts and visitors are nobody's: `BOT`, the fleet's bot domain, `ADMIN` and `DEMO`, its two addresses that are not throwaways, `isTestAddress` and `isVerifiedBot`                       |
-| `@yaks/platform/budget` | `SpaceBudget`, a space's monthly model and voice budget, and `budgetLines`, the lines a person reads it in                                                                                        |
-| `@yaks/platform/funnel` | `Funnel`, yaks.app's own funnel as its admin door answers it, and `funnelLines`, the lines a person reads it in                                                                                   |
-| `@yaks/platform/mover`  | what the store mover answers: `Swept`, a store a sweep asks; `Mark`, a rule's name; `Stamp`, `Standing` and `Rehearsal`, where a rule stands in a store and what a rehearsal found                |
-| `@yaks/platform/host`   | `Host`, a deployment's addresses read from its bindings; `apex`, `spaceHost` and `url`, its hostnames and pages; `hosted`, the platform's text said at them                                       |
-| `@yaks/platform/routes` | where a request goes: `route(host, path)`, its space, app and path; `hostOf`, `foreign`, `platform`; `admitted`, space isolation by `Origin`, and `cors`; the dashboard's and sign-in's addresses |
+| export                    | holds                                                                                                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/platform/names`    | `PLATFORM`, the platform's own host; `SLUG`, a space's or an app's slug; `PLATFORM_STORE`, the store the directory lives in; `LINK` and `INVITE`, the sign-in link's and an invitation's paths                |
+| `@yaks/platform/cookie`   | `COOKIE`, the cookie a platform session rides in, and `cookieValue(header, name?)`, one cookie out of a `Cookie` header                                                                                       |
+| `@yaks/platform/bots`     | which accounts and visitors are nobody's: `BOT`, the fleet's bot domain, `ADMIN` and `DEMO`, its two addresses that are not throwaways, `isTestAddress` and `isVerifiedBot`                                   |
+| `@yaks/platform/budget`   | `SpaceBudget`, a space's monthly model and voice budget, and `budgetLines`, the lines a person reads it in                                                                                                    |
+| `@yaks/platform/funnel`   | `Funnel`, yaks.app's own funnel as its admin door answers it, and `funnelLines`, the lines a person reads it in                                                                                               |
+| `@yaks/platform/mover`    | what the store mover answers: `Swept`, a store a sweep asks; `Mark`, a rule's name; `Stamp`, `Standing` and `Rehearsal`, where a rule stands in a store and what a rehearsal found                            |
+| `@yaks/platform/host`     | `Host`, a deployment's addresses read from its bindings; `apex`, `spaceHost` and `url`, its hostnames and pages; `hosted`, the platform's text said at them                                                   |
+| `@yaks/platform/routes`   | where a request goes: `route(host, path)`, its space, app and path; `hostOf`, `foreign`, `platform`; `admitted`, space isolation by `Origin`, and `cors`; the dashboard's and sign-in's addresses             |
+| `@yaks/platform/upstream` | `Upstream`, where something shared came from when someone outside the platform wrote it; `hostable(licence)`, whether its licence allows a hosted copy; `linked`, a listing that is only a link to its source |
 
 ## Compatibility
 

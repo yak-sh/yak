@@ -259,6 +259,34 @@
       },
       "description": "a copy of something somebody else shared (an app, a skill), at the version it was copied from"
     },
+    "upstream": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "format": "uri",
+          "description": "where its author publishes it"
+        },
+        "author": {
+          "type": "string",
+          "description": "who wrote it, as its source names them"
+        },
+        "commit": {
+          "type": "string",
+          "description": "the commit or version of the source it was taken at"
+        },
+        "licence": {
+          "type": "string",
+          "description": "the licence its source gives it under, an SPDX id such as MIT or Apache-2.0; empty when it gives none"
+        },
+        "notice": {
+          "type": "string",
+          "description": "the copyright and licence notice every copy keeps"
+        }
+      },
+      "description": "where something shared came from when someone outside yaks.app wrote it, and the licence it was given under. yaks.app hosts a copy only where that licence allows one, with its notice; otherwise the listing is a link to its source"
+    },
     "trend": {
       "component": true,
       "journal": false,

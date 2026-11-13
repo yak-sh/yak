@@ -14,6 +14,11 @@
 // counts only the platform's own runs, and a round shows as measured only
 // once a person has picked between two of its outputs. Publishing a skill
 // makes the cases and outputs of its rounds public with it.
+//
+// Someone else's skill says who wrote it, where and at which commit. A copy
+// yaks.app hosts shows its licence notice; one whose licence allows no copy
+// shows a link to its source in place of its instructions
+// (shared-skill.ts `linked`).
 import type { Directory, SkillOffer, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
@@ -26,6 +31,7 @@ import { type Host, spaceHost, url as siteUrl } from '@yaks/platform/host'
 import { lost } from './pages.ts'
 import { drawn, head } from './shell.ts'
 import { type Measured, versions } from '@yaks/trial/measured'
+import { linked } from '@yaks/platform/upstream'
 
 /** Where a skill's page is, under its platform-wide name. */
 export let PATH = '/skills/'
@@ -62,7 +68,8 @@ export let measuredOf = async (
 }
 
 let note = (...said: ComponentChildren[]) => h('p', { class: 'Note' }, ...said)
-let small = (said: string) => h('p', { class: 'Note Note-small' }, said)
+let small = (...said: ComponentChildren[]) =>
+  h('p', { class: 'Note Note-small' }, ...said)
 let times = (n: number, one: string) => `${n} ${one}${n == 1 ? '' : 's'}`
 
 // A variant as a line: its title and what it believes, and where it came
@@ -136,6 +143,42 @@ let round = (r: Measured) =>
     ...r.cases.map((c) => kase(r, c)),
   )
 
+// Who wrote someone else's skill, and the commit of its source it was taken
+// at, linked.
+let written = (skill: SkillOffer) => {
+  let up = skill.upstream!
+  return small(
+    `Written by ${up.author}, at `,
+    h('a', { href: up.source, rel: 'noopener' }, up.source),
+    ` (${up.commit}), `,
+    up.licence ? `under ${up.licence}.` : 'with no licence.',
+    linked(skill)
+      ? ' Its licence allows no copy, so yaks.app lists it as a link.'
+      : '',
+  )
+}
+
+// Its instructions, and the notice a copy keeps, or the link to them.
+let instructions = (skill: SkillOffer) =>
+  linked(skill)
+    ? note(
+      h(
+        'a',
+        { href: skill.upstream!.source, rel: 'noopener' },
+        'Read its instructions at its source',
+      ),
+      '.',
+    )
+    : [
+      h('pre', { class: 'Measured_Text' }, skill.body),
+      skill.upstream
+        ? [
+          h('h2', null, 'Its licence notice'),
+          h('pre', { class: 'Measured_Text' }, skill.upstream.notice),
+        ]
+        : null,
+    ]
+
 export let page = (
   at: { space: Space; skill: SkillOffer },
   rounds: Measured[] | null,
@@ -166,16 +209,20 @@ export let page = (
             { class: 'Note Note-lead' },
             skill.published.about || skill.description,
           ),
+          skill.upstream ? written(skill) : null,
           small(
             `Shared from ${
               spaceHost(env, space.slug)
-            }, version ${skill.published.version}. To use it, ask your Operator to install the skill ${skill.published.name}.`,
+            }, version ${skill.published.version}.`,
+            linked(skill)
+              ? ''
+              : ` To use it, ask your Operator to install the skill ${skill.published.name}.`,
           ),
         ),
         h('h2', null, 'When to use it'),
         note(skill.description),
         h('h2', null, 'Its instructions'),
-        h('pre', { class: 'Measured_Text' }, skill.body),
+        instructions(skill),
         h('h2', null, 'Measured'),
         rounds == null
           ? note('Its results could not be read just now.')

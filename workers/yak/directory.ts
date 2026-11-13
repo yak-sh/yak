@@ -36,6 +36,7 @@ import { knownOptions } from '@yaks/graph/errors'
 import type { Reload } from '@yaks/platform'
 import type { Comp } from '@yaks/platform/comp'
 import { type Host as HostEnv, spaceHost } from '@yaks/platform/host'
+import { type Upstream, upstreamOf } from '@yaks/platform/upstream'
 import type { Actor, Bundle, Tx } from '@yaks/graph'
 import { type Listed, listing } from '@yaks/connections/integrations'
 import { identityEid, minted } from '@yaks/graph/identity'
@@ -587,6 +588,8 @@ export type SkillOffer = Shared & {
   description: string
   body: string
   skill: Record<string, unknown>
+  /** Where it came from when someone outside yaks.app wrote it. */
+  upstream: Upstream | null
 }
 
 // That the app's store carries the data its files seed it with, and the
@@ -738,6 +741,7 @@ export type Row = {
     space?: Id | null
   }
   skill?: Record<string, unknown>
+  upstream?: Partial<Upstream> | null
   content?: { body?: string | null }
   installed?: {
     of?: Id | null
@@ -1512,6 +1516,7 @@ export let skillOfferOf = (r: Row): SkillOffer | null => {
     space: idOf(r.published.space),
     published,
     gallery: galleryOf(r),
+    upstream: upstreamOf(r.upstream),
   }
 }
 
@@ -2902,16 +2907,17 @@ export let directoryRows = (rows: {
         ? `.entity.eid=${at.eid}&.published`
         : null
       if (!key) return null
-      let row = await one(`${key}&.skill&?doc&?content&?gallery`)
+      let row = await one(`${key}&.skill&?doc&?content&?gallery&?upstream`)
       let skill = row ? skillOfferOf(row) : null
       let space = skill ? await self.at(skill.space) : null
       return skill && space && !space.trashed ? { space, skill } : null
     },
     // Every skill on offer, newest first, with its space.
     skillOffers: async (): Promise<{ space: Space; skill: SkillOffer }[]> => {
-      let skills = (await query('.published&.skill&?doc&?content&?gallery'))
-        .flatMap((r) => skillOfferOf(r) ?? [])
-        .sort((a, b) => b.published.at.localeCompare(a.published.at))
+      let skills =
+        (await query('.published&.skill&?doc&?content&?gallery&?upstream'))
+          .flatMap((r) => skillOfferOf(r) ?? [])
+          .sort((a, b) => b.published.at.localeCompare(a.published.at))
       let spaces = new Map<string, Space | null>()
       for (let { space } of skills) {
         if (!spaces.has(space)) spaces.set(space, await self.at(space))

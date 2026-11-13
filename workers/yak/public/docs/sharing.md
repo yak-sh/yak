@@ -659,6 +659,23 @@ app would be named:
 
 A copy of somebody else's skill is not republished: it is theirs to offer.
 
+### Someone else's skill
+
+A skill someone outside yaks.app wrote is shared the same way. The space keeps
+it with `upstream{source, author, commit, licence, notice}`: the http(s) address
+its author publishes it at, who they are, the commit it was taken at, the
+licence its source gives it under, and that licence's notice. `app_publish`
+refuses it until it names its author and commit.
+
+- **A licence that allows copies** (MIT, Apache-2.0, BSD, ISC and the like) lets
+  yaks.app host the skill: it is installable like any other, and its notice is
+  kept with every copy. `app_publish` refuses it without the notice.
+- **No licence, or one that allows no copy**, lists only a link to its source.
+  The listing holds none of its text, and nobody installs it.
+
+Either way it is reviewed before it is listed, and its listing and page say who
+wrote it, where, and at which commit.
+
 Once yaks.app lists a version, the skill has its own public page at
 `https://yaks.app/skills/<name>`, in the sitemap. It shows the skill's
 instructions and what its rounds measured: the variants it was compared with,

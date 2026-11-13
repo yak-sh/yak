@@ -16,6 +16,7 @@ import { caught } from './defects.ts'
 import { vouched, type Who } from './session.ts'
 import { asCaller, type Ctx, refuse } from './tool.ts'
 import type { Space } from './directory.ts'
+import type { Upstream } from '@yaks/platform/upstream'
 
 /** The Builder's route answering {@link kept}. */
 export let SKILLS = '/operator/skills'
@@ -120,12 +121,18 @@ export let skillText = async (g: Graph, title: string) => {
       installed: (b.installed ?? null) as
         | { of?: string; version?: number }
         | null,
+      upstream: (b.upstream ?? null) as Upstream | null,
     }
     : null
 }
 
-/** A shared skill's copy: its text and the offer and version it took. */
-export type Copy = SkillText & { of: string; version: number }
+/** A shared skill's copy: its text, where it came from when someone outside
+ * yaks.app wrote it, and the offer and version it took. */
+export type Copy = SkillText & {
+  of: string
+  version: number
+  upstream?: Upstream | null
+}
 
 /**
  * Keep a copy of a shared skill under its title: a new row, or the text of
@@ -155,6 +162,8 @@ export let keepCopy = async (
     content: { body: copy.body },
     skill: copy.skill,
     installed: { of: copy.of, version: copy.version },
+    // A copy of someone else's text keeps their notice (shared-skill.ts).
+    upstream: copy.upstream ?? null,
     $actor: { by },
   }], { trusted: true })
   return { eid, was: held ? textOf(held) : null }

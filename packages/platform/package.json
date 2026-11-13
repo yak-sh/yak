@@ -13,7 +13,8 @@
     "./mover": "./mover.ts",
     "./comp": "./comp.ts",
     "./host": "./host.ts",
-    "./routes": "./routes.ts"
+    "./routes": "./routes.ts",
+    "./upstream": "./upstream.ts"
   },
   "license": "Apache-2.0",
   "description": "What a hosting platform keeps about the apps it serves \u2014 spaces, apps, deploys, hostnames, plans and meters.",
