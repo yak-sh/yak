@@ -8,7 +8,14 @@
 // agent @yaks/spawn launches, or another host lent that provider.
 
 import { type Clock, system } from '@yaks/fp'
-import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { edgeEid } from '@yaks/edge'
+import {
+  type Bundle,
+  type Comp,
+  type Eid,
+  type Graph,
+  identityEid,
+} from '@yaks/graph'
 import {
   confirmed,
   type Executor,
@@ -80,6 +87,11 @@ export let providerResolver = (
     })
     return entry.value
   }
+  // Whether `provider` already has a `serves` edge to the model named `name`.
+  let serving = async (provider: Eid, name: string) => {
+    let edge = edgeEid(provider, 'serves', identityEid('model', [name]))
+    return !!(await g.get([edge], ['serves']))[0]?.serves
+  }
   return async (using, model) => {
     let all = await offers(g, model.entity.eid, implementations)
     if (using?.provider && !all.some((o) => o.provider == using.provider)) {
@@ -143,19 +155,23 @@ export let providerResolver = (
           : {},
       }
     }
-    let confirm = async (listing?: Listed) => {
-      if (
-        found.provider &&
-        (model.pending || !all.some((o) => o.provider == found.provider))
-      ) {
-        await g.apply(
-          confirmed(
-            found.provider,
-            String((model.model as Comp).name),
-            listing,
-          ),
-          { trusted: true },
-        )
+    // A provider's answer says what it serves: the model asked, where that was
+    // a request, and the release that answered it under another name (Claude
+    // Code's `fable` is answered by `claude-fable-5-2`), which a request may
+    // then name itself.
+    let confirm = async (listing?: Listed, answered?: string) => {
+      let provider = found.provider
+      if (!provider) return
+      let asked = model.pending ||
+          !all.some((o) => o.provider == provider)
+        ? confirmed(provider, String((model.model as Comp).name), listing)
+        : []
+      let release = answered && answered != found.name &&
+          !await serving(provider, answered)
+        ? confirmed(provider, answered)
+        : []
+      if (asked.length || release.length) {
+        await g.apply([...asked, ...release], { trusted: true })
       }
     }
     let wrapped: Model = Object.assign(async (req: Parameters<Model>[0]) => {
@@ -170,7 +186,7 @@ export let providerResolver = (
         retention: provider?.cache_retention,
       }
       let reply = await serve(prepare(req, listing, provider))
-      await confirm(listing)
+      await confirm(listing, reply.model)
       return reply.cacheExpiresAt === undefined && cache.retention == null
         ? reply
         : {
@@ -210,7 +226,7 @@ export let providerResolver = (
             },
             resume: async (call) => {
               let reply = await executor.resume(call)
-              if (reply) await confirm(listing)
+              if (reply) await confirm(listing, reply.model)
               return reply
             },
           },

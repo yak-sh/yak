@@ -51,6 +51,48 @@ test('metadata transport failure does not suppress a model ask', async () => {
   assertEquals(confirmed.pending as Comp | undefined, undefined)
 })
 
+test('a release that answers an alias is served by its provider under its own name', async () => {
+  let vocab = loadVocab(
+    [kernelDoc, edgeDoc, modelDoc],
+    [kernelKeywords, edgeKeywords],
+  )
+  let g = graph({ storage: ram(vocab), vocab })
+  let provider = identityEid('provider', ['claude'])
+  let alias = identityEid('model', ['fable'])
+  let release = identityEid('model', ['claude-fable-5-2'])
+  await g.apply([
+    { entity: { eid: provider }, provider: { name: 'claude' } },
+    { entity: { eid: alias }, model: { name: 'fable' } },
+    {
+      entity: { eid: release },
+      model: { name: 'claude-fable-5-2', context: 1_000_000 },
+    },
+    {
+      entity: { eid: edgeEid(provider, 'serves', alias) },
+      edge: { from: provider, to: alias },
+      serves: { name: 'fable' },
+    },
+  ])
+  let claude: Model = () =>
+    Promise.resolve({ id: 'r', model: 'claude-fable-5-2', items: [] })
+  let served = await providerResolver(g, { claude })(
+    { provider, model: alias },
+    (await g.get([alias]))[0],
+  )
+  await served.model({ model: served.name, items: [], tools: [] })
+  let [edge, row] = await g.get([
+    edgeEid(provider, 'serves', release),
+    release,
+  ])
+
+  assertEquals(edge.serves, { name: 'claude-fable-5-2' })
+  assertEquals(row.model, {
+    name: 'claude-fable-5-2',
+    context: 1_000_000,
+    offered: true,
+  })
+})
+
 test('resolved provider snapshots dispatch retention on every reply and keeps explicit expiry', async () => {
   let vocab = loadVocab([kernelDoc, edgeDoc, modelDoc], [
     kernelKeywords,
