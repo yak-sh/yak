@@ -380,6 +380,19 @@ let offered = (tools: Tool[], page: Drawn) => {
   ]
 }
 
+// The tools an ask offered as a layer: one line each, in no order, so what
+// changed is the tools put in, taken out or told differently.
+let toolset = (tools: Tool[]): Layer => {
+  let lines = tools.map((t) => JSON.stringify(t)).sort()
+  return {
+    name: `${tools.length} tools`,
+    key: 'tools',
+    text: lines.join('\n'),
+    lines,
+    inside: (page) => offered(tools, page),
+  }
+}
+
 /** A tool as a model was offered it (@yaks/model `Tool`). */
 export type Tool = {
   name: string
@@ -391,18 +404,44 @@ export type Tool = {
 export type Offers = Map<string, Tool[]>
 
 /** A layer of what a model was told: its name, what it holds drawn on a page
- * (once its text is drawn above, that it is the same), and what tells a later
- * ask's from it (`key`, its text). */
+ * (once its text is drawn above, that it is the same), what tells a later
+ * ask's from it (`key`, and `text`, what a person reads of it: no spacing, no
+ * order), and what it lost and gained since a layer before it (`lines`). */
 type Layer = {
   name: string
   key: string
   inside: (page: Drawn) => Node | Node[]
   text: string
+  lines: string[]
 }
 
+// What a person reads of some lines: each without its spacing, none blank.
+let read = (text: string) =>
+  text.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean)
+
 // A layer of Markdown, drawn once a page.
-let prose = (key: string, text: string) => (page: Drawn) =>
-  fresh(page, key + '\n' + text) ? written(text) : SAME
+let prose = (name: string, text: string, key = name): Layer => ({
+  name,
+  key,
+  text: read(text).join('\n'),
+  lines: read(text),
+  inside: (page) => fresh(page, key + '\n' + text) ? written(text) : SAME,
+})
+
+// What a layer lost and gained since the one before it: whole, when it is
+// new; the lines gone and the lines come, when it changed.
+let change = (now: Layer | undefined, before: Layer | undefined) => {
+  let gone = (a?: Layer, b?: Layer) =>
+    (a?.lines ?? []).filter((l) => !b?.lines.includes(l))
+  let lines = (said: string, list: string[]) =>
+    list.length
+      ? [h(More.Label, {}, said), h(More.Source, {}, list.join('\n'))]
+      : []
+  return !before ? now!.inside(new Set()) : [
+    ...lines('Taken out', gone(before, now)),
+    ...lines('Put in', gone(now, before)),
+  ]
+}
 
 // What a part a persona voiced is called: its heading, without the id before
 // its title (@yaks/persona `voice`).
@@ -429,7 +468,7 @@ let voiced = (said: string): Layer[] =>
     },
     [],
   ).map((l) => ({ ...l, text: l.text.trim() })).filter((l) => l.text)
-    .map((l) => ({ ...l, key: l.name, inside: prose(l.name, l.text) }))
+    .map((l) => prose(l.name, l.text))
 
 // What a prompt entry is, by where it came from (@yaks/session `spawn`).
 let NOTES: Record<string, string> = {
@@ -438,31 +477,38 @@ let NOTES: Record<string, string> = {
   'operator:earlier': 'What the person said before on this',
 }
 
-// One entry holding a context's layers, each closed until opened; one that
-// changed at a later ask marks what changed since the ask before (`was`).
+// The layers of an ask by key.
+type Layers = Map<string, Layer>
+
+// What changed between an ask's layers and the ask's before it: each layer
+// new, changed or taken out, by what a person reads of it.
+let changes = (now: Layers, was: Layers) =>
+  [...new Set([...now.keys(), ...was.keys()])].flatMap((key) => {
+    let [l, b] = [now.get(key), was.get(key)]
+    let mark = !b ? 'new' : !l ? 'taken out' : l.text != b.text && 'changed'
+    return mark ? [{ name: `${(l ?? b)!.name} (${mark})`, l, b }] : []
+  })
+
+// One entry holding a context's layers, each closed until opened; one at a
+// later ask holds only what changed since the ask before (`was`), each with
+// its change, drawn whole whatever the page drew above.
 let context = (
   who: string,
   layers: Layer[],
   page: Drawn,
-  was?: Map<string, string>,
+  was?: Layers,
 ) =>
-  instructed(
-    was
-      ? `The context ${who} was given changed here`
-      : `The context ${who} was given`,
-    layers.map((l) =>
-      instructed(
-        l.name + (!was
-          ? ''
-          : !was.has(l.key)
-          ? ' (new)'
-          : was.get(l.key) != l.text
-          ? ' (changed)'
-          : ''),
-        l.inside(page),
-      )
-    ),
-  )
+  was
+    ? instructed(
+      `The context ${who} was given changed here`,
+      changes(new Map(layers.map((l) => [l.key, l])), was).map((c) =>
+        instructed(c.name, change(c.l, c.b))
+      ),
+    )
+    : instructed(
+      `The context ${who} was given`,
+      layers.map((l) => instructed(l.name, l.inside(page))),
+    )
 
 /** What a transcript's model was told, from the record: at its first ask, one
  * entry holding each layer of its system prompt (`sending{instructions}`),
@@ -478,7 +524,7 @@ let briefed = (
   page: Drawn = new Set(),
   sources = new Map<string, string[]>(),
 ): Told[] => {
-  let last = new Map<string, Map<string, string>>()
+  let last = new Map<string, Layers>()
   // The entries each session's last ask was told from: its notes and itself.
   let from = new Map<string, string[]>()
   let notes: (Layer & { id: string })[] = []
@@ -488,9 +534,7 @@ let briefed = (
       let text = String(comp(b, 'content')?.body ?? '')
       let name = NOTES[String(comp(b, 'prompt')?.source)] ??
         'A note it was given'
-      if (text) {
-        notes.push({ id, name, key: name, inside: prose(name, text), text })
-      }
+      if (text) notes.push({ id, ...prose(name, text) })
       return []
     }
     let sending = comp(b, 'sending')
@@ -510,20 +554,11 @@ let briefed = (
     let layers: Layer[] = [
       ...voiced(said),
       ...noted,
-      ...tools
-        ? [{
-          name: `${tools.length} tools`,
-          key: 'tools',
-          inside: (page: Drawn) => offered(tools, page),
-          text: offer,
-        }]
-        : [],
+      ...tools ? [toolset(tools)] : [],
     ]
-    let now = new Map(layers.map((l) => [l.key, l.text]))
+    let now = new Map(layers.map((l) => [l.key, l]))
     last.set(session, now)
-    let same = was?.size == now.size &&
-      [...now].every(([key, text]) => was!.get(key) == text)
-    return layers.length && !same
+    return layers.length && (!was || changes(now, was).length)
       ? [{ id, uses, draw: () => context(who, layers, page, was) }]
       : []
   })

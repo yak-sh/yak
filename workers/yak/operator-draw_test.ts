@@ -261,6 +261,37 @@ test('an outside agent’s chat is a step named for whom it was with, holding th
   assertEquals(row.html.includes('Asked:'), false)
 })
 
+test('a context that changed draws only its changed layers, each with its change, and one changed in spacing alone is not drawn', () => {
+  let ask = (eid: string, seq: number, layers: string[], session = 's') =>
+    entry(eid, seq, told(layers.join(PART)), session)
+  let base = '# Base\nBe kind.'
+  let entries = [
+    ask('a1', 1, [base, '# Rules\nBe brief.\nBe calm.']),
+    // Another session drew the new rules above.
+    ask('b1', 2, ['# Rules\nBe plain.\nBe calm.'], 't'),
+    ask('a2', 3, [base, '# Rules\nBe plain.\nBe calm.']),
+    ask('a3', 4, ['# Base\n  Be   kind. ', '# Rules\nBe plain.\n\nBe calm.']),
+    ask('a4', 5, [base, '# Rules\nBe plain.\nBe calm.', '# More\nBe quick.']),
+  ]
+  let painted = rows(entries, namer(seen), { ...seen, helpers: [] })
+  assertEquals(painted.map((r) => r.id), ['a1', 'b1', 'a2', 'a4'])
+  let text = (id: string) =>
+    parseHTML(`<div>${painted.find((r) => r.id == id)!.html}</div>`)
+      .document.querySelector('div')!.textContent!.replace(/\s+/g, ' ').trim()
+  for (let id of ['a2', 'a4']) {
+    assertStringIncludes(text(id), 'changed here')
+    assertEquals(text(id).includes('The same as above'), false)
+    assertEquals(text(id).includes('Base'), false)
+  }
+  assertStringIncludes(
+    text('a2'),
+    'Rules (changed)Taken outBe brief.Put inBe plain.',
+  )
+  assertEquals(text('a2').includes('Be calm.'), false)
+  assertStringIncludes(text('a4'), 'More (new)Be quick.')
+  assertEquals(text('a4').includes('Rules'), false)
+})
+
 // What a painted node says, its boxes' parts joined by `|`.
 let said = (n: Node): string =>
   n.kind == 'text'
