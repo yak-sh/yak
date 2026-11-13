@@ -50,8 +50,8 @@ test('scoped whole archetype tally groups public shapes before ownership checks'
   let steps = status.symbols.sqlite3_stmt_status(tallyStmt.unsafeHandle, 4, 1)
   ok(steps < 18000, `${steps} VM steps\n${tallyQuery.sql}`)
 })
-// Classification is only a proof for stored reference equalities. Other
-// predicates and aspect masking retain their authoritative scoped evaluation.
+// Grouped, a scope must count as its ordinary scoped read does: references by
+// an eid, plain properties by their values, and aspect masking declined.
 let parityScopes = [
   { entity: '!apply_receipt&(!draft|.draft.by=other)' },
   { entity: '!apply_receipt&!draft' },
@@ -60,6 +60,12 @@ let parityScopes = [
   { entity: '.draft.by!=reader' },
   { entity: '.draft.by=reader', components: { note: '.entity.eid=note-0' } },
   { entity: '!apply_receipt', components: { note: '.entity.eid=note-0' } },
+  { entity: '!apply_receipt&(!draft|!draft.floor)' },
+  { entity: '!draft|.draft.floor=editor' },
+  { entity: '.draft.floor!=editor' },
+  { entity: '!draft.floor' },
+  { entity: '.draft.floor' },
+  { entity: '!draft|(.draft.by=reader|!draft.floor)&!draft.floor' },
 ]
 let parity = parityScopes.map((visibility) => {
   let opts = { visibility }
@@ -112,4 +118,43 @@ test('retained descriptor diversity does not disable grouped visibility tallies'
   equal(wideStmt.all(...wideQ.params), expectedTally)
   let steps = status.symbols.sqlite3_stmt_status(wideStmt.unsafeHandle, 4, 1)
   ok(steps < 18000, `${steps} VM steps`)
+})
+
+// A reader's privacy: open sets whole, and the few that keep a floor read in
+// one arm however many sets they are.
+let floored = render(
+  compile(
+    parse('.tally=entity.archetype'),
+    tallyVocab,
+    {
+      visibility: { entity: '!apply_receipt&(!draft|!draft.floor)' },
+      archetypes: fixture.catalog,
+    },
+  ),
+)
+let flooredStmt = db.prepare(floored.sql)
+test('a floored scope groups open sets and reads floored owners in one arm', () => {
+  ok(floored.sql.includes('__tally_groups'), floored.sql)
+  flooredStmt.all(...floored.params)
+  let steps = status.symbols.sqlite3_stmt_status(flooredStmt.unsafeHandle, 4, 1)
+  ok(steps < 18000, `${steps} VM steps`)
+})
+
+// A reader whose file keeps no table yet for a component reads it as empty,
+// and still groups whole sets.
+let ghostly = (archetypes?: typeof fixture.catalog) =>
+  render(
+    compile(parse('.tally=entity.archetype'), tallyVocab, {
+      visibility: { entity: '!ghost&' + tallyScope.visibility.entity },
+      absent: ['ghost'],
+      ...archetypes ? { archetypes } : {},
+    }),
+  )
+test('a component with no table yet leaves the tally grouped', () => {
+  let q = ghostly(fixture.catalog), old = ghostly()
+  ok(q.sql.includes('__tally_groups'), q.sql)
+  equal(
+    db.prepare(q.sql).all(...q.params),
+    db.prepare(old.sql).all(...old.params),
+  )
 })

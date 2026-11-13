@@ -13,9 +13,15 @@ export let tallyVocab = loadVocab({
     archetype: { component: true, properties: { tables: { type: 'string' } } },
     draft: {
       component: true,
-      properties: { by: { type: 'string', ref: 'entity' } },
+      properties: {
+        by: { type: 'string', ref: 'entity' },
+        floor: { type: 'string' },
+      },
     },
     apply_receipt: { component: true },
+    mark: { component: true },
+    // declared, and kept in no table yet
+    ghost: { component: true },
     tombstone: { component: true },
     note: { component: true },
     edge: {
@@ -52,12 +58,13 @@ export let seedTallies = (d: Driver, size = 256) => {
       'tombstone',
       'note',
       'edge',
+      'mark',
     ]
   ) {
     let extra = name == 'archetype'
       ? [{ name: 'tables', type: 'text' }]
       : name == 'draft'
-      ? [{ name: 'by', type: 'integer' }]
+      ? [{ name: 'by', type: 'integer' }, { name: 'floor', type: 'text' }]
       : name == 'edge'
       ? [{ name: 'from', type: 'integer' }, { name: 'to', type: 'integer' }]
       : []
@@ -109,12 +116,26 @@ export let seedTallies = (d: Driver, size = 256) => {
       [4003, 'dead', ['note', 'tombstone']],
     ] as const
   ) owners.push({ id, eid, archetype: shape([...names]) })
+  // Drafts in more sets than a tally has arms, each floored or not.
+  let drafted = [
+    ['draft'],
+    ['draft', 'edge'],
+    ['draft', 'mark'],
+    ['draft', 'edge', 'mark'],
+    ['draft', 'mark', 'note'],
+  ]
+  for (let [i, names] of drafted.entries()) {
+    owners.push(
+      { id: 4010 + 2 * i, eid: `open-${i}`, archetype: shape(names) },
+      { id: 4011 + 2 * i, eid: `floored-${i}`, archetype: shape(names) },
+    )
+  }
   for (let i = 0; i < size; i++) {
     owners.push({ id: 5000 + i, eid: `edge-${i}`, archetype: link })
   }
   for (let row of owners) d.query(insert('entity', row))
   for (
-    let row of owners.filter((r) => r.id < 3000 || r.id >= 4000 && r.id < 5000)
+    let row of owners.filter((r) => r.id < 3000 || r.id >= 4000 && r.id < 4010)
   ) d.query(insert('note', { entity: row.id }))
   for (let i = 0; i < size; i++) {
     d.query(
@@ -126,8 +147,25 @@ export let seedTallies = (d: Driver, size = 256) => {
     )
   }
   d.query(
-    insert('draft', { entity: 4000, by: 3000 }, { entity: 4001, by: 3001 }),
+    insert(
+      'draft',
+      { entity: 4000, by: 3000, floor: null },
+      { entity: 4001, by: 3001, floor: 'editor' },
+      ...drafted.flatMap((_, i) => [
+        { entity: 4010 + 2 * i, by: 3001, floor: null },
+        { entity: 4011 + 2 * i, by: 3001, floor: 'editor' },
+      ]),
+    ),
   )
+  for (let [i, names] of drafted.entries()) {
+    for (let id of [4010 + 2 * i, 4011 + 2 * i]) {
+      if (names.includes('mark')) d.query(insert('mark', { entity: id }))
+      if (names.includes('note')) d.query(insert('note', { entity: id }))
+      if (names.includes('edge')) {
+        d.query(insert('edge', { entity: id, from: 1, to: 2 }))
+      }
+    }
+  }
   d.query(insert('apply_receipt', { entity: 4002 }))
   d.query(insert('tombstone', { entity: 4003 }))
   for (let [tables, id] of sets) {

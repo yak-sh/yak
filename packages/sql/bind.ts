@@ -5233,7 +5233,6 @@ let scopedTally = (
     ast.clauses[0].path.join('.') == 'entity.archetype'
   if (
     tally && !opts.archetypes?.pending && !reads.length && !opts.eids &&
-    !opts.absent?.length &&
     !opts.backed?.entity && !screening &&
     !Object.keys(visibility.components ?? {}).length &&
     !opts.extend?.some((e) =>
@@ -5255,12 +5254,24 @@ let scopedTally = (
         return false
       }
       if (!h.prop) return [EXISTS, '~', '!', ''].includes(opOf(c))
-      return opOf(c) == '' && c.value?.kind == 'scalar' && c.value.raw != '' &&
-        vocab.prop(h.comp, h.prop)?.category == 'ref' &&
-        !plain.derived?.[h.comp] && !plain.backed?.[h.comp] &&
-        !vocab.prop(h.comp, h.prop)?.computed &&
-        !plain.derived?.[`${h.comp}.${h.prop}`]
+      let prop = vocab.prop(h.comp, h.prop)
+      if (
+        !prop || prop.computed || plain.derived?.[h.comp] ||
+        plain.backed?.[h.comp] || plain.derived?.[`${h.comp}.${h.prop}`]
+      ) return false
+      // A reference reads through its target's visibility, which an
+      // exception arm (read without one) cannot; only naming an eid holds.
+      if (prop.category == 'ref') {
+        return opOf(c) == '' && c.value?.kind == 'scalar' && c.value.raw != ''
+      }
+      return opOf(c) == EXISTS && !c.value ||
+        ['', '!'].includes(opOf(c)) && c.value?.kind == 'scalar'
     }
+    // What a property clause says of an entity without its component: only
+    // its absence (`!x.p`) or an inequality (`.x.p!=v`) holds.
+    let lacking = (p: Pred): boolean =>
+      operand(p) == '' ? opOf(p) == '' : opOf(p) == '!'
+    let operand = (p: Pred) => p.value?.kind == 'scalar' ? p.value.raw : ''
     if (!policy || valid(policy)) {
       let catalog = opts.archetypes
       let ids = catalog({})
@@ -5305,9 +5316,19 @@ let scopedTally = (
               clauses: [],
             }
           }
-          return wearing(h.comp, id) ? p : { kind: 'or', clauses: [] }
+          // Its owners all wear the component, so the arm reads from that
+          // component's rows, never every entity an absence would admit.
+          return wearing(h.comp, id)
+            ? { kind: 'and', clauses: [present(h.comp), p] }
+            : { kind: lacking(p) ? 'and' : 'or', clauses: [] }
         }
-        let groups: number[] = [], exceptions: Select[] = []
+        // Sets whose residual is the same test share one arm, which reads
+        // only their owners.
+        let groups: number[] = [],
+          residuals = new Map<string, {
+            residual: Clause
+            ids: number[]
+          }>()
         for (let id of ids) {
           if (wearing('tombstone', id)) continue
           let residual = policy
@@ -5317,30 +5338,36 @@ let scopedTally = (
           if (residual.kind == 'and' && !residual.clauses.length) {
             groups.push(id)
           } else {
-            let q: And = {
-              kind: 'and',
-              clauses: [residual, {
-                kind: 'tally',
-                path: ['entity', 'archetype'],
-              }],
-            }
-            let read = bound(
-              q,
-              vocab,
-              { ...plain, archetypes: undefined, extend: [] },
-              base,
-              [],
-            )
-            exceptions.push({
-              ...read,
-              where: and(
-                read.where ?? TRUE,
-                eq(raw('"entity"."archetype"'), val(id)),
-              ),
-            })
+            let key = JSON.stringify(residual)
+            let same = residuals.get(key)
+            if (same) same.ids.push(id)
+            else residuals.set(key, { residual, ids: [id] })
           }
         }
-        if (exceptions.length > ARMS) return
+        if (residuals.size > ARMS) return
+        let exceptions = [...residuals.values()].map(({ residual, ids }) => {
+          let q: And = {
+            kind: 'and',
+            clauses: [residual, {
+              kind: 'tally',
+              path: ['entity', 'archetype'],
+            }],
+          }
+          let read = bound(
+            q,
+            vocab,
+            { ...plain, archetypes: undefined, extend: [] },
+            base,
+            [],
+          )
+          return {
+            ...read,
+            where: and(
+              read.where ?? TRUE,
+              cond(base.among('"entity"."archetype"', ids)),
+            ),
+          }
+        })
         let publicRows = opts.population && !plain.derived?.['entity.archetype']
           ? select({
             cols: [as(col('eid', 'entity'), 'value'), col('n', '__population')],
