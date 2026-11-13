@@ -534,6 +534,11 @@ export type Source = {
   query: (q: string) => Bundle[] | Promise<Bundle[]>
 }
 
+// A call's words rather than a row it wrote: said under a name of its own, or
+// aimed at the call (@yaks/tools result.ts says them as lines the same way).
+let spoken = (b: Bundle): boolean =>
+  b.entity.eid[0] == '$' || b.$alias == '$said' || b.output != null
+
 /** What a read that found nothing prints. */
 export let NONE = 'none'
 
@@ -542,12 +547,15 @@ export let NONE = 'none'
  * applied — what `--json` prints — and names only what moved, so drawn as it
  * is, `task update T-3 done` would be an entity with a `completed` mark and no
  * title. One that no longer stands (a deletion's tombstone) is drawn as the
- * answer has it. */
+ * answer has it, and so are the call's own words (`$said`, or `output` aimed
+ * at the call, under whatever eid a host minted for them): they are no row,
+ * and asking for one is a graph_show refused as naming nothing. */
 export let standing = async (
   answer: Bundle[],
   from: Source,
 ): Promise<Bundle[]> => {
-  let eids = parted(answer).them.map((b) => b.entity.eid)
+  let eids = parted(answer).them.filter((b) => !spoken(b))
+    .map((b) => b.entity.eid)
   let now = new Map(
     (eids.length ? await from.lookup(eids) : []).map((b) => [b.entity.eid, b]),
   )

@@ -324,6 +324,30 @@ test('a write’s answer is a line per entity as it now stands', async () => {
   assertEquals(await shown([gone], false), await shown([gone], true))
 })
 
+test('a write’s words are drawn as said, never looked up as a row', async () => {
+  let asked: string[][] = []
+  let words = (b: unknown) =>
+    show(
+      { tui: false, out: () => {} },
+      views,
+      vocab,
+      [b] as never,
+      {},
+      { lookup: (ids) => (asked.push(ids), []), query: () => [] },
+      { readOnly: false },
+    )
+  let content = { body: 'wrote NOTES.md' }
+  await words({ entity: { eid: '$said' }, content })
+  // A host mints the words an eid of its own, and says they are `$said`.
+  await words({
+    entity: { eid: '3d3c54be-86a9-4f38-bde7-46193376ece5' },
+    $alias: '$said',
+    content,
+    output: { source: '97ddfd2b-74f7-4ec2-b7b3-e961906787b7' },
+  })
+  assertEquals(asked, [])
+})
+
 test('a new entity is a line, and what it was found near a line apiece', async () => {
   let made = { entity: { eid: t9.entity.eid }, doc: t9.doc, task: {} }
   let near = {
