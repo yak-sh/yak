@@ -25,11 +25,16 @@ export let BATCH = 200
  * advances only after the batch's writes land. A store kept nowhere was made
  * in memory with the rule, and owes no pass. */
 export let ownerBackfill = async (
-  store: { g: Graph; marks?: Pick<Meta, 'get' | 'set'> },
+  store: {
+    g: Graph
+    marks?: Pick<Meta, 'get' | 'set'>
+    waiting?: () => number
+  },
 ): Promise<boolean> => {
   let { g, marks } = store
   let at = marks?.get(OWNERS)
   if (!marks || at == 'done') return false
+  if (store.waiting?.()) return true
   let rows = await g.read(
     `(${BEARING})${
       at ? `&.entity.eid>${at}` : ''
@@ -38,6 +43,8 @@ export let ownerBackfill = async (
   let eids = rows.map((r) => r.entity.eid)
   let owed = await reckon((e, c) => g.get(e, c), eids)
   for (let i = 0; i < owed.length; i += 50) {
+    // Keep the cursor until the whole page lands; repeated patches are empty.
+    if (store.waiting?.()) return true
     await g.apply(owed.slice(i, i + 50), { trusted: true, stamp: false })
   }
   let last = eids.at(-1)

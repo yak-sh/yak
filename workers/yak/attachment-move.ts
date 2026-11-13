@@ -45,6 +45,7 @@ export let attachmentBackfill = async (
   let marks = marked(store)
   let saved = marks.get(ATTACHMENTS)
   if (saved == 'done') return false
+  if (store.waiting?.()) return true
   let pass: Pass = saved ? JSON.parse(saved) : {}
   if (!pass.space) {
     let [source] = await store.g.read(

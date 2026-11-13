@@ -1006,13 +1006,12 @@ export class Builder {
           retry = Date.now() + 60_000
         }
         let next = await drain(store, this.#until = Date.now() + SLICE)
-        return more
-          ? Date.now()
-          : retry == null
-          ? next
-          : next == null
-          ? retry
-          : Math.min(next, retry)
+        let due = [
+          next,
+          retry,
+          more ? Date.now() + (store.waiting?.() ?? 0) : null,
+        ].filter((at): at is number => at != null)
+        return due.length ? Math.min(...due) : null
       } finally {
         this.#draining = false
       }

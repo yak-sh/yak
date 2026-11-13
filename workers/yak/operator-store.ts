@@ -176,6 +176,7 @@ export let operatorStore = (
     }),
     marks: meta(sql),
     upkeep: store.upkeep,
+    waiting: () => bounded(durable).under(0.5),
   }
 }
 
@@ -185,6 +186,8 @@ export let operatorStore = (
 export type OperatorStore = ReturnType<typeof operatorGraph> & {
   marks?: Meta
   upkeep?: () => number | null
+  /** Background passes share half the object's windows with schema upkeep. */
+  waiting?: () => number
 }
 
 /** The Operator's work graph, independent of its durable storage boundary. */
