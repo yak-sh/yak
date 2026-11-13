@@ -15,7 +15,6 @@
 // it, the band on its own page, and the admin's list of the Operator's work.
 import { type ComponentChildren as Node, h } from 'preact'
 import { Card, Dot, Popover, Rows, State } from '@yaks/ui/parts'
-import { relative } from '@yaks/ui/relative'
 
 /** What a conversation's turn is doing while it runs, and since when. */
 export type Turn = { what: string; since: string }
@@ -49,35 +48,6 @@ export type Aside = { turn: Turn | null; helpers: HelperLine[] }
 export let going = ({ standing }: { standing?: Standing }) =>
   standing == 'running' || standing == 'waiting'
 
-/**
- * How long something has lasted, from `since` to `until` or `now`, in the
- * fewest units that say it.
- *
- * ```ts
- * import { equal } from '@yaks/testing'
- * import { lasted } from './operator-aside.ts'
- * let at = '2026-11-08T15:00:00.000Z'
- * let now = Date.parse(at)
- * equal(lasted(at, undefined, now + 4_400), '4s')
- * equal(lasted(at, undefined, now + 192_000), '3m 12s')
- * equal(lasted(at, '2026-11-08T16:04:30.000Z'), '1h 4m')
- * equal(lasted('', undefined, now), '')
- * ```
- */
-export let lasted = (since: string, until?: string, now = Date.now()) => {
-  let from = Date.parse(since)
-  if (!Number.isFinite(from)) return ''
-  let to = until ? Date.parse(until) : now
-  let s = Math.max(0, Math.floor((to - from) / 1000))
-  let [hours, minutes, seconds] = [s / 3600, (s % 3600) / 60, s % 60]
-    .map(Math.floor)
-  return hours
-    ? `${hours}h ${minutes}m`
-    : minutes
-    ? `${minutes}m ${seconds}s`
-    : `${seconds}s`
-}
-
 let WORD: Record<Standing, [string, string?]> = {
   running: ['Running', 'active'],
   waiting: ['Waiting', 'caution'],
@@ -100,16 +70,6 @@ let TONE: Record<Standing, string | string[] | undefined> = {
  * page, and to a call's voice (operator-glance.ts). */
 export let word = (standing: Standing) => WORD[standing][0]
 
-// How long, kept current by the page (`[data-since]`).
-let For = (
-  { since, until, now }: { since: string; until?: string; now: number },
-) =>
-  h(
-    Popover.Time,
-    { 'data-since': since, 'data-until': until, dateTime: since },
-    lasted(since, until, now),
-  )
-
 /** The turn under way, in a line: what it is doing and for how long, or that
  * nothing runs. */
 export let TurnNow = ({ turn, now }: { turn: Turn | null; now: number }) =>
@@ -120,7 +80,7 @@ export let TurnNow = ({ turn, now }: { turn: Turn | null; now: number }) =>
       ? [
         h(State, { mod: ['pulse', 'active'] }, turn.what.replace(/…$/, '')),
         ' · ',
-        h(For, { since: turn.since, now }),
+        h(Popover.Time, { at: turn.since, now, lasting: true }),
       ]
       : h(State, null, 'Nothing running'),
   )
@@ -128,10 +88,6 @@ export let TurnNow = ({ turn, now }: { turn: Turn | null; now: number }) =>
 /** How a helper stands, in a word in its tone. */
 export let Stands = ({ standing }: { standing: Standing }) =>
   h(State, { mod: WORD[standing][1] }, word(standing))
-
-// How long ago, kept current by the page (`[data-ago]`).
-let Ago = ({ at, now }: { at: string; now: number }) =>
-  h(Popover.Time, { 'data-ago': at, dateTime: at }, relative(at, now))
 
 /** A piece of work as a row, wherever it is drawn: its title in a line,
  * linked to its page, its recap on hover, over what `about` says of it
@@ -164,8 +120,8 @@ export let Work = (
           x.standing && h(Stands, { standing: x.standing }),
           x.step.replace(/…$/, ''),
           x.until && !going(x)
-            ? h(Ago, { at: x.until, now })
-            : h(For, { since: x.since, now }),
+            ? h(Popover.Time, { at: x.until, now })
+            : h(Popover.Time, { at: x.since, now, lasting: true }),
         ].filter(Boolean).flatMap((part, i) => i ? [' · ', part] : [part]),
       ),
     ),

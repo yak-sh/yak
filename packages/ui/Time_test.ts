@@ -101,3 +101,13 @@ test('mounted dates share a ticking clock and stop it when the last date leaves'
   render(null, root)
   equal(time.pending(), 0)
 })
+
+test('a mounted duration counts up every second', async () => {
+  let { root } = page()
+  let time = clock(Date.parse(at) + 192_000)
+  render(h(Time, { at, clock: time, lasting: true }), root)
+  equal(root.textContent, '3m 12s')
+  await time.advance(1_000)
+  await Promise.resolve()
+  equal(root.textContent, '3m 13s')
+})

@@ -39,7 +39,6 @@ export let metadata = (
       let model = comp(ask, 'using')?.model ?? comp(ask, 'ask')?.to
       let detail = [
         `Entry ${seq}; ${seq - boundary} since last compact`,
-        comp(b, 'created')?.at,
         ask && `Model: ${names.get(String(model)) ?? model ?? 'unknown'}`,
         ask &&
         (cost == null

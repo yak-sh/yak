@@ -69,7 +69,6 @@
     "workers/model/index.ts",
     "workers/yak/raster/index.ts",
     "workers/yak/fixtures",
-    "workers/yak/public/when.js",
     "workers/yak/public/chart.js",
     "workers/yak/public/data.js",
     "**/.wrangler",

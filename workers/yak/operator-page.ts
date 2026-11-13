@@ -2217,7 +2217,7 @@ import { browserDrafts } from '/_draft.js'
 import { follow } from '/follow.js'
 import { frames } from '/frames.js'
 import { redraw } from '/redraw.js'
-import { asideHtml, glanceHtml, helperHtml, lasted, menus, ordered, relative, rowsOf, turnHtml } from '/_talk.js'
+import { asideHtml, dates, glanceHtml, helperHtml, menus, ordered, rowsOf, turnHtml } from '/_talk.js'
 import { voice } from '/voice.js'
 let open = ${JSON.stringify(open)}
 let root = ${JSON.stringify(root)}
@@ -2476,11 +2476,10 @@ document.addEventListener('keydown', (e) => {
   unfold(false)
   aside().querySelector('[data-glance]').focus()
 })
-let lasting = () => {
-  for (let t of document.querySelectorAll('[data-since]')) t.textContent = lasted(t.dataset.since, t.dataset.until)
-  for (let t of document.querySelectorAll('[data-ago]')) t.textContent = relative(t.dataset.ago)
-}
-setInterval(lasting, 1000)
+// Every time on the page is the kit's (\`Time\`), said again in the person's
+// clock and zone each second, so a duration counts up, and at once after
+// anything is drawn here.
+setInterval(() => dates(document), 1000)
 // The yak beside the box shows what the Operator is doing (mascot.ts
 // \`MOVES\`): a loop over and over while it lasts, one played once as the
 // work ends, and his waiting otherwise (idle.js).
@@ -2592,6 +2591,7 @@ let read = async () => {
       if (got.aside && aside()) happening = got.aside, aside().replaceWith(drawn(asideHtml(happening, unfolded()))), shown()
       if (got.title) heading.textContent = got.title
       if (follows && !canvas() && got.making && (follows == 'worked' || got.started)) remake(got.making)
+      dates(document)
     } while (again)
     // Words of theirs the page showed are never taken off it: one a read
     // left out goes back in its place, and the tracker hears of it at once.
@@ -2659,6 +2659,7 @@ let hear = (frame) => {
     redraw(at, row.html)
     at.dataset.html = row.html
   }
+  dates(document)
   if (reading) again = true
   card.querySelector('[data-now]').textContent = o.now
   card.toggleAttribute('data-pending', !!o.now)

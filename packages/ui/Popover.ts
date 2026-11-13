@@ -4,6 +4,7 @@ import { h } from 'preact'
 import { block, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 import { Button } from './Button.ts'
+import { Time } from './Time.ts'
 
 /** A summary control and the panel it reveals. */
 export let Popover:
@@ -11,7 +12,13 @@ export let Popover:
   & Record<'Trigger' | 'Count' | 'Line' | 'Time' | 'Body', Part> = block(
     'aside',
     'Popover',
-    { Trigger: Button, Count: 'span', Line: 'p', Time: 'time', Body: 'div' },
+    {
+      Trigger: Button,
+      Count: 'span',
+      Line: 'p',
+      Time: Time as Part,
+      Body: 'div',
+    },
   )
 /** What this part presents. */
 export let description = 'A summary control and the panel it reveals.'
@@ -34,7 +41,16 @@ export let specimens = (): Specimen[] => [
       h(
         Popover.Body,
         {},
-        h(Popover.Line, {}, 'Working · ', h(Popover.Time, {}, '12s')),
+        h(
+          Popover.Line,
+          {},
+          'Working · ',
+          h(Popover.Time, {
+            at: '2026-11-09T15:41:48Z',
+            now: 1794238920000,
+            lasting: true,
+          } as never),
+        ),
       ),
     ),
   ],

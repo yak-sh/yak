@@ -14,9 +14,6 @@
 .Popover_Line {
   margin: 0;
 }
-.Popover_Time {
-  font-variant-numeric: tabular-nums;
-}
 
 .Popover[hidden],
 .Popover [hidden] {

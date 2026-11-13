@@ -369,7 +369,6 @@ test('the margin reveals request details in the kit tooltip on keyboard focus', 
   for (
     let detail of [
       'Entry 2071',
-      atTime,
       'test-model',
       '$0.0123456',
       'Tokens in: 1200',
@@ -379,4 +378,18 @@ test('the margin reveals request details in the kit tooltip on keyboard focus', 
   ) {
     assertEquals(tip.textContent!.includes(detail), true)
   }
+})
+
+test('an entry says when it was sent once, by the kit time on its line', () => {
+  let row = metered.document.querySelector(`#row-${afterCompact}`)!
+  assertEquals(
+    margin(afterCompact).getAttribute('data-tip')!.includes(atTime),
+    false,
+  )
+  assertEquals(
+    [...row.querySelectorAll('time.Time')].map((t) =>
+      t.getAttribute('datetime')
+    ),
+    [atTime],
+  )
 })

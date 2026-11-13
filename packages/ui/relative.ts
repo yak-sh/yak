@@ -1,7 +1,8 @@
 /**
- * A moment in words, `5 minutes ago`: what a `Stamp` says, and what a
- * printout says of a time. No interface comes with it, so a plain printout
- * reads a time without loading the kit.
+ * A moment in words, `5 minutes ago`, or how long since it, `3m 12s`: what
+ * a `Stamp` and a `Time` say, and what a printout says of a time. No
+ * interface comes with it, so a plain printout reads a time without loading
+ * the kit.
  *
  * @module
  */
@@ -47,6 +48,26 @@ export let relative = (
   return 'just now'
 }
 
+/** How long something has lasted, in its two largest units: what a `Time`
+ * says of the moment it counts from. */
+/// lasted(4_400) -> '4s'
+/// lasted(192_000) -> '3m 12s'
+/// lasted(3_870_000) -> '1h 4m'
+/// lasted(50 * 3_600_000) -> '2d 2h'
+/// lasted(-1) -> '0s'
+export let lasted = (ms: number): string => {
+  let s = Math.max(0, Math.floor(ms / 1000))
+  let d = Math.floor(s / 86_400), h = Math.floor(s / 3600) % 24
+  let m = Math.floor(s / 60) % 60
+  return d
+    ? `${d}d ${h}h`
+    : h
+    ? `${h}h ${m}m`
+    : m
+    ? `${m}m ${s % 60}s`
+    : `${s}s`
+}
+
 // ICU formatters are lazy: loading the kit never loads locale data.
 let formats = new Map<string, Intl.DateTimeFormat>()
 let formatted = (iso: string, clock: boolean, timeZone?: string): string => {
@@ -88,3 +109,36 @@ export let day = (iso: string, timeZone?: string): string =>
 /// pretty('2026-11-06T15:42:00Z', 'UTC') -> 'Nov 6th, 2026, 3:42 PM'
 export let pretty = (iso?: string | null, timeZone?: string): string =>
   iso ? formatted(iso, true, timeZone) : ''
+
+/** How a time is said: read at when, as its day or how long since it, in
+ * which zone. */
+export type Face = {
+  now?: number
+  written?: boolean
+  lasting?: boolean
+  timeZone?: string
+}
+
+/** What a time says at `now`: its age, its day when written, or how long
+ * since it when lasting. */
+/// said('2026-11-06T15:42:00Z', { now: 1794238920000 }) -> '3 days ago'
+/// said('2026-11-06T15:42:00Z', { now: 1794238920000, lasting: true }) -> '3d 0h'
+export let said = (
+  at: string,
+  { now = Date.now(), written, lasting, timeZone }: Face,
+): string =>
+  written
+    ? day(at, timeZone)
+    : lasting
+    ? lasted(now - Date.parse(at))
+    : relative(at, now)
+
+/** A time's tooltip: the moment in full, and for a duration, that it is since
+ * then; nothing for what is not a moment. */
+/// tip('2026-11-06T15:42:00Z', { timeZone: 'UTC' }) -> 'Nov 6th, 2026, 3:42 PM'
+/// tip('2026-11-06T15:42:00Z', { lasting: true, timeZone: 'UTC' }) -> 'Since Nov 6th, 2026, 3:42 PM'
+/// tip('soon', {}) -> ''
+export let tip = (at: string, { lasting, timeZone }: Face): string => {
+  let full = pretty(at, timeZone)
+  return full && lasting ? `Since ${full}` : full
+}

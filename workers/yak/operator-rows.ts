@@ -33,7 +33,7 @@ export let rowsOf = (sent: Lines, mentions?: string): Row[] =>
   drawLines(sent).map((line) => drawn(line, mentions))
 
 // The aside beside the lines, drawn the same way (operator-aside.ts).
-export { lasted, ordered } from './operator-aside.ts'
+export { ordered } from './operator-aside.ts'
 
 /** The aside as HTML, its list shown or not. */
 export let asideHtml = (aside: Aside, open = false, now = Date.now()) =>
@@ -50,6 +50,7 @@ export let turnHtml = (turn: Turn | null, now = Date.now()) =>
 /** A helper's row as HTML, as every place on the page draws it. */
 export let helperHtml = (helper: HelperLine, now = Date.now()) =>
   renderToString(h(Work, { work: helper, now }))
-export { relative } from '@yaks/ui/relative'
+// Its times said in the reader's clock and zone (dates.ts).
+export { dates } from './dates.ts'
 
 export { menus, tips } from '@yaks/ui/parts'

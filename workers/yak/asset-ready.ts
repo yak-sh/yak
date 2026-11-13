@@ -65,7 +65,7 @@ export let assetInputs = (paths: string[]) =>
     /^(?:packages\/|workers\/yak\/(?:public|site)\/)/.test(path) ||
     /^(?:deno\.(?:jsonc?|lock)|bin\/compiler-packages\.ts)$/.test(path) ||
     // `_talk.js` is built from operator-rows.ts and what it imports here.
-    /^workers\/yak\/(?:wrangler\.ts|asset-ready\.ts|client-assets\.ts|sheet-assets\.ts|(?:chart|data-editor)\.js|dates(?:-browser)?\.ts|when\.ts|settings(?:-draft(?:-browser)?)?\.ts|operator-(?:rows|draw|aside|source|metadata|contact-card|consent)\.ts|icons\.ts|sandbox\/(?:cli-assets|launch)\.ts|package(?:-lock)?\.json|deno\.json)$/
+    /^workers\/yak\/(?:wrangler\.ts|asset-ready\.ts|client-assets\.ts|sheet-assets\.ts|(?:chart|data-editor)\.js|dates(?:-browser)?\.ts|settings(?:-draft(?:-browser)?)?\.ts|operator-(?:rows|draw|aside|source|metadata|contact-card|consent)\.ts|icons\.ts|sandbox\/(?:cli-assets|launch)\.ts|package(?:-lock)?\.json|deno\.json)$/
       .test(path)
   ).filter((path) =>
     !/(^|\/)(?:node_modules|\.wrangler|fixtures?|tests?)(\/|$)/.test(path) &&

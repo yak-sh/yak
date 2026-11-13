@@ -15,12 +15,18 @@ let { document } = parseHTML(`<html><body>${
       h(Time, { at, now: Date.parse(at), timeZone: 'UTC' }),
     ),
     h(Time, { at: '2026-11-06', written: true, timeZone: 'UTC' }),
+    h(Time, {
+      at: '2026-11-09T15:38:48Z',
+      lasting: true,
+      now: Date.parse(at),
+      timeZone: 'UTC',
+    }),
   ])
 }</body></html>`)
 
-test('the hosted page refreshes ages and keeps written calendar dates and explicit zones', () => {
+test('the hosted page refreshes ages and durations and keeps written calendar dates and explicit zones', () => {
   dates(document as unknown as Document, now)
-  let [ago, written] = document.querySelectorAll('time')
+  let [ago, written, lasting] = document.querySelectorAll('time')
   equal(ago.textContent, '3 days ago')
   equal(ago.getAttribute('data-tip'), 'Nov 6th, 2026, 3:42 PM')
   equal(
@@ -29,6 +35,18 @@ test('the hosted page refreshes ages and keeps written calendar dates and explic
   )
   equal(written.textContent, 'Nov 6th, 2026')
   equal(written.getAttribute('data-tip'), 'Nov 6th, 2026, 12:00 AM')
+  equal(lasting.textContent, '3m 12s')
+  equal(lasting.getAttribute('data-tip'), 'Since Nov 9th, 2026, 3:38 PM')
+  dates(document as unknown as Document, now + 4_000)
+  equal(lasting.textContent, '3m 16s')
+})
+
+test('a time the server draws again has its tip said again', () => {
+  let [ago] = document.querySelectorAll('time')
+  dates(document as unknown as Document, now)
+  ago.setAttribute('data-tip', 'drawn by the server')
+  dates(document as unknown as Document, now)
+  equal(ago.getAttribute('data-tip'), 'Nov 6th, 2026, 3:42 PM')
 })
 
 test('the data editor uses the kit date face without mounting a ticking component', () => {

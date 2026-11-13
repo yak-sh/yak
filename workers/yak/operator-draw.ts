@@ -16,7 +16,6 @@ import { useContext } from 'preact/hooks'
 import { Body, Drop, Icon, Menu, More, Rows } from '@yaks/ui/parts'
 import { type HelperLine, Work } from './operator-aside.ts'
 import { type IconName, icons } from './icons.ts'
-import { pretty } from '@yaks/ui/relative'
 import { PART } from '@yaks/persona/part'
 import { sourceWords } from './operator-source.ts'
 import { measured, type Metadata } from './operator-metadata.ts'
@@ -117,8 +116,9 @@ export let spoken = (b: Bundle, body: string) => {
 
 let yours = (b: Bundle, text: string) => h(Transcript.Bubble, {}, via(b), text)
 
-// When a line was sent, small under it (public/when.js), the page saying it
-// again in the person's own time.
+// When a line was sent, small under it, the kit's `Time`, which holds its
+// tip: the page says both again in the person's own time (dates.ts), and
+// lends the tip to the menu's trigger the time sits in.
 let stamp = (b: Bundle) => {
   let at = String(comp(b, 'created')?.at ?? '')
   return h(Transcript.When, { at, tabindex: -1 })
@@ -698,7 +698,6 @@ export let framed = (line: Line, entries: Bundle[]): Line => {
           'aria-haspopup': 'menu',
           'aria-expanded': 'false',
           'aria-label': 'Entry actions',
-          'data-tip': pretty(String(comp(first, 'created')?.at ?? '')),
         }, first ? stamp(first) : 'Actions'),
         h(
           Menu,
