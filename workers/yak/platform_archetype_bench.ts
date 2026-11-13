@@ -68,7 +68,7 @@ for (
         set: { archetype: lit(null) },
       })
       const t = performance.now()
-      backfill(base, false)
+      backfill(base)
       backfillMs = performance.now() - t
     }
     const t = performance.now()

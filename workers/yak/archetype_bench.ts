@@ -65,7 +65,7 @@ for (let indexed of [false, true]) {
   if (indexed) {
     base.query({ t: 'update', table: 'entity', set: { archetype: lit(null) } })
     const at = performance.now()
-    backfill(base, false)
+    backfill(base)
     migrationMs = performance.now() - at
   }
   const at = performance.now()

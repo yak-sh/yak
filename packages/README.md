@@ -899,11 +899,11 @@ distinguish implemented behavior from remaining proposals.
 - **Numbers and prefixes are one package, and they are opt in.**
   [@yaks/id](./id) declares the `num` property, ships `numbers(allocate)` for
   explicit `$num` requests and `ids(vocab)` for resolving what a person typed;
-  storage numbering (`number: true`) is the other, plugin-free way to have them.
-  A component's `prefix` controls formatting, not allocation: a proposal to
-  allocate numbers automatically for prefixed components remains unimplemented,
-  so do not rely on it. A graph that loads none of this refuses `$num` rather
-  than ignoring it.
+  storage numbering is the other, plugin-free way to have them: `number: true`
+  numbers each entity once, in the series of the first of its components that
+  declares a `prefix`, and an entity whose components declare none is not
+  numbered. A graph that loads none of this refuses `$num` rather than ignoring
+  it.
 - **`./tools` is a reserved subpath that one core package still uses for
   something else.** `@yaks/vocab/tools` is the tool mechanism — validating a
   declaration's input — rather than one plugin's implementations, and it
