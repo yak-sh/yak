@@ -765,3 +765,21 @@ test('the assembly built for a browser names no AsyncDisposableStack', async () 
   await esbuild.stop()
   equal(out.outputFiles[0].text.includes('AsyncDisposableStack'), false)
 })
+
+test('a host’s own tools are made again as their revision moves, and leave out the generic tier where it says so', async () => {
+  let said = 'one'
+  let { host } = (await assembly(config, ['graph'], loading([]))).bind({
+    ...binding(),
+    tools: {
+      package: 'host',
+      generic: false,
+      revision: () => said,
+      offer: () => [{ name: `said_${said}`, description: said, run: () => [] }],
+    },
+  })
+  let names = () => host.tools.map((t) => t.name).sort()
+  equal(names(), ['book_list', 'said_one'])
+  let first = host.runner
+  said = 'two'
+  equal([names(), host.runner === first], [['book_list', 'said_two'], false])
+})

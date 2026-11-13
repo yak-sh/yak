@@ -268,6 +268,7 @@ import type {
   Comp,
   Eid,
   Graph,
+  NamedTool,
   Plugin,
   ReadOpts,
 } from '@yaks/graph'
@@ -313,12 +314,11 @@ import {
   retired,
   want,
 } from '@yaks/query'
-import { effectsIn, loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { decode as fromWire, stringify } from '@yaks/vocab/wire'
 import { decoded, opened, taken } from './binary.ts'
 import { type Anatomy, anatomy } from '@yaks/code/anatomy'
 import { workerAnatomy } from './anatomy.ts'
-import type { Runner } from '@yaks/tools'
 import { answerOf, toolEid } from '@yaks/tools/result'
 import { runner } from '@yaks/tools'
 import { commands, type Tools } from '@yaks/tools/declared'
@@ -645,7 +645,6 @@ type Word =
   // That a deployment pass (`#deployed`) has run here.
   | 'deployed'
   | 'wakes'
-  | 'planted'
   | 'effect-migrated'
   // The store this object was copied from (relocate.ts `copy`), until the
   // copy has forgiven what that store owed (`#forgiven`).
@@ -966,10 +965,6 @@ export class Store extends Durable {
   // asked this incarnation (`#analyzing`).
   #analyze: (tables: number) => number = () => 0
   #unanalyzed: boolean | null = null
-  // The app's own commands, as a runner over this store (T-37605), beside the
-  // manifest they were built from. A deploy is the only thing that moves that
-  // manifest, and a new one is a new runner.
-  #runs: { said: string; run: Runner } | null = null
   #host!: PluginHost
   // The write log's replay (writes.ts). `#landing` names a held write or
   // live receipt; the `yak/writes` hook completes it in the graph transaction; `#draining` is the replay in
@@ -1486,6 +1481,13 @@ export class Store extends Durable {
         defect(e, { request: 'schema requirements', store: name })
       }
     }
+    // The commands the manifest declares, told to the anatomy with what the
+    // runner binds of them.
+    let commanded = () => {
+      let declared = readTools(this.#get('tools') ?? '{}')
+      observed.commands(declared, () => host.runner.tools)
+      return declared
+    }
     let composed = plan.bind({
       observed: observed.composition,
       options: (plugin, options) => {
@@ -1804,6 +1806,26 @@ export class Store extends Durable {
       ready: (made) => {
         host = made
       },
+      // The app's commands, beside its plugins' tools, made again when a
+      // deploy moves the manifest they come from (T-37605). A call is a row
+      // here (what was asked, the claim while it runs, and the answer beside
+      // it), so a call wearing a wake is work asked for later, and nothing
+      // outside this object has to be awake for it. The generic graph tools
+      // are not among them: a caller reaches this graph through its doors.
+      tools: {
+        package: 'worker/store',
+        generic: false,
+        revision: () => this.#get('tools') ?? '{}',
+        offer: (made) => this.#commands(made.graph, commanded()),
+      },
+      // A call is recorded as the store's own bookkeeping (`#asIs`); one in
+      // a transcript is the transcript runner's, run in the order its model
+      // asked (@yaks/session, models.ts).
+      calls: (made) => ({
+        records: this.#kernelGraph(made.graph),
+        takes: (call) => !call.entry,
+        report: (error) => void this.#broke('tool', error),
+      }),
     })
     host = this.#host = composed.host
     let g = host.graph
@@ -1822,24 +1844,13 @@ export class Store extends Durable {
       changed: { at: (e) => this.#armAt(e.comp?.at) },
     })
     wakeRegistered()
-    // The app's own commands, run here (T-37605, D-37562). @yaks/tools
-    // declares which calls still want running as two effects — one for a call
-    // nobody scheduled, one for a call whose wake has fired — and a host
-    // handles both. That is the whole of the scheduled case: a page writes a
-    // `call` wearing a `wake{at}`, the object comes back at that instant, the
-    // firing makes the second hold, and the answer lands beside the ask. Each
-    // is an `effect` row this store's pool works once the write commits
-    // (`#workingEffects`), so the answer follows the write rather than riding
-    // its response.
-    let due = (e: { entity: { eid: string } }) =>
-      this.#runner().due(e.entity.eid)
-    let declared = new Set(effectsIn(vocab.docs).map((e) => e.name))
-    let coreRegistered = observed.registration('@yaks/tools', fx)
-    fx.handle(Object.fromEntries(
-      this.#runner(g, observed).rules.filter((r) => declared.has(r.rule.name))
-        .map((r) => [r.rule.name, due]),
-    ))
-    coreRegistered()
+    // The app's own commands are run by the host's runner (`#commands`), and
+    // the calls nobody waits on by the two effects @yaks/tools declares, which
+    // the assembly handles: a page writes a `call` wearing a `wake{at}`, the
+    // object comes back at that instant, the firing makes the second hold,
+    // and the answer lands beside the ask, once this store's pool works the
+    // run (`#workingEffects`).
+    commanded()
     observed.effects(fx.slots())
     this.#effectsReady = true
     this.#effects = fx
@@ -2526,210 +2537,156 @@ export class Store extends Durable {
   // ---- the calls (T-37605) -------------------------------------------------
 
   /**
-   * The runner over this store: the app's declared commands as tools, rebuilt
-   * when the manifest they come from moves. A call is a row here — what was
-   * asked, the claim while it runs, and the answer beside it — so a call
-   * wearing a wake is work asked for later, and nothing outside this object
-   * has to be awake for it.
+   * The app's declared commands as tools over `g`, each run as its caller:
+   * what the store's runner offers beside its plugins' tools.
    */
-  #runner = (g: Graph = this.#graph, capture = this.#anatomy): Runner => {
-    let said = this.#get('tools') ?? '{}'
-    if (this.#runs?.said != said || g != this.#graph) {
-      let declared = readTools(said)
-      let host = this.#host, kind = storeKind(this.#get('name') ?? '')
-      this.#runs = {
-        said,
-        run: runner(
-          this.#kernelGraph(g),
-          {
-            host: g,
-            // Made when a call first asks for a tool, as a host's are: most
-            // wakes run none, and an isolate's first would otherwise bind
-            // every command and package tool before its answer.
-            tools: () => [
-              ...commands(declared).map((tool) => ({
-                ...tool,
-                applied: true,
-                run: async (call: Bundle) => {
-                  let ns = this.#bind.STORE, appId = this.#get('app')
-                  if (!appId) throw new Error('app store is unavailable')
-                  let dir = ns ? this.#directory() : null
-                  let held = dir ? await dir.appAt(appId) : null
-                  if (
-                    dir && (!held || held.app.trashed || held.space.trashed)
-                  ) {
-                    throw new Error('app is unavailable')
-                  }
-                  let context = this.#expires?.context
-                  if (held && context) {
-                    held = {
-                      space: held.space,
-                      app: { ...context.app, policy: held.app.policy },
-                    }
-                  }
-                  let actor = instrumentActor(who(call))
-                  // Unattributed recorded work is the app's automation. A
-                  // browser's vouched instrument alone never supplies a person.
-                  let person = this.#authority(actor)?.person ?? actor?.by ??
-                    (actor?.via ? null : appId)
-                  let local = policy(g.storage, { ignore: this.#staleGrant })
-                  let role = person == appId
-                    ? 'editor'
-                    : person
-                    ? held && dir
-                      ? await dir.role(held.space, person) ??
-                        (await dir.grant(held.app, person))?.access ?? null
-                      : await local.levelOf(person, appId)
-                    : null
-                  let access = held
-                    ? mode(held.app.access)
-                    : await local.modeOf(appId)
-                  if (held) {
-                    let req = new Request('http://store', {
-                      headers: {
-                        'x-yak-app': appId,
-                        'x-yak-access': held.app.access,
-                        ...(held.app.policy == null
-                          ? {}
-                          : { 'x-yak-policy': String(held.app.policy) }),
-                        ...(person && person != appId
-                          ? { 'x-yak-person': person }
-                          : {}),
-                        ...(role ? { 'x-yak-role': role } : {}),
-                      },
-                    })
-                    await this.#learn(req)
-                    access = mode(req.headers.get('x-yak-access'))
-                    if (person != appId) role = vouchOf(req).level
-                  }
-                  if (!reads(access, role)) {
-                    throw new Denied(person, appId, 'viewer', 'read')
-                  }
-                  if (person) {
-                    this.#vouch({
-                      person,
-                      ...(actor?.by && actor.by != person
-                        ? { actor: actor.by }
-                        : {}),
-                      via: actor?.via ?? null,
-                      level: role,
-                      title: null,
-                    })
-                  }
-                  let caller = {
-                    person,
-                    role,
-                    ...(actor?.by && actor.by != person
-                      ? { actor: actor.by }
-                      : {}),
-                    ...(actor?.via ? { via: actor.via } : {}),
-                  }
-                  // The kept command template is the writer's vocabulary, not
-                  // the current host's. Only old declarative apply commands need
-                  // the session bridge; worker replies and current templates
-                  // already write the current shape.
-                  let template = declared[tool.name!].apply
-                  let legacyTemplate =
-                    (Array.isArray(template) ? template : [template])
-                      .some((row) => {
-                        let using = (row as Bundle | undefined)?.using as
-                          | Comp
-                          | undefined
-                        return !(row as Bundle | undefined)?.sending &&
-                          ['input', 'instructions', 'window', 'tools']
-                            .some((prop) => using?.[prop] !== undefined)
-                      })
-                  let releasedSession = held?.app.lenses?.[sessionPackage]
-                  let sessionVersion = template === undefined
-                    ? sessionStep
-                    : releasedSession ?? (legacyTemplate ? 0 : sessionStep)
-                  let acts = {
-                    query: (line: string) =>
-                      Promise.resolve(g.read(line, { person })),
-                    apply: async ({ entities }: { entities: Bundle[] }) => {
-                      let made = await g.apply(signed(
-                        sessionVersion < sessionStep
-                          ? entities.map((row) => ({
-                            ...row,
-                            $speaks: { [sessionPackage]: sessionVersion },
-                          }))
-                          : entities,
-                        {
-                          ...(actor?.by || person
-                            ? { by: actor?.by ?? person! }
-                            : {}),
-                          ...(actor?.via ? { via: actor.via } : {}),
-                        },
-                      ))
-                      return {
-                        entities: [...new Set(made.map((b) => b.entity.eid))],
-                        aliases: minted(made),
-                      }
-                    },
-                  }
-                  let answered = held
-                    ? await commandAt(
-                      this.#bind as Env,
-                      held.space,
-                      held.app,
-                      caller,
-                      tool.name!,
-                      declared[tool.name!],
-                      argsOf(call),
-                      acts,
-                      {
-                        call: call.entity.eid,
-                        at: String(
-                          (call.created as Comp | undefined)?.at ?? '',
-                        ),
-                        source: String(
-                          (call.call as Comp | undefined)?.source ??
-                            call.entity.eid,
-                        ),
-                      },
-                    )
-                    : await commandReply(
-                      this.#get('name') ?? '',
-                      caller,
-                      tool.name!,
-                      declared[tool.name!],
-                      argsOf(call),
-                      acts,
-                    )
-                  this.#used(true)
-                  return [{
-                    entity: { eid: '$answer' },
-                    content: { body: answered.text },
-                    output: { source: call.entity.eid },
-                  }]
-                },
-              })),
-              ...storedTools(host, kind, undefined, capture?.composition),
-            ],
-            // A call in a transcript is the transcript runner's, run in the
-            // order its model asked (@yaks/session, models.ts).
-            takes: (call) => !call.entry,
-            report: (error) => void this.#broke('tool', error),
+  #commands = (g: Graph, declared: Tools): NamedTool[] =>
+    commands(declared).map((tool) => ({
+      ...tool,
+      name: tool.name!,
+      applied: true,
+      run: async (call: Bundle) => {
+        let ns = this.#bind.STORE, appId = this.#get('app')
+        if (!appId) throw new Error('app store is unavailable')
+        let dir = ns ? this.#directory() : null
+        let held = dir ? await dir.appAt(appId) : null
+        if (
+          dir && (!held || held.app.trashed || held.space.trashed)
+        ) {
+          throw new Error('app is unavailable')
+        }
+        let context = this.#expires?.context
+        if (held && context) {
+          held = {
+            space: held.space,
+            app: { ...context.app, policy: held.app.policy },
+          }
+        }
+        let actor = instrumentActor(who(call))
+        // Unattributed recorded work is the app's automation. A
+        // browser's vouched instrument alone never supplies a person.
+        let person = this.#authority(actor)?.person ?? actor?.by ??
+          (actor?.via ? null : appId)
+        let local = policy(g.storage, { ignore: this.#staleGrant })
+        let role = person == appId
+          ? 'editor'
+          : person
+          ? held && dir
+            ? await dir.role(held.space, person) ??
+              (await dir.grant(held.app, person))?.access ?? null
+            : await local.levelOf(person, appId)
+          : null
+        let access = held ? mode(held.app.access) : await local.modeOf(appId)
+        if (held) {
+          let req = new Request('http://store', {
+            headers: {
+              'x-yak-app': appId,
+              'x-yak-access': held.app.access,
+              ...(held.app.policy == null
+                ? {}
+                : { 'x-yak-policy': String(held.app.policy) }),
+              ...(person && person != appId ? { 'x-yak-person': person } : {}),
+              ...(role ? { 'x-yak-role': role } : {}),
+            },
+          })
+          await this.#learn(req)
+          access = mode(req.headers.get('x-yak-access'))
+          if (person != appId) role = vouchOf(req).level
+        }
+        if (!reads(access, role)) {
+          throw new Denied(person, appId, 'viewer', 'read')
+        }
+        if (person) {
+          this.#vouch({
+            person,
+            ...(actor?.by && actor.by != person ? { actor: actor.by } : {}),
+            via: actor?.via ?? null,
+            level: role,
+            title: null,
+          })
+        }
+        let caller = {
+          person,
+          role,
+          ...(actor?.by && actor.by != person ? { actor: actor.by } : {}),
+          ...(actor?.via ? { via: actor.via } : {}),
+        }
+        // The kept command template is the writer's vocabulary, not
+        // the current host's. Only old declarative apply commands need
+        // the session bridge; worker replies and current templates
+        // already write the current shape.
+        let template = declared[tool.name!].apply
+        let legacyTemplate = (Array.isArray(template) ? template : [template])
+          .some((row) => {
+            let using = (row as Bundle | undefined)?.using as
+              | Comp
+              | undefined
+            return !(row as Bundle | undefined)?.sending &&
+              ['input', 'instructions', 'window', 'tools']
+                .some((prop) => using?.[prop] !== undefined)
+          })
+        let releasedSession = held?.app.lenses?.[sessionPackage]
+        let sessionVersion = template === undefined
+          ? sessionStep
+          : releasedSession ?? (legacyTemplate ? 0 : sessionStep)
+        let acts = {
+          query: (line: string) => Promise.resolve(g.read(line, { person })),
+          apply: async ({ entities }: { entities: Bundle[] }) => {
+            let made = await g.apply(signed(
+              sessionVersion < sessionStep
+                ? entities.map((row) => ({
+                  ...row,
+                  $speaks: { [sessionPackage]: sessionVersion },
+                }))
+                : entities,
+              {
+                ...(actor?.by || person ? { by: actor?.by ?? person! } : {}),
+                ...(actor?.via ? { via: actor.via } : {}),
+              },
+            ))
+            return {
+              entities: [...new Set(made.map((b) => b.entity.eid))],
+              aliases: minted(made),
+            }
           },
-        ),
-      }
-      let run = this.#runs.run
-      capture?.commands(declared, () => run.tools)
-    }
-    return this.#runs.run
-  }
-
-  // The `tool` rows a call names, written when the manifest they come from
-  // moves. A call points at a tool entity, so that row has to be standing
-  // before anybody can write one — and a deploy is the moment to stand it up.
-  #planting = async (): Promise<void> => {
-    let said = this.#get('tools') ?? '{}'
-    await this.#runner().ensure(
-      this.#get('planted') == said ? ['builder_model'] : undefined,
-    )
-    if (this.#get('planted') == said) return
-    this.#put('planted', said)
-  }
+        }
+        let answered = held
+          ? await commandAt(
+            this.#bind as Env,
+            held.space,
+            held.app,
+            caller,
+            tool.name!,
+            declared[tool.name!],
+            argsOf(call),
+            acts,
+            {
+              call: call.entity.eid,
+              at: String(
+                (call.created as Comp | undefined)?.at ?? '',
+              ),
+              source: String(
+                (call.call as Comp | undefined)?.source ??
+                  call.entity.eid,
+              ),
+            },
+          )
+          : await commandReply(
+            this.#get('name') ?? '',
+            caller,
+            tool.name!,
+            declared[tool.name!],
+            argsOf(call),
+            acts,
+          )
+        this.#used(true)
+        return [{
+          entity: { eid: '$answer' },
+          content: { body: answered.text },
+          output: { source: call.entity.eid },
+        }]
+      },
+    }))
 
   // ---- the clock (D-37562) -------------------------------------------------
   //
@@ -3302,7 +3259,7 @@ export class Store extends Durable {
     // A deployment stands up command identities. Recovery drains recorded
     // call_ready/call_woken effects, not a second derivation over all calls.
     if (storeKind(this.#get('name') ?? '') == 'app') {
-      await this.#planting()
+      await this.#host.runner.ensure()
     }
     this.#effectsReady = true
     // The pass starts as many start-up runs as the pool has slots; the rest
@@ -4976,9 +4933,9 @@ export class Store extends Durable {
       // of, and the kernel tells everyone who can reach the app when it moved
       // (declared.ts `viewsMoved`). The commands themselves move no list —
       // they are not tools, and the tool roster is fixed (T-34541).
-      // The rows those commands are called at (`#planting`): a deploy is what
-      // moves the manifest, so a deploy is what stands them up.
-      if (now != was && !candidate) await this.#planting()
+      // The rows those commands are called at (@yaks/tools `ensure`): a
+      // deploy is what moves the manifest, so a deploy is what stands them up.
+      if (now != was && !candidate) await this.#host.runner.ensure()
       let said = await answer.json() as Record<string, unknown>
       return Response.json({ ...said, views: viewed(now) != viewed(was) })
     }
@@ -5259,7 +5216,7 @@ export class Store extends Durable {
             report: (e) => void this.#broke('tool', e),
             ...reply ? { reply } : {},
           })
-          : this.#runner()
+          : this.#host.runner
         await run.ensure([name])
         let vouch = vouchOf(request)
         this.#vouch(vouch)

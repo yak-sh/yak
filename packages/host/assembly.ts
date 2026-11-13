@@ -84,7 +84,26 @@ export type Binding = {
    * ({@link Host.meaning}). */
   search?: (host: Host) => Search | undefined
   /** Operations supplied by the concrete host beside graph and plugin tools. */
-  tools?: { package: string; offer: (host: Host) => NamedTool[] }
+  tools?: {
+    package: string
+    offer: (host: Host) => NamedTool[]
+    /** What the offer is made from: the registry and its runner are made
+     * again when it moves. */
+    revision?: () => unknown
+    /** Whether the graph's generic tools are offered beside it (they are by
+     * default). A host whose callers reach the graph through doors of its own
+     * offers only its own and its plugins'. */
+    generic?: boolean
+  }
+  /** How the host's runner runs calls, beside what the assembly gives it:
+   * the graph its records are written through, where that is not the host's
+   * (a store whose door guards what it is sent records calls as itself),
+   * which calls are its to run, and where its failures go. */
+  calls?: (host: Host) => {
+    records?: Graph
+    takes?: (call: Bundle) => boolean
+    report?: (error: unknown, call: Bundle, tool?: string) => unknown
+  }
   actor?: Actor | null
   process?: Comp
   readOnly?: boolean
@@ -382,6 +401,15 @@ export let assemble = (
       let meant: Meaning | undefined = lent.meaning
       let replying: Reply | undefined
       let calls: Runner | undefined
+      // What the binding's tools were made from, when they were made: one
+      // that moved makes the registry and its runner again.
+      let revised: unknown
+      let current = () => {
+        let at = binding.tools?.revision?.()
+        if (at === revised) return
+        revised = at
+        made = calls = undefined
+      }
       let makeTools: (() => Registry) | undefined
       let makeRunner: (() => Runner) | undefined
       let toolPart = part
@@ -460,10 +488,12 @@ export let assemble = (
         },
         get registry() {
           if (!makeTools) throw new Error('the tools are not built yet')
+          current()
           return made ??= makeTools()
         },
         get runner() {
           if (!makeRunner) throw new Error('the tool runner is not built yet')
+          current()
           return calls ??= makeRunner()
         },
         get handler() {
@@ -623,9 +653,12 @@ export let assemble = (
       // `./tools`, imported the first time one of them is called.
       makeTools = () => {
         toolPart?.('tools')
-        let generic = tier({ search: ranked, keywords: vocab.keywords })
-        observed.tier(generic)
-        let sources = new Map([['@yaks/graph', generic]])
+        let sources = new Map<string, NamedTool[]>()
+        if (binding.tools?.generic !== false) {
+          let generic = tier({ search: ranked, keywords: vocab.keywords })
+          observed.tier(generic)
+          sources.set('@yaks/graph', generic)
+        }
         if (binding.tools) {
           let own = binding.tools.offer(host)
           observed.tier(own, binding.tools.package)
@@ -673,7 +706,11 @@ export let assemble = (
       // just to say hello.
       makeRunner = () => {
         toolPart?.('runner')
-        return prepared.factories.runner(g!, {
+        let own = binding.calls?.(host) ?? {}
+        return prepared.factories.runner(own.records ?? g!, {
+          // Tools read and write the host's graph, whatever records the calls.
+          ...own.records ? { host: g! } : {},
+          ...own.takes ? { takes: own.takes } : {},
           // Built by the first call that asks for a tool: effects need the
           // runner as the graph opens, and most openings run no tool.
           tools: () => host.registry,
@@ -689,16 +726,17 @@ export let assemble = (
           // the machine that received it.
           ...process ? { process } : {},
           ...clock ? { clock } : {},
-          report: (error, call, tool) =>
-            readOnly ? console.error(error) : host.report?.(error, {
-              actor: call.$actor ?? self ?? undefined,
-              during: {
-                entity: call.entity.eid,
-                kind: 'call',
-                process: host.me,
-              },
-              tags: { tool },
-            }),
+          report: own.report ??
+            ((error, call, tool) =>
+              readOnly ? console.error(error) : host.report?.(error, {
+                actor: call.$actor ?? self ?? undefined,
+                during: {
+                  entity: call.entity.eid,
+                  kind: 'call',
+                  process: host.me,
+                },
+                tags: { tool },
+              })),
           ...replying ? { reply: replying } : {},
         })
       }
@@ -707,7 +745,9 @@ export let assemble = (
       // every other caller reaches the same construction through Host.
       if (effecting) {
         let run = host.runner
-        let due: Handlers[string] = (e) => run.due(e.entity.eid)
+        // The runner standing when the run is due: one the binding's tools
+        // moved since is made again.
+        let due: Handlers[string] = (e) => host.runner.due(e.entity.eid)
         fx.handle(
           Object.fromEntries(
             run.rules.filter((r) => declared.has(r.rule.name)).map((
