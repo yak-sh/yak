@@ -8,6 +8,7 @@ import { ram } from '@yaks/ram'
 import { personal } from '@yaks/member'
 import { appVocab } from './vocab.ts'
 import { privacyRules } from './privacy-move.ts'
+import { THROUGH } from './config.ts'
 import type { Query } from '@yaks/query'
 
 let vocab = appVocab({})
@@ -25,7 +26,7 @@ await g.apply([
   { entity: { eid: page }, document_page: { document: doc, page: 1 } },
   { entity: { eid: open }, document_page: { document: ana, page: 2 } },
 ], { trusted: true })
-g.use(personal(vocab, {}, { document_page: 'document' }))
+g.use(personal(vocab, {}, THROUGH))
 let rules = privacyRules(vocab)
 let seen = async (person: string) =>
   (await g.read('.draft|.document_page', { person })).map((b) => b.entity.eid)
