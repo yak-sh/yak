@@ -29,6 +29,7 @@ import {
   lines,
   type Names,
   opening,
+  row,
   type Seen,
   spoken,
   theirs,
@@ -605,9 +606,7 @@ export let talk = (
       h(
         Transcript.Lines,
         { 'data-rows': '' },
-        lines(entries, names, seen).map((r) =>
-          h(Transcript.Row, { id: `row-${r.id}` }, r.node)
-        ),
+        lines(entries, names, seen).map(row),
       ),
       // the words a screen reader hears; the yak beside the box shows them
       h(Transcript.Status, {}, h('span', { 'data-now': '' }, working)),

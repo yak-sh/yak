@@ -785,6 +785,12 @@
   /* The row an alert was about, which pressing the alert opens at
      (operator-alerts.ts `openAt`); where the column is one press away, it
      opens with it. */
+  /* A line linked to (Copy link), clear of the bar held at the top. */
+  .Transcript_Row:target {
+    background: color-mix(in srgb, var(--card), var(--accent) 12%);
+    border-radius: var(--radius);
+    scroll-margin-block: 4rem;
+  }
   .Asks_Item:target {
     background: color-mix(in srgb, var(--card), var(--accent) 12%);
     border-radius: var(--radius);

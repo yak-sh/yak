@@ -5,6 +5,13 @@
   margin: 0;
   font-size: var(--small);
 }
+/* A person's own, on their side. */
+.Attachments-end {
+  justify-content: flex-end;
+  width: fit-content;
+  max-width: 85%;
+  margin-left: auto;
+}
 .Attachments_Link {
   overflow-wrap: anywhere;
 }

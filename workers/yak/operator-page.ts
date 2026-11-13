@@ -602,7 +602,7 @@ export let conversation = (rows: Bundle[]) =>
           'div',
           null,
           doc.body ? h(Transcript.Bubble, {}, doc.body) : null,
-          attached(row.entity.eid, files),
+          attached(row.entity.eid, files, 'end'),
         ),
         answer?.text ? reply(answer.text) : failed
           ? trouble(

@@ -34,6 +34,9 @@ export type Line = {
   text?: string
   of?: string[]
   uses: string[]
+  /** a step, which flows beside the steps around it while closed, or the
+   * person's own words, which sit on their side */
+  is?: 'step' | 'theirs'
 }
 /** How a call reads to the person, by its tool's eid (`call.to`) and its
  * arguments: what it is doing while it runs and what it did once it answered
@@ -133,12 +136,13 @@ export let PICTURES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
  * a step brought back, under the step: a picture as itself, any other file as
  * its kind and name, each opening the original (operator-page.ts
  * `?attachment=`, answered on either page). `row` is the request or the
- * step's result the files came with. */
-export let attached = (row: string, files: Sent[]) =>
+ * step's result the files came with; a person's sit at the `end`, on
+ * their side. */
+export let attached = (row: string, files: Sent[], mod?: 'end') =>
   files.length
     ? h(
       Attachments,
-      {},
+      { mod },
       files.map((f, i) => {
         let href = `?attachment=${row}&file=${i}`
         return PICTURES.includes(f.mime ?? '')
@@ -170,7 +174,7 @@ let input = (b: Bundle, body: string) => {
     Fragment,
     null,
     said && said != unsaid(files) ? yours(b, said) : null,
-    sent ? attached(String(sent.request), files) : null,
+    sent ? attached(String(sent.request), files, 'end') : null,
   )
 }
 
@@ -327,6 +331,7 @@ let tool = (
       ? h(Fragment, null, drawn, attached(result!.entity.eid, files))
       : drawn,
     text: ok === false ? `${name}\n\n${problem}` : undefined,
+    is: 'step' as const,
   }
 }
 
@@ -344,6 +349,7 @@ let helper = (b: Bundle, body: string) => {
     'A helper the Operator started could not finish, so the Operator went on without it.'
   return outcome == 'settled'
     ? {
+      is: 'step' as const,
       node: step(
         'Heard back from a helper',
         '',
@@ -358,6 +364,7 @@ let helper = (b: Bundle, body: string) => {
         trouble(problem, said),
       ),
       text: `${name}\n\n${problem}`,
+      is: 'step' as const,
     }
 }
 
@@ -645,22 +652,35 @@ export let namer = ({ tools = {}, person }: Naming): Names => (tool, args) =>
 export let helped = (h: Helper, offers?: Offers, page?: Drawn) =>
   briefed(h.entries, 'the helper', offers, page)
 
-/** Every line of a transcript worth showing, in order, what each helper was
- * told inside the step that started it. */
-let archivable = (line: Line, entries: Bundle[]): Line => {
-  let rows = entries.filter((b) => line.uses.includes(b.entity.eid) && b.entry)
-  if (!rows.length) return line
-  let archived = rows.filter((b) => b.archived).map((b) => b.entity.eid)
+/** A line in its row, under its id, as the conversation and every fold in it
+ * put one. */
+export let row = (line: { id: string; node: Node }) =>
+  h(Transcript.Row, { id: `row-${line.id}` }, line.node)
+
+// Lines inside a fold, spaced as the conversation's are.
+let rows = (lines: { id: string; node: Node }[]) =>
+  lines.length ? h(Transcript.Lines, { 'data-rows': '' }, lines.map(row)) : null
+
+// The frame every line is drawn in, wherever it is drawn: what it says, then
+// its time, which opens its menu. Copy, Quote and Copy link need only the
+// line; Hide and Restore need the entries it draws, so a line of none (words
+// no session has taken yet) goes without them.
+let framed = (line: Line, entries: Bundle[]): Line => {
+  let used = entries.filter((b) => line.uses.includes(b.entity.eid))
+  let entered = used.filter((b) => b.entry)
+  let first = entered[0] ?? used.find((b) => comp(b, 'created')?.at)
+  let archived = entered.filter((b) => b.archived).map((b) => b.entity.eid)
   let ids = archived.length ? archived : [line.id]
   let text = line.text ??
-    rows.map((b) => spoken(b, String(comp(b, 'content')?.body ?? '')))
-      .filter(Boolean).join('\n\n')
+    (entered.length ? entered : used).map((b) =>
+      spoken(b, String(comp(b, 'content')?.body ?? ''))
+    ).filter(Boolean).join('\n\n')
   let menu = 'entry-menu-' + line.id
   return {
     ...line,
     node: h(
       Transcript.Entry,
-      { mod: archived.length ? 'hidden' : undefined },
+      { mod: [line.is, archived.length > 0 && 'hidden'] },
       line.node,
       h(
         Transcript.Meta,
@@ -672,8 +692,8 @@ let archivable = (line: Line, entries: Bundle[]): Line => {
           'aria-haspopup': 'menu',
           'aria-expanded': 'false',
           'aria-label': 'Entry actions',
-          'data-tip': pretty(String(comp(rows[0], 'created')?.at ?? '')),
-        }, stamp(rows[0])),
+          'data-tip': pretty(String(comp(first, 'created')?.at ?? '')),
+        }, first ? stamp(first) : 'Actions'),
         h(
           Menu,
           {
@@ -700,13 +720,15 @@ let archivable = (line: Line, entries: Bundle[]): Line => {
             role: 'menuitem',
             'data-entry-link': line.id,
           }, 'Copy link'),
-          h(Menu.Rule, {}),
-          h(Menu.Item, {
-            type: 'button',
-            role: 'menuitem',
-            'data-archive-entries': ids.join(','),
-            'data-restore': String(archived.length > 0),
-          }, archived.length ? 'Restore' : 'Hide'),
+          entered.length ? h(Menu.Rule, {}) : null,
+          entered.length
+            ? h(Menu.Item, {
+              type: 'button',
+              role: 'menuitem',
+              'data-archive-entries': ids.join(','),
+              'data-restore': String(archived.length > 0),
+            }, archived.length ? 'Restore' : 'Hide')
+            : null,
         ),
       ),
     ),
@@ -755,18 +777,24 @@ export let lines = (
           ),
         )
         : null,
-      ...helped(one, offers, page).map((r) => r.draw()),
+      rows(context(one)),
     ])
+  // A helper's context, each line of it framed as the conversation's are.
+  let context = (one: Helper) =>
+    helped(one, offers, page).map((r) =>
+      framed(
+        { id: r.id, uses: r.uses, node: r.draw(), is: 'step' },
+        one.entries,
+      )
+    )
   let calls = new Set(entries.map((b) => b.entity.eid))
   let inside = asked(entries)
   let folds = new Map<string, Fold>()
   let drawn: (Line | Fold)[] = []
   let byId = new Map(entries.map((b) => [b.entity.eid, b]))
   let said = (id: string) => !!comp(byId.get(id), 'operator_call')?.said
-  let wrap = (line: Line, rows: Bundle[]) => {
-    let row = archivable(line, rows)
-    return { ...row, node: measured(row.node, metadata?.[line.id]) }
-  }
+  let wrap = (line: Line, rows: Bundle[]) =>
+    framed({ ...line, node: measured(line.node, metadata?.[line.id]) }, rows)
   for (let b of entries) {
     let id = b.entity.eid
     let body = String(comp(b, 'content')?.body ?? '')
@@ -777,7 +805,7 @@ export let lines = (
     let unwrapped: Line[] = thread
       ? [{ id, uses: [id], ...threaded(thread) }]
       : told
-      ? [{ id, uses: told.uses, node: told.draw() }]
+      ? [{ id, uses: told.uses, node: told.draw(), is: 'step' as const }]
       : b.call
       ? [{
         id,
@@ -796,7 +824,7 @@ export let lines = (
     if (fold) {
       fold.of.push(id)
       fold.uses.push(id, ...these.flatMap((l) => l.uses))
-      fold.nodes.push(...these.map((l) => l.node))
+      fold.nodes.push(...these)
     } else if (at) {
       // The request opens under the caller's words before it, past what the
       // voice said since, which say it; with none, its own words stand for
@@ -825,13 +853,13 @@ export let lines = (
           uses: l.uses,
           node: h(Called, l),
           text: l.said,
+          is: 'theirs',
         }, [l.b])
         : l
     ),
     // A helper no step of these started (one given a task) closes the list.
     ...helpers.filter((h) => !h.call || !calls.has(h.call))
-      .flatMap((h) => helped(h, offers, page))
-      .map((r) => ({ id: r.id, uses: before, node: r.draw() })),
+      .flatMap((h) => context(h).map((l) => ({ ...l, uses: before }))),
   ]
 }
 
@@ -869,7 +897,7 @@ type Fold = {
   said: string
   of: string[]
   uses: string[]
-  nodes: Node[]
+  nodes: Line[]
 }
 
 // The caller's words on a call, as they were heard.
@@ -899,7 +927,7 @@ let Called = ({ said, nodes }: Fold) =>
       ),
       said,
     ),
-    h(More.Body, {}, ...nodes),
+    h(More.Body, {}, rows(nodes)),
   )
 
 // Any other line: a refusal, a reply, a helper's end, a failure, a stop, or a
@@ -910,7 +938,9 @@ let line = (
   body: string,
   opens?: string,
 ): Line[] => {
-  let is = (node: Node, text?: string) => [{ id, node, text, uses: [id] }]
+  let is = (node: Node, text?: string, kind?: Line['is']) => [
+    { id, node, text, uses: [id], is: kind },
+  ]
   if (b.operator_contact) {
     return is(
       b.verified
@@ -950,7 +980,9 @@ let line = (
   let called = comp(b, 'operator_call')
   if (called?.began) return []
   if (called && b.notice && body) {
-    return is(called.said ? reply(spoken(b, body)) : input(b, body))
+    return called.said
+      ? is(reply(spoken(b, body)))
+      : is(input(b, body), undefined, 'theirs')
   }
   // A helper the person stopped (operator.ts `stop`, the only stop here),
   // told to the session that started it in its report or, up the
@@ -979,11 +1011,11 @@ let line = (
       said,
     )
   }
-  if (b.system && body) return is(system(b, body))
+  if (b.system && body) return is(system(b, body), undefined, 'step')
   if (b.stop || b.interrupted || b.cancel) {
     return is(h(Notice, {}, 'Stopped.'))
   }
-  if (theirs(b)) return is(input(b, body))
+  if (theirs(b)) return is(input(b, body), undefined, 'theirs')
   return []
 }
 
@@ -1021,11 +1053,9 @@ let threaded = (thread: Thread) => {
         ),
       )
       : null,
-    ...drawLines(thread.lines).map(({ id, node }) =>
-      h('div', { id: `row-${id}` }, node)
-    ),
+    rows(drawLines(thread.lines)),
   )
-  return { node, text: name }
+  return { node, text: name, is: 'step' as const }
 }
 
 /**

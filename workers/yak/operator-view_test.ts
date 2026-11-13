@@ -285,6 +285,56 @@ test("a call's turn draws the caller's words, whose phone mark opens the Operato
   ])
 })
 
+test('every line is a row under its id with its time and menu, inside a fold as at the top, and a step says it is one', () => {
+  let { document } = parseHTML(
+    `<main>${
+      rows(
+        [
+          entry('h', 1, {
+            content: { body: `${HEARD}Any errors?` },
+            notice: {},
+            operator_call: { call: 'c' },
+            operator_channel: { channel: 'voice', framing: HEARD },
+          }),
+          entry('r', 2, {
+            content: { body: 'User asks: any errors?' },
+            operator_call: { call: 'c', asked: true },
+          }),
+          entry('call', 3, { call: { to: 'tool', args: {} } }),
+          entry('back', 4, {
+            content: { body: '[]' },
+            result: { call: 'call' },
+          }),
+          entry('a', 5, {
+            content: { body: 'None.' },
+            output: { source: 'r' },
+          }),
+        ].map((b) => ({ ...b, created: { at: '2026-11-13T15:00:00.000Z' } })),
+        names,
+      ).map((r) => r.html).join('')
+    }</main>`,
+  )
+  let inner = [...document.querySelectorAll('.More_Body .Transcript_Row')]
+  assertEquals(inner.map((r) => r.id), ['row-call', 'row-a'])
+  for (let r of inner) {
+    let entry = r.querySelector(':scope > .Transcript_Entry')!
+    assert(entry.querySelector(':scope > .Transcript_Meta time[datetime]'))
+    assertEquals(
+      entry.querySelector('[data-entry-link]')!.getAttribute('data-entry-link'),
+      r.id.slice('row-'.length),
+    )
+  }
+  assertEquals(
+    inner.map((r) =>
+      r.querySelector(':scope > .Transcript_Entry')!.classList.contains(
+        'Transcript_Entry-step',
+      )
+    ),
+    [true, false],
+  )
+  assert(document.querySelector('.Transcript_Entry-theirs > div.More'))
+})
+
 test("words the platform wrote read as the system's in one closed line, never as the person's", () => {
   let recovery = 'System recovery: the previous response was interrupted.'
   let doc = parseHTML(

@@ -8,9 +8,9 @@
   min-width: 0;
 }
 .Transcript_Bubble {
-  justify-self: end;
+  width: fit-content;
   max-width: 85%;
-  margin: 0;
+  margin: 0 0 0 auto;
   padding: .6rem 1rem;
   border-radius: 1.1rem;
   background: var(--mine, var(--surface));
@@ -27,10 +27,6 @@
   height: .95em;
   vertical-align: -.1em;
 }
-.Transcript_Entry:has(> .Transcript_Bubble),
-.More:has(> .Transcript_Bubble) {
-  display: grid;
-}
 .Transcript_Meta {
   display: flex;
   align-items: center;
@@ -39,7 +35,7 @@
   color: var(--muted);
   font-size: var(--fine, var(--small));
 }
-.Transcript_Entry:has(> .Transcript_Bubble, > .Attachments, > .More > .Transcript_Bubble) > .Transcript_Meta {
+.Transcript_Entry-theirs > .Transcript_Meta {
   justify-content: end;
 }
 .Transcript_Entry-hidden {
@@ -56,8 +52,10 @@
   align-items: baseline;
   gap: .35rem .9rem;
 }
-.Transcript_Lines[data-rows] > :not(:has(> .Transcript_Entry > .More-quiet > .More_Summary)),
-.Transcript_Lines[data-rows] > :has(> .Transcript_Entry > .More-quiet[open]) {
+/* A closed step flows beside the steps around it; anything else, and a step
+   opened, takes the row. */
+.Transcript_Lines[data-rows] > :not(:has(> .Transcript_Entry-step)),
+.Transcript_Lines[data-rows] > :has(> .Transcript_Entry-step [open]) {
   flex-basis: 100%;
   margin-block: .325rem;
 }
@@ -75,12 +73,10 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
-.Transcript_Lines .Attachments {
-  justify-self: end;
-  justify-content: flex-end;
-  max-width: 85%;
-}
-.Transcript_Lines > .Transcript_Row:has(> .Attachments) {
+.Transcript_Error {
   display: grid;
-  gap: .5rem;
+  gap: var(--half-gap);
+}
+.Transcript_When {
+  white-space: nowrap;
 }
