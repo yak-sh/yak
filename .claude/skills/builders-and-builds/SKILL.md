@@ -225,6 +225,11 @@ down by itself.
 
 Each call a model builder makes opens one session, reused when that call is
 replayed, and `build.cost` sums what its calls spent, computed and never stored.
+The model reads every id in its binding as a short handle (`@1`, `@2`,
+packages/builders/handles.ts) and answers through them, so a bracket over many
+rows costs its words, not its eids. A platform model's reply stops at 4,096
+tokens, reasoning included, unless `sending.tokens` says more: an answer over
+many rows needs it, and an ask that ran out before writing fails its build.
 On yaks.app a builder spends the account's one budget (M-42105) through the
 store's session runner (workers/yak/builders.ts, models.ts), which is why only
 app editors may write one (workers/yak/public/docs/models.md, "Build from stored
