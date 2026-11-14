@@ -2,6 +2,7 @@ import { test } from '@yaks/testing'
 import { h } from 'preact'
 import { mount } from '../preact/testing.ts'
 import { assert, assertEquals } from '@std/assert'
+import { Marked } from 'marked'
 import {
   blocks,
   drawn,
@@ -245,6 +246,43 @@ test('a long text has every id in it found, wherever it falls', () => {
       [`${'x'.repeat(5000)} P-7 ${words(10)}`, ['P-7']],
     ] as [string, string[]][]
   ) assertEquals(typed(source), want)
+})
+
+test('a long text with no id in it is read as marked reads it', () => {
+  let plain = new Marked({ gfm: true })
+  for (
+    let unit of [
+      '{\\"key\\":\\"value\\",\\"n\\":[1,2]},',
+      'x@y.zz/a_b*c*~d~`e`(f);<g>[h]!i',
+      'see https://x.test/a,www.x.test;',
+      'one  \ntwo\\\nthree, ',
+      'Title\n===\n\nA *b*\nc\n---\nd\n- e\n---\n> f\n===\n\n',
+    ]
+  ) {
+    let source = unit.repeat(40)
+    for (let breaks of [true, false]) {
+      assertEquals(
+        parse(source, { breaks }),
+        plain.lexer(source, { ...plain.defaults, breaks }),
+      )
+    }
+  }
+  // Emphasis closing wherever the search for its closer might be cut short.
+  for (let n of [3800, 3966, 3968, 3972, 4000, 4090, 4093]) {
+    let words = 'word '.repeat(n / 5)
+    let source = `a *${words}* b ~${words}~ c __${words}__ d`.repeat(2)
+    assertEquals(parse(source), plain.lexer(source, { ...plain.defaults }))
+  }
+  for (let n of [4091, 4092, 4093]) {
+    let source = `a __${'w'.repeat(n)}__x b`
+    assertEquals(parse(source), plain.lexer(source, { ...plain.defaults }))
+  }
+  // A line break wherever the search might cut a line of words short.
+  for (let n = 370; n < 390; n++) {
+    let source = `${'word '.repeat(n / 5)}${'x'.repeat(n % 5)}  \nmore`
+      .repeat(3)
+    assertEquals(parse(source, { breaks: false }), plain.lexer(source))
+  }
 })
 
 test('what a document points at is read the way it is drawn', () => {

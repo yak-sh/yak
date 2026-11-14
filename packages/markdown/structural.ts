@@ -1,7 +1,7 @@
 /** Markdown as structural nodes, never generated HTML or terminal escapes.
  * Uses the same GFM parser/version as the older canvas markdown renderer.
  */
-import { Marked, type Token, type Tokens } from 'marked'
+import { Lexer, Marked, type Token, Tokenizer, type Tokens } from 'marked'
 import { HUMAN, short, WRITTEN } from '@yaks/id'
 import type { Child, H } from '@yaks/render'
 
@@ -49,22 +49,82 @@ export let shown = (id: string, ids?: Ids): string =>
 // Where the next id may start. Marked asks before every run of plain text,
 // about all the text left, so a search of all of it made a long text with few
 // ids quadratic: a 1 MB body took 21 seconds. The search looks a window ahead
-// instead, and with no id in it answers the last space well short of its end,
-// where cutting the text changes nothing (marked joins adjacent text) and no
-// id the window cut short can have begun.
-let AHEAD = 4096
+// instead, and with no id in it answers the last boundary well short of its
+// end, where no id the window cut short can have begun. Marked joins adjacent
+// text, and at a boundary its text either stops anyway (`\`, `<`, `!`, `[`,
+// `` ` ``, `*`, `~`, `_`) or nothing else can begin: no address and no email.
+// A boundary that follows a space is passed over, so the spaces of a line
+// break (`  \n`) are never split.
+let AHEAD = 512
 let REACH = 128
+let BOUND = /[\s"(),;>\]\\<![`*~_]/
 let next = (src: string): number | undefined => {
   if (src.length <= AHEAD) return src.match(START)?.index
   let head = src.slice(0, AHEAD)
   let i = head.match(START)?.index
   if (i != null) return i
-  let space = head.lastIndexOf(' ', AHEAD - REACH)
-  return space > 0 ? space : src.match(START)?.index
+  for (let at = AHEAD - REACH; at > 0; at--) {
+    if (BOUND.test(head[at]) && !/\s/.test(head[at - 1])) return at
+  }
+  return src.match(START)?.index
 }
+
+// A setext heading, a run of lines underlined with `=` or `-`: marked's own
+// rule, with each line's run of characters taken whole. Marked reads the run a
+// character at a time, which a paragraph of megabytes runs out of stack on (a
+// 12 MB JSON dump threw); a line at a time, 33 MB reads in a tenth of a second.
+let setext = Lexer.rules.block.gfm.lheading
+let SETEXT = new RegExp(
+  setext.source.replace(
+    '(?:.|\\n(?!',
+    '(?:(?=([^\\n\\r\\u2028\\u2029]+))\\2|\\n(?!',
+  ),
+  setext.flags,
+)
+
+// Emphasis and a strikethrough close within a span of text: a `*`, `_` or `~`
+// whose closer stands farther off stays as typed. Marked looks for
+// the closing `*`, `_` or `~` through the rest of the paragraph, once for every
+// one that opens, so a paragraph of megabytes with a few hundred that never
+// close took a minute. It is asked about the span ahead instead (and the run
+// just behind, which says whether the opener is one), and a closer found where
+// the span cuts its view short is asked about the whole text again.
+let SPAN = 4096
+let BEHIND = 256
+let spanned = <T extends { raw: string }>(
+  close: (src: string, masked: string, before?: string) => T | undefined,
+) =>
+  function (this: Tokenizer, src: string, masked: string, before?: string) {
+    let at = masked.length - src.length
+    let found = close.call(
+      this,
+      src.slice(0, SPAN),
+      masked.slice(Math.max(0, at - BEHIND), at + SPAN),
+      before,
+    )
+    return found && src.length > SPAN && found.raw.length > SPAN - REACH
+      ? close.call(this, src, masked, before)
+      : found
+  }
 
 let lexer = new Marked({
   gfm: true,
+  tokenizer: {
+    emStrong: spanned(Tokenizer.prototype.emStrong),
+    del: spanned(Tokenizer.prototype.del),
+    lheading(src) {
+      let m = SETEXT.exec(src)
+      if (!m) return undefined
+      let text = m[1].trim()
+      return {
+        type: 'heading',
+        raw: m[0].replace(/\n+$/, ''),
+        depth: m[3][0] == '=' ? 1 : 2,
+        text,
+        tokens: this.lexer.inline(text),
+      }
+    },
+  },
   extensions: [{
     name: 'ref',
     level: 'inline',
@@ -172,10 +232,14 @@ let rewritten = (
     return at
   }
   walk(parse(source, { breaks: false }), 0, source.length)
-  return edits.sort((a, b) => b[0] - a[0]).reduce(
-    (text, [from, to, word]) => text.slice(0, from) + word + text.slice(to),
-    source,
-  )
+  let out: string[] = []
+  let at = 0
+  for (let [from, to, word] of edits.sort((a, b) => a[0] - b[0])) {
+    out.push(source.slice(at, from), word)
+    at = to
+  }
+  out.push(source.slice(at))
+  return out.join('')
 }
 
 /** Prose as its reader reads it, still as text: each eid it holds, written
