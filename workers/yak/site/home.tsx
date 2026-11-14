@@ -6,6 +6,7 @@ import { START } from '../newcomer.ts'
 import { Data, Page, Yours } from './frame.tsx'
 import { attr, COPY, said, type Slots, text } from './copy.ts'
 import { Idle } from '../mascot.ts'
+import { Sky } from './sky.tsx'
 import { type Example, HOME } from '../demos.ts'
 
 // A plan's price in dollars, as its card says it: "Free" is none.
@@ -237,10 +238,12 @@ export let Home = () => (
       <>
         <script src='carousel.js' defer />
         <script src='wander.js' defer />
+        <script src='sky.js' defer />
         <script src='cta.js' defer />
         <Data of={data()} />
       </>
     }
+    before={<Sky />}
   >
     <section class='Hello' aria-labelledby='hello'>
       <div class='Hello_Copy'>

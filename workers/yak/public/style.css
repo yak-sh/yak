@@ -558,9 +558,13 @@
     text-align: center;
   }
 
+  /* The home page's hero stands on the grass under its sky (.Sky): it
+     starts well down the page, and its examples start level with the
+     kicker. */
   .Home .Hello {
     gap: 2.5rem;
-    align-items: center;
+    align-items: start;
+    padding-top: 4.5rem;
     text-align: start;
   }
 
@@ -692,6 +696,394 @@
   /* A box that asks for one line, such as a web address. */
   .Hello_Field-line {
     min-height: 0;
+  }
+
+  /* On the home page's phone the kicker stands on the grass under him, not
+     beside him. */
+  @media (max-width: 40rem) {
+    .Home .Hello_Copy > .Hello_Kicker {
+      grid-column: 1 / -1;
+    }
+  }
+
+  /* The home page's sky (site/sky.tsx), laid behind the page from its top
+     down to the pencil line under the hero, and cut off there. sky.js
+     measures where he sits and sets the lengths it is laid out from on it:
+     --u is a 128th of his slot, --x and --feet the middle of his figure and
+     the line he sits on, --rule the pencil line above the section after the
+     hero. Dusk when the page is light, night when it is dark. */
+  :root:has(> .Home),
+  .Home {
+    overflow-x: clip;
+  }
+
+  .Hello_Yak {
+    position: relative;
+    z-index: 0;
+  }
+
+  .Sky {
+    --air: linear-gradient(#cdd2ea 0%, #e1d3e3 42%, #f4d8cc 74%, #fbe0bf 100%);
+    position: absolute;
+    z-index: -1;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: var(--rule, 0px);
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .Sky > *,
+  .Sky_Grass > * {
+    position: absolute;
+  }
+
+  .Sky :is(path, circle, line) {
+    vector-effect: non-scaling-stroke;
+  }
+
+  /* The air, from the top of the page to just under the line. */
+  .Sky_Air {
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: calc(var(--feet) + 40 * var(--u));
+    background: var(--air);
+  }
+
+  /* What stands in the sky and on the horizon, drawn in his units around
+     him (viewBox -3000 -800 6000 860). */
+  .Sky_Far {
+    left: calc(var(--x) - 3000 * var(--u));
+    top: calc(var(--feet) - 800 * var(--u));
+    width: calc(6000 * var(--u));
+    height: calc(860 * var(--u));
+  }
+
+  /* The line and the grass under it (viewBox -3000 -60 6000 300), which
+     fades into the page. */
+  .Sky_Grass {
+    left: 0;
+    width: 100%;
+    top: calc(var(--feet) - 60 * var(--u));
+    bottom: 0;
+  }
+
+  .Sky_Turf {
+    left: calc(var(--x) - 3000 * var(--u));
+    top: 0;
+    width: calc(6000 * var(--u));
+    height: calc(300 * var(--u));
+  }
+
+  .Sky_Glow0 {
+    stop-color: #fff3d6;
+    stop-opacity: 0.95;
+  }
+  .Sky_Glow1 {
+    stop-color: #fde3bd;
+    stop-opacity: 0.55;
+  }
+  .Sky_Glow2 {
+    stop-color: #fbe0bf;
+    stop-opacity: 0;
+  }
+  .Sky_Glow {
+    fill: url(#Sky-glow);
+  }
+  .Sky_Sun {
+    fill: #fff0cc;
+  }
+  .Sky_Wisp {
+    fill: #f7cdbb;
+    opacity: 0.85;
+  }
+  .Sky_Wisp-far {
+    fill: #ecc6d6;
+    opacity: 0.8;
+  }
+  .Sky_Halo0 {
+    stop-color: #f6efd9;
+    stop-opacity: var(--halo, 0.32);
+  }
+  .Sky_Halo1 {
+    stop-color: #f6efd9;
+    stop-opacity: 0;
+  }
+  .Sky_Halo {
+    fill: url(#Sky-halo);
+  }
+  .Sky_Moon {
+    fill: #f6efd9;
+  }
+  .Sky_Star {
+    fill: #f1e6d8;
+  }
+  .Sky_Shoot {
+    fill: none;
+    stroke: #f1e6d8;
+    stroke-width: 1.3;
+    stroke-linecap: round;
+    opacity: 0;
+  }
+  .Sky_Fly {
+    fill: #ece79b;
+    opacity: 0;
+  }
+  .Sky_Farthest {
+    fill: light-dark(#d9c9df, #272e4f);
+  }
+  .Sky_Farther {
+    fill: light-dark(#c9b5cf, #222a43);
+  }
+  .Sky_Near {
+    fill: light-dark(#b8a1bd, #1f2a37);
+  }
+  .Sky_Base {
+    fill: var(--bg);
+  }
+  .Sky_Turf0 {
+    stop-color: light-dark(#e6deae, #2b3a2c);
+  }
+  .Sky_Turf1 {
+    stop-color: light-dark(#d9dfbe, #2b3a2c);
+    stop-opacity: 0;
+  }
+  .Sky_Ground {
+    fill: url(#Sky-turf);
+  }
+  .Sky_Line {
+    fill: none;
+    stroke: light-dark(#8a9659, #6f8b58);
+    stroke-width: 1.4;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .Sky {
+      --air: linear-gradient(#151a2c 0%, #1c2340 50%, #2a2e4d 85%, #35345a 100%);
+    }
+  }
+  @media not (prefers-color-scheme: dark) {
+    .Sky_Night {
+      display: none;
+    }
+  }
+  @media (prefers-color-scheme: dark) {
+    .Sky_Day {
+      display: none;
+    }
+  }
+
+  /* A touch on the sky (sky.js): the sun's glow and the moon's halo swell
+     under a pointer, which shows they answer one, and the stars it passes
+     brighten. */
+  .Home:has(> .Sky[data-over]) {
+    cursor: pointer;
+  }
+  .Sky_Glow,
+  .Sky_Halo,
+  .Sky_Star {
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .Sky[data-over='sun'] .Sky_Glow,
+  .Sky[data-over='moon'] .Sky_Halo {
+    scale: 1.15;
+  }
+  .Sky_Star.Sky_Star-near {
+    opacity: 1;
+    scale: 1.8;
+  }
+
+  /* Birds (sky.js): a flock is placed on the page and flown across the
+     window, each bird flapping a few beats and gliding. For less motion a
+     few are drawn at rest in the dusk instead. */
+  .Birds {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .Bird {
+    position: absolute;
+    display: block;
+    animation: Bird-bob 3.2s ease-in-out infinite alternate;
+  }
+  .Bird svg,
+  .Sky_Still {
+    fill: none;
+    stroke: #8a705c;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+  }
+  .Bird svg {
+    display: block;
+    overflow: visible;
+    transform-origin: 50% 60%;
+    animation: Bird-flap 2.6s ease-in-out infinite;
+  }
+  @keyframes Bird-flap {
+    0%,
+    30%,
+    100% {
+      transform: scaleY(1);
+    }
+    7.5%,
+    22.5% {
+      transform: scaleY(-0.5);
+    }
+    15% {
+      transform: scaleY(1);
+    }
+  }
+  @keyframes Bird-bob {
+    to {
+      translate: 0 6px;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .Sky_Still {
+      display: none;
+    }
+    .Sky_Drift {
+      animation: Sky-drift 200s ease-in-out infinite alternate;
+    }
+    .Sky_Star-blink {
+      animation: Sky-blink 5s ease-in-out infinite;
+    }
+    .Sky_Fly {
+      animation: Sky-fly 9s ease-in-out infinite;
+    }
+    .Sky_Shoot-often {
+      animation: Sky-shoot 26s linear infinite;
+    }
+    .Sky_Glow,
+    .Sky_Halo {
+      transition: scale 0.8s ease;
+    }
+    .Sky_Star {
+      transition: opacity 1.2s ease, scale 1.2s ease;
+    }
+    .Sky_Star-near {
+      transition-duration: 0.25s;
+    }
+  }
+  @keyframes Sky-drift {
+    to {
+      transform: translateX(90px);
+    }
+  }
+  @keyframes Sky-blink {
+    50% {
+      opacity: 0.15;
+    }
+  }
+  @keyframes Sky-fly {
+    0%,
+    100% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    25% {
+      opacity: 0.95;
+    }
+    50% {
+      opacity: 0.25;
+      transform: translate(16px, -10px);
+    }
+    75% {
+      opacity: 0.9;
+      transform: translate(26px, 2px);
+    }
+  }
+  @keyframes Sky-shoot {
+    0%,
+    93% {
+      opacity: 0;
+      transform: translate(0, 0);
+    }
+    94% {
+      opacity: 0.9;
+    }
+    98%,
+    100% {
+      opacity: 0;
+      transform: translate(170px, 62px);
+    }
+  }
+
+  /* The Start Free button he holds up when he sits down in the margin
+     (wander.js `sat`, sky.js), and beside him in his place for anyone who
+     asks for less motion, since then he never walks. */
+  .Wander > .Sign {
+    inset: auto auto 92% 50%;
+    translate: -50% 0;
+    display: grid;
+    justify-items: center;
+    visibility: hidden;
+    pointer-events: auto;
+    white-space: nowrap;
+  }
+  .Sign::after {
+    content: '';
+    width: 3px;
+    height: 1.1rem;
+    margin-top: -2px;
+    border-radius: 2px;
+    background: #9b7b62;
+  }
+  .Sign_Button.Button {
+    font-size: 0.8125rem;
+    padding: 0.3rem 0.7rem;
+    min-height: 0;
+  }
+  .Hello_Yak > .Sign {
+    position: absolute;
+    left: 88%;
+    bottom: 7%;
+    white-space: nowrap;
+  }
+  .Hello_Yak > .Sign::after {
+    content: none;
+  }
+  .Wander > .Sign[data-out] {
+    visibility: visible;
+    animation: Sign-raise 0.9s cubic-bezier(0.3, 0.7, 0.4, 1) both,
+      Sign-wave 2.8s 0.9s ease-in-out infinite;
+  }
+  @keyframes Sign-raise {
+    0% {
+      transform: translateY(70%) scale(0.2);
+      opacity: 0;
+    }
+    60% {
+      transform: translateY(-12%) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: none;
+    }
+  }
+  @keyframes Sign-wave {
+    0%,
+    100% {
+      transform: rotate(-3deg);
+    }
+    50% {
+      transform: translateY(-4px) rotate(3deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .Bird,
+    .Bird svg,
+    .Wander > .Sign[data-out] {
+      animation: none;
+    }
   }
 
   /* An exchange set beside a hero's words (site/organizations.tsx): what
@@ -882,6 +1274,11 @@
     .Home .Hello {
       grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
       gap: clamp(2rem, 5vw, 4rem);
+      padding-top: 9rem;
+    }
+
+    .Home .Hello > .Demo {
+      margin-top: 9.25rem;
     }
 
     .Hello_Copy {

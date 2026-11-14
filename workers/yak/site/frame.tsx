@@ -151,8 +151,10 @@ let Foot = () => (
  * (copy.ts), where `name` is what it is called where it is linked, `title`
  * its tab's and `description` what a preview says of it. `path` is its
  * address, `kind` the body class its frame is asked for by (style.css), and
- * `head` what its head carries besides (its scripts, its structured data). A
- * page that names no kind is prose in the reading column. */
+ * `head` what its head carries besides (its scripts, its structured data).
+ * `before` is laid first in its body, under its header (the home page's
+ * sky), and `after` last. A page that names no kind is prose in the reading
+ * column. */
 export let Page = (
   {
     copy,
@@ -160,6 +162,7 @@ export let Page = (
     kind,
     robots,
     head,
+    before,
     after,
     children,
   }: {
@@ -168,6 +171,7 @@ export let Page = (
     kind?: string
     robots?: string
     head?: ComponentChildren
+    before?: ComponentChildren
     after?: ComponentChildren
     children: ComponentChildren
   },
@@ -177,6 +181,7 @@ export let Page = (
       {head}
     </Head>
     <body class={kind}>
+      {before}
       <Top path={path} />
       <main class={kind ? 'Page' : 'Page Prose'}>{children}</main>
       <Foot />

@@ -39,6 +39,7 @@ export let FILES = [
   'township-dues.js',
   'carousel.js',
   'wander.js',
+  'sky.js',
   'favicon-32.png',
   'apple-touch-icon.png',
   '_client.js',

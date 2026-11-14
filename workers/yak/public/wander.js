@@ -14,6 +14,11 @@
 //
 // A click on him while he sits plays his nose lick.
 //
+// He tells the page what he does, as events on him that a listener on the
+// window hears by capturing: `sat` when he sits down out in the margin, `rise`
+// when he gets up from there, and `home` when he is back in his place
+// (sky.js holds up a button by them).
+//
 // Every strip of frames is decoded before he first moves, and each one is a
 // layer of its own, shown or hidden whole, so no frame waits on a picture.
 // A browser may refuse to decode ahead a strip that loads fine (Chrome does
@@ -79,7 +84,10 @@
     let things =
       'img, svg, button, input, select, textarea, video, canvas, iframe, .Card'
     for (let el of document.querySelectorAll(things)) {
-      if (!slot.contains(el) && el.checkVisibility?.() !== false) {
+      if (
+        !slot.contains(el) && !el.closest('.Sky, .Birds') &&
+        el.checkVisibility?.() !== false
+      ) {
         take(el.getBoundingClientRect(), el.parentElement)
       }
     }
@@ -180,6 +188,7 @@
       yak.style.transform = yak.style.width = yak.style.height = ''
       slot.append(yak)
       show(still)
+      yak.dispatchEvent(new Event('home'))
     }
     let walk = (dt) => {
       phase += dt * STEP
@@ -212,7 +221,7 @@
       if (act == 'sit' && quiet && Math.abs(target() - y) > 1) {
         if (y <= top - size) y = top - size, act = 'walk'
         else if (y >= bottom) y = bottom, act = 'walk'
-        else act = 'rise', phase = 0
+        else act = 'rise', phase = 0, yak.dispatchEvent(new Event('rise'))
       }
       if (act == 'rise') {
         phase += dt * STEP
@@ -243,7 +252,7 @@
         phase += dt * STEP * .6
         if (phase < FRAMES) show(strips.plop, Math.floor(phase))
         else if (homing) return homing = false, home()
-        else act = 'sit', show(still)
+        else act = 'sit', show(still), yak.dispatchEvent(new Event('sat'))
       }
       yak.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
     }
