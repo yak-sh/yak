@@ -272,6 +272,9 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
       return updatesAnswer(req, env, space, who)
     }
     if (!reading) return nothingHere(env)
+    let { shownAnswer } = await import('./updates.ts')
+    let shown = await shownAnswer(req, env, space, who)
+    if (shown) return shown
     let { updatesPage } = await import('./operator-page.ts')
     return updatesPage(env, space, who, await beside(dir, space, who))
   }

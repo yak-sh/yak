@@ -34,3 +34,9 @@
   border-radius: var(--radius);
   overflow-x: auto; /* what is wider than the line scrolls within its stage */
 }
+
+/* Even: figures share the line alike, as many as fit at 16rem or more, so
+   two to four choices sit side by side and a phone stacks them. */
+.Gallery-even > .Gallery_Figure {
+  flex: 1 1 16rem;
+}

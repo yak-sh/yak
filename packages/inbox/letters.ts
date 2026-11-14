@@ -5,7 +5,7 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { held } from '@yaks/graph/held'
 import type { Vocab } from '@yaks/vocab'
-import type { Decision } from '@yaks/task'
+import { type Decision, showing, shown } from '@yaks/task'
 import type { Door } from './options.ts'
 import { readInbox } from './read.ts'
 import type { Thread } from './threads.ts'
@@ -17,12 +17,80 @@ let link = (options: Door, eid: string) =>
 let reply = (options: Door, eid: string) =>
   `${eid}@${options.from.split('@')[1]}`
 
+/** What each choice of a thread's decision shows, by label: the shown
+ * entities with the components a letter draws them by. */
+export type Shows = Map<string, Bundle[]>
+/** A thread as a letter reads it: its decision's shown entities beside it. */
+export type Lettered = Thread & { shows?: Shows }
+
+// The components a shown entity is drawn by in a letter.
+let SHOWN = ['artifact', 'doc', 'web']
+
+// Each decision's shown entities, read through its `shows` edges.
+let showsOf = async (
+  tx: Pick<Graph, 'get' | 'read'>,
+  vocab: Vocab,
+  eids: string[],
+): Promise<Map<string, Shows>> => {
+  if (!vocab.comp('shows') || !vocab.comp('edge')) return new Map()
+  let byDecision = new Map(
+    await Promise.all(
+      eids.map(async (eid) =>
+        [
+          eid,
+          shown(await tx.read(`${showing(eid)}&*`, { native: true })),
+        ] as const
+      ),
+    ),
+  )
+  let ids = [
+    ...new Set([...byDecision.values()].flatMap((s) => [...s.values()].flat())),
+  ]
+  let comps = SHOWN.filter((name) => vocab.comp(name))
+  let found = new Map(
+    (ids.length ? await tx.get(ids, comps, { native: true }) : [])
+      .map((b) => [b.entity.eid, b]),
+  )
+  return new Map(
+    [...byDecision].map(([eid, s]) => [
+      eid,
+      new Map(
+        [...s].map(([label, to]) => [
+          label,
+          to.flatMap((id) => found.get(id) ?? []),
+        ]),
+      ),
+    ]),
+  )
+}
+
+// One shown entity in mail-safe Markdown, indented under its choice: an
+// image by its bytes at the door's base, other bytes as a link to them, prose
+// quoted, a page by its address.
+let drawn = (options: Door, label: string, b: Bundle): string => {
+  let artifact = comp(b, 'artifact')
+  let doc = comp(b, 'doc')
+  let page = str(comp(b, 'web').url)
+  let indent = (text: string) => text.replace(/^/gm, '   ')
+  if (artifact.address) {
+    let src = `${options.base.replace(/\/$/, '')}/blob/${artifact.address}`
+    return indent(
+      str(artifact.media_type).startsWith('image/')
+        ? `![${label}](${src})`
+        : `[${str(doc.title) || label}](${src})`,
+    )
+  }
+  if (page) return indent(`<${page}>`)
+  let words = str(doc.body || doc.title).trim()
+  return words ? indent(words.replace(/^/gm, '> ')) : ''
+}
+
 /** Each door reads the same policy, including mute, archive and blockers. */
 export let inboxAt = async (
   tx: Pick<Graph, 'get' | 'read'>,
   vocab: Vocab,
   who: string,
-): Promise<Thread[]> => {
+): Promise<Lettered[]> => {
   let inbox = await readInbox(tx, vocab, who)
   // Inbox summaries deliberately carry no bodies or choice arrays. Mail
   // renders complete words, but needs only each root and latest message,
@@ -45,10 +113,16 @@ export let inboxAt = async (
       },
     }
   }
+  let shows = await showsOf(
+    tx,
+    vocab,
+    inbox.filter((t) => full.get(t.row.eid)?.decision).map((t) => t.row.eid),
+  )
   return inbox.map((t) => ({
     ...t,
     row: hydrate(t.row),
     latest: hydrate(t.latest),
+    ...shows.get(t.row.eid)?.size ? { shows: shows.get(t.row.eid) } : {},
   }))
 }
 
@@ -61,15 +135,21 @@ export let eligible = (thread: Thread, options: Door): boolean =>
     ? options.updates == true
     : thread.lane == 'Needs you' || thread.lane == 'Replies')
 
-/** A thread's question, numbered choices and latest words, in mail-safe markdown. */
-export let rendered = (thread: Thread, options: Door): string => {
+/** A thread's question, numbered choices with what each shows, and latest
+ * words, in mail-safe markdown. */
+export let rendered = (thread: Lettered, options: Door): string => {
   let root = thread.row.comps
   let d = root.decision as Decision | undefined
   let latest = thread.latest.comps
   let choices = d?.choices.map((c, i) =>
-    `${i + 1}. ${c.label}: ${c.description}${
-      c.label == d.recommended ? ' (recommended)' : ''
-    }`
+    [
+      `${i + 1}. ${c.label}: ${c.description}${
+        c.label == d.recommended ? ' (recommended)' : ''
+      }`,
+      ...(thread.shows?.get(c.label) ?? []).map((b) =>
+        drawn(options, c.label, b)
+      ).filter(Boolean),
+    ].join('\n\n')
   ).join('\n')
   return [
     d?.question || str(root.doc?.title) || 'Inbox thread',
@@ -103,7 +183,7 @@ let letter = (
 /** Pure queue plan. Notices are snapshots of activity, never new inbox activity.
  * The queued letter, not a second cursor, is the durable deduplication record. */
 export let planned = (
-  inbox: Thread[],
+  inbox: Lettered[],
   notices: Bundle[],
   options: Door,
   now: string,

@@ -2,25 +2,29 @@
  * A decision's question, choices and answer, shared by browser and terminal.
  * The question, labels and descriptions are Markdown. An answer of one's own
  * takes several lines: Shift-Enter types a new one, and Enter or the button
- * sends it, as in a chat box.
+ * sends it, as in a chat box. A choice that shows entities (its `shows`
+ * edges, read with `showing` and grouped by `shown`) draws each over its
+ * button through the host's `show`, which draws them by their components.
  */
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Drafts } from '@yaks/draft'
 import { Markdown, MarkdownInline } from '@yaks/markdown'
-import { Button, Field, Notes, Say, Section } from '@yaks/ui'
-import { answer, type Decision } from './decision.ts'
+import { Button, Field, Gallery, Notes, Say, Section } from '@yaks/ui'
+import { answer, type Decision, type Shown } from './decision.ts'
 
 /** Where a custom answer waits, across every interface. */
 export let answerPlace = (eid: string): string => `${eid}.decision.answer`
 
 /** Domain controls; the host owns writes, drafts and reference names. */
 export let DecisionForm = (
-  { e, drafts, apply, name, blocking, caret }: {
+  { e, drafts, apply, name, shown, show, blocking, caret }: {
     e: Bundle
     drafts: Drafts
     apply: (bundles: Bundle[]) => unknown
     name: (eid: string) => ComponentChildren
+    shown?: Shown
+    show?: (eid: string) => ComponentChildren
     blocking?: boolean
     caret?: number
   },
@@ -35,6 +39,20 @@ export let DecisionForm = (
   let send = () => {
     if (text.trim()) drafts.spend(place, answer(eid, text))
   }
+  // A choice that shows something lays the choices out side by side, each
+  // over its button; a terminal or a phone stacks them.
+  let showing = !!show && d.choices.some((c) => shown?.get(c.label)?.length)
+  let pick = (c: Decision['choices'][number], i: number) => [
+    open
+      ? h(
+        Button,
+        { type: 'button', onClick: () => apply(answer(eid, c.label)) },
+        `${i + 1}. `,
+        h(MarkdownInline, { source: c.label }),
+      )
+      : h('span', {}, `${i + 1}. `, h(MarkdownInline, { source: c.label })),
+    c.label == d.recommended && h(Section.Note, {}, 'recommended'),
+  ]
   return h(
     Section,
     { 'data-decision': eid },
@@ -53,34 +71,40 @@ export let DecisionForm = (
       ),
     ),
     h(Markdown, { source: d.question }),
-    h(
-      Notes,
-      {},
-      d.choices.map((c, i) =>
-        h(
-          Notes.Item,
-          { key: c.label },
-          open
-            ? h(
-              Button,
-              {
-                type: 'button',
-                onClick: () => apply(answer(eid, c.label)),
-              },
-              `${i + 1}. `,
-              h(MarkdownInline, { source: c.label }),
-            )
-            : h(
-              'span',
-              {},
-              `${i + 1}. `,
-              h(MarkdownInline, { source: c.label }),
-            ),
-          c.label == d.recommended && h(Section.Note, {}, 'recommended'),
-          h(Markdown, { source: c.description }),
-        )
+    showing
+      ? h(
+        Gallery,
+        { mod: 'even' },
+        d.choices.map((c, i) =>
+          h(
+            Gallery.Figure,
+            { key: c.label },
+            shown!.get(c.label)?.length
+              ? h(
+                Gallery.Stage,
+                {},
+                shown!.get(c.label)!.map((eid) =>
+                  h(Fragment, { key: eid }, show!(eid))
+                ),
+              )
+              : null,
+            pick(c, i),
+            h(Markdown, { source: c.description }),
+          )
+        ),
+      )
+      : h(
+        Notes,
+        {},
+        d.choices.map((c, i) =>
+          h(
+            Notes.Item,
+            { key: c.label },
+            pick(c, i),
+            h(Markdown, { source: c.description }),
+          )
+        ),
       ),
-    ),
     decided &&
       h(
         'p',

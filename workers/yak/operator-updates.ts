@@ -16,7 +16,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { readInbox } from '@yaks/inbox/read'
 import type { Thread } from '@yaks/inbox'
 import { markAttention } from '@yaks/notify/attention'
-import type { Choice } from '@yaks/task'
+import { type Choice, showing, shown as shownBy } from '@yaks/task'
 import { refuse } from './tool.ts'
 import type { OperatorStore } from './operator-store.ts'
 import type { Env } from './env.ts'
@@ -46,6 +46,18 @@ export type Update = {
   work?: string
   choices?: Choice[]
   recommended?: string
+  /** What its choices show, in the order they show it. */
+  shown?: Shown[]
+}
+
+/** An entity a choice shows, with the components it is drawn by: an image
+ * or file kept in the space (`artifact`), prose (`doc`), or neither, an app,
+ * whose draft is drawn. */
+export type Shown = {
+  choice: string
+  eid: string
+  artifact?: { address: string; media_type: string }
+  doc?: { title?: string; body?: string }
 }
 
 /** Something to tell a space's people. `to` is a person, or the space for
@@ -77,7 +89,11 @@ let STANDING: [string, string][] = [
   ['cancelled', 'Stopped'],
 ]
 
-let updateOf = (t: Thread, row: Bundle | undefined): Update => {
+let updateOf = (
+  t: Thread,
+  row: Bundle | undefined,
+  shown: Shown[] = [],
+): Update => {
   let decision = comp(row, 'decision')
   let note = comp(row, 'notification')
   let title = String(comp(row, 'doc')?.title ?? '')
@@ -102,9 +118,55 @@ let updateOf = (t: Thread, row: Bundle | undefined): Update => {
         ...decision.recommended
           ? { recommended: String(decision.recommended) }
           : {},
+        ...shown.length ? { shown } : {},
       }
       : {},
   }
+}
+
+// What each decision's choices show (@yaks/task `showing`): the `shows`
+// edges from it, and the entities they reach, as the page draws them.
+let shownOf = async (store: Store, rows: (Bundle | undefined)[]) => {
+  let asks = rows.filter((b): b is Bundle => !!b?.decision)
+  let edges = await Promise.all(
+    asks.map((b) => store.g.read(showing(b.entity.eid) + '&*')),
+  )
+  let eids = [...new Set(edges.flat().map((b) => String(comp(b, 'edge')!.to)))]
+  let held = new Map(
+    (eids.length ? await store.g.get(eids) : []).map((
+      b,
+    ) => [b.entity.eid, b]),
+  )
+  return new Map(asks.map((b, i) => [
+    b.entity.eid,
+    [...shownBy(edges[i])].flatMap(([choice, to]) =>
+      to.map((eid): Shown => {
+        let e = held.get(eid)
+        let artifact = comp(e, 'artifact')
+        let doc = comp(e, 'doc')
+        return {
+          choice,
+          eid,
+          ...artifact
+            ? {
+              artifact: {
+                address: String(artifact.address ?? eid),
+                media_type: String(artifact.media_type ?? ''),
+              },
+            }
+            : {},
+          ...doc
+            ? {
+              doc: {
+                title: String(doc.title ?? ''),
+                body: String(doc.body ?? ''),
+              },
+            }
+            : {},
+        }
+      })
+    ),
+  ]))
 }
 
 // What its Updates show: its tasks, its questions and what it tells. Their
@@ -131,8 +193,9 @@ export let updatesOf = async (
   )
   let shown = threads.slice(0, most)
   let rows = await store.g.get(shown.map((t) => t.eid))
+  let shows = await shownOf(store, rows)
   return {
-    updates: shown.map((t, i) => updateOf(t, rows[i])),
+    updates: shown.map((t, i) => updateOf(t, rows[i], shows.get(t.eid))),
     waiting: threads.filter((t) => t.unread || t.lane == 'Needs you').length,
   }
 }
@@ -155,7 +218,9 @@ let opening = async (store: Store, person: string, eid: string) =>
 
 /**
  * What a person does in their Updates: reads them (`{}`, or `{seen}` to
- * mark what they read now as read), reads one (`{open}`), answers a question with a choice (`{choose, choice}`), or
+ * mark what they read now as read), reads one (`{open}`), reads a file one
+ * of their questions shows (`{shown, eid}`: its address and media type),
+ * answers a question with a choice (`{choose, choice}`), or
  * sends words about one (`{reply, say}`). A choice or words go into their
  * conversation with the Operator, as request `id`, which opens the chat.
  */
@@ -166,6 +231,15 @@ export let updating = async (
 ) => {
   let { person, space } = held
   let str = (k: string) => typeof args[k] == 'string' ? args[k] as string : ''
+  // A file one of their questions shows, by its address in the space.
+  if (str('shown')) {
+    let found = await theirs(store, person, space, str('shown'))
+    let [row] = await store.g.get([found.eid])
+    let file = (await shownOf(store, [row])).get(found.eid)
+      ?.find((s) => s.eid == str('eid'))?.artifact
+    if (!file) throw refuse('missing', 'That question shows no such file.')
+    return file
+  }
   if (str('open')) {
     await theirs(store, person, space, str('open'))
     await store.g.apply(await opening(store, person, str('open')))

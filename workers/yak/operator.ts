@@ -51,7 +51,7 @@ import { forwarding, PATH } from '@yaks/model/step'
 import { AWAY, falling, MACHINE, namesFor } from './operator-machine.ts'
 import type { Calling } from './tunnel.ts'
 import { platform, ready, served } from './providers.ts'
-import { attachmentRows } from './operator-attachments.ts'
+import { attachmentRows, shownFiles } from './operator-attachments.ts'
 import { attached, fileContext } from './operator-inputs.ts'
 import { agents, operatorProviders } from './config.ts'
 import { inputSchemaOf } from '@yaks/tools/schema'
@@ -273,7 +273,7 @@ let ON_TASK =
 // What every session is told where it is given the tool that asks the person
 // it works for to choose (operator-updates.ts).
 let ASKING =
-  ' Ask the person you work for: the question reaches them in their Updates under Needs you, with a button for each choice, and what they choose comes back to you in your conversation with them. When they are not in this conversation, tell them it waits with notification_send. Use it for a choice that is theirs to make (spending money, sending to people, deleting), not to confirm routine work.'
+  ' Ask the person you work for: the question reaches them in their Updates under Needs you, with a button for each choice, and what they choose comes back to you in your conversation with them. When they are not in this conversation, tell them it waits with notification_send. Use it for a choice that is theirs to make (spending money, sending to people, deleting), not to confirm routine work. A choice can show what it means beside it, by an id in its shows: an image’s attachment id (from image_new, or a file sent in the conversation), a doc’s id for prose, or an app’s eid (app_list) to show its draft, which they see as it stands.'
 
 // What the Operator is told of the spaces it reaches beyond its own.
 let told = (
@@ -560,6 +560,15 @@ export let operatorRoster = async (
           description: t.description + ASKING,
           parameters: { ...parameters, properties: rest },
           run: async (args, context) => {
+            // A file a choice shows is kept in the space's bucket: its
+            // artifact row says what it is, as a file sent in the
+            // conversation has one.
+            let files = await shownFiles(
+              ctx.env,
+              await ctx.dir.at(space),
+              args.choices,
+            )
+            if (files.length) await work.g.apply(files, { trusted: true })
             let answer = await tool.run(
               { ...args, assignee: ctx.person, project: space },
               context,

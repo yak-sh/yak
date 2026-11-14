@@ -22,7 +22,8 @@ import { loadVocab } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel'
 import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
-import { taskDoc } from '@yaks/task'
+import { showing, shown, taskDoc } from '@yaks/task'
+import { edgeDoc } from '@yaks/edge'
 import { DecisionForm } from '@yaks/task/form'
 import { projectDoc } from '@yaks/project/vocab'
 import { personaDoc } from '@yaks/persona/vocab'
@@ -50,6 +51,7 @@ export let vocab = loadVocab([
   kernelDoc,
   provenanceDoc,
   docDoc,
+  edgeDoc,
   taskDoc,
   projectDoc,
   personaDoc,
@@ -86,7 +88,7 @@ let title = (b?: Bundle) =>
 
 // What a browsing app draws entities with, as little as the inbox needs: a
 // row is a link naming it, with its id; a page its words, and a decision's
-// answers; a name; an id.
+// answers, each choice's shown entities as rows; a name; an id.
 let shared: View[] = [
   {
     view: 'Tile',
@@ -106,8 +108,16 @@ let shared: View[] = [
   {
     view: 'Full',
     match: parse('.decision'),
-    Render: ({ e, io }) => (
-      <DecisionForm e={e} drafts={drafts} apply={io.apply} name={io.name} />
+    asks: (e) => ({ shows: showing(e.entity.eid) }),
+    Render: ({ e, io, got }) => (
+      <DecisionForm
+        e={e}
+        drafts={drafts}
+        apply={io.apply}
+        name={io.name}
+        shown={shown(got.shows.rows)}
+        show={(eid) => io.show(io.get(eid) ?? { entity: { eid } }, 'Tile')}
+      />
     ),
   },
   {

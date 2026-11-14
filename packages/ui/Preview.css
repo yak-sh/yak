@@ -71,3 +71,18 @@
 .Preview_View > .Notice {
   padding: .25rem .5rem 0;
 }
+
+/* A page at a width of its own, its height following its shape, for a frame
+   in a flowing page rather than a pane: a desktop's 16:10, a phone's 9:16. */
+.Preview_Frame-desktop,
+.Preview_View > .Preview_Frame-desktop {
+  height: auto;
+  aspect-ratio: 16 / 10;
+}
+.Preview_Frame-phone,
+.Preview_View > .Preview_Frame-phone {
+  width: min(100%, 24rem);
+  height: auto;
+  aspect-ratio: 9 / 16;
+  margin-inline: auto;
+}

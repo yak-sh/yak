@@ -29,6 +29,8 @@ export let sheet = (c: Colors): Sheet => ({
   Preview: { col: true },
   Preview_Address: { fg: c.link },
   Preview_Frame: { hidden: true },
+  // A terminal draws no frame, so it has no view to choose between.
+  Preview_Choice: { hidden: true },
 })
 /** A complete example. */
 export let specimens = (): Specimen[] => [

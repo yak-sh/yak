@@ -342,6 +342,41 @@ test('a session and a decision without a doc fall back to the shared Tile and Fu
   }
 })
 
+test('a decision draws what each choice shows through the host', async () => {
+  let ask = {
+    entity: { eid: 'ask' },
+    task: {},
+    decision: {
+      question: 'Which look?',
+      choices: [
+        { label: 'Warm', description: 'Ochre' },
+        { label: 'Plain', description: 'Words' },
+      ],
+      recommended: 'Warm',
+    },
+  }
+  let mock = { entity: { eid: 'mock' }, doc: { title: 'The warm mockup' } }
+  let edge = {
+    entity: { eid: 'shows' },
+    edge: { from: 'ask', to: 'mock', ord: 0 },
+    shows: { choice: 'Warm' },
+  }
+  let h = host({ read: (line) => line.includes('.shows') ? [edge] : [] })
+  h.hold([ask, mock])
+  let seen = mount(<div>{h.io.show(ask, 'Inbox.Full')}</div>)
+  try {
+    await wait(
+      () => seen.root.querySelector('.Gallery_Stage') != null,
+      'a shown mockup',
+    )
+    let [warm, plain] = [...seen.root.querySelectorAll('.Gallery_Figure')]
+    assertStringIncludes(warm.textContent ?? '', 'The warm mockup')
+    assertEquals(plain.querySelector('.Gallery_Stage'), null)
+  } finally {
+    seen.free()
+  }
+})
+
 test('a person’s inbox draws summary rows and reads a thread’s history only when opened', async () => {
   let actor = crypto.randomUUID(), root = crypto.randomUUID()
   let first = crypto.randomUUID(), latest = crypto.randomUUID()

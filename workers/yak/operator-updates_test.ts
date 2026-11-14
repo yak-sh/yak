@@ -11,7 +11,8 @@ import { receive } from './operator-channels.ts'
 import { notification, type Update, updating } from './operator-updates.ts'
 import { parseHTML } from 'linkedom'
 import { chatPage, updatesPage } from './operator-page.ts'
-import { updatesAnswer } from './updates.ts'
+import { shownAnswer, updatesAnswer } from './updates.ts'
+import { attachmentKey } from './attachments.ts'
 import { chatPath, managePath } from '@yaks/platform/routes'
 
 let p = platform('operator-updates')
@@ -214,4 +215,78 @@ test('the Updates page and a new chat show what needs the person, and a button o
   assertEquals(sent.status, 303)
   assertEquals(sent.headers.get('location'), chatPath('club', 'r1'))
   assertEquals(buttons(await page(chatPage(p.env, space, who, 'new'))), [])
+})
+
+test('a choice shows a picture, prose or a draft, and only its asker reads the picture', async () => {
+  let png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1])
+  let sha = 'ab'.repeat(32)
+  let app = crypto.randomUUID()
+  await p.env.BLOBS.put(attachmentKey({ store: 'club' }, sha), png)
+  await store.g.apply([{
+    entity: { eid: 'plan' },
+    doc: { title: 'The plan', body: 'Meet *monthly*' },
+  }], { trusted: true })
+  script.push(
+    ...[
+      call('decision_new', {
+        question: 'Which cover?',
+        choices: [
+          { label: 'Warm', description: 'Orange', shows: sha },
+          { label: 'Plain', description: 'In words', shows: 'plan' },
+          { label: 'Live', description: 'The app', shows: app },
+        ],
+        recommended: 'Warm',
+      }),
+      said('Asked.'),
+    ],
+  )
+  await receive(store, { space: eid, person: ada, channel: 'chat' }, 'Cover')
+  await service.drain()
+  let cover = (await read(ada)).updates.find((u) => u.words == 'Which cover?')!
+  assertEquals(cover.shown, [
+    {
+      choice: 'Warm',
+      eid: sha,
+      artifact: { address: sha, media_type: 'image/png' },
+    },
+    {
+      choice: 'Plain',
+      eid: 'plan',
+      doc: { title: 'The plan', body: 'Meet *monthly*' },
+    },
+    { choice: 'Live', eid: app },
+  ])
+  let space = (await directoryOf(p.env.STORE).at(eid))!
+  let who = { person: ada, role: 'owner' as const, space: eid }
+  let page = parseHTML(await (await updatesPage(p.env, space, who)).text())
+    .document
+  let card = page.querySelector(`#u-${cover.eid}`)!
+  let src = card.querySelector('.Update_Picture')!.getAttribute('src')!
+  assertStringIncludes(src, `?shown=${cover.eid}&eid=${sha}`)
+  assertEquals(card.querySelector('.Update_Prose em')?.textContent, 'monthly')
+  assertStringIncludes(
+    card.querySelector('.Update_Draft iframe')!.getAttribute('src')!,
+    `?draft=${app}`,
+  )
+  assertEquals(
+    [...card.querySelectorAll('button[name=choice]')].map((b) => b.textContent),
+    ['Warm', 'Plain', 'Live'],
+  )
+  let get = (query: string) =>
+    shownAnswer(
+      new Request(`https://yaks.app${managePath('updates', 'club')}?${query}`),
+      p.env,
+      space,
+      who,
+    )
+  let picture = (await get(`shown=${cover.eid}&eid=${sha}`))!
+  assertEquals(picture.headers.get('content-type'), 'image/png')
+  assertEquals(new Uint8Array(await picture.arrayBuffer()), png)
+  await assertRejects(
+    () => updating(store, as(bo), { shown: cover.eid, eid: sha }),
+    'not in your Updates',
+  )
+  assertEquals((await get(`shown=${cover.eid}&eid=plan`))!.status, 404)
+  assertEquals((await get(`draft=${app}`))!.status, 404)
+  assertEquals(await get('other=1'), undefined)
 })

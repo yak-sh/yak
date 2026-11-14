@@ -70,4 +70,11 @@ export * from './comp.ts'
 export * from './deps.ts'
 export * from './plugin.ts'
 
-export { answer, type Choice, type Decision } from './decision.ts'
+export {
+  answer,
+  type Choice,
+  type Decision,
+  showing,
+  type Shown,
+  shown,
+} from './decision.ts'

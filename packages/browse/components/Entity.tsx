@@ -68,6 +68,7 @@ import { Json } from './views/Json.tsx'
 import { Md, mdText } from './views/Md.tsx'
 import { Web } from './views/Web.tsx'
 import { Media } from './views/Media.tsx'
+import { ShownImage, ShownPage, ShownProse } from './views/Shown.tsx'
 import { Session, SessionRow } from './views/Session.tsx'
 import {
   CheckpointSummary,
@@ -163,6 +164,13 @@ define([
   { view: 'Wake', match: parse('.wake'), Render: Wake },
   { view: 'Session', match: parse('.session'), Render: Session },
   { view: 'Media', match: parse('.artifact'), Render: Media },
+  // What a decision's choice shows (Decision.tsx), by what it is; anything
+  // else is its gist.
+  { view: 'Shown', match: parse('.artifact'), Render: ShownImage },
+  { view: 'Shown', match: parse('.attachment'), Render: ShownImage },
+  { view: 'Shown', match: parse('.web'), Render: ShownPage },
+  { view: 'Shown', match: parse('.doc'), Render: ShownProse },
+  { view: 'Shown', match: and(), Render: Gist },
   { view: 'Full', match: parse('.session'), Render: Session },
   { view: 'Full', match: parse('.decision'), Render: Show },
   { view: 'Full', match: parse('.doc'), Render: Show },

@@ -4,8 +4,9 @@
  * the caller's: a part in one of its variants, a picture, a page in small.
  *
  * A browser sets as many figures to a line as fit, each as wide as what it
- * shows asks and growing to fill the line. A terminal stacks them, each
- * caption over its stage, the stage indented under it.
+ * shows asks and growing to fill the line; `even` gives each figure a like
+ * share of the line, at least 16rem, whatever it shows. A terminal stacks
+ * them, each caption over its stage, the stage indented under it.
  *
  * @module
  */
@@ -43,8 +44,23 @@ export let sheet = (c: Colors): Sheet => ({
 
 let { Figure, Caption, Stage } = Gallery
 
-/** Three figures, one wider than the others. */
+/** Three figures, one wider than the others; and two sharing the line. */
 export let specimens = (): Specimen[] => [
+  [
+    'Gallery-even',
+    h(
+      Gallery,
+      { mod: 'even' },
+      ['First', 'Second'].map((title) =>
+        h(
+          Figure,
+          {},
+          h(Stage, {}, h(Chip, {}, title.toLowerCase())),
+          h(Button, { type: 'button' }, title),
+        )
+      ),
+    ),
+  ],
   [
     'Gallery, Figure, Caption, Stage',
     h(

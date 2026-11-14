@@ -10,7 +10,7 @@ import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges, link } from '@yaks/edge'
 import { projectDoc } from '@yaks/project'
 import { callDoc, runner, toolDoc, toolEid } from '@yaks/tools'
-import { answer } from './decision.ts'
+import { answer, showing, shown } from './decision.ts'
 import { taskDoc } from './comp.ts'
 import { tasks } from './plugin.ts'
 import { openDeps } from './deps.ts'
@@ -168,4 +168,19 @@ test('invalid asks and cancelled or blank answers refuse atomically', async () =
   await assertRejects(async () => {
     await g.apply([{ entity: { eid }, decision: { recommended: 'Walk' } }])
   })
+})
+
+test('a choice that shows an entity is drawn from a shows edge carrying its label', async () => {
+  let { g, call } = await world()
+  await g.apply([{ entity: { eid: 'sketch' }, doc: { title: 'Sketch' } }])
+  await call('decision_new', {
+    ...ask,
+    choices: [{ ...ask.choices[0], shows: 'sketch' }, ask.choices[1]],
+  }, agent)
+  let [asked] = await g.read('.decision&*')
+  assertEquals(asked.decision, ask)
+  let edges = await g.read(showing(asked.entity.eid) + '&*')
+  assertEquals(shown(edges), new Map([['Train', ['sketch']]]))
+  await g.apply([{ entity: { eid: 'sketch' }, $delete: true }])
+  assertEquals(await g.read(showing(asked.entity.eid)), [])
 })

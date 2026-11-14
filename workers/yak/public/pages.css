@@ -840,6 +840,44 @@
   .Update_Choices {
     padding-left: 1.25rem;
   }
+  /* Choices that show something (a picture, prose, a draft): a column each,
+     what it shows over its words and its button, side by side where there
+     is room and one above the next on a phone. */
+  .Update_Choices-shown {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: .75rem;
+    padding: 0;
+    list-style: none;
+    color: inherit;
+    font-size: inherit;
+  }
+  .Update_Choice {
+    display: grid;
+    align-content: start;
+    gap: .5rem;
+    min-width: 0;
+  }
+  .Update_Choice > p {
+    margin: 0;
+    color: var(--muted);
+    font-size: var(--fine);
+  }
+  .Update_Choice > .Button {
+    justify-self: start;
+  }
+  .Update_Picture {
+    width: 100%;
+    height: auto;
+    border-radius: var(--radius, .5rem);
+  }
+  .Update_Prose {
+    max-height: 20rem;
+    overflow: auto;
+  }
+  .Update_Draft .Preview_Frame {
+    height: 20rem;
+  }
   .Update_Reply .Update_Form {
     display: grid;
     gap: .5rem;

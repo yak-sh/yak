@@ -12,15 +12,22 @@ import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import type { Who } from './session.ts'
 import { type ComponentChildren, Fragment, h } from 'preact'
-import { Button, Card, Field, More, State } from '@yaks/ui/parts'
+import { Button, Card, Field, More, Preview, State } from '@yaks/ui/parts'
 import { operatorDoor } from './build-door.ts'
 import { chatPath, managePath } from '@yaks/platform/routes'
 import { spaceHost } from '@yaks/platform/host'
-import type { Update } from './operator-updates.ts'
+import type { Shown, Update } from './operator-updates.ts'
 import { lastDay } from './views.ts'
 import { markdown } from '@yaks/session/conversation'
 import { caught } from './defects.ts'
 import type { List } from './talk-beside.ts'
+import type { Choice } from '@yaks/task'
+import { attachmentKey } from './attachments.ts'
+import { directoryOf } from './directory.ts'
+import { PICTURES } from './operator-draw.ts'
+import { inApp } from './tool.ts'
+import { linkOf } from './preview.ts'
+import { CallError } from '@yaks/tools/errors'
 
 /** A person's Updates in a space, and how many wait on them: what needs
  * them, and what they have not read, which the side counts beside "Updates
@@ -82,13 +89,94 @@ let words = (text: string) =>
 // When it happened, said the human way.
 let stamp = (u: Update) => h(Time, { at: u.at, class: 'Update_When' })
 
+// Where what a choice shows is read: a file kept in the space, through the
+// question that shows it, or an app's draft, at the reader's own preview
+// link (`shownAnswer`).
+let shownAt = (space: Space, u: Update, s: Shown) =>
+  `${managePath('updates', space.slug)}?${
+    s.artifact
+      ? `shown=${encodeURIComponent(u.eid)}&eid=${encodeURIComponent(s.eid)}`
+      : `draft=${encodeURIComponent(s.eid)}`
+  }`
+
+// What a choice shows, drawn by its components: a picture, a file to open,
+// prose, or else an app, its draft in a frame.
+let showing = (space: Space, u: Update, s: Shown) => {
+  let at = shownAt(space, u, s)
+  if (s.artifact) {
+    return s.artifact.media_type.startsWith('image/')
+      ? h('img', { class: 'Update_Picture', src: at, alt: s.choice })
+      : h('a', { href: at, target: '_blank', rel: 'noopener' }, 'Open file')
+  }
+  if (s.doc) {
+    return h(
+      'div',
+      { class: 'Update_Prose' },
+      s.doc.title ? h('b', null, s.doc.title) : null,
+      s.doc.body ? markdown(s.doc.body) : null,
+    )
+  }
+  return h(
+    Preview,
+    { class: 'Update_Draft' },
+    h(
+      Preview.Address,
+      { href: at, target: '_blank', rel: 'noopener' },
+      'Open the draft',
+    ),
+    h(Preview.Frame, {
+      mod: 'flat',
+      src: at,
+      loading: 'lazy',
+      title: `${s.choice}, the draft`,
+    }),
+  )
+}
+
+// Choices that show something: each a column with what it shows, its words
+// and its button under them, side by side where there is room and one above
+// the next on a phone.
+let shownChoices = (space: Space, u: Update, choices: Choice[]) =>
+  form(
+    space,
+    [['choose', u.eid]],
+    h(
+      'ul',
+      { class: 'Update_Choices Update_Choices-shown' },
+      choices.map((c, i) =>
+        h(
+          'li',
+          { class: 'Update_Choice' },
+          (u.shown ?? []).filter((s) => s.choice == c.label)
+            .map((s) => showing(space, u, s)),
+          h('p', null, h('b', null, c.label), `: ${c.description}`),
+          h(
+            Button,
+            { mod: !i && 'go', name: 'choice', value: c.label },
+            c.label,
+          ),
+        )
+      ),
+    ),
+  )
+
 // What needs a person: the Operator's question, its choices, a button for
 // each (the one it recommends first and filled), and below them a way to ask
-// about it, opened in place.
+// about it, opened in place. Choices that show something are drawn with it.
 let needsCard = (space: Space, u: Update) => {
   let choices = [...u.choices ?? []].sort((a, b) =>
     +(b.label == u.recommended) - +(a.label == u.recommended)
   )
+  if (u.shown?.length) {
+    return h(
+      Card,
+      { class: 'Update Update-needs', id: `u-${u.eid}` },
+      h(Card.Head, null, h(State, { mod: 'negative' }, 'Needs you'), stamp(u)),
+      words(u.words),
+      shownChoices(space, u, choices),
+      replying(space, u),
+    )
+  }
   return h(
     Card,
     { class: 'Update Update-needs', id: `u-${u.eid}` },
@@ -304,4 +392,55 @@ export let updatesAnswer = async (
     status: 303,
     headers: { location: chatPath(space.slug, request) },
   })
+}
+
+/** What a choice of a person's question shows, read from their Updates
+ * (`?shown=<question>&eid=<file>`): a file kept in the space, a picture
+ * opening in place and anything else saved; or an app's draft
+ * (`?draft=<app>`), sent on to the reader's own preview link (preview.ts
+ * `linkOf`), which the platform lets the page frame. Undefined for a read
+ * that names neither. */
+export let shownAnswer = async (
+  req: Request,
+  env: Env,
+  space: Space,
+  who: Who,
+): Promise<Response | undefined> => {
+  let q = new URL(req.url).searchParams
+  let missing = (what: string) =>
+    new Response(`That ${what} is missing.`, { status: 404 })
+  if (q.has('shown')) {
+    let file = await operatorDoor(env, space, who, 'updates', {
+      shown: q.get('shown'),
+      eid: q.get('eid') ?? '',
+    }).catch((e) => e?.status == 404 ? null : Promise.reject(e)) as
+      | { address: string; media_type: string }
+      | null
+    if (!file) return missing('file')
+    let kept = await env.BLOBS.get(attachmentKey(space, file.address))
+    if (!kept) return missing('file')
+    let shows = PICTURES.includes(file.media_type)
+    return new Response(await kept.arrayBuffer(), {
+      headers: {
+        'content-type': shows ? file.media_type : 'application/octet-stream',
+        'content-disposition': shows ? 'inline' : 'attachment',
+        'x-content-type-options': 'nosniff',
+        'content-security-policy': "sandbox; default-src 'none'",
+        'cache-control': 'private, no-store',
+      },
+    })
+  }
+  if (!q.has('draft')) return undefined
+  if (!env.SESSION_SECRET) return missing('draft')
+  let dir = directoryOf(env.STORE)
+  let app = q.get('draft')!
+  if (!/^[0-9a-f-]{36}$/i.test(app)) return missing('draft')
+  let held = await dir.appAt(app)
+  if (!held || held.app.space != space.eid) return missing('draft')
+  let ctx = { env, dir, person: who.person ?? '' }
+  let found = await inApp(ctx, { space: space.slug, app: held.app.slug })
+    .catch((e) => e instanceof CallError ? null : Promise.reject(e))
+  if (!found) return missing('draft')
+  let { at } = await linkOf(ctx, space, found.app, found.who)
+  return new Response(null, { status: 302, headers: { location: at } })
 }

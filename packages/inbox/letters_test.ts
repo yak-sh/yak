@@ -173,6 +173,44 @@ test('mail loads complete root/latest words and choices without digest history',
   )
 })
 
+test('a letter draws what each choice shows under it: prose quoted, an image by its bytes, a page by its link', async () => {
+  let g = await world()
+  await g.apply([
+    {
+      entity: { eid: 'sketch' },
+      doc: { title: 'Sketch', body: 'By *rail*\nat dawn' },
+    },
+    {
+      entity: { eid: '$shows' },
+      edge: { from: 'ask', to: 'sketch', ord: 0 },
+      shows: { choice: 'Train' },
+    },
+  ])
+  let [thread] = await inboxAt(g, g.vocab, 'person')
+  let body = (t: typeof thread) =>
+    String(comp(planned([t], [], inbox, at(10))[0], 'doc').body)
+  assertStringIncludes(
+    body(thread),
+    '1. Train: Arrive earlier (recommended)\n\n   > By *rail*\n   > at dawn\n2. Bus',
+  )
+  let shows = new Map([
+    ['Train', [{
+      entity: { eid: 'photo' },
+      artifact: { address: 'abc', media_type: 'image/png', size: 3 },
+    }]],
+    ['Bus', [{
+      entity: { eid: 'page' },
+      web: { url: 'https://draft.example/' },
+    }]],
+  ])
+  let drawn = body({ ...thread, shows })
+  assertStringIncludes(drawn, '   ![Train](https://box.example/blob/abc)')
+  assertStringIncludes(
+    drawn,
+    '2. Bus: Spend less\n\n   <https://draft.example/>',
+  )
+})
+
 test('a pass after each commit queues what a whole pass would, reading only what the commit touched', async () => {
   let g = await world()
   let reads = 0, wrote: Bundle[][] = []

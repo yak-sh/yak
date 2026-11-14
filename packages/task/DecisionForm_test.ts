@@ -50,9 +50,10 @@ let form = async () => {
     configurable: true,
   })
   let root = document.querySelector('main')!
-  let mount = (e = question) =>
+  let mount = (e = question, more = {}) =>
     render(
       h(DecisionForm, {
+        ...more,
         e,
         drafts: words,
         apply: (b) => g.apply(signed(b, { by: 'reader' })),
@@ -154,6 +155,27 @@ test('a decision renders its Markdown, and Enter sends an answer of several line
     press(false)
     await until(() => !!f.row().decided)
     assertEquals((f.row().decided as Comp).choice, 'Walk\nand talk')
+  } finally {
+    f.free()
+  }
+})
+
+test('choices that show something stand side by side, each over its button', async () => {
+  let f = await form()
+  try {
+    f.mount(question, {
+      shown: new Map([['Bus', ['sketch']]]),
+      show: (eid: string) => h('img', { alt: eid }),
+    })
+    let figures = [...f.root.querySelectorAll('.Gallery_Figure')]
+    assertEquals(figures.length, 2)
+    assertEquals(figures[0].querySelector('.Gallery_Stage'), null)
+    let bus = figures[1]
+    assertEquals(bus.querySelector('img')?.getAttribute('alt'), 'sketch')
+    assertEquals(bus.textContent?.includes('Spend less'), true)
+    bus.querySelector('button')!.click()
+    await until(() => !!f.row().decided)
+    assertEquals((f.row().decided as Comp).choice, 'Bus')
   } finally {
     f.free()
   }

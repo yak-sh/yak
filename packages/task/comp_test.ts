@@ -45,10 +45,11 @@ test('a board is a query — there is no membership property anywhere', () => {
   }
 })
 
-test('the two relations are declared through @yaks/edge', () => {
+test('the three relations are declared through @yaks/edge', () => {
   assertEquals(relations(team), {
     [REQUIRES]: REQUIRES,
     [CONTAINS]: CONTAINS,
+    shows: 'shows',
   })
 })
 

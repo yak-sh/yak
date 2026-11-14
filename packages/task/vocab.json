@@ -518,6 +518,23 @@
         "status"
       ]
     },
+    "shows": {
+      "component": true,
+      "type": "object",
+      "edge": "shows",
+      "reversed": "shown in",
+      "description": "this decision presents that entity under one of its choices: an image, prose, or a page such as a draft of an app",
+      "properties": {
+        "choice": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The label of the choice that presents it."
+        }
+      },
+      "required": [
+        "choice"
+      ]
+    },
     "decision": {
       "component": true,
       "type": "object",
@@ -564,7 +581,7 @@
       "noun": "decision",
       "verb": "new",
       "title": "Ask a decision",
-      "description": "Ask a task question with 2–4 choices and a recommended label. Assign the person being asked. Requiring work waits for its answer. Returns applied bundles.",
+      "description": "Ask a task question with 2–4 choices and a recommended label; a choice may show an image, prose or a draft by its id. Assign the person being asked. Requiring work waits for its answer. Returns applied bundles.",
       "input": {
         "question": {
           "type": "string",
@@ -584,6 +601,11 @@
               "description": {
                 "type": "string",
                 "minLength": 1
+              },
+              "shows": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Id of an entity the choice presents, drawn beside it: an image (an artifact), prose (a doc), or a page (a draft of an app)."
               }
             },
             "required": [
@@ -592,7 +614,7 @@
             ],
             "additionalProperties": false
           },
-          "description": "Each choice has a label and explanation."
+          "description": "Each choice has a label and explanation, and may show an entity."
         },
         "recommended": {
           "type": "string"

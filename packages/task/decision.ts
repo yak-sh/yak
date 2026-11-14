@@ -12,6 +12,44 @@ export type Decision = {
   recommended: string
 }
 
+/** What each choice presents, by label, in the order the decision shows them:
+ * read from its `shows` edges (`edge{from, to, ord}` + `shows{choice}`). */
+export type Shown = Map<string, string[]>
+
+/** The query for a decision's `shows` edges. */
+export let showing = (eid: string): string => `.edge.from=${eid}&.shows`
+
+/** Each choice's shown entities, from the decision's `shows` edges. */
+export let shown = (edges: Bundle[]): Shown => {
+  let out: Shown = new Map()
+  let sorted = [...edges].sort((a, b) =>
+    Number((a.edge as Comp)?.ord ?? 0) - Number((b.edge as Comp)?.ord ?? 0)
+  )
+  for (let b of sorted) {
+    let choice = (b.shows as Comp | undefined)?.choice
+    let to = (b.edge as Comp | undefined)?.to
+    if (choice == null || to == null) continue
+    out.set(String(choice), [...out.get(String(choice)) ?? [], String(to)])
+  }
+  return out
+}
+
+/** The `shows` edges a new decision writes, one for each choice that shows
+ * an entity, ordered as the choices are. */
+export let shows = (
+  from: string,
+  choices: (Choice & { shows?: string })[],
+): Bundle[] =>
+  choices.flatMap((c, i) =>
+    c.shows
+      ? [{
+        entity: { eid: `$shows-${i}` },
+        edge: { from, to: c.shows, ord: i },
+        shows: { choice: c.label },
+      }]
+      : []
+  )
+
 /** The answer a door writes, optionally recording another person's words. */
 export let answer = (eid: string, choice: string, by?: string): Bundle[] => [{
   entity: { eid },
