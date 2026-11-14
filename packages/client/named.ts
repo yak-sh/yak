@@ -51,8 +51,10 @@ export let entire = (line: string): string => {
 export type Told = (trouble: Trouble & { names?: string[] }) => void
 
 /** How a named client says a refusal or a failure where nobody else hears
- * it: on the console, an error where nothing was sent, which the page tracker
- * captures by its first argument. */
+ * it: on the console, an error for a refusal or a failure where nothing was
+ * sent, which the page tracker captures by its first argument. A write whose
+ * outcome is unknown (the server away) is a warning: the outbox keeps it and
+ * sends it again. */
 export let said: Told = (r) => {
   let error = r.error
   if (r.refused) {
@@ -64,7 +66,7 @@ export let said: Told = (r) => {
     let message = error instanceof Error
       ? `${error.name}: ${error.message}`
       : String(error)
-    let log = r.sent.length ? console.warn : console.error
+    let log = r.sent.length && !r.refused ? console.warn : console.error
     log(`live client — ${message}`, error)
   }
 }

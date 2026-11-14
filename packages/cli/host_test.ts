@@ -2521,3 +2521,30 @@ test('a host warms what its routes make early first, and the rest once each has 
     await host.close()
   }
 })
+
+test("the page's keyed write is received in the host's write log, once", async () => {
+  let person = mint()
+  let host = await composing(
+    { db: ':memory:', person, plugins: ['@yaks/kernel', ...HTTP, '@yaks/web'] },
+    ['graph', 'web'],
+  )
+  try {
+    let key = `outbox:${mint()}`
+    let send = () =>
+      serving(host)(
+        new Request('http://h/web/apply', {
+          method: 'POST',
+          headers: { 'idempotency-key': key },
+          body: JSON.stringify([{ entity: { eid: 'w1' }, completed: {} }]),
+        }),
+      )
+    let first = await send()
+    assertEquals(first.status, 200)
+    let [done] = await first.json()
+    assertEquals(done.completed.by, person)
+    // A resend under its key is told what the first send was told.
+    assertEquals((await (await send()).json())[0].completed, done.completed)
+  } finally {
+    await host.close()
+  }
+})

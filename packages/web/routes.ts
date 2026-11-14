@@ -22,7 +22,12 @@ import { type Application, application } from './app.ts'
 // `received`) and hands each break to the host's own telemetry.
 
 import { queryRedirect } from '@yaks/query'
-import { applier, type Authenticate, type Route } from '@yaks/api'
+import {
+  applier,
+  type Applying,
+  type Authenticate,
+  type Route,
+} from '@yaks/api'
 import type { Graph, ReadOpts } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { addressId } from '@yaks/id'
@@ -54,6 +59,9 @@ export type Hosting = {
   early?: (make: () => Promise<unknown>) => void
   /** the host's telemetry, where what a page reports is sent */
   report?: (error: unknown, context?: Partial<Context>) => unknown
+  /** the store's own connection, which keeps the write log the page's keyed
+   * writes are received in (@yaks/api `Applying.db`) */
+  storage?: { statements?: Applying['db'] }
 }
 
 /** Every letter an id's page path can start with, in both cases. Any letter:
@@ -247,8 +255,11 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
         }
         let via = await host.who?.(request)
         let writer = { by, via: via?.via ?? via?.by }
-        return applier({ graph: host.graph, authenticate: () => writer })
-          .apply(request)
+        return applier({
+          graph: host.graph,
+          db: host.storage?.statements,
+          authenticate: () => writer,
+        }).apply(request)
       },
     },
     {
