@@ -1299,7 +1299,9 @@ own output makes it stop matching, as `+!shelf` does above.
 
 Declared rules run alphabetically by name, adjusted for `before` dependencies.
 Registration order does not determine their order; cyclic dependencies are
-rejected. Rules can also come from vocabulary documents. Declarations without a
+rejected. Rules can also come from vocabulary documents, including the ones a
+kind's `with` values declare
+([@yaks/vocab](../vocab/README.md#rules-and-effects)). Declarations without a
 phase, or with `phase: 'rules'`, run here; other phases need their corresponding
 runner.
 

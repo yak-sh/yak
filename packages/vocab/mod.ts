@@ -29,7 +29,8 @@
 //                (the query allowing a peer-relayed value to be stored)
 //   rules.ts     rulesIn(docs) → the rules a vocabulary declares: a `$defs`
 //                entry marked `rule: true` is a query the graph runs, and
-//                there is no implementation to join it to
+//                there is no implementation to join it to; a kind's `with`
+//                values are the rules that complete it
 //   effects.ts   effectsIn(docs) → the effects a vocabulary declares: a
 //                `$defs` entry marked `effect: true` names what a commit owes,
 //                and a plugin's code runs it by that name

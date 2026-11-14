@@ -854,6 +854,15 @@ refuse duplicate names. Rules require a nonempty `match` in the
 asks [@yaks/client](../client/README.md#rules) to run one before its server
 answers.
 
+A kind's `with` entry that carries values is a rule too, named for the kind and
+the component: `design: { with: { proposed: {} } }` reads as `design.proposed`,
+`.design, +!proposed`, and `product: { with: { shelf: { aisle: 'Z' } } }` as
+`.product, +!shelf, +shelf.aisle=Z`. A write of the kind's `is` components then
+comes out whole through any door; one that already carries the component keeps
+what it gave. An entry of `true` is the writer's to supply and makes no rule. A
+value is a string, number or boolean; anything else, or a string starting with
+`$` or `#`, throws.
+
 ```ts
 import { effectsIn, loadVocab, rulesIn } from '@yaks/vocab'
 import { equal } from '@yaks/testing'
@@ -882,6 +891,11 @@ equal(rulesIn(doc), [{
   match: '.mail, +!queued',
   before: ['sweep'],
   optimistic: true,
+}])
+equal(rulesIn({ kinds: { mail: { with: { queued: { at: 'now' } } } } }), [{
+  name: 'mail.queued',
+  match: '.mail, +!queued, +queued.at=now',
+  description: 'a mail carries queued',
 }])
 equal(effectsIn(doc), [{
   name: 'send_mail',

@@ -61,3 +61,52 @@ test('a rule declaration validates as one', () => {
     false,
   )
 })
+
+let kinds = (k: Record<string, unknown>) => rulesIn({ kinds: k } as never)
+
+test("a kind's `with` values are the rules that complete it", () => {
+  assertEquals(
+    kinds({
+      design: { with: { doc: true, proposed: {} } },
+      product: { with: { shelf: { aisle: 'Z', bay: 3 } } },
+      decision: { is: ['task', 'decision'], with: { open: { note: 'a, b' } } },
+    }),
+    [
+      {
+        name: 'design.proposed',
+        match: '.design, +!proposed',
+        description: 'a design carries proposed',
+      },
+      {
+        name: 'product.shelf',
+        match: '.product, +!shelf, +shelf.aisle=Z, +shelf.bay=3',
+        description: 'a product carries shelf',
+      },
+      {
+        name: 'decision.open',
+        match: '.task, .decision, +!open, +open.note="a, b"',
+        description: 'a decision carries open',
+      },
+    ],
+  )
+  // `true` is the writer's to supply: no rule
+  assertEquals(kinds({ task: { with: { doc: true } } }), [])
+})
+
+test('a kind gives no value a rule cannot write', () => {
+  for (let v of [{ x: 1 }, [1], null, '$x', '#Now']) {
+    assertThrows(
+      () => kinds({ p: { with: { shelf: { aisle: v } } } }),
+      Error,
+      "kind 'p' gives shelf.aisle a value no rule can write",
+    )
+  }
+  assertThrows(
+    () =>
+      rulesIn([{ kinds: { p: { with: { s: {} } } } }, {
+        kinds: { p: { with: { s: {} } } },
+      }]),
+    Error,
+    "rule 'p.s' is declared twice",
+  )
+})
