@@ -358,6 +358,7 @@ export let BOUNDARIES = [
   // Every keyed write a store's log holds is kept under its writer's name for
   // its key (@yaks/api/log `rekey`, at a store's wake, T-166122).
   'yak/store/write-receipt-keys/1',
+  'yak/store/app-draft/1',
 ]
 
 /** The column the interruption contract emptied before `attempt.state` and

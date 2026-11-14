@@ -42,6 +42,7 @@ export let draftRule: Rule = {
   mark: 'yak/store/app-draft/1',
   stores: [PLATFORM_STORE],
   core: ['app', 'app_draft', 'written'],
+  live: 'all',
   find: '.app.draft&*',
   move: draftMove,
 }
