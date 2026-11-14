@@ -235,7 +235,7 @@ export let Sky = () => {
         ))}
         <g class='Sky_Night'>{flies}</g>
         <g class='Sky_Day Sky_Still'>
-          {STILL.map((b) => <path d={still(b)} />)}
+          <path d={STILL.map(still).join('')} />
         </g>
       </svg>
       <div class='Sky_Grass'>
