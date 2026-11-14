@@ -557,31 +557,54 @@ await proof(
   },
 )
 
+// Another instance's write can commit above a fence this one was granted:
+// the write takes a fresh fence and lands under it.
 await proof(
-  'a write whose fence resumes after a newer commit lands under a fresh one',
+  'a write whose fence is older than a commit lands under a fresh one',
   async () => {
     let f = await fixture()
-    let release!: () => void
-    let held = new Promise<void>((r) => release = r)
-    f.onBegin(() => {
-      f.onBegin(() => Promise.resolve())
-      return held
+    f.offer(() => {
+      f.offer((revision) => revision)
+      return f.initial - 1
     })
-    f.onFinish(() => Promise.resolve(release()))
-    let g = await f.graph()
-    let titled = (eid: string, title: string) =>
-      g.apply([{ entity: { eid }, doc: { title } }])
-    await Promise.all([titled('app', 'One'), titled('space', 'Two')])
-    let rows = await f.at.query('.doc')
+    let error = await refusal(() => f.at.apply(patch, KERNEL))
+    let rows = await f.at.query('.entity.eid=app&.app')
     return () => {
-      equal(
-        rows.map((r) => [r.entity.eid, (r.doc as { title: string }).title])
-          .sort(),
-        [['app', 'One'], ['space', 'Two']],
-      )
-      ok(f.begins.length > f.finishes.length, 'a fence was lost and retaken')
+      equal(error, '')
+      equal(f.begins.length, 2)
+      equal((rows[0].app as { access: string }).access, 'private')
       equal(f.committed().epoch, String(f.fence().revision))
       equal(f.fence().blocked, false)
+    }
+  },
+)
+
+// The copy answers fences in any order, newest first here: writes asking at
+// once still commit in turn, and none loses its fence (T-165084).
+await proof(
+  'a burst of writes whose fences answer newest first all commit',
+  async () => {
+    let f = await fixture()
+    let waiting: (() => void)[] = []
+    f.onBegin(() =>
+      new Promise<void>((answer) => {
+        waiting.unshift(answer)
+        setTimeout(() => waiting.shift()?.())
+      })
+    )
+    let titles = ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven']
+    let answers = await Promise.all(
+      titles.map((title) =>
+        f.live([{ entity: { eid: 'app' }, doc: { title } }])
+          .then((r) => r.status)
+      ),
+    )
+    let rows = await f.at.query('.entity.eid=app&.doc')
+    return () => {
+      equal(answers, titles.map(() => 200))
+      equal(f.begins.length, titles.length)
+      equal((rows[0].doc as { title: string }).title, 'Seven')
+      equal(f.committed().epoch, String(f.fence().revision))
     }
   },
 )

@@ -229,11 +229,32 @@ export class Unfenced extends Error {
 // fired it, for as long as the job takes, and a fence orphaned meanwhile is
 // still lowered. A `begin` on its way holds whatever revision it will be
 // answered, so no fence is lowered while one is.
+//
+// Writes take their fences in turn: each waits for the one before it to
+// commit or fail before it asks for its own, so they commit in the order the
+// copy granted their fences. Asked all at once, the answers resumed the
+// directory in any order and a write could lose every try to newer ones
+// committing ahead of it (T-165084). The turn ends at the commit, not with
+// the effects after it, so an effect's own directory write takes the next one.
 let raising = 0
-let held = new Set<number>()
+let held = new Map<number, () => void>()
+let queue: Promise<void> = Promise.resolve()
 
-/** The directory committed a write under this fence: it holds it no longer. */
-export let released = (revision: number) => void held.delete(revision)
+// The next turn: ready once every turn asked before it has ended.
+let nextTurn = () => {
+  let end!: () => void
+  let ended = new Promise<void>((done) => end = done)
+  let ready = queue
+  queue = queue.then(() => ended)
+  return { ready, end }
+}
+
+/** The directory committed a write under this fence: it holds it no longer,
+ * and the next write takes its turn. */
+export let released = (revision: number) => {
+  held.get(revision)?.()
+  held.delete(revision)
+}
 
 /** Lower an orphaned fence, if there is one. Never throws: a copy that cannot
  * answer is mended by the next read that finds the fence. */
@@ -257,7 +278,9 @@ export let fenced = async <T>(
 ): Promise<T> => {
   let wait = jittered(clock)
   let failed = true
+  let { ready, end } = nextTurn()
   try {
+    await ready
     for (;; tries--) {
       raising++
       let revision: number
@@ -268,7 +291,7 @@ export let fenced = async <T>(
           moving,
           wait,
         )
-        held.add(revision)
+        held.set(revision, end)
       } finally {
         raising--
       }
@@ -279,7 +302,8 @@ export let fenced = async <T>(
         if (!(e instanceof Unfenced) || tries <= 1) throw e
         continue
       } finally {
-        released(revision)
+        // A write that lost keeps its turn for its next try.
+        held.delete(revision)
       }
       failed = false
       // The fence is lowered after the write is answered: a stalled read
@@ -289,6 +313,7 @@ export let fenced = async <T>(
       return out
     }
   } finally {
+    end()
     if (failed) await mend(copy, committed)
   }
 }
