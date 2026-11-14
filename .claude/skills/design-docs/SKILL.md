@@ -10,9 +10,9 @@ description: >
 
 # Writing a design
 
-A design is the graph's record of a proposed change, filed before the work. The repo documents what is; the
-design holds what's proposed. It is true enough to trust and short enough for
-the owner to read in a couple of minutes.
+A design is the graph's record of a proposed change, filed before the work.
+The repo documents what is; the design holds what's proposed. It is true
+enough to trust and short enough for the owner to read in a couple of minutes.
 
 He told us, about D-375: "that design is too long for me to read". Designs
 written for him had grown to 10,000 to 15,000 characters. So the body is what
