@@ -125,7 +125,13 @@ answer) signs in a test account that lasts instead, with
 call. Use a new name for each check: a free space holds five apps, and an
 earlier check's apps and unanswered decisions are in the next one's way. An
 Operator's model varies from run to run, so one run of a behavior proves little:
-send the same kind of request three or more times and count. A check of yaks.app's own pages or funnel tags its
+send the same kind of request three or more times and count. Comparing two
+versions of the Operator takes dozens of runs an arm: 16 could not tell 82% from
+88% (T-262). Deploys land while a batch runs, so read which code a run saw from
+the run itself (`operator_read`: its session's `fixed{parts}` holds each tool
+definition's size, and each tool answer's text is in its entry), not from the
+clock. A script run in the background can find another `yak` first on its PATH;
+name `~/.deno/bin/yak` in it. A check of yaks.app's own pages or funnel tags its
 visit `utm_source=agent-check` (@yaks/platform/bots `CHECK`), in its link or
 its `yak_came` cookie, so whatever it clicks or starts counts apart from
 people's. Acting as the owner is his to grant (M-31958). The box's own server runs main after `yak restart`. The platform
