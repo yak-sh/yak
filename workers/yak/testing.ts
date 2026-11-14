@@ -127,7 +127,16 @@ export let state = (name = '', prepared = true) => {
     },
     getWebSockets: (tag?: string) =>
       tag == null ? live : live.filter((ws) => tagged.get(ws)?.includes(tag)),
-    getTags: (ws: Wire) => tagged.get(ws) ?? [],
+    // The runtime lets go of a socket's tags once it has closed, and reading
+    // them after throws.
+    getTags: (ws: Wire) => {
+      if (ws.readyState > 1) {
+        throw new Error(
+          "you must call 'acceptWebSocket()' before attempting to access the tags of a WebSocket.",
+        )
+      }
+      return tagged.get(ws) ?? []
+    },
   }
 }
 

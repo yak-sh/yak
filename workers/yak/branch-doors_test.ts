@@ -4,6 +4,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { ownedBy } from './directory-fixture.ts'
 import { directory, fetch as directoryFetch, storeName } from './directory.ts'
+import { within } from './defects.ts'
 import { BRANCH, storeOf } from './door.ts'
 import { Store } from './graph.ts'
 import { KERNEL } from './meta.ts'
@@ -89,6 +90,37 @@ let again = await new Store(p.states.get(name)!, p.env).fetch(
     headers: { ...KERNEL, 'x-store': name, [BRANCH]: String(id) },
   }),
 ).then((r) => r.json())
+// A page's socket on the branch, closed: the runtime has let go of its tags
+// by the time its close arrives, and main's pages still list it.
+let socket = (() => {
+  let held: unknown = null
+  return {
+    readyState: 1,
+    send: () => {},
+    serializeAttachment: (v: unknown) => void (held = structuredClone(v)),
+    deserializeAttachment: () => held,
+  }
+})()
+let factory = globalThis as { WebSocketPair?: unknown }
+factory.WebSocketPair = function () {
+  return { 0: {}, 1: socket }
+}
+await branch('/ws', { headers: { upgrade: 'websocket' } }, KERNEL)
+  .catch(() => {})
+delete factory.WebSocketPair
+socket.readyState = 3
+let reports: unknown[] = []
+await within(
+  { ERRORS: { send: (rows) => (reports.push(...rows), Promise.resolve()) } },
+  { request: 'webSocketClose' },
+  async () => {
+    await p.object(name).webSocketClose(socket)
+    await post(main, '/apply', [{
+      entity: { eid: card },
+      card: { name: 'on' },
+    }])
+  },
+)
 let dropped = await send(main, `/branches/${id}`, { method: 'DELETE' })
 let gone = await send(branch, '/query?q=.card')
 
@@ -121,6 +153,9 @@ test('a branch keeps its pages’ storage apart from main’s', () => {
   equal(kept, { theme: 'dark' })
   equal(mainKept, {})
 })
+
+test('a closed socket on a branch closes and broadcasts without a report', () =>
+  equal(reports, []))
 
 test('a dropped branch answers nothing', () => {
   equal(dropped.status, 204)

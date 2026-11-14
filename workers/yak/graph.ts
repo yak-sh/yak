@@ -530,7 +530,7 @@ export type State = Held & {
   abort?(reason?: string): void
   // A socket's tags, as the runtime holds them across hibernation: a page on
   // a branch is tagged with it (`#onBranch`), so each branch's sockets are
-  // its own and main's are the untagged.
+  // its own and main's are the untagged. A closed socket's tags are gone.
   acceptWebSocket(ws: Wire, tags?: string[]): void
   getWebSockets(tag?: string): Wire[]
   getTags?(ws: Wire): string[]
@@ -547,8 +547,13 @@ type Pages = {
 // The tag a branch's sockets are held under (`State`), and the word its
 // declaration is kept under (`Word`).
 let tagOf = (id: number) => `branch:${id}` as const
-// The branch a socket is held for, null for main's.
+// The branch a socket is held for, null for main's. It is written on the
+// socket (`#socketsOn`), which still answers once the socket has closed and
+// its tags are gone. A socket opened before carries only its tag.
 let branchOfSocket = (ctx: State, ws: Wire): number | null => {
+  let held = ws.deserializeAttachment() as { branch?: number } | null
+  if (typeof held?.branch == 'number') return held.branch
+  if (ws.readyState != 1) return null
   let tag = ctx.getTags?.(ws).find((t) => t.startsWith('branch:'))
   return tag ? Number(tag.slice('branch:'.length)) : null
 }
@@ -2132,10 +2137,12 @@ export class Store extends Durable {
     let ctx = this.#ctx
     return {
       storage: ctx.storage,
-      acceptWebSocket: (ws) =>
-        id == null ? ctx.acceptWebSocket(ws) : ctx.acceptWebSocket(ws, [
-          tagOf(id),
-        ]),
+      acceptWebSocket: (ws) => {
+        if (id == null) return ctx.acceptWebSocket(ws)
+        let held = ws.deserializeAttachment() as object | null
+        ws.serializeAttachment({ ...held, branch: id })
+        ctx.acceptWebSocket(ws, [tagOf(id)])
+      },
       getWebSockets: () =>
         id == null
           ? ctx.getWebSockets().filter((ws) => branchOfSocket(ctx, ws) == null)
