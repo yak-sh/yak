@@ -174,6 +174,16 @@ let held = (b: Bundle): boolean => b[TOMBSTONE] != null || comps(b).length > 0
 let strings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x) => typeof x == 'string') : []
 
+// The branch a call reads on, where it names one.
+let on = (args: Record<string, unknown>) =>
+  typeof args.branch == 'number' ? { branch: args.branch } : undefined
+
+// Branch `id`'s graph, refused where the graph keeps none.
+let branched = (graph: Graph, id: number): Promise<Graph> => {
+  if (!graph.branches) throw new Refused('this graph keeps no branches')
+  return graph.branches.on(id)
+}
+
 /**
  * The implementations behind ./vocab.json — the generic tier, every one of
  * them taking bundles in and returning bundles out. `search` appears only
@@ -194,7 +204,8 @@ export let runs = (seams: Seams = {}): Runs => {
     // back. `check: true` makes the call a rehearsal, which the runner answers
     // with what a kept write would have returned (@yaks/tools).
     graph_apply: (call, graph) => {
-      let { q, bundles, edits, links, id, text, path, was } = argsOf(call)
+      let args = argsOf(call)
+      let { q, bundles, edits, links, id, text, path, was } = args
       if (id !== undefined && text === undefined) {
         throw new Refused('id needs text')
       }
@@ -216,10 +227,15 @@ export let runs = (seams: Seams = {}): Runs => {
             }],
           }]
         }
-        return Promise.all([
-          edited(graph, changes),
-          linked(graph, (links ?? []) as Link[]),
-        ]).then(([patches, edges]) => [...patches, ...edges])
+        // An edit replaces text as it stands where the write lands.
+        let base = on(args)
+        return (base ? branched(graph, base.branch) : Promise.resolve(graph))
+          .then((g) =>
+            Promise.all([
+              edited(g, changes),
+              linked(g, (links ?? []) as Link[]),
+            ])
+          ).then(([patches, edges]) => [...patches, ...edges])
       }
       if (q === undefined) {
         if (bundles === undefined) {
@@ -315,12 +331,13 @@ export let runs = (seams: Seams = {}): Runs => {
         let windowed = ast.clauses.some((c) => c.kind == 'limit')
         let rows = await graph.read(
           said.length && !windowed ? conjoin(q, `.limit=${BEST}`) : q,
+          on(args),
         )
         if (!said.length || named(graph.vocab, ast)) return rows
         let line = hit(graph.vocab, said)
         return rows.map((b) => ({ ...b, hit: line(b) }))
       }
-      let value = reduced(op, await graph.rows(q))
+      let value = reduced(op, await graph.rows(q, on(args)))
       return [{
         entity: { eid: '$said' },
         output: { source: call.entity.eid, value },
@@ -337,7 +354,7 @@ export let runs = (seams: Seams = {}): Runs => {
       let ids = [...strings(args.ids), ...strings([args.id])]
       if (!ids.length) throw new Refused('graph_show needs at least one id')
       let asked = [...new Set(ids)]
-      let rows = (await graph.get(asked)).filter(held)
+      let rows = (await graph.get(asked, undefined, on(args))).filter(held)
       let found = new Set(rows.map((b) => b.entity.eid))
       let nothing = asked.filter((id) => !found.has(id))
       if (!nothing.length) return rows

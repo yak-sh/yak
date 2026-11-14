@@ -35,14 +35,19 @@ let history = async (
 
 let comp = (b: Bundle, name: string) => b[name] as Comp
 
-test('the journal declares one tool and implements it', () => {
+test('the journal declares its tools and implements them', () => {
   assertEquals(
     loadTools(journalDoc, runs({ storage: wikiGraph().storage })).map((t) => [
       t.name,
       t.noun,
       t.verb,
     ]),
-    [['history', 'history', undefined]],
+    [
+      ['history', 'history', undefined],
+      ['branch_new', 'branch', 'new'],
+      ['branch_list', 'branch', 'list'],
+      ['branch_delete', 'branch', 'delete'],
+    ],
   )
 })
 

@@ -67,7 +67,7 @@ import type {
   Lent,
   Storage,
 } from '@yaks/graph'
-import { Stale } from '@yaks/graph/errors'
+import { Refused, Stale } from '@yaks/graph/errors'
 import { hit } from '@yaks/graph/hit'
 import type { Vocab } from '@yaks/vocab'
 import { EXIT, PROCESS } from '@yaks/process/vocab'
@@ -688,7 +688,55 @@ let composed = async (
       if (warmed) void Promise.allSettled([make()])
       else makes.push(make)
     })
+    // Each branch's host, composed the first time a call names the branch:
+    // this config over a connection of its own on the branch, every plugin
+    // bound to it, so nothing it writes reaches main. Closed with this host,
+    // or when its branch is dropped.
+    let forks = new Map<number, Promise<Served>>()
+    let forked = (id: number): Promise<Served> => {
+      let made = forks.get(id)
+      if (made) return made
+      made = composed(config, ['graph'], load, {
+        mode: { branch: id },
+        process: false,
+        ...opts.clock ? { clock: opts.clock } : {},
+      })
+      forks.set(id, made)
+      made.catch(() => forks.get(id) === made && forks.delete(id))
+      return made
+    }
+    let unfork = async (id: number) => {
+      let made = forks.get(id)
+      forks.delete(id)
+      await (await made?.catch(() => undefined))?.close()
+    }
+    let unforked = () => Promise.all([...forks.keys()].map(unfork))
     let built = plan.bind({
+      // A database in memory is its connection's alone, so no branch's host
+      // could open it.
+      branches: (h) => {
+        let kept = h.storage.branches
+        if (!kept || mode || path == ':memory:') return undefined
+        return {
+          make: async () => await kept.make(),
+          list: async () => await kept.list(),
+          drop: async (id) => {
+            await unfork(id)
+            await kept.drop(id)
+          },
+          // A branch nobody made is the caller's mistake, said before any
+          // host is composed for it.
+          on: async (id) => {
+            if (
+              !forks.has(id) && !(await kept.list()).some((b) => b.id == id)
+            ) {
+              throw new Refused(`no branch ${id}`)
+            }
+            return (await forked(id)).graph
+          },
+        }
+      },
+      unobserved: !!mode && 'branch' in mode,
       tools: {
         package: '@yaks/cli',
         offer: (host) => operations(host, { config: opts.path }),
@@ -1137,6 +1185,7 @@ let composed = async (
             }
           }
           await wait('retire', retire)
+          await wait('branches', unforked)
           stopping.abort()
           dutiesHost.stop()
           await wait('duty thread', () => opts.thread?.close().catch(lose))

@@ -163,6 +163,10 @@
             "null"
           ],
           "description": "Optional read token for id/text."
+        },
+        "branch": {
+          "type": "integer",
+          "description": "Write on this branch (branch_list) rather than main; main never sees it."
         }
       },
       "destructive": true,
@@ -200,6 +204,10 @@
         "fields": {
           "type": "string",
           "description": "What each row carries, as .fields= takes it: doc.title,created.at or a whole component."
+        },
+        "branch": {
+          "type": "integer",
+          "description": "Read on this branch (branch_list) rather than main."
         }
       },
       "required": [
@@ -234,6 +242,10 @@
           "type": "string",
           "ref": "entity",
           "description": "One entity id or name."
+        },
+        "branch": {
+          "type": "integer",
+          "description": "Read on this branch (branch_list) rather than main."
         }
       },
       "readOnly": true,

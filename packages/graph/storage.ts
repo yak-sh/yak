@@ -31,6 +31,9 @@ export type Visibility = {
 /** Options passed with a read, such as a fixed `now` for relative time
  * expressions. */
 export type ReadOpts = {
+  /** Read on this branch ({@link Branches}) rather than main. The graph
+   * answers it from the branch's own graph, so a store never sees it. */
+  branch?: number
   /** The caller stopped waiting. Read executors may cancel their own work;
    * this never cancels an admitted write. */
   signal?: AbortSignal
@@ -211,6 +214,26 @@ export type ReadTx = Pick<
  * rather than patched. */
 export type News = { applied: Bundle[][]; missed: boolean }
 
+/** A branch of a store's graph (D-395): its id, local to the store, the
+ * transaction of main it forked at, and when it was made. */
+export type Branch = { id: number; fork: number; at: string }
+
+/**
+ * A store's branches: forks of its whole graph, each reading main as it stood
+ * at its fork under its own writes, which stay on it. Only a store that keeps
+ * history has them (@yaks/sqlite with @yaks/journal's versions). A branch is
+ * read and written through a store of its own, which its host opens
+ * (@yaks/graph `GraphBranches.on`).
+ */
+export type Branches = {
+  /** fork main at its newest transaction; nothing is copied */
+  make: () => Branch | Promise<Branch>
+  /** every branch, oldest first */
+  list: () => Branch[] | Promise<Branch[]>
+  /** forget a branch and everything written on it */
+  drop: (id: number) => void | Promise<void>
+}
+
 /**
  * A storage adapter. `@yaks/sqlite` implements this over an embedded database;
  * an in-memory map, a Durable Object and a remote SQL service implement the
@@ -220,6 +243,8 @@ export type News = { applied: Bundle[][]; missed: boolean }
  * promise.
  */
 export type Storage = {
+  /** the store's branches, where it keeps any */
+  branches?: Branches
   /** Adopt an additive vocabulary snapshot without replacing stored data.
    * False leaves the store unchanged. Absent when growth needs a new store. */
   extend?: (next: Vocab) => boolean

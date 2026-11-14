@@ -1,6 +1,8 @@
 // `@yaks/journal/tools` — what an agent may ask the log: the function behind
-// the `history` declaration in ./vocab.json. One tool, because the log answers
-// one question people actually ask: what happened to this, and who did it.
+// the `history` declaration in ./vocab.json, because the log answers one
+// question people actually ask: what happened to this, and who did it. And
+// the graph's branches, which its versions make possible (D-395): made,
+// listed and deleted here, read and written through the graph's own tools.
 //
 // The answer is bundles, and each bundle is the transaction: `applied()`
 // rebuilds what a write committed out of the log's own record, so a history row
@@ -14,7 +16,8 @@
 // a write, and one a server has to decide it offers — and a feed is a cursor a
 // consumer holds, not a question anybody types.
 
-import type { Bundle, Comp } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import type { Branch } from '@yaks/graph/storage'
 import { argsOf } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
@@ -37,6 +40,22 @@ let stamp = (b: Batch): Comp => ({
 let said = (b: Batch): Bundle[] =>
   applied(b).map((patch) => ({ ...patch, _tx: stamp(b) }))
 
+// The graph's branches, or the reason it has none.
+let branches = (graph: Graph) => {
+  if (!graph.branches) {
+    throw new Refused(
+      'this graph keeps no branches: list @yaks/journal with versions on',
+    )
+  }
+  return graph.branches
+}
+
+// A branch tool's answer: what it says about the branches, as data.
+let told = (call: Bundle, value: Branch | Branch[]): Bundle[] => [{
+  entity: { eid: '$said' },
+  output: { source: call.entity.eid, value },
+}]
+
 /** The functions behind the tools ./vocab.json declares — read over this
  * host's storage, which is why this export is a factory. */
 export let runs = (host: Bound): Runs => {
@@ -49,6 +68,17 @@ export let runs = (host: Bound): Runs => {
       let n = args.limit == null ? undefined : Number(args.limit)
       // Newest first: a history is read back from where the entity got to.
       return j.history(asked, n).reverse().flatMap(said)
+    },
+    branch_new: async (call, graph) => told(call, await branches(graph).make()),
+    branch_list: async (call, graph) =>
+      told(call, await branches(graph).list()),
+    branch_delete: async (call, graph) => {
+      let id = Number(argsOf(call).id)
+      let all = branches(graph)
+      let gone = (await all.list()).find((b) => b.id == id)
+      if (!gone) throw new Refused(`no branch ${id}`)
+      await all.drop(id)
+      return told(call, gone)
     },
   }
 }

@@ -146,7 +146,22 @@ export let invoke = async (
     // twice, or never. A tool that answers only its own words about the call
     // has those words to say instead: it handled `check` itself (a session's
     // tool, whose graph call ran a rehearsal of its own and said so).
-    if (!tool.readOnly && !tool.applied && args.check === true) {
+    // A write on a branch lands there, through the branch's graph, and the
+    // call's record stays on main with the rest of its caller's: the answer
+    // is the batch as the branch applied it, kept nowhere else.
+    let branch = typeof args.branch == 'number' && !tool.readOnly &&
+        !tool.applied
+      ? args.branch
+      : undefined
+    if (branch !== undefined) {
+      let check = args.check === true
+      let wrote = await host.apply(made, { branch, ...check ? { check } : {} })
+      answered = await land(
+        check ? [...wrote, said(call, CHECKED)] : wrote,
+        'done',
+        false,
+      )
+    } else if (!tool.readOnly && !tool.applied && args.check === true) {
       let rehearsed = await g.apply(made, { check: true })
       let reported = made.length > 0 &&
         made.every((b) =>

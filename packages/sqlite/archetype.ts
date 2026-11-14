@@ -221,6 +221,18 @@ let minter = (
   return { mint, assign, made, born }
 }
 
+/** The id of the archetype of `tables`, its descriptor minted where the file
+ * holds none: what a branch points an entity it makes at, since on main that
+ * entity holds nothing (./branches.ts). */
+export let described = (driver: Driver, tables: string[]): number =>
+  unit(driver, () => {
+    let cache = new Archetypes()
+    let counts = { entities: 0, archetypes: 0, retired: 0 }
+    let { ids } = descriptors(driver)
+    let { mint } = minter((s) => driver.query(s), driver, cache, ids, counts)
+    return mint(cache.intern(tables).eid)
+  })
+
 /**
  * Every entity classified again from the tables it holds rows in, not only the
  * unclassified ones: what a pass that wrote component tables directly, outside

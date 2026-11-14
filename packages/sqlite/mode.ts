@@ -25,7 +25,6 @@ import {
   col,
   type Derived,
   type Driver,
-  eq,
   lit,
   select,
   type Stmt,
@@ -35,7 +34,6 @@ import type { Vocab } from '@yaks/vocab'
 import { pastShapes } from './history-shapes.ts'
 import { docDdl, indexed } from './ddl.ts'
 import {
-  BRANCHES,
   covered,
   DIAL,
   type History,
@@ -154,31 +152,4 @@ export let moded = (
   let store = storage(driver, vocab, opts)
   dialed.set(driver, { vocab, kind: k, opts, store })
   return store
-}
-
-/** Make a branch of main at its newest transaction: one row, nothing copied.
- * Answers its id and the transaction it forked at. */
-export let branch = (
-  driver: Driver,
-  history: History,
-): { branch: number; fork: number } => {
-  let fork = Number(driver.query(history.tip)[0]?.id ?? 0)
-  let [row] = driver.query({
-    t: 'insert',
-    into: BRANCHES,
-    cols: ['parent', 'fork', 'at'],
-    rows: [[lit(0), val(fork), val(new Date().toISOString())]],
-    returning: [col('id')],
-  })
-  return { branch: Number(row.id), fork }
-}
-
-/** The branch `id`, as a mode: where it forked. Undefined for none. */
-export let branchOf = (driver: Driver, id: number): Mode | undefined => {
-  let [row] = driver.query(select({
-    cols: [col('fork')],
-    from: { t: 'table', name: BRANCHES },
-    where: eq(col('id'), val(id)),
-  }))
-  return row ? { branch: id, fork: Number(row.fork) } : undefined
 }

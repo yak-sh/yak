@@ -3,18 +3,22 @@ import { type Bundle, graph } from '@yaks/graph'
 import {
   as,
   col,
+  eq,
   fn,
   type History,
+  join,
   NOW,
   select,
   type Stmt,
   table,
+  val,
 } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
+import { eidOf } from '@yaks/archetype/sets'
 import { open } from './db.ts'
 import { render } from '@yaks/sql'
 import { meta, SCHEMA } from './meta.ts'
-import { branch, type Mode, moded, storage } from './mod.ts'
+import { branch, branchOf, type Mode, moded, storage } from './mod.ts'
 
 let vocab = loadVocab([{
   $defs: {
@@ -59,7 +63,24 @@ let d = open(path)
 d.query(CLOCK)
 let store = storage(d, vocab, { history })
 store.install()
-let g = graph({ storage: store, vocab })
+// The graph's branches as a host gives them: the store's, each read and
+// written through a connection of its own.
+let g = graph({
+  storage: store,
+  vocab,
+  branches: {
+    make: async () => await store.branches!.make(),
+    list: async () => await store.branches!.list(),
+    drop: async (id) => await store.branches!.drop(id),
+    on: (id) => {
+      let mode = branchOf(d, id)
+      if (!mode) return Promise.reject(new Error(`no branch ${id}`))
+      return Promise.resolve(
+        graph({ storage: moded(open(path), vocab, { history }, mode), vocab }),
+      )
+    },
+  },
+})
 let past = open(path), branched = open(path)
 let seen = (mode: Mode) =>
   graph({
@@ -227,4 +248,60 @@ test('a past whole read asks no unrelated component view for presence', async ()
   } finally {
     past.query = query
   }
+})
+
+// Through the graph's own doors: a branch made, written, deleted on and read
+// by options, and then dropped.
+await g.apply([
+  { entity: { eid: 'd1' }, page: { title: 'kept' } },
+  { entity: { eid: 'd2' }, page: { title: 'doomed' } },
+])
+let made = await g.branches!.make()
+let on3 = { branch: made.id }
+await g.apply([{ entity: { eid: 'd1' }, page: { title: 'drafted' } }], on3)
+await g.apply([{ entity: { eid: 'd3' }, page: { title: 'born' } }], on3)
+await g.apply([{ entity: { eid: 'd2' }, $delete: true }], on3)
+let doors = {
+  get: (await g.get(['d1', 'd2', 'd3'], undefined, on3))
+    .map((b) => b.page ?? Object.keys(b)),
+  read: eids(await g.read('.page.title=born', on3)),
+  main: (await g.get(['d1', 'd2'])).map((b) => b.page),
+  listed: (await g.branches!.list()).map((b) => b.id),
+  // On main, the entity the branch made holds nothing, and its pointer says so.
+  pointed: d.query(select({
+    cols: [col('eid', 'p')],
+    from: table('entity', 'e'),
+    joins: [
+      join(table('entity', 'p'), eq(col('id', 'p'), col('archetype', 'e'))),
+    ],
+    where: eq(col('eid', 'e'), val('d3')),
+  }))[0]?.eid == eidOf([]),
+}
+await g.branches!.drop(made.id)
+
+test('a branch is made, written, deleted on and read through the graph’s options', () =>
+  equal(doors, {
+    get: [{ title: 'drafted' }, ['entity', 'tombstone'], { title: 'born' }],
+    read: ['d3'],
+    main: [{ title: 'kept' }, { title: 'doomed' }],
+    listed: [fork.branch, made.id],
+    pointed: true,
+  }))
+
+test('a dropped branch is gone, and so is what was written on it', async () => {
+  equal((await g.branches!.list()).map((b) => b.id), [fork.branch])
+  await throws(() => g.get(['d1'], undefined, on3))
+  equal(
+    d.query(select({
+      from: table('page$versions'),
+      where: eq(col('$branch'), val(made.id)),
+    })),
+    [],
+  )
+})
+
+test('a dropped branch’s id is never given again', async () => {
+  let next = await g.branches!.make()
+  await g.branches!.drop(next.id)
+  ok((await g.branches!.make()).id > next.id)
 })

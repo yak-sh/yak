@@ -461,6 +461,9 @@ export let tool = async (
   if (props && typeof props == 'object' && 'tui' in props) {
     args.tui = c.tui
   }
+  let branch = typeof args.branch == 'number' ? args.branch : undefined
+  // What the answer names is drawn as the branch it was read on holds it.
+  let on = branch === undefined ? undefined : { branch }
   let host = await opening(c, declared, listing)
   // Write the `tool` rows a call's `to` points at first: a call naming an
   // entity nothing created would be a dangling reference. Done once per
@@ -491,8 +494,8 @@ export let tool = async (
       host.vocab,
       answer,
       {
-        lookup: (eids) => host.graph.get(eids),
-        query: (q) => host.graph.read(q),
+        lookup: (eids) => host.graph.get(eids, undefined, on),
+        query: (q) => host.graph.read(q, on),
       },
       declared,
       host.observe,

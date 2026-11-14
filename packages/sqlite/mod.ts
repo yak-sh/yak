@@ -106,6 +106,8 @@ import {
 import { doom } from './doom.ts'
 import { exclusive, unit, unwaiting } from './unit.ts'
 import { enter } from '@yaks/graph/enter'
+import type { Branches } from '@yaks/graph/storage'
+import { branching, unborn } from './branches.ts'
 import { busy } from './error.ts'
 import { options } from './reader.ts'
 import { catalog } from './catalog.ts'
@@ -344,6 +346,8 @@ export type Tx = {
 // signature still satisfies `Storage` wherever the generic contract is what is
 // wanted.
 export type Store = {
+  /** its branches, where it keeps history (./branches.ts) */
+  branches?: Branches
   /** Matches evaluated against committed rows without a write transaction. */
   bindings?: Tx['bindings']
   /** Current committed-data invalidation token, including external WAL writes. */
@@ -1059,7 +1063,7 @@ export let storage = (
       bindings(driver, vocab, matches, bundles, covers, opts()),
     patch: (given) => {
       let bundles = readied(given)
-      return memo.patch(
+      return made(memo.patch(
         bundles,
         (known) =>
           patch(
@@ -1073,7 +1077,7 @@ export let storage = (
             undefined,
             base.names,
           ),
-      )
+      ))
     },
     remove: (entities) => {
       let at = new Date().toISOString()
@@ -1247,7 +1251,7 @@ export let storage = (
         },
         patch: (given) => {
           let bundles = readied(given)
-          let minted = memo.patch(
+          let minted = made(memo.patch(
             bundles,
             (known) =>
               patch(
@@ -1261,7 +1265,7 @@ export let storage = (
                 unsettled,
                 base.names,
               ),
-          )
+          ))
           for (let b of bundles) {
             if (b.entity.archetype !== undefined) l.pointed(b.entity.eid)
           }
@@ -1435,7 +1439,17 @@ export let storage = (
     if (base.schemaReady?.()) ready = true
     else install()
   }
+  // What a write minted: on a branch, each pointed as main sees it.
+  let made = base.mode && 'branch' in base.mode
+    ? (minted: Entity[]) => (unborn(driver, minted.map((e) => e.eid)), minted)
+    : (minted: Entity[]) => minted
+  // A store with history has branches; a mode's connection is a branch's,
+  // or reads the past.
+  let branches = base.history && !base.mode
+    ? branching(driver, base.history)
+    : undefined
   return {
+    ...branches ? { branches } : {},
     statements: keeping
       ? Object.assign(statements(driver), { archetypes: true })
       : base.mode
@@ -1589,4 +1603,5 @@ export {
 } from './follow.ts'
 
 export { doom } from './doom.ts'
-export { branch, branchOf, moded } from './mode.ts'
+export { branch, branching, branchOf } from './branches.ts'
+export { moded } from './mode.ts'

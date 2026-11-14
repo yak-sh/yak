@@ -76,7 +76,7 @@ import {
   type Eid,
   gives,
 } from './bundle.ts'
-import type { ReadTx, Row, Storage, Tx } from './storage.ts'
+import type { Branch, ReadTx, Row, Storage, Tx } from './storage.ts'
 import { isProse, proseOn } from './prose.ts'
 import {
   type Committed,
@@ -134,7 +134,13 @@ import {
 } from './rules.ts'
 import { own, type Ready, ready, settle } from './declared.ts'
 import { state } from './state.ts'
-import { queries, reader as reading, retained } from './read.ts'
+import {
+  branchOn,
+  branchReads,
+  queries,
+  reader as reading,
+  retained,
+} from './read.ts'
 import { NeedsWrite, rehearsing } from './admission.ts'
 import { referenced, takes } from './tool.ts'
 import { prune } from './prune.ts'
@@ -167,6 +173,9 @@ let overlaid = (
 
 /** The options one `apply()` call can pass. */
 export type ApplyOpts = {
+  /** Write on this branch ({@link Graph.branches}) rather than main, through
+   * the branch's own graph. */
+  branch?: number
   /** A runtime activity on this graph, not an entity ID or persisted field. */
   parent?: string
   /** the caller is trusted server code: server-owned properties are accepted */
@@ -211,6 +220,7 @@ export type ApplyOpts = {
 }
 
 let applyKeys = {
+  branch: true,
   parent: true,
   trusted: true,
   stamp: true,
@@ -308,6 +318,9 @@ export type Options = {
    * takes them only once it says it answers, and they are answered here until
    * then: the read workers start beside the host, and nothing waits on them. */
   reader?: Lent
+  /** the branches of this graph's storage, each with its graph, where its
+   * host keeps them: a read or write naming a `branch` runs on that graph */
+  branches?: GraphBranches
 }
 
 /** Reads answered on another connection, lent to a graph. */
@@ -426,6 +439,24 @@ export type Graph = {
    * the owning adapter's ordinary dry run. Returns composed checked patches,
    * including rule outputs, rewrites and stamps. */
   admit: (bundles: Bundle[], opts?: AdmitOpts) => Bundle[] | Promise<Bundle[]>
+  /** The graph's branches, where its host gives them ({@link
+   * Options.branches}). A read or write naming one (`branch`) runs on that
+   * branch's graph. */
+  branches?: GraphBranches
+}
+
+/** A graph's branches: its storage's ({@link Storage.branches}), and the
+ * graph that runs on each. */
+export type GraphBranches = {
+  make: () => Promise<Branch>
+  list: () => Promise<Branch[]>
+  /** forget a branch, its writes, and its graph */
+  drop: (id: number) => Promise<void>
+  /** Branch `id`'s graph: this one's words, plugins and rules over the
+   * branch's store, each plugin bound to that store, as the host composes it
+   * (@yaks/cli). Its writes stay on the branch and reach no effect, since
+   * nothing outside the branch acts on what it holds until it is merged. */
+  on: (id: number) => Promise<Graph>
 }
 
 /** A graph's data interface, whether its storage is local or another thread
@@ -1582,6 +1613,12 @@ export let graph = (opts: Options): Graph => {
     admission = false,
   ): Bundle[] | Promise<Bundle[]> => {
     applyOptions(o, admission)
+    if (o.branch !== undefined) {
+      let { branch, deferEffects: _, ...rest } = o
+      return on(branch).then((b) =>
+        admission ? b.admit(bundles, rest) : b.apply(bundles, rest)
+      )
+    }
     let c = peek(g)
     if (!c) return applying(bundles, o, undefined, admission)
     let epoch = recording(c)
@@ -1667,6 +1704,17 @@ export let graph = (opts: Options): Graph => {
     })
   }
 
+  let { branches } = opts
+  let on = branchOn(branches)
+  let main = queries(
+    () => g,
+    lending(opts.reader, {
+      read: (q, o) => reads.read(q, o),
+      rows: (q, o) => reads.rows(q, o),
+      get: (ids, comps, o) => reads.get(ids, comps, o),
+    }),
+  )
+
   let g: Graph = {
     get vocab() {
       return vocab
@@ -1712,16 +1760,10 @@ export let graph = (opts: Options): Graph => {
       return g
     },
     install: () => storage.install(),
-    ...queries(
-      () => g,
-      lending(opts.reader, {
-        read: (q, o) => reads.read(q, o),
-        rows: (q, o) => reads.rows(q, o),
-        get: (ids, comps, o) => reads.get(ids, comps, o),
-      }),
-    ),
+    ...branchReads(main, on),
     apply,
     admit: (bundles, o) => apply(bundles, { ...o, check: true }, true),
+    ...branches ? { branches } : {},
   }
   return g
 }

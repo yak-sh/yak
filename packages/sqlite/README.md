@@ -1430,7 +1430,15 @@ which entities it holds. Property edits keep the same membership span.
 Installation repairs a missing historical index from the versions already held.
 Text search reads the live text. An entity's spine is not versioned: one minted
 after the transaction a mode reads reads as an empty identity.
-[history_test.ts](./history_test.ts) shows each.
+
+A store with history has `branches` (./branches.ts): `make()` writes a row of
+the branch table and copies nothing, `list()` answers every branch, and
+`drop(id)` deletes the branch's rows beside the live tables. An entity a branch
+makes has a spine on main, pointed at the archetype of nothing, since on main it
+holds nothing; `make()` makes sure main keeps that archetype. Reading and
+writing on a branch is its host's: @yaks/cli composes a host on each branch a
+call names, so every plugin binds to the branch's connection (@yaks/graph
+`GraphBranches`). [history_test.ts](./history_test.ts) shows each.
 
 ## Limits
 

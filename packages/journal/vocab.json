@@ -158,6 +158,42 @@
       "positional": [
         "entity"
       ]
+    },
+    "branch_new": {
+      "tool": true,
+      "noun": "branch",
+      "verb": "new",
+      "title": "Make a branch",
+      "description": "Fork the whole graph at main's newest transaction; nothing is copied. Answers the branch: its id, the transaction it forked at (fork) and when. Pass the id as branch to graph_query, graph_show and graph_apply to read and write on it; main never sees its writes, and they reach no effect. Needs @yaks/journal with versions on.",
+      "input": {}
+    },
+    "branch_list": {
+      "tool": true,
+      "noun": "branch",
+      "verb": "list",
+      "title": "List branches",
+      "description": "Every branch of the graph, oldest first: its id, the transaction of main it forked at (fork) and when it was made.",
+      "input": {},
+      "readOnly": true
+    },
+    "branch_delete": {
+      "tool": true,
+      "noun": "branch",
+      "verb": "delete",
+      "title": "Delete a branch",
+      "description": "Forget a branch and everything written on it; main is untouched. Answers the branch as it was.",
+      "input": {
+        "id": {
+          "type": "integer",
+          "description": "The branch's id, as branch_new and branch_list give it."
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "positional": [
+        "id"
+      ]
     }
   },
   "kinds": {

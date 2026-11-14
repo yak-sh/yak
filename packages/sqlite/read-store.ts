@@ -14,6 +14,8 @@ import { plan } from './plan.ts'
 import { burying } from './buried.ts'
 import { measure } from './measure.ts'
 import { bindings } from './rules.ts'
+import { branching } from './branches.ts'
+import type { History } from './history.ts'
 
 /** Bind every committed-store capability without admitting write callbacks.
  * Index plugins receive the same statement, revision and schema descriptions
@@ -21,7 +23,7 @@ import { bindings } from './rules.ts'
 export let storage = (
   driver: Driver,
   vocab: Vocab,
-  base: BindOpts = {},
+  base: BindOpts & { history?: History } = {},
 ): Store => {
   let opts = options(driver, vocab, base)
   let sql = statements(driver)
@@ -31,6 +33,8 @@ export let storage = (
   }
   return {
     ...reader(driver, vocab, base),
+    // Listed here; made and dropped by a writer.
+    ...base.history ? { branches: branching(driver, base.history) } : {},
     statements: {
       ...sql,
       atomic: (body) => unit(driver, body, 'read'),

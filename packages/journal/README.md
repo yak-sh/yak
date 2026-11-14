@@ -191,8 +191,8 @@ Add the package to a compatible `yak` plugin configuration:
 ```
 
 `@yaks/journal/graph` creates the SQL tables on the host's connection and
-returns the journal plugin. `@yaks/journal/vocab` declares `_tx`, `_change` and
-the `history` tool, and `@yaks/journal/tools` implements the tool.
+returns the journal plugin. `@yaks/journal/vocab` declares `_tx`, `_change`, the
+`history` tool and the branch tools, and `@yaks/journal/tools` implements them.
 
 ```sh
 yak history T-5 -n 10
@@ -221,6 +221,16 @@ set false:
   `journal_tx` row's id. A store keeping versions requires the journal from then
   on (`required`), and can be read as of a transaction or on a branch:
   `YAK_AT=<id>` or `YAK_BRANCH=<id>` opens a `yak` command's graph that way.
+  `branch_new`, `branch_list` and `branch_delete` make, list and delete
+  branches, and `graph_query`, `graph_show` and `graph_apply` read and write on
+  one given its `branch`, which main never sees and no effect reaches:
+
+  ```sh
+  yak branch new
+  yak graph apply --branch 1 --bundles '[{"entity":{"eid":"$d"},"doc":{"title":"draft"}}]'
+  yak graph query .doc.title=draft --branch 1
+  yak branch delete 1
+  ```
 
 Naming neither is the journal before versions: attribution, with every value as
 a `journal_field` row.
@@ -450,7 +460,7 @@ The root exports `ddl`, `dropDdl`, `log`, `journal`, `backed`, `applied`,
 | ----------------------- | ---------------------------------------------------------------------- |
 | `@yaks/journal/vocab`   | `journalDoc`, `docs` and `backed`: `_tx`, `_change`, `kept`, `history` |
 | `@yaks/journal/graph`   | `schema()` its tables; `plugins(host)` the hooks; `logFor(host)` a log |
-| `@yaks/journal/tools`   | `runs(host)` implements the history tool                               |
+| `@yaks/journal/tools`   | `runs(host)` implements the history and branch tools                   |
 | `@yaks/journal/service` | the daily duty that keeps a `kept` row                                 |
 | `@yaks/journal/views`   | the History page and its place in the sidebar                          |
 | `@yaks/journal/kept`    | reading a `kept` row: history's bytes, changes, per change and per day |

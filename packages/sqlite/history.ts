@@ -217,13 +217,14 @@ export let seeds = (vocab: Vocab, made: (table: string) => boolean): Stmt[] => [
 ]
 
 /** The branch table: a branch's parent (0 is main), the transaction it forked
- * at, and when. Making one writes a row and copies nothing. */
+ * at, and when. Making one writes a row and copies nothing. A dropped
+ * branch's id is never given again, so an id names one branch for good. */
 export let BRANCH_DDL: CreateTable = {
   t: 'create table',
   name: BRANCHES,
   ifNot: true,
   cols: [
-    { name: 'id', type: 'integer', pk: true },
+    { name: 'id', type: 'integer', pk: true, autoincrement: true },
     { name: 'parent', type: 'integer', notNull: true, default: lit(0) },
     { name: 'fork', type: 'integer', notNull: true },
     { name: 'at', type: 'text', notNull: true },

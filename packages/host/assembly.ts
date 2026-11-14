@@ -1,5 +1,12 @@
 /** Assemble a graph from role-selected facets and capabilities lent by its host. */
-import type { Actor, Bundle, Comp, Graph, NamedTool } from '@yaks/graph'
+import type {
+  Actor,
+  Bundle,
+  Comp,
+  Graph,
+  GraphBranches,
+  NamedTool,
+} from '@yaks/graph'
 import type { graph } from '@yaks/graph'
 import { type Clock, groupBy } from '@yaks/fp'
 import { toolName } from '@yaks/graph/call'
@@ -74,6 +81,13 @@ export type Binding = {
   extend?: (host: Host) => Extension[]
   /** Construct the graph with any additional hooks and options the host owns. */
   graph?: typeof graph
+  /** The branches of the host's store, each with the graph its own host
+   * composes over it (@yaks/graph `GraphBranches`), asked once the store is
+   * bound. */
+  branches?: (host: Host) => GraphBranches | undefined
+  /** A branch's host: its graph's writes reach no effect, since nothing
+   * outside the branch acts on what it holds until it is merged. */
+  unobserved?: boolean
   /** Bring the store to its composed schema, given the statements the graph
    * plugins need beside the store's own, after extensions have bound and
    * before graph plugins are asked. A reader leaves it out. */
@@ -586,6 +600,7 @@ export let assemble = (
         )
       }
       part?.('graph')
+      let branching = binding.branches?.(host)
       g = (binding.graph ?? prepared.factories.graph)({
         storage: host.storage,
         vocab,
@@ -596,6 +611,8 @@ export let assemble = (
         ...clock ? { clock } : {},
         plugins: [...contributed, fx],
         ...lent.reader ? { reader: lent.reader } : {},
+        ...branching ? { branches: branching } : {},
+        ...binding.unobserved ? { deferEffects: () => {} } : {},
       })
       binding.ready?.(host)
       part?.('bindings')

@@ -28,7 +28,7 @@ import type {
 } from './storage.ts'
 import { detached } from './storage.ts'
 import type { Plugin, ReadContext, ReadView } from './plugin.ts'
-import type { Graph, Options } from './graph.ts'
+import type { Graph, GraphBranches, Options } from './graph.ts'
 import { Refused } from './errors.ts'
 import { minted } from './mint.ts'
 import { addressing } from './said.ts'
@@ -745,6 +745,42 @@ export let queries = (
   }
 }
 
+/** Branch `id`'s graph, from a graph's branches; refused for a graph with
+ * none. */
+export let branchOn =
+  (branches?: GraphBranches) => (id: number): Promise<Graph> => {
+    if (!branches) {
+      throw new Refused(
+        'this graph keeps no branches: its store keeps no history ' +
+          '(list @yaks/journal with versions on)',
+      )
+    }
+    return branches.on(id)
+  }
+
+/** A graph's reads, each one naming a `branch` read on that branch's graph
+ * instead. */
+export let branchReads = (
+  own: Pick<Graph, 'read' | 'rows' | 'get'>,
+  on: (id: number) => Promise<Graph>,
+): Pick<Graph, 'read' | 'rows' | 'get'> => ({
+  read: (q, o) => {
+    if (o?.branch === undefined) return own.read(q, o)
+    let { branch, ...rest } = o
+    return on(branch).then((b) => b.read(q, rest))
+  },
+  rows: (q, o) => {
+    if (o?.branch === undefined) return own.rows(q, o)
+    let { branch, ...rest } = o
+    return on(branch).then((b) => b.rows(q, rest))
+  },
+  get: (ids, comps, o) => {
+    if (o?.branch === undefined) return own.get(ids, comps, o)
+    let { branch, ...rest } = o
+    return on(branch).then((b) => b.get(ids, comps, rest))
+  },
+})
+
 /** A graph over committed storage: reads keep every registered hook, while
  * attempted writes refuse before preparation, admission or storage callbacks. */
 export let graph = (opts: Options): Graph => {
@@ -763,9 +799,14 @@ export let graph = (opts: Options): Graph => {
       return at ? retained(outside, () => at) : outside
     },
   })
+  let { branches } = opts
   let g: Graph = {
     ...reads,
-    ...queries(() => g, opts.reader ?? reads),
+    ...branchReads(
+      queries(() => g, opts.reader ?? reads),
+      branchOn(branches),
+    ),
+    ...branches ? { branches } : {},
     vocab: opts.vocab,
     storage,
     outside,
