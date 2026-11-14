@@ -660,9 +660,9 @@ let armed = async (o: { ctx: ReturnType<typeof state> }) =>
   (await o.ctx.storage.getAlarm()) != null
 
 // What the wiped incarnation opened knew the file before it was emptied, so
-// the object restarts rather than read tables that are gone (T-222).
-// What the work under way fails with as it restarts is a reset, which the
-// instance reports none of.
+// the object restarts rather than read tables that are gone (T-222): once
+// the kernel has its answer, never under the wipe that asked, and what the
+// work under way fails with is a reset, which the instance reports none of.
 test('a wiped Builder drops its alarm and restarts, and the next incarnation finds nothing', async () => {
   let o = await seeded()
   await (await posted(o, '/operator/conversation')).text()
@@ -679,9 +679,10 @@ test('a wiped Builder drops its alarm and restarts, and the next incarnation fin
     }),
   )
   await new Promise((go) => setTimeout(go, 1))
+  let before = o.ctx.pitr.aborts
   assertEquals(
-    [wiped.status, await armed(o), o.ctx.pitr.aborts, failed],
-    [200, false, 1, [true]],
+    [await wiped.json(), before, await armed(o), o.ctx.pitr.aborts, failed],
+    [{ ok: true }, 0, false, 1, [true]],
   )
   assertEquals(new Builder(o.ctx, o.env).said(), [])
 })
