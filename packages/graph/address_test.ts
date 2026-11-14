@@ -79,8 +79,17 @@ test('a write naming nothing is refused before anything is minted', () => {
   assertEquals([get(one, 'B-9'), get(one, 'r2')], [undefined, undefined])
 })
 
-test('a read naming nothing is refused too', () => {
-  assertThrows(() => g(numbered).read('.review.book=B-9'), Refused)
+test('a read compares an id naming nothing as written', () => {
+  // What a reference stores need not be an id: a letter's `mail.reply_to`
+  // keeps a Message-ID, and one may be written `B-9`.
+  let store = ram(books)
+  store.tx((tx) =>
+    tx.patch([{ entity: { eid: 'r9' }, review: { book: 'B-9' } }])
+  )
+  let one = graph({ storage: store, vocab: books, plugins: [numbered] })
+  let [r9] = one.read('.review.book=B-9') as Bundle[]
+  assertEquals(r9.entity.eid, 'r9')
+  assertEquals(one.read('.review.book=B-10'), [])
 })
 
 // A store that proves a revision, which every write moves, and a plugin that

@@ -689,7 +689,10 @@ them. Last, an id no plugin resolved that is a short handle copied without its
 `#` ([@yaks/id](../id/README.md) `BARE`, such as `e854bf7dc0`) names the entity
 whose eid starts that way, unless a document carries it as its exact title; one
 several eids start with is refused the same way. Addressing also runs on writes
-and on queries that name an eid or reference. Persistent names belong to
+and on queries that name an eid or reference. A query keeps an id that names
+nothing as written, since a reference may store a string that is no entity's id
+(a letter's `mail.reply_to` holds a Message-ID, which may read `outbox-1`): it
+matches the rows storing that string. Persistent names belong to
 [@yaks/alias](../alias/README.md) and [@yaks/key](../key/README.md).
 
 `g.named(ids)` answers the same, but leaves out an id that names nothing or

@@ -396,7 +396,8 @@ export type Graph = {
    * argument declared `ref: 'session'`): a plugin may answer to a key only
    * that kind has, such as a transcript's own id. With `opts`, the ids are
    * asked as that reader reads, under its scope, so one naming what is hidden
-   * from it names nothing; a read addresses its own ids so. */
+   * from it names nothing; a read addresses its own ids so, keeping one that
+   * names nothing as written (a stored Message-ID may read `outbox-1`). */
   address: (
     ids: string[],
     kind?: string,

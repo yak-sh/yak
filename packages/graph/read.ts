@@ -73,6 +73,11 @@ let fits = (id: string, eids: Eid[]): string =>
   `${id} names ${eids.length} entities (${eids.slice(0, 3).join(', ')}` +
   `${eids.length > 3 ? ', …' : ''}); give more of it`
 
+/** How strictly an address holds an id to naming one entity: `one` refuses
+ * an id naming nothing or several; `query` keeps one naming nothing as
+ * written and refuses several; `words` leaves out both. */
+type Strict = 'one' | 'query' | 'words'
+
 /** How many addressed ids a reader keeps for one revision of its store. */
 let ANSWERED = 10_000
 
@@ -173,30 +178,35 @@ export let reader = (opts: {
   // hundred in a hundred reads. A store that proves no revision is asked
   // every time.
   let answered: { at: unknown; ids: Map<string, Eid> } | undefined
-  // Prose asks `loose`ly (`named`): an id typed in a sentence that names
-  // nothing, or several, is words, and is left out rather than refused.
+  // How strictly an id is held to naming one entity (`Strict`): a caller's
+  // ids and a write's refuse one naming nothing or several. A query's
+  // (`aimed`) keeps one naming nothing as written, since a reference property
+  // may store a string that is no entity's id (a letter's `mail.reply_to`
+  // holding a Message-ID such as `outbox-1`), and the query asks for that
+  // string. Prose (`named`) leaves out both: an id typed in a sentence that
+  // names nothing, or several, is words.
   let address = (
     ids: string[],
     kind?: string,
     readOpts?: ReadOpts,
-    loose = false,
+    strict: Strict = 'one',
   ): Map<string, Eid> | Promise<Map<string, Eid>> => {
     if (!ids.length || !plugins.some((p) => p.address) && !ids.some(handled)) {
       return new Map<string, Eid>()
     }
     return continuing(storage.revision?.(), (at) => {
-      if (at === undefined) return resolve(ids, kind, readOpts, loose)
+      if (at === undefined) return resolve(ids, kind, readOpts, strict)
       if (answered?.at !== at || answered.ids.size > ANSWERED) {
         answered = { at, ids: new Map() }
       }
       let held = answered.ids
       // The call's own cancellation and trace parent change no answer.
       let { signal: _signal, parent: _parent, ...asking } = readOpts ?? {}
-      let as = JSON.stringify([kind ?? null, asking, loose]) + '\n'
+      let as = JSON.stringify([kind ?? null, asking, strict]) + '\n'
       let fresh = [...new Set(ids.filter((id) => !held.has(as + id)))]
       return continuing(
         fresh.length
-          ? resolve(fresh, kind, readOpts, loose)
+          ? resolve(fresh, kind, readOpts, strict)
           : new Map<string, Eid>(),
         (found) => {
           for (let id of fresh) held.set(as + id, found.get(id) ?? id)
@@ -215,7 +225,7 @@ export let reader = (opts: {
     ids: string[],
     kind?: string,
     readOpts?: ReadOpts,
-    loose = false,
+    strict: Strict = 'one',
   ): Map<string, Eid> | Promise<Map<string, Eid>> => {
     let asks = plugins.flatMap((p) => p.address ?? [])
     let outside = outsideRead()
@@ -250,8 +260,9 @@ export let reader = (opts: {
       let nothing: string[] = []
       let refusals: string[] = []
       for (let [id, eid] of at) {
-        if (eid == null) nothing.push(id)
-        else if (typeof eid != 'string') refusals.push(fits(id, eid))
+        if (eid == null) {
+          if (strict == 'one') nothing.push(id)
+        } else if (typeof eid != 'string') refusals.push(fits(id, eid))
         else found.set(id, eid)
       }
       if (nothing.length) {
@@ -260,13 +271,15 @@ export let reader = (opts: {
             'nothing',
         )
       }
-      if (refusals.length && !loose) throw new Refused(refusals.join('; '))
+      if (refusals.length && strict != 'words') {
+        throw new Refused(refusals.join('; '))
+      }
       return found
     })
   }
 
   // Texts as prose is stored (Graph.prose): the ids the store's Prose finds
-  // in them asked in one loose read, and the texts handed back with those it
+  // in them asked as words in one read, and the texts handed back with those it
   // is sure of swapped for their eids.
   let prose = (
     texts: string[],
@@ -276,7 +289,7 @@ export let reader = (opts: {
     let ids = p ? [...new Set(texts.flatMap(p.typed))] : []
     if (!p || !ids.length) return texts
     return continuing(
-      address(ids, undefined, undefined, true),
+      address(ids, undefined, undefined, 'words'),
       (at) => at.size ? p.stored(texts, at, outsideRead(), was) : texts,
     )
   }
@@ -285,7 +298,7 @@ export let reader = (opts: {
   // words searched for as prose is stored (`worded`).
   let aimed = (query: Query, readOpts?: ReadOpts) =>
     continuing(
-      aim(query, (ids: string[]) => address(ids, undefined, readOpts)),
+      aim(query, (ids: string[]) => address(ids, undefined, readOpts, 'query')),
       worded,
     )
 
@@ -610,7 +623,7 @@ export let reader = (opts: {
 
   return {
     address: (ids, kind, o) => address(ids, kind, o && scoped(o)),
-    named: (ids) => address(ids, undefined, undefined, true),
+    named: (ids) => address(ids, undefined, undefined, 'words'),
     prose,
     scope: scoped,
     ask: (q, o) => ask(q, scoped(o)),
