@@ -4306,6 +4306,9 @@ importers:
       '@yaks/wake':
         specifier: 0.2.24
         version: link:../wake
+      preact-render-to-string:
+        specifier: 6.7.0
+        version: 6.7.0(preact@10.29.7)
 
   packages/spawn:
     dependencies:

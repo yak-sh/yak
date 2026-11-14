@@ -5,7 +5,8 @@
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { Host } from '@yaks/markdown'
-import { drawLines, type Line, type Lines, opening } from './operator-draw.ts'
+import { drawLines, type Line, type Lines } from './operator-draw.ts'
+import { opening } from '@yaks/session/conversation'
 import {
   Aside,
   Glance,

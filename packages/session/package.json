@@ -9,6 +9,7 @@
     "./who": "./who.ts",
     "./tools": "./tools.ts",
     "./views": "./views.ts",
+    "./conversation": "./conversation.ts",
     "./service": "./service.ts",
     "./routes": "./routes.ts",
     "./parts": "./parts.ts",
@@ -70,6 +71,7 @@
     "@yaks/sqlite": "0.2.30",
     "@yaks/testing": "0.2.30",
     "@yaks/topic": "0.2.23",
-    "@yaks/wake": "0.2.24"
+    "@yaks/wake": "0.2.24",
+    "preact-render-to-string": "6.7.0"
   }
 }

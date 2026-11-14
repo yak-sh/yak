@@ -18,7 +18,7 @@ import { chatPath, managePath } from '@yaks/platform/routes'
 import { spaceHost } from '@yaks/platform/host'
 import type { Update } from './operator-updates.ts'
 import { lastDay } from './views.ts'
-import { markdown } from './operator-draw.ts'
+import { markdown } from '@yaks/session/conversation'
 import { caught } from './defects.ts'
 import type { List } from './talk-beside.ts'
 

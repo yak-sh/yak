@@ -1,20 +1,52 @@
-import { Attachments, Notice, Pairs, Transcript } from '@yaks/ui/parts'
-// How the Operator's chat draws a conversation's lines: the person's words,
-// the replies, each tool call as a short line in plain words that opens on
-// what it asked for and what came back, and what each model was told. Pure,
-// and the one drawing of them: the Builder object draws a conversation with
-// it for the page (operator-view.ts `talk`), and the page's socket sends each
-// line a step changed as the entries it draws (`Lines`), which the chat page
-// (operator-rows.ts) and the iOS shell (native/operator.tsx) draw with it
-// again, each with its own host. It imports no server, so it bundles for a
-// browser and for the shell alike.
+// How the Operator's chat draws a conversation's lines. A line is drawn by
+// @yaks/session's conversation (`kinds`: a person's words, a reply, a tool
+// call, a failure, a stop); what only the Operator's rows say is drawn here,
+// as kinds ahead of those: the channel words came by and the files with them,
+// a call's turns, a contact card, a helper stopped or heard back from, a line
+// the platform wrote, and an outside agent's chat; and here too what each
+// model was told, the frame every line sits in, and a call's turn folded
+// under the caller's words. Pure, and the one drawing of them: the Builder
+// object draws a conversation with it for the page (operator-view.ts `talk`),
+// and the page's socket sends each line a step changed as the entries it
+// draws (`Lines`), which the chat page (operator-rows.ts) and the iOS shell
+// (native/operator.tsx) draw with it again, each with its own host. It
+// imports no server, so it bundles for a browser and for the shell alike.
 import type { Bundle, Comp } from '@yaks/graph/bundle'
-import { type Step, stepOf, type Steps } from '@yaks/tools/title'
-import { blocks, Host, type Options, parse } from '@yaks/markdown'
 import { HUMAN } from '@yaks/id'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
-import { useContext } from 'preact/hooks'
-import { Body, Drop, Icon, Menu, More, Rows } from '@yaks/ui/parts'
+import {
+  Attachments,
+  Body,
+  Drop,
+  Icon,
+  Menu,
+  More,
+  Notice,
+  Rows,
+  Transcript,
+} from '@yaks/ui/parts'
+import { define, type Registry } from '@yaks/render'
+import {
+  type Beside,
+  draw,
+  joined,
+  type Kind,
+  kind,
+  kinds as conversation,
+  markdown,
+  type Named,
+  namer,
+  type Names,
+  type Naming,
+  readable,
+  reply,
+  type Said,
+  step,
+  theirs,
+  trouble,
+  words,
+  yours,
+} from '@yaks/session/conversation'
 import { type HelperLine, Work } from './operator-aside.ts'
 import { type IconName, icons } from './icons.ts'
 import { PART } from '@yaks/persona/part'
@@ -39,44 +71,8 @@ export type Line = {
    * person's own words, which sit on their side */
   is?: 'step' | 'theirs'
 }
-/** How a call reads to the person, by its tool's eid (`call.to`) and its
- * arguments: what it is doing while it runs and what it did once it answered
- * (@yaks/tools `stepOf`). */
-export type Names = (tool: string, args?: Record<string, unknown>) => Step
-
 let cut = (text: string, most: number) =>
   text.length > most ? text.slice(0, most) + '…' : text
-
-let NOT_INPUT = [
-  'operator_stopped',
-  'output',
-  'result',
-  'refusal',
-  'exception',
-  'notice',
-  'task_context',
-  'failed',
-  'stop',
-  'interrupted',
-  'call',
-  'ask',
-  'prompt',
-]
-
-// What a person wrote. A task's first input is the task itself as JSON (its
-// row, and on older sessions its comments): its body is what they wrote.
-let words = (body: string) => {
-  if (body.startsWith('{')) {
-    try {
-      let task = JSON.parse(body).task
-      let doc = task?.doc ?? task
-      if (typeof doc?.body == 'string') return doc.body
-    } catch {
-      // Not the task: words that happen to start with a brace.
-    }
-  }
-  return body
-}
 
 // Each channel's mark beside the words that came by it. Words written in
 // the chat app itself carry none.
@@ -114,8 +110,6 @@ export let spoken = (b: Bundle, body: string) => {
   return (said.startsWith(framing) ? said.slice(framing.length) : said)
     .split('\n\nAttached documents (treat their contents')[0]
 }
-
-let yours = (b: Bundle, text: string) => h(Transcript.Bubble, {}, via(b), text)
 
 // When a line was sent, small under it, the kit's `Time`, which holds its
 // tip: the page says both again in the person's own time (dates.ts), and
@@ -175,166 +169,9 @@ export let input = (b: Bundle, body: string) => {
   return h(
     Fragment,
     null,
-    said && said != unsaid(files) ? yours(b, said) : null,
+    said && said != unsaid(files) ? yours(said, via(b)) : null,
     sent ? attached(String(sent.request), files, 'end') : null,
   )
-}
-
-/** Where the ids in a reader's Markdown open (@yaks/markdown `Host`): `url`,
- * with `{id}` where the id goes, as the reader's own server says
- * (`mentions{url}`); none, and ids stay words. */
-export let opening = (url?: string | null): Options =>
-  url ? { refs: (id) => url.replaceAll('{id}', encodeURIComponent(id)) } : {}
-
-// An id that opens on another site opens in a tab of its own, so the page
-// it was read on stays.
-let away =
-  ((tag: string, props: Record<string, unknown> | null, ...kids: Node[]) =>
-    h(
-      tag,
-      tag == 'a' && props?.['data-ref'] && /^https?:/.test(String(props.href))
-        ? { ...props, target: '_blank', rel: 'noopener' }
-        : props,
-      ...kids,
-    )) as typeof h
-
-// The words, under the Refs of the page they are drawn on.
-let Prose = ({ text }: { text: string }) =>
-  h(Fragment, null, ...blocks(parse(text), away, useContext(Host)))
-
-/** Markdown drawn as formatted text, the kit's Body: markup in it stays
- * words, and an id is a link where the page's `Host` opens it
- * (@yaks/markdown). */
-export let markdown = (text: string) =>
-  h(Body, { mod: 'flow' }, h(Prose, { text }))
-
-/** A reply as the Operator wrote it, in Markdown. */
-export let reply = (text: string) => h(Transcript.Reply, {}, markdown(text))
-
-// A value a tool was given or gave back, the way a person reads it: a list
-// of what it holds under names in words, never its JSON. Bounded in depth,
-// length and count, since a tool can answer with a whole file.
-let readable = (value: unknown, depth = 0): Node => {
-  if (typeof value == 'string' && /^\s*[[{]/.test(value)) {
-    try {
-      return readable(JSON.parse(value), depth)
-    } catch {
-      // Words that happen to start with a bracket.
-    }
-  }
-  if (value == null || value === '') {
-    return h(More.Value, {}, 'Nothing')
-  }
-  if (typeof value != 'object') {
-    return h(More.Value, {}, cut(String(value), 600))
-  }
-  if (depth > 2) return h(More.Value, {}, '…')
-  let list = Array.isArray(value)
-    ? value.map((v, i) => [String(i + 1), v] as const)
-    : Object.entries(value)
-  if (!list.length) return h(More.Value, {}, 'Nothing')
-  let more = list.length - 12
-  return h(
-    Pairs,
-    { mod: 'nested' },
-    list.slice(0, 12).map(([k, v]) =>
-      h(
-        Pairs.Row,
-        {},
-        h(
-          Pairs.Key,
-          {},
-          Array.isArray(value)
-            ? k
-            : k.replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase()),
-        ),
-        h(Pairs.Value, {}, readable(v, depth + 1)),
-      )
-    ),
-    more > 0 ? h(Pairs.Row, {}, h(Pairs.Value, {}, `and ${more} more`)) : null,
-  )
-}
-
-// An error's own words, laid out to read: JSON indented, after the status a
-// provider puts before it ("400 {…}").
-let laid = (detail: unknown) => {
-  if (typeof detail != 'string') return JSON.stringify(detail, null, 2)
-  let [, head, rest] = detail.match(/^(\d{3} )?\s*([[{][\s\S]*)$/) ?? []
-  if (rest == null) return detail
-  try {
-    return (head ?? '') + JSON.stringify(JSON.parse(rest), null, 2)
-  } catch {
-    return detail
-  }
-}
-
-/** The one way the chat draws an error: what happened and what to do, in
- * words, with what the error said only inside a closed "Details". */
-export let trouble = (said: string, detail?: unknown) =>
-  h(
-    Transcript.Error,
-    {},
-    h(Notice, { mod: 'negative' }, said),
-    detail == null || detail === '' ||
-      (typeof detail == 'object' && !Object.keys(detail).length)
-      ? null
-      : step('Details', '', h(Body.Source, { mod: 'detail' }, laid(detail))),
-  )
-
-// The one way the chat draws anything that opens: a step, by what it did,
-// opening on what it holds; `on` while it runs, `no` once it did not work. A
-// fold in a fold is the same fold.
-let step = (name: Node, mod: '' | 'on' | 'no', ...inside: Node[]) =>
-  h(
-    More,
-    { mod: ['quiet', mod] },
-    h(More.Summary, {}, name),
-    h(More.Body, {}, ...inside),
-  )
-
-// A step that did not work: "Tried texting Jeff".
-let tried = (doing: string) =>
-  'Tried ' + doing.replace(/…$/, '').replace(/^./, (c) => c.toLowerCase())
-
-// A tool call and, once it came back, its answer: one row, under the call's
-// id, so the answer takes the call's place on the page. The files it brought
-// back (an image it made) are drawn under it, open.
-let tool = (
-  call: Bundle,
-  names: Names,
-  result?: Bundle,
-  told: Node[] = [],
-) => {
-  let c = comp(call, 'call')!
-  let said = names(String(c.to), c.args as Record<string, unknown>)
-  let ok = result ? !comp(result, 'refusal') && !result.exception : null
-  let files = (comp(result, 'operator_files')?.files ?? []) as Sent[]
-  let name = ok == null ? said.doing : ok ? said.done : tried(said.doing)
-  let problem = 'This step did not work, so the Operator went on without it.'
-  let drawn = step(
-    name,
-    ok == null ? 'on' : ok ? '' : 'no',
-    h(More.Label, {}, 'What it asked for'),
-    readable(c.args ?? {}),
-    ...told,
-    ok == null ? null : ok
-      ? [
-        h(More.Label, {}, 'What came back'),
-        readable(String(comp(result, 'content')?.body ?? '')),
-      ]
-      : trouble(
-        problem,
-        comp(result, 'content')?.body ?? result!.exception ??
-          comp(result, 'refusal'),
-      ),
-  )
-  return {
-    node: files.length
-      ? h(Fragment, null, drawn, attached(result!.entity.eid, files))
-      : drawn,
-    text: ok === false ? `${name}\n\n${problem}` : undefined,
-    is: 'step' as const,
-  }
 }
 
 // A helper session's end, told to the Operator (@yaks/session `deliverChild`):
@@ -640,26 +477,6 @@ export type Seen = {
   mentions?: string
 } & Naming
 
-/** What the calls' steps are said from: each tool a call points at
- * (`call.to`) by its eid, as its `tool` component names it, and whom the
- * calls work for. */
-export type Naming = {
-  tools?: Record<string, Named>
-  person?: string | null
-}
-
-/** What a tool is called, of its `tool` component: its name, title and
- * steps (@yaks/tools `stepOf`). */
-export type Named = { name?: string; title?: string; step?: Steps }
-
-/** How the calls read, from what names them. */
-export let namer = ({ tools = {}, person }: Naming): Names => (tool, args) =>
-  stepOf(
-    tools[tool] ?? { title: 'Use a tool' },
-    args,
-    person ? { person } : undefined,
-  )
-
 // What a helper was told, all its asks', in one place.
 export let helped = (h: Helper, offers?: Offers, page?: Drawn) =>
   briefed(h.entries, 'the helper', offers, page)
@@ -758,12 +575,6 @@ export let lines = (
     metadata,
   }: Seen = {},
 ): Line[] => {
-  let results = new Map(
-    entries.filter((b) => b.result).map((b) => [
-      String(comp(b, 'result')!.call),
-      b,
-    ]),
-  )
   let page: Drawn = new Set()
   let sources = new Map<string, string[]>()
   let prompts = new Map(
@@ -793,31 +604,35 @@ export let lines = (
   let folds = new Map<string, Fold>()
   let drawn: (Line | Fold)[] = []
   let byId = new Map(entries.map((b) => [b.entity.eid, b]))
-  let said = (id: string) => !!comp(byId.get(id), 'operator_call')?.said
+  let aloud = (id: string) => !!comp(byId.get(id), 'operator_call')?.said
   let wrap = (line: Line, rows: Bundle[]) =>
     framed({ ...line, node: measured(line.node, metadata?.[line.id]) }, rows)
-  for (let b of entries) {
+  for (let { entry: b, result } of joined(entries)) {
     let id = b.entity.eid
     let body = String(comp(b, 'content')?.body ?? '')
     let told = prompts.get(id)
-    let result = results.get(id)
     let helping = b.call && helpers.some((one) => one.call == id)
     let thread = threads[id]
+    let saying = thread || told ? null : draw(kinds, b, {
+      result,
+      names,
+      under: b.call ? under(id) : [],
+      who: 'the Operator',
+      opens,
+    })
     let unwrapped: Line[] = thread
       ? [{ id, uses: [id], ...threaded(thread) }]
       : told
       ? [{ id, uses: told.uses, node: told.draw(), is: 'step' as const }]
-      : b.call
+      : saying
       ? [{
         id,
-        uses: [
-          ...helping ? before : [],
-          id,
-          ...result ? [result.entity.eid] : [],
-        ],
-        ...tool(b, names, result, under(id)),
+        uses: b.call
+          ? [...helping ? before : [], id, ...result ? [result.entity.eid] : []]
+          : [id],
+        ...saying,
       }]
-      : line(b, id, body, opens)
+      : []
     let these = unwrapped.map((l) => wrap(l, result ? [b, result] : [b]))
     before = sources.get(id) ?? before
     let at = inside.get(id)
@@ -830,7 +645,7 @@ export let lines = (
       // The request opens under the caller's words before it, past what the
       // voice said since, which say it; with none, its own words stand for
       // them.
-      let back = drawn.findLastIndex((l) => 'nodes' in l || !said(l.id))
+      let back = drawn.findLastIndex((l) => 'nodes' in l || !aloud(l.id))
       let last = drawn[back]
       let by = last && !('nodes' in last) && heard(byId.get(last.id)) ||
         { b, said: spoken(b, body) }
@@ -863,10 +678,6 @@ export let lines = (
       .flatMap((h) => context(h).map((l) => ({ ...l, uses: before }))),
   ]
 }
-
-// A person's own words: an input that is none of the other kinds.
-export let theirs = (b: Bundle) =>
-  !!comp(b, 'content')?.body && !NOT_INPUT.some((c) => b[c])
 
 // What a call's talking model asked the Operator (`operator_call.asked`)
 // through the Operator's written answer, by the request each entry belongs
@@ -931,94 +742,101 @@ let Called = ({ said, nodes }: Fold) =>
     h(More.Body, {}, rows(nodes)),
   )
 
-// Any other line: a refusal, a reply, a helper's end, a failure, a stop, or a
-// person's words.
-let line = (
-  b: Bundle,
-  id: string,
-  body: string,
-  opens?: string,
-): Line[] => {
-  let is = (node: Node, text?: string, kind?: Line['is']) => [
-    { id, node, text, uses: [id], is: kind },
-  ]
-  if (b.operator_contact) {
-    return is(
-      b.verified
-        ? h(Notice, {}, 'Your contact is confirmed.')
-        : b.cancelled
-        ? h(
-          Notice,
-          {},
-          'This contact request is no longer active.',
-        )
-        : String(comp(b, 'operator_contact')?.address ?? '').includes('@')
-        ? h(
-          Notice,
-          {},
-          'Check your email for the contact verification code.',
-        )
-        : contactCard(body),
-    )
-  }
-  // A provider's refusal (its own response kept beside it) is said in plain
-  // words; its error waits in Details.
-  if (b.refusal && !b.result && (b.response || !b.output)) {
-    let said =
-      'The Operator could not get an answer from its model, so it stopped before replying. Send your message again to try once more.'
-    return is(
-      trouble(
-        said,
-        body || comp(b, 'response')?.body || comp(b, 'refusal'),
-      ),
-      said,
-    )
-  }
-  if (b.output && body) return is(reply(body))
-  // A line of a call its talking model hears and speaks: theirs, or its own
-  // (old rows, before its own were outputs). Where the call began is the
-  // model's to read.
-  let called = comp(b, 'operator_call')
-  if (called?.began) return []
-  if (called && b.notice && body) {
-    return called.said
-      ? is(reply(spoken(b, body)))
-      : is(input(b, body), undefined, 'theirs')
-  }
-  // A helper the person stopped (operator.ts `stop`, the only stop here),
-  // told to the session that started it in its report or, up the
-  // conversation, in a line of theirs.
-  let stopped = comp(b, 'operator_stopped')?.helper ??
-    (comp(b, 'delivery')?.outcome == 'stopped'
-      ? comp(b, 'delivery')?.child
-      : undefined)
-  if (stopped && !b.result) {
-    let helper = opens
-      ? h('a', { href: `${opens}/${stopped}` }, 'a helper')
-      : 'a helper'
-    return is(
-      h(Notice, {}, 'You stopped ', helper, '.'),
-    )
-  }
-  if (told(b, body)) return [{ id, uses: [id], ...helper(b, body) }]
-  if (b.failed || b.exception) {
-    let said =
-      'Something went wrong, and the Operator stopped before it finished. Send your message again to try once more.'
-    return is(
-      trouble(
-        said,
-        body || b.exception || b.failed,
-      ),
-      said,
-    )
-  }
-  if (b.system && body) return is(system(b, body), undefined, 'step')
-  if (b.stop || b.interrupted || b.cancel) {
-    return is(h(Notice, {}, 'Stopped.'))
-  }
-  if (theirs(b)) return is(input(b, body), undefined, 'theirs')
-  return []
+// What the Operator's kinds of line are drawn with: where a helper's own
+// conversation opens, by its id after `opens/`.
+type Heard = Beside & { opens?: string }
+
+let said = (b: Bundle) => String(comp(b, 'content')?.body ?? '')
+
+// A contact the person asked to add: the card that confirms it, and once it
+// is answered, what came of it.
+let contact = (b: Bundle): Said => ({
+  node: b.verified
+    ? h(Notice, {}, 'Your contact is confirmed.')
+    : b.cancelled
+    ? h(Notice, {}, 'This contact request is no longer active.')
+    : String(comp(b, 'operator_contact')?.address ?? '').includes('@')
+    ? h(Notice, {}, 'Check your email for the contact verification code.')
+    : contactCard(said(b)),
+})
+
+// A line of a call its talking model hears and speaks: theirs, or its own
+// (old rows, before its own were outputs). Where the call began is the
+// model's to read; what it asked of the Operator is the person's words.
+let onCall = (b: Bundle): Said | null | undefined => {
+  let called = comp(b, 'operator_call')!
+  if (called.began) return null
+  if (!b.notice || !said(b)) return undefined
+  return called.said
+    ? { node: reply(spoken(b, said(b))) }
+    : { node: input(b, said(b)), is: 'theirs' }
 }
+
+// A helper the person stopped (operator.ts `stop`, the only stop here), told
+// to the session that started it in its report or, up the conversation, in a
+// line of theirs.
+let halted = (helper: unknown, { opens }: Heard): Said => ({
+  node: h(
+    Notice,
+    {},
+    'You stopped ',
+    opens ? h('a', { href: `${opens}/${helper}` }, 'a helper') : 'a helper',
+    '.',
+  ),
+})
+
+// A helper's end: stopped by the person, or heard back from.
+let delivered = (b: Bundle, heard: Heard) => {
+  let delivery = comp(b, 'delivery')!
+  return delivery.outcome == 'stopped' && delivery.child != null
+    ? halted(delivery.child, heard)
+    : helper(b, said(b))
+}
+
+/** The kinds of line only the Operator's rows have, ahead of every
+ * transcript's (@yaks/session `kinds`): a call's step with the files it
+ * brought back, a contact card, a line of a phone call, a helper stopped or
+ * heard back from, a line the platform wrote, and a person's words with the
+ * channel they came by and the files they sent. */
+let kinds: Registry<Kind<Heard>> = define<Kind<Heard>>([
+  // The files a step brought back (an image it made), open under it.
+  kind('.call', (b, heard) => {
+    let step = draw(conversation, b, heard)!
+    let files = (comp(heard.result, 'operator_files')?.files ?? []) as Sent[]
+    return files.length
+      ? {
+        ...step,
+        node: h(
+          Fragment,
+          null,
+          step.node,
+          attached(heard.result!.entity.eid, files),
+        ),
+      }
+      : step
+  }),
+  kind('.operator_contact', contact),
+  kind('.operator_call&!output', onCall),
+  kind('.operator_stopped&!result', (b, heard) => {
+    let helper = comp(b, 'operator_stopped')?.helper
+    return helper == null ? undefined : halted(helper, heard)
+  }),
+  kind('.delivery&!result', delivered),
+  kind(
+    '.system',
+    (b) => said(b) ? { node: system(b, said(b)), is: 'step' } : undefined,
+  ),
+  kind(
+    '',
+    (b) =>
+      told(b, said(b))
+        ? helper(b, said(b))
+        : theirs(b)
+        ? { node: input(b, said(b)), is: 'theirs' }
+        : null,
+  ),
+  ...conversation.renderers,
+])
 
 // Words the platform wrote into the conversation (`system`): a recovery, an
 // error to fix. Never the person's: one quiet line, its words when opened.

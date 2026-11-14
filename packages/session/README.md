@@ -862,13 +862,24 @@ Additional entry points are `@yaks/session/vocab`, `/graph` (with
 `authenticate`), `/tools`, `/cli` (local context hooks), `/views`, `/service`
 (the duty that reads transcripts), `/tail` (the importer) and `/transcript`
 (`transcript()` alone, for a reader that runs no session). `/views` is `views`,
-the portable renderers, and `inspectViews`, how the inspector (@yaks/inspect)
-draws an entry and a session: an entry as a turn of its conversation
-(`Inspect.Turn`), the turns either side of it (`Inspect.Conversation`, what a
-belief citing the entry shows), the entry's page inside its conversation, and a
-session's page with its status, brief and latest turns. A **host** is the
-process that opened the graph; effects and tools receive its graph and, where
-needed, its process entity ID.
+the portable renderers; `joined`, which entries make the lines of a conversation
+(a result joins the call it answers); `conversationKinds`, loaded when asked
+for; and `inspectViews`, how the inspector (@yaks/inspect) draws an entry and a
+session: an entry as a turn of its conversation (`Inspect.Turn`), the turns
+either side of it (`Inspect.Conversation`, what a belief citing the entry
+shows), the entry's page inside its conversation, and a session's page with its
+status, brief and latest turns.
+
+`/conversation` draws a conversation's lines with @yaks/ui: a person's words, a
+reply, a tool call as one step that opens on what it asked for and what came
+back, a failure, and a stop. Each is a `Kind`, a `Conversation.Line`
+registration (@yaks/render) that matches on which components an entry wears, so
+it selects the same under any vocabulary. `draw(registry, entry, beside)` draws
+an entry by the most specific kind, and a kind that returns `undefined` passes
+the entry to the next best. A host with rows of its own puts its kinds ahead of
+`kinds` in its own registry; the Operator's chat on yaks.app does
+(workers/yak/operator-draw.ts). A **host** is the process that opened the graph;
+effects and tools receive its graph and, where needed, its process entity ID.
 
 <a id="what-is-deliberately-not-here"></a>
 <a id="compatibility"></a>

@@ -47,14 +47,16 @@ import {
   type Helper,
   type Lines,
   lines as drawnLines,
-  type Named as ToolNamed,
-  namer,
-  type Names,
-  type Naming,
   type Offers,
   type Thread,
   wire,
 } from './operator-draw.ts'
+import {
+  type Named as ToolNamed,
+  namer,
+  type Names,
+  type Naming,
+} from '@yaks/session/conversation'
 
 type Store = OperatorStore
 // What the channels take a person's words in with: loaded by the request that

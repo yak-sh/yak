@@ -25,16 +25,14 @@ import {
   type Line,
   type Lines,
   lines,
-  type Names,
-  opening,
   row,
   type Seen,
   spoken,
-  theirs,
   told,
   VIA,
   wire,
 } from './operator-draw.ts'
+import { type Names, opening, theirs } from '@yaks/session/conversation'
 import { drawn, type Row, rowsOf } from './operator-rows.ts'
 import {
   going,

@@ -10,7 +10,7 @@ import {
   standingAt,
 } from './operator-host.ts'
 import { rows } from './operator-view.ts'
-import { namer } from './operator-draw.ts'
+import { namer } from '@yaks/session/conversation'
 import { recentOf } from './operator-glance.ts'
 import { rootOf } from './operator-root.ts'
 

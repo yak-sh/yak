@@ -104,10 +104,9 @@ import {
   type Line,
   type Lines,
   PICTURES,
-  reply,
   row,
-  trouble,
 } from './operator-draw.ts'
+import { reply, trouble } from '@yaks/session/conversation'
 import { does, keeps, type Made, madeOf, type Page, pagesOf } from './made.ts'
 import { drafting } from './written.ts'
 import { r2RawObjects } from './lib/objects.ts'

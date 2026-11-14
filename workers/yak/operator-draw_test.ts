@@ -9,14 +9,8 @@ import { h } from 'preact'
 import { parseHTML } from 'linkedom'
 import { type Box, look as kit, mount, type Node } from '@yaks/native'
 import type { Colors } from '@yaks/ui'
-import {
-  drawLines,
-  lines,
-  look,
-  namer,
-  type Seen,
-  wire,
-} from './operator-draw.ts'
+import { drawLines, lines, look, type Seen, wire } from './operator-draw.ts'
+import { namer } from '@yaks/session/conversation'
 import { HEARD, rows } from './operator-view.ts'
 import { rowsOf } from './operator-rows.ts'
 import { sourceReference } from './operator-source.ts'
