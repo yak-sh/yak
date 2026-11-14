@@ -1,11 +1,4 @@
-import {
-  Composer,
-  Identity,
-  Notice,
-  Preview,
-  Toolbar,
-  Transcript,
-} from '@yaks/ui/parts'
+import { Identity, Notice, Preview, Toolbar, Transcript } from '@yaks/ui/parts'
 import { Time } from '@yaks/ui/parts'
 import type { Bundle } from '@yaks/graph'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
@@ -15,7 +8,6 @@ import {
   Card,
   Check,
   Chip,
-  Drop,
   Empty,
   Field,
   Form,
@@ -59,7 +51,8 @@ import { mailFrom } from './post.ts'
 import { parts } from './form.ts'
 import { gathered } from './bytes.ts'
 import { inApp, refuse } from './tool.ts'
-import { Idle, MOVES } from './mascot.ts'
+import { MOVES } from './mascot.ts'
+import { Ask, type Asking } from './operator-box.ts'
 import {
   CONSENT,
   REPLIES,
@@ -139,7 +132,7 @@ let html = (node: Node) => renderToString(h(Fragment, null, node))
 // message, and the box says the Operator can't read it.
 let COUNT = 10
 let SIZE = 16 * 1000 * 1000
-let READ = ['image/*', 'text/*', ...DOCUMENTS.map((d) => '.' + d)].join(',')
+let READ = ['image/*', 'text/*', ...DOCUMENTS.map((d) => '.' + d)]
 // The most a recording heard at once may be, a minute of Opus with room to
 // spare, and the most a line said at once.
 let HEARD = 2 * 1000 * 1000
@@ -866,7 +859,7 @@ export let operatorAnswer = async (
     }
     let request = String(form.get('request') || crypto.randomUUID())
     // The app open beside the chat, which the words are about, and the page
-    // of yaks.app they were written on, which its box names (`composer`).
+    // of yaks.app they were written on, which its box names (operator-box.ts `Ask`).
     let app = String(form.get('app') ?? '')
     let drawn = String(form.get('page') ?? '')
     let page = new URL(
@@ -1946,6 +1939,24 @@ export let chatPage = async (
   let drawn = (waits: boolean) =>
     listed ? besides(listed, at, here, waits) : [later(at, here, waits)]
   let lists = [...drawn(true), needsList(space, news), ...drawn(false)]
+  // The box, where the page has one (operator-box.ts): on a helper's page
+  // the words still go to the person's conversation. Each conversation keeps
+  // its own draft.
+  let boxed = fresh || !!talked.title
+  let asking: Asking = {
+    at,
+    here,
+    operator,
+    ...app ? { app: { slug: app.slug, title: app.title } } : {},
+    ...talked.helper ? { to: `${at}/${root}` } : {},
+    inline: fresh,
+    base: url(env),
+    request: crypto.randomUUID(),
+    count: COUNT,
+    size: SIZE,
+    reads: READ,
+  }
+  let place = 'operator:' + (talked.begun || open)
   return talkPage(env, space, who, beside, {
     title: fresh
       ? app ? app.title || app.slug : `Message ${operator}`
@@ -1983,15 +1994,11 @@ export let chatPage = async (
           counted(lists),
         )
         : null,
-      fresh || talked.title
-        ? composer(
-          env,
-          at,
-          here,
-          operator,
-          app,
-          talked.helper && `${at}/${root}`,
-          fresh,
+      boxed
+        ? h(
+          'div',
+          { class: 'Talk_Ask', 'data-ask': '' },
+          h(Ask, { asking, place }),
         )
         : null,
     ],
@@ -2007,7 +2014,7 @@ export let chatPage = async (
       space,
       open,
       root,
-      talked.begun || open,
+      boxed ? { asking, place } : null,
       follows,
       talked.standing,
       !!speechOf(env),
@@ -2044,125 +2051,13 @@ export let updatesPage = async (
   })
 }
 
-// The box a person writes in, at the foot of the conversation: their words,
-// the files going with them along its top (a gathering drop part,
-// public/drop.js: picked, pasted or dropped anywhere on the box, each a
-// preview or a chip to take back), Send, and Stop while the Operator works.
-// The yak sits in the margin beside it (mascot.ts `Idle`), taking no room
-// from the conversation, and shows what the Operator and its helpers are
-// doing (`MOVES`, operator-aside.ts `showing`). It
-// asks for a message to the Operator by
-// name, or with an app open beside it, what should change there, and the
-// words say the page they were written on and the app (`onPage`).
-let composer = (
-  env: Env,
-  at: string,
-  here: string,
-  operator: string,
-  app?: Shown,
-  // on a helper's page, the person's conversation, where the words go
-  to?: string,
-  inline = false,
-) => {
-  // On a helper's page the words still go to the person's conversation,
-  // never the helper, and the box says so along its top.
-  let asked = to
-    ? `Message ${operator} in your conversation`
-    : app
-    ? `What should change in ${app.title || app.slug}?`
-    : `Message ${operator}`
-  return h(
-    Composer.Form,
-    {
-      mod: inline && 'inline',
-      class: 'Talk_Box Page_Form',
-      id: 'ask',
-      method: 'post',
-      action: at,
-      enctype: 'multipart/form-data',
-    },
-    // Shown while the person has scrolled up from the newest entry, and
-    // takes them back to it (the conversation's `away`, operator-talk.ts).
-    h(
-      Button,
-      {
-        type: 'button',
-        class: 'Talk_Jump',
-        'data-jump': '',
-        hidden: true,
-      },
-      h(Icon, { of: icons['arrow-down'] }),
-      'Newest',
-    ),
-    h('input', { type: 'hidden', name: 'request', value: crypto.randomUUID() }),
-    h('input', { type: 'hidden', name: 'page', value: here }),
-    app ? h('input', { type: 'hidden', name: 'app', value: app.slug }) : null,
-    h(
-      Composer,
-      {},
-      to
-        ? h(
-          Composer.To,
-          null,
-          'To ',
-          h('a', { href: to }, `your conversation with ${operator}`),
-          ', not this helper',
-        )
-        : null,
-      h(Composer.Figure, { as: Idle, base: url(env) }),
-      h(Drop.Chosen, { 'aria-label': 'Files to send', 'aria-live': 'polite' }),
-      h(Composer.Field, {
-        lines: true,
-        name: 'say',
-        placeholder: asked,
-        'aria-label': asked,
-      }),
-      h(
-        Composer.Tools,
-        {},
-        h(
-          Composer.Attach,
-          { title: 'Add images or documents, or paste or drop them here' },
-          h(Icon, { of: icons.plus }),
-          'Add files',
-          h(Composer.File, {
-            type: 'file',
-            name: 'file',
-            multiple: true,
-            'data-count': COUNT,
-            'data-size': SIZE,
-            'data-reads': READ,
-            'data-unread':
-              "The Operator can't read this kind of file. It is kept with your message.",
-          }),
-        ),
-        h(Drop.Said, { role: 'status' }),
-        h(Composer.Stop, { type: 'button', 'data-stop': '' }, 'Stop'),
-        // shown where the browser or the platform can hear (public/voice.js)
-        h(
-          Composer.Voice,
-          {
-            type: 'button',
-            hidden: true,
-            'data-voice': '',
-            'aria-pressed': 'false',
-            title: 'Talk instead of typing',
-          },
-          h(Icon, { of: icons.mic }),
-          h('span', { 'data-voice-says': '' }, 'Talk'),
-        ),
-        h(Composer.Send, { type: 'submit' }, 'Send'),
-      ),
-    ),
-    h(Composer.Status, { role: 'status', 'data-send-status': '' }),
-  )
-}
-
-// The chat app's script: the durable draft and sending, Stop, talking
-// instead of typing, and the conversation kept current from the Builder
-// object's socket, each step's lines drawn from the entries its frame sends
-// (operator-talk.ts) and what it says aloud said to a person who talked. `paid` is whether the platform's
-// speech is on, for a browser that has none of its own.
+// The chat app's script: the box mounted over what the server drew
+// (operator-box.ts), its words the person's drafts and where they and Stop
+// go, talking instead of typing, and the conversation kept current from the
+// Builder object's socket, each step's lines drawn from the entries its
+// frame sends (operator-talk.ts) and what it says aloud said to a person who
+// talked. `boxOf` is the box, where the page has one; `paid` is whether the
+// platform's speech is on, for a browser that has none of its own.
 let chatScript = (
   now: Asided,
   at: string,
@@ -2170,17 +2065,16 @@ let chatScript = (
   space: Space,
   open: string,
   root: string,
-  talk: string,
+  boxOf: { asking: Asking; place: string } | null,
   follows: Follows,
   standing: string,
   paid: boolean,
   mentions?: string,
 ) =>
   `<script type="module">
-import { browserDrafts } from '/_draft.js'
 import { follow } from '/follow.js'
 import { frames } from '/frames.js'
-import { asideHtml, dates, glanceHtml, helperHtml, menus, ordered, showing, storeAt, mountTalk, turnHtml } from '/_talk.js'
+import { asideHtml, browserDrafts, dates, glanceHtml, helperHtml, menus, mountAsk, mountTalk, ordered, showing, storeAt, turnHtml } from '/_talk.js'
 import words from '/_words.js'
 import { voice } from '/voice.js'
 let open = ${JSON.stringify(open)}
@@ -2198,17 +2092,59 @@ let mentions = ${JSON.stringify(mentions ?? '')}
 // \`#menu\`, the app's \`#app\` on a phone) is public/follow.js's.
 let content = document.getElementById('content')
 follow(globalThis, box, content)
-let jump = document.querySelector('[data-jump]')
+// How long the page waits on its door before giving up and asking again, so
+// a request the network holds unanswered fails in seconds.
+let WAIT = 10_000
+// What the page says goes under its box (\`boxed\`, mounted once its drafts are).
+let boxed
+let said = (e) => boxed?.set({ said: e.message })
+// The Operator's store as this person reads and writes it, through @yaks/api
+// (operator-api.ts): their drafts are its rows, heard on its socket as each
+// change lands, from this page or another, and read again whenever the socket
+// opens again. They are never read on a timer: what is typed here is kept on
+// the device and written whether or not a read answered.
+// While its socket cannot reach the store, the page says the draft is kept.
+let KEPT = 'Your draft is kept on this device until syncing returns.'
+let store = storeAt(location.origin + '${at}', '${who.person}', (e) => boxed?.set({ said: e?.name == 'Dropped' ? KEPT : e.message }))
+store.connected((open) => { if (open && boxed?.said() == KEPT) boxed.set({ said: '' }) })
+// A draft sent with the words it holds is spent by the same request that
+// takes the words in.
+let submission
+let draftClient = {
+  ...store,
+  apply: async (bundles) => {
+    if (!submission) return store.apply(bundles).catch(() => { throw new Error('Your draft could not sync. A recovery copy is kept on this device.') })
+    let sent = submission; submission = undefined
+    sent.set('draft', JSON.stringify(bundles))
+    let response = await fetch('${at}', { method: 'POST', body: sent })
+    if (!response.ok) throw new Error('Your draft could not sync. A recovery copy is kept on this device.')
+    return response.json()
+  },
+}
+let drafts = browserDrafts(draftClient, '${space.eid}:operator', { by: '${who.person}', report: said })
+// The box (operator-box.ts), mounted over what the server drew: what is sent
+// goes to this page's door, and Stop to its \`?stop=1\`; Newest, over it, takes
+// the reader back to the newest line.
+let given = ${script(boxOf)}
+let place = given?.place
+boxed = given && mountAsk({
+  root: document.querySelector('[data-ask]'),
+  ...given,
+  drafts,
+  onSend: (b) => send(b),
+  onStop: (b) => stop(b),
+  onNewest: () => talk.newest(),
+})
+let form = document.querySelector('#ask')
 let taking = 0
 let talk = mountTalk({
   box,
   words,
   mentions,
   pane: () => content,
-  onAway: (away) => { if (jump) jump.hidden = !away },
+  onAway: (away) => boxed?.set({ away }),
   older: (take) => { taking = take; read().catch(said) },
 })
-jump?.addEventListener('click', () => talk.newest())
 // Lists their servers had not answered when the page was drawn come in
 // now, each in its place, and the bar counts what waits in them.
 let later = [...document.querySelectorAll('[data-later]')]
@@ -2232,7 +2168,6 @@ if (later.length) {
   })
 }
 let heading = document.querySelector('[data-title]')
-let form = document.querySelector('#ask')
 // The app open beside the chat (T-140509) is loaded again when the Operator
 // changes it, and what it is made of drawn again as the Operator works on it
 // (\`canvas\`). With none open, the one the Operator is making opens by
@@ -2317,7 +2252,6 @@ let remake = async (slug) => {
     }
   } catch (e) { said(e) } finally { remaking = false }
 }
-let status = document.querySelector('[data-send-status]') ?? document.createElement('p')
 document.addEventListener('submit', async (event) => {
   let contact = event.target.closest?.('[data-contact-form]')
   if (!contact) return
@@ -2332,33 +2266,6 @@ document.addEventListener('submit', async (event) => {
     contact.querySelector('[type=submit]').disabled = true
   } catch (error) { said.textContent = error.message }
 })
-// How long the page waits on its door before giving up and asking again, so
-// a request the network holds unanswered fails in seconds.
-let WAIT = 10_000
-let said = (e) => { status.textContent = e.message }
-// The Operator's store as this person reads and writes it, through @yaks/api
-// (operator-api.ts): their drafts are its rows, heard on its socket as each
-// change lands, from this page or another, and read again whenever the socket
-// opens again. They are never read on a timer: what is typed here is kept on
-// the device and written whether or not a read answered.
-// While its socket cannot reach the store, the page says the draft is kept.
-let KEPT = 'Your draft is kept on this device until syncing returns.'
-let store = storeAt(location.origin + '${at}', '${who.person}', (e) => { status.textContent = e?.name == 'Dropped' ? KEPT : e.message })
-store.connected((open) => { if (open && status.textContent == KEPT) status.textContent = '' })
-// A draft sent with the words it holds is spent by the same request that
-// takes the words in.
-let submission
-let draftClient = {
-  ...store,
-  apply: async (bundles) => {
-    if (!submission) return store.apply(bundles).catch(() => { throw new Error('Your draft could not sync. A recovery copy is kept on this device.') })
-    let sent = submission; submission = undefined
-    sent.set('draft', JSON.stringify(bundles))
-    let response = await fetch(form.action, { method: 'POST', body: sent })
-    if (!response.ok) throw new Error('Your draft could not sync. A recovery copy is kept on this device.')
-    return response.json()
-  },
-}
 // A read that had no answer in time, or one the platform failed, is asked
 // again after a second, then two, four and eight: a deploy is a moment in
 // which the edge answers 502 and the Builder restarts, and the page reads past
@@ -2374,10 +2281,8 @@ let ask = async (url) => {
     await new Promise((on) => setTimeout(on, pause))
   }
 }
-let drafts = browserDrafts(draftClient, '${space.eid}:operator', { by: '${who.person}', report: said })
-// Each conversation keeps its own draft, and the box is ready to type in.
-let place = ${JSON.stringify('operator:' + talk)}
-if (form) { drafts.bind(form.elements.say, place); form.elements.say.focus() }
+// The box is ready to type in.
+form?.elements.say.focus()
 // An ask another page typed for the person (public/edit.js: \`?say=\`) joins
 // what they had typed here, and leaves the address so a reload adds nothing.
 let typed = new URL(location.href).searchParams.get('say')
@@ -2472,29 +2377,24 @@ let show = () => {
   if (move) yak.dispatchEvent(new CustomEvent('idle', { detail: move.loop }))
 }
 let doing = (now = 'idle') => {
-  form?.querySelector('.Composer')?.toggleAttribute('data-busy', working())
+  boxed?.set({ busy: working(), session: talk.task() })
   talking = now
   show()
 }
 let redrawn = () => doing(talk.doing())
 redrawn()
-// Enter sends, Shift+Enter starts a new line.
-form?.elements.say.addEventListener('keydown', (e) => {
-  if (e.key == 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit?.() }
-})
-// A way to start fills the box with its words, kept as the draft, for the
-// person to finish.
+// What the page puts in the box is the person's draft, as if they typed it:
+// a way to start's words, for them to finish, and a line quoted from its
+// menu after what they had (the kit's menu, which also copies a line and its
+// link).
+let typing = (text) => {
+  drafts.type(place, text)
+  boxed.focus(true)
+}
 document.addEventListener('click', (e) => {
   let start = e.target.closest('[data-say]')
-  if (!start || !form) return
-  let say = form.elements.say
-  say.value = start.dataset.say
-  say.dispatchEvent(new Event('input', { bubbles: true }))
-  say.focus()
-  say.setSelectionRange(say.value.length, say.value.length)
+  if (start && boxed) typing(start.dataset.say)
 })
-// Entry actions share the kit menu; quoting goes through the same input
-// event as typing, so the draft keeps it across reloads and devices.
 document.addEventListener('click', async (e) => {
   let action = e.target.closest?.('[data-entry-copy], [data-entry-quote], [data-entry-link]')
   if (!action) return
@@ -2503,13 +2403,9 @@ document.addEventListener('click', async (e) => {
   let link = new URL(location.href ?? '${at}', location.origin)
   if (id) link.hash = 'row-' + id
   try {
-    if ('entryQuote' in action.dataset && form) {
-      let say = form.elements.say
+    if ('entryQuote' in action.dataset && boxed) {
       let quote = '> [Quoted entry](' + link.href + ')\\n' + text.split('\\n').map((line) => '> ' + line).join('\\n')
-      say.value = [say.value, quote].filter(Boolean).join('\\n\\n') + '\\n\\n'
-      say.dispatchEvent(new Event('input', { bubbles: true }))
-      say.focus()
-      say.setSelectionRange(say.value.length, say.value.length)
+      typing([drafts.text(place), quote].filter(Boolean).join('\\n\\n') + '\\n\\n')
     } else await navigator.clipboard.writeText('entryCopy' in action.dataset ? text : link.href)
   } catch (error) { said(error) }
 })
@@ -2525,10 +2421,10 @@ document.addEventListener('click', async (e) => {
     await read()
   } catch (error) { said(error); button.disabled = false }
 })
-// Stop takes effect on the page at once; the Operator's own word follows.
-document.addEventListener('click', async (e) => {
-  if (!e.target.closest('[data-stop]')) return
-  let task = talk.task()
+// Stop, pressed in the box, takes effect on the page at once; the Operator's
+// own word follows.
+let stop = async (b) => {
+  let task = b.entity.eid
   if (!task) return
   let undo = talk.stopped()
   doing('idle')
@@ -2536,13 +2432,13 @@ document.addEventListener('click', async (e) => {
   try {
     let response = await fetch('${at}?stop=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task }) })
     if (!response.ok) throw new Error('It could not be stopped. Try again.')
-    status.textContent = ''
+    boxed.set({ said: '' })
   } catch (error) {
     undo()
     redrawn()
     said(error)
   }
-})
+}
 // Where the conversation stood when the page last drew it (operator-host.ts
 // \`standingAt\`), until a step is heard; the socket says where it stands as
 // it opens, and the page reads it again only when that moved.
@@ -2627,19 +2523,21 @@ let poll = async () => {
   try { await read() } catch (e) { said(e) }
   finally { polling = false; if (working()) setTimeout(poll, 2000) }
 }
-form?.addEventListener('submit', async (e) => {
-  e.preventDefault()
-  let button = form.querySelector('[type=submit]')
-  button.disabled = true
-  form.setAttribute('aria-busy', 'true')
-  status.textContent = 'Sending…'
+// Words sent from the box go to this page's door with the rest of its form,
+// the files held with them, in the request that spends their draft, so the
+// draft is spent only once the door has taken them in; words it did not take
+// stay in the box.
+let send = async (b) => {
+  boxed.set({ sending: true, said: 'Sending…' })
   try {
+    let request = b.entity.eid
     submission = new FormData(form)
-    let request = form.elements.request.value
+    submission.set('request', request)
+    submission.set('say', b.content.body)
     let saved = await drafts.spend(place, [{ entity: { eid: request } }])
     if (!saved) throw new Error('Your message could not be confirmed. Your words are kept; try sending again.')
-    form.elements.file.value = ''; form.elements.file.dispatchEvent(new Event('change', { bubbles: true })); form.elements.request.value = crypto.randomUUID()
-    status.textContent = ''
+    form.elements.file.value = ''; form.elements.file.dispatchEvent(new Event('change', { bubbles: true }))
+    boxed.set({ request: crypto.randomUUID(), said: '' })
     talk.newest()
     // Words go to the person's conversation, which opens to show them when
     // another page sent them.
@@ -2647,7 +2545,7 @@ form?.addEventListener('submit', async (e) => {
     if (talk.task() != root) return void location.assign(chats + request + (app ? '?app=' + encodeURIComponent(app.dataset.app) : ''))
     await read(); poll()
   } catch (error) { said(error) }
-  finally { button.disabled = false; form.removeAttribute('aria-busy') }
-})
+  finally { boxed.set({ sending: false }) }
+}
 listen()
 </script>`

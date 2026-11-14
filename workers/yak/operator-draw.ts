@@ -21,7 +21,6 @@ import {
   Annotated,
   Attachments,
   Body,
-  Drop,
   Icon,
   Menu,
   More,
@@ -133,36 +132,71 @@ export let unsaid = (files: Sent[]) =>
 // The kinds a browser draws as a picture, never a drawing that runs (SVG).
 export let PICTURES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 
+/** A file's kind as a person names it: its extension, else "File". */
+export let kindOf = (name: string) =>
+  name.match(/\.([a-z0-9]{1,5})$/i)?.[1].toUpperCase() ?? 'File'
+
+/** A size in bytes as a person reads it. */
+export let sized = (n: number) =>
+  n < 1000
+    ? `${n} B`
+    : n < 1e6
+    ? `${Math.round(n / 1e3)} KB`
+    : `${(n / 1e6).toFixed(n < 1e7 ? 1 : 0)} MB`
+
+/** A file as the Operator page draws it, sent or held in its box to send: a
+ * picture as itself, any other file as its kind and name. What differs is
+ * given: where its original opens (`href`), a picture's source where that is
+ * not it (`src`), and for one held, its `size`, a `note` and how to take it
+ * back (`remove`, what its button carries). */
+export type Filed = Sent & {
+  href?: string
+  src?: string
+  size?: number
+  note?: string
+  remove?: Record<string, unknown>
+}
+
+/** One file, as `Filed` says. */
+export let Filed = ({ name, mime, href, src, size, note, remove }: Filed) => {
+  let away = remove
+    ? h(Attachments.Remove, {
+      type: 'button',
+      'aria-label': `Remove ${name}`,
+      ...remove,
+    }, '✕')
+    : null
+  return PICTURES.includes(mime ?? '')
+    ? h(
+      Attachments.Picture,
+      { href, target: href ? '_blank' : undefined },
+      h(Attachments.Image, { src: src ?? href, alt: name, loading: 'lazy' }),
+      away,
+    )
+    : h(
+      Attachments.File,
+      { href },
+      h(Attachments.Kind, null, kindOf(name)),
+      h(Attachments.Name, null, name),
+      size == null ? null : h(Attachments.Size, null, sized(size)),
+      note ? h(Attachments.Note, null, note) : null,
+      away,
+    )
+}
+
 /** The files a person sent, under their words as a chat app shows them, or
- * a step brought back, under the step: a picture as itself, any other file as
- * its kind and name, each opening the original (operator-page.ts
- * `?attachment=`, answered on either page). `row` is the request or the
- * step's result the files came with; a person's sit at the `end`, on
- * their side. */
+ * a step brought back, under the step, each opening the original
+ * (operator-page.ts `?attachment=`, answered on either page). `row` is the
+ * request or the step's result the files came with; a person's sit at the
+ * `end`, on their side. */
 export let attached = (row: string, files: Sent[], mod?: 'end') =>
   files.length
     ? h(
       Attachments,
       { mod },
-      files.map((f, i) => {
-        let href = `?attachment=${row}&file=${i}`
-        return PICTURES.includes(f.mime ?? '')
-          ? h(Attachments.Picture, {
-            class: 'Attachments_Link',
-            href,
-            target: '_blank',
-          }, h(Attachments.Image, { src: href, alt: f.name, loading: 'lazy' }))
-          : h(
-            Attachments.File,
-            { href },
-            h(
-              Drop.Kind,
-              null,
-              f.name.match(/\.([a-z0-9]{1,5})$/i)?.[1].toUpperCase() ?? 'File',
-            ),
-            h(Drop.Name, null, f.name),
-          )
-      }),
+      files.map(({ name, mime }, i) =>
+        h(Filed, { name, mime, href: `?attachment=${row}&file=${i}` })
+      ),
     )
     : null
 

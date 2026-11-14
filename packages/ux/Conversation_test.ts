@@ -16,8 +16,10 @@ import {
   type Line,
   scrolled,
   shown,
+  stopped,
   TAKE,
 } from './Conversation.ts'
+import { signal } from '@preact/signals'
 import { docs } from './vocab.ts'
 
 let lines = (n: number, from = 0): Line[] =>
@@ -221,4 +223,103 @@ test('it mounts over the page a server drew, and a fold the reader opened stays 
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else Reflect.deleteProperty(globalThis, 'document')
   }
+})
+
+// A box on a linkedom page, its words kept in drafts held in a signal, as a
+// host's are, and what it emits kept.
+let boxed = () => {
+  let { document, Event } = parseHTML(
+    '<html><body><div id="box"></div></body></html>',
+  )
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let texts = signal<Record<string, string>>({})
+  let drafts = {
+    text: (place: string) => texts.value[place] ?? '',
+    type: (place: string, text: string) =>
+      void (texts.value = { ...texts.value, [place]: text }),
+    spend: (place: string) =>
+      void (texts.value = { ...texts.value, [place]: '' }),
+  }
+  let sent: Bundle[] = [], stops: Bundle[] = []
+  let root = document.getElementById('box')!
+  let draw = (more: Record<string, unknown> = {}) =>
+    render(
+      h(Conversation.Box, {
+        place: 'talk',
+        drafts,
+        session: 's1',
+        words: (body) => ({ entity: { eid: 'said' }, content: { body } }),
+        onSend: (b) => void sent.push(b),
+        onStop: (b) => void stops.push(b),
+        name: 'say',
+        ...more,
+      }),
+      root,
+    )
+  draw()
+  let field = () => root.querySelector('textarea') as HTMLTextAreaElement
+  return {
+    drafts,
+    sent,
+    stops,
+    draw,
+    field,
+    root,
+    type: (text: string) => {
+      field().value = text
+      field().dispatchEvent(new Event('input'))
+    },
+    key: (key: string, shiftKey = false) =>
+      field().dispatchEvent(
+        Object.assign(new Event('keydown', { cancelable: true }), {
+          key,
+          shiftKey,
+        }),
+      ),
+    [Symbol.dispose]: () => {
+      render(null, root)
+      if (prior) Object.defineProperty(globalThis, 'document', prior)
+      else Reflect.deleteProperty(globalThis, 'document')
+    },
+  }
+}
+
+test('words typed in the box are its draft, and Enter sends them, the draft kept until it is spent', () => {
+  using b = boxed()
+  b.type('Find the recipe')
+  equal(b.drafts.text('talk'), 'Find the recipe')
+  b.key('Enter', true)
+  equal(b.sent, [])
+  b.key('Enter')
+  equal(b.sent, [{
+    entity: { eid: 'said' },
+    content: { body: 'Find the recipe' },
+  }])
+  equal(b.field().value, 'Find the recipe')
+  b.drafts.spend('talk')
+  b.draw()
+  equal(b.field().value, '')
+})
+
+test('a draft typed elsewhere shows in the box', () => {
+  using b = boxed()
+  b.drafts.type('talk', 'From the phone')
+  b.draw()
+  equal(b.field().value, 'From the phone')
+})
+
+test('a box sending waits, and Stop says so on its conversation', () => {
+  using b = boxed()
+  b.draw({ sending: true, busy: true, said: 'Sending…' })
+  b.key('Enter')
+  equal(b.sent, [])
+  equal(b.root.querySelector('.Composer')!.hasAttribute('data-busy'), true)
+  equal(b.root.querySelector('.Composer_Status')!.textContent, 'Sending…')
+  ;(b.root.querySelector('.Composer_Stop') as HTMLElement).click()
+  equal(b.stops, [{ entity: { eid: 's1' }, Stop: {} }])
+  equal(stopped('s1'), b.stops[0])
 })

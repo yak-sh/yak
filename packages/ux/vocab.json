@@ -77,6 +77,14 @@
         }
       }
     },
+    "Stop": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "0s",
+      "description": "an event a conversation's box (@yaks/ux Conversation.Box) emits on the session its words go to: Stop was pressed while it worked",
+      "properties": {}
+    },
     "Completion": {
       "component": true,
       "type": "object",

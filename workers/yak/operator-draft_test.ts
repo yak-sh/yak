@@ -213,6 +213,10 @@ let load = async (
       return answer
     }
     if (cut && init?.method == 'POST') return new Promise<Response>(() => {})
+    if (init?.method == 'POST') posted.push(url)
+    if (refused && init?.method == 'POST' && new URL(url, base).href == base) {
+      return new Response('Bad Gateway', { status: 502 })
+    }
     if (/draft=1|\/query/.test(url)) asked++
     if (url.includes('?talk=')) talks++
     if (network == 'deploying' && !init?.method && !failed.has(url)) {
@@ -352,7 +356,7 @@ let load = async (
     document,
     sockets,
     // What the page says under its box.
-    status: () => document.querySelector('[data-send-status]')!.textContent,
+    status: () => document.querySelector('#ask .Composer_Status')!.textContent,
     failed,
     asked: () => asked,
     // The handshakes its store's sockets made.
@@ -445,6 +449,10 @@ let settle = async () => {
 // While set, a read of the conversation is answered as the store stood when
 // it was asked, but reaches the page only once this settles.
 let slow: Promise<void> | undefined
+// While set, the page's door refuses what is sent to it; and every address
+// a page posted to, in order.
+let refused = false
+let posted: string[] = []
 let stored = async (place = 'operator:new') =>
   ((await (await serve(`${base}/query?q=.draft`)).json()) as {
     draft: { place: string; text: string }
@@ -568,6 +576,32 @@ test('a way to start fills the box with its words, for the person to finish', ()
   page.press(page.document.querySelector('[data-say]')!)
   assertEquals(page.say.value, 'Make me an app for ')
   assertEquals(page.focused, true)
+  page.leave()
+})
+
+test('words the door does not take stay in the box, and it says so', async () => {
+  let page = await load(storage(), false, park)
+  await page.heard()
+  page.type('Ask for the pavilion keys')
+  refused = true
+  try {
+    page.send()
+    await settle()
+  } finally {
+    refused = false
+  }
+  assertEquals(page.say.value, 'Ask for the pavilion keys')
+  assertStringIncludes(page.status(), 'Your words are kept')
+  page.leave()
+})
+
+test('Stop in the box stops the conversation it shows', async () => {
+  let page = await load(storage(), false, park)
+  await page.heard()
+  posted.length = 0
+  page.press(page.document.querySelector('#ask .Composer_Stop')!)
+  await settle()
+  assertEquals(posted, [new URL(base).pathname + '?stop=1'])
   page.leave()
 })
 

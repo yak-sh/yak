@@ -67,7 +67,7 @@ export let assetInputs = (paths: string[]) =>
     /^(?:deno\.(?:jsonc?|lock)|bin\/compiler-packages\.ts)$/.test(path) ||
     // `_talk.js` is built from operator-rows.ts and what it imports here, and
     // `_words.js` from the Operator store's words (operator-words.ts).
-    /^workers\/yak\/(?:wrangler\.ts|asset-ready\.ts|client-assets\.ts|sheet-assets\.ts|(?:chart|data-editor)\.js|dates(?:-browser)?\.ts|settings(?:-draft(?:-browser)?)?\.ts|operator-(?:rows|draw|aside|source|metadata|contact-card|consent|api-page|talk|words|vocab|store|load)\.ts|(?:config|vocabs)\.ts|icons\.ts|sandbox\/(?:cli-assets|launch)\.ts|package(?:-lock)?\.json|deno\.json)$/
+    /^workers\/yak\/(?:wrangler\.ts|asset-ready\.ts|client-assets\.ts|sheet-assets\.ts|(?:chart|data-editor)\.js|dates(?:-browser)?\.ts|settings(?:-draft(?:-browser)?)?\.ts|operator-(?:rows|draw|aside|source|metadata|contact-card|consent|api-page|talk|box|words|vocab|store|load)\.ts|(?:config|vocabs)\.ts|icons\.ts|mascot\.ts|sandbox\/(?:cli-assets|launch)\.ts|package(?:-lock)?\.json|deno\.json)$/
       .test(path)
   ).filter((path) =>
     !/(^|\/)(?:node_modules|\.wrangler|fixtures?|tests?)(\/|$)/.test(path) &&

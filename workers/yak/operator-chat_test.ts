@@ -251,7 +251,7 @@ test('a conversation opens in the chat app: its words, each step in plain words,
   // Done: nothing is said to be under way, and Stop is not offered.
   assertEquals(page.document.querySelector('[data-pending]'), null)
   assertEquals(
-    page.document.querySelector('[data-stop]')?.textContent,
+    page.document.querySelector('#ask .Composer_Stop')?.textContent,
     'Stop',
   )
 })

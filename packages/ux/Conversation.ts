@@ -7,6 +7,12 @@
  * has scrolled away from the newest. It knows no data names: its owner
  * gives it lines already drawn, and what the conversation is doing now.
  *
+ * `Conversation.Box` is where a person writes to it: their words are a draft
+ * (the host's `drafts`), Enter sends them and Shift+Enter starts a line, and
+ * Send emits them as the bundle its owner says they become, Stop a `Stop`
+ * event; the owner says where each goes, and spends the draft once the words
+ * are taken.
+ *
  * Only `h` and hooks, so it paints under any renderer that has them.
  *
  * @module
@@ -16,7 +22,8 @@ import { type ComponentChildren, h, type JSX } from 'preact'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { Button, Transcript } from '@yaks/ui/parts'
+import { Button, Composer, Transcript } from '@yaks/ui/parts'
+import { type Drafts, useDrafts } from './host.ts'
 
 /** How many lines it draws before it is asked for more, and how many more
  * each time. */
@@ -97,8 +104,125 @@ let scroller = (at: HTMLElement): HTMLElement => {
   return (doc.scrollingElement ?? doc.documentElement) as HTMLElement
 }
 
-/** The lines, the newest last, with what it is doing now under them. */
-export let Conversation = (
+/** What a box's owner gives it. Any other prop goes on its form, which
+ * posts as it is where no script runs. */
+export type BoxProps = {
+  /** where its words are typed, as a draft */
+  place: string
+  /** the drafts they are kept in; the host's without them */
+  drafts?: Drafts
+  /** the conversation they go to, which a stop is said on */
+  session?: string
+  /** the bundle the words become */
+  words: (text: string) => Bundle
+  /** the words, sent; the draft stays until its owner spends it */
+  onSend: (b: Bundle) => void
+  /** Stop, pressed: `{entity: {eid: session}, Stop: {}}` */
+  onStop: (b: Bundle) => void
+  /** the conversation is at work, so Stop shows */
+  busy?: boolean
+  /** a send is under way, so Send waits */
+  sending?: boolean
+  /** what it says under itself */
+  said?: ComponentChildren
+  /** the field's name, the words in a form posted without script */
+  name?: string
+  placeholder?: string
+  /** its owner's, over the field: who the words go to, files held */
+  top?: ComponentChildren
+  /** its owner's, along its tools before Stop */
+  tools?: ComponentChildren
+  /** its owner's, beside Send */
+  beside?: ComponentChildren
+  /** its owner's, in the form before the box */
+  children?: ComponentChildren
+  [attribute: string]: unknown
+}
+
+/** The event Stop emits. */
+export let stopped = (session = ''): Bundle => ({
+  entity: { eid: session },
+  Stop: {},
+})
+
+// The box: a form wearing the kit's Composer. Enter submits the form, as
+// Send does, so every listener on it hears a send however it was asked for.
+let Box = (
+  {
+    place,
+    drafts: supplied,
+    session,
+    words,
+    onSend,
+    onStop,
+    busy,
+    sending,
+    said,
+    name,
+    placeholder,
+    top,
+    tools,
+    beside,
+    children,
+    ...rest
+  }: BoxProps,
+): JSX.Element => {
+  let drafts = useDrafts(supplied)
+  let text = drafts.text(place)
+  let send = () => void (!sending && onSend(words(drafts.text(place))))
+  return h(
+    Composer.Form,
+    {
+      ...rest,
+      'aria-busy': sending ? 'true' : undefined,
+      onSubmit: (ev: Event) => {
+        ev.preventDefault()
+        send()
+      },
+    },
+    children,
+    h(
+      Composer,
+      { 'data-busy': busy ? '' : undefined },
+      top,
+      h(Composer.Field, {
+        lines: true,
+        name,
+        value: text,
+        placeholder,
+        'aria-label': placeholder,
+        onInput: (ev: Event) =>
+          drafts.type(place, (ev.currentTarget as HTMLTextAreaElement).value),
+        onKeyDown: (ev: KeyboardEvent) => {
+          if (ev.key != 'Enter' || ev.shiftKey || ev.isComposing) return
+          ev.preventDefault()
+          let form = (ev.currentTarget as HTMLTextAreaElement).form
+          if (form?.requestSubmit) form.requestSubmit()
+          else send()
+        },
+      }),
+      h(
+        Composer.Tools,
+        {},
+        tools,
+        h(
+          Composer.Stop,
+          { type: 'button', onClick: () => onStop(stopped(session)) },
+          'Stop',
+        ),
+        beside,
+        h(Composer.Send, { type: 'submit', disabled: sending }, 'Send'),
+      ),
+    ),
+    h(Composer.Status, { role: 'status' }, said),
+  )
+}
+
+/** The lines, the newest last, with what it is doing now under them;
+ * `Conversation.Box` is where a person writes to it. */
+export let Conversation: ((p: ConversationProps) => JSX.Element) & {
+  Box: (p: BoxProps) => JSX.Element
+} = Object.assign((
   { e, onChange, lines, now, earlier, pane, ...rest }: ConversationProps,
 ): JSX.Element => {
   let { take = TAKE, away = false } = conversingOf(e)
@@ -245,4 +369,4 @@ export let Conversation = (
     ),
     now == null ? null : h(Transcript.Status, {}, now),
   )
-}
+}, { Box })

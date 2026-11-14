@@ -67,6 +67,7 @@ export {
   isOpen,
 } from './Disclosure.ts'
 export {
+  type BoxProps,
   Conversation,
   conversationAt,
   type ConversationProps,
@@ -77,6 +78,7 @@ export {
   NEAR,
   scrolled,
   shown,
+  stopped,
   TAKE,
 } from './Conversation.ts'
 export { useRows } from './rows.ts'

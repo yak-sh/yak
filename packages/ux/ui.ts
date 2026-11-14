@@ -82,17 +82,44 @@ let ConversationSample = (): JSX.Element => {
       front.close()
     }
   }, [])
-  let said = [
+  // What is sent from its box joins it, and Stop ends what it is doing.
+  let said = useSignal([
     h(Transcript.Bubble, {}, 'Can you find the recipe from last week?'),
     h(Transcript.Reply, {}, 'It is the lentil soup, saved on Tuesday.'),
     h(Transcript.Bubble, {}, 'Add it to Sunday.'),
-  ]
-  return h(Conversation, {
-    e: row.value,
-    onChange: (b) => void front.mutate([b]),
-    lines: said.map((node, i) => ({ id: `sample-${i}`, node })),
-    now: 'Writing…',
-  })
+  ])
+  let now = useSignal('Writing…')
+  let typed = useSignal('')
+  let drafts = {
+    text: () => typed.value,
+    type: (_: string, text: string) => void (typed.value = text),
+    spend: () => void (typed.value = ''),
+  }
+  return h(
+    'div',
+    {},
+    h(Conversation, {
+      e: row.value,
+      onChange: (b) => void front.mutate([b]),
+      lines: said.value.map((node, i) => ({ id: `sample-${i}`, node })),
+      now: now.value,
+    }),
+    h(Conversation.Box, {
+      place: 'guide',
+      drafts,
+      session: 'sample',
+      busy: !!now.value,
+      placeholder: 'Write a message',
+      words: (body) => ({ entity: { eid: 'sample' }, content: { body } }),
+      onSend: (b) => {
+        let body = String((b.content as { body: string }).body)
+        if (!body.trim()) return
+        said.value = [...said.value, h(Transcript.Bubble, {}, body)]
+        drafts.spend()
+      },
+      onStop: () => void (now.value = ''),
+    }),
+  )
 }
 
 // Rows put in order by dragging, in the specimen's own page graph.
@@ -286,10 +313,10 @@ export let kit: Kit = defineKit({
     Conversation: {
       Component: Conversation,
       description:
-        'The lines of a conversation, followed at the newest until the reader scrolls up',
+        'The lines of a conversation, followed at the newest until the reader scrolls up, and its box to write in',
       state: ['Conversation'],
       specimens: () => [[
-        'Two lines drawn; press to draw the earlier one',
+        'Two lines drawn; press to draw the earlier one, or write and press Enter',
         h('div', {}, h(ConversationSample, {})),
       ]],
     },

@@ -20,6 +20,7 @@ import { platform } from './testing.ts'
 import { operatorService } from './operator-testing.ts'
 import { chatPage, operatorAnswer } from './operator-page.ts'
 import { onPage } from './operator-view.ts'
+import { mountAsk } from './operator-box.ts'
 
 let p = platform('operator-files')
 let person = crypto.randomUUID(), eid = crypto.randomUUID()
@@ -181,14 +182,20 @@ test('a sent picture opens in place, and a document is saved', async () => {
   await saved.body?.cancel()
 })
 
-// The box on a new conversation, with the shell's drop script running in it.
+// The box on a new conversation, mounted over what the server drew as the
+// page's script mounts it (with what the page tells it, `given`), with the
+// shell's drop script running in it.
 let code = await Deno.readTextFile(
   new URL('./public/drop.js', import.meta.url),
 )
 let fresh = await (await chatPage(p.env, space, who, 'new')).text()
+let given = JSON.parse(/^let given = (.+)$/m.exec(fresh)![1])
 let box = () => {
-  let html = fresh
-  let { document, window } = parseHTML(html)
+  let { document, window } = parseHTML(fresh)
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
   class Held {
     list: File[] = []
     items = { add: (f: File) => this.list.push(f) }
@@ -208,7 +215,7 @@ let box = () => {
     document.addEventListener.bind(document),
     Held,
     window.Event,
-    { createObjectURL: (f: File) => 'blob:' + f.name, revokeObjectURL() {} },
+    { createObjectURL: () => 'blob:x', revokeObjectURL() {} },
   )
   let input = document.querySelector('#ask .Drop_File') as HTMLInputElement
   let files: File[] = []
@@ -216,6 +223,13 @@ let box = () => {
     files: { get: () => files, set: (v) => files = v },
     multiple: { get: () => input.hasAttribute('multiple') },
   })
+  let text = ''
+  mountAsk({
+    root: document.querySelector('[data-ask]')!,
+    ...given,
+    drafts: { text: () => text, type: (_, t) => void (text = t), spend() {} },
+  })
+
   let field = document.querySelector('[name=say]')!
   let event = (type: string, extra: Record<string, unknown>) => {
     let e = new window.Event(type, { bubbles: true, cancelable: true })
@@ -234,19 +248,21 @@ let box = () => {
         event('drop', { dataTransfer: { types: ['Files'], files: list } }),
       ),
     remove: (i: number) =>
-      (document.querySelectorAll('.Drop_Item button')[i] as HTMLElement)
+      (document.querySelectorAll('#ask .Attachments_Remove')[i] as HTMLElement)
         .click(),
     sending: () => files.map((f) => f.name),
     shown: () =>
-      [...document.querySelectorAll('#ask .Drop_Item')].map((li) =>
+      [...document.querySelectorAll('#ask .Attachments-held > *')].map((a) =>
         [
-          li.querySelector('img')?.getAttribute('src') ??
-            li.querySelector('.Drop_Kind')?.textContent,
-          li.querySelector('.Drop_Name')?.textContent,
-          li.querySelector('.Drop_Note') ? 'unread' : '',
+          a.querySelector('img') ? 'picture' : '',
+          a.querySelector('img')?.getAttribute('alt') ??
+            a.querySelector('.Attachments_Kind')?.textContent,
+          a.querySelector('.Attachments_Name')?.textContent,
+          a.querySelector('.Attachments_Note') ? 'unread' : '',
         ].filter(Boolean).join(' ')
       ),
     said: () => document.querySelector('#ask .Drop_Said')?.textContent,
+    [Symbol.dispose]: () => Reflect.deleteProperty(globalThis, 'document'),
   }
 }
 let file = (name: string, type: string, size = 3) =>
@@ -254,8 +270,8 @@ let file = (name: string, type: string, size = 3) =>
     value: size,
   })
 
-test('files picked, pasted and dropped join the box, each a preview to take back', () => {
-  let b = box()
+test('files picked, pasted and dropped join the box, each drawn as a sent one is, to take back', () => {
+  using b = box()
   b.pick(file('flyer.png', 'image/png'))
   b.paste(file('image.png', 'image/png'))
   b.drop(
@@ -263,8 +279,8 @@ test('files picked, pasted and dropped join the box, each a preview to take back
     file('site.zip', 'application/zip'),
   )
   assertEquals(b.shown(), [
-    'blob:flyer.png flyer.png',
-    'blob:image.png image.png',
+    'picture flyer.png',
+    'picture image.png',
     'PDF agenda.pdf',
     'ZIP site.zip unread',
   ])
@@ -276,13 +292,31 @@ test('files picked, pasted and dropped join the box, each a preview to take back
   ])
   b.remove(1)
   assertEquals(b.sending(), ['flyer.png', 'agenda.pdf', 'site.zip'])
+  assertEquals(b.shown(), [
+    'picture flyer.png',
+    'PDF agenda.pdf',
+    'ZIP site.zip unread',
+  ])
   // Sent, the box lets go of them.
   b.pick()
   assertEquals(b.shown(), [])
 })
 
+test('the box posts its words and files as a form where no script runs', () => {
+  let form = parseHTML(fresh).document.querySelector('#ask')!
+  assertEquals(
+    ['method', 'enctype', 'action'].map((a) => form.getAttribute(a)),
+    ['post', 'multipart/form-data', '/manage/clerk/operator'],
+  )
+  assertEquals(
+    [...form.querySelectorAll('[name]')].map((f) => f.getAttribute('name')),
+    ['request', 'page', 'say', 'file'],
+  )
+  assertEquals(form.querySelector('[type=submit]')?.textContent, 'Send')
+})
+
 test('a file over the size the box takes is left out, and the box says so', () => {
-  let b = box()
+  using b = box()
   b.pick(
     file('scan.tiff', 'image/tiff', 16_000_001),
     file('note.txt', 'text/plain'),

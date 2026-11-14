@@ -102,7 +102,7 @@ try {
 | `@yaks/ux`              | `Edit`, `Text`, `Disclosure`, `Conversation`, `Order`, `Fields`, `Submit`; `useRows`; `Ux`, `useHost`, `useOwner`; `useEdit`; state, emission, formatting and picker helpers; `defineKit`, `kitDocs`; `completion`; their types |
 | `@yaks/ux/views`        | `editorViews`, `views`: editor registrations and their registry                                                                                                                                                                 |
 | `@yaks/ux/vocab`        | `uxDoc`, `docs`, `description`: the UX vocabulary documents and package summary                                                                                                                                                 |
-| `@yaks/ux/conversation` | `Conversation`, its state helpers and `TAKE`, alone, for a page that draws nothing else of this package                                                                                                                         |
+| `@yaks/ux/conversation` | `Conversation` and its `Box`, their helpers and `TAKE`, alone, for a page that draws nothing else of this package                                                                                                               |
 | `@yaks/ux/ui`           | `kit`, `ux`: the base UX kit and `{ base: kit }`                                                                                                                                                                                |
 | `@yaks/ux/completion`   | `completion`; `typed`, `placed`, `moved`, `taken`, `dismissed`, `act`, `CAP`; controller, input and transition types                                                                                                            |
 | `@yaks/ux/keys`         | `walk`, `keymap`, `walkKeys`, `chord`, `land`, `items`, `front`, `typing`; `Box`, `Move`: vim's keys walking a page                                                                                                             |
@@ -340,6 +340,38 @@ let html = renderToString(
   h(Conversation, { e, onChange: () => {}, lines, now: 'Writing…' }),
 )
 equal(html.includes('id="row-l3"'), true)
+```
+
+`Conversation.Box` is where a person writes to it, wearing @yaks/ui's
+`Composer`. Its words are a draft at `place` in the host's `drafts` (or its own
+`drafts`), so nothing typed is lost and the words follow the person to their
+other interfaces. Enter sends and Shift+Enter starts a line; Send emits the
+bundle its owner's `words` makes of them through `onSend`, and Stop emits a
+`Stop` event on the `session` (`stopped`) through `onStop`. The owner says where
+each goes and spends the draft once the words are taken, so a send that fails
+keeps them. What is the owner's own (files, a microphone, who the words go to)
+it hands the box as `top`, `tools` and `beside`; any other prop lands on its
+form, which posts as it is where no script runs.
+
+```ts
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
+import { Conversation, stopped } from '@yaks/ux'
+import { equal } from '@yaks/testing'
+
+let drafts = { text: () => 'Add it to Sunday', type() {}, spend() {} }
+let html = renderToString(h(Conversation.Box, {
+  place: 'chat:session-1',
+  drafts,
+  session: 'session-1',
+  words: (body) => ({ entity: { eid: 'said-1' }, content: { body } }),
+  onSend: () => {},
+  onStop: () => {},
+  name: 'say',
+  method: 'post',
+}))
+equal(html.includes('Add it to Sunday</textarea>'), true)
+equal(stopped('session-1'), { entity: { eid: 'session-1' }, Stop: {} })
 ```
 
 `useRows(front, query)` is what a domain component asks of the page's graph with

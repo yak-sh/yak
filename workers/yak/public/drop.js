@@ -10,10 +10,10 @@
 //
 // A gathering part (`.Drop-gather`, a chat app's message box) takes a drop or
 // a paste anywhere on it, and adds each choice, drop or paste to what it
-// holds. The input says what it takes: `data-size` the most bytes of one
-// file and `data-count` the most files, past which a file is left out and the
-// part says so (`.Drop_Said`), and `data-reads` the kinds that are read (as
-// `accept` names them), a file of any other kind marked with `data-unread`.
+// holds; what it holds its page draws, hearing `change`, each with a button
+// that takes it back (`data-drop-remove`). The input says what it takes:
+// `data-size` the most bytes of one file and `data-count` the most files,
+// past which a file is left out and the part says so (`.Drop_Said`).
 {
   let zoneOf = (e) =>
     e.target.closest?.('.Drop_Zone') ?? e.target.closest?.('.Drop-gather')
@@ -31,20 +31,6 @@
 
   // What each input was last given, so a gathering part adds a choice to it.
   let holding = new WeakMap()
-
-  // Whether a file is of a kind `data-reads` names.
-  let reads = (input, file) => {
-    let kinds = input.dataset.reads
-    if (!kinds) return true
-    let name = file.name.toLowerCase(), type = file.type.toLowerCase()
-    return kinds.split(',').map((k) => k.trim().toLowerCase()).some((k) =>
-      k.startsWith('.')
-        ? name.endsWith(k)
-        : k.endsWith('/*')
-        ? type.startsWith(k.slice(0, -1))
-        : type == k
-    )
-  }
 
   // Sets the input's files and says so, as a choice would: within its
   // ceilings, and saying what was left out.
@@ -79,15 +65,9 @@
     return s
   }
 
-  // A file's kind as a person names it: its extension, else what it is.
-  let kind = (file) =>
-    file.name.match(/\.([a-z0-9]{1,5})$/i)?.[1].toUpperCase() ??
-      (file.type.split('/')[0] || 'File')
-
   let row = (input, file, i) => {
     let li = document.createElement('li')
     li.className = 'Drop_Item'
-    let gather = gathers(input)
     if (file.type.startsWith('image/')) {
       let img = document.createElement('img')
       img.className = 'Drop_Picture'
@@ -95,16 +75,12 @@
       img.src = URL.createObjectURL(file)
       img.onload = () => URL.revokeObjectURL(img.src)
       li.append(img)
-    } else if (gather) li.append(span('Drop_Kind', kind(file)))
-    li.append(span('Drop_Name', file.name), span('Drop_Size', size(file.size)))
-    if (!reads(input, file) && input.dataset.unread) {
-      li.classList.add('Drop_Item-unread')
-      li.append(span('Drop_Note', input.dataset.unread))
     }
+    li.append(span('Drop_Name', file.name), span('Drop_Size', size(file.size)))
     let remove = document.createElement('button')
     remove.type = 'button'
     remove.className = 'Button'
-    remove.textContent = gather ? '✕' : 'Remove'
+    remove.textContent = 'Remove'
     remove.setAttribute('aria-label', `Remove ${file.name}`)
     remove.onclick = () => {
       put(input, [...input.files].filter((_, j) => j != i))
@@ -114,9 +90,10 @@
     return li
   }
 
+  // A zone lists what is chosen under it; a gathering part's page draws it.
   let show = (input) => {
     let list = input.closest('.Drop')?.querySelector('.Drop_Chosen')
-    if (list) {
+    if (list && !gathers(input)) {
       list.replaceChildren(...[...input.files].map((f, i) => row(input, f, i)))
     }
   }
@@ -127,10 +104,7 @@
     let had = holding.get(input) ?? []
     let now = [...input.files]
     // A choice in a gathering part joins what it holds; emptied, it lets go.
-    if (
-      gathers(input) && now.length &&
-      (now.length != had.length || now.some((f, i) => f != had[i]))
-    ) {
+    if (gathers(input) && now.some((f) => !had.includes(f))) {
       return add(input, now.filter((f) => !had.includes(f)))
     }
     holding.set(input, now)
@@ -138,6 +112,16 @@
     if (input.hasAttribute('data-sends') && now.length) {
       input.form?.requestSubmit()
     }
+  })
+  // A file a gathering part's page drew taken back by its button
+  // (`data-drop-remove`, the file's place among them).
+  addEventListener('click', (e) => {
+    let button = e.target.closest?.('[data-drop-remove]')
+    let input = fileOf(button?.closest('.Drop-gather'))
+    if (!input) return
+    let at = Number(button.dataset.dropRemove)
+    put(input, [...input.files].filter((_, j) => j != at))
+    input.focus()
   })
   // A form's reset empties its inputs without a change.
   addEventListener('reset', (e) => {

@@ -124,51 +124,11 @@
   flex-wrap: wrap;
 }
 /* A gathering part (a chat app's message box): it takes a drop or a paste
-   anywhere on it, and what it holds sits along its top as chips, a picture
-   as itself and any other file as its kind and name, each with a way to take
-   it back. */
+   anywhere on it; what it holds its caller draws (Attachments-held). */
 .Drop-gather {
   position: relative;
 }
 .Drop-over {
   outline: 2px dashed var(--accent);
   outline-offset: 2px;
-}
-.Drop-gather .Drop_Chosen {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .5rem;
-}
-.Drop-gather .Drop_Chosen:empty {
-  display: none;
-}
-.Drop-gather .Drop_Item {
-  position: relative;
-  gap: .5rem;
-  max-width: 16rem;
-  padding: .35rem 2rem .35rem .35rem;
-}
-.Drop-gather .Drop_Picture {
-  width: 3.5rem;
-  height: 3.5rem;
-}
-.Drop-gather .Drop_Item > .Button {
-  position: absolute;
-  top: .2rem;
-  right: .2rem;
-  --control-height: 1.6rem;
-  --control-pad-inline: .45rem;
-}
-.Drop_Kind {
-  flex: none;
-  display: grid;
-  place-items: center;
-  min-width: 2.5rem;
-  height: 2.5rem;
-  padding-inline: .3rem;
-  border-radius: var(--radius);
-  background: var(--card);
-  color: var(--muted);
-  font-size: var(--fine, var(--small));
-  font-weight: 700;
 }

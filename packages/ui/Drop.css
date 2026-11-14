@@ -105,19 +105,6 @@
 .Drop_Item-unread {
   flex-wrap: wrap;
 }
-.Drop_Kind {
-  flex: none;
-  display: grid;
-  place-items: center;
-  min-width: 2.5rem;
-  height: 2.5rem;
-  padding-inline: 4px;
-  border-radius: var(--radius);
-  background: var(--card);
-  color: var(--muted);
-  font-size: var(--small);
-  font-weight: 700;
-}
 .Drop-gather {
   position: relative;
 }
@@ -125,28 +112,8 @@
   outline: 2px dashed var(--accent);
   outline-offset: 2px;
 }
-.Drop-gather .Drop_Chosen {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--half-gap);
-}
-.Drop-gather .Drop_Item {
-  position: relative;
-  max-width: 16rem;
-  padding: 4px 2rem 4px 4px;
-}
-.Drop-gather .Drop_Picture {
-  width: 3.5rem;
-  height: 3.5rem;
-}
-.Drop-gather .Drop_Item > .Button {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-}
 /* What is empty takes no room, chips or not. */
 .Drop_Chosen:empty,
-.Drop_Said:empty,
-.Drop-gather .Drop_Chosen:empty {
+.Drop_Said:empty {
   display: none;
 }

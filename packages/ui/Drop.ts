@@ -3,15 +3,15 @@
  * `Drop.Zone` holding the form's own `File` input (unseen, kept in the tab
  * order, so the zone wears its focus) and what it `Say`s, its `Choose` the
  * words that read as the press, then a `Hint` of what it takes. Under it the
- * `Chosen`, an `Item` a file: its `Picture` where it is one or its `Kind`,
+ * `Chosen`, an `Item` a file: its `Picture` where it is one,
  * its `Name`, its `Size` and a button that takes it back; `Item-unread` is
  * one of a kind that is not read, with a `Note` that says so. `Said` is what
  * was left out, past the input's ceilings. `Zone-over` is a zone with files
  * held over it.
  *
  * `Drop-gather` is a part that takes a drop or a paste anywhere on it (a chat
- * app's message box): what it holds sits along its top as chips, each with
- * a way to take it back; `Drop-over` is one with files held over it. Taking
+ * app's message box), whose caller draws what it holds (@yaks/ui
+ * `Attachments-held`); `Drop-over` is one with files held over it. Taking
  * the drop and listing what is chosen are the caller's.
  *
  * @module
@@ -36,7 +36,6 @@ export let Drop:
     | 'Chosen'
     | 'Item'
     | 'Picture'
-    | 'Kind'
     | 'Name'
     | 'Size'
     | 'Note'
@@ -51,7 +50,6 @@ export let Drop:
     Chosen: 'ul',
     Item: 'li',
     Picture: 'img',
-    Kind: 'span',
     Name: 'span',
     Size: 'span',
     Note: 'span',
@@ -71,7 +69,6 @@ export let sheet = (c: Colors): Sheet => ({
   Drop_Choose: { fg: c.accent, underline: true },
   Drop_Hint: { fg: c.muted, block: true },
   Drop_Item: { block: true, spaced: true },
-  Drop_Kind: { fg: c.muted, bold: true },
   Drop_Name: { fg: c.text, bold: true },
   Drop_Size: { fg: c.muted },
   Drop_Note: { fg: c.muted, block: true },
@@ -100,25 +97,20 @@ let zone = (mod?: string) =>
 let item = (
   name: string,
   size: string,
-  { picture = false, kind = '', unread = '', gather = false } = {},
+  { picture = false, unread = '' } = {},
 ) =>
   h(
     Item,
     { mod: unread && 'unread' },
     picture ? h(Drop.Picture, { src: PICTURE, alt: '' }) : null,
-    kind ? h(Drop.Kind, {}, kind) : null,
     h(Drop.Name, {}, name),
     h(Drop.Size, {}, size),
     unread ? h(Drop.Note, {}, unread) : null,
-    h(
-      Button,
-      { type: 'button', 'aria-label': `Remove ${name}` },
-      gather ? '✕' : 'Remove',
-    ),
+    h(Button, { type: 'button', 'aria-label': `Remove ${name}` }, 'Remove'),
   )
 
 /** A zone and what was chosen through it, one held over, and a gathering
- * box with its chips, one held over. */
+ * part, one held over. */
 export let specimens = (): Specimen[] => [
   [
     'Drop, Zone, File, Say, Choose, Hint, Chosen, Item, Picture, Name, Size, ' +
@@ -140,16 +132,10 @@ export let specimens = (): Specimen[] => [
   ],
   ['Drop, Zone-over', h(Drop, {}, zone('over'))],
   [
-    'Drop-gather, Kind',
+    'Drop-gather',
     h(
       Drop,
       { mod: 'gather' },
-      h(
-        Chosen,
-        {},
-        item('kitchen.jpg', '1.2 MB', { picture: true, gather: true }),
-        item('menu.pdf', '310 KB', { kind: 'PDF', gather: true }),
-      ),
       h(Field, { lines: true, value: '', placeholder: 'Say something…' }),
     ),
   ],
@@ -158,7 +144,6 @@ export let specimens = (): Specimen[] => [
     h(
       Drop,
       { mod: ['gather', 'over'] },
-      h(Chosen, {}),
       h(Field, { lines: true, value: '', placeholder: 'Say something…' }),
     ),
   ],

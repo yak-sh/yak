@@ -961,7 +961,11 @@
     flex: 1 1 auto;
     min-height: 0;
   }
-  /* The box to write in, held at the foot of the window. */
+  /* The box to write in, held at the foot of the window; the page's script
+     draws it in a place of its own that takes no room (operator-box.ts). */
+  .Talk_Ask {
+    display: contents;
+  }
   .Talk_Box {
     position: sticky;
     bottom: 0;

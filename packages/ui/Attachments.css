@@ -34,3 +34,59 @@
   color: var(--text);
   text-decoration: none;
 }
+.Attachments_Kind {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  padding-inline: .3rem;
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+  font-weight: 700;
+}
+.Attachments_Name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Attachments_Size,
+.Attachments_Note {
+  color: var(--muted);
+  font-size: var(--fine, var(--small));
+}
+.Attachments_Size {
+  flex: none;
+}
+.Attachments_Note {
+  flex-basis: 100%;
+}
+/* Files held to send, along a message box's top: small, each with a way to
+   take it back at its corner. */
+.Attachments-held .Attachments_Picture,
+.Attachments-held .Attachments_File {
+  position: relative;
+  flex-wrap: wrap;
+}
+.Attachments-held .Attachments_File {
+  padding-right: 2rem;
+}
+.Attachments-held .Attachments_Image {
+  width: 3.5rem;
+  height: 3.5rem;
+}
+.Attachments_Remove {
+  position: absolute;
+  top: .2rem;
+  right: .2rem;
+  --control-height: 1.6rem;
+  --control-pad-inline: .45rem;
+}
+.Attachments:empty {
+  display: none;
+}
