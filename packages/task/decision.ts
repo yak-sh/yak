@@ -57,7 +57,10 @@ export let answer = (eid: string, choice: string, by?: string): Bundle[] => [{
   ...(by ? { $decider: by } : {}),
 }]
 
-let check = (b: Bundle): void => {
+/** Refuses a decision that is not whole: a store composing only this
+ * package's vocabulary runs no {@link deciding}, so decision_new checks the
+ * ask it builds too. */
+export let check = (b: Bundle): void => {
   let d = b.decision as Decision
   if (b.task == null) throw new Refused('A decision must be a task')
   if (!d.question?.trim()) throw new Refused('A decision needs a question')
@@ -74,7 +77,11 @@ let check = (b: Bundle): void => {
     throw new Refused('Each choice needs a description')
   }
   if (!d.choices.some((c) => c.label == d.recommended)) {
-    throw new Refused('Recommend a listed choice by label')
+    let labels = d.choices.map((c) => JSON.stringify(c.label)).join(', ')
+    throw new Refused(`Recommend one of the choices by its label: ${labels}`, {
+      comp: 'decision',
+      prop: 'recommended',
+    })
   }
   if (b.decided && !(b.decided as Comp).choice?.toString().trim()) {
     throw new Refused('Answer a decision with a choice')

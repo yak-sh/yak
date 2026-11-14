@@ -189,3 +189,27 @@ test('an update can make a task wait on others', async () => {
   assertEquals(comp(edge, 'edge'), { from: 'a', to: 'b' })
   assertEquals(comp((await g.get(['a']))[0], 'doc').title, 'checkout')
 })
+
+test('decision_new refuses a recommendation naming none of its labels, listing them', () => {
+  let choices = [
+    { label: 'Warm & traditional', description: 'Serif, cream' },
+    { label: 'Bright', description: 'Sans, white' },
+  ]
+  let ask = (recommended: string) =>
+    tools.decision_new!(...asked({ question: 'Which?', choices, recommended }))
+  let refused = (() => {
+    try {
+      ask('Warm &amp; traditional')
+    } catch (e) {
+      return e as Refused
+    }
+  })()
+  assertEquals(refused instanceof Refused, true)
+  assertEquals(
+    refused!.message,
+    'Recommend one of the choices by its label: "Warm & traditional", "Bright"',
+  )
+  assertEquals([refused!.comp, refused!.prop], ['decision', 'recommended'])
+  let [made] = ask('Warm & traditional') as Bundle[]
+  assertEquals(comp(made, 'decision').recommended, 'Warm & traditional')
+})

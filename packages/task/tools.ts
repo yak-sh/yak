@@ -18,7 +18,7 @@
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
-import { answer, type Choice, shows } from './decision.ts'
+import { answer, check, type Choice, shows } from './decision.ts'
 import { type Edit, edited, type Runs, type TextEdit } from '@yaks/graph/tools'
 import { Refused } from '@yaks/graph/errors'
 import { conjoin } from '@yaks/query'
@@ -223,7 +223,7 @@ export let runs = (): Runs => ({
     let question = String(args.question).trim()
     let filed = filedIn(args)
     let choices = args.choices as (Choice & { shows?: string })[]
-    return [{
+    let asked: Bundle = {
       entity: { eid: '$decision' },
       task: {},
       doc: { title: question },
@@ -236,7 +236,9 @@ export let runs = (): Runs => ({
         recommended: args.recommended,
       },
       ...(filed ? { filed } : {}),
-    }, ...shows('$decision', choices)]
+    }
+    check(asked)
+    return [asked, ...shows('$decision', choices)]
   },
 
   decision_answer: (call): Bundle[] => {
