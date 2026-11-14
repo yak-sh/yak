@@ -1,7 +1,8 @@
 // The home page's yak (public/wander.js) run over index.html in a 1440 by
 // 900 window, its frames stepped by hand. The page's words start where the
 // column does; the hero's yak sits at the top of the page. Out of the hero
-// his place is on the page, so a scroll alone never moves him.
+// his place is on the page, so a scroll alone never moves him. Out there his
+// box asks for 56px of room above him, as style.css's does for his sign.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { parseHTML } from 'linkedom'
@@ -69,7 +70,11 @@ let page = async (column = 144, decode = () => Promise.resolve()) => {
     window,
     NodeFilter: { SHOW_TEXT: 4, FILTER_ACCEPT: 1, FILTER_REJECT: 2 },
     matchMedia: () => ({ matches: false }),
-    getComputedStyle: () => ({ overflowX: 'visible' }),
+    getComputedStyle: () => ({
+      overflowX: 'visible',
+      scrollMarginTop: '56px',
+      scrollMarginBottom: '0px',
+    }),
     performance: { now: () => env.now },
     requestAnimationFrame: (f: (t: number) => void) => env.frames.push(f),
     addEventListener: (type: string, f: () => void) => env.on[type] = f,
@@ -85,11 +90,21 @@ let page = async (column = 144, decode = () => Promise.resolve()) => {
     },
   }
   new Function('scope', `with (scope) {${code}}`)(scope)
+  // what he told the page, and `up` each time he leaves off sitting
+  let told: string[] = [], heard = false
   let step = async (ms: number) => {
     for (let t = 0; t < ms; t += 16) {
       env.now += 16
+      if (!heard && yak()) {
+        heard = true
+        for (let e of ['sat', 'rise', 'home']) {
+          yak().addEventListener(e, () => told.push(e))
+        }
+      }
+      let was = where()
       let frames = env.frames.splice(0)
       frames.forEach((f) => f(env.now))
+      if (was.endsWith('sitting') && where().endsWith('moving')) told.push('up')
       await Promise.resolve()
     }
   }
@@ -118,7 +133,7 @@ let page = async (column = 144, decode = () => Promise.resolve()) => {
     (e) => asked.push((e as CustomEvent).detail),
   )
   let click = () => yak().dispatchEvent(new Event('click'))
-  return { step, scroll, where, click, asked, started: env.started! }
+  return { step, scroll, where, click, asked, told, started: env.started! }
 }
 
 test('the home page draws the yak as its logo, and loads what moves him', async () => {
@@ -143,18 +158,18 @@ test('once loaded he shows, sitting as the logo', async () => {
   assertEquals(p.where(), 'home sitting')
 })
 
-test('scrolled out of view, he scampers in just far enough to be in frame, and there he stays', async () => {
+test('scrolled out of view, he scampers in just far enough to be in frame with room for what he holds, and there he stays', async () => {
   let p = await page()
   await p.scroll(1500)
   await p.step(500)
   assertEquals(p.where(), 'home sitting', 'he waits for the page to be still')
   await p.step(3000)
-  assertEquals(p.where(), 'translate(21px, 1512px) sitting')
+  assertEquals(p.where(), 'translate(21px, 1568px) sitting')
   await p.scroll(1400)
   await p.step(3000)
   assertEquals(
     p.where(),
-    'translate(21px, 1512px) sitting',
+    'translate(21px, 1568px) sitting',
     'in frame, he does not move',
   )
   await p.scroll(700)
@@ -175,6 +190,18 @@ test('scrolled back to the hero, he goes up into his place', async () => {
   assert(p.where().endsWith('moving'), p.where())
   await p.step(8000)
   assertEquals(p.where(), 'home sitting')
+})
+
+test('he gets up, telling the page, before every walk, even carried far out of frame', async () => {
+  let p = await page()
+  await p.scroll(1500)
+  await p.step(3000)
+  await p.scroll(4000)
+  await p.step(3000)
+  assertEquals(p.told, ['up', 'sat', 'rise', 'up', 'sat'])
+  await p.scroll(0)
+  await p.step(9000)
+  assertEquals(p.told.slice(5), ['rise', 'up', 'home'])
 })
 
 test('with no margin to walk in, he stays the logo', async () => {

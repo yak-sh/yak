@@ -16,8 +16,10 @@
 //
 // He tells the page what he does, as events on him that a listener on the
 // window hears by capturing: `sat` when he sits down out in the margin, `rise`
-// when he gets up from there, and `home` when he is back in his place
-// (sky.js holds up a button by them).
+// when he gets up from there, always before he walks, and `home` when he is
+// back in his place (sky.js holds up a button by them). What the page has him
+// hold out there gets room in the window: his box's scroll margins, kept
+// clear above and below him like the window's edges (style.css).
 //
 // Every strip of frames is decoded before he first moves, and each one is a
 // layer of its own, shown or hidden whole, so no frame waits on a picture.
@@ -169,6 +171,7 @@
       size = 0,
       y = 0,
       x = 0,
+      room = [0, 0],
       dir = 1,
       homing = false
     let phase = 0, last = 0, scrolled = -Infinity
@@ -181,6 +184,10 @@
       yak.classList.add('Wander-out')
       yak.style.width = yak.style.height = `${size}px`
       document.body.append(yak)
+      let m = getComputedStyle(yak)
+      room = [m.scrollMarginTop, m.scrollMarginBottom].map((v) =>
+        parseFloat(v) || 0
+      )
     }
     let home = () => {
       where = 'home', act = 'sit'
@@ -205,9 +212,13 @@
       // the window's top and bottom, and his place in the hero, on the page
       let top = scrollY, bottom = scrollY + innerHeight
       let hx = s.left + scrollX, hy = s.top + scrollY
-      // where he goes: his place, or the nearest spot in frame
+      // where he goes: his place, or the nearest spot in frame with room
+      // for what he holds
       let target = () =>
-        inView ? hy : Math.min(Math.max(y, top + PAD), bottom - size - PAD)
+        inView ? hy : Math.min(
+          Math.max(y, top + PAD + room[0]),
+          bottom - size - PAD - room[1],
+        )
 
       if (where == 'home') {
         if (inView || !quiet || !lane.size) return
@@ -219,9 +230,9 @@
       if (!lane.size) return home()
 
       if (act == 'sit' && quiet && Math.abs(target() - y) > 1) {
-        if (y <= top - size) y = top - size, act = 'walk'
-        else if (y >= bottom) y = bottom, act = 'walk'
-        else act = 'rise', phase = 0, yak.dispatchEvent(new Event('rise'))
+        // carried far out of frame, he gets up just beyond its edge
+        y = Math.min(Math.max(y, top - size), bottom)
+        act = 'rise', phase = 0, yak.dispatchEvent(new Event('rise'))
       }
       if (act == 'rise') {
         phase += dt * STEP

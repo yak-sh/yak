@@ -27,6 +27,11 @@ let sky = ({ dark = false, calm = false } = {}) => {
     top: 0,
     width: 6000,
   })
+  // the Start Free button is 97px across
+  Object.defineProperty(window.HTMLElement.prototype, 'offsetWidth', {
+    get: () => 97,
+    configurable: true,
+  })
   window.Element.prototype.animate = function (this: Element) {
     moved.push(this.getAttribute('class') ?? '')
     return {} as Animation
@@ -47,13 +52,21 @@ let sky = ({ dark = false, calm = false } = {}) => {
     getSelection: () => ({ toString: () => '' }),
     scrollX: 0,
     scrollY: 0,
+    innerWidth: 1440,
   }
   new Function('scope', `with (scope) {${code}}`)(scope)
   let el = (s: string) => document.querySelector(s)!
   // a touch at a point in his units, landing on `on` (the hero, by default)
   let touch = (x: number, y: number, target = el('.Hello')) =>
     on.click({ target, clientX: x + 3000, clientY: y + 800 })
-  return { el, touch, moved, document }
+  // the wandering yak, sat down out in the margin at `left`, 72px across
+  let sat = (left: number) => {
+    let yak = document.createElement('div')
+    yak.getBoundingClientRect = rect({ left, width: 72 })
+    on.sat({ target: yak })
+    return yak.querySelector('.Sign') as HTMLElement
+  }
+  return { el, touch, moved, document, sat, on }
 }
 
 test('the line he sits on is set where his tail touches it', () => {
@@ -101,4 +114,24 @@ test('for less motion nothing in the sky moves, and the moon still turns', () =>
   assertEquals([...day.moved, ...night.moved], [])
   assertEquals(night.el('.Sky_Moon').getAttribute('d'), moon(PHASES[1]))
   assert(night.document.querySelectorAll('.Sky_Shoot').length == 1)
+})
+
+test('the button he holds up is slid along its post to stay in the window', () => {
+  let { sat } = sky()
+  let shift = (left: number) => sat(left).style.getPropertyValue('--shift')
+  // centred over him it would start at 4.8 + 36 - 48.5 = -7.7, past the left
+  assertEquals(shift(4.8), '15.7px')
+  assertEquals(shift(200), '0.0px')
+  // and end at 1400 + 36 + 48.5 = 1484.5, past the right
+  assertEquals(shift(1400), '-52.5px')
+})
+
+test('he lowers the button as he gets up, and it is gone once he is home', () => {
+  let { sat, on } = sky()
+  let sign = sat(200)
+  assertEquals(Object.keys(sign.dataset), ['out'])
+  on.rise({})
+  assertEquals(Object.keys(sign.dataset), ['away'])
+  on.home({})
+  assertEquals(Object.keys(sign.dataset), [])
 })

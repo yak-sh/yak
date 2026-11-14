@@ -1010,7 +1010,13 @@
 
   /* The Start Free button he holds up when he sits down in the margin
      (wander.js `sat`, sky.js), and beside him in his place for anyone who
-     asks for less motion, since then he never walks. */
+     asks for less motion, since then he never walks. Out there he keeps
+     room in the window above him for it: its post and button, about 3rem,
+     and the wave's lift (wander.js reads his scroll margins). sky.js slides
+     the button along its post (--shift) to keep it in the window. */
+  .Wander-out {
+    scroll-margin-top: 3.5rem;
+  }
   .Wander > .Sign {
     inset: auto auto 92% 50%;
     translate: -50% 0;
@@ -1029,6 +1035,7 @@
     background: #9b7b62;
   }
   .Sign_Button.Button {
+    translate: var(--shift, 0px) 0;
     font-size: 0.8125rem;
     padding: 0.3rem 0.7rem;
     min-height: 0;
@@ -1046,6 +1053,18 @@
     visibility: visible;
     animation: Sign-raise 0.9s cubic-bezier(0.3, 0.7, 0.4, 1) both,
       Sign-wave 2.8s 0.9s ease-in-out infinite;
+  }
+  /* lowered as he gets up, gone before he walks */
+  .Wander > .Sign[data-away] {
+    visibility: visible;
+    pointer-events: none;
+    animation: Sign-lower 0.3s ease-in both;
+  }
+  @keyframes Sign-lower {
+    100% {
+      transform: translateY(70%) scale(0.2);
+      opacity: 0;
+    }
   }
   @keyframes Sign-raise {
     0% {

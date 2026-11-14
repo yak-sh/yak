@@ -10,7 +10,9 @@
 // At dusk, birds fly by now and then (<.Sky data-birds="most lo hi low
 // high">: how many in a flock at most, the seconds between flocks, and how
 // high they fly, in his units above his hooves). When he sits down out in
-// the margin (wander.js `sat`) he holds up the Start Free button.
+// the margin (wander.js `sat`) he holds up the Start Free button, slid along
+// its post to stay in the window, and he lowers it as he gets up (`rise`),
+// before he walks.
 //
 // A touch on the sky: the sun sinks behind the hills and comes back up, the
 // moon turns through its phases (<.Sky data-phases>, its shapes), stars
@@ -98,10 +100,11 @@
     setTimeout(() => (fly(), next(between(lo, hi) * 1000)), wait)
   if (slot && sky && most && !calm.matches) next(between(3, 6) * 1000)
 
-  // the button: brought out when he sits in the margin, put away when he
-  // gets up or goes home
+  // the button: brought out when he sits in the margin, lowered when he
+  // gets up, and gone when he is home
   let SIGN =
     '<span class="Sign"><a href="/login" class="Surface_Press Button Button-go Sign_Button" data-cta="yak">Start Free</a></span>'
+  let EDGE = 8 // css px the button keeps from the window's sides
   let sign
   addEventListener('sat', (e) => {
     if (!sign) {
@@ -110,7 +113,14 @@
       sign = t.content.firstChild
     }
     e.target.append(sign)
+    delete sign.dataset.away
     sign.dataset.out = ''
+    // it stands centred over him: slid along so all of it is in the window
+    let r = e.target.getBoundingClientRect()
+    let mid = r.left + r.width / 2, half = sign.offsetWidth / 2
+    let shift = Math.max(0, EDGE - (mid - half)) ||
+      Math.min(0, innerWidth - EDGE - (mid + half))
+    sign.style.setProperty('--shift', `${shift.toFixed(1)}px`)
   }, true)
   // for anyone who asks for less motion he never walks: he sits as the logo
   // with the button already beside him, where there is room for it
@@ -119,9 +129,15 @@
     t.innerHTML = SIGN
     slot.append(t.content.firstChild)
   }
-  let away = () => sign && delete sign.dataset.out
-  addEventListener('rise', away, true)
-  addEventListener('home', away, true)
+  let lower = () => {
+    if (sign?.dataset.out == null) return
+    delete sign.dataset.out
+    sign.dataset.away = ''
+  }
+  addEventListener('rise', lower, true)
+  addEventListener('home', () => {
+    if (sign) delete sign.dataset.out, delete sign.dataset.away
+  }, true)
 
   // The sky's things where they are in the window: `at(x, y)` is a point in
   // his units, from the far scene's box.
