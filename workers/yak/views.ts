@@ -126,6 +126,26 @@ export let TOP = 10
 export let ROWS = 1000
 
 /**
+ * How many apps one query names. The SQL API refuses SQL longer than 10000
+ * characters, and each app is 40 of them (`'<eid>', `), so a platform's every
+ * app is asked about this many at a time, the batches side by side.
+ */
+export let APPS = 200
+
+// Each batch of APPS apps asked by `ask`, at once, the answers one map.
+let batched = async <T>(
+  apps: string[],
+  ask: (apps: string[]) => Promise<Map<string, T>>,
+): Promise<Map<string, T>> => {
+  let batches = []
+  for (let i = 0; i < apps.length; i += APPS) {
+    batches.push(apps.slice(i, i + APPS))
+  }
+  let all = await Promise.all(batches.map(ask))
+  return new Map(all.flatMap((m) => [...m]))
+}
+
+/**
  * How long an answer is held before the SQL API is asked again. Views are a
  * curiosity, not a control: a few minutes stale is invisible to a person, and
  * it saves a round trip on every refresh of the page.
@@ -416,22 +436,19 @@ export let statsFor = (
 }
 
 /**
- * Every app's views over the last `days` ({@link DAYS} by default), in one
- * query, for the hourly reading to keep on each row (usage.ts): an app absent
- * from the answer had none.
+ * Every app's views over the last `days` ({@link DAYS} by default), one query
+ * a batch of {@link APPS}, for the hourly reading to keep on each row
+ * (usage.ts): an app absent from the answer had none.
  */
-export let visited = async (
+export let visited = (
   env: Env,
   apps: string[],
   days = DAYS,
-): Promise<Map<string, number>> => {
-  if (!apps.length) return new Map()
-  let rows = await ran(
-    env,
-    totals(apps, days, env.VIEWS_DATASET ?? DATASET),
-  )
-  return new Map(rows.map((r) => [word(r.app), num(r.views)]))
-}
+): Promise<Map<string, number>> =>
+  batched(apps, async (apps) => {
+    let rows = await ran(env, totals(apps, days, env.VIEWS_DATASET ?? DATASET))
+    return new Map(rows.map((r) => [word(r.app), num(r.views)]))
+  })
 
 // The last day's answers, by the apps asked about, held like `held`.
 let lastDays = new Map<
@@ -549,9 +566,17 @@ export let ago = (stats: Pick<Stats, 'at'>, now = Date.now()) => {
   } ago)`
 }
 
-// Four questions, four queries, whatever the number of apps: one round
-// trip's worth of waiting, and a second only for an app a list cut short.
-let asked = async (
+// Four questions, four queries a batch of APPS apps: one round trip's worth
+// of waiting, and a second only for an app a list cut short.
+let asked = (
+  env: Env,
+  apps: string[],
+  days: number,
+  now: number,
+): Promise<Map<string, Stats>> =>
+  batched(apps, (apps) => askedOf(env, apps, days, now))
+
+let askedOf = async (
   env: Env,
   apps: string[],
   days: number,

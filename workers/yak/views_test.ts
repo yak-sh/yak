@@ -19,6 +19,7 @@ import type { Visited } from './crawlers.ts'
 import { fetch as siteFetch } from './site.ts'
 import {
   ago,
+  APPS,
   classed,
   cut,
   daily,
@@ -41,6 +42,7 @@ import {
   topFrom,
   topPages,
   viewed,
+  visited,
 } from './views.ts'
 
 // A request from this user agent, and from this network as Cloudflare reads it.
@@ -399,6 +401,31 @@ test('every app of a page is asked about in the same four queries', async () => 
     // Held for a few minutes: asked again, nothing is asked.
     await statsOf(env(), box, 3, Date.parse('2026-09-06T12:01:00Z'))
     assertEquals(api.asked.length, 4)
+  } finally {
+    api.done()
+  }
+})
+
+test('a platform of apps is asked about in queries the SQL API takes', async () => {
+  let apps = Array.from({ length: APPS * 2 + 1 }, () => crypto.randomUUID())
+  let api = sql((q) => {
+    assert(q.length <= 10000, `${q.length} characters`)
+    return {
+      body: JSON.stringify({
+        data: named(q).map((app) => ({ app, day: '2026-09-06', views: 1 })),
+      }),
+    }
+  })
+  try {
+    let views = await visited(env(), apps)
+    assertEquals(api.asked.length, 3)
+    assertEquals(apps.filter((app) => views.get(app) == 1).length, apps.length)
+    let all = await statsFor(env(), apps, 3, Date.parse('2026-09-06T12:00:00Z'))
+    assertEquals(api.asked.length, 3 + 3 * 4)
+    assertEquals(
+      apps.filter((app) => all?.get(app)?.total == 1).length,
+      apps.length,
+    )
   } finally {
     api.done()
   }
