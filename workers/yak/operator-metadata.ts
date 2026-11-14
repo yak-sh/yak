@@ -1,6 +1,7 @@
 import { Annotated } from '@yaks/ui/parts'
 import type { Bundle, Comp } from '@yaks/graph/bundle'
-import { type ComponentChildren as Node, h } from 'preact'
+import { h } from 'preact'
+import { type Kind, kind, MARGIN } from '@yaks/session/conversation'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -64,18 +65,21 @@ let dollars = (cost: number) =>
     maximumFractionDigits: 6,
   })
 
-/** A quiet margin outside the message's reading column. */
-export let measured = (node: Node, meta?: Metadata) =>
-  !meta ? node : h(
-    Annotated,
-    {},
-    h(Annotated.Content, {}, node),
-    h(
-      Annotated.Margin,
-      { tabindex: 0, 'data-tip': meta.detail, 'aria-label': meta.detail },
-      h(Annotated.Number, { 'data-sequence': '' }, `#${meta.seq}`),
-      meta.cost != null
-        ? h(Annotated.Number, { 'data-cost': '' }, dollars(meta.cost))
-        : null,
-    ),
-  )
+/** The admin's margin: each entry's position since compaction and what its
+ * model request cost, quiet beside its line, outside the reading column. A
+ * view loads it beside the kinds of line (operator-host.ts); a person's
+ * loads none. */
+export let margins = (measures: Record<string, Metadata>): Kind =>
+  kind('.entry', (b) => {
+    let meta = measures[b.entity.eid]
+    return meta && {
+      node: h(
+        Annotated.Margin,
+        { tabindex: 0, 'data-tip': meta.detail, 'aria-label': meta.detail },
+        h(Annotated.Number, { 'data-sequence': '' }, `#${meta.seq}`),
+        meta.cost != null
+          ? h(Annotated.Number, { 'data-cost': '' }, dollars(meta.cost))
+          : null,
+      ),
+    }
+  }, MARGIN)

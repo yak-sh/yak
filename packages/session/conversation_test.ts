@@ -1,6 +1,6 @@
 // A conversation's lines (./conversation.ts): each kind of entry drawn as the
-// person reads it, a host's kinds ahead of these, and which entries make a
-// line (./lines.ts `joined`).
+// person reads it, a host's kinds ahead of these, a margin where a view loads
+// one, and which entries make a line (./lines.ts `joined`).
 import { equal, test } from '@yaks/testing'
 import { renderToString } from 'preact-render-to-string'
 import { Fragment, h } from 'preact'
@@ -13,6 +13,8 @@ import {
   type Kind,
   kind,
   kinds,
+  MARGIN,
+  margin,
   namer,
 } from './conversation.ts'
 
@@ -108,6 +110,26 @@ test("a host's kinds draw ahead of these, and pass an entry back to them", () =>
     'Yes.',
     '',
   ])
+})
+
+test('a margin is drawn where a view loads one, by the most specific that draws it', () => {
+  let said = (registry: typeof kinds, b: Bundle) =>
+    renderToString(h(Fragment, null, margin(registry, b, { names })))
+  let noted = define<Kind>([
+    kind(
+      '.noted',
+      (b) => (b.noted as { by?: string }).by ? { node: 'Noted' } : undefined,
+      MARGIN,
+    ),
+    kind('.entry', () => ({ node: '#1' }), MARGIN),
+    ...kinds.renderers,
+  ])
+  let words = e('w', { content: { body: 'Hello' } })
+  equal(said(kinds, words), '')
+  equal(said(noted, words), '#1')
+  equal(said(noted, e('n', { noted: { by: 'a' } })), 'Noted')
+  equal(said(noted, e('n', { noted: {} })), '#1')
+  equal(read(words, {}, noted), ['theirs', 'Hello', ''])
 })
 
 test('which entries make a line: a result joins its call, a run of repeats is one', () => {

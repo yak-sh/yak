@@ -11,7 +11,11 @@
  * A host with words of its own (a channel's mark, a helper) puts its kinds
  * ahead of {@link kinds} in its own registry; the most specific match draws
  * the entry, and {@link draw} gives it to the next best when a kind passes.
- * Which entries make a line is `joined` (./lines.ts), which reads no kit.
+ * What a view draws beside a line, outside its reading column, is a kind
+ * registered under `Conversation.Margin` ({@link margin}): a view that loads
+ * none draws its lines without one. Which renderers a view loads is the list
+ * its registry is defined from. Which entries make a line is `joined`
+ * (./lines.ts), which reads no kit.
  *
  * @module
  */
@@ -93,26 +97,48 @@ export type Kind<B extends Beside = Beside> = Registration & {
 /** The view every kind of line is registered under. */
 export let LINE = 'Conversation.Line'
 
+/** The view what a line has beside it is registered under: drawn outside
+ * its reading column, of the entry the line is put by (an admin's sequence
+ * and cost). */
+export let MARGIN = 'Conversation.Margin'
+
 // Every kind matches on which components an entry wears and on nothing they
 // hold, and a vocabulary reads an undeclared name in a presence test as a
 // component: kinds select the same under any vocabulary, so they need none.
 let NONE = loadVocab([])
 
-/** An entry drawn as its line, by the most specific kind that draws it. */
-export let draw = <B extends Beside>(
+// An entry drawn in a view by the most specific kind registered under it
+// that draws it.
+let drawn = <B extends Beside>(
+  view: string,
   registry: Registry<Kind<B>>,
   b: Bundle,
   beside: B,
 ): Said | null => {
   let pool = registry
   for (;;) {
-    let kind = resolve(pool, b, LINE, NONE)
+    let kind = resolve(pool, b, view, NONE)
     if (!kind) return null
     let said = kind.draw(b, beside)
     if (said !== undefined) return said
     pool = { ...pool, renderers: pool.renderers.filter((k) => k != kind) }
   }
 }
+
+/** An entry drawn as its line, by the most specific kind that draws it. */
+export let draw = <B extends Beside>(
+  registry: Registry<Kind<B>>,
+  b: Bundle,
+  beside: B,
+): Said | null => drawn(LINE, registry, b, beside)
+
+/** What the line an entry is put by has beside it, by the most specific
+ * margin kind that draws it; nothing where the registry loads none. */
+export let margin = <B extends Beside>(
+  registry: Registry<Kind<B>>,
+  b: Bundle,
+  beside: B,
+): Node => drawn(MARGIN, registry, b, beside)?.node ?? null
 
 /** Where the ids in a reader's Markdown open (@yaks/markdown `Host`): `url`,
  * with `{id}` where the id goes, as the reader's own server says; none, and
@@ -340,12 +366,14 @@ export let words = (said: string): string => {
   return said
 }
 
-/** A kind of line drawn by `draw`, matching `match` (a query of which
- * components an entry wears), or any entry where it is empty. */
+/** A kind drawn by `draw`, matching `match` (a query of which components
+ * an entry wears), or any entry where it is empty: a kind of line, or under
+ * `view` another place a line is drawn ({@link MARGIN}). */
 export let kind = <B extends Beside = Beside>(
   match: string,
   draw: Kind<B>['draw'],
-): Kind<B> => ({ view: LINE, match: match ? query(match) : true, draw })
+  view = LINE,
+): Kind<B> => ({ view, match: match ? query(match) : true, draw })
 
 /** The kinds of line any transcript has: a tool call, a refusal, a reply, a
  * failure, a stop, and a person's words, which is any entry no other kind

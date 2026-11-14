@@ -30,6 +30,7 @@ import {
   spoken,
   told,
   VIA,
+  type View,
   wire,
 } from './operator-draw.ts'
 import { type Names, opening, theirs } from '@yaks/session/conversation'
@@ -589,12 +590,14 @@ export let helperFrame = (
   }
 }
 
-/** A task as its conversation draws it: its lines and what it is doing now. */
+/** A task as its conversation draws it: its lines, drawn by the renderers
+ * `view` loads, and what it is doing now. */
 export let talk = (
   task: Bundle,
   entries: Bundle[],
   names: Names,
   seen: Seen = {},
+  view?: View,
 ) => {
   let working = now(entries, names)
   let first = comp(entries.find((b) => b.entry), 'entry')?.seq
@@ -612,7 +615,7 @@ export let talk = (
       h(
         Transcript.Lines,
         { 'data-rows': '' },
-        lines(entries, names, seen).map(row),
+        lines(entries, names, seen, view).map(row),
       ),
       // the words a screen reader hears; the yak beside the box shows them
       h(Transcript.Status, {}, h('span', { 'data-now': '' }, working)),

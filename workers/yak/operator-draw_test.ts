@@ -5,11 +5,23 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { PART } from '@yaks/persona/part'
-import { h } from 'preact'
+import { Fragment, h } from 'preact'
 import { parseHTML } from 'linkedom'
 import { type Box, look as kit, mount, type Node } from '@yaks/native'
 import type { Colors } from '@yaks/ui'
-import { drawLines, lines, look, type Seen, wire } from './operator-draw.ts'
+import {
+  CONTEXT,
+  drawLines,
+  lines,
+  look,
+  PERSON,
+  type Seen,
+  type View,
+  wire,
+} from './operator-draw.ts'
+import { margins, metadata } from './operator-metadata.ts'
+import { define } from '@yaks/render'
+import { renderToString } from 'preact-render-to-string'
 import { namer } from '@yaks/session/conversation'
 import { HEARD, rows } from './operator-view.ts'
 import { rowsOf } from './operator-rows.ts'
@@ -146,6 +158,26 @@ test('each line sent alone draws from its own entries what the conversation draw
   assertEquals(Object.keys(sent.tools), ['files'])
   assertEquals(Object.keys(sent.offers), ['tools'])
   assertStringIncludes(rowsOf(sent)[0].html, 'Read notes for Jeff')
+})
+
+test('a view draws what it loads: the context a model was given, a margin beside each line', () => {
+  let names = namer(seen)
+  let drawn = (view?: View) =>
+    lines(conversation, names, seen, view).map((l) =>
+      renderToString(h(Fragment, null, l.node))
+    )
+  // Each line's own number, after those of the lines folded in it.
+  let numbers = (view?: View) =>
+    drawn(view).map((s) =>
+      [...s.matchAll(/data-sequence[^>]*>([^<]*)/g)].at(-1)?.[1]
+    )
+  let briefless = define(PERSON.filter((k) => !CONTEXT.includes(k)))
+  assertEquals(drawn().filter((s) => s.includes('The context')).length, 4)
+  assertEquals(drawn(briefless).filter((s) => s.includes('context')), [])
+  assertEquals(drawn(briefless).length, 4)
+  assertEquals(numbers(), Array(7).fill(undefined))
+  let admin = define([...PERSON, margins(metadata(conversation, [], [], []))])
+  assertEquals(numbers(admin), ['#1', '#3', '#4', '#6', '#7', '#11', undefined])
 })
 
 test('a contact request stays inline in the person’s conversation through confirmation and socket updates', () => {

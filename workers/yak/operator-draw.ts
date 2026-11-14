@@ -3,18 +3,22 @@
 // call, a failure, a stop); what only the Operator's rows say is drawn here,
 // as kinds ahead of those: the channel words came by and the files with them,
 // a call's turns, a contact card, a helper stopped or heard back from, a line
-// the platform wrote, and an outside agent's chat; and here too what each
-// model was told, the frame every line sits in, and a call's turn folded
-// under the caller's words. Pure, and the one drawing of them: the Builder
-// object draws a conversation with it for the page (operator-view.ts `talk`),
-// and the page's socket sends each line a step changed as the entries it
-// draws (`Lines`), which the chat page (operator-rows.ts) and the iOS shell
-// (native/operator.tsx) draw with it again, each with its own host. It
-// imports no server, so it bundles for a browser and for the shell alike.
+// the platform wrote, the context each model was given, and an outside
+// agent's chat; and here too the frame every line sits in, which asks the
+// view for the line's margin, and a call's turn folded under the caller's
+// words. Which of these a view loads is a list (`PERSON`; the admin's adds
+// its margin, operator-metadata.ts `margins`). Pure, and the one drawing of
+// them: the Builder object draws a conversation with it for the page
+// (operator-view.ts `talk`), and the page's socket sends each line a step
+// changed as the entries it draws (`Lines`), which the chat page
+// (operator-rows.ts) and the iOS shell (native/operator.tsx) draw with it
+// again, each with its own host. It imports no server, so it bundles for a
+// browser and for the shell alike.
 import type { Bundle, Comp } from '@yaks/graph/bundle'
 import { HUMAN } from '@yaks/id'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import {
+  Annotated,
   Attachments,
   Body,
   Drop,
@@ -33,6 +37,7 @@ import {
   type Kind,
   kind,
   kinds as conversation,
+  margin,
   markdown,
   type Named,
   namer,
@@ -51,7 +56,6 @@ import { type HelperLine, Work } from './operator-aside.ts'
 import { type IconName, icons } from './icons.ts'
 import { PART } from '@yaks/persona/part'
 import { sourceWords } from './operator-source.ts'
-import { measured, type Metadata } from './operator-metadata.ts'
 import { contactCard } from './operator-contact-card.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
@@ -468,7 +472,6 @@ export type Helper = {
 export type Seen = {
   helpers?: Helper[]
   threads?: Record<string, Thread>
-  metadata?: Record<string, Metadata>
   offers?: Offers
   called?: string
   opens?: string
@@ -491,10 +494,18 @@ let rows = (lines: { id: string; node: Node }[]) =>
   lines.length ? h(Transcript.Lines, { 'data-rows': '' }, lines.map(row)) : null
 
 /** The frame every line is drawn in, wherever it is drawn: what it says,
- * then its time, which opens its menu. Copy, Quote and Copy link need only
- * the line; Hide and Restore need the entries it draws, so a line of none
- * (words no session has taken yet) goes without them. */
-export let framed = (line: Line, entries: Bundle[]): Line => {
+ * with the margin `view` draws beside it where it loads one, then its time,
+ * which opens its menu. Copy, Quote and Copy link need only the line; Hide
+ * and Restore need the entries it draws, so a line of none (words no session
+ * has taken yet) goes without them. */
+export let framed = (
+  line: Line,
+  entries: Bundle[],
+  view: View = person,
+  beside: Heard = UNNAMED,
+): Line => {
+  let own = entries.find((b) => b.entity.eid == line.id)
+  let aside = own ? margin(view, own, beside) : null
   let used = entries.filter((b) => line.uses.includes(b.entity.eid))
   let entered = used.filter((b) => b.entry)
   let first = entered[0] ?? used.find((b) => comp(b, 'created')?.at)
@@ -510,7 +521,9 @@ export let framed = (line: Line, entries: Bundle[]): Line => {
     node: h(
       Transcript.Entry,
       { mod: [line.is, archived.length > 0 && 'hidden'] },
-      line.node,
+      aside
+        ? h(Annotated, {}, h(Annotated.Content, {}, line.node), aside)
+        : line.node,
       h(
         Transcript.Meta,
         {},
@@ -563,6 +576,8 @@ export let framed = (line: Line, entries: Bundle[]): Line => {
   }
 }
 
+/** A conversation's lines, each in its frame, drawn by the renderers `view`
+ * loads. */
 export let lines = (
   entries: Bundle[],
   names: Names,
@@ -572,14 +587,16 @@ export let lines = (
     offers,
     called = 'the Operator',
     opens,
-    metadata,
   }: Seen = {},
+  view: View = person,
 ): Line[] => {
   let page: Drawn = new Set()
   let sources = new Map<string, string[]>()
-  let prompts = new Map(
+  let told = new Map(
     briefed(entries, called, offers, page, sources).map((r) => [r.id, r]),
   )
+  let beside: Heard = { names, who: 'the Operator', opens }
+  let frame = (line: Line, rows: Bundle[]) => framed(line, rows, view, beside)
   // A helper is told mostly what the ask before it was, which the page drew
   // above it: a line drawing what a helper was told reads that ask too, so
   // drawn alone it says the same is above where the page does.
@@ -591,49 +608,48 @@ export let lines = (
       one.line ? h(Rows, null, h(Work, { work: one.line })) : null,
       rows(context(one)),
     ])
-  // A helper's context, each line of it framed as the conversation's are.
-  let context = (one: Helper) =>
-    helped(one, offers, page).map((r) =>
-      framed(
-        { id: r.id, uses: r.uses, node: r.draw(), is: 'step' },
-        one.entries,
-      )
-    )
+  // A helper's context, each line of it drawn and framed as the
+  // conversation's are.
+  let context = (one: Helper) => {
+    let briefs = helped(one, offers, page)
+    let byAsk = new Map(briefs.map((r) => [r.id, r]))
+    return briefs.flatMap((r) => {
+      let b = one.entries.find((b) => b.entity.eid == r.id)
+      let said = b && draw(view, b, { ...beside, told: byAsk })
+      return said
+        ? [frame({ id: r.id, uses: r.uses, ...said }, one.entries)]
+        : []
+    })
+  }
   let calls = new Set(entries.map((b) => b.entity.eid))
   let inside = asked(entries)
   let folds = new Map<string, Fold>()
   let drawn: (Line | Fold)[] = []
   let byId = new Map(entries.map((b) => [b.entity.eid, b]))
   let aloud = (id: string) => !!comp(byId.get(id), 'operator_call')?.said
-  let wrap = (line: Line, rows: Bundle[]) =>
-    framed({ ...line, node: measured(line.node, metadata?.[line.id]) }, rows)
   for (let { entry: b, result } of joined(entries)) {
     let id = b.entity.eid
     let body = String(comp(b, 'content')?.body ?? '')
-    let told = prompts.get(id)
     let helping = b.call && helpers.some((one) => one.call == id)
     let thread = threads[id]
-    let saying = thread || told ? null : draw(kinds, b, {
+    let saying = thread ? null : draw(view, b, {
+      ...beside,
       result,
-      names,
       under: b.call ? under(id) : [],
-      who: 'the Operator',
-      opens,
+      told,
     })
     let unwrapped: Line[] = thread
       ? [{ id, uses: [id], ...threaded(thread) }]
-      : told
-      ? [{ id, uses: told.uses, node: told.draw(), is: 'step' as const }]
       : saying
       ? [{
         id,
-        uses: b.call
+        uses: told.get(id)?.uses ?? (b.call
           ? [...helping ? before : [], id, ...result ? [result.entity.eid] : []]
-          : [id],
+          : [id]),
         ...saying,
       }]
       : []
-    let these = unwrapped.map((l) => wrap(l, result ? [b, result] : [b]))
+    let these = unwrapped.map((l) => frame(l, result ? [b, result] : [b]))
     before = sources.get(id) ?? before
     let at = inside.get(id)
     let fold = at && folds.get(at)
@@ -663,7 +679,7 @@ export let lines = (
   return [
     ...drawn.map((l) =>
       'nodes' in l
-        ? wrap({
+        ? frame({
           id: l.of[0],
           of: l.of,
           uses: l.uses,
@@ -742,9 +758,18 @@ let Called = ({ said, nodes }: Fold) =>
     h(More.Body, {}, rows(nodes)),
   )
 
-// What the Operator's kinds of line are drawn with: where a helper's own
-// conversation opens, by its id after `opens/`.
-type Heard = Beside & { opens?: string }
+/** What the Operator's kinds of line are drawn with: where a helper's own
+ * conversation opens, by its id after `opens/`, and what each model was
+ * told, by the entry it is drawn at (`briefed`). */
+type Heard = Beside & { opens?: string; told?: Map<string, Told> }
+
+/** A view of a conversation: the renderers it loads, defined from a list
+ * (`PERSON`, and what a view loads beside it). */
+export type View = Registry<Kind<Heard>>
+
+// A frame drawn outside a conversation (words no session has taken yet),
+// whose lines name no tools.
+let UNNAMED: Heard = { names: namer({}) }
 
 let said = (b: Bundle) => String(comp(b, 'content')?.body ?? '')
 
@@ -798,7 +823,7 @@ let delivered = (b: Bundle, heard: Heard) => {
  * brought back, a contact card, a line of a phone call, a helper stopped or
  * heard back from, a line the platform wrote, and a person's words with the
  * channel they came by and the files they sent. */
-let kinds: Registry<Kind<Heard>> = define<Kind<Heard>>([
+let own: Kind<Heard>[] = [
   // The files a step brought back (an image it made), open under it.
   kind('.call', (b, heard) => {
     let step = draw(conversation, b, heard)!
@@ -835,8 +860,32 @@ let kinds: Registry<Kind<Heard>> = define<Kind<Heard>>([
         ? { node: input(b, said(b)), is: 'theirs' }
         : null,
   ),
+]
+
+// What a model was given, at the ask that sent it, or at the first of the
+// notes no ask has sent yet: a step opening on each layer.
+let given = (b: Bundle, { told }: Heard): Said | undefined => {
+  let brief = told?.get(b.entity.eid)
+  return brief && { node: brief.draw(), is: 'step' }
+}
+
+/** The line of the context a model was given, a conversation's and each
+ * helper's: a view without it draws none. */
+export let CONTEXT: Kind<Heard>[] = [
+  kind('.ask', given),
+  kind('.prompt', given),
+]
+
+/** What a person's view of a conversation loads: the Operator's own kinds
+ * of line, the context each model was given, and every transcript's kinds.
+ * A view that shows more loads more beside them; the admin's loads its
+ * margin (operator-metadata.ts `margins`). */
+export let PERSON: Kind<Heard>[] = [
+  ...own,
+  ...CONTEXT,
   ...conversation.renderers,
-])
+]
+let person = define(PERSON)
 
 // Words the platform wrote into the conversation (`system`): a recovery, an
 // error to fix. Never the person's: one quiet line, its words when opened.

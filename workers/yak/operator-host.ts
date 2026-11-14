@@ -42,12 +42,14 @@ import {
   type Standing,
 } from './operator-aside.ts'
 import { type Spending, spent } from './operator-spending.ts'
-import { metadata } from './operator-metadata.ts'
+import { margins, metadata } from './operator-metadata.ts'
+import { define } from '@yaks/render'
 import {
   type Helper,
   type Lines,
   lines as drawnLines,
   type Offers,
+  PERSON,
   type Thread,
   wire,
 } from './operator-draw.ts'
@@ -137,6 +139,14 @@ let metadataOf = async (store: Store, entries: Bundle[]) => {
   ], ['model'])
   return metadata(entries, checkpoints, asks, models)
 }
+
+// What a reader's view of a conversation loads: a person's, and for the
+// admin, what each entry cost and where it sits, in the margin beside it.
+let viewOf = async (store: Store, entries: Bundle[], admin: boolean) =>
+  define([
+    ...PERSON,
+    ...admin ? [margins(await metadataOf(store, entries))] : [],
+  ])
 
 // A conversation's lines and its helpers', whose steps it names too.
 let withHelpers = (entries: Bundle[], helpers: Helper[]) => [
@@ -974,13 +984,13 @@ export let conversationOf = async (
     let seen = {
       ...helped,
       threads: await threadsOf(store, entries, named, called, opens),
-      ...everyone ? { metadata: await metadataOf(store, entries) } : {},
       called,
       opens,
       ...mentions ? { mentions } : {},
       ...await namingOf(store, withHelpers(entries, helped.helpers), named),
     }
     let names = namer(seen)
+    let view = await viewOf(store, entries, !!everyone)
     seen.helpers = await lined(store, seen.helpers, names, opens)
     let shown = helper
       ? entries
@@ -999,13 +1009,8 @@ export let conversationOf = async (
         : everyone
         ? await whose(row, everyone)
         : CONVERSATION,
-      html: talk(
-        { entity: { eid } } as Bundle,
-        shown,
-        names,
-        seen,
-      ),
-      lines: () => wire(drawnLines(shown, names, seen), shown, seen),
+      html: talk({ entity: { eid } } as Bundle, shown, names, seen, view),
+      lines: () => wire(drawnLines(shown, names, seen, view), shown, seen),
       now: now(entries, names),
       waiting: [],
       making: making(entries, seen.helpers),
@@ -1044,21 +1049,21 @@ export let conversationOf = async (
   let seen = {
     ...helped,
     threads: await threadsOf(store, entries, named, called, opens),
-    ...everyone ? { metadata: await metadataOf(store, entries) } : {},
     called,
     opens,
     ...mentions ? { mentions } : {},
     ...await namingOf(store, withHelpers(entries, helped.helpers), named),
   }
   let names = namer(seen)
+  let view = await viewOf(store, entries, !!everyone)
   seen.helpers = await lined(store, seen.helpers, names, opens)
   return {
     aside: asideOf(entries, seen.helpers, names),
     task,
     begun: asked[0]?.entity.eid ?? task,
     title: String(comp(held, 'doc')?.title ?? 'A request'),
-    html: talk(held, entries, names, seen),
-    lines: () => wire(drawnLines(entries, names, seen), entries, seen),
+    html: talk(held, entries, names, seen, view),
+    lines: () => wire(drawnLines(entries, names, seen, view), entries, seen),
     now: now(entries, names),
     waiting: [],
     making: making(entries, seen.helpers),
