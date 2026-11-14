@@ -2,16 +2,15 @@
 name: design-docs
 description: >
   Use for proposals or designs beyond a bug fix or small feature, D- entity
-  drafting/revision/decision/task trees, design_decide, and changes adding
-  or moving packages, vocabulary or workers. Component shapes are
-  vocabulary; package wiring is packages-and-plugins. Small features and
-  fixes are done directly.
+  drafting/revision/decision/task trees, design_decide, and changes adding or
+  moving packages, vocabulary or workers. Component shapes are vocabulary;
+  package wiring is packages-and-plugins. Small features and fixes are done
+  directly.
 ---
 
 # Writing a design
 
-A design is the graph's record of a proposed change (`design{}` + `doc{title,
-body}` + `proposed{}`), filed before the work. The repo documents what is; the
+A design is the graph's record of a proposed change, filed before the work. The repo documents what is; the
 design holds what's proposed. It is true enough to trust and short enough for
 the owner to read in a couple of minutes.
 
