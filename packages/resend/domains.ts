@@ -127,12 +127,18 @@ export let domains = (
     setup: async (name) => {
       let found = await find(name)
       if (!found) {
-        return shaped(
-          await ask<Answered>(`set up ${name}`, 'POST', '/domains', {
-            name,
-            capabilities: both,
-          }),
-        )
+        try {
+          return shaped(
+            await ask<Answered>(`set up ${name}`, 'POST', '/domains', {
+              name,
+              capabilities: both,
+            }),
+          )
+        } catch (why) {
+          // Another call set it up between the look and the add.
+          found = await find(name)
+          if (!found) throw why
+        }
       }
       let on = found.capabilities ?? {}
       if (on.sending != 'enabled' || on.receiving != 'enabled') {

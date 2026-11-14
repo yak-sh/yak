@@ -8,17 +8,17 @@ implementation.
 
 `space` is what a customer owns; `app` is what lives in it; `deploy` is one
 release of that app, and `published` is the name it was released under;
-`hostname` is a domain pointed at a space or an app, and `mail_domain` on it
-where its mail is and which provider carries it; `installed` records the source
-app and version of a copy, `install` that a space took one, credited to the
-space that shared it, and `upstream` where something someone outside the
-platform wrote came from and under which licence; `plan` is what is being paid
-for, a mirror of one Stripe subscription, and `meter` is the usage it is billed
-on; `signin` is a sign-in in progress, and `report` is an error a deployed app
-reported. `operator{name}` on a space is what its Operator is called, a copy of
-its persona's title for what reads the space without the Operator's store; its
-other properties are retired, read only by a store moving its persona from
-before they were the persona's.
+`hostname` is a domain pointed at a space or an app, and `mail_domain` on it (or
+on a space, for its subdomain) where its mail is and which provider carries it;
+`installed` records the source app and version of a copy, `install` that a space
+took one, credited to the space that shared it, and `upstream` where something
+someone outside the platform wrote came from and under which licence; `plan` is
+what is being paid for, a mirror of one Stripe subscription, and `meter` is the
+usage it is billed on; `signin` is a sign-in in progress, and `report` is an
+error a deployed app reported. `operator{name}` on a space is what its Operator
+is called, a copy of its persona's title for what reads the space without the
+Operator's store; its other properties are retired, read only by a store moving
+its persona from before they were the persona's.
 
 yaks.app's directory (`workers/yak`) loads these declarations from this package.
 The Worker declares its own directory words alongside them.

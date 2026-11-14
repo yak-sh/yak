@@ -48,6 +48,7 @@ import {
   type Request as Intake,
 } from './operator-channels.ts'
 import { mailFrom } from './post.ts'
+import { subdomainMail } from './space-mail.ts'
 import { parts } from './form.ts'
 import { gathered } from './bytes.ts'
 import { inApp, refuse } from './tool.ts'
@@ -1190,6 +1191,7 @@ export let operatorBody = async (env: Env, seen: Space, who: Who) => {
   let from = phone?.transport().number
   let call = platform?.caller ? platform.transport().number : undefined
   let address = mailFrom(space.slug, null, env)
+  let sub = subdomainMail(env, space)
   let operator = space.operator
   return html([
     h(
@@ -1213,6 +1215,9 @@ export let operatorBody = async (env: Env, seen: Space, who: Who) => {
         null,
         `You can also email ${operator} from any mail app: write to `,
         h('a', { href: `mailto:${address}` }, address),
+        sub
+          ? ` (or any other name at ${sub} that is not an app's, such as clerk@${sub})`
+          : '',
         ` with what you want changed, and attach a PDF or a photo if you have one. Send it from the email address you sign in with; ${operator} answers by email.`,
       ),
     ),

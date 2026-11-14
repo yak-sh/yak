@@ -229,6 +229,10 @@ export type Env = {
   // half-attached.
   CF_ZONE?: string
   CF_HOSTNAMES_TOKEN?: string
+  // A token that may edit that zone's DNS (Zone → DNS → Edit), which the
+  // records a space's subdomain takes mail by are written with (zone.ts,
+  // space-mail.ts). Unset, no subdomain takes mail and nothing says it failed.
+  CF_DNS_TOKEN?: string
   // And the base URL those calls go to, which a probe aims somewhere other
   // than Cloudflare — the same seam MAIL_API is, and for the same reason:
   // attaching a domain is a conversation, and the test that holds it must be

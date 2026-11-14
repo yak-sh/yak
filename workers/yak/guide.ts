@@ -371,7 +371,9 @@ for the whole thing (${url(env, '/docs/home.md')}).
 Every app has a mailbox, at ${mailFrom('<space>', '<app>', env)} — ${
     mailFrom('<space>', null, env)
   } for the
-space's front page. Mail in both directions lives in the store. Sending is one
+space's front page. A Plus plan space also has mail at its subdomain from its
+first letter: <app>@<space>.${apex(env)} is that app, and any other name there
+(clerk@) is the space's own mailbox. Mail in both directions lives in the store. Sending is one
 apply call — a list of bundles written in one transaction: the recipient as an
 entity with email {address}, the letter as doc {title, body}
 (markdown) and mail {}, and the request to send it, deliver {to}, naming that

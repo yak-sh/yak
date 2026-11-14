@@ -102,6 +102,7 @@ import { drop } from './dispatch.ts'
 import { deleteBindings } from './bindings.ts'
 import { reachable, release } from './domains.ts'
 import { unmail } from './domain-mail.ts'
+import { unmailSpace } from './space-mail.ts'
 import { bound, type Env } from './env.ts'
 import { apex, type Host as HostEnv } from '@yaks/platform/host'
 import { allAsleep, destroyedAll } from './sandbox.ts'
@@ -425,6 +426,8 @@ export let erase = async (
     await release(env, host.name)
     await unmail(env, host.mail)
   }
+  // And the mail domains at its subdomains, each one of the plan's.
+  await unmailSpace(env, dir, d.space)
   let files = 0
   for (let app of d.apps) {
     files += (await emptied(env, d.space, app, who)).length

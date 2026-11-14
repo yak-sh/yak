@@ -190,6 +190,7 @@ import {
   setUp,
   unmail,
 } from './domain-mail.ts'
+import { subdomainBox, subdomainMail } from './space-mail.ts'
 import type { DomainRecord } from '@yaks/host/senders'
 import { bound, type Env } from './env.ts'
 import { integrationEid } from '@yaks/connections'
@@ -3195,10 +3196,18 @@ let OURS: Row[] = [
           (moving
             ? ` — moved from ${spaceHost(ctx.env, space.slug)}, which ` +
               'redirects here, with letters to ' +
-              `${mailFrom(space.slug, '<app>', ctx.env)} still arriving, ` +
+              `${mailFrom(space.slug, '<app>', ctx.env)}` +
+              (subdomainMail(ctx.env, space)
+                ? ` and at ${subdomainMail(ctx.env, space)}`
+                : '') +
+              ' still arriving, ' +
               `until another space takes the name ${space.slug}: it is free ` +
               'for anyone now. Give people the new address; every app moved ' +
-              'with the space'
+              'with the space' +
+              (subdomainMail(ctx.env, space)
+                ? `, and mail at ${spaceHost(ctx.env, now.slug)} is set up ` +
+                  'with its next email'
+                : '')
             : '') +
           (drop == null ? '' : ` — ${lost(`${spaceHost(ctx.env, drop)}`)}`) +
           (logo === undefined
@@ -5331,7 +5340,11 @@ let OURS: Row[] = [
             url: url(space, app, ctx.env),
             // Where its letters leave from and where a reader writes back
             // (directory.ts `mailbox`).
-            mailbox: mailbox(space, app, ctx.env),
+            mailbox: [
+              mailbox(space, app, ctx.env),
+              subdomainBox(ctx.env, space, app),
+            ]
+              .filter(Boolean).join(', '),
             version: app.version ?? 0,
             access: mode(app.access),
             errors: broken.get(app.eid) ?? 0,

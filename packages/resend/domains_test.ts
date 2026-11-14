@@ -39,6 +39,16 @@ test('a subdomain is set up for both ways, its records named in full', async () 
   equal(api.held.size, 1)
 })
 
+test('two setups at once answer the one domain', async () => {
+  let { api, mail } = made()
+  let [a, b] = await Promise.all([
+    mail.setup('ada.yaks.app'),
+    mail.setup('ada.yaks.app'),
+  ])
+  equal(a.name, b.name)
+  equal(api.held.size, 1)
+})
+
 test('an apex domain receives at its own name', async () => {
   let { mail } = made()
   let domain = await mail.setup('nottawa.org')

@@ -109,7 +109,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'mail',
     'title': 'Email',
     'description':
-      "Sending and receiving email from an app: the app's email address (<space>.<app>@yaks.app), the rows that send an email and who may send one, the delivered and bounced rows that record the outcome, replies and threading, how incoming email is stored with its attachments, the monthly email limit, confirmed email subscriptions for notices declared with notice: true, unsubscribe links, and what yaks.app email does not support.",
+      "Sending and receiving email from an app: the app's email address (<space>.<app>@yaks.app, and <app>@<space>.yaks.app at its subdomain), the rows that send an email and who may send one, the delivered and bounced rows that record the outcome, replies and threading, how incoming email is stored with its attachments, the monthly email limit, confirmed email subscriptions for notices declared with notice: true, unsubscribe links, and what yaks.app email does not support.",
     'brief': "sending and receiving email at an app's own address",
   },
   'memory': {

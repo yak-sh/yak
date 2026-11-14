@@ -74,6 +74,7 @@ import { signupAddress, url } from '@yaks/platform/host'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import { mailedTo, mailFrom } from './post.ts'
 import { counted } from './meter.ts'
+import { usedMail } from './space-mail.ts'
 import { ARRIVAL } from './config.ts'
 import { lent } from './lent.ts'
 import { copyOf } from './directory-copy.ts'
@@ -244,6 +245,7 @@ export let arrived = async (mail: Incoming, env: Env): Promise<string> => {
   // allowance it still lands — the ceiling is the send door's (`metering`),
   // because a letter refused here is somebody else's words lost.
   await counted(env, space)
+  await usedMail(env, space)
   return eid
 }
 
@@ -474,6 +476,9 @@ let asked = async (
   if (!response.ok) {
     throw new Error('Operator email intake failed: ' + await response.text())
   }
-  if (response.status == 202) await counted(env, space)
+  if (response.status == 202) {
+    await counted(env, space)
+    await usedMail(env, space)
+  }
   return id
 }

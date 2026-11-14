@@ -224,14 +224,14 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "the domain the hostname's mail is at: the hostname itself, or mail.<hostname> when the hostname already takes mail or is below its domain's apex, where its CNAME leaves no room for an MX"
+          "description": "the domain the mail is at: for a hostname, the hostname itself, or mail.<hostname> when the hostname already takes mail or is below its domain's apex, where its CNAME leaves no room for an MX; for a space, <space>.yaks.app"
         },
         "via": {
           "type": "string",
           "description": "the name of the mail provider that sets the domain up and carries its mail both ways, as the host lends it"
         }
       },
-      "description": "where a hostname's mail is, and the provider that carries it; letters there reach the place the hostname serves. Whether its DNS records have arrived is read from the provider, never stored"
+      "description": "where a hostname's or a space's own mail is, and the provider that carries it; letters there reach the place the hostname serves, or the space. A space's is its subdomain, set up the first time it uses mail on the Plus plan. Whether its DNS records have arrived is read from the provider, never stored"
     },
     "installed": {
       "component": true,

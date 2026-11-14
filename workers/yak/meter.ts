@@ -21,6 +21,7 @@ import type { Namespace } from '@yaks/durable-object/door'
 import type { Env } from './env.ts'
 import type { Held, Holding } from './held.ts'
 import { mailedTo } from './post.ts'
+import { usedMail } from './space-mail.ts'
 import { refuse } from './tool.ts'
 import {
   affordable,
@@ -1191,7 +1192,7 @@ export let countedTexts = async (
  * its address yet — the way an unset analytics token meters nothing.
  */
 export let metering = (
-  bind: { STORE?: Namespace; MODEL_FETCH?: typeof fetch } & Host,
+  bind: Partial<Env> & { STORE?: Namespace },
   from: () => string | null,
   sender: Sender,
 ): Sender => ({
@@ -1204,6 +1205,8 @@ export let metering = (
     if (no) throw refuse('limit', no)
     let receipt = await sender.send(m)
     await counted({ STORE: ns }, space)
+    // A Plus plan space's first letter sets its subdomain up for mail.
+    await usedMail(bind, space)
     return receipt
   },
 })

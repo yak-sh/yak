@@ -6,7 +6,8 @@ guide:
   brief: sending and receiving email at an app's own address
   description: >-
     Sending and receiving email from an app: the app's email address
-    (<space>.<app>@yaks.app), the rows that send an email and who may send
+    (<space>.<app>@yaks.app, and <app>@<space>.yaks.app at its subdomain),
+    the rows that send an email and who may send
     one, the delivered and bounced rows that record the outcome, replies and
     threading, how incoming email is stored with its attachments, the monthly
     email limit, confirmed email subscriptions for notices declared with
@@ -31,23 +32,36 @@ Back to the map: <https://yaks.app/docs.md>
     <space>.<app>@yaks.app        ada.cookbook@yaks.app
     <space>@yaks.app              ada@yaks.app — the space's front page
 
-The address has one dot before `@yaks.app`, and there is no other form. The part
-before the dot is the space, the part after is the app; the bare space name is
-the app that space made its front page with `app_set(app, home: true)`.
+The address at yaks.app has one dot before `@yaks.app`. The part before the dot
+is the space, the part after is the app; the bare space name is the app that
+space made its front page with `app_set(app, home: true)`. Every space has these
+addresses, on every plan.
 
-The address does not use a subdomain. `cookbook@ada.yaks.app` does not work and
-never will: email is set up per domain, so the only address format that works
-for every possible space is a local part at the apex domain. Give the dotted
-form when you tell somebody where to write.
+A space on the Plus plan also takes mail at its own subdomain, which is set up
+the first time the space sends or receives an email:
+
+    <app>@<space>.yaks.app        cookbook@ada.yaks.app — that app
+    <anything>@<space>.yaks.app   clerk@ada.yaks.app — the space's own mailbox
+
+An app's name there is that app's address, and any other name (`clerk@`,
+`treasurer@`) reaches the space as `<space>@yaks.app` does, so a reader can tell
+`clerk@` from `treasurer@` by the email's `mail.to`. Setting it up takes a few
+minutes after that first email, and `app_list` says each app's addresses once it
+is set up. A free space has only the addresses at yaks.app. A space that leaves
+the Plus plan keeps receiving at its subdomain. A domain attached to the space
+or an app takes mail the same way (<https://yaks.app/docs/domains.md>, "Mail at
+the domain").
 
 Case does not matter (`Ada.Cookbook@Yaks.App` is the same mailbox). Underscores
 cannot be used in an address, at yaks.app or upstream, so an app whose slug has
 one has no mailbox.
 
-The address is the same in both directions: an app's email is sent from the
-address that others write to. When the app is renamed, its old address still
-reaches it, the same way a link to its old path still opens: email to the old
-address keeps arriving, and new email is sent from the new address.
+A new email is sent from the app's address at yaks.app, and a reply is sent from
+the address the email it answers was written to: an email to
+`clerk@ada.yaks.app` is answered from `clerk@ada.yaks.app`. When the app or the
+space is renamed, its old addresses still reach it, the same way a link to its
+old path still opens: email to them keeps arriving until another space or app
+takes the name, and new email is sent from the new address.
 
 ## Sending email
 
@@ -358,10 +372,6 @@ rather than guessing at a number.
 
 ## What is not supported
 
-- **Email at the person's own domain.** A domain they own can serve the app
-  (<https://yaks.app/docs/domains.md>), but yaks.app does not send or receive
-  email at it; the app's address stays `<space>.<app>@yaks.app` whatever
-  hostname the pages answer at.
 - **Outgoing attachments.** An email is sent as a subject and a body. To send
   somebody a file, upload it and put the link in the body
   (<https://yaks.app/docs/files.md>).

@@ -334,6 +334,10 @@ export type Space = {
   // and whether its provider says it may take money yet. Null for a space
   // that has never asked to sell, which is almost all of them.
   seller: Seller | null
+  // Where the space's own mail is beside `<space>@yaks.app`, and the provider
+  // carrying it: its subdomain, set up the first time a Plus plan space uses
+  // mail (space-mail.ts, D-415). Null until then.
+  mail?: MailDomain | null
   // What the platform takes from a sale here, in basis points (sell.ts
   // `feeOf`). It is asked of one space — `yak`, the platform's own row — and
   // 0 on every other, where nobody has ever written one.
@@ -1367,6 +1371,7 @@ export let SPACE_PARTS = [
   'space_logo',
   'preview',
   'featured',
+  'mail_domain',
 ]
 let SPACE_ABOUT = SPACE_PARTS.map((part) => `?${part}`).join('&')
 
@@ -1490,6 +1495,7 @@ export let spaceOf = (r: Row): Space => ({
   comped: r.comped?.until ?? null,
   ...(r.comp ? { comp: { ...r.comp, by: idOf(r.comp.by) } } : {}),
   seller: sellerOf(r),
+  mail: mailOf(r),
   fee: r.fee?.bps ?? 0,
   budget: r.budget?.dollars ?? null,
   newcomer: !!r.budget?.newcomer,
@@ -1698,10 +1704,14 @@ let hostOf = (r: Row): Host => ({
   verification: r.hostname!.verification ?? null,
   verified: r.verified?.at ?? null,
   to: r.hostname!.to || null,
-  mail: r.mail_domain?.name
-    ? { name: r.mail_domain.name, via: r.mail_domain.via }
-    : null,
+  mail: mailOf(r),
 })
+
+// Where a hostname's or a space's mail is, or null where it has none.
+let mailOf = (r: Row): MailDomain | null =>
+  r.mail_domain?.name
+    ? { name: r.mail_domain.name, via: r.mail_domain.via }
+    : null
 
 // A deploy of an app, as versions.ts reads one: the manifest parsed, since
 // the store holds it as the text it is. A row whose manifest cannot be read

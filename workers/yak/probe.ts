@@ -136,6 +136,7 @@ export let vars = (secret: string, cloudflare: string) => ({
   MAIL_API: cloudflare,
   CF_ZONE: 'zone',
   CF_HOSTNAMES_TOKEN: 'a-token',
+  CF_DNS_TOKEN: 'a-token',
   HOSTNAMES_API: cloudflare,
   RESEND_DOMAINS_TOKEN: 'a-token',
   DNS_API: `${cloudflare}/dns-query`,
@@ -816,6 +817,24 @@ let refused = (to: string | string[]) =>
 export let cloudflare = (log = crypto.randomUUID()) => {
   let held = new Map<string, Custom>()
   let dns = new Map<string, string[]>()
+  // The records written in the platform's own zone (zone.ts), by their id.
+  let zone = new Map<string, Record<string, unknown> & { id: string }>()
+  let records = async (req: Request, url: URL, id?: string) => {
+    if (req.method == 'POST') {
+      let made = { ...await req.json(), id: crypto.randomUUID() }
+      zone.set(made.id, made)
+      return ok(made)
+    }
+    if (req.method == 'DELETE' && id) {
+      zone.delete(id)
+      return ok({ id })
+    }
+    let { type, name } = Object.fromEntries(url.searchParams)
+    return ok(
+      [...zone.values()].filter((r) => r.type == type && r.name == name),
+    )
+  }
+  let ok = (result: unknown) => Response.json({ success: true, result })
   let calls = new Map<string, Track[]>()
   let workers = new Map<string, { version: string; secrets: Set<string> }>()
   let sfu = async (req: Request, path: string) => {
@@ -874,7 +893,10 @@ export let cloudflare = (log = crypto.randomUUID()) => {
     )
   let service = endpoint(async (req) => {
     let url = new URL(req.url)
-    let ok = (result: unknown) => Response.json({ success: true, result })
+    let written = /^\/zones\/[^/]+\/dns_records(?:\/([^/]+))?$/
+      .exec(url.pathname)
+    if (written) return await records(req, url, written[1])
+    if (url.pathname == '/probe/zone') return ok([...zone.values()])
     if (url.pathname.startsWith('/meta/')) {
       logs.set(
         log,
@@ -1036,6 +1058,14 @@ export let dnsTxt = async (
     body: JSON.stringify({ name, values }),
   })
   await response.body?.cancel()
+}
+
+/** The records the platform wrote in its own zone, each `TYPE name content`,
+ * sorted. */
+export let zoneRecords = async (k: Pick<Kernel, 'cloudflare'>) => {
+  let { result } = await (await fetch(`${k.cloudflare}/probe/zone`)).json()
+  return (result as { type: string; name: string; content: string }[])
+    .map((r) => `${r.type} ${r.name} ${r.content}`).sort()
 }
 
 /** The MX records served by the kernel's DNS stand-in, each written as DNS
