@@ -48,8 +48,7 @@ let history: History = {
 }
 
 // One database with history for the file, its graph, and a connection for
-// each kind of mode that reads it, since a mode's views are its connection's
-// own.
+// each kind of mode that reads it.
 let CLOCK: Stmt = {
   t: 'create table',
   name: 'clock',
@@ -140,7 +139,7 @@ await g.apply([{ entity: { eid: 'b1' }, page: { title: 'main moved' } }])
 let pages = async (on: ReturnType<typeof graph>) =>
   (await on.get(['b1', 'b2', 'b3'])).map((b) => b.page ?? Object.keys(b))
 
-// Each mode's connection reads before any test does, so none of them pays
+// Each mode's driver reads before any test does, so none of them pays
 // for preparing the statements they share.
 for (let eids of [['b1', 'b2'], ['b1']]) {
   await on.get(eids)

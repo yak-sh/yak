@@ -24,11 +24,12 @@
 // branch copies what the branch sees of it, then changes the copy. A removal on
 // a branch closes its row, which goes on hiding main's.
 //
-// Reading the past is a connection of its own (./mode.ts): its temporary views
-// stand in front of each table, so every statement this package builds reads
-// the mode's rows without knowing it. Each view is one select over one table,
-// which SQLite folds into any read, a join's right side included; a compound
-// one it would materialize whole wherever a read left-joins it.
+// Reading the past is a driver of its own (./mode.ts): each statement it runs
+// names, in front of each table it reads, a common table expression of the
+// same name holding the mode's rows, so every statement this package builds
+// reads the mode without knowing it. Each is one select over one table, which
+// SQLite folds into any read, a join's right side included; a compound one it
+// would materialize whole wherever a read left-joins it.
 
 import {
   among,
@@ -53,7 +54,6 @@ import {
   select,
   type Source,
   type Stmt,
-  sub,
   table,
   unionAll,
   val,
@@ -470,20 +470,14 @@ let synced = (
 
 // ---- what a mode reads ----
 
-/** The temporary one-row table a mode's connection reads its mode from:
- * `at`, the transaction main is read as of (a branch's fork), and `branch`,
- * the branch whose rows lie over it, or null. Turning it is a write, so the
- * views stand and their statements stay prepared (./mode.ts `moded`). */
-export let DIAL = '$mode'
-
-/** Which views a mode's connection reads through: as of a transaction, or on
- * a branch. Turning the dial between them makes the views again. */
+/** Which way a mode reads: as of a transaction, or on a branch. */
 export type Kind = 'at' | 'branch'
 
-/** The kind of views a mode reads through. */
+/** The way a mode reads. */
 export let kind = (mode: Mode): Kind => 'at' in mode ? 'at' : 'branch'
 
-// A table in the file itself, past any temporary view of the same name.
+// A table in the file itself, past any relation of the same name the
+// statement reading it stands in front of it (./mode.ts).
 let main = (name: string, as?: string): Source => ({
   t: 'table',
   name,
@@ -491,57 +485,62 @@ let main = (name: string, as?: string): Source => ({
   as,
 })
 
-let dial = (c: 'at' | 'branch'): Expr =>
-  sub(select({ cols: [col(c)], from: table(DIAL) }))
+// The transaction main is read as of, a branch's fork, and the branch, or 0
+// for none: integers written into the text, so a mode binds no value of its
+// own beside the statement's (a Durable Object binds at most 100).
+let atOf = (mode: Mode): Expr => lit('at' in mode ? mode.at : mode.fork)
+let branchOf = (mode: Mode): Expr => lit('branch' in mode ? mode.branch : 0)
 
-// No row of the dial's branch for the entity a row of `of` belongs to.
-let unshadowed = (comp: string, of: string): Expr =>
+// No row of the mode's branch for the entity a row of `of` belongs to.
+let unshadowed = (comp: string, of: string, mode: Mode): Expr =>
   not(exists(select({
     cols: [lit(1)],
     from: main(beside(comp), '__mine'),
     where: and(
       eq(col('entity', '__mine'), col('entity', of)),
-      eq(col(BRANCH, '__mine'), dial('branch')),
+      eq(col(BRANCH, '__mine'), branchOf(mode)),
     ),
   })))
 
 /**
- * What a mode reads `comp` as. Where main keeps its versions, one select over
- * them: main's as of the dial's transaction and, on a branch, the branch's
+ * What `mode` reads `comp` as. Where main keeps its versions, one select over
+ * them: main's as of the mode's transaction and, on a branch, the branch's
  * open rows over main's for every entity the branch has not written. Where it
  * keeps none, as of a transaction, the live table as it stands; on a branch,
  * the branch's open rows and the live rows it has not written.
  */
-export let seen = (vocab: Vocab, comp: string, k: Kind): Query => {
+export let seen = (vocab: Vocab, comp: string, mode: Mode): Query => {
   let names = ['entity', ...stored(vocab, comp)]
   let v = '__v'
   let picked = (of?: string) => names.map((c) => col(c, of))
+  let at = atOf(mode), b = branchOf(mode)
+  let past = kind(mode) == 'at'
   if (keeps(vocab, comp)) {
     let then = and(
       eq(col(BRANCH, v), lit(0)),
-      or(isNull(col(FROM, v)), op('<=', col(FROM, v), dial('at'))),
-      or(eq(col(TO, v), lit(0)), op('>', col(TO, v), dial('at'))),
+      or(isNull(col(FROM, v)), op('<=', col(FROM, v), at)),
+      or(eq(col(TO, v), lit(0)), op('>', col(TO, v), at)),
     )
     return select({
       cols: picked(v),
       from: main(beside(comp), v),
-      where: k == 'at' ? then : or(
-        and(eq(col(BRANCH, v), dial('branch')), eq(col(TO, v), lit(0))),
-        and(then, unshadowed(comp, v)),
+      where: past ? then : or(
+        and(eq(col(BRANCH, v), b), eq(col(TO, v), lit(0))),
+        and(then, unshadowed(comp, v, mode)),
       ),
     })
   }
-  if (k == 'at') return select({ cols: picked(), from: main(comp) })
+  if (past) return select({ cols: picked(), from: main(comp) })
   return unionAll(
     select({
       cols: picked(),
       from: main(beside(comp)),
-      where: and(eq(col(BRANCH), dial('branch')), eq(col(TO), lit(0))),
+      where: and(eq(col(BRANCH), b), eq(col(TO), lit(0))),
     }),
     select({
       cols: picked('__live'),
       from: main(comp, '__live'),
-      where: unshadowed(comp, '__live'),
+      where: unshadowed(comp, '__live', mode),
     }),
   )
 }

@@ -1,7 +1,7 @@
 // A store's branches (D-395): rows of its branch table. Making one writes a
 // row and copies nothing; a branch's rows live beside the live tables, in
 // `<comp>$versions` and the archetypes' versions, under its id, and dropping
-// it deletes them. Reading and writing on one is a connection of its own
+// it deletes them. Reading and writing on one is a driver of its own
 // (./mode.ts), which its host opens.
 //
 // What a branch changed is read on main's own connection, from those rows:

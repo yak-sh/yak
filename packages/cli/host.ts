@@ -454,9 +454,9 @@ let composed = async (
   }
   let mode = opts.mode ?? moding()
   let opened: Opened | undefined
-  // A store as of a transaction or on a branch reads through temporary views
-  // of its own connection (@yaks/sqlite `moded`), which the read-only door
-  // cannot make, so a reader in a mode takes the writer's.
+  // A store as of a transaction or on a branch is @yaks/sqlite's writing store
+  // (`moded`), which the read-only door does not open, so a reader in a mode
+  // takes the writer's connection.
   let open = async (): Promise<Opened> =>
     opts.readOnly && !mode
       ? (await import('@yaks/sqlite/read-db')).open(path)

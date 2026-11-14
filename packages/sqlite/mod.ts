@@ -581,7 +581,7 @@ export let storage = (
   }
   // Whether this store keeps each entity's archetype pointer in step with
   // its rows: every store does, whatever its vocabulary declares, since every
-  // whole read and removal goes by the pointer. A mode's connection reads
+  // whole read and removal goes by the pointer. A mode's store reads
   // what an entity held then, which no pointer says (./mode.ts).
   let keeping = !base.mode
   // What the connection's open transaction wrote that no pointer says yet
@@ -1120,7 +1120,7 @@ export let storage = (
     )
   }
   // A read, and once more after the repair where it met such an entity. A
-  // store that cannot write (a mode's connection) only reports.
+  // store that cannot write (a mode's) only reports.
   let mending = <R>(read: () => R): R => {
     try {
       return read()
@@ -1443,7 +1443,7 @@ export let storage = (
   let made = base.mode && 'branch' in base.mode
     ? (minted: Entity[]) => (unborn(driver, minted.map((e) => e.eid)), minted)
     : (minted: Entity[]) => minted
-  // A store with history has branches; a mode's connection is a branch's,
+  // A store with history has branches; a mode's store is a branch's,
   // or reads the past.
   let branches = base.history && !base.mode
     ? branching(driver, vocab, base.history, opts)
@@ -1456,7 +1456,8 @@ export let storage = (
       ? {
         ...statements(driver),
         archetypes: false,
-        // A mode's connection turns its dial under the store (./mode.ts).
+        // A mode's driver is bound to another mode under the store
+        // (./mode.ts).
         get mode() {
           return base.mode
         },

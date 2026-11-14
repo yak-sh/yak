@@ -13,6 +13,9 @@
 //   it refuses Cloudflare's own tables  a statement naming `_cf_KV` throws
 //                                      SQLITE_AUTH, the way workerd's
 //                                      authorizer does — see {@link prohibited}
+//   it refuses temporary objects       `create temp table`, `create temp
+//                                      view` and the rest throw SQLITE_AUTH,
+//                                      as workerd's authorizer does
 //   a blob comes back as an ArrayBuffer
 //   it holds workerd's SQLite limits   100 binds, an expression 100 deep, a
 //                                      compound select of 5: see {@link LIMITS}
@@ -46,6 +49,10 @@ export { shop }
 // and attaching or vacuuming another database is not on offer.
 let REFUSED =
   /^\s*(begin|commit|end|rollback|savepoint|release|attach|detach|vacuum)\b/i
+
+// A temporary table, view, index or trigger, which workerd's authorizer
+// refuses.
+let TEMPORARY = /^\s*create\s+(?:temp|temporary)\b/i
 
 // Schema cookies, database paths and the analysis sampling limit are private
 // to the runtime.
@@ -169,7 +176,9 @@ export let durable = (from?: Snapshot): DurableStorage & {
             `not authorized: use transactionSync, not \`${query.trim()}\``,
           )
         }
-        if (SCHEMA.test(query)) throw new Error('not authorized: SQLITE_AUTH')
+        if (SCHEMA.test(query) || TEMPORARY.test(query)) {
+          throw new Error('not authorized: SQLITE_AUTH')
+        }
         let no = refused(query)
         if (no) throw new Error(`access to ${no} is prohibited: SQLITE_AUTH`)
         let rows = run(query, bindings).map(out)

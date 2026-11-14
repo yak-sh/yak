@@ -81,7 +81,7 @@ import {
 import { derivedOf, storedOnly, tablesOf } from '@yaks/sql/query'
 import { type Filter, filter } from '@yaks/match'
 import { tables } from './layout.ts'
-import { BESIDE, DIAL } from './history.ts'
+import { BESIDE } from './history.ts'
 import { type Answer as Packed, copied, packed } from './answer.ts'
 import type { Known, Spine } from './write.ts'
 import { follows, newest, since } from './written.ts'
@@ -451,6 +451,8 @@ type Connection = {
   /** the cursor the open transaction began at: a row read inside it may be
    * its own, whose seq another takes if it rolls back */
   began?: number
+  /** let go of everything, as when the schema moves */
+  moved?: () => void
 }
 
 // By connection (@yaks/sql `Driver.connection`): every driver speaking
@@ -468,6 +470,11 @@ let connect = (driver: Driver): Connection => {
   }
   return c
 }
+
+/** Let go of everything the connection `driver` is holds: what it reads now
+ * reads otherwise, as a mode's driver bound to another mode does (./mode.ts). */
+export let turned = (driver: Driver): void =>
+  connections.get(driver.connection ?? driver)?.moved?.()
 
 let opened = (): Connection => ({
   kept: new Set(),
@@ -558,8 +565,8 @@ let tell = (driver: Driver, c: Connection) => {
       ? { ...w, from: w.from.slice(0, -BESIDE.length) }
       : w
   // Everything read may read otherwise now: the schema moved, or a mode's
-  // dial turned (./mode.ts).
-  let moved = () => {
+  // driver was bound to another mode (./mode.ts, `turned`).
+  let moved = c.moved = () => {
     forget()
     unspine()
     c.classes.clear()
@@ -577,7 +584,6 @@ let tell = (driver: Driver, c: Connection) => {
       // holds, a write of it: on a branch it is the component's whole state.
       s = held(s)
       let table = s.t == 'insert' ? s.into : s.t == 'update' ? s.table : s.from
-      if (table == DIAL) return moved()
       bump(table)
       if (moves(s)) {
         c.shifts++

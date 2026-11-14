@@ -1412,24 +1412,28 @@ plugin hands it (@yaks/journal's `history(options)`): `clock` takes the id of
 the transaction a unit's versions name, run by the unit's first versioned write,
 and `tip` reads the newest. So a unit writing only exempt components takes none.
 
-A **mode** reads the past or a branch, on a connection of its own:
+A **mode** reads the past or a branch, through a driver of its own:
 `moded(driver, vocab, { history }, mode)` with `{ at }`, main as of a
 transaction, which refuses every write; or a branch from
 `branch(driver, history)`, main as of its fork under the branch's own rows,
 whose writes go to `<comp>$versions` rows of that branch and never reach main.
-The connection's temporary views stand in front of each table and read the mode
-from a one-row dial, so binding the same connection to another mode of the same
-kind turns the dial and answers the same store. Each view is one select over one
-table, which SQLite folds into any read that names it; a compound one it would
-materialize whole for a left join. A branch's exempt components are the
-exception, a compound of its rows and the live ones. The historical archetype
-index (`$archetype$versions`) keeps membership spans from the version writes. A
-mode reads its table sets there, with live exempt components from the owner's
-current archetype and branch membership overlaid. It asks no component view
-which entities it holds. Property edits keep the same membership span.
-Installation repairs a missing historical index from the versions already held.
-Text search reads the live text. An entity's spine is not versioned: one minted
-after the transaction a mode reads reads as an empty identity.
+Each statement the mode's driver runs is given, for each component table it
+names, a common table expression of that name holding the mode's rows, which
+stands in front of the table everywhere in the statement. Nothing is made in the
+database, so a mode needs no temporary object (a Durable Object refuses them)
+and reads over any connection, the one its main store writes through included.
+Binding the same driver to another mode answers the same store, reading the new
+one. Each relation is one select over one table, which SQLite folds into any
+read that names it; a compound one it would materialize whole for a left join. A
+branch's exempt components are the exception, a compound of its rows and the
+live ones. The historical archetype index (`$archetype$versions`) keeps
+membership spans from the version writes. A mode reads its table sets there,
+with live exempt components from the owner's current archetype and branch
+membership overlaid. It asks no component's relation which entities it holds.
+Property edits keep the same membership span. Installation repairs a missing
+historical index from the versions already held. Text search reads the live
+text. An entity's spine is not versioned: one minted after the transaction a
+mode reads reads as an empty identity.
 
 A store with history has `branches` (./branches.ts): `make()` writes a row of
 the branch table and copies nothing, `list()` answers every branch, and
