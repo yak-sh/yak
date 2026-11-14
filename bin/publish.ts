@@ -225,11 +225,23 @@ let alone = async (all: Member[], named: string[], flags: string[]) => {
   let each = all.filter((m) => named.includes(m.dir) && publishes(m))
   if (!each.length) return 0
   return await project(root, all.map((m) => m.dir), async (target) => {
-    let runs = await Promise.all(
-      each.map((m) =>
-        publish(`${target}/${m.dir}/deno.json`, flags, true).output()
-      ),
-    )
+    // One publish per core at a time: each is a runtime of its own, and a
+    // change touching thirty packages started thirty, past a session's
+    // memory cap.
+    let runs: Deno.CommandOutput[] = []
+    let next = 0
+    let lane = async () => {
+      for (let i = next++; i < each.length; i = next++) {
+        runs[i] = await publish(
+          `${target}/${each[i].dir}/deno.json`,
+          flags,
+          true,
+        )
+          .output()
+      }
+    }
+    let lanes = Math.min(navigator.hardwareConcurrency, each.length)
+    await Promise.all(Array.from({ length: lanes }, lane))
     for (let run of runs) {
       await Deno.stdout.write(run.stdout)
       await Deno.stderr.write(run.stderr)
