@@ -113,7 +113,8 @@ export let schema = (): Stmt[] => [...ddl(), ...feedDdl()]
  * the journal before versions, attribution with every value as a
  * `journal_field` row, until the box's journal moves into versions.
  * `{"with": {"components": ["space", "member"]}}` keeps the history of those
- * components alone.
+ * components alone. `{"with": {"feed": false}}` writes no feed, for a store
+ * no other host writes to (a Durable Object is its store's only host).
  */
 export type Aspects = {
   attribution: boolean
@@ -176,7 +177,7 @@ export let plugins = (
     : undefined
   return [
     journal(logFor(host), host.vocab, { record, components }),
-    ...mode ? [] : [feeder(feedFor(host))],
+    ...mode || options?.feed === false ? [] : [feeder(feedFor(host))],
   ]
 }
 
@@ -211,6 +212,7 @@ export let TRIES = 5
  * A look reads through the host's reader, and the consumer may take its time:
  * stopping cancels the next look, and the host's release (`defer`) waits out
  * the one under way, so no read outlives the plugins into a closed reader.
+ * A host whose options say `feed: false` is offered none.
  */
 export let feed = (
   host: Bound & {
@@ -219,87 +221,87 @@ export let feed = (
     report?: (error: unknown) => void | Promise<void>
     defer?: (release: () => void | Promise<void>) => void
   },
-  options: { every?: number; timer?: Timer } = {},
-) =>
-(each: Each): () => void => {
-  let every = options.every ?? EVERY
-  let timer = options.timer ?? later
-  let told = (error: unknown) =>
-    host.report
-      ? void host.report(error)
-      : console.error('@yaks/journal feed —', error)
-  let missed = false
-  let next = follow(feedFor(host), {
-    missed: (n) => {
-      missed = true
-      told(new Error(`the feed pruned ${n} commits before they were read`))
-    },
-  })
-  let heard: Wrote[][] = []
-  let tries = 0
-  let taking: Promise<void> | undefined
-  let cancel = () => {}
-  let stopped = false
-  // One call at a time, so the consumer is never handed a transaction out of
-  // order. News it fails on (a store busy for a moment) is offered again at
-  // the next look, ahead of everything heard after it.
-  let take = async () => {
-    while ((heard.length || missed) && !stopped) {
-      let [said, was] = [heard, missed]
-      heard = []
-      missed = false
-      try {
-        let applied = await filled(
-          said,
-          (e, c) =>
-            host.reader?.storage
-              ? host.reader.storage.get(e, c)
-              : host.storage.get(e, c),
-        )
-        await each({ applied, missed: was })
-        tries = 0
-      } catch (err) {
-        if (++tries < TRIES) {
-          heard = [...said, ...heard]
-          missed ||= was
-          break
-        }
-        tries = 0
+  options: { every?: number; timer?: Timer; feed?: boolean } = {},
+): ((each: Each) => () => void) | undefined =>
+  options.feed === false ? undefined : (each: Each): () => void => {
+    let every = options.every ?? EVERY
+    let timer = options.timer ?? later
+    let told = (error: unknown) =>
+      host.report
+        ? void host.report(error)
+        : console.error('@yaks/journal feed —', error)
+    let missed = false
+    let next = follow(feedFor(host), {
+      missed: (n) => {
         missed = true
-        told(new Error('the feed passed over what it heard', { cause: err }))
+        told(new Error(`the feed pruned ${n} commits before they were read`))
+      },
+    })
+    let heard: Wrote[][] = []
+    let tries = 0
+    let taking: Promise<void> | undefined
+    let cancel = () => {}
+    let stopped = false
+    // One call at a time, so the consumer is never handed a transaction out of
+    // order. News it fails on (a store busy for a moment) is offered again at
+    // the next look, ahead of everything heard after it.
+    let take = async () => {
+      while ((heard.length || missed) && !stopped) {
+        let [said, was] = [heard, missed]
+        heard = []
+        missed = false
+        try {
+          let applied = await filled(
+            said,
+            (e, c) =>
+              host.reader?.storage
+                ? host.reader.storage.get(e, c)
+                : host.storage.get(e, c),
+          )
+          await each({ applied, missed: was })
+          tries = 0
+        } catch (err) {
+          if (++tries < TRIES) {
+            heard = [...said, ...heard]
+            missed ||= was
+            break
+          }
+          tries = 0
+          missed = true
+          told(new Error('the feed passed over what it heard', { cause: err }))
+        }
       }
     }
-  }
-  // A read that fails is tried again at the next look, since the cursor moves
-  // only past what was read.
-  let looking: Promise<unknown> | undefined
-  let look = () => looking = looked()
-  let looked = async () => {
-    try {
-      heard.push(...(await next()).map((h) => h.wrote))
-    } catch (err) {
-      told(err)
+    // A read that fails is tried again at the next look, since the cursor moves
+    // only past what was read.
+    let looking: Promise<unknown> | undefined
+    let look = () => looking = looked()
+    let looked = async () => {
+      try {
+        heard.push(...(await next()).map((h) => h.wrote))
+      } catch (err) {
+        told(err)
+      }
+      let started = !taking && (heard.length || missed)
+        ? taking = take().finally(() => taking = undefined)
+        : undefined
+      if (!stopped) cancel = timer(look, every)
+      return started
     }
-    let started = !taking && (heard.length || missed)
-      ? taking = take().finally(() => taking = undefined)
-      : undefined
-    if (!stopped) cancel = timer(look, every)
-    return started
+    let stop = () => {
+      stopped = true
+      cancel()
+    }
+    host.defer?.(async () => {
+      stop()
+      await looking
+      await taking
+    })
+    if (host.stopping.aborted) return stop
+    host.stopping.addEventListener('abort', stop, { once: true })
+    cancel = timer(look, every)
+    return stop
   }
-  let stop = () => {
-    stopped = true
-    cancel()
-  }
-  host.defer?.(async () => {
-    stop()
-    await looking
-    await taking
-  })
-  if (host.stopping.aborted) return stop
-  host.stopping.addEventListener('abort', stop, { once: true })
-  cancel = timer(look, every)
-  return stop
-}
 
 /** What a feed schedules its next look with, and how it cancels it. */
 export type Timer = (

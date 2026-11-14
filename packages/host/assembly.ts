@@ -29,7 +29,7 @@ import type {
   Route,
   Told,
 } from '@yaks/api'
-import type { Host, Role } from './mod.ts'
+import type { Feed, Host, Role } from './mod.ts'
 import {
   type Config,
   type Configured,
@@ -475,17 +475,20 @@ export let assemble = (
             if (said !== undefined) return said
           }
         },
-        // Present only when a plugin offers one: a host without it polls its
+        // Present only when a plugin's options keep one: a host without it polls its
         // store's revision instead (@yaks/api routes), so another process's
         // commits still reach its subscriptions.
-        feed: graphs.some(([r]) => r.feed)
-          ? (each) => {
-            let stops = graphs.flatMap(([r, options]) =>
-              r.feed ? [r.feed(host, options)(each)] : []
-            )
-            return () => stops.forEach((stop) => stop())
-          }
-          : undefined,
+        get feed(): Feed | undefined {
+          let feeds = graphs.flatMap(([r, options]) =>
+            r.feed?.(host, options) ?? []
+          )
+          return feeds.length
+            ? (each) => {
+              let stops = feeds.map((feed) => feed(each))
+              return () => stops.forEach((stop) => stop())
+            }
+            : undefined
+        },
         get storage() {
           if (!store) throw new Error('the store is not open yet')
           return g?.storage ?? store

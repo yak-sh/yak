@@ -275,7 +275,7 @@ let looping = async (each: Each, reader?: Bound['reader']) => {
     report: (e: unknown) => void told.push(e),
     defer: (release: () => void | Promise<void>) => void releases.push(release),
   }
-  feed(host, { every: 1, timer: (fn, ms) => time.after(ms, fn) })(each)
+  feed(host, { every: 1, timer: (fn, ms) => time.after(ms, fn) })!(each)
   await time.advance(1)
   let write = (eid: string) => theirs.write(wrote([page('p')(eid)]))
   // The host closing: stopped, then its plugins' releases awaited.
@@ -330,7 +330,7 @@ let threaded = (() => {
     },
   }
   let start = () =>
-    feed(host, { every: 1, timer: (fn, ms) => time.after(ms, fn) })(
+    feed(host, { every: 1, timer: (fn, ms) => time.after(ms, fn) })!(
       (heard) => void news.push(heard),
     )
   return { theirs, time, news, start }

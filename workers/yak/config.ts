@@ -208,10 +208,11 @@ export let directoryConfig: Config = {
     // visit, spend and deploy.
     {
       use: '@yaks/journal',
-      facets: ['vocab'],
+      facets: ['vocab', 'graph'],
       words: ['_tx', '_change'],
       with: {
         components: ['space', 'doc', 'former', 'member', 'grant', 'invite'],
+        feed: false,
       },
     },
     // The directory keeps the persona every Operator is worn on

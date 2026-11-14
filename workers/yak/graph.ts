@@ -81,7 +81,7 @@ import { planting, recovering } from './models.ts'
 import { hits as documentHits } from './document-search.ts'
 import { metered as meteredModel } from './meter.ts'
 import { attributed } from './attribution.ts'
-import { backed as journalBacked, journal, log } from '@yaks/journal'
+import { backed as journalBacked } from '@yaks/journal'
 import { described, describing } from '@yaks/code/described'
 import {
   compile,
@@ -338,7 +338,7 @@ import {
 import { type Assembling, lent, planned } from '@yaks/durable-object/compose'
 import { type Host as PluginHost, type Load } from '@yaks/host'
 import type { Words } from '@yaks/host/words'
-import { type Config, given, meet, used } from '@yaks/host/config'
+import { meet } from '@yaks/host/config'
 import { posts, worker } from './config.ts'
 import { privacyRules } from './privacy-move.ts'
 import { COPY as READ_OUT, copying } from './store-copy.ts'
@@ -462,13 +462,6 @@ export let vocabOfStore = (name: string, declared: unknown = {}): Vocab =>
 
 let storeKind = (name: string): keyof typeof worker.stores =>
   name == PLATFORM_STORE ? 'directory' : name == GIT_STORE ? 'git' : 'app'
-// The components a store's journal keeps, as its config's @yaks/journal entry
-// names them (`with.components`); absent, every one its words keep.
-let journaled = (config: Config): string[] | undefined => {
-  let plug = config.plugins?.find((p) => used(p) == '@yaks/journal')
-  let named = plug && given(plug).components
-  return Array.isArray(named) ? named.map(String) : undefined
-}
 // The words a shape's plan is assembled under: its own, read through what
 // its storage reads a stored value through. Plans retain only declarations
 // and modules (@yaks/durable-object `planned`), one a kind and words; each
@@ -1626,13 +1619,6 @@ export class Store extends Durable {
             defect(error, { request: `${plugin} ${phase}`, store: name }),
           ...(own ? {} : { teach: teach(this.#bind) }),
           plugins: [
-            ...(vocab.comp('_tx')
-              ? [
-                journal(log({ rows: (s) => drive.query(s), derived }), vocab, {
-                  components: journaled(config),
-                }),
-              ]
-              : []),
             ...(!own || declaredLenses(declaration)
               ? [
                 lenses(

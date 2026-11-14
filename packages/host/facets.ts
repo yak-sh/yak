@@ -95,8 +95,9 @@ export type GraphFacet = {
   payments?: (host: Host, options: Options) => Record<string, Payments>
   /** who a request is from, or none where these options name nobody to ask */
   authenticate?: (host: Host, options: Options) => Authenticate | undefined
-  /** the commits other hosts make to this store (@yaks/journal's feed) */
-  feed?: (host: Host, options: Options) => Feed
+  /** the commits other hosts make to this store (@yaks/journal's feed), or
+   * none where these options keep no feed */
+  feed?: (host: Host, options: Options) => Feed | undefined
   /** Whether a store this plugin writes to, configured with `options`, is
    * shaped so that only this plugin reads or writes it correctly from then
    * on. A writing host records it in the store, and a host whose config leaves
