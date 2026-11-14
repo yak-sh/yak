@@ -1046,9 +1046,10 @@ export let worn = (
   who: Who,
 ): Scripts | null => bearing(req) ? null : wearing(req, space, app, env, who)
 
-// What every page the door serves this caller wears. The pencil's doors are
-// the app's own `api/` under its mount, unless the router said they are
-// elsewhere for this browser (@yaks/platform/routes `API_AT`).
+// What every page the door serves this caller wears. The release listener's
+// and the pencil's doors are the app's own `api/` under its mount, unless the
+// router said they are elsewhere for this browser (@yaks/platform/routes
+// `API_AT`).
 export let wearing = (
   req: Request,
   space: Space,
@@ -1056,11 +1057,10 @@ export let wearing = (
   env: Host,
   who: Who,
 ): Scripts => {
-  let edit = editOf(space, app, env, who)
-  let api = edit && req.headers.get(API_AT)
+  let api = req.headers.get(API_AT)
   return {
     ...badged(space, app, env),
-    edit,
+    edit: editOf(space, app, env, who),
     ...api ? { api } : {},
     bar: barOf(env, app, who),
   }
@@ -2714,6 +2714,12 @@ export let edged = async (req: Request, env: Env, view?: Directory) => {
   return answer
 }
 
+// A release check (public/release.js, `/api/release`) reads which release is
+// out and uses no instrument, so it hands none out: the home app's is asked
+// at the apex (apex.ts), where a cookie would make every visitor one Site no
+// longer treats as a stranger (kept-page.ts `stranger`).
+let checking = (path: string) => /^(?:\/[^/]+)?\/api\/release$/.test(path)
+
 export let fetch = (req: Request, env: Env): Promise<Response> => {
   let c = clock()
   // Inside `counting`, so every store hop and bucket op the chain below makes
@@ -2727,10 +2733,12 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
     // Bytes the same for everyone (kept-page.ts `fixed`) set none either: a
     // cookie would keep them out of every cache, and no door of theirs uses
     // the instrument.
+    // Nor does a release check (`checking`).
     // The browser's own cookies are kept, and told which stores it holds
     // (visit.ts `ownOf`), only where it is the browser asking.
-    let remember = !pagePath(new URL(req.url).pathname) && !bearing(req) &&
-      !req.headers.has('authorization') && !fixed(new URL(req.url).pathname)
+    let path = new URL(req.url).pathname
+    let remember = !pagePath(path) && !bearing(req) &&
+      !req.headers.has('authorization') && !fixed(path) && !checking(path)
     let res = await browsing(
       req,
       env,

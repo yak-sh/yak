@@ -25,7 +25,12 @@ class ReleaseEvent {
     public options: { detail: Release; cancelable: boolean },
   ) {}
 }
-export let browser = (prevent = false) => {
+// A page mounted at `at`, opened at `href`, whose tag names its `api/` where
+// it is not under the mount.
+type Page = { at: string; href: string; api?: string }
+let COOKBOOK = { at: '/cookbook/', href: 'https://ada.yaks.app/cookbook/' }
+
+export let browser = (prevent = false, page: Page = COOKBOOK) => {
   let listeners: Record<string, ((e: Frame) => void)[]> = {}
   let ears = (kind: string, fn: (e: Frame) => void) =>
     (listeners[kind] ??= []).push(fn)
@@ -66,7 +71,11 @@ export let browser = (prevent = false) => {
   }
   let document = {
     currentScript: {
-      dataset: { yakAt: '/cookbook/', yakVersion: '1' },
+      dataset: {
+        yakAt: page.at,
+        yakVersion: '1',
+        ...page.api ? { yakApi: page.api } : {},
+      },
     },
     visibilityState: 'visible',
     body: { prepend: (n: Element) => nodes.unshift(n) },
@@ -83,7 +92,7 @@ export let browser = (prevent = false) => {
     Infinity,
     Date: { now: () => time },
     location: {
-      href: 'https://ada.yaks.app/cookbook/',
+      href: page.href,
       reload: () => reloads++,
     },
     sessionStorage: {

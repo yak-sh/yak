@@ -80,8 +80,8 @@ let atApex = async (req: Request, env: Env, path: string) => {
   }
   // The home app's own doors (site.ts `HOME_API`): its pages are the apex's,
   // and its `api/` the address it has on its space's hostname, where the
-  // request is carried and served as any app's door is, the pencil's
-  // drafts and saves among them.
+  // request is carried and served as any app's door is: the pencil's
+  // drafts and saves, and every open tab's release check (public/release.js).
   if (path.startsWith(`${site.HOME_API}api/`)) {
     return bound(env.APPS, apps.fetch, env).fetch(
       aim(req, apex(env), { space: site.HOME.space, app: null }, env),

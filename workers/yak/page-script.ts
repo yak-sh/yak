@@ -13,13 +13,13 @@
 // Each tag says where its app is mounted for this browser (`data-yak-at`) and
 // which release the page is (`data-yak-version`): the scripts read their doors
 // off the first, and client.js sends the second with every request. The
-// badge's also says what it opens (`data-yak-badge`): the app's own page on
-// yaks.app, or yaks.app itself. The pencil's says where the Operator's chat
-// for the app is (`data-yak-edit`), and where the app's own `api/` is when it
-// is not under the mount (`data-yak-api`). The bar's says where keeping it goes and what
-// its button says (`data-yak-keep`, `data-yak-keep-says`). Attributes are not
-// hashed, so the scripts'
-// text and a policy's hashes are the same on every page.
+// release listener's and the pencil's also say where the app's own `api/` is
+// when it is not under the mount (`data-yak-api`). The badge's says what it
+// opens (`data-yak-badge`): the app's own page on yaks.app, or yaks.app
+// itself. The pencil's says where the Operator's chat for the app is
+// (`data-yak-edit`). The bar's says where keeping it goes and what its button
+// says (`data-yak-keep`, `data-yak-keep-says`). Attributes are not hashed, so
+// the scripts' text and a policy's hashes are the same on every page.
 //
 // A page with a Content-Security-Policy of its own may refuse inline scripts.
 // Its policy is given the scripts' hashes (`admitted`), which lets these run
@@ -52,7 +52,8 @@ export type Scripts = {
   draft?: string
   edit?: string | null
   /** Where the app's own `api/` is for this browser, where it is not under
-   * the mount (@yaks/platform/routes `API_AT`): the pencil's doors. */
+   * the mount (@yaks/platform/routes `API_AT`): the release listener's and
+   * the pencil's doors. */
   api?: string | null
   bar?: Bar | null
 }
@@ -112,7 +113,12 @@ export let pageScript = async (
         hashes: [location.hash, release.hash],
       }
     }
-    let worn: [Script, string][] = [[report, ''], [release, ''], [location, '']]
+    let doors = api ? ` data-yak-api="${esc(api)}"` : ''
+    let worn: [Script, string][] = [
+      [report, ''],
+      [release, doors],
+      [location, ''],
+    ]
     if (badge != null) {
       worn.push([
         badged,
@@ -120,13 +126,7 @@ export let pageScript = async (
         (preview ? ` data-yak-preview="${esc(preview)}"` : ''),
       ])
     }
-    if (edit) {
-      worn.push([
-        pencil,
-        ` data-yak-edit="${esc(edit)}"` +
-        (api ? ` data-yak-api="${esc(api)}"` : ''),
-      ])
-    }
+    if (edit) worn.push([pencil, ` data-yak-edit="${esc(edit)}"${doors}`])
     if (bar) {
       worn.push([
         barred,

@@ -107,9 +107,11 @@ and setup; this is the map and the feel.
   none to give. The variant split, the funnel and the front run before Site
   and are unchanged by it. A person signed in who may write the app is served
   its page as themselves, wearing the pencil and never kept (site.ts
-  `forward`, apps.ts `editing`); the pencil's doors are the app's own `api/`
-  at the apex's `/home/api/` (site.ts `HOME_API`), since `/api/` there is the
-  apex's.
+  `forward`, apps.ts `editing`). The pencil's doors and every open tab's
+  release check are the app's own `api/` at the apex's `/home/api/` (site.ts
+  `HOME_API`, the tags' `data-yak-api`), since `/api/` there is the apex's. A
+  release check sets no cookie (apps.ts `checking`), so it leaves a stranger a
+  stranger at `/login`.
 - **The connector**: `mcp.ts` and `tools.ts`, the tools Claude and ChatGPT call;
   `prompts/` and `public/docs/` are what those assistants read.
 - **Spending**: `models.ts` and `meter.ts`, one model and voice budget per space

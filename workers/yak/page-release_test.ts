@@ -74,3 +74,15 @@ test('canceling yak-release replaces the default; returning to view is throttled
   assertEquals(b.nodes.length, 0)
   assertEquals(b.reloads(), 0)
 })
+
+// The home app's pages are mounted at yaks.app's `/`, whose `/api/` is the
+// platform's; their tag names the app's own (site.ts `HOME_API`).
+test("a page whose tag names its api elsewhere asks that api of its releases and watches that api's sockets", async () => {
+  let b = browser(false, { at: '/', href: 'https://yaks.app/', api: '/home/' })
+  new b.world.WebSocket('wss://yaks.app/api/ws').fire('open')
+  await tick()
+  assertEquals(b.asks, [])
+  new b.world.WebSocket('wss://yaks.app/home/api/ws').fire('open')
+  await tick()
+  assertEquals(b.asks, ['https://yaks.app/home/api/release?version=1'])
+})

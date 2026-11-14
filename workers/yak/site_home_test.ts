@@ -211,6 +211,21 @@ test('a stranger and a person with no seat are answered the page everyone is', (
   }
 })
 
+// A release check from a tab left open on yaks.app, by a browser with no
+// cookie yet (public/release.js, at the tag's `data-yak-api`).
+let checked = await answer(
+  new Request('https://yaks.app/home/api/release?version=1'),
+  home.env,
+  '/home/api/release',
+)
+
+test("an open tab of the apex asks the home app's own api of its releases, which leaves a stranger a stranger", async () => {
+  assertStringIncludes(strangers.text, 'data-yak-api="/home/"')
+  assertEquals(checked.status, 200)
+  assertEquals(await checked.json(), { version: 1 })
+  assertEquals(checked.headers.get('set-cookie'), null)
+})
+
 // A module of the app's own `api/`, at the apex and at the app's address.
 let door = 'api/storage.js'
 let [atApex, atApp] = await Promise.all([

@@ -19,6 +19,13 @@
   if (!script) return
   let version = Number(script.dataset.yakVersion)
   let at = new URL(script.dataset.yakAt, location.href)
+  // The app's own `api/`, under its mount unless the tag says it is elsewhere
+  // (`data-yak-api`): the home app's at yaks.app, whose `/api/` is the
+  // platform's.
+  let api = new URL(
+    script.dataset.yakApi || script.dataset.yakAt,
+    location.href,
+  )
   let following = (link) => {
     // What a reload keeps, in sessionStorage, or in the window's name where a
     // sandboxed page has no storage: both outlive a reload of the tab.
@@ -135,7 +142,7 @@
       if (links) links.forEach((link, i) => swap(link, news.files[i].sha))
       else reload()
     }
-    let door = new URL('api/ws', at)
+    let door = new URL('api/ws', api)
     door.protocol = door.protocol == 'https:' ? 'wss:' : 'ws:'
     let wait = 1000
     let opened = false
@@ -162,9 +169,9 @@
     connect()
   }
   if (script.dataset.yakDraft) return following(script.dataset.yakDraft)
-  let door = new URL('api/release', at)
+  let door = new URL('api/release', api)
   door.searchParams.set('version', String(version))
-  let socketDoor = new URL('api/ws', at)
+  let socketDoor = new URL('api/ws', api)
   let latest = version
   let busy = false
   let again = false
