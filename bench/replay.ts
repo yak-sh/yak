@@ -23,7 +23,8 @@
  * check it against the `usage` the original response recorded. `--dry` prints
  * the rebuild without starting the CLI. A variant is a list of
  * `{ in: 'system' | 'messages', from, to }`, each replacing text wherever it
- * reads, also inside a JSON tool result.
+ * reads, also inside a JSON tool result, or `{ in: 'end', add }`, text added
+ * after the request's last message as a hook's added text arrives there.
  * @module
  */
 // Transcript lines and API bodies are JSON of the CLI's and the API's shapes.
@@ -100,7 +101,24 @@ export let swap = (x: unknown, from: string, to: string): [unknown, number] => {
   return [walk(x), n]
 }
 
-export type Variant = { in: 'system' | 'messages'; from: string; to: string }
+export type Variant =
+  | { in: 'system' | 'messages'; from: string; to: string }
+  | { in: 'end'; add: string }
+
+/** `messages` with `text` after the last, as a hook's added text arrives: a
+ * block of its own in the closing system message, or a system message after a
+ * user one. Nothing before it changes, so earlier thinking stays in. */
+export let append = (messages: Rec[], text: string): Rec[] => {
+  let last = messages.at(-1)
+  let block = { type: 'text', text }
+  if (last?.role != 'system') {
+    return [...messages, { role: 'system', content: [block] }]
+  }
+  let content = typeof last.content == 'string'
+    ? [{ type: 'text', text: last.content }]
+    : last.content
+  return [...messages.slice(0, -1), { ...last, content: [...content, block] }]
+}
 
 /** Each tool_result that loaded deferred tools, by its call: the CLI, offering
  * no tools, renders one as text, where the original sent tool_reference
@@ -244,6 +262,7 @@ if (import.meta.main) {
   let swaps: number[] = []
   let holes = body.messages.some((m: unknown) => !m)
   for (let v of variants) {
+    if (v.in == 'end') continue
     let [swapped, n] = swap(body[v.in], v.from, v.to)
     // a text only in a hole is checked when the hole is filled
     if (!n && (v.in != 'messages' || !holes)) {
@@ -306,7 +325,13 @@ if (import.meta.main) {
     let own = (headers.get('anthropic-beta') ?? '').split(',')
       .map((s) => s.trim()).filter(Boolean)
     headers.set('anthropic-beta', [...new Set([...betas, ...own])].join(','))
-    let sent: Rec = { ...body, messages: merged.messages }
+    let sent: Rec = {
+      ...body,
+      messages: variants.reduce(
+        (m, v) => v.in == 'end' ? append(m, v.add) : m,
+        merged.messages,
+      ),
+    }
     if (count) {
       // only the context is counted, not how a reply would be made
       let rest = Object.fromEntries(

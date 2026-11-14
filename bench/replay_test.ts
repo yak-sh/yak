@@ -1,5 +1,5 @@
 import { equal, test, throws } from '@yaks/testing'
-import { cut, loaded, merge, read, rebuild, swap } from './replay.ts'
+import { append, cut, loaded, merge, read, rebuild, swap } from './replay.ts'
 
 let j = (x: unknown) => JSON.stringify(x)
 let blob = (hash: string, message: unknown) =>
@@ -167,4 +167,22 @@ test('cut keeps the lines before the response, without request records, under a 
       j({ type: 'assistant', sessionId: 'new', message: { content: [] } }),
     ].join('\n') + '\n',
   )
+})
+
+test('append adds a block to a closing system message, else a system message of its own', () => {
+  let hook = { role: 'system', content: [{ type: 'text', text: 'hook' }] }
+  let add = { type: 'text', text: 'added' }
+  equal(append([user('jeff'), hook], 'added'), [user('jeff'), {
+    ...hook,
+    content: [...hook.content, add],
+  }])
+  equal(
+    append([user('jeff'), { role: 'system', content: 'hook' }], 'added')[1]
+      .content,
+    [hook.content[0], add],
+  )
+  equal(append([user('jeff')], 'added'), [user('jeff'), {
+    role: 'system',
+    content: [add],
+  }])
 })
