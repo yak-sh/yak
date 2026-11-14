@@ -2,7 +2,7 @@
 // Compiler-owned toolkit sources, seeded as npm-shaped packages. Only declared
 // toolkit roots and their catalog dependency closure enter a build; their source
 // digests describe what was compiled, never a version to ask the registry for.
-import { intersects, Range } from 'semver'
+import { gt, intersects, minVersion, Range } from 'semver'
 import { parse } from 'es-module-lexer/js'
 import { script } from './graph.ts'
 import { dependencies } from './plan.ts'
@@ -28,6 +28,8 @@ export type Seed = {
   dependencies: Record<string, string>
   /** Toolkit package to the exact source digest used by this compiler. */
   platform: Record<string, string>
+  /** What the app should know about how its asks were met. */
+  notes: string[]
 }
 
 /** Runtime resources stay outside the app's own paths. */
@@ -90,8 +92,25 @@ export let moved = (source: string, value: () => string | undefined) => {
   return source
 }
 
-// A flat install must satisfy every consumer, not whichever was visited last.
-let together = (name: string, a: string, b: string) => {
+// The lowest version a range allows, or null for a tag or a URL.
+let least = (range: string) => {
+  try {
+    return minVersion(range)?.version ?? null
+  } catch {
+    return null
+  }
+}
+
+/** One version for a flat install that two consumers ask for: what both
+ * ranges allow, else the higher of two that semver calls compatible, as when
+ * a release pins the marked its toolkit used before the toolkit moved on.
+ * `noted` hears that choice; different majors cannot share one install. */
+export let together = (
+  name: string,
+  a: string,
+  b: string,
+  noted: (note: string) => void = () => {},
+) => {
   if (a == b) return a
   try {
     if (intersects(a, b)) {
@@ -101,6 +120,15 @@ let together = (name: string, a: string, b: string) => {
         )
       )
       return choices.join(' || ')
+    }
+    let [low, high] = [least(a), least(b)]
+    if (low && high && intersects(`^${low}`, `^${high}`)) {
+      let [kept, left] = gt(low, high) ? [a, b] : [b, a]
+      noted(
+        `package.json: ${name} ${left} and ${kept} are both asked for; ` +
+          `the one install is ${kept}`,
+      )
+      return kept
     }
   } catch {
     // Different tags and URLs cannot express a shared version constraint.
@@ -125,14 +153,18 @@ export let seed = (files: Record<string, string>, catalog: Catalog): Seed => {
     assets: {},
     dependencies: {},
     platform: {},
+    notes: [],
   }
+  let noted = (note: string) => out.notes.push(note)
   let visit = (name: string, version: string) => {
     if (!toolkit(name)) {
       if (version == 'platform') {
         throw new Error(`${name}: only @yaks toolkit packages use "platform"`)
       }
       let prior = out.dependencies[name]
-      out.dependencies[name] = prior ? together(name, prior, version) : version
+      out.dependencies[name] = prior
+        ? together(name, prior, version, noted)
+        : version
       return
     }
     if (version != 'platform') {

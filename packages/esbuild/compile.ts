@@ -195,6 +195,7 @@ export let compile = async (
   let installing = phase(report, 'install')
   try {
     setup = seed(ask.files, catalog)
+    answer.notes.push(...setup.notes)
     answer.assets = options.shared === false || ask.worker || !ask.pages.length
       ? setup.assets
       : {}

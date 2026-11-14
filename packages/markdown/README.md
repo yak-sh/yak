@@ -1,7 +1,7 @@
 # @yaks/markdown
 
 Parses GitHub Flavored Markdown (GFM) and renders it as element nodes for Preact
-in a browser or `@yaks/tui` in a terminal. It uses Marked 18.0.6 for parsing,
+in a browser or `@yaks/tui` in a terminal. It uses Marked 18.2.0 for parsing,
 never generates HTML strings, and does not store or fetch documents.
 
 ```ts

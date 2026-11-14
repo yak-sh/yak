@@ -1,6 +1,12 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
-import { type Catalog, located, seed, type Toolkit } from './platform.ts'
+import {
+  type Catalog,
+  located,
+  seed,
+  together,
+  type Toolkit,
+} from './platform.ts'
 import { lockfile, pins, reached, wanted } from './lock.ts'
 import { satisfies } from 'semver'
 import { compile } from './compile.ts'
@@ -114,13 +120,43 @@ test('seed does not load an unused catalog and preserves ordinary npm asks', () 
     dependencies: { preact: '^10' },
     platform: {},
     assets: {},
+    notes: [],
   })
   assertEquals(seed({ 'main.ts': 'export {}' }, {}), {
     files: { 'main.ts': 'export {}' },
     dependencies: {},
     platform: {},
     assets: {},
+    notes: [],
   })
+})
+
+test('together finds one version for two asks, or refuses', () => {
+  let cases: [string, string, string | null][] = [
+    ['18.2.0', '18.2.0', '18.2.0'],
+    ['^10', '^10.20.0', '>=10.0.0 <11.0.0-0 >=10.20.0 <11.0.0-0'],
+    ['18.0.6', '18.2.0', '18.2.0'],
+    ['18.2.0', '18.0.6', '18.2.0'],
+    ['~18.0.6', '^18.2.0', '^18.2.0'],
+    ['0.2.1', '0.3.0', null],
+    ['17.0.0', '18.2.0', null],
+    ['latest', '18.2.0', null],
+  ]
+  for (let [a, b, want] of cases) {
+    if (want) assertEquals(together('marked', a, b), want, `${a} ${b}`)
+    else assertThrows(() => together('marked', a, b), Error, 'incompatible')
+  }
+})
+
+test('seed installs the newer of a release and toolkit pin, and says so', () => {
+  let toolkit = { '@yaks/markdown': pkg({ marked: '18.2.0' }) }
+  let input = files({ '@yaks/markdown': 'platform', marked: '18.0.6' })
+  let got = seed(input, toolkit)
+  assertEquals(got.dependencies, { marked: '18.2.0' })
+  assertEquals(got.notes, [
+    'package.json: marked 18.0.6 and 18.2.0 are both asked for; ' +
+    'the one install is 18.2.0',
+  ])
 })
 
 test('seed refuses incompatible flat npm versions rather than choosing by order', () => {
