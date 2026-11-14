@@ -210,6 +210,42 @@ await looking.get(['q1'])
 test('a store that begins to keep history keeps what it held as its past', async () =>
   equal((await looking.get(['q1']))[0].page, { title: 'before' }))
 
+// The same beginning paced: the install owes the live rows as their first
+// versions, each maintain() takes a page of them, and a row a write changed
+// before its page keeps only the version that write made.
+let slow = open(`file:${crypto.randomUUID()}?mode=memory&cache=shared`)
+slow.query(CLOCK)
+storage(slow, vocab).install()
+await graph({ storage: storage(slow, vocab), vocab }).apply(
+  Array.from({ length: 600 }, (_, i) => ({
+    entity: { eid: `s${i}` },
+    page: { title: `held ${i}` },
+  })),
+)
+let pacing = storage(slow, vocab, { history, paced: true })
+pacing.install()
+let seededAt = graph({ storage: pacing, vocab })
+let early = await Promise.resolve().then(() => pacing.branches!.make())
+  .then(() => null, (e) => e.name)
+await seededAt.apply([{ entity: { eid: 's599' }, page: { title: 'moved' } }])
+let units = 0
+while (pacing.maintain(() => true)) units++
+let atStart = graph({
+  storage: moded(slow, vocab, { history }, { at: 0 }),
+  vocab,
+})
+let firsts = await atStart.get(['s0', 's599'])
+
+test('a paced beginning takes its rows a page at a time, and makes no branch till it has', async () => {
+  equal(early, 'Unseeded')
+  equal(units, 3)
+  equal(firsts.map((b) => b.page), [{ title: 'held 0' }, undefined])
+  equal(
+    (await pacing.branches!.make()).fork,
+    Number(slow.query(history.tip)[0].id),
+  )
+})
+
 // As a file from before historical archetypes: keep all its component
 // versions, remove only the new index, and let installation rebuild it.
 let shapeRows = () =>

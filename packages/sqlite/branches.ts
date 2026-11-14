@@ -39,12 +39,28 @@ import {
   type History,
   keeps,
   type Mode,
+  SEEDING,
   TO,
 } from './history.ts'
 import { tables } from './physical.ts'
 import { described } from './archetype.ts'
 import { rowsOf } from './read.ts'
 import { unraised } from './raise.ts'
+import { meta } from './meta.ts'
+import { Refused } from '@yaks/graph/errors'
+
+/** A store still taking its live rows as their first versions (`Opts.paced`)
+ * makes no branch yet: one would read main as of a fork that misses every
+ * row not taken. Asked again once maintain() has taken the last page. */
+export class Unseeded extends Refused {
+  constructor() {
+    super(
+      'this store is still keeping its rows as their first versions; ' +
+        'make the branch again in a moment',
+    )
+    this.name = 'Unseeded'
+  }
+}
 
 // The branch table's rows `where` matches, oldest first, as branches.
 let rows = (driver: Driver, where?: Expr): Branch[] =>
@@ -169,6 +185,7 @@ export let branching = (
   opts: () => BindOpts = () => ({}),
 ): Branches => ({
   make: () => {
+    if (meta(driver).get(SEEDING) != null) throw new Unseeded()
     described(driver, [])
     return rows(driver, eq(col('id'), val(branch(driver, history).branch)))[0]
   },

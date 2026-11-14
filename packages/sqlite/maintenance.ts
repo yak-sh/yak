@@ -3,7 +3,9 @@
 // pointer index exists. Ordinary reads use the component tables until it ends.
 // Once that index stands, a pass reads only the owners it names as strays
 // (./archetype.ts `strays`), and a cursor already part way through the spine
-// stops there: a schema change leaves a classified spine alone.
+// stops there: a schema change leaves a classified spine alone. A store whose
+// history began paced takes its live rows as their first versions here, a
+// page of entities a unit (./history.ts `seedPage`).
 import {
   as,
   col,
@@ -16,7 +18,9 @@ import {
   table,
   val,
 } from '@yaks/sql'
+import type { Vocab } from '@yaks/vocab'
 import { backfill, classify, pointable, presence, strays } from './archetype.ts'
+import { beside, SEEDING, type Seeding, seedPage } from './history.ts'
 import { needless } from './ddl.ts'
 import { meta } from './meta.ts'
 import { componentTables, objects } from './physical.ts'
@@ -37,7 +41,7 @@ let most = (driver: Driver, name: string) =>
     )[0]?.n ?? 0,
   )
 
-export let maintenance = (driver: Driver) => {
+export let maintenance = (driver: Driver, vocab: Vocab) => {
   let marks = meta(driver)
   let classifying = () => marks.get(CLASSIFYING) != null
   let pending = () =>
@@ -102,6 +106,24 @@ export let maintenance = (driver: Driver) => {
         )
         if (rows.length < PAGE) marks.del(CLASSIFYING)
         else if (!pointed) marks.set(CLASSIFYING, String(rows.at(-1)!.id))
+      })
+      return true
+    }
+    let owing = marks.get(SEEDING)
+    if (owing) {
+      let { comps, after } = JSON.parse(owing) as Seeding
+      let [comp] = comps
+      // Each row's version and its membership, with every index of both.
+      let indexes =
+        objects(driver, { type: 'index', tbl_name: beside(comp) }).length
+      if (!admit((PAGE + 2) * (indexes + 3))) return false
+      unit(driver, () => {
+        let last = seedPage(driver, vocab, comp, after, PAGE)
+        let next: Seeding = last == null
+          ? { comps: comps.slice(1), after: 0 }
+          : { comps, after: last }
+        if (next.comps.length) marks.set(SEEDING, JSON.stringify(next))
+        else marks.del(SEEDING)
       })
       return true
     }

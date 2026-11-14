@@ -34,6 +34,7 @@
 import {
   among,
   and,
+  as,
   col,
   type CreateIndex,
   type CreateTable,
@@ -42,6 +43,8 @@ import {
   exists,
   type Expr,
   field,
+  fn,
+  from,
   type History,
   isNull,
   lit,
@@ -70,6 +73,7 @@ import {
   FROM,
   shaped,
   shapeDdl,
+  SHAPES,
   shapeSeeds,
   TO,
 } from './history-shapes.ts'
@@ -225,6 +229,115 @@ export let seeds = (vocab: Vocab, made: (table: string) => boolean): Stmt[] => [
     }),
   ...shapeSeeds([...covered(vocab)], made),
 ]
+
+/** The key of what a store whose history began paced (`Opts.paced`) still
+ * owes, in `server_meta`: the components whose live rows are not yet their
+ * first versions, oldest first, and the last entity taken of the first. */
+export let SEEDING = 'history:seeding'
+
+/** What a paced beginning owes ({@link SEEDING}). */
+export type Seeding = { comps: string[]; after: number }
+
+/** The components of `seeds` whose first versions are owed a page at a
+ * time: each that keeps versions, whose table of versions `made` says was
+ * just made. */
+export let unseeded = (
+  vocab: Vocab,
+  made: (table: string) => boolean,
+): string[] =>
+  [...covered(vocab)].filter((comp) => keeps(vocab, comp) && made(beside(comp)))
+
+/** The memberships a store repairs at once where its table of them was
+ * made beside tables of versions that stood: what {@link seeds} copies of
+ * them, less the components a paced beginning seeds itself. */
+export let reshapes = (
+  vocab: Vocab,
+  made: (table: string) => boolean,
+): Stmt[] =>
+  shapeSeeds(
+    [...covered(vocab)].filter((comp) => !made(beside(comp))),
+    made,
+  )
+
+/**
+ * One page of a paced beginning's first versions: the live rows of `comp`
+ * past entity `after`, up to `limit`, each as its open version from no
+ * transaction, with its membership, where main has neither yet. History is
+ * kept from the beginning on, so a row a write changed or removed before its
+ * page was taken keeps only what that write made: its past begins there. Answers the last entity it took, or null where it
+ * took the last of them.
+ */
+export let seedPage = (
+  driver: Driver,
+  vocab: Vocab,
+  comp: string,
+  after: number,
+  limit: number,
+): number | null => {
+  let [last] = driver.query(select({
+    cols: [
+      as(fn('max', col('entity')), 'last'),
+      as(fn('count', lit(1)), 'n'),
+    ],
+    from: from(
+      select({
+        cols: [col('entity')],
+        from: table(comp),
+        where: op('>', col('entity'), val(after)),
+        order: [col('entity')],
+        limit: lit(limit),
+      }),
+      'page',
+    ),
+  }))
+  if (last?.last == null) return null
+  let upto = Number(last.last), whole = Number(last.n) == limit
+  let page = and(
+    op('>', col('entity', 'live'), val(after)),
+    op('<=', col('entity', 'live'), val(upto)),
+  )
+  let none = (name: string, also: Expr[] = []) =>
+    not(exists(select({
+      cols: [lit(1)],
+      from: table(name, 'held'),
+      where: and(
+        eq(col('entity', 'held'), col('entity', 'live')),
+        eq(col(BRANCH, 'held'), lit(0)),
+        ...also,
+      ),
+    })))
+  let cols = stored(vocab, comp)
+  driver.query({
+    t: 'insert',
+    into: beside(comp),
+    cols: ['entity', ...cols, BRANCH, FROM, TO],
+    q: select({
+      cols: [
+        col('entity', 'live'),
+        ...cols.map((c) => col(c, 'live')),
+        lit(0),
+        lit(null),
+        lit(0),
+      ],
+      from: table(comp, 'live'),
+      where: and(page, none(beside(comp))),
+    }),
+  })
+  driver.query({
+    t: 'insert',
+    into: SHAPES,
+    cols: ['entity', 'component', BRANCH, FROM, TO],
+    q: select({
+      cols: [col('entity', 'live'), lit(comp), lit(0), lit(null), lit(0)],
+      from: table(comp, 'live'),
+      where: and(
+        page,
+        none(SHAPES, [eq(col('component', 'held'), lit(comp))]),
+      ),
+    }),
+  })
+  return whole ? upto : null
+}
 
 /** The branch table: a branch's parent (0 is main), the transaction it forked
  * at, and when. Making one writes a row and copies nothing. A dropped

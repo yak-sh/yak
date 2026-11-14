@@ -33,7 +33,7 @@ import { tablesOf } from '@yaks/archetype/sets'
 
 export let FROM = '$from', TO = '$to', BRANCH = '$branch', BESIDE = '$versions'
 export let beside = (comp: string): string => `${comp}${BESIDE}`
-let SHAPES = '$archetype$versions'
+export let SHAPES = '$archetype$versions'
 let columns = ['entity', 'component', BRANCH, FROM, TO]
 
 export let shapeDdl: Stmt[] = [{

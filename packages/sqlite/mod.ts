@@ -152,8 +152,12 @@ import {
   historySchema,
   keep,
   type Mode,
+  reshapes,
+  SEEDING,
+  type Seeding,
   seeds,
   type Typed,
+  unseeded,
   within,
 } from './history.ts'
 import { add } from './follow.ts'
@@ -167,6 +171,7 @@ export {
   historySchema,
   keeps,
   type Mode,
+  SEEDING,
   ticked,
   TO,
 } from './history.ts'
@@ -444,6 +449,11 @@ export type Opts = BindOpts & {
   counts?: 'lazy' | 'eager'
   /** Leave row-dependent work for maintain(), while reads serve the standing rows. */
   deferred?: boolean
+  /** Where history begins, take the live rows as their first versions a page
+   * at a time through maintain() rather than all in the install: for a host
+   * whose writes are bounded by the minute (a Durable Object). Until the
+   * last page, the store makes no branch. */
+  paced?: boolean
 
   /** How big a table is before a file owes its schema work, and the rows a
    * window does of it (./owe.ts `SIZES`): what a test shrinks. */
@@ -546,8 +556,9 @@ let keyed = (value: unknown): string | undefined => {
 
 // The tables of versions a store with history keeps (./history.ts), made where
 // missing and typed as the live tables stand now, and each one just made
-// given the live rows as the versions they are so far.
-let versioned = (driver: Driver, vocab: Vocab): Error[] => {
+// given the live rows as the versions they are so far: here, or, `paced`, a
+// page at a time through maintain() (./maintenance.ts).
+let versioned = (driver: Driver, vocab: Vocab, paced: boolean): Error[] => {
   let had = new Set(objects(driver, { type: 'table' }).map((o) => o.name))
   let stood = standing(driver, vocab)
   let typed: Typed = (comp, c) => {
@@ -555,8 +566,20 @@ let versioned = (driver: Driver, vocab: Vocab): Error[] => {
     return found ? String(found.type ?? '') : undefined
   }
   let left = add(driver, historySchema(vocab, typed))
-  let seed = seeds(vocab, (name) => !had.has(name))
+  let made = (name: string) => !had.has(name)
+  let seed = paced ? reshapes(vocab, made) : seeds(vocab, made)
   for (let s of holds(driver, vocab, seed)) driver.query(s)
+  // Only a live table that stands holds rows to take.
+  let comps = paced ? unseeded(vocab, made).filter((c) => had.has(c)) : []
+  if (comps.length) {
+    // An install while pages are still owed adds its tables behind them.
+    let owed = meta(driver).get(SEEDING)
+    let was: Seeding = owed ? JSON.parse(owed) : { comps: [], after: 0 }
+    meta(driver).set(
+      SEEDING,
+      JSON.stringify({ ...was, comps: [...was.comps, ...comps] }),
+    )
+  }
   return left
 }
 
@@ -590,7 +613,7 @@ export let storage = (
   let owing = () => book?.owed() ?? []
   // All handles on this connection see the open writer's rows, including a
   // graph's scope reads through the outer store rather than its tx handle.
-  let upkeep = maintenance(driver)
+  let upkeep = maintenance(driver, vocab)
   let migrating = () => !!base.deferred && upkeep.pending()
   let unindexed = Object.assign(() => undefined, {
     pending: { ids: [], matching: () => [] },
@@ -1373,7 +1396,7 @@ export let storage = (
               base.sizes,
               base.deferred,
             ),
-            ...besides.length ? versioned(driver, vocab) : [],
+            ...besides.length ? versioned(driver, vocab, !!base.paced) : [],
           ]
           left.forEach(report)
           clean = !left.length
@@ -1604,5 +1627,5 @@ export {
 } from './follow.ts'
 
 export { doom } from './doom.ts'
-export { branch, branching, branchOf } from './branches.ts'
+export { branch, branching, branchOf, Unseeded } from './branches.ts'
 export { moded } from './mode.ts'
