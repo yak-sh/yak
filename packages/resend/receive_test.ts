@@ -1,6 +1,6 @@
 // Signed receipts and receiving bytes are checked at the HTTP boundary.
 import { equal, test, throws } from '@yaks/testing'
-import { event, receipt, received } from './receive.ts'
+import { event, notification, receipt, received } from './receive.ts'
 
 let secret = 'whsec_' + btoa('a shared endpoint key for testing')
 let at = 1_800_000_000
@@ -21,6 +21,7 @@ let key = await crypto.subtle.importKey(
   false,
   ['sign'],
 )
+let now = () => Math.floor(Date.now() / 1000)
 let signed = async (raw = body, time = at) => {
   let signature = await crypto.subtle.sign(
     'HMAC',
@@ -82,7 +83,8 @@ test('receiving preserves all recipients and attachment bytes without forwarding
           }
           : {
             from: 'Ann <ann@example.com>',
-            to: ['one@books.example', 'two@books.example'],
+            to: ['one@books.example', 'Two@books.example'],
+            cc: ['two@books.example', 'three@books.example'],
             message_id: '<inbound@example.com>',
             subject: 'Note',
             text: 'See attached',
@@ -93,10 +95,17 @@ test('receiving preserves all recipients and attachment bytes without forwarding
     },
   }, 'provider-id')
   equal(calls.length, 3)
-  equal(letters.map((m) => m.to), ['one@books.example', 'two@books.example'])
+  equal(letters.map((m) => m.to), [
+    'one@books.example',
+    'two@books.example',
+    'three@books.example',
+  ])
+  equal(letters[0].name, 'Ann')
+  equal(letters[0].from, 'ann@example.com')
+  equal(letters[0].headers.get('from'), 'ann@example.com')
   equal(letters[0].headers.get('in-reply-to'), '<prior@example.com>')
   equal(letters[0].text, 'See attached')
-  equal(letters[0].verified, false)
+  equal(letters[0].verified, undefined)
   equal(letters[0].attachments, [{
     name: 'note.txt',
     type: 'text/plain',
@@ -105,11 +114,11 @@ test('receiving preserves all recipients and attachment bytes without forwarding
 })
 
 for (
-  let [authentication, verified] of [
-    [{ dkim: 'pass', dmarc: 'gray' }, true],
-    [{ dkim: 'fail', dmarc: 'pass' }, true],
-    [{ dkim: 'fail', dmarc: 'fail' }, false],
-    [null, false],
+  let [authentication, verified, vouched] of [
+    [{ dkim: 'pass', dmarc: 'gray' }, true, false],
+    [{ dkim: 'fail', dmarc: 'pass' }, false, true],
+    [{ dkim: 'fail', dmarc: 'fail' }, false, false],
+    [null, undefined, false],
   ] as const
 ) {
   test(`receiving trusts the server verdict ${JSON.stringify(authentication)}`, async () => {
@@ -126,6 +135,38 @@ for (
           authentication,
         })),
     }, 'incoming')
-    equal(mail.verified, verified)
+    equal([mail.verified, mail.vouched], [verified, vouched])
   })
 }
+
+test('a received event is read in full only where the host takes mail in', async () => {
+  let raw = JSON.stringify({
+    type: 'email.received',
+    data: { email_id: 'incoming' },
+  })
+  let receiving = {
+    token: 'full-access',
+    fetch: () =>
+      Promise.resolve(Response.json({
+        from: 'author@example.com',
+        to: ['reader@example.com'],
+        message_id: '<incoming@example.com>',
+        text: 'Hello.',
+      })),
+  }
+  equal(await notification(await signed(raw, now()), secret), {})
+  let { letters } = await notification(
+    await signed(raw, now()),
+    secret,
+    receiving,
+  )
+  equal(letters?.map((m) => [m.to, m.text]), [['reader@example.com', 'Hello.']])
+  await throws(
+    async () =>
+      notification(await signed(raw, now()), secret, {
+        ...receiving,
+        token: undefined,
+      }),
+    'receiving key is not configured',
+  )
+})

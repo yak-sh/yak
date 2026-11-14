@@ -427,9 +427,9 @@ export let email = async (
   env: Env,
   _ctx?: Lent,
 ): Promise<void> => {
-  let { arrived, Refused } = await import('./inbox.ts')
+  let { arrived, reading, Refused } = await import('./inbox.ts')
   try {
-    await arrived(message, env)
+    await arrived(await reading(message, env), env)
   } catch (e) {
     if (!(e instanceof Refused)) {
       await fault(env, `EMAIL ${message.to.split('@').pop()}`, e)

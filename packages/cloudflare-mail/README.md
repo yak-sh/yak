@@ -3,7 +3,10 @@
 Cloudflare's mail provider at the portable `@yaks/host` boundary. `cloudflare`
 sends through the account's REST API; `bound` adapts the Workers Email Sending
 binding. `received` decodes an Email Routing delivery's streamed MIME into a
-neutral `Incoming`, preserving headers and attachment bytes. No graph, server,
+neutral `Incoming`, preserving headers and attachment bytes, with Email
+Routing's own DKIM verdict as `verified` and its DMARC pass aligned with the
+From as `vouched` (`vouched(header, from)`), read from the first
+Authentication-Results, never one the sender supplied. No graph, server,
 credential lookup or fixed sending domain lives here.
 
 `cloudflare({account, token, base?, fetch?})` implements `Sender`. `deliver`

@@ -1,8 +1,12 @@
-import { copyOf } from './directory-copy.ts'
-// A letter that arrived (T-33687): the platform's third entry point, and the
-// only one no URL names. Email Routing's catch-all on the yaks.app zone hands
-// every address the specific rules did not claim to `email()` (index.ts), and
-// this is what that door does with one.
+// A letter that arrived (T-33687): the platform's third entry point. Two
+// providers hand letters in, and each reads its own into a neutral `Incoming`
+// (@yaks/host/senders) before anything here sees it. Email Routing's
+// catch-all on the yaks.app zone hands every address the specific rules did
+// not claim to `email()` (kernel.ts), which the arrival config.ts names reads
+// (`reading`). Resend posts a signed `email.received` to `/mail/resend`
+// (mail-receipts.ts), whose notice reads the letter in full, one for each
+// recipient (`received`). Both are filed by `arrived`, which knows no
+// provider.
 //
 // Where a letter lands follows the web (post.ts `mailedTo`, the same
 // derivation an app's letters leave under): `<space>.<app>@yaks.app` is that
@@ -11,11 +15,14 @@ import { copyOf } from './directory-copy.ts'
 // mailbox, and every address at a hostname aimed at one app is that app.
 // `signup@yaks.app` signs its sender up (`signingUp`). An address the app has
 // left still reaches it, the way its old hostname does. An address naming a space or an
-// app that is not there is refused — a bounce the sender reads — rather than
-// accepted and dropped, because silence is the one answer that cannot be
-// corrected later.
+// app that is not there is refused (`Refused`) rather than accepted and
+// dropped, because silence is the one answer that cannot be corrected later:
+// Email Routing bounces it while the sender's server is still talking, and a
+// letter Resend has already accepted is answered by a letter (`received`).
 // Anything that fails on our side throws instead: a throw is a temporary
-// failure the sending server retries, where a reject is forever.
+// failure the sending server, or Resend's webhook, retries, where a refusal
+// is forever. A retried letter files once: its eid is derived from its
+// Message-ID and the address it was written to.
 //
 // An arrival's `from` is the sender's, out on the web, where an app's own
 // letters are stamped with the app's address (graph.ts `#posting`). The kernel
@@ -35,19 +42,22 @@ import { copyOf } from './directory-copy.ts'
 //   door (meta.ts `KERNEL`) with no person on it, so nothing an arrival says
 //   can put words in a member's mouth. Who wrote it is `mail.from`, a property,
 //   and the reader decides what that is worth — helped by `mail.verified`,
-//   which is the receiving MTA's DKIM verdict. An unsigned letter is recorded
-//   with `verified: false`, never dropped.
+//   which is the receiving server's DKIM verdict. An unsigned letter is
+//   recorded with `verified: false`, never dropped. Only a letter its From
+//   domain vouches for (`vouched`, the receiving server's DMARC verdict) signs
+//   anybody up or asks an Operator as a member.
 //
-//   The MIME is parsed by A parser: the arrival the mail provider config.ts
-//   names lends (`ARRIVAL`) turns the raw RFC 5322 stream into a subject, a
-//   body and attachments; @yaks/mail composes the bundles around what it
-//   read and asks the graph nothing. An html-only letter is
-//   read as its own text (`plain` below), so a body is words in every case and
-//   markup in none.
+//   The provider reads the letter: its subject, body and attachments, and
+//   both verdicts, which are its receiving server's and never a header the
+//   sender wrote. @yaks/mail composes the bundles around what it read and
+//   asks the graph nothing. An html-only letter is read as its own text
+//   (`plain` below), so a body is words in every case and markup in none.
 import type { Incoming } from '@yaks/host/senders'
 import { link } from '@yaks/edge'
 import type { Bundle } from '@yaks/graph'
-import { author, inbound, messageId, verdict } from '@yaks/mail'
+import { derivedEid } from '@yaks/graph/identity'
+import { and, eq, every, list, stringify } from '@yaks/query'
+import { author, inbound, messageId } from '@yaks/mail'
 import { automated } from '@yaks/mail/answers'
 import { writes } from '@yaks/member'
 import { acceptsOf, filed, Untaken } from './uploads.ts'
@@ -66,6 +76,8 @@ import { mailedTo, mailFrom } from './post.ts'
 import { counted } from './meter.ts'
 import { ARRIVAL } from './config.ts'
 import { lent } from './lent.ts'
+import { copyOf } from './directory-copy.ts'
+import { mail as post } from './mail.ts'
 
 /** A letter refused at the door: the sender is told, and nothing is written. */
 export class Refused extends Error {}
@@ -123,16 +135,9 @@ export let plain = (html: string) =>
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 
-// The letter as its provider's arrival reads it, read once: its raw stream
-// can be read only once, and a letter may be asked for its sender's name
-// before it is handed on whole.
-let parsings = new WeakMap<Inbound, Promise<Incoming>>()
-let parsed = (m: Inbound, env: Env) => {
-  let mail = parsings.get(m) ?? reading(m, env)
-  parsings.set(m, mail)
-  return mail
-}
-let reading = async (m: Inbound, env: Env) => {
+/** A letter Email Routing handed `email()`, as the arrival config.ts names
+ * reads it. */
+export let reading = async (m: Inbound, env: Env): Promise<Incoming> => {
   let read = (await lent(env, 'arrivals'))[ARRIVAL]
   if (!read) throw new Error(`no arrival called ${ARRIVAL} reads a letter`)
   return read(m)
@@ -194,28 +199,37 @@ let carried = async (
 /**
  * One letter, filed in the app its address named. It answers the entity the
  * letter landed as, so a caller (a test, a later effect) can read it back.
+ * The same letter again answers the same entity and files nothing more.
  *
  * A {@link Refused} means the address is nobody's here and the sender should be
- * told; anything else thrown is ours, and the sending server will try again.
+ * told; anything else thrown is ours, and the provider will try again.
  */
-export let arrived = async (m: Inbound, env: Env): Promise<string> => {
-  let requested = await signingUp(m, env) ?? await operatorMail(m, env)
+export let arrived = async (mail: Incoming, env: Env): Promise<string> => {
+  let requested = await signingUp(mail, env) ?? await operatorMail(mail, env)
   if (requested) return requested
-  let { space, app } = await opened(env, m.to)
-  let mail = await parsed(m, env)
+  let { space, app } = await opened(env, mail.to)
   let head = mail.headers
-  let signed = verdict(head)
-  let eid = crypto.randomUUID()
-  let letter = inbound({ from: m.from, to: m.to, headers: head }, {
+  let id = messageId(mail)
+  let eid = id
+    ? derivedEid(`mail|${mail.to.trim().toLowerCase()}|${id}`)
+    : crypto.randomUUID()
+  let store = appStore(env.STORE, space, app, env)
+  // Filed already, even if since deleted: a retry neither repeats it nor
+  // brings it back.
+  let had = await metaOf(store, KERNEL).query(
+    stringify(and(eq('entity.eid', list(eid)), every())),
+    { trusted: true, graves: true },
+  )
+  if (had.length) return eid
+  let letter = inbound(mail, {
     eid,
     text: words(mail),
     at: when(head.get('date') ?? undefined),
-    // The MTA's verdict, recorded either way. No header at all — nobody
-    // checked — leaves the property unwritten rather than claiming a `false`
+    // The receiving server's verdict, recorded either way. Where nobody
+    // checked, the property is left unwritten rather than claiming a `false`
     // nobody said.
-    ...(signed == null ? {} : { verified: signed }),
+    ...(mail.verified == null ? {} : { verified: mail.verified }),
   })
-  let store = appStore(env.STORE, space, app, env)
   let graph = metaOf(store, {
     'x-yak-person': app.eid,
     'x-yak-role': 'editor',
@@ -233,6 +247,44 @@ export let arrived = async (m: Inbound, env: Env): Promise<string> => {
   return eid
 }
 
+/**
+ * The letters a provider has already accepted, one for each recipient, each
+ * filed by {@link arrived}. It answers the entities they landed as.
+ *
+ * A refusal can no longer bounce, so where none of them landed, the sender is
+ * written to from the platform's address, one line for each address and why
+ * nobody there took it. Only a sender whose domain vouches for the letter is,
+ * and never a machine: anyone else's From is unproven, and a letter to it
+ * would land on whoever was forged. An address one of several recipients
+ * names that is nobody's here goes unanswered, since it is most often
+ * somebody else's mailbox elsewhere.
+ */
+export let received = async (
+  letters: Incoming[],
+  env: Env,
+): Promise<string[]> => {
+  let filed: string[] = [], refused: string[] = []
+  for (let mail of letters) {
+    try {
+      filed.push(await arrived(mail, env))
+    } catch (e) {
+      if (!(e instanceof Refused)) throw e
+      console.log(`yak: mail refused for ${mail.to.split('@').pop()}`)
+      refused.push(`${mail.to}: ${e.message}`)
+    }
+  }
+  let [mail] = letters
+  let from = mail && author(mail).trim().toLowerCase()
+  if (filed.length || !mail?.vouched || machine(mail, from)) return filed
+  await post(env)({
+    to: from,
+    subject: `Not delivered: ${mail.headers.get('subject') || '(no subject)'}`,
+    body: `yaks.app received your letter, and nobody it was written to ` +
+      `could take it.\n\n${refused.join('\n\n')}`,
+  })
+  return filed
+}
+
 // A letter to the sign-up address (D-136811): the whole of signing up, with
 // no form, no link and no password. Its domain must vouch that the sender
 // wrote it (DMARC, as for a member's letter to the Operator), and a
@@ -242,14 +294,13 @@ export let arrived = async (m: Inbound, env: Env): Promise<string> => {
 // Someone who already has a space (identity.ts `met`) is writing to its
 // Operator, not signing up. A reply to the Operator's sign-in letter
 // lands here too (signin.ts `codeLetter`).
-let signingUp = async (m: Inbound, env: Env): Promise<string | null> => {
-  if (m.to.trim().toLowerCase() != signupAddress(env)) return null
-  let from = author(m).trim().toLowerCase()
-  let { authenticated } = await import('./operator-channels.ts')
-  if (
-    automated(from) ||
-    !authenticated(m.headers.get('authentication-results'), from)
-  ) {
+let signingUp = async (
+  mail: Incoming,
+  env: Env,
+): Promise<string | null> => {
+  if (mail.to.trim().toLowerCase() != signupAddress(env)) return null
+  let from = author(mail).trim().toLowerCase()
+  if (automated(from) || !mail.vouched) {
     throw new Refused(
       `yaks.app could not confirm that ${from} sent this letter, so it signed nobody up. Sign up at ${
         url(env, '/login')
@@ -258,7 +309,6 @@ let signingUp = async (m: Inbound, env: Env): Promise<string | null> => {
   }
   let { joined, met } = await import('./identity.ts')
   let back = await met(env, from)
-  let mail = await parsed(m, env)
   let { person, space } = await joined(
     env,
     from,
@@ -266,7 +316,7 @@ let signingUp = async (m: Inbound, env: Env): Promise<string | null> => {
     `${mail.headers.get('subject') ?? ''}\n${words(mail)}`,
   )
   return await asked(
-    m,
+    mail,
     env,
     space,
     '/operator/receive',
@@ -279,30 +329,38 @@ let signingUp = async (m: Inbound, env: Env): Promise<string | null> => {
 // App addresses keep receiving app mail. A member writing the space itself
 // asks its operator, and so does a reply to a letter the Operator wrote for
 // one; other arrivals remain ordinary app mail.
-let operatorMail = async (m: Inbound, env: Env): Promise<string | null> => {
+let operatorMail = async (
+  mail: Incoming,
+  env: Env,
+): Promise<string | null> => {
   let dir = directoryOf(env.STORE)
-  let box = await mailedTo(m.to, dir, env)
+  let box = await mailedTo(mail.to, dir, env)
   if (!box || box.app) return null
   let { space } = box
-  let from = author(m).trim().toLowerCase()
+  let from = author(mail).trim().toLowerCase()
   let person = await dir.personAt(from)
   if (!person || !writes(await dir.role(space, person))) {
-    return await replied(m, env, space, from)
+    return await replied(mail, env, space, from)
   }
-  let { authenticated } = await import('./operator-channels.ts')
-  if (!authenticated(m.headers.get('authentication-results'), from)) {
+  if (!mail.vouched) {
     throw new Refused(
       'The operator needs an authenticated email from your member address. Sign in and use Operator chat, or resend with DMARC authentication.',
     )
   }
-  return await asked(m, env, space, '/operator/receive', {
+  return await asked(mail, env, space, '/operator/receive', {
     'x-yak-person': person,
   }, { verified: true })
 }
 
+// Whether a machine wrote the letter (an auto-responder, a bounce), which
+// nothing answers: answering it could answer forever.
+let machine = (m: Incoming, from: string) =>
+  automated(from) ||
+  !/^(no)?$/i.test((m.headers.get('auto-submitted') ?? '').trim())
+
 // The Message-IDs a letter answers, its In-Reply-To first and then its
 // References, newest first.
-let threadOf = (m: Inbound) =>
+let threadOf = (m: Incoming) =>
   [
     ...(m.headers.get('in-reply-to') ?? '').split(/\s+/),
     ...(m.headers.get('references') ?? '').split(/\s+/).reverse(),
@@ -315,7 +373,7 @@ let threadOf = (m: Inbound) =>
 // (operator-host.ts `operatorReply`). A machine's reply (an auto-responder, a
 // bounce) is only told: answering it could answer forever.
 let replied = async (
-  m: Inbound,
+  m: Incoming,
   env: Env,
   space: Space,
   from: string,
@@ -339,8 +397,7 @@ let replied = async (
     throw new Error('Operator letter lookup failed: ' + await found.text())
   }
   let { letter } = await found.json() as { letter: string }
-  let machine = automated(from) ||
-    !/^(no)?$/i.test((m.headers.get('auto-submitted') ?? '').trim())
+  let bot = machine(m, from)
   let { personOf } = await import('./signin.ts')
   return await asked(
     m,
@@ -349,7 +406,7 @@ let replied = async (
     '/operator/replied',
     {
       'x-yak-kernel': '1',
-      ...machine ? {} : { 'x-yak-person': await personOf(meta(env), from) },
+      ...bot ? {} : { 'x-yak-person': await personOf(meta(env), from) },
     },
     { reply: letter },
     { address: from, thread },
@@ -359,7 +416,7 @@ let replied = async (
 // A letter for the Operator, its attachments kept, handed to the space's
 // builder object at `path` as the request it answers on.
 let asked = async (
-  m: Inbound,
+  mail: Incoming,
   env: Env,
   space: Space,
   path: string,
@@ -368,7 +425,6 @@ let asked = async (
   extra: { address?: string; thread?: string[]; signup?: boolean } = {},
 ): Promise<string> => {
   let { keepFile, requestId } = await import('./operator-channels.ts')
-  let mail = await parsed(m, env)
   let head = mail.headers
   let files = []
   for (let a of mail.attachments) {
@@ -383,9 +439,9 @@ let asked = async (
       ),
     )
   }
-  let id = requestId(space.eid, messageId({ ...m, headers: head }))
-  let signed = arrival.verified ?? verdict(head)
-  let received = inbound({ ...m, headers: head }, {
+  let id = requestId(space.eid, messageId(mail))
+  let signed = arrival.verified ?? mail.verified
+  let received = inbound(mail, {
     eid: id,
     text: words(mail),
     ...(arrival.reply ? { reply: arrival.reply } : {}),
@@ -404,8 +460,8 @@ let asked = async (
         say: words(mail),
         request: {
           channel: 'email',
-          address: extra.address ?? author(m).trim().toLowerCase(),
-          reply_to: messageId({ ...m, headers: head }),
+          address: extra.address ?? author(mail).trim().toLowerCase(),
+          reply_to: messageId(mail),
           files,
           ...(extra.signup ? { signup: true } : {}),
         },

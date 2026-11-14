@@ -8,7 +8,7 @@ import { operatorModel, operatorService } from './operator-testing.ts'
 import { conversationOf } from './operator-host.ts'
 import { textSigned } from './operator-channels.ts'
 import { rootOf } from './operator-root.ts'
-import { arrived, Refused } from './inbox.ts'
+import { arrived, reading, Refused } from './inbox.ts'
 import { arrived as textArrived, DISCLOSURE } from './operator-texts.ts'
 import { endpoints } from './endpoints.ts'
 import { codeOf } from './referral.ts'
@@ -112,7 +112,7 @@ await dir.stamp({
 await codeOf(dir, jeff, () => 'k7q2')
 
 let request = await arrived(
-  letter('Dana Reyes <Dana@Example.com>', { id: 'dana-1' }),
+  await reading(letter('Dana Reyes <Dana@Example.com>', { id: 'dana-1' }), env),
   env,
 )
 await drained()
@@ -128,7 +128,10 @@ let { html } = await conversationOf(
 let [reply] = letters.splice(0)
 
 // Writing again, and two letters that make nobody.
-await arrived(letter('dana@example.com', { id: 'dana-2' }), env)
+await arrived(
+  await reading(letter('dana@example.com', { id: 'dana-2' }), env),
+  env,
+)
 await drained()
 let again = {
   person: await dir.personAt('dana@example.com'),
@@ -144,7 +147,8 @@ for (
   ] as const
 ) {
   refused.push(
-    await arrived(letter(from, { vouched }), env).catch((e) => e),
+    await arrived(await reading(letter(from, { vouched }), env), env)
+      .catch((e) => e),
     await dir.personAt(from),
   )
 }

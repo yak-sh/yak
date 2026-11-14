@@ -1,6 +1,7 @@
 // The `@yaks/resend/graph` facet: what this plugin lends its host. The sender
 // named `resend`, which @yaks/mail selects with `sender: {"via": "resend"}`,
-// the reader of Resend's signed notices about the letters it carried, and the
+// the reader of Resend's signed notices about the letters it carried and the
+// letters it received, and the
 // mail domains it sets up, each also named `resend`, for a host that routes
 // mail itself.
 import {
@@ -20,12 +21,22 @@ export let senders = (
   options: Options = {},
 ): Record<string, Sender> => ({ resend: afresh(() => configured(options)) })
 
-/** The `resend` notices, verified with `receipts.secret` as it reads then. */
+/** The `resend` notices, verified with `receipts.secret` as it reads then,
+ * and a received letter read with `receiving.token` where options name one. */
 export let notices = (
   _host: unknown,
   options: Options = {},
 ): Record<string, Notices> => ({
-  resend: (request) => notification(request, options.receipts?.secret),
+  resend: (request) =>
+    notification(
+      request,
+      options.receipts?.secret,
+      options.receiving && {
+        token: options.receiving.token,
+        base: options.base,
+        fetch: options.fetch,
+      },
+    ),
 })
 
 /** The `resend` mail domains, set up with `domains.token` as it reads at

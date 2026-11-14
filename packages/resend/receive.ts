@@ -1,6 +1,7 @@
 // Resend's signed events and receiving API. Provider ids remain in this file;
 // callers receive a neutral letter, or a correlation id and RFC Message-ID.
 import { type Incoming, type Notice, Unsigned } from '@yaks/host/senders'
+import { type Fetch, root } from './api.ts'
 
 export { Unsigned }
 
@@ -9,6 +10,10 @@ export type Event = {
   data: {
     email_id?: string
     message_id?: string
+    to?: string[]
+    cc?: string[]
+    bcc?: string[]
+    received_for?: string[]
     tags?: Record<string, string>
     headers?: { name: string; value: string }[]
   }
@@ -16,19 +21,23 @@ export type Event = {
 type ReceivedEmail = {
   from: string
   to: string[]
+  cc?: string[]
+  bcc?: string[]
+  received_for?: string[]
   subject?: string
   message_id: string
   headers?: Record<string, string>
   text?: string
   html?: string
-  authentication?: { dkim?: string; dmarc?: string } | null
+  authentication?: { spf?: string; dkim?: string; dmarc?: string } | null
   attachments?: unknown[]
   data?: { download_url: string; filename?: string; content_type?: string }[]
 }
 export type Receiving = {
-  token: string
+  /** a `full_access` key: a sending key cannot read received mail */
+  token?: string
   base?: string
-  fetch?: (url: string, init?: RequestInit) => Promise<Response>
+  fetch?: Fetch
 }
 
 let bytes = (value: string) =>
@@ -96,16 +105,21 @@ export let receipt = (
     : undefined
 }
 
-/** Receive full content and attachments. This explicitly needs a receiving
- * credential: a sending-only key cannot retrieve bodies or attachments. */
+// One address out of either shape, `Ann <ann@example.com>` or bare.
+let address = (said: string) => (/<([^>]+)>/.exec(said)?.[1] ?? said).trim()
+
+/** Receive full content and attachments, one letter for each recipient it
+ * names: its To, Cc and Bcc, and those Resend received it for. This
+ * explicitly needs a receiving credential: a sending-only key cannot retrieve
+ * bodies or attachments. */
 export let received = async (
   options: Receiving,
   email: string,
 ): Promise<Incoming[]> => {
+  if (!options.token) throw new Error('Resend receiving key is not configured')
   let go = options.fetch ?? fetch
-  let root = (options.base ?? 'https://api.resend.com').replace(/\/+$/, '')
   let get = async (path: string) => {
-    let res = await go(`${root}${path}`, {
+    let res = await go(`${root(options.base)}${path}`, {
       headers: { authorization: `Bearer ${options.token}` },
     })
     if (!res.ok) throw new Error(`Resend receive failed (HTTP ${res.status})`)
@@ -133,31 +147,48 @@ export let received = async (
     })
   }
   let headers = new Headers(mail.headers ?? {})
-  headers.set('from', mail.from)
+  let author = headers.get('from') || mail.from
+  headers.set('from', address(author))
   headers.set('subject', mail.subject ?? '')
   headers.set('message-id', mail.message_id)
+  let name = /^\s*"?([^"<]*?)"?\s*</.exec(author)?.[1]
+  let recipients = new Map(
+    [mail.to, mail.cc, mail.bcc, mail.received_for].flat()
+      .filter((to): to is string => !!to)
+      .map((to) => [address(to).toLowerCase(), address(to)]),
+  )
   // Only the receiving server's verdict vouches for the author. Supplied
-  // Authentication-Results headers do not. Resend's DKIM result is From-aligned.
-  return mail.to.map((to: string) => ({
-    from: mail.from,
+  // Authentication-Results headers do not. Resend's DKIM passes only for a
+  // signature by the From domain, and its DMARC only aligned with it.
+  let checked = mail.authentication
+  return [...recipients.values()].map((to) => ({
+    ...name ? { name } : {},
+    from: address(headers.get('return-path') || mail.from),
     to,
     headers,
     text: mail.text ?? '',
     html: mail.html ?? '',
-    verified: mail.authentication?.dkim == 'pass' ||
-      mail.authentication?.dmarc == 'pass',
+    ...checked ? { verified: checked.dkim == 'pass' } : {},
+    vouched: checked?.dmarc == 'pass',
     attachments,
   }))
 }
 
 /** A signed provider event at the neutral receipt boundary, verified with
- * the endpoint's signing secret. */
+ * the endpoint's signing secret. Where the host takes mail in (`receiving`),
+ * a received letter is read in full with its key. */
 export let notification = async (
   request: Request,
   secret: string | undefined,
+  receiving?: Receiving,
 ): Promise<Notice> => {
   if (!secret) throw new Error('Resend webhook secret is not configured')
   let arrived = await event(request, secret)
+  if (arrived.type == 'email.received') {
+    let email = arrived.data.email_id
+    if (!receiving || !email) return {}
+    return { letters: await received(receiving, email) }
+  }
   let found = receipt(arrived)
   if (
     !found && arrived.data.tags?.yak_letter &&

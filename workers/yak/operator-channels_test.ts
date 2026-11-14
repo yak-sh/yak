@@ -28,7 +28,6 @@ import {
 } from './operator-testing.ts'
 import {
   attachmentTools,
-  authenticated,
   handleChannels,
   keepFile,
   receive,
@@ -57,7 +56,7 @@ import {
   operatorBody,
 } from './operator-page.ts'
 import { operatorDoor } from './build-door.ts'
-import { arrived, Refused } from './inbox.ts'
+import { arrived, reading, Refused } from './inbox.ts'
 import type { Inbound } from './env.ts'
 import { endpoints } from './endpoints.ts'
 import { chatPath } from '@yaks/platform/routes'
@@ -251,27 +250,6 @@ test('redelivering a request and resuming its committed transcript do not repeat
 test('the same intake recovers a recorded interrupted effect after reopening its store', () => {
   assertEquals(!!recovered.operator_answer, true)
   assertEquals(!!recovered.delivered, true)
-})
-
-test('an email needs the receiving MTA DMARC pass aligned with the member From', () => {
-  assertEquals(
-    authenticated(
-      'mx.cloudflare.net; dmarc=pass header.from=example.com; dkim=pass',
-      'clerk@example.com',
-    ),
-    true,
-  )
-  for (
-    let header of [
-      null,
-      'mx.cloudflare.net; dkim=pass header.d=evil.com',
-      'evil.com; dmarc=pass header.from=example.com',
-      'mx.cloudflare.net; dmarc=fail header.from=example.com, mx.cloudflare.net; dmarc=pass header.from=example.com',
-      'mx.cloudflare.net; dmarc=pass header.from=evil.com',
-    ]
-  ) {
-    assertEquals(authenticated(header, 'clerk@example.com'), false)
-  }
 })
 
 let html = await operatorBody(f.env, f.space, f.held)
@@ -721,7 +699,7 @@ let watched = (operator: boolean) => {
 }
 let operatorPage = watched(true)
 let buildPage = watched(false)
-let firstEmail = await arrived(email('request-1'), f.env)
+let firstEmail = await arrived(await reading(email('request-1'), f.env), f.env)
 await f.drain()
 // Each step's frame, its lines drawn as the page draws them.
 let heard = operatorPage.flatMap((frame) =>
@@ -748,9 +726,15 @@ test('a page watching the Operator hears each step as the lines it changed, and 
   assertEquals(heard.at(-1)!.now.endsWith('…'), false)
   assertEquals(buildPage.length, 0)
 })
-let duplicateEmail = await arrived(email('request-1'), f.env)
+let duplicateEmail = await arrived(
+  await reading(email('request-1'), f.env),
+  f.env,
+)
 await f.drain()
-let secondEmail = await arrived(email('request-2', 'reply-1'), f.env)
+let secondEmail = await arrived(
+  await reading(email('request-2', 'reply-1'), f.env),
+  f.env,
+)
 await f.drain()
 let messages = await operatorDoor(
   f.env,
@@ -769,7 +753,7 @@ let followedTask = sessionOf(secondEmail)
 let emailMeter = (await f.dir.at(f.space.eid))!.meter!.emails
 let rejected: unknown
 try {
-  await arrived(email('forged', undefined, false), f.env)
+  await arrived(await reading(email('forged', undefined, false), f.env), f.env)
 } catch (error) {
   rejected = error
 }

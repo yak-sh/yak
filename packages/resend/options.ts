@@ -1,14 +1,16 @@
 // What a config passes to this plugin: the sender's credentials, which
 // `./graph` lends the host as the sender named `resend`, the webhook
-// `./routes` takes this sender's signed delivery receipts on, and the key
-// `./graph` sets up the mail domains it lends as `resend` with.
+// `./routes` takes this sender's signed delivery receipts on, the key
+// `./graph` sets up the mail domains it lends as `resend` with, and the key
+// its notices read a received letter with.
 //
 // ```json
 // { "use": "@yaks/resend",
 //   "with": { "token": { "secret": "RESEND_TOKEN" },
 //             "tags": { "yak_host": "box" },
 //             "receipts": { "secret": { "secret": "RESEND_WEBHOOK_SECRET" } },
-//             "domains": { "token": { "secret": "RESEND_DOMAINS_TOKEN" } } } }
+//             "domains": { "token": { "secret": "RESEND_DOMAINS_TOKEN" } },
+//             "receiving": { "token": { "secret": "RESEND_DOMAINS_TOKEN" } } } }
 // ```
 //
 // A `{"secret": "NAME"}` is that secret's value when it is read, and the
@@ -25,6 +27,12 @@ export type Options = Partial<Resend> & {
    * `fetch` as the sender is. */
   domains?: {
     /** a `full_access` key: a sending key cannot manage domains */ token?:
+      string
+  }
+  /** Mail Resend receives, which the notices read in full for a host that
+   * takes mail in. Without it, a received letter is acknowledged unread. */
+  receiving?: {
+    /** a `full_access` key: a sending key cannot read received mail */ token?:
       string
   }
 }

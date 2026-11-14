@@ -142,16 +142,23 @@ export type Incoming = {
   headers: { get(name: string): string | null }
   text: string
   html?: string
+  /** the receiving server's DKIM verdict; unset where nobody checked */
   verified?: boolean
+  /** the receiving server's DMARC pass, aligned with the From domain: that
+   * domain vouches its author wrote the letter */
+  vouched?: boolean
   attachments: { name: string; type: string; bytes: Uint8Array<ArrayBuffer> }[]
 }
 
 /** A provider's signed word on a letter it carried: the receipt @yaks/mail's
  * `receipted` applies, if it names one, and the tags the letter was sent
- * with, which say whose letter it was. */
+ * with, which say whose letter it was. Or the letters it received, for a
+ * provider that takes mail in by webhook. */
 export type Notice = {
   receipt?: { letter: string; id: string }
   tags?: Record<string, string>
+  /** the letters it received, one for each recipient, read in full */
+  letters?: Incoming[]
 }
 
 /** Reads one request a provider posted about the letters it carried. A

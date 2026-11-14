@@ -677,6 +677,9 @@ let mailing = (token: string): Plug[] => [
       base: { secret: 'RESEND_API' },
       fetch: { binding: 'MAIL_FETCH' },
       receipts: { secret: { secret: 'RESEND_WEBHOOK_SECRET' } },
+      // Reading a letter Resend received takes a `full_access` key, the one
+      // a space's mail domains are set up with (#a3030ebc6a).
+      receiving: { token: { secret: 'RESEND_DOMAINS_TOKEN' } },
     },
   },
 ]

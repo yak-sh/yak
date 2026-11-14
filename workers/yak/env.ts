@@ -139,7 +139,7 @@ export type Env = {
   // CF_ACCOUNT). A probe
   // aims an API root somewhere else, and calls through MAIL_FETCH.
   // RESEND_DOMAINS_TOKEN is the `full_access` key `mailDomains` there sets up
-  // a space's mail domains with.
+  // a space's mail domains with, and that reads the letters Resend receives.
   RESEND_WEBHOOK_SECRET?: string
   RESEND_TOKEN?: string
   RESEND_PLATFORM_TOKEN?: string

@@ -108,18 +108,6 @@ export type Channel = (
 ) => Promise<{ id?: string }>
 let part = <T>(b: Bundle | undefined, name: string) => b?.[name] as T
 
-// Cloudflare's first Authentication-Results is its receiving MTA's verdict.
-// A signature on somebody else's domain does not authenticate a member's From.
-// https://developers.cloudflare.com/email-service/api/route-emails/email-handler/
-export let authenticated = (header: string | null, from: string) => {
-  let first = (header ?? '').split(/,(?=\s*[^;,]+;)/)[0]
-  let domain = from.toLowerCase().split('@')[1]
-  let dmarc = first.split(';').find((s) => /^\s*dmarc=pass\b/i.test(s))
-  let aligned = dmarc?.match(/\bheader\.from\s*=\s*"?([^\s;"()]+)/i)?.[1]
-  return !!domain && /^\s*mx\.cloudflare\.net\s*;/i.test(first) &&
-    !!dmarc && aligned?.toLowerCase() == domain
-}
-
 /** The id a file attached to the Operator goes by: the digest its key ends
  * in (attachments.ts). */
 export let attachmentId = (file: File) => file.key.split('/').at(-1)!

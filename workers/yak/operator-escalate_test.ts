@@ -12,7 +12,7 @@ import { escalate, escalationAnswer } from './operator-escalate.ts'
 import { rootOf } from './operator-root.ts'
 import { conversationOf } from './operator-host.ts'
 import { mailFrom } from './post.ts'
-import { arrived } from './inbox.ts'
+import { arrived, reading } from './inbox.ts'
 import type { Inbound } from './env.ts'
 
 // A person's Operator writes to Dr Alvarez for them. Her reply is answered in
@@ -150,7 +150,10 @@ let answer = (id: string, answers: string): Inbound => {
     setReject: () => {},
   }
 }
-let reached = await arrived(answer('alvarez-1', 'sent-1'), env)
+let reached = await arrived(
+  await reading(answer('alvarez-1', 'sent-1'), env),
+  env,
+)
 await service.drain()
 
 let writer = (await dir.personAt('alvarez@clinic.example'))!

@@ -1,7 +1,10 @@
 // A provider's notice about a letter, posted at `/mail/<via>`, is read by the
 // notices that provider lends (config.ts `posts`), and a verified receipt is
 // routed to the graph its sender named. The provider's API ids stay outside
-// those graphs; only RFC Message-IDs land.
+// those graphs; only RFC Message-IDs land. A notice that it received letters
+// hands them to the inbox (inbox.ts `received`), the path a letter from
+// Email Routing takes, and a failure of ours answers 500 so the provider
+// tries again.
 import { fromBase64url } from '@yaks/fp'
 import { and, eq, every, list, stringify } from '@yaks/query'
 import { Unsigned } from '@yaks/host/senders'
@@ -29,6 +32,20 @@ export let receipts = async (
       return Response.json({ error: error.message }, { status: 401 })
     }
     throw error
+  }
+  if (arrived.letters) {
+    let { received } = await import('./inbox.ts')
+    try {
+      await received(arrived.letters, env)
+    } catch (error) {
+      caught(error, {
+        request: 'mail arrival',
+        provider: via,
+        domain: arrived.letters[0]?.to.split('@').pop(),
+      })
+      throw error
+    }
+    return Response.json({ ok: true })
   }
   let found = arrived.receipt, tags = arrived.tags
   if (!found) return Response.json({ ok: true })

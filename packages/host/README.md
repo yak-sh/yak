@@ -162,13 +162,15 @@ fail composition. `afresh(build)` (`@yaks/host/senders`) makes a sender that
 builds again at every use, and says through `waiting()` why it cannot send yet,
 so a letter waits for a credential instead of bouncing. `Message.id` is the
 caller's letter UUID, for an asynchronous receipt. `Incoming` is a
-provider-neutral letter with headers, text and attachments; a provider supplies
-an authentication verdict separately from the author's headers. The assembly
-passes this capability to plugin factories through `Binding.host` or
-`Binding.ready`. A sender rejects with `Unsent` (`@yaks/host/senders`) when the
-message certainly never left, so mail tries it again instead of bouncing it, and
-with `Undeliverable` when its provider refused an address on the letter, so mail
-bounces it as the letter's outcome rather than a failure of the sender.
+provider-neutral letter with headers, text and attachments; its provider
+supplies the receiving server's verdicts separately from the author's headers:
+`verified` is DKIM, unset where nobody checked, and `vouched` is DMARC passing
+for the From domain. The assembly passes this capability to plugin factories
+through `Binding.host` or `Binding.ready`. A sender rejects with `Unsent`
+(`@yaks/host/senders`) when the message certainly never left, so mail tries it
+again instead of bouncing it, and with `Undeliverable` when its provider refused
+an address on the letter, so mail bounces it as the letter's outcome rather than
+a failure of the sender.
 
 ```ts
 import type { Host, Message } from '@yaks/host'
@@ -204,9 +206,10 @@ A host that composes no graph, such as a Worker, names its mail providers in a
 config too, and asks their graph facets with `lending` (`@yaks/host/lending`)
 for what each lends by name: `senders`, the `notices` readers of a provider's
 signed word about a letter it carried (a `Notice`: the receipt, and the tags the
-letter was sent with, which say whose it was), and the `arrivals` that read a
-letter the runtime handed the host, in the runtime's own shape, as an
-`Incoming`. A request its provider did not sign rejects as `Unsigned`. Its
+letter was sent with, which say whose it was, or the `letters` it received, as
+`Incoming`s, for a provider that takes mail in by webhook), and the `arrivals`
+that read a letter the runtime handed the host, in the runtime's own shape, as
+an `Incoming`. A request its provider did not sign rejects as `Unsigned`. Its
 `mailDomains` set a domain up for sending and receiving (`setup`), read the DNS
 records it needs with whether each has `arrived` (`read`), and `remove` it, each
 domain named by its domain name, never the provider's id for it. The host reads

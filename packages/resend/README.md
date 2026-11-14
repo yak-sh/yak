@@ -66,11 +66,15 @@ at each call, and `base` and `fetch` shared with the sender. `./testing` holds
 does.
 
 `received({token, base?, fetch?}, emailId)` retrieves incoming message content
-and attachments, and returns one neutral `Incoming` per recipient. Download URLs
-receive no API credential. A sending-only key cannot retrieve mail; Resend
-offers no receiving-only API permission, so a host limited to scoped keys keeps
-receiving elsewhere. `verified` comes from the API's trusted, From-aligned DKIM
-or DMARC verdict; supplied message headers cannot establish authorship. See
+and attachments, and returns one neutral `Incoming` per recipient its To, Cc and
+Bcc name or Resend received it for. Download URLs receive no API credential. A
+sending-only key cannot retrieve mail; Resend offers no receiving-only API
+permission, so a host limited to scoped keys keeps receiving elsewhere.
+`verified` is the API's trusted DKIM verdict, which passes only for the From
+domain's signature, and `vouched` its DMARC pass; supplied message headers
+cannot establish authorship. With `receiving: {token}` among its options, the
+`resend` notices answer a signed `email.received` with the `letters` it carried,
+read with that key; without it, the event is acknowledged unread. See
 [receiving authentication](https://resend.com/docs/api-reference/emails/retrieve-received-email)
 and
 [API key permissions](https://resend.com/docs/api-reference/api-keys/create-api-key).

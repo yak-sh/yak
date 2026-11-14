@@ -1,6 +1,6 @@
 // The Cloudflare receiving adapter yields the same neutral mail boundary.
 import { equal, test } from '@yaks/testing'
-import { received } from './receive.ts'
+import { received, vouched } from './receive.ts'
 
 test('Email Routing decodes the author and subject without losing transport headers', async () => {
   let raw =
@@ -18,4 +18,23 @@ test('Email Routing decodes the author and subject without losing transport head
   equal(mail.headers.get('authentication-results'), 'mx.example; dkim=pass')
   equal(mail.text.trim(), 'At seven.')
   equal(mail.attachments, [])
+})
+
+test("a letter is vouched for only by Email Routing's DMARC pass aligned with its From", () => {
+  equal(
+    vouched(
+      'mx.cloudflare.net; dmarc=pass header.from=example.com; dkim=pass',
+      'clerk@example.com',
+    ),
+    true,
+  )
+  for (
+    let header of [
+      null,
+      'mx.cloudflare.net; dkim=pass header.d=evil.com',
+      'evil.com; dmarc=pass header.from=example.com',
+      'mx.cloudflare.net; dmarc=fail header.from=example.com, mx.cloudflare.net; dmarc=pass header.from=example.com',
+      'mx.cloudflare.net; dmarc=pass header.from=evil.com',
+    ]
+  ) equal(vouched(header, 'clerk@example.com'), false)
 })

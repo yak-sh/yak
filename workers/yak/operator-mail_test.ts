@@ -11,7 +11,7 @@ import { mailSend, receive, signedFor } from './operator-channels.ts'
 import { rootOf } from './operator-root.ts'
 import { conversationOf } from './operator-host.ts'
 import { mailFrom } from './post.ts'
-import { arrived } from './inbox.ts'
+import { arrived, reading } from './inbox.ts'
 import type { Inbound } from './env.ts'
 
 // A person asks their Operator to write to someone for them: a fork sends the
@@ -129,7 +129,10 @@ let answer = (id: string, answers: string): Inbound => {
     setReject: () => {},
   }
 }
-let request = await arrived(answer('alvarez-1', 'sent-1'), env)
+let request = await arrived(
+  await reading(answer('alvarez-1', 'sent-1'), env),
+  env,
+)
 await service.drain()
 let [replied] = await store.g.get([request])
 let asking = replied.operator_request as Record<string, unknown>
