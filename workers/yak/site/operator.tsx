@@ -15,6 +15,7 @@ import { attr, type Slots, text } from './copy.ts'
 import { Page, Yours } from './frame.tsx'
 import { Examples } from './home.tsx'
 import { Idle } from '../mascot.ts'
+import { Sky, Walk } from './sky.tsx'
 import type { VNode } from 'preact'
 
 type By = 'text' | 'email'
@@ -67,9 +68,10 @@ export let Operator = ({ by }: { by: By }) => {
         <>
           <script src='cta.js' defer />
           <script src='carousel.js' defer />
-          <script src='wander.js' defer />
+          <Walk />
         </>
       }
+      before={<Sky />}
     >
       <section class='Hello' aria-labelledby='hello'>
         <div class='Hello_Copy'>

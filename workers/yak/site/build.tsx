@@ -10,6 +10,7 @@ import { attr, type Slots, text } from './copy.ts'
 import { Page, Yours } from './frame.tsx'
 import { arrow, Cost, Examples } from './home.tsx'
 import { Idle } from '../mascot.ts'
+import { Sky, Walk } from './sky.tsx'
 import { BUILD } from '../demos.ts'
 
 export let Build = () => (
@@ -20,10 +21,11 @@ export let Build = () => (
     head={
       <>
         <script src='carousel.js' defer />
-        <script src='wander.js' defer />
+        <Walk />
         <script src='cta.js' defer />
       </>
     }
+    before={<Sky />}
   >
     <section class='Hello' aria-labelledby='hello'>
       <div class='Hello_Copy'>

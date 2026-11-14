@@ -1,4 +1,5 @@
-// The home page's sky (site/sky.tsx, public/sky.js) run over index.html. Its
+// The home page's sky (site/sky.tsx, public/sky.js) run over index.html, and
+// over every other home page `/` draws (variant.ts). Its
 // far scene is laid out one pixel to his unit from the window's corner, so a
 // point in his units (x, y) is at (x + 3000, y + 800) in the window.
 import { test } from '@yaks/testing'
@@ -6,12 +7,15 @@ import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { page as home } from './site/mod.ts'
 import { MOON, moon, PHASES, SINK, SUN } from './site/sky.tsx'
+import { VARIANTS } from './variant.ts'
 
-let html = home('index.html')
+// The page Site keeps a home page's path in (site.ts `HOME`).
+let file = (path: string) =>
+  path == '/' ? 'index.html' : `${path.slice(1)}.html`
 let code = await Deno.readTextFile(new URL('./public/sky.js', import.meta.url))
 
-let sky = ({ dark = false, calm = false } = {}) => {
-  let { document, window } = parseHTML(html)
+let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
+  let { document, window } = parseHTML(home(file(path)))
   let on: Record<string, (e: unknown) => void> = {}
   let moved: string[] = []
   let rect = (r: Partial<DOMRect>) => () => r as DOMRect
@@ -76,6 +80,15 @@ test('the line he sits on is set where his tail touches it', () => {
     (el('.Sky') as HTMLElement).style.getPropertyValue('--feet'),
     `${feet.toFixed(2)}px`,
   )
+})
+
+test('every home page / draws stands under the same sky', () => {
+  let drawn = VARIANTS.filter((v) => v.share > 0).map((v) => v.path)
+  assert(drawn.length > 1)
+  for (let path of drawn) {
+    let { el } = sky({ path })
+    assert((el('.Sky') as HTMLElement).style.getPropertyValue('--feet'), path)
+  }
 })
 
 test('a touch on the moon turns it through its phases and back', () => {

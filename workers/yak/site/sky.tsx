@@ -167,6 +167,17 @@ let still = ([x, y, s]: number[]) =>
     n1(y + 3 * s)
   }`
 
+/** What a page whose hero has the wandering yak carries in its head: his
+ * walk (public/wander.js) and the sky he walks under (public/sky.js). Every
+ * such page lays the `Sky` first in its body (frame.tsx `Page` `before`), so
+ * each home page `/` draws (variant.ts) wears the same hero. */
+export let Walk = () => (
+  <>
+    <script src='wander.js' defer />
+    <script src='sky.js' defer />
+  </>
+)
+
 /** The sky, laid behind the page from its top to the pencil line under the
  * hero. It is drawing only, so a screen reader passes over it. */
 export let Sky = () => {
