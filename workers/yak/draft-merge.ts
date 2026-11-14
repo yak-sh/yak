@@ -1,9 +1,15 @@
-// A released draft's preview rows merged into the live app's (D-453, step 4
-// of c8807d60). A draft's preview reads and writes the app's store on a
-// branch of its own (preview.ts); once a release of that draft is live, what
-// the branch wrote since its fork merges into the live rows three ways per
-// property (@yaks/journal `merge`, graph.ts `#merging`), as one batch written
-// as whoever released it, and the branch is dropped.
+// A released draft's preview rows, merged into the live app's only when the
+// release asks for them (D-453, step 4 of c8807d60). A draft's preview reads
+// and writes the app's store on a branch of its own (preview.ts). A release
+// is of the draft's code and copy: what the branch wrote since its fork stays
+// there, out of the live rows, on a `draft_rows` row of the directory naming
+// the branch and how many rows it holds (`draftKept`), until app_deploy with
+// rows: all merges them or a discard drops them, so nothing written in a
+// preview is lost and no row written to try a draft out lands in the people's
+// own. A release with rows: all, or app_deploy naming the kept rows later,
+// merges them into the live rows three ways per property (@yaks/journal
+// `merge`, graph.ts `#merging`), as one batch written as whoever asked, and
+// the branch is dropped (`draftReleased`).
 //
 // A property the preview and the live app both changed is the person's to
 // settle: one decision each, in their Updates, showing its value when the
@@ -17,12 +23,38 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Choice, Conflict } from '@yaks/journal'
 import type { Door } from '@yaks/durable-object/door'
-import { type App, appStore, directoryOf, type Space } from './directory.ts'
+import {
+  type App,
+  appStore,
+  type Directory,
+  directoryOf,
+  type Space,
+} from './directory.ts'
 import type { Env } from './env.ts'
 import { builderOf, SPACE } from './build-door.ts'
 import { instrumentEid } from './instrument.ts'
 import { acting, vouched, type Who } from './session.ts'
 import type { AppDraft } from './written.ts'
+
+/** Which rows a release merges (app_deploy `rows`): none, the default, or
+ * all its draft's preview wrote. */
+export type Rows = 'none' | 'all'
+
+/** A released draft's preview rows kept on its branch (`draft_rows`). */
+export type DraftRows = {
+  eid: string
+  /** the released draft's eid, which app_deploy and app_files name it by */
+  draft: string
+  branch: number
+  version: number | null
+  /** each an entity the preview changed */
+  rows: number
+  by: string | null
+  at: string | null
+}
+
+/** A draft whose branch a merge takes: its eid, branch, and whose it is. */
+export type Branched = Pick<AppDraft, 'eid' | 'by'> & { branch: number }
 
 /** What a merge came to: the conflicts it left, and how many rows it wrote,
  * none while a conflict stands. */
@@ -53,6 +85,35 @@ export let mergeBranch = (
     },
     { method: 'POST', body: JSON.stringify({ picks }) },
     { ...head, 'x-yak-kernel': '1' },
+  )
+
+/** How many rows branch `branch` of the store behind `store` wrote since its
+ * fork: each an entity it changed (graph.ts `#branching`, `changes`). */
+export let rowsOn = (store: Door, branch: number): Promise<number> =>
+  store.consume(
+    `/branches/${branch}/changes`,
+    async (res) => {
+      if (!res.ok) throw new Error(`changes: ${res.status} ${await res.text()}`)
+      let { changes } = await res.json() as { changes: { eid: string }[] }
+      return new Set(changes.map((c) => c.eid)).size
+    },
+    {},
+    { 'x-yak-kernel': '1' },
+  )
+
+/** Branch `branch` of the store behind `store` dropped, with everything
+ * written on it; one already gone is no matter. */
+export let dropBranch = (store: Door, branch: number): Promise<void> =>
+  store.consume(
+    `/branches/${branch}`,
+    async (res) => {
+      if (!res.ok && res.status != 404) {
+        throw new Error(`drop branch: ${res.status} ${await res.text()}`)
+      }
+      await res.body?.cancel()
+    },
+    { method: 'DELETE' },
+    { 'x-yak-kernel': '1' },
   )
 
 /** The head a merge is written under, for a writer kept on its question. */
@@ -192,7 +253,8 @@ export let ask = async (
 
 /**
  * Draft `draft`'s branch merged into the app's live rows, right after a
- * release of it went live (tools.ts `published`), written as `who`'s act
+ * release of it with rows: all went live (tools.ts `published`), or when
+ * app_deploy names its kept rows (`keptMerged`), written as `who`'s act
  * (session.ts `acting`): with nothing in conflict it is in and the branch
  * gone; otherwise the person is asked about each conflict, and none being
  * there to ask, the branch waits.
@@ -201,7 +263,7 @@ export let draftReleased = async (
   env: Env,
   space: Space,
   app: App,
-  draft: AppDraft & { branch: number },
+  draft: Branched,
   caller: Who,
 ): Promise<Merging & { asked: string | null }> => {
   let { who } = acting(caller)
@@ -225,6 +287,87 @@ export let draftReleased = async (
     conflicts: m.conflicts,
   })
   return { ...m, asked: to }
+}
+
+/**
+ * Draft `draft`'s branch kept out of the live rows by a release of it as
+ * `version` that did not ask for them: its row (`draft_rows`) names the
+ * branch and how many rows the preview wrote there. A branch that wrote
+ * nothing is dropped, and nothing is kept. Answers that count.
+ */
+export let draftKept = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+  app: App,
+  draft: Branched,
+  version: number,
+  caller: Who,
+): Promise<number> => {
+  let store = appStore(env.STORE, space, app, env)
+  let rows = await rowsOn(store, draft.branch)
+  if (!rows) {
+    await dropBranch(store, draft.branch)
+    return 0
+  }
+  await dir.stamp({
+    entities: [{
+      entity: { eid: derivedEid(`draft_rows|${app.eid}|${draft.eid}`) },
+      draft_rows: {
+        app: app.eid,
+        draft: draft.eid,
+        branch: draft.branch,
+        version,
+        rows,
+        ...draft.by ? { by: draft.by } : {},
+        at: new Date().toISOString(),
+      },
+    }],
+  }, vouched(caller))
+  return rows
+}
+
+/** Kept rows `kept` let go of: their row deleted, so app_deploy and a
+ * discard no longer find them. */
+let unkept = (dir: Directory, kept: DraftRows, caller: Who) =>
+  dir.stamp(
+    { entities: [{ entity: { eid: kept.eid }, $delete: true }] },
+    vouched(caller),
+  )
+
+/** A released draft's kept rows merged into the live app (app_deploy
+ * rows: all naming the draft), as `draftReleased` merges at a release: a
+ * property both changed waits for the person's pick, and the row goes either
+ * way, the branch being the questions' to settle from then. */
+export let keptMerged = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+  app: App,
+  kept: DraftRows,
+  caller: Who,
+) => {
+  let m = await draftReleased(env, space, app, {
+    eid: kept.draft,
+    by: kept.by,
+    branch: kept.branch,
+  }, caller)
+  await unkept(dir, kept, caller)
+  return m
+}
+
+/** A released draft's kept rows discarded (app_files op: discard naming the
+ * draft): the branch dropped with everything on it, and the row. */
+export let keptDiscarded = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+  app: App,
+  kept: DraftRows,
+  caller: Who,
+) => {
+  await dropBranch(appStore(env.STORE, space, app, env), kept.branch)
+  await unkept(dir, kept, caller)
 }
 
 /**

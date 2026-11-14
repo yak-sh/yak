@@ -402,7 +402,8 @@ app_preview:
     The browser runs on Cloudflare; no local files, CLI or computer is needed.
     The draft reads the app's live rows as they stood when it was first
     previewed, in the draft's vocabulary, on a branch of its own, so preview
-    edits never change released app data. It shows one draft: draft names
+    edits never change released app data unless app_deploy merges them
+    with rows: all. It shows one draft: draft names
     it, else this conversation's own, else your one open draft. Each draft
     has its own private bearer link and branch, so several drafts
     preview side by side: a page open on one shows each file written to that
@@ -424,8 +425,12 @@ app_deploy:
     your one open draft, and with several the answer lists them to choose
     from. Its edits are laid over the live files, so paths it did not
     change stay as live has them, and the app's other drafts stay open.
-    Rows its preview wrote merge into the live ones; one both changed
-    waits for the person's pick in their Updates.
+    A release is of the draft's files: rows its preview wrote stay on its
+    branch, out of the live app, unless rows: all merges them, and the
+    answer says how many stayed. app_deploy with that draft and rows: all
+    merges them later, a property both sides changed waiting for the
+    person's pick in their Updates; app_files op: discard with the draft
+    drops them.
     Drafts of an open-ended request wait for the person to choose one
     (decision_new); release only the one they chose.
     Always send message: everything this release changes and why, in full,

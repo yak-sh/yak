@@ -42,6 +42,7 @@ import { ownedPrefix, rootedPrefix } from './file-root.ts'
 // kept, files and all, so app_rollback can put it back.
 import { declarationOf, keepDeclaration } from './declaration.ts'
 import type { Reload } from '@yaks/platform'
+import type { Rows } from './draft-merge.ts'
 import { configured, deployWorker } from './deploy_worker.ts'
 import { type Config, sourceOf } from './wrangler_app.ts'
 import { compiled } from './esbuild.ts'
@@ -1267,6 +1268,7 @@ let published = async (
   message?: string,
   keep = false,
   closing: AppDraft | null = null,
+  rows: Rows = 'none',
 ) => {
   let c = ctx.clock ?? clock()
   let blobs = files.files
@@ -1837,16 +1839,30 @@ let published = async (
     )
   }
   // What the draft's preview wrote on its branch merges into the live rows
-  // now that the release is live, written as this caller's act; a property
-  // both changed waits for the person's pick (draft-merge.ts).
-  let merging = closing?.branch != null
+  // now that the release is live where the release asked for them (rows:
+  // all), written as this caller's act, a property both changed waiting for
+  // the person's pick; otherwise they stay on the branch until merged or
+  // discarded (draft-merge.ts).
+  let branched = closing?.branch != null
+    ? { ...closing, branch: closing.branch }
+    : null
+  let live = { ...app, version, declaration: pointer }
+  let merging = branched && rows == 'all'
     ? await after(async () => {
       let { draftReleased } = await import('./draft-merge.ts')
-      return await draftReleased(
+      return await draftReleased(ctx.env, space, live, branched, who)
+    })
+    : undefined
+  let left = branched && rows != 'all'
+    ? await after(async () => {
+      let { draftKept } = await import('./draft-merge.ts')
+      return await draftKept(
         ctx.env,
+        ctx.dir,
         space,
-        { ...app, version, declaration: pointer },
-        { ...closing, branch: closing.branch! },
+        live,
+        branched,
+        version,
         who,
       )
     })
@@ -1869,6 +1885,7 @@ let published = async (
     said: ran +
       trailing +
       mergedSaid(merging) +
+      keptSaid(left, closing, space, standing) +
       servesSaid(serves) +
       // What this app can now be asked to do, as `command` takes them: bare
       // names, because a command is said with its app beside it rather than
@@ -1914,6 +1931,23 @@ let published = async (
         : ''),
   }
 }
+
+// What a release said of the rows its draft's preview left on its branch
+// (draft-merge.ts `draftKept`), and how to merge or drop them.
+let keptSaid = (
+  rows: number | undefined,
+  draft: AppDraft | null,
+  space: Space,
+  app: App,
+) =>
+  !rows || !draft
+    ? ''
+    : `\n${rows} ${
+      rows == 1 ? 'row' : 'rows'
+    } the draft's preview wrote stay on its branch, out of the live app: ` +
+      `app_deploy(app: '${app.slug}', space: '${space.slug}', draft: ` +
+      `'${draft.eid}', rows: 'all') merges them into the live rows, and ` +
+      `app_files(op: 'discard', draft: '${draft.eid}') drops them`
 
 // What a release said of its draft's preview rows (draft-merge.ts).
 let mergedSaid = (
@@ -1962,6 +1996,7 @@ export let released = async (
     over,
     keep = !!over,
     draft: asked = null,
+    rows = 'none',
   }: {
     target?: Version
     reload?: Reload
@@ -1989,6 +2024,9 @@ export let released = async (
      * closes; none releases the live files again. A release of other files
      * (`target`, `over`) takes none, and leaves every draft open. */
     draft?: AppDraft | null
+    /** Which rows the draft's preview wrote merge into the live ones
+     * (app_deploy `rows`): none, the default, keeps them on its branch. */
+    rows?: Rows
   } = {},
 ): Promise<
   { version: number; said: string; serves?: string; review?: DeployReview }
@@ -2112,6 +2150,7 @@ export let released = async (
       message,
       keep,
       taken,
+      rows,
     )
     released = true
     await c.time('purge', () => purged)
@@ -3924,6 +3963,25 @@ let OURS: Row[] = [
         c.time('draft', async () => drafting(blobs, ctx.dir, app, await mine()))
       let at = (d: Draft, path: string) => `${d.root}/${path}`
       if (op == 'discard') {
+        // A released draft's preview rows its release left on the branch go
+        // with their branch (draft-merge.ts `keptDiscarded`).
+        let named = draftArg(args)
+        let kept = named && named != NEW
+          ? await ctx.dir.draftRows(app, named)
+          : null
+        if (kept) {
+          let { keptDiscarded } = await import('./draft-merge.ts')
+          await keptDiscarded(ctx.env, ctx.dir, space, app, kept, who)
+          return {
+            text:
+              `discarded the ${kept.rows} ${
+                kept.rows == 1 ? 'row' : 'rows'
+              } released draft ${named}'s preview left on its branch of ` +
+              `${space.slug}/${app.slug}; the live app never had them`,
+            space,
+            value: { discarded: named, rows: kept.rows },
+          }
+        }
         let all = await drafts()
         let of = await mine()
         if (!of) {
@@ -4616,6 +4674,15 @@ let OURS: Row[] = [
             "conversation's own draft, else your one open draft; the app's " +
             'other drafts stay open',
         ),
+        rows: {
+          type: 'string',
+          enum: ['none', 'all'],
+          description:
+            "which rows the draft's preview wrote merge into the live app: " +
+            'none (the default) releases only its files and keeps them on ' +
+            "the draft's branch; all merges them. With rows: all, draft may " +
+            'name a draft already released, to merge the rows it left',
+        },
       },
       required: ['app'],
     },
@@ -4642,6 +4709,40 @@ let OURS: Row[] = [
       if (args.message != null && typeof args.message != 'string') {
         throw refuse('invalid', 'message must be text')
       }
+      let rows = (args.rows ?? 'none') as Rows
+      if (rows != 'none' && rows != 'all') {
+        throw refuse('invalid', 'rows must be none or all')
+      }
+      // A released draft whose preview rows its release left on the branch
+      // is named to merge them, and nothing is released.
+      let named = draftArg(args)
+      let kept = named && named != NEW
+        ? await ctx.dir.draftRows(app, named)
+        : null
+      if (kept) {
+        if (rows != 'all') {
+          throw refuse(
+            'arguments',
+            `draft ${named} was released as v${kept.version}; the ${kept.rows} ` +
+              `${kept.rows == 1 ? 'row' : 'rows'} its preview wrote stay on ` +
+              "its branch: rows: 'all' merges them into the live app",
+          )
+        }
+        let { keptMerged } = await import('./draft-merge.ts')
+        let m = await keptMerged(ctx.env, ctx.dir, space, app, kept, who)
+        return {
+          text: `the rows draft ${named}'s preview left on its branch, ` +
+            `into ${space.slug}/${app.slug}; no version was released:` +
+            (mergedSaid(m) || '\nnothing was left to merge'),
+          space,
+          value: {
+            deployed: false,
+            draft: named,
+            merged: m.merged,
+            conflicts: m.conflicts.length,
+          },
+        }
+      }
       let draft = releasing(
         app,
         await draftsOf(ctx.dir, app),
@@ -4660,6 +4761,7 @@ let OURS: Row[] = [
           confirm: args.confirm as boolean | undefined,
           message: (args.message as string | undefined)?.trim() || undefined,
           draft,
+          rows,
         },
       )
       if (review) {

@@ -795,6 +795,15 @@ export type Row = {
     previewed?: string | null
     branch?: number | null
   }
+  draft_rows?: {
+    app: Id
+    draft: string
+    branch: number
+    version?: number | null
+    rows?: number | null
+    by?: Id | null
+    at?: string | null
+  }
   entity: { eid: string }
   // A browser and the person who claimed its guest work (attribution.ts).
   browser?: { by?: Id | null }
@@ -1759,6 +1768,18 @@ export let appDraftOf = (r: Row) => ({
   at: r.app_draft!.at ?? null,
   previewed: r.app_draft!.previewed ?? null,
   branch: r.app_draft!.branch ?? null,
+})
+
+/** A released draft's preview rows kept on its branch (draft-merge.ts
+ * `DraftRows`), as a row reads. */
+export let draftRowsOf = (r: Row) => ({
+  eid: r.entity.eid,
+  draft: r.draft_rows!.draft,
+  branch: r.draft_rows!.branch,
+  version: r.draft_rows!.version ?? null,
+  rows: r.draft_rows!.rows ?? 0,
+  by: r.draft_rows!.by ? idOf(r.draft_rows!.by) : null,
+  at: r.draft_rows!.at ?? null,
 })
 
 /** One file written into an app (written.ts `Written`), as a row reads. */
@@ -3288,6 +3309,14 @@ export let directoryRows = (rows: {
     // row. Never cached: a write chooses among them.
     drafts: async (app: App) =>
       (await query(`.app_draft.app=${app.eid}`)).map(appDraftOf),
+    // A released draft's preview rows kept on its branch, by the draft's
+    // eid (draft-merge.ts `DraftRows`); none once merged or discarded.
+    draftRows: async (app: App, draft: string) => {
+      let row = await one(
+        `.draft_rows.app=${app.eid}&.draft_rows.draft=${draft}`,
+      )
+      return row?.draft_rows ? draftRowsOf(row) : null
+    },
     // The eid of an app's newest write, which names the draft a writer
     // opens (written.ts `modifying`); none before its first.
     newestWrite: async (app: App) =>

@@ -999,6 +999,46 @@
         }
       }
     },
+    "draft_rows": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "Rows a released draft's preview wrote, kept on its branch of the app's store and out of the live app, because the release did not ask for them (app_deploy rows). app_deploy with the draft and rows: all merges them; a discard of the draft drops the branch and them. Either deletes this row.",
+      "properties": {
+        "app": {
+          "type": "string",
+          "ref": "app",
+          "death": "cascade"
+        },
+        "draft": {
+          "type": "string",
+          "description": "the eid the released draft had, which app_deploy and app_files name it by"
+        },
+        "branch": {
+          "type": "number",
+          "description": "the branch of the app's store holding the rows"
+        },
+        "version": {
+          "type": "number",
+          "description": "the version the draft was released as"
+        },
+        "rows": {
+          "type": "number",
+          "description": "how many rows the preview wrote there, each an entity it changed"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the person whose draft it was, who is asked about a property both sides changed when they merge"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when the release left them there"
+        }
+      }
+    },
     "switched": {
       "component": true,
       "type": "object",

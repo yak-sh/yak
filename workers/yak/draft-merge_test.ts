@@ -1,7 +1,8 @@
-// Releasing a draft merges what its preview wrote on its branch into the
-// app's live rows (draft-merge.ts): at once where nothing conflicts, and
-// where the preview and the live app changed one property, once the person
-// picks a side, never over a live write they did not see.
+// Releasing a draft keeps what its preview wrote on its branch, out of the
+// live rows, until a release asks for them (draft-merge.ts): then they merge
+// at once where nothing conflicts, and where the preview and the live app
+// changed one property, once the person picks a side, never over a live
+// write they did not see.
 import { equal, ok, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { appStore } from './directory.ts'
@@ -76,7 +77,8 @@ let branches = async () =>
   (await live().consume('/branches', (r) => r.json(), {}, KERNEL)).branches
     .map((b: { id: number }) => b.id)
 let note = (eid: string, text: string) => ({ entity: { eid }, note: { text } })
-// A new draft, previewed, whose pages write `bundles` on its branch.
+// A new draft, previewed, whose pages write `bundles` on its branch: its id
+// and branch.
 let drafted = async (word: string, bundles: Bundle[]) => {
   await run('app_files', {
     app: 'notes',
@@ -95,33 +97,34 @@ let drafted = async (word: string, bundles: Bundle[]) => {
   equal(res.status, 200, await res.clone().text())
   await res.body?.cancel()
   let d = (await dir.drafts(app)).find((d) => d.eid == out.value!.draft)!
-  return d.branch!
+  return { draft: d.eid, branch: d.branch! }
 }
-let release = async () => {
-  let out = await run('app_deploy', { app: 'notes', message: 'Next' })
+let said = (out: { text?: string }) => String(out.text ?? JSON.stringify(out))
+let release = async (rows?: string) => {
+  let out = await run('app_deploy', { app: 'notes', message: 'Next', rows })
   app = (await dir.app(space, 'notes'))!
-  return String(out.text ?? JSON.stringify(out))
+  return said(out)
 }
 
 let [a, b, c] = [0, 1, 2].map(() => crypto.randomUUID())
 await liveWrite([note(a, 'live'), note(b, 'live')])
 
 test('a release whose preview conflicts with nothing merges it at once and drops its branch', async () => {
-  let branch = await drafted('One', [note(b, 'drafted'), note(c, 'new')])
+  let { branch } = await drafted('One', [note(b, 'drafted'), note(c, 'new')])
   // The person goes on writing the live app meanwhile.
   await liveWrite([note(a, 'the person’s')])
-  let said = await release()
-  ok(said.includes('merged what the draft'), said)
+  let out = await release('all')
+  ok(out.includes('merged what the draft'), out)
   equal(await texts(), { [a]: 'the person’s', [b]: 'drafted', [c]: 'new' })
   ok(!(await branches()).includes(branch))
   equal(asks, [])
 })
 
 test('a property both changed waits for the person, and their pick merges the rest', async () => {
-  let branch = await drafted('Two', [note(a, 'mine'), note(c, 'newer')])
+  let { branch } = await drafted('Two', [note(a, 'mine'), note(c, 'newer')])
   await liveWrite([note(a, 'theirs')])
-  let said = await release()
-  ok(said.includes('wait for the person to pick'), said)
+  let out = await release('all')
+  ok(out.includes('wait for the person to pick'), out)
   equal(await texts(), { [a]: 'theirs', [b]: 'drafted', [c]: 'new' })
   ok((await branches()).includes(branch))
   equal(asks.length, 1)
@@ -155,4 +158,47 @@ test('a property both changed waits for the person, and their pick merges the re
   await answer(again[0])
   equal(await texts(), { [a]: 'mine', [b]: 'drafted', [c]: 'newer' })
   ok(!(await branches()).includes(branch))
+})
+
+let d = crypto.randomUUID()
+
+test("a release keeps its preview's rows on the branch, and app_deploy naming the draft merges them later", async () => {
+  let before = await texts()
+  let { draft, branch } = await drafted('Three', [note(d, 'a test row')])
+  let out = await release()
+  ok(out.includes("1 row the draft's preview wrote stay on its branch"), out)
+  ok(out.includes(`draft: '${draft}', rows: 'all'`), out)
+  equal(await texts(), before)
+  ok((await branches()).includes(branch))
+  let refused = await run('app_deploy', { app: 'notes', draft }).then(
+    said,
+    (e) => String(e),
+  )
+  ok(refused.includes("rows: 'all' merges them"), refused)
+  let merged = said(
+    await run('app_deploy', { app: 'notes', draft, rows: 'all' }),
+  )
+  ok(merged.includes('no version was released'), merged)
+  equal(await texts(), { ...before, [d]: 'a test row' })
+  ok(!(await branches()).includes(branch))
+  equal(await dir.draftRows(app, draft), null)
+})
+
+test('discarding a released draft drops the rows its release kept, and the live app never has them', async () => {
+  let before = await texts()
+  let { draft, branch } = await drafted('Four', [note(d, 'forgotten')])
+  await release()
+  let out = said(await run('app_files', { app: 'notes', op: 'discard', draft }))
+  ok(out.includes('discarded the 1 row'), out)
+  equal(await texts(), before)
+  ok(!(await branches()).includes(branch))
+  equal(await dir.draftRows(app, draft), null)
+})
+
+test('a release whose preview wrote nothing keeps no branch', async () => {
+  let { draft, branch } = await drafted('Five', [])
+  let out = await release()
+  ok(!out.includes('stay on its branch'), out)
+  ok(!(await branches()).includes(branch))
+  equal(await dir.draftRows(app, draft), null)
 })

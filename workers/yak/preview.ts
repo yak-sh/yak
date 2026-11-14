@@ -2,8 +2,8 @@
 // drafts stands at each request, the draft's newest `written` rows over the
 // release (written.ts), on a branch of the app's own store (graph.ts
 // `#onBranch`): the live rows as of the branch's fork, under the preview's own
-// writes, which the live app sees only once a release takes the draft and
-// merges them (draft-merge.ts). Each draft has a link and a branch of its own,
+// writes, which the live app sees only once a release of the draft asks for
+// them (app_deploy rows: all, draft-merge.ts). Each draft has a link and a branch of its own,
 // made when it is first previewed, so several drafts of one app preview side
 // by side, each with its own writes; once a release takes the draft, its link
 // serves what was released, over the live rows. Discarding the draft drops its
@@ -248,17 +248,8 @@ export let unbranched = async (
   d: AppDraft,
 ) => {
   if (d.branch != null) {
-    await appStore(env.STORE, space, app, env).consume(
-      `/branches/${d.branch}`,
-      async (res) => {
-        if (!res.ok && res.status != 404) {
-          throw new Error(`drop branch: ${res.status} ${await res.text()}`)
-        }
-        await res.body?.cancel()
-      },
-      { method: 'DELETE' },
-      { 'x-yak-kernel': '1' },
-    )
+    let { dropBranch } = await import('./draft-merge.ts')
+    await dropBranch(appStore(env.STORE, space, app, env), d.branch)
   }
   if (env.CF_WORKERS_TOKEN) {
     await drop(env, scriptOf(app, linkFor(app, d)), true)
@@ -753,7 +744,7 @@ export let preview = async (ctx: Ctx, args: Args) => {
     cost: 0,
   }
   let follows =
-    `It shows draft ${draft.eid} over the app's live rows as they stood when it was first previewed, on a branch of its own: what its pages write stays there until app_deploy releases the draft, which merges it into the live rows, so delete rows written only to try it out first. An open page takes each write to that draft as it lands, a stylesheet in place and anything else by reloading, keeping its scroll and typed fields, and once app_deploy releases the draft shows what was released. Each draft of the app has its own link and branch; discarding the draft drops its branch.`
+    `It shows draft ${draft.eid} over the app's live rows as they stood when it was first previewed, on a branch of its own: what its pages write stays there, out of the live app, until app_deploy merges it with rows: all; a release without it takes only the draft's files and keeps those rows on the branch until merged or discarded. An open page takes each write to that draft as it lands, a stylesheet in place and anything else by reloading, keeping its scroll and typed fields, and once app_deploy releases the draft shows what was released. Each draft of the app has its own link and branch; discarding the draft drops its branch.`
   if (!screenshot) {
     return {
       text:

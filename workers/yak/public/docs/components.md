@@ -847,18 +847,18 @@ The complete list of reserved names:
     code_review comment commit comp compat completed connection contains
     content conversation cost counted created credit credit_block delegates
     delete_upload deliver delivered demo deploy desk_sidebar dispatch doc
-    document_extract document_page document_text draft edge effect email
-    entity entry error event exception execution failed favorite featured
-    fee feed feedback file filed finding fired form form_guest form_mail
-    form_phone form_post former gallery gitobj grant grants_listed heard
-    heard_turn hearing held home hook hostname image inference install
-    installed integration integration_install interrupted invite inviting
-    key last_deploy lease lines mail mail_answered mail_dismissed
-    mail_domain mail_post mail_task mcp_list mcp_server member memory
-    mentions meter miss model model_reservation model_result newcomer
-    newcomer_builds notice notice_confirmed notice_letter notice_posted
-    notice_subscription notified notify_deaths notify_trash oauth_grant
-    occupancy occurrence offer openai opened openrouter operator
+    document_extract document_page document_text draft draft_rows edge
+    effect email entity entry error event exception execution failed
+    favorite featured fee feed feedback file filed finding fired form
+    form_guest form_mail form_phone form_post former gallery gitobj grant
+    grants_listed heard heard_turn hearing held home hook hostname image
+    inference install installed integration integration_install interrupted
+    invite inviting key last_deploy lease lines mail mail_answered
+    mail_dismissed mail_domain mail_post mail_task mcp_list mcp_server
+    member memory mentions meter miss model model_reservation model_result
+    newcomer newcomer_builds notice notice_confirmed notice_letter
+    notice_posted notice_subscription notified notify_deaths notify_trash
+    oauth_grant occupancy occurrence offer openai opened openrouter operator
     operator_alerts operator_reach order output output_of own_number parent
     pending person persona phone phone_line plan preview price product
     project provider provisional public_file published push_subscription
