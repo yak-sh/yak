@@ -12,7 +12,7 @@
     "@yaks/voxel": "platform",
     "@yaks/stage": "platform",
     "@preact/signals": "^2.9.0",
-    "marked": "18.0.6",
+    "marked": "18.2.0",
     "preact": "^10.29.1",
     "three": "^0.186.1",
     "@yaks/graph": "platform",

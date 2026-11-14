@@ -62,7 +62,7 @@
     "npm:linkedom@~0.18.12": "0.18.13",
     "npm:lucide@*": "1.31.0",
     "npm:lucide@1.31.0": "1.31.0",
-    "npm:marked@18.0.6": "18.0.6",
+    "npm:marked@18.2.0": "18.2.0",
     "npm:mime-types@^3.0.2": "3.0.2",
     "npm:postal-mime@3.0.0": "3.0.0",
     "npm:preact-render-to-string@6.7.0": "6.7.0_preact@10.29.7",
@@ -1955,8 +1955,8 @@
     "lucide@1.31.0": {
       "integrity": "sha512-iPJC7py8o990ZSmvFZlS+4+bNasP+ANDkD0IeDOGgQZjTm3p85F2Ldut7leM1yhYavr1pmoPfigm9MDHyyCOrw=="
     },
-    "marked@18.0.6": {
-      "integrity": "sha512-MrV5puXBfuiy6wl6DLaq3BtIJQAJToAd5zt/ZKhRfGRAuFPALE7/4Y7jnxRQoEgK/pBgurGqLyAuRgZ2xOjr6w==",
+    "marked@18.2.0": {
+      "integrity": "sha512-KaeL+tAbtvI930q7HE2PN5lYXYdT8EiSmxHlN6F3rsfb57wd5mp5W5TLazpdj4inTQBJdgjYwbs40W/0VUGU+Q==",
       "bin": true
     },
     "math-intrinsics@1.1.0": {
@@ -2814,7 +2814,7 @@
         "npm:jsdom@^26.1.0",
         "npm:linkedom@~0.18.12",
         "npm:lucide@1.31.0",
-        "npm:marked@18.0.6",
+        "npm:marked@18.2.0",
         "npm:mime-types@^3.0.2",
         "npm:pdf-lib@1.17.1",
         "npm:postal-mime@3.0.0",
@@ -4015,7 +4015,7 @@
             "npm:@yaks/render@0.2.24",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/vocab@0.2.32",
-            "npm:marked@18.0.6",
+            "npm:marked@18.2.0",
             "npm:preact@10.29.7"
           ]
         }
@@ -4797,7 +4797,7 @@
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/vocab@0.2.32",
             "npm:linkedom@~0.18.12",
-            "npm:marked@18.0.6",
+            "npm:marked@18.2.0",
             "npm:preact@10.29.7"
           ]
         }

@@ -15,7 +15,7 @@
     "@yaks/query": "0.2.32",
     "@yaks/testing": "0.2.30",
     "linkedom": "^0.18.12",
-    "marked": "18.0.6",
+    "marked": "18.2.0",
     "preact": "10.29.7"
   }
 }

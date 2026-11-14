@@ -50,7 +50,7 @@
     "html-rewriter-wasm": "0.4.1",
     "linkedom": "^0.18.12",
     "lucide": "1.31.0",
-    "marked": "18.0.6",
+    "marked": "18.2.0",
     "postal-mime": "3.0.0",
     "preact": "10.29.7",
     "preact-render-to-string": "6.7.0",

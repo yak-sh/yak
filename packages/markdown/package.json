@@ -15,7 +15,7 @@
     "@yaks/id": "0.2.23",
     "@yaks/render": "0.2.24",
     "@yaks/vocab": "0.2.32",
-    "marked": "18.0.6",
+    "marked": "18.2.0",
     "preact": "10.29.7"
   },
   "devDependencies": {
