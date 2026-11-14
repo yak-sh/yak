@@ -7,6 +7,7 @@ import { signed } from '@yaks/graph/provenance'
 import { CallError } from '@yaks/tools/errors'
 import type { Vocab } from '@yaks/vocab'
 import { outputs } from './answer.ts'
+import { step, steps } from './steps.ts'
 import {
   buildFor,
   ids,
@@ -51,68 +52,72 @@ export let supply = async (
   if (!blob?.artifact) {
     throw new CallError('refused', `${ask.artifact} is no artifact`)
   }
-  let plan = await graph.storage.tx(async (tx) => {
-    let result = await reconcile(
-      tx,
-      definition,
-      {
-        ...options,
-        vocab,
-        only: [target],
-        variant: 'main',
-      },
-      undefined,
-      false,
-    )
-    let matches = result.plans.filter((p) => subject(p.binding) == target)
-    if (matches.length != 1) {
-      throw new CallError(
-        'refused',
-        `${ask.for} has ${matches.length} bindings of ${ask.builder}; ` +
-          'supply needs exactly one',
+  // Inside the write's transaction, which over a synchronous store answers
+  // synchronously (./steps.ts): a Durable Object's commits when it returns.
+  let plan = await graph.storage.tx((tx) =>
+    steps(function* () {
+      let result = yield* step(reconcile(
+        tx,
+        definition,
+        {
+          ...options,
+          vocab,
+          only: [target],
+          variant: 'main',
+        },
+        undefined,
+        false,
+      ))
+      let matches = result.plans.filter((p) => subject(p.binding) == target)
+      if (matches.length != 1) {
+        throw new CallError(
+          'refused',
+          `${ask.for} has ${matches.length} bindings of ${ask.builder}; ` +
+            'supply needs exactly one',
+        )
+      }
+      let p = matches[0]
+      if (p.build.startsWith('$')) p.build = crypto.randomUUID()
+      let [before] = yield* step(tx.get([p.build]))
+      p.key = crypto.randomUUID()
+      let writes = start(p, before?.build as Comp | undefined, options.eid)
+      let [run, call] = writes
+      call.call = {
+        ...call.call as Comp,
+        args: {
+          ...ask.args,
+          ...(call.call as Comp).args as Comp,
+          supplied: true,
+        },
+      }
+      call.execution = { state: 'done' }
+      call.cost = { dollars: 0, reported: true }
+      let value = {
+        outputs: [{
+          slot: ask.slot,
+          inputs: ids(p.binding),
+          components: {},
+          artifact,
+        }],
+        cost: 0,
+      }
+      writes.push({
+        entity: { eid: crypto.randomUUID() },
+        result: { call: call.entity.eid, ms: 0 },
+      }, {
+        entity: { eid: crypto.randomUUID() },
+        output: { source: call.entity.eid, value },
+      }, ...yield* step(outputs(tx, run, call, value, vocab, false)))
+      // Reconciliation also refreshed the immediate builder's dependencies.
+      writes.push(
+        ...result.writes.filter((row) =>
+          row.builder_dep || row.$delete ||
+          row.entity.eid == builder && row.builder
+        ),
       )
-    }
-    let p = matches[0]
-    if (p.build.startsWith('$')) p.build = crypto.randomUUID()
-    let [before] = await tx.get([p.build])
-    p.key = crypto.randomUUID()
-    let writes = start(p, before?.build as Comp | undefined, options.eid)
-    let [run, call] = writes
-    call.call = {
-      ...call.call as Comp,
-      args: {
-        ...ask.args,
-        ...(call.call as Comp).args as Comp,
-        supplied: true,
-      },
-    }
-    call.execution = { state: 'done' }
-    call.cost = { dollars: 0, reported: true }
-    let value = {
-      outputs: [{
-        slot: ask.slot,
-        inputs: ids(p.binding),
-        components: {},
-        artifact,
-      }],
-      cost: 0,
-    }
-    writes.push({
-      entity: { eid: crypto.randomUUID() },
-      result: { call: call.entity.eid, ms: 0 },
-    }, {
-      entity: { eid: crypto.randomUUID() },
-      output: { source: call.entity.eid, value },
-    }, ...await outputs(tx, run, call, value, vocab, false))
-    // Reconciliation also refreshed the immediate builder's dependencies.
-    writes.push(
-      ...result.writes.filter((row) =>
-        row.builder_dep || row.$delete ||
-        row.entity.eid == builder && row.builder
-      ),
-    )
-    return { p, writes }
-  })
+      return { p, writes }
+    })
+  )
   await graph.apply(signed(plan.writes, actor), { trusted: true })
   let build = await buildFor(graph, builder, plan.p.binding.entities)
   let output = build && await outputFor(graph, build, ask.slot)

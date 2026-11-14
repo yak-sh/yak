@@ -7,7 +7,7 @@ import { sqliteBlobs } from './sqlite.ts'
 import { hydrate } from './hydrate.ts'
 import { blog, mem } from './testing.ts'
 import { blobSchema } from './sqlite.ts'
-import { by, scan } from '@yaks/sql'
+import { by, scan, type Settled } from '@yaks/sql'
 
 test('an address is the SHA-256 of the text, and nothing else', () => {
   assertEquals(address('a long essay'), sha256('a long essay'))
@@ -81,7 +81,7 @@ let locked = () => {
   let blocked = new Promise<void>((resolve) => release = resolve)
   let store = sqliteBlobs({
     ...db,
-    atomic: <R>(body: () => R | Promise<R>) =>
+    atomic: <R extends Settled>(body: () => R) =>
       blocked.then(() => db.atomic(body)),
     query: (s) => {
       if ((s.t == 'insert' || s.t == 'delete') && !db.inside?.()) {
@@ -128,15 +128,10 @@ let transactional = (() => {
 
 test('blob transaction reads see their own writes while other contexts use committed reads', async () => {
   let { db, store } = transactional
-  let release: () => void = () => {}
-  let blocked = new Promise<void>((resolve) => release = resolve)
-  let writing = db.atomic(async () => {
-    await store.put('pending', encode('pending'))
+  await db.atomic(() => {
+    store.put('pending', encode('pending'))
     assertEquals(store.has('pending'), true)
     assertEquals(decode(store.get('pending') as Uint8Array), 'pending')
-    await blocked
   })
   assertEquals(await store.has('pending'), false)
-  release()
-  await writing
 })

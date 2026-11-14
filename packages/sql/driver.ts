@@ -12,6 +12,20 @@ import { as, col, count, type Expr, select, type Stmt, table } from './ast.ts'
 /** One row, a bag of column values keyed by name. */
 export type Row = Record<string, unknown>
 
+/** Anything but a promise: what the body of a synchronous transaction
+ * returns. One that returned a promise would have its transaction commit at
+ * the first `await`, and run the rest outside it. */
+export type Settled =
+  | null
+  | undefined
+  | void
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | (object & { then?: never })
+
 export type Driver = {
   /** Load a native SQL extension when this engine supports one. */
   extension?: (path: string) => void
@@ -25,9 +39,10 @@ export type Driver = {
    * transactions: commit when it returns, roll back when it throws. Most
    * drivers leave it out and the store opens a savepoint; a Durable Object
    * refuses `savepoint` as a statement and offers `transactionSync`, which is
-   * what this is for. It nests, and it is synchronous.
+   * what this is for. It nests, and it is synchronous: a body that went async
+   * would commit at its first `await` (`Settled`).
    */
-  tx?: <R>(body: () => R) => R
+  tx?: <R extends Settled>(body: () => R) => R
   /**
    * This driver owns a whole SQLite file other processes may have open. The
    * outermost unit then takes the write lock up front (`begin immediate`): a

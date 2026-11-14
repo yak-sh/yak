@@ -25,7 +25,10 @@ deno add jsr:@yaks/durable-object jsr:@yaks/graph jsr:@yaks/vocab jsr:@yaks/api
 over that driver creates the schema, reads components, and applies row changes.
 `ctx.storage.transactionSync` provides the transaction. Storage operations are
 synchronous; graph plugins can make an operation asynchronous, but code
-executing inside `transactionSync` must remain synchronous.
+executing inside `transactionSync` must remain synchronous: it commits when its
+body returns, so a write that awaits inside it commits half way. Such a write is
+reported to the store's `report` (an error named `Halfway`, its stack the
+write's) and goes on as it was; the code that went async is the fix.
 
 Pass an optional observer to `driver(ctx.storage, observe)` or as the fourth
 argument to `storage(ctx.storage, vocab, base, observe)` to receive each drained

@@ -3,6 +3,7 @@
 
 import { loadVocab, pick, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Graph, graph, identityEid, type Tool } from '@yaks/graph'
+import { isPromise } from '@yaks/fp'
 import { type Effects, effects } from '@yaks/effects'
 import { docDoc, docs } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
@@ -122,6 +123,16 @@ export let shop = async (
     report: (err) => void failed.push(err),
   })
   let db = store(vocab)
+  // A Durable Object's transaction commits when its body returns, so a body
+  // that went async there commits half way (@yaks/sqlite `unit`). This store
+  // waits for one, so it is told here among `failed`.
+  let tx = db.tx
+  db.tx = (body, o) =>
+    tx((t) => {
+      let out = body(t)
+      if (isPromise(out)) failed.push(new Error('a transaction went async'))
+      return out
+    }, o)
   let g = graph({
     storage: db,
     vocab,

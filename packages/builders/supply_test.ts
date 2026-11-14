@@ -35,7 +35,7 @@ let ask = (slot = 'main') => ({
 let comp = (row: Bundle, name: string): Comp => row[name] as Comp
 
 test('supply is current, costs zero and rebuilds only after input edits', async () => {
-  let { g, vocab } = await shop()
+  let { g, vocab, failed } = await shop()
   await g.apply(seed())
   let id = await supply(g, vocab, {
     ...ask('song'),
@@ -65,6 +65,7 @@ test('supply is current, costs zero and rebuilds only after input edits', async 
   assertEquals((await g.read('.built.current=true')).length, 0)
   assertEquals(await buildFor(g, ids.builder, [source]), buildId)
   assertEquals(await outputFor(g, buildId, 'song'), id)
+  assertEquals(failed, [])
 })
 
 test('supply adds takes and keeps other chosen slots; replay does not undo a choice', async () => {

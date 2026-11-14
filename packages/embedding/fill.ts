@@ -70,62 +70,65 @@ export let fill = (
   limit = 256,
 ): void | Promise<void> => {
   if (!filling(db)) return
-  return db.atomic(() => {
-    let names = tablesIn(db)
-    while (limit > 0) {
-      let [job] = db.query(select({
-        cols: [col('name'), col('after'), col('last')],
-        from: table(FILL),
-        order: [col('name')],
-        limit: lit(1),
+  return db.atomic(() => filled(db, fields, limit))
+}
+
+/** {@link fill} inside a unit the caller already holds. */
+export let filled = (db: Statements, fields: Field[], limit = 256): void => {
+  let names = tablesIn(db)
+  while (limit > 0) {
+    let [job] = db.query(select({
+      cols: [col('name'), col('after'), col('last')],
+      from: table(FILL),
+      order: [col('name')],
+      limit: lit(1),
+    }))
+    if (!job) return
+    let name = String(job.name)
+    let where = eq(col('name'), val(name))
+    let rows = names.has(name)
+      ? db.query(select({
+        cols: [as(col(key(name)), 'owner')],
+        from: table(name),
+        where: and(
+          gt(col(key(name)), val(Number(job.after))),
+          le(col(key(name)), val(Number(job.last))),
+        ),
+        order: [col(key(name))],
+        limit: val(limit),
       }))
-      if (!job) return
-      let name = String(job.name)
-      let where = eq(col('name'), val(name))
-      let rows = names.has(name)
-        ? db.query(select({
-          cols: [as(col(key(name)), 'owner')],
-          from: table(name),
-          where: and(
-            gt(col(key(name)), val(Number(job.after))),
-            le(col(key(name)), val(Number(job.last))),
-          ),
-          order: [col(key(name))],
-          limit: val(limit),
+      : []
+    let owners = rows.map((r) => Number(r.owner))
+    if (owners.length) {
+      let candidates = select({
+        cols: [as(col('value'), 'owner')],
+        from: from(each(owners), 'ids'),
+      })
+      let vectors = select({
+        cols: [col('owner', 'v')],
+        from: from(candidates, 'o'),
+        joins: [{
+          how: 'cross',
+          src: table(TABLE, 'v'),
+          on: eq(col('owner', 'v'), col('owner', 'o')),
+        }],
+      })
+      for (let q of [...wearers(fields, db.arms, candidates), vectors]) {
+        db.query(queue({
+          q: select({ cols: [col('owner'), lit(1)], from: from(q, 'w') }),
         }))
-        : []
-      let owners = rows.map((r) => Number(r.owner))
-      if (owners.length) {
-        let candidates = select({
-          cols: [as(col('value'), 'owner')],
-          from: from(each(owners), 'ids'),
-        })
-        let vectors = select({
-          cols: [col('owner', 'v')],
-          from: from(candidates, 'o'),
-          joins: [{
-            how: 'cross',
-            src: table(TABLE, 'v'),
-            on: eq(col('owner', 'v'), col('owner', 'o')),
-          }],
-        })
-        for (let q of [...wearers(fields, db.arms, candidates), vectors]) {
-          db.query(queue({
-            q: select({ cols: [col('owner'), lit(1)], from: from(q, 'w') }),
-          }))
-        }
       }
-      if (rows.length < limit || owners.at(-1) == Number(job.last)) {
-        db.query({ t: 'delete', from: FILL, where })
-      } else {
-        db.query({
-          t: 'update',
-          table: FILL,
-          set: { after: val(owners.at(-1)!) },
-          where,
-        })
-      }
-      limit -= rows.length
     }
-  })
+    if (rows.length < limit || owners.at(-1) == Number(job.last)) {
+      db.query({ t: 'delete', from: FILL, where })
+    } else {
+      db.query({
+        t: 'update',
+        table: FILL,
+        set: { after: val(owners.at(-1)!) },
+        where,
+      })
+    }
+    limit -= rows.length
+  }
 }

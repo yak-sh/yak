@@ -14,3 +14,27 @@ export class Unpointed extends Error {
     this.name = 'Unpointed'
   }
 }
+
+/** A write whose body went async inside a transaction that commits when the
+ * body returns (`Driver.tx`, a Durable Object's `transactionSync`): what it
+ * did before its first `await` committed then, and the rest ran outside any
+ * transaction, so a later throw rolled none of it back. One wording, so it is
+ * one bug wherever it happens. Its stack is the write's, deep enough to pass
+ * the driver's wrappers and reach the code that asked for the write. */
+export let halfway = (): Error => {
+  let errors = Error as ErrorConstructor & { stackTraceLimit?: number }
+  let limit = errors.stackTraceLimit
+  errors.stackTraceLimit = 50
+  try {
+    return Object.assign(
+      new Error(
+        'a write went async inside a transaction that commits when its body ' +
+          'returns: what it did after its first await is outside the ' +
+          'transaction',
+      ),
+      { name: 'Halfway' },
+    )
+  } finally {
+    errors.stackTraceLimit = limit
+  }
+}

@@ -480,8 +480,10 @@ export type Opts = BindOpts & {
    * so a number given out before and kept as a name is never given again. */
   names?: Names
   /** Where a failure the store outlives is told: a table that stood and could
-   * not be fitted to the vocabulary, left as it was (ddl.ts `fit`). One
-   * line on the console, by default (ddl.ts `logged`). */
+   * not be fitted to the vocabulary, left as it was (ddl.ts `fit`), or a
+   * write that went async inside a transaction that commits when its body
+   * returns (./error.ts `halfway`). One line on the console, by default
+   * (ddl.ts `logged`). */
   report?: (error: Error) => void
   /** What each of these entities, by id, holds among `names` in the mode
    * this connection reads, where no archetype pointer says (./mode.ts). */
@@ -1600,7 +1602,7 @@ export let storage = (
               })
             },
             'write',
-            { wait: false },
+            { wait: false, report },
           )
         return wait === false
           ? run(() => {})

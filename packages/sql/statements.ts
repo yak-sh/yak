@@ -1,6 +1,6 @@
 // The statement capability a storage adapter lends to indexes beside its
 // graph. It carries no connection, file, native-library path or schema cache.
-import type { Row } from './driver.ts'
+import type { Row, Settled } from './driver.ts'
 import type { Stmt } from './ast.ts'
 
 /** Synchronous statements over the same storage and transaction as the graph.
@@ -19,8 +19,10 @@ export type Statements = {
   /** Invalidation tokens include writes, DDL and rollback, and other hosts. */
   revision: (scope: 'schema' | 'catalog' | 'data') => number
   /** A unit on the adapter's transaction, nested where needed. A held writer
-   * is awaited before the body starts, without blocking the calling thread. */
-  atomic: <R>(body: () => R | Promise<R>) => R | Promise<R>
+   * is awaited before the body starts, without blocking the calling thread.
+   * The body is synchronous: an adapter's transaction may commit when it
+   * returns (`Driver.tx`). */
+  atomic: <R extends Settled>(body: () => R) => R | Promise<R>
   /** Named engine facilities; only the adapter knows how to load them. */
   facilities?: { vector?: () => void }
   /** What this connection reads, where it is not main as it stands: main as

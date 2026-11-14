@@ -1,6 +1,7 @@
-import type { Driver, Stmt } from '@yaks/sql'
+import type { Driver, Settled, Stmt } from '@yaks/sql'
+import { isPromise } from '@yaks/fp'
 import { context, scope } from '@yaks/trace'
-import { busy } from './error.ts'
+import { busy, halfway } from './error.ts'
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 type Owner = { connection: object; active: boolean }
@@ -63,11 +64,23 @@ export let exclusive = <R>(
 // one connection has one transaction however deeply the calls nest.
 let depth = new WeakMap<Driver, number>()
 
+// How many writes have been told `halfway`. A driver's transaction runs its
+// body synchronously to its return, so nothing else runs between a unit's
+// body starting and returning: one nested in it that was told already leaves
+// the enclosing ones untold, and one occurrence is one report.
+let told = 0
+
 // One all-or-nothing unit of work. A driver that owns its own transactions
 // (see `Driver.tx`) is asked for one; otherwise it is `begin immediate` where
 // this driver owns a file and nobody is inside a unit yet, and a SAVEPOINT in
-// plain SQL everywhere else. An async body is settled before the unit closes,
-// so a batch that went async is still rolled back by a rejection.
+// plain SQL everywhere else. On SQL an async body is settled before the unit
+// closes, so a batch that went async is still rolled back by a rejection.
+//
+// A driver's own transaction is synchronous, and commits when the body
+// returns: a body that returned a promise has committed what it did before
+// its first `await`, and does the rest outside any transaction. That is
+// reported to `report` where it happens (./error.ts `halfway`), and the write
+// goes on as it was; the code that went async is the fix.
 //
 // A unit that only reads says so (`read`), and the outermost one then begins
 // deferred: in WAL a reader sees one consistent snapshot without the write
@@ -89,7 +102,12 @@ export let unit = <R>(
   driver: Driver,
   body: () => R,
   mode: 'write' | 'read' = 'write',
-  { wait = true }: { wait?: boolean } = {},
+  { wait = true, report = (e) => console.error(e) }: {
+    wait?: boolean
+    /** Where a write that went async inside a driver's own transaction is
+     * told (./error.ts `halfway`). */
+    report?: (error: Error) => void
+  } = {},
 ): R => {
   let tracing = context()
   let held = depth.get(driver) ?? 0
@@ -98,15 +116,22 @@ export let unit = <R>(
   if (mode == 'read' && (held || !driver.file)) return body()
   if (driver.tx) {
     depth.set(driver, held + 1)
-    let close = () => depth.set(driver, (depth.get(driver) ?? 1) - 1)
-    try {
-      let out = driver.tx(body)
-      if (out instanceof Promise) return out.finally(close) as R
-      close()
+    let watched = () => {
+      let before = told
+      let out = body()
+      if (isPromise(out) && told == before) {
+        told++
+        report(halfway())
+      }
       return out
-    } catch (error) {
-      close()
-      throw error
+    }
+    // The transaction has ended when `tx` returns, whatever its body left
+    // running. A generic body's type can't say it is synchronous; `watched`
+    // tells.
+    try {
+      return driver.tx(watched as () => R & Settled) as R
+    } finally {
+      depth.set(driver, (depth.get(driver) ?? 1) - 1)
     }
   }
   let outer = !!driver.file && held == 0

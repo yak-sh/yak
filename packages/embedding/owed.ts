@@ -45,7 +45,7 @@ import type { Statements } from '@yaks/sql'
 import { after } from '@yaks/fp'
 import type { Bundle } from '@yaks/graph'
 import { type Field, present } from './fields.ts'
-import { fill, filling, queue, schedule } from './fill.ts'
+import { filled, filling, queue, schedule } from './fill.ts'
 import { OWED, TABLE } from './ddl.ts'
 
 let one = (e: Expr): Insert => queue({ rows: [[e, lit(1)]] })
@@ -278,12 +278,9 @@ export let watch = (
         db.query({ t: 'drop', kind: 'trigger', name, ifExists: true })
       }
       for (let t of make) db.query(t)
-      let queued = owed === true
-        ? owe(db, fields)
-        : owed.size
-        ? owe(db, fields, owed)
-        : undefined
-      return after(queued, () => true)
+      if (owed === true) scheduled(db, fields)
+      else if (owed.size) scheduled(db, fields, owed)
+      return true
     }),
     (changed) => {
       watched.set(db, { version: db.revision('schema'), fields: key })
@@ -301,10 +298,13 @@ export let owe = (
   tables?: Set<string>,
 ): void | Promise<void> => {
   let fields = present(db, wanted)
-  return db.atomic(() => {
-    schedule(db, tables ?? [...fields.map((f) => f.comp), TABLE])
-    return fill(db, fields)
-  })
+  return db.atomic(() => scheduled(db, fields, tables))
+}
+
+// {@link owe} inside a unit the caller already holds.
+let scheduled = (db: Statements, fields: Field[], tables?: Set<string>) => {
+  schedule(db, tables ?? [...fields.map((f) => f.comp), TABLE])
+  filled(db, fields)
 }
 
 /** One queued entity, and the count it was read at. */

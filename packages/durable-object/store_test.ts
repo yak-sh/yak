@@ -25,6 +25,28 @@ test('an object binds without looking for a host database file', () => {
   assertEquals(s.read('.doc'), [])
 })
 
+// The object's transaction commits when its body returns, so a write whose
+// body went async did what followed its first await outside it. That is told
+// once where it happens, a nested unit's included, and the write goes on.
+test('a write that went async inside its transaction is told, once', async () => {
+  using db = durable()
+  let told: string[] = []
+  let s = storage(db, shop, { report: (e) => void told.push(e.name) })
+  s.install()
+  let doc = (eid: string) => [{ entity: { eid }, doc: { title: eid } }]
+  await s.tx((tx) => tx.patch(doc('sync')))
+  assertEquals(told, [])
+  await s.tx(async (tx) => {
+    tx.patch(doc('before'))
+    await Promise.resolve()
+  })
+  await s.tx((tx) => s.tx(async () => await tx.patch(doc('nested'))))
+  assertEquals({ told, docs: s.read('.doc').length }, {
+    told: ['Halfway', 'Halfway'],
+    docs: 3,
+  })
+})
+
 test('install is idempotent, and a bundle survives the round trip', async () => {
   using db = durable()
   // The runtime supplies size without a SQL scan. Drive that boundary to

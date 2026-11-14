@@ -142,13 +142,7 @@ export function revision(driver: Driver, scope: Scope): number {
       driver.tx = (body) => {
         let was = { ...current }
         try {
-          let out = tx(body)
-          return out instanceof Promise
-            ? out.catch((error) => {
-              undo(was)
-              throw error
-            }) as typeof out
-            : out
+          return tx(body)
         } catch (error) {
           undo(was)
           throw error

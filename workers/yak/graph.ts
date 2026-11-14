@@ -189,6 +189,7 @@ import {
   type Raw,
   revision,
   select,
+  type Settled,
   type Statements,
   type Stmt,
   table,
@@ -1327,7 +1328,7 @@ export class Store extends Durable {
   // A transaction over this object's storage, through the driver its graph
   // reads with, so the storage beneath sees where each one begins and ends
   // (@yaks/sql `revision`, @yaks/sqlite's memory of entities).
-  #tx<T>(body: () => T): T {
+  #tx<T extends Settled>(body: () => T): T {
     return this.#sql.tx!(body)
   }
 

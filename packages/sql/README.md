@@ -333,12 +333,12 @@ equal(tally(driver, 'book'), 2)
 equal(sent[0], 'insert into "book" ("title") values (?)')
 ```
 
-Optional driver capabilities include `tx` for synchronous transactions,
-`extension` for native SQL extensions, `template` for reusable empty schemas,
-`file` for a database file needing a write lock before reads, `watch` for
-hearing a file change soon after another connection commits to it, and `arms`
-for the engine's compound-select allowance. Async engines wrap execution at
-their own boundary.
+Optional driver capabilities include `tx` for synchronous transactions (its body
+returns a `Settled` value, anything but a promise), `extension` for native SQL
+extensions, `template` for reusable empty schemas, `file` for a database file
+needing a write lock before reads, `watch` for hearing a file change soon after
+another connection commits to it, and `arms` for the engine's compound-select
+allowance. Async engines wrap execution at their own boundary.
 
 A **revision** is a connection-local invalidation token for a schema, catalog,
 or data snapshot. `revision(driver, 'schema')` changes after DDL and after a
@@ -1060,8 +1060,9 @@ equal(writing(stmt), false)
 A **statement capability** runs SQL AST statements over a host's storage without
 exposing its driver, connection or files. `Statements` offers `query`, coherent
 `revision` tokens, `ownership`, the engine's compound-select limit `arms`, and
-`atomic` for a unit of work. Await its result: an adapter may wait
-asynchronously for another writer before entering the body.
+`atomic` for a unit of work. Its body is synchronous (`Settled`), since an
+adapter's transaction may commit when the body returns. Await its result: an
+adapter may wait asynchronously for another writer before entering the body.
 `statements(storage)` requires the optional capability on a storage adapter; it
 refuses if none is offered.
 

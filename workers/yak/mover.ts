@@ -42,6 +42,7 @@ import type { Bundle, Comp, Row } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { isPromise } from '@yaks/fp'
 import { and, conjoin, parse, type Query } from '@yaks/query'
+import type { Settled } from '@yaks/sql'
 import { Unknown, type VocabDoc } from '@yaks/vocab'
 import { GIT_STORE } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
@@ -211,7 +212,7 @@ export type Moving = {
   read: (line: string | Query) => Bundle[] | Promise<Bundle[]>
   rows: (line: string | Query) => Row[] | Promise<Row[]>
   apply: (patch: Bundle[]) => Bundle[] | Promise<Bundle[]>
-  tx: <T>(body: () => T) => T
+  tx: <T extends Settled>(body: () => T) => T
   drop?: (paths: string[]) => void
   /** Whether the store's words declare this component, or its property. */
   speaks: (comp: string, prop?: string) => boolean

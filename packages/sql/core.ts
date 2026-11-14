@@ -99,7 +99,14 @@ export {
   STOCK_VARIABLES,
   VARIABLES,
 } from './render.ts'
-export { type Driver, effect, type Row, scan, tally } from './driver.ts'
+export {
+  type Driver,
+  effect,
+  type Row,
+  scan,
+  type Settled,
+  tally,
+} from './driver.ts'
 export { held, type Tag, tagOf, tallied } from './sqlite.ts'
 export * from './compound.ts'
 export { field, indexName } from './sqlite.ts'
