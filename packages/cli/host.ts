@@ -1018,7 +1018,10 @@ let composed = async (
       }
     }
     let fx = host.fx
-    let effecting = roles.includes('effects')
+    // A read-only host commits nothing, so it owes no effects to work, even
+    // when its roles name them (a graph with no pool runs them where they
+    // are committed).
+    let effecting = roles.includes('effects') && !opts.readOnly
     // Whoever works the effects also works off the schema work a pass owed
     // (@yaks/sqlite/owe), one process at a time under its lease, and does the
     // file's upkeep: its statistics, and once a day a check that each text
@@ -1042,7 +1045,7 @@ let composed = async (
     let tending: Served['upkeep'] = sql.file
       ? (signal, tell) => upkeepThread(config, signal, tell)
       : upkeep
-    let duties = effecting && !opts.readOnly
+    let duties = effecting
       ? [...built.services, {
         name: SCHEMA_DUTY,
         run: (signal: AbortSignal) =>
@@ -1096,7 +1099,7 @@ let composed = async (
     let dutiesHost = serveRoles(g, {
       me: selfEid(),
       roles: [...effecting ? ['effects'] : [], ...duties.map((d) => d.name)],
-      fx: effecting && !opts.readOnly ? fx : undefined,
+      fx: effecting ? fx : undefined,
       services: Object.fromEntries(duties.map((d) => [d.name, d.run])),
       hold: config.lease,
       gone: host.gone,
@@ -1170,7 +1173,7 @@ let composed = async (
         void retire()
         stopping.abort()
         dutiesHost.stop()
-        if (effecting && !opts.readOnly) void drained()
+        if (effecting) void drained()
       },
       close: (code?: number) =>
         closing ??= (async () => {
@@ -1191,7 +1194,7 @@ let composed = async (
           dutiesHost.stop()
           await wait('duty thread', () => opts.thread?.close().catch(lose))
           await wait('thread ending', () => ending)
-          if (effecting && !opts.readOnly) await wait('effects', drained)
+          if (effecting) await wait('effects', drained)
           await wait('duties', () => dutiesHost.close())
           await wait('plugins', () => cleanup('dispose plugins', built.close))
           let shut = async () => {

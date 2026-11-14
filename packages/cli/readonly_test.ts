@@ -161,3 +161,37 @@ test('local read commands leave graph bytes unchanged under a concurrent writer'
     await Deno.remove(dir, { recursive: true })
   }
 })
+
+test('a read-only host opens a graph that runs its effects where they are committed', async () => {
+  let dir = await Deno.makeTempDir({ prefix: 'T-305-unpooled-' })
+  let file = `${dir}/yak.json`, db = `${dir}/graph.db`
+  await Deno.writeTextFile(
+    file,
+    JSON.stringify({
+      db,
+      plugins: ['@yaks/kernel', '@yaks/doc', {
+        use: '@yaks/journal',
+        with: { versions: true },
+      }],
+    }),
+  )
+  let config = read(file)
+  let eid = '12345678-1234-1234-1234-123456789abc'
+  let writer = await compose(config, ['graph', 'effects'], facet, {
+    process: false,
+  })
+  await writer.graph.apply([{ entity: { eid }, doc: { title: 'kept' } }])
+  await writer.close()
+  let reader = await compose(config, ['graph', 'effects'], facet, {
+    process: false,
+    readOnly: true,
+  })
+  try {
+    equal(await reader.graph.get([eid], ['doc']), [{
+      entity: { eid },
+      doc: { title: 'kept' },
+    }])
+  } finally {
+    await reader.close()
+  }
+})
