@@ -643,12 +643,16 @@
       "tool": true,
       "noun": "trial",
       "verb": "tally",
-      "title": "Tally a round of a skill trial",
-      "description": "Print what a round's rows say: for each variant, persona arm and case, how often a person preferred its attempts, how often neither, and how many grabbed them; then the round's known answers, each automated judge's agreement on them, and each judge's verdicts on the rest, a judge that did not pass shown apart as not to be used. Reads only.",
+      "title": "Tally a round of a trial",
+      "description": "Print what a round's rows say. For a skill round: for each variant, persona arm and case, how often a person preferred its attempts, how often neither, and how many grabbed them; then the round's known answers, each automated judge's agreement on them, and each judge's verdicts on the rest, a judge that did not pass shown apart as not to be used. For a match round (trial_match): every side, highest rated first, by its id, with what was measured of it (its place, its rating, and under each question the picks it won and how many people and passing judges made them), the first `few` marked as the ones a decision offers. Reads only.",
       "input": {
         "round": {
           "type": "string",
           "description": "the round: its key as loaded (`copy-r1`), its id or its eid"
+        },
+        "few": {
+          "type": "integer",
+          "description": "of a match round, how many sides a decision may offer (default 4)"
         }
       },
       "required": [
@@ -680,6 +684,65 @@
       },
       "required": [
         "round"
+      ]
+    },
+    "trial_match": {
+      "tool": true,
+      "noun": "trial",
+      "verb": "match",
+      "title": "Plan matches between drafts, images or documents",
+      "description": "Plan a round of pair matches between any sides: drafts of an app, images or documents, by id. Each two sides are a pair under each question asked, so copy and layout can be judged apart. People tap between them, and with a judge each pair is also compared by a model in both orders, asked once trial_cap sets a cap; a judge's verdicts count only once it agrees with enough of the people's picks (trial_pass). trial_tally says where each side stands. Planning again with the same key and sides lands on the same rows.",
+      "input": {
+        "key": {
+          "type": "string",
+          "description": "what the round is found again by (`covers-1`)"
+        },
+        "title": {
+          "type": "string",
+          "description": "what the round is called where people tap"
+        },
+        "sides": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "description": "the ids of the sides: two or more drafts, images or documents"
+        },
+        "questions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "what each pair is asked, one aspect each (`Which says it better?`, `Which looks better?`); none asks which is better as a whole"
+        },
+        "judge": {
+          "type": "object",
+          "description": "a model to compare each pair too: `title`; `provider` and `model`, the names of who is asked; and `question`, the words it is asked, with `$a` and `$b` filled in by the two sides and `$question` by the pair's question, ending by asking for {\"chose\": \"A\" or \"B\" or \"neither\", \"why\": \"...\"} in a ```json block",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "question": {
+              "type": "string"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "question",
+            "provider",
+            "model"
+          ]
+        }
+      },
+      "required": [
+        "key",
+        "sides"
       ]
     },
     "trial_cap": {

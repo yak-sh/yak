@@ -1746,6 +1746,11 @@ export let operatorRequest = async (
     if ('request' in answer) await armed()
     return Response.json(answer)
   }
+  // The space's rounds of matches, and a member's picks in them (matches.ts).
+  if (path == '/operator/matches') {
+    let { matching } = await import('./operator-trials.ts')
+    return Response.json(await matching(store, person, args))
+  }
   // What `from` had here is the person's now (newcomer.ts `keep`).
   if (path == '/operator/handover') {
     let { handOver } = await channels()

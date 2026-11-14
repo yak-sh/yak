@@ -61,7 +61,6 @@ import { earlier } from '@yaks/memory/earlier'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { trialDoc } from '@yaks/trial/vocab'
 import { type Options as Trials, runs as trialRuns } from '@yaks/trial/tools'
-import { asking } from '@yaks/trial/run'
 import { ORACLE } from '@yaks/topic'
 import { runs as memoryRuns } from '@yaks/memory/tools'
 import { held, workNames } from './operator-tasks.ts'
@@ -127,10 +126,11 @@ import { imageNew } from './operator-images.ts'
 import { googleAccounts, googleTold, googleTools } from './operator-google.ts'
 import { notification } from './operator-updates.ts'
 import {
-  answering,
   type Lending,
   pickTools,
   publicity,
+  roundAsking,
+  tappingAt,
   trialRunning,
 } from './operator-trials.ts'
 import {
@@ -1225,8 +1225,9 @@ export let operating = (
   let lending: Lending = { models: implementations, priced, provider, name }
   trialRunning(store, env, lending)
   let trials: Trials = {
-    asking: (round) => asking(g, answering(env, lending, round)),
+    asking: (round) => roundAsking(env, store, lending, round),
     notice: (round) => publicity(dir(), env, round),
+    page: (round) => tappingAt(env, dir(), store, round),
   }
   let catalogue = async <T>(
     from: string,

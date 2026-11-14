@@ -39,7 +39,9 @@ import { type Model, ModelError, type Price, weigh } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
 import { entryStatus, saidOf, textOf } from '@yaks/session'
 import { over } from '@yaks/spawn/over'
+import { render } from '@yaks/text'
 import { unreturned } from './round.ts'
+import { shown, side, sides, vocab } from './sides.ts'
 
 type Row = Record<string, unknown>
 let comp = (b: Bundle | undefined, name: string): Row =>
@@ -191,8 +193,9 @@ export let question = (
   }
 }
 
-/** What a judge of the `pair` form is asked about two attempts, the first
- * shown as A and the second as B, under the pair's `question` (`$question`,
+/** What a judge of the `pair` form is asked about two sides, the first
+ * shown as A and the second as B: an attempt as the parts it is `shown`, any
+ * other side as its `words`, under the pair's `question` (`$question`,
  * empty where the pair asks the whole), and how its reply is read:
  * `{"chose": "A", "why": "..."}`, with `"neither"` for neither. `chose` is the attempt's eid,
  * absent where it said neither; `why` is never empty, so a verdict called
@@ -203,13 +206,16 @@ export let compare = (
   first: Bundle,
   second: Bundle,
   question = '',
+  /** the words of a side that is not an attempt */
+  words: (b: Bundle) => string = () => '',
 ): { text: string; read: (reply: string) => Row | undefined } => {
   let j = comp(judge, 'judge')
   let parts = list(j.shown ?? comp(round, 'round').parts)
   let show = (a: Bundle) =>
-    parts.map((p) => ((comp(a, 'writing').output ?? {}) as Row)[p]).filter((
-      v,
-    ) => v).join('\n\n')
+    a.writing
+      ? parts.map((p) => ((comp(a, 'writing').output ?? {}) as Row)[p])
+        .filter((v) => v).join('\n\n')
+      : words(a)
   return {
     text: fill(str(j.question), {
       a: show(first),
@@ -255,6 +261,17 @@ export type Call = {
  * `keyed`). */
 export type Label = (b: Bundle) => string
 
+// A round's comparisons: those of its attempts, and those answering one of
+// its pairs, whatever their sides are.
+let comparisons = async (g: Graph, r: string, also = '*') => {
+  let rows = (await Promise.all([
+    g.read(`.preference .preference.first.writing.round=${r} ${also}`),
+    g.read(`.preference .preference.pair.pair.round=${r} ${also}`),
+  ])).flat()
+  let seen = new Set<Eid>()
+  return rows.filter((b) => !seen.has(b.entity.eid) && !!seen.add(b.entity.eid))
+}
+
 /**
  * The calls a round still owes, writers first: each attempt with a variant
  * and no output, then each guess with no guesses and each comparison of a
@@ -265,13 +282,14 @@ export let owed = async (
   g: Graph,
   round: Eid,
   labelOf: Label = (b) => str(comp(b, 'doc').title),
+  see?: Asking['see'],
 ): Promise<Call[]> => {
   let r = JSON.stringify(round)
   let [[head], attempts, guesses, compared] = await Promise.all([
     g.get([round]),
     g.read(`.writing .writing.round=${r} *`),
     g.read(`.guess .guess.attempt.writing.round=${r} *`),
-    g.read(`.preference .preference.first.writing.round=${r} *`),
+    comparisons(g, r),
   ])
   let waiting = guesses.filter(unreturned)
   let comparing = compared.filter(unreturned)
@@ -375,13 +393,44 @@ export let owed = async (
       },
     })
   }
+  // A side that is not an attempt is read as its views draw it in words (a
+  // document), or, where this graph does not hold it, as the host sees it.
+  let others = [
+    ...new Set(
+      comparing.flatMap((w) => [
+        str(comp(w, 'preference').first),
+        str(comp(w, 'preference').second),
+      ]).filter((e) => !written.has(e)),
+    ),
+  ]
+  let kept = new Map(
+    (others.length ? await g.get(others) : []).map((b) => [b.entity.eid, b]),
+  )
+  let held = new Map([...kept].filter(([, b]) => b.doc))
+  // Only words are compared: a side held here without them (an image) is
+  // left out, and so is one away that the host does not see. A side kept
+  // elsewhere is no row here, or a bare one its pair's reference made.
+  let away = others.filter((e) =>
+    Object.keys(kept.get(e) ?? { entity: e }).length == 1
+  )
+  let seen = away.length && see ? await see(away) : new Map<Eid, string>()
+  let parts = list(comp(head, 'round').parts)
+  let words = (b: Bundle) =>
+    held.has(b.entity.eid)
+      ? render(sides, shown(b), 'Side', vocab(), side(parts), 'plain')
+      : seen.get(b.entity.eid) ?? ''
+  let sideOf = (e: Eid) =>
+    written.get(e) ?? held.get(e) ??
+      (seen.has(e) ? { entity: { eid: e } } : undefined)
+  let nameOf = (b: Bundle) =>
+    b.writing ? of(b).name : str(comp(b, 'doc').title) || b.entity.eid
   for (let w of comparing) {
     let said = comp(w, 'preference')
-    let [x, y] = [written.get(str(said.first)), written.get(str(said.second))]
+    let [x, y] = [sideOf(str(said.first)), sideOf(str(said.second))]
     let judge = named.get(str(said.judge))
     if (!x || !y || !judge) continue
     let using = judge.using ? comp(judge, 'using') : comp(head, 'using')
-    let label = `${of(x).name} v ${of(y).name} ? ${labelOf(judge)}`
+    let label = `${nameOf(x)} v ${nameOf(y)} ? ${labelOf(judge)}`
     let common = {
       row: w.entity.eid,
       comp: 'preference' as const,
@@ -394,7 +443,7 @@ export let owed = async (
       continue
     }
     let question = str(comp(named.get(str(said.pair)), 'pair').question)
-    let asked = compare(judge, head, x, y, question)
+    let asked = compare(judge, head, x, y, question, words)
     judges.push({
       ...common,
       text: asked.text,
@@ -472,6 +521,9 @@ export type Asking = {
   /** asks one call and waits for what it said: nothing when the run was
    * stopped first, a {@link Stop} when nothing more can be asked */
   ask: (c: Call) => Promise<Said | Stop | undefined>
+  /** the words of sides this graph does not hold (a draft kept elsewhere),
+   * as a judge is shown them, by eid; a side it leaves out is not compared */
+  see?: (eids: Eid[]) => Promise<Map<Eid, string>>
   /** what a call an earlier run asked (`Call.session`) has said since,
    * waiting for it; absent where nothing an earlier run asked lasts */
   again?: (c: Call) => Promise<Said | undefined>
@@ -712,7 +764,10 @@ export let owing = async (
   round: Eid,
   o: { asking?: Asking; label?: Label } = {},
 ): Promise<Owed> => {
-  let [calls, cost] = await Promise.all([owed(g, round, o.label), costs(g)])
+  let [calls, cost] = await Promise.all([
+    owed(g, round, o.label, o.asking?.see),
+    costs(g),
+  ])
   let each = new Map<Call, number>()
   for (let c of calls) {
     let n = cost(c) ?? await o.asking?.quote?.(c)
@@ -745,9 +800,7 @@ export let spent = async (g: Graph, round: Eid): Promise<number> => {
   let rows = (await Promise.all([
     g.read(`.writing.round=${r} .cost .fields=cost.dollars`),
     g.read(`.guess.attempt.writing.round=${r} .cost .fields=cost.dollars`),
-    g.read(
-      `.preference .preference.first.writing.round=${r} .cost .fields=cost.dollars`,
-    ),
+    comparisons(g, r, '.cost .fields=cost.dollars'),
   ])).flat()
   let n = rows.reduce((a, b) => a + (Number(comp(b, 'cost').dollars) || 0), 0)
   return Math.round(n * 1e6) / 1e6

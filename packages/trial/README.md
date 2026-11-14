@@ -296,6 +296,7 @@ show on the skill's public page.
 | tool          | what it does                                                                                               |
 | ------------- | ---------------------------------------------------------------------------------------------------------- |
 | `trial_plan`  | plans a round from its file, refusing any attempt or guess with results: only a run writes those           |
+| `trial_match` | plans a round of matches between any sides, with a judge to compare them where one is given                |
 | `trial_cap`   | says what the round owes and has cost so far; with a cap above that, sets `capped` and the round runs      |
 | `trial_adopt` | makes a variant the skill's text (`content{body}`) and marks it `adopted{skill}`: the skill's next version |
 
@@ -330,6 +331,35 @@ browser and sent again. Opened again, the page starts at the pair the rating
 picks, and Back goes through the pairs chosen before. The same address asked
 with `accept: application/json` answers the decks (`deck` in ./skill.ts).
 
+### Match rounds
+
+A round of matches (`@yaks/trial/match`) develops no skill and has no writers:
+its sides are whatever is to be chosen between, by eid (drafts of an app,
+images, documents), and each two of them are a pair under each question asked.
+People tap between them, and a judge of the `pair` form, given with the round,
+compares each pair in both orders once a cap runs it. `trial_match` plans one
+(`matched`), and planning again with the same key lands on the same rows.
+
+Where each side stands is `places(all)`: rated under each question apart from
+every person's taps and the verdicts of each judge that passed the round's known
+answers, highest first, never stored. `measured(place, of)` says it in a line a
+decision's choice carries, and `trial_tally` on a match round lists every side
+that way, the first `few` (four) marked as the ones to offer.
+
+```ts
+import { matched, measured, places } from '@yaks/trial/match'
+
+let made = matched({ key: 'r1', title: 'Covers', sides: ['x', 'y'] })
+let pair = made.find((b) => b.pair)!
+let tap = {
+  entity: { eid: 't' },
+  created: { by: 'ada' },
+  preference: { first: 'x', second: 'y', chose: 'x', pair: pair.entity.eid },
+}
+let [first] = places([...made, tap])
+console.log(measured(first, 2)) // First of 2 by its rating, 131: chosen in 1 of 1 pick by 1 person
+```
+
 ### Known answers
 
 An automated judge earns trust the way a new reviewer does: answers already
@@ -363,14 +393,17 @@ nobody else's.
   attempts, and both must be attempts at a `riddle` case.
 - Neither, or the same score for both, is a verdict that agrees with no answer.
 
-A judge of the `pair` form compares: it sees two attempts as A and B, and the
+A judge of the `pair` form compares: it sees two sides as A and B, and the
 pair's question as `$question`, and answers `{"chose": "A", "why": "..."}`, or
-`"neither"`. It reads attempts, so `yak trial compare` plans it only over pairs
-of attempts. A round's file lists `compared: [{judge, pairs?}]`, and each pair
-of the file (or the `pairs` named) is planned in both orders, so a judge that
-leans to the first or second it is shown splits and agrees with no answer. Each
-verdict is a `preference` naming the judge, planned until it has a `chose` or a
-`why`; `yak trial run` asks it like any other judgement.
+`"neither"`. It reads words: an attempt's parts it is `shown`, a document as its
+views draw it in words, and a side this graph does not hold (a draft kept in
+another store) as the host's `Asking.see` gives it. A side with no words, an
+image, is not compared, so `yak trial compare` plans it only over pairs of
+attempts and documents. A round's file lists `compared: [{judge, pairs?}]`, and
+each pair of the file (or the `pairs` named) is planned in both orders, so a
+judge that leans to the first or second it is shown splits and agrees with no
+answer. Each verdict is a `preference` naming the judge, planned until it has a
+`chose` or a `why`; `yak trial run` asks it like any other judgement.
 
 A judge **passes** a round when its pick is the winner on at least the round's
 `passing{share}` of the known answers it sat. That share is a person's to set

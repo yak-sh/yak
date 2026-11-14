@@ -1912,6 +1912,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     space: 'New space',
     operator: 'Operator',
     updates: 'Updates',
+    matches: 'Matches',
     apps: 'Apps',
     people: 'People',
     connections: 'Connections',

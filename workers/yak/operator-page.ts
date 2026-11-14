@@ -2064,6 +2064,37 @@ export let updatesPage = async (
   })
 }
 
+/** A space's Matches (matches.ts), beside the chat app's side: the rounds
+ * to pick in, or with `?round=` one round's next pair. */
+export let matchesPage = async (
+  req: Request,
+  env: Env,
+  space: Space,
+  who: Who,
+  beside: Beside = {},
+) => {
+  let { matches, matchesOf } = await import('./matches.ts')
+  let round = new URL(req.url).searchParams.get('round')
+  let [read, news] = await Promise.all([
+    matchesOf(env, space, who, round ? { round } : {}),
+    updatesOf(env, space, who),
+  ])
+  return talkPage(env, space, who, beside, {
+    title: 'Pick between drafts',
+    status: 200,
+    waiting: news.updates.filter((u) => u.needs).length,
+    current: ['updates'],
+    here: managePath('matches', space.slug) +
+      (round ? `?round=${encodeURIComponent(round)}` : ''),
+    skip: ['#content', 'Skip to content'],
+    main: h(
+      'div',
+      { class: 'Talk_Column Updates' },
+      matches(space, read as Parameters<typeof matches>[1]),
+    ),
+  })
+}
+
 // The chat app's script: the box mounted over what the server drew
 // (operator-box.ts), its words the person's drafts and where they and Stop
 // go, talking instead of typing, and the conversation kept current from the

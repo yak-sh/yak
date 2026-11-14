@@ -1,8 +1,9 @@
 /**
  * The tools: `trial_plan` plans a round from its file (./round.ts `load`),
+ * `trial_match` plans a round of matches between any sides (./match.ts),
  * `trial_cap` says what the round owes and sets the cap that runs it
- * (./effects.ts), `trial_tally` reads a skill round's rows and says what they
- * say (./skill.ts `tally`), `trial_pass` sets how much of the known answers a
+ * (./effects.ts), `trial_tally` reads a round's rows and says what they say
+ * (./skill.ts `tally`, or for a match round where each side stands), `trial_pass` sets how much of the known answers a
  * judge of the round must get right, `trial_hold` marks the pairs whose tap
  * is kept from selectors (./skill.ts `hold`), and `trial_adopt` makes a
  * variant its skill's next version. Those that write a mark answer their
@@ -17,6 +18,7 @@ import { Refused } from '@yaks/graph/errors'
 import { actorOf, signed } from '@yaks/graph/provenance'
 import type { Runs } from '@yaks/graph/tools'
 import { said } from '@yaks/tools/result'
+import { type Match, matched, ranking } from './match.ts'
 import { find, gather, keyed, load } from './round.ts'
 import { type Asking, owes, owing, spent } from './run.ts'
 import { hold, type RoundFile, tally } from './skill.ts'
@@ -28,6 +30,8 @@ import { hold, type RoundFile, tally } from './skill.ts'
 export type Options = {
   asking?: (round: Bundle) => Asking | Promise<Asking>
   notice?: (round: Bundle) => string | undefined | Promise<string | undefined>
+  /** where people tap through a round's pairs, which a match's answer names */
+  page?: (round: Bundle) => string | undefined | Promise<string | undefined>
 }
 
 // The host's notice, after an answer that comes before a round runs.
@@ -70,6 +74,38 @@ let plan = (file: unknown): RoundFile => {
   return f
 }
 
+// A match's arguments, or a refusal: two sides at least to match.
+let match = (args: Record<string, unknown>): Match => {
+  let words = (v: unknown) =>
+    Array.isArray(v) ? v.map(String).map((w) => w.trim()).filter((w) => w) : []
+  let key = String(args.key ?? '').trim()
+  if (!key) throw new Refused('a match round needs its `key`')
+  let sides = [...new Set(words(args.sides))]
+  if (sides.length < 2) throw new Refused('a match needs two sides at least')
+  let judge = args.judge as Match['judge'] | undefined
+  for (let need of ['question', 'provider', 'model'] as const) {
+    if (judge && !String(judge[need] ?? '').trim()) {
+      throw new Refused(`a judge needs its \`${need}\``)
+    }
+  }
+  return {
+    key,
+    title: String(args.title ?? '').trim() || key,
+    sides,
+    questions: words(args.questions),
+    ...judge
+      ? {
+        judge: {
+          title: String(judge.title ?? '').trim() || `The judge of ${key}`,
+          question: String(judge.question),
+          provider: String(judge.provider).trim(),
+          model: String(judge.model).trim(),
+        },
+      }
+      : {},
+  }
+}
+
 /** The tools this package runs. */
 export let runs = (o: Options = {}): Runs => ({
   trial_plan: async (call, graph) => {
@@ -83,6 +119,28 @@ export let runs = (o: Options = {}): Runs => ({
       removed ? `, ${removed} rows of the last plan removed` : ''
     }. trial_cap says what it will cost.`
     return [said(call, await noticed(o, graph, round, line))]
+  },
+  trial_match: async (call, graph) => {
+    let m = match(argsOf(call))
+    let made = matched(m)
+    await graph.apply(signed(made, actorOf([call])))
+    let eid = await find(graph, m.key)
+    let [row] = await graph.get([eid])
+    let at = await o.page?.(row)
+    let pairs = made.filter((b) => b.pair).length
+    let judged = made.filter((b) => b.preference).length
+    return [
+      said(
+        call,
+        `${m.key} is planned: ${m.sides.length} sides in ${pairs} pairs${
+          judged
+            ? `, and ${judged} verdicts of its judge to ask, which trial_cap says the cost of`
+            : ''
+        }.${
+          at ? ` People tap between them at ${at}.` : ''
+        } trial_tally says where each side stands.`,
+      ),
+    ]
   },
   trial_cap: async (call, graph) => {
     let { round, cap } = argsOf(call)
@@ -163,7 +221,15 @@ export let runs = (o: Options = {}): Runs => ({
       graph,
       await find(graph, String(argsOf(call).round)),
     )
-    return [said(call, tally(all, await keyed(graph, all)))]
+    let round = all.find((b) => b.round)?.round as { skill?: unknown }
+    return [
+      said(
+        call,
+        round?.skill
+          ? tally(all, await keyed(graph, all))
+          : ranking(all, Number(argsOf(call).few) || 4),
+      ),
+    ]
   },
   trial_pass: async (call, graph) => {
     let { round, share } = argsOf(call)

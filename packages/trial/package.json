@@ -18,7 +18,8 @@
     "./page": "./page.ts",
     "./cli": "./cli.ts",
     "./main": "./main.ts",
-    "./arrive": "./arrive.ts"
+    "./arrive": "./arrive.ts",
+    "./match": "./match.ts"
   },
   "license": "Apache-2.0",
   "description": "Trials as rows. Scores a way of assembling an agent's context on the corrections it missed, and develops a skill by rounds: candidate texts, cases, attempts, a person's taps between pairs and a judge's guesses, loaded from a file and tallied.",
@@ -41,6 +42,7 @@
     "@yaks/render": "0.2.24",
     "@yaks/session": "0.2.33",
     "@yaks/spawn": "0.2.28",
+    "@yaks/text": "0.2.24",
     "@yaks/tools": "0.2.30",
     "@yaks/vocab": "0.2.32"
   },
@@ -52,7 +54,6 @@
     "@yaks/ram": "0.2.24",
     "@yaks/task": "0.2.23",
     "@yaks/testing": "0.2.30",
-    "@yaks/text": "0.2.24",
     "linkedom": "^0.18.12"
   }
 }

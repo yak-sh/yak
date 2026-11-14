@@ -1,8 +1,9 @@
 ---
 # How the Operator answers an open-ended creative request (D-453's loop:
 # diverge, measure, select, iterate): several drafts of one app at once
-# (public/docs/files.md, Drafts), one decision whose choices show them
-# (decision_new, `shows`), and a memory of what was chosen.
+# (public/docs/files.md, Drafts), matches that narrow more than four
+# (@yaks/trial/match, the space's Matches page), one decision whose choices
+# show them (decision_new, `shows`), and a memory of what was chosen.
 doc:
   title: 'Several directions'
 ---
@@ -21,9 +22,19 @@ and let them choose:
 3. Ask one decision (decision_new) with a choice for each draft, showing it by
    its id in `shows`, with a description of a line on how it differs. Recommend
    the one you would pick.
-4. When they choose, release that draft (app_deploy, naming it) and close the
+4. A decision offers at most four. With more drafts than that (more directions
+   were worth trying, or others made some too), narrow them by matches first:
+   trial_match with the drafts' ids as its sides and the question the round
+   settles ("Which looks better?", "Which says it better?"), then tell the
+   space's members where to pick (the link its answer gives) with
+   notification_send. A judge can compare them too, from the space's budget:
+   give trial_match a judge, quote it with trial_cap at 0, and set a cap only
+   once the person agrees to what it costs. Once picks are in, trial_tally lists
+   every draft highest first; ask the decision between the first four, each
+   choice's description ending with what trial_tally says was measured of it.
+5. When they choose, release that draft (app_deploy, naming it) and close the
    others (app_files, op discard).
-5. Save the choice with store_memory_save: in `said`, the reason they gave in
+6. Save the choice with store_memory_save: in `said`, the reason they gave in
    their words, or the choice they pressed where they gave none; in `context`,
    what it was chosen over; in `about`, the app. Start the next round from the
    released draft with that memory, trying the other aspect: the words when this

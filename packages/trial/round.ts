@@ -220,14 +220,14 @@ export let compare = async (
     let p = comps(b, 'preference')
     return match(p.first, p.second, asks.get(String(p.pair)) ?? '')
   }))
-  // A judge of this form reads attempts, so it compares only pairs of them.
+  // A judge of this form reads words, so it compares only pairs of attempts
+  // and documents.
   let sides = [
     ...new Set(pairs.flatMap((p) => [comps(p, 'pair').a, comps(p, 'pair').b])),
   ].map(String)
   let written = new Set(
-    (await g.get(sides, ['writing'])).filter((b) => b?.writing).map((b) =>
-      b.entity.eid
-    ),
+    (await g.get(sides, ['writing', 'doc'])).filter((b) => b?.writing || b?.doc)
+      .map((b) => b.entity.eid),
   )
   let made = pairs.flatMap((p) => {
     let { a, b, question } = comps(p, 'pair') as {

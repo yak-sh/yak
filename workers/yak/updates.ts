@@ -94,11 +94,11 @@ let stamp = (u: Update) => h(Time, { at: u.at, class: 'Update_When' })
 // question that shows it, or an app's draft, at the reader's own preview
 // link (`shownAnswer`).
 let shownAt = (space: Space, u: Update, s: Shown) =>
-  `${managePath('updates', space.slug)}?${
-    s.artifact
-      ? `shown=${encodeURIComponent(u.eid)}&eid=${encodeURIComponent(s.eid)}`
-      : `draft=${encodeURIComponent(s.eid)}`
-  }`
+  s.artifact
+    ? `${managePath('updates', space.slug)}?shown=${
+      encodeURIComponent(u.eid)
+    }&eid=${encodeURIComponent(s.eid)}`
+    : draftAt(space, s.eid)
 
 // What a choice shows, drawn by its components: a picture, a file to open,
 // prose, or else an app, its draft in a frame.
@@ -395,6 +395,32 @@ export let updatesAnswer = async (
   })
 }
 
+/** A file kept in the space, as a page shows it: a picture in place, and
+ * anything else saved. */
+export let fileAnswer = async (
+  env: Env,
+  space: Space,
+  file: { address: string; media_type: string },
+) => {
+  let kept = await env.BLOBS.get(attachmentKey(space, file.address))
+  if (!kept) return new Response('That file is missing.', { status: 404 })
+  let shows = PICTURES.includes(file.media_type)
+  return new Response(await kept.arrayBuffer(), {
+    headers: {
+      'content-type': shows ? file.media_type : 'application/octet-stream',
+      'content-disposition': shows ? 'inline' : 'attachment',
+      'x-content-type-options': 'nosniff',
+      'content-security-policy': "sandbox; default-src 'none'",
+      'cache-control': 'private, no-store',
+    },
+  })
+}
+
+/** Where a draft of one of the space's apps is read in a page's frame: the
+ * reader's own preview link of it (`shownAnswer`). */
+export let draftAt = (space: Space, draft: string) =>
+  `${managePath('updates', space.slug)}?draft=${encodeURIComponent(draft)}`
+
 /** What a choice of a person's question shows, read from their Updates
  * (`?shown=<question>&eid=<file>`): a file kept in the space, a picture
  * opening in place and anything else saved; or an app's draft
@@ -417,19 +443,7 @@ export let shownAnswer = async (
     }).catch((e) => e?.status == 404 ? null : Promise.reject(e)) as
       | { address: string; media_type: string }
       | null
-    if (!file) return missing('file')
-    let kept = await env.BLOBS.get(attachmentKey(space, file.address))
-    if (!kept) return missing('file')
-    let shows = PICTURES.includes(file.media_type)
-    return new Response(await kept.arrayBuffer(), {
-      headers: {
-        'content-type': shows ? file.media_type : 'application/octet-stream',
-        'content-disposition': shows ? 'inline' : 'attachment',
-        'x-content-type-options': 'nosniff',
-        'content-security-policy': "sandbox; default-src 'none'",
-        'cache-control': 'private, no-store',
-      },
-    })
+    return file ? fileAnswer(env, space, file) : missing('file')
   }
   if (!q.has('draft')) return undefined
   if (!env.SESSION_SECRET) return missing('draft')

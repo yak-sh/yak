@@ -54,8 +54,15 @@ An open-ended request, where the right answer depends on the person's taste
    different words.
 2. Ask one decision with `decision_new`, a choice for each draft, its `shows`
    the draft's id. The person sees each draft's preview above its button.
-3. Release the chosen draft with `app_deploy` and discard the rest.
-4. Save what was chosen and the reason they gave with `store_memory_save`, and
+3. A decision offers at most four choices, so more drafts are narrowed by
+   matches first. The space's Operator does it (ask it with `operator_chat`,
+   naming the drafts): it pairs every two drafts under each question asked, the
+   space's members tap between them on its Matches page
+   (`/manage/<space>/matches`), and a model judge can compare them too, spent
+   from the space's budget. It then asks the decision between the four rated
+   highest, each choice's description saying what was measured of it.
+4. Release the chosen draft with `app_deploy` and discard the rest.
+5. Save what was chosen and the reason they gave with `store_memory_save`, and
    write the next round from the released draft with it.
 
 A request with one obvious answer gets one draft and no decision.
