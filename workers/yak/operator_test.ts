@@ -312,6 +312,27 @@ test('the space budget, rather than twelve model rounds, bounds the operator', (
   assertEquals(pastTwelve.status, 'settled')
 })
 
+let efforts: (string | undefined)[] = []
+let reasoned = (effort?: string) =>
+  operate(
+    operatorMemory(),
+    roundsPlatform,
+    operatorModel((req) => {
+      efforts.push(req.effort)
+      return Promise.resolve({
+        id: crypto.randomUUID(),
+        model: req.model,
+        items: [{ kind: 'assistant', text: 'Done.' }],
+        cost: 0.001,
+      })
+    }),
+  ).run(roundsHeld, roundsSpace, { say: 'Look.', ...effort ? { effort } : {} })
+await reasoned('xhigh')
+await reasoned()
+test("a run's effort is what its model is asked with, and the model's default where it names none", () => {
+  assertEquals(efforts, ['xhigh', undefined])
+})
+
 let homeSpace = (await f.dir.space('home'))!
 let pa = await operatorContext(
   f.env,

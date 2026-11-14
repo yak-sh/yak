@@ -1136,7 +1136,11 @@ export let operating = (
   // it writes the input (@yaks/model `requesting`), and the provider's answer
   // records the window, output limit and price its catalogue lists for the
   // model (@yaks/session `providerResolver`).
-  let usingOf = (model = name, from = provider) => ({ provider: from, model })
+  let usingOf = (model = name, from = provider, effort?: string) => ({
+    provider: from,
+    model,
+    ...effort ? { effort } : {},
+  })
   let using = usingOf()
   // The session an ask is an entry of.
   let sessionOf = async (ask?: string) => {
@@ -2004,7 +2008,7 @@ export let operating = (
     // its conversations raised, is its own words, not the person's it is
     // said for (unseen.ts).
     ...OWN.has(o.channel ?? '') ? { system: {} } : {},
-    using: usingOf(o.model, o.provider),
+    using: usingOf(o.model, o.provider, o.effort),
     $actor: { by, via: session },
   })
   // What the person said before on the subject of the words they now give
@@ -2276,11 +2280,13 @@ export let operating = (
     if (typeof args.model == 'string' && selected.model != args.model) {
       throw await unknown(args.model, selected.provider)
     }
+    let effort = typeof args.effort == 'string' ? args.effort : undefined
     let { task, session, input } = await ask(held, space, args, {
       task: crypto.randomUUID(),
       chat: true,
       from: 'an outside agent',
       ...selected,
+      ...effort ? { effort } : {},
       ...files.length ? { files } : {},
       ...o,
     })
@@ -2507,6 +2513,9 @@ export type Asking = {
   // answered by the Operator's own.
   model?: string
   provider?: string
+  // How much that model reasons before it answers (@yaks/model
+  // `Request.effort`); its provider's default where absent.
+  effort?: string
 }
 type Asker = Pick<Held, 'person' | 'administrative'>
 export type Operator = {

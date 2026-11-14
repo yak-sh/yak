@@ -64,6 +64,12 @@ let chat: Omit<Tool, 'title' | 'description'> = {
       ),
       provider: str('The configured model provider to use for this run.'),
       model: str('The model the selected provider lists for this run.'),
+      effort: {
+        type: 'string',
+        enum: ['low', 'medium', 'high', 'xhigh', 'max'],
+        description:
+          "How much the model reasons before it answers in this run. Omit for the model's default.",
+      },
       attachments: {
         type: 'array',
         items: { type: 'string' },
