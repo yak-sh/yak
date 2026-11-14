@@ -887,7 +887,7 @@ export type Row = {
   starter?: { dollars?: number | null }
   visitor_share?: { percent?: number | null; calls?: number | null }
   started?: { space?: Id | null }
-  newcomer?: { at?: string }
+  newcomer?: { at?: string; campaign?: string | null }
   visitor_build?: { at?: string }
   preview?: { site?: string | null; at?: string | null }
   created?: { at?: string; by?: Id | null }
@@ -2122,6 +2122,10 @@ let heldOf = (rows: ReadRow[]) =>
       }]
       : []
   })
+
+/** Whom a funnel step is for, and the campaign it counts under
+ * (`stepper`). */
+export type Stepper = { who: string | null; campaign: string }
 
 /** What to call a person, where their letters go and the number they gave. */
 export type Known = { name: string; email: string; phone: string | null }
@@ -3567,6 +3571,16 @@ export let directoryRows = (rows: {
     // Whether this person is a newcomer (`newcomerIs`).
     newcomer: async (person: string) =>
       newcomerIs(await one(`.entity.eid=${person}`)),
+    // Whom a funnel step this person takes away from any request is for, and
+    // the campaign it counts under (funnel.ts `step`): their address, and the
+    // campaign a newcomer came to the box by (identity.ts `begun`).
+    stepper: async (person: string): Promise<Stepper> => {
+      let row = await one(`.entity.eid=${person}`)
+      return {
+        who: row?.email?.address ?? null,
+        campaign: row?.newcomer?.campaign ?? '',
+      }
+    },
     // All at once, from the person's one row: what to call them, where to
     // write to them and the mobile number they gave. Null for anybody the platform has no address for.
     known: async (person: string) =>

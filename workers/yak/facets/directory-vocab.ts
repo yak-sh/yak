@@ -459,11 +459,17 @@ export let directoryDoc: VocabDoc = {
     // When a person came in by the home page's box (newcomer.ts), before they
     // had an address: a newcomer (directory.ts `newcomer`) until they sign in
     // on that browser or their space is erased, when the row goes
-    // (erase.ts `vacated`).
+    // (erase.ts `vacated`). `campaign` is the one their arrival named
+    // (arrival.ts `campaign`), '' for none, which the funnel counts their
+    // steps under when no request of theirs is there to say it (directory.ts
+    // `stepper`).
     newcomer: {
       component: true,
       type: 'object',
-      properties: { at: { type: 'string', format: 'date-time' } },
+      properties: {
+        at: { type: 'string', format: 'date-time' },
+        campaign: text,
+      },
     },
     // When the home page's box opened this space for a newcomer
     // (newcomer.ts `oneBuild`). It stays once they keep it, so the platform

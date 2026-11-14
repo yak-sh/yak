@@ -39,6 +39,7 @@ test("a step is written under the platform, saying what a view says and its camp
   step({ VIEWS: views }, 'started', visit('ClaudeBot/1.0'))
   step({ VIEWS: views }, 'returned')
   step({ VIEWS: views }, 'first_app', undefined, { who: 'e2e@bot.yak.sh' })
+  step({ VIEWS: views }, 'first_deploy', undefined, { campaign: 'meta//pilot' })
   step(
     { VIEWS: views },
     'home',
@@ -69,6 +70,12 @@ test("a step is written under the platform, saying what a view says and its camp
     {
       indexes: [FUNNEL],
       blobs: ['', 'first_app', '', '', '', 'test', '', '', ''],
+      doubles: [0],
+    },
+    // One taken away from a request counts under its taker's campaign.
+    {
+      indexes: [FUNNEL],
+      blobs: ['', 'first_deploy', '', '', '', '', 'meta//pilot', '', ''],
       doubles: [0],
     },
     {

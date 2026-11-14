@@ -221,6 +221,7 @@ import { WHO } from './signed.ts'
 import { versionOf } from './running.ts'
 import { background, caught, failing, refusing } from './defects.ts'
 import { step } from './funnel.ts'
+import { arrival, campaign } from './arrival.ts'
 import * as ads from './ads.ts'
 import { Blocked, consentEid, shown } from '@yaks/phone'
 import { credit } from './referral.ts'
@@ -925,7 +926,10 @@ let begun = async (req: Request, env: Env, said: string, org = '') => {
     await meta(env).apply([{
       entity: { eid: person },
       person: {},
-      newcomer: { at: new Date().toISOString() },
+      newcomer: {
+        at: new Date().toISOString(),
+        campaign: campaign(arrival(req)),
+      },
     }], KERNEL)
     set = await minted(req, env, secret(env), person)
   }

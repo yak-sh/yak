@@ -28,6 +28,8 @@ import { answer } from './admin.ts'
 import { type Id, idOf, META } from './directory.ts'
 import { meta } from './meta.ts'
 import { COOKIE, sign } from './lib/token.ts'
+import { COOKIE as CAME } from './arrival.ts'
+import { CHECK } from '@yaks/platform/bots'
 import type { Ctx } from './tool.ts'
 import { TOOLS } from './tools.ts'
 import { PUBLISHED } from './published.ts'
@@ -93,6 +95,7 @@ let sitedSaid = parseHTML(
 
 let newcomer = await k.dir.newcomer(owner)
 let known = await k.dir.known(owner)
+let steps = await k.dir.stepper(owner)
 
 // Keeping: Dana, new here, gives her address in the first chat's card and
 // spends the code the letter brings, on the browser she built on; Ana, who
@@ -179,14 +182,16 @@ let pastWeek = await swept(KEEPING + hour)
 
 // An agent checking the path keeps a fourth as a test account: the day counts
 // it, and the admin's page leaves it off unless asked for tests.
-let checked = await build('A reading list', { ip: '203.0.113.11' })
+// It came by the check's link, so its steps away from any request count
+// under that campaign, as a test's.
+let checked = await build('A reading list', {
+  ip: '203.0.113.11',
+  cookie: `${CAME}=utm_source=${CHECK}&at=1`,
+})
 let checkedSpace = (await k.dir.space(spaceOf(checked)))!
-await keep(
-  env,
-  k.dir,
-  (await k.dir.owners(checkedSpace))[0],
-  await person('e2e@bot.yak.sh'),
-)
+let checker = (await k.dir.owners(checkedSpace))[0]
+let checkerSteps = await k.dir.stepper(checker)
+await keep(env, k.dir, checker, await person('e2e@bot.yak.sh'))
 
 // The admin's Visitor builds page, read once everything above is done.
 let root = await person('root@example.com')
@@ -284,6 +289,11 @@ test("a newcomer's build at its budget asks for their email, not a plan", () => 
 test('a newcomer is a person with no address yet', () => {
   assert(newcomer)
   assertEquals(known, null)
+})
+
+test("a newcomer's steps away from the box count under the campaign they came to it by", () => {
+  assertEquals(steps, { who: null, campaign: '' })
+  assertEquals(checkerSteps, { who: null, campaign: `${CHECK}//` })
 })
 
 test("keeping into an account takes the newcomer's browser, and their row goes", () => {

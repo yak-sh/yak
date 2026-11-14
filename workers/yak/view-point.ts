@@ -90,14 +90,20 @@ export let FUNNEL = 'yaks.app'
  * says what a view says of it, and after it the campaign its arrival names
  * (arrival.ts), the call to action clicked, for a click (funnel.ts
  * `clicked`), and the home page variant its visitor was shown (variant.ts); a
- * step taken away from any request (a person coming back) says only the step.
- * A step a test account took (@yaks/platform/bots) says `test` where a view
- * says who asked, so it is counted apart from a person's.
+ * step taken away from any request (a person coming back, a newcomer's first
+ * app) says only the step and the campaign `came`, the one its taker arrived
+ * by (directory.ts `stepper`). A step a test account took
+ * (@yaks/platform/bots) says `test` where a view says who asked, so it is
+ * counted apart from a person's.
  */
 export let stepOf = (
   step: string,
   req?: Visited,
-  { button = '', test = false }: { button?: string; test?: boolean } = {},
+  { button = '', test = false, came = '' }: {
+    button?: string
+    test?: boolean
+    came?: string
+  } = {},
 ) => {
   let url = req && new URL(req.url)
   let p = point({
@@ -111,7 +117,7 @@ export let stepOf = (
     status: 0,
   })
   p.blobs.push(
-    clipped(req ? campaign(arrival(req)) : ''),
+    clipped(req ? campaign(arrival(req)) : came),
     clipped(button),
     clipped(req ? variant(req) : ''),
   )

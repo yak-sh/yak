@@ -123,18 +123,25 @@ export type Who = string | null | readonly (string | null)[]
  * (crawlers.ts `isPerson`): a crawler's, an assistant's or a script's, such
  * as an agent going through the sign-up live, counts as nothing. One for a
  * test account (`who`, @yaks/platform/bots), such as an agent signing up
- * through a browser, is counted apart from a person's.
+ * through a browser, is counted apart from a person's. One taken away from a
+ * request counts under the `campaign` its taker came by (directory.ts
+ * `stepper`), so an agent's check's newcomer building is counted apart too.
  */
 export let step = (
   env: Pick<Env, 'VIEWS'>,
   name: Step,
   req?: Request,
-  { button, who }: { button?: string; who?: Who } = {},
+  { button, who, campaign }: { button?: string; who?: Who; campaign?: string } =
+    {},
 ) => {
   if (!env.VIEWS || (req && !isPerson(req))) return
   try {
     env.VIEWS.writeDataPoint(
-      stepOf(name, req as Visited | undefined, { button, test: tested(who) }),
+      stepOf(name, req as Visited | undefined, {
+        button,
+        test: tested(who),
+        came: campaign,
+      }),
     )
   } catch (e) {
     caught(e, { request: 'funnel write' })
