@@ -139,14 +139,18 @@ let kept = <K extends 'person' | 'called' | 'opens'>(
 
 /** What the page holds once a frame's lines have come: each line in its
  * place, or after the others when new, drawn from its entries from now on,
- * and what they are drawn with gathered. */
+ * and what they are drawn with gathered. A line of the person's own words
+ * stays theirs, however it came. */
 export let heard = (was: Held, sent: Lines): Held => {
   let lines = [...was.lines]
+  let theirs = new Set(
+    drawLines(sent).flatMap((l) => l.is == 'theirs' ? [l.id] : []),
+  )
   for (let { id, uses } of sent.lines) {
     let at = lines.findIndex((l) => l.id == id)
-    let mine = at >= 0 && lines[at].mine ? { mine: true } : {}
+    let mine = theirs.has(id) || at >= 0 && lines[at].mine ? { mine: true } : {}
     if (at >= 0) lines[at] = { id, uses, ...mine }
-    else lines.push({ id, uses })
+    else lines.push({ id, uses, ...mine })
   }
   let helpers = new Map(was.beside.helpers.map((h) => [helperKey(h), h]))
   for (let h of sent.helpers ?? []) helpers.set(helperKey(h), h)
@@ -168,15 +172,20 @@ export let heard = (was: Held, sent: Lines): Held => {
 }
 
 /** A read of the whole conversation over what the page held: the read's
- * lines, and the person's own words the page showed that the read left out,
- * put back where they were (`missing`, which the tracker hears of). */
+ * lines, after those the page held before them when the read starts later
+ * (its newest `take`); and the person's own words the page showed that the
+ * read left out, put back where they were (`missing`, which the tracker
+ * hears of). */
 export let reread = (
   was: Held | null,
   read: Held,
 ): { held: Held; missing: string[] } => {
   if (!was || was.task != read.task) return { held: read, missing: [] }
   let ids = new Set(read.lines.map((l) => l.id))
-  let lines = [...read.lines]
+  let first = was.lines.findIndex((l) => ids.has(l.id))
+  let before = read.earlier > 0 && first > 0 ? was.lines.slice(0, first) : []
+  for (let line of before) ids.add(line.id)
+  let lines = [...before, ...read.lines]
   let missing: string[] = []
   was.lines.forEach((line, i) => {
     if (!line.mine || ids.has(line.id)) return
@@ -187,7 +196,13 @@ export let reread = (
     ids.add(line.id)
   })
   return {
-    held: { ...read, lines, from: was.from ?? read.from, beside: was.beside },
+    held: {
+      ...read,
+      lines,
+      earlier: Math.max(0, read.earlier - before.length),
+      from: was.from ?? read.from,
+      beside: was.beside,
+    },
     missing,
   }
 }

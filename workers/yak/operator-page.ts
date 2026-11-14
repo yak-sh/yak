@@ -2450,7 +2450,8 @@ let reading, again = false
 // slides its oldest displayed entries out of the next read.
 let from = talk.from()
 // Words of theirs the page showed are never taken off it: one a read left
-// out stays in its place, and the tracker hears of it at once.
+// out stays in its place, and the tracker hears of it, unless a step heard
+// during the read came after what it answered, which the next read covers.
 let read = async () => {
   if (open == 'new') return
   if (reading) return void (again = true)
@@ -2462,7 +2463,8 @@ let read = async () => {
       let got = await response.json()
       standing = got.standing
       if (got.html) {
-        for (let id of talk.read(got.html)) globalThis.reportError?.(new Error('The Operator chat page left out words of the person it had shown: ' + id))
+        let missing = talk.read(got.html)
+        if (!again) for (let id of missing) globalThis.reportError?.(new Error('The Operator chat page left out words of the person it had shown: ' + id))
         redrawn()
       }
       from ??= talk.from()

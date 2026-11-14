@@ -1046,8 +1046,10 @@ export let wire = (
 }
 
 /** Each line {@link Lines} sends, drawn from the entries it reads, as the
- * whole conversation draws it. */
-export let drawLines = (sent: Lines): { id: string; node: Node }[] => {
+ * whole conversation draws it, and whether it is the person's own words. */
+export let drawLines = (
+  sent: Lines,
+): { id: string; node: Node; is?: Line['is'] }[] => {
   let seen = {
     ...sent,
     offers: new Map(Object.entries(sent.offers ?? {})),
@@ -1061,7 +1063,9 @@ export let drawLines = (sent: Lines): { id: string; node: Node }[] => {
     let entries = sent.entries.filter((b) => reads.has(b.entity.eid))
     let drawn = lines(entries, names, { ...seen, helpers })
       .find((l) => l.id == id)
-    return drawn ? [{ id, node: called(sent.ids, drawn.node) }] : []
+    if (!drawn) return []
+    let { is } = drawn
+    return [{ id, node: called(sent.ids, drawn.node), ...is ? { is } : {} }]
   })
 }
 

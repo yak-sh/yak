@@ -828,14 +828,15 @@ test("the Operator's chat app reads its draft again when its socket is never ans
 test('a page whose reads meet a deploy’s 502 reads again and catches up quietly', async () => {
   let page = await load(storage(), false, park, {}, undefined, 'deploying')
   let box = page.document.querySelector('[data-conversation]')!
-  box.innerHTML = ''
   page.open()
   // where the conversation stands, moved by a line the page has not drawn
   page.hear({ ready: true, standing: 'moved' })
   await page.heard()
-  for (let i = 0; i < 200 && !box.innerHTML; i++) await settle()
+  for (let i = 0; i < 200 && page.talks() < 2; i++) await settle()
+  await settle()
   assertEquals(page.failed.size, 2, 'the draft and the conversation met it')
-  assertEquals(!!box.innerHTML, true, 'the conversation is drawn again')
+  assertEquals(page.talks(), 2, 'the conversation is read again')
+  assertEquals(!!box.querySelector('[data-task]'), true)
   assertEquals(page.status(), '')
   page.leave()
 })
@@ -956,6 +957,8 @@ test(
           lines: ids.map((id) => ({ id, uses: [id] })),
           entries: ids.map((id, i) => ({
             entity: { eid: id },
+            entry: { session: card.dataset.task, seq: 1000 + i },
+            created: { at: new Date().toISOString() },
             content: { body: words[i] },
           })),
           helpers: [],
@@ -965,12 +968,6 @@ test(
         now: '',
       },
     })
-    let rows = card.querySelector('[data-rows]')!
-    // The omitted words were older than the surviving conversation, as in a
-    // refresh whose displayed range starts too late.
-    rows.prepend(
-      ...ids.map((id) => page.document.getElementById('row-' + id)!),
-    )
     let reported: string[] = []
     let was = globalThis.reportError
     globalThis.reportError = (e: unknown) => void reported.push(String(e))
@@ -978,16 +975,14 @@ test(
       page.hear({ ready: true, standing: 'moved' })
       await until(() => reported.length == 2)
       assertEquals(
-        [...page.document.querySelectorAll('[data-rows] > *')]
-          .slice(0, 2).map((r) =>
-            r.querySelector('.Transcript_Bubble')?.textContent
-          ),
+        [...page.document.querySelectorAll('.Transcript_Bubble')]
+          .map((r) => r.textContent).filter((t) => words.includes(t!)),
         words,
       )
       assertEquals(
         reported.sort(),
         ids.map((id) =>
-          `Error: The Operator chat page left out words of the person it had shown: row-${id}`
+          `Error: The Operator chat page left out words of the person it had shown: ${id}`
         ).sort(),
       )
     } finally {
@@ -1326,7 +1321,22 @@ test(
     let words = () =>
       [...page.document.querySelectorAll('.Transcript_Bubble')]
         .map((r) => r.textContent)
+    // The page draws the newest lines; the reader asks for the earlier ones
+    // until there are none.
+    let earlier = () =>
+      page.document.querySelector('[data-task] > button') as Element | null
+    let all = async () => {
+      for (let i = 0; i < 20 && earlier(); i++) {
+        page.press(earlier()!)
+        await until(() =>
+          !earlier() || !earlier()!.textContent!.includes(String(i))
+        )
+        await settle()
+      }
+    }
     try {
+      await all()
+      assertEquals(words(), oldWords)
       await growingStore.g.apply([
         ...Array.from(
           { length: 20 },
@@ -1336,10 +1346,13 @@ test(
       ], { trusted: true })
       page.hear({ ready: true, standing: 'changed' })
       await until(() => words().includes('The newest request'))
+      await all()
       assertEquals(words(), [...oldWords, 'The newest request'])
+      let talks = page.talks()
       page.hear({ ready: true, standing: 'reconnected' })
-      await until(() => page.talks() == 2)
+      await until(() => page.talks() == talks + 1)
       await settle()
+      await all()
       assertEquals(words(), [...oldWords, 'The newest request'])
       assertEquals(reported, [])
     } finally {

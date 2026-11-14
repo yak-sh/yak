@@ -160,3 +160,18 @@ test('the earlier lines the server did not draw are read when the reader asks', 
   equal(p.rows().length, 5)
   equal(p.box.querySelector('[data-task] > button'), null)
 })
+
+test("the person's words a step sent are kept when a whole read leaves them out", () => {
+  let more = entry('more', 3, { content: { body: 'And the bread' } })
+  using p = page([asked, call])
+  p.talk.heard(frame('task-1', [asked, call, more], names, 2).operator)
+  equal(p.talk.read(talk(task, [asked, call], names)), ['more'])
+  equal(p.rows(), rowsOf(talk(task, [asked, call, more], names)))
+})
+
+test('a read of the newest lines keeps the earlier ones the page holds, and misses none', () => {
+  using p = page(words(5))
+  equal(p.talk.read(talk(task, words(6), names, {}, { take: 2 })), [])
+  equal(p.rows(), rowsOf(talk(task, words(6), names)))
+  equal(p.box.querySelector('[data-task] > button'), null)
+})
