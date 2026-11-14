@@ -32,6 +32,8 @@ await agent.tool('app_files', {
             },
             properties: { first: txt, phone: txt, status: txt },
           },
+          // Shown to editors and holding no rows yet, as in a fresh copy.
+          interests: { shown: 'editor', properties: { choices: txt } },
         },
       }),
     },
