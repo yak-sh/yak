@@ -1940,14 +1940,17 @@ let keptSaid = (
   space: Space,
   app: App,
 ) =>
-  !rows || !draft
-    ? ''
-    : `\n${rows} ${
-      rows == 1 ? 'row' : 'rows'
-    } the draft's preview wrote stay on its branch, out of the live app: ` +
-      `app_deploy(app: '${app.slug}', space: '${space.slug}', draft: ` +
-      `'${draft.eid}', rows: 'all') merges them into the live rows, and ` +
-      `app_files(op: 'discard', draft: '${draft.eid}') drops them`
+  !rows || !draft ? '' : `\n${plural(rows, 'row')} the draft's preview wrote ` +
+    `${rows == 1 ? 'stays' : 'stay'} on its branch, out of the live app: ` +
+    `app_deploy(app: '${app.slug}', space: '${space.slug}', draft: ` +
+    `'${draft.eid}', rows: 'all') merges ${them(rows)} into the live ` +
+    `rows, and app_files(app: '${app.slug}', space: '${space.slug}', ` +
+    `op: 'discard', draft: '${draft.eid}') drops ${them(rows)}`
+
+// `n` of `thing`, the plural where it is not one.
+let plural = (n: number, thing: string, things = `${thing}s`) =>
+  `${n} ${n == 1 ? thing : things}`
+let them = (n: number) => n == 1 ? 'it' : 'them'
 
 // What a release said of its draft's preview rows (draft-merge.ts).
 let mergedSaid = (
@@ -1956,16 +1959,17 @@ let mergedSaid = (
   !m
     ? ''
     : m.conflicts.length
-    ? `\n${m.conflicts.length} ${
-      m.conflicts.length == 1 ? 'property' : 'properties'
-    } the draft's preview and the live app both changed ${
-      m.asked
-        ? 'wait for the person to pick a side in their Updates'
-        : 'wait for a pick'
-    }, and nothing else the preview wrote merges until then`
+    ? `\n${
+      plural(m.conflicts.length, 'property', 'properties')
+    } the draft's preview and the live app both changed ` +
+      `${m.conflicts.length == 1 ? 'waits' : 'wait'} ${
+        m.asked
+          ? 'for the person to pick a side in their Updates'
+          : 'for a pick'
+      }, and nothing else the preview wrote merges until then`
     : m.merged
-    ? `\nmerged what the draft's preview wrote into the live app's rows (${m.merged} ${
-      m.merged == 1 ? 'entity' : 'entities'
+    ? `\nmerged what the draft's preview wrote into the live app's rows (${
+      plural(m.merged, 'entity', 'entities')
     })`
     : ''
 
@@ -3973,11 +3977,10 @@ let OURS: Row[] = [
           let { keptDiscarded } = await import('./draft-merge.ts')
           await keptDiscarded(ctx.env, ctx.dir, space, app, kept, who)
           return {
-            text:
-              `discarded the ${kept.rows} ${
-                kept.rows == 1 ? 'row' : 'rows'
-              } released draft ${named}'s preview left on its branch of ` +
-              `${space.slug}/${app.slug}; the live app never had them`,
+            text: `discarded the ${plural(kept.rows, 'row')} released draft ` +
+              `${named}'s preview left on its branch of ` +
+              `${space.slug}/${app.slug}; the live app never had ` +
+              them(kept.rows),
             space,
             value: { discarded: named, rows: kept.rows },
           }
@@ -4723,16 +4726,18 @@ let OURS: Row[] = [
         if (rows != 'all') {
           throw refuse(
             'arguments',
-            `draft ${named} was released as v${kept.version}; the ${kept.rows} ` +
-              `${kept.rows == 1 ? 'row' : 'rows'} its preview wrote stay on ` +
-              "its branch: rows: 'all' merges them into the live app",
+            `draft ${named} was released as v${kept.version}; the ` +
+              `${plural(kept.rows, 'row')} its preview wrote ` +
+              `${kept.rows == 1 ? 'stays' : 'stay'} on its branch: rows: ` +
+              `'all' merges ${them(kept.rows)} into the live app`,
           )
         }
         let { keptMerged } = await import('./draft-merge.ts')
         let m = await keptMerged(ctx.env, ctx.dir, space, app, kept, who)
         return {
-          text: `the rows draft ${named}'s preview left on its branch, ` +
-            `into ${space.slug}/${app.slug}; no version was released:` +
+          text: `no version of ${space.slug}/${app.slug} was released; ` +
+            `of the rows released draft ${named}'s preview left on its ` +
+            'branch:' +
             (mergedSaid(m) || '\nnothing was left to merge'),
           space,
           value: {

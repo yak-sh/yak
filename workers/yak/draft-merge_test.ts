@@ -124,7 +124,7 @@ test('a property both changed waits for the person, and their pick merges the re
   let { branch } = await drafted('Two', [note(a, 'mine'), note(c, 'newer')])
   await liveWrite([note(a, 'theirs')])
   let out = await release('all')
-  ok(out.includes('wait for the person to pick'), out)
+  ok(out.includes('waits for the person to pick'), out)
   equal(await texts(), { [a]: 'theirs', [b]: 'drafted', [c]: 'new' })
   ok((await branches()).includes(branch))
   equal(asks.length, 1)
@@ -166,7 +166,7 @@ test("a release keeps its preview's rows on the branch, and app_deploy naming th
   let before = await texts()
   let { draft, branch } = await drafted('Three', [note(d, 'a test row')])
   let out = await release()
-  ok(out.includes("1 row the draft's preview wrote stay on its branch"), out)
+  ok(out.includes("1 row the draft's preview wrote stays on its branch"), out)
   ok(out.includes(`draft: '${draft}', rows: 'all'`), out)
   equal(await texts(), before)
   ok((await branches()).includes(branch))
@@ -174,11 +174,11 @@ test("a release keeps its preview's rows on the branch, and app_deploy naming th
     said,
     (e) => String(e),
   )
-  ok(refused.includes("rows: 'all' merges them"), refused)
+  ok(refused.includes("rows: 'all' merges it"), refused)
   let merged = said(
     await run('app_deploy', { app: 'notes', draft, rows: 'all' }),
   )
-  ok(merged.includes('no version was released'), merged)
+  ok(merged.includes('notes was released; of the rows'), merged)
   equal(await texts(), { ...before, [d]: 'a test row' })
   ok(!(await branches()).includes(branch))
   equal(await dir.draftRows(app, draft), null)
