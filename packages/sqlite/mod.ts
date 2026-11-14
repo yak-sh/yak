@@ -1627,5 +1627,5 @@ export {
 } from './follow.ts'
 
 export { doom } from './doom.ts'
-export { branch, branching, branchOf, Unseeded } from './branches.ts'
+export { branch, branching, branchOf, seeding, Unseeded } from './branches.ts'
 export { moded } from './mode.ts'

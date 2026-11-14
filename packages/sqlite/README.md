@@ -1405,7 +1405,12 @@ vocabulary indexes, none of them unique. Current reads, their plans and every
 trigger on a live table are unchanged. A component declared `journal: false`
 keeps no versions on main, and the tombstones always do. A store that begins to
 keep history takes its live rows as their first versions, open from no
-transaction.
+transaction: in its install, or, opened `paced`, a page of entities at a time
+through `maintain()`, for a host whose writes are bounded by the minute (a
+Durable Object). History is kept from the beginning on, so a row a write changed
+before its page was taken keeps only what that write made. Until the last page
+the store makes no branch (`Unseeded`; `seeding(driver)` says whether pages are
+owed).
 
 The store does not mint transaction ids. `History` is two statements its history
 plugin hands it (@yaks/journal's `history(options)`): `clock` takes the id of
@@ -1423,17 +1428,18 @@ stands in front of the table everywhere in the statement. Nothing is made in the
 database, so a mode needs no temporary object (a Durable Object refuses them)
 and reads over any connection, the one its main store writes through included.
 Binding the same driver to another mode answers the same store, reading the new
-one. Each relation is one select over one table, which SQLite folds into any
-read that names it; a compound one it would materialize whole for a left join. A
-branch's exempt components are the exception, a compound of its rows and the
-live ones. The historical archetype index (`$archetype$versions`) keeps
-membership spans from the version writes. A mode reads its table sets there,
-with live exempt components from the owner's current archetype and branch
-membership overlaid. It asks no component's relation which entities it holds.
-Property edits keep the same membership span. Installation repairs a missing
-historical index from the versions already held. Text search reads the live
-text. An entity's spine is not versioned: one minted after the transaction a
-mode reads reads as an empty identity.
+one, and a mode's store installs nothing: its schema is its main store's. Each
+relation is one select over one table, which SQLite folds into any read that
+names it; a compound one it would materialize whole for a left join. A branch's
+exempt components are the exception, a compound of its rows and the live ones.
+The historical archetype index (`$archetype$versions`) keeps membership spans
+from the version writes. A mode reads its table sets there, with live exempt
+components from the owner's current archetype and branch membership overlaid. It
+asks no component's relation which entities it holds. Property edits keep the
+same membership span. Installation repairs a missing historical index from the
+versions already held. Text search reads the live text. An entity's spine is not
+versioned: one minted after the transaction a mode reads reads as an empty
+identity.
 
 A store with history has `branches` (./branches.ts): `make()` writes a row of
 the branch table and copies nothing, `list()` answers every branch, and

@@ -238,7 +238,7 @@ let firsts = await atStart.get(['s0', 's599'])
 
 test('a paced beginning takes its rows a page at a time, and makes no branch till it has', async () => {
   equal(early, 'Unseeded')
-  equal(units, 3)
+  equal(units, 2)
   equal(firsts.map((b) => b.page), [{ title: 'held 0' }, undefined])
   equal(
     (await pacing.branches!.make()).fork,

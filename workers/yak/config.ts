@@ -211,6 +211,27 @@ export let appConfig: Config = {
   ]),
 }
 
+/** What an app store composes once it keeps versions: the journal, its
+ * versions on and its attribution off, since every row carries its own
+ * stamps, and no feed, since a Durable Object is its store's only host. A
+ * store's first branch records it as required (@yaks/host `meet`), and that
+ * record is what makes a store compose {@link appVersionsConfig}. */
+export let versions = {
+  use: '@yaks/journal',
+  facets: ['graph'] as FacetName[],
+  with: { versions: true, attribution: false, feed: false },
+} satisfies Plug
+
+/** An app store that keeps versions: {@link appConfig} and {@link versions},
+ * ahead of the hooks that run once a write commits. */
+export let appVersionsConfig: Config = {
+  plugins: appConfig.plugins!.flatMap((plug) =>
+    typeof plug != 'string' && plug.use == 'yak/weigh'
+      ? [versions, plug]
+      : [plug]
+  ),
+}
+
 export let directoryConfig: Config = {
   numbers: true,
   plugins: storePlugins([

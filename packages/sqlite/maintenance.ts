@@ -112,17 +112,20 @@ export let maintenance = (driver: Driver, vocab: Vocab) => {
     let owing = marks.get(SEEDING)
     if (owing) {
       let { comps, after } = JSON.parse(owing) as Seeding
-      let [comp] = comps
-      // Each row's version and its membership, with every index of both.
+      // Each row's version and its membership, with every index of both: a
+      // unit takes a page of rows, across as many components as it reaches.
       let indexes =
-        objects(driver, { type: 'index', tbl_name: beside(comp) }).length
+        objects(driver, { type: 'index', tbl_name: beside(comps[0]) }).length
       if (!admit((PAGE + 2) * (indexes + 3))) return false
       unit(driver, () => {
-        let last = seedPage(driver, vocab, comp, after, PAGE)
-        let next: Seeding = last == null
-          ? { comps: comps.slice(1), after: 0 }
-          : { comps, after: last }
-        if (next.comps.length) marks.set(SEEDING, JSON.stringify(next))
+        let left = PAGE
+        while (left > 0 && comps.length) {
+          let { taken, last } = seedPage(driver, vocab, comps[0], after, left)
+          left -= taken
+          if (last == null) [comps, after] = [comps.slice(1), 0]
+          else after = last
+        }
+        if (comps.length) marks.set(SEEDING, JSON.stringify({ comps, after }))
         else marks.del(SEEDING)
       })
       return true

@@ -24,7 +24,6 @@
 // live tables are never a mode's to write.
 
 import {
-  col,
   type Cte,
   type Derived,
   type Driver,
@@ -44,14 +43,16 @@ import { type Opts, storage, type Store } from './mod.ts'
 // What a mode reads each relation it stands in front of as, by name, in the
 // order a statement's `with` gives them: each component's table, then
 // `doc_value`, which reads `doc`. A view's body sees no `with` of the
-// statement naming it, so the view is given as its own.
+// statement naming it, so the view is given as its own. The archetypes are
+// the store's own, and a mode reads none of them: their table's columns, and
+// no row.
 let relations = (vocab: Vocab, derived: Derived, mode: Mode): Cte[] => [
   ...[...covered(vocab)].map((comp): Cte => ({
     name: comp,
     materialized: false,
     q: comp == 'archetype'
       ? select({
-        cols: [col('entity'), lit(null)],
+        cols: [star()],
         from: { t: 'table', name: comp, schema: 'main' },
         where: lit(false),
       })
@@ -170,6 +171,9 @@ export let moded = (
   on.opts = {
     ...base,
     mode,
+    // The schema is its main store's: a mode's store installs nothing, even
+    // over a driver with no file, which would install on its first use.
+    schemaReady: () => true,
     archetypes: () => undefined,
     missingIndexes: indexed(vocab).map((i) => i.name),
     held: (ids: number[], names: readonly string[]) =>

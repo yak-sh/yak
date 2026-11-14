@@ -195,13 +195,17 @@ import {
   val,
 } from '@yaks/sql'
 import {
+  branchOf,
   deletions as inspectDeletions,
   identity as inspectIdentity,
   inspect as inspectStorage,
+  moded,
   printed,
   requirements,
   requires,
+  seeding,
   storage as sqliteStorage,
+  Unseeded,
 } from '@yaks/sqlite'
 import {
   driver,
@@ -331,7 +335,7 @@ import { type Assembling, lent, planned } from '@yaks/durable-object/compose'
 import { type Host as PluginHost, type Load } from '@yaks/host'
 import type { Words } from '@yaks/host/words'
 import { meet } from '@yaks/host/config'
-import { posts, worker } from './config.ts'
+import { appVersionsConfig, posts, versions, worker } from './config.ts'
 import { privacyRules } from './privacy-move.ts'
 import { COPY as READ_OUT, copying } from './store-copy.ts'
 import { freely } from '@yaks/durable-object/sql'
@@ -454,6 +458,15 @@ export let vocabOfStore = (name: string, declared: unknown = {}): Vocab =>
 
 let storeKind = (name: string): keyof typeof worker.stores =>
   name == PLATFORM_STORE ? 'directory' : name == GIT_STORE ? 'git' : 'app'
+// Which plan a store composes: its kind's, or, for an app store whose data
+// requires @yaks/journal, `versions` (config.ts `appVersionsConfig`).
+type PlanKind = keyof typeof worker.stores | 'versions'
+let planKind = (name: string, versioned: boolean): PlanKind => {
+  let kind = storeKind(name)
+  return kind == 'app' && versioned ? 'versions' : kind
+}
+let configOf = (kind: PlanKind) =>
+  kind == 'versions' ? appVersionsConfig : worker.stores[kind]
 // The words a shape's plan is assembled under: its own, read through what
 // its storage reads a stored value through. Plans retain only declarations
 // and modules (@yaks/durable-object `planned`), one a kind and words; each
@@ -647,6 +660,10 @@ type Word =
 // them, so this bounds the alarm, not a request's wait; a deploy owes a few,
 // and only growth or a store's first statistics owe every table holding rows.
 let ANALYSES = 50
+// The most pages of first versions one alarm or one first branch takes
+// (`#seeding`): each fits a window's share on its own, and the alarm comes
+// back for the rest.
+let SEEDS = 8
 
 /// due([], 0) -> null
 /// due([{ entity: { eid: 'a' }, effect: { next: '1970-01-01T00:00:05.000Z' } }], 0) -> 5000
@@ -954,6 +971,10 @@ export class Store extends Durable {
   // a table at a time, answering how many stay owed; and whether any do, once
   // asked this incarnation (`#analyzing`).
   #analyze: (tables: number) => number = () => 0
+  // One unit of the schema work a store owes past its install, admitted by
+  // its estimated writes (@yaks/sqlite `maintain`): here, the first versions
+  // of a store that made its first branch (`#seeding`).
+  #maintain: (admit: (written: number) => boolean) => boolean = () => false
   #unanalyzed: boolean | null = null
   #host!: PluginHost
   // The write log's door (@yaks/api/receipts `door`): what this object could
@@ -1111,8 +1132,15 @@ export class Store extends Durable {
 
   #started = once()
   #startedDormant = false
-  // Each kind's plan, once its facets are imported (`#prepare`).
+  // Each kind's plan, once its facets are imported (`#prepare`), and an app
+  // store's that keeps versions, under `versions`.
   #plans = new Map<string, Assembling>()
+  // Whether this store's data requires @yaks/journal, which an app store's
+  // first branch records (`#branches`): read once an incarnation (`#start`),
+  // it is what makes the store compose `appVersionsConfig`.
+  #versioned = false
+  // Each branch's graph this incarnation composed (`#build`).
+  #forks = new Map<number, Graph>()
   #dormant: boolean | null = null
   #moveOnly = false
   #checking: Promise<boolean> | null = null
@@ -1156,10 +1184,21 @@ export class Store extends Durable {
   }
 
   #prepare(name: string): Promise<void> {
-    let kind = storeKind(name)
+    let kind = planKind(name, this.#versioned)
     if (this.#plans.has(kind)) return Promise.resolve()
-    return planned(worker.stores[kind], this.#load)().then((plan) =>
+    return planned(configOf(kind), this.#load)().then((plan) =>
       void this.#plans.set(kind, plan)
+    )
+  }
+
+  // The shape of this store's words, `declared` (its own `vocab.json`, as
+  // held), kept with versions where its data requires them.
+  #shape(declared = this.#get('vocab')): Shape {
+    let name = this.#get('name') ?? ''
+    return shapeOf(
+      name,
+      declared,
+      planKind(name, this.#versioned) == 'versions',
     )
   }
 
@@ -1213,6 +1252,7 @@ export class Store extends Durable {
       rekey(this.#sql, writer)
     }
     this.#reshaping()
+    this.#versioned = requirements(this.#sql).includes(versions.use)
     let remembered = this.#get('name')
     let name = request?.headers.get('x-store') ?? remembered ?? ''
     // The directory is never stopped, only told of: every door reads it, so
@@ -1387,10 +1427,7 @@ export class Store extends Durable {
     // app-shaped extras below are for: `task.status` is an expression over
     // words a git object graph does not have, and `vocab.json` is not a
     // sentence to say to a caller of either one.
-    let shape = shapeOf(
-      name,
-      this.#get('vocab'),
-    )
+    let shape = this.#shape()
     let { vocab, own, derived, searchable } = shape
     let said = fieldsSaid(worded(searchable))
     this.#lexis = this.#bind.LEXICON && !own && storeKind(name) == 'app' &&
@@ -1420,6 +1457,7 @@ export class Store extends Durable {
       screen: (line, opts) => store.screen(line, opts),
     }
     this.#analyze = (tables) => store.analyze(tables)
+    this.#maintain = (admit) => store.maintain(admit)
     // The schema this object stands at is one word (`shapeOf`): a wake under
     // the same vocabulary runs no DDL at all, and a deploy that added a
     // component raises its table on the next request. Every index the
@@ -1492,7 +1530,7 @@ export class Store extends Durable {
     // Where the directory keeps a connection's credential (vault.ts). A key
     // comes out of a write before anything else reads it, and is sealed once
     // the write commits, by the same plugin; an app's store keeps none.
-    let kind = storeKind(name), config = worker.stores[kind]
+    let kind = planKind(name, this.#versioned), config = configOf(kind)
     let observed = workerAnatomy(config)
     let host!: PluginHost
     let env = () => meta ? { ...this.#bind, META: this.#meta } : this.#bind
@@ -1537,10 +1575,12 @@ export class Store extends Durable {
       observed.commands(declared, () => host.runner.tools)
       return declared
     }
-    let composed = plan.bind({
-      observed: observed.composition,
-      options: (plugin, options) => {
-        if (plugin.startsWith('yak/')) return { ...options, store: at }
+    // What each plugin is given beside its configured options, the store's
+    // own given `stored`.
+    let optionsOf =
+      (stored: Stored) =>
+      <O extends Record<string, unknown>>(plugin: string, options: O): O => {
+        if (plugin.startsWith('yak/')) return { ...options, store: stored }
         if (plugin == '@yaks/mail') {
           return { ...options, domain: apex(this.#bind) }
         }
@@ -1549,59 +1589,122 @@ export class Store extends Durable {
           return { ...options, realtime: realtimeOf(this.#bind) }
         }
         return options
+      }
+    // What the store's storage is opened with, main's and each branch's.
+    let opened = {
+      // A number is @yaks/id's, and only the platform's own stores loaded it
+      // (vocab.ts): the directory's memories are ordered by the number it
+      // minted, while an app's entities are pointed at by the eid its client
+      // minted and never by a number, so nothing mints one for them.
+      number: numbered(vocab),
+      counts: 'lazy' as const,
+      report: (error: unknown) =>
+        defect(error, { request: 'store', store: name }),
+      // A body is stored as its address (@yaks/blob `store: "blob"`), so the
+      // reads and the `doc_value` view resolve it as prose. The FTS schema
+      // receives the same resolution, keeping hashes out of the index
+      // (T-33978).
+      derived,
+    }
+    // Each branch's graph, composed the first time a door names it: this
+    // store's plan over a driver of its own reading the branch (@yaks/sqlite
+    // `moded`, one mode a driver), each plugin bound to it, and no effect
+    // run, since nothing outside the branch acts on what it holds until it
+    // is merged. Its writes still grow the file, so they are weighed; they
+    // rouse no wake, embed no text and keep no keyed answer of main's.
+    let forks = this.#forks = new Map<number, Graph>()
+    let onBranch: Stored = Object.assign(Object.create(at) as Stored, {
+      rouse: (bundles: Bundle[]) => Promise.resolve(bundles),
+      embed: (bundles: Bundle[]) => bundles,
+      tell: undefined,
+      log: { name: 'yak/log', hooks: {} },
+    })
+    let forked = (id: number): Graph => {
+      let made = forks.get(id)
+      if (made) return made
+      let mode = branchOf(drive, id)
+      if (!mode) throw new Refused(`no branch ${id}`)
+      let quiet = effects(vocab, {
+        write: () => Promise.reject(new Error('a branch runs no effects')),
+        singleOwner: true,
+        startup: 'manual',
+        defer: true,
+      })
+      let bound = plan.bind({
+        options: optionsOf(onBranch),
+        host: { ...lending, duties: () => Promise.resolve() },
+        storage: (_host, _extend, _words, history) =>
+          moded(driver(ctx.storage, observe, this.#measure), vocab, {
+            ...opened,
+            history: history!,
+          }, mode),
+        effects: () => quiet,
+        graph: (options) =>
+          graph({
+            ...options,
+            clock: clockOf(this.#time),
+            report: (error, { phase, plugin }) =>
+              defect(error, {
+                request: `branch ${plugin} ${phase}`,
+                store: name,
+              }),
+          }),
+        unobserved: true,
+      })
+      forks.set(id, made = bound.host.graph)
+      return made
+    }
+    // What the store lends its plugins, main's graph and each branch's.
+    let lending = {
+      ...lent(app ?? name, bytes),
+      vault: vaultOf(this.#bind),
+      senders: {
+        worker: metering(
+          this.#bind,
+          () => this.#get('mail'),
+          outgoing(this.#bind, mailTags(name)),
+        ),
+        // The platform's own letters, which only the directory sends
+        // (config.ts): unmetered, from the platform's address.
+        platform: outgoing(this.#bind, {}, posts.platform),
       },
-      host: {
-        ...lent(app ?? name, bytes),
-        vault: vaultOf(this.#bind),
-        senders: {
-          worker: metering(
-            this.#bind,
-            () => this.#get('mail'),
-            outgoing(this.#bind, mailTags(name)),
-          ),
-          // The platform's own letters, which only the directory sends
-          // (config.ts): unmetered, from the platform's address.
-          platform: outgoing(this.#bind, {}, posts.platform),
-        },
-        texters: {
-          worker: appTexter(
-            this.#bind as Env,
-            () => this.#get('phone'),
-            () => this.#get('space'),
-          ),
-        },
-        duties: async () => {
-          await this.#effects.work(this.#stored(this.#graph).graph)
-        },
-        end: () => {
-          throw new Error('a store does not host processes')
-        },
-        report: (error) => defect(error, { request: 'plugin', store: name }),
-        meaning: ranking(() => this.#embedder(), this.#texts),
+      texters: {
+        worker: appTexter(
+          this.#bind as Env,
+          () => this.#get('phone'),
+          () => this.#get('space'),
+        ),
       },
-      storage: (_host, extend) => {
+      duties: async () => {
+        await this.#effects.work(this.#stored(this.#graph).graph)
+      },
+      end: () => {
+        throw new Error('a store does not host processes')
+      },
+      report: (error: unknown) =>
+        defect(error, { request: 'plugin', store: name }),
+      meaning: ranking(() => this.#embedder(), this.#texts),
+    }
+    let composed = plan.bind({
+      observed: observed.composition,
+      options: optionsOf(at),
+      host: lending,
+      storage: (_host, extend, _words, history) => {
         store = sqliteStorage(
           drive,
           vocab,
           {
-            // A number is @yaks/id's, and only the platform's own stores loaded it
-            // (vocab.ts): the directory's memories are ordered by the number it
-            // minted, while an app's entities are pointed at by the eid its client
-            // minted and never by a number, so nothing mints one for them.
-            number: numbered(vocab),
-            counts: 'lazy',
-            report: (error) => defect(error, { request: 'store', store: name }),
+            ...opened,
+            // The versions an app store keeps once it made a branch (config.ts
+            // `versions`), its live rows taken as their first a page at a
+            // time by its alarm (`#seeding`).
+            ...history ? { history, paced: true } : {},
             schemaReady: () =>
               this.#stood(shape) || printed(drive, shape.print),
             // A component's search index and queue triggers are made with its
             // table, by the write that first names it.
             over: () => shape.over,
             extend,
-            // A body is stored as its address (@yaks/blob `store: "blob"`), so the
-            // reads and the `doc_value` view resolve it as prose. The FTS schema
-            // receives the same resolution, keeping hashes out of the index
-            // (T-33978).
-            derived,
             ...(vocab.comp('_tx')
               ? { backed: journalBacked(vocab, derived) }
               : {}),
@@ -1616,6 +1719,20 @@ export class Store extends Durable {
         }),
       ],
       effects: () => fx,
+      branches: (made) => {
+        let kept = made.storage.branches
+        if (!kept) return undefined
+        return {
+          make: async () => await kept.make(),
+          list: async () => await kept.list(),
+          changes: async (id) => await kept.changes(id),
+          drop: async (id) => {
+            forks.delete(id)
+            await kept.drop(id)
+          },
+          on: (id) => Promise.resolve().then(() => forked(id)),
+        }
+      },
       graph: (options) => {
         let g = graph({
           ...options,
@@ -3121,6 +3238,7 @@ export class Store extends Durable {
       return null
     }),
     statistics: this.#own(() => this.#analyzing()),
+    versions: this.#own(() => this.#seeding()),
   }
 
   // One packet to every socket, subscribed or not: a page decides what to do
@@ -3299,6 +3417,124 @@ export class Store extends Durable {
   // A moment from now: the wake that armed it answers first.
   #soon = () => this.#now() + PAUSE
 
+  // The live rows a store that made its first branch takes as their first
+  // versions (@yaks/sqlite `paced`): a page of entities a unit, each under
+  // the mover's share of its windows, up to SEEDS units with the object
+  // yielded between them, then the alarm again for the rest. A page no window
+  // could hold is taken, as a deploy's schema is. The versions are the
+  // store's file, so the bytes it tells the directory count them.
+  #seeding = async (): Promise<number | null> => {
+    if (!this.#versioned || !seeding(this.#sql)) return null
+    let wait = 0
+    for (let n = 0; n < SEEDS && seeding(this.#sql); n++) {
+      if (n) await new Promise((r) => setTimeout(r, 0))
+      let fits = (written: number) =>
+        !(wait = this.ceiling.under(SHARE, written))
+      if (!this.#tx(() => this.#maintain(fits))) {
+        if (wait != Infinity) break
+        this.ceiling.take(() => this.#tx(() => this.#maintain(() => true)))
+      }
+    }
+    this.#tell()
+    if (!seeding(this.#sql)) return null
+    return wait && Number.isFinite(wait) ? this.#now() + wait : this.#soon()
+  }
+
+  // An app store's branches (@yaks/sqlite `branches`), for the kernel alone:
+  // `/branches` lists them (GET) and makes one (POST); `/branches/<id>` drops
+  // one (DELETE); and under it, `changes` (GET) is what it changed since its
+  // fork, `query` (POST `{query}`) reads on it and `apply` (POST
+  // `{bundles}`) writes on it, as the kernel's own writes are. A store's
+  // first branch turns its versions on (`#versionsOn`); until its live rows
+  // are all versions it makes none, and answers 503 with `retry-after`.
+  #branching = async (request: Request, path: string): Promise<Response> => {
+    let missing = () => json({ error: 'NotFound', message: 'no route' }, 404)
+    if (storeKind(this.#name() ?? '') != 'app') return missing()
+    let [, id, door] = path.match(/^\/branches(?:\/(\d+))?(?:\/(\w+))?$/) ??
+      []
+    let branch = id == null ? undefined : Number(id)
+    let method = request.method
+    try {
+      if (branch == null && !door) {
+        if (method == 'GET') {
+          return json({ branches: await this.#graph.branches?.list() ?? [] })
+        }
+        if (method != 'POST') return missing()
+        await this.#versionsOn()
+        let left = await this.#seeding()
+        if (left != null) {
+          await this.#arm(left, 'versions')
+          throw new Unseeded()
+        }
+        return json({ branch: await this.#graph.branches!.make() }, 201)
+      }
+      let branches = this.#graph.branches
+      if (branch == null || !branches) return missing()
+      if (!door && method == 'DELETE') {
+        await branches.drop(branch)
+        return new Response(null, { status: 204 })
+      }
+      if (door == 'changes' && method == 'GET') {
+        return json({ changes: await branches.changes(branch) })
+      }
+      if (door == 'query' && method == 'POST') {
+        let { query } = await request.json() as { query?: unknown }
+        if (typeof query != 'string') {
+          throw new Refused('a query is required')
+        }
+        return json({ rows: await this.#graph.read(query, { branch }) })
+      }
+      if (door == 'apply' && method == 'POST') {
+        let { bundles } = await request.json() as { bundles?: unknown }
+        if (!Array.isArray(bundles)) throw new Refused('bundles are required')
+        return json({
+          applied: await this.#asIs(bundles as Bundle[], { branch }),
+        })
+      }
+      return missing()
+    } catch (e) {
+      if (e instanceof Unseeded) {
+        let retry = Math.ceil(PAUSE / 1000)
+        return Response.json({ error: e.name, message: e.message, retry }, {
+          status: 503,
+          headers: { 'retry-after': String(retry) },
+        })
+      }
+      if (e instanceof Refused) {
+        return json({ error: 'Refused', message: e.message }, 400)
+      }
+      throw e
+    }
+  }
+
+  // The first branch's switch: the store records that its data requires
+  // @yaks/journal (config.ts `versions`) and composes again with it, its
+  // schema pass making the tables of versions and owing their first
+  // (`#seeding`), in one transaction. One that fails leaves the store as it
+  // was. A request arriving while it turns waits for it.
+  #versionsOn = (): Promise<void> => {
+    if (this.#versioned && !this.#turning) return Promise.resolve()
+    return this.#turning ??= this.#turnOn().finally(() => this.#turning = null)
+  }
+  #turning: Promise<void> | null = null
+  #turnOn = async (): Promise<void> => {
+    this.#versioned = true
+    let failed: unknown
+    try {
+      await this.#prepare(this.#name() ?? '')
+      this.#atomic(() => {
+        requires(this.#sql, [versions.use])
+        this.#build()
+      }, (e) => failed = e)
+    } catch (e) {
+      failed ??= e
+    }
+    if (failed === undefined) return
+    this.#versioned = false
+    this.#boot()
+    throw failed
+  }
+
   #stamp = (rule: Rule): Stamp | null => {
     let held = this.#get(rule.mark)
     return held ? JSON.parse(held) : null
@@ -3419,10 +3655,7 @@ export class Store extends Durable {
         let undeclared = paths.filter((path) => !declared(path))
         if (undeclared.length) {
           contract(this.#sql, undeclared.map((p) => p.split('.', 2).join('.')))
-          let [error] = install(
-            this.#sql,
-            shapeOf(this.#get('name') ?? '', this.#get('vocab')),
-          )
+          let [error] = install(this.#sql, this.#shape())
           if (error) throw error
         }
         paths = paths.filter(declared)
@@ -4298,6 +4531,9 @@ export class Store extends Durable {
     }
     if (path == '/notices' && kernel) {
       return subscription(request, this.#stored(this.#graph))
+    }
+    if (path.startsWith('/branches') && kernel) {
+      return this.#branching(request, path)
     }
     if (path == '/used') {
       if (
@@ -5345,9 +5581,7 @@ export class Store extends Durable {
           try {
             this.#tx(() => {
               prepare()
-              undone = this.#schema(
-                shapeOf(this.#get('name') ?? '', JSON.stringify(doc)),
-              )[0]
+              undone = this.#schema(this.#shape(JSON.stringify(doc)))[0]
               throw rollback
             })
           } catch (e) {
@@ -5392,7 +5626,7 @@ export class Store extends Durable {
             prepare()
             // A declaration already bound here needs its deployment pass,
             // while its graph and host capabilities can keep their lifetime.
-            if (shapeOf(this.#name() ?? '', declared).vocab != this.#vocab) {
+            if (this.#shape(declared).vocab != this.#vocab) {
               this.#build()
             }
           })

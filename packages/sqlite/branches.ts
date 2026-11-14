@@ -49,6 +49,11 @@ import { unraised } from './raise.ts'
 import { meta } from './meta.ts'
 import { Refused } from '@yaks/graph/errors'
 
+/** Whether the store over `driver` is still taking its live rows as their
+ * first versions (`Opts.paced`): what maintain() owes it. */
+export let seeding = (driver: Driver): boolean =>
+  meta(driver).get(SEEDING) != null
+
 /** A store still taking its live rows as their first versions (`Opts.paced`)
  * makes no branch yet: one would read main as of a fork that misses every
  * row not taken. Asked again once maintain() has taken the last page. */
@@ -185,7 +190,7 @@ export let branching = (
   opts: () => BindOpts = () => ({}),
 ): Branches => ({
   make: () => {
-    if (meta(driver).get(SEEDING) != null) throw new Unseeded()
+    if (seeding(driver)) throw new Unseeded()
     described(driver, [])
     return rows(driver, eq(col('id'), val(branch(driver, history).branch)))[0]
   },

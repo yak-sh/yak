@@ -398,11 +398,20 @@ use of those apps, and adds no activity hop to those reads.
   request after a deploy that changed a store's words still inspects its
   standing schema (the catalogue and a pragma a table): rows in proportion to
   its vocabulary, never to what it holds.
-- **App stores keep no journal** (T-65227). They don't load @yaks/journal, and
-  declaring journal names in an app manifest doesn't turn it on; their inspector
-  reads schema and entities without history. A store still holding the journal's
-  tables from that window drops them in its next schema pass (migrate.ts
-  `unjournaled`, T-131164).
+- **App stores keep no journal until their first branch** (T-65227). They
+  don't load @yaks/journal, and declaring journal names in an app manifest
+  doesn't turn it on; their inspector reads schema and entities without
+  history. A store still holding the journal's tables from that window drops
+  them in its next schema pass (migrate.ts `unjournaled`, T-131164). A store's
+  first branch (the kernel-only `/branches` doors, graph.ts `#branching`)
+  records @yaks/journal as required, and from then on it composes
+  config.ts `appVersionsConfig`: versions on, attribution and feed off. Its
+  live rows become their first versions a page at a time from its alarm
+  (`#seeding`, @yaks/sqlite `paced`), under the mover's share of its windows;
+  until the last page it makes no branch and answers 503 with `retry-after`.
+  Each branch reads and writes through a graph of its own over a driver of its
+  own (@yaks/sqlite `moded`), running no effect. The versions sit in the
+  store's file, so the bytes it tells the directory count them.
 - **A trashed store sleeps.** Trashing or restoring an app or its space commits
   a `notify_trash` effect in the directory beside the mark (`trash.ts`). It
   tells every affected store, retries until acknowledged, and reads the present

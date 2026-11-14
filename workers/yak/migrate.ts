@@ -359,6 +359,9 @@ export let BOUNDARIES = [
   // its key (@yaks/api/log `rekey`, at a store's wake, T-166122).
   'yak/store/write-receipt-keys/1',
   'yak/store/app-draft/1',
+  // An app store that made a branch keeps versions and requires @yaks/journal
+  // (config.ts `versions`); code before it drops the journal it reads them by.
+  'yak/store/versions/1',
 ]
 
 /** The column the interruption contract emptied before `attempt.state` and
@@ -386,8 +389,12 @@ export let lifecycleColumns = (d: Driver, vocab: Vocab) => {
  * one the store does not hold is not dropped again: any DDL moves the schema's
  * revision, and with it everything read of the schema. A drop that fails comes
  * back for the caller to report, and the store serves what it holds. */
-export let unjournaled = (d: Driver, vocab: Vocab): Error[] => {
-  if (vocab.comp('_tx')) return []
+export let unjournaled = (
+  d: Driver,
+  vocab: Vocab,
+  versioned = false,
+): Error[] => {
+  if (versioned || vocab.comp('_tx')) return []
   let held = new Set(catalogue(d).map((o) => o.name))
   return journalDrop()
     .filter((s) => !vocab.comp(s.name) && held.has(s.name))

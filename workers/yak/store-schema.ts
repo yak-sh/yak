@@ -9,12 +9,14 @@ import {
 import { adopt, type Field, indexed, schema as ftsSchema } from '@yaks/fts'
 import { sha256 } from '@yaks/graph/sha256'
 import { ddl as journalDdl } from '@yaks/journal'
+import { history as historyOf } from '@yaks/journal/graph'
 import {
   col,
   type CreateTable,
   type Derived,
   type Driver,
   eq,
+  type History,
   render,
   select,
   type Stmt,
@@ -47,6 +49,7 @@ import {
 } from './migrate.ts'
 import { appDerived, appWords, numbered, storeWords } from './vocab.ts'
 import { texts } from './embedding-read.ts'
+import { versions } from './config.ts'
 
 let storeKind = (name: string) =>
   name == PLATFORM_STORE ? 'directory' : name == GIT_STORE ? 'git' : 'app'
@@ -65,6 +68,9 @@ export type Shape = {
   own: boolean
   derived: Derived
   searchable: Field[]
+  /** how the store keeps versions, where it does: an app store whose data
+   * requires @yaks/journal (config.ts `versions`) */
+  history?: History
   /** what the store's schema holds beside its own tables: the blob table,
    * the search indexes, the vectors and, where its words keep one, the
    * journal */
@@ -91,13 +97,19 @@ let SHAPES = 16
 export let ownStore = (name: string) =>
   name == PLATFORM_STORE || name == GIT_STORE
 
-export let shapeOf = (name: string, declared: string | null): Shape => {
+export let shapeOf = (
+  name: string,
+  declared: string | null,
+  versioned = false,
+): Shape => {
   // Neither the directory nor the git object graph is an app: each speaks its
   // own words whatever it holds, so its name is the whole key.
   let own = ownStore(name)
   let fixed = own || declared == null || declared == '{}' ||
     declared == '{"$defs":{}}'
-  let key = own ? name : fixed ? 'app' : `app ${declared}`
+  let kept = !own && versioned
+  let key = (own ? name : fixed ? 'app' : `app ${declared}`) +
+    (kept ? ' versions' : '')
   let cache = fixed ? fixedShapes : shapes
   let held = cache.get(key)
   if (held) {
@@ -117,8 +129,9 @@ export let shapeOf = (name: string, declared: string | null): Shape => {
   let after = () => [
     ...ftsSchema(searchable, read),
     ...vectorSchema(),
-    ...(vocab.comp('_tx') ? journalDdl() : []),
+    ...(kept || vocab.comp('_tx') ? journalDdl() : []),
   ]
+  let history = kept ? historyOf(versions.with) : undefined
   // The print is the box's (packages/cli/host.ts): the storage's own print,
   // which carries the revision of the fitting that brings standing tables to
   // it (@yaks/sqlite `FIT`), and every statement beside it. The stamp is the
@@ -132,12 +145,13 @@ export let shapeOf = (name: string, declared: string | null): Shape => {
     own,
     derived,
     searchable,
+    ...history ? { history } : {},
     get beside() {
       return beside ??= [...blobSchema(), ...after()]
     },
     get print() {
       return print ??= printOf(
-        `${INSTALL}:${printFor(vocab, derived)}`,
+        `${INSTALL}:${printFor(vocab, derived)}${history ? ';history' : ''}`,
         shape.beside,
       )
     },
@@ -152,7 +166,12 @@ export let shapeOf = (name: string, declared: string | null): Shape => {
     },
     get stamp() {
       return stamp ??= sha256(
-        [FIT, INSTALL, ...shape.ddl.map((s) => render(s).sql)].join('\n'),
+        [
+          FIT,
+          INSTALL,
+          ...history ? ['history'] : [],
+          ...shape.ddl.map((s) => render(s).sql),
+        ].join('\n'),
       )
     },
     get key() {
@@ -243,7 +262,7 @@ export let INSTALL = 6
  * compose ({@link Shape}). */
 export type Pass = Pick<
   Shape,
-  'vocab' | 'derived' | 'beside' | 'print' | 'stamp' | 'own'
+  'vocab' | 'derived' | 'beside' | 'print' | 'stamp' | 'own' | 'history'
 >
 
 /** The schema a store's words compose, brought over whatever the object
@@ -255,7 +274,10 @@ export type Pass = Pick<
  * fitted, and a new unique index the rows already there break. */
 export let install = (
   d: Driver,
-  { vocab, derived, beside }: Pick<Pass, 'vocab' | 'derived' | 'beside'>,
+  { vocab, derived, beside, history }: Pick<
+    Pass,
+    'vocab' | 'derived' | 'beside' | 'history'
+  >,
 ): Error[] => {
   let read = blobRead(vocab)
   lifecycleColumns(d, vocab)
@@ -265,13 +287,19 @@ export let install = (
   let left = [
     // The blob table first: the `doc_value` view and the search triggers
     // read a body's text out of it.
-    ...add(d, [...blobSchema(), ...(vocab.comp('_tx') ? journalDdl() : [])]),
-    ...unjournaled(d, vocab),
+    ...add(d, [
+      ...blobSchema(),
+      ...(history || vocab.comp('_tx') ? journalDdl() : []),
+    ]),
+    ...unjournaled(d, vocab, !!history),
     // What it leaves undone is answered here, for the caller to report once.
+    // Versions a store begins to keep are seeded a page at a time, by its
+    // alarm (graph.ts `#seeding`), so no install writes a row per row held.
     ...storage(d, vocab, {
       derived,
       number: numbered(vocab),
       report: () => {},
+      ...history ? { history, paced: true } : {},
     }).install(beside),
     ...add(d, vectorSchema()),
   ]

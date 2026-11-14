@@ -264,8 +264,9 @@ export let reshapes = (
  * past entity `after`, up to `limit`, each as its open version from no
  * transaction, with its membership, where main has neither yet. History is
  * kept from the beginning on, so a row a write changed or removed before its
- * page was taken keeps only what that write made: its past begins there. Answers the last entity it took, or null where it
- * took the last of them.
+ * page was taken keeps only what that write made: its past begins there.
+ * Answers how many rows it took, and the last entity, or null where it took
+ * the last of them.
  */
 export let seedPage = (
   driver: Driver,
@@ -273,7 +274,7 @@ export let seedPage = (
   comp: string,
   after: number,
   limit: number,
-): number | null => {
+): { taken: number; last: number | null } => {
   let [last] = driver.query(select({
     cols: [
       as(fn('max', col('entity')), 'last'),
@@ -290,8 +291,8 @@ export let seedPage = (
       'page',
     ),
   }))
-  if (last?.last == null) return null
-  let upto = Number(last.last), whole = Number(last.n) == limit
+  if (last?.last == null) return { taken: 0, last: null }
+  let upto = Number(last.last), taken = Number(last.n)
   let page = and(
     op('>', col('entity', 'live'), val(after)),
     op('<=', col('entity', 'live'), val(upto)),
@@ -336,7 +337,7 @@ export let seedPage = (
       ),
     }),
   })
-  return whole ? upto : null
+  return { taken, last: taken == limit ? upto : null }
 }
 
 /** The branch table: a branch's parent (0 is main), the transaction it forked
