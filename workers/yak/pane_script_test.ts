@@ -55,7 +55,7 @@ test('a page with a layer loads its script', async () => {
 
 test('the menu opens and closes in place, adding no history entry', async () => {
   let p = await page()
-  assert(p.press('.Desk_Bar a[data-pane]'))
+  assert(p.press('.Frame_Menu[data-pane]'))
   assertEquals(p.location.hash, '#menu')
   assert(p.press('#menu .Sidebar_Close'))
   assertEquals([p.location.hash, p.replaced], ['', ['#menu', '#']])
@@ -63,7 +63,7 @@ test('the menu opens and closes in place, adding no history entry', async () => 
 
 test('a press with a modifier key is left to the browser', async () => {
   let p = await page()
-  assert(!p.press('.Desk_Bar a[data-pane]', { metaKey: true }))
+  assert(!p.press('.Frame_Menu[data-pane]', { metaKey: true }))
   assertEquals(p.replaced, [])
 })
 

@@ -1,9 +1,9 @@
 import { Shell } from '@yaks/ui/parts'
-import { Head, Skip, Toolbar } from '@yaks/ui/parts'
+import { Head } from '@yaks/ui/parts'
 // The dashboard's pages, apart from pages.ts so a page that only serves a
 // space never compiles them. Its sidebar is composed by desk-sidebar.ts.
 import { deskSide } from './desk-sidebar.ts'
-import { menuButton } from './sidebar.ts'
+import { frame, FRAMED } from './frame.ts'
 import { spaceTile } from './space-picker.ts'
 import { Time } from '@yaks/ui/parts'
 import { agentSetup, pasteLink } from './signin-pages.ts'
@@ -200,40 +200,36 @@ let picked = (at: DeskPage) =>
     { slug: at.space, title: '', owner: !at.member, own: false }
 let named = (s: Pick<Picked, 'slug' | 'title'>) => s.title || s.slug
 
-// The dashboard's frame, which every dashboard page is drawn in (`desk`, and
-// the platform's admin directory, admin.ts `desk`): the side beside the page;
-// on a phone a top bar naming the page, whose Menu opens the same side over
-// the whole screen and whose Close shuts it (`:target`, no script).
+// A dashboard page in the frame (frame.ts), as every one is drawn (`desk`,
+// and the platform's admin directory, admin.ts `desk`): a sheet under the
+// head that names it, the side beside it, and on a phone the frame's bar
+// naming it too, whose Menu opens the side over the whole screen.
 export let deskFrame = (
   at: {
     sidebar: Kids
-    where: Kids
+    title: string
+    sub: Kids
     head: Kids
     content: Kids
     class?: string
     person?: string
   },
-) => [
-  h(
-    Toolbar,
-    { class: 'Desk_Bar', mod: 'narrow' },
-    menuButton(),
-    h(Toolbar.Text, { as: 'span' }, at.where),
-  ),
-  h(Skip, { href: '#content' }, 'Skip to content'),
-  at.sidebar,
-  h(
-    Shell.Sheet,
-    { class: 'Desk_Body' },
-    h('header', { class: 'Desk_Head' }, at.head),
-    h(Shell.Content, {
-      class: ['Desk_Content', at.class].filter(Boolean).join(' '),
-      id: 'content',
-      tabindex: '-1',
-      'data-save-person': at.person,
-    }, at.content),
-  ),
-]
+) =>
+  frame({
+    side: at.sidebar,
+    title: at.title,
+    sub: at.sub,
+    headed: true,
+    content: h(
+      Shell.Sheet,
+      { class: 'Desk_Body' },
+      h('header', { class: 'Desk_Head' }, at.head),
+      h(Shell.Content, {
+        class: ['Desk_Content', at.class].filter(Boolean).join(' '),
+        'data-save-person': at.person,
+      }, at.content),
+    ),
+  })
 
 let connectCard = (at: DeskPage, env: Host) =>
   h(
@@ -2012,15 +2008,13 @@ export let desk = (at: DeskPage, env: Host = {}) => {
         'cache-control': 'private, no-store',
         'x-robots-tag': 'noindex',
       },
-      layout: 'Desk',
+      layout: FRAMED,
     },
     deskFrame({
       sidebar: deskSide(at, view, env),
       person: at.person,
-      where: [
-        h('b', null, titles[view]),
-        h(Toolbar.Sub, { as: 'small' }, whose),
-      ],
+      title: titles[view],
+      sub: whose,
       head: [
         h(
           'div',

@@ -11,12 +11,12 @@
 // `data-pending`, or a send, `aria-busy`). A hidden page is calm whenever
 // nothing on it is busy.
 //
-// The reload keeps what the person had: the window's scroll, or its bottom
-// where they were following it down; the entries they had open; the field they
-// were in and where in it; and each value they changed from what the page
-// drew, put back as if typed. A draft is kept on the device and in the store
-// as well (@yaks/draft). The browser shows the old page until the new one
-// paints, so nothing flashes.
+// The reload keeps what the person had: the page's scroll (the frame's body,
+// frame.ts, else the window's), or its bottom where they were following it
+// down; the entries they had open; the field they were in and where in it;
+// and each value they changed from what the page drew, put back as if typed.
+// A draft is kept on the device and in the store as well (@yaks/draft). The
+// browser shows the old page until the new one paints, so nothing flashes.
 {
   let script = document.currentScript
   let mine = script?.dataset.deploy
@@ -55,6 +55,10 @@
       [...document.querySelectorAll('details')],
       (d) => d.id || d.querySelector('summary')?.textContent || '',
     )
+  // What scrolls the page: the frame's body where it has one, else the window.
+  let pane = () =>
+    document.querySelector('.Frame_Body') ?? document.scrollingElement ??
+      document.documentElement
   let checkable = (el) => el.type == 'checkbox' || el.type == 'radio'
   let changed = (el) =>
     checkable(el)
@@ -93,11 +97,10 @@
       field.focus({ preventScroll: true })
       if (start != null) field.setSelectionRange?.(start, end)
     }
-    let scroll = () =>
-      scrollTo(
-        kept.x,
-        kept.bottom ? document.documentElement.scrollHeight : kept.y,
-      )
+    let scroll = () => {
+      let at = pane()
+      at.scrollTo(kept.x, kept.bottom ? at.scrollHeight : kept.y)
+    }
     // The browser goes back to restoring places as the page had it (the
     // Operator's chat keeps its own, public/follow.js).
     let restored = () => history.scrollRestoration = kept.restoration ?? 'auto'
@@ -133,15 +136,15 @@
   let target, timer
   let move = () => {
     let active = fields().find(([, el]) => el == document.activeElement)
-    let root = document.documentElement
+    let at = pane()
     try {
       sessionStorage.setItem(
         KEY,
         JSON.stringify({
-          x: scrollX,
-          y: scrollY,
-          bottom: scrollY > 0 &&
-            innerHeight + scrollY >= root.scrollHeight - 40,
+          x: at.scrollLeft,
+          y: at.scrollTop,
+          bottom: at.scrollTop > 0 &&
+            at.clientHeight + at.scrollTop >= at.scrollHeight - 40,
           restoration: history.scrollRestoration,
           open: entries().map(([key, d]) => [key, d.open]),
           fields: fields().filter(([, el]) => changed(el))

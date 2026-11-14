@@ -129,7 +129,7 @@ test('a conversation opens on what was said and everything its model was told an
   ])
   // In the column the chat app draws a conversation in, and written in the
   // chat app, so marked by no channel.
-  let column = talk.document.querySelector('#content > .Talk_Column')!
+  let column = talk.document.querySelector('.Desk_Content > .Talk_Column')!
   assertEquals(column.hasAttribute('data-conversation'), true)
   assertEquals(texts(column, '.Transcript_Bubble'), ['Post the meeting.'])
   assertEquals(column.querySelector('.Transcript_Via'), null)

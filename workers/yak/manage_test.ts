@@ -308,7 +308,7 @@ test('the chat’s side opens each app beside it, and Updates', async () => {
   let chat = await get(home)
   assertEquals(chat.status, 200)
   let chatted = await chat.text()
-  assertStringIncludes(chatted, 'class="Talk Talk-beside"')
+  assertStringIncludes(chatted, ' Talk Talk-beside"')
   assertStringIncludes(chatted, `href="${home}?app=site"`)
   let about = await (await get(`${home}?app=site`)).text()
   assertEquals(

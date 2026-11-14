@@ -10,10 +10,11 @@ let code = await Deno.readTextFile(
 )
 let OLD = { id: 'old', at: '2026-11-06T10:00:00Z' }
 let NEW = { id: 'new', at: '2026-11-07T10:00:00Z' }
+// A dashboard page, which scrolls in the frame's body (frame.ts).
 let BODY =
-  `<form><textarea name="say"></textarea><input name="title" value="Soup">
+  `<div class="Frame_Body"><form><textarea name="say"></textarea><input name="title" value="Soup">
 <input type="hidden" name="request" value="r1"></form>
-<details id="step"><summary>Step</summary></details><div data-card></div>`
+<details id="step"><summary>Step</summary></details><div data-card></div></div>`
 
 let browser = (
   opts: {
@@ -55,7 +56,6 @@ let browser = (
     visibilityState: { get: () => opts.hidden ? 'hidden' : 'visible' },
     readyState: { value: 'interactive' },
   })
-  Object.defineProperty(d.documentElement, 'scrollHeight', { value: 2000 })
   let clock = 1_000_000
   let timers = new Map<number, [number, () => void]>()
   let n = 0
@@ -64,6 +64,13 @@ let browser = (
   let storage = opts.kept ?? new Map<string, string>()
   let asks: string[] = []
   let at = { x: 0, y: 0 }
+  Object.defineProperties(d.querySelector('.Frame_Body'), {
+    scrollHeight: { value: 2000 },
+    clientHeight: { value: 800 },
+    scrollLeft: { get: () => at.x },
+    scrollTop: { get: () => at.y },
+    scrollTo: { value: (x: number, y: number) => at = { x, y } },
+  })
   let reloads = 0
   let w = {
     document,
@@ -90,14 +97,6 @@ let browser = (
     addEventListener: (kind: string, fn: (e: Heard) => void) =>
       (on[kind] ??= []).push(fn),
     dispatchEvent: (e: Heard) => on[e.type!]?.forEach((fn) => fn(e)),
-    scrollTo: (x: number, y: number) => at = { x, y },
-    get scrollX() {
-      return at.x
-    },
-    get scrollY() {
-      return at.y
-    },
-    innerHeight: 800,
   }
   // The window and the document are heard alike.
   d.addEventListener = w

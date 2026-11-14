@@ -291,7 +291,7 @@ test('the Operator page is drawn beside the side, which a member sees with only 
 
 test('on a phone, Menu opens the same side', async () => {
   let { document } = sides(await block({ view: 'people' }))
-  let menu = document.querySelector('.Desk_Bar a')!
+  let menu = document.querySelector('.Frame_Menu')!
   assertEquals(menu.textContent, 'Menu')
   assert(menu.querySelector('svg.Icon'), 'Menu wears the kit’s icon')
   assertEquals(menu.getAttribute('href'), '#menu')

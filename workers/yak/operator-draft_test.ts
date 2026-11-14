@@ -723,7 +723,7 @@ test("a newcomer's chat opens the app their Operator is making beside it, then i
   assertEquals(made(document), { keeps: ['Recipe'], open: ['keeps'] })
   assert(document.querySelector('.Talk')!.classList.contains('Talk-app'))
   assertEquals(
-    document.querySelector('.Talk_Bar .Talk_Show')?.textContent,
+    document.querySelector('.Frame_Bar .Talk_Show')?.textContent,
     'Recipe box',
   )
   assertEquals(document.querySelector('[data-frame]'), null)
@@ -1148,7 +1148,7 @@ test('the aside’s summary in the bar shows a dot for each, “+N” past four,
   let page = await load(storage(), false, park)
   let { document } = page
   let glance = () =>
-    document.querySelector('.Talk_Bar [data-aside] [data-glance]')!
+    document.querySelector('.Frame_Bar [data-aside] [data-glance]')!
   let aside = document.querySelector('[data-aside]')!
   let dots = () =>
     [...glance().querySelectorAll('.Dot')].map((d) => d.className)

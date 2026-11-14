@@ -207,9 +207,7 @@ ${links(env, 'pages.css', undefined, assets)}${
   }${head ? `\n${head}` : ''}
 </head>
 <body${layout ? ` class="${layout}"` : ''}><main class="${
-    layout.split(/\s+/).filter(Boolean).map((name) =>
-      name + (name == 'Talk_Page' ? 'Main' : '_Main')
-    ).join(' ')
+    layout.split(/\s+/).filter(Boolean).map((name) => name + '_Main').join(' ')
   }">${main}`
   let close = `</main><script type="module" src="${
     file('_dates.js')

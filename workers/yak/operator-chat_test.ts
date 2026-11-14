@@ -765,7 +765,7 @@ test('a helper’s page is zoomed in: held under the bar, the way back out, its 
   let { document } = await sided('owner', helper)
   let theirs = `${managePath('operator', space.slug)}/${task}`
   assert(document.querySelector('.Talk')!.classList.contains('Talk-zoomed'))
-  let band = document.querySelector('.Talk_Top > .Talk_Helper')!
+  let band = document.querySelector('.Frame_Bar + .Talk_Helper')!
   let out = band.querySelector('.Talk_Out')!
   assertEquals(
     [out.getAttribute('href'), out.textContent],
@@ -879,12 +879,12 @@ test('what needs the person is beside every conversation, counted, beside the si
       'asked about in place',
     )
     assertEquals(aside.querySelector(`#u-${told.eid}`), null)
-    let waits = document.querySelector('.Talk_Bar .Talk_Waits')!
+    let waits = document.querySelector('.Frame_Bar .Talk_Waits')!
     assertEquals([waits.getAttribute('href'), waits.textContent], [
       '#needs',
       '1',
     ])
-    let menu = document.querySelector('.Talk_Bar .Talk_Menu')!
+    let menu = document.querySelector('.Frame_Bar .Frame_Menu')!
     // it reads as the desk's does (home_test.ts)
     assertEquals([menu.getAttribute('href'), menu.textContent], [
       '#menu',
@@ -892,7 +892,7 @@ test('what needs the person is beside every conversation, counted, beside the si
     ])
     assert(menu.querySelector('svg.Icon'), 'Menu wears the kit’s icon')
     // each layer opens and closes without a history entry (public/pane.js)
-    for (let sel of ['.Talk_Menu', '.Talk_Waits', '#menu .Sidebar_Close']) {
+    for (let sel of ['.Frame_Menu', '.Talk_Waits', '#menu .Sidebar_Close']) {
       assert(document.querySelector(sel)?.hasAttribute('data-pane'), sel)
     }
     assert(

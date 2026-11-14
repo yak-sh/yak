@@ -1,4 +1,4 @@
-import { Head, Toolbar } from '@yaks/ui/parts'
+import { Head } from '@yaks/ui/parts'
 // The platform admin's directory (T-124291): every person, space and app on
 // yaks.app and what each uses, at /admin on the apex. A person's row says
 // what the spaces they own spent this month (each against its own budget), the
@@ -65,6 +65,7 @@ import { Button, Card, Empty, Field, Group } from '@yaks/ui/parts'
 import { day, esc, markup, raw } from './html.ts'
 import { lost, shell } from './pages.ts'
 import { deskFrame } from './desk-pages.ts'
+import { FRAMED } from './frame.ts'
 import { type IconName } from './icons.ts'
 import { type Host, spaceHost, url } from '@yaks/platform/host'
 import { DAYS, NOT_ON, statsOf } from './views.ts'
@@ -569,16 +570,14 @@ let desk = (
         home: url(d.env, '/'),
         sections: [{ id: 'side-directory', label: 'Directory', items: nav }],
       }),
-      where: [
-        h('b', null, title),
-        h(Toolbar.Sub, { as: 'small' }, 'Admin'),
-      ],
+      title,
+      sub: 'Admin',
       head: h('div', null, kicker, h(Head.Title, { mod: 'page' }, title)),
       content: body,
       class: 'Directory_Content',
     })),
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
-    'Desk',
+    FRAMED,
   )
 }
 

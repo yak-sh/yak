@@ -363,20 +363,51 @@
   .Tv_Said:empty {
     display: none;
   }
-  .Desk {
+  /* The frame a signed-in page stands in (frame.ts), the Operator's chat
+     and the settings pages alike: the kit's Shell, the window's height, the
+     side (sidebar.ts) beside the page's column and any panes beside that.
+     The column's bar stays put over its body, which scrolls down. The bar's
+     Menu shows only where the side is folded away, and on a page that names
+     itself in its own head, so does the bar. */
+  .Framed {
     display: block;
+    height: 100dvh;
+    overflow: hidden;
   }
-  .Desk_Main {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: start;
+  .Framed_Main {
     max-width: none;
-    min-height: 100vh;
     padding: 0;
     text-align: left;
   }
-  .Desk_Bar {
+  /* What the column holds is sized to it: the yak beside the Operator's
+     box (operator-page.ts `composer`), and what its bar opens. */
+  .Frame_Column {
+    container: workspace / inline-size;
+  }
+  /* Over the body, so what the bar opens under itself lies above it. */
+  .Frame_Bar {
+    position: relative;
+    z-index: 1;
+  }
+  .Frame_Menu {
     display: none;
+  }
+  /* The body keeps what it raises (a selected tab, a chart, the box held
+     at its foot) to itself, so the side, the bar and what they open over
+     it lie above it all. */
+  .Frame_Body {
+    isolation: isolate;
+    overflow: hidden auto;
+  }
+  @media (min-width: 701px) {
+    .Frame-headed .Frame_Bar {
+      display: none;
+    }
+  }
+  @media (max-width: 700px) {
+    .Frame_Menu {
+      display: inline-flex;
+    }
   }
   .Desk_Logo {
     display: flex;
@@ -389,12 +420,10 @@
     flex: 1;
     min-width: 12rem;
   }
-  /* The body keeps what it raises (a selected tab, a chart) to itself, so
-     the side, and a menu opened from it over the body, lies above it all. */
+  /* The sheet fills the frame's body, to the window's foot. */
   .Desk_Body {
-    isolation: isolate;
+    flex: 1 0 auto;
     min-width: 0;
-    min-height: 100vh;
     padding: 2rem clamp(1.25rem, 4vw, 3rem) 3rem;
   }
   .Desk_Head {
@@ -464,18 +493,7 @@
     }
   }
   @media (max-width: 700px) {
-    .Desk_Main {
-      display: block;
-    }
-    /* The top bar: Menu, and the page with the space it is in. */
-    .Desk_Bar {
-      position: sticky;
-      top: 0;
-      z-index: 2;
-      display: flex;
-    }
     .Desk_Body {
-      min-height: 0;
       padding: 1.5rem 1rem 2.5rem;
     }
     .Desk_Head {
@@ -640,43 +658,20 @@
       grid-template-columns: 8rem minmax(0, 1fr);
     }
   }
-  /* The Operator's chat app (operator-page.ts `chatPage`): the side
-     (talk-sidebar.ts), one conversation filling the page, read down a column
-     with the box to write in held at the foot of the window, and at its
-     right what waits on the person (talk-beside.ts). Each pane scrolls
-     within the window; the whole side scrolls together (`.Sidebar_Scroll`).
-     On a phone the side opens over the page from the bar's Menu. */
-  .Talk_Page {
-    display: block;
-    min-height: 0;
-    height: 100dvh;
-    overflow: hidden;
-  }
+  /* The Operator's chat app (operator-page.ts `chatPage`), in the frame
+     (frame.ts): one conversation filling the column, read down it with the
+     box to write in held at the foot of the window, and at its right what
+     waits on the person (talk-beside.ts). Each pane scrolls within the
+     window; the whole side scrolls together (`.Sidebar_Scroll`). */
   /* The app is a window onto another site. Keep the page's grain below
      its column, including when that column fills the screen on a phone,
-     and over everything else: the side (z-index 1, before the grain in the
-     page) and the current tab where it reaches across onto the page. */
-  html:has(.Talk_Page)::after {
+     and over everything else: the side and the frame's bar (z-index 1,
+     before the grain in the page) and the current tab where it reaches
+     across onto the page. */
+  html:has(.Talk_App)::after {
     z-index: 1;
   }
-  .Talk_PageMain {
-    max-width: none;
-    padding: 0;
-    text-align: left;
-  }
-  /* The side (sidebar.ts) takes the room it is drawn at, folded or not, as
-     on the settings pages. */
-  .Talk {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    height: 100dvh;
-    overflow: hidden;
-  }
-  .Talk-beside {
-    grid-template-columns: auto minmax(0, 1fr) 22rem;
-  }
 
-  .Talk_Menu,
   .Talk_Back,
   .Talk_Show,
   .Talk_Waits,
@@ -689,6 +684,7 @@
      where the column is opened over the conversation. */
   .Talk_Beside {
     display: flex;
+    flex: 0 0 22rem;
     flex-direction: column;
     min-width: 0;
     height: 100dvh;
@@ -714,25 +710,6 @@
     min-width: 0;
     max-width: 50%;
   }
-  .Talk_Main {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    min-height: 0;
-    height: 100dvh;
-    overflow: hidden auto;
-    overscroll-behavior: contain;
-  }
-  /* The bar, and under it on a zoomed page its band, held at the top as
-     the conversation scrolls. */
-  .Talk_Top {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-  }
-  .Talk_Bar {
-    position: relative;
-  }
   /* The conversation, at a reading width in the middle of the page. */
   .Talk_Column,
   .Talk_Keep,
@@ -752,12 +729,6 @@
     padding-top: 18vh;
     text-align: center;
   }
-  /* The yak beside the box (operator-page.ts `composer`), taking no room
-     from the conversation: in the margin to its left where the page is wide
-     enough, else sitting on its top edge. */
-  .Talk_Main {
-    container: workspace / inline-size;
-  }
   /* A newcomer's address, asked for over the chat (newcomer.ts). */
   .Talk_Keep {
     display: grid;
@@ -770,7 +741,7 @@
   /* The row an alert was about, which pressing the alert opens at
      (operator-alerts.ts `openAt`); where the column is one press away, it
      opens with it. */
-  /* A line linked to (Copy link), clear of the bar held at the top. */
+  /* A line linked to (Copy link), with room above it. */
   .Transcript_Row:target {
     background: color-mix(in srgb, var(--card), var(--accent) 12%);
     border-radius: var(--radius);
@@ -786,7 +757,7 @@
      under the bar in it says it is a helper with the way back out, its
      words lined up with the conversation's, and the conversation grows
      into place as it opens. */
-  .Talk-zoomed .Talk_Main {
+  .Talk-zoomed .Frame_Column {
     background: color-mix(in srgb, var(--bg), var(--accent) 7%);
   }
   .Talk_Helper {
@@ -922,17 +893,20 @@
   /* An app open beside the chat (operator-page.ts `canvas`): a third column
      the height of the window, held in place while the chat scrolls, the app
      itself filling it under its name. */
-  .Talk-app {
-    grid-template-columns: auto minmax(20rem, 1fr) minmax(0, 1.4fr);
+  @media (min-width: 701px) {
+    .Talk-app .Frame_Column {
+      min-width: 20rem;
+    }
   }
   /* Beside an app, what waits keeps its column where the window holds all
      three; narrower, it is behind the bar's button, as on a phone. */
   @media (min-width: 1400px) {
-    .Talk-app.Talk-beside {
-      grid-template-columns: auto minmax(20rem, 1fr) 20rem minmax(0, 1.4fr);
+    .Talk-app .Talk_Beside {
+      flex-basis: 20rem;
     }
   }
   .Talk_App {
+    flex: 1.4 1 0;
     position: sticky;
     top: 0;
     z-index: 2;
@@ -1038,9 +1012,6 @@
     }
   }
   @media (max-width: 1099px) {
-    .Talk-beside:not(.Talk-app) {
-      grid-template-columns: auto minmax(0, 1fr);
-    }
     .Talk-beside .Talk_Waits {
       display: inline-flex;
     }
@@ -1064,13 +1035,6 @@
     }
   }
   @media (max-width: 700px) {
-    .Talk {
-      display: block;
-    }
-    .Talk_Menu {
-      display: inline-flex;
-    }
-
     .Talk_Column,
     .Talk_Box,
     .Talk_Helper {
@@ -1110,6 +1074,7 @@
 @layer sections {
   .Sidebar {
     --sidebar-padding: .75rem;
+    flex: none;
     position: sticky;
     top: 0;
     display: flex;

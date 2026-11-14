@@ -453,7 +453,7 @@ let page = async (path: string) => {
     current: document.querySelector('[aria-current="page"]')?.textContent,
     // On a phone, the top bar's Menu and the side it opens.
     menu: [
-      document.querySelector('.Desk_Bar a')?.getAttribute('href'),
+      document.querySelector('.Frame_Menu')?.getAttribute('href'),
       document.querySelector('#menu')?.getAttribute('aria-label'),
       document.querySelector('#menu .Sidebar_Close')?.getAttribute('href'),
     ],

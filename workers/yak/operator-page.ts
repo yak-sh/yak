@@ -3,7 +3,6 @@ import {
   Identity,
   Notice,
   Preview,
-  Skip,
   Toolbar,
   Transcript,
 } from '@yaks/ui/parts'
@@ -38,7 +37,7 @@ import { vouched, type Who } from './session.ts'
 import { PROTOCOL, protocolled, upgrading } from './protocol.ts'
 import { esc, type Picked, script, shell } from './pages.ts'
 import { aboutPath, talkSide } from './talk-sidebar.ts'
-import { menuButton } from './sidebar.ts'
+import { frame, FRAMED } from './frame.ts'
 import { spaceHost, url } from '@yaks/platform/host'
 import {
   backTo,
@@ -1711,10 +1710,10 @@ export let installing = (space: Space) => {
   })
 }
 
-// A page of the chat app: the side (talk-sidebar.ts), and beside it the bar
-// naming the page and whose Operator it is, over `main`; the lists
-// of what waits on the person beside it where the page has them
-// (talk-beside.ts); and the app open beside them all.
+// A page of the chat app, in the frame (frame.ts): the side
+// (talk-sidebar.ts), and beside it the bar naming the page and whose Operator
+// it is, over `main`; the lists of what waits on the person beside it where
+// the page has them (talk-beside.ts); and the app open beside them all.
 let talkPage = (
   env: Env,
   space: Space,
@@ -1747,57 +1746,36 @@ let talkPage = (
     `${esc(page.title)} · ${esc(space.operator)}`,
     null,
     page.status,
-    html([
-      h(Skip, { href: page.skip[0] }, page.skip[1]),
-      h(
-        'div',
-        {
-          class: [
-            'Talk',
-            page.app && 'Talk-app',
-            page.lists && 'Talk-beside',
-            page.band && 'Talk-zoomed',
-          ].filter(Boolean).join(' '),
-        },
-        talkSide(env, space, who, beside, {
-          waiting: page.waiting,
-          current: page.current,
-          app: page.app?.slug,
-          here: page.here,
-        }),
-        h(
-          'div',
-          {
-            class: 'Talk_Main',
-            id: 'content',
-          },
-          h(
-            'div',
-            { class: 'Talk_Top' },
-            h(
-              Toolbar,
-              { class: 'Talk_Bar' },
-              menuButton('Talk_Menu'),
-              h(
-                Toolbar.Text,
-                {},
-                h(Toolbar.Title, { 'data-title': '' }, page.title),
-                h(Toolbar.Sub, {}, whoseOf(space)),
-              ),
-              page.app ? showing(page.app) : null,
-              page.aside,
-              page.lists ? waitsButton(counted(page.lists)) : null,
-            ),
-            page.band,
-          ),
-          page.main,
-        ),
+    html(frame({
+      side: talkSide(env, space, who, beside, {
+        waiting: page.waiting,
+        current: page.current,
+        app: page.app?.slug,
+        here: page.here,
+      }),
+      title: page.title,
+      sub: whoseOf(space),
+      tools: [
+        page.app ? showing(page.app) : null,
+        page.aside,
+        page.lists ? waitsButton(counted(page.lists)) : null,
+      ],
+      under: page.band,
+      content: page.main,
+      beside: [
         page.lists ? talkBeside(page.lists) : null,
         page.app ? canvas(env, space, page.app, space.operator) : null,
-      ),
-    ]) + (page.script ?? ''),
+      ],
+      class: [
+        'Talk',
+        page.app && 'Talk-app',
+        page.lists && 'Talk-beside',
+        page.band && 'Talk-zoomed',
+      ].filter(Boolean).join(' '),
+      skip: page.skip,
+    })) + (page.script ?? ''),
     { 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' },
-    'Talk_Page',
+    FRAMED,
     installable(space),
   )
 
@@ -2271,7 +2249,7 @@ let put = (drawn) => {
     remember(next)
     refreshFrames()
     made.innerHTML = drawn.show
-    let bar = document.querySelector('.Talk_Bar')
+    let bar = document.querySelector('.Frame_Bar')
     bar.insertBefore(made.content.firstElementChild, bar.querySelector('[data-aside]'))
     return
   }
