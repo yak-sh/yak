@@ -1950,8 +1950,11 @@ export let recompileRelease = async (
 let transferable = (path: string) =>
   !!own([path]).length || path.startsWith(BUILT)
 
-let offered = async (ctx: Ctx, from: { space: Space; app: App }) => {
-  let number = from.app.published!.version
+let offered = async (
+  ctx: Ctx,
+  from: { space: Space; app: App },
+  number = from.app.published!.version,
+) => {
   let version = (await ctx.dir.deploys(from.app)).find((v) =>
     v.version == number
   )
@@ -6288,7 +6291,16 @@ let OURS: Row[] = [
         )
       }
       let from = app.installed.of ? await ctx.dir.appAt(app.installed.of) : null
-      if (!from?.app.published) {
+      // What the copy moves to is what its publisher offers. An owner of the
+      // app it came from holds its code anyway, so for them a copy of one no
+      // longer published follows the version it serves: how the gallery's
+      // copy in a space of ours keeps taking a private app's releases (T-76).
+      let to = from?.app.published?.version ??
+        (from && from.app.version &&
+            (await ctx.dir.owners(from.space)).includes(ctx.person)
+          ? from.app.version
+          : null)
+      if (!from || !to) {
         throw refuse(
           'missing',
           `the app ${space.slug}/${app.slug} came from is no longer ` +
@@ -6296,12 +6308,13 @@ let OURS: Row[] = [
             'nothing to update it to',
         )
       }
+      let named = from.app.published?.name ??
+        `${from.space.slug}/${from.app.slug}`
       let was = app.installed.version
-      let to = from.app.published.version
       if (to == was && app.version) {
         return {
           text:
-            `${space.slug}/${app.slug} is already at v${to} of ${from.app.published.name} — nothing to update`,
+            `${space.slug}/${app.slug} is already at v${to} of ${named} — nothing to update`,
           space,
         }
       }
@@ -6309,7 +6322,7 @@ let OURS: Row[] = [
       // moves: a vocabulary that only grew lands through the store's own
       // additive graft, and one that conflicts is refused here with the
       // sentence a deploy gives (T-32728), leaving the copy as it was.
-      let source = await offered(ctx, from)
+      let source = await offered(ctx, from, to)
       let said = await offeredWords(r2RawObjects(ctx.env.BLOBS), source)
       let accepted = Object.keys(
         appDoc(said.source ?? {}, said.file).$defs ?? {},
@@ -6351,7 +6364,7 @@ let OURS: Row[] = [
       }, vouched(who))
       return {
         text:
-          `updated ${space.slug}/${app.slug} from v${was} to v${to} of ${from.app.published.name}: ${wrote.length} ${
+          `updated ${space.slug}/${app.slug} from v${was} to v${to} of ${named}: ${wrote.length} ${
             wrote.length == 1 ? 'file' : 'files'
           }${
             gone.length ? `, ${gone.length} removed` : ''

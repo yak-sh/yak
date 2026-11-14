@@ -1,6 +1,11 @@
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import { test } from '@yaks/testing'
-import { connector, fresh, letter, owned, vocabFile } from './probe.ts'
+import { connector, fresh, letter, owned, signIn, vocabFile } from './probe.ts'
 import { ServingCopy } from './serving-copy.ts'
 import type { ServingCopyDoor } from './directory-copy.ts'
 import { directoryOf } from './directory.ts'
@@ -174,6 +179,36 @@ test('relisting updates the demo copy and keeps its records', async () => {
   assertEquals([who.role, who.writes], ['viewer', true])
   let offer = await agent.tool('app_published', { words: 'private-skip-demo' })
   assertStringIncludes(offer, 'v2')
+})
+
+// The gallery's copy of an app of ours that is no longer published keeps
+// taking its releases for whoever owns both spaces (T-76); a stranger's copy
+// of it has nothing to update to.
+test('a copy follows an unpublished app its owner owns', async () => {
+  let ann = await signIn(k)
+  let hers = connector(k, ann.cookie)
+  await hers.tool('app_install', { name: 'private-skip', as: 'kept' })
+  await agent.tool('app_unpublish', { space: 'home', app: 'skip' })
+  await agent.tool('app_files', {
+    space: 'home',
+    app: 'skip',
+    path: 'index.html',
+    content: '<h1>Unpublished manual</h1>',
+  })
+  await agent.tool('app_deploy', { space: 'home', app: 'skip' })
+  assertStringIncludes(
+    await agent.tool('app_update', { space: 'yourname', app: 'skip' }),
+    'to v3 of home/skip',
+  )
+  // Strangers are shown what the copy offers, so it is published again.
+  await agent.tool('app_publish', { space: 'yourname', app: 'skip' })
+  let demo = await k.at('yourname.yaks.app', '/skip/')
+  assertStringIncludes(await demo.text(), 'Unpublished manual')
+  assertStringIncludes(
+    (await assertRejects(() => hers.tool('app_update', { app: 'kept' }), Error))
+      .message,
+    'no longer published',
+  )
 })
 
 let demos = await Promise.all(['bible-study', 'housebook'].map(async (app) => {

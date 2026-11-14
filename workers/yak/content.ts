@@ -729,7 +729,7 @@ export let WORDS: Record<string, Words> = {
   'app_update': {
     'title': 'Update an installed app',
     'description':
-      "Move an installed app to whatever version its publisher offers now. The person's data stays: every row they saved is theirs and is not touched. Only the code is replaced, so anything you wrote into the copy yourself is replaced too. A vocab.json schema that only added properties is applied to their store; one that would retype a property their rows were written under is refused, and nothing moves. A connection the new version uses that the copy did not is asked for, as app_install asks. It reports what changed. To undo: app_rollback, since the update goes out as a version like any other and app_versions lists the one before it. Documentation: https://yaks.app/docs/sharing.",
+      "Move an installed app to whatever version its publisher offers now. A copy of an app no longer published moves to the version it serves, for an owner of the space it came from, and is refused for anyone else. The person's data stays: every row they saved is theirs and is not touched. Only the code is replaced, so anything you wrote into the copy yourself is replaced too. A vocab.json schema that only added properties is applied to their store; one that would retype a property their rows were written under is refused, and nothing moves. A connection the new version uses that the copy did not is asked for, as app_install asks. It reports what changed. To undo: app_rollback, since the update goes out as a version like any other and app_versions lists the one before it. Documentation: https://yaks.app/docs/sharing.",
   },
   'app_rate': {
     'title': 'Rate something your space installed',

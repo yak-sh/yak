@@ -1019,7 +1019,9 @@ app_install:
 app_update:
   title: Update an installed app
   description: >-
-    Move an installed app to whatever version its publisher offers now. The
+    Move an installed app to whatever version its publisher offers now. A
+    copy of an app no longer published moves to the version it serves, for
+    an owner of the space it came from, and is refused for anyone else. The
     person's data stays: every row they saved is theirs and is not touched.
     Only the code is replaced, so anything you wrote into the copy yourself
     is replaced too. A vocab.json schema that only added properties is
