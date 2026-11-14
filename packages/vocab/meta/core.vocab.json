@@ -178,8 +178,17 @@
       ]
     },
     "kind": {
-      "description": "true = this component names a display kind (feeds kindOf / kindOrder).",
+      "description": "true = this component is the kind of its own name, `is: [name]`, carrying its `before` and `prefix` (feeds kindOf / kindOrder).",
       "type": "boolean"
+    },
+    "kinds": {
+      "description": "Beside $defs: the kinds a document declares, by name. A kind is the components that make an entity that kind of thing (`is`, left out the component of its own name) and what a whole one also carries (`with`: true when the writer supplies it, or the values a rule gives it). `before`, `prefix` and `examples` as on a component. A kind names only components of its own package and the packages that one depends on. A kind sorts before every kind whose `is` its own `is` and `with` contain, and kindOf names an entity by the first kind whose `is` it carries.",
+      "type": "object"
+    },
+    "prefix": {
+      "description": "The letter a kind's human ids use: \"B\" gives B-7 (@yaks/id). One uppercase letter. On a component it makes that component the kind of its own name, as `kind: true` does.",
+      "type": "string",
+      "pattern": "^[A-Z]$"
     },
     "before": {
       "description": "Kind names this kind sorts before. kindOrder is alphabetical, topologically refined by these constraints. On a rule it names the rules this one runs before, so order among rules touching one entity is declared rather than registration-incidental.",

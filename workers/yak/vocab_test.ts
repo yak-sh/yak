@@ -575,14 +575,10 @@ test('a manifest wears the component marker without saying it', () => {
 // did: `memory_recall` orders by `.order=-entity.num`, which is a property or
 // it is a refused filter — so the one place the plugin is loaded is the
 // platform's own two stores.
-let letters = appVocab(says({ book: { title: txt } }))
 let directoryWords = platformVocab(), gitWords = gitVocab()
 test("an app has no numbers; the platform's own stores do", () => {
   assertEquals(cookbook.prop('entity', 'num'), undefined)
   assert(!numbered(cookbook))
-  // And a prefix an app declares is a word nothing here reads, dropped on load
-  // like any unregistered keyword.
-  assertEquals(letters.comp('book')?.keywords.prefix, undefined)
 
   assert(numbered(directoryWords), 'the directory numbers its own')
   assert(numbered(gitWords), 'the object store numbers its own')

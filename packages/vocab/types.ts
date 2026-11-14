@@ -8,6 +8,7 @@
 
 import type { Sync } from './lifetime.ts'
 import type { NumericConstraint } from './constraints.ts'
+import type { KindDecl } from './kinds.ts'
 
 // What the cascading delete (@yaks/graph cascade.ts) does to a reference
 // property when its target entity is deleted. These four values are the whole
@@ -223,6 +224,8 @@ export type VocabDoc = {
    * it does not remove those controls from composition. Omitted reserves. */
   reserved?: boolean
   $defs?: Record<string, PropSchema>
+  /** the kinds this document declares, by name (./kinds.ts) */
+  kinds?: Record<string, KindDecl>
   [k: string]: unknown
 }
 

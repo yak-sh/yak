@@ -120,3 +120,23 @@ test('expire admits a query for a stored component, never a duration or blank', 
     assert(ok({ component: true, expire } as PropSchema).length)
   }
 })
+
+test('a kinds section declares shapes beside $defs', () => {
+  let kinds = (k: Record<string, unknown>) => check({ $defs: {}, kinds: k })
+  assert(kinds({
+    decision: {
+      title: 'Decision',
+      is: ['task', 'decision'],
+      with: { doc: true, proposed: {} },
+      before: ['claim'],
+      prefix: 'Q',
+      examples: [{ task: {}, decision: {} }],
+    },
+    proposal: {},
+  }))
+  assert(!kinds({ decision: { is: [] } }))
+  assert(!kinds({ decision: { with: { doc: false } } }))
+  assert(!kinds({ decision: { prefix: 'qq' } }))
+  assert(!kinds({ decision: { shape: [] } }))
+  assert(!kinds({ Decision: {} }))
+})

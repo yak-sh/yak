@@ -9,15 +9,16 @@
  * entity also has a **human id**: a letter and a number, `B-7`. The number is
  * this package's; the letter comes from the vocabulary.
  *
- * ## The `prefix` keyword
- * This package owns one keyword. A component that declares
- * `"prefix": "B"` numbers its entities in the `B` series:
+ * ## The `prefix` of a kind
+ * The letter is a kind's `prefix` (@yaks/vocab): a kind that declares
+ * `"prefix": "B"` numbers its entities in the `B` series. On a component it
+ * makes the component the kind of its own name:
  *
  * ```json
- * { "$defs": { "book": { "type": "object", "prefix": "B", "properties": {} } } }
+ * { "$defs": { "book": { "component": true, "prefix": "B", "properties": {} } } }
  * ```
  *
- * Register it when you load the vocabulary and the ids follow:
+ * Load the vocabulary and the ids follow:
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -50,7 +51,7 @@
  * request it has no plugin for.
  *
  * The pieces:
- * - `keywords.ts` — the `prefix` keyword vocabulary, ready to register
+ * - `keywords.ts` — the `$vocabulary` URI of ids, ready to register
  * - `id.ts` — the prefix table, `(prefix, num)` → id and back, and the short
  *   handle an entity shows before it has been numbered
  * - `vocab.ts` — `entity{num}`, the property the number is kept in

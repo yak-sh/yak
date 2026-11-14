@@ -24,7 +24,5 @@ export let description: string = manifest.description
 /** Every document this plugin declares. */
 export let docs: VocabDoc[] = [idDoc]
 
-/** The JSON Schema keywords those documents use — and the `prefix` keyword the
- * components in other documents declare, which is what gives each series its
- * letter. */
+/** The keyword registration those documents name. */
 export let keywords: Keywords[] = [idKeywords]

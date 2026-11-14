@@ -27,7 +27,7 @@ import type {
 } from './types.ts'
 import type { Keywords } from './keywords.ts'
 import { kept, paced, said, saved, type Sync } from './lifetime.ts'
-import { kindOrder as deriveKindOrder } from './order.ts'
+import { type Kind, kindsIn, orderKinds } from './kinds.ts'
 import { appended, ladderOf, statusProp } from './status.ts'
 
 /** A name this vocabulary does not know. One error for every caller, raised
@@ -438,7 +438,11 @@ export type Vocab = {
   keywords: Keywords[] // the extension vocabularies this load registered
   comps: string[] // component names a client may write, alphabetical
   all: string[] // every declared component name, alphabetical
-  kinds: string[] // kindOrder: alphabetical, refined by `before` and marks
+  /** every kind's name, in the order they name an entity: alphabetical,
+   * refined by containment, `before` and marks (./kinds.ts) */
+  kinds: string[]
+  /** One kind's declaration, loaded; undefined for a name no kind has. */
+  kind: (name: string) => Kind | undefined
   comp: (name: string) => CompInfo | undefined
   /** A component's `$defs` entry as its documents declare it, with every
    * `extends` applied — the JSON Schema itself, for a reader that wants the
@@ -909,6 +913,11 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
     return !!own.at?.stamped && !!(own.by?.stamped || own.via?.stamped)
   }
 
+  // Every kind, by name; a component names a kind when it is the kind of its
+  // own name.
+  let kindsBy = kindsIn(docs, defs, from)
+  let own = (name: string) => kindsBy.get(name)?.is.join() == name
+
   let info = (name: string): CompInfo => {
     let d = defs[name]
     let entries = Object.keys(props(name))
@@ -921,10 +930,10 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
       found: d.found !== false,
       notice: d.notice === true,
       journal: d.journal !== false,
-      kind: !!d.kind,
+      kind: own(name),
       mark: mark(name),
       ...(from[name] ? { package: from[name] } : {}),
-      before: d.before ?? [],
+      before: own(name) ? kindsBy.get(name)!.before : d.before ?? [],
       // A computed property is readable, never writable — like a stamped one,
       // but with no storage either.
       writable: entries.filter((p) => {
@@ -1004,11 +1013,8 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
   )
   let dying = new Map<string, [string, string][]>()
 
-  let kinds = deriveKindOrder(
-    names.filter((n) => defs[n].kind),
-    (k) => defs[k].before ?? [],
-    mark,
-  )
+  let kinds = orderKinds(kindsBy, mark)
+  let shapes = kinds.map((k) => kindsBy.get(k)!.is)
 
   // Where a path leads, what a component indexes and what identifies its
   // entities are facts of the vocabulary, asked of it for every clause a query
@@ -1104,9 +1110,15 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
       return -1
     },
     assocs: () => [...assocs],
-    // The most specific kind an entity carries names it — first present in
-    // kindOrder, else the bare spine component.
-    kindOf: (has) => kinds.find((k) => has[k]) ?? 'entity',
+    kind: (name) => kindsBy.get(name),
+    // The most specific kind an entity is names it: the first in order whose
+    // components it all carries, else the bare spine component.
+    kindOf: (has) => {
+      for (let i = 0; i < kinds.length; i++) {
+        if (shapes[i].every((c) => has[c])) return kinds[i]
+      }
+      return 'entity'
+    },
     // The cascading-delete worklist (@yaks/graph cascade.ts): every
     // client-writable reference that declares a `death`, as (comp, prop) pairs.
     // Stamped refs stay out — server-owned rows are deleted by server code,

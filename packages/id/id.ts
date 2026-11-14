@@ -43,15 +43,14 @@ export type Named = {
 export type Parsed = { prefix: string; num: number }
 
 /**
- * Every prefix the vocabulary declares, as component name → letter. Reads the
- * `prefix` keyword, so the vocabulary must have been loaded with `idKeywords`
- * registered — an unregistered keyword is invisible to the loader.
+ * Every prefix the vocabulary declares, as kind name → letter: each kind's
+ * `prefix` (@yaks/vocab `Vocab.kind`).
  */
 export let prefixes = (v: Vocab): Record<string, string> => {
   let out: Record<string, string> = {}
-  for (let name of v.all) {
-    let p = v.comp(name)?.keywords.prefix
-    if (typeof p == 'string') out[name] = p
+  for (let name of v.kinds) {
+    let p = v.kind(name)?.prefix
+    if (p) out[name] = p
   }
   return out
 }
@@ -78,9 +77,10 @@ export let prefixOf = (v: Vocab): (kind: string) => string | undefined => {
 
 /**
  * The letter an entity holding these components is numbered with, from a
- * table of component → letter (by default the vocabulary's declared
- * prefixes): the one of the kind the vocabulary names among the components in
- * the table (`kindOf`), else the first of them; undefined where it holds none.
+ * table of kind → letter (by default the vocabulary's declared prefixes): the
+ * first kind in the table, in kind order, whose components it all holds, else
+ * the letter of the first component it holds that the table names; undefined
+ * where it holds none.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -97,15 +97,15 @@ export let prefixOf = (v: Vocab): (kind: string) => string | undefined => {
 export let seriesOf = (
   v: Vocab,
   table: Readonly<Record<string, string>> = declared(v),
-): (held: Iterable<string>) => string | undefined =>
-(held) => {
-  let has = Object.fromEntries(
-    [...held].filter((c) => Object.hasOwn(table, c)).map((c) => [c, true]),
-  )
-  let kind = v.kindOf(has)
-  return Object.hasOwn(has, kind)
-    ? table[kind]
-    : Object.keys(has).map((c) => table[c])[0]
+): (held: Iterable<string>) => string | undefined => {
+  let lettered = v.kinds.filter((k) => Object.hasOwn(table, k))
+    .map((k) => [k, v.kind(k)!.is] as const)
+  return (held) => {
+    let has = new Set(held)
+    let kind = lettered.find(([, is]) => is.every((c) => has.has(c)))
+    if (kind) return table[kind[0]]
+    for (let c of has) if (Object.hasOwn(table, c)) return table[c]
+  }
 }
 
 /** A letter and a number, joined into one id: `format('B', 7)` → `'B-7'`. */

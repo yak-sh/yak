@@ -1,17 +1,12 @@
-// The registration: what @yaks/id adds to a component vocabulary, written in
-// JSON Schema's own extension form. `meta/id.vocab.json` is the authored source
-// (the keyword's schema and its documentation); this module gives it a name and
-// the shape `loadVocab(docs, [idKeywords])` expects.
+// The registration a document names when it uses ids. The letter a series is
+// numbered in is a kind's `prefix`, which @yaks/vocab reads with the rest of the
+// kind, so there is no keyword here for a loader to copy.
 
 import type { Keywords } from '@yaks/vocab'
-import doc from './meta/id.vocab.json' with { type: 'json' }
 
-/** The URI a vocab file declares under `$vocabulary` to use `prefix`. */
+/** The URI a vocab file declares under `$vocabulary` to use ids. */
 export let ID_URI = 'https://yak.sh/vocab/id'
 
-/**
- * The `prefix` keyword vocabulary, ready to register:
- * `loadVocab(docs, [idKeywords])` copies each component's declared prefix onto
- * `v.comp(name).keywords.prefix`, which is where `prefixes()` reads it.
- */
-export let idKeywords: Keywords = { uri: ID_URI, comp: ['prefix'], doc }
+/** The id vocabulary, ready to register: `loadVocab(docs, [idKeywords])`.
+ * It adds no keyword: `prefix` is the kind's (@yaks/vocab `Vocab.kind`). */
+export let idKeywords: Keywords = { uri: ID_URI }

@@ -123,17 +123,21 @@ test('what is not a human id says so', () => {
   }
 })
 
-test('the keyword is registered, so the loader carries it', () => {
-  assertEquals(v.comp('book')?.keywords, { prefix: 'B' })
-  // without the registration the vocabulary answers nothing about ids
-  assertEquals(prefixes(loadVocab([catalog])), {})
-  // and the meta-schema admits `prefix` only once composed
+test("the letter is the kind's, declared on a component or under kinds", () => {
+  // read with the kind, whatever keywords the load registered
+  assertEquals(prefixes(loadVocab([catalog])), { book: 'B', author: 'A' })
+  // a component with a prefix is the kind of its name; a shape names its own
+  let shelf = loadVocab([{
+    $defs: {
+      box: { component: true, prefix: 'X' },
+      shelf: { component: true },
+    },
+    kinds: { stack: { is: ['box', 'shelf'], prefix: 'S' } },
+  }])
+  assertEquals(prefixes(shelf), { stack: 'S', box: 'X' })
+  assertEquals(seriesOf(shelf)(['box', 'shelf']), 'S')
+  assertEquals(seriesOf(shelf)(['box']), 'X')
   let meta = extendMeta([idKeywords]) as Record<string, Record<string, unknown>>
-  let comp = meta.$defs.component as { properties: Record<string, unknown> }
-  assertEquals(
-    (comp.properties.prefix as { pattern: string }).pattern,
-    '^[A-Z]$',
-  )
   assertEquals(meta.$vocabulary[ID_URI], true)
 })
 

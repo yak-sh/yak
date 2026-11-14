@@ -40,6 +40,7 @@
 
 export * from './types.ts'
 export * from './order.ts'
+export * from './kinds.ts'
 export * from './pick.ts'
 export * from './lifetime.ts'
 export * from './vocab.ts'

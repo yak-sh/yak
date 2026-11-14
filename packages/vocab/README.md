@@ -23,10 +23,13 @@ A **reference** is a string property that names an
 as `{ type: 'string', ref: 'book', death: 'detach' }`. `ref: 'entity'` accepts
 any entity; another component name requires that component on the target.
 
-A **kind** is a component marked `kind: true` that names an entity for display.
-A **mark** is a component with stamped `at` and at least one of stamped `by` or
-`via`; it records what happened to an entity. The
-[graph](../graph/README.md#stamps-and-actors) fills these properties.
+A **kind** is a named shape: the components that make an entity that kind of
+thing, and what a whole one also carries. A document declares its kinds beside
+`$defs` (see [Kinds and status](#kinds-and-status)); a component marked
+`kind: true` is the kind of its own name. A **mark** is a component with stamped
+`at` and at least one of stamped `by` or `via`; it records what happened to an
+entity. The [graph](../graph/README.md#stamps-and-actors) fills these
+properties.
 
 ## Use
 
@@ -64,14 +67,14 @@ edit is a new document.
 
 ## Exports
 
-| Export                    | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/vocab`             | `loadVocab`, `Vocab`, declaration and loaded metadata types; `storable`, `reserved`; routing errors and messages; `kindOrder`, `pick`, `cast`, `typesOf`, `jsonb`, `composite`; `syncOf`, `durableOf`, `paceOf`, `saveOf`, `expireOf`, `ms`, `lives`, `said`, `kept`, `paced`, `saved`, `SYNC`; `rulesIn`, `effectsIn`; `same`, `changed`; `CORE_URI`, `coreVocabulary`, `metaSchema`, `extendMeta`, `Keywords`, `JsonSchema`; `metaDoc`, `toBundles`, `fromBundles`, `Ids`, `Bundle` |
-| `@yaks/vocab/runtime`     | `loadVocab`, `Vocab`, `pick`, routing errors, keyword and loaded metadata types; excludes document validation and bundle conversion                                                                                                                                                                                                                                                                                                                                                   |
-| `@yaks/vocab/vocab`       | `docs`, containing `metaDoc`, and the package `description`                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `@yaks/vocab/tools`       | `ToolDefinition`, `Role`, `toolDefinition`, `toolGrammar`, `toolDefinitionSchema`, `toolsSaid`, `toolsIn`, `validateToolInput`, `validateToolOutput`, `toolCheck`, `Check`, `errorsText`, `publicToolSchema`, `legacyOptions`                                                                                                                                                                                                                                                         |
-| `@yaks/vocab/time`        | `timeSpan`, `timeInstant`, `isTimeLiteral`, `unitMs`, `Span`: the time grammar (see [Time phrases](#time-phrases)); @yaks/query re-exports them                                                                                                                                                                                                                                                                                                                                       |
-| `@yaks/vocab/constraints` | `Factor`, `Term`, `Score`, `NumericConstraint`, `numberOf`, `constraintErrors`                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Export                    | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@yaks/vocab`             | `loadVocab`, `Vocab`, declaration and loaded metadata types; `storable`, `reserved`; routing errors and messages; `kindOrder`, `kindsIn`, `orderKinds`, `Kind`, `KindDecl`, `With`, `pick`, `cast`, `typesOf`, `jsonb`, `composite`; `syncOf`, `durableOf`, `paceOf`, `saveOf`, `expireOf`, `ms`, `lives`, `said`, `kept`, `paced`, `saved`, `SYNC`; `rulesIn`, `effectsIn`; `same`, `changed`; `CORE_URI`, `coreVocabulary`, `metaSchema`, `extendMeta`, `Keywords`, `JsonSchema`; `metaDoc`, `toBundles`, `fromBundles`, `Ids`, `Bundle` |
+| `@yaks/vocab/runtime`     | `loadVocab`, `Vocab`, `pick`, routing errors, keyword and loaded metadata types; excludes document validation and bundle conversion                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `@yaks/vocab/vocab`       | `docs`, containing `metaDoc`, and the package `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `@yaks/vocab/tools`       | `ToolDefinition`, `Role`, `toolDefinition`, `toolGrammar`, `toolDefinitionSchema`, `toolsSaid`, `toolsIn`, `validateToolInput`, `validateToolOutput`, `toolCheck`, `Check`, `errorsText`, `publicToolSchema`, `legacyOptions`                                                                                                                                                                                                                                                                                                              |
+| `@yaks/vocab/time`        | `timeSpan`, `timeInstant`, `isTimeLiteral`, `unitMs`, `Span`: the time grammar (see [Time phrases](#time-phrases)); @yaks/query re-exports them                                                                                                                                                                                                                                                                                                                                                                                            |
+| `@yaks/vocab/constraints` | `Factor`, `Term`, `Score`, `NumericConstraint`, `numberOf`, `constraintErrors`                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 ## The format
 
@@ -138,7 +141,7 @@ Use a JSON Schema validator with it for full document validation.
 | `reads`                               | computed property     | Components on other entities it reads; `[]` means its own entity; `comp.ref` identifies a reference back to it                                                    |
 | `stamped`                             | property              | Server-owned: clients read it and cannot write it                                                                                                                 |
 | `status`                              | component             | Ordered components and the statuses they give, with a default                                                                                                     |
-| `kind`, `before`                      | component             | Display kind and the kinds it sorts before                                                                                                                        |
+| `kind`, `before`, `prefix`            | component             | The kind of its own name, the kinds it sorts before, and the letter its human ids use                                                                             |
 | `search`                              | property or component | Stored text to index, or another component's text property names                                                                                                  |
 | `contains`                            | property              | Stored text a substring index answers `~=` on                                                                                                                     |
 | `prose`                               | property              | Stored text a person reads as Markdown: ids typed in it are stored as eids, drawn as ids or short handles; a list names the components an entity carries for that |
@@ -317,11 +320,31 @@ references cannot be found by reading stored components.
 
 `all` lists every loaded component alphabetically; `comps` excludes components
 that are computed or `wire: false`. `props` follows property declaration order;
-`comp` separates writable and stamped properties. `kinds` is alphabetical,
-constrained by `before`. A cycle throws. A `before` naming an unloaded kind has
-no effect. A mark follows every kind it does not sort before, so a marked
-comment is still displayed as a comment. `kindOf` chooses the first kind
-present, or `entity` when none is present.
+`comp` separates writable and stamped properties.
+
+A document declares its kinds under `kinds`, beside `$defs`:
+
+| Key                                | Meaning                                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `is`                               | The components an entity carries to be this kind; left out, the component of the kind's own name |
+| `with`                             | What a whole one also carries: `true` when the writer supplies it, or the values a rule gives it |
+| `before`                           | Kinds it sorts before, where containment does not settle the order                               |
+| `prefix`                           | The letter its [human ids](../id/README.md#human-ids) use                                        |
+| `title`, `description`, `examples` | What it is called and means, and whole bundles of one                                            |
+
+A component marked `kind: true` or declaring a `prefix` is the kind of its own
+name, `is: [name]`, with its `before` and `prefix`; a vocabulary written before
+the section loads as it always did. A kind names only components of its own
+package and the packages that one depends on. A name declared as a kind twice
+throws.
+
+`kinds` lists every kind in the order they name an entity: alphabetical,
+adjusted by `before`, and by containment: a kind sorts before every kind whose
+`is` its own `is` and `with` contain. A cycle throws. A `before` naming an
+unloaded kind has no effect. A mark follows every kind it does not sort before,
+so a marked comment is still displayed as a comment. `kindOf` chooses the first
+kind whose `is` components are all present, or `entity` when none is. `kind`
+answers one kind's declaration by name.
 
 ```ts
 import { kindOrder, loadVocab } from '@yaks/vocab'
@@ -330,14 +353,18 @@ import { equal } from '@yaks/testing'
 const v = loadVocab({
   $defs: {
     doc: { component: true, kind: true },
-    task: { component: true, kind: true, before: ['doc'] },
+    task: { component: true, kind: true, before: ['doc'], prefix: 'T' },
+    decision: { component: true },
     completed: { component: true, wire: false },
   },
+  kinds: { decision: { is: ['task', 'decision'], with: { doc: true } } },
 })
-equal(v.all, ['completed', 'doc', 'task'])
-equal(v.comps, ['doc', 'task'])
-equal(v.kinds, ['task', 'doc'])
+equal(v.all, ['completed', 'decision', 'doc', 'task'])
+equal(v.comps, ['decision', 'doc', 'task'])
+equal(v.kinds, ['decision', 'task', 'doc'])
 equal(v.kindOf({ task: 1, doc: 1 }), 'task')
+equal(v.kindOf({ task: 1, decision: 1, doc: 1 }), 'decision')
+equal(v.kind('task')?.prefix, 'T')
 equal(
   kindOrder(
     ['doc', 'memory', 'task'],

@@ -48,6 +48,12 @@
       "additionalProperties": {
         "$ref": "#/$defs/entry"
       }
+    },
+    "kinds": {
+      "type": "object",
+      "description": "The kinds this document declares, by name: each the components that make an entity that kind of thing, and what a whole one also carries",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+      "additionalProperties": { "$ref": "#/$defs/kind" }
     }
   },
   "$defs": {
@@ -359,6 +365,32 @@
           }
         }
       ]
+    },
+    "kind": {
+      "description": "One kind: `is` lists the components an entity carries to be it (left out, the component of the kind's own name); `with` maps each component a whole one also carries to true, when the writer supplies it, or to the values a rule gives it when it is missing; `before` names kinds it sorts before where containment does not settle it; `prefix` is the letter its human ids use; `examples` are whole bundles of one.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "is": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-zA-Z_][a-zA-Z0-9_]{0,39}$"
+          }
+        },
+        "with": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [{ "const": true }, { "type": "object" }]
+          }
+        },
+        "before": { "type": "array", "items": { "type": "string" } },
+        "prefix": { "type": "string", "pattern": "^[A-Z]$" },
+        "examples": { "type": "array", "items": { "type": "object" } }
+      }
     },
     "score": {
       "type": "object",

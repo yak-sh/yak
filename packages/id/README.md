@@ -8,8 +8,7 @@ durable identity.
 ## Human ids
 
 A **human id** is a prefix and a number joined by a hyphen, such as `B-7`. A
-**prefix** is the letter declared by a
-[component](../graph/README.md#data-model)'s `prefix` keyword, such as
+**prefix** is the letter a [kind](../vocab/README.md#kinds) declares, such as
 `prefix: 'B'`, and names a **series**: each prefix counts its own numbers in a
 store, so `B-7` and `A-7` are two entities. The store keeps the pair as
 `entity{prefix, num}`, fixed when the entity is first numbered. A row numbered
@@ -24,10 +23,8 @@ letter.
 
 ## Format and parse
 
-Register `idKeywords` when loading the
-[vocabulary](../vocab/README.md#vocabulary) so the loader keeps the `prefix`
-keyword. `idOf(vocab)` accepts an eid, a [kind](../vocab/README.md#vocabulary),
-and an optional number and prefix; `human(vocab)` accepts a
+`idOf(vocab)` accepts an eid, a [kind](../vocab/README.md#vocabulary), and an
+optional number and prefix; `human(vocab)` accepts a
 [bundle](../graph/README.md#data-model) and reads the pair from its `entity`
 row. Either prints the stored pair, and the short handle for a row stored
 without a prefix.
@@ -111,7 +108,7 @@ equal(BARE.test('abcdef0123'), true)
 equal(BARE.test('facade'), false)
 ```
 
-The keyword schema requires one uppercase letter. Formatting a prefix does not
+The meta-schema requires one uppercase letter. Formatting a prefix does not
 allocate a number.
 
 ## Ids in text and in maps

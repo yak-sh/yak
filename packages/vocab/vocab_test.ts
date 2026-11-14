@@ -548,6 +548,82 @@ test('a mark names an entity only where no other kind does', () => {
   assertEquals(w.kindOf({ doc: 1, memory: 1, task: 1 }), 'task')
 })
 
+// A small shop of shapes: a task, a decision that is a task too, a claim mark.
+let shapes = (
+  kinds: VocabDoc['kinds'],
+  extra: Record<string, PropSchema> = {},
+) =>
+  loadVocab({
+    package: '@shop/task',
+    $defs: {
+      task: { component: true, kind: true, prefix: 'T', before: ['doc'] },
+      doc: { component: true, kind: true },
+      decision: { component: true },
+      proposed: { component: true },
+      ...extra,
+    },
+    kinds,
+  })
+
+test('a kind is declared beside $defs, or by a component of its name', () => {
+  let w = shapes({
+    decision: {
+      title: 'Decision',
+      is: ['task', 'decision'],
+      with: { doc: true, proposed: {} },
+      prefix: 'Q',
+      examples: [{ task: {}, decision: {}, doc: { title: 'Ship?' } }],
+    },
+  })
+  assertEquals(w.kind('decision'), {
+    name: 'decision',
+    title: 'Decision',
+    is: ['task', 'decision'],
+    with: { doc: true, proposed: {} },
+    before: [],
+    prefix: 'Q',
+    examples: [{ task: {}, decision: {}, doc: { title: 'Ship?' } }],
+    package: '@shop/task',
+  })
+  // `kind: true`, its `before` and `prefix` load as the kind of that name
+  assertEquals(w.kind('task'), {
+    name: 'task',
+    is: ['task'],
+    with: {},
+    before: ['doc'],
+    prefix: 'T',
+    examples: [],
+    package: '@shop/task',
+  })
+  // `is` left out is the component of the kind's own name
+  assertEquals(shapes({ proposed: {} }).kind('proposed')?.is, ['proposed'])
+  assertEquals(w.kind('proposed'), undefined)
+  assertEquals(w.comp('task')?.kind, true)
+  assertEquals(w.comp('decision')?.kind, false)
+})
+
+test('a kind sorts before the kinds it contains, and names what it all holds', () => {
+  let w = shapes({ decision: { is: ['task', 'decision'] } })
+  assertEquals(w.kinds, ['decision', 'task', 'doc'])
+  assertEquals(w.kindOf({ task: 1, decision: 1, doc: 1 }), 'decision')
+  assertEquals(w.kindOf({ task: 1, doc: 1 }), 'task')
+  // a part alone is no decision
+  assertEquals(w.kindOf({ decision: 1 }), 'entity')
+  // `with` counts toward containment: a proposal carrying a doc precedes doc
+  let p = shapes({ proposal: { is: ['proposed'], with: { doc: true } } })
+  assertEquals(p.kinds, ['proposal', 'task', 'doc'])
+  assertEquals(p.kindOf({ proposed: 1, doc: 1 }), 'proposal')
+})
+
+test('a kind declared twice is refused', () => {
+  assertThrows(
+    () => shapes({ task: {} }),
+    Error,
+    "kind 'task' is declared twice",
+  )
+  assertThrows(() => shapes({ odd: { is: [] } }), Error, 'says no component')
+})
+
 test('indexes merge the property flag with the composite lists', () => {
   let w = loadVocab({
     $defs: {
