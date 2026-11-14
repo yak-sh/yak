@@ -103,28 +103,46 @@ asynchronously. Work is done when its affected tests pass and it lands; no agent
 waits for those background runs. `admin_deploys` as admin says what is live,
 `admin_errors` what broke, and a new failure reaches the tracker when it happens
 (M-37965). A live check of the platform runs in the agents' own space,
-`checks` (checks.yaks.app), as its owner `checks@bot.yak.sh`: `--as checks` on
-any `yak` command, its Operator through `yak operator_chat --space checks --as
-checks`. It is kept from the idle sweep, so it outlasts any check. Never check
-in the owner's `jeff` space or any person's: a test row there lands in his
-conversation, Updates and task list. Talking to a person's Operator is itself
-such a write: every connector chat forks that person's conversation, so even a
-timing check that only measures how fast it replies leaves a notice of your run
-in their chat, where they see it (one timing run left dozens of "ok" probes in
-Jeff's). Drive the Operator only as `checks`; never send to a real person's
-Operator to measure or exercise it. The yaks.app connector on this box
-(the `mcp__…yaks_app__*` tools) is signed in as Jeff, so anything a live check
-writes through it, `feedback` included, is written as him; a live check that
-writes, or talks to his Operator, goes through `yak … --as checks` instead. A check that needs a clean account runs
-`yak admin throwaway '<command>'` (listing accounts is
-`secrets-and-connections`). The throwaway account is deleted once that command
-exits, which cuts off any Operator work still running. An Operator check that
-spans several calls (a chat, then `operator_read` until it settles, then an
-answer) signs in a test account that lasts instead, with
-`yak auth yaks.app --as <name>@bot.yak.sh`, and passes the same `--as` to each
-call. Use a new name for each check: a free space holds five apps, and an
-earlier check's apps and unanswered decisions are in the next one's way. An
-Operator's model varies from run to run, so one run of a behavior proves little:
+`checks` (checks.yaks.app), as its owner `checks@bot.yak.sh`, and never as Jeff.
+
+### Acting as checks
+
+Every yaks.app tool is a `yak` command, and `--as checks` signs that call in
+as checks@bot.yak.sh. The connection is already on this box, so there is no
+sign-in step:
+
+```sh
+yak about --as checks                  # "You are signed in as checks <checks@bot.yak.sh>"
+yak app_list --as checks               # the space's apps and how full it is
+yak app_files app=roster space=checks op=list --as checks
+yak operator_chat --space checks --as checks
+```
+
+A tool's own arguments are written `name=value`, and `name=@file` reads a
+value from a file (JSON for an array such as `drafts`). Every call made with
+`--as checks` on this box is one conversation, so drafts and other
+per-conversation state carry from one call to the next.
+
+The `mcp__…yaks_app__*` tools in an agent session are Jeff's claude.ai
+connector, signed in as him, with no way to pick another account. A live check
+never calls them: anything they write (`feedback` included) is written as Jeff,
+lands in his conversation, Updates and task list, and a chat with his Operator
+forks his conversation, where he sees it (one timing run left dozens of "ok"
+probes in his). Reading through them is fine. Never
+check in the `jeff` space or any person's, and never drive a person's Operator
+to measure or exercise it.
+
+`checks` is kept from the idle sweep, so what a check leaves there lasts, and
+an Operator check that spans several calls (a chat, then `operator_read` until
+it settles, then an answer) runs there too. A free space holds five apps:
+reuse one of its apps when the check allows it, and otherwise `app_delete` an
+old check's app (it waits 30 days in the trash) before `app_new`. Discard the
+drafts a check opens (`op=discard draft=<id>`). A check that needs an account
+with nothing in it runs `yak admin throwaway '<command>'`, which deletes the
+account once that command exits and so cuts off any Operator work still
+running.
+
+An Operator's model varies from run to run, so one run of a behavior proves little:
 send the same kind of request three or more times and count. Comparing two
 versions of the Operator takes dozens of runs an arm: 16 could not tell 82% from
 88% (T-262). Deploys land while a batch runs, so read which code a run saw from

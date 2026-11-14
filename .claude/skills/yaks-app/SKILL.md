@@ -555,8 +555,9 @@ asked for (M-31958), so platform work goes `--as admin@bot.yak.sh`: the
 platform's admin, an owner of `yak`, which stands as an owner in every space
 through the connector's graph tier (tool.ts `roleIn`). A live check (an app, a
 subscription, the Operator) runs in `checks`, the agents' own space,
-`--as
-checks`; `operator_chat --space checks` reaches its Operator. `checks` is
+`--as checks`, never through the session's yaks.app MCP tools, which are Jeff's
+(end-to-end-checks has the recipe). `operator_chat --space checks --as checks`
+reaches its Operator. `checks` is
 in idle-spaces.ts `PROTECTED`, so the sweep never takes it. Nothing an agent
 tests runs in `jeff` or another person's space.
 
