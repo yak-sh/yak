@@ -692,6 +692,10 @@ read again for an ask once the prefix the transcript's last ask cached has
 expired at the provider, so an edit to the persona, or to the base it is worn on
 (`persona.base`), reaches the transcript on its first turn after a pause, never
 rewriting a prefix still in the cache (@yaks/session `cachedInstructions`).
+`opts.opens` is what every system prompt the agent composes opens with, ahead of
+the persona; the box opens each with the kinds index of its vocabulary
+(@yaks/vocab `kindsIndex`), as an MCP connection's instructions end with it.
+Instructions a transcript inherited are sent as they were.
 `sending.instructions` records the text each ask was sent. `wear.bases` is where
 those bases are kept when this graph does not keep them; the yaks.app Operator
 wears each space's persona on the platform's, which the directory keeps.

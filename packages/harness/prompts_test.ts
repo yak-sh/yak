@@ -10,7 +10,8 @@ import {
 
 import type { Harness } from './store.ts'
 import { input } from '../openai/responses.ts'
-import { voice, wear } from '@yaks/persona'
+import { PART, voice, wear } from '@yaks/persona'
+import { kindsIndex } from '@yaks/vocab'
 import { projection } from '../persona/owed.ts'
 import { begin } from './agent.ts'
 import { attachedWorkspace, harness } from './testing.ts'
@@ -255,10 +256,12 @@ test('a native session carries its chosen graph persona into the model request',
       ),
       ['From the system:\nRepository guidance.'],
     )
+    // The kinds index opens it, and the persona follows.
     assertEquals(
       requests[0].instructions,
-      voice(h.g.vocab)((await wear(h.g.storage, h.g.vocab)(persona))!)
-        .trimEnd(),
+      kindsIndex(h.g.vocab) + PART +
+        voice(h.g.vocab)((await wear(h.g.storage, h.g.vocab)(persona))!)
+          .trimEnd(),
     )
     let [session] = await h.g.get([id])
     assertEquals((session.session as Comp).persona, persona)
@@ -293,9 +296,11 @@ test('retired CLI instructions are omitted on future asks without rewriting hist
     'graph_ tools. Be terse; say what you did, not what you are about to do.'
   try {
     await Deno.writeTextFile(dir + '/AGENTS.md', 'Keep repository guidance.')
+    let index = kindsIndex(h.g.vocab)
+    assertEquals(index.startsWith('# Kinds'), true)
     let id = await a.start('first')
     await a.idle(id)
-    assertEquals(requests[0].instructions, undefined)
+    assertEquals(requests[0].instructions, index)
     assertEquals(
       requests[0].items.filter((i) => i.kind == 'instruction').map((i) =>
         i.text
@@ -310,7 +315,11 @@ test('retired CLI instructions are omitted on future asks without rewriting hist
     }])
     await a.send(id, 'continue')
     await a.idle(id)
-    assertEquals(requests.at(-1)!.instructions, undefined)
+    assertEquals(requests.at(-1)!.instructions, index)
+    // An ask inheriting the index it was sent is sent it once.
+    await a.send(id, 'again')
+    await a.idle(id)
+    assertEquals(requests.at(-1)!.instructions, index)
     assertEquals(
       ((await a.transcript(id)).find((b) => b.entity.eid == ask.entity.eid)!
         .sending as Comp).instructions,
@@ -318,7 +327,7 @@ test('retired CLI instructions are omitted on future asks without rewriting hist
     )
     let current = await a.transcript(id)
     let latest = current.filter((b) => b.ask).at(-1)!
-    assertEquals((latest.sending as Comp | undefined)?.instructions, undefined)
+    assertEquals((latest.sending as Comp | undefined)?.instructions, index)
     // A child of historical context must not reintroduce the old baseline.
     let child = crypto.randomUUID()
     await h.g.apply([
@@ -336,7 +345,7 @@ test('retired CLI instructions are omitted on future asks without rewriting hist
       },
     ])
     await a.idle(child)
-    assertEquals(requests.at(-1)!.instructions, undefined)
+    assertEquals(requests.at(-1)!.instructions, index)
     await h.g.apply([{
       entity: { eid: latest.entity.eid },
       sending: { instructions: 'Custom instructions stay.' },

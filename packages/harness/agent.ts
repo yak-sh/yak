@@ -189,6 +189,11 @@ export type Opts<H extends Host = Host> = ChildLimits & {
    * read again for every ask, so what it reads (a name, the apps in reach)
    * is current in a transcript that runs for weeks. */
   instructions?: string | ((session: Eid) => Promise<string>)
+  /** What every system prompt this agent composes opens with, ahead of the
+   * persona and `instructions`: the same for every transcript and every ask,
+   * so it stays in a provider's cached prefix (the box's kinds index, @yaks/vocab
+   * `kindsIndex`). */
+  opens?: string
   /** Wear each transcript's persona on every ask (`session.persona`, or that
    * of the session that started it): its text (@yaks/persona `voice`) leads
    * the system prompt and `instructions` follows it, both read again for
@@ -447,6 +452,12 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     undefined,
     (error) => report(error, { phase: 'model-metadata' }),
   )
+  // Every system prompt composed here opens with `opens`. What a transcript
+  // inherited is sent as it was: it opened with it already.
+  let opened = (text?: string) =>
+    [opts.opens, text].filter(Boolean).join(PART) || undefined
+  let kept = (inherited?: string, configured?: string) =>
+    inheritedInstructions(inherited, undefined) ?? opened(configured)
   // Compaction is a text task, even when a transcript selects a media model:
   // it asks the model this agent was lent by name, else the default
   // (./default.ts), read again before every ask.
@@ -541,13 +552,13 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     typed: opts.typed,
     compactAt: opts.compactAt,
     instructions: typeof opts.instructions == 'string'
-      ? opts.instructions
+      ? opened(opts.instructions)
       : undefined,
     resolveInstructions: async (inherited, session) => {
       if (!opts.wear) {
         return typeof opts.instructions == 'function'
-          ? await opts.instructions(session)
-          : inheritedInstructions(inherited, opts.instructions)
+          ? opened(await opts.instructions(session))
+          : kept(inherited, opts.instructions)
       }
       // What was sent before already says the persona, so only what the host
       // adds follows the persona's text as it reads now, a part of its own.
@@ -561,8 +572,8 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       ])
       // A transcript wearing nothing is told what it was told before: the
       // instructions its first line chose (a builder's contract) stand.
-      if (!worn && !reads) return inheritedInstructions(inherited, added)
-      return [worn, added].filter(Boolean).join(PART) || undefined
+      if (!worn && !reads) return kept(inherited, added)
+      return opened([worn, added].filter(Boolean).join(PART))
     },
     ...opts.wear?.tools
       ? { resolveTools: (session) => offeredTo(h.g, session, opts.wear) }

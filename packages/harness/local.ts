@@ -26,6 +26,7 @@ import { graphTools, harnessTools, skillTools } from './tools.ts'
 import { skillItems } from './skills.ts'
 import { pooledHttp } from './http.ts'
 import { configured, lending } from './providers.ts'
+import { kindsIndex } from '@yaks/vocab/runtime'
 
 export { type Harness, hosted } from './store.ts'
 export { graphTools, harnessTools } from './tools.ts'
@@ -177,6 +178,9 @@ export let here = async (
     // opened on, and is offered the tools that persona contains, as they read
     // now, once its cached prefix has expired.
     wear: { topic: true, tools: true },
+    // Each ask opens with the kinds this graph makes, as an MCP connection's
+    // instructions carry them (@yaks/mcp), so a session writes whole ones.
+    opens: kindsIndex(h.vocab),
     opening: async (persona) => {
       let home = opts.workspace
         ? { workspace: opts.workspace, ...opts.cwd ? { cwd: opts.cwd } : {} }

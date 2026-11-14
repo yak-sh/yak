@@ -13,7 +13,7 @@ import { ram } from '@yaks/ram'
 import { sessionDoc, sessionEid } from '@yaks/session'
 import { authenticate as sessionAuth } from '@yaks/session/graph'
 import { PATH as HOOK, routes as sessionRoutes } from '@yaks/session/routes'
-import { loadVocab } from '@yaks/vocab'
+import { kindsIndex, loadVocab } from '@yaks/vocab'
 import { mcp } from './mount.ts'
 import { routes } from './routes.ts'
 import { FILES } from './files.ts'
@@ -722,9 +722,18 @@ test('a call is answered while a subscriber is still reading what it wrote', asy
   assertEquals(heard, ['b1'])
 })
 
-test('initialize carries instructions from the loaded vocabularies', async () => {
+test('initialize carries instructions from the loaded vocabularies, then their kinds', async () => {
   let vocab = loadVocab([
-    { ...shop.docs[0], instructions: 'Read the shelf.' },
+    {
+      ...shop.docs[0],
+      instructions: 'Read the shelf.',
+      kinds: {
+        signed: {
+          is: ['book', 'review'],
+          examples: [{ book: { price: 30 }, review: { stars: 5 } }],
+        },
+      },
+    },
     { ...shop.docs[1], instructions: 'Keep each sale.' },
   ])
   let g = graph({ storage: ram(vocab), vocab })
@@ -737,7 +746,8 @@ test('initialize carries instructions from the loaded vocabularies', async () =>
   }))).json()
   assertEquals(
     hello.result.instructions,
-    `${graphDoc.instructions}\n\nRead the shelf.\n\nKeep each sale.\n\n${FILES}`,
+    `${graphDoc.instructions}\n\nRead the shelf.\n\nKeep each sale.\n\n` +
+      `${kindsIndex(vocab)}\n\n${FILES}`,
   )
 })
 

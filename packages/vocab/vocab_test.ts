@@ -8,6 +8,7 @@ import {
   cast,
   extendMeta,
   kindOrder,
+  kindsIndex,
   loadVocab,
   metaSchema,
   Unknown,
@@ -613,6 +614,27 @@ test('a kind sorts before the kinds it contains, and names what it all holds', (
   let p = shapes({ proposal: { is: ['proposed'], with: { doc: true } } })
   assertEquals(p.kinds, ['proposal', 'task', 'doc'])
   assertEquals(p.kindOf({ proposed: 1, doc: 1 }), 'proposal')
+})
+
+test('the kinds index lines up each kind with an example, as its examples carry it', () => {
+  let w = shapes({
+    decision: {
+      is: ['task', 'decision'],
+      with: { doc: true, proposed: {} },
+      prefix: 'Q',
+      examples: [
+        { entity: { eid: 'q1' }, task: {}, decision: { question: 'Ship?' } },
+        { decision: { choices: [] }, doc: { title: 'Ship?' }, cites: {} },
+      ],
+    },
+    anchor: { is: ['proposed'], examples: [{ proposed: {} }] },
+  })
+  // alphabetical; task and doc declare no example; `is`, then `with`, then
+  // any other component an example carries, with every property one gives it
+  assertEquals(kindsIndex(w).split('\n').slice(-2), [
+    '- anchor: proposed{}',
+    '- decision (Q-): task{} decision{question, choices} doc{title} proposed{} cites{}',
+  ])
 })
 
 test('a kind declared twice is refused', () => {

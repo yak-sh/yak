@@ -150,3 +150,62 @@ export let orderKinds = (
     (k) => kinds.get(k)!.is.every(mark),
   )
 }
+
+/** The kinds index: one line for each kind that declares an example, by name,
+ * with the components its example carries, each with the properties the
+ * example gives it (`- task (T-): task{} doc{title, body}`).
+ * What an agent is told on connect, so it writes a whole one; a kind without
+ * an example (one the graph writes itself) is left to `graph_schema`. Empty
+ * where no kind declares one.
+ *
+ * ```ts
+ * import { kindsIndex, loadVocab } from '@yaks/vocab'
+ * import { equal } from '@yaks/testing'
+ *
+ * let v = loadVocab({
+ *   $defs: {
+ *     task: { component: true, properties: { status: { type: 'string' } } },
+ *     doc: { component: true, properties: { title: { type: 'string' } } },
+ *     lease: { component: true, kind: true },
+ *   },
+ *   kinds: {
+ *     task: {
+ *       with: { doc: true },
+ *       prefix: 'T',
+ *       examples: [{ task: {}, doc: { title: 'Paint the shed' } }],
+ *     },
+ *   },
+ * })
+ * equal(kindsIndex(v).split('\n').at(-1), '- task (T-): task{} doc{title}')
+ * equal(kindsIndex(loadVocab({ $defs: {} })), '')
+ * ```
+ */
+export let kindsIndex = (
+  v: { kinds: string[]; kind: (name: string) => Kind | undefined },
+): string => {
+  let lines = v.kinds.map((n) => v.kind(n)!)
+    .filter((k) => k.examples.length)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(indexLine)
+  return lines.length ? [INDEX, ...lines].join('\n') : ''
+}
+
+let INDEX = '# Kinds\n\nWhat each kind of entity carries, as its example ' +
+  'writes it; `graph_schema` with `kind` says one whole.\n'
+
+// A kind's line: the components its `is` and `with` name, then any more its
+// examples carry, each with the properties they give it.
+let indexLine = (k: Kind): string => {
+  let { examples } = k
+  let comps = new Set([
+    ...k.is,
+    ...Object.keys(k.with),
+    ...examples.flatMap(Object.keys),
+  ])
+  comps.delete('entity')
+  let props = (c: string) =>
+    new Set(examples.flatMap((x) => Object.keys(x[c] ?? {})))
+  let prefix = k.prefix ? ` (${k.prefix}-)` : ''
+  let shown = [...comps].map((c) => `${c}{${[...props(c)].join(', ')}}`)
+  return `- ${k.name}${prefix}: ${shown.join(' ')}`
+}

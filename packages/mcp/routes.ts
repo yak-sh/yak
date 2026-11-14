@@ -17,6 +17,7 @@ import type { Reply, Runner } from '@yaks/tools'
 import { generic } from '@yaks/graph/tools'
 import { graphDoc } from '@yaks/graph/vocab'
 import { SESSION } from '@yaks/session'
+import { kindsIndex } from '@yaks/vocab/runtime'
 import type { Authenticate, Handler, Offers, Route, Told } from '@yaks/api'
 import type { Search } from './tools.ts'
 
@@ -78,10 +79,13 @@ let mounted = async (host: Hosting): Promise<Handler> => {
     name: host.config.name ?? 'yak',
     skills: (built, exchange) =>
       attachSkills(built, { graph: host.graph, cwd: system.cwd() }, exchange),
-    instructions: [graphDoc, ...host.graph.vocab.docs].map((doc) =>
-      doc.instructions?.trim()
-    )
-      .filter((line): line is string => !!line).join('\n\n'),
+    // Each vocabulary's own instructions, then the kinds it makes.
+    instructions: [
+      ...[graphDoc, ...host.graph.vocab.docs].map((doc) =>
+        doc.instructions?.trim()
+      ),
+      kindsIndex(host.graph.vocab),
+    ].filter((line): line is string => !!line).join('\n\n'),
   })
 }
 

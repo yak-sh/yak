@@ -124,8 +124,10 @@ application's header and storage alone.
 
 The route composes the generic graph vocabulary's top-level `instructions` with
 each loaded vocabulary document's instructions in document order and sends them
-in the MCP `initialize` response. Other plugins can add instructions beside
-their own component declarations.
+in the MCP `initialize` response, followed by the kinds index of the loaded
+vocabulary (@yaks/vocab `kindsIndex`): one line for each kind that declares an
+example, so an agent knows on connect what a whole task or design carries. Other
+plugins can add instructions beside their own component declarations.
 
 `instructions` may also be a function returning the text. It is called only for
 the exchange that sends it, `initialize` (or a server serving a whole
