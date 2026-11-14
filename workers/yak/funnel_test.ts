@@ -164,13 +164,15 @@ test('the funnel reads each step, a share of the one it follows, and where visit
     let since = new Date(Math.floor(Date.now() / 1000 - 2 * 86_400) * 1000)
     let f = (await funnel(env, since))!
     assertEquals(f.since, since.toISOString())
-    // A stage adds up its steps, and is a share of the stage before it.
+    // A stage counts its step, and is a share of the stage it follows: a
+    // connector's sign-in and a build begun are two doors, each its own count.
     assertEquals(
       f.stages!.map((s) => [s.name, s.n, s.share]),
       [
         ['visit', 40, undefined],
-        ['began', 10, 0.25],
-        ['signup', 8, 0.8],
+        ['built', 4, 0.1],
+        ['connected', 6, undefined],
+        ['signup', 8, undefined],
         ['first_app', 0, 0],
         ['back', 0, undefined],
       ],
@@ -377,25 +379,6 @@ let read = (points: { indexes?: string[]; blobs?: string[] }[]) => {
   )
 }
 
-test('a step added after the funnel began says when its own count began, and no share, in a window that starts before it', () => {
-  let rows = [{ step: 'signup', n: 4 }, { step: 'checkout', n: 1 }]
-  let checkout = (since: string) =>
-    shaped(new Date(since), rows).steps.find((s) => s.name == 'checkout')
-  assertEquals(checkout('2026-11-03T05:00:00Z'), {
-    name: 'checkout',
-    say: 'Checkouts started',
-    n: 1,
-    since: '2026-11-07T05:00:31Z',
-  })
-  assertEquals(checkout('2026-11-08T00:00:00Z'), {
-    name: 'checkout',
-    say: 'Checkouts started',
-    n: 1,
-    share: 0.25,
-    of: 'signup',
-  })
-})
-
 test('a landing page visited at its own address is a home page visit, and the build begun from its box counts under it', async () => {
   let k = await kernel()
   for (
@@ -474,7 +457,9 @@ test("a stranger's way is read stage by stage, a crawler's and Meta's reviewer's
     f.stages!.map((s) => [s.name, s.n]),
     STAGES.map((s) => [
       s.name,
-      { visit: 2, began: 0, signup: 1, first_app: 1, back: 0 }[s.name],
+      { visit: 2, built: 0, connected: 0, signup: 1, first_app: 1, back: 0 }[
+        s.name
+      ],
     ]),
   )
   assertEquals(stopped(f.stages), { after: f.stages![0], went: 0 })

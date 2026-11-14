@@ -953,7 +953,11 @@ let way = (f: Funnel): [string, string][] => {
     ...(f.stages ?? []).map((s): [string, string] => [
       s.say,
       `${s.n}${
-        s.share == null ? '' : ` · ${pct(s.share)} of the stage before`
+        s.share == null
+          ? ''
+          : ` · ${pct(s.share)} of ${
+            f.stages!.find((o) => o.name == s.of)?.say.toLowerCase()
+          }`
       }`,
     ]),
     ...stop
@@ -1006,7 +1010,7 @@ let funnelPage = (
           s.share == null
             ? ''
             : ` · ${Math.round(s.share * 100)}% of ${of(s.name)}`
-        }${s.since ? ` · counted since ${day(s.since)}` : ''}`,
+        }`,
       ])),
       f.from.length
         ? h(

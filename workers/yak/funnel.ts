@@ -30,29 +30,21 @@ import {
   whole,
 } from './views.ts'
 
-/** When the funnel began to count (T-135225 went live). A window never starts
- * before it (`start`), so a count is never of days nothing was counted on: a
- * plan bought in October read as none bought in thirty days (T-153604). Once
- * it is further back than a step is kept, it bounds nothing and goes. */
-export let BEGAN = '2026-11-03T04:47:14Z'
+/** When the funnel's steps became people's: the release after 965f3dbbc, by
+ * which a step written by the CLI's own fetch (e70d31490), a test account or an
+ * agent's check (965f3dbbc) counted apart. From 2026-11-03 to then the fleet's
+ * own sign-ups read as 11 of 13 connector sign-ins and 11 of 12 first sign-ins
+ * (T-154788). A window never starts before it (`start`), so a count is never
+ * of days nothing was counted on, or counted wrong. Once it is further back
+ * than a step is kept, it bounds nothing and goes. */
+export let BEGAN = '2026-11-07T13:23:04Z'
 
-/** Each step, in the order a person meets them, what the admin calls it, the
- * step it is a share of, and for one added after the funnel began, when its
- * own count began (`since`). */
+/** Each step, in the order a person meets them, what the admin calls it, and
+ * the step it is a share of. */
 export let STEPS = [
   { name: 'home', say: 'Home page visits' },
-  {
-    name: 'click',
-    say: 'Calls to action clicked',
-    of: 'home',
-    since: '2026-11-07T04:48:35Z',
-  },
-  {
-    name: 'started',
-    say: 'Builds started from the home page',
-    of: 'home',
-    since: '2026-11-07T05:08:33Z',
-  },
+  { name: 'click', say: 'Calls to action clicked', of: 'home' },
+  { name: 'started', say: 'Builds started from the home page', of: 'home' },
   { name: 'code_sent', say: 'Sign-in codes sent', of: 'home' },
   { name: 'signed_in', say: 'Sign-ins finished', of: 'code_sent' },
   { name: 'signup', say: 'First sign-ins', of: 'signed_in' },
@@ -66,43 +58,47 @@ export let STEPS = [
   { name: 'install_done', say: 'Installs finished', of: 'install' },
   { name: 'first_app', say: "Spaces' first apps", of: 'signup' },
   { name: 'first_deploy', say: "Apps' first deploys", of: 'first_app' },
-  {
-    name: 'checkout',
-    say: 'Checkouts started',
-    of: 'signup',
-    since: '2026-11-07T05:00:31Z',
-  },
-  {
-    name: 'paid',
-    say: 'Plans bought',
-    of: 'checkout',
-    since: '2026-11-07T05:00:31Z',
-  },
+  { name: 'checkout', say: 'Checkouts started', of: 'signup' },
+  { name: 'paid', say: 'Plans bought', of: 'checkout' },
   { name: 'returned', say: 'People back a day or more later' },
 ] as const
 
 export type Step = typeof STEPS[number]['name']
 export type { Funnel }
 
-/** A stranger's way, stage by stage, each the steps it adds up: a visit to the
- * home page, a connector's sign-in or a build begun in the home page's box, a
- * first sign-in, a space's first app, and coming back a day or more later.
- * The steps join nobody to anybody, so a stage counts the times it was
- * reached, not who reached it. */
+/** A stranger's way, stage by stage, each one step, and the stage it is a
+ * share of: a visit to the home page, then by either of two doors, a build
+ * begun in the home page's box or a connector's sign-in begun from an
+ * assistant, which no visit leads to; a first sign-in, by either door or the
+ * sign-in page, so a share of neither; a space's first app, and coming back a
+ * day or more later. The steps join nobody to anybody, so a stage counts the
+ * times it was reached, not who reached it. */
 export let STAGES = [
-  { name: 'visit', say: 'Home page visits', steps: ['home'] },
+  { name: 'visit', say: 'Home page visits', step: 'home' },
   {
-    name: 'began',
-    say: 'Connectors or home page builds begun',
-    steps: ['connector_start', 'started'],
+    name: 'built',
+    say: "Builds begun in the home page's box",
+    step: 'started',
+    of: 'visit',
   },
-  { name: 'signup', say: 'First sign-ins', steps: ['signup'] },
-  { name: 'first_app', say: 'First apps', steps: ['first_app'] },
-  { name: 'back', say: 'Back a day or more later', steps: ['returned'] },
+  {
+    name: 'connected',
+    say: 'Connector sign-ins begun',
+    step: 'connector_start',
+  },
+  { name: 'signup', say: 'First sign-ins', step: 'signup' },
+  { name: 'first_app', say: 'First apps', step: 'first_app', of: 'signup' },
+  {
+    name: 'back',
+    say: 'Back a day or more later',
+    step: 'returned',
+    of: 'first_app',
+  },
 ] as const satisfies readonly {
   name: string
   say: string
-  steps: readonly Step[]
+  step: Step
+  of?: string
 }[]
 
 /** Each call to action on the home page, by the name its `data-cta` gives it
@@ -192,8 +188,8 @@ let DAY = 86_400_000
  * let now = Date.parse('2026-11-10T00:00:00Z')
  * let at = (window: number | Date) => start(window, now).toISOString()
  * assertEquals(at(2), '2026-11-08T00:00:00.000Z')
- * assertEquals(at(30), '2026-11-03T04:47:14.000Z')
- * assertEquals(at(new Date('2026-10-11T00:00:00Z')), '2026-11-03T04:47:14.000Z')
+ * assertEquals(at(30), '2026-11-07T13:23:04.000Z')
+ * assertEquals(at(new Date('2026-10-11T00:00:00Z')), '2026-11-07T13:23:04.000Z')
  * assertEquals(at(new Date('2026-11-09T00:00:00Z')), '2026-11-09T00:00:00.000Z')
  * ```
  */
@@ -272,9 +268,7 @@ let split = (rows: Record<string, unknown>[]): FunnelSplit[] =>
   })
 
 /** The funnel from `since`, from the counts as the SQL API answers them: a
- * step nobody took is a zero, not a gap. A step whose own count began inside
- * the window says when (`since`), and no share: the step it follows was
- * counted for longer. */
+ * step nobody took is a zero, not a gap, and a share of one is no share. */
 export let shaped = (
   since: Date,
   rows: Record<string, unknown>[],
@@ -286,29 +280,25 @@ export let shaped = (
 ): Funnel => {
   let had = new Map(rows.map((r) => [String(r.step), Number(r.n) || 0]))
   let n = (name: string) => had.get(name) ?? 0
-  let sums = STAGES.map((s) => s.steps.reduce((t, step) => t + n(step), 0))
-  return {
-    since: since.toISOString(),
-    stages: STAGES.map((s, i) => ({
-      name: s.name,
-      say: s.say,
-      n: sums[i],
-      ...i && sums[i - 1]
-        ? { share: sums[i] / sums[i - 1], of: STAGES[i - 1].name }
-        : {},
-    })),
-    steps: STEPS.map((s) => {
-      let late = 'since' in s && since < new Date(s.since) ? s.since : null
+  let count = <T extends { name: string; say: string; of?: string }>(
+    all: readonly T[],
+    step: (s: T) => string,
+  ) =>
+    all.map((s) => {
+      let of = s.of && all.find((o) => o.name == s.of)
       return {
         name: s.name,
         say: s.say,
-        n: n(s.name),
-        ...late ? { since: late } : {},
-        ...!late && 'of' in s && n(s.of)
-          ? { share: n(s.name) / n(s.of), of: s.of }
+        n: n(step(s)),
+        ...of && n(step(of))
+          ? { share: n(step(s)) / n(step(of)), of: s.of }
           : {},
       }
-    }),
+    })
+  return {
+    since: since.toISOString(),
+    stages: count<typeof STAGES[number]>(STAGES, (s) => s.step),
+    steps: count<typeof STEPS[number]>(STEPS, (s) => s.name),
     apart: others.map((r) => ({
       client: String(r.client),
       step: String(r.step),

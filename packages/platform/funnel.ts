@@ -3,15 +3,13 @@
 // else it is shown in lines.
 
 /** One step's count over the window, and its share of the step it is
- * measured against (`of`), where that step was taken. A step whose count
- * began inside the window says when (`since`): it is a count from then. */
+ * measured against (`of`), where that step was taken. */
 export type FunnelCount = {
   name: string
   say: string
   n: number
   share?: number
   of?: string
-  since?: string
 }
 
 /** The home page's visits, clicks, builds begun in its box, sign-ups and
@@ -34,8 +32,8 @@ export type Funnel = {
   /** Where the window starts, as an ISO time; it runs to now. */
   since: string
   /** How far strangers got: each stage of their way, from a visit to coming
-   * back, as the sum of the steps it is made of, and its share of the stage
-   * before it. A Worker older than these has none. */
+   * back, and its share of the stage it follows (`of`), for one that follows
+   * one. A Worker older than these has none. */
   stages?: FunnelCount[]
   /** Each step people took, in the order a person meets them. */
   steps: FunnelCount[]
@@ -50,26 +48,32 @@ export type Funnel = {
 export type Stop = { after: FunnelCount; went: number }
 
 /**
- * Where most stop: the stage the next one keeps the smallest share of, and
- * that share. None until a stage after one somebody reached is read.
+ * Where most stop: the stage a stage that follows it keeps the smallest share
+ * of, and that share. None until a stage after one somebody reached is read.
  *
  * @example
  * ```ts
  * import { assertEquals } from '@std/assert'
- * let at = (name: string, n: number, share?: number) => ({ name, say: name, n, share })
- * let way = [at('visit', 40), at('began', 4, 0.1), at('first_app', 2, 0.5)]
+ * let at = (name: string, n: number, of?: string, share?: number) =>
+ *   ({ name, say: name, n, of, share })
+ * let way = [
+ *   at('visit', 40),
+ *   at('built', 4, 'visit', 0.1),
+ *   at('connected', 3),
+ *   at('signup', 6),
+ *   at('first_app', 2, 'signup', 1 / 3),
+ * ]
  * assertEquals(stopped(way), { after: way[0], went: 0.1 })
  * assertEquals(stopped([at('visit', 0)]), undefined)
  * ```
  */
 export let stopped = (stages: FunnelCount[] = []): Stop | undefined =>
-  stages.slice(1).reduce<Stop | undefined>(
-    (low, s, i) =>
-      s.share == null || (low && low.went <= s.share)
-        ? low
-        : { after: stages[i], went: s.share },
-    undefined,
-  )
+  stages.reduce<Stop | undefined>((low, s) => {
+    let after = stages.find((a) => a.name == s.of)
+    return !after || s.share == null || (low && low.went <= s.share)
+      ? low
+      : { after, went: s.share }
+  }, undefined)
 
 let pct = (share: number) => `${Math.round(share * 100)}%`
 
@@ -92,12 +96,13 @@ let split = (s: FunnelSplit) => `  ${s.name}: ${splitSays(s)}`
  *   since: '2026-11-07T00:00:00.000Z',
  *   stages: [
  *     { name: 'visit', say: 'Home page visits', n: 40 },
- *     { name: 'began', say: 'Connectors or home page builds begun', n: 4, share: 0.1, of: 'visit' },
+ *     { name: 'built', say: "Builds begun in the home page's box", n: 4, share: 0.1, of: 'visit' },
+ *     { name: 'connected', say: 'Connector sign-ins begun', n: 3 },
  *   ],
  *   steps: [
  *     { name: 'home', say: 'Home page visits', n: 40 },
  *     { name: 'click', say: 'Calls to action clicked', n: 10, share: 0.25, of: 'home' },
- *     { name: 'paid', say: 'Plans bought', n: 0, since: '2026-11-07T05:00:31Z' },
+ *     { name: 'paid', say: 'Plans bought', n: 0 },
  *   ],
  *   apart: [{ client: 'test', step: 'signup', n: 2 }],
  *   from: [], buttons: [], campaigns: [], variants: [],
@@ -105,12 +110,13 @@ let split = (s: FunnelSplit) => `  ${s.name}: ${splitSays(s)}`
  * assertEquals(funnelLines(f), [
  *   'How far strangers got since 2026-11-07T00:00:00.000Z:',
  *   '  Home page visits: 40',
- *   '  Connectors or home page builds begun: 4 (10% of visit)',
+ *   "  Builds begun in the home page's box: 4 (10% of visit)",
+ *   '  Connector sign-ins begun: 3',
  *   '  Most stop after home page visits: 10% went on',
  *   'People since 2026-11-07T00:00:00.000Z:',
  *   '  Home page visits: 40',
  *   '  Calls to action clicked: 10 (25% of home)',
- *   '  Plans bought: 0, counted since 2026-11-07T05:00:31Z',
+ *   '  Plans bought: 0',
  *   'Not people, counted apart:',
  *   '  test signup: 2',
  * ])
@@ -121,8 +127,7 @@ export let funnelLines = (f: Funnel): string[] => {
     rows.length ? [say, ...rows.map(line)] : []
   let count = (s: FunnelCount) =>
     `  ${s.say}: ${s.n}` +
-    (s.share == null ? '' : ` (${pct(s.share)} of ${s.of})`) +
-    (s.since ? `, counted since ${s.since}` : '')
+    (s.share == null ? '' : ` (${pct(s.share)} of ${s.of})`)
   let stop = stopped(f.stages)
   return [
     ...group(`How far strangers got since ${f.since}:`, f.stages ?? [], count),
