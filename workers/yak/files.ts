@@ -369,18 +369,33 @@ export let fileBytes = (
   range?: string | null,
   method = 'GET',
 ) => {
-  // A folder's redirect is the browser's to follow (apps.ts `asset`): the
-  // binding would follow it here and answer the folder's page at the address
-  // without its slash.
-  let req = new Request(at(eid, path, source), {
-    method,
-    headers: { [PREFIX]: prefix, ...(range ? { range } : {}) },
-    redirect: 'manual',
-  })
+  let req = fileRequest(eid, prefix, path, source, { method, range })
   return range || method == 'HEAD'
     ? fetch(req, env).then(relayed)
     : door(env).fetch(req)
 }
+
+// The request for one of an app's files at the Files door. A folder's
+// redirect is the browser's to follow (apps.ts `asset`): the binding would
+// follow it here and answer the folder's page at the address without its
+// slash.
+let fileRequest = (
+  eid: string,
+  prefix: string,
+  path: string,
+  source: string,
+  { method = 'GET', range, signal }: {
+    method?: string
+    range?: string | null
+    signal?: AbortSignal
+  } = {},
+) =>
+  new Request(at(eid, path, source), {
+    method,
+    headers: { [PREFIX]: prefix, ...(range ? { range } : {}) },
+    redirect: 'manual',
+    signal,
+  })
 
 // The addresses a browser opens for a release's files, pages first: a page
 // at its directory, the rest at their own encoded paths, never the app's
@@ -408,14 +423,25 @@ export let warmed = (paths: string[]) => {
 // a view would, through the same door at the same addresses (`fileBytes`),
 // and the view finds them cached. A few at a time, and only where the cache
 // is (`FILES`): in-process there is nothing to fill.
+//
+// A warm is a guess at the next view, not a view: it asks the cache alone,
+// never `door`. When the cache fails it (a 520, a throw, no answer within
+// `wait`), the file is left for its view, which asks the same address
+// through `door`, reads the bucket and reports a cache that still fails.
+// Read through `door`, a warm reported a failure no person met and then read
+// the bucket to fill nothing, and a cache that held an answer back held the
+// store's alarm with it, for two minutes once (T-152883).
 let AT_ONCE = 8
+let WAIT = 10_000
 export let warm = async (
   env: Env,
   eid: string,
   source: string,
   paths: string[],
+  wait = WAIT,
 ) => {
-  if (!env.FILES) return
+  let cache = env.FILES
+  if (!cache) return
   // A file's address is its path inside the served folder, and a file
   // outside that folder has none.
   let dir = (await configOf(r2Objects(env.BLOBS), source)).assets?.directory
@@ -428,9 +454,12 @@ export let warm = async (
   let next = 0
   let run = async () => {
     while (next < asked.length) {
-      let got = await fileBytes(env, eid, source, asked[next++], source)
+      let signal = AbortSignal.timeout(wait)
+      let req = fileRequest(eid, source, asked[next++], source, { signal })
       // Read through, never held: the cache keeps what passes it whole.
-      await got.body?.pipeTo(new WritableStream())
+      await cache.fetch(req)
+        .then((got) => got.body?.pipeTo(new WritableStream(), { signal }))
+        .catch(() => {})
     }
   }
   await Promise.all(Array.from({ length: AT_ONCE }, run))
