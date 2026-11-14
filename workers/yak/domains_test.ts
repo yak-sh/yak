@@ -14,6 +14,8 @@ import {
   apex,
   type Custom,
   customOf,
+  NEEDS_ZONE,
+  needsHostnames,
   ownership,
   provision,
   reachable,
@@ -25,6 +27,7 @@ import {
 } from './domains.ts'
 import type { Env } from './env.ts'
 import { ORIGIN } from '@yaks/platform/routes'
+import { CallError } from '@yaks/tools/errors'
 
 let env = { CF_ZONE: 'zone', CF_HOSTNAMES_TOKEN: 'a-token' } as Env
 let AT = 'https://api.cloudflare.com/client/v4/zones/zone/custom_hostnames'
@@ -172,12 +175,12 @@ test('the lines an agent reads out say the order of the wait', () => {
   )
 })
 
-test('with no token or no zone, every door says which is missing', () => {
-  assertThrows(() => reachable({} as Env), Error, 'CF_ZONE')
+test('with no token or no zone, every door refuses saying which is missing', () => {
+  assertThrows(() => reachable({} as Env), CallError, NEEDS_ZONE)
   assertThrows(
     () => reachable({ CF_ZONE: 'zone' } as Env),
-    Error,
-    'CF_HOSTNAMES_TOKEN',
+    CallError,
+    needsHostnames({}),
   )
 })
 

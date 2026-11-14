@@ -30,6 +30,7 @@ import { apex as hostApex, type Host } from '@yaks/platform/host'
 import { type Host as Hostname, stamp } from './directory.ts'
 import { unveiled } from './newcomer.ts'
 import { token } from '@yaks/graph/sha256'
+import { CallError } from '@yaks/tools/errors'
 
 export let needsHostnames = (env: Host = {}) =>
   'the platform has no Cloudflare token to attach custom hostnames with ' +
@@ -111,10 +112,14 @@ let sent = (env: Env, path: string, init: RequestInit = {}) =>
   })
 
 // Whether this platform can reach Cloudflare at all. Every door asks first,
-// because the alternative to refusing is a half-attached domain.
+// because the alternative to refusing is a half-attached domain. A missing
+// zone or token is a refusal the caller reads, not a defect: the platform is
+// working as configured.
 export let reachable = (env: Env) => {
-  if (!env.CF_ZONE) throw new Error(NEEDS_ZONE)
-  if (!env.CF_HOSTNAMES_TOKEN) throw new Error(needsHostnames(env))
+  if (!env.CF_ZONE) throw new CallError('unavailable', NEEDS_ZONE)
+  if (!env.CF_HOSTNAMES_TOKEN) {
+    throw new CallError('unavailable', needsHostnames(env))
+  }
 }
 
 // The custom hostname for this name, or null. The hostname is the key on
