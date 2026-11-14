@@ -737,7 +737,8 @@ export class Builder extends Durable {
           url.pathname == '/operator/letter' ||
           url.pathname == '/operator/replied' ||
           url.pathname == '/operator/support' ||
-          url.pathname == '/operator/tell'
+          url.pathname == '/operator/tell' ||
+          url.pathname == '/operator/ask'
         ) {
           let space = request.headers.get(SPACE)
           if (request.headers.get('x-yak-kernel') != '1' || !space) {
@@ -751,6 +752,14 @@ export class Builder extends Durable {
             await store.g.apply([notification(await request.json())], {
               trusted: true,
             })
+            return Response.json({ ok: true })
+          }
+          // What a released draft's merge asks its person (draft-merge.ts
+          // `ask`).
+          if (url.pathname == '/operator/ask') {
+            let { asked } = await import('./draft-merge.ts')
+            let { store } = await this.#stored()
+            await store.g.apply(asked(await request.json()), { trusted: true })
             return Response.json({ ok: true })
           }
           if (url.pathname == '/operator/receipt') {

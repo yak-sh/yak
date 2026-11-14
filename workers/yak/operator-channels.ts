@@ -767,6 +767,12 @@ export let handleChannels = (
       let { pointed } = await import('./operator-line.ts')
       await pointed(env, g, line.connection, row ? undefined : line.number)
     },
+    // A question of a released draft's merge answered: once all are, the
+    // merge runs with their picks (draft-merge.ts `settled`).
+    draft_merge: async (event) => {
+      let { settled } = await import('./draft-merge.ts')
+      await settled(env, g, event.entity.eid)
+    },
     // A wake set for a person that fired: what it asks, once per firing
     // (operator-schedules.ts `fired`).
     wake_run: async (event) => {

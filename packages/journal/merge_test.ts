@@ -115,6 +115,35 @@ let cases: [string, Change[], Choice[], unknown][] = [
     },
   ],
   [
+    'a pick made seeing main’s value as it stands settles the conflict',
+    [
+      page(at('a'), at('b'), at('c')),
+    ],
+    [{ ...pick('title', 'branch'), main: 'c' }],
+    {
+      writes: [{ page: { title: 'b' }, $was: { page: {} } }],
+    },
+  ],
+  [
+    'a pick made seeing a main that has moved since settles nothing',
+    [
+      page(at('a'), at('b'), at('d')),
+    ],
+    [{ ...pick('title', 'branch'), main: 'c' }],
+    { conflicts: [conflict('title', 'a', 'b', 'd')] },
+  ],
+  [
+    'of picks of one property, the one that saw main as it stands is taken',
+    [
+      page(at('a'), at('b'), at('d')),
+    ],
+    [
+      { ...pick('title', 'branch'), main: 'c' },
+      { ...pick('title', 'main'), main: 'd' },
+    ],
+    { writes: [] },
+  ],
+  [
     'a pick for main writes nothing',
     [
       page(at('a'), at('b'), at('c')),

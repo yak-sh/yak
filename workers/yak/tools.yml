@@ -424,6 +424,8 @@ app_deploy:
     your one open draft, and with several the answer lists them to choose
     from. Its edits are laid over the live files, so paths it did not
     change stay as live has them, and the app's other drafts stay open.
+    Rows its preview wrote merge into the live ones; one both changed
+    waits for the person's pick in their Updates.
     Drafts of an open-ended request wait for the person to choose one
     (decision_new); release only the one they chose.
     Always send message: everything this release changes and why, in full,

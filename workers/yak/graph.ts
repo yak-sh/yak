@@ -81,7 +81,8 @@ import { planting, recovering } from './models.ts'
 import { hits as documentHits } from './document-search.ts'
 import { metered as meteredModel } from './meter.ts'
 import { attributed } from './attribution.ts'
-import { backed as journalBacked } from '@yaks/journal'
+import { backed as journalBacked, type Choice, merge } from '@yaks/journal'
+import { Stale } from '@yaks/graph/errors'
 import { described } from '@yaks/code/described'
 import {
   compile,
@@ -3542,8 +3543,9 @@ export class Store extends Durable {
   // An app store's branches (@yaks/sqlite `branches`), for the kernel alone:
   // `/branches` lists them (GET) and makes one (POST); `/branches/<id>` drops
   // one (DELETE); and under it, `changes` (GET) is what it changed since its
-  // fork, `query` (POST `{query}`) reads on it and `apply` (POST
-  // `{bundles}`) writes on it, as the kernel's own writes are. A store's
+  // fork, `query` (POST `{query}`) reads on it, `apply` (POST `{bundles}`)
+  // writes on it, as the kernel's own writes are, and `merge` (POST
+  // `{picks}`) writes what it changed to main (`#merging`). A store's
   // first branch turns its versions on (`#versionsOn`); until its live rows
   // are all versions it makes none, and answers 503 with `retry-after`.
   #branching = async (request: Request, path: string): Promise<Response> => {
@@ -3590,6 +3592,11 @@ export class Store extends Durable {
           applied: await this.#asIs(bundles as Bundle[], { branch }),
         })
       }
+      if (door == 'merge' && method == 'POST') {
+        let { picks = [] } = await request.json() as { picks?: Choice[] }
+        if (!Array.isArray(picks)) throw new Refused('picks are a list')
+        return json(await this.#merging(branch, picks, writer(request)))
+      }
       return missing()
     } catch (e) {
       if (e instanceof Unseeded) {
@@ -3603,6 +3610,25 @@ export class Store extends Durable {
         return json({ error: 'Refused', message: e.message }, 400)
       }
       throw e
+    }
+  }
+
+  // A branch merged into main (@yaks/journal `merge`), as `actor`, the
+  // releasing caller: three ways per property, one batch, and the branch
+  // dropped once it is in. While a conflict has no pick nothing is written
+  // and the branch stays, and the answer is the conflicts. A main that moved
+  // between the merge's read and its write refuses the write rather than
+  // lose that change, and the merge is worked out again over it.
+  async #merging(id: number, picks: Choice[], actor: Actor | null) {
+    let merged = merge(this.#kernelGraph(this.#graph))
+    for (let n = 0;; n++) {
+      try {
+        let m = await merged(id, picks, actor ?? undefined)
+        if (!m.conflicts.length) await this.#graph.branches!.drop(id)
+        return { conflicts: m.conflicts, merged: m.bundles.length }
+      } catch (e) {
+        if (!(e instanceof Stale) || n >= 2) throw e
+      }
     }
   }
 

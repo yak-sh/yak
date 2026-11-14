@@ -42,12 +42,17 @@ export type Conflict = {
   main: unknown
 }
 
-/** Which side's value a conflict takes. */
+/** Which side's value a conflict takes. With `main`, the value main held
+ * when the pick was made: a main that has moved since is a value the picker
+ * never saw, so the pick settles nothing and the conflict stands again, and
+ * of several picks of one property, the one made seeing main as it stands
+ * is taken. */
 export type Choice = {
   eid: Eid
   comp: string
   prop: string
   take: 'branch' | 'main'
+  main?: unknown
 }
 
 /** A merge, worked out: the conflicts no pick settles, and the bundles that
@@ -90,7 +95,7 @@ let part = (
   vocab: Vocab,
   eid: Eid,
   changes: Change[],
-  picks: Map<string, Choice['take']>,
+  picks: Map<string, Choice[]>,
 ): Part => {
   let bundle: Bundle = { entity: { eid } }
   let conflicts: Conflict[] = []
@@ -114,7 +119,10 @@ let part = (
       let byBranch = cut.branch || !same(b, f)
       let byMain = cut.main || !same(m, f)
       if (!byBranch || same(b, m)) continue
-      let take = !byMain ? 'branch' : picks.get(key(eid, c.comp, prop))
+      let pick = picks.get(key(eid, c.comp, prop))?.find((p) =>
+        !('main' in p) || same(p.main ?? null, m)
+      )
+      let take = !byMain ? 'branch' : pick?.take
       if (!take) {
         conflicts.push({ eid, comp: c.comp, prop, fork: f, branch: b, main: m })
       } else if (take == 'main') keptHere = true
@@ -149,7 +157,7 @@ export let merged = (
   changes: Change[],
   picks: Choice[] = [],
 ): Merged => {
-  let taken = new Map(picks.map((p) => [key(p.eid, p.comp, p.prop), p.take]))
+  let taken = groupBy(picks, (p) => key(p.eid, p.comp, p.prop))
   let byEntity = groupBy(changes, (c) => c.eid)
   let parts = [...byEntity].map(([eid, cs]) => part(vocab, eid, cs, taken))
   let conflicts = parts.flatMap((p) => p.conflicts)

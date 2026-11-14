@@ -227,6 +227,9 @@
                   "branch",
                   "main"
                 ]
+              },
+              "main": {
+                "description": "The value main held as the conflict listed it. A main that has moved since is one the pick never saw, so the conflict stands again."
               }
             },
             "required": [

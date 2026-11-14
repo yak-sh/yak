@@ -1836,6 +1836,21 @@ let published = async (
       }),
     )
   }
+  // What the draft's preview wrote on its branch merges into the live rows
+  // now that the release is live, written as this caller's act; a property
+  // both changed waits for the person's pick (draft-merge.ts).
+  let merging = closing?.branch != null
+    ? await after(async () => {
+      let { draftReleased } = await import('./draft-merge.ts')
+      return await draftReleased(
+        ctx.env,
+        space,
+        { ...app, version, declaration: pointer },
+        { ...closing, branch: closing.branch! },
+        who,
+      )
+    })
+    : undefined
   if (tooled.views) await after(() => viewsMoved(ctx, space))
   // A published app's offer does not move with a deploy: publishing is the
   // owner's deliberate act and pins the version strangers install, so an
@@ -1853,6 +1868,7 @@ let published = async (
     serves,
     said: ran +
       trailing +
+      mergedSaid(merging) +
       servesSaid(serves) +
       // What this app can now be asked to do, as `command` takes them: bare
       // names, because a command is said with its app beside it rather than
@@ -1898,6 +1914,26 @@ let published = async (
         : ''),
   }
 }
+
+// What a release said of its draft's preview rows (draft-merge.ts).
+let mergedSaid = (
+  m?: { conflicts: unknown[]; merged: number; asked: string | null },
+) =>
+  !m
+    ? ''
+    : m.conflicts.length
+    ? `\n${m.conflicts.length} ${
+      m.conflicts.length == 1 ? 'property' : 'properties'
+    } the draft's preview and the live app both changed ${
+      m.asked
+        ? 'wait for the person to pick a side in their Updates'
+        : 'wait for a pick'
+    }, and nothing else the preview wrote merges until then`
+    : m.merged
+    ? `\nmerged what the draft's preview wrote into the live app's rows (${m.merged} ${
+      m.merged == 1 ? 'entity' : 'entities'
+    })`
+    : ''
 
 type DeployReview = {
   base: number

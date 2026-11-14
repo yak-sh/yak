@@ -118,12 +118,22 @@ of the app's store of its own, so several drafts preview side by side. Anyone
 holding it can exercise the preview as its author while that author remains a
 writer; keep it private. The preview reads the app's live rows as they stood
 when the draft was first previewed, in the draft's vocabulary, and what its
-pages write stays on the draft's branch: the released app never sees it.
-Discarding the draft drops its branch. A draft that changes a word in a way
-`app_deploy` would refuse is refused in its preview the same way. An app no
-release has seeded yet takes its draft's seed files on the branch, as its first
-release would. External D1, R2, Vectorize and Durable Object bindings are
-unavailable in a draft preview.
+pages write stays on the draft's branch until the draft is released.
+
+Releasing the draft merges what its pages wrote into the live app's rows, each
+property against its value when the draft was first previewed: one only the
+preview changed takes the preview's value, and one the live app changed
+meanwhile keeps the live value, so nobody's live writes are lost. Rows written
+only to try the draft out go live too; delete them in the preview first. A
+property both changed is asked of the person who released it, in their Updates,
+with its value then, the draft's and the live app's; nothing else the preview
+wrote merges until each is answered, and a live change made after they were
+asked is asked about again rather than written over. Once merged, the branch is
+dropped. Discarding the draft drops its branch and what its pages wrote. A draft
+that changes a word in a way `app_deploy` would refuse is refused in its preview
+the same way. An app no release has seeded yet takes its draft's seed files on
+the branch, as its first release would. External D1, R2, Vectorize and Durable
+Object bindings are unavailable in a draft preview.
 
 ### A preview that follows the draft
 

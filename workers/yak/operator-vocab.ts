@@ -399,6 +399,50 @@ export let operatorDoc: VocabDoc = {
       description:
         "Copy the Operator's name, its persona's title, to its space's directory row, which lists, letters and pages read (operator-persona.ts `named`).",
     },
+    draft_conflict: {
+      component: true,
+      description:
+        "A property a released draft's preview and the live app both changed since the draft began, which this decision asks the person to settle: the draft's value or the live one (draft-merge.ts).",
+      properties: {
+        app: {
+          type: 'string',
+          ref: 'entity',
+          death: 'keep',
+          description: 'The app whose live rows the draft merges into.',
+        },
+        branch: {
+          type: 'number',
+          description: "The branch of the app's store the draft wrote on.",
+        },
+        draft: { type: 'string', description: 'The draft released.' },
+        eid: { type: 'string', description: 'The entity both changed.' },
+        comp: { type: 'string' },
+        prop: { type: 'string' },
+        live: {
+          type: 'string',
+          description:
+            'The live value as it was asked about, as JSON: a pick that saw another settles nothing, so a change on the live app since is never lost.',
+        },
+        by: {
+          type: 'string',
+          ref: 'entity',
+          death: 'keep',
+          description: 'Who released the draft, who the merge is written as.',
+        },
+        via: {
+          type: 'string',
+          description: 'The instrument the release came through.',
+        },
+      },
+    },
+    draft_merge: {
+      effect: true,
+      target: '.draft_conflict',
+      created: ['decided'],
+      tries: 3,
+      description:
+        "Once every question of a released draft's merge is answered, merge the draft's branch into the app's live rows with those picks, and ask again about any property the live app changed since (draft-merge.ts `settled`).",
+    },
     operator_alert: {
       effect: true,
       created: ['notification'],
