@@ -28,8 +28,9 @@
 # in swap, and yak-mail stalled 42 s for memory with yak.db's write lock held.
 # A session is a managed run's process-* scope or a tmux pane's tmux-spawn-*
 # scope. A session at its cap gives back page cache, swaps up to 2 GB, and then
-# the kernel kills its largest process; OOMPolicy=continue keeps the rest of
-# the session, where a scope's default stops it whole. The caps are Max, never
+# the kernel kills a test run's process first (bin/test.ts raises its
+# oom_score_adj), else the largest; OOMPolicy=continue keeps the rest of the
+# session, where a scope's default stops it whole. The caps are Max, never
 # High: over High the kernel throttles every process in the group, the agent's
 # own included, and a runaway sits there frozen instead of failing. They go on
 # those two names, not scope.d, since a drop-in overrides a scope's own

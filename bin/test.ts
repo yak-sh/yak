@@ -28,6 +28,17 @@ if (import.meta.main && Deno.args[0] !== '--bulk') {
     )
     Deno.exit(2)
   }
+  // The run, and every runtime and check it starts, is the first thing the
+  // kernel kills when the session it runs in reaches its memory cap
+  // (bin/limits). Otherwise the kernel kills the largest process in the
+  // session, which beside a suite of mid-sized runtimes is the agent itself,
+  // and the agent's run ends with SIGKILL where a test runtime's SIGKILL would
+  // have been a failure it reads. Linux only; elsewhere there is no such file.
+  await Deno.writeTextFile('/proc/self/oom_score_adj', '1000').catch(
+    (e) => {
+      if (!(e instanceof Deno.errors.NotFound)) throw e
+    },
+  )
 }
 
 let { relative } = await import('node:path')
