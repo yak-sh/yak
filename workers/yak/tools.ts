@@ -3721,10 +3721,8 @@ let OURS: Row[] = [
       return {
         text: `app ${space.slug}/${s} (${app.eid}) is made but not deployed: ` +
           'its address serves nothing yet, so do not tell the person it ' +
-          'exists or give them a link. app_files writes it: files for one ' +
-          'version, or files with drafts for two to four the person chooses ' +
-          'between (decision_new). app_deploy releases one and answers its ' +
-          `link. ${told(app.access)}. ${
+          'exists or give them a link. app_files writes it, and app_deploy ' +
+          `releases it and answers its link. ${told(app.access)}. ${
             previews ? HELD(previews.site) + ' ' : ''
           }https://${spaceHost(ctx.env, space.slug)}/ ${
             front ? `opens ${front.slug}` : "lists the space's apps"
