@@ -657,6 +657,26 @@ let posted = (o: Awaited<ReturnType<typeof seeded>>, path: string) =>
 let armed = async (o: { ctx: ReturnType<typeof state> }) =>
   (await o.ctx.storage.getAlarm()) != null
 
+// What the wiped incarnation opened knew the file before it was emptied, so
+// the object restarts rather than read tables that are gone (T-222).
+test('a wiped Builder drops its alarm and restarts, and the next incarnation finds nothing', async () => {
+  let o = await seeded()
+  await (await posted(o, '/operator/conversation')).text()
+  await Promise.all(o.ctx.pending)
+  let wiped = await o.object.fetch(
+    new Request('https://builder/wipe', {
+      method: 'POST',
+      headers: { 'x-yak-kernel': '1' },
+    }),
+  )
+  await new Promise((go) => setTimeout(go, 1))
+  assertEquals(
+    [wiped.status, await armed(o), o.ctx.pitr.aborts],
+    [200, false, 1],
+  )
+  assertEquals(new Builder(o.ctx, o.env).said(), [])
+})
+
 test('a new incarnation says it owes work in its answers, and takes the work up on a wake', async () => {
   let o = await seeded()
   let read = await posted(o, '/operator/conversation')

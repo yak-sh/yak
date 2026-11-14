@@ -355,16 +355,26 @@ export class Builder extends Durable {
    * again (erase.ts order): emptying an empty object empties it again. The
    * table is made again by whatever next asks about the conversation.
    *
+   * The incarnation ends with it, once the answer is out: what it opened (the
+   * Operator's store, the alarm's works, a step under way) holds a driver that
+   * knew the file before `deleteAll`, and would go on reading tables that are
+   * gone ("no such table: server_meta", T-222). Its alarm goes too, so no
+   * incarnation wakes to plant a store for a space that no longer exists.
+   * A stand-in that cannot restart forgets what it opened here instead.
+   *
    * The sockets are left where they are: a page still holding one is watching
    * a space that no longer exists, and the next line it says is answered
    * "that space is gone" by {@link Builder.say}, which reads the directory.
    */
   async wipe() {
-    await this.#ctx.storage.deleteAll()
+    let ctx = this.#ctx
+    await ctx.storage.deleteAlarm?.()
+    await ctx.storage.deleteAll()
     this.#raised = false
     this.#operator = undefined
     this.#store = undefined
     this.#frames = undefined
+    if (ctx.abort) setTimeout(() => ctx.abort?.('wiped'), 0)
   }
 
   // Everyone watching this space, including the socket the frame came in on: a
