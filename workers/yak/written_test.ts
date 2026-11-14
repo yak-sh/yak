@@ -15,7 +15,9 @@ import type { App, Directory, Space } from './directory.ts'
 import { addressed, sha256 } from './versions.ts'
 import type { Who } from './session.ts'
 import {
+  anew,
   type AppDraft,
+  type Asked,
   type Change,
   chosen,
   deleting,
@@ -233,7 +235,7 @@ let made = () => {
   let edit = <T>(
     act: Parameters<typeof modifying<T>>[5],
     who = WHO,
-    asked?: string | null,
+    asked?: Asked,
   ) =>
     modifying(
       raw,
@@ -246,7 +248,7 @@ let made = () => {
       asked,
       () => new Date(time.now() + skew).toISOString(),
     )
-  let write = (sent: Record<string, string>, who = WHO, asked?: string) =>
+  let write = (sent: Record<string, string>, who = WHO, asked?: Asked) =>
     edit(
       () =>
         Promise.resolve({
@@ -594,16 +596,26 @@ test('one conversation opens several drafts on purpose, and names the one each c
 })
 
 let resend = made()
-test('a draft opened on purpose and sent again after it was cut off lands in the draft its first sending opened', async () => {
+test('a draft a call opens and the call run again after it was cut off land in one draft', async () => {
   let { write, drafts } = resend
-  let first = await write({ 'a.txt': 'left' }, ONE)
-  let second = await write({ 'a.txt': 'right' }, ONE, NEW)
-  let again = await write({ 'a.txt': 'right' }, ONE, NEW)
-  assertEquals([again.draft, again.already], [second.draft, ['a.txt']])
+  await write({ 'a.txt': 'left' }, ONE)
+  let second = await write({ 'a.txt': 'right' }, ONE, anew(NEW, 'c1'))
+  let again = await write({ 'a.txt': 'right' }, ONE, anew(NEW, 'c1'))
+  assertEquals([again.draft, again.wrote, again.already], [
+    second.draft,
+    [],
+    ['a.txt'],
+  ])
   assertEquals((await drafts()).length, 2)
-  // Another direction that shares a file with one already open is new.
-  let third = await write({ 'a.txt': 'right', 'b.txt': 'two' }, ONE, NEW)
-  assert(![first.draft, second.draft].includes(third.draft))
+})
+
+let alike = made()
+test('two calls that open a draft each with the same files open two drafts', async () => {
+  let { write, drafts } = alike
+  let one = await write({ 'a.txt': 'left' }, ONE, anew(NEW, 'c1'))
+  let two = await write({ 'a.txt': 'left' }, ONE, anew(NEW, 'c2'))
+  let bare = await write({ 'a.txt': 'left' }, ONE, NEW)
+  assertEquals(new Set([one.draft, two.draft, bare.draft]).size, 3)
   assertEquals((await drafts()).length, 3)
 })
 

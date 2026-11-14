@@ -346,8 +346,10 @@ import {
   whatChanged,
 } from './versions.ts'
 import {
+  anew,
   type AppDraft,
   applied,
+  type Asked,
   type Change,
   chosen,
   deleting,
@@ -2104,7 +2106,7 @@ let copied = async (
       })
     },
     watching(ctx.env, onto.space, onto.app),
-    NEW,
+    anew(NEW, ctx.call),
   )
   return {
     ...out.value,
@@ -2341,7 +2343,7 @@ export let wroteAt = async (
   who: Who,
   files: { path: string; bytes: Uint8Array }[],
   c: Clock = clock(),
-  draft?: string | null,
+  draft?: Asked,
 ) => {
   await c.time('pictures', () => pictured(files))
   return await wrotePinned(env, space, app, who, await hashed(files), c, draft)
@@ -2364,7 +2366,7 @@ export let wrotePinned = async (
   who: Who,
   sent: Change[],
   c: Clock = clock(),
-  draft?: string | null,
+  draft?: Asked,
 ) => {
   for (let f of sent) {
     let no = tooLong(f.path, f.size ?? 0)
@@ -2456,7 +2458,7 @@ export let drafted = async (
   app: App,
   who: Who,
   changes: Change[],
-  asked?: string | null,
+  asked?: Asked,
 ) => {
   let raw = r2RawObjects(env.BLOBS)
   let config: Promise<Config> = Promise.resolve({})
@@ -2509,7 +2511,7 @@ let swept = async (
   who: Who,
   folder: string,
   kept: string[],
-  draft?: string | null,
+  draft?: Asked,
 ) => {
   let keep = new Set(kept)
   return (await modifying(
@@ -3704,7 +3706,9 @@ let OURS: Row[] = [
         () => inApp(ctx, args, write, !write),
       )
       let blobs = r2RawObjects(ctx.env.BLOBS)
-      let asked = draftArg(args)
+      // `draft: 'new'` opens the draft named for this call, so the call run
+      // again after it was cut off lands in it (written.ts `anew`).
+      let asked = anew(draftArg(args), ctx.call)
       // A path as the app names it: written.ts keys the draft by app-relative
       // paths, and a leading slash names the same file.
       let named = (path: string) => path.replace(/^\/+/, '')

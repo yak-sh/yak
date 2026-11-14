@@ -103,6 +103,39 @@ export type AppDraft = {
  * an agent trying several directions at once holds one per direction. */
 export let NEW = 'new'
 
+/** {@link NEW} as one call asks it: the draft it opens is named for the call
+ * (a tool's Ctx `call`). */
+export type Opens = { opens: string }
+
+/** The draft a write names: an open one's id, {@link NEW}, or the draft one
+ * call opens ({@link anew}). */
+export type Asked = string | Opens | null
+
+/**
+ * `draft` as the call `call` names it. {@link NEW} with a call to name it by
+ * opens the draft named for that call, so the same call run again after it
+ * was cut off lands in the draft its first run opened, and another call,
+ * however alike, opens another. With no call, each write opens its own.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(anew('new', 'c1'), { opens: 'c1' })
+ * assertEquals([anew('new'), anew('d1', 'c1'), anew(null, 'c1')], ['new', 'd1', null])
+ * ```
+ */
+export let anew = (draft: string | null, call?: string): Asked =>
+  draft == NEW && call ? { opens: call } : draft
+
+/** Whether `asked` opens a draft beside the writer's own. */
+let opensNew = (asked?: Asked): asked is typeof NEW | Opens =>
+  asked == NEW || typeof asked == 'object' && asked != null
+
+/** The eid of the draft `asked` opens: the call's own, else a new one. */
+let openedFor = (app: App, asked: typeof NEW | Opens) =>
+  typeof asked == 'object'
+    ? derivedEid(`app_draft_opened|${app.eid}|${asked.opens}`)
+    : mint()
+
 /** An app's open drafts: its `app_draft` rows, and the draft its row still
  * names as `app.draft` where no row stands for it yet. Never cached: a write
  * chooses among them. */
@@ -146,9 +179,14 @@ export let chosen = (
   app: App,
   drafts: AppDraft[],
   who: Who,
-  asked?: string | null,
+  asked?: Asked,
 ): AppDraft | null => {
-  if (asked == NEW) return null
+  // A draft a call opens is the one it opened, where that run landed.
+  if (opensNew(asked)) {
+    return typeof asked == 'object'
+      ? drafts.find((d) => d.eid == openedFor(app, asked)) ?? null
+      : null
+  }
   if (asked) {
     let named = drafts.find((d) => d.eid == asked)
     if (!named) {
@@ -424,26 +462,14 @@ export let applied = (files: Files, changes: Change[]) => {
   return out
 }
 
-/** Which of `own` holds exactly `files`, if any. */
-let resent = async (
-  raw: Objects,
-  dir: Directory,
-  app: App,
-  own: AppDraft[],
-  files: Files,
-) => {
-  let held = await Promise.all(own.map((d) => drafting(raw, dir, app, d)))
-  return held.find((d) => same(d.files, files))?.of ?? null
-}
-
 /**
  * A write into one of an app's drafts: the one `asked` names, else the
  * writer's own (`chosen`), else a new one, which `asked` {@link NEW} opens
- * beside those it holds, unless one of them already holds just what the new
- * one would: the same call sent again after it was cut off. `act` is handed the draft as it stands and answers
- * the changes it makes and whatever its caller wants back; it runs again if
- * the draft moved under it (a deploy began or ended, another write to the
- * same draft), so it decides and does nothing it cannot repeat.
+ * beside those it holds; a call ({@link Opens}) run again after it was cut
+ * off finds the draft its first run opened. `act` is handed the draft as it
+ * stands and answers the changes it makes and whatever its caller wants back;
+ * it runs again if the draft moved under it (a deploy began or ended, another
+ * write to the same draft), so it decides and does nothing it cannot repeat.
  *
  * A change that leaves a path as the draft already holds it is left out: a
  * write sent again after it was cut off puts and records only what did not
@@ -464,7 +490,7 @@ export let modifying = async <T>(
     attempt: number,
   ) => Promise<{ changes: Change[]; value: T }>,
   tell: Tell,
-  asked?: string | null,
+  asked?: Asked,
   now = () => new Date().toISOString(),
 ): Promise<{
   value: T
@@ -480,7 +506,7 @@ export let modifying = async <T>(
   let stored = new Set<string>()
   // The eid a draft opened on purpose takes ({@link NEW}), the same however
   // often the write goes round.
-  let opened = mint()
+  let opened = opensNew(asked) ? openedFor(app, asked) : null
   let row = app
   for (let n = 0; n < 5; n++) {
     // The app, its drafts, and its newest write, which names the draft a
@@ -517,29 +543,13 @@ export let modifying = async <T>(
       if (!todo.length) {
         return { value, wrote: [], already, draft: into?.eid ?? null, drafts }
       }
-      // A draft opened on purpose and sent again after it was cut off finds
-      // the draft its first sending opened: one of the conversation's own
-      // that holds just what a new one would.
-      let twin = asked == NEW
-        ? await resent(
-          raw,
-          dir,
-          row,
-          drafts.filter(ownBy(who)),
-          applied(draft.files, todo),
-        )
-        : null
-      if (twin) {
-        let paths = last.map((c) => c.path)
-        return { value, wrote: [], already: paths, draft: twin.eid, drafts }
-      }
       let fresh = !into
       let via = who.agent && who.via ? who.via : null
       let d: AppDraft = into ?? {
         // A writer's own draft is named for the writer and the app's newest
         // write, so two first writes of one conversation at once race for
         // one eid and the second lands in the draft the first opened.
-        eid: asked == NEW ? opened : derivedEid(
+        eid: opened ?? derivedEid(
           `app_draft|${row.eid}|${via ?? who.person ?? ''}|${head ?? ''}`,
         ),
         base: row.version,
