@@ -138,6 +138,10 @@ app_new:
     Write the new app's copy, the words its pages show, in a copy.json
     beside index.html and mark each element with data-copy, so the person
     can edit the words on the page (https://yaks.app/docs/copy).
+    An open-ended request, where the person's taste picks among many good
+    answers ("a landing page for churches"), gets two to four drafts
+    (app_files draft: 'new') and one decision_new whose choices show them,
+    before anything is released (https://yaks.app/docs/files).
     Documentation: https://yaks.app/docs.
 app_files:
   title: Read or write app files
@@ -417,6 +421,8 @@ app_deploy:
     your one open draft, and with several the answer lists them to choose
     from. Its edits are laid over the live files, so paths it did not
     change stay as live has them, and the app's other drafts stay open.
+    Drafts of an open-ended request wait for the person to choose one
+    (decision_new); release only the one they chose.
     Always send message: everything this release changes and why, in full,
     written from the change you just made, as a commit message says it. It
     is kept with the version, and every agent or Operator working on the app
