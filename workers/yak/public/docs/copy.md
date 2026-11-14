@@ -150,7 +150,7 @@ A member of the app's space who may write its files, an owner or an editor, sees
 a pencil in the bottom-right corner of every page of the app. Nobody else is
 sent it: not a visitor, not a guest.
 
-1. Press the pencil to enter edit mode. Every marked element is outlined.
+1. Click or tap the pencil to enter edit mode. Every marked element is outlined.
 2. Click one and type over its text where it stands. Links and buttons do not
    act while editing, and a slot's own element is edited on its own.
 3. Each change is kept as the person's draft of that snippet, `copy:<key>`, as

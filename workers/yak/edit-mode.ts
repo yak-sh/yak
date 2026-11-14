@@ -59,6 +59,15 @@ export let asking = (page: string) =>
 /** How many changes a count is, as the panel says it. */
 export let counted = (n: number) => n == 1 ? '1 change' : `${n} changes`
 
+/** The word for a press where the person is: Tap on a touch screen, Click
+ * with a mouse. */
+export let pressWord = (win: Pick<Window, 'matchMedia'>) =>
+  win.matchMedia?.('(pointer: coarse)').matches ? 'Tap' : 'Click'
+
+/** What the panel says before any change. */
+export let hint = (win: Pick<Window, 'matchMedia'>) =>
+  `${pressWord(win)} any outlined words to change them.`
+
 /** What the panel says once Save has answered. */
 export let savedAs = (version: number) => `Saved as version ${version}`
 
@@ -341,9 +350,7 @@ export let editMode = (doc: Document, drafts: Desk, opts: Opts) => {
     ready = true
     stop = drafts.follow(() => {
       let changes = mine().length
-      count.textContent = changes
-        ? counted(changes)
-        : 'Press any outlined words to change them'
+      count.textContent = changes ? counted(changes) : hint(win)
       save.hidden = discard.hidden = !changes
       for (let el of marked) {
         let key = keyOf(el), value = shows(key)

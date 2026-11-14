@@ -353,9 +353,9 @@ test('a row is added, listed, edited, linked, given a file and removed', async (
   await p.press('Delete')
   assertEquals(
     [...p.root.querySelectorAll('button')].map((b) => b.textContent).at(-1),
-    'Press again to delete',
+    'Click again to delete',
   )
-  await p.press('Press again to delete')
+  await p.press('Click again to delete')
   await p.go('#announcement')
   assertStringIncludes(p.text(), 'Nothing here yet')
   p.stop()

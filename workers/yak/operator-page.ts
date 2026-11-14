@@ -475,7 +475,7 @@ export let alertsOffer = (
         h(
           'p',
           null,
-          'To get alerts on this iPhone, add this page to your Home Screen first: press Share, then Add to Home Screen, and open it from there. Apple sends alerts only to a page on the Home Screen.',
+          'To get alerts on this iPhone, add this page to your Home Screen first: tap Share, then Add to Home Screen, and open it from there. Apple sends alerts only to a page on the Home Screen.',
         ),
       ),
       h(

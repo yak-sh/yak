@@ -5,7 +5,7 @@ import { equal, ok, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { browserDrafts } from '@yaks/draft/browser'
 import type { Bundle } from '@yaks/graph'
-import { editMode, placeOf } from './edit-mode.ts'
+import { editMode, hint, placeOf } from './edit-mode.ts'
 
 let BODY = `
 <h1 data-copy="hero.title">Build your ideas</h1>
@@ -114,10 +114,21 @@ let load = async (body = BODY, answers: Record<string, Answer> = {}) => {
 test('edit mode outlines the page, and Done takes the outlines off', async () => {
   let p = await load()
   ok(p.doc.documentElement.hasAttribute('data-yak-editing'))
-  equal(p.shown(), 'Press any outlined words to change them ·  · Done')
+  equal(p.shown(), 'Click any outlined words to change them. ·  · Done')
   p.mode.stop()
   ok(!p.doc.documentElement.hasAttribute('data-yak-editing'))
   equal(p.says(), '')
+})
+
+test('the hint says Tap on a touch screen and Click with a mouse', () => {
+  let at = (coarse: boolean) =>
+    ({
+      matchMedia: (q: string) => ({
+        matches: coarse && q == '(pointer: coarse)',
+      }),
+    }) as unknown as Window
+  equal(hint(at(true)), 'Tap any outlined words to change them.')
+  equal(hint(at(false)), 'Click any outlined words to change them.')
 })
 
 test('a press lets the person type over a snippet, kept as their draft at copy:<key>', async () => {
@@ -180,7 +191,7 @@ test('a draft typed on another device shows in place, and Discard empties every 
     p.applied.map((b) => (b.draft as { text: string }).text),
     ['', ''],
   )
-  equal(p.shown(), 'Press any outlined words to change them ·  · Done')
+  equal(p.shown(), 'Click any outlined words to change them. ·  · Done')
   p.mode.stop()
 })
 
@@ -233,7 +244,7 @@ test('Save sends the drafts, and the page then shows the saved words as its own'
   equal(p.q('h1').textContent, 'Build it by asking')
   equal(
     p.shown(),
-    'Press any outlined words to change them · Saved as version 4 · Undo · Done',
+    'Click any outlined words to change them. · Saved as version 4 · Undo · Done',
   )
   p.mode.stop()
   equal(p.q('footer span').textContent, 'Build it by asking')

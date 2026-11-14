@@ -1,7 +1,7 @@
 // The pencil a member who may write an app sees in the bottom-right corner of
 // its pages (page-script.ts, only for a viewer the file door lets write:
 // apps.ts `editOf`). Pressed, it loads edit mode (edit-mode.ts, at the app's
-// `./api/_edit.js`) and the app's store client, and the panel beside it
+// `./api/_edit.js`) and the app's store client, and the panel to its left
 // counts the person's changes and saves them (`./api/save`, save.ts). Edit
 // mode stays on across a reload of the tab until Done.
 //
@@ -21,8 +21,7 @@
   right: calc(8px + env(safe-area-inset-right, 0px)) !important;
   bottom: calc(var(--rise, 0px) + 8px + env(safe-area-inset-bottom, 0px)) !important;
   display: flex !important;
-  flex-direction: column !important;
-  align-items: flex-end !important;
+  align-items: center !important;
   gap: 6px !important;
   max-width: calc(100vw - 16px) !important;
   font: 500 13px/1.3 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif !important;
@@ -36,7 +35,7 @@
   align-items: center;
   justify-content: flex-end;
   gap: 6px 10px;
-  max-width: min(360px, calc(100vw - 16px));
+  max-width: min(360px, calc(100vw - 62px));
   box-sizing: border-box;
   padding: 8px 10px;
   border: 1px solid #e3d3bf;
@@ -147,8 +146,9 @@ svg { width: 18px; height: 18px }
       pencil.setAttribute('aria-pressed', 'true')
     } catch (e) {
       let says = document.createElement('p')
-      says.textContent =
-        'Edit mode could not load. Press the pencil to try again.'
+      says.textContent = `Edit mode could not load. ${
+        matchMedia('(pointer: coarse)').matches ? 'Tap' : 'Click'
+      } the pencil to try again.`
       panel.replaceChildren(says)
       // The reporter (report.js) hears it.
       queueMicrotask(() => {

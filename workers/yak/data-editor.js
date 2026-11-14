@@ -565,7 +565,10 @@ export let open = ({ root, client, kinds: all, accepts, view, files }) => {
     let remove = async (e) => {
       if (!sure) {
         sure = true
-        e.target.textContent = 'Press again to delete'
+        e.target.textContent =
+          globalThis.matchMedia?.('(pointer: coarse)').matches
+            ? 'Tap again to delete'
+            : 'Click again to delete'
         return
       }
       try {

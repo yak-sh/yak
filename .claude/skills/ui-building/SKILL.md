@@ -32,6 +32,9 @@ The words a domain component owns are `vocabulary`'s, and where a kit or a
 `/views` facet is wired is `packages-and-plugins`. Proving what a screen does,
 in your own process, is `end-to-end-checks`; its tests are `testing`.
 
+Words a person reads say "click" with a mouse and "tap" on a touch screen
+(`(pointer: coarse)`), never "press", which is for a key, and end with a period.
+
 ## Feel
 
 We want screens that feel instant and light, the way a great native app does.

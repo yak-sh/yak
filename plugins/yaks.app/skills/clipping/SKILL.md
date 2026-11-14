@@ -415,7 +415,7 @@ Put the link on a page of the app, usually the app's home page, with a line
 telling them to drag it to the bookmarks bar:
 
     <p>Drag this to your bookmarks bar:
-      <a id="tool">Clip to my recipe box</a> — then press it on any page.</p>
+      <a id="tool">Clip to my recipe box</a> — then click it on any page.</p>
     <script type="module">
       let at = new URL('./clip.html', location.href).href
       document.getElementById('tool').href =
