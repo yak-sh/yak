@@ -17,7 +17,7 @@
 import { type ComponentChildren, h, type JSX } from 'preact'
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { Rows } from '@yaks/ui'
+import { Rows } from '@yaks/ui/parts'
 import { drag, dragged, drags } from './drag.ts'
 
 /** The page entity holding this owner's order state. */

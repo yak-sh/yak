@@ -15,7 +15,7 @@ import {
 } from 'preact'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import type { Bundle } from '@yaks/graph'
-import { Choices, Field as Input } from '@yaks/ui'
+import { Choices, Field as Input } from '@yaks/ui/parts'
 import type { Result } from './completion-state.ts'
 import {
   type Act,

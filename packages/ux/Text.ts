@@ -13,7 +13,7 @@
 
 import { h, type JSX } from 'preact'
 import { useLayoutEffect, useRef } from 'preact/hooks'
-import { Edit as Span } from '@yaks/ui'
+import { Edit as Span } from '@yaks/ui/parts'
 import { type Bundle, useHost } from './host.ts'
 import { emit, type OnChange } from './emit.ts'
 import { useEdit } from './live.ts'

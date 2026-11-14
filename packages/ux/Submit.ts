@@ -4,7 +4,7 @@ import { h, type JSX } from 'preact'
 import { useEffect, useRef } from 'preact/hooks'
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { Button, Form, Loading, Notice } from '@yaks/ui'
+import { Button, Form, Loading, Notice } from '@yaks/ui/parts'
 import { type Drafts, useDrafts } from './host.ts'
 import { type Path, put, type Values } from './field-values.ts'
 

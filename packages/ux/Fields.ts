@@ -1,7 +1,7 @@
 /** Controlled fields and repeat groups, composed from the UI kit's controls.
  * The caller supplies visible fields, values and validation feedback. @module */
 import { type ComponentChildren, h, type JSX } from 'preact'
-import { Button, Card, Check, Field, Form, Notice } from '@yaks/ui'
+import { Button, Card, Check, Field, Form, Notice } from '@yaks/ui/parts'
 import { named, type Path, valueAt, type Values } from './field-values.ts'
 
 /** One visible input, or a repeat group containing visible inputs per entry. */
