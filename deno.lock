@@ -2890,6 +2890,7 @@
       "packages/anthropic": {
         "packageJson": {
           "dependencies": [
+            "npm:@yaks/fp@0.2.23",
             "npm:@yaks/model@0.2.32",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/vocab@0.2.32"
@@ -4205,6 +4206,7 @@
           "dependencies": [
             "npm:@jsr/std__assert@1",
             "npm:@yaks/blob@0.2.30",
+            "npm:@yaks/fp@0.2.23",
             "npm:@yaks/model@0.2.32",
             "npm:@yaks/openai@0.2.26",
             "npm:@yaks/testing@0.2.30",

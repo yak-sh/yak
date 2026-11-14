@@ -1,3 +1,4 @@
+import { type Hold, sharing } from '@yaks/fp'
 import { listing } from './list.ts'
 import { described } from './info.ts'
 import { reads } from './reads.ts'
@@ -57,6 +58,9 @@ export type Options = Omit<ResponseOptions, 'credentials'> & RunOptions & {
   /** The account whose ChatGPT plan the Codex backend's limit readings are
    * of (@yaks/model `accountEid`). */
   account?: string
+  /** keeps a shared model-list read alive past its request (@yaks/model
+   * `Lent.hold`) */
+  hold?: Hold
 }
 
 type Frame = Record<string, unknown>
@@ -233,17 +237,11 @@ export let responses = (opts: Options): Model => {
   let list = async () =>
     listing(await opts.credential(), opts.fetch, opts.refresh, opts.headers)
   let known = new Map<string, Promise<Listed | undefined>>()
-  let info = (name: string) => {
-    let held = known.get(name) ?? list().then((models) => {
-      let model = models.find((m) => m.name == name)
+  let info = (name: string) =>
+    sharing(known, name, async () => {
+      let model = (await list()).find((m) => m.name == name)
       return model ? described(model, opts.fetch) : undefined
-    }).catch((error) => {
-      known.delete(name)
-      throw error
-    })
-    known.set(name, held)
-    return held
-  }
+    }, { hold: opts.hold })
   return Object.assign(ask(opts), {
     reads,
     lateResults: true as const,

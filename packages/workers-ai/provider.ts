@@ -58,6 +58,7 @@ export let providers = (
       fetch: lent.fetch,
       gateway: options.gateway,
       receipts: lent.receipts,
+      hold: lent.hold,
     })
     : refusing,
 })
@@ -101,7 +102,7 @@ export let native = (
     if (!ai) throw unbound()
     let info = music(model)
       ? { name: model }
-      : await modelInfo(model, lent.fetch)
+      : await modelInfo(model, lent.fetch, { hold: lent.hold })
     let price = info.price
     if (!music(model) && !price) throw priceless(model, lent.fetch, spending)
     let sent = input && typeof input == 'object'

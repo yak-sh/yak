@@ -1,5 +1,5 @@
 import { type Listing, listing, modelInfo, nativeReads } from './list.ts'
-import { toBase64 } from '@yaks/fp'
+import { type Hold, toBase64 } from '@yaks/fp'
 export { listed, listing, modelInfo, pagePrice } from './list.ts'
 /**
  * @yaks/workers-ai implements @yaks/model's {@link Model} over Cloudflare
@@ -591,6 +591,9 @@ export let workersAi = (
     fetch?: typeof fetch
     gateway?: string
     receipts?: MediaReceipts
+    /** keeps a shared model-page read alive past its request (@yaks/model
+     * `Lent.hold`) */
+    hold?: Hold
   } = {},
 ): Model => {
   let deliver = async (receipt: MediaReceipt): Promise<Reply> => {
@@ -729,8 +732,10 @@ export let workersAi = (
   }, {
     recover: (call: string) => recoveredMedia(call, options.receipts, deliver),
     list: () => listing(ai),
-    info: (name: string) => modelInfo(name, options.fetch),
-    reads: (name: string) => nativeReads(name, options.fetch),
+    info: (name: string) =>
+      modelInfo(name, options.fetch, { hold: options.hold }),
+    reads: (name: string) =>
+      nativeReads(name, options.fetch, { hold: options.hold }),
     quote: (req: Request, remaining: number) =>
       music(req.model)
         ? musicQuote(req.model, req.input ?? {}, remaining)

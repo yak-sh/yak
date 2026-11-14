@@ -505,6 +505,9 @@ importers:
 
   packages/anthropic:
     dependencies:
+      '@yaks/fp':
+        specifier: 0.2.23
+        version: link:../fp
       '@yaks/model':
         specifier: 0.2.32
         version: link:../model
@@ -3462,6 +3465,9 @@ importers:
 
   packages/openrouter:
     dependencies:
+      '@yaks/fp':
+        specifier: 0.2.23
+        version: link:../fp
       '@yaks/model':
         specifier: 0.2.32
         version: link:../model

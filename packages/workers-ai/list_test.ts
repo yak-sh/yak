@@ -124,7 +124,7 @@ test('model metadata shares concurrent reads, expires and keeps fetch bindings s
   let time = clock(), reads = 0
   let fetcher: typeof fetch = () =>
     Promise.resolve(new Response(pricedPage(++reads)))
-  let read = () => modelInfo('vendor/model', fetcher, time)
+  let read = () => modelInfo('vendor/model', fetcher, { clock: time })
   let infos = await Promise.all([read(), read()])
   assertEquals(infos.map((info) => info.price?.input), [1, 1])
   assertEquals((await read()).price?.input, 1)
@@ -132,7 +132,25 @@ test('model metadata shares concurrent reads, expires and keeps fetch bindings s
   assertEquals((await read()).price?.input, 2)
   assertEquals(reads, 2)
   let other: typeof fetch = () => Promise.resolve(new Response(pricedPage(9)))
-  assertEquals((await modelInfo('vendor/model', other, time)).price?.input, 9)
+  assertEquals(
+    (await modelInfo('vendor/model', other, { clock: time })).price?.input,
+    9,
+  )
+})
+
+test('the caller that begins a shared read is held until it settles', async () => {
+  let held: Promise<void>[] = [], answer = (_: Response) => {}
+  let fetcher: typeof fetch = () => new Promise((yes) => answer = yes)
+  let read = () =>
+    modelInfo('vendor/held', fetcher, { hold: (w) => held.push(w) })
+  let [first, second] = [read(), read()]
+  assertEquals(held.length, 1)
+  answer(new Response(pricedPage(4)))
+  assertEquals([(await first).price?.input, (await second).price?.input], [
+    4,
+    4,
+  ])
+  await held[0]
 })
 
 test('a failed metadata fetch is retried and an unpriced page can acquire a price', async () => {
@@ -143,7 +161,7 @@ test('a failed metadata fetch is retried and an unpriced page can acquire a pric
       ? Promise.reject(new Error('offline'))
       : Promise.resolve(new Response(reads == 2 ? 'No price' : pricedPage(3)))
   }
-  let read = () => modelInfo('vendor/model', fetcher, time)
+  let read = () => modelInfo('vendor/model', fetcher, { clock: time })
   await assertRejects(read, Error, 'offline')
   assertEquals((await read()).price, undefined)
   assertEquals((await read()).price, undefined)

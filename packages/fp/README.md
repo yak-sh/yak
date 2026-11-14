@@ -25,9 +25,9 @@ equal(tally('status')([{ status: 'open' }, { status: 'open' }]), { open: 2 })
 
 ## Exports
 
-| Export     | Provides                                                                                                                            |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/fp` | All functions, `Fn` (a function of any shape), `Table` (see [Dispatch](#dispatch)) and `Clock`, with `system` (see [Waits](#waits)) |
+| Export     | Provides                                                                                                                                                                                    |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/fp` | All functions, `Fn` (a function of any shape), `Table` (see [Dispatch](#dispatch)), `Clock`, with `system` (see [Waits](#waits)), and `Kept` and `Hold` (see [Shared reads](#shared-reads)) |
 
 | `@yaks/fp/imports` | `importing`, `imported`, `watchImports`: observable
 module loading |
@@ -314,6 +314,39 @@ let slept = sleep(60_000, undefined, time).then(() => woke = true)
 await time.advance(60_000)
 await slept
 equal([woke, time.now()], [true, 60_000])
+```
+
+## Shared reads
+
+`sharing(kept, key, read, { limit?, hold? })` hands every caller asking for
+`key` one read: the first ask begins it, and each ask after, while it runs or
+once it is done, gets the same promise. A failed read is dropped, so the next
+ask reads again. `kept` is a Map, a WeakMap or any store with `get`, `set` and
+`delete` (`Kept`); with a Map, `limit` keeps the newest asked keys.
+
+A Worker cancels a request's reads when the request ends, so a read one request
+begins and another awaits never settles. `hold` (a `Hold`, the runtime's
+`waitUntil` or a host's wrapper of it) keeps the caller that began a read alive
+until the read settles. A package that cannot see the runtime takes its hold
+from whoever calls it (@yaks/model `Lent.hold`).
+
+```ts
+import { sharing } from '@yaks/fp'
+import { equal } from '@yaks/testing'
+
+let kept = new Map<string, Promise<string>>(), held: Promise<void>[] = []
+let reads = 0
+let read = () => Promise.resolve(`page ${++reads}`)
+let hold = (work: Promise<void>) => held.push(work)
+let [a, b] = [
+  sharing(kept, 'k', read, { hold }),
+  sharing(kept, 'k', read, { hold }),
+]
+equal([await a, await b, reads, held.length], ['page 1', 'page 1', 1, 1])
+
+let failing = sharing(kept, 'f', () => Promise.reject(new Error('down')))
+await failing.catch(() => {})
+equal(await sharing(kept, 'f', read), 'page 2')
 ```
 
 ## Limits

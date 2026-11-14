@@ -1,6 +1,6 @@
 // Workers AI's binding listing and published model page, never a code catalogue.
 import type { Listed, Price } from '@yaks/model'
-import { type Clock, system } from '@yaks/fp'
+import { type Clock, type Hold, sharing, system } from '@yaks/fp'
 import { pageReads } from './reads.ts'
 
 export type Listing = {
@@ -76,47 +76,44 @@ let readInfo = async (
   }
 }
 
-// A page is shared across callers, including in-flight reads. Refresh hourly
-// so a stored offering never freezes an old price; a failed fetch is retried.
-let pages = new WeakMap<
-  typeof fetch,
-  Map<string, { until: number; read: Promise<Info> }>
->()
+// A model's page is read once an hour per fetch binding, the read shared by
+// every caller that asks in that hour, so a stored offering never freezes an
+// old price. A failed read is read again on the next ask.
+let pages = new WeakMap<typeof fetch, Map<string, Promise<Info>>>()
 
-/** Published metadata, read once per model and fetch binding each hour. */
+/** How a page read is shared: the clock its hour is read from, and the hold
+ * that keeps the read alive past the request that began it (@yaks/model
+ * `Lent.hold`). */
+export type Reading = { clock?: Clock; hold?: Hold }
+
 let described = (
   name: string,
-  fetcher: typeof fetch = fetch,
-  clock: Clock = system,
+  fetcher: typeof fetch,
+  { clock = system, hold }: Reading,
 ): Promise<Info> => {
   let held = pages.get(fetcher) ?? new Map()
   pages.set(fetcher, held)
-  let found = held.get(name)
-  if (found && found.until > clock.now()) return found.read
-  let read = readInfo(name, fetcher)
-  held.set(name, { until: clock.now() + 3_600_000, read })
-  read.catch(() => {
-    if (held.get(name)?.read == read) held.delete(name)
+  let hour = Math.floor(clock.now() / 3_600_000)
+  return sharing(held, `${hour} ${name}`, () => readInfo(name, fetcher), {
+    limit: 512,
+    hold,
   })
-  for (let key of held.keys()) {
-    if (held.size <= 512) break
-    held.delete(key)
-  }
-  return read
 }
 
 /** Published model metadata, without runtime capabilities in graph model rows. */
 export let modelInfo = async (
   name: string,
   fetcher: typeof fetch = fetch,
-  clock: Clock = system,
-): Promise<Listed> => (await described(name, fetcher, clock)).model
+  reading: Reading = {},
+): Promise<Listed> => (await described(name, fetcher, reading)).model
 
 /** Native input types from the same cached model page. */
 export let nativeReads = async (
   name: string,
   fetcher: typeof fetch = fetch,
-): Promise<Record<string, number>> => (await described(name, fetcher)).reads
+  reading: Reading = {},
+): Promise<Record<string, number>> =>
+  (await described(name, fetcher, reading)).reads
 
 export let listing = async (
   ai: {

@@ -610,3 +610,52 @@ export let sleep = (
     signal?.addEventListener('abort', done, { once: true })
     if (signal?.aborted) done()
   })
+
+/** Where `sharing` keeps reads by key: a Map, a WeakMap, or any store of the
+ * same three calls. */
+export type Kept<K, T> = {
+  get(key: K): Promise<T> | undefined
+  set(key: K, value: Promise<T>): unknown
+  delete(key: K): unknown
+}
+
+/** Keeps work alive past the caller that began it, as a Worker's `waitUntil`
+ * does. */
+export type Hold = (work: Promise<void>) => void
+
+/**
+ * A read every caller shares by key: begun by the first to ask, and handed to
+ * each that asks while it runs or after. A failed read is not kept, so the
+ * next ask reads again. Where `limit` is given, a Map keeps that many keys,
+ * dropping the oldest asked.
+ *
+ * Where a runtime cancels a read once the request that began it ends, a read
+ * still running then never settles, and every later caller waits on it. So
+ * the caller that begins a read is held (`hold`) until the read settles. A
+ * host lends its hold; code that knows no host takes it from its caller.
+ */
+export let sharing = <K, T>(
+  kept: Kept<K, T>,
+  key: K,
+  read: () => Promise<T>,
+  { limit, hold }: { limit?: number; hold?: Hold } = {},
+): Promise<T> => {
+  let lru = limit && kept instanceof Map ? kept : null
+  let had = kept.get(key)
+  if (had) {
+    lru?.delete(key)
+    lru?.set(key, had)
+    return had
+  }
+  let reading = read()
+  kept.set(key, reading)
+  let settled = reading.then(() => {}, () => {
+    if (kept.get(key) == reading) kept.delete(key)
+  })
+  hold?.(settled)
+  for (let old of lru?.keys() ?? []) {
+    if (lru!.size <= limit!) break
+    lru!.delete(old)
+  }
+  return reading
+}

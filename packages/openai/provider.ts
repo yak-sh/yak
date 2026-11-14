@@ -177,6 +177,7 @@ export let providers = (
           images,
           web: options.web ?? lent.env('HARNESS_WEB') != '0',
           receipts: lent.receipts,
+          hold: lent.hold,
         })
       ),
     {

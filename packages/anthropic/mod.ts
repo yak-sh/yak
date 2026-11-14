@@ -38,6 +38,7 @@ import {
   type Usage,
 } from '@yaks/model'
 import { stallMs, watched } from '@yaks/model/stall'
+import { type Hold, sharing } from '@yaks/fp'
 import { anthropicDoc } from './vocab.ts'
 import { mark } from './mark.ts'
 import { READS } from './reads.ts'
@@ -68,6 +69,9 @@ export type Options = {
   base?: string
   /** Offer the API's own web search and page fetch. */
   web?: boolean
+  /** keeps a shared model read alive past its request (@yaks/model
+   * `Lent.hold`) */
+  hold?: Hold
 }
 
 // A reply's ceiling where the request names none: streamed, so no timeout.
@@ -311,17 +315,18 @@ export let messages = (options: Options): Model => {
   let get = async <T>(path: string): Promise<T> =>
     (await send(options, await options.key(), path)).json()
   let known = new Map<string, Promise<Listed | undefined>>()
-  let info = (name: string) => {
-    let held = known.get(name) ??
-      get<ModelInfo>(`/v1/models/${encodeURIComponent(name)}`).then(listed)
-        .catch((e) => {
-          known.delete(name)
-          if (e instanceof ModelError && e.code == 'model') return undefined
-          throw e
-        })
-    known.set(name, held)
-    return held
-  }
+  let info = (name: string) =>
+    sharing(
+      known,
+      name,
+      () =>
+        get<ModelInfo>(`/v1/models/${encodeURIComponent(name)}`).then(listed)
+          .catch((e) => {
+            if (e instanceof ModelError && e.code == 'model') return undefined
+            throw e
+          }),
+      { hold: options.hold },
+    )
   let list = async () => {
     let out: Listed[] = []
     let after: string | null | undefined
