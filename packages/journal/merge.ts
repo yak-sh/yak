@@ -22,6 +22,7 @@
 // property written carries main's value as its `$was`, so a main that moved
 // after the merge was read refuses it whole rather than losing that change.
 
+import { groupBy } from '@yaks/fp'
 import type { Actor, Bundle, Comp, Eid, Graph, Was } from '@yaks/graph'
 import { signed } from '@yaks/graph/provenance'
 import type { Change } from '@yaks/graph/storage'
@@ -149,7 +150,7 @@ export let merged = (
   picks: Choice[] = [],
 ): Merged => {
   let taken = new Map(picks.map((p) => [key(p.eid, p.comp, p.prop), p.take]))
-  let byEntity = Map.groupBy(changes, (c) => c.eid)
+  let byEntity = groupBy(changes, (c) => c.eid)
   let parts = [...byEntity].map(([eid, cs]) => part(vocab, eid, cs, taken))
   let conflicts = parts.flatMap((p) => p.conflicts)
   let bundles = conflicts.length ? [] : parts.map((p) => p.bundle)
