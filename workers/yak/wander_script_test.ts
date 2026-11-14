@@ -64,6 +64,7 @@ let page = async (column = 144, decode = () => Promise.resolve()) => {
   })
   let scope = {
     document,
+    Event,
     CustomEvent,
     window,
     NodeFilter: { SHOW_TEXT: 4, FILTER_ACCEPT: 1, FILTER_REJECT: 2 },

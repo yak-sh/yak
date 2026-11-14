@@ -194,7 +194,13 @@ export let Sky = () => {
           </radialGradient>
         </defs>
         <g class='Sky_Day'>
-          <circle class='Sky_Glow' cx={SUN.x} cy='0' r='230' />
+          <circle
+            class='Sky_Glow'
+            fill='url(#Sky-glow)'
+            cx={SUN.x}
+            cy='0'
+            r='230'
+          />
           <g class='Sky_Drift'>
             {wisp(-330, -214, 300, 11, true)}
             {wisp(250, -128, 330, 12)}
@@ -206,7 +212,13 @@ export let Sky = () => {
         </g>
         <g class='Sky_Night'>
           <g class='Sky_Stars'>{stars}</g>
-          <circle class='Sky_Halo' cx={MOON.x} cy={MOON.y} r='80' />
+          <circle
+            class='Sky_Halo'
+            fill='url(#Sky-halo)'
+            cx={MOON.x}
+            cy={MOON.y}
+            r='80'
+          />
           <g transform={`translate(${MOON.x} ${MOON.y}) rotate(-28)`}>
             <path class='Sky_Moon' d={moon(PHASES[0])} />
           </g>
@@ -242,7 +254,7 @@ export let Sky = () => {
             </linearGradient>
           </defs>
           <path class='Sky_Base' d={ground} />
-          <path class='Sky_Ground' d={ground} />
+          <path class='Sky_Ground' fill='url(#Sky-turf)' d={ground} />
           <path class='Sky_Line' d={line(G)} />
         </svg>
       </div>

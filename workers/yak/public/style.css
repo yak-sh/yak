@@ -789,9 +789,6 @@
     stop-color: #fbe0bf;
     stop-opacity: 0;
   }
-  .Sky_Glow {
-    fill: url(#Sky-glow);
-  }
   .Sky_Sun {
     fill: #fff0cc;
   }
@@ -810,9 +807,6 @@
   .Sky_Halo1 {
     stop-color: #f6efd9;
     stop-opacity: 0;
-  }
-  .Sky_Halo {
-    fill: url(#Sky-halo);
   }
   .Sky_Moon {
     fill: #f6efd9;
@@ -849,9 +843,6 @@
   .Sky_Turf1 {
     stop-color: light-dark(#d9dfbe, #2b3a2c);
     stop-opacity: 0;
-  }
-  .Sky_Ground {
-    fill: url(#Sky-turf);
   }
   .Sky_Line {
     fill: none;
