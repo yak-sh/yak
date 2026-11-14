@@ -308,6 +308,42 @@ export let grew = (
     }
   })
 
+/**
+ * `main` with every word `others` add to it: each component it lacks, and
+ * each property a component it has lacks, as the other declares it. A word
+ * `main` declares keeps its own declaration. What a store's schema holds
+ * beside its own words, for the words its branches speak (graph.ts
+ * `#fitted`).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let main = { $defs: { card: { properties: { name: { type: 'string' } } } } }
+ * let draft = { $defs: {
+ *   card: { properties: { name: { type: 'number' }, color: { type: 'string' } } },
+ *   note: { properties: { text: { type: 'string' } } },
+ * } }
+ * assertEquals(widened(main, [draft]).$defs, {
+ *   card: { properties: { name: { type: 'string' }, color: { type: 'string' } } },
+ *   note: { properties: { text: { type: 'string' } } },
+ * })
+ * ```
+ */
+export let widened = (main: VocabDoc, others: VocabDoc[]): VocabDoc => {
+  let defs = { ...main.$defs }
+  for (let other of others) {
+    for (let [name, def] of Object.entries(other.$defs ?? {})) {
+      let had = defs[name]
+      defs[name] = had
+        ? {
+          ...had,
+          properties: { ...def.properties, ...had.properties },
+        }
+        : def
+    }
+  }
+  return { ...main, $defs: defs }
+}
+
 let growing = (
   was: VocabDoc,
   next: VocabDoc,

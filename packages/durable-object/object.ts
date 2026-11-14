@@ -89,11 +89,11 @@ export type Opened = {
    * not is let go unanswered, before anything is asked of its sockets, a
    * clock probe included. */
   admit?(ws: Wire): boolean | Promise<boolean>
-  /** The sockets serving now, where the object makes its own over
-   * subscriptions it remakes (`subs` makes them once), asked once a frame or
-   * close is admitted and a clock probe answered. None hangs a frame's
-   * socket up: the page must open another. */
-  live?(): Sockets | undefined | Promise<Sockets | undefined>
+  /** The sockets serving `ws` now, where the object makes its own over
+   * subscriptions it remakes (`subs` makes them once), or keeps several sets
+   * of them, asked once a frame or close is admitted and a clock probe
+   * answered. None hangs a frame's socket up: the page must open another. */
+  live?(ws: Wire): Sockets | undefined | Promise<Sockets | undefined>
   /** A frame from one of its sockets, given `take`, the sockets' own reading
    * of it, which answers whether they took it: the object reads frames
    * itself, or around them. */
@@ -354,9 +354,9 @@ export class Durable {
     if (!opened.admit || await opened.admit(ws)) return opened
   }
 
-  // The sockets serving now.
-  #sockets(opened: Opened) {
-    return opened.live ? opened.live() : this.#live
+  // The sockets serving `ws` now.
+  #sockets(opened: Opened, ws: Wire) {
+    return opened.live ? opened.live(ws) : this.#live
   }
 
   /** A frame from one of the object's sockets. A clock probe is answered
@@ -371,7 +371,7 @@ export class Durable {
         let { probed } = await import('./sockets.ts')
         if (probed(ws, data, received)) return
         let take = async () => {
-          let live = await this.#sockets(opened)
+          let live = await this.#sockets(opened, ws)
           if (!live) return hangUp(ws)
           await live.message(
             ws,
@@ -393,7 +393,7 @@ export class Durable {
     return this.#around('socket close', async () => {
       try {
         let opened = await this.#admitted(ws)
-        if (opened) await (await this.#sockets(opened))?.close(ws)
+        if (opened) await (await this.#sockets(opened, ws))?.close(ws)
       } catch (error) {
         await this.spec.report(error, 'webSocketClose')
       }

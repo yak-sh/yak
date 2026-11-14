@@ -398,6 +398,9 @@ export type AppInfo = {
   scope?: 'store'
   /** An internal mount for an isolated preview, never directory state. */
   mount?: string
+  /** The branch of its store a draft's preview reads and writes on
+   * (preview.ts), never directory state. */
+  branch?: number
   eid: string
   slug: string
   space: string
@@ -1871,6 +1874,7 @@ let served = (space: Space, app: App, env: HostEnv) => ({
   access: app.access,
   mail: mailbox(space, app, env),
   phone: app.phone ?? '',
+  ...app.branch != null ? { branch: app.branch } : {},
 })
 
 /**

@@ -89,6 +89,7 @@ export type Pitr = {
 /** One Durable Object's state, as the Store constructor takes it. */
 export let state = (name = '', prepared = true) => {
   let live: Wire[] = []
+  let tagged = new WeakMap<Wire, string[]>()
   let pending = new Set<Promise<unknown>>()
   let pitr: Pitr = { restore: '', aborts: 0, marks: [] }
   let bookmark = (name: string) => {
@@ -120,8 +121,13 @@ export let state = (name = '', prepared = true) => {
     live,
     pitr,
     abort: () => void pitr.aborts++,
-    acceptWebSocket: (ws: Wire) => void live.push(ws),
-    getWebSockets: () => live,
+    acceptWebSocket: (ws: Wire, tags: string[] = []) => {
+      live.push(ws)
+      tagged.set(ws, tags)
+    },
+    getWebSockets: (tag?: string) =>
+      tag == null ? live : live.filter((ws) => tagged.get(ws)?.includes(tag)),
+    getTags: (ws: Wire) => tagged.get(ws) ?? [],
   }
 }
 

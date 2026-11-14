@@ -212,6 +212,7 @@ import {
   driver,
   type DurableSql,
   type DurableStorage,
+  type Hibernation,
   opaque,
   profile,
   type Sockets,
@@ -351,6 +352,7 @@ import { conditionalWakes } from './conditional-wakes.ts'
 import { resumed } from './wake.ts'
 import { ledger } from './ledger.ts'
 import {
+  BRANCH,
   doorOf,
   GIT_STORE,
   placed,
@@ -359,7 +361,7 @@ import {
   WAKE,
   WARM,
 } from './door.ts'
-import type { Namespace } from '@yaks/durable-object/door'
+import { IDEMPOTENCY, type Namespace } from '@yaks/durable-object/door'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { type Mark, type Stamp, type Standing } from '@yaks/platform/mover'
 import { borrows } from '@yaks/reach'
@@ -437,6 +439,7 @@ import {
   numbered,
   platformVocab,
   teach,
+  widened,
 } from './vocab.ts'
 
 /**
@@ -524,6 +527,29 @@ export type State = Held & {
   // now rather than at the next wake (`#recovery`). Optional for the same
   // reason: the stand-in has no session to end.
   abort?(reason?: string): void
+  // A socket's tags, as the runtime holds them across hibernation: a page on
+  // a branch is tagged with it (`#onBranch`), so each branch's sockets are
+  // its own and main's are the untagged.
+  acceptWebSocket(ws: Wire, tags?: string[]): void
+  getWebSockets(tag?: string): Wire[]
+  getTags?(ws: Wire): string[]
+}
+
+// What a page reaches of one graph (`#pages`).
+type Pages = {
+  graph: Graph
+  live: Sockets
+  route: Handler
+  reading: Handler
+}
+
+// The tag a branch's sockets are held under (`State`), and the word its
+// declaration is kept under (`Word`).
+let tagOf = (id: number) => `branch:${id}` as const
+// The branch a socket is held for, null for main's.
+let branchOfSocket = (ctx: State, ws: Wire): number | null => {
+  let tag = ctx.getTags?.(ws).find((t) => t.startsWith('branch:'))
+  return tag ? Number(tag.slice('branch:'.length)) : null
 }
 
 /** The Worker's store capabilities lent to its own facets. The address and
@@ -619,6 +645,8 @@ type Word =
   | 'tools'
   | 'release'
   | `vocab:${string}`
+  // The words a draft gave its branch (`#branchWords`), its declaration.
+  | `branch:${number}`
   | `uses:${string}`
   | `tools:${string}`
   | `seed:${string}`
@@ -1140,8 +1168,10 @@ export class Store extends Durable {
   // first branch records (`#branches`): read once an incarnation (`#start`),
   // it is what makes the store compose `appVersionsConfig`.
   #versioned = false
-  // Each branch's graph this incarnation composed (`#build`).
+  // Each branch's graph this incarnation composed (`#build`), and the doors
+  // its pages reach it through (`#doorsOn`).
   #forks = new Map<number, Graph>()
+  #branchDoors = new Map<number, Promise<Pages>>()
   #dormant: boolean | null = null
   #moveOnly = false
   #checking: Promise<boolean> | null = null
@@ -1393,6 +1423,23 @@ export class Store extends Durable {
     )
   }
 
+  // The schema this store's file holds: its own words, and every word a
+  // branch adds to them (`#branchWords`), so a draft's new component or
+  // property has its table and column beside main's, which main neither
+  // speaks nor writes.
+  #fitted(shape: Shape): Shape {
+    if (storeKind(this.#name() ?? '') != 'app') return shape
+    let said = this.#sql.query(select({
+      cols: [col('k'), col('v')],
+      from: table(KV.name),
+    })).filter((r) => String(r.k).startsWith('branch:'))
+    if (!said.length) return shape
+    return this.#shape(JSON.stringify(widened(
+      appDoc(this.#get('vocab') ?? '{}'),
+      said.map((r) => appDoc(String(r.v))),
+    )))
+  }
+
   #fit(shape: Shape): string | null {
     return fitOf(this.#version(), shape.key, this.#get('schema'))
   }
@@ -1468,8 +1515,9 @@ export class Store extends Durable {
     // An unnamed object raises nothing yet. Its first named request selects
     // the store kind before boot, so an app's tables never land in a newborn
     // directory or Git store. `#learn` rebuilds when later metadata changes.
-    let stood = this.#stood(shape)
-    this.#schema(shape, defect)
+    let fitted = this.#fitted(shape)
+    let stood = this.#stood(fitted)
+    this.#schema(fitted, defect)
     let app = this.#get('app')
     // Each incarnation binds declared effects to its host capabilities.
     // An effect writes back through the kernel's own door — a new batch
@@ -1614,29 +1662,37 @@ export class Store extends Durable {
     // is merged. Its writes still grow the file, so they are weighed; they
     // rouse no wake, embed no text and keep no keyed answer of main's.
     let forks = this.#forks = new Map<number, Graph>()
+    this.#branchDoors = new Map()
     let onBranch: Stored = Object.assign(Object.create(at) as Stored, {
       rouse: (bundles: Bundle[]) => Promise.resolve(bundles),
       embed: (bundles: Bundle[]) => bundles,
       tell: undefined,
       log: { name: 'yak/log', hooks: {} },
     })
+    // A branch a draft gave words of its own (`#branchWords`) speaks them,
+    // under the plan they assemble; any other speaks main's.
     let forked = (id: number): Graph => {
       let made = forks.get(id)
       if (made) return made
       let mode = branchOf(drive, id)
       if (!mode) throw new Refused(`no branch ${id}`)
-      let quiet = effects(vocab, {
+      let said = this.#get(tagOf(id))
+      let words = said ? this.#shape(said) : shape
+      let planned = said ? this.#plans.get(kind)!(wordsOf(words)) : plan
+      let quiet = effects(words.vocab, {
         write: () => Promise.reject(new Error('a branch runs no effects')),
         singleOwner: true,
         startup: 'manual',
         defer: true,
       })
-      let bound = plan.bind({
+      let bound = planned.bind({
         options: optionsOf(onBranch),
         host: { ...lending, duties: () => Promise.resolve() },
         storage: (_host, _extend, _words, history) =>
-          moded(driver(ctx.storage, observe, this.#measure), vocab, {
+          moded(driver(ctx.storage, observe, this.#measure), words.vocab, {
             ...opened,
+            number: numbered(words.vocab),
+            derived: words.derived,
             history: history!,
           }, mode),
         effects: () => quiet,
@@ -1701,10 +1757,10 @@ export class Store extends Durable {
             // time by its alarm (`#seeding`).
             ...history ? { history, paced: true } : {},
             schemaReady: () =>
-              this.#stood(shape) || printed(drive, shape.print),
+              this.#stood(fitted) || printed(drive, fitted.print),
             // A component's search index and queue triggers are made with its
             // table, by the write that first names it.
-            over: () => shape.over,
+            over: () => fitted.over,
             extend,
             ...(vocab.comp('_tx')
               ? { backed: journalBacked(vocab, derived) }
@@ -1730,6 +1786,7 @@ export class Store extends Durable {
           drop: async (id) => {
             forks.delete(id)
             await kept.drop(id)
+            this.#unbranch(id)
           },
           on: (id) => Promise.resolve().then(() => forked(id)),
         }
@@ -1987,10 +2044,44 @@ export class Store extends Durable {
       this.#ctx.waitUntil?.(roused.catch(() => {}))
       return roused
     })
-    let spared = screened((w) => !!vocab.comp(w), own)
-    this.#live = sockets(
+    // The one `Authenticate` (T-33813). The app is read at request time — the
+    // object may learn which app it holds from the request being answered —
+    // and the mode with it, so a store told its access changed follows the
+    // new word without a reboot.
+    this.#auth = authenticating(
+      policy(g.storage, { ignore: this.#staleGrant }),
+      () => this.#get('app'),
+      (v) => this.#vouch(v),
+    )
+    ;({ live: this.#live, route: this.#route, reading: this.#reading } = this
+      .#pages(g, subs, own, this.#socketsOn(null), this.#applying))
+    // The registry is fresh, and the sockets are not: they belong to the
+    // runtime and outlive every incarnation of this object, so whatever they
+    // are watching is re-opened against the new one. Without this a deploy
+    // would leave every open page subscribed to a registry nothing commits to.
+    let restored = this.#dormant ? undefined : this.#live.wake(!rebinding)
+    if (isPromise(restored)) {
+      restored.catch((error) =>
+        defect(error, { request: 'socket restore', store: name })
+      )
+    }
+  }
+
+  // What a page reaches of one graph, main's or a branch's: its sockets over
+  // `subs`, held on `at`, and its write and read doors, each through `g`.
+  #pages(
+    g: Graph,
+    subs: Subs,
+    own: boolean,
+    at: Hibernation,
+    applying: Applying,
+    branch?: number,
+  ) {
+    let name = this.#name() ?? ''
+    let spared = screened((w) => !!g.vocab.comp(w), own)
+    let live = sockets(
       this.#naming(subs, spared),
-      ctx,
+      at,
       (error) => defect(error, { request: 'socket restore', store: name }),
       {
         // Restore current standing after hibernation; keep the verified identity.
@@ -2017,38 +2108,37 @@ export class Store extends Durable {
           : {}),
       },
     )
-    // The one `Authenticate` (T-33813). The app is read at request time — the
-    // object may learn which app it holds from the request being answered —
-    // and the mode with it, so a store told its access changed follows the
-    // new word without a reboot.
-    this.#auth = authenticating(
-      policy(g.storage, { ignore: this.#staleGrant }),
-      () => this.#get('app'),
-      (v) => this.#vouch(v),
-    )
-    this.#route = api({ ...this.#applying, graph: g, subs })
-    this.#reading = appRead({
+    let route = api({ ...applying, graph: g, subs })
+    let reading = appRead({
       graph: g,
-      vocab,
-      route: this.#route,
+      vocab: g.vocab,
+      route,
       authenticate: this.#auth,
       read: (request) => this.#callerRead(request),
       own,
       spoke: (line) => this.#spoke(line),
-      trusted: () => this.#kernelGraph(g),
+      trusted: () => this.#kernelGraph(g, branch),
       found: (text, opts, limit) => this.#found(text, opts, { limit }),
       speak: this.#speak,
       taught: (answer) => this.#taught(answer),
     })
-    // The registry is fresh, and the sockets are not: they belong to the
-    // runtime and outlive every incarnation of this object, so whatever they
-    // are watching is re-opened against the new one. Without this a deploy
-    // would leave every open page subscribed to a registry nothing commits to.
-    let restored = this.#dormant ? undefined : this.#live.wake(!rebinding)
-    if (isPromise(restored)) {
-      restored.catch((error) =>
-        defect(error, { request: 'socket restore', store: name })
-      )
+    return { graph: g, live, route, reading }
+  }
+
+  // The sockets of a branch (`tagOf`), or main's, the untagged, as the
+  // runtime holds them.
+  #socketsOn(id: number | null): Hibernation {
+    let ctx = this.#ctx
+    return {
+      storage: ctx.storage,
+      acceptWebSocket: (ws) =>
+        id == null ? ctx.acceptWebSocket(ws) : ctx.acceptWebSocket(ws, [
+          tagOf(id),
+        ]),
+      getWebSockets: () =>
+        id == null
+          ? ctx.getWebSockets().filter((ws) => branchOfSocket(ctx, ws) == null)
+          : ctx.getWebSockets(tagOf(id)),
     }
   }
 
@@ -2613,10 +2703,14 @@ export class Store extends Durable {
     }
   }
 
-  #kernelGraph = (g: Graph): Graph => ({
+  // On a branch's graph, `branch` names it, so the kernel's writes land
+  // there and not on main.
+  #kernelGraph = (g: Graph, branch?: number): Graph => ({
     ...g,
-    apply: (bundles, opts) => this.#asIs(bundles, opts),
-    admit: (bundles, opts) => this.#asIs(bundles, opts, true),
+    apply: (bundles, opts) =>
+      this.#asIs(bundles, branch == null ? opts : { ...opts, branch }),
+    admit: (bundles, opts) =>
+      this.#asIs(bundles, branch == null ? opts : { ...opts, branch }, true),
   })
 
   // What a facet may know about this store (`Stored`), over the
@@ -3128,10 +3222,14 @@ export class Store extends Durable {
   // being prepared. A hibernated socket outlives a deploy, so one can wake
   // an object whose schema refused to stand: it has none, and the page must
   // reopen the socket.
-  #listening = async (): Promise<Sockets | undefined> => {
+  #listening = async (ws: Wire): Promise<Sockets | undefined> => {
     await this.#ensureStarted()
     while (this.#draft) await this.#draft
-    return this.#refused == null ? this.#live : undefined
+    if (this.#refused != null) return undefined
+    let branch = branchOfSocket(this.#ctx, ws)
+    if (branch == null) return this.#live
+    // A branch dropped since its page opened has nothing to serve it.
+    return await this.#doorsOn(branch).then((on) => on.live, () => undefined)
   }
 
   // A frame the sockets took, as this store notes it: a query in a retired
@@ -3244,8 +3342,8 @@ export class Store extends Durable {
 
   // One packet to every socket, subscribed or not: a page decides what to do
   // with a release or a draft write.
-  #broadcast(packet: string, request: string) {
-    broadcast(this.#ctx.getWebSockets(), packet, (error) => {
+  #broadcast(packet: string, request: string, id: number | null = null) {
+    broadcast(this.#socketsOn(id).getWebSockets(), packet, (error) => {
       caught(error, { request, store: this.#name() })
     })
   }
@@ -3505,6 +3603,191 @@ export class Store extends Durable {
         return json({ error: 'Refused', message: e.message }, 400)
       }
       throw e
+    }
+  }
+
+  // A page on a branch, a draft's preview (preview.ts): the doors a page
+  // uses, each on the branch's graph (`#doorsOn`) with the branch's own
+  // sockets, words and page storage, and nothing else. Its writes are the
+  // draft's test data and keep no receipt in the write log (`#door`), so a
+  // page's outbox key is let go and its write lands as sent.
+  async #onBranch(
+    request: Request,
+    path: string,
+    id: number,
+  ): Promise<Response> {
+    let missing = () =>
+      json({ error: 'NotFound', message: 'no such door on a branch' }, 404)
+    if (storeKind(this.#name() ?? '') != 'app') return missing()
+    if (path == '/vocab') {
+      if (request.method == 'POST') return await this.#branchWords(request, id)
+      return Response.json(
+        meant(this.#get(tagOf(id)) ?? this.#get('vocab') ?? '{}'),
+      )
+    }
+    if (path == '/storage') {
+      return storageDoor(
+        request,
+        (key) => this.#get(`${key}@${id}` as Word),
+        (key, value) => this.#put(`${key}@${id}` as Word, value),
+      )
+    }
+    if (path == '/drafted') {
+      return drafted(
+        request,
+        (packet) => this.#broadcast(packet, 'POST /drafted', id),
+      )
+    }
+    if (path == '/uses' && request.method == 'GET') {
+      return this.#slot(request, 'uses')
+    }
+    if (path == '/graph') {
+      return Response.json({
+        db: `do:${this.#get('name') ?? ''}`,
+        bytes: this.#ctx.storage.sql.databaseSize,
+      })
+    }
+    let on = await this.#doorsOn(id)
+    if (path == '/api/vocab') {
+      return on.route(new Request(new URL('/vocab', request.url), request))
+    }
+    if (path == '/vocab.json') return Response.json(on.graph.vocab.docs)
+    if (path == '/query') return await this.#paged(request, on.reading)
+    if (path == '/ws') {
+      let said = new URL(request.url).searchParams.get('uses') == '1'
+        ? this.#held(request, 'uses')
+        : '{}'
+      if (Object.keys(JSON.parse(said)).length) {
+        return new Response(null, { status: 204, headers: { [USES]: said } })
+      }
+      let actor
+      try {
+        actor = await this.#auth(request)
+      } catch (e) {
+        return refuse(e, request)
+      }
+      let read = this.#callerRead(request)
+      return on.live.accept(request, read, { actor, speaks: read.speaks })
+    }
+    if (path == '/apply') {
+      let headers = new Headers(request.headers)
+      headers.delete(IDEMPOTENCY)
+      return await on.route(new Request(request, { headers }))
+    }
+    return missing()
+  }
+
+  // A branch's pages (`#pages`), composed the first time one asks: its
+  // graph, a registry of its own, and the sockets tagged with it, taken up
+  // again by each incarnation as main's are (`#build`). Its writes are
+  // authorized by the grants it reads, and no receipt is kept of them.
+  #doorsOn = (id: number): Promise<Pages> => {
+    let doors = this.#branchDoors
+    let held = doors.get(id)
+    if (held) return held
+    let made = (async () => {
+      let branches = this.#graph.branches
+      if (!branches) throw new Refused(`no branch ${id}`)
+      let g = await branches.on(id)
+      let subs = subscriptions(g, {
+        ...this.#time,
+        refused: (error, query) => this.#mistook(error, query),
+      })
+      let pages = this.#pages(g, subs, this.#shape().own, this.#socketsOn(id), {
+        ...this.#applying,
+        graph: g,
+        trust: (request) =>
+          request.headers.get('x-yak-kernel') == '1'
+            ? { graph: this.#kernelGraph(g, id), actor: writer(request) }
+            : undefined,
+        authorize: (request) =>
+          editing(
+            policy(g.storage, { ignore: this.#staleGrant }),
+            () => this.#get('app'),
+            this.#auth,
+          )(request),
+        log: undefined,
+      }, id)
+      await pages.live.wake(true)
+      return pages
+    })()
+    made.catch(() => {
+      if (doors.get(id) == made) doors.delete(id)
+    })
+    doors.set(id, made)
+    return made
+  }
+
+  // The words a draft's pages speak on its branch (preview.ts): its
+  // vocabulary document, refused as a deploy of it would be (`#vocabDoor`),
+  // and kept for the branch alone, whose graph composes again under them.
+  // Main's declaration is untouched, so a word the draft adds is one main
+  // neither speaks nor holds a row of.
+  async #branchWords(request: Request, id: number): Promise<Response> {
+    let body = await readBody(request)
+    try {
+      if (!branchOf(this.#sql, id)) throw new Refused(`no branch ${id}`)
+      let { doc, dropped, added, kept, retyped } = redeclared(
+        request,
+        appDoc(this.#get('vocab') ?? '{}'),
+        body,
+        (name, prop) => this.#rows(name, prop),
+      )
+      let no = this.#tried(
+        doc,
+        () => contract(this.#sql, [...dropped, ...retyped]),
+      )
+      if (no) return no
+      let said = JSON.stringify(doc)
+      if (this.#get(tagOf(id)) != said) {
+        let left: Error[] = []
+        this.#tx(() => {
+          this.#put(tagOf(id), said)
+          left = this.#schema(this.#fitted(this.#shape()))
+        })
+        if (left.length) throw left[0]
+        this.#forks.delete(id)
+        this.#branchDoors.delete(id)
+      }
+      return Response.json({
+        ok: true,
+        comps: Object.keys(doc.$defs ?? {}),
+        dropped,
+        added,
+        kept,
+      })
+    } catch (e) {
+      let status = refusing(e, {
+        request: 'POST /vocab on a branch',
+        store: this.#name(),
+      })
+      return Response.json({
+        error: 'Refused',
+        message: e instanceof Error ? e.message : String(e),
+      }, { status })
+    }
+  }
+
+  // What a dropped branch leaves behind in this object: its words, its
+  // pages' storage and their sockets.
+  #unbranch(id: number) {
+    this.#branchDoors.delete(id)
+    let mine = (k: string) =>
+      k == tagOf(id) || (k.startsWith('storage:') && k.endsWith(`@${id}`))
+    let keys = this.#sql.query(
+      select({ cols: [col('k')], from: table(KV.name) }),
+    )
+      .map((r) => String(r.k)).filter(mine)
+    for (let k of keys) {
+      this.#sql.query({
+        t: 'delete',
+        from: KV.name,
+        where: eq(col('k'), val(k)),
+      })
+      this.#kv.set(k as Word, null)
+    }
+    for (let ws of this.#ctx.getWebSockets(tagOf(id))) {
+      ws.close?.(1000, 'branch dropped')
     }
   }
 
@@ -4366,8 +4649,9 @@ export class Store extends Durable {
     }
     // A stopped object (`#ceiling`) answers a read at once with how long to
     // wait, and keeps a person's write for the window's end (`#write`), which
-    // needs nothing of the start but its log.
-    let writing = logged(request)
+    // needs nothing of the start but its log. A write on a branch is a
+    // draft's test data (`#onBranch`), which the log would land on main.
+    let writing = logged(request) && !request.headers.has(BRANCH)
     let stop = this.ceiling.refusal(writing)
     if (stop && (!writing || !this.#sql)) return refuse(stop)
     if (!stop) await this.#ensureStarted(request)
@@ -4380,7 +4664,7 @@ export class Store extends Durable {
         let leave = await this.#enter(base != null)
         let answer: Response
         try {
-          if (logged(request)) answer = await this.#log.write(request)
+          if (writing) answer = await this.#log.write(request)
           else {
             let no = await elapsed('ready_wait', () => this.#ready(request))
             if (no) answer = no
@@ -4521,6 +4805,11 @@ export class Store extends Durable {
     let kernel = request.headers.get('x-yak-kernel') == '1'
     // Brought up for the request behind it (door.ts `WAKE`), and nothing more.
     if (path == WAKE && kernel) return new Response(null, { status: 204 })
+    let branch = request.headers.get(BRANCH)
+    if (branch != null && !path.startsWith('/branches')) {
+      if (!/^\d+$/.test(branch)) throw new Refused(`no branch ${branch}`)
+      return await this.#onBranch(request, path, Number(branch))
+    }
     if (path == '/signup' && kernel) {
       return signupIn(request, this.#stored(this.#graph))
     }
@@ -5140,13 +5429,16 @@ export class Store extends Durable {
   // app uses from other homes, refusals included. A line naming one is not
   // this store's to answer alone: it is answered 204, unread, and the kernel
   // composes it from this store and those homes (@yaks/reach `read`).
-  async #paged(request: Request): Promise<Response> {
+  async #paged(
+    request: Request,
+    ask: Handler = this.#asked,
+  ): Promise<Response> {
     let url = new URL(request.url)
-    if (url.searchParams.get('uses') != '1') return await this.#asked(request)
+    if (url.searchParams.get('uses') != '1') return await ask(request)
     let said = this.#held(request, 'uses')
     let answer = borrows(url.searchParams.get('q') ?? '', JSON.parse(said))
       ? new Response(null, { status: 204 })
-      : await this.#asked(request)
+      : await ask(request)
     let headers = new Headers(answer.headers)
     headers.set(USES, said)
     return new Response(answer.body, {
@@ -5577,37 +5869,8 @@ export class Store extends Durable {
           // A draft is validated against the serving rows, but its schema
           // changes roll back. Only the declaration is kept for selection when
           // the directory moves the release pointer.
-          let rollback = Symbol('candidate schema')
-          let undone: Error | undefined
-          try {
-            this.#tx(() => {
-              prepare()
-              undone = this.#schema(this.#shape(JSON.stringify(doc)))[0]
-              throw rollback
-            })
-          } catch (e) {
-            if (e !== rollback) {
-              this.#kv.clear()
-              defect(e, {
-                request: 'schema candidate',
-                store: this.#get('name') ?? '',
-              })
-              return Response.json({
-                error: 'Refused',
-                message: e instanceof Error ? e.message : String(e),
-              }, { status: 503 })
-            }
-          }
-          this.#kv.clear()
-          // The draft's words ask for what the rows already here cannot hold
-          // (a unique key they share): the caller's own data refuses its
-          // deploy, which is an answer to it, not a defect of ours.
-          if (undone) {
-            return Response.json({
-              error: 'Refused',
-              message: undone.message,
-            }, { status: 409 })
-          }
+          let no = this.#tried(doc, prepare)
+          if (no) return no
           stageDeclaration(
             request,
             'vocab',
@@ -5657,6 +5920,44 @@ export class Store extends Durable {
         }, { status })
       }
     })
+  }
+
+  // Whether this store's rows would take `doc`'s schema, its words `prepare`
+  // lets go of first, as a deploy's candidate is tried: in a transaction that
+  // rolls back, answering the refusal, or null where they would.
+  #tried(doc: object, prepare: () => void): Response | null {
+    let rollback = Symbol('candidate schema')
+    let undone: Error | undefined
+    try {
+      this.#tx(() => {
+        prepare()
+        undone = this.#schema(this.#shape(JSON.stringify(doc)))[0]
+        throw rollback
+      })
+    } catch (e) {
+      if (e !== rollback) {
+        this.#kv.clear()
+        defect(e, {
+          request: 'schema candidate',
+          store: this.#get('name') ?? '',
+        })
+        return Response.json({
+          error: 'Refused',
+          message: e instanceof Error ? e.message : String(e),
+        }, { status: 503 })
+      }
+    }
+    this.#kv.clear()
+    // The draft's words ask for what the rows already here cannot hold
+    // (a unique key they share): the caller's own data refuses its
+    // deploy, which is an answer to it, not a defect of ours.
+    if (undone) {
+      return Response.json({
+        error: 'Refused',
+        message: undone.message,
+      }, { status: 409 })
+    }
+    return null
   }
 
   // Whether one component holds rows, or with a property, any hold a

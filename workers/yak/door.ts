@@ -212,7 +212,13 @@ export type Served = {
   phone?: string
   release?: string
   base?: string
+  /** the store's branch a page reads and writes on, a draft's (preview.ts):
+   * none for main */
+  branch?: number
 }
+
+/** The header naming the branch a request is served on ({@link Served}). */
+export let BRANCH = 'x-yak-branch'
 
 // What the kernel says on every request to a store, whatever the caller set:
 // the deploy it runs, so a store still on older code restarts onto this one
@@ -230,6 +236,8 @@ let vouched = (req: Request, name: string, app?: Served) => {
   if (app.phone != null) req.headers.set('x-yak-phone', app.phone)
   if (app.release != null) req.headers.set('x-yak-release', app.release)
   if (app.base != null) req.headers.set('x-yak-base-release', app.base)
+  if (app.branch != null) req.headers.set(BRANCH, String(app.branch))
+  else req.headers.delete(BRANCH)
 }
 
 /** The kernel's door to one store (@yaks/durable-object `doorOf`), over
