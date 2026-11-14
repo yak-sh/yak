@@ -15,10 +15,11 @@ and let them choose:
 
 1. Recall what they chose before (store_memory_recall), and give it to whoever
    writes the drafts.
-2. Make two to four drafts from one starting point: the live app, or a new app's
-   first files. Open each draft after the first with `draft: 'new'`. Where copy
-   and layout can be separated, the drafts of a round differ in one of them: the
-   same `copy.json` under different layouts, or one layout with different words.
+2. Make two to four drafts from one starting point, the live app or a new app's
+   first files, in one app_files call: what they share in `files`, each one's
+   own in `drafts`. Where copy and layout can be separated, the drafts of a
+   round differ in one of them: the same `copy.json` under different layouts, or
+   one layout with different words.
 3. Ask one decision (decision_new) with a choice for each draft, showing it by
    its id in `shows`, with a description of a line on how it differs. Recommend
    the one you would pick.

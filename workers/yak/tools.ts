@@ -98,6 +98,7 @@ import {
   appStore,
   clamped,
   daysLeft,
+  type Directory,
   directory,
   draftStore,
   folded,
@@ -357,6 +358,7 @@ import {
   type Draft,
   drafting,
   draftsOf,
+  fanned,
   goingBack,
   history,
   linkFor,
@@ -364,6 +366,7 @@ import {
   NEW,
   releasing,
   replaced,
+  replayed,
   restoring,
   served,
   when,
@@ -505,6 +508,17 @@ let ACCESS = {
 
 let ROLES: Role[] = ['owner', 'editor', 'viewer']
 
+// One file of a write, as `files` and each of `drafts` list them.
+let FILE = {
+  type: 'object',
+  properties: {
+    path: str('path relative to the app root'),
+    content: str('the file text'),
+    base64: str('the file bytes, base64, instead of content'),
+  },
+  required: ['path'],
+}
+
 // What app_files does to a file, in the order an app is built.
 let OPS = [
   'list',
@@ -547,6 +561,53 @@ let landedIn = (
       : '')
 }
 
+// The answer to a write of several drafts (`fannedAt`): the files they share,
+// each draft's id with its own files, and what each next step takes.
+let fannedOut = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  who: Who,
+  args: Args,
+  batch: { path: string; bytes: Uint8Array }[],
+  fan: { path: string; bytes: Uint8Array }[][],
+  c: Clock,
+) => {
+  let shared = batch.length || args.path == null
+    ? batch
+    : [{ path: text(args.path, 'path'), bytes: bytesOf(args) }]
+  let { sent, each, drafts } = await fannedAt(
+    ctx.env,
+    ctx.dir,
+    space,
+    app,
+    who,
+    shared,
+    fan,
+    c,
+    draftArg(args),
+    ctx.call,
+  )
+  let said = (fs: typeof sent) =>
+    fs.map((f) => `${f.path} — ${stored(f.path, f.bytes, f.sha)}`).join('\n')
+  let ids = drafts.filter((d): d is string => !!d)
+  return {
+    text: `wrote ${ids.length} drafts of ${space.slug}/${app.slug}` +
+      (sent.length ? `; shared by all:\n${said(sent)}` : ':') + '\n' +
+      drafts.map((d, i) =>
+        d
+          ? `draft ${d}:\n${said(each[i])}`
+          : `drafts[${i}] changed nothing the drafts started from, so ` +
+            'opened no draft'
+      ).join('\n') +
+      "\napp_preview with draft: '<id>' shows one; decision_new with a " +
+      "choice per draft, its shows the draft's id, asks the person which; " +
+      "app_deploy with draft: '<id>' releases the one chosen.",
+    space,
+    value: { drafts: ids },
+  }
+}
+
 /**
  * What an `app_files` call is asking for, when it did not say. Bytes say what
  * a call is: a `files` batch is a write, and so is a lone path with `content`
@@ -575,20 +636,39 @@ let decoded = (bytes?: Uint8Array) => decoder.decode(bytes)
 // entry was wrong, since the model sent them all at once.
 let files = (
   v: unknown,
+  name = 'files',
 ): { path: string; bytes: Uint8Array<ArrayBuffer> }[] => {
   if (v == null) return []
   if (!Array.isArray(v)) {
-    throw refuse('arguments', 'files: a list of {path, content}')
+    throw refuse('arguments', `${name}: a list of {path, content}`)
   }
   return v.map((one, i) => {
     if (!one || typeof one != 'object') {
-      throw refuse('arguments', `files[${i}]: {path, content}`)
+      throw refuse('arguments', `${name}[${i}]: {path, content}`)
     }
     let f = one as Record<string, unknown>
     return {
-      path: text(f.path, `files[${i}].path`),
-      bytes: bytesOf(f, `files[${i}].`),
+      path: text(f.path, `${name}[${i}].path`),
+      bytes: bytesOf(f, `${name}[${i}].`),
     }
+  })
+}
+
+// The several-drafts form of a write: `drafts: [{files}, …]`, two to four,
+// each entry's files laid over the ones the call shares (`fannedAt`).
+let entries = (v: unknown) => {
+  if (v == null) return []
+  let say = 'drafts: two to four entries, each {files: [{path, content}, …]}'
+  if (!Array.isArray(v) || v.length < 2 || v.length > 4) {
+    throw refuse('arguments', say)
+  }
+  return v.map((one, i) => {
+    let own = files(
+      (one as Record<string, unknown> | null)?.files,
+      `drafts[${i}].files`,
+    )
+    if (!own.length) throw refuse('arguments', `drafts[${i}]: ${say}`)
+    return own
   })
 }
 
@@ -2368,6 +2448,23 @@ export let wrotePinned = async (
   c: Clock = clock(),
   draft?: Asked,
 ) => {
+  await admitted(env, space, app, sent, c)
+  let landing = await c.time(
+    'files',
+    () => drafted(env, space, app, who, sent, draft),
+  )
+  return { ...landing, paths: sent.map((f) => f.path) }
+}
+
+// What turns on where files land, checked before any of them is written
+// (`wrotePinned`).
+let admitted = async (
+  env: Env,
+  space: Space,
+  app: App,
+  sent: Change[],
+  c: Clock,
+) => {
   for (let f of sent) {
     let no = tooLong(f.path, f.size ?? 0)
     if (no) throw refuse('limit', no)
@@ -2375,11 +2472,58 @@ export let wrotePinned = async (
   await c.time('icon', () => iconed(env, app, sent))
   let stopped = await c.time('quota', () => fullAt(env, space, sent))
   if (stopped) throw refuse('limit', stopped)
-  let landing = await c.time(
-    'files',
-    () => drafted(env, space, app, who, sent, draft),
+}
+
+/**
+ * Several drafts of an app from one write (app_files `drafts`): each holds
+ * what the call's own draft held, then `shared`, then its entry's own files
+ * (written.ts `fanned`). Every file is checked once, as any write checks it.
+ * The later drafts are written first and the call's own last, so a call sent
+ * again after it was cut off, its own draft holding the first entry already,
+ * finds every later one open and gives it nothing of that entry. Bytes are put
+ * by the first draft that names them, and the rest name their sha. Answers
+ * the drafts in entry order, none where an entry changed nothing.
+ */
+export let fannedAt = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+  app: App,
+  who: Who,
+  shared: { path: string; bytes: Uint8Array }[],
+  own: { path: string; bytes: Uint8Array }[][],
+  c: Clock,
+  asked: string | null,
+  call?: string,
+) => {
+  await c.time('pictures', () => pictured([...shared, ...own.flat()]))
+  let [sent, ...each] = await Promise.all([shared, ...own].map(hashed))
+  await admitted(env, space, app, [...sent, ...each.flat()], c)
+  let { from, into, fresh } = fanned(
+    app,
+    await draftsOf(dir, app),
+    who,
+    asked,
+    own.length,
+    call,
   )
-  return { ...landing, paths: sent.map((f) => f.path) }
+  let carry = replayed(from ? await dir.written(app, from.eid) : [])
+  let put = new Set<string>()
+  let once = (changes: Change[]) =>
+    changes.map(({ bytes, ...ch }) => {
+      if (!bytes || !ch.sha || put.has(ch.sha)) return ch
+      put.add(ch.sha)
+      return { ...ch, bytes }
+    })
+  let drafts: (string | null)[] = []
+  for (let i of [...into.keys()].slice(1).concat(0)) {
+    let changes = once([...fresh[i] ? carry : [], ...sent, ...each[i]])
+    drafts[i] = (await c.time(
+      'files',
+      () => drafted(env, space, app, who, changes, into[i]),
+    )).draft
+  }
+  return { sent, each, drafts }
 }
 
 /**
@@ -3607,11 +3751,11 @@ let OURS: Row[] = [
         draft: str(
           'the id of the draft to work in, from an earlier answer: every ' +
             'write answers the id of the draft it landed in. new opens ' +
-            'another beside the ones this conversation holds, as for trying ' +
-            'several directions at once. Left out, the call works in this ' +
-            "conversation's own draft: a read sees it over the live files, " +
-            'and the first write opens it. Once the conversation holds ' +
-            "several, every call names one, as draft: '<id>'. For discard, " +
+            'another beside the ones this conversation holds. Left out, the ' +
+            "call works in this conversation's own draft: a read sees it " +
+            'over the live files, and the first write opens it. Once the ' +
+            'conversation holds several, every call names one, as draft: ' +
+            "'<id>'. With drafts, the draft they start from. For discard, " +
             'the draft to close unreleased',
         ),
         path: str(
@@ -3670,24 +3814,33 @@ let OURS: Row[] = [
         ),
         files: {
           type: 'array',
+          items: FILE,
+          description: 'several files to write at once, instead of ' +
+            'path and content: the whole app in one call',
+        },
+        drafts: {
+          type: 'array',
+          minItems: 2,
+          maxItems: 4,
           items: {
             type: 'object',
             properties: {
-              path: str('path relative to the app root'),
-              content: str('the file text'),
-              base64: str('the file bytes, base64, instead of content'),
+              files: { type: 'array', items: FILE },
             },
-            required: ['path'],
+            required: ['files'],
           },
-          description: 'several files to write at once, instead of ' +
-            'path and content: the whole app in one call',
+          description: 'for a write: two to four drafts in one call, each ' +
+            'its own files over what files shares, all over what the ' +
+            'draft held. The first lands in the draft, each other opens one ' +
+            'beside it, and the answer lists their ids',
         },
       },
       required: ['app'],
     },
     run: async (ctx, args) => {
       let batch = files(args.files)
-      let op = opOf(args, batch.length)
+      let fan = entries(args.drafts)
+      let op = opOf(args, batch.length + fan.length)
       // The refusal names the ops and the batch, because a bare "op is
       // required" leaves an agent guessing at both (C-32624 item 5).
       if (!OPS.includes(op)) {
@@ -3695,6 +3848,16 @@ let OURS: Row[] = [
           'arguments',
           `op: one of ${OPS.join(', ')} — write takes path and content, or ` +
             'files: [{path, content}] for several at once',
+        )
+      }
+      if (fan.length && op != 'write') {
+        throw refuse('arguments', `drafts: for a write, not op: ${op}`)
+      }
+      if (fan.length && args.draft == NEW) {
+        throw refuse(
+          'arguments',
+          'drafts opens a draft per entry itself: leave draft out, or name ' +
+            "the draft they start from as draft: '<id>'",
         )
       }
       let c = ctx.clock ?? clock()
@@ -4178,6 +4341,9 @@ let OURS: Row[] = [
           space,
           value: { draft: into },
         }
+      }
+      if (fan.length) {
+        return await fannedOut(ctx, space, app, who, args, batch, fan, c)
       }
       let sent = batch.length ? batch : [{
         path: text(args.path, 'path'),

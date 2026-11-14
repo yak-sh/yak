@@ -48,8 +48,8 @@ once never release each other's edits:
   the live files. A person's own edits in the browser share one draft.
 - Every write answers its draft's id and your other open drafts of the app.
   `draft: '<id>'` keeps a call in that draft, after a reconnect or from another
-  chat. `draft: 'new'` opens another beside it, to try several directions at
-  once and preview each.
+  chat. `drafts: [{files}, …]` makes two to four in one write, each its own
+  files over the `files` they share. `draft: 'new'` opens one more.
 - A read with no `draft` sees this conversation's draft over the live files, or
   the live files where it has none.
 - `app_files(app, op: 'list')` names the paths your draft changed, says when a
@@ -66,10 +66,10 @@ once never release each other's edits:
 An open-ended request, where the right answer depends on the person's taste
 ("make a landing page for churches"), gets two to four drafts and one choice:
 
-1. Make the drafts from one starting point, each after the first with
-   `draft: 'new'`. Where copy and layout can be separated, the drafts differ in
-   one of them: the same `copy.json` under different layouts, or one layout with
-   different words.
+1. Make the drafts from one starting point in one `app_files` call: the files
+   they share in `files`, each draft's own in `drafts`. Where copy and layout
+   can be separated, the drafts differ in one of them: the same `copy.json`
+   under different layouts, or one layout with different words.
 2. Ask one decision with `decision_new`, a choice for each draft, its `shows`
    the draft's id. The person sees each draft's preview above its button.
 3. A decision offers at most four choices, so more drafts are narrowed by

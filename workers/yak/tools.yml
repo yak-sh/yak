@@ -139,9 +139,9 @@ app_new:
     beside index.html and mark each element with data-copy, so the person
     can edit the words on the page (https://yaks.app/docs/copy).
     An open-ended request, where the person's taste picks among many good
-    answers ("a landing page for churches"), gets two to four drafts
-    (app_files draft: 'new') and one decision_new whose choices show them,
-    before anything is released (https://yaks.app/docs/files).
+    answers ("a landing page for churches"), gets two to four drafts (one
+    app_files call with drafts) and one decision_new whose choices show
+    them, before anything is released (https://yaks.app/docs/files).
     Documentation: https://yaks.app/docs.
 app_files:
   title: Read or write app files
@@ -183,9 +183,9 @@ app_files:
     writes in a draft of its own, opened by its first write over the live
     files, and every write answers that draft's id and your other open
     drafts. Pass draft to keep working in one, as after a reconnect;
-    draft: new opens another beside it, to try several directions at once,
-    and once a conversation holds several, every call names one as
-    draft: '<id>'.
+    drafts: [{files}, …] makes two to four at once, each its own files over
+    the files they share, and once a conversation holds several, every call
+    names one as draft: '<id>'.
     op: list says which paths your draft changed and lists every other
     open draft (who, which paths, since when); nobody locks anything. op:
     discard closes a draft unreleased. files: [{path, content}, …] writes a whole

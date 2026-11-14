@@ -209,6 +209,48 @@ export let chosen = (
   return own[0] ?? null
 }
 
+/**
+ * Where one call's `n` drafts go (app_files `drafts`): the first where the
+ * call works (the draft `asked` names, else the caller's own, else one the
+ * call opens) and each later one opened beside it, named for the call and its
+ * place. `from` is the draft they start from, chosen as though the drafts
+ * this call opens were not there, so the call sent again after it was cut off
+ * starts where its first run did and lands in the drafts that run opened.
+ * `fresh` says which later ones are not open yet, so take what `from` holds.
+ */
+export let fanned = (
+  app: App,
+  drafts: AppDraft[],
+  who: Who,
+  asked: string | null,
+  n: number,
+  call?: string,
+) => {
+  let opens = Array.from(
+    { length: n },
+    (_, i): Asked => call ? { opens: i ? `${call}|${i}` : call } : NEW,
+  )
+  let eid = (a: Asked) => typeof a == 'object' && a ? openedFor(app, a) : null
+  let ours = new Set(opens.map(eid))
+  let from = chosen(app, drafts.filter((d) => !ours.has(d.eid)), who, asked)
+  let into = opens.map((a, i) => i == 0 && from ? from.eid : a)
+  let open = new Set(drafts.map((d) => d.eid))
+  return {
+    from,
+    into,
+    fresh: into.map((a, i) => i > 0 && !open.has(eid(a) ?? '')),
+  }
+}
+
+/** The changes that make a draft opened over the live files hold what
+ * `rows`, another draft's writes, left: each path as its newest row left it,
+ * by the sha it names, so no bytes are copied. */
+export let replayed = (rows: Written[]): Change[] =>
+  [...new Map(newest(rows).reverse().map((w) => [w.path, w])).values()].map(
+    (w) =>
+      w.sha ? { path: w.path, sha: w.sha, size: w.size } : { path: w.path },
+  )
+
 /** The draft a release takes: the one named, else the caller's own, else,
  * for a caller with none of its own (a new chat, a reconnect), the person's
  * one open draft or the one no author holds. Several to choose from is
