@@ -117,7 +117,14 @@ Operator to measure or exercise it. The yaks.app connector on this box
 writes through it, `feedback` included, is written as him; a live check that
 writes, or talks to his Operator, goes through `yak … --as checks` instead. A check that needs a clean account runs
 `yak admin throwaway '<command>'` (listing accounts is
-`secrets-and-connections`). A check of yaks.app's own pages or funnel tags its
+`secrets-and-connections`). The throwaway account is deleted once that command
+exits, which cuts off any Operator work still running. An Operator check that
+spans several calls (a chat, then `operator_read` until it settles, then an
+answer) signs in a test account that lasts instead, with
+`yak auth yaks.app --as <name>@bot.yak.sh`, and passes the same `--as` to each
+call. Use a new name for each check: an Operator follows what its conversation
+already did, so a space where it built once one way can build the same way again
+whatever its instructions now say. A check of yaks.app's own pages or funnel tags its
 visit `utm_source=agent-check` (@yaks/platform/bots `CHECK`), in its link or
 its `yak_came` cookie, so whatever it clicks or starts counts apart from
 people's. Acting as the owner is his to grant (M-31958). The box's own server runs main after `yak restart`. The platform
