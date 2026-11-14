@@ -733,6 +733,47 @@ test('a death word that moved rebuilds its table without the key', () => {
   assertEquals(scan(d, 'product', undefined, ['maker']), [{ maker: 1 }])
 })
 
+// A connection the way workerd keeps one: once a unit has run, its
+// transaction stays open and SQLite ignores `foreign_keys`, so an `on` said
+// after a rebuild would leave the keys off.
+test('a table its install rebuilt still refuses a dangling reference', () => {
+  let d = mem()
+  whole(d, shop)
+  let query = d.query, held = false
+  let workerd: Driver = {
+    ...d,
+    query: (q) => {
+      if (q.t == 'pragma' && q.name == 'foreign_keys' && q.value && held) {
+        return []
+      }
+      held ||= q.t == 'savepoint' || q.t == 'begin'
+      return query(q)
+    },
+  }
+  let kept = loadVocab({
+    $defs: {
+      ...(shop.docs[0].$defs as Record<string, never>),
+      product: {
+        component: true,
+        ...(shop.docs[0].$defs!.product as Record<string, never>),
+        properties: {
+          ...(shop.docs[0].$defs!.product.properties as Record<string, never>),
+          maker: { type: 'string', ref: 'entity', death: 'keep' },
+        },
+      },
+    },
+  })
+  storage(workerd, kept).install()
+  assertEquals(d.query({ t: 'pragma', name: 'foreign_keys' }), [{
+    foreign_keys: 1,
+  }])
+  assertThrows(
+    () => d.query(insert('product', { entity: 9 })),
+    Error,
+    'FOREIGN KEY',
+  )
+})
+
 // A creature, its kind declared as `kind` says: a list of kinds, or any word.
 let creatures = (kind: Record<string, unknown>) =>
   loadVocab({

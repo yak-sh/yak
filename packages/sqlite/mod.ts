@@ -1319,11 +1319,6 @@ export let storage = (
     // taking its write lock, and tables, growth and indexes commit together.
     let unchanged = matches()
     if (!unchanged) {
-      let keys = (value: string): Stmt => ({
-        t: 'pragma',
-        name: 'foreign_keys',
-        value,
-      })
       let clean = false
       let seal = () => {
         epoch(driver)
@@ -1381,22 +1376,17 @@ export let storage = (
           // Memory templates keep schema, never a store's lineage identity.
           if (driver.file && clean) seal()
         })
-      // Foreign keys are off while tables are rebuilt, and only then: setting
-      // the pragma, to any value, makes SQLite compile again every statement
-      // the connection keeps, and a template's copy rebuilds nothing.
-      let rebuild = () => {
-        driver.query(keys('off'))
-        try {
-          make()
-        } finally {
-          driver.query(keys('on'))
-        }
-      }
+      // Tables are rebuilt with foreign keys on. A rebuilt table is a
+      // component's: it references `entity` and nothing references it, so
+      // dropping it checks nothing and each row put back finds its entity.
+      // The pragma is never set here: SQLite ignores it inside a transaction,
+      // and workerd holds one open from a turn's first write, so an `on` after
+      // the rebuild could leave a Durable Object without its keys.
       // Templates are only for fresh in-memory files; file installs always
       // inspect their standing schema under BEGIN IMMEDIATE.
       let fresh = !installed(driver) &&
         !Object.keys(standing(driver, vocab)).length
-      fresh && driver.template ? driver.template(print, rebuild) : rebuild()
+      fresh && driver.template ? driver.template(print, make) : make()
       if (!driver.file) {
         unit(driver, () => {
           epoch(driver)
