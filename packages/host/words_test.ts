@@ -10,6 +10,7 @@ let facets: Taken<'vocab'> = [[
           component: true,
           type: 'object',
           prefix: 'R',
+          by_name: true,
           properties: { value: { type: 'string' } },
         },
       },
@@ -24,8 +25,9 @@ test('explicit host words refuse paths outside their configured vocabulary', asy
   equal(v.aim('record.value')[0].prop, 'value')
   await throws(() => v.aim('commit.target'), 'commit')
   equal(wordsOf(facets).vocab.aim('commit.target')[0].prop, 'target')
-  equal(v.comp('record')?.keywords.prefix, undefined)
-  equal(wordsOf(facets).vocab.comp('record')?.keywords.prefix, 'R')
+  equal(v.comp('record')?.keywords.by_name, undefined)
+  equal(wordsOf(facets).vocab.comp('record')?.keywords.by_name, true)
+  equal(v.kind('record')?.prefix, 'R')
   equal(wordsOf(facets, undefined, exact).vocab, v)
 })
 
