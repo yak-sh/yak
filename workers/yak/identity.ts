@@ -160,6 +160,9 @@ export let NO_MAIL = 'Sign-in mail is not switched on here yet: this deploy ' +
 export let TOO_MANY = 'Too many codes have been asked for from here just ' +
   'now. Try again in a minute.'
 export let NOT_EMAIL = 'That is not an email address. Check it and try again.'
+// What the card says when the mail provider refused the address itself
+// (@yaks/mail `Undeliverable`): the person's to fix, so nobody was told.
+export let NO_MAILBOX = 'that address takes no mail. Check it and try again'
 export let NOT_ADDRESS = 'That is not an email address or a US mobile ' +
   'number. Check it and try again.'
 import { KERNEL, type Meta, meta } from './meta.ts'
@@ -173,6 +176,7 @@ import {
   askLink,
   connect,
   deleted,
+  type Failed,
 } from './signin-pages.ts'
 import {
   chatPath,
@@ -224,6 +228,7 @@ import { step } from './funnel.ts'
 import { arrival, campaign } from './arrival.ts'
 import * as ads from './ads.ts'
 import { Blocked, consentEid, shown } from '@yaks/phone'
+import { sendable, Undeliverable } from '@yaks/mail'
 import { credit } from './referral.ts'
 import { unauthorized, withAuth } from './asking.ts'
 
@@ -696,11 +701,13 @@ export let met = async (env: Env, email: string) => {
 //
 // One that never leaves is a break for us to read, and the person's to know
 // (M-16612): it is reported, unless a carrier's block (expected until the
-// texting campaign is approved), and answered, why it never left, for the
-// card that said it was sent to say (signin-pages.ts `askCode`). A write that
-// fails is reported, and nothing was sent to say anything about. Answers
-// null for a letter that left, or one never sent because the address had had
-// its letters, which the card says nothing about.
+// texting campaign is approved) or the provider's refusal of the address
+// itself, which is the person's to fix; and answered, why it never left and
+// whether we were told, for the card that said it was sent to say
+// (signin-pages.ts `askCode`). A write that fails is reported, and nothing
+// was sent to say anything about. Answers null for a letter that left, or one
+// never sent because the address had had its letters, which the card says
+// nothing about.
 let send = async (
   env: Env,
   req: Request,
@@ -749,8 +756,14 @@ let send = async (
     )
     return null
   } catch (e) {
-    if (!(e instanceof Blocked)) fault(env, 'POST /login', e)
-    return kept ? (e instanceof Error ? e.message : `${e}`) : null
+    let yours = e instanceof Undeliverable
+    let told = !yours && !(e instanceof Blocked)
+    if (told) fault(env, 'POST /login', e)
+    if (!kept) return null
+    return {
+      why: yours ? NO_MAILBOX : e instanceof Error ? e.message : `${e}`,
+      told,
+    }
   }
 }
 
@@ -1375,7 +1388,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let back = field('return') || null
     let texts = await textable(env)
     let text = texts && texted(address)
-    if (!text && !address.includes('@')) {
+    if (!text && !sendable(address)) {
       return signCard(env, {
         q,
         back,
@@ -1421,7 +1434,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       let ask = drawn()
       let sending = apart(() => send(env, req, { address, ask, from, q, back }))
       background(sending.then(() => {}))
-      let letter = new Promise<string | null>((done) => {
+      let letter = new Promise<Failed | null>((done) => {
         let stop = (env.CLOCK ?? system).after(LETTER, () => done(null))
         sending.then((why) => {
           stop()

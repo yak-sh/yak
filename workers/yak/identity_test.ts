@@ -24,6 +24,7 @@ import { challenge } from '@yaks/oauth'
 import {
   allowed,
   connector,
+  fresh,
   type Kernel,
   kernel,
   letter,
@@ -36,6 +37,7 @@ import {
 } from './probe.ts'
 import { COOKIE, cookieValue, sign, verify } from './lib/token.ts'
 import { SENDS } from './signin.ts'
+import { NO_MAILBOX, NOT_EMAIL } from './identity.ts'
 import { managePath } from '@yaks/platform/routes'
 import type { Agent } from './connected.ts'
 
@@ -964,6 +966,65 @@ test('a letter that never leaves is said on its own card, and reported', async (
     ),
     'the tracker hears of it',
   )
+})
+
+// An address no provider takes a letter for is the person's typo: the card
+// refuses it before any code is minted or letter sent, and nobody is told.
+test('an address that is not one is refused on the card, before any send', async () => {
+  let k = await kernel()
+  let before = k.reported.length
+  for (let email of ['ana@books', 'ana@@x.example', 'Ana <ana@x.example>']) {
+    let card = await form(k, '/login', { email })
+    equal([card.status, (await card.text()).includes(NOT_EMAIL)], [400, true])
+  }
+  await k.flushReports()
+  equal(k.reported.slice(before), [])
+})
+
+// Resend refusing the recipient of a code's letter (HTTP 422) is the
+// person's address to fix: said on the card, and never a break reported.
+test("a provider's refusal of the address is said on the card, not reported", async () => {
+  let refusing = (url: string, init: RequestInit) =>
+    new URL(url).pathname == '/emails'
+      ? JSON.parse(String(init.body)).to.some((t: string) =>
+          t.endsWith('@nomail.example')
+        )
+        ? Response.json({
+          statusCode: 422,
+          name: 'validation_error',
+          message: 'Invalid `to` field. The email address needs to follow ' +
+            'the `email@example.com` or `Name <email@example.com>` format.',
+        }, { status: 422 })
+        : Response.json({ id: crypto.randomUUID() })
+      : Response.json({}, { status: 404 })
+  // Its owner signs in through the stand-in mail first; then the deploy's
+  // platform letters go through Resend, as production's do.
+  let env: Record<string, unknown> = {}
+  let k = await fresh({}, (e) => env = e as never)
+  Object.assign(env, {
+    MAIL_VIA: 'resend',
+    RESEND_PLATFORM_TOKEN: 'a-token',
+    RESEND_API: 'https://resend.test',
+    MAIL_FETCH: (url: string, init: RequestInit) =>
+      Promise.resolve(refusing(url, init)),
+  })
+  try {
+    let card = await form(k, '/login', {
+      email: `${unique('no')}@nomail.example`,
+    })
+    let page = await card.text()
+    equal(
+      [card.status, page.includes(NO_MAILBOX), /We have been told/.test(page)],
+      [200, true, false],
+    )
+    await k.flushReports()
+    equal(
+      k.reported.filter((r) => JSON.stringify(r).includes('Undeliverable')),
+      [],
+    )
+  } finally {
+    await k.stop()
+  }
 })
 
 // Every code comes in the Operator's letter, answered at the sign-up address,

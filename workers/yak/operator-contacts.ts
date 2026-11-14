@@ -5,7 +5,7 @@ import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { kindOf, type Tool } from '@yaks/session'
 import { mobile } from '@yaks/phone/mobile'
-import { Unsent } from '@yaks/mail'
+import { sendable, Unsent } from '@yaks/mail'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { type Ctx, refuse } from './tool.ts'
@@ -35,7 +35,7 @@ let comp = (row: Bundle | undefined, name: string) =>
   row?.[name] as Comp | undefined
 let addressOf = (typed: unknown) => {
   let address = canon(String(typed ?? ''))
-  if (!mobile(address) && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address)) {
+  if (!mobile(address) && !sendable(address)) {
     throw refuse(
       'arguments',
       'Give an email address or a US mobile number with its area code.',

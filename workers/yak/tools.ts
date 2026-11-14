@@ -407,6 +407,7 @@ import { background, caught, failing } from './defects.ts'
 import { step } from './funnel.ts'
 import { adopt, unadopt, type Visit, visitOf } from './visit.ts'
 import { Stale } from '@yaks/graph/errors'
+import { sendable } from '@yaks/mail'
 
 // What a tool IS, and the little kit for saying one, live in tool.ts — below
 // this module, so a domain can say a row without importing the
@@ -631,7 +632,7 @@ let role = (v: unknown): Role => {
 // an invite and the sign-in that answers it are the same person.
 let address = (v: unknown) => {
   let at = canon(text(v, 'email'))
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(at)) {
+  if (!sendable(at)) {
     throw refuse('arguments', 'email: an address like name@example.com')
   }
   return at

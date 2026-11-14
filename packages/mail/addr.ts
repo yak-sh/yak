@@ -25,6 +25,33 @@ export let parts = (address: string): [string, string] | null => {
   return local && domain && !extra.length ? [local, domain] : null
 }
 
+// An address as a sending API takes one: the address form of WHATWG's
+// `<input type=email>`, ASCII and unquoted, whose local part neither starts,
+// ends nor doubles a dot, at a domain of two labels or more.
+let LOCAL =
+  /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*$/
+let LABEL = /^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/
+
+/**
+ * Whether a typed address is one a letter can be sent to, as a provider such
+ * as Resend checks it before taking a letter. Ask before sending, so a typo
+ * is the writer's to fix rather than a send that fails.
+ *
+ * ```ts
+ * import { sendable } from '@yaks/mail'
+ * sendable('ana@books.example') // true
+ * sendable('ana@books')         // false
+ * sendable('ana@@books.example') // false
+ * ```
+ */
+export let sendable = (address: string): boolean => {
+  let split = parts(address)
+  if (!split || address != address.trim() || address.length > 254) return false
+  let labels = split[1].split('.')
+  return split[0].length <= 64 && LOCAL.test(split[0]) &&
+    labels.length > 1 && labels.every((l) => LABEL.test(l))
+}
+
 /** An address at a domain: `address('ana', 'books.example')`. */
 export let address = (local: string, domain: string): string =>
   `${local}@${domain}`

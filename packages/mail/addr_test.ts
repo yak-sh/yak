@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { address, at, canon, local, parts } from './addr.ts'
+import { address, at, canon, local, parts, sendable } from './addr.ts'
 
 let mine = canon('books.example')
 
@@ -10,6 +10,25 @@ test('parts: one @, or nothing', () => {
   assertEquals(parts('ana'), null)
   assertEquals(parts('ana@books.example@'), null)
   assertEquals(parts('@books.example'), null)
+})
+
+test('sendable: an address a provider takes a letter for', () => {
+  let yes = ['ana@books.example', 'a.b+c@x.co', "o'neil@a-b.example"]
+  let no = [
+    'ana',
+    'ana@books',
+    'ana@@books.example',
+    'ana@books..example',
+    '.ana@books.example',
+    'a..b@books.example',
+    'ana@-books.example',
+    'Ana <ana@books.example>',
+    'ana@books.example,',
+    'añа@books.example',
+    ' ana@books.example',
+  ]
+  for (let a of yes) assertEquals(sendable(a), true, a)
+  for (let a of no) assertEquals(sendable(a), false, a)
 })
 
 test('local: the domain is case-blind, the local part is kept as written', () => {

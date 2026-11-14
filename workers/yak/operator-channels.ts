@@ -12,7 +12,7 @@ import { attachmentRows } from './operator-attachments.ts'
 import { sourceReference } from './operator-source.ts'
 import { type Ctx, inApp, refuse } from './tool.ts'
 import type { Tool } from '@yaks/session'
-import { Unsent } from '@yaks/mail'
+import { sendable, Unsent } from '@yaks/mail'
 import { Blocked, Denied } from '@yaks/phone'
 import { appStore } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
@@ -580,7 +580,7 @@ export let mailSend = (
   run: async (args, context) => {
     let to = String(args.to ?? '').trim().toLowerCase()
     let text = String(args.text ?? '').trim()
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+    if (!sendable(to)) {
       throw refuse('arguments', 'Give the email address to write to.')
     }
     if (!text) throw refuse('arguments', 'Say what to write.')

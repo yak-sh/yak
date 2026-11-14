@@ -188,29 +188,33 @@ export let askEmail = (at: {
 // card says so.
 //
 // `letter` is what became of the letter this card says was sent: why it
-// never left, or null (M-16612). The card is answered before its letter goes
+// never left and whether we were told, or null (M-16612). The card is answered before its letter goes
 // (T-149702), so it is said at the card's end once known, everything above it
 // shown and pressable meanwhile (pages.ts `later`): nobody waits on it, and no
 // later card has to ask (T-150301).
+/** Why a code's letter never left, and whether the tracker heard of it. */
+export type Failed = { why: string; told: boolean }
+
 export let askCode = (at: {
   address: string
   q?: string | null
   back?: string | null
   why?: string
   status?: number
-  letter?: Promise<string | null>
+  letter?: Promise<Failed | null>
 }, env: Host = {}) => {
   let { address } = at
   let q = at.q ?? null, back = at.back ?? null
   let text = texted(address)
   let to = text ? shown(address) : address
-  let failed = (why: string | null) =>
-    why
+  let failed = (left: Failed | null) =>
+    left
       ? h(
         'p',
         { role: 'alert' },
         `The ${text ? 'text' : 'letter'} with your code to ${to} ` +
-          `never left: ${why.replace(/\.?$/, '.')} We have been told.`,
+          `never left: ${left.why.replace(/\.?$/, '.')}` +
+          (left.told ? ' We have been told.' : ''),
       )
       : null
   return page(

@@ -87,6 +87,7 @@ import { step } from './funnel.ts'
 import { sessionAt } from './session.ts'
 import { fault } from './unseen.ts'
 import { plans } from './payments.ts'
+import { sendable } from '@yaks/mail'
 
 // ---- the plan, derived from one subscription -----------------------------
 
@@ -423,7 +424,7 @@ export type To = { email: string; name: string }
 
 /** Why an address typed for an invoice is not one, or null where it is. */
 export let badTo = (to: To) =>
-  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to.email)
+  sendable(to.email)
     ? to.name.length > 200
       ? 'An organization’s name is 200 characters at most'
       : null
