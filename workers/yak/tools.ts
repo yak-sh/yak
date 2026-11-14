@@ -124,7 +124,7 @@ import * as dirPart from './directory.ts'
 import { HELD, previewing } from './newcomer.ts'
 import { latestSpeaks, ownSpeaks } from './lenses.ts'
 import { sandboxed, sandboxing } from './installed.ts'
-import { watching } from './preview.ts'
+import { unbranched, watching } from './preview.ts'
 import { tools as previewTools } from './preview-tools.ts'
 import { demonstrate, ours } from './gallery-demo.ts'
 import * as shared from './shared-skill.ts'
@@ -1830,6 +1830,7 @@ let published = async (
         app: app.eid,
         link: linkFor(app, closing),
         draft: null,
+        branch: closing.branch,
         files: [],
         at: new Date().toISOString(),
       }),
@@ -3900,6 +3901,16 @@ let OURS: Row[] = [
         }
         let rows = await ctx.dir.written(app, of.eid)
         await discarded(ctx.dir, app, of, who)
+        // Its preview's branch goes with it, and everything written there.
+        background(
+          unbranched(ctx.env, space, app, of).catch((e) =>
+            caught(e, {
+              request: 'drop draft branch',
+              space: space.slug,
+              app: app.slug,
+            })
+          ),
+        )
         return {
           text: `discarded draft ${of.eid} of ${space.slug}/${app.slug}: ` +
             'nothing of it was released. What it wrote stays in each ' +

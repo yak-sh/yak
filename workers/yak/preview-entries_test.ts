@@ -3,6 +3,7 @@ import type { Ask } from '@yaks/esbuild'
 import { strip } from '@yaks/esbuild/strip'
 import { ADA, seeded } from './serving-data-probe.ts'
 import { platform } from './deploy-probe.ts'
+import { BRANCH } from './door.ts'
 import { broadcast, drafted } from './page-notice.ts'
 import { handler } from './kernel.ts'
 import { tools as previews } from './preview-tools.ts'
@@ -19,9 +20,12 @@ let fixture = async () => {
       get: (name) => ({
         fetch: async (req: Request) => {
           let path = new URL(req.url).pathname
+          // A draft's pages are on its branch of the app's store.
+          let on = req.headers.get(BRANCH)
+          let key = on == null ? String(name) : `${name}@${on}`
           if (path == '/drafted') {
             return drafted(req, (packet) => {
-              broadcast(sockets.get(String(name)) ?? [], packet, (error) => {
+              broadcast(sockets.get(key) ?? [], packet, (error) => {
                 throw error
               })
             })
@@ -32,10 +36,11 @@ let fixture = async () => {
           equal(req.method, 'POST')
           equal(req.headers.get('x-yak-kernel'), '1')
           let value = await req.json()
-          if (path == '/expires') {
-            equal(typeof value.at, 'number')
-            if (!sockets.has(String(name))) sockets.set(String(name), [])
-            return Response.json({ ok: true })
+          if (path == '/branches') {
+            if (!sockets.has(`${name}@1`)) sockets.set(`${name}@1`, [])
+            return Response.json({ branch: { id: 1, fork: 0 } }, {
+              status: 201,
+            })
           }
           if (path == '/vocab') {
             equal(Object.keys(value.$defs ?? {}), [])
@@ -88,9 +93,7 @@ let fixture = async () => {
   let out = await previews[0].run(ctx, { app: 'entries', screenshot: false })
   let link = String(out.value!.url)
   let sent: { draft: Drafted }[] = []
-  let name = [...sockets.keys()].find((n) =>
-    n.includes(`preview/${out.value!.draft}`)
-  )!
+  let name = [...sockets.keys()].find((n) => n.endsWith('@1'))!
   sockets.get(name)!.push({
     send: (data: string) => void sent.push(JSON.parse(data)),
   })

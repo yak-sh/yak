@@ -42,7 +42,7 @@ export let tools = [worded(
             'default true; false returns the address without running a browser',
         },
         draft: str(
-          "the id of the draft to show, from app_files: each draft has a link and a test store of its own. Left out, this conversation's own draft, else your one open draft",
+          "the id of the draft to show, from app_files: each draft has a link of its own, over the app's live rows on a branch that keeps its preview's writes from the released app. Left out, this conversation's own draft, else your one open draft",
         ),
         released: {
           type: 'boolean',

@@ -793,6 +793,7 @@ export type Row = {
     via?: Id | null
     at?: string | null
     previewed?: string | null
+    branch?: number | null
   }
   entity: { eid: string }
   // A browser and the person who claimed its guest work (attribution.ts).
@@ -1757,6 +1758,7 @@ export let appDraftOf = (r: Row) => ({
   via: r.app_draft!.via ? idOf(r.app_draft!.via) : null,
   at: r.app_draft!.at ?? null,
   previewed: r.app_draft!.previewed ?? null,
+  branch: r.app_draft!.branch ?? null,
 })
 
 /** One file written into an app (written.ts `Written`), as a row reads. */

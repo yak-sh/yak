@@ -14,7 +14,8 @@ worker and for the scripts a page loads.
 Write the files with `app_files`, then call `app_preview` at phone and desktop
 widths before `app_deploy`. The connector returns the screenshot, console and
 page errors from a browser on Cloudflare; there is no local checkout or browser
-to prepare. The draft worker uses a separate test store. See
+to prepare. The draft worker writes on the draft's own branch of the app's rows.
+See
 [draft previews](https://yaks.app/docs/files.md#checking-a-draft-with-app_preview)
 for the private URL, examples and limits.
 

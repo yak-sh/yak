@@ -1,22 +1,23 @@
 // A draft's private preview link (D-136180, D-453): the app as one of its
 // drafts stands at each request, the draft's newest `written` rows over the
-// release (written.ts), against a store of the link's own and never the live
-// one. Each draft has a link and a store of its own, so several drafts of one
-// app preview side by side, each with its own test data; once a release takes
-// the draft, its link serves what was released. Nothing here selects a
-// release in the directory or opens the serving app's store for writing.
+// release (written.ts), on a branch of the app's own store (graph.ts
+// `#onBranch`): the live rows as of the branch's fork, under the preview's own
+// writes, which the live app never sees. Each draft has a link and a branch of
+// its own, made when it is first previewed, so several drafts of one app
+// preview side by side, each with its own writes; once a release takes the
+// draft, its link serves what was released, over the live rows. Discarding the
+// draft drops its branch. Nothing here selects a release in the directory.
 //
 // Each state of the draft is served as a release named for the files it holds,
 // built by the first request that finds it missing (`following`) and found
 // again by any isolate after. A state starts from the one before the newest
 // write: what that one compiled carries over, so a page script is compiled
-// once per sha (esbuild.ts), and the worker, the store's vocabulary and its
+// once per sha (esbuild.ts), and the worker, the branch's vocabulary and its
 // seed rows are set up again only by the write that changed them. Each write
 // is told to the link's pages (`watching`); public/release.js takes it there.
 import { writes } from '@yaks/member'
 import { derivedEid } from '@yaks/graph/identity'
-import { appTools } from './tool-grammar.ts'
-import { appVocab, stated, VOCABS } from './vocab.ts'
+import { stated, VOCABS } from './vocab.ts'
 import { ACCEPTED } from './door.ts'
 import { declarationOf } from './declaration.ts'
 import { api, copyFor, storing, unwritten, woven } from './apps.ts'
@@ -24,8 +25,8 @@ import {
   type App,
   appStore,
   directory,
+  releaseOf,
   type Space,
-  storeName,
   url as appUrl,
 } from './directory.ts'
 import * as directoryPart from './directory.ts'
@@ -34,7 +35,9 @@ import { caught } from './defects.ts'
 import {
   bearing,
   carried,
+  drop,
   granted,
+  grantee,
   type Module,
   ran,
   upload,
@@ -58,7 +61,6 @@ import { type Args, type Ctx, inApp, refuse, rejected } from './tool.ts'
 import { CallError } from '@yaks/tools/errors'
 import { addressed, BUILT, type Files, sha256 } from './versions.ts'
 import {
-  AGE,
   type AppDraft,
   type Draft,
   type Drafted,
@@ -181,29 +183,84 @@ let post = (
     },
   )
 
-// The app as its link serves one state of its draft: the link's own store,
-// and its own dispatch script where the state has a worker.
+// The app as its link serves one state of its draft: the app's store on the
+// draft's branch, and its own dispatch script where the state has a worker.
+// A link whose draft is closed has no branch, and shows the live app's rows.
+// The store is told of the app as it serves (its release and access), since
+// it is the live app's.
 let previewing = (
   app: App,
   link: string,
   source: string | null,
   mount: string,
+  branch: number | null,
   worker = false,
 ): App => {
-  let script = worker ? `app-${app.eid}-preview-${link}` : undefined
+  let script = worker ? scriptOf(app, link) : undefined
   return {
     ...app,
-    store: `preview/${link}`,
+    ...branch != null ? { branch } : {},
     source,
     files: `${source}/private`,
     version: null,
-    declaration: '0',
+    declaration: releaseOf(app),
     lenses: undefined,
     scope: 'store',
     script,
     worker: script ?? '',
-    access: 'private',
     mount,
+  }
+}
+
+// The dispatch script a link's states with a worker run in.
+let scriptOf = (app: App, link: string) => `app-${app.eid}-preview-${link}`
+
+/** A branch of the app's store for a draft's preview (graph.ts
+ * `#branching`), made on its first preview. The store's first branch turns
+ * its versions on, and one still taking its live rows as their first versions
+ * makes none yet, which is said for the caller to try again. */
+export let branching = (env: Env, space: Space, app: App) => () =>
+  appStore(env.STORE, space, app, env).consume(
+    '/branches',
+    async (res) => {
+      if (res.status == 503) {
+        await res.body?.cancel()
+        throw refuse(
+          'unavailable',
+          `${space.slug}/${app.slug} is getting its live rows ready to ` +
+            'preview drafts on; try again in a minute',
+        )
+      }
+      if (!res.ok) throw new Error(`branch: ${res.status} ${await res.text()}`)
+      return (await res.json() as { branch: { id: number } }).branch.id
+    },
+    { method: 'POST', body: '{}' },
+    { 'x-yak-kernel': '1' },
+  )
+
+/** A discarded draft's preview let go of: its branch dropped, with
+ * everything its preview wrote, and its link's worker. */
+export let unbranched = async (
+  env: Env,
+  space: Space,
+  app: App,
+  d: AppDraft,
+) => {
+  if (d.branch != null) {
+    await appStore(env.STORE, space, app, env).consume(
+      `/branches/${d.branch}`,
+      async (res) => {
+        if (!res.ok && res.status != 404) {
+          throw new Error(`drop branch: ${res.status} ${await res.text()}`)
+        }
+        await res.body?.cancel()
+      },
+      { method: 'DELETE' },
+      { 'x-yak-kernel': '1' },
+    )
+  }
+  if (env.CF_WORKERS_TOKEN) {
+    await drop(env, scriptOf(app, linkFor(app, d)), true)
   }
 }
 
@@ -249,6 +306,7 @@ let built = async (
   space: Space,
   app: App,
   link: string,
+  branch: number | null,
   d: Draft,
   source: string,
   mount: string,
@@ -297,7 +355,7 @@ let built = async (
   let made = await compiled(
     ctx,
     space,
-    previewing(app, link, source, mount),
+    previewing(app, link, source, mount, branch),
     parsed.config,
     keys,
     files.files,
@@ -308,18 +366,8 @@ let built = async (
     (keys.includes(main) ? await carried(read, main) : null)
   let config = { ...parsed.config, main: made.worker?.main ?? main }
   let worker = modules && await digest(modules, config)
-  let candidate = previewing(app, link, source, mount, !!worker)
+  let candidate = previewing(app, link, source, mount, branch, !!worker)
   let store = appStore(ctx.env.STORE, space, candidate, ctx.env)
-  await post(
-    store,
-    '/expires',
-    {
-      at: Date.now() + AGE,
-      script: `app-${app.eid}-preview-${link}`,
-      context: { app: candidate, space },
-    },
-    who,
-  )
   if (modules && worker != was?.worker) {
     if (!ctx.env.CF_WORKERS_TOKEN) {
       throw refuse(
@@ -330,7 +378,9 @@ let built = async (
     await upload(ctx.env, candidate.script!, modules, config)
   }
   let changed = (path: string) => !prev || prev[path] != d.files[path]
-  if (VOCAB.some(changed)) {
+  // Only a branch is set up: a link with none shows what was released, whose
+  // words and rows are the live app's own.
+  if (branch != null && VOCAB.some(changed)) {
     let vocabFile = keys.includes('vocab.yml') ? 'vocab.yml' : 'vocab.json'
     let doc = stated(
       decode(await read(vocabFile)) ?? '{}',
@@ -343,15 +393,11 @@ let built = async (
       (await declarationOf(ctx.env, space, app)).vocab.$defs ?? {},
     )
     await post(store, '/vocab', doc, who, { [ACCEPTED]: JSON.stringify(held) })
-    await post(
-      store,
-      '/tools',
-      appTools(doc, appVocab(doc).comps, vocabFile),
-      who,
-    )
   }
+  // The rows a release would seed: only an app no release has seeded yet
+  // takes its seed files (tools.ts `willSeed`), and its draft's branch with it.
   let seeds = keys.filter((path) => seedy(path) && changed(path))
-  if (seeds.length) {
+  if (branch != null && !app.seeded && seeds.length) {
     let seed = loaded(
       await Promise.all(seeds.map(async (path) => ({
         path,
@@ -384,12 +430,13 @@ let following = async (
   who: Who,
 ) => {
   let d = await drafting(r2RawObjects(ctx.env.BLOBS), ctx.dir, app, of)
+  let branch = of?.branch ?? null
   let source = stateOf(space, app, link, d.files)
   let state = states.get(source)
   if (!state) {
     states.set(
       source,
-      state = built(ctx, space, app, link, d, source, mount, who),
+      state = built(ctx, space, app, link, branch, d, source, mount, who),
     )
     state.catch(() => states.delete(source))
     for (let old of states.keys()) {
@@ -397,7 +444,7 @@ let following = async (
       states.delete(old)
     }
   }
-  return previewing(app, link, source, mount, (await state).worker)
+  return previewing(app, link, source, mount, branch, (await state).worker)
 }
 
 // The last plan a page could have loaded. Writes can arrive before a page
@@ -454,25 +501,28 @@ let reached = async (
  * `previewed`). */
 export let watching =
   (env: Env, space: Space, app: App): Tell => async (news, before) => {
+    // A link's pages are on its draft's branch; a draft with none has none.
+    let { branch, ...told } = news
+    if (branch == null) return
     try {
-      news = await reached(env, space, app, news, before)
+      told = await reached(env, space, app, told, before)
     } catch (e) {
       caught(e, { request: 'draft entries', space: space.slug, app: app.slug })
     }
     try {
-      await appStore(
-        env.STORE,
-        space,
-        { ...app, store: `preview/${news.link}` },
-        env,
-      ).consume('/drafted', async (res) => {
-        if (!res.ok) throw new Error(`draft notice: ${res.status}`)
-        await res.arrayBuffer()
-      }, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ draft: news }),
-      }, { 'x-yak-kernel': '1' })
+      await appStore(env.STORE, space, { ...app, branch }, env).consume(
+        '/drafted',
+        async (res) => {
+          if (!res.ok) throw new Error(`draft notice: ${res.status}`)
+          await res.arrayBuffer()
+        },
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ draft: told }),
+        },
+        { 'x-yak-kernel': '1' },
+      )
     } catch (e) {
       caught(e, { request: 'draft notice', space: space.slug, app: app.slug })
     }
@@ -490,7 +540,14 @@ export let linkOf = async (
   of: AppDraft,
   screen?: string,
 ) => {
-  let draft = await previewed(ctx.dir, space, app, of, who)
+  let draft = await previewed(
+    ctx.dir,
+    space,
+    app,
+    of,
+    who,
+    branching(ctx.env, space, app),
+  )
   return {
     draft,
     link: linkFor(app, draft),
@@ -695,11 +752,11 @@ export let preview = async (ctx: Ctx, args: Args) => {
     cost: 0,
   }
   let follows =
-    `It shows draft ${draft.eid} on a test store of its own: an open page takes each write to that draft as it lands, a stylesheet in place and anything else by reloading, keeping its scroll and typed fields, and once app_deploy releases the draft shows what was released. Each draft of the app has its own link.`
+    `It shows draft ${draft.eid} over the app's live rows as they stood when it was first previewed, on a branch of its own: what its pages write stays there, and the released app never sees it. An open page takes each write to that draft as it lands, a stylesheet in place and anything else by reloading, keeping its scroll and typed fields, and once app_deploy releases the draft shows what was released. Each draft of the app has its own link and branch; discarding the draft drops its branch.`
   if (!screenshot) {
     return {
       text:
-        `Private draft preview: ${url}\n${follows} Its test data is separate from the released app; worker calls to external services still reach those services. app_preview with screenshot: true renders it on Cloudflare.`,
+        `Private draft preview: ${url}\n${follows} Worker calls to external services still reach those services. app_preview with screenshot: true renders it on Cloudflare.`,
       space,
       value,
     }
@@ -708,7 +765,7 @@ export let preview = async (ctx: Ctx, args: Args) => {
   Object.assign(value, shot.diagnostics, { cost: shot.cost })
   return {
     text: shot.said(
-      `Private draft preview: ${url}\n${follows} Test data is isolated; worker calls to external services still reach those services. app_preview with released: true opens the released app with its live data.`,
+      `Private draft preview: ${url}\n${follows} Worker calls to external services still reach those services. app_preview with released: true opens the released app.`,
     ),
     space,
     value,
@@ -753,14 +810,32 @@ let target = async (req: Request, env: Env) => {
     : drafts.find((d) => !d.by) ?? null
   let link = of ? linkFor(pair.app, of) : named
   let mount = url.pathname.slice(0, url.pathname.length - match[3].length)
-  let app = previewing(pair.app, link, pair.app.source ?? null, mount)
+  // An open draft previewed before drafts had branches takes one now, as the
+  // person whose link it is. One its store cannot make yet is made later, and
+  // its pages' doors wait for it (`fetch`).
+  if (of && of.branch == null) {
+    of = await previewed(
+      dir,
+      pair.space,
+      pair.app,
+      of,
+      { person: ticket.person, role: role!, via: ticket.app },
+      branching(env, pair.space, pair.app),
+    ).catch((e) => {
+      if (e instanceof CallError) return of
+      throw e
+    })
+  }
+  let app = previewing(
+    pair.app,
+    link,
+    pair.app.source ?? null,
+    mount,
+    of?.branch ?? null,
+  )
   // The ticket's writer is checked above on every callback. A directory
   // edit cannot revoke its scoped worker grant; current membership does.
-  let grant = await granted(
-    req,
-    env.SESSION_SECRET,
-    storeName(pair.space, app),
-  )
+  let grant = await granted(req, env.SESSION_SECRET, grantee(pair.space, app))
   if (bearing(req) && !grant) return null
   let who: Who = ticket.screen
     ? { person: ticket.person, role: 'viewer', via: ticket.screen }
@@ -792,6 +867,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   headers.delete('authorization')
   req = new Request(req, { headers })
   if (path.startsWith('/api/')) {
+    // An open draft's pages read and write its branch alone, never the
+    // live rows: until it has one, they wait.
+    if (found.of && found.of.branch == null) return no(503)
     let at = path.slice(4)
     if (
       ![

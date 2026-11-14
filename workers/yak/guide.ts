@@ -101,8 +101,8 @@ wrangler.jsonc, {"assets": {"directory": "dist"}}
    for a phone and width: 1280 for a desktop. It returns a screenshot image,
    console messages, JavaScript errors, WCAG 2.1 AA accessibility problems
    (rule, element and fix) and a private preview URL. Use path for another
-   page. Fix the reported problems before deploying and preview again. Its test store and
-   worker are separate from the released app. The browser runs on Cloudflare:
+   page. Fix the reported problems before deploying and preview again. Its writes stay on
+   the draft's branch of the app's rows, apart from the released app. The browser runs on Cloudflare:
    these connector tools need no local files, CLI, computer or browser.
 4. app_deploy — release them. app_files keeps its edits private until this
    runs; then they serve at once, as the version an error will name. It also

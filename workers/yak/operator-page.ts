@@ -1476,8 +1476,8 @@ let screens = (app: Making, operator: string) => {
       title: 'Draft',
       at: draft,
       note: live
-        ? `${operator}’s changes, not live yet, with the draft’s own test data.`
-        : `A draft with its own test data, changing as ${operator} works on it.`,
+        ? `${operator}’s changes, not live yet, over the live rows; what it writes stays in the draft.`
+        : `A draft over the live rows, changing as ${operator} works on it; what it writes stays in the draft.`,
     },
     live &&
     {

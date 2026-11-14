@@ -1,5 +1,5 @@
 import { equal, ok, test, throws } from '@yaks/testing'
-import { appStore, releaseOf } from './directory.ts'
+import { appStore, releaseOf, storeName } from './directory.ts'
 import { declarationOf, keepDeclaration } from './declaration.ts'
 import { handler } from './kernel.ts'
 import { fetch as preview, viewport } from './preview.ts'
@@ -129,7 +129,7 @@ test('preview installs vocabulary and seed data in a separate store before first
   equal(words, {})
 })
 
-test('preview writes stay in the preview store', async () => {
+test('preview writes stay on the draft’s branch, and the live app never sees them', async () => {
   let res = await request('api/apply', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -226,14 +226,19 @@ test('a store-scoped page keeps borrowed component homes out of its graph', asyn
   equal(graph.uses, {})
 })
 
-// A socket on a draft's link, as its store holds one: what it was sent.
-let heard = (link: string) => {
+// The store a draft's link pages are on: its branch of the app's store, as
+// this platform keeps one (app-lifecycle-probe.ts).
+let branchStore = async (link: string) => {
+  let d = (await dir.drafts(app)).find((d) => d.eid == link)!
+  return `${storeName(space, app)}@${d.branch}`
+}
+
+// A socket on a draft's link, as its branch holds one: what it was sent.
+let heard = async (link: string) => {
   let sent: {
     draft: { link: string; draft: string | null; files: unknown }
   }[] = []
-  let name = [...scenario.sockets.keys()].find((n) =>
-    n.includes(`preview/${link}`)
-  )!
+  let name = await branchStore(link)
   scenario.sockets.get(name)!.push({
     readyState: 1,
     send: (data: string) => void sent.push(JSON.parse(data)),
@@ -255,7 +260,7 @@ test('the link follows the draft: each write is told to its pages and served on 
   let at = (path = '') => kernel(new Request(new URL(path, link)), env)
   let page = await (await at()).text()
   ok(page.includes(`data-yak-draft="${draft}"`), page)
-  let sent = heard(draft)
+  let sent = await heard(draft)
   await write('style.css', 'body { color: tomato }')
   await write(
     'index.html',
@@ -287,7 +292,7 @@ test('a page drawn by @yaks/preact/host takes a write of its views module from t
   await write('views.js', views('Soup'))
   let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
   let link = String(out.value!.url)
-  let sent = heard(String(out.value!.draft))
+  let sent = await heard(String(out.value!.draft))
   let { root, document, free } = stage()
   Object.defineProperty(document, 'baseURI', {
     value: link,
@@ -352,22 +357,42 @@ test('a page drawn by @yaks/preact/host takes a write of its views module from t
   }
 })
 
-test("a seed edited in the draft rewrites the rows it seeded in the link's store, never adding them again", async () => {
-  let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
+test("an app no release has seeded takes its draft's seed on the branch, and an edited seed rewrites those rows, never adding them again", async () => {
+  let seed = (text: string) =>
+    run('app_files', {
+      app: 'sown',
+      files: [{
+        path: 'seed.json',
+        content: JSON.stringify([{
+          entity: { eid: '$note' },
+          draft_note: { text },
+        }]),
+      }],
+    })
+  await run('app_new', { slug: 'sown', title: 'Sown', access: 'public' })
+  await run('app_files', {
+    app: 'sown',
+    files: [
+      { path: 'index.html', content: '<html><body>Sown</body></html>' },
+      {
+        path: 'vocab.json',
+        content: JSON.stringify({
+          $defs: { draft_note: { properties: { text: { type: 'string' } } } },
+        }),
+      },
+    ],
+  })
+  await seed('seeded privately')
+  let out = await tools[0].run(ctx, { app: 'sown', screenshot: false })
   let link = String(out.value!.url)
   let notes = async () =>
     (await (await kernel(
       new Request(new URL('api/query?q=.draft_note', link)),
       env,
     )).json()).map((r: { draft_note: { text: string } }) => r.draft_note.text)
+  await kernel(new Request(link), env)
   equal(await notes(), ['seeded privately'])
-  await write(
-    'seed.json',
-    JSON.stringify([{
-      entity: { eid: '$note' },
-      draft_note: { text: 'seeded again' },
-    }]),
-  )
+  await seed('seeded again')
   await kernel(new Request(link), env)
   equal(await notes(), ['seeded again'])
 })
@@ -379,7 +404,7 @@ test("an open link rides through its draft's release: its pages hear it and see 
   let draft = String(out.value!.draft)
   let at = (path = '') => kernel(new Request(new URL(path, link)), env)
   ok((await (await at()).text()).includes('Before'))
-  let sent = heard(draft)
+  let sent = await heard(draft)
   await run('app_deploy', { app: 'draft' })
   app = (await dir.app(space, 'draft'))!
   equal((await dir.drafts(app)).map((d) => d.eid), [])
@@ -404,7 +429,7 @@ test("an open link rides through its draft's release: its pages hear it and see 
   )
 })
 
-test('two drafts of one app preview side by side, each at its own link on its own store', async () => {
+test('two drafts of one app preview side by side, each at its own link on its own branch', async () => {
   let one = await run('app_files', {
     app: 'draft',
     path: 'index.html',
@@ -435,10 +460,12 @@ test('two drafts of one app preview side by side, each at its own link on its ow
   ok(warm.url != plain.url)
   ok(warm.text.includes('Warm') && !warm.text.includes('Plain'))
   ok(plain.text.includes('Plain') && !plain.text.includes('Warm'))
-  let stores = [...scenario.sockets.keys()].join(' ')
-  for (let d of [one.value!.draft, two.value!.draft]) {
-    ok(stores.includes(`preview/${d}`), stores)
-  }
+  let stores = [...scenario.sockets.keys()]
+  let branches = await Promise.all(
+    [one.value!.draft, two.value!.draft].map((d) => branchStore(String(d))),
+  )
+  ok(branches[0] != branches[1], branches.join(' '))
+  for (let b of branches) ok(stores.includes(b), stores.join(' '))
 })
 
 // The platform declares `event` (@yaks/events). An app that declared it first

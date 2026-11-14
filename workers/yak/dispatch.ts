@@ -567,6 +567,14 @@ export let script = (
 // that never deployed a worker. A throw is the app's code falling over, and
 // what that means is the callers' — it ends the request for the app that owns
 // the path (`ran`) and is skipped for the home app's router (`ahead`).
+/** What a worker's grant names: its app's store, or for a draft's preview
+ * (preview.ts), the branch of it the preview is on, so draft code holds no
+ * grant the live app's doors take. */
+export let grantee = (space: Space, app: App) =>
+  app.branch == null
+    ? storeName(space, app)
+    : `${storeName(space, app)}@${app.branch}`
+
 let called = async (
   env: Pick<Env, 'DISPATCH' | 'SESSION_SECRET'> & Partial<Pick<Env, 'STORE'>>,
   space: Space,
@@ -586,7 +594,7 @@ let called = async (
   if (env.STORE && who.person !== app.eid) {
     who = await browsersOf({ STORE: env.STORE }, who)
   }
-  let store = storeName(space, app)
+  let store = grantee(space, app)
   let worker
   try {
     // Declared commands may do bounded work beyond a page's 50 ms budget.

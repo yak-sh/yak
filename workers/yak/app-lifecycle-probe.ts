@@ -2,6 +2,7 @@ import { kvStorage } from './binding-probe.ts'
 import { servingAuthority } from './app-serving-authority.ts'
 import { copyOf, servingDirectory } from './directory-copy.ts'
 import { fetch as directoryFetch } from './directory.ts'
+import { BRANCH } from './door.ts'
 import type { Driver } from '@yaks/sql'
 // App graph lifecycle over RAM rows, or private SQLite for storage behavior. The production declaration
 // selector owns staging and release changes; this host supplies transactions,
@@ -490,14 +491,38 @@ export let lifecycleStores = (
     disposals.add(() => wire?.subs.stop())
     return { fetch }
   }
+  let open = (key: string) => {
+    let found = held.get(key)
+    if (!found) held.set(key, found = store(key))
+    return found
+  }
+  // A store's branches (graph.ts `#branching`, `#onBranch`), each a store of
+  // its own beside it: this host keeps no versions, so a branch starts empty
+  // rather than from the rows as of its fork.
+  let made = new Map<string, number>()
+  let branched = (key: string) => ({
+    fetch: async (request: Request) => {
+      let path = new URL(request.url).pathname
+      let kernel = request.headers.get('x-yak-kernel') == '1'
+      let on = request.headers.get(BRANCH)
+      if (path == '/branches' && kernel && request.method == 'POST') {
+        let id = (made.get(key) ?? 0) + 1
+        made.set(key, id)
+        return json({ branch: { id, fork: 0 } }, 201)
+      }
+      let [, dropped] = /^\/branches\/(\d+)$/.exec(path) ?? []
+      if (dropped && kernel && request.method == 'DELETE') {
+        held.delete(`${key}@${dropped}`)
+        return new Response(null, { status: 204 })
+      }
+      return await open(on == null ? key : `${key}@${on}`).fetch(request)
+    },
+  })
   env.STORE = {
     idFromName: (name) => name,
     get: (name, options) => {
       if (String(name) == PLATFORM_OBJECT) return namespace.get(name, options)
-      let key = String(name)
-      let found = held.get(key)
-      if (!found) held.set(key, found = store(key))
-      return found
+      return branched(String(name))
     },
   }
   return {

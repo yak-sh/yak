@@ -95,14 +95,17 @@ never refuse a preview or release. Automated checks do not prove conformance;
 check keyboard use, reading order and content as well.
 
 The URL is a private bearer link to one draft: `draft` names it, else this
-conversation's own, else your one open draft. Each draft has a link and a test
-store of its own, so several drafts preview side by side. Anyone holding it can
-exercise the preview as its author while that author remains a writer; keep it
-private. Draft files, vocabulary, seed data and worker run with the link's own
-test store, kept for thirty days after the draft last changed. Preview edits do
-not change released app data, and do not become released data later. External
-D1, R2, Vectorize and Durable Object bindings are unavailable in a draft
-preview.
+conversation's own, else your one open draft. Each draft has a link and a branch
+of the app's store of its own, so several drafts preview side by side. Anyone
+holding it can exercise the preview as its author while that author remains a
+writer; keep it private. The preview reads the app's live rows as they stood
+when the draft was first previewed, in the draft's vocabulary, and what its
+pages write stays on the draft's branch: the released app never sees it.
+Discarding the draft drops its branch. A draft that changes a word in a way
+`app_deploy` would refuse is refused in its preview the same way. An app no
+release has seeded yet takes its draft's seed files on the branch, as its first
+release would. External D1, R2, Vectorize and Durable Object bindings are
+unavailable in a draft preview.
 
 ### A preview that follows the draft
 
@@ -113,8 +116,8 @@ shows there as it lands, without calling `app_preview` again:
 - any other write reloads the page, keeping its scroll position and what was
   typed into its fields;
 - a change to `worker.js`, `vocab.json` or a seed file sets up the preview's
-  worker or test store again first. A seed file applied again rewrites the rows
-  it seeded rather than adding new ones;
+  worker or branch again first. A seed file applied again rewrites the rows it
+  seeded rather than adding new ones;
 - an `app_deploy` of the draft reloads the page to show what was released, which
   the link shows from then on.
 
@@ -154,7 +157,7 @@ or a module that fails to import or draw reloads the page as above. The
 [@yaks/preact README](https://jsr.io/@yaks/preact) has the details.
 
 Calls a draft worker makes to external services still reach those services; the
-separate test store isolates app data, not external side effects.
+draft's branch keeps its writes from the app's data, not external side effects.
 
 Browser time is estimated at $0.09 per hour ($0.000025 per second), charged to
 the space's monthly budget. Each reply reports its browser cost; compilation,

@@ -78,6 +78,7 @@ let vocab = loadVocab({
         via: 'string',
         at: 'string',
         previewed: 'string',
+        branch: 'number',
       },
       written: {
         app: 'string',
@@ -145,6 +146,7 @@ let made = () => {
             via: null,
             at: null,
             previewed: null,
+            branch: null,
             ...(b.app_draft as object),
           }) as AppDraft
         )
@@ -308,6 +310,7 @@ let made = () => {
         app(),
         chosen(app(), await drafts(), who)!,
         who,
+        () => Promise.resolve(7),
       ),
     // The app as it stood before drafts were rows: one draft, `app.draft`,
     // whose writes name it.
@@ -379,6 +382,7 @@ test('a write to a draft once previewed tells its files and shas once they land 
     app: APP,
     link,
     draft: link,
+    branch: 7,
     files: [
       { path: 'a.txt', sha: sha('one') },
       { path: 'b.txt', sha: sha('two') },
@@ -654,7 +658,15 @@ test('the one draft an app held before drafts were rows is an open draft nobody 
 })
 
 let mine = (eid: string, by: string | null, via: string | null) =>
-  ({ eid, base: 1, by, via, at: null, previewed: null }) as AppDraft
+  ({
+    eid,
+    base: 1,
+    by,
+    via,
+    at: null,
+    previewed: null,
+    branch: null,
+  }) as AppDraft
 let APPROW = { eid: APP, slug: 'notes' } as App
 let BEN = 'b0000000-0000-4000-8000-0000000000be'
 test('a release takes the draft named, else the conversation’s own, else the person’s one open draft, and asks when there are several', () => {

@@ -96,6 +96,9 @@ export type AppDraft = {
   /** When its preview link was first asked for; none where nobody has
    * previewed it, so a write to it tells no preview's pages. */
   previewed: string | null
+  /** The branch of the app's store its preview reads and writes on (graph.ts
+   * `#onBranch`), made when it was first previewed; none before. */
+  branch: number | null
   legacy?: true
 }
 
@@ -153,6 +156,7 @@ export let withLegacy = (app: App, rows: AppDraft[]): AppDraft[] =>
       via: null,
       at: null,
       previewed: null,
+      branch: null,
       legacy: true,
     }]
     : rows
@@ -308,9 +312,15 @@ export let opening = (
   app: App,
   d: AppDraft,
   fresh: boolean,
-  extra: Partial<Pick<AppDraft, 'previewed'>> = {},
-) =>
-  fresh || d.legacy
+  extra: Partial<Pick<AppDraft, 'previewed' | 'branch'>> = {},
+) => {
+  let previewed = extra.previewed ?? d.previewed
+  let branch = extra.branch ?? d.branch
+  let marks = {
+    ...extra.previewed ? { previewed: extra.previewed } : {},
+    ...extra.branch != null ? { branch: extra.branch } : {},
+  }
+  return fresh || d.legacy
     ? {
       entity: { eid: d.eid },
       app_draft: {
@@ -319,17 +329,17 @@ export let opening = (
         ...d.by ? { by: d.by } : {},
         ...d.via ? { via: d.via } : {},
         ...d.at ? { at: d.at } : {},
-        ...extra.previewed ?? d.previewed
-          ? { previewed: extra.previewed ?? d.previewed }
-          : {},
+        ...previewed ? { previewed } : {},
+        ...branch != null ? { branch } : {},
       },
       $was: { app_draft: { app: token(null) } },
     }
     : {
       entity: { eid: d.eid },
-      ...extra.previewed ? { app_draft: { previewed: extra.previewed } } : {},
+      ...Object.keys(marks).length ? { app_draft: marks } : {},
       $was: { app_draft: { app: token(app.eid) } },
     }
+}
 
 /** Writes newest first. */
 export let newest = (rows: Written[]) =>
@@ -434,6 +444,8 @@ export type Drafted = {
   app: string
   link: string
   draft: string | null
+  /** the branch the link's pages are on, none where its draft has none */
+  branch?: number | null
   files: { path: string; sha: string | null; entries?: string[] }[]
   at: string
 }
@@ -444,22 +456,27 @@ export type Drafted = {
 export type Tell = (news: Drafted, before?: Draft) => Promise<void>
 
 /** A draft marked as previewed the first time its link is asked for
- * (preview.ts), so its writes are told to the link's pages from then on; a
- * draft nobody previewed costs a write nothing more. Answers the draft as it
- * stands after. */
+ * (preview.ts), so its writes are told to the link's pages from then on, and
+ * given the branch of the app's store its preview reads and writes on, which
+ * `branching` makes; a draft nobody previewed costs a write nothing more.
+ * Answers the draft as it stands after. */
 export let previewed = async (
   dir: Directory,
   space: Space,
   app: App,
   d: AppDraft,
   who: Who,
+  branching: () => Promise<number>,
 ): Promise<AppDraft> => {
   let row = app
   let now = d
+  let made: number | null = null
   for (let n = 0; n < 5; n++) {
-    if (now.previewed || (!now.by && row.followed)) return now
+    let told = !!now.previewed || (!now.by && !!row.followed)
+    if (told && now.branch != null) return now
     row = await waiting(dir, space, row, who)
     let at = new Date().toISOString()
+    let branch = now.branch ?? (made ??= await branching())
     try {
       let { app: pointer, was } = unpointed(now)
       await dir.stamp({
@@ -467,10 +484,18 @@ export let previewed = async (
           ...pointer
             ? [{ entity: { eid: row.eid }, app: pointer, $was: { app: was } }]
             : [],
-          opening(row, now, false, { previewed: at }),
+          opening(row, now, false, {
+            ...told ? {} : { previewed: at },
+            branch,
+          }),
         ],
       }, vouched(who))
-      return { ...now, previewed: at, legacy: undefined }
+      return {
+        ...now,
+        previewed: told ? now.previewed : at,
+        branch,
+        legacy: undefined,
+      }
     } catch (e) {
       if (!(e instanceof Stale)) throw e
       let found = (await draftsOf(dir, row)).find((o) => o.eid == d.eid)
@@ -599,6 +624,7 @@ export let modifying = async <T>(
         via,
         at: null,
         previewed: null,
+        branch: null,
       }
       let id = d.eid
       // A retry has reread the winner. Its rows must sort after that winner
@@ -665,6 +691,7 @@ export let modifying = async <T>(
           app: row.eid,
           link: linkFor(row, d),
           draft: id,
+          branch: d.branch,
           files: todo.map((c) => ({ path: c.path, sha: c.sha ?? null })),
           at,
         }, draft)

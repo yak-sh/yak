@@ -992,6 +992,10 @@
           "type": "string",
           "format": "date-time",
           "description": "when its preview link was first asked for, after which each write to it is told to that link's pages; none where nobody has previewed it"
+        },
+        "branch": {
+          "type": "number",
+          "description": "the branch of the app's store its preview reads and writes on: the live rows as of the fork under the preview's own writes; made when it was first previewed, none before"
         }
       }
     },
