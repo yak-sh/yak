@@ -919,7 +919,15 @@ is over passes that knock to nobody: the operator is not asked to relay it.
 A writer is never knocked about its own write, and its subagents write for it: a
 subagent runs inside its parent's process and hands back what it did as the
 result of the parent's own call, so a change written through one knocks no
-session up its line (`writers`).
+session up its line (`writers`). A helper writes in its operator's place
+([an operator's helper](#an-operators-helper)), so what it writes knocks neither
+that operator nor the project it helps or one filed under it: such a knock would
+be routine, and start the next helper on the work the first one just did.
+
+A mark that names nobody who made it, no `by` and no `via`, records an act in
+another store at that store's time: @yaks/heal closes a bug's task with the
+tracker's resolution or archival. That store tells of the act (the bug's
+letters, and its fixer's own report), so the mark knocks nobody.
 
 One event is one knock. A managed run that ends leaves its whole report as a
 comment on its task that knocks whoever started it, or the nearest session up

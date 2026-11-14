@@ -1096,8 +1096,8 @@ for (let between of [true, false]) {
   }, stop.signal)
   let [completed] = [comp(await task(), 'completed')]
   f.close()
-  test(`a bug resolved ${between ? 'between passes' : 'while no follower ran'} completes its work`, () => {
-    equal(completed?.at, '2026-10-02T00:00:02Z')
+  test(`a bug resolved ${between ? 'between passes' : 'while no follower ran'} completes its work at its time, naming nobody`, () => {
+    equal(completed, { at: '2026-10-02T00:00:02Z' })
   })
 }
 

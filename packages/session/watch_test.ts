@@ -141,6 +141,17 @@ test("a filer that is over is told through its project's operator", async () => 
   equal(await o.heard('operator'), [`${o.id} completed by Jeff: ${TITLE}`])
 })
 
+test("a mark naming nobody who made it, another store's act at its time, knocks nobody", async () => {
+  let o = await office('gone', [{ entity: { eid: 'heal' }, process: {} }])
+  await o.write([{
+    entity: { eid: 't' },
+    completed: { at: '2026-11-14T16:06:20.796Z' },
+  }], { by: 'taskmaster', via: 'heal' })
+  let [t] = await o.g.get(['t'])
+  equal(t.completed, { at: '2026-11-14T16:06:20.796Z' })
+  equal(await o.g.read('.knock'), [])
+})
+
 test('a session whose own words mention the task hears it; one that only read it does not', async () => {
   let o = await office()
   await o.g.apply([
@@ -269,6 +280,31 @@ test("a subagent's comment knocks no session up its line", async () => {
   })
   equal(await o.heard('worker'), [])
   equal((await o.heard('operator')).length, 1)
+})
+
+test("a helper's comment knocks no operator it writes for, and still the filer at work", async () => {
+  let o = await office('worker', [
+    { ...agent('aide'), helping: { project: 'p' } },
+    { entity: { eid: 'sub' }, project: {}, filed: { project: 'p' } },
+    { entity: { eid: 'sub-hand' }, persona: { home: 'sub' } },
+    agent('left', { persona: 'sub-hand', ended: true }),
+  ])
+  await o.g.apply([
+    {
+      entity: { eid: 's1' },
+      subscription: { actor: 'left', target: 't', mode: 'watch' },
+    },
+    {
+      entity: { eid: 's2' },
+      subscription: { actor: 'sub', target: 't', mode: 'watch' },
+    },
+  ], { trusted: true })
+  await o.write(comment('c1', 'fixer started on it'), {
+    by: 'taskmaster',
+    via: 'aide',
+  })
+  equal(await o.heard('operator'), [])
+  equal((await o.heard('worker')).length, 1)
 })
 
 let SPAWN = toolEid('session_spawn')

@@ -131,19 +131,23 @@ leaves the bug as it was. A completed task resolves nothing: a resolution needs
 its explanation, which only the resolver can give, so its bug stays open until
 someone resolves it explained. Archiving a bug is likewise an act on the bug,
 with its reason (`bug_archive`). A tracker resolution completes its task;
-archival cancels it, carrying its reason. Only open bugs file tasks or request
-fixers. A running fixer that holds a bug's task marks the bug `taken{task}` in
-its tracker, as soon as heal starts it and again on a replay that finds no mark
-for the bug's current opening, so the bug's letter thread hears a fixer started.
-Terminal native sessions do not mark bugs taken. [Tracker](../tracker/README.md)
-owns these marks: resolution allows a later regression to reopen the bug;
-archival stops its notifications. A regression newer than completion reopens its
-task immediately, even while fixer starts are paused. Each new bug and each
-reopening writes one `knock{target}` for the home project, in the write that
-files or reopens the task. The task is its receipt, so a replay, a restart, a
-second tracker holding the same bug or a moved stamp sends no second knock; a
-regression after the next completion sends a new one. A reopening's knock names
-the hit that reopened it, from `regressed{message,
+archival cancels it, carrying its reason. The mark takes the tracker's time and
+names nobody who made it, so it starts no one
+([@yaks/session](../session/README.md)): the bug's letters and its fixer's
+report tell of it, and a resolution is not a failure. Only open bugs file tasks
+or request fixers. A running fixer that holds a bug's task marks the bug
+`taken{task}` in its tracker, as soon as heal starts it and again on a replay
+that finds no mark for the bug's current opening, so the bug's letter thread
+hears a fixer started. Terminal native sessions do not mark bugs taken.
+[Tracker](../tracker/README.md) owns these marks: resolution allows a later
+regression to reopen the bug; archival stops its notifications. A regression
+newer than completion reopens its task immediately, even while fixer starts are
+paused. Each new bug and each reopening writes one `knock{target}` for the home
+project, in the write that files or reopens the task. The task is its receipt,
+so a replay, a restart, a second tracker holding the same bug or a moved stamp
+sends no second knock; a regression after the next completion sends a new one. A
+reopening's knock names the hit that reopened it, from
+`regressed{message,
 commit}`.
 
 The follower writes each mark through the same client's `/apply` door, with

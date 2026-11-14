@@ -272,6 +272,9 @@ export let follow = (
           if (close) {
             let source = close == 'cancelled' ? 'archived' : 'resolved'
             closed = true
+            // At the tracker's time, so the mark names nobody who made it:
+            // the tracker tells of the act, and no watcher is knocked for it
+            // (@yaks/session `knocks`).
             await g.apply([{
               entity: task.entity,
               [close]: {

@@ -36,7 +36,15 @@
 // Nobody is knocked about their own write, and a session's subagents write
 // for it: a subagent runs inside its parent's process and hands what it did
 // back as the result of the parent's own call, so a knock about its comment
-// would tell the parent what it just read (`writers`).
+// would tell the parent what it just read (`writers`). A helper writes in its
+// operator's place (./help.ts), so its operator, and the project it helps, are
+// not knocked about what it wrote: that knock would be routine and start the
+// next helper on the same work (`standing`).
+//
+// A mark that names nobody who made it, no `by` and no `via`, records an act in
+// another store at that store's time, as @yaks/heal closes a bug's task when
+// the tracker resolves or archives the bug. That store tells of the act, so the
+// mark knocks nobody.
 //
 // One event is one knock. A managed run that ends leaves its whole report as
 // a comment on its task that knocks whoever started it (`reported`, which
@@ -52,6 +60,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { HUMAN, human, mentions } from '@yaks/id'
 import { CLAIM, SESSION } from './comp.ts'
 import { ended, type Projects, projects, taken } from './listen.ts'
+import { HELPING } from './routine.ts'
 
 type G = Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>
 // A reader that also resolves the ids a call was given (`T-12`) to eids.
@@ -303,6 +312,20 @@ export let writers = async (g: G, via: Eid): Promise<Set<Eid>> => {
   return own
 }
 
+/** Whom a write through `via` is the own write of because `via` helps them
+ * (./help.ts): a helper takes its operator's routine in its place, so what it
+ * writes is that operator's own. The project it helps, each project filed
+ * under it, and that project's operator hear nothing of it; a knock to any of
+ * them would be routine, and start the next helper on the first one's work. */
+let standing = async (g: G, via: Eid): Promise<(target: Eid) => boolean> => {
+  let [s] = via && g.vocab.comp(HELPING) ? await g.get([via], [HELPING]) : []
+  let helped = str(comp(s, HELPING).project)
+  if (!helped) return () => false
+  let tree = await projects(g)
+  let operator = await operatorOf(g, helped)
+  return (t) => t == operator || above(tree, t).includes(helped)
+}
+
 // The task an id a call was given names, or none where it names nothing now.
 let named = async (g: Addressing, id: string): Promise<Eid | ''> => {
   if (!id) return ''
@@ -392,6 +415,10 @@ let marked = (g: G, task: Bundle): Change | undefined => {
     : undefined
   if (!mark) return
   let c = comp(task, mark.name)
+  // A mark naming nobody who made it records an act in another store, at that
+  // store's time: @yaks/heal closes a bug's task with the tracker's
+  // resolution or archival. That store tells it, so it knocks nobody here.
+  if (!str(c.by) && !str(c.via)) return
   let reason = mark.name == 'cancelled' && str(c.reason)
     ? ` (${fold(str(c.reason))})`
     : ''
@@ -492,8 +519,9 @@ export let knocks = async (
   ])
   watching = watching.filter((w) => !own.has(w))
   let worked = !!row.comment && (await taken(g, [eid])).has(eid)
+  let stands = await standing(g, change.via)
   let to = (await targets(g, watching, muting, !worked, change.by))
-    .filter((t) => !knows.has(t))
+    .filter((t) => !knows.has(t) && !stands(t))
   // A comment reaches a person's assistant only when it answers them.
   if (row.comment && to.length) {
     let stood = new Map(
