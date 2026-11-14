@@ -362,6 +362,39 @@ let named = (
   return out
 }
 
+/**
+ * The rows of `comp` that table `name` holds where `where` matches, each read
+ * as a whole read reads its component (references as eids, JSON parsed,
+ * booleans as booleans), by its owner's id. The table stands where the
+ * component's would, aliased by its name: its table of versions
+ * (./history.ts) does, so any version reads as the live row it was.
+ */
+export let rowsOf = (
+  driver: Driver,
+  vocab: Vocab,
+  comp: string,
+  name: string,
+  where: Expr,
+  opts: BindOpts = {},
+): Map<number, Comp> => {
+  let p = project(vocab, comp, opts.derived, opts.backed, opts.tags, true)
+  let rows = driver.query(select({
+    with: tagging(p, opts.tags),
+    cols: [as(col('entity', comp), '@id'), ...p.sel],
+    from: table(name, comp),
+    joins: p.joins,
+    where,
+  }))
+  let names = naming(
+    driver,
+    rows.flatMap((r) => p.refs?.map((x) => r[x]) ?? []),
+  )
+  return new Map(rows.map(({ '@id': id, ...value }) => [
+    Number(id),
+    decoded(vocab, comp, named(value, p.refs, names)) as Comp,
+  ]))
+}
+
 // One component's read, whatever names its owners: `lead` is what is selected
 // before the component's own columns, `owner` the condition on `o`, the
 // owner's spine row.

@@ -6,6 +6,7 @@ import { equal, test } from '@yaks/testing'
 import { answerOf, toolEid } from '@yaks/tools'
 import { type Bundle, mint } from '@yaks/graph'
 import type { Facets } from '@yaks/host'
+import type { Merged } from '@yaks/journal'
 import { facet } from './words.ts'
 import { compose } from './host.ts'
 
@@ -62,9 +63,9 @@ let titles = (b: Bundle[]) => b.map((x) => (x.doc as { title: string }).title)
 let seen = await (async () => {
   try {
     await h.runner.ensure()
-    await ask('graph_apply', {
+    let kept = (await ask('graph_apply', {
       bundles: [{ entity: { eid: '$kept' }, doc: { title: 'kept' } }],
-    })
+    })).answer.find((b) => b.doc)!.entity.eid
     let made = value((await ask('branch_new')).answer) as { id: number }
     let branch = made.id
     let wrote = await ask('graph_apply', {
@@ -86,9 +87,41 @@ let seen = await (async () => {
       listed: (value((await ask('branch_list')).answer) as { id: number }[])
         .map((b) => b.id),
     }
+    // Both sides change the kept page's title: a conflict, and nothing
+    // merges until it is picked.
+    let retitle = (title: string, on?: number) =>
+      ask('graph_apply', {
+        ...on ? { branch: on } : {},
+        bundles: [{ entity: { eid: kept }, doc: { title } }],
+      })
+    await retitle('kept, drafted', branch)
+    await retitle('kept, changed')
+    let held = value(
+      (await ask('branch_merge', { id: branch })).answer,
+    ) as Merged
+    let mainHeld = titles((await ask('graph_query', { q: '.doc' })).answer)
+    let pick = held.conflicts.map(({ eid, comp, prop }) => ({
+      eid,
+      comp,
+      prop,
+      take: 'branch',
+    }))
+    let done = value(
+      (await ask('branch_merge', { id: branch, pick })).answer,
+    ) as Merged
+    let merging = {
+      conflicts: held.conflicts.map((
+        c,
+      ) => [c.comp, c.prop, c.fork, c.branch, c.main]),
+      held: mainHeld,
+      left: done.conflicts,
+      merged: titles((await ask('graph_query', { q: '.doc' })).answer).sort(),
+      observed: [...observed].sort(),
+    }
     await ask('branch_delete', { id: branch })
     return {
       ...result,
+      merging,
       left: value((await ask('branch_list')).answer),
       refused: !!(await ask('graph_query', { q: '.doc', branch })).answer
         .find((b) => b.refusal),
@@ -108,6 +141,13 @@ test('a branch is made, written, read and deleted through the tools, main untouc
     recorded: true,
     observed: ['kept'],
     listed: [1],
+    merging: {
+      conflicts: [['doc', 'title', 'kept', 'kept, drafted', 'kept, changed']],
+      held: ['kept, changed'],
+      left: [],
+      merged: ['draft', 'kept, drafted'],
+      observed: ['draft', 'kept', 'kept, changed', 'kept, drafted'],
+    },
     left: [],
     refused: true,
     made: 'number',

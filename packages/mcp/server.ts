@@ -115,7 +115,11 @@ export type Options = {
    * a command not writing to a terminal prints. The HTTP door sets it only
    * for a request that asks (./mount.ts), so every other client reads the
    * reply it always did. */
-  text?: (answer: Bundle[], tool: Tool) => Promise<string>
+  text?: (
+    answer: Bundle[],
+    tool: Tool,
+    on?: { branch?: number },
+  ) => Promise<string>
   /** a tool's answer as its reader reads it, before it is sent as data or
    * drawn as text: the host's, which draws each eid in its prose as an id or
    * a short handle (@yaks/tools/readable). Absent, the answer is sent as the
@@ -269,6 +273,10 @@ export let instructed = async (
 }
 
 export { answerSchema, answerWith } from '@yaks/tools/schema'
+
+// The branch a call names, which its answer is drawn as it holds.
+let branchOf = (args: Record<string, unknown>) =>
+  typeof args.branch == 'number' ? { branch: args.branch } : undefined
 
 // The reply, built twice over from the bundles the tool returned: the text
 // they carry (or the bundles themselves, as JSON) for a client that reads
@@ -637,7 +645,10 @@ export let server = (
       if (opts.text) {
         out = {
           ...out,
-          content: [{ type: 'text', text: await opts.text(answer, t) }],
+          content: [{
+            type: 'text',
+            text: await opts.text(answer, t, branchOf(input)),
+          }],
         }
       }
     } catch (err) {

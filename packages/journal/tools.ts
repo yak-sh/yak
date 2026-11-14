@@ -2,7 +2,9 @@
 // the `history` declaration in ./vocab.json, because the log answers one
 // question people actually ask: what happened to this, and who did it. And
 // the graph's branches, which its versions make possible (D-395): made,
-// listed and deleted here, read and written through the graph's own tools.
+// listed, merged and deleted here, read and written through the graph's own
+// tools. A merge with a conflict left writes nothing and answers the
+// conflicts, each side by side, for a person to pick (./merge.ts).
 //
 // The answer is bundles, and each bundle is the transaction: `applied()`
 // rebuilds what a write committed out of the log's own record, so a history row
@@ -16,13 +18,15 @@
 // a write, and one a server has to decide it offers — and a feed is a cursor a
 // consumer holds, not a question anybody types.
 
-import type { Bundle, Comp, Graph } from '@yaks/graph'
+import type { Bundle, Comp, Graph, GraphBranches } from '@yaks/graph'
 import type { Branch } from '@yaks/graph/storage'
 import { argsOf } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
 import type { Batch } from './batch.ts'
 import { applied } from './undo.ts'
+import { type Choice, merge } from './merge.ts'
+import { actorOf } from '@yaks/graph/provenance'
 import { type Bound, logFor } from './graph.ts'
 
 // Which transaction it was: where it sits in the log, when it committed, whom
@@ -51,10 +55,17 @@ let branches = (graph: Graph) => {
 }
 
 // A branch tool's answer: what it says about the branches, as data.
-let told = (call: Bundle, value: Branch | Branch[]): Bundle[] => [{
+let told = (call: Bundle, value: unknown): Bundle[] => [{
   entity: { eid: '$said' },
   output: { source: call.entity.eid, value },
 }]
+
+// The branch `id`, or the refusal that names it.
+let known = async (all: GraphBranches, id: number): Promise<Branch> => {
+  let b = (await all.list()).find((b) => b.id == id)
+  if (!b) throw new Refused(`no branch ${id}`)
+  return b
+}
 
 /** The functions behind the tools ./vocab.json declares — read over this
  * host's storage, which is why this export is a factory. */
@@ -75,10 +86,16 @@ export let runs = (host: Bound): Runs => {
     branch_delete: async (call, graph) => {
       let id = Number(argsOf(call).id)
       let all = branches(graph)
-      let gone = (await all.list()).find((b) => b.id == id)
-      if (!gone) throw new Refused(`no branch ${id}`)
+      let gone = await known(all, id)
       await all.drop(id)
       return told(call, gone)
+    },
+    branch_merge: async (call, graph) => {
+      let args = argsOf(call)
+      let id = Number(args.id)
+      await known(branches(graph), id)
+      let picks = (args.pick ?? []) as Choice[]
+      return told(call, await merge(graph)(id, picks, actorOf([call])))
     },
   }
 }

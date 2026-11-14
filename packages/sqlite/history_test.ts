@@ -72,6 +72,7 @@ let g = graph({
     make: async () => await store.branches!.make(),
     list: async () => await store.branches!.list(),
     drop: async (id) => await store.branches!.drop(id),
+    changes: async (id) => await store.branches!.changes(id),
     on: (id) => {
       let mode = branchOf(d, id)
       if (!mode) return Promise.reject(new Error(`no branch ${id}`))
@@ -305,3 +306,32 @@ test('a dropped branch’s id is never given again', async () => {
   await g.branches!.drop(next.id)
   ok((await g.branches!.make()).id > next.id)
 })
+
+// What a branch changed, as its store reads it: each entity's component it
+// wrote, at the fork, on the branch and on main now.
+await g.apply([
+  { entity: { eid: 'c1' }, page: { title: 'a', n: 1 } },
+  { entity: { eid: 'c2' }, page: { title: 'gone' } },
+])
+let since = await g.branches!.make()
+let onIt = { branch: since.id }
+await g.apply([{ entity: { eid: 'c1' }, page: { title: 'b' } }], onIt)
+await g.apply([{ entity: { eid: 'c1' }, lease: { holder: 'x' } }], onIt)
+await g.apply([{ entity: { eid: 'c2' }, $delete: true }], onIt)
+await g.apply([{ entity: { eid: 'c3' }, pinned: {} }], onIt)
+await g.apply([{ entity: { eid: 'c1' }, page: { n: 2 } }])
+let changed = (await g.branches!.changes(since.id))
+  .map((c) => [c.eid, c.comp, c.fork, c.branch, c.main])
+  .sort((a, b) => String(a).localeCompare(String(b)))
+await g.branches!.drop(since.id)
+
+test('a branch’s changes are each component it wrote, at the fork, on it and on main now', () =>
+  equal(changed, [
+    ['c1', 'page', { title: 'a', n: 1 }, { title: 'b', n: 1 }, {
+      title: 'a',
+      n: 2,
+    }],
+    ['c2', 'page', { title: 'gone' }, null, { title: 'gone' }],
+    ['c2', 'tombstone', null, {}, null],
+    ['c3', 'pinned', null, {}, null],
+  ]))

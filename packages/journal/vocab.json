@@ -194,6 +194,56 @@
       "positional": [
         "id"
       ]
+    },
+    "branch_merge": {
+      "tool": true,
+      "noun": "branch",
+      "verb": "merge",
+      "title": "Merge a branch into main",
+      "description": "Write what a branch changed since its fork to main as one batch. Each property merges against its value at the fork: one only the branch changed takes the branch's value, one only main changed keeps main's. A property both changed to different values is a conflict, and nothing merges by itself: while any conflict has no pick, nothing is written, and the answer lists the conflicts, each with its value at the fork, on the branch and on main side by side. Pass a pick for each to merge. A removed component or deleted entity against the other side's edit is a conflict too. Answers the conflicts left and the bundles written; the branch is left as it is.",
+      "input": {
+        "id": {
+          "type": "integer",
+          "description": "The branch's id, as branch_new and branch_list give it."
+        },
+        "pick": {
+          "type": "array",
+          "description": "Which value each conflict takes: its eid, comp and prop as the conflicts list them, and take, branch or main.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "eid": {
+                "type": "string"
+              },
+              "comp": {
+                "type": "string"
+              },
+              "prop": {
+                "type": "string"
+              },
+              "take": {
+                "type": "string",
+                "enum": [
+                  "branch",
+                  "main"
+                ]
+              }
+            },
+            "required": [
+              "eid",
+              "comp",
+              "prop",
+              "take"
+            ]
+          }
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "positional": [
+        "id"
+      ]
     }
   },
   "kinds": {

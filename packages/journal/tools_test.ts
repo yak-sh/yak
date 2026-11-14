@@ -47,6 +47,7 @@ test('the journal declares its tools and implements them', () => {
       ['branch_new', 'branch', 'new'],
       ['branch_list', 'branch', 'list'],
       ['branch_delete', 'branch', 'delete'],
+      ['branch_merge', 'branch', 'merge'],
     ],
   )
 })

@@ -121,7 +121,7 @@ export type Typed = (comp: string, column: string) => string | undefined
  * live table declares them (`typed`, else the vocabulary), so a version holds
  * a value exactly as its live row did, and the three store-reserved ones.
  * Keyed `(entity, $branch, $to)`, `$to` indexed over closed rows for the
- * retention floor, and each of the live table's vocabulary indexes kept over
+ * retention floor, `$branch` over the branches' rows, and each of the live table's vocabulary indexes kept over
  * its versions too, none of them unique, so a read of the past seeks as a read
  * of the present does.
  */
@@ -168,6 +168,16 @@ export let besideDdl = (
       ifNot: true,
       where: ne(col(TO), lit(0)),
     }
+    // A branch's rows are few beside main's: what reads or drops one finds
+    // them here rather than in every version main keeps.
+    let few: CreateIndex = {
+      t: 'create index',
+      name: `${name}.branch`,
+      on: name,
+      cols: [col(BRANCH), col('entity')],
+      ifNot: true,
+      where: ne(col(BRANCH), lit(0)),
+    }
     let mirrored = indexes.filter((i) => i.on == comp).map((
       i,
     ): CreateIndex => ({
@@ -176,7 +186,7 @@ export let besideDdl = (
       on: name,
       unique: false,
     }))
-    return [made, key, closed, ...mirrored]
+    return [made, key, closed, few, ...mirrored]
   })
 }
 

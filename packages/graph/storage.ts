@@ -11,7 +11,7 @@
 
 import type { Query as Ast } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
-import type { Bundle, Eid, Entity } from './bundle.ts'
+import type { Bundle, Comp, Eid, Entity } from './bundle.ts'
 import { Misfit, Refused } from './errors.ts'
 import type { Binding, Match } from './join.ts'
 
@@ -232,6 +232,25 @@ export type Branches = {
   list: () => Branch[] | Promise<Branch[]>
   /** forget a branch and everything written on it */
   drop: (id: number) => void | Promise<void>
+  /** what branch `id` changed since its fork: every entity's component it
+   * wrote, as it stood at the fork, as the branch holds it and as main holds
+   * it now */
+  changes: (id: number) => Change[] | Promise<Change[]>
+}
+
+/**
+ * One component of one entity a branch wrote since its fork: the component as
+ * main held it at the fork, as the branch holds it, and as main holds it now,
+ * each null where the entity did not hold it. An entity's deletion is its
+ * `tombstone`. Only components whose versions main keeps are offered: one
+ * declared `journal: false` has no value at the fork to compare.
+ */
+export type Change = {
+  eid: Eid
+  comp: string
+  fork: Comp | null
+  branch: Comp | null
+  main: Comp | null
 }
 
 /**

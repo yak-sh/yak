@@ -1433,12 +1433,17 @@ after the transaction a mode reads reads as an empty identity.
 
 A store with history has `branches` (./branches.ts): `make()` writes a row of
 the branch table and copies nothing, `list()` answers every branch, and
-`drop(id)` deletes the branch's rows beside the live tables. An entity a branch
-makes has a spine on main, pointed at the archetype of nothing, since on main it
-holds nothing; `make()` makes sure main keeps that archetype. Reading and
-writing on a branch is its host's: @yaks/cli composes a host on each branch a
-call names, so every plugin binds to the branch's connection (@yaks/graph
-`GraphBranches`). [history_test.ts](./history_test.ts) shows each.
+`drop(id)` deletes the branch's rows beside the live tables, and `changes(id)`
+answers what the branch changed since its fork: each entity's component it holds
+a row of, as main held it at the fork, as the branch holds it, and as main holds
+it now, read as any read is, so @yaks/journal can merge them. A component
+declared `journal: false` is left out, since main keeps no value of it at the
+fork. An entity a branch makes has a spine on main, pointed at the archetype of
+nothing, since on main it holds nothing; `make()` makes sure main keeps that
+archetype. Reading and writing on a branch is its host's: @yaks/cli composes a
+host on each branch a call names, so every plugin binds to the branch's
+connection (@yaks/graph `GraphBranches`). [history_test.ts](./history_test.ts)
+shows each.
 
 ## Limits
 

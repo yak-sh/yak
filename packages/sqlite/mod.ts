@@ -1446,7 +1446,7 @@ export let storage = (
   // A store with history has branches; a mode's connection is a branch's,
   // or reads the past.
   let branches = base.history && !base.mode
-    ? branching(driver, base.history)
+    ? branching(driver, vocab, base.history, opts)
     : undefined
   return {
     ...branches ? { branches } : {},

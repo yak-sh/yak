@@ -211,10 +211,12 @@ export interface Host {
   /** Render a tool answer as plain text with this host's configured views.
    * The answering tool's declaration decides how: a writing one (not
    * `readOnly`) reads its answer back as it now stands, and a `page` one has
-   * a lone entity drawn whole; every other answer is a line per entity. */
+   * a lone entity drawn whole; every other answer is a line per entity.
+   * `on` reads it back as the call read: on its `branch`, where it named one. */
   text?: (
     answer: Bundle[],
     tool?: { readOnly?: boolean; page?: boolean },
+    on?: { branch?: number },
   ) => Promise<string>
   /** A tool answer as its reader reads it, sent as data, printed or drawn:
    * each eid in its prose drawn as the entity's id, where the answer or the

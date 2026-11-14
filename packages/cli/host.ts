@@ -720,6 +720,7 @@ let composed = async (
         return {
           make: async () => await kept.make(),
           list: async () => await kept.list(),
+          changes: async (id) => await kept.changes(id),
           drop: async (id) => {
             await unfork(id)
             await kept.drop(id)
@@ -997,9 +998,9 @@ let composed = async (
     host = built.host
     g = host.graph
     let worded: import('@yaks/host').Host['text']
-    host.text = async (answer, tool) => {
+    host.text = async (answer, tool, on) => {
       worded ??= (await import('./text.ts')).text(host)
-      return worded(answer, tool)
+      return worded(answer, tool, on)
     }
     // A numbered graph draws each eid in an answer's prose as the entity's
     // id, from the small series it holds in memory. A read of them that

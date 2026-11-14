@@ -9,7 +9,11 @@ export let text = (
   host: Pick<Host, 'config' | 'graph' | 'vocab' | 'observe'>,
 ) => {
   let views: ReturnType<typeof registry> | undefined
-  return async (answer: Bundle[], tool?: Drawn): Promise<string> => {
+  return async (
+    answer: Bundle[],
+    tool?: Drawn,
+    on?: { branch?: number },
+  ): Promise<string> => {
     views ??= registry(
       (host.config.plugins ?? []).map(used),
       pluginViews,
@@ -23,8 +27,8 @@ export let text = (
       answer,
       {},
       {
-        lookup: (ids) => host.graph.get(ids),
-        query: (q) => host.graph.read(q),
+        lookup: (ids) => host.graph.get(ids, undefined, on),
+        query: (q) => host.graph.read(q, on),
       },
       tool,
     )

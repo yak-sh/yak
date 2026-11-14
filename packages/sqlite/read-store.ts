@@ -34,7 +34,9 @@ export let storage = (
   return {
     ...reader(driver, vocab, base),
     // Listed here; made and dropped by a writer.
-    ...base.history ? { branches: branching(driver, base.history) } : {},
+    ...base.history
+      ? { branches: branching(driver, vocab, base.history, opts) }
+      : {},
     statements: {
       ...sql,
       atomic: (body) => unit(driver, body, 'read'),

@@ -484,7 +484,7 @@ export let tool = async (
   if (c.json) {
     c.out(JSON.stringify(structured(declared, answer), null, 2))
   } else if (!c.tui && !c.tty && host.text) {
-    let text = await host.text(answer, declared)
+    let text = await host.text(answer, declared, on)
     if (text) c.out(text)
   } else {
     await shown(

@@ -232,6 +232,22 @@ set false:
   yak branch delete 1
   ```
 
+  `branch_merge` writes what a branch changed since its fork to main as one
+  batch (./merge.ts). Each property merges against its value at the fork: one
+  only the branch changed takes the branch's value, one only main changed keeps
+  main's. One both changed to different values is a conflict, and nothing merges
+  by itself: while any conflict has no pick, nothing is written, and the answer
+  lists each conflict with its value at the fork, on the branch and on main side
+  by side. A removed component or a deleted entity against the other side's edit
+  is a conflict too. Stamped properties are main's to stamp on the merge's
+  write, and each property written carries main's value as its `$was`, so a main
+  that moved since refuses the merge whole. The branch is left as it is.
+
+  ```sh
+  yak branch merge 1
+  yak branch merge 1 --pick '[{"eid":"<eid>","comp":"doc","prop":"title","take":"branch"}]'
+  ```
+
 Naming neither is the journal before versions: attribution, with every value as
 a `journal_field` row.
 
@@ -452,15 +468,16 @@ reversible changes returns `[]`.
 ## Exports
 
 The root exports `ddl`, `dropDdl`, `log`, `journal`, `backed`, `applied`,
-`undone`, `undo`, `Final`, value encoding helpers, and types including `Log`,
-`LogOpts`, `Batch`, `Entry`, `Patch`, `Delta` and `Cas`. `dropDdl()` drops what
-`ddl()` created, for a store that stops keeping a journal.
+`undone`, `undo`, `Final`, `merge`, `merged`, value encoding helpers, and types
+including `Log`, `LogOpts`, `Batch`, `Entry`, `Patch`, `Delta`, `Cas`, `Merged`,
+`Conflict` and `Choice`. `dropDdl()` drops what `ddl()` created, for a store
+that stops keeping a journal.
 
 | Sub-module export       | Purpose                                                                |
 | ----------------------- | ---------------------------------------------------------------------- |
 | `@yaks/journal/vocab`   | `journalDoc`, `docs` and `backed`: `_tx`, `_change`, `kept`, `history` |
 | `@yaks/journal/graph`   | `schema()` its tables; `plugins(host)` the hooks; `logFor(host)` a log |
-| `@yaks/journal/tools`   | `runs(host)` implements the history and branch tools                   |
+| `@yaks/journal/tools`   | `runs(host)` implements the history and branch tools, merge included   |
 | `@yaks/journal/service` | the daily duty that keeps a `kept` row                                 |
 | `@yaks/journal/views`   | the History page and its place in the sidebar                          |
 | `@yaks/journal/kept`    | reading a `kept` row: history's bytes, changes, per change and per day |

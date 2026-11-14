@@ -76,7 +76,7 @@ import {
   type Eid,
   gives,
 } from './bundle.ts'
-import type { Branch, ReadTx, Row, Storage, Tx } from './storage.ts'
+import type { Branch, Change, ReadTx, Row, Storage, Tx } from './storage.ts'
 import { isProse, proseOn } from './prose.ts'
 import {
   type Committed,
@@ -452,6 +452,8 @@ export type GraphBranches = {
   list: () => Promise<Branch[]>
   /** forget a branch, its writes, and its graph */
   drop: (id: number) => Promise<void>
+  /** what a branch changed since its fork, as its storage reads it */
+  changes: (id: number) => Promise<Change[]>
   /** Branch `id`'s graph: this one's words, plugins and rules over the
    * branch's store, each plugin bound to that store, as the host composes it
    * (@yaks/cli). Its writes stay on the branch and reach no effect, since
