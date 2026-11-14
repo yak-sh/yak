@@ -780,6 +780,11 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     )
   }
   let worker = bearing(req) ? null : await ran(env, space, app, req, who)
+  // The worker's 404 is its pass, as on the released app (apps.ts): the
+  // draft's files answer behind it, and where they hold nothing either, that
+  // 404 is the app's answer.
+  let pass = worker?.status == 404 ? worker : null
+  if (pass) worker = null
   let res = worker ??
     await fileBytes(
       env,
@@ -797,6 +802,10 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       res = generated
     }
   }
+  if (pass && res.status == 404) {
+    await res.body?.cancel()
+    res = pass
+  } else await pass?.body?.cancel()
   if (
     res.status == 200 &&
     res.headers.get('content-type')?.startsWith('text/html')

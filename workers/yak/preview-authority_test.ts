@@ -133,3 +133,32 @@ test('a concurrent directory edit leaves a preview worker able to read its isola
   equal(workerRead.status, 200)
   equal(JSON.parse(workerText).length, 1)
 })
+
+// A worker that answers only its routes passes on the rest with a 404, and
+// the draft's files answer behind it, as they do on the released app.
+let passing = data(`export default {
+  fetch: (req) => new URL(req.url).pathname.endsWith('/ping')
+    ? new Response('pong')
+    : new Response('not found', { status: 404 })
+}`)
+let { default: router } = await import(
+  data(shim().replaceAll('"./worker.js"', JSON.stringify(passing)))
+)
+p.env.DISPATCH = {
+  get: () => ({ fetch: (req: Request) => router.fetch(req, {}, {}) }),
+}
+let answered = async (path: string) => {
+  let res = await request(path)
+  return [res.status, await res.text()]
+}
+let [front, ping, missing] = [
+  await answered(''),
+  await answered('ping'),
+  await answered('nowhere.png'),
+]
+test("a preview worker's 404 passes to the draft's files", () => {
+  equal(front[0], 200)
+  equal(String(front[1]).includes('A private draft'), true)
+  equal(ping, [200, 'pong'])
+  equal(missing, [404, 'not found'])
+})
