@@ -70,7 +70,6 @@ let fixture = async (env: Env, dir: Directory) => {
       '',
       {
         sourceWas: app.source,
-        draftWas: app.draft,
         fenceWas: app.fence,
         reload,
       },

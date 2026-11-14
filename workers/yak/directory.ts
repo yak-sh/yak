@@ -782,6 +782,14 @@ export type Row = {
     at?: string | null
     by?: Id | null
   }
+  app_draft?: {
+    app: Id
+    base?: number | null
+    by?: Id | null
+    via?: Id | null
+    at?: string | null
+    previewed?: string | null
+  }
   entity: { eid: string }
   // A browser and the person who claimed its guest work (attribution.ts).
   browser?: { by?: Id | null }
@@ -1737,7 +1745,17 @@ export let deployOf = (r: Row) => ({
   speaks: r.deploy!.speaks as Record<string, number> | undefined,
 })
 
-/** One file written into an app (drafts.ts `Written`), as a row reads. */
+/** One open draft of an app (written.ts `AppDraft`), as a row reads. */
+export let appDraftOf = (r: Row) => ({
+  eid: r.entity.eid,
+  base: r.app_draft!.base ?? null,
+  by: r.app_draft!.by ? idOf(r.app_draft!.by) : null,
+  via: r.app_draft!.via ? idOf(r.app_draft!.via) : null,
+  at: r.app_draft!.at ?? null,
+  previewed: r.app_draft!.previewed ?? null,
+})
+
+/** One file written into an app (written.ts `Written`), as a row reads. */
 export let writtenOf = (r: Row) => ({
   eid: r.entity.eid,
   draft: r.written!.draft ?? null,
@@ -3195,6 +3213,17 @@ export let directoryRows = (rows: {
       (await query(
         `.written.app=${app.eid}${draft ? `&.written.draft=${draft}` : ''}`,
       )).map(writtenOf),
+    // An app's open drafts (written.ts `draftsOf`), each its `app_draft`
+    // row. Never cached: a write chooses among them.
+    drafts: async (app: App) =>
+      (await query(`.app_draft.app=${app.eid}`)).map(appDraftOf),
+    // One open draft by its eid, with its app's; none once it is closed.
+    draftAt: async (eid: string) => {
+      let row = await one(`.entity.eid=${eid}&.app_draft`)
+      return row?.app_draft
+        ? { app: idOf(row.app_draft.app), draft: appDraftOf(row) }
+        : null
+    },
     // The file an app published at a path, or none (public-files.ts). Its
     // eid is derived from the two, so this asks for one row by its eid.
     publicFile: async (app: App, path: string) => {

@@ -273,7 +273,7 @@ let ON_TASK =
 // What every session is told where it is given the tool that asks the person
 // it works for to choose (operator-updates.ts).
 let ASKING =
-  ' Ask the person you work for: the question reaches them in their Updates under Needs you, with a button for each choice, and what they choose comes back to you in your conversation with them. When they are not in this conversation, tell them it waits with notification_send. Use it for a choice that is theirs to make (spending money, sending to people, deleting), not to confirm routine work. A choice can show what it means beside it, by an id in its shows: an image’s attachment id (from image_new, or a file sent in the conversation), a doc’s id for prose, or an app’s eid (app_list) to show its draft, which they see as it stands.'
+  ' Ask the person you work for: the question reaches them in their Updates under Needs you, with a button for each choice, and what they choose comes back to you in your conversation with them. When they are not in this conversation, tell them it waits with notification_send. Use it for a choice that is theirs to make (spending money, sending to people, deleting), not to confirm routine work. A choice can show what it means beside it, by an id in its shows: an image’s attachment id (from image_new, or a file sent in the conversation), a doc’s id for prose, or a draft’s id (from app_files) to show that draft of an app as it stands, each on its own preview, so several directions can be chosen between; an app’s eid shows their own draft of it.'
 
 // What the Operator is told of the spaces it reaches beyond its own.
 let told = (

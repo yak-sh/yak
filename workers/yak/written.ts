@@ -4,9 +4,12 @@
 // it brings at their address and writes one `written` row per file in the
 // directory, naming the path, the sha (none for a delete), who and when.
 //
-// The rows are both things a person asks about files. An app's draft, the
-// edits its next deploy releases, is the newest row per path among the rows
-// carrying `app.draft`, laid over the serving release's files (`overlaid`).
+// The rows are both things a person asks about files. An app holds a draft
+// for each writer (D-414): a row of its own (`app_draft`, {@link AppDraft}),
+// whose edits are the newest row per path among the rows naming it, laid over
+// the serving release's files (`overlaid`). Each connector session writes in
+// drafts of its own, and a person's own hands in the browser share one, so
+// one writer's release never ships another's edits.
 // A path's history is every row for it, newest first, each naming the sha it
 // replaced too. So a write reads no old bytes and copies none: what it
 // replaced is a sha the draft already named, whose bytes are already at their
@@ -21,8 +24,9 @@
 // rows are appended, never rewritten, so neither loses the other's. A row is
 // named for the row it supersedes, so two writes of one path from the same
 // state collide and the second goes round to write over the first; the guard
-// on the app row sends a write that crossed a deploy back to read the draft
-// the deploy left.
+// on the app row sends a write that crossed a deploy back to read the live
+// files the deploy left, and the guard on the draft's row sends one whose
+// draft a release closed back to choose again.
 import type { Objects } from '@yaks/blob'
 import { groupBy, lanes } from '@yaks/fp'
 import { Stale } from '@yaks/graph/errors'
@@ -77,6 +81,173 @@ export let AGE = 30 * 24 * 60 * 60_000
 let after = (a: Written, b: Written) =>
   (a.at ?? '') != (b.at ?? '') ? (a.at ?? '') > (b.at ?? '') : a.eid > b.eid
 
+/** One open draft of an app, the directory's `app_draft` row: the live
+ * version it opened on, the person whose it is and the connector session
+ * that opened it. Neither names the draft an app held before drafts were rows
+ * (`app.draft`, read as one of these until the store mover writes its row:
+ * `legacy`); anyone with a seat may release it. A release or a discard
+ * deletes the row. */
+export type AppDraft = {
+  eid: string
+  base: number | null
+  by: string | null
+  via: string | null
+  at: string | null
+  /** When its preview link was first asked for; none where nobody has
+   * previewed it, so a write to it tells no preview's pages. */
+  previewed: string | null
+  legacy?: true
+}
+
+/** What a call names to open a draft of its own beside the ones it holds:
+ * an agent trying several directions at once holds one per direction. */
+export let NEW = 'new'
+
+/** An app's open drafts: its `app_draft` rows, and the draft its row still
+ * names as `app.draft` where no row stands for it yet. Never cached: a write
+ * chooses among them. */
+export let draftsOf = async (dir: Directory, app: App) =>
+  withLegacy(app, await dir.drafts(app))
+
+/** An app's `app_draft` rows, with the draft `app.draft` still names where
+ * no row stands for it. */
+export let withLegacy = (app: App, rows: AppDraft[]): AppDraft[] =>
+  app.draft && !rows.some((d) => d.eid == app.draft)
+    ? [...rows, {
+      eid: app.draft,
+      base: app.version,
+      by: null,
+      via: null,
+      at: null,
+      previewed: null,
+      legacy: true,
+    }]
+    : rows
+
+/** Whether a draft is the caller's own: one its connector session opened,
+ * or, for a person at their own browser, the one their hands share. */
+export let ownBy = (who: Who) => (d: AppDraft) =>
+  who.agent && who.via
+    ? d.via == who.via
+    : !!who.person && d.by == who.person && !d.via
+
+let listed = (drafts: AppDraft[]) => drafts.map((d) => d.eid).join(', ')
+
+/** The draft a call works in: the one it names, else the caller's own; none
+ * where it has none, which a read sees as live and a write opens. Several of
+ * its own and none named is refused with their ids: a conversation holding
+ * several on purpose says which each call means. */
+export let chosen = (
+  app: App,
+  drafts: AppDraft[],
+  who: Who,
+  asked?: string | null,
+): AppDraft | null => {
+  if (asked == NEW) return null
+  if (asked) {
+    let named = drafts.find((d) => d.eid == asked)
+    if (!named) {
+      throw refuse(
+        'missing',
+        `no open draft ${asked} of ${app.slug}: it was released or ` +
+          `discarded${
+            drafts.length ? `; its open drafts are ${listed(drafts)}` : ''
+          }`,
+      )
+    }
+    return named
+  }
+  let own = drafts.filter(ownBy(who))
+  if (own.length > 1) {
+    throw refuse(
+      'arguments',
+      `draft: this conversation holds ${own.length} drafts of ${app.slug} ` +
+        `(${listed(own)}); name the one this call means`,
+    )
+  }
+  return own[0] ?? null
+}
+
+/** The draft a release takes: the one named, else the caller's own, else,
+ * for a caller with none of its own (a new chat, a reconnect), the person's
+ * one open draft or the one no author holds. Several to choose from is
+ * refused with their ids. None is a release of the live files again. */
+export let releasing = (
+  app: App,
+  drafts: AppDraft[],
+  who: Who,
+  asked?: string | null,
+): AppDraft | null => {
+  let mine = chosen(app, drafts, who, asked == NEW ? null : asked)
+  if (mine || asked) return mine
+  let theirs = drafts.filter((d) => !d.by || d.by == who.person)
+  if (theirs.length > 1) {
+    throw refuse(
+      'arguments',
+      `draft: ${app.slug} has ${theirs.length} open drafts (${
+        listed(theirs)
+      }); name the one to release`,
+    )
+  }
+  return theirs[0] ?? null
+}
+
+/** The draft a page shows a person when nothing names one: their own
+ * newest, else the one no author holds; none where they have neither. */
+export let theirs = (drafts: AppDraft[], who: Who) =>
+  [...drafts.filter(ownBy(who))].sort(byAt).at(-1) ??
+    [...drafts.filter((d) => d.by == who.person)].sort(byAt).at(-1) ??
+    drafts.find((d) => !d.by) ?? null
+
+let byAt = (a: AppDraft, b: AppDraft) =>
+  (a.at ?? '') < (b.at ?? '') ? -1 : (a.at ?? '') > (b.at ?? '') ? 1 : 0
+
+/** Where a draft's preview link serves from and is told: its own eid, or
+ * for the draft no author holds, the app's link from before each draft had
+ * its own (`app.followed`), so a link sealed then keeps showing it. */
+export let linkFor = (app: App, d: AppDraft) =>
+  !d.by && app.followed ? app.followed : d.eid
+
+/** What a write into `d` carries on the app's row: for the draft
+ * `app.draft` names, that pointer gone, since the draft's row is written in
+ * the same write (`opening`). */
+export let unpointed = (
+  d: AppDraft,
+): { app?: { draft: null }; was: Record<string, string | null> } =>
+  d.legacy
+    ? { app: { draft: null }, was: { draft: token(d.eid) } }
+    : { was: {} }
+
+/** What a write into `d` carries for its row: the row written where it has
+ * none yet (a new draft, or the one `app.draft` names), or a guard that it
+ * is still open. */
+export let opening = (
+  app: App,
+  d: AppDraft,
+  fresh: boolean,
+  extra: Partial<Pick<AppDraft, 'previewed'>> = {},
+) =>
+  fresh || d.legacy
+    ? {
+      entity: { eid: d.eid },
+      app_draft: {
+        app: app.eid,
+        ...d.base != null ? { base: d.base } : {},
+        ...d.by ? { by: d.by } : {},
+        ...d.via ? { via: d.via } : {},
+        ...d.at ? { at: d.at } : {},
+        ...extra.previewed ?? d.previewed
+          ? { previewed: extra.previewed ?? d.previewed }
+          : {},
+      },
+      $was: { app_draft: { app: token(null) } },
+    }
+    : {
+      entity: { eid: d.eid },
+      ...extra.previewed ? { app_draft: { previewed: extra.previewed } } : {},
+      $was: { app_draft: { app: token(app.eid) } },
+    }
+
 /** Writes newest first. */
 export let newest = (rows: Written[]) =>
   [...rows].sort((a, b) => after(a, b) ? -1 : after(b, a) ? 1 : 0)
@@ -103,8 +274,11 @@ export let draftRoot = (app: Pick<App, 'eid'>) => `.drafts/${app.eid}`
 export let served = async (raw: Objects, app: App): Promise<Files> =>
   app.source ? await filesAt(raw, app.source) : {}
 
-/** An app's draft as a write or a read finds it. */
+/** What a draft holds, as a write or a read finds it; with no draft
+ * (`of` none), the live files. */
 export type Draft = {
+  /** the draft's row; none where the caller has no draft */
+  of: AppDraft | null
   /** where its files are read, in `view` */
   root: string
   /** path to sha: the serving release, with the draft's writes over it */
@@ -116,16 +290,18 @@ export type Draft = {
   view: Objects
 }
 
-/** An app's draft as it stands: the serving release's files with the
- * draft's own writes laid over them. */
+/** A draft as it stands: the serving release's files with the draft's own
+ * writes laid over them; the serving release's alone with no draft. */
 export let drafting = async (
   raw: Objects,
   dir: Directory,
   app: App,
+  of: AppDraft | null,
 ): Promise<Draft> => {
-  let { files, rows, base } = await over(dir, app, served(raw, app))
+  let { files, rows, base } = await over(dir, app, of, served(raw, app))
   let root = draftRoot(app)
   return {
+    of,
     root,
     files,
     rows,
@@ -134,33 +310,43 @@ export let drafting = async (
   }
 }
 
-/** The paths an app's draft holds, for what an erasure says it took. A
- * release an erasure that died partway already swept holds nothing now, so
- * asking again finishes the erasure instead of refusing to read it. */
-export let holding = async (raw: Objects, dir: Directory, app: App) =>
-  Object.keys(
-    (await over(
-      dir,
-      app,
-      app.source
-        ? filesIn(raw, app.source).then((files) => files ?? {})
-        : Promise.resolve({}),
-    )).files,
-  )
+/** The paths an app's release and every open draft hold, for what an
+ * erasure says it took. A release an erasure that died partway already swept
+ * holds nothing now, so asking again finishes the erasure instead of refusing
+ * to read it. */
+export let holding = async (raw: Objects, dir: Directory, app: App) => {
+  let [base, drafts] = await Promise.all([
+    app.source
+      ? filesIn(raw, app.source).then((files) => files ?? {})
+      : Promise.resolve({}),
+    draftsOf(dir, app),
+  ])
+  let paths = new Set(Object.keys(base))
+  for (let d of drafts) {
+    let { files } = await over(dir, app, d, Promise.resolve(base))
+    for (let path of Object.keys(files)) paths.add(path)
+  }
+  return [...paths]
+}
 
 // The draft's own writes laid over `base`.
-let over = async (dir: Directory, app: App, base: Promise<Files>) => {
+let over = async (
+  dir: Directory,
+  app: App,
+  of: AppDraft | null,
+  base: Promise<Files>,
+) => {
   let [files, rows] = await Promise.all([
     base,
-    app.draft ? dir.written(app, app.draft) : Promise.resolve([]),
+    of ? dir.written(app, of.eid) : Promise.resolve([]),
   ])
   return { files: overlaid(files, rows), rows, base: files }
 }
 
-/** One change to what an app's preview link serves, as its pages hear it:
+/** One change to what a draft's preview link serves, as its pages hear it:
  * a write to the draft, naming the files it left, each at its sha, null for a
- * delete; or a release, `draft` null and no files, after which the link
- * serves what was released. `link` is the app's `followed`. */
+ * delete; or its release, `draft` null and no files, after which the link
+ * serves what was released. `link` is the draft's (`linkFor`). */
 export type Drafted = {
   app: string
   link: string
@@ -174,32 +360,41 @@ export type Drafted = {
  * page entries it reaches. Never refuses: the write has already landed. */
 export type Tell = (news: Drafted, before?: Draft) => Promise<void>
 
-/** The app with its preview link (`app.followed`, preview.ts), minted the
- * first time one is asked for. The link outlives every deploy: it follows
- * whatever draft the app has, so each write to any of them is told; an app
- * nobody previewed costs a write nothing more. */
-export let followed = async (
+/** A draft marked as previewed the first time its link is asked for
+ * (preview.ts), so its writes are told to the link's pages from then on; a
+ * draft nobody previewed costs a write nothing more. Answers the draft as it
+ * stands after. */
+export let previewed = async (
   dir: Directory,
   space: Space,
   app: App,
+  d: AppDraft,
   who: Who,
-): Promise<App> => {
+): Promise<AppDraft> => {
   let row = app
+  let now = d
   for (let n = 0; n < 5; n++) {
+    if (now.previewed || (!now.by && row.followed)) return now
     row = await waiting(dir, space, row, who)
-    if (row.followed) return row
-    let link = mint()
+    let at = new Date().toISOString()
     try {
+      let { app: pointer, was } = unpointed(now)
       await dir.stamp({
-        entities: [{
-          entity: { eid: row.eid },
-          app: { followed: link },
-          $was: { app: { followed: token(null), fence: token(null) } },
-        }],
+        entities: [
+          ...pointer
+            ? [{ entity: { eid: row.eid }, app: pointer, $was: { app: was } }]
+            : [],
+          opening(row, now, false, { previewed: at }),
+        ],
       }, vouched(who))
-      return { ...row, followed: link }
+      return { ...now, previewed: at, legacy: undefined }
     } catch (e) {
       if (!(e instanceof Stale)) throw e
+      let found = (await draftsOf(dir, row)).find((o) => o.eid == d.eid)
+      if (!found) {
+        throw refuse('missing', `draft ${d.eid} of ${app.slug} was released`)
+      }
+      now = found
     }
   }
   throw refuse('conflict', `app ${app.slug} changed while opening its link`)
@@ -216,17 +411,19 @@ export type Change = {
 }
 
 /**
- * A write into an app's draft. `act` is handed the draft as it stands and
- * answers the changes it makes and whatever its caller wants back; it runs
- * again if the draft moved under it (a deploy began or ended, another write
- * opened the draft), so it decides and does nothing it cannot repeat.
+ * A write into one of an app's drafts: the one `asked` names, else the
+ * writer's own (`chosen`), else a new one, which `asked` {@link NEW} opens
+ * beside those it holds. `act` is handed the draft as it stands and answers
+ * the changes it makes and whatever its caller wants back; it runs again if
+ * the draft moved under it (a deploy began or ended, another write to the
+ * same draft), so it decides and does nothing it cannot repeat.
  *
  * A change that leaves a path as the draft already holds it is left out: a
  * write sent again after it was cut off puts and records only what did not
  * land, and says which were there (`already`). Answers which paths it wrote,
- * and once they have landed tells `tell`, if the app has a preview link.
- * `now` is the writer's clock; persisted draft stamps order edits even when
- * that clock stops or moves backwards.
+ * and the draft they landed in, and once they have landed tells `tell`, if
+ * the draft has a preview link. `now` is the writer's clock; persisted draft
+ * stamps order edits even when that clock stops or moves backwards.
  */
 export let modifying = async <T>(
   raw: Objects,
@@ -240,16 +437,40 @@ export let modifying = async <T>(
     attempt: number,
   ) => Promise<{ changes: Change[]; value: T }>,
   tell: Tell,
+  asked?: string | null,
   now = () => new Date().toISOString(),
-): Promise<{ value: T; wrote: string[]; already: string[] }> => {
+): Promise<{
+  value: T
+  wrote: string[]
+  already: string[]
+  /** the draft the write landed in, none where it changed nothing */
+  draft: string | null
+  /** the app's open drafts once it landed */
+  drafts: AppDraft[]
+}> => {
   // Bytes this call already put, so a write that goes round again does not
   // send them twice.
   let stored = new Set<string>()
+  // The eid a draft opened on purpose takes ({@link NEW}), the same however
+  // often the write goes round.
+  let opened = mint()
   let row = app
   for (let n = 0; n < 5; n++) {
     row = await waiting(dir, space, row, who)
     try {
-      let draft = await drafting(raw, dir, row)
+      let drafts = await draftsOf(dir, row)
+      let into = chosen(row, drafts, who, asked)
+      // A writer with no draft of its own names the one it opens for the
+      // app's newest write, read before its drafts are read again: a draft
+      // another write of its opened since is then either seen, or opened
+      // on the same head, so the two race for one eid.
+      let head = ''
+      if (!into && asked != NEW) {
+        head = newest(await dir.written(row))[0]?.eid ?? ''
+        drafts = await draftsOf(dir, row)
+        into = chosen(row, drafts, who, asked)
+      }
+      let draft = await drafting(raw, dir, row, into)
       let { changes, value } = await act(draft, row, n)
       // A batch naming one path twice keeps the last, as a person would
       // expect.
@@ -266,8 +487,25 @@ export let modifying = async <T>(
           },
         ),
       )
-      if (!todo.length) return { value, wrote: [], already }
-      let id = row.draft ?? mint()
+      if (!todo.length) {
+        return { value, wrote: [], already, draft: into?.eid ?? null, drafts }
+      }
+      let fresh = !into
+      let via = who.agent && who.via ? who.via : null
+      let d: AppDraft = into ?? {
+        // A writer's own draft is named for the writer and the app's newest
+        // write, so two first writes of one conversation at once race for
+        // one eid and the second lands in the draft the first opened.
+        eid: asked == NEW ? opened : derivedEid(
+          `app_draft|${row.eid}|${via ?? who.person ?? ''}|${head}`,
+        ),
+        base: row.version,
+        by: who.person || null,
+        via,
+        at: null,
+        previewed: null,
+      }
+      let id = d.eid
       // A retry has reread the winner. Its rows must sort after that winner
       // even if the clock has not ticked: derived eids are not write order.
       // Advance only from this draft's persisted stamp, never an isolate-wide
@@ -277,6 +515,13 @@ export let modifying = async <T>(
         return Number.isFinite(at) ? Math.max(last, at) : last
       }, -Infinity)
       let at = new Date(Math.max(Date.parse(now()), lastAt + 1)).toISOString()
+      if (fresh || d.legacy) {
+        d = {
+          ...d,
+          at: d.at ??
+            (newest(draft.rows).at(-1)?.at ?? at),
+        }
+      }
       // Each row is named for the row it supersedes, so two writers who read
       // the same state of a path race for one eid: the first lands, and the
       // guard sends the other round to write over it.
@@ -284,20 +529,22 @@ export let modifying = async <T>(
       for (let w of newest(draft.rows)) {
         if (!heads.has(w.path)) heads.set(w.path, w.eid)
       }
+      let pointer = unpointed(d)
       await dir.stamp({
         entities: [
           {
             entity: { eid: row.eid },
-            app: { draft: id },
+            ...pointer.app ? { app: pointer.app } : {},
             $was: {
               app: {
-                draft: token(row.draft ?? null),
                 fence: token(null),
                 source: token(row.source ?? null),
                 version: token(row.version ?? null),
+                ...pointer.was,
               },
             },
           },
+          opening(row, d, fresh),
           ...todo.map((c) => ({
             entity: {
               eid: derivedEid(
@@ -318,22 +565,45 @@ export let modifying = async <T>(
           })),
         ],
       }, vouched(who))
-      if (row.followed) {
+      if (d.previewed || (!d.by && row.followed)) {
         await tell({
           app: row.eid,
-          link: row.followed,
+          link: linkFor(row, d),
           draft: id,
           files: todo.map((c) => ({ path: c.path, sha: c.sha ?? null })),
           at,
         }, draft)
       }
-      return { value, wrote: todo.map((c) => c.path), already }
+      return {
+        value,
+        wrote: todo.map((c) => c.path),
+        already,
+        draft: id,
+        drafts: [
+          ...drafts.filter((o) => o.eid != id),
+          { ...d, legacy: undefined },
+        ],
+      }
     } catch (e) {
       if (!(e instanceof Stale)) throw e
     }
   }
   throw refuse('conflict', `app ${app.slug} changed during edit; retry`)
 }
+
+/** A draft closed unreleased (app_files op: discard): its row gone, or
+ * for the one `app.draft` names, that pointer. What it wrote stays in each
+ * path's history, as a released draft's does. */
+export let discarded = (dir: Directory, app: App, d: AppDraft, who: Who) =>
+  dir.stamp({
+    entities: d.legacy
+      ? [{
+        entity: { eid: app.eid },
+        app: { draft: null },
+        $was: { app: { draft: token(d.eid) } },
+      }]
+      : [{ entity: { eid: d.eid }, $delete: true }],
+  }, vouched(who))
 
 /** A delete sent again is already done if this draft records its deletion,
  * or if a competing writer deleted it while the caller retried. */
@@ -432,12 +702,16 @@ export let when = (said: string): Date => {
 }
 
 /** Which of one path's rows, newest first, the history keeps at `now`: the
- * newest {@link KEEP}, every one inside {@link AGE}, and every one of the
+ * newest {@link KEEP}, every one inside {@link AGE}, and every one of a
  * draft still open, which is not history yet. */
-export let kept = (rows: Written[], now: number, draft?: string | null) =>
+export let kept = (
+  rows: Written[],
+  now: number,
+  open: ReadonlySet<string> = new Set(),
+) =>
   rows.filter((row, i) =>
     i < KEEP || (row.at != null && now - Date.parse(row.at) <= AGE) ||
-    (!!draft && row.draft == draft)
+    (!!row.draft && open.has(row.draft))
   )
 
 /**
@@ -519,9 +793,10 @@ export let pruned = async (
       paths.set(row.path, [...paths.get(row.path) ?? [], row])
     }
     let gone: string[] = []
+    let open = new Set((await draftsOf(dir, app)).map((d) => d.eid))
     for (let rows of paths.values()) {
       let all = newest(rows)
-      let keep = new Set(kept(all, now, app.draft))
+      let keep = new Set(kept(all, now, open))
       for (let row of all) {
         if (!keep.has(row)) gone.push(row.eid)
         else for (let sha of [row.sha, row.was]) if (sha) named.add(sha)

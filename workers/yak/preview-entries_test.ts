@@ -68,7 +68,7 @@ let fixture = async () => {
       strip,
     },
   } as Partial<Env>)
-  let { dir, space } = await seeded(p.env, 'public', p.dir)
+  let { dir } = await seeded(p.env, 'public', p.dir)
   let ctx: Ctx = { env: p.env, dir, person: ADA }
   let run = (name: string, args: Record<string, unknown>) =>
     TOOLS.find((t) => t.name == name)!.run(ctx, args)
@@ -87,10 +87,9 @@ let fixture = async () => {
   })
   let out = await previews[0].run(ctx, { app: 'entries', screenshot: false })
   let link = String(out.value!.url)
-  let app = (await dir.app(space, 'entries'))!
   let sent: { draft: Drafted }[] = []
   let name = [...sockets.keys()].find((n) =>
-    n.includes(`preview/${app.followed}`)
+    n.includes(`preview/${out.value!.draft}`)
   )!
   sockets.get(name)!.push({
     send: (data: string) => void sent.push(JSON.parse(data)),

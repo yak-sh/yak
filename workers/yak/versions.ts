@@ -37,6 +37,7 @@ import type { Reload } from '@yaks/platform'
 import { acting, vouched, type Who } from './session.ts'
 import { instrumentEid } from './instrument.ts'
 import { refuse } from './tool.ts'
+import type { AppDraft } from './written.ts'
 
 // A version's file set: the path the app serves it at, and the name of its
 // bytes.
@@ -136,27 +137,36 @@ export let waiting = async (
  * (remake.ts `remade`). */
 export let drawn = () => `${Date.now()}:${crypto.randomUUID()}`
 
-/** Hold new edits while one release copies its selected draft. */
+/** Hold new edits while one release copies the draft it takes, `taken`,
+ * which must still be open; none for a release of other files. */
 export let fenced = async (
   dir: Directory,
   app: App,
-  draft: string | null,
+  taken: AppDraft | null,
   who: Who,
   fence = drawn(),
 ) => {
   await dir.stamp({
-    entities: [{
-      entity: { eid: app.eid },
-      app: { fence },
-      $was: {
-        app: {
-          fence: token(app.fence),
-          draft: token(draft),
-          source: token(app.source),
-          version: token(app.version),
+    entities: [
+      {
+        entity: { eid: app.eid },
+        app: { fence },
+        $was: {
+          app: {
+            fence: token(app.fence),
+            ...taken?.legacy ? { draft: token(taken.eid) } : {},
+            source: token(app.source),
+            version: token(app.version),
+          },
         },
       },
-    }],
+      ...taken && !taken.legacy
+        ? [{
+          entity: { eid: taken.eid },
+          $was: { app_draft: { app: token(app.eid) } },
+        }]
+        : [],
+    ],
   }, vouched(who))
   return fence
 }
@@ -363,30 +373,27 @@ export let record = async (
   {
     homes = [],
     sourceWas = app.source,
-    draftWas = app.draft,
+    taken = null,
     fenceWas = app.fence,
     seeded = false,
     reload,
     target,
     declaration = String(version),
     speaks,
-    draft = null,
     message,
   }: {
     homes?: { app: App; release: string }[]
     sourceWas?: string | null
-    draftWas?: string | null
+    /** The draft this release is made of, which it closes; none for a
+     * release of other files (a version put back, an installed copy's
+     * update, the live version made again), which leaves every draft open. */
+    taken?: AppDraft | null
     fenceWas?: string | null
     seeded?: boolean
     reload?: Reload
     target?: Version
     declaration?: string
     speaks?: Record<string, number>
-    /** The draft a release leaves: none, its edits released, except where
-     * the release is the live version made again (tools.ts
-     * `recompileRelease`), whose files are the ones the draft was laid
-     * over. */
-    draft?: string | null
     /** Everything the release changed and why, as its deployer wrote it. */
     message?: string
   } = {},
@@ -413,7 +420,7 @@ export let record = async (
           version,
           declaration,
           source: app.source,
-          draft,
+          ...taken?.legacy ? { draft: null } : {},
           fence: null,
           script: app.script,
           worker,
@@ -426,11 +433,14 @@ export let record = async (
             version: token(app.version),
             declaration: token(app.declaration),
             source: token(sourceWas),
-            draft: token(draftWas),
+            ...taken?.legacy ? { draft: token(taken.eid) } : {},
             fence: token(fenceWas),
           },
         },
       },
+      ...taken && !taken.legacy
+        ? [{ entity: { eid: taken.eid }, $delete: true }]
+        : [],
       ...homes.map(({ app, release }) => ({
         entity: { eid: app.eid },
         app: { declaration: release },

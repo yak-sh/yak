@@ -346,13 +346,20 @@ import {
   whatChanged,
 } from './versions.ts'
 import {
+  type AppDraft,
   type Change,
+  chosen,
   deleting,
+  discarded,
   type Draft,
   drafting,
+  draftsOf,
   goingBack,
   history,
+  linkFor,
   modifying,
+  NEW,
+  releasing,
   replaced,
   restoring,
   served,
@@ -503,10 +510,37 @@ let OPS = [
   'delete',
   'history',
   'restore',
+  'discard',
 ]
 
 // The ops that need a writer, which is every one that changes a byte.
-let WRITES = ['write', 'patch', 'fetch', 'delete', 'restore']
+let WRITES = ['write', 'patch', 'fetch', 'delete', 'restore', 'discard']
+
+// The draft a call names (written.ts `chosen`), or none for the caller's own.
+let draftArg = (args: Args) =>
+  args.draft == null ? null : text(args.draft, 'draft')
+
+// Where a write landed, as its answer ends: the draft's id, and the person's
+// other open drafts of the app, so a conversation goes on in the one it means
+// (D-414) and releases only its own.
+let landedIn = (
+  app: App,
+  who: Who,
+  id: string | null,
+  drafts: AppDraft[],
+) => {
+  if (!id) return ''
+  let others = drafts.filter((d) =>
+    d.eid != id && (!d.by || d.by == who.person)
+  )
+  return `\nIn draft ${id}: pass draft: '${id}' to go on in it, and to ` +
+    'app_deploy to release it.' +
+    (others.length
+      ? ` Your other open drafts of ${app.slug}: ${
+        others.map((d) => d.eid).join(', ')
+      }.`
+      : '')
+}
 
 /**
  * What an `app_files` call is asking for, when it did not say. Bytes say what
@@ -1147,6 +1181,7 @@ let published = async (
   recompile = false,
   message?: string,
   keep = false,
+  closing: AppDraft | null = null,
 ) => {
   let c = ctx.clock ?? clock()
   let blobs = files.files
@@ -1625,7 +1660,7 @@ let published = async (
         {
           homes: staged,
           sourceWas: standing.source,
-          draftWas: standing.draft,
+          taken: closing,
           fenceWas: fence,
           seeded: sowed.length > 0,
           reload,
@@ -1635,7 +1670,6 @@ let published = async (
             dirPart.storeName(space, app),
             appDoc(source ?? {}, vocabFile),
           ),
-          draft: recompile || keep ? standing.draft ?? null : null,
           message,
         },
       ),
@@ -1703,13 +1737,13 @@ let published = async (
       })
     }))
   }
-  // A preview link open on the app goes on following it: its pages show what
-  // was released, then the next draft's writes.
-  if (app.followed) {
+  // A preview link open on the draft this released goes on showing it: its
+  // pages show what was released.
+  if (closing && (closing.previewed || (!closing.by && app.followed))) {
     background(
       watching(ctx.env, space, app)({
         app: app.eid,
-        link: app.followed,
+        link: linkFor(app, closing),
         draft: null,
         files: [],
         at: new Date().toISOString(),
@@ -1805,6 +1839,7 @@ export let released = async (
     message,
     over,
     keep = !!over,
+    draft: asked = null,
   }: {
     target?: Version
     reload?: Reload
@@ -1828,6 +1863,10 @@ export let released = async (
     /** The draft stays as it is, its edits still unreleased: this release is
      * not made of it. */
     keep?: boolean
+    /** The draft this release is made of (written.ts `releasing`), which it
+     * closes; none releases the live files again. A release of other files
+     * (`target`, `over`) takes none, and leaves every draft open. */
+    draft?: AppDraft | null
   } = {},
 ): Promise<
   { version: number; said: string; serves?: string; review?: DeployReview }
@@ -1853,11 +1892,11 @@ export let released = async (
   let blobs = r2RawObjects(ctx.env.BLOBS)
   let kept = !recompile && target?.source && target.script ? target : undefined
   let release = kept?.source ?? releaseOf(space, standing)
-  let draft = standing.draft ?? null
+  let taken = target || over || keep ? null : asked
   let reviewing = base != null && base < (standing.version ?? 0) && !confirm
   let fence = await c.time(
     'fence',
-    () => fenced(ctx.dir, standing, draft, who, drew),
+    () => fenced(ctx.dir, standing, taken, who, drew),
   )
   // The fence is a directory commit. Acquire a new app and caller together;
   // none of the standing from before that commit authorizes the next phase.
@@ -1909,7 +1948,7 @@ export let released = async (
           ? await over(await served(blobs, standing))
           : (await c.time(
             'staged',
-            () => drafting(blobs, ctx.dir, standing),
+            () => drafting(blobs, ctx.dir, standing, taken),
           )).files,
         release,
       )
@@ -1937,7 +1976,7 @@ export let released = async (
     let out = await published(
       ctx,
       space,
-      { ...standing, draft },
+      standing,
       who,
       store,
       release,
@@ -1950,6 +1989,7 @@ export let released = async (
       recompile,
       message,
       keep,
+      taken,
     )
     released = true
     await c.time('purge', () => purged)
@@ -2033,14 +2073,16 @@ let offered = async (
 
 // A publication's source and completed build travel together, named by their
 // shas, so an install copies no bytes. The copy earns its own history, and its
-// uploaded blobs and store data stay its own.
+// uploaded blobs and store data stay its own. It lands in a draft of its own,
+// which the release after it takes, so a draft the installer holds is
+// neither released with it nor written over.
 let copied = async (
   ctx: Ctx,
   from: Files,
   onto: { space: Space; app: App },
   who: Who,
-) =>
-  (await modifying(
+) => {
+  let out = await modifying(
     r2RawObjects(ctx.env.BLOBS),
     ctx.dir,
     onto.space,
@@ -2059,7 +2101,13 @@ let copied = async (
       })
     },
     watching(ctx.env, onto.space, onto.app),
-  )).value
+    NEW,
+  )
+  return {
+    ...out.value,
+    draft: out.drafts.find((d) => d.eid == out.draft) ?? null,
+  }
+}
 
 let answer = (
   store: Door,
@@ -2290,9 +2338,10 @@ export let wroteAt = async (
   who: Who,
   files: { path: string; bytes: Uint8Array }[],
   c: Clock = clock(),
+  draft?: string | null,
 ) => {
   await c.time('pictures', () => pictured(files))
-  return await wrotePinned(env, space, app, who, await hashed(files), c)
+  return await wrotePinned(env, space, app, who, await hashed(files), c, draft)
 }
 
 /**
@@ -2302,7 +2351,8 @@ export let wroteAt = async (
  * here, by the path it lands at: the app's notes, the one file with a ceiling
  * of its own (standing.ts), handed whole to any agent that can reach the app,
  * so refused over the cap at the write rather than truncated at the read; and
- * an icon.svg, drawn. Then the space's room, then the draft.
+ * an icon.svg, drawn. Then the space's room, then the draft: the one
+ * `draft` names, else the writer's own (written.ts `modifying`).
  */
 export let wrotePinned = async (
   env: Env,
@@ -2311,6 +2361,7 @@ export let wrotePinned = async (
   who: Who,
   sent: Change[],
   c: Clock = clock(),
+  draft?: string | null,
 ) => {
   for (let f of sent) {
     let no = tooLong(f.path, f.size ?? 0)
@@ -2321,7 +2372,7 @@ export let wrotePinned = async (
   if (stopped) throw refuse('limit', stopped)
   let landing = await c.time(
     'files',
-    () => drafted(env, space, app, who, sent),
+    () => drafted(env, space, app, who, sent, draft),
   )
   return { ...landing, paths: sent.map((f) => f.path) }
 }
@@ -2393,7 +2444,8 @@ export let wrote = async (...args: Parameters<typeof wroteAt>) =>
 /**
  * Changes into an app's draft (written.ts `modifying`), with the wrangler
  * config the app serves by once they have landed, worked out beside them so
- * it adds no wait. Answers which paths the draft already held as sent.
+ * it adds no wait. Answers which paths the draft already held as sent, the
+ * draft they landed in and the app's open drafts.
  */
 export let drafted = async (
   env: Env,
@@ -2401,10 +2453,11 @@ export let drafted = async (
   app: App,
   who: Who,
   changes: Change[],
+  asked?: string | null,
 ) => {
   let raw = r2RawObjects(env.BLOBS)
   let config: Promise<Config> = Promise.resolve({})
-  let { already } = await modifying(
+  let { already, draft, drafts } = await modifying(
     raw,
     directory(bound(env.DIRECTORY, dirPart.fetch, env)),
     space,
@@ -2416,9 +2469,10 @@ export let drafted = async (
       return Promise.resolve({ changes, value: null })
     },
     watching(env, space, app),
+    asked,
   )
   if (!who.administrative) scheduleUse(env, app.eid)
-  return { config: await config, already }
+  return { config: await config, already, draft, drafts }
 }
 
 /**
@@ -2456,6 +2510,7 @@ let swept = async (
   who: Who,
   folder: string,
   kept: string[],
+  draft?: string | null,
 ) => {
   let keep = new Set(kept)
   return (await modifying(
@@ -2474,6 +2529,7 @@ let swept = async (
       })
     },
     watching(env, space, app),
+    draft,
   )).value
 }
 
@@ -3543,9 +3599,19 @@ let OURS: Row[] = [
           type: 'string',
           enum: [...OPS],
           description:
-            'list, read, write, patch, fetch, delete, history or restore. Required ' +
-            'unless files, content or base64 supplies a write',
+            'list, read, write, patch, fetch, delete, history, restore or ' +
+            'discard. Required unless files, content or base64 supplies a ' +
+            'write',
         },
+        draft: str(
+          'the id of the draft to work in, from an earlier answer: every ' +
+            'write answers the id of the draft it landed in. new opens ' +
+            'another beside the ones this conversation holds, as for trying ' +
+            'several directions at once. Left out, the call works in this ' +
+            "conversation's own draft: a read sees it over the live files, " +
+            'and the first write opens it. For discard, the draft to close ' +
+            'unreleased',
+        ),
         path: str(
           'path relative to the app root, e.g. index.html. For restore, ' +
             'leaving path, sha and at out goes back one write: every file ' +
@@ -3638,16 +3704,54 @@ let OURS: Row[] = [
         () => inApp(ctx, args, write, !write),
       )
       let blobs = r2RawObjects(ctx.env.BLOBS)
+      let asked = draftArg(args)
       // A path as the app names it: written.ts keys the draft by app-relative
       // paths, and a leading slash names the same file.
       let named = (path: string) => path.replace(/^\/+/, '')
+      // The app's open drafts, and the one this call works in: the one it
+      // names, else this conversation's own, else none, the live files.
+      let reading: Promise<AppDraft[]> | undefined
+      let drafts = () => reading ??= draftsOf(ctx.dir, app)
+      let mine = async () => chosen(app, await drafts(), who, asked)
       // The draft names every file it holds by sha (written.ts), so listing,
       // comparing and finding a file read no bytes; only a file asked for
       // whole is read, from its content address.
-      let draft = () => c.time('draft', () => drafting(blobs, ctx.dir, app))
+      let draft = () =>
+        c.time('draft', async () => drafting(blobs, ctx.dir, app, await mine()))
       let at = (d: Draft, path: string) => `${d.root}/${path}`
+      if (op == 'discard') {
+        let all = await drafts()
+        let of = await mine()
+        if (!of) {
+          throw refuse(
+            'missing',
+            `no draft of this conversation's in ${space.slug}/${app.slug} ` +
+              `to discard${
+                all.length
+                  ? `; name one with draft: ${all.map((d) => d.eid).join(', ')}`
+                  : ''
+              }`,
+          )
+        }
+        let rows = await ctx.dir.written(app, of.eid)
+        await discarded(ctx.dir, app, of, who)
+        return {
+          text: `discarded draft ${of.eid} of ${space.slug}/${app.slug}: ` +
+            'nothing of it was released. What it wrote stays in each ' +
+            `file's history (${
+              [...new Set(rows.map((w) => w.path))].sort().join(', ') ||
+              'it wrote nothing'
+            }); op: history and op: restore bring a file back.`,
+          space,
+          value: { discarded: of.eid },
+        }
+      }
       if (op == 'list') {
-        let [d, all] = await Promise.all([draft(), versions(ctx.dir, app)])
+        let [d, all, rows] = await Promise.all([
+          draft(),
+          versions(ctx.dir, app),
+          ctx.dir.written(app),
+        ])
         let live = all.find((v) => v.version == app.version)
         let files: Files = Object.fromEntries(
           Object.entries(d.files).filter(([path]) => own([path]).length),
@@ -3663,8 +3767,37 @@ let OURS: Row[] = [
         )
         let { dir, source } = sourceOnly(config, paths)
         let said = noted(all)
+        // Each open draft as who holds it, which paths it changed and since
+        // when: the presence of everyone else editing the app (D-414), which
+        // nobody locks.
+        let changed = (eid: string) =>
+          [
+            ...new Set(rows.filter((w) => w.draft == eid).map((w) => w.path)),
+          ].sort()
+        let of = d.of
+        let others = (await drafts()).filter((o) => o.eid != of?.eid)
+        let names = new Map(
+          await Promise.all(
+            [...new Set(others.flatMap((o) => o.by ? [o.by] : []))].map(
+              async (by) =>
+                [by, (await ctx.dir.nameAt(by)) ?? 'someone'] as const,
+            ),
+          ),
+        )
+        let held = (o: AppDraft) =>
+          o.by ? `${names.get(o.by)}${o.via ? "'s agent" : ''}` : 'no author'
+        let ours = of ? changed(of.eid) : []
+        let base = of?.base ?? version
+        // A release since the draft opened that touched a path it changed
+        // too: what the draft would put back over, said before it does.
+        let then = all.find((v) => v.version == of?.base)?.files
+        let crossed = of && then && base < version
+          ? ours.filter((path) =>
+            (live?.files[path] ?? null) != (then[path] ?? null)
+          )
+          : []
         // Every fact in the value said in the words too: claude.ai's model
-        // reads only the words, and app_deploy's base is this version.
+        // reads only the words, and app_deploy's base is the draft's.
         return {
           text: [
             ...paths.length
@@ -3676,12 +3809,37 @@ let OURS: Row[] = [
                 `web: ${source.join(', ') || '(none)'}`,
               ]
               : [],
-            !live
-              ? 'Nothing is released yet.'
+            !of
+              ? live
+                ? `These are live v${version}; this conversation has no ` +
+                  'draft of the app, and its first write opens one.'
+                : 'Nothing is released yet, and this conversation has no ' +
+                  'draft of the app; its first write opens one.'
+              : !live
+              ? `Nothing is released yet. Draft ${of.eid} holds these: ` +
+                `app_deploy(draft: '${of.eid}') releases it.`
               : unreleased
-              ? `The draft differs from live v${version}; ` +
-                `app_deploy(base: ${version}) releases it.`
-              : `These are live v${version}, with nothing unreleased.`,
+              ? `Draft ${of.eid} differs from live v${version} in ${
+                ours.join(', ') || 'nothing it wrote'
+              }; app_deploy(draft: '${of.eid}', base: ${base}) releases it.`
+              : `Draft ${of.eid} is live v${version}, with nothing unreleased.`,
+            ...crossed.length
+              ? [
+                `A release since this draft's base v${base} changed ${
+                  crossed.join(', ')
+                }, which this draft changed too: read them before releasing.`,
+              ]
+              : [],
+            ...others.length
+              ? [
+                'Other open drafts:',
+                ...others.map((o) =>
+                  `- ${o.eid} · ${held(o)} · ${
+                    changed(o.eid).join(', ') || 'nothing written'
+                  }${o.at ? ` · since ${o.at}` : ''}`
+                ),
+              ]
+              : [],
             ...said.length ? ['', recent(said)] : [],
           ].join('\n'),
           space,
@@ -3689,6 +3847,16 @@ let OURS: Row[] = [
             files: paths.map((path) => ({ path, sha: files[path] })),
             unreleased,
             version,
+            draft: of?.eid ?? null,
+            ...of ? { base } : {},
+            drafts: [...of ? [of] : [], ...others].map((o) => ({
+              draft: o.eid,
+              by: o.by,
+              via: o.via,
+              at: o.at,
+              paths: changed(o.eid),
+              ...o == of ? { yours: true } : {},
+            })),
             ...dir && { serves: dir, sourceOnly: source },
             releases: releases(said),
           },
@@ -3743,7 +3911,7 @@ let OURS: Row[] = [
         // same way: the file's last write stays in its history the moment it
         // stops being a file, and op restore brings it back (T-34508). One
         // sent again after it landed finds the draft's own delete and says so.
-        let { value: gone } = await modifying(
+        let { value: gone, draft: into, drafts: open } = await modifying(
           blobs,
           ctx.dir,
           space,
@@ -3751,13 +3919,16 @@ let OURS: Row[] = [
           who,
           (d, _app, attempt) => Promise.resolve(deleting(d, path, attempt)),
           watching(ctx.env, space, app),
+          asked,
         )
         if (!who.administrative) scheduleUse(ctx.env, app.eid)
         return {
           text: `${gone ? 'deleted' : 'already deleted'} ${path} — ` +
             `app_files(app: '${app.slug}', op: 'restore', path: '${path}') ` +
-            'brings it back; staged for app_deploy',
+            'brings it back; staged for app_deploy' +
+            landedIn(app, who, into, open),
           space,
+          value: { draft: into },
         }
       }
       // What this file has been (T-34508): what each write to it the app
@@ -3804,7 +3975,15 @@ let OURS: Row[] = [
         op == 'restore' && args.path == null && args.sha == null &&
         args.at == null
       ) {
-        let back = goingBack(await ctx.dir.written(app))
+        // Going back walks the writes released and this draft's own, never
+        // another open draft's.
+        let [rows, of] = await Promise.all([ctx.dir.written(app), mine()])
+        let others = new Set(
+          (await drafts()).filter((o) => o.eid != of?.eid).map((o) => o.eid),
+        )
+        let back = goingBack(
+          rows.filter((w) => !w.draft || !others.has(w.draft)),
+        )
         if (!back) {
           throw refuse(
             'missing',
@@ -3824,7 +4003,14 @@ let OURS: Row[] = [
               'longer kept — the history goes back 30 days',
           )
         }
-        let { config } = await drafted(ctx.env, space, app, who, back.changes)
+        let { config, draft: into, drafts: open } = await drafted(
+          ctx.env,
+          space,
+          app,
+          who,
+          back.changes,
+          asked,
+        )
         let where = placing(ctx, space, app, config)
         return {
           text: `went back past the write of ${back.at}: ` +
@@ -3834,8 +4020,10 @@ let OURS: Row[] = [
                 : `${c.path} removed`
             ).join('; ') +
             '. This is itself a write; op restore with no path again goes ' +
-            'back one more. Staged for app_deploy.',
+            'back one more. Staged for app_deploy.' +
+            landedIn(app, who, into, open),
           space,
+          value: { draft: into },
         }
       }
       if (op == 'restore') {
@@ -3878,11 +4066,18 @@ let OURS: Row[] = [
           )
         }
         let until = gone.find((w) => w.sha == want)?.at
-        let { config } = await drafted(ctx.env, space, app, who, [{
-          path,
-          sha: want,
-          size: all.find((w) => w.sha == want)?.size ?? null,
-        }])
+        let { config, draft: into, drafts: open } = await drafted(
+          ctx.env,
+          space,
+          app,
+          who,
+          [{
+            path,
+            sha: want,
+            size: all.find((w) => w.sha == want)?.size ?? null,
+          }],
+          asked,
+        )
         let where = placing(ctx, space, app, config)
         return {
           text:
@@ -3891,8 +4086,10 @@ let OURS: Row[] = [
             } → ${
               where(path)
             }, sha256 ${want}. This is itself a write, so op ` +
-            'history now has the bytes it replaced. Staged for app_deploy.',
+            'history now has the bytes it replaced. Staged for app_deploy.' +
+            landedIn(app, who, into, open),
           space,
+          value: { draft: into },
         }
       }
       // A read-modify-write of one file, in one call: the loop an agent that
@@ -3912,14 +4109,16 @@ let OURS: Row[] = [
           bytes: new TextEncoder().encode(done.texts[path]),
         }))
         // Every file the edits touched, in one write to the draft.
-        let { paths: wrote, config } = await wroteAt(
+        let { paths: wrote, config, draft: into, drafts: open } = await wroteAt(
           ctx.env,
           space,
           app,
           who,
           sent,
           c,
+          asked,
         )
+        let where0 = landedIn(app, who, into, open)
         let where = placing(ctx, space, app, config)
         let each = await Promise.all(
           sent.map(async (f, i) =>
@@ -3929,17 +4128,22 @@ let OURS: Row[] = [
           ),
         )
         if (list.length == 1) {
-          return { text: `patched ${each[0]}; staged for app_deploy`, space }
+          return {
+            text: `patched ${each[0]}; staged for app_deploy${where0}`,
+            space,
+            value: { draft: into },
+          }
         }
         return {
           text: `patched ${list.length} places in ${sent.length} ` +
             `file${sent.length == 1 ? '' : 's'}:\n` +
             list.map((e, i) => `edits[${i}] ${e.path}: line ${done.lines[i]}`)
               .join('\n') +
-            '\n' + each.join('\n') + '\nStaged for app_deploy.',
+            '\n' + each.join('\n') + '\nStaged for app_deploy.' + where0,
           space,
           value: {
             edits: list.map((e, i) => ({ path: e.path, line: done.lines[i] })),
+            draft: into,
           },
         }
       }
@@ -3947,13 +4151,14 @@ let OURS: Row[] = [
       if (op == 'fetch') {
         let path = text(args.path, 'path')
         let got = await c.time('fetch', () => fetched(text(args.url, 'url')))
-        let { paths: [p], config } = await wroteAt(
+        let { paths: [p], config, draft: into, drafts: open } = await wroteAt(
           ctx.env,
           space,
           app,
           who,
           [{ path, bytes: got.bytes }],
           c,
+          asked,
         )
         let sha = await sha256(got.bytes)
         let where = placing(ctx, space, app, config)
@@ -3969,21 +4174,23 @@ let OURS: Row[] = [
               ? ' — the app serves it as application/octet-stream; give the ' +
                 'path a known extension to serve it as anything else'
               : '') +
-            '; staged for app_deploy',
+            '; staged for app_deploy' + landedIn(app, who, into, open),
           space,
+          value: { draft: into },
         }
       }
       let sent = batch.length ? batch : [{
         path: text(args.path, 'path'),
         bytes: bytesOf(args),
       }]
-      let { paths, config, already } = await wroteAt(
+      let { paths, config, already, draft: into, drafts: open } = await wroteAt(
         ctx.env,
         space,
         app,
         who,
         sent,
         c,
+        asked,
       )
       // What landed, per file: the measurement the caller checks its own
       // transcription against. A file the draft already held as sent was not
@@ -3997,23 +4204,28 @@ let OURS: Row[] = [
       )
       let where = placing(ctx, space, app, config)
       return {
-        text: paths.length == 1
-          ? `${there.size ? 'already had' : 'wrote'} ${paths[0]} → ${
-            where(paths[0])
-          } — ${each[0]}; staged for app_deploy`
-          : `wrote ${
-            there.size ? `${paths.length - there.size} of ` : ''
-          }${paths.length} files → ${url(space, app, ctx.env)}` +
-            (there.size
-              ? ` (the draft already held ${there.size} of them as sent)`
-              : '') +
-            ':\n' +
-            paths.map((p, i) =>
-              `${p}${where.dir ? ` → ${where(p)}` : ''} — ${each[i]}`
-            ).join('\n') +
-            '\nStaged for app_deploy.',
+        text:
+          (paths.length == 1
+            ? `${there.size ? 'already had' : 'wrote'} ${paths[0]} → ${
+              where(paths[0])
+            } — ${each[0]}; staged for app_deploy`
+            : `wrote ${
+              there.size ? `${paths.length - there.size} of ` : ''
+            }${paths.length} files → ${url(space, app, ctx.env)}` +
+              (there.size
+                ? ` (the draft already held ${there.size} of them as sent)`
+                : '') +
+              ':\n' +
+              paths.map((p, i) =>
+                `${p}${where.dir ? ` → ${where(p)}` : ''} — ${each[i]}`
+              ).join('\n') +
+              '\nStaged for app_deploy.') + landedIn(app, who, into, open),
         space,
-        value: { wrote: paths.filter((p) => !there.has(p)), already },
+        value: {
+          wrote: paths.filter((p) => !there.has(p)),
+          already,
+          draft: into,
+        },
       }
     },
   },
@@ -4186,6 +4398,11 @@ let OURS: Row[] = [
             'everything this release changes and why, in full, as a commit ' +
             'message says it: every agent that works on the app next reads it',
         },
+        draft: str(
+          'the id of the draft to release, from app_files. Left out, this ' +
+            "conversation's own draft, else your one open draft; the app's " +
+            'other drafts stay open',
+        ),
       },
       required: ['app'],
     },
@@ -4212,6 +4429,12 @@ let OURS: Row[] = [
       if (args.message != null && typeof args.message != 'string') {
         throw refuse('invalid', 'message must be text')
       }
+      let draft = releasing(
+        app,
+        await draftsOf(ctx.dir, app),
+        who,
+        draftArg(args),
+      )
       let { version, said, serves, review } = await released(
         ctx,
         space,
@@ -4223,6 +4446,7 @@ let OURS: Row[] = [
           base: base as number | undefined,
           confirm: args.confirm as boolean | undefined,
           message: (args.message as string | undefined)?.trim() || undefined,
+          draft,
         },
       )
       if (review) {
@@ -4242,12 +4466,17 @@ let OURS: Row[] = [
       }
       return {
         text:
-          `deployed ${space.slug}/${app.slug} v${version}: ${
-            url(space, app, ctx.env)
-          }` +
+          `deployed ${space.slug}/${app.slug} v${version}${
+            draft ? ` from draft ${draft.eid}` : ''
+          }: ${url(space, app, ctx.env)}` +
           said,
         space,
-        value: { deployed: true, version, ...serves && { serves } },
+        value: {
+          deployed: true,
+          version,
+          ...serves && { serves },
+          ...draft && { draft: draft.eid },
+        },
       }
     },
   },
@@ -4286,6 +4515,10 @@ let OURS: Row[] = [
             'part an earlier answer named. Leave it out to start at the ' +
             'beginning',
         },
+        draft: str(
+          'the id of the draft the file is read from; left out, this ' +
+            "conversation's own draft over the live files",
+        ),
       },
       required: ['app', 'path'],
     },
@@ -4296,7 +4529,12 @@ let OURS: Row[] = [
       if (!(Number.isSafeInteger(from) && from >= 1)) {
         throw refuse('arguments', `part: ${args.part} — a whole number from 1`)
       }
-      let draft = await drafting(r2RawObjects(ctx.env.BLOBS), ctx.dir, app)
+      let draft = await drafting(
+        r2RawObjects(ctx.env.BLOBS),
+        ctx.dir,
+        app,
+        chosen(app, await draftsOf(ctx.dir, app), who, draftArg(args)),
+      )
       let files = await texts(
         draft.view,
         `${draft.root}/`,
@@ -6358,7 +6596,7 @@ let OURS: Row[] = [
         app = current.app!
       }
       let onto = { space, app }
-      let { wrote } = await copied(ctx, source, onto, who)
+      let { wrote, draft } = await copied(ctx, source, onto, who)
       if (ctx.reopen) {
         let current = await reacquire(ctx, space, app)
         space = current.space
@@ -6380,6 +6618,7 @@ let OURS: Row[] = [
           preserve: true,
           accepted,
           message: crossed(theirs, version - 1, version) || undefined,
+          draft,
         },
       )
       return {
@@ -6474,7 +6713,12 @@ let OURS: Row[] = [
           )
         ? 'required'
         : undefined
-      let { wrote, gone } = await copied(ctx, source, { space, app }, who)
+      let { wrote, gone, draft } = await copied(
+        ctx,
+        source,
+        { space, app },
+        who,
+      )
       // The asks for what the new version uses that the copy did not, before
       // the release, which binds what the copy is connected to.
       let asked = await carried(ctx.env, space, app, from.app.eid)
@@ -6494,6 +6738,7 @@ let OURS: Row[] = [
           preserve: true,
           accepted,
           message: crossed(theirs, was, to) || undefined,
+          draft,
         },
       )
       await ctx.dir.apply({

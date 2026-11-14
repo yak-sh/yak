@@ -59,7 +59,7 @@
         "draft": {
           "type": "string",
           "stamped": true,
-          "description": "the draft its edits since the served release belong to: the written rows carrying it are those edits"
+          "description": "the app's one draft before drafts were rows (app_draft): read as an app_draft row of the same eid until the store mover writes that row and drops this"
         },
         "fence": {
           "type": "string",
@@ -69,7 +69,7 @@
         "followed": {
           "type": "string",
           "stamped": true,
-          "description": "the app's preview link, kept across deploys: each write to its draft, and each deploy, is told to the link's pages"
+          "description": "the app's preview link before each draft had its own: a link sealed with it serves the draft that held no author (app_draft.by none), else the release, on the link's own store"
         },
         "store": {
           "type": "string",
@@ -916,7 +916,7 @@
       "component": true,
       "type": "object",
       "wire": false,
-      "description": "One file written into an app's draft: its path, the SHA-256 naming the bytes the write left there (stored once, under that address), or none where the write deleted it, the SHA-256 of what it replaced, and who wrote it when. A draft is the newest of these per path among the rows carrying it, and every row for a path is that path's history.",
+      "description": "One file written into an app's draft: its path, the SHA-256 naming the bytes the write left there (stored once, under that address), or none where the write deleted it, the SHA-256 of what it replaced, and who wrote it when. A draft (app_draft) is the newest of these per path among the rows naming it, over the live release, and every row for a path is that path's history.",
       "properties": {
         "app": {
           "type": "string",
@@ -925,7 +925,7 @@
         },
         "draft": {
           "type": "string",
-          "description": "the app's draft when it was written"
+          "description": "the draft it was written into: an app_draft row while that draft is open"
         },
         "path": {
           "type": "string",
@@ -953,6 +953,45 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true
+        }
+      }
+    },
+    "app_draft": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "One open draft of an app: edits to its files that no release has taken yet, held apart from every other draft so each writer releases only their own. Its edits are the written rows naming it. A release or a discard deletes it; the written rows stay as each path's history.",
+      "properties": {
+        "app": {
+          "type": "string",
+          "ref": "app",
+          "death": "cascade"
+        },
+        "base": {
+          "type": "number",
+          "description": "the app's live version when the draft opened; none where the app had no release"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the person whose draft it is; none for the draft an app held before drafts were rows, which anyone with a seat may release"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the connector session that opened it, its instrument; none for a person's own edits in the browser, which share one draft"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when it opened"
+        },
+        "previewed": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when its preview link was first asked for, after which each write to it is told to that link's pages; none where nobody has previewed it"
         }
       }
     },

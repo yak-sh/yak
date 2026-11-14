@@ -27,6 +27,7 @@ import { directoryOf } from './directory.ts'
 import { PICTURES } from './operator-draw.ts'
 import { inApp } from './tool.ts'
 import { linkOf } from './preview.ts'
+import { draftsOf, theirs } from './written.ts'
 import { CallError } from '@yaks/tools/errors'
 
 /** A person's Updates in a space, and how many wait on them: what needs
@@ -433,14 +434,20 @@ export let shownAnswer = async (
   if (!q.has('draft')) return undefined
   if (!env.SESSION_SECRET) return missing('draft')
   let dir = directoryOf(env.STORE)
-  let app = q.get('draft')!
-  if (!/^[0-9a-f-]{36}$/i.test(app)) return missing('draft')
-  let held = await dir.appAt(app)
+  // A draft by its own id, or an app's, whose draft is the reader's own
+  // (written.ts `theirs`).
+  let shown = q.get('draft')!
+  if (!/^[0-9a-f-]{36}$/i.test(shown)) return missing('draft')
+  let named = await dir.draftAt(shown)
+  let held = await dir.appAt(named?.app ?? shown)
   if (!held || held.app.space != space.eid) return missing('draft')
   let ctx = { env, dir, person: who.person ?? '' }
   let found = await inApp(ctx, { space: space.slug, app: held.app.slug })
     .catch((e) => e instanceof CallError ? null : Promise.reject(e))
   if (!found) return missing('draft')
-  let { at } = await linkOf(ctx, space, found.app, found.who)
+  let of = named?.draft ??
+    theirs(await draftsOf(dir, found.app), found.who)
+  if (!of) return missing('draft')
+  let { at } = await linkOf(ctx, space, found.app, found.who, of)
   return new Response(null, { status: 302, headers: { location: at } })
 }

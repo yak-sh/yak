@@ -559,15 +559,32 @@ deploy selects its `$speaks` for writes, dry runs, streamed imports, reads,
 subscriptions and vocabulary declarations, including composed app/home access.
 Core platform columns remain owned by the platform's vocabulary.
 
+## Drafts
+
+An app holds a draft per writer (D-414, D-453): an
+`app_draft{app, base, by,
+via, at, previewed}` row in the directory, its edits
+the `written` rows naming it (written.ts). A write lands in the draft its call
+names, else the one its connector session opened (`via`, the session's
+instrument), else a new one; a person's own edits in the browser share one
+(`via` none). `draft: 'new'` opens another, so one conversation can hold
+several. A release takes one draft (`releasing`) and deletes its row; a discard
+deletes it unreleased. The draft an app held before drafts were rows,
+`app.draft`, reads as an `app_draft` with no author (`withLegacy`) until a
+write, a release or the store mover (draft-move.ts) writes its row.
+
 ## Draft previews
 
-`app_preview` gives an app's private link (`app.followed`, preview.ts), minted
-once and kept across deploys: it serves the app's draft, or the release where
-there is none. Each request serves the draft's newest `written` rows over the
-release as a release of their own, built the first time the link serves that
-state: what changed is compiled, and the worker, the link's own Store's
-vocabulary and seed rows are set up again only when a write changed them. Each
-write, and each deploy, is told to the link's pages over that Store's socket
+`app_preview` gives a draft's private link (preview.ts): each draft has its own,
+on a Store of its own (`preview/<draft>`), so drafts preview side by side on
+separate test data. A ticket sealed before drafts had links names `app.followed`
+and shows the draft with no author. Once a release takes the draft its link
+serves what was released. Each request serves the draft's newest `written` rows
+over the release as a release of their own, built the first time the link serves
+that state: what changed is compiled, and the worker, the link's own Store's
+vocabulary and seed rows are set up again only when a write changed them. From
+the first time its link is asked for (`app_draft.previewed`), each write to the
+draft, and its release, is told to the link's pages over that Store's socket
 (`{"draft":…}`), and public/release.js swaps a stylesheet in place or reloads.
 The Store's expiry alarm, thirty days after the draft's last change, removes its
 test data and script. Browser screenshots are `yak-browser`'s, the sibling

@@ -6,29 +6,40 @@ import { clock, test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Objects } from '@yaks/blob'
 import { guard } from '@yaks/graph/guard'
+import { token } from '@yaks/graph/sha256'
 import { Stale } from '@yaks/graph/errors'
 import type { Bundle } from '@yaks/graph/bundle'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import type { App, Directory, Space } from './directory.ts'
 import { addressed, sha256 } from './versions.ts'
+import type { Who } from './session.ts'
 import {
+  type AppDraft,
   type Change,
+  chosen,
   deleting,
   type Drafted,
   drafting,
-  followed,
+  draftsOf,
   goingBack,
   history,
   modifying,
+  NEW,
+  previewed,
+  releasing,
   replaced,
   restoring,
   type Written,
 } from './written.ts'
+import { draftMove } from './draft-move.ts'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let APP = 'a0000000-0000-4000-8000-000000000001'
-let WHO = { person: ADA, role: 'owner' as const }
+let WHO: Who = { person: ADA, role: 'owner' }
+// Two conversations of Ada's own agent, each its connector session.
+let ONE: Who = { ...WHO, agent: 'claude-ai', via: 'session-one' }
+let TWO: Who = { ...WHO, agent: 'claude-ai', via: 'session-two' }
 let SPACE = { slug: 'ada' } as Space
 let encode = (text: string) => new TextEncoder().encode(text)
 // Content addressing is an input to modifying, as it is at the tool's door.
@@ -57,6 +68,14 @@ let vocab = loadVocab({
         version: 'number',
         fence: 'string',
         followed: 'string',
+      },
+      app_draft: {
+        app: 'string',
+        base: 'number',
+        by: 'string',
+        via: 'string',
+        at: 'string',
+        previewed: 'string',
       },
       written: {
         app: 'string',
@@ -106,6 +125,20 @@ let made = () => {
     reread: () => {
       seen = undefined
     },
+    drafts: (): Promise<AppDraft[]> =>
+      answer(() =>
+        store.read(`.app_draft.app=${APP}`).map((b) =>
+          ({
+            eid: b.entity.eid,
+            base: null,
+            by: null,
+            via: null,
+            at: null,
+            previewed: null,
+            ...(b.app_draft as object),
+          }) as AppDraft
+        )
+      ),
     written: (_app: App, draft?: string): Promise<Written[]> =>
       answer(() =>
         store.read(`.written.app=${APP}`).filter((b) =>
@@ -189,31 +222,42 @@ let made = () => {
         throw new Error('edits do not sweep')
       }),
   }
-  let edit = <T>(act: Parameters<typeof modifying<T>>[5]) =>
+  let edit = <T>(
+    act: Parameters<typeof modifying<T>>[5],
+    who = WHO,
+    asked?: string | null,
+  ) =>
     modifying(
       raw,
       dir,
       SPACE,
       app(),
-      WHO,
+      who,
       act,
       (news) => Promise.resolve(void heard.push(news)),
+      asked,
       () => new Date(time.now() + skew).toISOString(),
     )
-  let write = (sent: Record<string, string>) =>
-    edit(() =>
-      Promise.resolve({
-        changes: Object.entries(sent).map(([path, text]) => ({
-          path,
-          ...contents[text],
-        })),
-        value: null,
-      })
+  let write = (sent: Record<string, string>, who = WHO, asked?: string) =>
+    edit(
+      () =>
+        Promise.resolve({
+          changes: Object.entries(sent).map(([path, text]) => ({
+            path,
+            ...contents[text],
+          })),
+          value: null,
+        }),
+      who,
+      asked,
     )
-  let draft = () => drafting(raw, dir, app())
-  let read = async (path: string) => {
-    let d = await draft()
-    return new TextDecoder().decode(await d.view.get(`${d.root}/${path}`))
+  let drafts = () => draftsOf(dir, app())
+  let draft = async (who = WHO, asked?: string) =>
+    drafting(raw, dir, app(), chosen(app(), await drafts(), who, asked))
+  let read = async (path: string, who = WHO, asked?: string) => {
+    let d = await draft(who, asked)
+    let bytes = await d.view.read(`${d.root}/${path}`)
+    return bytes && new TextDecoder().decode(bytes)
   }
   let past = (path: string) => history(dir, app(), path)
   let restore = async (
@@ -244,7 +288,41 @@ let made = () => {
     read,
     puts,
     heard,
-    follow: () => followed(dir, SPACE, app(), WHO),
+    drafts,
+    app,
+    // The caller's own draft, previewed: its writes are told from then on.
+    preview: async (who = WHO) =>
+      previewed(
+        dir,
+        SPACE,
+        app(),
+        chosen(app(), await drafts(), who)!,
+        who,
+      ),
+    // The app as it stood before drafts were rows: one draft, `app.draft`,
+    // whose writes name it.
+    legacy: (id: string, rows: Record<string, string>) => {
+      for (let text of Object.values(rows)) {
+        bytes.set(addressed(sha(text)), contents[text].bytes)
+      }
+      return store.tx((tx) =>
+        tx.patch([
+          { entity: { eid: APP }, app: { draft: id } },
+          ...Object.entries(rows).map(([path, text], i) => ({
+            entity: { eid: `00000000-0000-4000-8000-00000000000${i}` },
+            written: {
+              app: APP,
+              draft: id,
+              path,
+              sha: sha(text),
+              size: text.length,
+              at: '2026-10-01T00:00:00.000Z',
+              by: ADA,
+            },
+          })),
+        ])
+      )
+    },
     past,
     restore,
     back,
@@ -277,23 +355,25 @@ test('a first write sends every new file at its content address', async () => {
   )
 })
 let unfollowed = made()
-test('a write to an app with a preview link tells its files and shas once they land; one that changes nothing, or to an app with no link, tells nobody', async () => {
-  let { write, heard, draft, follow } = made()
-  let link = (await follow()).followed!
+test('a write to a draft once previewed tells its files and shas once they land at the draft’s own link; one that changes nothing, or to a draft nobody previewed, tells nobody', async () => {
+  let { write, heard, draft, preview } = made()
+  await write({ 'a.txt': 'two' })
+  heard.length = 0
+  let link = (await preview()).eid
   await write({ 'a.txt': 'one', 'b.txt': 'two' })
   await write({ 'a.txt': 'one' })
   await unfollowed.write({ 'a.txt': 'one' })
   assertEquals(unfollowed.heard, [])
-  let { rows } = await draft()
+  let at = (await draft()).rows.map((w) => w.at!).sort().at(-1)!
   assertEquals(heard, [{
     app: APP,
     link,
-    draft: rows[0].draft!,
+    draft: link,
     files: [
       { path: 'a.txt', sha: sha('one') },
       { path: 'b.txt', sha: sha('two') },
     ],
-    at: rows[0].at!,
+    at,
   }])
 })
 test('a write sent again sends only what did not land, and says so', async () => {
@@ -384,7 +464,7 @@ test('same-head writers retry and preserve both versions in history', async () =
   let { write, read, past, collisions } = sameHeadWrites
   let before = collisions()
   await Promise.all([write({ 'a.txt': 'left' }), write({ 'a.txt': 'right' })])
-  let now = await read('a.txt')
+  let now = (await read('a.txt'))!
   assert(['left', 'right'].includes(now), now)
   assert(collisions() > before, 'same-head writes must exercise the retry')
   let all = await past('a.txt')
@@ -464,4 +544,119 @@ test('going back undoes the newest write across its files, and again the one bef
   await back()
   assertEquals(await files(), {})
   assertEquals(goingBack((await draft()).rows), undefined)
+})
+
+let apart = made()
+test('two conversations under one person each write in a draft of their own, and a browser in a third', async () => {
+  let { write, read, drafts } = apart
+  let one = await write({ 'a.txt': 'left' }, ONE)
+  let two = await write({ 'a.txt': 'right' }, TWO)
+  let hands = await write({ 'b.txt': 'three' })
+  assertEquals(
+    [await read('a.txt', ONE), await read('a.txt', TWO), await read('a.txt')],
+    ['left', 'right', null],
+  )
+  assertEquals(await read('b.txt', ONE), null)
+  assertEquals(
+    (await drafts()).map((d) => [d.eid, d.by, d.via, d.base]).sort(),
+    [
+      [one.draft, ADA, 'session-one', 0],
+      [two.draft, ADA, 'session-two', 0],
+      [hands.draft, ADA, null, 0],
+    ].sort(),
+  )
+  // The same conversation goes on in the draft it opened.
+  assertEquals((await write({ 'c.txt': 'two' }, ONE)).draft, one.draft)
+})
+
+let several = made()
+test('one conversation opens several drafts on purpose, and names the one each call means', async () => {
+  let { write, read } = several
+  let first = await write({ 'a.txt': 'left' }, ONE)
+  let second = await write({ 'a.txt': 'right' }, ONE, NEW)
+  assert(first.draft != second.draft)
+  assertEquals(await read('a.txt', ONE, second.draft!), 'right')
+  assertEquals(await read('a.txt', ONE, first.draft!), 'left')
+  let unnamed = await write({ 'a.txt': 'one' }, ONE).catch((e) => e)
+  assert(String(unnamed.message).includes(first.draft!), unnamed.message)
+  assert(String(unnamed.message).includes(second.draft!), unnamed.message)
+  await write({ 'b.txt': 'two' }, ONE, second.draft!)
+  assertEquals(await read('b.txt', ONE, second.draft!), 'two')
+  assertEquals(await read('b.txt', ONE, first.draft!), null)
+})
+
+let racing = made()
+test('two first writes of one conversation at once land in one draft', async () => {
+  let { write, drafts } = racing
+  let [a, b] = await Promise.all([
+    write({ 'a.txt': 'one' }, ONE),
+    write({ 'b.txt': 'two' }, ONE),
+  ])
+  assertEquals(a.draft, b.draft)
+  assertEquals((await drafts()).length, 1)
+})
+
+let shared = made()
+shared.legacy('d0000000-0000-4000-8000-0000000000d1', { 'a.txt': 'one' })
+test('the one draft an app held before drafts were rows is an open draft nobody owns, and writing in it makes its row', async () => {
+  let { write, read, drafts, app } = shared
+  let id = 'd0000000-0000-4000-8000-0000000000d1'
+  assertEquals((await drafts()).map((d) => [d.eid, d.by, d.legacy]), [
+    [id, null, true],
+  ])
+  // Nobody's own: a conversation that names nothing starts its own.
+  assertEquals(await read('a.txt', ONE), null)
+  assertEquals(await read('a.txt', ONE, id), 'one')
+  await write({ 'b.txt': 'two' }, ONE, id)
+  assertEquals(app().draft ?? null, null)
+  assertEquals(
+    (await drafts()).map((d) => [d.eid, d.by, d.via, d.at, d.legacy]),
+    [[id, null, null, '2026-10-01T00:00:00.000Z', undefined]],
+  )
+  assertEquals(
+    [await read('a.txt', ONE, id), await read('b.txt', ONE, id)],
+    ['one', 'two'],
+  )
+})
+
+let mine = (eid: string, by: string | null, via: string | null) =>
+  ({ eid, base: 1, by, via, at: null, previewed: null }) as AppDraft
+let APPROW = { eid: APP, slug: 'notes' } as App
+let BEN = 'b0000000-0000-4000-8000-0000000000be'
+test('a release takes the draft named, else the conversation’s own, else the person’s one open draft, and asks when there are several', () => {
+  let drafts = [
+    mine('one', ADA, 'session-one'),
+    mine('ben', BEN, null),
+    mine('old', null, null),
+  ]
+  assertEquals(releasing(APPROW, drafts, ONE)?.eid, 'one')
+  assertEquals(releasing(APPROW, drafts, ONE, 'ben')?.eid, 'ben')
+  assertThrows(() => releasing(APPROW, drafts, TWO), Error, 'one, old')
+  assertEquals(releasing(APPROW, drafts.slice(0, 2), TWO)?.eid, 'one')
+  assertEquals(releasing(APPROW, [drafts[1]], TWO), null)
+  assertThrows(() => chosen(APPROW, drafts, ONE, 'gone'), Error, 'released')
+})
+
+test('the mover makes each app.draft a row of the same eid with the live version as its base', () => {
+  let id = 'd0000000-0000-4000-8000-0000000000d1'
+  let at = '2026-10-01T00:00:00.000Z'
+  assertEquals(
+    draftMove(
+      { entity: { eid: APP }, app: { draft: id, version: 3 } },
+      () => [{ entity: { eid: 'w' }, written: { at } }],
+    ),
+    [
+      {
+        entity: { eid: id },
+        app_draft: { app: APP, base: 3, at },
+        $was: { app_draft: { app: token(null) } },
+      },
+      {
+        entity: { eid: APP },
+        app: { draft: null },
+        $was: { app: { draft: token(id) } },
+      },
+    ],
+  )
+  assertEquals(draftMove({ entity: { eid: APP }, app: { version: 3 } }), [])
 })

@@ -27,7 +27,8 @@ import { writes } from '@yaks/member'
 import { type Directory, directory, idOf } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { linkOf } from './preview.ts'
+import { linkOf, sealed } from './preview.ts'
+import { draftsOf } from './written.ts'
 import { opened, seal } from './lib/token.ts'
 import { sessionAt } from './session.ts'
 import { source, within } from '@yaks/workerd/rate'
@@ -242,7 +243,7 @@ export let showing = async (
   let [row] = await dir.read(
     `.written.by=${s.person}&.order=-written.at&.limit=1`,
   )
-  let written = row?.written as { app?: string } | undefined
+  let written = row?.written as { app?: string; draft?: string } | undefined
   if (!written?.app) return null
   let app = idOf(written.app)
   let [named] = await dir.read(`.entity.eid=${app}&.app`)
@@ -254,13 +255,21 @@ export let showing = async (
     !writes(found.role)
   ) return null
   let who = { person: s.person, role: 'viewer' as const, via: s.eid }
-  let { at } = await linkOf(
-    { env, dir, person: s.person },
-    found.space,
-    found.app,
-    who,
-    s.eid,
-  )
+  // The draft they last wrote in, which shows what was released once a
+  // release takes it.
+  let ctx = { env, dir, person: s.person }
+  let open = written.draft
+    ? (await draftsOf(dir, found.app)).find((d) => d.eid == written.draft)
+    : undefined
+  let { at } = open
+    ? await linkOf(ctx, found.space, found.app, who, open, s.eid)
+    : await sealed(
+      ctx,
+      found.space,
+      found.app,
+      written.draft ?? found.app.eid,
+      s.eid,
+    )
   return {
     app: found.app.eid,
     title: found.app.title || found.app.slug,

@@ -175,7 +175,14 @@ app_files:
           done: 'Restored %{path}'
   description: >-
     Write the app's files (index.html and any css, js or images beside it),
-    or list, read or delete them. files: [{path, content}, …] writes a whole
+    or list, read or delete them. Edits land in a draft: each conversation
+    writes in a draft of its own, opened by its first write over the live
+    files, and every write answers that draft's id and your other open
+    drafts. Pass draft to keep working in one, as after a reconnect;
+    draft: new opens another beside it, to try several directions at once.
+    op: list says which paths your draft changed and lists every other
+    open draft (who, which paths, since when); nobody locks anything. op:
+    discard closes a draft unreleased. files: [{path, content}, …] writes a whole
     app in one call, with op left out; path and content write one file, and
     base64 in place of content writes one that is not text (an image, the
     .wasm a worker.js imports). Check the draft with app_preview at phone and
@@ -388,10 +395,12 @@ app_preview:
     width (390 for a phone, 1280 for desktop), height, and wait in milliseconds.
     The browser runs on Cloudflare; no local files, CLI or computer is needed.
     Draft vocabulary, seed data and worker use a separate test store, so preview
-    edits never change released app data. The URL is the app's private
-    bearer link, the same across every app_deploy: a page open on it shows
-    each file written, a stylesheet in place and anything else by reloading,
-    and after a deploy what was released; do not publish it. screenshot: false returns only the URL without
+    edits never change released app data. It shows one draft: draft names
+    it, else this conversation's own, else your one open draft. Each draft
+    has its own private bearer link and test store, so several drafts
+    preview side by side: a page open on one shows each file written to that
+    draft, a stylesheet in place and anything else by reloading, and once
+    app_deploy releases the draft, what was released; do not publish it. screenshot: false returns only the URL without
     browser cost. Browser use costs $0.09/hour from the space's monthly
     budget; the result reports the estimated cost. External database, bucket
     and Durable Object bindings are not available in a draft preview.
@@ -402,8 +411,12 @@ app_deploy:
     doing: 'Releasing %{app}…'
     done: 'Released %{app}'
   description: >-
-    Release the app's staged files as a version: files, vocabulary and
+    Release one draft of the app as a version: files, vocabulary and
     worker begin serving together, and error reports name this version.
+    draft names the draft; left out, it is this conversation's own, else
+    your one open draft, and with several the answer lists them to choose
+    from. Its edits are laid over the live files, so paths it did not
+    change stay as live has them, and the app's other drafts stay open.
     Always send message: everything this release changes and why, in full,
     written from the change you just made, as a commit message says it. It
     is kept with the version, and every agent or Operator working on the app
@@ -412,7 +425,7 @@ app_deploy:
     app build on each other's changes rather than over them. Before releasing, check the private draft with app_preview at widths
     390 and 1280; inspect the returned screenshots, accessibility problems, console messages and
     page errors and fix the files. No local computer or browser is needed.
-    Send base as the live version the files were made on (app_files op: list
+    Send base as the live version the draft was made on (app_files op: list
     says it). When base is behind, the answer names the files this draft
     would remove or replace and keeps it unreleased; after reviewing them,
     repeat with the same base and confirm: true. Leaving base out releases as

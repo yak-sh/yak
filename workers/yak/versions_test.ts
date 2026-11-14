@@ -188,6 +188,7 @@ let directory = () => {
   }
   let dir = {
     switches: () => Promise.resolve([]),
+    drafts: () => Promise.resolve([]),
     // Per app, because the sweep now marks from every app in the bucket and
     // what one names has to be tellable from what another does.
     deploys: (app: App) =>

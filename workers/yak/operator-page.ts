@@ -101,7 +101,7 @@ import {
 } from './operator-draw.ts'
 import { reply, trouble } from '@yaks/session/conversation'
 import { does, keeps, type Made, madeOf, type Page, pagesOf } from './made.ts'
-import { drafting } from './written.ts'
+import { drafting, draftsOf, theirs } from './written.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { linkOf } from './preview.ts'
 import { VOCABS } from './vocab.ts'
@@ -1384,7 +1384,13 @@ let makingOf = async (
     .catch((e) => e instanceof CallError ? null : Promise.reject(e))
   if (!found) return null
   let { app } = found
-  let draft = await drafting(r2RawObjects(env.BLOBS), ctx.dir, app)
+  // The draft the person and their Operator write in (written.ts `theirs`).
+  let draft = await drafting(
+    r2RawObjects(env.BLOBS),
+    ctx.dir,
+    app,
+    theirs(await draftsOf(ctx.dir, app), found.who),
+  )
   let file = VOCABS.find((p) => p in draft.files)
   let words = file ? await draft.view.read(`${draft.root}/${file}`) : null
   let decoded = (bytes: Uint8Array | null) =>
@@ -1409,7 +1415,9 @@ let makingOf = async (
     live: app.source
       ? `https://${spaceHost(env, space.slug)}/${app.slug}/`
       : null,
-    draft: pending ? (await linkOf(ctx, space, app, found.who)).at : null,
+    draft: pending && draft.of
+      ? (await linkOf(ctx, space, app, found.who, draft.of)).at
+      : null,
   }
 }
 

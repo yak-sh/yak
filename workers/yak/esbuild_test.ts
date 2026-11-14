@@ -433,7 +433,7 @@ test('a remake that writes a new lock leaves nothing unreleased', async () => {
   )
   assertStringIncludes(
     await s.tool('app_files', { op: 'list' }),
-    'live v1, with nothing unreleased',
+    'These are live v1; this conversation has no draft',
   )
   assertStringIncludes(
     await s.tool('app_deploy', { base: 0 }),
@@ -510,7 +510,7 @@ let leftToDeploy = await (async () => {
   let app = (await s.dir.app(space, 'cookbook'))!
   let release = await s.release()
   let asks = s.asks.length
-  await fenced(s.dir, app, app.draft ?? null, OWNER)
+  await fenced(s.dir, app, null, OWNER)
   let began = Date.now()
   await remade(s.env, { app: app.eid, source: app.source! })
   return {
@@ -543,7 +543,7 @@ let lifted = await (async () => {
     entity: row.entity,
     release_remake: { fence: left },
   }], KERNEL)
-  await fenced(s.dir, app, app.draft ?? null, OWNER, left)
+  await fenced(s.dir, app, null, OWNER, left)
   ;[row] = await meta(s.env).query('.release_remake')
   await remade(s.env, row.release_remake as Remake)
   return {

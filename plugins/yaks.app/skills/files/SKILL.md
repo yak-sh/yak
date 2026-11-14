@@ -21,6 +21,28 @@ a `content`, or a list of them as `files: [{path, content}, …]`. The files sta
 in a private draft until `app_deploy` releases them. A refused deploy leaves the
 previous files, vocabulary and worker serving together.
 
+### Drafts
+
+An app holds a draft for each writer, so people and agents editing one app at
+once never release each other's edits:
+
+- Each conversation writes in a draft of its own, opened by its first write over
+  the live files. A person's own edits in the browser share one draft.
+- Every write answers its draft's id and your other open drafts of the app.
+  `draft: '<id>'` keeps a call in that draft, after a reconnect or from another
+  chat. `draft: 'new'` opens another beside it, to try several directions at
+  once and preview each.
+- A read with no `draft` sees this conversation's draft over the live files, or
+  the live files where it has none.
+- `app_files(app, op: 'list')` names the paths your draft changed, says when a
+  release since it opened changed one of them too, and lists every other open
+  draft: who holds it, which paths, since when. Nothing is locked.
+- `app_deploy` releases one draft: the one named, else this conversation's, else
+  your one open draft. Paths it did not change stay as live has them, and the
+  other drafts stay open.
+- `app_files(app, op: 'discard', draft)` closes a draft unreleased. What it
+  wrote stays in each file's history for `op: 'restore'`.
+
 ## Checking a draft with `app_preview`
 
 Build and check the app through the connector before releasing it. No local
@@ -48,13 +70,15 @@ shows up to 30 problems and five review items, with remaining counts. Findings
 never refuse a preview or release. Automated checks do not prove conformance;
 check keyboard use, reading order and content as well.
 
-The URL is a private bearer link to the app, one per app, that keeps working
-across every `app_deploy`. Anyone holding it can exercise the preview as its
-author while that author remains a writer; keep it private. Draft files,
-vocabulary, seed data and worker run with the link's own test store, kept across
-deploys and for thirty days after the draft last changed. Preview edits do not
-change released app data, and do not become released data later. External D1,
-R2, Vectorize and Durable Object bindings are unavailable in a draft preview.
+The URL is a private bearer link to one draft: `draft` names it, else this
+conversation's own, else your one open draft. Each draft has a link and a test
+store of its own, so several drafts preview side by side. Anyone holding it can
+exercise the preview as its author while that author remains a writer; keep it
+private. Draft files, vocabulary, seed data and worker run with the link's own
+test store, kept for thirty days after the draft last changed. Preview edits do
+not change released app data, and do not become released data later. External
+D1, R2, Vectorize and Durable Object bindings are unavailable in a draft
+preview.
 
 ### A preview that follows the draft
 
@@ -67,17 +91,17 @@ shows there as it lands, without calling `app_preview` again:
 - a change to `worker.js`, `vocab.json` or a seed file sets up the preview's
   worker or test store again first. A seed file applied again rewrites the rows
   it seeded rather than adding new ones;
-- an `app_deploy` reloads the page to show what was released, and the page goes
-  on following the next draft's writes.
+- an `app_deploy` of the draft reloads the page to show what was released, which
+  the link shows from then on.
 
 A TV can follow the person instead of one app. It opens `yaks.app/tv` and shows
 an eight-letter code; the person types it at `yaks.app/tv/pair` on their phone,
-or reads it out for `screen_pair`. The paired TV then shows the draft of the app
-they last wrote to, moving to another app when they write there, read-only: its
-page's writes are refused and what it keeps stays in the page. Each write is
-said over it for a few seconds as it lands ("Wrote styles.css"), and a deploy as
-"Released" and the app's title. They unpair it at `yaks.app/tv/pair`, and the TV
-shows a new code.
+or reads it out for `screen_pair`. The paired TV then shows the draft they last
+wrote to, moving to another when they write there, read-only: its page's writes
+are refused and what it keeps stays in the page. Each write is said over it for
+a few seconds as it lands ("Wrote styles.css"), and a deploy as "Released" and
+the app's title. They unpair it at `yaks.app/tv/pair`, and the TV shows a new
+code.
 
 Before either, the page receives a cancelable **`yak-draft` event on `window`**.
 Its `detail` is `{app, link, draft, files: [{path, sha, url, entries?}], at}`,
@@ -114,8 +138,9 @@ when needed, uses the ordinary compiler allowance. Opening an already prepared
 URL does not run a Cloudflare browser or incur browser time.
 
 `app_files(app, op: 'list')` lists their paths, each with the SHA-256 of its
-bytes, then the live version and whether the draft differs from it: the number
-`app_deploy` takes as `base`.
+bytes, then the live version and whether your draft differs from it, with the
+version it opened on, the number `app_deploy` takes as `base`, and the app's
+other open drafts.
 
 **To read an existing app, use one call**: `app_files(app, op: 'read')` returns
 every text file in it, each under its path and SHA-256, up to 64 KB in all, and

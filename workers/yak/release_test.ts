@@ -113,7 +113,7 @@ test('an erasure asked again counts a release it already swept as empty', async 
   let source = 'alice/.releases/app/live'
   await staged(files, { 'index.html': PAGE }, source).finish()
   let app = { source, draft: null } as unknown as App
-  let dir = {} as Directory
+  let dir = { drafts: () => Promise.resolve([]) } as unknown as Directory
   assertEquals(await holding(files, dir, app), ['index.html'])
   let swept = memory().files
   assertEquals(await holding(swept, dir, app), [])

@@ -226,13 +226,13 @@ test('a store-scoped page keeps borrowed component homes out of its graph', asyn
   equal(graph.uses, {})
 })
 
-// A socket on the link, as the store holds one: what it was sent.
-let heard = () => {
+// A socket on a draft's link, as its store holds one: what it was sent.
+let heard = (link: string) => {
   let sent: {
     draft: { link: string; draft: string | null; files: unknown }
   }[] = []
   let name = [...scenario.sockets.keys()].find((n) =>
-    n.includes(`preview/${app.followed}`)
+    n.includes(`preview/${link}`)
   )!
   scenario.sockets.get(name)!.push({
     readyState: 1,
@@ -248,13 +248,14 @@ let write = (path: string, content: string) =>
 
 test('the link follows the draft: each write is told to its pages and served on the next request, and the released page stays as it was', async () => {
   await run('app_deploy', { app: 'draft' })
+  await write('style.css', 'body { color: plum }')
   let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
   let link = String(out.value!.url)
+  let draft = String(out.value!.draft)
   let at = (path = '') => kernel(new Request(new URL(path, link)), env)
   let page = await (await at()).text()
-  app = (await dir.app(space, 'draft'))!
-  ok(page.includes(`data-yak-draft="${app.followed}"`), page)
-  let sent = heard()
+  ok(page.includes(`data-yak-draft="${draft}"`), page)
+  let sent = heard(draft)
   await write('style.css', 'body { color: tomato }')
   await write(
     'index.html',
@@ -262,10 +263,9 @@ test('the link follows the draft: each write is told to its pages and served on 
   )
   equal(await (await at('style.css')).text(), 'body { color: tomato }')
   ok((await (await at()).text()).includes('Soup tonight'))
-  let draft = (await dir.app(space, 'draft'))!.draft
   equal(sent.map((m) => [m.draft.link, m.draft.draft]), [
-    [app.followed, draft],
-    [app.followed, draft],
+    [draft, draft],
+    [draft, draft],
   ])
   equal(sent[0].draft.files, [{
     path: 'style.css',
@@ -287,7 +287,7 @@ test('a page drawn by @yaks/preact/host takes a write of its views module from t
   await write('views.js', views('Soup'))
   let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
   let link = String(out.value!.url)
-  let sent = heard()
+  let sent = heard(String(out.value!.draft))
   let { root, document, free } = stage()
   Object.defineProperty(document, 'baseURI', {
     value: link,
@@ -372,36 +372,73 @@ test("a seed edited in the draft rewrites the rows it seeded in the link's store
   equal(await notes(), ['seeded again'])
 })
 
-test("an open link rides through a deploy: its pages hear the release and see what was released, then the next draft's writes, all in the link's own store", async () => {
+test("an open link rides through its draft's release: its pages hear it and see what was released, and the next draft has a link of its own", async () => {
+  await write('index.html', '<html><head></head><body>Before</body></html>')
   let out = await tools[0].run(ctx, { app: 'draft', screenshot: false })
   let link = String(out.value!.url)
+  let draft = String(out.value!.draft)
   let at = (path = '') => kernel(new Request(new URL(path, link)), env)
-  await write('index.html', '<html><head></head><body>Before</body></html>')
   ok((await (await at()).text()).includes('Before'))
-  app = (await dir.app(space, 'draft'))!
-  let sent = heard()
+  let sent = heard(draft)
   await run('app_deploy', { app: 'draft' })
-  equal((await dir.app(space, 'draft'))!.draft, null)
+  app = (await dir.app(space, 'draft'))!
+  equal((await dir.drafts(app)).map((d) => d.eid), [])
   await new Promise((done) => setTimeout(done, 10))
   equal(sent.map((m) => [m.draft.link, m.draft.draft, m.draft.files]), [
-    [app.followed, null, []],
+    [draft, null, []],
   ])
   let page = await at()
   equal(page.status, 200)
   ok((await page.text()).includes('Before'))
   await write('index.html', '<html><head></head><body>After</body></html>')
-  let next = (await dir.app(space, 'draft'))!.draft
-  ok(next && next != app.draft)
-  equal(sent.at(-1)!.draft.link, app.followed)
-  equal(sent.at(-1)!.draft.draft, next)
-  ok((await (await at()).text()).includes('After'))
-  equal(
-    String(
-      (await tools[0].run(ctx, { app: 'draft', screenshot: false }))
-        .value!.url,
-    ),
-    link,
+  let next = (await dir.drafts(app)).map((d) => d.eid)
+  equal(next.length, 1)
+  ok(next[0] != draft)
+  ok((await (await at()).text()).includes('Before'))
+  let then = await tools[0].run(ctx, { app: 'draft', screenshot: false })
+  equal(then.value!.draft, next[0])
+  ok(String(then.value!.url) != link)
+  ok(
+    (await (await kernel(new Request(String(then.value!.url)), env)).text())
+      .includes('After'),
   )
+})
+
+test('two drafts of one app preview side by side, each at its own link on its own store', async () => {
+  let one = await run('app_files', {
+    app: 'draft',
+    path: 'index.html',
+    content: '<html><body>Warm</body></html>',
+  })
+  let two = await run('app_files', {
+    app: 'draft',
+    draft: 'new',
+    path: 'index.html',
+    content: '<html><body>Plain</body></html>',
+  })
+  let shown = async (draft: unknown) => {
+    let out = await tools[0].run(ctx, {
+      app: 'draft',
+      draft,
+      screenshot: false,
+    })
+    return {
+      url: String(out.value!.url),
+      text: await (await kernel(new Request(String(out.value!.url)), env))
+        .text(),
+    }
+  }
+  let [warm, plain] = [
+    await shown(one.value!.draft),
+    await shown(two.value!.draft),
+  ]
+  ok(warm.url != plain.url)
+  ok(warm.text.includes('Warm') && !warm.text.includes('Plain'))
+  ok(plain.text.includes('Plain') && !plain.text.includes('Warm'))
+  let stores = [...scenario.sockets.keys()].join(' ')
+  for (let d of [one.value!.draft, two.value!.draft]) {
+    ok(stores.includes(`preview/${d}`), stores)
+  }
 })
 
 // The platform declares `event` (@yaks/events). An app that declared it first

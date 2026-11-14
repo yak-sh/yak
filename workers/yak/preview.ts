@@ -1,10 +1,10 @@
-// An app's private preview link (D-136180): the app as its draft stands at
-// each request, the newest `written` rows over the release (written.ts),
-// against a store of the link's own and never the live one. The link is the
-// app's, not one draft's (`app.followed`): a deploy releases the draft and the
-// link goes on serving what was released, then the next draft. Nothing here
-// selects a release in the directory or opens the serving app's store for
-// writing.
+// A draft's private preview link (D-136180, D-453): the app as one of its
+// drafts stands at each request, the draft's newest `written` rows over the
+// release (written.ts), against a store of the link's own and never the live
+// one. Each draft has a link and a store of its own, so several drafts of one
+// app preview side by side, each with its own test data; once a release takes
+// the draft, its link serves what was released. Nothing here selects a
+// release in the directory or opens the serving app's store for writing.
 //
 // Each state of the draft is served as a release named for the files it holds,
 // built by the first request that finds it missing (`following`) and found
@@ -59,14 +59,19 @@ import { CallError } from '@yaks/tools/errors'
 import { addressed, BUILT, type Files, sha256 } from './versions.ts'
 import {
   AGE,
+  type AppDraft,
   type Draft,
   type Drafted,
   drafting,
-  followed,
+  draftsOf,
+  linkFor,
   newest,
   overlaid,
+  previewed,
+  releasing,
   served,
   type Tell,
+  withLegacy,
 } from './written.ts'
 import type { Objects } from '@yaks/blob'
 import type { Cookie, View, Visit } from './browser/capture.ts'
@@ -80,14 +85,16 @@ let encode = (value: string) => new TextEncoder().encode(value)
 let decode = (value: Uint8Array | null) =>
   value && new TextDecoder().decode(value)
 
-// What a link names: the app's link it follows (`app.followed`), as whom.
-// A ticket sealed before links outlived a deploy names it as `draft`. A
+// What a link names: the draft it shows (`of`), as whom. A ticket sealed
+// before each draft had its own link names the app's (`app.followed`) as
+// `link`, or before that as `draft`, and shows the draft no author holds. A
 // ticket for a paired TV names its screen (screen.ts): it reads the draft as
 // a viewer, and only while that screen stays paired with the person.
 type Ticket = {
   app: string
   space: string
   person: string
+  of?: string
   link?: string
   draft?: string
   screen?: string
@@ -365,17 +372,18 @@ let built = async (
 let states = new Map<string, Promise<{ worker: boolean }>>()
 let HELD = 256
 
-/** The app as its draft stands now, or as released where it has none, built
+/** The app as a draft stands now, or as released once it is closed, built
  * for the link where no isolate has served this state before. */
 let following = async (
   ctx: Ctx,
   space: Space,
   app: App,
+  of: AppDraft | null,
   link: string,
   mount: string,
   who: Who,
 ) => {
-  let d = await drafting(r2RawObjects(ctx.env.BLOBS), ctx.dir, app)
+  let d = await drafting(r2RawObjects(ctx.env.BLOBS), ctx.dir, app, of)
   let source = stateOf(space, app, link, d.files)
   let state = states.get(source)
   if (!state) {
@@ -440,9 +448,10 @@ let reached = async (
   }
 }
 
-/** Each write to an app's draft, and each release, told to the pages of the
- * app's preview link the way a release is told to the app's (graph.ts
- * `/drafted`). A link nobody opened has no pages to hear it. */
+/** Each write to a draft, and its release, told to the pages of the draft's
+ * preview link the way a release is told to the app's (graph.ts
+ * `/drafted`). A draft nobody previewed is told nothing (written.ts
+ * `previewed`). */
 export let watching =
   (env: Env, space: Space, app: App): Tell => async (news, before) => {
     try {
@@ -469,35 +478,72 @@ export let watching =
     }
   }
 
-/** An app's preview link for the caller (`ctx.person`), and the app with
- * its link (`followed`, minted the first time one is asked for): where it is
- * mounted, and its address. Nothing is built until a page asks for it. A
- * link for a paired TV names its `screen`. */
+/** A draft's preview link for the caller (`ctx.person`), with the draft
+ * marked as previewed, so its writes are told to the link's pages from now
+ * on: where it is mounted, and its address. Nothing is built until a page
+ * asks for it. A link for a paired TV names its `screen`. */
 export let linkOf = async (
   ctx: Ctx,
   space: Space,
   app: App,
   who: Who,
+  of: AppDraft,
   screen?: string,
 ) => {
-  let open = await followed(ctx.dir, space, app, who)
+  let draft = await previewed(ctx.dir, space, app, of, who)
+  return {
+    draft,
+    link: linkFor(app, draft),
+    ...await sealed(ctx, space, app, draft.eid, screen),
+  }
+}
+
+/** The link to a draft by its id alone, marking nothing: a draft no longer
+ * open shows what was released (`target`). */
+export let sealed = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  of: string,
+  screen?: string,
+) => {
   let ticket = await seal(
     'preview',
     {
       app: app.eid,
       space: space.eid,
       person: ctx.person,
-      link: open.followed!,
+      of,
       ...screen ? { screen } : {},
     } satisfies Ticket,
     ctx.env.SESSION_SECRET!,
   )
   let mount = `/${app.slug}/_preview/${ticket}/`
   return {
-    open,
     mount,
     at: `https://${spaceHost(ctx.env, space.slug)}${mount}`,
   }
+}
+
+/** The draft a preview of an app shows when the caller names none: theirs,
+ * as a release would take it (written.ts `releasing`). Refused where the app
+ * has no open draft. */
+export let shownDraft = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  who: Who,
+  asked?: string | null,
+) => {
+  let d = releasing(app, await draftsOf(ctx.dir, app), who, asked)
+  if (!d) {
+    throw refuse(
+      'missing',
+      `${space.slug}/${app.slug} has no open draft: app_files writes open ` +
+        'one, and app_preview with released: true shows the live app',
+    )
+  }
+  return d
 }
 
 // A page as yak-browser rendered it, held on the space's budget for the most
@@ -634,18 +680,22 @@ export let preview = async (ctx: Ctx, args: Args) => {
     )
   }
   if (live) return released(ctx, space, app, who, path, view, screenshot)
-  let { open, mount, at } = await linkOf(ctx, space, app, who)
-  await following(ctx, space, open, open.followed!, mount, who)
+  if (args.draft != null && typeof args.draft != 'string') {
+    throw refuse('arguments', "draft: the id of one of the app's drafts")
+  }
+  let of = await shownDraft(ctx, space, app, who, args.draft as string)
+  let { draft, link, mount, at } = await linkOf(ctx, space, app, who, of)
+  await following(ctx, space, app, draft, link, mount, who)
   let url = at + path
   let value: Record<string, unknown> = {
     url,
-    draft: open.draft ?? null,
+    draft: draft.eid,
     ...view,
     isolated: true,
     cost: 0,
   }
   let follows =
-    'It follows the app from now on, across every app_deploy: an open page takes each write to the draft as it lands, a stylesheet in place and anything else by reloading, keeping its scroll and typed fields, and after a deploy shows what was released, then the next draft.'
+    `It shows draft ${draft.eid} on a test store of its own: an open page takes each write to that draft as it lands, a stylesheet in place and anything else by reloading, keeping its scroll and typed fields, and once app_deploy releases the draft shows what was released. Each draft of the app has its own link.`
   if (!screenshot) {
     return {
       text:
@@ -671,15 +721,16 @@ let target = async (req: Request, env: Env) => {
   let match = /^\/([^/]+)\/_preview\/([^/]+)\/(.*)$/.exec(url.pathname)
   if (!match || !env.SESSION_SECRET) return null
   let ticket = await opened<Ticket>('preview', match[2], env.SESSION_SECRET)
-  let link = ticket?.link ?? ticket?.draft
-  if (!ticket || typeof link != 'string') return null
+  let named = ticket?.of ?? ticket?.link ?? ticket?.draft
+  if (!ticket || typeof named != 'string') return null
   let dir = directory(bound(env.DIRECTORY, directoryPart.fetch, env), {
     copy: copyOf(env),
     time: env.CLOCK,
   })
-  let [found, paired] = await Promise.all([
+  let [found, paired, rows] = await Promise.all([
     dir.target(ticket.space, ticket.person, ticket.app),
     ticket.screen ? screenAt(dir, ticket.screen) : null,
+    dir.drafts({ eid: ticket.app } as App),
   ])
   if (ticket.screen && paired?.person != ticket.person) return null
   let pair = found.space && found.app
@@ -689,9 +740,18 @@ let target = async (req: Request, env: Env) => {
   if (
     !pair || pair.space.eid != ticket.space ||
     url.hostname != spaceHost(env, pair.space.slug) ||
-    pair.app.slug != match[1] || pair.app.followed != link ||
+    pair.app.slug != match[1] ||
+    (!ticket.of && pair.app.followed != named) ||
     pair.app.trashed || pair.space.trashed || !writes(role)
   ) return null
+  // The draft it shows while that draft is open, and the release once it is
+  // closed; a ticket from before each draft had a link shows the draft no
+  // author holds.
+  let drafts = withLegacy(pair.app, rows)
+  let of = ticket.of
+    ? drafts.find((d) => d.eid == ticket.of) ?? null
+    : drafts.find((d) => !d.by) ?? null
+  let link = of ? linkFor(pair.app, of) : named
   let mount = url.pathname.slice(0, url.pathname.length - match[3].length)
   let app = previewing(pair.app, link, pair.app.source ?? null, mount)
   // The ticket's writer is checked above on every callback. A directory
@@ -712,6 +772,7 @@ let target = async (req: Request, env: Env) => {
     space: pair.space,
     app: pair.app,
     person: ticket.person,
+    of,
     link,
     preview: app,
     who,
@@ -767,6 +828,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       { env, dir, person: found.person },
       space,
       found.app,
+      found.of,
       found.link,
       mount,
       who,
