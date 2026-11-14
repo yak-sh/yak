@@ -102,21 +102,21 @@ for (let [prop, by] of cases) {
   }
 }
 
-// Newest first under a comparison, the page walks the order's index; past a
-// deep cursor it starts there.
-test('a page down a held order past its cursor reads its own rows however deep the cursor', () => {
-  for (
-    let q of [
-      '.thing.rank>-1000 .order=-thing.rank',
-      '.thing.note>m .order=-thing.note',
-    ]
-  ) {
-    let at = (i: number) => page(`${q} .limit=20 .after=e${i}`)
-    let [shallow, deep] = [at(n - 101), at(1001)]
-    equal(deep.eids.length, 20)
-    ok(
-      deep.steps < 2 * shallow.steps,
-      `${q}: ${deep.steps} vs ${shallow.steps} steps`,
-    )
+// Under a test requiring the order's value, bare or a comparison, the page
+// walks the order's index in either direction and starts at its cursor: near
+// either end of the order, it reads about as many rows as the first page.
+test('a page in a held order past its cursor reads its own rows wherever the cursor', () => {
+  for (let prop of ['thing.rank', 'thing.note']) {
+    for (let held of ['', prop == 'thing.rank' ? '>-1000' : '>m']) {
+      for (let desc of ['', '-']) {
+        let q = `.${prop}${held} .order=${desc}${prop} .limit=20`
+        let first = page(q).steps
+        for (let i of [n - 101, 1001]) {
+          let { eids, steps } = page(`${q} .after=e${i}`)
+          equal(eids.length, 20)
+          ok(steps < 3 * first, `${q} .after=e${i}: ${steps} vs ${first} steps`)
+        }
+      }
+    }
   }
 })

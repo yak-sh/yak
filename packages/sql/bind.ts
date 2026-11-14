@@ -4128,9 +4128,16 @@ let halved = (ast: And, ctx: Ctx): Frag | undefined => {
 // put in order. A filter another index seeks, or a needle few rows hold,
 // already bounds what is sorted. A bound on the ordered property instead
 // narrows the same walk, which still stops at the page.
+//
+// A page past a cursor is that walk alone, started at the cursor, where a
+// test requires the ordered value: read any other way, it sorted every row
+// past the cursor, 1.24M VM steps for a page of 20 of 20,000 things by
+// `-thing.rank` under `.thing.rank` (T-166104). Without such a test, its
+// halves would each need the cursor, and it is read as one statement.
 let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
   let limit = find<Limit>(ast.clauses, 'limit')
   let order = find<Order>(ast.clauses, 'order')
+  let after = find<After>(ast.clauses, 'after')
   if (
     !limit || limit.n <= 0 || !Number.isSafeInteger(limit.n) || !order ||
     ctx.walk !== undefined || ctx.half || ctx.unordered || ctx.storageOrder ||
@@ -4143,9 +4150,7 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
       ...ast,
       clauses: ast.clauses.filter((c) => c != order),
     }) ||
-    ast.clauses.some((c) =>
-      ['after', 'count', 'tally', 'distinct'].includes(c.kind)
-    )
+    ast.clauses.some((c) => ['count', 'tally', 'distinct'].includes(c.kind))
   ) return
   let desc = order.value.startsWith('-')
   let path = order.value.slice(Number(desc)).split('.')
@@ -4174,7 +4179,25 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
       : c.kind == 'and' && c.clauses.some(seeks)
   if (filters.some(seeks)) return
   let page = (road: Partial<Ctx>, has: Pred[], n: Cond | number): Query =>
-    arm(ctx, [...filters, ...has, order], limit.n, road, n)
+    arm(
+      ctx,
+      [...filters, ...has, order, ...after ? [after] : []],
+      limit.n,
+      road,
+      n,
+    )
+  // A test requiring the ordered value excludes nulls already. One index
+  // walk answers it, including empty text where that test admits it; there
+  // is no missing-value half to scan before an ascending page.
+  let required = flattened(filters).some((c) =>
+    c.kind == 'pred' && !c.not && !c.where &&
+    c.path.join('.') == path.join('.') && needs(opOf(c), c.value)
+  )
+  if (after) {
+    return required
+      ? render(page({ walk: { comp, index } }, [], limit.n))
+      : undefined
+  }
   // Beside a test, fewer than a page of the component that drives the read
   // may pass it, and the walk then reads the whole index to learn so: 6 s for
   // the box's live sessions, `.session !session.ended`, among 3.5 million
@@ -4228,15 +4251,7 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
       limit.n,
     )
   }
-  // A test requiring the ordered value excludes nulls already. One index
-  // walk answers it, including empty text where that test admits it; there
-  // is no missing-value half to scan before an ascending page.
-  if (
-    flattened(filters).some((c) =>
-      c.kind == 'pred' && !c.not && !c.where &&
-      c.path.join('.') == path.join('.') && needs(opOf(c), c.value)
-    )
-  ) return render(page({ walk: { comp, index } }, [], limit.n))
+  if (required) return render(page({ walk: { comp, index } }, [], limit.n))
   let holding: Pred = { kind: 'pred', path, op: '!', value: null }
   // Blank, so it holds an empty text too, which the holding half may also read.
   let lacking: Pred = {
@@ -6148,11 +6163,17 @@ let seekOf = (ctx: Ctx, cs: Clause[], sort: Sort | null): Seek | null => {
 // every other stands in (a blob sorts above any number or text, and nothing
 // sorts below the empty text in a text column or below -Infinity in a
 // numeric one).
+//
+// The query's own test may bound the same side, as `.thing.rank>-1000` does
+// an ascending page, and SQLite starts a walk at only one bound of a side: of
+// two it judges alike, the one written first, which is the query's. That walk
+// read every row before the cursor (T-166104). `likelihood` tells SQLite this
+// bound is the narrow one, wherever it stands.
 let seekFrom = (seek: Seek, v: string, desc: boolean, a: Frag): Frag =>
-  desc ? spliced(`${v} <= coalesce(`, a, `, x'ff')`) : spliced(
-    `${v} >= coalesce(`,
+  spliced(
+    `likelihood(${v} ${desc ? '<=' : '>='} coalesce(`,
     a,
-    seek.affinity == 'text' ? `, '')` : ', -9e999)',
+    `, ${desc ? "x'ff'" : seek.affinity == 'text' ? "''" : '-9e999'}), 0.001)`,
   )
 
 // Past the anchor in an explicit order: its value first, the tie after.
