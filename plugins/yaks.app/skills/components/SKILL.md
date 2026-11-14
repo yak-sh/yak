@@ -1,6 +1,6 @@
 ---
 name: components
-description: "Components and vocab.json (yaks.app). Every built-in component an app already has (doc, task, filed, comment, alias, attachment, created and the rest), property by property, and vocab.json for declaring an app's own components: the property types, schema refusals, who may write a component and how often (floor, pace), rows kept to members (readers), a component kept from readers below a level (shown), private per-person rows (personal), full-text search on a property, what a later deploy may change, the reserved component names, when to use a property instead of doc.body, and edges."
+description: "Components and vocab.json (yaks.app). Every built-in component an app already has (doc, task, filed, comment, alias, attachment, created and the rest), property by property, and vocab.json for declaring an app's own components: the property types, schema refusals, who may write a component and how often (floor, pace), rows kept to members (readers), a component kept from readers below a level (shown), kinds and what a whole one carries (kinds), private per-person rows (personal), full-text search on a property, what a later deploy may change, the reserved component names, when to use a property instead of doc.body, and edges."
 ---
 
 # Components and vocab.json
@@ -657,6 +657,43 @@ forms record what each person asked for, keeps that list to its editors:
 A form question whose `fills` is `interests.choices` adds what the person ticked
 to their own `interests`, which their entry shows to the app's editors and
 owners and to no viewer.
+
+## Kinds: what a whole one carries
+
+A kind names a combination of components: what makes an entity a meal, and what
+a whole meal also carries. Without `kinds`, each component an app declares is a
+kind of its own name. Declare `kinds` beside `$defs` when an entity of the app
+is more than one component:
+
+    { "$defs": {
+        "dish":    { "description": "A dish someone cooks",
+                     "properties": { "serves": { "type": "number" } } },
+        "tasting": { "description": "How it went the last time",
+                     "properties": { "stars": { "type": "number" } } } },
+      "kinds": {
+        "meal": { "description": "A dish cooked for a night, and how it went",
+                  "is": ["dish"],
+                  "with": { "doc": true, "tasting": { "stars": 0 } } } } }
+
+- **`is`** lists the components an entity carries to be this kind. Left out, it
+  is the component of the kind's own name. A row with `dish` reads back as
+  `kind: "meal"`.
+- **`with`** lists what a whole one also carries. `true` means whoever writes
+  one supplies it. An object holds the values the store gives the component when
+  an entity of the kind lacks it: writing `dish` through any door (a page, a
+  command, `graph_apply`) also writes `tasting{stars: 0}` in the same write,
+  unless the entity has a `tasting` already or the write sets one.
+- **`description`** and `title` say what the kind is, and the generated
+  `add_meal` and `find_meal` say it too. `examples` are whole bundles of one.
+
+Once `vocab.json` declares `kinds`, those are the app's kinds: a component of it
+is a kind only where it says `"kind": true` itself, so `tasting` gets no
+commands of its own. A kind names only components the app declares, the
+platform's (`doc`, `alias`), or those of its `"platform"` packages; any other
+name is refused at the deploy. The Operator sees each of its space's apps with
+its kinds, one line each:
+`meal: dish{serves}, doc{title, body}; a rule adds
+tasting{stars}`.
 
 ## Private per-person rows: `personal`
 

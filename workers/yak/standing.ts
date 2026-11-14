@@ -58,8 +58,8 @@ import {
 } from './declared.ts'
 import { at, vocabAt } from './reach.ts'
 import { told } from './memory.ts'
-import { generated } from './kinds.ts'
-import { unwritten } from './vocab.ts'
+import { generated, index, kindsOf } from './kinds.ts'
+import { meant, shapeOf, unwritten } from './vocab.ts'
 import { background, caught } from './defects.ts'
 import type { Ctx } from './tools.ts'
 
@@ -97,8 +97,10 @@ export let tooLong = (path: string, n: number): string =>
 export type Listed = {
   space: Space
   app: App
-  /** the components its vocab.json declares */
+  /** the kinds its vocab.json declares (kinds.ts) */
   kinds: string[]
+  /** each kind, what it is and what a whole one carries (kinds.ts `index`) */
+  shapes: string[]
   /** the commands it declares, as `command` takes them (declared.ts) */
   commands: string[]
   /** of those, the ones its vocab.json wrote rather than the add_ and find_
@@ -115,7 +117,10 @@ export type Entry = Listed & {
 }
 
 // What a line says beyond the rows naming it.
-type Line = Pick<Listed, 'kinds' | 'commands' | 'does' | 'noted'>
+type Line = Pick<
+  Listed,
+  'kinds' | 'shapes' | 'commands' | 'does' | 'noted'
+>
 
 // Each app's notes this isolate has read, by the release holding them: a
 // release's files never change under its name (release.ts), so the notes read
@@ -161,23 +166,26 @@ let notesAt = async (env: Env, source: string) => {
   return new TextDecoder().decode(bytes).slice(0, CAP).trim()
 }
 
-// The words an app declares as its own, as the store last accepted them
-// (reach.ts `vocabAt`). A store that cannot answer says nothing, which reads
-// as an app with no words of its own.
-let kindsOf = async (ctx: Ctx, space: Space, app: App): Promise<string[]> =>
-  Object.keys((await vocabAt(ctx.env, space, app)).$defs ?? {})
+// The kinds an app declares, as the store last accepted its words (reach.ts
+// `vocabAt`): their names and the index of their shapes, with the platform's
+// own components (`doc`) said by their properties. A store that cannot answer
+// says nothing, which reads as an app with no words of its own.
+let kindsAt = async (ctx: Ctx, space: Space, app: App) => {
+  let doc = meant(await vocabAt(ctx.env, space, app))
+  return { kinds: kindsOf(doc).map((k) => k.name), shapes: index(doc, shapeOf) }
+}
 
 // One app's line, read from its release and its declaration, the three reads
 // at once (T-34986).
 let lineOf = async (ctx: Ctx, space: Space, app: App): Promise<Line> => {
-  let [said, kinds, tools] = await Promise.all([
+  let [said, { kinds, shapes }, tools] = await Promise.all([
     notesOf(ctx.env, app),
-    kindsOf(ctx, space, app),
+    kindsAt(ctx, space, app),
     toolsOf(ctx.env, space, app),
   ])
   let commands = Object.keys(tools)
   let does = commands.filter((name) => !generated(name, tools[name]))
-  return { kinds, commands, does, noted: !!said }
+  return { kinds, shapes, commands, does, noted: !!said }
 }
 
 // What a line is read from: the release holding the notes and the declaration
@@ -225,12 +233,13 @@ export let listed = async (
   let names = all.map(({ space, app }) => named(space, app))
   let missed = names.some((n) => n && !heldLines.has(n))
   let roster = missed && ctx.person ? await kept(ctx.env, ctx.person) : {}
-  // A line kept before lines said what an app does is read again, once.
+  // A line kept before lines said what an app does, or the shapes of its
+  // kinds, is read again, once.
   let read = new Set<number>()
   let lines = await Promise.all(
     all.map(({ space, app }, i) => {
       let held = heldLines.get(names[i]) ?? roster[names[i]]
-      if (held?.does) return held
+      if (held?.does && held.shapes) return held
       read.add(i)
       return lineOf(ctx, space, app)
     }),
@@ -341,11 +350,11 @@ export let commandLine = (one: Command): string =>
     one.readOnly ? 'reads' : 'writes'
   } — ${one.description}`
 
-// The commands each component is given, said once for all of them.
+// The commands each kind is given, said once for all of them.
 let given = (made: Command[]) =>
-  `${made.map((one) => one.name).join(', ')} — each add_ writes one row of ` +
-  "its component (title, body?, alias? and the component's properties); " +
-  'each find_ reads them (words?, any of its properties, limit?)'
+  `${made.map((one) => one.name).join(', ')} — each add_ writes one of its ` +
+  'kind (title, body?, alias? and the properties of the components it is); ' +
+  'each find_ reads them (words?, any of those properties, limit?)'
 
 /** One app in full: its address, components, commands and released notes. */
 export let appEntry = async (
@@ -361,6 +370,13 @@ export let appEntry = async (
   ])
   let components = Object.entries(vocab.$defs ?? {})
     .filter(([, schema]) => schema.component)
+  // A kind that is only its one component says nothing the line above it
+  // does not, so the kinds said are the ones with a shape of their own.
+  let doc = meant(vocab)
+  let lines = index(doc, shapeOf)
+  let kinds = kindsOf(doc).flatMap((k, i) =>
+    k.is.join() != k.name || Object.keys(k.with).length ? [lines[i]] : []
+  )
   // What its vocabulary leaves to guess, said until it is written (D-162751).
   let warned = unwritten({ $defs: Object.fromEntries(components) })
   // The add_ and find_ each component is given take its properties, which
@@ -380,6 +396,7 @@ export let appEntry = async (
         ),
       ]
       : [],
+    ...kinds.length ? ['\n### Kinds', ...kinds] : [],
     ...all.length
       ? [
         '\n### Commands',

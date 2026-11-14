@@ -7,6 +7,7 @@ import {
   changed,
   kept as durableValue,
   type Keywords,
+  type KindDecl,
   metaDoc,
   ms,
   type PropSchema,
@@ -181,6 +182,9 @@ export let reserved = once((): string[] =>
 )
 export let EXAMPLE =
   '{"$defs": {"recipe": {"properties": {"serves": {"type": "number"}}}}}'
+/** A `kinds` entry, as a refusal shows one. */
+export let KINDS =
+  '{"kinds": {"meal": {"is": ["dish"], "with": {"doc": true, "tasting": {"stars": 0}}}}}'
 export let GUIDE = url({}, '/docs.md')
 // The most of an app's own components a refusal lists.
 let OWN = 12
@@ -468,8 +472,9 @@ export let livesIn = (uses: Record<string, string>) =>
  * about a row — an entity wearing `recipe` is a recipe, not the `doc` it also
  * wears for its title — so it is a kind sorting before `doc` unless the
  * manifest says otherwise, which is also what earns it its two tools
- * (kinds.ts). */
-let mine = (schema: PropSchema): PropSchema =>
+ * (kinds.ts). A manifest that declares `kinds` says which its kinds are, so
+ * there a component is one only where it says `kind: true` itself. */
+let mine = (schema: PropSchema, implicit: boolean): PropSchema =>
   schema.lens === true ? schema : ({
     // `component: true` is the marker @yaks/vocab wants on a component, and it
     // is put on here rather than asked of the person: an app manifest's $defs
@@ -478,10 +483,17 @@ let mine = (schema: PropSchema): PropSchema =>
     // (T-37551).
     component: true,
     type: 'object',
-    kind: true,
-    before: ['doc'],
+    ...implicit || schema.kind === true ? { kind: true, before: ['doc'] } : {},
     ...schema,
   })
+
+/** One kind an app declared under `kinds`: like a component of its own, it
+ * sorts before the `doc` its rows wear for their titles, unless it says what it
+ * sorts before. */
+let kindOf = (decl: KindDecl): KindDecl =>
+  object(decl) && decl.before === undefined
+    ? { ...decl, before: ['doc'] }
+    : decl
 
 /**
  * The manifest words that open a spend to the app's visitors, each with what
@@ -566,6 +578,54 @@ export let joinErrors = (join: unknown, defs: unknown): string[] => {
   ]
 }
 
+/**
+ * What is wrong with a manifest's `kinds` (@yaks/vocab kinds.ts): an object of
+ * kinds by name, each an object whose `is` lists component names, whose `with`
+ * maps each component to `true` (its writer supplies it) or to the values a
+ * rule gives it, and whose `before` lists kinds. Which components exist is
+ * {@link unsaid}'s to say, at the doors a new manifest comes through.
+ */
+/// kindErrors({ meal: { with: { doc: true, tasting: { stars: 0 } } } }) -> []
+/// kindErrors({ meal: { is: ['recipe', 'guest'] } }) -> []
+/// kindErrors({ recipe: { with: { doc: false } } }).length -> 1
+/// kindErrors({ recipe: { is: 'recipe' } }).length -> 1
+/// kindErrors(['recipe']).length -> 1
+export let kindErrors = (kinds: unknown): string[] => {
+  if (!object(kinds)) {
+    return [`it is an object, one entry per kind: ${KINDS}`]
+  }
+  let names = (v: unknown) =>
+    Array.isArray(v) && v.length > 0 && v.every((e) => typeof e == 'string')
+  let WORDS = ['title', 'description', 'is', 'with', 'before', 'examples']
+  return Object.entries(kinds).flatMap(([name, d]) => {
+    if (!object(d)) return [`${name} is an object: ${KINDS}`]
+    return [
+      ...Object.keys(d).filter((k) => !WORDS.includes(k)).map((k) =>
+        `${name}.${k} is not one of its words: ${WORDS.join(', ')}`
+      ),
+      ...d.is === undefined || names(d.is)
+        ? []
+        : [`${name}.is lists the components that make one, e.g. ["${name}"]`],
+      ...d.before === undefined || names(d.before)
+        ? []
+        : [`${name}.before lists the kinds it sorts before`],
+      ...d.with === undefined
+        ? []
+        : !object(d.with)
+        ? [`${name}.with is an object of components: {"doc": true}`]
+        : Object.entries(d.with).filter(([, w]) => w !== true && !object(w))
+          .map(([c]) =>
+            `${name}.with.${c} is true (its writer supplies it) or the ` +
+            `values a rule gives it, e.g. {"stars": 0}`
+          ),
+      ...d.examples === undefined ||
+          Array.isArray(d.examples) && d.examples.every(object)
+        ? []
+        : [`${name}.examples is a list of whole bundles of one`],
+    ]
+  })
+}
+
 /** The files an app's words may be written in, the one read when both
  * are there first. */
 export let VOCABS = ['vocab.yml', 'vocab.json']
@@ -599,6 +659,10 @@ export let VOCABS = ['vocab.yml', 'vocab.json']
  * the one the person never writes here: a deploy lifts it off package.json's
  * `"platform"` dependencies ({@link stated}), and the store speaks their
  * words ({@link lent}).
+ *
+ * `kinds` names the app's shapes (@yaks/vocab, kinds.ts): each kind's `is`
+ * components and what a whole one also carries. A manifest without it has a
+ * kind for each component, as every manifest written before it did.
  *
  * A `$defs` entry marked `"tool": true` is one of the app's commands, not a
  * component: it is left out here and read by @yaks/tools/declared `parseTools`, so a
@@ -674,13 +738,28 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
     )
   }
   let doc = body as VocabDoc
+  let kinds = doc.kinds as Record<string, KindDecl> | undefined
+  if (kinds !== undefined) {
+    let wrong = kindErrors(kinds)
+    if (wrong.length) {
+      throw refuse('arguments', `${file}: "kinds": ${wrong.join('; ')}`)
+    }
+  }
   if (doc.$defs) {
     doc = {
       ...doc,
       $defs: Object.fromEntries(
         Object.entries(doc.$defs)
           .filter(([, s]) => s?.tool !== true)
-          .map(([name, s]) => [name, mine(s)]),
+          .map(([name, s]) => [name, mine(s, !kinds)]),
+      ),
+    }
+  }
+  if (kinds) {
+    doc = {
+      ...doc,
+      kinds: Object.fromEntries(
+        Object.entries(kinds).map(([name, d]) => [name, kindOf(d)]),
       ),
     }
   }
@@ -787,6 +866,16 @@ export let unsaid = (
       reserved().includes(n) && !(n in (held.$defs ?? {})) &&
       !accepted.includes(n)
     )
+  let unknown = unnamed(doc)
+  if (unknown.length) {
+    throw refuse(
+      'arguments',
+      `${file}: "kinds" names ${unknown.join(', ')}, which neither ${file} ` +
+        'nor the platform declares — declare each in $defs, or use a word ' +
+        `every app's store has (doc, alias); how to declare a kind: call ` +
+        `guide with page components, or ${GUIDE}`,
+    )
+  }
   if (taken.length) {
     let had = taken.flatMap((n) => {
       let props = shapeOf(n)
@@ -808,9 +897,26 @@ export let unsaid = (
   return doc
 }
 
-// The properties of a component every app's store already has, or nothing
-// for a word only the platform's own stores speak.
-let shapeOf = (name: string): string[] | undefined => {
+// The components a manifest's kinds name that its store would not speak: not
+// its own, not the platform's, and lent by none of its dependencies.
+let unnamed = (doc: VocabDoc): string[] => {
+  let kinds = Object.entries((doc.kinds ?? {}) as Record<string, KindDecl>)
+  if (!kinds.length) return []
+  let spoken = new Set([
+    ...everywhere(),
+    ...declares(doc),
+    ...lentDocs(doc).flatMap((d) => Object.keys(d.$defs ?? {})),
+  ])
+  let named = kinds.flatMap(([name, k]) => [
+    ...k.is ?? [name],
+    ...Object.keys(k.with ?? {}),
+  ])
+  return [...new Set(named.filter((c) => !spoken.has(c)))]
+}
+
+/** The properties of a component every app's store already has, or nothing
+ * for a word only the platform's own stores speak. */
+export let shapeOf = (name: string): string[] | undefined => {
   let def = coreDocs().find((d) => d.reserved !== false && d.$defs?.[name])
     ?.$defs?.[name]
   if (!def || def.tool === true || def.lens === true) return

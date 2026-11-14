@@ -54,9 +54,9 @@ changes to the graph tools.
 
 ## Generated `add_` and `find_` commands
 
-`app_deploy` generates two commands for every component an app's `vocab.json`
-declares, treating each component as a kind of thing the app is about: one
-command adds an entity of that kind, and one finds such entities again:
+`app_deploy` generates two commands for every kind of thing an app's
+`vocab.json` declares: one command adds an entity of that kind, and one finds
+such entities again. Without `kinds`, each component is a kind of its own name:
 
     vocab.json  { "$defs": {
                     "recipe": { "properties": {
@@ -74,6 +74,13 @@ the call is not written. `find` builds a query string over the same properties:
 equality test, and every clause whose argument is left out is dropped from the
 query, so `find` with no arguments returns every entity of that kind.
 
+A kind declared under `kinds` ([Components and vocab.json](./components.md))
+gets the same two. `add_meal` writes the kind's `is` components and each `with`
+component marked `true`, each property an argument of its own name, or
+`<component>_<property>` where two of them share a name, beside the `doc` and
+`alias`. A `with` component carrying values is left to the store, which adds it
+in the same write. `find_meal` matches the `is` components.
+
 **The generated commands let an agent find the app later.** A person who asked
 for a recipe box in one conversation may say "add this recipe" in a later one,
 to an agent that has never seen the app. Every agent looks in `commands` for
@@ -87,7 +94,8 @@ There are three ways to change the generated commands:
 - **Exclude one component** — `"kind": false` on that component. Use it for a
   mark an entity carries rather than a thing someone adds, such as `starred` or
   `paid`: that component gets no generated commands, and the file's other
-  components keep theirs.
+  components keep theirs. A file that declares `kinds` names its kinds outright,
+  and its components get none of their own.
 - **Override** — declare a tool named `add_recipe` or `find_recipe` yourself.
   Your entry replaces the generated one entirely: its description, arguments and
   template are yours. A declared command can describe what the app is for; a

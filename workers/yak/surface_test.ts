@@ -135,6 +135,7 @@ test('what an app wrote stays off the surface a host reads', () => {
     said,
     noted: true,
     kinds: ['recipe'],
+    shapes: ['recipe: recipe'],
     commands: [],
     does: [],
   }

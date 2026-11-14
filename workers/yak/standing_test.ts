@@ -48,6 +48,7 @@ let entry = (slug: string, over: Partial<Entry> = {}): Entry => ({
   app: app(slug, 'Recipes'),
   said: '',
   kinds: [],
+  shapes: [],
   commands: [],
   does: [],
   ...over,

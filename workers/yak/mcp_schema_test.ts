@@ -441,6 +441,49 @@ test(
   },
 )
 
+// A manifest declaring `kinds` deploys, and its kind's add writes the shape:
+// the `is` component from the arguments, and the `with` one a rule gives it.
+test('a kind declared under kinds deploys, and its add writes it whole', async () => {
+  let k = await kernel()
+  try {
+    let agent = connector(k, (await signIn(k)).cookie)
+    await agent.tool('app_new', { slug: 'meals', title: 'Meals' })
+    await agent.tool('app_files', {
+      app: 'meals',
+      files: [{
+        path: 'vocab.json',
+        content: JSON.stringify({
+          $defs: {
+            dish: { properties: { serves: num } },
+            tasting: { properties: { stars: num } },
+          },
+          kinds: {
+            meal: { is: ['dish'], with: { doc: true, tasting: { stars: 0 } } },
+          },
+        }),
+      }],
+    })
+    assertStringIncludes(
+      await agent.tool('app_deploy', { app: 'meals' }),
+      'commands: add_meal, find_meal',
+    )
+    await agent.tool('command', {
+      app: 'meals',
+      name: 'add_meal',
+      args: { title: 'Soup night', serves: 4 },
+    })
+    let [row] = JSON.parse(
+      await agent.tool('graph_query', { app: 'meals', q: '.dish&*' }),
+    )
+    assertEquals(
+      [row.kind, row.doc, row.dish, row.tasting],
+      ['meal', { title: 'Soup night' }, { serves: 4 }, { stars: 0 }],
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
 // One roster, for everybody (T-34541). A directory snapshots `tools/list`
 // when a connector is submitted and serves that snapshot forever — only
 // `tools/call` reaches us — so a list that moves with whose token arrived, or

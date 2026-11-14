@@ -94,7 +94,9 @@ export let oracleMap = async (ctx: Ctx, g: Graph): Promise<string> => {
           safe(l.app.title)
         }, ${safe(holds(l.kinds))}${
           l.does.length ? `; does ${safe(l.does.join(', '))}` : ''
-        }${l.noted ? '; its notes say how' : ''}`
+        }${l.noted ? '; its notes say how' : ''}${
+          l.shapes.map((k) => `\n    - kind ${safe(k)}`).join('')
+        }`
       ),
     ]),
   ].join('\n')

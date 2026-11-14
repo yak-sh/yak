@@ -78,6 +78,7 @@ let make = async (slug: string, words: VocabDoc = vocab, kinds = false) => {
           schema.component
         ),
       ),
+      ...words.kinds ? { kinds: words.kinds } : {},
     },
     tools: kinds
       ? withKinds({}, appDoc(words), `kitchen/${slug}`)
@@ -105,6 +106,22 @@ await make('quiet', {
   },
 }, true)
 let quiet = await call(ctx, 'commands', { app: 'quiet' })
+await make('meals', {
+  $defs: {
+    dish: {
+      component: true,
+      description: 'a dish',
+      properties: { serves: { type: 'number', description: 'how many' } },
+    },
+    tasting: {
+      component: true,
+      description: 'how it went',
+      properties: { stars: { type: 'number', description: 'out of five' } },
+    },
+  },
+  kinds: { meal: { is: ['dish'], with: { doc: true, tasting: { stars: 0 } } } },
+}, true)
+let meals = await call(ctx, 'commands', { app: 'meals' })
 let editor = crypto.randomUUID()
 await dir.apply({
   entities: [{
@@ -178,12 +195,23 @@ test('what an app leaves undescribed is a warning wherever an agent looks', () =
   ok(!named.text!.includes('### Warnings'), named.text)
 })
 
-test('the commands a component is given are named once, not each spelled out', () => {
+test('the commands a kind is given are named once, not each spelled out', () => {
   ok(
     quiet.text!.includes(
-      '\n### Commands\nadd_shift, find_shift — each add_ writes one row',
+      '\n### Commands\nadd_shift, find_shift — each add_ writes one of its kind',
     ),
     quiet.text,
   )
   ok(!quiet.text!.includes('add_shift('), quiet.text)
+})
+
+test('an app declaring kinds is read by them: their shapes, and a pair each', () => {
+  ok(
+    meals.text!.includes(
+      '\n### Kinds\nmeal: dish{serves}, doc{title, body}; a rule adds ' +
+        'tasting{stars}\n',
+    ),
+    meals.text,
+  )
+  ok(meals.text!.includes('add_meal, find_meal — each add_'), meals.text)
 })

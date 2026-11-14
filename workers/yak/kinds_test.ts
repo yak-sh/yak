@@ -3,7 +3,7 @@
 // manifest through app_deploy and a call at the MCP door — is in mcp_test.ts.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { generated, withKinds } from './kinds.ts'
+import { generated, index, withKinds } from './kinds.ts'
 import { appDoc } from './vocab.ts'
 import { filled, schemaOf } from '@yaks/tools/declared'
 
@@ -193,4 +193,62 @@ test('the commands a kind made are told from the ones an app wrote', () => {
     generated('add_official', wrote('Add a official to town/site')),
     true,
   )
+})
+
+// A declared kind: a show at a venue, rated by a rule. The add writes what
+// the writer supplies and leaves the tasting to the rule; `at`, which both
+// components have, is an argument for each.
+let gig = {
+  $defs: {
+    show: {
+      properties: { at: { type: 'string' }, act: { type: 'string' } },
+    },
+    venue: { properties: { at: { type: 'string' } } },
+    tasting: { properties: { stars: { type: 'number' } } },
+  },
+  kinds: {
+    gig: {
+      is: ['show'],
+      description: 'a night of music',
+      with: { doc: true, venue: true, tasting: { stars: 0 } },
+    },
+  },
+}
+
+test('a declared kind adds its whole shape, and a rule adds the rest', () => {
+  let made = tools(gig, 'town/gigs')
+  assertEquals(Object.keys(made), ['add_gig', 'find_gig'])
+  assertEquals(
+    made.add_gig.description,
+    'Add a gig to town/gigs: a night of music',
+  )
+  assertEquals(
+    filled(made.add_gig, {
+      title: 'Friday',
+      act: 'The Owls',
+      show_at: '2026-11-20',
+      venue_at: 'Main St',
+    }).apply,
+    {
+      entity: { eid: '$gig' },
+      doc: { title: 'Friday' },
+      show: { at: '2026-11-20', act: 'The Owls' },
+      venue: { at: 'Main St' },
+    },
+  )
+  assertEquals(
+    filled(made.find_gig, { act: 'The Owls', venue_at: 'Main St' }).query,
+    '.show&?doc&.show.act=The%20Owls&.venue.at=Main%20St',
+  )
+})
+
+test('the index says each kind, what it is and what a whole one carries', () => {
+  let doc = (c: string) => c == 'doc' ? ['title', 'body'] : undefined
+  assertEquals(index(appDoc(gig), doc), [
+    'gig: show{at, act}, doc{title, body}, venue{at}; a rule adds ' +
+    'tasting{stars}',
+  ])
+  assertEquals(index(appDoc(box)), [
+    'recipe: recipe{serves, cuisine}',
+  ])
 })

@@ -139,6 +139,46 @@ test("an app's own word is a kind before doc", () => {
   )
 })
 
+// A manifest that declares `kinds` says which its kinds are: a component is
+// one only where it says so, and each kind is named before the `doc` its rows
+// wear for their titles.
+test('a manifest declaring kinds names its rows by them', () => {
+  let src = {
+    $defs: {
+      dish: { properties: { serves: { type: 'number' } } },
+      tasting: { properties: { stars: { type: 'number' } } },
+      menu: { kind: true },
+    },
+    kinds: {
+      meal: { is: ['dish'], with: { doc: true, tasting: { stars: 0 } } },
+    },
+  }
+  let v = appVocab(src)
+  assertEquals(v.kindOf({ dish: 1, doc: 1, tasting: 1 }), 'meal')
+  assertEquals(v.kindOf({ tasting: 1, doc: 1 }), 'doc')
+  assertEquals(v.kindOf({ menu: 1, doc: 1 }), 'menu')
+  // A manifest without the section keeps a kind for each component.
+  assertEquals(appVocab({ $defs: src.$defs }).kindOf({ tasting: 1 }), 'tasting')
+  // A kind is said whole or refused at the deploy, each fault in the words
+  // that fix it.
+  for (
+    let [kinds, why] of [
+      [['meal'], '"kinds": it is an object'],
+      [{ meal: { is: 'dish' } }, 'meal.is lists the components'],
+      [{ meal: { with: { doc: false } } }, 'meal.with.doc is true'],
+      [{ meal: { is: ['dish'], shape: 1 } }, 'meal.shape is not one of'],
+    ] as const
+  ) {
+    assertThrows(() => appDoc({ ...src, kinds }), Error, why)
+  }
+  assertThrows(
+    () => unsaid(appDoc({ ...src, kinds: { meal: { is: ['dinner'] } } })),
+    Error,
+    '"kinds" names dinner, which neither vocab.json nor the platform declares',
+  )
+  assertEquals(unsaid(appDoc(src)).kinds?.meal.before, ['doc'])
+})
+
 // There is one form. A manifest of bare component names is not a shorter
 // way to say a document — it is refused, in the shape that works.
 test('a manifest that is not a document is refused', () => {
