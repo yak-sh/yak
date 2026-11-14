@@ -456,20 +456,20 @@ export let modifying = async <T>(
   let opened = mint()
   let row = app
   for (let n = 0; n < 5; n++) {
-    row = await waiting(dir, space, row, who)
+    // The app, its drafts, and its newest write, which names the draft a
+    // writer with none of its own opens: read in one turn, they travel as
+    // one trip and answer from one state, so a draft another write of its
+    // opened is either seen or opened on the same head, and the two race
+    // for one eid.
+    let [standing, rows, head] = await Promise.all([
+      waiting(dir, space, row, who),
+      dir.drafts(row),
+      dir.newestWrite(row),
+    ])
+    row = standing
     try {
-      let drafts = await draftsOf(dir, row)
+      let drafts = withLegacy(row, rows)
       let into = chosen(row, drafts, who, asked)
-      // A writer with no draft of its own names the one it opens for the
-      // app's newest write, read before its drafts are read again: a draft
-      // another write of its opened since is then either seen, or opened
-      // on the same head, so the two race for one eid.
-      let head = ''
-      if (!into && asked != NEW) {
-        head = newest(await dir.written(row))[0]?.eid ?? ''
-        drafts = await draftsOf(dir, row)
-        into = chosen(row, drafts, who, asked)
-      }
       let draft = await drafting(raw, dir, row, into)
       let { changes, value } = await act(draft, row, n)
       // A batch naming one path twice keeps the last, as a person would
@@ -497,7 +497,7 @@ export let modifying = async <T>(
         // write, so two first writes of one conversation at once race for
         // one eid and the second lands in the draft the first opened.
         eid: asked == NEW ? opened : derivedEid(
-          `app_draft|${row.eid}|${via ?? who.person ?? ''}|${head}`,
+          `app_draft|${row.eid}|${via ?? who.person ?? ''}|${head ?? ''}`,
         ),
         base: row.version,
         by: who.person || null,

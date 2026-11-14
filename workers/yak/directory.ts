@@ -3217,6 +3217,12 @@ export let directoryRows = (rows: {
     // row. Never cached: a write chooses among them.
     drafts: async (app: App) =>
       (await query(`.app_draft.app=${app.eid}`)).map(appDraftOf),
+    // The eid of an app's newest write, which names the draft a writer
+    // opens (written.ts `modifying`); none before its first.
+    newestWrite: async (app: App) =>
+      (await query(
+        `.written.app=${app.eid}&.order=-written.at&.limit=1&.written.at`,
+      ))[0]?.entity.eid ?? null,
     // One open draft by its eid, with its app's; none once it is closed.
     draftAt: async (eid: string) => {
       let row = await one(`.entity.eid=${eid}&.app_draft`)

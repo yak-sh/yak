@@ -427,8 +427,9 @@ test('the tool teaches every op it answers', () => {
     'delete',
     'history',
     'restore',
+    'discard',
   ])
-  for (let arg of ['find', 'replace', 'url', 'sha', 'at']) {
+  for (let arg of ['find', 'replace', 'url', 'sha', 'at', 'draft']) {
     assertEquals(typeof input.properties[arg], 'object', `${arg} is described`)
   }
   for (

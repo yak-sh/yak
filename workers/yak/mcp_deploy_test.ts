@@ -276,12 +276,14 @@ test('a deploy is a version, and one word puts it back', async () => {
       releases: [],
       unreleased: false,
       version: 2,
+      draft: null,
+      drafts: [],
     })
     // Every fact of the value is in the words a model reads.
     for (let { path, sha } of files) {
       assertStringIncludes(listing.text, `${path} — sha256 ${sha}`)
     }
-    assertStringIncludes(listing.text, 'live v2, with nothing unreleased')
+    assertStringIncludes(listing.text, 'These are live v2;')
 
     // A size down from a deploy: every write keeps what it replaced
     // (written.ts, T-34508). The page has been written three times by now, so

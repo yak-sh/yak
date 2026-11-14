@@ -61,8 +61,15 @@ for (let base of [-1, 1.5, 'one', 100]) {
 }
 await k.stop()
 
+// A release answers the draft it took, the one its writes landed in.
+let taken = (value: unknown) => {
+  let { draft, ...rest } = value as { draft?: unknown }
+  assertEquals(typeof draft, 'string')
+  return rest
+}
+
 test('two deploys from one base leave the first serving and name the second losses', () => {
-  assertEquals(first.value, { deployed: true, version: 2 })
+  assertEquals(taken(first.value), { deployed: true, version: 2 })
   assertEquals(second.value, {
     deployed: false,
     base: 1,
@@ -83,17 +90,18 @@ test('file reads and lists say which live version the draft was read against', (
   assertEquals((pending.value as { version: number }).version, 2)
   assertEquals((pending.value as { unreleased: boolean }).unreleased, true)
   // The words say it too, since some hosts show their model only the words.
-  assertStringIncludes(initial.text, 'live v1, with nothing unreleased')
+  assertStringIncludes(initial.text, 'These are live v1;')
   assertStringIncludes(pending.text, 'differs from live v2')
-  assertStringIncludes(pending.text, 'app_deploy(base: 2)')
+  assertStringIncludes(pending.text, 'base: 2)')
+  assertEquals((pending.value as { base: number }).base, 2)
   assertEquals((read.value as { version: number }).version, 2)
 })
 
 test('confirmation releases the kept draft and calls without a base still deploy', () => {
-  assertEquals(confirmed.value, { deployed: true, version: 3 })
+  assertEquals(taken(confirmed.value), { deployed: true, version: 3 })
   assertStringIncludes(after.text, '<h1>Second checkout</h1>')
   assertEquals(removed.status, 404)
-  assertEquals(unguarded.value, { deployed: true, version: 4 })
+  assertEquals(taken(unguarded.value), { deployed: true, version: 4 })
   assertEquals(unchanged.value, {
     deployed: false,
     base: 1,

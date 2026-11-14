@@ -125,6 +125,14 @@ let made = () => {
     reread: () => {
       seen = undefined
     },
+    newestWrite: () =>
+      answer(() =>
+        store.read(`.written.app=${APP}`).map((b) => ({
+          eid: b.entity.eid,
+          at: String((b.written as { at?: string }).at ?? ''),
+        })).sort((a, b) => a.at < b.at ? 1 : a.at > b.at ? -1 : 0)[0]?.eid ??
+          null
+      ),
     drafts: (): Promise<AppDraft[]> =>
       answer(() =>
         store.read(`.app_draft.app=${APP}`).map((b) =>

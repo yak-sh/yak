@@ -31,6 +31,12 @@ import { facing, GUIDE, minted } from './mcp-probe.ts'
 
 // The paths an app_files listing names: each file's line, before its sha,
 // and not the last line, which says what is live.
+// A write's answer without its last line, which names the draft it landed
+// in (tools.ts `landedIn`), and that draft.
+let landed = (said: string) => {
+  let [, words, draft] = /^([\s\S]*)\nIn draft ([0-9a-f-]+):[^\n]*$/.exec(said)!
+  return { words, draft }
+}
 let paths = (said: string) =>
   said.split('\n').slice(0, -1).map((line) => line.split(' — ')[0]).join('\n')
 
@@ -601,13 +607,16 @@ test(
       // call that made it (T-34337).
       let page = '<!doctype html><h1>Our recipe box</h1>'
       let app = { space: jeff54, app: 'recipes' }
-      assertEquals(
+      let one = landed(
         await agent.tool('app_files', {
           ...app,
           op: 'write',
           path: 'index.html',
           content: page,
         }),
+      )
+      assertEquals(
+        one.words,
         `wrote index.html → https://${jeff54}.yaks.app/recipes/index.html — ` +
           `${page.length} bytes, sha256 ${await sha256(
             new TextEncoder().encode(page),
@@ -628,7 +637,7 @@ test(
       // (C-32624 item 5). Written out rather than spread, because the point
       // is what is absent: no `op` at all, the way `initialize` step 2
       // teaches it, since a `files` batch is the write (C-32730 item 1).
-      assertEquals(
+      let both = landed(
         await agent.tool('app_files', {
           space: jeff54,
           app: 'recipes',
@@ -637,6 +646,11 @@ test(
             { path: '/img/logo.svg', content: '<svg/>' },
           ],
         }),
+      )
+      // One conversation goes on in the draft its first write opened.
+      assertEquals(both.draft, one.draft)
+      assertEquals(
+        both.words,
         `wrote 2 files → https://${jeff54}.yaks.app/recipes/:\n` +
           `app.js — 24 bytes, sha256 ${await sha256(
             new TextEncoder().encode('export let go = () => {}'),

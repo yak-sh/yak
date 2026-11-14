@@ -868,7 +868,8 @@ test('another model working for a person is offered the tools their conversation
   assertEquals(names.includes('fork'), false)
   assertEquals(
     await run('app_files', { app: 'notices', op: 'list' }),
-    '(no files)\nNothing is released yet.',
+    '(no files)\nNothing is released yet, and this conversation has no ' +
+      'draft of the app; its first write opens one.',
   )
   await assertRejects(() => run('nope', {}), CallError, 'no tool called nope')
   // Their conversation is begun for the calls to be its own.
