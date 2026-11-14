@@ -99,7 +99,7 @@ export let Talk = (
 }
 
 /** The conversation the server drew under `at`, as the page holds it. */
-export let parsed = (at: ParentNode): Held | null => {
+export let parsed = (at: Pick<ParentNode, 'querySelector'>): Held | null => {
   let talk = at.querySelector('[data-task]') as HTMLElement | null
   if (!talk) return null
   let list = talk.querySelector('.Transcript_Lines')
