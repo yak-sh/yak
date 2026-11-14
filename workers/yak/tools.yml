@@ -183,7 +183,9 @@ app_files:
     writes in a draft of its own, opened by its first write over the live
     files, and every write answers that draft's id and your other open
     drafts. Pass draft to keep working in one, as after a reconnect;
-    draft: new opens another beside it, to try several directions at once.
+    draft: new opens another beside it, to try several directions at once,
+    and once a conversation holds several, every call names one as
+    draft: '<id>'.
     op: list says which paths your draft changed and lists every other
     open draft (who, which paths, since when); nobody locks anything. op:
     discard closes a draft unreleased. files: [{path, content}, …] writes a whole

@@ -643,6 +643,12 @@ test('a release takes the draft named, else the conversation’s own, else the p
   assertEquals(releasing(APPROW, drafts.slice(0, 2), TWO)?.eid, 'one')
   assertEquals(releasing(APPROW, [drafts[1]], TWO), null)
   assertThrows(() => chosen(APPROW, drafts, ONE, 'gone'), Error, 'released')
+  let two = [...drafts, mine('two', ADA, 'session-one')]
+  assertThrows(
+    () => chosen(APPROW, two, ONE),
+    Error,
+    "2 drafts of notes: pass draft: '<id>', one of one, two",
+  )
 })
 
 test('the mover makes each app.draft a row of the same eid with the live version as its base', () => {

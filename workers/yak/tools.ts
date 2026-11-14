@@ -364,6 +364,7 @@ import {
   restoring,
   served,
   when,
+  whichDraft,
   type Written,
 } from './written.ts'
 import { appTag, purge, spaceTag } from './purge.ts'
@@ -3609,8 +3610,9 @@ let OURS: Row[] = [
             'another beside the ones this conversation holds, as for trying ' +
             'several directions at once. Left out, the call works in this ' +
             "conversation's own draft: a read sees it over the live files, " +
-            'and the first write opens it. For discard, the draft to close ' +
-            'unreleased',
+            'and the first write opens it. Once the conversation holds ' +
+            "several, every call names one, as draft: '<id>'. For discard, " +
+            'the draft to close unreleased',
         ),
         path: str(
           'path relative to the app root, e.g. index.html. For restore, ' +
@@ -3726,11 +3728,7 @@ let OURS: Row[] = [
           throw refuse(
             'missing',
             `no draft of this conversation's in ${space.slug}/${app.slug} ` +
-              `to discard${
-                all.length
-                  ? `; name one with draft: ${all.map((d) => d.eid).join(', ')}`
-                  : ''
-              }`,
+              `to discard${all.length ? `; ${whichDraft(all)}` : ''}`,
           )
         }
         let rows = await ctx.dir.written(app, of.eid)

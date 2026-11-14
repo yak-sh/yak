@@ -133,6 +133,11 @@ export let ownBy = (who: Who) => (d: AppDraft) =>
 
 let listed = (drafts: AppDraft[]) => drafts.map((d) => d.eid).join(', ')
 
+/** How a call names one of `drafts`, as a refusal ends: the argument and
+ * its form, then the ids to choose from. */
+export let whichDraft = (drafts: AppDraft[]) =>
+  `pass draft: '<id>', one of ${listed(drafts)}`
+
 /** The draft a call works in: the one it names, else the caller's own; none
  * where it has none, which a read sees as live and a write opens. Several of
  * its own and none named is refused with their ids: a conversation holding
@@ -150,9 +155,7 @@ export let chosen = (
       throw refuse(
         'missing',
         `no open draft ${asked} of ${app.slug}: it was released or ` +
-          `discarded${
-            drafts.length ? `; its open drafts are ${listed(drafts)}` : ''
-          }`,
+          `discarded${drafts.length ? `; ${whichDraft(drafts)}` : ''}`,
       )
     }
     return named
@@ -161,8 +164,8 @@ export let chosen = (
   if (own.length > 1) {
     throw refuse(
       'arguments',
-      `draft: this conversation holds ${own.length} drafts of ${app.slug} ` +
-        `(${listed(own)}); name the one this call means`,
+      `this conversation holds ${own.length} drafts of ${app.slug}: ` +
+        `${whichDraft(own)}, for the one this call means`,
     )
   }
   return own[0] ?? null
@@ -184,9 +187,9 @@ export let releasing = (
   if (theirs.length > 1) {
     throw refuse(
       'arguments',
-      `draft: ${app.slug} has ${theirs.length} open drafts (${
-        listed(theirs)
-      }); name the one to release`,
+      `${app.slug} has ${theirs.length} open drafts: ${
+        whichDraft(theirs)
+      }, for the one to release`,
     )
   }
   return theirs[0] ?? null
