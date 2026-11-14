@@ -47,7 +47,7 @@ export let specimens = (): Specimen[] => [
       }),
     ),
   ],
-  ['Preview, two choices', choices()],
+  ['Preview, desktop and phone', choices()],
   [
     'Preview',
     h(
@@ -63,11 +63,12 @@ export let specimens = (): Specimen[] => [
   ],
 ]
 
+// A page at a desktop's width and a phone's, one shown at a time.
 let choices = () =>
   h(
     Preview.Choices,
-    { role: 'radiogroup', 'aria-label': 'Preview views' },
-    ['First', 'Second'].map((title, i) =>
+    { role: 'radiogroup', 'aria-label': 'Page width' },
+    [['Desktop', 'desktop'], ['Phone', 'phone']].map(([title, width], i) =>
       h(
         Preview.Item,
         {},
@@ -77,7 +78,7 @@ let choices = () =>
           h(Check.Input, {
             type: 'radio',
             name: 'preview-specimen',
-            value: title,
+            value: width,
             checked: i == 0,
           }),
           title,
@@ -85,15 +86,11 @@ let choices = () =>
         h(
           Preview.View,
           {},
-          h(
-            Preview.Address,
-            { href: '#' },
-            'example.com/' + title.toLowerCase(),
-          ),
+          h(Preview.Address, { href: '#' }, 'example.com'),
           h(Preview.Frame, {
-            title,
-            srcdoc: '<p>' + title + ' view</p>',
-            style: 'height:8rem',
+            mod: width,
+            title: `${title} view`,
+            srcdoc: `<p>${title} view</p>`,
           }),
         ),
       )
