@@ -104,6 +104,10 @@ is not a native `Promise`. `after(v, f)` calls `f` with a plain value
 immediately or through `v.then(f)` when `v` is a promise. `f` may itself return
 a promise.
 
+`together(values)` is several such values as one: `Promise.all` when any of them
+is a promise, else the values themselves, so a synchronous run that reads two
+things at once stays synchronous.
+
 `each(items, seed, step)` carries an accumulator through items in order.
 `over(items, fn)` runs a function for each item in order and returns `null`.
 Both wait for a step's promise before proceeding. A pipe also waits for a
@@ -113,10 +117,21 @@ promise before testing for nil or applying its next function.
 when its last one settles, and the first failure stops them all and is thrown.
 
 ```ts
-import { after, each, inc, isPromise, lanes, over, pipe } from '@yaks/fp'
+import {
+  after,
+  each,
+  inc,
+  isPromise,
+  lanes,
+  over,
+  pipe,
+  together,
+} from '@yaks/fp'
 import { equal } from '@yaks/testing'
 
 equal(after(1, inc), 2)
+equal(together([1, 'a']), [1, 'a'])
+equal(await together([1, Promise.resolve('a')]), [1, 'a'])
 equal(await after(Promise.resolve(1), inc), 2)
 equal(isPromise({ then: () => {} }), true)
 equal(each([1, 2, 3], 0, (sum, n) => sum + n), 6)

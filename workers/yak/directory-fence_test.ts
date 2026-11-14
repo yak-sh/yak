@@ -343,6 +343,34 @@ await proof(
   },
 )
 
+// A new person's code is spent by the write that mints them their space, and
+// that write stays inside one transaction however it is decided: one that
+// lost its serving fence leaves nothing behind, and the try that wins spends
+// the code. A decision that went async committed the losing try half way, and
+// the winner found the code already spent (T-316).
+await proof(
+  "a new person's code opens though its write lost a fence",
+  async () => {
+    let f = await fixture()
+    let at = 'lost@example.com'
+    let code = (await mint(f.at, 'secret', at))!
+    f.offer(() => {
+      f.offer((revision) => revision)
+      return f.initial - 1
+    })
+    let opened = await spend(f.at, 'secret', at, code)
+    let people = await f.at.query(`.person&.email.address=${at}`)
+    let seats = await f.at.query(`.member.person=${people[0]?.entity.eid}`)
+    return () =>
+      equal({
+        opened: opened?.person,
+        people: people.length,
+        seats: seats.length,
+        left: f.begins.length,
+      }, { opened: people[0]?.entity.eid, people: 1, seats: 1, left: 2 })
+  },
+)
+
 // A person's own space is decided inside the write that mints it
 // (facets/directory-graph.ts), so the batch carries none of the space and seat
 // a copied line names, and it fences as they would.

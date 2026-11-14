@@ -1,4 +1,5 @@
 import type { ByDay } from '@yaks/ui/chart'
+import { after, together } from '@yaks/fp'
 import { christened, pick } from '@yaks/persona'
 import { calledOf } from './operator-name.ts'
 import {
@@ -2347,18 +2348,136 @@ let keep = (spaces: Iterable<string>, apps: App[], since?: number) => {
 
 /** The directory's decisions over a write's own transaction, for a hook
  * deciding inside it (facets/directory-graph.ts, facets/signin-graph.ts): its
- * reads are the write's, and it writes nothing itself. */
+ * reads are the write's, and it writes nothing itself. Over a synchronous
+ * store they answer synchronously, so the write stays inside the transaction
+ * its storage holds open only until the body returns (a Durable Object's
+ * `transactionSync`). An `async` step here commits the write half way, and a
+ * write that then lost its serving fence kept what it had done: a new
+ * person's sign-in was spent by the try that lost, and refused the code on
+ * the try that won (T-316). */
 export let inside = (tx: Tx) =>
-  directoryRows({
-    query: async (q) =>
-      (await tx.read(q) as Row[]).map((row) => ({
-        ...row,
-        policy: { revision: 0 },
-      })),
-    apply: () => {
-      throw new Error('a write decided inside another writes nothing itself')
+  decisions((q) => tx.read(q) as Row[] | Promise<Row[]>)
+
+/** What minting a person their space decides, over `read`: each answer is a
+ * promise only when a read it took was one (@yaks/fp `after`). The
+ * directory's client asks them over its own reads (`directoryRows`), and a
+ * write's hook over the write's (`inside`). */
+export let decisions = (read: (q: string) => Row[] | Promise<Row[]>) => {
+  let one = (q: string) => after(read(q), (rows) => rows[0])
+  let self = {
+    space: (slug: string) =>
+      after(
+        one(`.space.slug=${slug}&${SPACE_ABOUT}`),
+        (row) => row ? spaceOf(row) : null,
+      ),
+    // The space that left `slug` and still answers there.
+    formerly: (slug: string) =>
+      after(
+        read(`.former&.space&${SPACE_ABOUT}`),
+        (rows) =>
+          rows.map(spaceOf)
+            .find((s) => s.slug != slug && s.slugs.includes(slug)) ?? null,
+      ),
+    claimed: (slug: string, by?: string) =>
+      after(
+        self.formerly(slug),
+        (was): Bundle[] =>
+          !was || was.eid == by ? [] : [{
+            entity: { eid: was.eid },
+            former: addresses(was.slugs.filter((s) => s != slug)),
+          }],
+      ),
+    seated: (person: string, role?: Role) =>
+      person
+        ? after(read(seatsLine(person)), (rows) => seatsOf(rows, person, role))
+        : [],
+    seats: (person: string, role?: Role) =>
+      after(
+        self.seated(person, role),
+        (seats) => seats.filter((s) => s.space.slug != META.space),
+      ),
+    // The name itself, else numbered until nothing answers to it.
+    free: (base: string, n = 2, slug = base): string | Promise<string> =>
+      RESERVED.has(slug) ? self.free(base, n + 1, `${base}${n}`) : after(
+        self.space(slug),
+        (taken) => taken ? self.free(base, n + 1, `${base}${n}`) : slug,
+      ),
+    minting: (person: string, slug: string, title: string, own = false) => {
+      let eid = crypto.randomUUID()
+      return after(
+        together([
+          self.claimed(slug),
+          self.seats(person),
+          one(`.entity.eid=${person}&?started`),
+        ]),
+        ([claims, seats, row]) => {
+          let name = christened(
+            eid,
+            seats.map((s) => ({ eid: s.space.eid, name: s.space.operator })),
+          )
+          let first = !row?.started && !seats.some((s) => s.role == 'owner')
+          return {
+            eid,
+            entities: [
+              {
+                entity: { eid: person },
+                person: {},
+                ...(first ? { started: { space: eid } } : {}),
+              },
+              {
+                entity: { eid },
+                doc: { title },
+                space: { slug, store: spaceHandle(slug, eid) },
+                operator: { name },
+                ...(first ? {} : { starter: { dollars: 0 } }),
+              },
+              // Its eid chosen here too, not a `$seat` the store resolves: a
+              // batch decided inside a write (`owning`) is past resolving one.
+              {
+                entity: { eid: crypto.randomUUID() },
+                member: {
+                  space: eid,
+                  person,
+                  role: 'owner',
+                  ...(own ? { own } : {}),
+                },
+              },
+              ...claims,
+            ] as Bundle[],
+          }
+        },
+      )
     },
-  })
+    owning: (
+      person: string,
+      want?: string,
+      as?: Row,
+    ): Bundle[] | Promise<Bundle[]> =>
+      after(
+        together([
+          self.seats(person, 'owner'),
+          as ?? one(`.entity.eid=${person}`),
+        ]),
+        ([mine, row]) => {
+          if (mine.length || !row) return []
+          let chosen = !!want && SLUG.test(want) && !RESERVED.has(want)
+          return after(
+            chosen ? self.space(want!) : null,
+            (taken) =>
+              after(
+                chosen && !taken ? want! : self.free(slugOf(row)),
+                (slug) =>
+                  after(
+                    self.minting(person, slug, slug, true),
+                    (minted) => minted.entities,
+                  ),
+              ),
+          )
+        },
+      ),
+  }
+  return self
+}
 
 /** Directory decisions over supplied reads and writes. The binding client
  * above owns revisions, request caching and transport recovery. */
@@ -2372,6 +2491,7 @@ export let directoryRows = (rows: {
 }) => {
   let query = rows.query
   let one = async (q: string) => (await query(q))[0]
+  let decided = decisions(query)
   let held = (to: string, person: string) => {
     let invited = found()?.invited
     return invited?.person == person && invited.at == wrote(META_STORE)
@@ -2468,10 +2588,7 @@ export let directoryRows = (rows: {
       (await query(line)).map(({ policy: _, ...row }) => row as Bundle),
     stamp: (mutation: { entities: Bundle[] }, headers = {}) =>
       write(mutation, { ...headers, 'x-yak-kernel': '1' }),
-    space: async (slug: string) => {
-      let row = await one(`.space.slug=${slug}&${SPACE_ABOUT}`)
-      return row ? spaceOf(row) : null
-    },
+    space: async (slug: string) => await decided.space(slug),
     // A page needs the space, its two possible apps and the seat of whoever
     // is asking, together. Filtering through app.space and member.space
     // avoids an earlier trip just to learn the space eid; the same
@@ -2658,12 +2775,7 @@ export let directoryRows = (rows: {
     // at: what is at an address and what redirects to it are two questions,
     // and this is only the second. One query over the spaces that have ever
     // moved, which is a handful of rows and never grows with the platform.
-    formerly: async (slug: string) => {
-      let space = (await query(`.former&.space&${SPACE_ABOUT}`))
-        .map(spaceOf)
-        .find((s) => s.slug != slug && s.slugs.includes(slug))
-      return space ?? null
-    },
+    formerly: async (slug: string) => await decided.formerly(slug),
     // The space an address reaches: the one living there, else the one that
     // left it and still answers there. What a letter, a webhook and a clone
     // aimed at an old address follow (inbox.ts, connections.ts `hook`,
@@ -2684,14 +2796,8 @@ export let directoryRows = (rows: {
     // letters, its hooks) reaches the claimant alone, and no later move of
     // the claimant can hand it back. Nothing for a name that redirects for
     // nobody, or for `by` itself moving back to where it was.
-    claimed: async (slug: string, by?: string): Promise<Bundle[]> => {
-      let was = await self.formerly(slug)
-      if (!was || was.eid == by) return []
-      return [{
-        entity: { eid: was.eid },
-        former: addresses(was.slugs.filter((s) => s != slug)),
-      }]
-    },
+    claimed: async (slug: string, by?: string): Promise<Bundle[]> =>
+      await decided.claimed(slug, by),
     // A space minted at `slug`, owned by `person`: the batch both doors that
     // make one write (tools.ts `space_new`, `own` below) — the person's own
     // row (they may have none yet), the space with its handle and its
@@ -2724,48 +2830,7 @@ export let directoryRows = (rows: {
       slug: string,
       title: string,
       own = false,
-    ) => {
-      let eid = crypto.randomUUID()
-      let [claims, seats, row] = await Promise.all([
-        self.claimed(slug),
-        self.seats(person),
-        one(`.entity.eid=${person}&?started`),
-      ])
-      let name = christened(
-        eid,
-        seats.map((s) => ({ eid: s.space.eid, name: s.space.operator })),
-      )
-      let first = !row?.started && !seats.some((s) => s.role == 'owner')
-      return {
-        eid,
-        entities: [
-          {
-            entity: { eid: person },
-            person: {},
-            ...(first ? { started: { space: eid } } : {}),
-          },
-          {
-            entity: { eid },
-            doc: { title },
-            space: { slug, store: spaceHandle(slug, eid) },
-            operator: { name },
-            ...(first ? {} : { starter: { dollars: 0 } }),
-          },
-          // Its eid chosen here too, not a `$seat` the store resolves: a
-          // batch decided inside a write (`owning`) is past resolving one.
-          {
-            entity: { eid: crypto.randomUUID() },
-            member: {
-              space: eid,
-              person,
-              role: 'owner',
-              ...(own ? { own } : {}),
-            },
-          },
-          ...claims,
-        ] as Bundle[],
-      }
-    },
+    ) => await decided.minting(person, slug, title, own),
     // A space moved to another address, retitled, or made to forget one it
     // left: the one write behind both doors that do it (tools.ts `space_set`,
     // identity.ts `choose`). Nothing but directory rows change. The handle
@@ -3658,15 +3723,12 @@ export let directoryRows = (rows: {
     // spaces one eid at a time was a third per space — three spaces cost eight
     // round trips where the whole answer is three (T-35431).
     seats: async (person: string, role?: Role): Promise<Seat[]> =>
-      (await self.seated(person, role))
-        .filter((s) => s.space.slug != META.space),
+      await decided.seats(person, role),
     // Every seat, the meta space's among them: the same read, and what says
     // whether this person may address the platform's own store (agent.ts
     // `spoken`), which is a seat in `yak` like any other.
-    seated: async (person: string, role?: Role): Promise<Seat[]> => {
-      if (!person) return []
-      return seatsOf(await query(seatsLine(person)), person, role)
-    },
+    seated: async (person: string, role?: Role): Promise<Seat[]> =>
+      await decided.seated(person, role),
     // The eid of each space this person sits in, with their role there: all
     // of them whatever a caller goes on to keep, so that every question about
     // a person's seats is the one line, asked once.
@@ -3744,15 +3806,7 @@ export let directoryRows = (rows: {
     // The next free variant of a derived name: the name itself, else
     // numbered until nothing answers to it. What `own` mints, and what the
     // sign-in card offers a person before it does (T-32967).
-    free: async (base: string) => {
-      let slug = base
-      for (
-        let n = 2;
-        RESERVED.has(slug) || await self.space(slug);
-        n++
-      ) slug = `${base}${n}`
-      return slug
-    },
+    free: async (base: string) => await decided.free(base),
     // The person's own space, minted the moment they first need one — at
     // sign-in, or at the first tool call by someone who signed in before this
     // existed (T-32482). Theirs is the space whose seat says so (`member.own`),
@@ -3814,17 +3868,7 @@ export let directoryRows = (rows: {
       person: string,
       want?: string,
       as?: Row,
-    ): Promise<Bundle[]> => {
-      let [mine, row] = await Promise.all([
-        self.seats(person, 'owner'),
-        as ?? one(`.entity.eid=${person}`),
-      ])
-      if (mine.length || !row) return []
-      let chosen = !!want && SLUG.test(want) && !RESERVED.has(want) &&
-        !await self.space(want)
-      let slug = chosen ? want! : await self.free(slugOf(row))
-      return (await self.minting(person, slug, slug, true)).entities
-    },
+    ): Promise<Bundle[]> => await decided.owning(person, want, as),
     // The space this directory is narrowed to: none, for the whole directory
     // (grants.ts `narrowed` answers one).
     narrowedTo: (): Promise<Space | null> => Promise.resolve(null),

@@ -150,6 +150,26 @@ export let each = <T, A>(
   return acc
 }
 
+/// together([1, 'a']) -> [1, 'a']
+/// together([1, Promise.resolve('a')]) ~> [1, 'a']
+/**
+ * Several values that may still be in flight, as one: `Promise.all` when any
+ * of them is a promise, else the values themselves, so a synchronous run stays
+ * synchronous where `Promise.all` would always answer a promise.
+ */
+export let together = <T extends readonly unknown[]>(
+  values: readonly [...T],
+):
+  | { -readonly [K in keyof T]: Awaited<T[K]> }
+  | Promise<
+    { -readonly [K in keyof T]: Awaited<T[K]> }
+  > =>
+  values.some(isPromise)
+    ? Promise.all(values) as Promise<
+      { -readonly [K in keyof T]: Awaited<T[K]> }
+    >
+    : values.slice() as { -readonly [K in keyof T]: Awaited<T[K]> }
+
 /// let seen: string[] = []
 /// over(['a', 'b'], (s) => seen.push(s)) -> null
 /// seen -> ['a', 'b']

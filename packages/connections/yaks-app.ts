@@ -62,7 +62,9 @@ export let botCallback = async (
     session = cookie(spent.headers)
     await spent.body?.cancel()
     if (!session) {
-      throw new Error('the sign-in code returned no website session')
+      throw new Error(
+        `the sign-in code returned no website session: ${spent.status}`,
+      )
     }
   }
   let page = await go(url, {
