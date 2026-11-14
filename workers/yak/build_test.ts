@@ -44,6 +44,8 @@ import { manage } from './manage.ts'
 import { operatorStore } from './operator-store.ts'
 import { endpoints } from './endpoints.ts'
 import { draftEid } from '@yaks/draft'
+import { redone } from './defects.ts'
+import { restarting } from './running.ts'
 
 let SECRET = 'a probe secret'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -659,10 +661,17 @@ let armed = async (o: { ctx: ReturnType<typeof state> }) =>
 
 // What the wiped incarnation opened knew the file before it was emptied, so
 // the object restarts rather than read tables that are gone (T-222).
+// What the work under way fails with as it restarts is a reset, which the
+// instance reports none of.
 test('a wiped Builder drops its alarm and restarts, and the next incarnation finds nothing', async () => {
   let o = await seeded()
   await (await posted(o, '/operator/conversation')).text()
   await Promise.all(o.ctx.pending)
+  let failed: boolean[] = [], abort = o.ctx.abort
+  o.ctx.abort = (why?: string) => {
+    failed.push(redone(new Error(why), () => restarting(o.ctx)))
+    abort()
+  }
   let wiped = await o.object.fetch(
     new Request('https://builder/wipe', {
       method: 'POST',
@@ -671,8 +680,8 @@ test('a wiped Builder drops its alarm and restarts, and the next incarnation fin
   )
   await new Promise((go) => setTimeout(go, 1))
   assertEquals(
-    [wiped.status, await armed(o), o.ctx.pitr.aborts],
-    [200, false, 1],
+    [wiped.status, await armed(o), o.ctx.pitr.aborts, failed],
+    [200, false, 1, [true]],
   )
   assertEquals(new Builder(o.ctx, o.env).said(), [])
 })

@@ -186,18 +186,28 @@ export let owed = (
   mine: Meta | null | undefined,
   ctx: Restartable,
 ): (() => Promise<void>) | null => {
-  let theirs = caller(headers), s = ctx.storage, abort = ctx.abort
+  let theirs = caller(headers), s = ctx.storage
   if (
-    !theirs || !newer(theirs, versionOf(mine)) || !abort || !s.get || !s.put
+    !theirs || !newer(theirs, versionOf(mine)) || !ctx.abort || !s.get ||
+    !s.put
   ) return null
   return async () => {
     let last = await restartedFor(s)
     if (last && !newer(theirs, last)) return
     await s.put!(RESTARTED, theirs)
     await s.sync?.()
-    retiring.add(ctx)
-    abort.call(ctx, `${BEHIND} ${theirs.id}`)
+    restart(ctx, `${BEHIND} ${theirs.id}`)
   }
+}
+
+/** Start the object again on the spot: the runtime ends every request and
+ * piece of work under way on this instance, `reason` their failure, and the
+ * next one meets an incarnation holding nothing this one held. What fails on
+ * the instance meanwhile is no defect (`restarting`). */
+export let restart = (ctx: Restartable, reason: string): void => {
+  if (!ctx.abort) return
+  retiring.add(ctx)
+  ctx.abort(reason)
 }
 
 /** Whether an answer refuses its caller: what an object on an older deploy

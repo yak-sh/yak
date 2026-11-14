@@ -81,7 +81,7 @@ import {
 } from '@yaks/sql'
 import type { Beat, Line } from './builder.ts'
 import { directory, type Space } from './directory.ts'
-import { onceRead, owed, type Restartable } from './running.ts'
+import { onceRead, owed, restart, type Restartable } from './running.ts'
 import * as dirPart from './directory.ts'
 import type { Settings } from './operator-persona.ts'
 import type { Env } from './env.ts'
@@ -374,7 +374,7 @@ export class Builder extends Durable {
     this.#operator = undefined
     this.#store = undefined
     this.#frames = undefined
-    if (ctx.abort) setTimeout(() => ctx.abort?.('wiped'), 0)
+    setTimeout(() => restart(ctx, WIPED), 0)
   }
 
   // Everyone watching this space, including the socket the frame came in on: a
@@ -1268,6 +1268,11 @@ let unstopped = <T>(forget: () => void, make: () => Promise<T>): Promise<T> => {
 // `/operator/`: an object on code from before them reads none of them as an
 // Operator request it would run.
 let API = /^\/api\/(apply|query|ws)$/
+
+// What the work under way when its space was deleted fails with: a reset's
+// words (@yaks/durable-object `moved`), so the instance reports none of it
+// and a caller sends it again, as for any other reset.
+let WIPED = 'Durable Object reset because its space was deleted'
 
 let no = (status: number, message: string) =>
   Response.json({ error: 'Refused', message }, { status })
