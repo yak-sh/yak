@@ -5,7 +5,7 @@ import { statements } from '@yaks/sqlite'
 import type { Bundle, Graph, Storage } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { held } from '@yaks/id/graph'
-import { readable } from '@yaks/tools/readable'
+import { type Ids, readable } from '@yaks/tools/readable'
 import type { Extension } from '@yaks/sql'
 import { driver, type DurableStorage } from '@yaks/durable-object/sql'
 import { bounded } from '@yaks/durable-object/ceiling'
@@ -209,31 +209,40 @@ export let operatorGraph = (plan: Assembly, bound: Bound) => {
         ...bound.effects,
       }),
   })
+  let known = naming(host.vocab, host.graph)
   return {
     g: host.graph,
     fx: host.fx,
     vocab: host.vocab,
-    readable: drawing(host.vocab, host.graph),
+    known,
+    readable: drawing(host.vocab, known),
   }
+}
+
+/**
+ * What the store calls each entity of the small series it holds in memory
+ * (@yaks/id/graph `held`), by eid: its id (`T-2`). A read of the series that
+ * failed is reported, and calls nothing, so prose draws its handles.
+ */
+let naming = (vocab: Vocab, g: Graph) => {
+  let small = held(vocab, g)
+  return (): Promise<Ids> =>
+    small().catch((error) => {
+      caught(error, { request: 'operator ids' })
+      return () => undefined
+    })
 }
 
 /**
  * A tool's answer from the store as its reader reads it (@yaks/tools
  * `readable`): each eid its prose holds drawn as the entity's id, from the
- * answer itself or the small series the store holds in memory (@yaks/id/graph
- * `held`), else as its short handle. A read of the series that failed is
- * reported, and the answer drawn with what the answer holds.
+ * answer itself or what the store calls it (`known`), else as its short
+ * handle.
  */
-let drawing = (vocab: Vocab, g: Graph) => {
-  let small = held(vocab, g)
-  let draw = readable(vocab)
-  return async (answer: Bundle[]): Promise<Bundle[]> => {
-    let ids = await small().catch((error) =>
-      void caught(error, { request: 'operator ids' })
-    )
-    return (ids ? readable(vocab, ids) : draw)(answer)
-  }
-}
+let drawing =
+  (vocab: Vocab, known: () => Promise<Ids>) =>
+  async (answer: Bundle[]): Promise<Bundle[]> =>
+    readable(vocab, await known())(answer)
 
 /**
  * The Operator's own effects (operator-vocab.ts), and a trial round's run,

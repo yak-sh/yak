@@ -5,6 +5,7 @@ import { assert, assertEquals } from '@std/assert'
 import {
   blocks,
   drawn,
+  eids as held,
   headings,
   Host,
   Markdown,
@@ -225,6 +226,14 @@ test('the ids typed in prose are listed once each, never from code', () => {
     ['T-12', 'P-1', '#0e513227de'],
   )
   assertEquals(typed(`no ids but ${TASK}`), [])
+})
+
+test('the eids prose holds are listed once each, never from code', () => {
+  assertEquals(
+    held(`${PROJECT}, [plan](${TASK}), \`${PROJECT}\`, T-12 ${PROJECT}`),
+    [PROJECT, TASK],
+  )
+  assertEquals(held('no eids, T-12 and #0e513227de'), [])
 })
 
 test('a long text has every id in it found, wherever it falls', () => {

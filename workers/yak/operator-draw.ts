@@ -32,6 +32,7 @@ import {
 import { define, type Registry } from '@yaks/render'
 import {
   type Beside,
+  called,
   draw,
   joined,
   type Kind,
@@ -944,6 +945,9 @@ export type Lines = {
   offers: Record<string, Tool[]>
   called?: string
   opens?: string
+  /** what the entities their prose names are called, by eid
+   * (@yaks/session `Naming`) */
+  ids?: Record<string, string>
 }
 
 // The tool offer an ask names.
@@ -970,6 +974,8 @@ export let wire = (
     [...read, ...helpers.flatMap((h) => h.entries)].map(offerOf),
   )
   let tools = new Set(read.map((b) => String(comp(b, 'call')?.to ?? '')))
+  let said = JSON.stringify([read, helpers])
+  let ids = Object.entries(seen.ids ?? {}).filter(([eid]) => said.includes(eid))
   return {
     lines: drawn.map(({ id, uses }) => ({ id, uses })),
     entries: read,
@@ -986,6 +992,7 @@ export let wire = (
     ),
     ...seen.called ? { called: seen.called } : {},
     ...seen.opens ? { opens: seen.opens } : {},
+    ...ids.length ? { ids: Object.fromEntries(ids) } : {},
   }
 }
 
@@ -1005,7 +1012,7 @@ export let drawLines = (sent: Lines): { id: string; node: Node }[] => {
     let entries = sent.entries.filter((b) => reads.has(b.entity.eid))
     let drawn = lines(entries, names, { ...seen, helpers })
       .find((l) => l.id == id)
-    return drawn ? [{ id, node: drawn.node }] : []
+    return drawn ? [{ id, node: called(sent.ids, drawn.node) }] : []
   })
 }
 

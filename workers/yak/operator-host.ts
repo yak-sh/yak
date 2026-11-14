@@ -8,6 +8,7 @@ import { enqueue } from '@yaks/effects'
 import { derivedEid } from '@yaks/graph/identity'
 import { sha256 } from '@yaks/graph/sha256'
 import { short } from '@yaks/id'
+import { eids } from '@yaks/markdown/structural'
 import { ownerOf, owns, placed } from './operator-access.ts'
 import type { Held } from './build-door.ts'
 import type { Copy } from './operator-skills.ts'
@@ -109,7 +110,26 @@ let namingOf = async (
       }),
     ),
     person: await personOf(store, entries, named),
+    ids: await idsOf(store, entries),
   }
+}
+
+// What the entities the entries' words name are called, by eid: each the
+// store calls by its id (operator-store.ts `known`), as the model reads it.
+// An entry's words are Markdown the conversation draws (@yaks/session
+// `markdown`), not prose the store swaps, so an eid a model wrote stays.
+let idsOf = async (store: Store, entries: Bundle[]) => {
+  let named = new Set(
+    entries.flatMap((b) => eids(String(comp(b, 'content')?.body ?? ''))),
+  )
+  if (!named.size) return {}
+  let known = await store.known()
+  return Object.fromEntries(
+    [...named].flatMap((eid) => {
+      let id = known(eid)
+      return id ? [[eid, id]] : []
+    }),
+  )
 }
 
 // Admin reads include compactions and producing requests outside the page.

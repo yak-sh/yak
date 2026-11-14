@@ -188,6 +188,20 @@ export let drawn = (source: string, ids?: Ids): string =>
     ? rewritten(source, (id) => EID.test(id) ? shown(id, ids) : undefined)
     : source
 
+/** The eids prose holds, written bare or as a link's target, in reading
+ * order, once each and in lower case: what {@link drawn} and the renderer ask
+ * a host's {@link Ids} about. Code keeps its ids literal, so none in it is
+ * listed. */
+export let eids = (source: string): string[] => {
+  if (!EIDS.test(source)) return []
+  let out = new Set<string>()
+  rewritten(source, (id) => {
+    if (EID.test(id)) out.add(id.toLowerCase())
+    return undefined
+  })
+  return [...out]
+}
+
 // An id a person types for an entity, as prose holds it before it is stored:
 // a human id or a short handle. An eid is already what is stored, and a SHA
 // names its content.

@@ -62,10 +62,12 @@ export type Named = { name?: string; title?: string; step?: Steps }
 
 /** What the calls' steps are said from: each tool a call points at
  * (`call.to`) by its eid, as its `tool` component names it, and whom the
- * calls work for. */
+ * calls work for; and what the entities the lines' prose names are called,
+ * by eid (`ids`, an entity's id such as `T-2`), drawn by {@link called}. */
 export type Naming = {
   tools?: Record<string, Named>
   person?: string | null
+  ids?: Record<string, string>
 }
 
 /** How the calls read, from what names them. */
@@ -145,6 +147,22 @@ export let margin = <B extends Beside>(
  * ids stay words. */
 export let opening = (url?: string | null): Options =>
   url ? { refs: (id) => url.replaceAll('{id}', encodeURIComponent(id)) } : {}
+
+/** Lines drawn with each eid their prose holds called as `ids` calls it,
+ * else as the page's own Host does, else as its short handle; where the page
+ * opens an id is the page's. */
+export let called = (
+  ids: Record<string, string> | undefined,
+  node: Node,
+): Node => ids && Object.keys(ids).length ? h(Called, { ids }, node) : node
+
+let Called = (
+  { ids, children }: { ids: Record<string, string>; children?: Node },
+) => {
+  let host = useContext(Host)
+  let value = { ...host, ids: (eid: string) => ids[eid] ?? host.ids?.(eid) }
+  return h(Host.Provider, { value }, children)
+}
 
 // An id that opens on another site opens in a tab of its own, so the page
 // it was read on stays.

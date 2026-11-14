@@ -33,7 +33,7 @@ import {
   type View,
   wire,
 } from './operator-draw.ts'
-import { type Names, opening, theirs } from '@yaks/session/conversation'
+import { called, type Names, opening, theirs } from '@yaks/session/conversation'
 import { drawn, type Row, rowsOf } from './operator-rows.ts'
 import {
   going,
@@ -615,7 +615,7 @@ export let talk = (
       h(
         Transcript.Lines,
         { 'data-rows': '' },
-        lines(entries, names, seen, view).map(row),
+        called(seen.ids, lines(entries, names, seen, view).map(row)),
       ),
       // the words a screen reader hears; the yak beside the box shows them
       h(Transcript.Status, {}, h('span', { 'data-now': '' }, working)),
