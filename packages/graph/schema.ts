@@ -5,15 +5,26 @@
 // the way any vocabulary document is.
 //
 // Three sizes, one per question. The index is every component with its
-// description, whether it names a kind, and each property's type, small enough
-// to read whole. A component asked for by name is its entry as declared, with
-// an example value. A kind is that component whole, beside the index entries
-// of the components it is displayed with.
+// description and each property's type, small enough to read whole. A
+// component asked for by name is its entry as declared, with an example value.
+// A kind is the components it is whole, beside the index entries of those a
+// whole one also carries. Each answer's `kinds` are the kinds its components
+// make, as `narrow` (@yaks/vocab) keeps them, so a program that loads the
+// answer back names an entity as this graph does; a component said whole
+// that declares its own kind (`kind: true`) still says it there.
 //
 // Everything is derived: a description is the one the vocabulary carries, and
 // a property that has none is described without one.
 
-import { isBinary, type PropSchema, typesOf, type Vocab } from '@yaks/vocab'
+import {
+  declOf,
+  isBinary,
+  type KindDecl,
+  namesKind,
+  type PropSchema,
+  typesOf,
+  type Vocab,
+} from '@yaks/vocab'
 
 /** Where a component is documented at length, when the program that opened
  * the graph has such a page — `mail` → the guide's mail page. The vocabulary
@@ -24,10 +35,12 @@ export type Guide = (comp: string) => string | undefined
  * kind. */
 export type About = { comps?: string[]; kind?: string }
 
-/** A vocabulary document: the components under one `$defs`. */
+/** A vocabulary document: the components under one `$defs`, and the kinds
+ * they make under `kinds`. */
 export type SchemaDoc = {
   $vocabulary?: Record<string, boolean>
   $defs: Record<string, PropSchema>
+  kinds?: Record<string, KindDecl>
 }
 
 // What deleting the referenced entity does to the entity holding the
@@ -79,15 +92,13 @@ let example = (vocab: Vocab, name: string): Record<string, unknown> => {
   )
 }
 
-// A component as the index lists it: what it is, whether it names a kind, and
-// each property's type.
+// A component as the index lists it: what it is and each property's type.
 let cut = (vocab: Vocab, name: string): PropSchema => {
   let def = vocab.def(name)!
   return {
     component: true,
     type: 'object',
     ...(def.description ? { description: def.description } : {}),
-    ...(def.kind ? { kind: true } : {}),
     properties: Object.fromEntries(
       Object.entries(def.properties ?? {}).map((
         [p, s],
@@ -113,15 +124,23 @@ let whole = (vocab: Vocab, name: string): PropSchema => {
   }
 }
 
+// A kind's components: those it is, and those a whole one also carries.
+let parts = (vocab: Vocab, name: string) => {
+  let k = vocab.kind(name)!
+  let is = k.is.filter((n) => vocab.comp(n))
+  let carried = Object.keys(k.with).filter((n) =>
+    vocab.comp(n) && !is.includes(n)
+  )
+  return { is, carried }
+}
+
 // The components an answer is about, each at the size it is asked for.
 let entries = (vocab: Vocab, about: About): [string, PropSchema][] => {
   if (about.kind) {
-    let shown = (vocab.comp(about.kind)?.before ?? []).filter((n) =>
-      vocab.comp(n)
-    )
+    let { is, carried } = parts(vocab, about.kind)
     return [
-      [about.kind, whole(vocab, about.kind)],
-      ...shown.map((n): [string, PropSchema] => [n, cut(vocab, n)]),
+      ...is.map((n): [string, PropSchema] => [n, whole(vocab, n)]),
+      ...carried.map((n): [string, PropSchema] => [n, cut(vocab, n)]),
     ]
   }
   if (about.comps?.length) return about.comps.map((n) => [n, whole(vocab, n)])
@@ -136,9 +155,18 @@ export let schemaOf = (vocab: Vocab, about: About = {}): SchemaDoc => {
     {},
     ...vocab.docs.map((d) => d.$vocabulary ?? {}),
   ) as Record<string, boolean>
+  let $defs = Object.fromEntries(entries(vocab, about))
+  let index = !about.kind && !about.comps?.length
+  // A component said whole as it was declared may name its kind itself, and
+  // a document that declares a kind twice is refused.
+  let kinds = vocab.kinds.filter((k) =>
+    vocab.kind(k)!.is.every((c) => Object.hasOwn($defs, c)) &&
+    !($defs[k] && namesKind($defs[k]))
+  ).map((k) => [k, declOf(vocab.kind(k)!, { examples: !index })])
   return {
     ...(Object.keys(used).length ? { $vocabulary: used } : {}),
-    $defs: Object.fromEntries(entries(vocab, about)),
+    $defs,
+    ...(kinds.length ? { kinds: Object.fromEntries(kinds) } : {}),
   }
 }
 
@@ -203,7 +231,7 @@ let block = (vocab: Vocab, name: string, heading: string): string => {
   let def = vocab.def(name)!
   let props = Object.keys(def.properties ?? {})
   return [
-    `${heading} ${name}${def.kind ? ' (kind)' : ''}`,
+    `${heading} ${name}${vocab.comp(name)?.kind ? ' (kind)' : ''}`,
     def.description && sentence(def.description),
     props.length && listed(props),
   ].filter(Boolean).join('\n\n')
@@ -276,13 +304,11 @@ export let proseOf = (
   guide?: Guide,
 ): string => {
   if (about.kind) {
-    let shown = (vocab.comp(about.kind)?.before ?? []).filter((n) =>
-      vocab.comp(n)
-    )
+    let { is, carried } = parts(vocab, about.kind)
     return [
-      page(vocab, about.kind, guide),
-      ...(shown.length
-        ? ['## Shown with', ...shown.map((n) => block(vocab, n, '###'))]
+      ...is.map((n) => page(vocab, n, guide)),
+      ...(carried.length
+        ? ['## Carried with', ...carried.map((n) => block(vocab, n, '###'))]
         : []),
     ].join('\n\n')
   }
@@ -296,8 +322,8 @@ export let proseOf = (
       `An entity is shown as the first kind it carries: ${
         listed(vocab.kinds)
       }.`,
-      'Name a component for its properties in full, or a kind for what it is ' +
-      'shown with.',
+      'Name a component for its properties in full, or a kind for the ' +
+      'components a whole one carries.',
     ].filter(Boolean).join('\n'),
     grouped(vocab),
   ].join('\n\n')

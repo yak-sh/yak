@@ -445,13 +445,11 @@ test('graph_schema hands over the words of this graph', async () => {
   // A vocabulary is not rows in the store it describes, so its structured
   // answer is a vocabulary document rather than bundles.
   let out = (await called(client, 'graph_schema')).structuredContent as {
-    $defs: Record<string, { kind?: boolean }>
+    $defs: Record<string, unknown>
+    kinds: Record<string, unknown>
   }
   assertEquals(Object.keys(out.$defs), shop.all)
-  assertEquals(
-    Object.keys(out.$defs).filter((n) => out.$defs[n].kind).sort(),
-    [...shop.kinds].sort(),
-  )
+  assertEquals(Object.keys(out.kinds), shop.kinds)
   await client.close()
 })
 

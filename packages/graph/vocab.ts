@@ -53,23 +53,28 @@ let bare = (s: unknown): unknown =>
     : s
 
 // An answer describes a composed vocabulary, including internal and UX
-// components. The authoring meta-schema reserves those names for the host;
-// its name restriction does not constrain what the host reports.
+// components and the kinds they make. The authoring meta-schema reserves those
+// names for the host; its name restriction does not constrain what the host
+// reports.
 let reports = new WeakMap<Keywords[], Record<string, unknown>>()
 let reported = (keywords: Keywords[]): Record<string, unknown> => {
   let held = reports.get(keywords)
   if (held) return held
   let { $schema: _, ...meta } = extendMeta(keywords)
   let properties = meta.properties as Record<string, unknown>
-  let { propertyNames: __, ...defs } = properties.$defs as Record<
-    string,
-    unknown
-  >
+  let named = (s: unknown) => {
+    let { propertyNames: _, ...rest } = s as Record<string, unknown>
+    return rest
+  }
   // Tool schemas are already read as 2020-12. Omit the dialect line, which
   // clients defaulting to an older draft can refuse before checking a value.
   let schema = bare({
     ...meta,
-    properties: { ...properties, $defs: defs },
+    properties: {
+      ...properties,
+      $defs: named(properties.$defs),
+      kinds: named(properties.kinds),
+    },
   }) as Record<string, unknown>
   reports.set(keywords, schema)
   return schema

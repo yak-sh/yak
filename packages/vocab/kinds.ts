@@ -49,8 +49,10 @@ export type Kind = {
   package?: string
 }
 
-// A component that loads as the kind of its own name.
-let named = (def: PropSchema) => def.kind === true || def.prefix != null
+/** Whether a component declares the kind of its own name, the way every
+ * vocabulary written before `kinds` did: `kind: true`, or a `prefix`. */
+export let namesKind = (def: PropSchema): boolean =>
+  def.kind === true || def.prefix != null
 
 // The kind a component declares of its own name.
 let fromComp = (name: string, def: PropSchema, pkg?: string): Kind => ({
@@ -83,6 +85,22 @@ let fromDecl = (name: string, d: KindDecl, pkg?: string): Kind => {
   }
 }
 
+/** A kind said back as a document declares it under `kinds`: what was given,
+ * without the defaults loading filled in. `examples: false` leaves its example
+ * bundles out, for an answer meant to be read whole. */
+export let declOf = (
+  k: Kind,
+  { examples = true }: { examples?: boolean } = {},
+): KindDecl => ({
+  ...(k.title ? { title: k.title } : {}),
+  ...(k.description ? { description: k.description } : {}),
+  ...(k.is.join() != k.name ? { is: k.is } : {}),
+  ...(Object.keys(k.with).length ? { with: k.with } : {}),
+  ...(k.before.length ? { before: k.before } : {}),
+  ...(k.prefix != null ? { prefix: k.prefix } : {}),
+  ...(examples && k.examples.length ? { examples: k.examples } : {}),
+})
+
 /** Every kind the documents declare, under `kinds` or as a component of the
  * kind's name, by name. A name declared twice throws, as a component does. */
 export let kindsIn = (
@@ -96,7 +114,7 @@ export let kindsIn = (
     out.set(k.name, k)
   }
   for (let name of Object.keys(defs).sort()) {
-    if (named(defs[name])) add(fromComp(name, defs[name], from[name]))
+    if (namesKind(defs[name])) add(fromComp(name, defs[name], from[name]))
   }
   for (let doc of docs) {
     let kinds = (doc.kinds ?? {}) as Record<string, KindDecl>

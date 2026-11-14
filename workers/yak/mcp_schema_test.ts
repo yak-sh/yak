@@ -7,6 +7,7 @@ import {
 } from '@std/assert'
 import { Ajv } from 'ajv'
 import { test, until } from '@yaks/testing'
+import type { KindDecl } from '@yaks/vocab'
 import {
   accepted,
   argsIn,
@@ -611,7 +612,6 @@ test('graph_schema answers the index, a word whole, and a kind', async () => {
     await agent.tool('app_deploy', { app: 'cookbook' })
     type Entry = {
       description?: string
-      kind?: boolean
       before?: string[]
       properties: Record<string, { type: unknown; description?: string }>
       examples?: Record<string, unknown>[]
@@ -648,6 +648,7 @@ test('graph_schema answers the index, a word whole, and a kind', async () => {
       return {
         text: String(data.said ?? reply.content[0].text),
         defs: data.$defs as Record<string, Entry>,
+        kinds: (data.kinds ?? {}) as Record<string, KindDecl>,
       }
     }
 
@@ -657,6 +658,7 @@ test('graph_schema answers the index, a word whole, and a kind', async () => {
       {},
       `{
       "$defs": {recipe: .["$defs"].recipe, mail: .["$defs"].mail, doc: .["$defs"].doc},
+      kinds: {recipe: .kinds.recipe},
       said: ("## recipe" + (.said | split("## recipe")[1] | split("## ")[0]))
     }`,
     )
@@ -666,7 +668,7 @@ test('graph_schema answers the index, a word whole, and a kind', async () => {
       title: { type: 'string' },
       body: { type: 'string' },
     })
-    assertEquals(index.defs.recipe.kind, true)
+    assert(index.kinds.recipe, 'the app own word is a kind')
     assertStringIncludes(index.text, '## recipe (kind)\n\nserves')
 
     // One word whole: its entry as its vocab.json declares it, with an example
@@ -679,7 +681,7 @@ test('graph_schema answers the index, a word whole, and a kind', async () => {
       mail.defs.mail.properties.verified.description!,
       'DKIM',
     )
-    assertEquals(mail.defs.mail.before, ['doc'])
+    assertEquals(mail.kinds.mail.with, { doc: true })
     assert('from' in mail.defs.mail.examples![0])
     assertStringIncludes(
       mail.text,
@@ -690,7 +692,7 @@ test('graph_schema answers the index, a word whole, and a kind', async () => {
     assertStringIncludes(mail.text, '- mail.reply_to')
 
     // A kind is what an entity of it is made of: the word itself, then the
-    // index entry of each word it is shown with.
+    // index entry of each word a whole one carries.
     let letter = await said({ kind: 'mail' })
     assertEquals(Object.keys(letter.defs), ['mail', 'doc'])
 

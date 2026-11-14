@@ -371,7 +371,7 @@ export let runs = (seams: Seams = {}): Runs => {
       let named = strings([args.component].flat())
         .flatMap((s) => s.split(/[\s,]+/).filter(Boolean))
       let kind = str(args.kind)
-      let unknown = [...named, ...(kind ? [kind] : [])]
+      let unknown = [...named, ...(kind && !v.kind(kind) ? [kind] : [])]
         .filter((name) => !v.comp(name))
       if (unknown.length) {
         throw new Refused(
@@ -380,7 +380,7 @@ export let runs = (seams: Seams = {}): Runs => {
             `this graph knows`,
         )
       }
-      if (kind && !v.comp(kind)!.kind) {
+      if (kind && !v.kind(kind)) {
         throw new Refused(
           `'${kind}' is a component, not a kind — the kinds are ` +
             `${v.kinds.join(', ')}; ask for it as component instead`,
