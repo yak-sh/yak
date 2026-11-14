@@ -636,7 +636,7 @@ test('a config naming the box tracker reads and marks its bugs there', async () 
 })
 test('a config naming the box tracker refuses what it does not hold', async () => {
   let refused = await use('bug_show', { bug: 'B-999999' }).catch((e) => e)
-  equal(refused.message, 'B-999999 names nothing')
+  equal(refused.message, 'B-999999 names no bug')
 })
 
 // A failed run in the platform tracker goes back to its pool through the
