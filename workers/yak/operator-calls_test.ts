@@ -1025,9 +1025,12 @@ test("a recorded call is the caller's conversation: their words theirs, its voic
     'Hi Ellihu, how are you this evening?',
     'Hi, Ellahu, do any of my apps have errors right now?',
   ])
-  equal(texts('div.More > .Transcript_Bubble'), [
-    'Hi, Ellahu, do any of my apps have errors right now?',
-  ])
+  equal(
+    [...document.querySelectorAll('.Transcript_Via > .More_Mark')].map((m) =>
+      m.closest('.Transcript_Bubble')!.textContent!.trim()
+    ),
+    ['Hi, Ellahu, do any of my apps have errors right now?'],
+  )
   equal(texts(`.Transcript_Reply${open}`), [
     "Hi, it's Elihu.",
     'Good evening. I’m well, thank you. Ready to assist with anything you need.',
