@@ -1,6 +1,6 @@
 // What the chat page's script draws with, in the browser as `_talk.js`
 // (client-assets.ts): its conversation, mounted over what the server drew
-// (operator-talk.ts), and the aside beside it, drawn as HTML for the parts of
+// (operator-talk-browser.ts), and the aside beside it, drawn as HTML for the parts of
 // the page the script puts in place.
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
@@ -13,11 +13,11 @@ import {
   Work,
 } from './operator-aside.ts'
 
-export { mountTalk } from './operator-talk.ts'
+export { mountTalk } from './operator-talk-browser.ts'
 
-// Its message box (operator-box.ts), whose words are drafts bound here, in
+// Its message box (operator-box-browser.ts), whose words are drafts bound here, in
 // the same bundle, so a draft changed anywhere draws the box again.
-export { mountAsk } from './operator-box.ts'
+export { mountAsk } from './operator-box-browser.ts'
 export { browserDrafts } from '@yaks/draft/browser'
 
 // The aside beside the lines, drawn the same way (operator-aside.ts).

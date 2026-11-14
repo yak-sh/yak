@@ -10,14 +10,15 @@
 // pasted or dropped anywhere on it, public/drop.js), each drawn as a sent one
 // is (operator-draw.ts `Filed`), the microphone (public/voice.js), and over
 // it Newest, while the reader has scrolled up from the newest line.
-import { h, render } from 'preact'
+// operator-box-browser.ts mounts it (`mountAsk`).
+import { h } from 'preact'
 import type { Bundle } from '@yaks/graph'
 import type { Drafts } from '@yaks/ux'
 import { Conversation } from '@yaks/ux/conversation'
 import { Attachments, Button, Composer, Drop, Icon } from '@yaks/ui/parts'
 import { Idle } from './mascot.ts'
 import { icons } from './icons.ts'
-import { Filed, PICTURES } from './operator-draw.ts'
+import { Filed } from './operator-draw.ts'
 
 /** What the page's box is, as the server says it, the same on the page. */
 export type Asking = {
@@ -194,52 +195,4 @@ export let Ask = (
     h('input', { type: 'hidden', name: 'page', value: here }),
     app ? h('input', { type: 'hidden', name: 'app', value: app.slug }) : null,
   )
-}
-
-// The files an input holds, as the box draws them: a picture by a source of
-// its own, which the page lets go once it is drawn no more.
-let held = (input: HTMLInputElement, kinds: string[]): Filed[] =>
-  [...input.files ?? []].map((f) => ({
-    name: f.name,
-    mime: f.type,
-    size: f.size,
-    ...PICTURES.includes(f.type) ? { src: URL.createObjectURL(f) } : {},
-    ...reads(kinds, f) ? {} : { note: UNREAD },
-  }))
-
-/** What the page does to its box. */
-export type Asked = ReturnType<typeof mountAsk>
-
-/**
- * The box mounted over what the server drew in `root`, its words the
- * person's drafts at `place`. What the page holds of it changes by `set`;
- * `focus` puts the caret in it, at the end of what it holds when asked.
- */
-export let mountAsk = (
-  { root, ...given }: Omit<AskProps, keyof Held> & { root: Element },
-) => {
-  let now: Held = {}
-  let draw = () => render(h(Ask, { ...given, ...now }), root)
-  draw()
-  let field = () => root.querySelector('textarea')
-  let input = root.querySelector<HTMLInputElement>('input[type=file]')
-  input?.addEventListener('change', () => {
-    for (let f of now.files ?? []) if (f.src) URL.revokeObjectURL(f.src)
-    now = { ...now, files: held(input, given.asking.reads) }
-    draw()
-  })
-  return {
-    set: (change: Held) => {
-      now = { ...now, ...change }
-      draw()
-    },
-    /** what it says under itself */
-    said: () => now.said ?? '',
-    focus: (end = false) => {
-      draw()
-      let f = field()
-      f?.focus()
-      if (end && f) f.setSelectionRange(f.value.length, f.value.length)
-    },
-  }
 }

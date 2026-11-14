@@ -84,12 +84,15 @@ test('platform merging refuses conflicts, hidden options and runtime libs', () =
     Error,
     'non-web platform lib deno.ns',
   )
-  // A page meets browsers that lack what ES2023 does not have; workerd has it.
-  let esnext = [{ url: a, config: config({}, ['dom', 'esnext']) }]
+  // A page meets browsers that lack what ES2023 does not have; workerd has
+  // it, and no DOM.
+  let esnext = [{ url: a, config: config({}, ['esnext']) }]
   assertThrows(() => mergeConfigs(esnext), Error, 'platform lib esnext')
-  assertEquals(
-    mergeConfigs(esnext, 'workers').compilerOptions.lib,
-    ['dom', 'esnext'],
+  assertEquals(mergeConfigs(esnext, 'workers').compilerOptions.lib, ['esnext'])
+  assertThrows(
+    () => mergeConfigs([{ url: a, config: config() }], 'workers'),
+    Error,
+    'platform lib dom',
   )
 })
 

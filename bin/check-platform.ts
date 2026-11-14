@@ -28,10 +28,14 @@ export type Config = {
 
 /** The libs a platform's program may name. ES2023 is the language the oldest
  * browsers a page supports have (Safari 16, Chrome 110), so a built-in newer
- * than that fails the browser check; workerd is always current. */
+ * than that fails the browser check; workerd is always current. The Workers
+ * program has the runtime's globals alone (@cloudflare/workers-types, by each
+ * entry's reference): the DOM's would merge into them, an `Element` whose
+ * `append` takes a Response, so a page's module reached from a Worker fails
+ * to check by name (`HTMLElement`) rather than by a merged signature. */
 let LIBS: Record<string, string[]> = {
   browser: ['dom', 'dom.asynciterable', 'dom.iterable', 'es2023'],
-  workers: ['dom', 'dom.asynciterable', 'dom.iterable', 'esnext'],
+  workers: ['esnext'],
 }
 
 export function mergeConfigs(

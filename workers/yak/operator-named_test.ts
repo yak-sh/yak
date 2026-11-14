@@ -4,7 +4,7 @@ import { equal, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { operatorMemory, sentRows } from './operator-testing.ts'
 import { conversationOf } from './operator-host.ts'
-import { mountTalk } from './operator-talk.ts'
+import { mountTalk } from './operator-talk-browser.ts'
 import { operatorVocab } from './operator-store.ts'
 import { pageDocs } from './operator-words.ts'
 

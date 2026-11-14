@@ -4,7 +4,7 @@
 // a line for what it is doing now, and the list of conversations beside it.
 // Pure: the page draws the conversation, and the Builder object sends the
 // lines a step changed to the page's socket (`frame`) as the entries each
-// draws, which the page draws again over what it was drawn (operator-talk.ts
+// draws, which the page draws again over what it was drawn (operator-talk-browser.ts
 // `mountTalk`).
 import type { Bundle, Comp } from '@yaks/graph'
 import { statusOf } from '@yaks/session/status'

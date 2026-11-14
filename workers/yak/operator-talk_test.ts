@@ -1,5 +1,5 @@
 // The chat page's conversation mounted over what the server drew
-// (operator-talk.ts), on a linkedom page: it changes nothing it was not told
+// (operator-talk-browser.ts), on a linkedom page: it changes nothing it was not told
 // to, draws a step's lines from the entries its frame sends as the server
 // draws them, a reply being written as a settled one, Stop at once, and a
 // whole read that leaves out the person's words keeps them.
@@ -9,7 +9,7 @@ import { parseHTML } from 'linkedom'
 import { namer } from '@yaks/session/conversation'
 import { TAKE } from '@yaks/ux/conversation'
 import { frame, talk } from './operator-view.ts'
-import { mountTalk, type Talking } from './operator-talk.ts'
+import { mountTalk, type Talking } from './operator-talk-browser.ts'
 import { operatorVocab } from './operator-store.ts'
 import { pageDocs } from './operator-words.ts'
 

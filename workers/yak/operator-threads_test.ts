@@ -10,7 +10,7 @@ import {
 } from './operator-host.ts'
 import type { Operator } from './operator.ts'
 import type { Lines } from './operator-draw.ts'
-import { mountTalk } from './operator-talk.ts'
+import { mountTalk } from './operator-talk-browser.ts'
 import { operatorVocab } from './operator-store.ts'
 import { pageDocs } from './operator-words.ts'
 

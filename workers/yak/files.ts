@@ -279,9 +279,9 @@ export let nearest = (path: string) => {
 //
 // The hop itself can be cut off: the runtime fails it with its `retryable`
 // flag (`Network connection lost.`) when the entrypoint behind the binding is
-// reset or its connection drops. A read carries no body, so it is sent again
-// with the backoff a store's call takes (@yaks/durable-object `retried`); an
-// upload is its caller's to send again.
+// reset or its connection drops. A read carries no body, so each try sends a
+// copy of it, with the backoff a store's call takes (@yaks/durable-object
+// `retried`); an upload is its caller's to send again.
 //
 // Each trip is one `files` hop on the request's tally (hops.ts), and its wait
 // `files_wait`: a hit never reaches the bucket, so no `r2` counts it.
@@ -297,7 +297,7 @@ let through = async (env: Env, req: Request) => {
   try {
     let files = env.FILES, read = req.method == 'GET' || req.method == 'HEAD'
     let cached = await retried(
-      () => files.fetch(read ? req.clone() : req),
+      () => files.fetch(read ? new Request(req) : req),
       read,
       evicted,
       jittered(env.CLOCK),

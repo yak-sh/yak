@@ -32,6 +32,11 @@
  *   graph.
  * - `canEdit`, `formatProp`, `reading`: what a value is, pure.
  *
+ * What binds the DOM is a `-browser` module, at a subpath of its own
+ * (`./save`, `./sort`) and never here: a server imports this front door, and
+ * the Workers program checks what it reaches with the runtime's globals,
+ * which have no DOM.
+ *
  * @module
  */
 
@@ -59,7 +64,6 @@ export {
 } from './Edit.ts'
 export { Text, type TextProps } from './Text.ts'
 export { Save, type SaveFieldProps, type SaveProps } from './Save.ts'
-export { bindSave, type SaveBinding, type SaveOptions } from './save-browser.ts'
 export {
   type Disclosed,
   disclosed,

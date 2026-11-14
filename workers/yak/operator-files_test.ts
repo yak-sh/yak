@@ -20,7 +20,7 @@ import { platform } from './testing.ts'
 import { operatorService } from './operator-testing.ts'
 import { chatPage, operatorAnswer } from './operator-page.ts'
 import { onPage } from './operator-view.ts'
-import { mountAsk } from './operator-box.ts'
+import { mountAsk } from './operator-box-browser.ts'
 
 let p = platform('operator-files')
 let person = crypto.randomUUID(), eid = crypto.randomUUID()

@@ -10,7 +10,7 @@ import { Time } from '@yaks/ui/parts'
 // It only draws: admin.ts reads the rows and puts this on its desk.
 import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
 import { Card, type Col, Empty, Group, Table } from '@yaks/ui/parts'
-import { Sort, sortAt, type SortRow, type SortValue } from '@yaks/ux/sort'
+import { Sort, sortAt, type SortRow, type SortValue } from '@yaks/ux'
 import { type ByDay, columns, series, sparkline, summed } from '@yaks/ui/chart'
 import { count, dollars, SOURCES } from './meter.ts'
 import { day } from './html.ts'
