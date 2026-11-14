@@ -25,6 +25,7 @@ import {
   drafting,
   draftsOf,
   goingBack,
+  guessed,
   history,
   modifying,
   NEW,
@@ -302,13 +303,15 @@ let made = () => {
     heard,
     drafts,
     app,
+    // The draft a read naming none takes.
+    guess: async (who = WHO) => guessed(dir, app(), await drafts(), who),
     // The caller's own draft, previewed: its writes are told from then on.
-    preview: async (who = WHO) =>
+    preview: async (who = WHO, asked?: string) =>
       previewed(
         dir,
         SPACE,
         app(),
-        chosen(app(), await drafts(), who)!,
+        chosen(app(), await drafts(), who, asked)!,
         who,
         () => Promise.resolve(7),
       ),
@@ -585,7 +588,7 @@ test('two conversations under one person each write in a draft of their own, and
 
 let several = made()
 test('one conversation opens several drafts on purpose, and names the one each call means', async () => {
-  let { write, read } = several
+  let { write, read, guess, preview } = several
   let first = await write({ 'a.txt': 'left' }, ONE)
   let second = await write({ 'a.txt': 'right' }, ONE, NEW)
   assert(first.draft != second.draft)
@@ -597,6 +600,15 @@ test('one conversation opens several drafts on purpose, and names the one each c
   await write({ 'b.txt': 'two' }, ONE, second.draft!)
   assertEquals(await read('b.txt', ONE, second.draft!), 'two')
   assertEquals(await read('b.txt', ONE, first.draft!), null)
+  // A read naming none takes the one last written, then the one previewed.
+  let latest = async () => (await guess(ONE))?.eid
+  assertEquals(await latest(), second.draft)
+  await several.time.advance(5)
+  await write({ 'c.txt': 'one' }, ONE, first.draft!)
+  assertEquals(await latest(), first.draft)
+  await several.time.advance(5)
+  await preview(ONE, second.draft!)
+  assertEquals(await latest(), second.draft)
 })
 
 let resend = made()

@@ -361,6 +361,7 @@ import {
   draftsOf,
   fanned,
   goingBack,
+  guessed,
   history,
   linkFor,
   modifying,
@@ -535,6 +536,9 @@ let OPS = [
 
 // The ops that need a writer, which is every one that changes a byte.
 let WRITES = ['write', 'patch', 'fetch', 'delete', 'restore', 'discard']
+// The ops that may take the conversation's latest draft when it holds several
+// and names none (written.ts `guessed`): none replaces a file it has not read.
+let GUESSES = ['list', 'read', 'history', 'patch']
 
 // The draft a call names (written.ts `chosen`), or none for the caller's own.
 let draftArg = (args: Args) =>
@@ -3833,9 +3837,9 @@ let OURS: Row[] = [
             'write answers the id of the draft it landed in. new opens ' +
             'another beside the ones this conversation holds. Left out, the ' +
             "call works in this conversation's own draft: a read sees it " +
-            'over the live files, and the first write opens it. Once the ' +
-            'conversation holds several, every call names one, as draft: ' +
-            "'<id>'. With drafts, the draft they start from. For discard, " +
+            'over the live files, and the first write opens it. Of several, ' +
+            'the one last written; write, fetch, delete and restore name ' +
+            'one. With drafts, the draft they start from. For discard, ' +
             'the draft to close unreleased',
         ),
         path: str(
@@ -3959,7 +3963,12 @@ let OURS: Row[] = [
       // names, else this conversation's own, else none, the live files.
       let reading: Promise<AppDraft[]> | undefined
       let drafts = () => reading ??= draftsOf(ctx.dir, app)
-      let mine = async () => chosen(app, await drafts(), who, asked)
+      // A read, a patch or a preview of several of the conversation's own
+      // takes the one it last wrote or previewed; a whole-file write names one.
+      let mine = async () =>
+        GUESSES.includes(op)
+          ? guessed(ctx.dir, app, await drafts(), who, asked)
+          : chosen(app, await drafts(), who, asked)
       // The draft names every file it holds by sha (written.ts), so listing,
       // comparing and finding a file read no bytes; only a file asked for
       // whole is read, from its content address.
@@ -4368,6 +4377,8 @@ let OURS: Row[] = [
       if (op == 'patch') {
         let list = edits(args)
         let d = await draft()
+        // The draft its edits were read from is the one they land in.
+        let held = d.of?.eid ?? asked
         let paths = [...new Set(list.map((e) => e.path))]
         let texts: Record<string, string> = {}
         await Promise.all(paths.map(async (p) => {
@@ -4387,7 +4398,7 @@ let OURS: Row[] = [
           who,
           sent,
           c,
-          asked,
+          held,
         )
         let where0 = landedIn(app, who, into, open)
         let where = placing(ctx, space, app, config)
@@ -4853,7 +4864,13 @@ let OURS: Row[] = [
         r2RawObjects(ctx.env.BLOBS),
         ctx.dir,
         app,
-        chosen(app, await draftsOf(ctx.dir, app), who, draftArg(args)),
+        await guessed(
+          ctx.dir,
+          app,
+          await draftsOf(ctx.dir, app),
+          who,
+          draftArg(args),
+        ),
       )
       let files = await texts(
         draft.view,

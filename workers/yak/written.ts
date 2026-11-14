@@ -177,8 +177,8 @@ export let whichDraft = (drafts: AppDraft[]) =>
 
 /** The draft a call works in: the one it names, else the caller's own; none
  * where it has none, which a read sees as live and a write opens. Several of
- * its own and none named is refused with their ids: a conversation holding
- * several on purpose says which each call means. */
+ * its own and none named is refused with their ids, where a guess could write
+ * over the wrong one ({@link guessed} takes the latest for the rest). */
 export let chosen = (
   app: App,
   drafts: AppDraft[],
@@ -211,6 +211,41 @@ export let chosen = (
     )
   }
   return own[0] ?? null
+}
+
+/** When a draft was last worked in: its newest write or its preview,
+ * whichever came later, else when it opened.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let d = { at: '1', previewed: '3' } as AppDraft
+ * assertEquals(touched(d, [{ at: '2' }, { at: '4' }] as Written[]), '4')
+ * assertEquals(touched(d, [{ at: '2' }] as Written[]), '3')
+ * ```
+ */
+export let touched = (d: AppDraft, rows: Written[]) =>
+  [newest(rows)[0]?.at, d.previewed, d.at].reduce<string>(
+    (last, at) => at && at > last ? at : last,
+    '',
+  )
+
+/** The draft a read, a patch or a preview works in: as {@link chosen}, but
+ * of several of the caller's own and none named, the one it last wrote or
+ * previewed. A read changes nothing, and a patch refuses where the draft
+ * lacks the text it replaces, so only a whole-file write still refuses. */
+export let guessed = async (
+  dir: Pick<Directory, 'written'>,
+  app: App,
+  drafts: AppDraft[],
+  who: Who,
+  asked?: Asked,
+): Promise<AppDraft | null> => {
+  let own = asked ? [] : drafts.filter(ownBy(who))
+  if (own.length < 2) return chosen(app, drafts, who, asked)
+  let last = await Promise.all(
+    own.map(async (d) => touched(d, await dir.written(app, d.eid))),
+  )
+  return own[last.indexOf([...last].sort().at(-1)!)]
 }
 
 /**

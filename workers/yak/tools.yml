@@ -183,7 +183,7 @@ app_files:
     writes in a draft of its own, opened by its first write over the live
     files, and every write answers that draft's id and your other open
     drafts. Pass draft to keep working in one; drafts makes two to four at
-    once, and once a conversation holds several, every call names one.
+    once; with several, write and delete name one.
     op: list says which paths your draft changed and lists every other
     open draft; nobody locks anything. op: discard closes a draft
     unreleased. files: [{path, content}, …] writes a whole app in one call,

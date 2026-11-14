@@ -84,7 +84,16 @@ test("an app with a live version keeps what live holds in every draft, and each 
   for (let [i, id] of ids.entries()) {
     equal(await held(app, id), await shas({ ...live, ...SHARED, ...OWN[i] }))
   }
-  await throws(() => held(app), 'holds 3 drafts')
+  // A read naming none takes one of them; a write naming none refuses.
+  ok(
+    ids.includes(
+      (await run('app_files', { app, op: 'list' })).value!.draft as string,
+    ),
+  )
+  await throws(
+    () => run('app_files', { app, path: 'a.txt', content: 'a' }),
+    'holds 3 drafts',
+  )
 })
 
 // The call cut off where the last entry's bytes go out, so the drafts before

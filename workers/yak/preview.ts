@@ -67,6 +67,7 @@ import {
   type Drafted,
   drafting,
   draftsOf,
+  guessed,
   linkFor,
   newest,
   overlaid,
@@ -574,9 +575,10 @@ export let sealed = async (
   }
 }
 
-/** The draft a preview of an app shows when the caller names none: theirs,
- * as a release would take it (written.ts `releasing`). Refused where the app
- * has no open draft. */
+/** The draft a preview of an app shows when the caller names none: of
+ * several of the conversation's own, the one it last wrote or previewed
+ * (written.ts `guessed`), else theirs as a release would take it
+ * (`releasing`). Refused where the app has no open draft. */
 export let shownDraft = async (
   ctx: Ctx,
   space: Space,
@@ -584,7 +586,9 @@ export let shownDraft = async (
   who: Who,
   asked?: string | null,
 ) => {
-  let d = releasing(app, await draftsOf(ctx.dir, app), who, asked)
+  let drafts = await draftsOf(ctx.dir, app)
+  let d = await guessed(ctx.dir, app, drafts, who, asked) ??
+    releasing(app, drafts, who, asked)
   if (!d) {
     throw refuse(
       'missing',
