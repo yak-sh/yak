@@ -5,22 +5,18 @@
 // hostname row names the provider that carries it (`mail_domain{via}`).
 import type { MailDomains } from '@yaks/host/senders'
 import { mailDomains as config } from './config.ts'
+import { sharing } from './lib/shared.ts'
 
 // One lending per environment. Its options read the environment as they are
 // used, so a key put after the first call is used by the next.
 let held = new WeakMap<object, Promise<Record<string, MailDomains>>>()
 
-let lending = (env: object) => {
-  let got = held.get(env)
-  if (!got) {
-    held.set(
-      env,
-      got = import('./lent.ts').then((m) => m.lent(env, 'mailDomains', config)),
-    )
-    got.catch(() => held.delete(env))
-  }
-  return got
-}
+let lending = (env: object) =>
+  sharing(
+    held,
+    env,
+    () => import('./lent.ts').then((m) => m.lent(env, 'mailDomains', config)),
+  )
 
 /** The mail domains lent as `via`: config.ts `mailDomains`'s own by
  * default, which is the provider a new mail domain is set up with. */

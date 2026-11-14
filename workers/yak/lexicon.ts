@@ -32,6 +32,7 @@ import type { Reach } from './reach.ts'
 import { appVocab } from './vocab.ts'
 import { caught } from './defects.ts'
 import { Durable, type State } from '@yaks/durable-object/object'
+import { sharing } from './lib/shared.ts'
 
 /** Entries a lexicon keeps before it admits everything. */
 export let LIMIT = 16_000
@@ -157,14 +158,14 @@ let indexed = (env: Env, r: Reach): Promise<string> => {
   let key = `${r.app.eid} ${r.app.source ?? ''} ${r.app.declaration ?? ''} ${
     r.app.version ?? ''
   }`
-  let held = said.get(key)
-  if (held) return held
-  let next = declarationOf(env, r.space, r.app)
-    .then((d) => fieldsSaid(fields(appVocab(d.vocab))))
-  said.set(key, next)
-  next.catch(() => said.get(key) == next && said.delete(key))
-  if (said.size > SAID) said.delete(said.keys().next().value!)
-  return next
+  return sharing(
+    said,
+    key,
+    () =>
+      declarationOf(env, r.space, r.app)
+        .then((d) => fieldsSaid(fields(appVocab(d.vocab)))),
+    SAID,
+  )
 }
 
 // Words a lexicon can judge: plain words and quoted runs. Anything of the

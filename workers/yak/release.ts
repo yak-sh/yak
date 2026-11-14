@@ -3,6 +3,7 @@
 // that index, beside what its compile made, before the app row selects it.
 import type { Objects } from '@yaks/blob'
 import { elapsed } from './lib/hops.ts'
+import { background } from './defects.ts'
 import { addressed, type Files, own, sha256 } from './versions.ts'
 import { decode, encode, type File, type Index, META } from './release_index.ts'
 
@@ -59,7 +60,13 @@ let indexAt = (raw: Objects, prefix: string) => {
   }
   let drop = () => all.get(prefix) == entry && all.delete(prefix)
   all.set(prefix, entry)
-  entry.index.then((index) => index ? trim(all) : drop(), drop)
+  // Held to its end by the request that began it (lib/shared.ts): a later
+  // request awaits this same read.
+  let settled = entry.index.then((index) => {
+    if (index) trim(all)
+    else drop()
+  }, drop)
+  background(settled.then(() => {}))
   return entry.index
 }
 

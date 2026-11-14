@@ -76,6 +76,7 @@ import type { Subscription } from '@yaks/push'
 import type { Row as GrantRow } from './grant-rows.ts'
 import { principals, type Stamp, stampOf, writers } from './stamps.ts'
 import { instrumentEid } from './instrument.ts'
+import { sharing } from './lib/shared.ts'
 
 // The slugs no space or app may take, because at `<slug>.yaks.app` and at
 // `<slug>@yaks.app` (post.ts `mailFrom`) they would read as the platform
@@ -1107,11 +1108,7 @@ let seeded = new WeakMap<Meta, Promise<void>>()
  * store: before a directory write, and before the first-owner bootstrap
  * reads the meta space (identity.ts `founding`), which on a new platform
  * may follow a sign-in no directory write came before. */
-export let seeding = (store: Meta) => {
-  let first = seeded.get(store)
-  if (!first) seeded.set(store, first = seed(store))
-  return first
-}
+export let seeding = (store: Meta) => sharing(seeded, store, () => seed(store))
 
 // What the platform is made of, row by row: the meta space and its app, the
 // admin person, and the admin's seat in that space. Each half is asked for on

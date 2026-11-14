@@ -18,6 +18,7 @@ import { url } from '@yaks/platform/host'
 import { filesIn } from './release.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { BUILT } from './versions.ts'
+import { sharing } from './lib/shared.ts'
 
 /** Where a release keeps the digests of the toolkit it was compiled with. */
 export let RECORD = `${BUILT}.toolkit.json`
@@ -37,20 +38,14 @@ let asset = async (env: Pick<Env, 'ASSETS'> & Partial<Env>, path: string) => {
 /** The toolkit this platform compiles with. */
 export let current = (
   env: Pick<Env, 'ASSETS'> & Partial<Env>,
-): Promise<Toolkits> => {
-  let kit = kits.get(env.ASSETS)
-  if (kit) return kit
-  kit = (async () => {
+): Promise<Toolkits> =>
+  sharing(kits, env.ASSETS, async () => {
     let made = await asset(env, '/_compiler/toolkit.json')
     if (made) return made as Toolkits
     let catalog = await asset(env, '/_compiler/packages.json')
     if (catalog) return toolkits(catalog as Parameters<typeof toolkits>[0])
     throw new Error('no compiler toolkit among the assets')
-  })()
-  kit.catch(() => kits.delete(env.ASSETS))
-  kits.set(env.ASSETS, kit)
-  return kit
-}
+  })
 
 /** What a compile of an app with this package.json is made of. */
 export let used = async (

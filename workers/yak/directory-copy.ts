@@ -85,6 +85,9 @@ export let handover = (
       handing.delete(copies)
       if (!moving(e)) defect(e, { request: 'serving copy handover' })
     })
+    // Later requests await this same handover: held to its end
+    // (lib/shared.ts).
+    background(ready.then(() => {}, () => {}))
   }
   return {
     ...copy,

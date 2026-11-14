@@ -4,6 +4,7 @@ import type { VocabDoc } from '@yaks/vocab'
 import { type App, type Directory } from './directory.ts'
 import type { Env } from './env.ts'
 import { r2Objects } from './lib/objects.ts'
+import { sharing } from './lib/shared.ts'
 import { pins, type Version } from './versions.ts'
 import { appDoc, VOCABS } from './vocab.ts'
 
@@ -22,39 +23,33 @@ export let releaseStatus = async (
   let cache = held.get(env)
   if (!cache) held.set(env, cache = new Map())
   let key = `${app.eid}:${version}:${now}`
-  let found = cache.get(key)
-  if (!found) {
-    found = (async () => {
-      let all = await dir.deploys(app)
-      let was = all.find((v) => v.version == version)
-      let next = all.find((v) => v.version == now)
-      if (!was || !next) throw new Error('no_such_release')
-      let oldFiles = filesOf(was)
-      let newFiles = filesOf(next)
-      // Restored identical bytes need neither vocabulary reads nor a notice.
-      if (oldFiles == newFiles) return undefined
-      let blobs = pins(r2Objects(env.BLOBS))
-      let vocab = async (v: Version): Promise<VocabDoc> => {
-        let file = VOCABS.find((p) => v.files[p])
-        if (!file) return {}
-        let bytes = await blobs.get(v.files[file])
-        if (!bytes) throw new Error(`release has no bytes for ${file}`)
-        return appDoc(new TextDecoder().decode(bytes), file)
-      }
-      let [oldVocab, newVocab] = await Promise.all([vocab(was), vocab(next)])
-      return reloadLevel(
-        { files: oldFiles, vocab: oldVocab },
-        { files: newFiles, vocab: newVocab },
-        all.filter((v) =>
-          v.version > Math.min(version, now) &&
-          v.version <= Math.max(version, now)
-        ),
-      )
-    })()
-    if (cache.size >= 1024) cache.delete(cache.keys().next().value!)
-    cache.set(key, found)
-    found.catch(() => cache!.delete(key))
-  }
+  let found = sharing(cache, key, async () => {
+    let all = await dir.deploys(app)
+    let was = all.find((v) => v.version == version)
+    let next = all.find((v) => v.version == now)
+    if (!was || !next) throw new Error('no_such_release')
+    let oldFiles = filesOf(was)
+    let newFiles = filesOf(next)
+    // Restored identical bytes need neither vocabulary reads nor a notice.
+    if (oldFiles == newFiles) return undefined
+    let blobs = pins(r2Objects(env.BLOBS))
+    let vocab = async (v: Version): Promise<VocabDoc> => {
+      let file = VOCABS.find((p) => v.files[p])
+      if (!file) return {}
+      let bytes = await blobs.get(v.files[file])
+      if (!bytes) throw new Error(`release has no bytes for ${file}`)
+      return appDoc(new TextDecoder().decode(bytes), file)
+    }
+    let [oldVocab, newVocab] = await Promise.all([vocab(was), vocab(next)])
+    return reloadLevel(
+      { files: oldFiles, vocab: oldVocab },
+      { files: newFiles, vocab: newVocab },
+      all.filter((v) =>
+        v.version > Math.min(version, now) &&
+        v.version <= Math.max(version, now)
+      ),
+    )
+  }, 1024)
   let reload = await found
   return { version: now, ...(reload ? { reload } : {}) }
 }

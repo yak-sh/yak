@@ -27,6 +27,7 @@
 import { caught } from './defects.ts'
 import { esc } from './html.ts'
 import type { Bar } from './visit.ts'
+import { sharing } from './lib/shared.ts'
 
 type Assets = { fetch: (req: Request) => Promise<Response> }
 type Script = { text: string; hash: string }
@@ -80,14 +81,7 @@ let read = (assets: Assets) =>
 // Read once per isolate: the files are the deploy's own and never change
 // under it. A failed read is not kept, so the next page asks again.
 let held = new WeakMap<Assets, Promise<Script[]>>()
-let scripts = (assets: Assets) => {
-  let got = held.get(assets)
-  if (!got) {
-    held.set(assets, got = read(assets))
-    got.catch(() => held.delete(assets))
-  }
-  return got
-}
+let scripts = (assets: Assets) => sharing(held, assets, () => read(assets))
 
 /** The tags for a page mounted at `at`, of release `version`, wearing
  * `worn`, and the hashes a policy needs to admit them. A page of a draft's

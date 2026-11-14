@@ -37,6 +37,7 @@ import { BUILT } from './versions.ts'
 import { drawn, ICON_SVG } from './raster.ts'
 import { type Config, type NotFound, parse, WORKER } from './wrangler_app.ts'
 import * as shared from './shared.ts'
+import { sharing } from './lib/shared.ts'
 
 // What the gateway tells this part, in headers rather than the path, because
 // the path is the cache key and these two are not part of what distinguishes
@@ -121,19 +122,8 @@ export let ofRelease = <T>(
   kept: Map<string, Promise<T>>,
   prefix: string,
   read: () => Promise<T>,
-): Promise<T> => {
-  let had = kept.get(prefix)
-  if (had) return had
-  let reading = read()
-  if (!RELEASED.test(prefix)) return reading
-  kept.set(prefix, reading)
-  reading.catch(() => kept.delete(prefix))
-  for (let old of kept.keys()) {
-    if (kept.size <= KEPT) break
-    kept.delete(old)
-  }
-  return reading
-}
+): Promise<T> =>
+  RELEASED.test(prefix) ? sharing(kept, prefix, read, KEPT) : read()
 
 // What serving reads of an app's wrangler config: its server source (`main`,
 // never served) and the folder its addresses serve (`assets.directory`). Both

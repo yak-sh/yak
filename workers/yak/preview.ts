@@ -83,6 +83,7 @@ import { sourceOf } from './wrangler_app.ts'
 import { decodedPath } from './request-path.ts'
 import { walled } from './installed.ts'
 import { screen as screenAt } from './screen.ts'
+import { sharing } from './lib/shared.ts'
 
 let RATE = 0.09 / 3600
 let encode = (value: string) => new TextEncoder().encode(value)
@@ -425,18 +426,12 @@ let following = async (
   let d = await drafting(r2RawObjects(ctx.env.BLOBS), ctx.dir, app, of)
   let branch = of?.branch ?? null
   let source = stateOf(space, app, link, d.files)
-  let state = states.get(source)
-  if (!state) {
-    states.set(
-      source,
-      state = built(ctx, space, app, link, branch, d, source, mount, who),
-    )
-    state.catch(() => states.delete(source))
-    for (let old of states.keys()) {
-      if (states.size <= HELD) break
-      states.delete(old)
-    }
-  }
+  let state = sharing(
+    states,
+    source,
+    () => built(ctx, space, app, link, branch, d, source, mount, who),
+    HELD,
+  )
   return previewing(app, link, source, mount, branch, (await state).worker)
 }
 

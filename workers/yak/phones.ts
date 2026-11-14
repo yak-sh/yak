@@ -8,6 +8,7 @@ import type { Transport } from '@yaks/phone'
 import type { Phone } from '@yaks/phone/plugin'
 import { phoneConfig } from './config.ts'
 import type { Env } from './env.ts'
+import { sharing } from './lib/shared.ts'
 
 // One lending per environment. Its options read the environment as they are
 // used, so a secret put after the first text is used by the next.
@@ -22,14 +23,8 @@ let lend = async (env: Env) =>
 
 /** Every phone config.ts `phoneConfig` lends, by name. Two plugins lending
  * one name are refused: which answers would be an accident of order. */
-export let phones = (env: Env): Promise<Record<string, Phone>> => {
-  let got = held.get(env)
-  if (!got) {
-    held.set(env, got = lend(env))
-    got.catch(() => held.delete(env))
-  }
-  return got
-}
+export let phones = (env: Env): Promise<Record<string, Phone>> =>
+  sharing(held, env, () => lend(env))
 
 /** The phone config.ts `phoneConfig` lends as `via`, where one does. */
 export let phoneNamed = async (

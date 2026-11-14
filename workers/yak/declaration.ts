@@ -9,6 +9,7 @@ import type { Env } from './env.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { keptBytes } from './files.ts'
 import { background, caught } from './defects.ts'
+import { sharing } from './lib/shared.ts'
 
 export type Declaration = { vocab: VocabDoc; tools: Tools }
 // Where an app's declarations are kept, and each one's name there.
@@ -73,9 +74,10 @@ export let declarationOf = (
   let release = releaseOf(app)
   if (release == '0') return Promise.resolve({ vocab: {}, tools: {} })
   let at = prefix(space, app) + name(app, release)
-  return hold(
+  return sharing(
+    held,
     at,
-    held.get(at) ??
+    () =>
       keptBytes(env, app, prefix(space, app), name(app, release)).then(
         (bytes) => {
           if (!bytes) {
@@ -86,5 +88,6 @@ export let declarationOf = (
           return new TextDecoder().decode(bytes)
         },
       ),
+    HELD,
   ).then((text): Declaration => JSON.parse(text))
 }

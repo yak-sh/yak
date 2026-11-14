@@ -62,6 +62,7 @@ import { generated, index, kindsOf } from './kinds.ts'
 import { meant, shapeOf, unwritten } from './vocab.ts'
 import { background, caught } from './defects.ts'
 import type { Ctx } from './tools.ts'
+import { sharing } from './lib/shared.ts'
 
 /** The file, at the app's root. */
 export let NOTES = 'NOTES.md'
@@ -149,11 +150,7 @@ let keep = <T>(all: Map<string, T>, key: string, value: T) => {
 export let notesOf = (env: Env, app: App): Promise<string> => {
   let source = app.source
   if (!source) return Promise.resolve('')
-  let held = heldNotes.get(source)
-  if (held) return held
-  let read = notesAt(env, source)
-  read.catch(() => heldNotes.get(source) == read && heldNotes.delete(source))
-  return keep(heldNotes, source, read)
+  return sharing(heldNotes, source, () => notesAt(env, source), HELD)
 }
 
 let notesAt = async (env: Env, source: string) => {

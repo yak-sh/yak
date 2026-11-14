@@ -421,6 +421,8 @@ export let statsFor = (
   let missing = [...new Set(apps)].filter((app) => !fresh(app))
   if (missing.length) {
     let all = asked(env, missing, window, now)
+    // Later requests await this same read: held to its end (lib/shared.ts).
+    background(all.then(() => {}, () => {}))
     for (let app of missing) {
       let stats = all.then((all) => all.get(app)!)
       held.set(key(app), { at: now, stats })

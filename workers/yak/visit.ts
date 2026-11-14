@@ -50,6 +50,8 @@ import { COPY } from './relocate.ts'
 import { installAt, signInAt } from '@yaks/platform/routes'
 import { cleared, sampling } from './sample.ts'
 import { domainOf, newcomer, SESSION, type Who } from './session.ts'
+import { background } from './defects.ts'
+import { sharing } from './lib/shared.ts'
 
 /** A browser's own store of an app: its handle, where its uploads go, when it
  * was last used, and the app it became once installed. */
@@ -341,6 +343,8 @@ export let born = (
   let birth = bear(env, space, app, instrumentEid(via), by, now)
     .finally(() => births.delete(key))
   births.set(key, birth)
+  // Another request may await this birth: held to its end (lib/shared.ts).
+  background(birth.then(() => {}, () => {}))
   return birth
 }
 
@@ -533,21 +537,21 @@ export let releaseFor = (
   let version = app.demo?.version
   if (version == null || version == app.version) return Promise.resolve(null)
   let key = `${app.eid} ${version}`
-  let held = releases.get(key)
-  if (held) return held
-  let read = dir.deployAt(app, version).then((d) =>
-    d
-      ? {
-        version: d.version,
-        source: d.source,
-        script: d.script,
-        worker: d.worker,
-        lenses: d.lenses,
-      }
-      : null
+  return sharing(
+    releases,
+    key,
+    () =>
+      dir.deployAt(app, version).then((d) =>
+        d
+          ? {
+            version: d.version,
+            source: d.source,
+            script: d.script,
+            worker: d.worker,
+            lenses: d.lenses,
+          }
+          : null
+      ),
+    256,
   )
-  read.catch(() => releases.delete(key))
-  releases.set(key, read)
-  if (releases.size > 256) releases.delete(releases.keys().next().value!)
-  return read
 }

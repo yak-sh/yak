@@ -41,6 +41,7 @@ import { url } from '@yaks/platform/host'
 import { fillable, noted, valid as sharedPath } from './shared.ts'
 import { RECORD, used } from './toolkit.ts'
 import { keepShared } from './shared-files.ts'
+import { sharing } from './lib/shared.ts'
 
 export let LOCK = 'package-lock.json'
 
@@ -58,19 +59,15 @@ let MODULE = `${BUILT}.worker.js`
 // Kept per assets binding, the isolate's one in a deployment: a platform made
 // in a test reads its own, so what it reads never rests on an earlier one.
 let catalogs = new WeakMap<Env['ASSETS'], Promise<string>>()
-let CATALOG = (env: Env) => {
-  let text = catalogs.get(env.ASSETS)
-  if (text) return text
-  text = env.ASSETS.fetch(
-    new Request(url(env, '/_compiler/packages.json')),
-  ).then(async (r) => {
+let CATALOG = (env: Env) =>
+  sharing(catalogs, env.ASSETS, async () => {
+    let r = await env.ASSETS.fetch(
+      new Request(url(env, '/_compiler/packages.json')),
+    )
     if (r.ok) return await r.text()
-    catalogs.delete(env.ASSETS)
+    await r.body?.cancel()
     throw new Error(`compiler catalog ${r.status}`)
   })
-  catalogs.set(env.ASSETS, text)
-  return text
-}
 
 type Cache = {
   compiler: string

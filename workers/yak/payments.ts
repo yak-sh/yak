@@ -6,6 +6,7 @@
 // sell.ts connects a seller and opens their checkouts through its shops.
 import type { Payments, Plans, Shops } from '@yaks/host/payments'
 import { payments as config } from './config.ts'
+import { sharing } from './lib/shared.ts'
 
 // One lending per environment. Its options read the environment as they are
 // used, so a key put after the first call is used by the next.
@@ -20,14 +21,8 @@ let lend = async (env: object) => {
 }
 
 /** The payment provider config.ts `payments` lends as its `via`. */
-export let payments = (env: object): Promise<Payments> => {
-  let got = held.get(env)
-  if (!got) {
-    held.set(env, got = lend(env))
-    got.catch(() => held.delete(env))
-  }
-  return got
-}
+export let payments = (env: object): Promise<Payments> =>
+  sharing(held, env, () => lend(env))
 
 /** The plans it sells a space. */
 export let plans = async (env: object): Promise<Plans> =>

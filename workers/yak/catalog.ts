@@ -87,12 +87,14 @@ let stored = async (env: Env): Promise<Kept | undefined> => {
 }
 
 // One read at a time in an isolate: a page drawn while it is under way waits
-// on the same one.
+// on the same one, so the request that began it holds it to its end
+// (lib/shared.ts).
 let once = (env: Env, read: () => Promise<Kept | undefined>) => {
   let under = reading.get(env.BLOBS)
   if (under) return under
   let now = read().finally(() => reading.delete(env.BLOBS))
   reading.set(env.BLOBS, now)
+  background(now.then(() => {}, () => {}))
   return now
 }
 
