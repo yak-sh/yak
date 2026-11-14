@@ -1012,7 +1012,10 @@ export let get = (
       }
     }
     let described = found.some((b) => b.entity.archetype)
+    // A component the file holds no table for is worn by nobody, so it hides
+    // nothing and no statement names its table.
     let aspects = Object.keys(visibility.components ?? {})
+      .filter((name) => !setOf(absent).has(name))
       .filter((name) => described || found.some((b) => b[name]))
       .map((name) => [name, permitted(eids, [name])] as const)
     let hidden = new Set<string>()

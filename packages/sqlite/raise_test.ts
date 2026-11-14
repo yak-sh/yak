@@ -14,6 +14,7 @@ import {
 } from '@yaks/sql'
 import type { Stmt } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
+import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
 import { open } from './db.ts'
 import { mem } from './testing.ts'
@@ -247,4 +248,16 @@ test('a rule reading a property derived from a word nobody wrote lets the write 
   await g.apply([{ entity: { eid: 'b' }, tag: { name: 'red' } }])
   await g.apply([{ entity: { eid: 'b' }, doc: { title: 'b' } }])
   equal((await g.read('.mark')).map((b) => b.entity.eid), ['b'])
+})
+
+test('a scope over a word nobody wrote reads the entities asked for as wearing none of it', async () => {
+  let typed = loadVocab([words, archetypeDoc])
+  let d = mem(), s = storage(d, typed)
+  s.install()
+  let g = graph({ storage: s, vocab: typed, plugins: [archetypes()] })
+  await g.apply([{ entity: { eid: 'a' }, doc: { title: 'Hi' } }])
+  let visibility = { components: { tag: '.doc' } }
+  equal(s.get(['a'], ['doc'], { visibility }).map((b) => b.doc), [{
+    title: 'Hi',
+  }])
 })
