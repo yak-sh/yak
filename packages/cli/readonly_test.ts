@@ -10,6 +10,12 @@ import { TOOLS, YAK } from './main.ts'
 import { open } from '@yaks/sqlite/db'
 import { col, select, table } from '@yaks/sql'
 
+let schemaRows = select({
+  cols: [col('name'), col('sql')],
+  from: table('sqlite_schema'),
+  order: [col('name')],
+})
+
 test('local read commands leave graph bytes unchanged under a concurrent writer', async () => {
   let dir = await Deno.makeTempDir({ prefix: 'T-65799-reader-' })
   let file = `${dir}/yak.json`, db = `${dir}/graph.db`
@@ -54,13 +60,7 @@ test('local read commands leave graph bytes unchanged under a concurrent writer'
       ifExists: true,
     })
     let before = await Deno.readFile(db)
-    let schema = writer.query(
-      select({
-        cols: [col('name'), col('sql')],
-        from: table('sqlite_schema'),
-        order: [col('name')],
-      }),
-    )
+    let schema = writer.query(schemaRows)
     writer.query({ t: 'begin', mode: 'immediate' })
     // The command line run in this process, as `yak` runs it: the graph it
     // opens is closed when the line is done.
@@ -136,19 +136,16 @@ test('local read commands leave graph bytes unchanged under a concurrent writer'
       )
       equal(prepared, [])
       equal(
-        reader.storage.statements.atomic(() =>
-          reader.graph.get(['12345678-1234-1234-1234-123456789abc'], ['doc'])
+        await reader.graph.get(
+          ['12345678-1234-1234-1234-123456789abc'],
+          ['doc'],
         ),
         snapshot,
       )
+      let statements = reader.storage.statements
+      equal(statements.query(schemaRows), schema)
       equal(
-        reader.storage.statements.query(
-          select({
-            cols: [col('name'), col('sql')],
-            from: table('sqlite_schema'),
-            order: [col('name')],
-          }),
-        ),
+        await statements.atomic(() => statements.query(schemaRows)),
         schema,
       )
     } finally {
