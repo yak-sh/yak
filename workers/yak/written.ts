@@ -413,10 +413,34 @@ export type Change = {
   size?: number | null
 }
 
+/** The files `files` holds once `changes` land: each path to its sha, or
+ * gone where a change names none. */
+export let applied = (files: Files, changes: Change[]) => {
+  let out = { ...files }
+  for (let c of changes) {
+    if (c.sha) out[c.path] = c.sha
+    else delete out[c.path]
+  }
+  return out
+}
+
+/** Which of `own` holds exactly `files`, if any. */
+let resent = async (
+  raw: Objects,
+  dir: Directory,
+  app: App,
+  own: AppDraft[],
+  files: Files,
+) => {
+  let held = await Promise.all(own.map((d) => drafting(raw, dir, app, d)))
+  return held.find((d) => same(d.files, files))?.of ?? null
+}
+
 /**
  * A write into one of an app's drafts: the one `asked` names, else the
  * writer's own (`chosen`), else a new one, which `asked` {@link NEW} opens
- * beside those it holds. `act` is handed the draft as it stands and answers
+ * beside those it holds, unless one of them already holds just what the new
+ * one would: the same call sent again after it was cut off. `act` is handed the draft as it stands and answers
  * the changes it makes and whatever its caller wants back; it runs again if
  * the draft moved under it (a deploy began or ended, another write to the
  * same draft), so it decides and does nothing it cannot repeat.
@@ -492,6 +516,22 @@ export let modifying = async <T>(
       )
       if (!todo.length) {
         return { value, wrote: [], already, draft: into?.eid ?? null, drafts }
+      }
+      // A draft opened on purpose and sent again after it was cut off finds
+      // the draft its first sending opened: one of the conversation's own
+      // that holds just what a new one would.
+      let twin = asked == NEW
+        ? await resent(
+          raw,
+          dir,
+          row,
+          drafts.filter(ownBy(who)),
+          applied(draft.files, todo),
+        )
+        : null
+      if (twin) {
+        let paths = last.map((c) => c.path)
+        return { value, wrote: [], already: paths, draft: twin.eid, drafts }
       }
       let fresh = !into
       let via = who.agent && who.via ? who.via : null

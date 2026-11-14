@@ -593,6 +593,20 @@ test('one conversation opens several drafts on purpose, and names the one each c
   assertEquals(await read('b.txt', ONE, first.draft!), null)
 })
 
+let resend = made()
+test('a draft opened on purpose and sent again after it was cut off lands in the draft its first sending opened', async () => {
+  let { write, drafts } = resend
+  let first = await write({ 'a.txt': 'left' }, ONE)
+  let second = await write({ 'a.txt': 'right' }, ONE, NEW)
+  let again = await write({ 'a.txt': 'right' }, ONE, NEW)
+  assertEquals([again.draft, again.already], [second.draft, ['a.txt']])
+  assertEquals((await drafts()).length, 2)
+  // Another direction that shares a file with one already open is new.
+  let third = await write({ 'a.txt': 'right', 'b.txt': 'two' }, ONE, NEW)
+  assert(![first.draft, second.draft].includes(third.draft))
+  assertEquals((await drafts()).length, 3)
+})
+
 let racing = made()
 test('two first writes of one conversation at once land in one draft', async () => {
   let { write, drafts } = racing

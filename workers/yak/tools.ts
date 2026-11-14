@@ -347,6 +347,7 @@ import {
 } from './versions.ts'
 import {
   type AppDraft,
+  applied,
   type Change,
   chosen,
   deleting,
@@ -2484,11 +2485,7 @@ export let drafted = async (
  */
 let configAfter = async (raw: Objects, changes: Change[], draft: Draft) => {
   let sent = new Map(changes.map((c) => [c.path, c.bytes]))
-  let files = { ...draft.files }
-  for (let c of changes) {
-    if (c.sha) files[c.path] = c.sha
-    else delete files[c.path]
-  }
+  let files = applied(draft.files, changes)
   let view = viewOf(raw, draft.root, files)
   return (await configured((p) =>
     sent.get(p)
