@@ -66,6 +66,20 @@ export {
   type DisclosureProps,
   isOpen,
 } from './Disclosure.ts'
+export {
+  Conversation,
+  conversationAt,
+  type ConversationProps,
+  conversed,
+  type Conversing,
+  conversingOf,
+  type Line,
+  NEAR,
+  scrolled,
+  shown,
+  TAKE,
+} from './Conversation.ts'
+export { useRows } from './rows.ts'
 export { Fields, type FieldSpec, type FieldsProps } from './Fields.ts'
 export {
   type Feedback,

@@ -36,6 +36,7 @@ export type Front = {
   watch: (query: string) => {
     value: Bundle[]
     subscribe: (fn: (rows: Bundle[]) => void) => () => void
+    close?: () => void
   }
   ent: (eid: string) => Bundle | undefined
 }

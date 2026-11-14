@@ -79,8 +79,10 @@ node_modules
 # Edit mode on an app's page, generated from workers/yak/edit-mode.ts.
 /workers/yak/public/_edit.js
 
-# The Operator chat's line drawing, generated from workers/yak/operator-rows.ts.
+# The Operator chat's conversation, generated from workers/yak/operator-rows.ts,
+# and its graph's words (operator-words.ts).
 /workers/yak/public/_talk.js
+/workers/yak/public/_words.js
 /workers/yak/public/_settings.js
 /workers/yak/public/_alerts.js
 /workers/yak/public/_sort.js

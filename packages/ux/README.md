@@ -97,14 +97,15 @@ try {
 
 ## Exports
 
-| Entry point           | Provides                                                                                                                                                                                             |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/ux`            | `Edit`, `Text`, `Disclosure`, `Order`, `Fields`, `Submit`; `Ux`, `useHost`, `useOwner`; `useEdit`; state, emission, formatting and picker helpers; `defineKit`, `kitDocs`; `completion`; their types |
-| `@yaks/ux/views`      | `editorViews`, `views`: editor registrations and their registry                                                                                                                                      |
-| `@yaks/ux/vocab`      | `uxDoc`, `docs`, `description`: the UX vocabulary documents and package summary                                                                                                                      |
-| `@yaks/ux/ui`         | `kit`, `ux`: the base UX kit and `{ base: kit }`                                                                                                                                                     |
-| `@yaks/ux/completion` | `completion`; `typed`, `placed`, `moved`, `taken`, `dismissed`, `act`, `CAP`; controller, input and transition types                                                                                 |
-| `@yaks/ux/keys`       | `walk`, `keymap`, `walkKeys`, `chord`, `land`, `items`, `front`, `typing`; `Box`, `Move`: vim's keys walking a page                                                                                  |
+| Entry point             | Provides                                                                                                                                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/ux`              | `Edit`, `Text`, `Disclosure`, `Conversation`, `Order`, `Fields`, `Submit`; `useRows`; `Ux`, `useHost`, `useOwner`; `useEdit`; state, emission, formatting and picker helpers; `defineKit`, `kitDocs`; `completion`; their types |
+| `@yaks/ux/views`        | `editorViews`, `views`: editor registrations and their registry                                                                                                                                                                 |
+| `@yaks/ux/vocab`        | `uxDoc`, `docs`, `description`: the UX vocabulary documents and package summary                                                                                                                                                 |
+| `@yaks/ux/conversation` | `Conversation`, its state helpers and `TAKE`, alone, for a page that draws nothing else of this package                                                                                                                         |
+| `@yaks/ux/ui`           | `kit`, `ux`: the base UX kit and `{ base: kit }`                                                                                                                                                                                |
+| `@yaks/ux/completion`   | `completion`; `typed`, `placed`, `moved`, `taken`, `dismissed`, `act`, `CAP`; controller, input and transition types                                                                                                            |
+| `@yaks/ux/keys`         | `walk`, `keymap`, `walkKeys`, `chord`, `land`, `items`, `front`, `typing`; `Box`, `Move`: vim's keys walking a page                                                                                                             |
 
 ## Kits from outside
 
@@ -297,6 +298,53 @@ tree.props.onChange(opened)
 equal(sent, [opened])
 ```
 
+## Conversation
+
+A **conversation** draws a session's lines, the newest last, and follows them as
+a reader does: it stays at the newest line while lines arrive until the reader
+scrolls up to read, and draws the last `take` lines it is given (100, `TAKE`),
+with a Button above them that draws earlier ones without moving the reader. It
+knows no data names: its owner gives it `lines`, each `{id, node}` already drawn
+(or `{id, html}`, a line a server drew, kept as it is), what the conversation is
+doing now (`now`), and how many lines came before these that it was not given
+(`earlier`). Any other prop lands on the `Transcript` it draws. Each line is at
+`#row-<id>`: an address naming one opens there, and scrolling while the address
+names a place outside it (a menu over it) is not the reader's.
+
+Its state is `Conversation{take, away}` on `conversationAt(owner, session)`,
+emitted through `onChange` like a disclosure's. Its owner keeps the bundle and
+supplies it again; writing `away: false` takes the reader back to the newest
+line, which is what a page's "Newest" button does.
+
+```ts
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
+import {
+  Conversation,
+  conversationAt,
+  conversed,
+  scrolled,
+  shown,
+} from '@yaks/ux'
+import { equal } from '@yaks/testing'
+
+let e = { entity: { eid: conversationAt('chat', 'session-1') } }
+let lines = [1, 2, 3].map((n) => ({
+  id: `l${n}`,
+  node: h('p', {}, `Line ${n}`),
+}))
+equal(shown(lines, 2).hidden, 1)
+equal(scrolled(false, { was: 900, now: 400, near: false }), true)
+equal(conversed(e, { away: true }), { ...e, Conversation: { away: true } })
+let html = renderToString(
+  h(Conversation, { e, onChange: () => {}, lines, now: 'Writing…' }),
+)
+equal(html.includes('id="row-l3"'), true)
+```
+
+`useRows(front, query)` is what a domain component asks of the page's graph with
+hooks alone: the rows a query answers now, drawn again as they change.
+
 ## Fields and submissions
 
 `Fields` renders controlled text fields, choices, checkboxes, file inputs and
@@ -404,26 +452,27 @@ equal(list.type, Order)
 
 ## State and events
 
-| component    | on                                | what it holds                                                     |
-| ------------ | --------------------------------- | ----------------------------------------------------------------- |
-| `Edit`       | `at(owner, eid, comp, prop)`      | `open` while it is changed here, `query` in its picker            |
-| `Disclosure` | `disclosureAt(owner)`             | `open`, whether its content is shown                              |
-| `Order`      | `orderAt(owner)`                  | `at`, where an entity dragged over it would land                  |
-| `Submit`     | `submitAt(at)`, its submission    | `content`, `unread`, `values`, `tried`, `sending`, `sent`, `said` |
-| `Completion` | field id                          | `caret`, `from`, `to`, `cands`, `pick`                            |
-| `Refused`    | the entity whose value it changes | an event: `said`, why what was typed could not be read            |
+| component      | on                                | what it holds                                                             |
+| -------------- | --------------------------------- | ------------------------------------------------------------------------- |
+| `Edit`         | `at(owner, eid, comp, prop)`      | `open` while it is changed here, `query` in its picker                    |
+| `Disclosure`   | `disclosureAt(owner)`             | `open`, whether its content is shown                                      |
+| `Conversation` | `conversationAt(owner, session)`  | `take`, how many lines back it draws; `away`, scrolled up from the newest |
+| `Order`        | `orderAt(owner)`                  | `at`, where an entity dragged over it would land                          |
+| `Submit`       | `submitAt(at)`, its submission    | `content`, `unread`, `values`, `tried`, `sending`, `sent`, `said`         |
+| `Completion`   | field id                          | `caret`, `from`, `to`, `cands`, `pick`                                    |
+| `Refused`      | the entity whose value it changes | an event: `said`, why what was typed could not be read                    |
 
 Each state component is `sync: none`: nothing leaves the page. `Edit`,
-`Disclosure`, `Order`, `Submit` and `Completion` are `durable: connection`, gone
-with the page and kept across every remount before that; closing an `Edit`
-removes it. What is typed over a value is not its state but the person's draft,
-in the value's own place (`place(eid, comp, prop)`), kept by the host's
-`drafts`: every view of the value, and every interface the host syncs drafts to,
-types on from it, and a value whose draft says something else shows it, open,
-wherever it is drawn. Leaving a value typed over emits it and spends the draft,
-Escape puts the value back and spends it, and being taken off the page is
-neither: the draft waits for the remount. `Refused` is `durable: "0s"`; see
-[component lifetimes](../vocab/README.md#state-lifetimes).
+`Disclosure`, `Conversation`, `Order`, `Submit` and `Completion` are
+`durable: connection`, gone with the page and kept across every remount before
+that; closing an `Edit` removes it. What is typed over a value is not its state
+but the person's draft, in the value's own place (`place(eid, comp, prop)`),
+kept by the host's `drafts`: every view of the value, and every interface the
+host syncs drafts to, types on from it, and a value whose draft says something
+else shows it, open, wherever it is drawn. Leaving a value typed over emits it
+and spends the draft, Escape puts the value back and spends it, and being taken
+off the page is neither: the draft waits for the remount. `Refused` is
+`durable: "0s"`; see [component lifetimes](../vocab/README.md#state-lifetimes).
 
 The state helpers can also be used without rendering a component.
 
@@ -700,25 +749,27 @@ syntax and query completion belong to [@yaks/query](../query/README.md).
 
 ## Files
 
-| file                  | owns                                                                       |
-| --------------------- | -------------------------------------------------------------------------- |
-| `kit.ts`              | external kit metadata, boundary validation and vocabulary documents        |
-| `ui.ts`               | the base kit and its browser-safe `./ui` facet and specimens               |
-| `vocab.json`          | the `Edit`, `Disclosure`, `Order`, `Submit`, `Completion`, `Refused` words |
-| `state.ts`            | the bundles: an `Edit`'s eid, its patches, what it emits                   |
-| `live.ts`             | `useEdit`: an `Edit`'s state and its value's draft, read live              |
-| `emit.ts`             | typed or picked input, read as its type, sent as a bundle                  |
-| `host.ts`             | `Host`, `Ux`                                                               |
-| `Edit.ts`             | `Edit`, its controls and faces, `views`                                    |
-| `Text.ts`             | `Edit.Text`                                                                |
-| `Order.ts`            | `Order`, rows put in order by dragging                                     |
-| `Fields.ts`           | controlled inputs and repeat groups                                        |
-| `Submit.ts`           | `Submit`, loading, durable drafts and submission callbacks                 |
-| `hits.ts`             | a picker's line and its debounced search                                   |
-| `read.ts`             | what a property is, off the vocabulary                                     |
-| `completion.ts`       | shared completion controller, field, list and input binding                |
-| `completion-state.ts` | pure completion transitions and candidate types                            |
-| `keys.ts`             | vim's keys: the keymap, where a move lands, the cursor and layers          |
+| file                  | owns                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------ |
+| `kit.ts`              | external kit metadata, boundary validation and vocabulary documents                        |
+| `ui.ts`               | the base kit and its browser-safe `./ui` facet and specimens                               |
+| `vocab.json`          | the `Edit`, `Disclosure`, `Conversation`, `Order`, `Submit`, `Completion`, `Refused` words |
+| `state.ts`            | the bundles: an `Edit`'s eid, its patches, what it emits                                   |
+| `live.ts`             | `useEdit`: an `Edit`'s state and its value's draft, read live                              |
+| `emit.ts`             | typed or picked input, read as its type, sent as a bundle                                  |
+| `host.ts`             | `Host`, `Ux`                                                                               |
+| `Edit.ts`             | `Edit`, its controls and faces, `views`                                                    |
+| `Text.ts`             | `Edit.Text`                                                                                |
+| `Order.ts`            | `Order`, rows put in order by dragging                                                     |
+| `Conversation.ts`     | `Conversation`, a session's lines followed at the newest                                   |
+| `rows.ts`             | `useRows`: a query's rows in the page's graph, read live                                   |
+| `Fields.ts`           | controlled inputs and repeat groups                                                        |
+| `Submit.ts`           | `Submit`, loading, durable drafts and submission callbacks                                 |
+| `hits.ts`             | a picker's line and its debounced search                                                   |
+| `read.ts`             | what a property is, off the vocabulary                                                     |
+| `completion.ts`       | shared completion controller, field, list and input binding                                |
+| `completion-state.ts` | pure completion transitions and candidate types                                            |
+| `keys.ts`             | vim's keys: the keymap, where a move lands, the cursor and layers                          |
 
 ## Saving several fields
 

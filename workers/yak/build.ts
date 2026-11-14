@@ -874,8 +874,6 @@ export class Builder extends Durable {
         called: space.operator,
         opens: managePath('operator', space.slug),
         operator: true,
-        // Its lines sent as data, which it draws (operator-draw.ts `Lines`).
-        lines: asked.has('lines'),
       }
       // The conversation the page was drawn with, whose standing its `ready`
       // says, read once the socket hears every step after it.

@@ -2,16 +2,17 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { parseHTML } from 'linkedom'
-import { operatorMemory } from './operator-testing.ts'
+import { operatorMemory, sentRows } from './operator-testing.ts'
 import {
   conversationOf,
   operatorFrames,
   operatorRequest,
 } from './operator-host.ts'
 import type { Operator } from './operator.ts'
-import { rowsOf } from './operator-rows.ts'
 import type { Lines } from './operator-draw.ts'
-import { redraw } from './public/redraw.js'
+import { mountTalk } from './operator-talk.ts'
+import { operatorVocab } from './operator-store.ts'
+import { pageDocs } from './operator-words.ts'
 
 let store = operatorMemory()
 let [
@@ -155,16 +156,31 @@ test('a sub-thread appears once at its closing notice, a step named for whom it 
 })
 
 let socket = delivered.find((f) => f.operator.task == root && f.operator.lines)!
-let row = rowsOf(JSON.parse(JSON.stringify(socket.operator.lines))).find((r) =>
-  r.id == notice
-)!
+let row = sentRows(JSON.parse(JSON.stringify(socket.operator.lines))).find((
+  r,
+) => r.id == notice)!
 let socketFold = documentOf(row.html).querySelector('details')!.outerHTML
 let pageFold = foldOf(first.html).outerHTML
-let document = documentOf(first.html)
-let kept = document.querySelector('[data-rows]')!
-document.querySelector(`#row-${notice} details`)!.setAttribute('open', '')
-let next = documentOf(updated.html).querySelector('[data-rows]')!
-redraw(kept, next.innerHTML)
+// The page as it was drawn, the sub-thread opened, then read again whole.
+let page = parseHTML(
+  `<html><body><div data-conversation>${first.html}</div></body></html>`,
+)
+let document = page.document
+let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+Object.defineProperty(globalThis, 'document', {
+  value: document,
+  configurable: true,
+})
+let talk = mountTalk({
+  box: document.querySelector('[data-conversation]') as HTMLElement,
+  words: pageDocs(operatorVocab.docs),
+})
+let opened = document.querySelector(`#row-${notice} details`)!
+opened.setAttribute('open', '')
+opened.dispatchEvent(new page.Event('toggle', { bubbles: true }))
+talk.read(updated.html)
+if (prior) Object.defineProperty(globalThis, 'document', prior)
+else Reflect.deleteProperty(globalThis, 'document')
 
 test('page and socket render the same sub-thread entries and preserve its open state on refresh', () => {
   assertEquals(socketFold, pageFold)

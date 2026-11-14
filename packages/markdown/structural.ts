@@ -547,7 +547,7 @@ export let blocks = <Node>(
         return [
           element(
             'a',
-            { href: safeHref(v.href), title: v.title },
+            { href: safeHref(v.href), title: v.title || undefined },
             ...children(v.tokens),
           ),
         ]
@@ -558,7 +558,7 @@ export let blocks = <Node>(
         return [
           element(
             'a',
-            { href: safeHref(v.href), title: v.title },
+            { href: safeHref(v.href), title: v.title || undefined },
             v.text || '[image]',
           ),
         ]

@@ -7,8 +7,6 @@ import type { Operator } from './operator.ts'
 import { operatorMemory } from './operator-testing.ts'
 import { operatorFrames, operatorRequest } from './operator-host.ts'
 import { seenBy } from './operator-access.ts'
-import type { Lines } from './operator-draw.ts'
-import { rowsOf } from './operator-rows.ts'
 import { chatPage, operatorAnswer } from './operator-page.ts'
 import { rootOf } from './operator-root.ts'
 import { platform } from './testing.ts'
@@ -227,28 +225,6 @@ test('live transcript and typing frames go only to the conversation’s owner', 
   assertStringIncludes(own.sent.join(''), secret)
   assertEquals(other.sent, [])
   assertEquals(elsewhere.sent, [])
-})
-
-test('a page that draws its lines is sent them as data, and a page opened before is sent them drawn', async () => {
-  let page = (lines: boolean) => {
-    let sent: { operator?: Record<string, unknown> }[] = []
-    return {
-      sent,
-      send: (data: string) => void sent.push(JSON.parse(data)),
-      deserializeAttachment: () => ({
-        ...who(ada),
-        space,
-        operator: true,
-        ...lines ? { lines } : {},
-      }),
-    }
-  }
-  let drawing = page(true), older = page(false)
-  await operatorFrames(store, () => [drawing, older]).tell(root)
-  let [{ operator: data }] = drawing.sent, [{ operator: drawn }] = older.sent
-  let { lines, ...rest } = data as { lines: Lines }
-  assertEquals(drawn, { ...rest, rows: rowsOf(lines) })
-  assertStringIncludes(JSON.stringify(drawn), secret)
 })
 
 let { env } = platform('operator-privacy')

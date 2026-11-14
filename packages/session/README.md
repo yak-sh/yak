@@ -864,11 +864,14 @@ Additional entry points are `@yaks/session/vocab`, `/graph` (with
 (`transcript()` alone, for a reader that runs no session). `/views` is `views`,
 the portable renderers; `joined`, which entries make the lines of a conversation
 (a result joins the call it answers); `conversationKinds`, loaded when asked
-for; and `inspectViews`, how the inspector (@yaks/inspect) draws an entry and a
-session: an entry as a turn of its conversation (`Inspect.Turn`), the turns
-either side of it (`Inspect.Conversation`, what a belief citing the entry
-shows), the entry's page inside its conversation, and a session's page with its
-status, brief and latest turns.
+for; `conversationViews`, a session's `Conversation` view, which asks for its
+entries, draws each line by those kinds and hands them to @yaks/ux's
+`Conversation`, which follows its reader; and `inspectViews`, how the inspector
+(@yaks/inspect) draws an entry and a session: an entry as a turn of its
+conversation (`Inspect.Turn`), the turns either side of it
+(`Inspect.Conversation`, what a belief citing the entry shows), the entry's page
+inside its conversation, and a session's page with its status, brief and latest
+turns.
 
 `/conversation` draws a conversation's lines with @yaks/ui: a person's words, a
 reply, a tool call as one step that opens on what it asked for and what came

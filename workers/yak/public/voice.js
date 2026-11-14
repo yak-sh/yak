@@ -12,7 +12,7 @@
 // speech is on (`paid`), the page records and the Operator page hears it,
 // and says each line in the Operator's own voice, both charged to the
 // space's budget (operator-page.ts `?hear`, `?speak`). With neither, the
-// microphone stays hidden. Served as it is written, as redraw.js is.
+// microphone stays hidden. Served as it is written, as follow.js is.
 
 // The longest a recording the platform hears may run.
 let MINUTE = 60_000

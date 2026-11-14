@@ -17,6 +17,23 @@
         }
       }
     },
+    "Conversation": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "A conversation (@yaks/ux Conversation) as its reader follows it, on the page entity its owner names for a session: how many lines back it draws, and whether the reader scrolled away from the newest; missing state draws the last 100 lines and stays at the newest.",
+      "properties": {
+        "take": {
+          "type": "number",
+          "description": "how many lines back it draws"
+        },
+        "away": {
+          "type": "boolean",
+          "description": "the reader has scrolled up from the newest line"
+        }
+      }
+    },
     "Order": {
       "component": true,
       "type": "object",

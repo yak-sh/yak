@@ -10,7 +10,7 @@ import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
 import { conversationOf, frameOf } from './operator-host.ts'
 import { reply } from '@yaks/session/conversation'
-import { rowsOf } from './operator-rows.ts'
+import { sentRows } from './operator-testing.ts'
 import { transcript } from '@yaks/session'
 import { PART } from '@yaks/persona'
 
@@ -186,7 +186,7 @@ test('the conversation shows the context the Operator and each helper were given
   let live = await frameOf(store, child.entity.eid)
   assertEquals(live!.frame.operator.task, out.session)
   // A helper's step brings the page that step, live, its context inside.
-  let rows = rowsOf(live!.frame.operator.lines)
+  let rows = sentRows(live!.frame.operator.lines)
   assertEquals(rows.map((r) => `row-${r.id}`), [
     step.closest('[id^="row-"]')!.id,
   ])

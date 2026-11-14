@@ -24,7 +24,7 @@ import { define } from '@yaks/render'
 import { renderToString } from 'preact-render-to-string'
 import { namer } from '@yaks/session/conversation'
 import { HEARD, rows } from './operator-view.ts'
-import { rowsOf } from './operator-rows.ts'
+import { sentRows } from './operator-testing.ts'
 import { sourceReference } from './operator-source.ts'
 
 let entry = (eid: string, seq: number, comps: object, session = 's') =>
@@ -140,7 +140,7 @@ test('each line sent alone draws from its own entries what the conversation draw
   ])
   for (let line of lines(conversation, names, seen)) {
     let sent = JSON.parse(JSON.stringify(wire([line], conversation, seen)))
-    assertEquals(rowsOf(sent), whole.filter((r) => r.id == line.id))
+    assertEquals(sentRows(sent), whole.filter((r) => r.id == line.id))
   }
   // What a line sends is what it reads (a helper's step, the ask before it
   // too), and the tools, helpers and offers those name.
@@ -157,7 +157,7 @@ test('each line sent alone draws from its own entries what the conversation draw
   ])
   assertEquals(Object.keys(sent.tools), ['files'])
   assertEquals(Object.keys(sent.offers), ['tools'])
-  assertStringIncludes(rowsOf(sent)[0].html, 'Read notes for Jeff')
+  assertStringIncludes(sentRows(sent)[0].html, 'Read notes for Jeff')
 })
 
 test('a view draws what it loads: the context a model was given, a margin beside each line', () => {
@@ -218,7 +218,7 @@ test('a contact request stays inline in the person’s conversation through conf
     let painted = rows(changed, namer({}))
     for (let line of lines(changed, namer({}))) {
       let sent = JSON.parse(JSON.stringify(wire([line], changed)))
-      assertEquals(rowsOf(sent), painted.filter((r) => r.id == line.id))
+      assertEquals(sentRows(sent), painted.filter((r) => r.id == line.id))
     }
     let updated = parseHTML(
       painted.find((r) => r.id == contact.id)!.html,

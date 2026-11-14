@@ -49,6 +49,7 @@
     "@yaks/text": "0.2.24",
     "@yaks/tools": "0.2.30",
     "@yaks/ui": "0.2.30",
+    "@yaks/ux": "0.2.23",
     "@yaks/vocab": "0.2.32",
     "preact": "10.29.7"
   },

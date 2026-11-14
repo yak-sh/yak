@@ -4242,6 +4242,9 @@ importers:
       '@yaks/ui':
         specifier: 0.2.30
         version: link:../ui
+      '@yaks/ux':
+        specifier: 0.2.23
+        version: link:../ux
       '@yaks/vocab':
         specifier: 0.2.32
         version: link:../vocab

@@ -13,7 +13,7 @@ import { appStore } from './directory.ts'
 import { stores } from './app-store-probe.ts'
 import { operating, readOperator } from './operator.ts'
 import { conversationOf, frameOf, workOf } from './operator-host.ts'
-import { rowsOf } from './operator-rows.ts'
+import { sentRows } from './operator-testing.ts'
 import { TOOLS } from './tools.ts'
 import { operatorContext } from './operator.ts'
 import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
@@ -391,7 +391,7 @@ test('words given while the Operator works land in its running session, which an
   assertEquals(steeredRead.sessions?.length, 1)
   assertEquals(mid?.frame.operator.now, 'Thinking…')
   assertStringIncludes(
-    rowsOf(mid!.frame.operator.lines)[0].html,
+    sentRows(mid!.frame.operator.lines)[0].html,
     'Post the meeting.',
   )
   assertEquals(steering.length, 2)

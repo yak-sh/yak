@@ -5,11 +5,14 @@
 // written beside it, for the bundle to read and for a page that loaded the
 // client before it was one. The site's own pages (site/mod.ts) and its files
 // under names of their bytes (sheet-assets.ts) are written beside it, those
-// once the client is, since it is one of them.
+// once the client is, since it is one of them. The Operator chat page's
+// graph holds its store's words, written as `_words.js` (operator-words.ts).
 import * as io from '@yaks/file/io'
 import { bundle } from '@yaks/cli/page'
 import { written } from './sheet-assets.ts'
 import { deployed as pages } from './site/mod.ts'
+import { operatorVocab } from './operator-store.ts'
+import { pageDocs } from './operator-words.ts'
 
 export let parts = {
   'chart.js': './chart.js',
@@ -20,7 +23,7 @@ export let parts = {
   '_wire.js': '../../packages/vocab/wire.ts',
   // Edit mode on an app's page, loaded by its pencil (public/edit.js).
   '_edit.js': './edit-mode.ts',
-  // The Operator chat's line drawing (operator-rows.ts), for its page alone.
+  // The Operator chat's conversation (operator-rows.ts), for its page alone.
   '_talk.js': './operator-rows.ts',
   '_settings.js': './settings.ts',
   '_alerts.js': './alerts-browser.ts',
@@ -40,7 +43,12 @@ export let assets = async (to = new URL('./public/', import.meta.url)) => {
     new URL('_client.js', to),
     await bundle(new URL('client.js', to)),
   )
+  await io.writeTextFile(new URL('_words.js', to), words())
 }
+
+/** The Operator store's words as its chat page's graph holds them. */
+export let words = () =>
+  `export default ${JSON.stringify(pageDocs(operatorVocab.docs))}\n`
 if (import.meta.main) {
   await Promise.all([assets().then(() => written()), pages()])
 }

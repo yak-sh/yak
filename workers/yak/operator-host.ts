@@ -32,7 +32,6 @@ import {
   talk,
   turnOf,
   type Underway,
-  withRows,
   type Worked,
 } from './operator-view.ts'
 import {
@@ -977,6 +976,7 @@ export let conversationOf = async (
   opens = at,
   from?: number,
   mentions?: string,
+  take?: number,
 ): Promise<{
   task: string
   begun: string
@@ -1015,6 +1015,7 @@ export let conversationOf = async (
     let shown = helper
       ? entries
       : [...entries, ...await arriving(store, row, entries)]
+    let drawn = drawnLines(shown, names, seen, view)
     return {
       ...helper
         ? { helper: await helperPage(store, row, entries, names, opens) }
@@ -1029,8 +1030,11 @@ export let conversationOf = async (
         : everyone
         ? await whose(row, everyone)
         : CONVERSATION,
-      html: talk({ entity: { eid } } as Bundle, shown, names, seen, view),
-      lines: () => wire(drawnLines(shown, names, seen, view), shown, seen),
+      html: talk({ entity: { eid } } as Bundle, shown, names, seen, {
+        drawn,
+        take,
+      }),
+      lines: () => wire(drawn, shown, seen),
       now: now(entries, names),
       waiting: [],
       making: making(entries, seen.helpers),
@@ -1077,13 +1081,14 @@ export let conversationOf = async (
   let names = namer(seen)
   let view = await viewOf(store, entries, !!everyone)
   seen.helpers = await lined(store, seen.helpers, names, opens)
+  let drawn = drawnLines(entries, names, seen, view)
   return {
     aside: asideOf(entries, seen.helpers, names),
     task,
     begun: asked[0]?.entity.eid ?? task,
     title: String(comp(held, 'doc')?.title ?? 'A request'),
-    html: talk(held, entries, names, seen, view),
-    lines: () => wire(drawnLines(entries, names, seen, view), entries, seen),
+    html: talk(held, entries, names, seen, { drawn, take }),
+    lines: () => wire(drawn, entries, seen),
     now: now(entries, names),
     waiting: [],
     making: making(entries, seen.helpers),
@@ -1292,17 +1297,10 @@ export let operatorFrames = (
       )
       if (!made) return
       told.set(session, made.seq)
-      // A page that asked for lines as data draws them itself; one opened
-      // before they were is sent them drawn (operator-view.ts `withRows`).
       // Each page keeps the frame for the conversation it shows: a helper's
       // step goes to the conversation that started it and to its own.
-      let drawing = pages.filter((ws) =>
-        (ws.deserializeAttachment() as { lines?: boolean }).lines
-      )
-      let older = pages.filter((ws) => !drawing.includes(ws))
       for (let frame of made.own ? [made.frame, made.own] : [made.frame]) {
-        if (drawing.length) send(drawing, frame)
-        if (older.length) send(older, withRows(frame))
+        send(pages, frame)
       }
     },
     typing: async (session: string, text: string) => {
@@ -1781,6 +1779,7 @@ export let operatorRequest = async (
         ? args.from
         : undefined,
       typeof args.mentions == 'string' ? args.mentions : undefined,
+      typeof args.take == 'number' && args.take > 0 ? args.take : undefined,
     )
     // Its lines as data only for a reader that draws them (the iOS shell).
     return Response.json({

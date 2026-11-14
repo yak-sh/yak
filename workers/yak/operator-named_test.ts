@@ -2,9 +2,11 @@
 // id, the way the model reads it, wherever the page draws its lines.
 import { equal, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
-import { operatorMemory } from './operator-testing.ts'
+import { operatorMemory, sentRows } from './operator-testing.ts'
 import { conversationOf } from './operator-host.ts'
-import { rowsOf } from './operator-rows.ts'
+import { mountTalk } from './operator-talk.ts'
+import { operatorVocab } from './operator-store.ts'
+import { pageDocs } from './operator-words.ts'
 
 let store = operatorMemory()
 let session = crypto.randomUUID()
@@ -36,5 +38,25 @@ test('the page draws an eid its store numbers as the id, else its handle', () =>
 test('the lines its socket sends say the same', () => {
   let lines = page.lines()!
   equal(lines.ids, { [task]: 'T-1' })
-  equal(words(rowsOf(lines).map((r) => r.html).join('')), said)
+  equal(words(sentRows(lines).map((r) => r.html).join('')), said)
+})
+
+test('and so does the page, drawing those lines from their entries', () => {
+  let { document } = parseHTML(
+    `<html><body><div data-conversation>${page.html}</div></body></html>`,
+  )
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  try {
+    let box = document.querySelector('[data-conversation]') as HTMLElement
+    let talk = mountTalk({ box, words: pageDocs(operatorVocab.docs) })
+    talk.heard({ task: session, lines: page.lines()! })
+    equal(words(box.innerHTML), said)
+  } finally {
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else Reflect.deleteProperty(globalThis, 'document')
+  }
 })

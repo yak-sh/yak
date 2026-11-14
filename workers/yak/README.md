@@ -1042,6 +1042,19 @@ asked. Ten loads after: the page 834 KB, `operator_wait` 249–592 ms (most
 260–400), the Builder's CPU 179–478 ms. What remains is mostly the
 conversation's own first context, about 240 KB, drawn once.
 
+The page now draws its conversation's last 100 lines (@yaks/ux `Conversation`,
+operator-talk.ts), with a button for the earlier ones, and a read draws its
+lines once for the page and for its lines as data. On a copy of the `checks`
+store on 2026-11-13, its largest conversation (136 lines, 180 entries) drew as
+948 KB (152 KB gzipped) where it drew as 1.42 MB (229 KB), in 201–276 ms warm
+against 229–321 ms, and its lines as data took no second drawing, where they
+took 86–139 ms more. The page's script grew with the page graph it mounts over
+the conversation: `_talk.js` 332 KB (125 KB gzipped) against 190 KB (72 KB), and
+the store's words beside it, `_words.js`, 46 KB (6 KB), kept by the browser; the
+data behind a whole conversation is about twice its drawing (3.2 MB for that
+one), so the page holds the lines the server drew as drawn and draws from data
+only the lines its socket sends.
+
 A Store imports its graph and effects facets before opening its boot
 transaction, then binds them with `@yaks/host` over its storage, vault, blobs
 and named mail sender. Cold reads owe no start-up work. A deployment calls the

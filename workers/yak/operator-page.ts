@@ -900,10 +900,9 @@ export let operatorAnswer = async (
       })
     }
     // The conversation the page shows, for its socket to say where it
-    // stands, and whether it draws its lines from data.
+    // stands.
     let on = new URLSearchParams()
     if (q.get('talk')) on.set('talk', q.get('talk')!)
-    if (q.has('lines')) on.set('lines', '1')
     return socketTo(
       env,
       space,
@@ -928,6 +927,7 @@ export let operatorAnswer = async (
     let talked = await conversationOf(env, space, who, at, open, {
       lines: q.has('lines'),
       ...q.has('from') ? { from: Number(q.get('from')) } : {},
+      ...Number(q.get('take')) > 0 ? { take: Number(q.get('take')) } : {},
     })
     if (!talked.title) {
       return Response.json({ message: 'That conversation is missing.' }, {
@@ -1057,9 +1057,10 @@ export let storeAnswer = async (
  * titled by whose it is, `opens` is where its helpers' conversations open,
  * by their id (the chat app's unless the admin's), `lines` answers its lines
  * as data, and `updates` the person's Updates beside it, in the same
- * request. `from` keeps entries past the initial page's oldest sequence. An
- * id in its words opens where the reader's own server says (`mentions`, read
- * from their servers unless the caller has them). */
+ * request. `from` keeps entries past the initial page's oldest sequence, and
+ * `take` is how many of its lines it draws, the last 100 without it. An id in
+ * its words opens where the reader's own server says (`mentions`, read from
+ * their servers unless the caller has them). */
 export let conversationOf = async (
   env: Env,
   space: Space,
@@ -1073,6 +1074,7 @@ export let conversationOf = async (
     updates = false,
     from,
     mentions,
+    take,
   }: {
     everyone?: boolean
     opens?: string
@@ -1080,6 +1082,7 @@ export let conversationOf = async (
     updates?: boolean
     from?: number
     mentions?: string | null
+    take?: number
   } = {},
 ) => {
   let none = {
@@ -1129,6 +1132,7 @@ export let conversationOf = async (
       ...updates ? { updates } : {},
       ...from != null ? { from } : {},
       ...opening ? { mentions: opening } : {},
+      ...take ? { take } : {},
     },
   ).catch((e) => {
     if (e.status != 404) throw e
@@ -2078,7 +2082,7 @@ let composer = (
       enctype: 'multipart/form-data',
     },
     // Shown while the person has scrolled up from the newest entry, and
-    // takes them back to it (public/follow.js).
+    // takes them back to it (the conversation's `away`, operator-talk.ts).
     h(
       Button,
       {
@@ -2156,8 +2160,8 @@ let composer = (
 
 // The chat app's script: the durable draft and sending, Stop, talking
 // instead of typing, and the conversation kept current from the Builder
-// object's socket, each step's lines put in place by id and what it says
-// aloud said to a person who talked. `paid` is whether the platform's
+// object's socket, each step's lines drawn from the entries its frame sends
+// (operator-talk.ts) and what it says aloud said to a person who talked. `paid` is whether the platform's
 // speech is on, for a browser that has none of its own.
 let chatScript = (
   now: Asided,
@@ -2176,8 +2180,8 @@ let chatScript = (
 import { browserDrafts } from '/_draft.js'
 import { follow } from '/follow.js'
 import { frames } from '/frames.js'
-import { redraw } from '/redraw.js'
-import { asideHtml, dates, glanceHtml, helperHtml, menus, ordered, rowsOf, showing, storeAt, turnHtml } from '/_talk.js'
+import { asideHtml, dates, glanceHtml, helperHtml, menus, ordered, showing, storeAt, mountTalk, turnHtml } from '/_talk.js'
+import words from '/_words.js'
 import { voice } from '/voice.js'
 let open = ${JSON.stringify(open)}
 let root = ${JSON.stringify(root)}
@@ -2187,6 +2191,24 @@ let box = document.querySelector('[data-conversation]')
 // An id in a line drawn here opens where the person's server says
 // (\`mentions\`), as it does in the lines the page came drawn with.
 let mentions = ${JSON.stringify(mentions ?? '')}
+// The conversation, mounted over what the server drew (operator-talk.ts): it
+// stays at the newest line until the person scrolls up to read, when Newest
+// shows and takes them back; earlier lines than the page holds are read when
+// they ask for them. Where the page keeps a layer over it (the side's
+// \`#menu\`, the app's \`#app\` on a phone) is public/follow.js's.
+let content = document.getElementById('content')
+follow(globalThis, box, content)
+let jump = document.querySelector('[data-jump]')
+let taking = 0
+let talk = mountTalk({
+  box,
+  words,
+  mentions,
+  pane: () => content,
+  onAway: (away) => { if (jump) jump.hidden = !away },
+  older: (take) => { taking = take; read().catch(said) },
+})
+jump?.addEventListener('click', () => talk.newest())
 // Lists their servers had not answered when the page was drawn come in
 // now, each in its place, and the bar counts what waits in them.
 let later = [...document.querySelectorAll('[data-later]')]
@@ -2366,8 +2388,7 @@ if (form && typed) {
   history.replaceState(history.state, '', clean)
 }
 let speech = form && voice({ button: form.querySelector('[data-voice]'), form, say: form.elements.say, at: '${at}', paid: ${paid}, said })
-let thread = () => box.querySelector('[data-task]')
-let working = () => !!box.querySelector('[data-pending]')
+let working = () => talk.working()
 // The aside in the bar (operator-aside.ts): the turn under way and the
 // helpers (\`happening\`), each put in place as a frame tells it, shown while either
 // is there, and how long each has lasted kept current every second. Where
@@ -2410,7 +2431,7 @@ let turning = (turn) => {
 let helped = (helper) => {
   let at = '[data-help="' + helper.session + '"]'
   for (let row of document.querySelectorAll(at)) row.replaceWith(drawn(helperHtml(helper)))
-  if (helper.session == thread()?.dataset.task) return
+  if (helper.session == talk.task()) return
   happening.helpers = ordered([helper, ...happening.helpers.filter((h) => h.session != helper.session)])
   show()
   let list = aside()?.querySelector('[data-helping]')
@@ -2455,7 +2476,7 @@ let doing = (now = 'idle') => {
   talking = now
   show()
 }
-let redrawn = () => doing(thread()?.dataset.doing)
+let redrawn = () => doing(talk.doing())
 redrawn()
 // Enter sends, Shift+Enter starts a new line.
 form?.elements.say.addEventListener('keydown', (e) => {
@@ -2507,19 +2528,18 @@ document.addEventListener('click', async (e) => {
 // Stop takes effect on the page at once; the Operator's own word follows.
 document.addEventListener('click', async (e) => {
   if (!e.target.closest('[data-stop]')) return
-  let card = thread()
-  if (!card) return
-  card.removeAttribute('data-pending')
-  card.querySelector('[data-now]').textContent = 'Stopped.'
+  let task = talk.task()
+  if (!task) return
+  let undo = talk.stopped()
   doing('idle')
   turning(null)
   try {
-    let response = await fetch('${at}?stop=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task: card.dataset.task }) })
+    let response = await fetch('${at}?stop=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ task }) })
     if (!response.ok) throw new Error('It could not be stopped. Try again.')
     status.textContent = ''
   } catch (error) {
-    card.setAttribute('data-pending', '')
-    doing(card.dataset.doing)
+    undo()
+    redrawn()
     said(error)
   }
 })
@@ -2532,101 +2552,60 @@ let standing = ${JSON.stringify(standing)}
 let reading, again = false
 // Keep reading from where this page began, so a growing transcript never
 // slides its oldest displayed entries out of the next read.
-let from = thread()?.dataset.from
-// The person's own words the page shows, each by its row's id.
-let theirs = () => new Map([...box.querySelectorAll('[id^="row-"]')].filter((r) => r.querySelector('.Transcript_Bubble')).map((r) => [r.id, r]))
+let from = talk.from()
+// Words of theirs the page showed are never taken off it: one a read left
+// out stays in its place, and the tracker hears of it at once.
 let read = async () => {
   if (open == 'new') return
   if (reading) return void (again = true)
-  let mine = theirs()
-  let before = [...box.querySelectorAll('[id^="row-"]')]
   reading = (async () => {
     do {
       again = false
-      let response = await ask('${at}?talk=' + encodeURIComponent(open) + (from == null ? '' : '&from=' + encodeURIComponent(from)))
+      let response = await ask('${at}?talk=' + encodeURIComponent(open) + (from == null ? '' : '&from=' + encodeURIComponent(from)) + (taking ? '&take=' + taking : ''))
       if (!response.ok) throw new Error('This page could not be brought up to date. Your conversation is saved; reload to try again.')
       let got = await response.json()
       standing = got.standing
-      if (got.html) redraw(box, got.html), redrawn()
-      from ??= thread()?.dataset.from
+      if (got.html) {
+        for (let id of talk.read(got.html)) globalThis.reportError?.(new Error('The Operator chat page left out words of the person it had shown: ' + id))
+        redrawn()
+      }
+      from ??= talk.from()
       if (got.aside && aside()) happening = got.aside, aside().replaceWith(drawn(asideHtml(happening, unfolded()))), shown(), show()
       if (got.title) heading.textContent = got.title
       if (follows && !canvas() && got.making && (follows == 'worked' || got.started)) remake(got.making)
       dates(document)
     } while (again)
-    // Words of theirs the page showed are never taken off it: one a read
-    // left out goes back in its place, and the tracker hears of it at once.
-    let rows = thread()?.querySelector('[data-rows]')
-    let now = theirs()
-    for (let [id, row] of [...mine].reverse()) {
-      if (now.has(id) || !rows) continue
-      let index = before.indexOf(row)
-      let next = before.slice(index + 1).map((r) => document.getElementById(r.id)).find((r) => rows.contains(r))
-      let prior = before.slice(0, index).reverse().map((r) => document.getElementById(r.id)).find((r) => rows.contains(r))
-      if (next) next.before(row)
-      else if (prior) prior.after(row)
-      else rows.prepend(row)
-      now.set(id, row)
-      globalThis.reportError?.(new Error('The Operator chat page left out words of the person it had shown: ' + id))
-    }
   })()
   try { await reading } finally { reading = undefined }
 }
 // Each step the Operator takes arrives on the socket as the lines it changed,
-// each as the entries it draws, drawn here as the conversation draws them
-// (operator-rows.ts) and put in place by id; a conversation the page has not
-// drawn yet (a request just taken up) reads the page again, and another
-// one's step is not this page's.
+// each as the entries it draws, which the conversation draws as the server
+// does (operator-talk.ts); a conversation the page has not drawn yet (a
+// request just taken up) reads the page again, and another one's step is not
+// this page's.
 let live = false, opened = false
 let hear = (frame) => {
   if (frame.ready && (frame.standing == null || frame.standing !== standing)) read().catch(said)
   let o = frame.operator
   if (!o) return
   changing(o)
-  let card = thread()
-  if (!card) return void read().catch(said)
+  if (!talk.task()) return void read().catch(said)
   if (o.refresh) return void read().catch(said)
-  if (card.dataset.task != o.task) return
+  if (talk.task() != o.task) return
   if ('turn' in o) turning(o.turn)
   if (o.helping) helped(o.helping)
   if (o.said) speech?.tell(o.said)
   standing = undefined
-  let rows = card.querySelector('[data-rows]')
-  // A reply as it is written, until the step that wrote it lands.
-  let typing = card.querySelector('[data-typing]')
-  if (o.typing) {
-    if (!typing) {
-      typing = document.createElement('p')
-      typing.className = 'Transcript_Reply'
-      typing.dataset.typing = ''
-      rows.append(typing)
-    }
-    typing.textContent += o.typing
-    card.querySelector('[data-now]').textContent = 'Typing…'
-    doing('writing')
-    return
-  }
-  typing?.remove()
-  for (let row of o.lines ? rowsOf(o.lines, mentions) : o.rows) {
-    let at = document.getElementById('row-' + row.id)
-    if (!at) {
-      at = document.createElement('div')
-      at.className = 'Transcript_Row'
-      at.id = 'row-' + row.id
-      rows.append(at)
-    }
-    if (at.dataset.html == row.html) continue
-    redraw(at, row.html)
-    at.dataset.html = row.html
-  }
+  // A reply as it is written, drawn as a settled one, until the step that
+  // wrote it lands.
+  if (o.typing) return void (talk.typed(o.typing), doing('writing'))
+  talk.heard(o)
   dates(document)
   if (reading) again = true
-  card.querySelector('[data-now]').textContent = o.now
-  card.toggleAttribute('data-pending', !!o.now)
   doing(o.doing)
 }
 let listen = () => {
-  let socket = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1&lines=1' + (open == 'new' ? '' : '&talk=' + encodeURIComponent(open)))
+  let socket = new WebSocket(location.origin.replace(/^http/, 'ws') + '${at}?live=1' + (open == 'new' ? '' : '&talk=' + encodeURIComponent(open)))
   // A socket still opening after the wait is closed, and so opened again.
   let opening = setTimeout(() => socket.close(), WAIT)
   // A socket opening again may follow a deploy, which the page then moves onto
@@ -2661,17 +2640,14 @@ form?.addEventListener('submit', async (e) => {
     if (!saved) throw new Error('Your message could not be confirmed. Your words are kept; try sending again.')
     form.elements.file.value = ''; form.elements.file.dispatchEvent(new Event('change', { bubbles: true })); form.elements.request.value = crypto.randomUUID()
     status.textContent = ''
-    reader.newest()
+    talk.newest()
     // Words go to the person's conversation, which opens to show them when
     // another page sent them.
     let app = canvas()
-    if (thread()?.dataset.task != root) return void location.assign(chats + request + (app ? '?app=' + encodeURIComponent(app.dataset.app) : ''))
+    if (talk.task() != root) return void location.assign(chats + request + (app ? '?app=' + encodeURIComponent(app.dataset.app) : ''))
     await read(); poll()
   } catch (error) { said(error) }
   finally { button.disabled = false; form.removeAttribute('aria-busy') }
 })
-// The page opens at the newest entry and follows the conversation down as it
-// grows, unless the person has scrolled up to read (public/follow.js).
-let reader = follow(globalThis, box, document.querySelector('[data-jump]'), document.getElementById('content'))
 listen()
 </script>`

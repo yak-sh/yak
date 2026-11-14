@@ -9,6 +9,7 @@ import { useSignal } from '@preact/signals'
 import { client } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
+import { Conversation, conversationAt } from './Conversation.ts'
 import { Disclosure, disclosureAt } from './Disclosure.ts'
 import { Edit } from './Edit.ts'
 import { Order, orderAt } from './Order.ts'
@@ -18,7 +19,7 @@ import { put } from './field-values.ts'
 import { Text } from './Text.ts'
 import { Save } from './Save.ts'
 import { Sort, sortAt } from './Sort.ts'
-import { Button, Form, Notice, Table } from '@yaks/ui/parts'
+import { Button, Form, Notice, Table, Transcript } from '@yaks/ui/parts'
 import { type Host, Ux } from './host.ts'
 import { defineKit, type Kit } from './kit.ts'
 import { uxDoc } from './vocab.ts'
@@ -56,6 +57,42 @@ let DisclosureSample = ({ open }: { open: boolean }): JSX.Element => {
     onChange: (b) => void front.mutate([b]),
     summary: 'Completed',
   }, h('p', {}, 'The village is safe.'))
+}
+
+// A short conversation in the specimen's own page graph, with more lines
+// than it draws at first.
+let ConversationSample = (): JSX.Element => {
+  let front = useMemo(
+    () => client(loadVocab([uxDoc]), [], { vault: false, wireVault: false }),
+    [],
+  )
+  let row = useSignal<Bundle>({
+    entity: { eid: conversationAt('guide', 'sample') },
+    Conversation: { take: 2 },
+  })
+  useEffect(() => {
+    front.mutate([row.value])
+    let watch = front.watch('.Conversation', { remote: false })
+    let off = watch.subscribe((rows) => {
+      if (rows[0]) row.value = rows[0]
+    })
+    return () => {
+      off()
+      watch.close()
+      front.close()
+    }
+  }, [])
+  let said = [
+    h(Transcript.Bubble, {}, 'Can you find the recipe from last week?'),
+    h(Transcript.Reply, {}, 'It is the lentil soup, saved on Tuesday.'),
+    h(Transcript.Bubble, {}, 'Add it to Sunday.'),
+  ]
+  return h(Conversation, {
+    e: row.value,
+    onChange: (b) => void front.mutate([b]),
+    lines: said.map((node, i) => ({ id: `sample-${i}`, node })),
+    now: 'Writing…',
+  })
 }
 
 // Rows put in order by dragging, in the specimen's own page graph.
@@ -245,6 +282,16 @@ export let kit: Kit = defineKit({
           h('div', {}, h(DisclosureSample, { open: true })),
         ],
       ],
+    },
+    Conversation: {
+      Component: Conversation,
+      description:
+        'The lines of a conversation, followed at the newest until the reader scrolls up',
+      state: ['Conversation'],
+      specimens: () => [[
+        'Two lines drawn; press to draw the earlier one',
+        h('div', {}, h(ConversationSample, {})),
+      ]],
     },
     Order: {
       Component: Order,

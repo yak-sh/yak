@@ -26,6 +26,12 @@ import {
 import { attachmentTools, handleChannels } from './operator-channels.ts'
 import { drain } from './operator-store.ts'
 import { type Ctx, TOOLS } from './tools.ts'
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
+import { Host } from '@yaks/markdown'
+import { opening } from '@yaks/session/conversation'
+import { drawLines, type Lines } from './operator-draw.ts'
+import type { Row } from './operator-view.ts'
 
 /** What an ask could call: the tools it was sent, and the ones `tool_load`
  * lists for it to load (@yaks/session `tool_load`). */
@@ -211,3 +217,13 @@ export let released = async (ctx: Ctx, slug: string, title: string) => {
   })
   await run('app_deploy', { app: slug })
 }
+
+/** Each line a frame sends, drawn as HTML as the page draws it, under its id
+ * (operator-talk.ts), with its ids opening at `mentions`. */
+export let sentRows = (sent: Lines, mentions?: string): Row[] =>
+  drawLines(sent).map(({ id, node }) => ({
+    id,
+    html: renderToString(
+      h(Host.Provider, { value: opening(mentions) }, node),
+    ),
+  }))

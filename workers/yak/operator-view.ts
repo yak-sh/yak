@@ -1,11 +1,11 @@
-import { Transcript } from '@yaks/ui/parts'
 // What the Operator's chat app shows of its work (operator-page.ts
 // `chatPage`): each task as one conversation, its lines drawn by
-// operator-draw.ts under a line for what it is doing now, and the list of
-// conversations beside it. Pure: the page draws the conversation, and the
-// Builder object sends the lines a step changed to the page's socket
-// (`frame`) as the entries each draws, which the page draws again and puts
-// in place by its id.
+// operator-draw.ts in @yaks/ux's Conversation (operator-talk.ts `Talk`) under
+// a line for what it is doing now, and the list of conversations beside it.
+// Pure: the page draws the conversation, and the Builder object sends the
+// lines a step changed to the page's socket (`frame`) as the entries each
+// draws, which the page draws again over what it was drawn (operator-talk.ts
+// `mountTalk`).
 import type { Bundle, Comp } from '@yaks/graph'
 import { statusOf } from '@yaks/session/status'
 import { toolEid } from '@yaks/tools/result'
@@ -23,9 +23,7 @@ import {
   helped,
   type Helper,
   type Line,
-  type Lines,
   lines,
-  row,
   type Seen,
   spoken,
   told,
@@ -34,7 +32,7 @@ import {
   wire,
 } from './operator-draw.ts'
 import { called, type Names, opening, theirs } from '@yaks/session/conversation'
-import { drawn, type Row, rowsOf } from './operator-rows.ts'
+import { readerAt, Talk } from './operator-talk.ts'
 import {
   going,
   type HelperLine,
@@ -87,9 +85,17 @@ export let channelOf = (channel: string, framing = '') => ({
   ...framing ? { framing } : {},
 })
 
-/** Every line of a transcript worth showing, drawn, in order. */
+/** A drawn line of a transcript: what it shows, under the id it is put by. */
+export type Row = { id: string; html: string }
+
+/** Every line of a transcript worth showing, drawn as HTML, in order. */
 export let rows = (entries: Bundle[], names: Names, seen: Seen = {}): Row[] =>
-  lines(entries, names, seen).map((l) => drawn(l, seen.mentions))
+  lines(entries, names, seen).map(({ id, node }) => ({
+    id,
+    html: renderToString(
+      h(Host.Provider, { value: opening(seen.mentions) }, node),
+    ),
+  }))
 
 /**
  * A conversation's words as plain lines, for a reader that hears rather than
@@ -590,35 +596,42 @@ export let helperFrame = (
   }
 }
 
-/** A task as its conversation draws it: its lines, drawn by the renderers
- * `view` loads, and what it is doing now. */
+/** A task as its conversation draws it: the last `take` of its lines
+ * (@yaks/ux `Conversation`), drawn by the renderers `view` loads once for
+ * the page and its lines as data alike (`drawn`), each eid their prose holds
+ * called by its id (`seen.ids`), and what it is doing now. */
 export let talk = (
   task: Bundle,
   entries: Bundle[],
   names: Names,
   seen: Seen = {},
-  view?: View,
+  { view, drawn = lines(entries, names, seen, view), take }: {
+    view?: View
+    drawn?: Line[]
+    take?: number
+  } = {},
 ) => {
   let working = now(entries, names)
   let first = comp(entries.find((b) => b.entry), 'entry')?.seq
+  let eid = task.entity.eid
   return renderToString(h(
     Host.Provider,
     { value: opening(seen.mentions) },
-    h(
-      Transcript,
-      {
-        'data-task': task.entity.eid,
-        'data-from': first == null ? undefined : Number(first) - 1,
-        'data-pending': working ? '' : undefined,
-        'data-doing': working ? doingOf(entries) : undefined,
-      },
-      h(
-        Transcript.Lines,
-        { 'data-rows': '' },
-        called(seen.ids, lines(entries, names, seen, view).map(row)),
-      ),
-      // the words a screen reader hears; the yak beside the box shows them
-      h(Transcript.Status, {}, h('span', { 'data-now': '' }, working)),
+    called(
+      seen.ids,
+      h(Talk, {
+        task: eid,
+        lines: drawn.map(({ id, node }) => ({ id, node })),
+        now: working,
+        pending: !!working,
+        doing: working ? doingOf(entries) : undefined,
+        from: first == null ? undefined : Number(first) - 1,
+        e: {
+          entity: { eid: readerAt(eid) },
+          ...take ? { Conversation: { take } } : {},
+        },
+        onChange: () => {},
+      }),
     ),
   ))
 }
@@ -670,10 +683,3 @@ export let talks = (space: string) =>
       h(Button, { mod: 'go', href: chatPath(space) }, 'Open the chat'),
     ),
   )
-
-/** A frame as a page reads it that opened its socket before lines were sent
- * as data: each line drawn as HTML (`rows`), and no `lines`. */
-export let withRows = <F extends { operator: { lines?: Lines } }>(f: F) => {
-  let { lines, ...operator } = f.operator
-  return { ...f, operator: { ...operator, rows: lines ? rowsOf(lines) : [] } }
-}

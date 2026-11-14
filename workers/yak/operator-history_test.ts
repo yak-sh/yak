@@ -3,6 +3,7 @@ import { equal, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { operatorMemory } from './operator-testing.ts'
 import { conversationOf } from './operator-host.ts'
+import { TAKE } from '@yaks/ux/conversation'
 
 let store = operatorMemory()
 let session = crypto.randomUUID()
@@ -34,7 +35,9 @@ await store.g.apply([
     output: { source: input },
   })),
 ])
-let shown = async (from?: number) => {
+// Its newest lines as a page first draws them, and every line from the
+// first, as a page that asked for all of them reads them.
+let shown = async (from?: number, take?: number) => {
   let page = await conversationOf(
     store,
     '/chat',
@@ -44,11 +47,13 @@ let shown = async (from?: number) => {
     undefined,
     undefined,
     from,
+    undefined,
+    take,
   )
   return parseHTML(page.html).document
 }
 let newest = await shown()
-let whole = await shown(0)
+let whole = await shown(0, 400)
 
 let newestRows = newest.querySelectorAll('.Transcript_Row').length
 let newestLinks = newest.querySelectorAll('.Attachments_Link').length
@@ -59,7 +64,7 @@ let said = whole.querySelector(`#row-${input} .Transcript_Bubble`)?.textContent
 let footer = whole.querySelector('.Transcript > .Attachments')
 
 test('an upload outside the displayed history is not appended below newer messages', () => {
-  equal(newestRows, 300)
+  equal(newestRows, TAKE)
   equal(newestLinks, 0)
 })
 
