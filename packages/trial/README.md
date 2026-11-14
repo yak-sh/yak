@@ -108,14 +108,59 @@ the writers writes a round file; everything after that is rows.
 | `riddle{name, aliases, forbidden, forbidden_exact, group}`                           | on a case: a judge guesses what the attempt describes                                                                       |
 | `found{name, source}`                                                                | on a case: something its maker published, kept to learn a judge's taste                                                     |
 | `writing{round, case, variant, persona, run, model, at, ms, reply, output, session}` | what one writer returned, beside @yaks/model's `usage{input_tokens, output_tokens}` and `cost{dollars, reported}`           |
-| `pair{round, a, b, ord}`                                                             | two attempts planned for comparison                                                                                         |
+| `pair{round, a, b, ord, question}`                                                   | two sides planned for comparison under one question; a side is any entity                                                   |
 | `known{winner}`                                                                      | on a pair: its winner was settled when it was planned (a planted known answer)                                              |
 | `held_out{at, by, via}`                                                              | on a pair: a person's tap on it is kept from every selector's examples                                                      |
-| `preference{first, second, chose, judge, why}`                                       | one comparison; no `chose` is neither, no `judge` is a person's tap, by its `created.by`                                    |
-| `grabbed{attempt}`                                                                   | its `created.by` found the attempt appealing on its own                                                                     |
+| `preference{first, second, chose, pair, judge, why}`                                 | one comparison of the `pair` it names; no `chose` is neither, no `judge` is a person's tap, by its `created.by`             |
+| `grabbed{attempt}`                                                                   | its `created.by` found the side appealing on its own                                                                        |
 | `judge{taught, form, shown, question, cap}` + `doc{title}`                           | an automated judge; `taught` when it was handed a person's taps as examples; one that guesses says how and what it is asked |
 | `guess{attempt, judge, form, model, guesses, among, rank, cap, leaked, session}`     | one judge's guesses at a riddle attempt                                                                                     |
 | `passing{share, at, by, via}`                                                        | on a round: how much of the known answers a judge must get right before its verdicts count                                  |
+
+### Pairs and questions
+
+A pair's two sides are any two entities: two attempts, two images
+(`artifact{address, media_type}`), two drafts (`doc{title, body}`). A pair asks
+one `question` of them ("Which says it better?", "Which looks better?"), and the
+same two sides are one pair under each question asked. That is how copy and
+layout are judged apart: where two drafts differ in one, a single question does;
+where one change moves both, the same two drafts are matched under each. A pair
+with no question asks which a judge would rather have as a whole.
+
+A pair's eid is derived from its round, its two sides and its question, and a
+`preference` names the `pair` it answers, so the question is read off the pair.
+A round file gives a pair's question as a third element:
+`["a", "b", "Which says it better?"]`, and the same in `known` and `compared`. A
+pair of sides that are not attempts is written as rows,
+`pair{round, a, b,
+ord, question}`.
+
+### The rating
+
+`@yaks/trial/rating` rates the sides of a round's pairs from the `preference`
+rows, never stored: Bradley-Terry on the Elo scale, where a side rated 400 above
+another is expected to be chosen ten times in eleven. Each side starts with half
+a win and half a loss against a fixed side rated 0, so one choice does not rate
+it without limit. Neither orders nothing and is no game. Each question is rated
+on its own.
+
+The rating picks the next pair. Of the pairs not yet played, the next is the one
+whose sides are rated nearest, then the one whose sides have played least. A
+pair whose winner the rating already expects at least nine times in ten (`SURE`)
+is settled and is not played, so a judge who chose consistently is not asked
+every pair.
+
+```ts
+import { next, rate } from '@yaks/trial/rating'
+
+let games = [
+  { a: 'x', b: 'y', chose: 'x' },
+  { a: 'x', b: 'z' },
+  { a: 'y', b: 'z' },
+]
+console.log(Math.round(rate(games).get('x')!)) // 131
+console.log(next(games)) // 1: z has not played, and x and y are as near it
+```
 
 Variants, cases, attempts and what judges them are kept out of embedding, and
 their text is in their own components, not `doc{body}`, so no agent meets a
@@ -259,24 +304,31 @@ show on the skill's public page.
 `yak serve` answers `/trial/<round>` with the page a person taps through the
 round's pairs on, made for a phone. Several rounds are named with commas and
 shown one after another: `/trial/taste1,copy-r1`. It shows one pair at a time,
-shuffled, with nothing that says which variant, persona or model wrote a pitch,
-and no title where the case is a `riddle` or `found`. The first two parts of
-each pitch show and the rest fold behind "Read the rest".
+each shuffled, under its question, with nothing that says which variant, persona
+or model made a side, and no title where the case is a `riddle` or `found`. Each
+side is drawn through @yaks/render's `Side` view (`@yaks/trial/sides`): an
+attempt's first two parts show and the rest fold behind "Read the rest", an
+image shows as itself, a document as its title over its paragraphs. The deck
+hands the page only those components of a side (`shown`).
 
-- A tap on a pitch, or on Neither, writes
+The next pair is the one the rating of the person's own taps picks, each round
+and question rated apart. When none is left to play, the page says how many were
+chosen, skipped, and settled by the person's other choices.
+
+- A tap on a side, or on Neither, writes
   `preference{first, second, chose,
-  why}` and moves on. The why is optional,
-  and typed before the tap.
-- "Grabs me" on a pitch writes `grabbed{attempt}`; a second tap deletes it.
+  pair, why}` and moves on. The why is
+  optional, and typed before the tap.
+- "Grabs me" on a side writes `grabbed{attempt}`; a second tap deletes it.
 - "Add a pitch of my own" writes a `writing{round, case, output}` with no
   variant, and the deck sets it against three of the round's attempts about the
   same thing.
 
 Each is written the moment it is tapped, through `/web/apply`, so its
 `created.by` is the graph's configured person. A write that fails is kept in the
-browser and sent again. Opened again, the page starts at the first pair without
-a preference. The same address asked with `accept: application/json` answers the
-decks (`deck` in ./skill.ts).
+browser and sent again. Opened again, the page starts at the pair the rating
+picks, and Back goes through the pairs chosen before. The same address asked
+with `accept: application/json` answers the decks (`deck` in ./skill.ts).
 
 ### Known answers
 
@@ -311,13 +363,14 @@ nobody else's.
   attempts, and both must be attempts at a `riddle` case.
 - Neither, or the same score for both, is a verdict that agrees with no answer.
 
-A judge of the `pair` form compares: it sees two attempts as A and B and answers
-`{"chose": "A", "why": "..."}`, or `"neither"`. A round's file lists
-`compared: [{judge, pairs?}]`, and each pair of the file (or the `pairs` named)
-is planned in both orders, so a judge that leans to the first or second it is
-shown splits and agrees with no answer. Each verdict is a `preference` naming
-the judge, planned until it has a `chose` or a `why`; `yak trial run` asks it
-like any other judgement.
+A judge of the `pair` form compares: it sees two attempts as A and B, and the
+pair's question as `$question`, and answers `{"chose": "A", "why": "..."}`, or
+`"neither"`. It reads attempts, so `yak trial compare` plans it only over pairs
+of attempts. A round's file lists `compared: [{judge, pairs?}]`, and each pair
+of the file (or the `pairs` named) is planned in both orders, so a judge that
+leans to the first or second it is shown splits and agrees with no answer. Each
+verdict is a `preference` naming the judge, planned until it has a `chose` or a
+`why`; `yak trial run` asks it like any other judgement.
 
 A judge **passes** a round when its pick is the winner on at least the round's
 `passing{share}` of the known answers it sat. That share is a person's to set
@@ -342,26 +395,30 @@ answers held out.
 them: the variants compared, with how often a person chose each; the cases,
 leaving out the title and text of one that is something its maker published;
 every output; how many people picked and how many picks; the automated judges
-that passed the round's known answers; and the variant people preferred most,
-when one led. A round is measured once a person has chosen between two of its
-attempts. `measured(all, ran)` leaves out an attempt a model wrote that `ran`
-rejects, with every tap on it, so a page shows only the platform's own runs.
+that passed the round's known answers; and the variant people rated highest
+(./rating.ts, their taps rated as if between variants), when one led. A round is
+measured once a person has chosen between two of its attempts.
+`measured(all, ran)` leaves out an attempt a model wrote that `ran` rejects,
+with every tap on it, so a page shows only the platform's own runs.
 `versions(rounds)` is each variant that became the skill's text (`adopted`),
 oldest first, with the variant it was changed from and the round it won, where
 it won one. A winner nobody adopted is no version.
 
 ### The tally
 
-The tally first counts a person's taps, for each variant, persona arm and case:
-attempts, comparisons shown, preferred, neither and grabbed. Then:
+The tally first counts a person's taps under each question they answered, for
+each variant, persona arm and case: attempts, comparisons shown, its rating (the
+comparisons rated as if between the two variants, arms or cases; `-` where it
+was in none against another), neither and grabbed. Then:
 
+- every side a person chose between, by its rating under each question;
 - the round's known answers, how many pairs are held out, and the passing share;
 - each judge: how many known answers it sat, how many it agreed on, and whether
   it passed, failed, is untested or has no passing share to meet;
 - each judge that passed, with its verdicts on the pairs that have no known
   answer (`judged`, `picked`) and, for a guessing judge, its mean guesses until
   right (a miss counts as its cap plus one), how often a pick among the group
-  was right, and whether the variants a person preferred are the ones it guessed
-  soonest (Spearman's rho over the variants that have both);
+  was right, and whether the variants a person rated highest are the ones it
+  guessed soonest (Spearman's rho over the variants that have both);
 - every other judge the same way under "Not to be used", apart;
 - each attempt that grabbed, and each why.

@@ -14,7 +14,9 @@ import { named, type RoundFile, rows } from './skill.ts'
 let comps = (b: Bundle | undefined, name: string) =>
   (b?.[name] ?? {}) as Record<string, unknown>
 let attempt = (b: Bundle) => comps(b, 'writing')
-let ends = (p: Record<string, unknown>) => [p.first, p.second].sort().join('|')
+// Two sides under one question as one match, whichever is named first.
+let match = (a: unknown, b: unknown, question: unknown) =>
+  [a, b].map(String).sort().join('|') + (question ? `|${question}` : '')
 
 /** The round a word names: the key it was loaded under (`copy-r1`), or any
  * id the graph resolves. */
@@ -40,10 +42,12 @@ export let unreturned = (b: Bundle): boolean => {
 }
 
 /** Everything a round's deck and tally read: the round, its attempts, their
- * variants and cases, its pairs, each preference, mark and guess aimed at
- * one of its attempts, the judges those name, the skill it develops, and the
- * title of whoever set the round's passing share. An attempt or a guess still to be returned is
- * no attempt or guess yet, and is left out unless `planned` asks for them. */
+ * variants and cases, its pairs and each side of them that is not an attempt,
+ * each preference, mark and guess aimed at one of its sides or answering one
+ * of its pairs, the judges those name, the skill it develops, and the title
+ * of whoever set the round's passing share. An attempt or a guess still to be
+ * returned is no attempt or guess yet, and is left out unless `planned` asks
+ * for them. */
 export let gather = async (
   g: Graph,
   round: Eid,
@@ -54,14 +58,36 @@ export let gather = async (
   let attempts = (await g.read(`.writing .writing.round=${r} *`)).filter(here)
   let of = (prop: string) =>
     attempts.map((a) => attempt(a)[prop]).filter((e) => e).map(String)
-  let [head, ...rest] = await Promise.all([
+  let [head, pairs, ...rest] = await Promise.all([
     g.get([round, ...new Set([...of('variant'), ...of('case')])]),
     g.read(`.pair .pair.round=${r} *`),
     g.read(`.preference .preference.first.writing.round=${r} *`),
+    g.read(`.preference .preference.pair.pair.round=${r} *`),
     g.read(`.grabbed .grabbed.attempt.writing.round=${r} *`),
     g.read(`.guess .guess.attempt.writing.round=${r} *`),
   ])
-  let aimed = rest.flat().filter(here)
+  // The sides that are not this round's attempts, and the marks on them.
+  let written = new Set(attempts.map((a) => a.entity.eid))
+  let others = [
+    ...new Set(
+      pairs.flatMap((p) => [comps(p, 'pair').a, comps(p, 'pair').b])
+        .map(String).filter((e) => !written.has(e)),
+    ),
+  ]
+  let [sides, marks] = others.length
+    ? await Promise.all([
+      g.get(others),
+      g.read(
+        `.grabbed .grabbed.attempt=${
+          others.map((e) => JSON.stringify(e)).join(',')
+        } *`,
+      ),
+    ])
+    : [[], []]
+  let seen = new Set<Eid>()
+  let aimed = [...pairs, ...rest.flat(), ...marks].filter(here).filter((b) =>
+    !seen.has(b.entity.eid) && !!seen.add(b.entity.eid)
+  )
   let named = (comp: string) =>
     aimed.map((b) => (b[comp] as { judge?: unknown })?.judge)
   let judges = [...new Set([...named('preference'), ...named('guess')])]
@@ -74,7 +100,7 @@ export let gather = async (
     skill ? g.get([String(skill)], ['skill', 'doc']) : [],
   ])
   return [...head, ...more.flat()].filter((b) => b)
-    .concat(attempts, aimed)
+    .concat(attempts, sides.filter((b) => b && here(b)), aimed)
 }
 
 /** How a round's file named a variant or a case: the key it was loaded under
@@ -187,18 +213,39 @@ export let compare = async (
     g.read(`.pair .pair.round=${r} *`),
     g.read(`.preference .preference.judge=${j} *`),
   ])
-  let seen = new Set(
-    done.map((b) => ends(comps(b, 'preference'))),
+  let asks = new Map(
+    pairs.map((p) => [p.entity.eid, comps(p, 'pair').question ?? '']),
+  )
+  let seen = new Set(done.map((b) => {
+    let p = comps(b, 'preference')
+    return match(p.first, p.second, asks.get(String(p.pair)) ?? '')
+  }))
+  // A judge of this form reads attempts, so it compares only pairs of them.
+  let sides = [
+    ...new Set(pairs.flatMap((p) => [comps(p, 'pair').a, comps(p, 'pair').b])),
+  ].map(String)
+  let written = new Set(
+    (await g.get(sides, ['writing'])).filter((b) => b?.writing).map((b) =>
+      b.entity.eid
+    ),
   )
   let made = pairs.flatMap((p) => {
-    let { a, b } = comps(p, 'pair') as { a: Eid; b: Eid }
-    return seen.has(ends({ first: a, second: b })) ? [] : [[a, b], [b, a]].map((
+    let { a, b, question } = comps(p, 'pair') as {
+      a: Eid
+      b: Eid
+      question?: string
+    }
+    if (!written.has(a) || !written.has(b)) return []
+    return seen.has(match(a, b, question)) ? [] : [[a, b], [b, a]].map((
       [first, second],
     ): Bundle => ({
       entity: {
-        eid: derivedEid(['preference', judge, first, second].join('|')),
+        eid: derivedEid(
+          ['preference', judge, first, second, ...question ? [question] : []]
+            .join('|'),
+        ),
       },
-      preference: { first, second, judge },
+      preference: { first, second, pair: p.entity.eid, judge },
     }))
   })
   if (made.length) await g.apply(made)

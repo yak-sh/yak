@@ -380,7 +380,7 @@
       "component": true,
       "type": "object",
       "embed": false,
-      "description": "two attempts a person is asked to compare, planned by whoever ran the round. Which is shown first is the page's to shuffle",
+      "description": "two sides a judge is asked to compare under one question, planned by whoever ran the round. A side is any entity: an attempt, an image, a document. The same two sides are one pair under each question asked of them, so copy and layout are judged apart even when one draft changes both. Which is shown first is the page's to shuffle",
       "properties": {
         "round": {
           "type": "string",
@@ -390,19 +390,23 @@
         },
         "a": {
           "type": "string",
-          "ref": "writing",
+          "ref": "entity",
           "death": "cascade",
-          "description": "one attempt"
+          "description": "one side"
         },
         "b": {
           "type": "string",
-          "ref": "writing",
+          "ref": "entity",
           "death": "cascade",
           "description": "the other"
         },
         "ord": {
           "type": "number",
           "description": "its place in the deck"
+        },
+        "question": {
+          "type": "string",
+          "description": "what the judge is asked of the two, one aspect at a time: `Which says it better?`, `Which looks better?`. Absent asks which they would rather have as a whole"
         }
       }
     },
@@ -414,9 +418,9 @@
       "properties": {
         "winner": {
           "type": "string",
-          "ref": "writing",
+          "ref": "entity",
           "death": "cascade",
-          "description": "the one of the pair's two attempts every judge should pick"
+          "description": "the one of the pair's two sides every judge should pick"
         }
       }
     },
@@ -452,25 +456,31 @@
       "component": true,
       "type": "object",
       "embed": false,
-      "description": "one comparison of two attempts: which the judge would rather read on from, or neither. One row per judge and pair; choosing again changes it. A person's tap names no `judge` (they are its `created.by`), and with a `chose` it is a known answer: the pick every automated judge of the round is scored against",
+      "description": "one comparison of two sides: which the judge chose under the pair's question, or neither. One row per judge and pair; choosing again changes it. A person's tap names no `judge` (they are its `created.by`), and with a `chose` it is a known answer: the pick every automated judge of the round is scored against. The rating of each side is computed from these rows (@yaks/trial/rating), never stored",
       "properties": {
         "first": {
           "type": "string",
-          "ref": "writing",
+          "ref": "entity",
           "death": "cascade",
-          "description": "the attempt shown first"
+          "description": "the side shown first"
         },
         "second": {
           "type": "string",
-          "ref": "writing",
+          "ref": "entity",
           "death": "cascade",
-          "description": "the attempt shown second"
+          "description": "the side shown second"
         },
         "chose": {
           "type": "string",
-          "ref": "writing",
+          "ref": "entity",
           "death": "cascade",
-          "description": "the one preferred; absent when neither was"
+          "description": "the one chosen; absent when neither was"
+        },
+        "pair": {
+          "type": "string",
+          "ref": "pair",
+          "death": "cascade",
+          "description": "the pair it answers, and so the question it was asked; absent where a person's own attempt was set against the round's, which asks the whole"
         },
         "judge": {
           "type": "string",
@@ -500,13 +510,13 @@
       "component": true,
       "type": "object",
       "embed": false,
-      "description": "its writer (`created.by`) found this attempt appealing on its own, whatever it was compared with. Deleting the row takes the mark back",
+      "description": "its writer (`created.by`) found this side appealing on its own, whatever it was compared with. Deleting the row takes the mark back",
       "properties": {
         "attempt": {
           "type": "string",
-          "ref": "writing",
+          "ref": "entity",
           "death": "cascade",
-          "description": "the attempt that grabbed them"
+          "description": "the side that grabbed them: an attempt, an image, a document"
         }
       }
     },

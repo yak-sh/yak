@@ -14,7 +14,15 @@ import { modelDoc } from '@yaks/model/vocab'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { drop, find, gather, load } from './round.ts'
-import { answers, deck, examples, type RoundFile, tally } from './skill.ts'
+import {
+  answers,
+  deck,
+  examples,
+  loaded,
+  type RoundFile,
+  type Side,
+  tally,
+} from './skill.ts'
 import { runs } from './tools.ts'
 import { measured, versions } from './measured.ts'
 import { trialDoc } from './vocab.ts'
@@ -30,6 +38,10 @@ let vocab = loadVocab([keyDoc, aliasDoc, docDoc, modelDoc, trialDoc, {
     skill: { component: true, type: 'object' },
   },
 }], [keyKeywords])
+
+// A side's headline, as the page is handed it.
+let said = (p: Side) =>
+  (p.shown.writing as { output: Record<string, string> }).output.headline
 
 let open = async () => {
   let g = graph({
@@ -160,6 +172,68 @@ test('a round loaded twice holds its rows once, and a dropped pair goes', async 
   equal(await g.read('.judge'), [])
 })
 
+test('two sides are matched once under each question, a side is any entity, and each question is rated apart', async () => {
+  let g = await open()
+  let [copy, look] = ['Which says it better?', 'Which looks better?']
+  let [a, b] = ['office.none.blank.1', 'office.plain.persona.1']
+  let { round } = await load(g, {
+    ...file,
+    pairs: [[a, b, copy], [a, b, look]],
+  })
+  let drafts = await g.apply(['First', 'Second'].map((title) => ({
+    entity: { eid: `$${title}` },
+    doc: { title, body: `${title} draft.` },
+  })))
+  let [one, two] = drafts.map((d) => d.entity.eid)
+  await g.apply([{
+    entity: { eid: 'drafts' },
+    pair: { round, a: one, b: two, ord: 9, question: look },
+  }])
+
+  let cards = deck(await gather(g, round), 'jeff').cards
+  equal(cards.map((c) => c.question), [copy, look, look])
+  equal(cards[2].title, '')
+  equal(
+    [cards[2].first, cards[2].second].map((s) => s.shown).sort((x, y) =>
+      x.entity.eid == one ? -1 : y.entity.eid == one ? 1 : 0
+    ).map((s) => s.doc),
+    [
+      { title: 'First', body: 'First draft.' },
+      { title: 'Second', body: 'Second draft.' },
+    ],
+  )
+
+  // Copy goes to A, the look to B, and the second draft over the first.
+  let [A, B] = [a, b].map((key) => loaded('writing', 'r1', key))
+  await g.apply(cards.map((c, i) => ({
+    entity: { eid: `t${i}` },
+    created: { by: 'jeff', at: String(i) },
+    preference: {
+      first: c.first.eid,
+      second: c.second.eid,
+      chose: [A, B, two][i],
+      pair: c.pair,
+    },
+  })))
+  let all = await gather(g, round)
+  equal(deck(all, 'jeff').cards.map((c) => c.chose), [A, B, two])
+  equal(
+    [...answers(all).values()].map((k) => [k.question, k.winner]),
+    [[copy, A], [look, B], [look, two]],
+  )
+  // The tally's lines, with the padding between columns closed up.
+  let lines = tally(all).split('\n').map((l) => l.replace(/ +/g, ' '))
+  for (
+    let line of [
+      `Asked: ${copy}`,
+      `Asked: ${look}`,
+      `Rated (${look}):`,
+      '- Second 131 1 choice',
+      '- First -131 1 choice',
+    ]
+  ) ok(lines.includes(line), line)
+})
+
 test("the deck hides who wrote a pitch, keeps a judge's taps and sets their own pitch against the round's", async () => {
   let g = await open()
   let { round } = await load(g, file)
@@ -167,9 +241,7 @@ test("the deck hides who wrote a pitch, keeps a judge's taps and sets their own 
   equal(blind.parts, ['headline', 'brief'])
   equal(blind.cards.map((c) => c.title), ['The office', 'The office'])
   equal(
-    blind.cards.map((c) =>
-      [c.first, c.second].map((p) => p.parts.headline).sort().join('')
-    ),
+    blind.cards.map((c) => [c.first, c.second].map(said).sort().join('')),
     ['AB', 'BC'],
   )
   ok(!/variant|persona|model|plain|story/.test(JSON.stringify(blind.cards)))
@@ -218,7 +290,7 @@ test("the deck hides who wrote a pitch, keeps a judge's taps and sets their own 
   equal(seen.cards[1].chose, null)
   equal(
     seen.cards.slice(2).map((c) =>
-      [c.first, c.second].map((p) => p.parts.headline).sort().join('')
+      [c.first, c.second].map(said).sort().join('')
     ).sort(),
     ['AMine', 'BMine', 'CMine'],
   )
@@ -230,21 +302,25 @@ test("the deck hides who wrote a pitch, keeps a judge's taps and sets their own 
       'Round one (skill: copy)',
       '7 attempts, 2 pairs, 2 comparisons made, 1 of them neither, 1 grabbed, 4 guesses.',
       '',
-      'By variant   attempts  shown  preferred   neither  grabbed',
-      'none                2      1   1 (100%)    0 (0%)        1',
-      'plain               2      2     0 (0%)   1 (50%)        0',
-      'story               2      1     0 (0%)  1 (100%)        0',
-      '(their own)         1      0          -         -        0',
+      'By variant   attempts  shown  rating   neither  grabbed',
+      'none                2      1     131    0 (0%)        1',
+      'plain               2      2    -131   1 (50%)        0',
+      'story               2      1       -  1 (100%)        0',
+      '(their own)         1      0       -         -        0',
       '',
-      'By persona   attempts  shown  preferred  neither  grabbed',
-      'blank               5      2    1 (50%)  1 (50%)        1',
-      'persona             1      2     0 (0%)  1 (50%)        0',
-      '(their own)         1      0          -        -        0',
+      'By persona   attempts  shown  rating  neither  grabbed',
+      'blank               5      2     131  1 (50%)        1',
+      'persona             1      2    -131  1 (50%)        0',
+      '(their own)         1      0       -        -        0',
       '',
-      'By case     attempts  shown  preferred   neither  grabbed',
-      'The office         3      3    1 (33%)   1 (33%)        1',
-      'His words          1      1     0 (0%)  1 (100%)        0',
-      'Zap                3      0          -         -        0',
+      'By case     attempts  shown  rating   neither  grabbed',
+      'The office         3      3       -   1 (33%)        1',
+      'His words          1      1       -  1 (100%)        0',
+      'Zap                3      0       -         -        0',
+      '',
+      'Rated:',
+      '- "A" [none / blank / The office]      131  1 choice',
+      '- "B" [plain / persona / The office]  -131  1 choice',
       '',
       'Known answers: 1 pair (1 a person tapped, 0 planted).',
       'Passing: no share is set on this round, so no judge has passed (yak trial pass <round> <share>).',
@@ -279,7 +355,7 @@ test("the deck hides who wrote a pitch, keeps a judge's taps and sets their own 
       'By case    guesses  among',
       'Zap      2.3 (n=3)      -',
       '',
-      "By variant: over 3 variants, Spearman's rho between the share a person preferred and its mean guesses until right is 0.87: the variants preferred take more guesses (they disagree).",
+      'By variant: not enough to say whether it guesses soonest what a person rated highest (variants with both a rating and a guess: 2; three that vary are needed).',
       '',
       'Grabbed:',
       '- "A" [none / blank / The office]',
@@ -535,7 +611,7 @@ test('every judge sits the known answers unmarked, and one that fails is shown a
     'By case    guesses  among',
     'Zap      2.0 (n=6)      -',
     '',
-    "By variant: over 3 variants, Spearman's rho between the share a person preferred and its mean guesses until right is -1.00: the variants preferred are guessed sooner (they agree).",
+    "By variant: over 3 variants, Spearman's rho between a person's rating and its mean guesses until right is -1.00: the variants rated higher are guessed sooner (they agree).",
   ])
 })
 

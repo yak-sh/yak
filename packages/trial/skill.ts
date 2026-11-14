@@ -13,11 +13,13 @@
  * - An **attempt** is what one writer returned: `writing{round, case, variant,
  *   persona, run, model, at, ms, reply, output}` beside @yaks/model's
  *   `usage{input_tokens, output_tokens}` and `cost{dollars, reported}`.
- * - A **pair** is two attempts to compare: `pair{round, a, b, ord}`, wearing
- *   `known{winner}` where its winner was settled when it was planned, and
- *   `held_out{at, by, via}` where a person's tap on it is kept from selectors.
- * - A person's taps are `preference{first, second, chose, judge, why}` and
- *   `grabbed{attempt}`, each a row its `created.by` wrote and naming no judge.
+ * - A **pair** is two sides to compare under one question: `pair{round, a, b,
+ *   ord, question}`, wearing `known{winner}` where its winner was settled when
+ *   it was planned, and `held_out{at, by, via}` where a person's tap on it is
+ *   kept from selectors. A side is any entity; an attempt is the usual one.
+ * - A person's taps are `preference{first, second, chose, pair, judge, why}`
+ *   and `grabbed{attempt}`, each a row its `created.by` wrote and naming no
+ *   judge. Each side's rating is computed from them (./rating.ts).
  * - An automated **judge** is `doc{title}` + `judge{taught}`. Its verdicts
  *   name it: a `preference`, or `guess{attempt, judge, form, model, guesses,
  *   among, rank, cap, leaked}`.
@@ -45,6 +47,8 @@
  */
 import type { Bundle, Eid } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
+import { type Game, rate } from './rating.ts'
+import { shown } from './sides.ts'
 
 /** A round as the runner writes it: `rounds/<key>/round.json`. Keys name
  * things within the file; the graph holds eids. */
@@ -124,14 +128,16 @@ export type RoundFile = {
     question?: string
     cap?: number
   }[]
-  pairs?: [string, string][]
+  /** pairs of attempts, by key, each with the question it asks where it asks
+   * one: `["a", "b", "Which says it better?"]` */
+  pairs?: Matched[]
   /** judges that compare two attempts (form `pair`), each asked about every
    * pair of the file, known answers included, or only the `pairs` it names,
    * in each order */
-  compared?: { judge: string; pairs?: [string, string][] }[]
+  compared?: { judge: string; pairs?: Matched[] }[]
   /** planted known answers: pairs whose winner is settled, the winner first.
    * Each is a pair of the deck besides `pairs`, placed among them */
-  known?: [string, string][]
+  known?: Matched[]
   guesses?: {
     attempt: string
     /** the key of the judge that guessed; a guess naming none is given the
@@ -148,6 +154,10 @@ export type RoundFile = {
     dollars?: number | null
   }[]
 }
+
+/** Two attempts of a round's file by key, and the question they are matched
+ * under, where one is asked. */
+export type Matched = [string, string] | [string, string, string]
 
 /** The names a round, a variant and a case are found again by (@yaks/alias):
  * a second load lands on the rows of the first. */
@@ -265,6 +275,10 @@ export let rows = (file: RoundFile): Bundle[] => {
   let judged = held(judges)
   let judge = (key: string) =>
     judged.has(key) ? `$judge:${key}` : named.judge(file.skill, key)
+  // A pair's eid: its round, its two attempts in the order the file names
+  // them, and its question where it asks one.
+  let paired = (a: string, b: string, question?: string) =>
+    loaded('pair', file.key, a, b, ...question ? [question] : [])
   // A planted pair's place among the planned ones: a bit of its eid, so it
   // holds across loads and says nothing of what it is.
   let among = (eid: Eid) =>
@@ -392,32 +406,49 @@ export let rows = (file: RoundFile): Bundle[] => {
           : {},
       }
     }),
-    ...(file.pairs ?? []).map(([a, b], ord): Bundle => ({
-      entity: { eid: loaded('pair', file.key, a, b) },
-      pair: { round: '$round', a: attempt(a), b: attempt(b), ord },
+    ...(file.pairs ?? []).map(([a, b, question], ord): Bundle => ({
+      entity: { eid: paired(a, b, question) },
+      pair: some({
+        round: '$round',
+        a: attempt(a),
+        b: attempt(b),
+        ord,
+        question,
+      }),
     })),
-    ...(file.known ?? []).map(([winner, other]): Bundle => {
-      let eid = loaded('pair', file.key, winner, other)
+    ...(file.known ?? []).map(([winner, other, question]): Bundle => {
+      let eid = paired(winner, other, question)
       return {
         entity: { eid },
-        pair: {
+        pair: some({
           round: '$round',
           a: attempt(winner),
           b: attempt(other),
           ord: among(eid),
-        },
+          question,
+        }),
         known: { winner: attempt(winner) },
       }
     }),
     ...(file.compared ?? []).flatMap(({ judge: key, pairs }) =>
       (pairs ?? [...file.pairs ?? [], ...file.known ?? []]).flatMap((
-        [a, b],
+        [a, b, question],
       ) =>
         [[a, b], [b, a]].map(([first, second]): Bundle => ({
-          entity: { eid: loaded('preference', file.key, key, first, second) },
+          entity: {
+            eid: loaded(
+              'preference',
+              file.key,
+              key,
+              first,
+              second,
+              ...question ? [question] : [],
+            ),
+          },
           preference: {
             first: attempt(first),
             second: attempt(second),
+            pair: paired(a, b, question),
             judge: judge(key),
           },
         }))
@@ -466,9 +497,22 @@ let str = (v: unknown): string => v == null ? '' : String(v)
 let wearing = (all: Bundle[], name: string) => all.filter((b) => b[name])
 let byEid = (all: Bundle[]) => new Map(all.map((b) => [b.entity.eid, b]))
 
-// Two attempts as one pair, whichever is named first.
-let between = (a: unknown, b: unknown) => [str(a), str(b)].sort().join('|')
-let ends = (p: Bundle) => between(comp(p, 'pair').a, comp(p, 'pair').b)
+// Two sides under one question as one match, whichever side is named first.
+let match = (a: unknown, b: unknown, question: unknown = '') =>
+  [str(a), str(b)].sort().join('|') + (question ? `|${question}` : '')
+let ends = (p: Bundle) =>
+  match(comp(p, 'pair').a, comp(p, 'pair').b, comp(p, 'pair').question)
+// The question a comparison was asked: its pair's, or none where it names no
+// pair.
+let asking = (all: Bundle[]) => {
+  let pairs = byEid(wearing(all, 'pair'))
+  return (p: Row): string => str(comp(pairs.get(str(p.pair)), 'pair').question)
+}
+// The match a comparison answers.
+let answering = (all: Bundle[]) => {
+  let asked = asking(all)
+  return (p: Row) => match(p.first, p.second, asked(p))
+}
 // A person's taps: the comparisons that name no judge.
 let taps = (all: Bundle[]) =>
   wearing(all, 'preference').map((p) => comp(p, 'preference'))
@@ -490,19 +534,24 @@ let root = (cases: Map<Eid, Bundle>, eid: Eid): Eid => {
   return eid
 }
 
-/** One attempt as the page shows it: its parts and nothing that says who or
- * what wrote it. `grabbed` is the row that marks it, when the judge has. */
-export type Pitch = { eid: Eid; parts: Record<string, string>; grabbed?: Eid }
+/** One side as the page shows it: the components it is drawn from
+ * (./sides.ts), and nothing that says who or what made it. `grabbed` is the
+ * row that marks it, when the judge has. */
+export type Side = { eid: Eid; shown: Bundle; grabbed?: Eid }
 
-/** One pair as the page shows it, in the order shown: `title` says what both
- * are about, empty where saying would name what the judge must not know.
- * `preference` is the judge's row for it, when they have tapped: `chose` the
- * attempt, or null for neither. */
+/** One pair as the page shows it, in the order shown: `pair` is its row and
+ * `question` what it asks, absent on a person's own attempt set against the
+ * round's, which asks the whole. `title` says what both are about, empty
+ * where saying would name what the judge must not know, or where the sides
+ * are not attempts. `preference` is the judge's row for it, when they have
+ * tapped: `chose` the side, or null for neither. */
 export type Card = {
+  pair?: Eid
+  question?: string
   title: string
   case: Eid
-  first: Pitch
-  second: Pitch
+  first: Side
+  second: Side
   preference?: Eid
   chose?: Eid | null
   why?: string
@@ -537,15 +586,14 @@ let swapped = (a: Eid, b: Eid) =>
 export let deck = (all: Bundle[], judge?: Eid): Deck => {
   let round = wearing(all, 'round')[0]
   let attempts = byEid(wearing(all, 'writing'))
+  let named = byEid(all)
   let cases = byEid(wearing(all, 'case'))
+  let answers = answering(all)
   let mine = (b: Bundle) =>
     !!judge && (comp(b, 'preference').judge ?? comp(b, 'created').by) == judge
   let preferred = new Map(
     wearing(all, 'preference').filter(mine).map((p) => [
-      between(
-        str(comp(p, 'preference').first),
-        str(comp(p, 'preference').second),
-      ),
+      answers(comp(p, 'preference')),
       p,
     ]),
   )
@@ -558,31 +606,33 @@ export let deck = (all: Bundle[], judge?: Eid): Deck => {
     ]),
   )
   let about = (a: Eid) =>
-    root(cases, str(comp(attempts.get(a), 'writing').case))
+    attempts.has(a)
+      ? root(cases, str(comp(attempts.get(a), 'writing').case))
+      : ''
   // A case with a name to keep from the judge is shown untitled.
   let secret = (a: Eid) => {
     let c = cases.get(str(comp(attempts.get(a), 'writing').case))
     return !!(c?.found || c?.riddle)
   }
-  let pitch = (eid: Eid): Pitch => ({
+  let side = (eid: Eid): Side => ({
     eid,
-    parts: (comp(attempts.get(eid), 'writing').output ?? {}) as Record<
-      string,
-      string
-    >,
+    shown: shown(named.get(eid)!),
     ...grabs.has(eid) ? { grabbed: grabs.get(eid) } : {},
   })
-  let card = (a: Eid, b: Eid): Card => {
+  let card = (a: Eid, b: Eid, pair?: Bundle): Card => {
     let [first, second] = swapped(a, b) ? [b, a] : [a, b]
-    let p = preferred.get(between(a, b))
+    let question = str(comp(pair, 'pair').question)
+    let p = preferred.get(match(a, b, question))
     let said = comp(p, 'preference')
     return {
-      title: secret(a) || secret(b)
+      ...pair ? { pair: pair.entity.eid } : {},
+      ...question ? { question } : {},
+      title: !about(a) || about(a) != about(b) || secret(a) || secret(b)
         ? ''
         : str(comp(cases.get(about(a)), 'doc').title),
       case: about(a),
-      first: pitch(first),
-      second: pitch(second),
+      first: side(first),
+      second: side(second),
       ...p
         ? {
           preference: p.entity.eid,
@@ -593,11 +643,16 @@ export let deck = (all: Bundle[], judge?: Eid): Deck => {
     }
   }
   let planned = wearing(all, 'pair')
-    .map((p) => comp(p, 'pair'))
-    .filter((p) => attempts.has(str(p.a)) && attempts.has(str(p.b)))
-    .sort((x, y) => Number(x.ord) - Number(y.ord))
-    .map((p): [Eid, Eid] => [str(p.a), str(p.b)])
-  let inDeck = [...new Set(planned.flat())]
+    .filter((p) =>
+      named.has(str(comp(p, 'pair').a)) && named.has(str(comp(p, 'pair').b))
+    )
+    .sort((x, y) => Number(comp(x, 'pair').ord) - Number(comp(y, 'pair').ord))
+  let inDeck = [
+    ...new Set(
+      planned.flatMap((p) => [str(comp(p, 'pair').a), str(comp(p, 'pair').b)])
+        .filter((e) => attempts.has(e)),
+    ),
+  ]
   let own = [...attempts.values()]
     .filter((a) => !comp(a, 'writing').variant)
     .sort((x, y) =>
@@ -610,23 +665,29 @@ export let deck = (all: Bundle[], judge?: Eid): Deck => {
           derivedEid(a.entity.eid + x) < derivedEid(a.entity.eid + y) ? -1 : 1
         )
         .slice(0, AGAINST)
-        .map((o): [Eid, Eid] => [a.entity.eid, o])
+        .map((o) => card(a.entity.eid, o))
     )
   return {
     round: round?.entity.eid ?? '',
     title: str(comp(round, 'doc').title),
     parts: (comp(round, 'round').parts ?? []) as string[],
-    cards: [...planned, ...own].map(([a, b]) => card(a, b)),
+    cards: [
+      ...planned.map((p) =>
+        card(str(comp(p, 'pair').a), str(comp(p, 'pair').b), p)
+      ),
+      ...own,
+    ],
   }
 }
 
-/** A pair whose winner is settled: the attempt every judge should pick, and
- * the one it was set against. `tapped` when a person's tap settled it, and
- * then `held` when that tap is kept from selectors; otherwise it was planted
- * (`known{winner}`). */
+/** A pair whose winner is settled: the side every judge should pick under
+ * the pair's `question`, and the one it was set against. `tapped` when a
+ * person's tap settled it, and then `held` when that tap is kept from
+ * selectors; otherwise it was planted (`known{winner}`). */
 export type Answer = {
   winner: Eid
   other: Eid
+  question: string
   tapped: boolean
   held: boolean
 }
@@ -640,20 +701,22 @@ export type Answer = {
  */
 export let answers = (all: Bundle[]): Map<string, Answer> => {
   let out = new Map<string, Answer>(), held = heldOut(all)
+  let asked = asking(all)
   for (let p of wearing(all, 'pair')) {
     let { a, b } = comp(p, 'pair'), winner = str(comp(p, 'known').winner)
     if (winner && (winner == a || winner == b)) {
-      out.set(between(a, b), {
+      out.set(ends(p), {
         winner,
         other: str(winner == a ? b : a),
+        question: str(comp(p, 'pair').question),
         tapped: false,
-        held: held.has(between(a, b)),
+        held: held.has(ends(p)),
       })
     }
   }
   let said = new Map<string, Row[]>()
   for (let t of taps(all)) {
-    let key = between(t.first, t.second)
+    let key = match(t.first, t.second, asked(t))
     said.set(key, [...said.get(key) ?? [], t])
   }
   for (let [key, [t, ...more]] of said) {
@@ -662,6 +725,7 @@ export let answers = (all: Bundle[]): Map<string, Answer> => {
       out.set(key, {
         winner,
         other: str(winner == t.first ? t.second : t.first),
+        question: asked(t),
         tapped: true,
         held: held.has(key),
       })
@@ -678,7 +742,7 @@ export let answers = (all: Bundle[]): Map<string, Answer> => {
 export let examples = (all: Bundle[], person: Eid): Card[] => {
   let held = heldOut(all)
   return deck(all, person).cards.filter((c) =>
-    c.preference && !held.has(between(c.first.eid, c.second.eid))
+    c.preference && !held.has(match(c.first.eid, c.second.eid, c.question))
   )
 }
 
@@ -690,7 +754,8 @@ export let examples = (all: Bundle[], person: Eid): Card[] => {
  */
 export let hold = (all: Bundle[], share: number): Eid[] => {
   let pairs = wearing(all, 'pair')
-  let tapped = new Set(taps(all).map((t) => between(t.first, t.second)))
+  let answers = answering(all)
+  let tapped = new Set(taps(all).map(answers))
   let place = (p: Bundle) => derivedEid(`held|${p.entity.eid}`)
   return pairs
     .filter((p) => !p.held_out && !tapped.has(ends(p)))
@@ -715,20 +780,22 @@ let off = (g: Row): number =>
     : Number(g.rank ?? Number(g.cap ?? 0) + 1)
 
 /**
- * One judge's pick of a pair, from its own rows. Where it compared the two
- * (`preference`), the one it chose. Where it scored attempts one at a time
+ * One judge's pick of a pair under a question, from its own rows. Where it
+ * compared the two (`preference`), the one it chose; `asked` says which
+ * question each comparison answered. Where it scored attempts one at a time
  * (`guess`), the one it was less far from right on, over its guesses at
- * each. `null` when it judged the pair and picked neither, or scored the two
- * the same; `undefined` when it did not judge the pair, or guessed at only
- * one of the two.
+ * each, whatever the question. `null` when it judged the pair and picked
+ * neither, or scored the two the same; `undefined` when it did not judge the
+ * pair, or guessed at only one of the two.
  */
 export let picker = (
   preferences: Row[],
   guesses: Row[],
-): (a: Eid, b: Eid) => Eid | null | undefined => {
+  asked: (p: Row) => string = () => '',
+): (a: Eid, b: Eid, question?: string) => Eid | null | undefined => {
   let chose = new Map<string, Row[]>(), far = new Map<string, number[]>()
   for (let p of preferences) {
-    let key = between(p.first, p.second)
+    let key = match(p.first, p.second, asked(p))
     chose.set(key, [...chose.get(key) ?? [], p])
   }
   for (let g of guesses) {
@@ -736,8 +803,8 @@ export let picker = (
   }
   let less = (x: number, y: number, a: Eid, b: Eid) =>
     x < y ? a : y < x ? b : null
-  return (a, b) => {
-    let rows = chose.get(between(a, b))
+  return (a, b, question = '') => {
+    let rows = chose.get(match(a, b, question))
     let times = (e: Eid) => rows!.filter((r) => r.chose == e).length
     if (rows) return less(times(b), times(a), a, b)
     let [x, y] = [far.get(a), far.get(b)]
@@ -753,7 +820,7 @@ export type Standing = {
   taught: boolean
   compared: Row[]
   guessed: Row[]
-  pick: (a: Eid, b: Eid) => Eid | null | undefined
+  pick: (a: Eid, b: Eid, question?: string) => Eid | null | undefined
   sat: number
   agreed: number
   result: 'passed' | 'failed' | 'untested' | 'no passing share'
@@ -762,7 +829,7 @@ export type Standing = {
 /** Every automated judge that gave a round a verdict, and where it stands.
  * A taught judge sits only the known answers held out. */
 export let standings = (all: Bundle[]): Standing[] => {
-  let named = byEid(all), known = answers(all)
+  let named = byEid(all), known = answers(all), asked = asking(all)
   let verdicts = wearing(all, 'preference').map((p) => comp(p, 'preference'))
     .filter((p) => p.judge)
   let guesses = wearing(all, 'guess').map((g) => comp(g, 'guess'))
@@ -774,10 +841,10 @@ export let standings = (all: Bundle[]): Standing[] => {
     let taught = !!comp(named.get(eid), 'judge').taught
     let mine = (v: Row) => str(v.judge) == eid
     let compared = verdicts.filter(mine), guessed = guesses.filter(mine)
-    let pick = picker(compared, guessed)
+    let pick = picker(compared, guessed, asked)
     let picks = [...known.values()]
       .filter((k) => !taught || k.held)
-      .map((k) => [pick(k.winner, k.other), k.winner])
+      .map((k) => [pick(k.winner, k.other, k.question), k.winner])
       .filter(([p]) => p !== undefined)
     let sat = picks.length, agreed = picks.filter(([p, w]) => p == w).length
     let result: Standing['result'] = !sat
@@ -793,7 +860,9 @@ export let standings = (all: Bundle[]): Standing[] => {
 
 type Count = {
   shown: number
-  preferred: number
+  /** the rating from the comparisons it was in against another; absent where
+   * it was in none */
+  rating?: number
   neither: number
   grabbed: number
   attempts: number
@@ -804,7 +873,6 @@ type Count = {
 }
 let count = (): Count => ({
   shown: 0,
-  preferred: 0,
   neither: 0,
   grabbed: 0,
   attempts: 0,
@@ -860,7 +928,7 @@ type Column = [string, (c: Count) => string]
 let TAPPED: Column[] = [
   ['attempts', (c) => String(c.attempts)],
   ['shown', (c) => String(c.shown)],
-  ['preferred', (c) => share(c.preferred, c.shown)],
+  ['rating', (c) => c.rating == undefined ? '-' : String(Math.round(c.rating))],
   ['neither', (c) => share(c.neither, c.shown)],
   ['grabbed', (c) => String(c.grabbed)],
 ]
@@ -888,9 +956,12 @@ let GUESSED: Column[] = [
 /**
  * What a round's rows say, as text for whoever plans the next round.
  *
- * First a person's taps. For each variant, persona arm and case: how many
- * comparisons its attempts were shown in, how often preferred, how often
- * neither was, and how many attempts grabbed.
+ * First a person's taps, under each question they answered. For each
+ * variant, persona arm and case: how many comparisons its attempts were shown
+ * in, its rating from those against another (./rating.ts, computed from the
+ * comparisons, as if each were between the two variants, arms or cases), how
+ * often neither was chosen, and how many attempts grabbed. Then every side's
+ * own rating, highest first.
  *
  * Then the judges. The round's known answers ({@link answers}) are counted,
  * and each automated judge is scored on those it sat: its pick of the pair
@@ -903,8 +974,8 @@ let GUESSED: Column[] = [
  * other apart, under "Not to be used": `judged` and `picked` count the pairs
  * it gave a verdict on and the attempts it picked, and a guessing judge adds
  * its mean guesses until right and how often its pick among the group was
- * right, with whether the variants a person preferred are the ones it guessed
- * soonest.
+ * right, with whether the variants a person rated highest are the ones it
+ * guessed soonest.
  *
  * Last, each attempt that grabbed and each why. `label` names a variant or
  * case more shortly than its title, where the caller knows how.
@@ -918,6 +989,17 @@ export let tally = (
   let named = byEid(all)
   let titled = (eid: unknown) =>
     str(comp(named.get(str(eid)), 'doc').title) || str(eid)
+  // A side in a line: an attempt by its first part and what wrote it, any
+  // other side by its title.
+  let line = (eid: unknown) => {
+    let a = attempts.get(str(eid))
+    let parts = Object.values(
+      (comp(a, 'writing').output ?? {}) as Record<string, string>,
+    )
+    return a
+      ? `"${str(parts[0])}" [${keys(a).map(([, v]) => v).join(' / ')}]`
+      : titled(eid)
+  }
   let said = (eid: unknown) =>
     named.has(str(eid)) ? label(named.get(str(eid))!) : '(their own)'
   let keys = (a: Bundle): [string, string][] => {
@@ -962,20 +1044,74 @@ export let tally = (
       ]),
     ])
 
-  let [tapped, tap] = counting()
-  for (let a of attempts.values()) tap(a.entity.eid, (c) => c.attempts++)
   let preferences = taps(all)
-  for (let p of preferences) {
-    for (let side of [p.first, p.second]) {
-      tap(side, (c) => {
-        c.shown++
-        if (!p.chose) c.neither++
-        else if (p.chose == side) c.preferred++
-      })
-    }
-  }
+  let asked = asking(all)
   let grabbed = wearing(all, 'grabbed')
-  for (let g of grabbed) tap(comp(g, 'grabbed').attempt, (c) => c.grabbed++)
+  let questions = [...new Set(preferences.map(asked))].sort()
+  // A person's taps under one question, counted by variant, persona arm and
+  // case, each rated as if its comparisons were between those.
+  let tappedUnder = (question: string): Counts => {
+    let [counts, tap] = counting()
+    for (let a of attempts.values()) tap(a.entity.eid, (c) => c.attempts++)
+    let under = preferences.filter((p) => asked(p) == question)
+    for (let p of under) {
+      for (let side of [p.first, p.second]) {
+        tap(side, (c) => {
+          c.shown++
+          if (!p.chose) c.neither++
+        })
+      }
+    }
+    for (let g of grabbed) tap(comp(g, 'grabbed').attempt, (c) => c.grabbed++)
+    for (let [by, of] of counts) {
+      let group = (eid: unknown) => {
+        let a = attempts.get(str(eid))
+        return a && keys(a).find(([k]) => k == by)![1]
+      }
+      let games = under.flatMap((p): Game[] => {
+        let [a, b] = [group(p.first), group(p.second)]
+        return a && b && a != b && p.chose
+          ? [{ a, b, chose: group(p.chose) }]
+          : []
+      })
+      for (let [name, rating] of rate(games)) of.get(name)!.rating = rating
+    }
+    return counts
+  }
+  let blocks = (questions.length ? questions : ['']).map((question) => ({
+    question,
+    counts: tappedUnder(question),
+  }))
+  let tapped = blocks[0].counts
+  // Every side a person chose between under a question, by its rating.
+  let ratings = questions.flatMap((question) => {
+    let games = preferences.filter((p) => asked(p) == question).map((
+      p,
+    ): Game => ({
+      a: str(p.first),
+      b: str(p.second),
+      chose: p.chose ? str(p.chose) : null,
+    }))
+    let played = new Map<string, number>()
+    for (let g of games.filter((g) => g.chose)) {
+      for (let side of [g.a, g.b]) played.set(side, (played.get(side) ?? 0) + 1)
+    }
+    let rated = [...rate(games)].filter(([side]) => played.has(side))
+      .sort((x, y) => y[1] - x[1])
+    return rated.length
+      ? [
+        '',
+        `Rated${question ? ` (${question})` : ''}:`,
+        ...table(
+          rated.map(([side, r]) => [
+            line(side),
+            String(Math.round(r)),
+            many(played.get(side)!, 'choice'),
+          ]),
+        ).map((l) => `- ${l}`),
+      ]
+      : []
+  })
 
   let known = answers(all)
   let pairs = wearing(all, 'pair')
@@ -987,22 +1123,22 @@ export let tally = (
   let agreement = (judged: Counts): string => {
     let both = [...judged.get('variant') ?? []].flatMap(([name, c]) => {
       let t = tapped.get('variant')?.get(name)
-      return t?.shown && c.ranks.length
-        ? [[t.preferred / t.shown, mean(c.ranks)]]
+      return t?.rating != undefined && c.ranks.length
+        ? [[t.rating, mean(c.ranks)]]
         : []
     })
     let rho = both.length > 2
       ? spearman(both.map(([p]) => p), both.map(([, r]) => r))
       : undefined
     return rho == undefined
-      ? `By variant: not enough to say whether it guesses soonest what a person preferred (variants with both a comparison and a guess: ${both.length}; three that vary are needed).`
-      : `By variant: over ${both.length} variants, Spearman's rho between the share a person preferred and its mean guesses until right is ${
+      ? `By variant: not enough to say whether it guesses soonest what a person rated highest (variants with both a rating and a guess: ${both.length}; three that vary are needed).`
+      : `By variant: over ${both.length} variants, Spearman's rho between a person's rating and its mean guesses until right is ${
         rho.toFixed(2)
       }: ${
         rho <= -0.3
-          ? 'the variants preferred are guessed sooner (they agree)'
+          ? 'the variants rated higher are guessed sooner (they agree)'
           : rho >= 0.3
-          ? 'the variants preferred take more guesses (they disagree)'
+          ? 'the variants rated higher take more guesses (they disagree)'
           : 'no clear relation'
       }.`
   }
@@ -1010,16 +1146,21 @@ export let tally = (
     { eid, taught, compared, guessed, pick, sat, agreed, result },
   ) => {
     let [counts, add] = counting()
-    let unknown = new Map<string, [Eid, Eid]>()
+    let unknown = new Map<string, [Eid, Eid, string]>()
     for (let p of pairs) {
-      unknown.set(ends(p), [str(comp(p, 'pair').a), str(comp(p, 'pair').b)])
+      let { a, b, question } = comp(p, 'pair')
+      unknown.set(ends(p), [str(a), str(b), str(question)])
     }
     for (let p of compared) {
-      unknown.set(between(p.first, p.second), [str(p.first), str(p.second)])
+      unknown.set(match(p.first, p.second, asked(p)), [
+        str(p.first),
+        str(p.second),
+        asked(p),
+      ])
     }
     let judged = 0
-    for (let [key, [a, b]] of unknown) {
-      let p = known.has(key) ? undefined : pick(a, b)
+    for (let [key, [a, b, question]] of unknown) {
+      let p = known.has(key) ? undefined : pick(a, b, question)
       if (p === undefined) continue
       judged++
       for (let side of [a, b]) {
@@ -1077,15 +1218,6 @@ export let tally = (
   let settled = [...known.values()]
   let heldPairs = pairs.filter((p) => p.held_out).length
 
-  let line = (eid: unknown) => {
-    let a = attempts.get(str(eid))
-    let parts = Object.values(
-      (comp(a, 'writing').output ?? {}) as Record<string, string>,
-    )
-    return a
-      ? `"${str(parts[0])}" [${keys(a).map(([, v]) => v).join(' / ')}]`
-      : str(eid)
-  }
   let whys = preferences.filter((p) => p.why)
   return [
     `${str(comp(round, 'doc').title)} (skill: ${
@@ -1099,7 +1231,11 @@ export let tally = (
       `${grabbed.length} grabbed`,
       many(guesses.length, 'guess', 'guesses'),
     ].join(', ') + '.',
-    ...sections(tapped, TAPPED),
+    ...blocks.flatMap(({ question, counts }) => [
+      ...question ? ['', `Asked: ${question}`] : [],
+      ...sections(counts, TAPPED),
+    ]),
+    ...ratings,
     '',
     settled.length
       ? `Known answers: ${many(settled.length, 'pair')} (${

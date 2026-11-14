@@ -120,7 +120,7 @@ test('a tap on the page is a row the owner wrote, and the page comes back to whe
     equal(main.querySelector('.about').textContent, 'The office')
     equal(headlines(main).sort(), ['A', 'B'])
     ok(!/none|plain|story/.test(main.textContent))
-    ok(main.querySelector('.more').hasAttribute('hidden'))
+    ok(!main.querySelector('.more').hasAttribute('open'))
 
     let [first, second] = main.querySelectorAll('.pitch')
     let chosen = second.querySelector('h2').textContent
@@ -132,10 +132,15 @@ test('a tap on the page is a row the owner wrote, and the page comes back to whe
 
     let [p] = await some(() => rows('preference'))
     equal(p.created.by, owner)
+    let [pair] = (await rows('pair')).filter((b) =>
+      [b.pair.a, b.pair.b].includes(p.preference.first) &&
+      [b.pair.a, b.pair.b].includes(p.preference.second)
+    )
     equal(p.preference, {
       first: first.getAttribute('data-eid'),
       second: second.getAttribute('data-eid'),
       chose: second.getAttribute('data-eid'),
+      pair: pair.entity.eid,
       why: 'says who it is for',
     })
     let [g] = await some(() => rows('grabbed'))
@@ -143,7 +148,10 @@ test('a tap on the page is a row the owner wrote, and the page comes back to whe
 
     tap(main.querySelector('.neither'))
     await until(async () => (await rows('preference')).length == 2)
-    equal(main.querySelector('.done').textContent, 'That is all 2. 0 skipped.')
+    equal(
+      main.querySelector('.done').textContent,
+      'That is all: 2 chosen, 0 skipped.',
+    )
 
     tap(main.querySelector('.back'))
     tap(main.querySelector('.add'))
@@ -169,6 +177,39 @@ test('a tap on the page is a row the owner wrote, and the page comes back to whe
     )
     tap(again.querySelector('.pitch.chosen .grab'))
     await until(async () => (await rows('grabbed')).length == 0)
+  } finally {
+    await host.close()
+  }
+})
+
+test('a pair of any two entities is drawn by what they are, under its question', async () => {
+  let { host, visit, rows } = await open()
+  try {
+    let [round] = await rows('round')
+    let drafts = await host.graph.apply(['First', 'Second'].map((title) => ({
+      entity: { eid: `$${title}` },
+      doc: { title, body: `${title} draft.\n\nMore of it.` },
+    })))
+    let [pair] = await host.graph.apply([{
+      entity: { eid: '$pair' },
+      pair: {
+        round: round.entity.eid,
+        a: drafts[0].entity.eid,
+        b: drafts[1].entity.eid,
+        ord: 9,
+        question: 'Which looks better?',
+      },
+    }])
+    let main = await visit()
+    while (!main.querySelector('.question')) tap(main.querySelector('.skip'))
+    equal(main.querySelector('.question').textContent, 'Which looks better?')
+    equal(main.querySelector('.about'), null)
+    equal(headlines(main).sort(), ['First', 'Second'])
+    equal(main.querySelectorAll('.pitch p').length, 4)
+
+    tap(main.querySelector('.pitch p'))
+    let [p] = await some(() => rows('preference'))
+    equal(p.preference.pair, pair.entity.eid)
   } finally {
     await host.close()
   }

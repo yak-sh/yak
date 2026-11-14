@@ -38,9 +38,14 @@ header button { min-width: 2.75rem; font-size: 1.4rem; line-height: 1; padding: 
 .pitch { background: var(--card); border: 2px solid var(--line); border-radius: .9rem; padding: .9rem 1rem .6rem; margin-bottom: .75rem; cursor: pointer; -webkit-tap-highlight-color: transparent; animation: in .14s ease-out; }
 .pitch:active { border-color: var(--pick); }
 .pitch.chosen, .neither.chosen { border-color: var(--pick); box-shadow: inset 0 0 0 1px var(--pick); }
+.question { margin: .25rem 0 .6rem; font-size: 1.1rem; }
 .pitch h2 { margin: 0 0 .4rem; font-size: 1.3rem; line-height: 1.2; }
 .pitch p { margin: 0 0 .55rem; }
+.pitch figure { margin: 0 0 .4rem; }
+.pitch img { display: block; width: 100%; height: auto; border-radius: .5rem; }
+.pitch figcaption { margin-top: .4rem; color: var(--soft); font-size: .9rem; }
 .pitch .more { color: var(--soft); font-size: .95rem; }
+.pitch .more summary { padding: .4rem 0; font-size: .9rem; cursor: pointer; }
 .pitch footer { display: flex; justify-content: space-between; gap: .5rem; margin-top: .2rem; }
 .pitch footer button { border: 0; padding: .4rem .2rem; color: var(--soft); font-size: .9rem; }
 .pitch .grab { margin-left: auto; }
@@ -59,7 +64,7 @@ export let PAGE: string = '<!doctype html><html lang="en"><head>' +
   '<meta charset="utf-8">' +
   '<meta name="viewport" content="width=device-width, initial-scale=1">' +
   '<meta name="robots" content="noindex">' +
-  `<title>Which would you rather read?</title><style>${CSS}</style></head>` +
+  `<title>Which would you choose?</title><style>${CSS}</style></head>` +
   '<body><main></main>' +
   '<script type="module" src="/trial.js"></script></body></html>'
 

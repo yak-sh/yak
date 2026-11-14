@@ -25,7 +25,10 @@ import type { Model, Price } from '@yaks/model'
 import type { Tool } from '@yaks/session'
 import { find, gather } from '@yaks/trial/round'
 import { type Answering, asking, type Ran } from '@yaks/trial/run'
-import { type Card, deck } from '@yaks/trial/skill'
+import { type Card, deck, type Side } from '@yaks/trial/skill'
+import { next } from '@yaks/trial/rating'
+import { side, sides, vocab } from '@yaks/trial/sides'
+import { render } from '@yaks/text'
 import { running } from '@yaks/trial/effects'
 import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
@@ -123,17 +126,40 @@ export let trialRunning = (store: Store, env: Env, lent: Lending) =>
     },
   ))
 
-// A card as the person reads it: the two outputs, each part on its line.
+// A card as the person reads it: its question, then the two sides, an
+// output each part on its line and anything else as its view draws it.
 let shown = (c: Card, parts: string[], n: number, of: number) => {
-  let pitch = (label: string, p: Card['first']) =>
-    `${label}:\n${
-      parts.filter((k) => p.parts[k]).map((k) => `${k}: ${p.parts[k]}`).join(
-        '\n',
-      )
+  let pitch = (label: string, p: Side) => {
+    let output = (p.shown.writing as { output?: Record<string, string> })
+      ?.output
+    return `${label}:\n${
+      output
+        ? parts.filter((k) => output[k]).map((k) => `${k}: ${output[k]}`)
+          .join('\n')
+        : render(sides, p.shown, 'Side', vocab(), side(parts), 'plain')
     }`
-  return `Pair ${n} of ${of}${c.title ? ` (${c.title})` : ''}\n${
-    pitch('First', c.first)
-  }\n\n${pitch('Second', c.second)}`
+  }
+  return `Pair ${n} of ${of}${c.title ? ` (${c.title})` : ''}${
+    c.question ? `\nAsks: ${c.question}` : ''
+  }\n${pitch('First', c.first)}\n\n${pitch('Second', c.second)}`
+}
+
+// The cards to show next, by deck index: what the rating of the person's own
+// picks says is closest, one after another, each question rated apart.
+let upcoming = (cards: Card[], few: number): number[] => {
+  let games = cards.map((c) => ({
+    a: c.first.eid,
+    b: c.second.eid,
+    chose: c.preference ? c.chose ?? null : undefined,
+    group: c.question ?? '',
+  }))
+  let picked: number[] = []
+  while (picked.length < few) {
+    let i = next(games, (j) => picked.includes(j))
+    if (i == undefined) break
+    picked.push(i)
+  }
+  return picked
 }
 
 let round = {
@@ -156,7 +182,7 @@ export let pickTools = (
     title: 'Show the next pairs to pick between',
     readOnly: true,
     description:
-      "The next pairs of outputs in a skill trial's round that this person has not picked between, each numbered for trial_pick. Show them to the person as they are, never saying which variant wrote which, and ask which they would rather read on from, or neither.",
+      "The next pairs in a skill trial's round that this person has not picked between, each numbered for trial_pick: the ones their earlier picks leave closest, so a pair those already settle is not shown. Show them to the person as they are, never saying which variant wrote which, and ask the pair's question where it asks one, otherwise which they would rather read on from, or neither.",
     parameters: {
       type: 'object',
       properties: {
@@ -167,20 +193,20 @@ export let pickTools = (
     },
     run: async (args) => {
       let d = await cards(String(args.round))
-      let open = d.cards.map((c, i) => [c, i + 1] as const)
-        .filter(([c]) => !c.preference)
+      let open = upcoming(d.cards, Number(args.few ?? 3))
       if (!open.length) {
         return {
-          text: d.cards.length
+          text: !d.cards.length
+            ? `${d.title} has no pair with both outputs written yet.`
+            : d.cards.every((c) => c.preference)
             ? `They have picked in every pair of ${d.title}.`
-            : `${d.title} has no pair with both outputs written yet.`,
+            : `Nothing is left to pick in ${d.title}: their picks settle the pairs they have not picked in.`,
           with: {},
         }
       }
       return {
-        text: open.slice(0, Number(args.few ?? 3)).map(([c, n]) =>
-          shown(c, d.parts, n, d.cards.length)
-        ).join('\n\n-----\n\n'),
+        text: open.map((i) => shown(d.cards[i], d.parts, i + 1, d.cards.length))
+          .join('\n\n-----\n\n'),
         with: {},
       }
     },
@@ -211,13 +237,18 @@ export let pickTools = (
         : null
       // One row a person and pair: picking again changes it.
       let eid = c.preference ??
-        derivedEid(`preference|${person}|${c.first.eid}|${c.second.eid}`)
+        derivedEid(
+          `preference|${person}|${c.first.eid}|${c.second.eid}${
+            c.question ? `|${c.question}` : ''
+          }`,
+        )
       await store.g.apply([{
         entity: { eid },
         preference: {
           first: c.first.eid,
           second: c.second.eid,
           chose,
+          ...c.pair ? { pair: c.pair } : {},
           ...args.why ? { why: String(args.why) } : {},
         },
         $actor: { by: person, via: context?.session },

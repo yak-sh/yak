@@ -192,8 +192,9 @@ export let question = (
 }
 
 /** What a judge of the `pair` form is asked about two attempts, the first
- * shown as A and the second as B, and how its reply is read: `{"chose": "A",
- * "why": "..."}`, with `"neither"` for neither. `chose` is the attempt's eid,
+ * shown as A and the second as B, under the pair's `question` (`$question`,
+ * empty where the pair asks the whole), and how its reply is read:
+ * `{"chose": "A", "why": "..."}`, with `"neither"` for neither. `chose` is the attempt's eid,
  * absent where it said neither; `why` is never empty, so a verdict called
  * neither still returns. */
 export let compare = (
@@ -201,6 +202,7 @@ export let compare = (
   round: Bundle,
   first: Bundle,
   second: Bundle,
+  question = '',
 ): { text: string; read: (reply: string) => Row | undefined } => {
   let j = comp(judge, 'judge')
   let parts = list(j.shown ?? comp(round, 'round').parts)
@@ -209,7 +211,11 @@ export let compare = (
       v,
     ) => v).join('\n\n')
   return {
-    text: fill(str(j.question), { a: show(first), b: show(second) }),
+    text: fill(str(j.question), {
+      a: show(first),
+      b: show(second),
+      question,
+    }),
     read: (reply) => {
       let said = answer(reply)
       let pick = str(said?.chose).trim().toUpperCase()
@@ -278,6 +284,7 @@ export let owed = async (
         ...ids(attempts, 'writing', 'case'),
         ...ids(waiting, 'guess', 'judge'),
         ...ids(comparing, 'preference', 'judge'),
+        ...ids(comparing, 'preference', 'pair'),
       ]),
     ])).filter((b) => b).map((b) => [b.entity.eid, b]),
   )
@@ -386,7 +393,8 @@ export let owed = async (
       judges.push({ ...common, text: '', waits: true, read: () => undefined })
       continue
     }
-    let asked = compare(judge, head, x, y)
+    let question = str(comp(named.get(str(said.pair)), 'pair').question)
+    let asked = compare(judge, head, x, y, question)
     judges.push({
       ...common,
       text: asked.text,

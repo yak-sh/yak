@@ -1,13 +1,19 @@
 /**
- * The page a person taps through a round's pairs on: one pair at a time, a
- * tap on the pitch they would rather read on from, or neither. Each tap is
- * written the moment it is made, through the page's own door (`/web/apply`),
- * which signs it as the graph's person; a write that fails is kept and sent
- * again. The deck comes from ./routes.ts and is ./skill.ts's `deck`.
+ * The page a person taps through a round's pairs on: one pair at a time, each
+ * side drawn by what it is (./sides.ts), a tap on the one they choose under
+ * the pair's question, or neither. The next pair is the one their own taps'
+ * rating says is closest (./rating.ts), so a pair whose answer their earlier
+ * taps already settle is not asked. Each tap is written the moment it is
+ * made, through the page's own door (`/web/apply`), which signs it as the
+ * graph's person; a write that fails is kept and sent again. The deck comes
+ * from ./routes.ts and is ./skill.ts's `deck`.
  *
  * @module
  */
-import type { Card, Deck, Pitch } from './skill.ts'
+import type { H } from '@yaks/render'
+import { next } from './rating.ts'
+import { draw } from './sides.ts'
+import type { Card, Deck, Side } from './skill.ts'
 
 /** What the page reaches the world through. */
 export type Io = {
@@ -32,11 +38,11 @@ export let mount = async (root: Element, io: Io): Promise<void> => {
   let doc = root.ownerDocument!
   let h = (
     tag: string,
-    props: Record<string, unknown> = {},
+    props: Record<string, unknown> | null = {},
     ...kids: Kid[]
   ): HTMLElement => {
     let el = doc.createElement(tag) as HTMLElement
-    for (let [k, v] of Object.entries(props)) {
+    for (let [k, v] of Object.entries(props ?? {})) {
       if (typeof v == 'function') el.addEventListener(k, v as EventListener)
       else if (v != null && v !== false) el.setAttribute(k, String(v))
     }
@@ -48,6 +54,9 @@ export let mount = async (root: Element, io: Io): Promise<void> => {
 
   let cards: Shown[] = []
   let at = 0
+  // The cards shown before this one, for Back, and those skipped.
+  let trail: number[] = []
+  let skipped = new Set<number>()
   let composing = false
   let saved = ''
 
@@ -92,17 +101,32 @@ export let mount = async (root: Element, io: Io): Promise<void> => {
     let { decks } = await got.json() as { decks: Deck[] }
     cards = decks.flatMap((deck) => deck.cards.map((c) => ({ ...c, deck })))
   }
-  let undecided = () => {
-    let i = cards.findIndex((c) => c.chose === undefined)
-    return i < 0 ? cards.length : i
+  // The card the rating picks next, or past the end where none is left: each
+  // round and question rated on its own.
+  let upcoming = () =>
+    next(
+      cards.map((c) => ({
+        a: c.first.eid,
+        b: c.second.eid,
+        chose: c.chose,
+        group: `${c.deck.round}|${c.question ?? ''}`,
+      })),
+      (i) => skipped.has(i),
+    ) ?? cards.length
+  let forward = () => {
+    if (at < cards.length) trail.push(at)
+    go(upcoming())
   }
   let go = (to: number) => {
-    at = Math.max(0, Math.min(cards.length, to))
+    at = to
     composing = false
-    draw()
+    paint()
   }
 
-  let between = (c: Card) => `trial:why:${c.first.eid}|${c.second.eid}`
+  let between = (c: Card) =>
+    `trial:why:${c.first.eid}|${c.second.eid}${
+      c.question ? `|${c.question}` : ''
+    }`
   let why = (c: Card) => io.store.getItem(between(c)) ?? c.why ?? ''
 
   let choose = (c: Shown, chose: string | null) => {
@@ -117,12 +141,13 @@ export let mount = async (root: Element, io: Io): Promise<void> => {
         first: c.first.eid,
         second: c.second.eid,
         chose,
+        ...c.pair ? { pair: c.pair } : {},
         ...said ? { why: said } : {},
       },
     }])
-    go(at + 1)
+    forward()
   }
-  let grab = (p: Pitch) => {
+  let grab = (p: Side) => {
     if (p.grabbed) {
       void send([{ entity: { eid: p.grabbed }, $delete: true }])
       delete p.grabbed
@@ -130,7 +155,7 @@ export let mount = async (root: Element, io: Io): Promise<void> => {
       p.grabbed = io.uuid()
       void send([{ entity: { eid: p.grabbed }, grabbed: { attempt: p.eid } }])
     }
-    draw()
+    paint()
   }
   // A why typed before the tap waits here for it; one typed after is written
   // when the field is left.
@@ -152,38 +177,21 @@ export let mount = async (root: Element, io: Io): Promise<void> => {
     go(at)
   }
 
-  let pitch = (c: Shown, p: Pitch) => {
-    let [head, lead, ...rest] = c.deck.parts.map((name) => p.parts[name] ?? '')
-    let more = rest.filter((t) => t)
-    let folded = h(
-      'div',
-      { class: 'more', hidden: true },
-      ...more.map((t) => h('p', {}, t)),
-    )
+  let pitch = (c: Shown, p: Side) => {
     return h(
       'article',
       {
         class: `pitch${c.chose == p.eid ? ' chosen' : ''}`,
         'data-eid': p.eid,
         click: (e: Event) => {
-          if (!(e.target as Element).closest?.('button')) choose(c, p.eid)
+          let on = e.target as Element
+          if (!on.closest?.('button, summary, a')) choose(c, p.eid)
         },
       },
-      h('h2', {}, head),
-      lead && h('p', { class: 'lead' }, lead),
-      folded,
+      draw(p.shown, h as unknown as H<Node>, c.deck.parts),
       h(
         'footer',
         {},
-        more.length > 0 && h('button', {
-          class: 'fold',
-          type: 'button',
-          click: (e: Event) => {
-            folded.toggleAttribute('hidden')
-            ;(e.currentTarget as Element).textContent =
-              folded.hasAttribute('hidden') ? 'Read the rest' : 'Fold'
-          },
-        }, 'Read the rest'),
         h('button', {
           class: 'grab',
           type: 'button',
@@ -221,14 +229,15 @@ export let mount = async (root: Element, io: Io): Promise<void> => {
         class: 'quiet',
         click: () => {
           composing = false
-          draw()
+          paint()
         },
       }, 'Cancel'),
     )
   }
 
-  let draw = () => {
+  let paint = () => {
     let c = cards[at]
+    let chosen = cards.filter((x) => x.chose !== undefined).length
     let bar = h(
       'header',
       {},
@@ -236,40 +245,45 @@ export let mount = async (root: Element, io: Io): Promise<void> => {
         class: 'back',
         type: 'button',
         'aria-label': 'Back',
-        disabled: at == 0,
-        click: () => go(at - 1),
+        disabled: !trail.length,
+        click: () => go(trail.pop()!),
       }, '‹'),
       h(
         'span',
         { class: 'place' },
-        c ? `${at + 1} of ${cards.length} · ${c.deck.title}` : 'Done',
+        c ? `${trail.length + 1} of ${cards.length} · ${c.deck.title}` : 'Done',
       ),
       h('button', {
         class: 'skip',
         type: 'button',
         'aria-label': 'Skip',
         disabled: !c,
-        click: () => go(at + 1),
+        click: () => {
+          if (c.chose === undefined) skipped.add(at)
+          forward()
+        },
       }, '›'),
     )
+    let settled = cards.length - chosen - skipped.size
     let body: Kid[] = !c
       ? [h(
         'p',
         { class: 'done' },
         cards.length
-          ? `That is all ${cards.length}. ${
-            cards.length - cards.filter((x) => x.chose !== undefined).length
-          } skipped.`
+          ? `That is all: ${chosen} chosen, ${skipped.size} skipped${
+            settled ? `, ${settled} settled by your other choices` : ''
+          }.`
           : 'No pairs here yet.',
       )]
       : composing
       ? [compose(c)]
       : [
-        h(
+        (c.title || !c.question) && h(
           'p',
           { class: 'about' },
           c.title || 'Which would you rather read on from?',
         ),
+        !!c.question && h('h1', { class: 'question' }, c.question),
         pitch(c, c.first),
         pitch(c, c.second),
         h('button', {
@@ -291,7 +305,7 @@ export let mount = async (root: Element, io: Io): Promise<void> => {
           type: 'button',
           click: () => {
             composing = true
-            draw()
+            paint()
           },
         }, 'Add a pitch of my own'),
       ]
@@ -304,8 +318,10 @@ export let mount = async (root: Element, io: Io): Promise<void> => {
 
   try {
     await load()
-    at = undecided()
-    draw()
+    // Opened again, Back goes through what was chosen before.
+    trail = cards.flatMap((c, i) => c.chose === undefined ? [] : [i])
+    at = upcoming()
+    paint()
     if (outbox.length) void flush()
   } catch (error) {
     root.replaceChildren(h('p', { class: 'done' }, String(error)))

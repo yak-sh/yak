@@ -21,6 +21,7 @@
  */
 import type { Bundle, Eid } from '@yaks/graph'
 import { standings } from './skill.ts'
+import { type Game, rate } from './rating.ts'
 
 /** A candidate text of the skill, with how a person's taps went for it. */
 export type Variant = {
@@ -35,6 +36,9 @@ export type Variant = {
   shown: number
   /** of those, how many they chose it in */
   preferred: number
+  /** its rating from those against another variant (./rating.ts), null where
+   * it was in none */
+  rating: number | null
   /** when it became the skill's text, its next version (`adopted`) */
   adopted: string | null
 }
@@ -63,7 +67,7 @@ export type Measured = {
   }[]
   /** the automated judges that passed the round's known answers */
   judges: { eid: Eid; title: string; sat: number; agreed: number }[]
-  /** the variant people preferred most often, when one led */
+  /** the variant people rated highest, when one led */
   winner: Eid | null
 }
 
@@ -107,6 +111,12 @@ export let measured = (
       tally.set(v, c)
     }
   }
+  // The taps as games between the variants of their two sides.
+  let rated = rate(chosen.flatMap((t): Game[] => {
+    let p = comp(t, 'preference')
+    let [a, b] = [variantOf(p.first), variantOf(p.second)]
+    return a && b && a != b ? [{ a, b, chose: variantOf(p.chose) }] : []
+  }))
   let used = (prop: string) =>
     [...new Set(kept.map((a) => str(comp(a, 'writing')[prop])))]
       .filter((e) => byEid.has(e)).map((e) => byEid.get(e)!)
@@ -121,11 +131,12 @@ export let measured = (
       licence: str(v.licence),
       from: v.from ? str(v.from) : null,
       ...tally.get(b.entity.eid) ?? { shown: 0, preferred: 0 },
+      rating: rated.get(b.entity.eid) ?? null,
       adopted: b.adopted ? str(comp(b, 'adopted').at) : null,
     }
   })
-  let rate = (v: Variant) => v.shown ? v.preferred / v.shown : -1
-  let [best, next] = [...variants].sort((a, b) => rate(b) - rate(a))
+  let score = (v: Variant) => v.rating ?? -Infinity
+  let [best, next] = [...variants].sort((a, b) => score(b) - score(a))
   let names = new Map(all.map((b) => [b.entity.eid, str(comp(b, 'doc').title)]))
   return {
     round: round?.entity.eid ?? '',
@@ -155,7 +166,7 @@ export let measured = (
       sat: j.sat,
       agreed: j.agreed,
     })),
-    winner: best && best.shown && (!next || rate(best) > rate(next))
+    winner: best && best.rating != null && (!next || score(best) > score(next))
       ? best.eid
       : null,
   }
