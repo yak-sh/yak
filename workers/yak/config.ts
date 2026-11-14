@@ -52,8 +52,26 @@ let links: Plug[] = [
   { use: '@yaks/dreaming', facets: ['vocab'], words: ['recalled'] },
 ]
 
+// The store's own plugins that run ahead of every package's: an app's lenses
+// name each component as it is now, its references are lowered to eids, and
+// its schema pages are derived from its words when read.
+let ahead: Plug[] = [
+  { use: 'yak/lenses', facets: ['graph'] },
+  { use: 'yak/lower', facets: ['graph'] },
+  { use: 'yak/describe', facets: ['graph'] },
+]
+// What every store does once a write commits: rouse the wakes it made hold,
+// embed the texts it changed, and keep a keyed write's answer, last of the
+// commit hooks (facets/log-graph.ts).
+let behind: Plug[] = [
+  { use: 'yak/rouse', facets: ['graph'] },
+  { use: 'yak/embed', facets: ['graph'] },
+  { use: 'yak/log', facets: ['graph'] },
+]
+
 export let appConfig: Config = {
   plugins: storePlugins([
+    ...ahead,
     {
       use: '@yaks/kernel',
       facets: ['vocab'],
@@ -183,12 +201,20 @@ export let appConfig: Config = {
     { use: 'yak/meter', words: [] },
     { use: 'yak/models', with: {} },
     { use: 'yak/attribution', words: ['register_writes'] },
+    // What the app holds, told to the directory (facets/weigh-graph.ts), and
+    // the words a write brought, told to the Lexicon.
+    { use: 'yak/weigh', facets: ['graph'] },
+    { use: 'yak/lexicon', facets: ['graph'] },
+    ...behind,
+    // Last, so no write hook rewrites a value it checked.
+    { use: 'yak/admit', facets: ['graph'] },
   ]),
 }
 
 export let directoryConfig: Config = {
   numbers: true,
   plugins: storePlugins([
+    { use: 'yak/lower', facets: ['graph'] },
     {
       use: '@yaks/kernel',
       facets: ['vocab'],
@@ -317,6 +343,7 @@ export let directoryConfig: Config = {
     { use: 'yak/remake', facets: ['graph'] },
     { use: 'yak/kills', facets: ['graph'] },
     { use: 'yak/signin', facets: ['graph'] },
+    ...behind,
   ]),
 }
 
@@ -336,6 +363,8 @@ export let gitConfig: Config = {
     { use: 'yak/app', words: ['archetype', 'retired', 'exception'] },
     { use: 'yak/trash', words: [] },
     { use: 'yak/meter', words: [] },
+    { use: 'yak/lower', facets: ['graph'] },
+    ...behind,
   ]),
 }
 
@@ -739,6 +768,15 @@ export let domains = {
     effects: './facets/refusals-effects.ts',
   },
   'yak/pages': { graph: './facets/pages-graph.ts' },
+  'yak/lenses': { graph: './facets/lenses-graph.ts' },
+  'yak/lower': { graph: './facets/lower-graph.ts' },
+  'yak/describe': { graph: './facets/describe-graph.ts' },
+  'yak/weigh': { graph: './facets/weigh-graph.ts' },
+  'yak/rouse': { graph: './facets/rouse-graph.ts' },
+  'yak/embed': { graph: './facets/embed-graph.ts' },
+  'yak/lexicon': { graph: './facets/lexicon-graph.ts' },
+  'yak/log': { graph: './facets/log-graph.ts' },
+  'yak/admit': { graph: './facets/admit-graph.ts' },
   'yak/publishing': { graph: './facets/publishing-graph.ts' },
   'yak/attribution': {
     vocab: './facets/attribution-vocab.ts',

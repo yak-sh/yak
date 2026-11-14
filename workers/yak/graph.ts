@@ -61,7 +61,7 @@ export {
   type Vouch,
   vouchOf,
 } from './app-authority.ts'
-import { lowering, staleGrant, vouching } from './app-writes.ts'
+import { staleGrant, vouching } from './app-writes.ts'
 export { grantEid } from './app-writes.ts'
 import {
   type Context as AppContext,
@@ -82,21 +82,14 @@ import { hits as documentHits } from './document-search.ts'
 import { metered as meteredModel } from './meter.ts'
 import { attributed } from './attribution.ts'
 import { backed as journalBacked } from '@yaks/journal'
-import { described, describing } from '@yaks/code/described'
+import { described } from '@yaks/code/described'
 import {
   compile,
   described as describedLenses,
-  lenses,
   lensesIn,
   packageEid,
 } from '@yaks/lens'
-import {
-  contractPaths,
-  declaredLenses,
-  lensDocAt,
-  lensRule,
-  spoken,
-} from './lenses.ts'
+import { contractPaths, lensDocAt, lensRule, spoken } from './lenses.ts'
 // The Store Durable Object, built out of the packages (T-33810, D-33490): one
 // app's graph, and nothing of the fleet's. It is composition, not code —
 //
@@ -231,7 +224,6 @@ import { settling } from '@yaks/effects/tools'
 import { type Field, fields, find, search, sources, worded } from '@yaks/fts'
 import { lexemes } from '@yaks/fts/lexicon'
 import { fieldsSaid, lexiconOf, LIMIT } from './lexicon.ts'
-import { admitSchema } from '@yaks/graph/schema'
 import {
   BATCH as EMBED_BATCH,
   drain,
@@ -553,6 +545,19 @@ export type Stored = {
   broke: (what: string, error: unknown) => void
   /** the store's clock (`Time`), which its own decisions read the hour by */
   now: () => number
+  /** the store's name: an app's address, or the platform's own store */
+  name: string
+  /** what an app holds, told to the directory once a write has committed */
+  weigh: (bundles: Bundle[]) => Bundle[]
+  /** the sleeping wakes a committed write makes hold, roused */
+  rouse: (bundles: Bundle[]) => Promise<Bundle[]>
+  /** the texts a committed write changed, embedded */
+  embed: (bundles: Bundle[]) => Bundle[]
+  /** the words a committed write brought, told to the Lexicon, in a store
+   * that keeps one */
+  tell?: (bundles: Bundle[]) => Bundle[]
+  /** the write log's hook, which keeps a keyed write's answer as it commits */
+  log: Plugin
 }
 
 /** The Worker's bindings: outgoing mail for every store, and `#Env` for the
@@ -1619,29 +1624,6 @@ export class Store extends Durable {
             defect(error, { request: `${plugin} ${phase}`, store: name }),
           ...(own ? {} : { teach: teach(this.#bind) }),
           plugins: [
-            ...(!own || declaredLenses(declaration)
-              ? [
-                lenses(
-                  (error) =>
-                    defect(error, { request: 'lens normalize', store: name }),
-                  {
-                    vocab,
-                    speaks: !own ? { [sessionPackage]: 0 } : undefined,
-                    rows: [
-                      ...(!own ? sessionRows() : []),
-                      ...lensesIn([lensDocAt(name, declaration)]),
-                    ],
-                  },
-                ),
-              ]
-              : []),
-            // An app's store holds its own rows, not a copy of the platform's
-            // words: every schema page in it is derived from the vocabulary when
-            // read. The platform's own two stores describe theirs in rows, which
-            // the directory's journal names a change's component by.
-            ...(own ? [] : [describing]),
-
-            // The Store lowers incoming bundles and lends the caller's standing.
             ...(meta && this.#bind.SERVING_COPY
               ? [{
                 name: 'yak/serving-fence',
@@ -1711,8 +1693,8 @@ export class Store extends Durable {
                 },
               }]
               : []),
-            this.#lowering,
             ...options.plugins ?? [],
+            // The Store lends the caller's standing.
             this.#vouching,
             ...(meta
               ? [using(() => !this.#useScope.getStore()?.administrative)]
@@ -1721,15 +1703,6 @@ export class Store extends Durable {
               ? [this.#guarding(app, vocab, meant(this.#get('vocab')))]
               : []),
             ...(!meta && app ? [this.#posting()] : []),
-            // What an app holds, told to the directory once a write has committed
-            // (`#tell`). The platform's own two stores are not apps and are not
-            // metered.
-            ...(own
-              ? []
-              : [{ name: 'yak/weigh', hooks: { effect: this.#weigh } }]),
-            // A sleeping wake armed by the write that makes its `while` hold
-            // (`#rouse`), in every store.
-            { name: 'yak/rouse', hooks: { effect: this.#rouse } },
             {
               name: 'yak/names',
               hooks: {
@@ -1739,30 +1712,6 @@ export class Store extends Durable {
                 },
               },
             },
-            // A text the write changed, embedded once it has committed
-            // (`#embedding`). Its triggers queued it in the write's own statement,
-            // so finding whether anything is owed is a single-row seek, asked only
-            // of a write that names what a trigger watches.
-            {
-              name: 'yak/embed',
-              hooks: {
-                effect: (bundles) => {
-                  if (
-                    this.#texts && queues(this.#texts.fields, bundles)
-                  ) this.#embedding()
-                  return bundles
-                },
-              },
-            },
-            // The words a write brought, told to the Lexicon once it has
-            // committed (`#telling`).
-            ...(this.#lexis
-              ? [{ name: 'yak/lexicon', hooks: { effect: this.#telling } }]
-              : []),
-            // Last, so the answer a keyed write keeps is the batch as every other
-            // commit hook left it (`#log`).
-            this.#log.plugin,
-            ...(own ? [] : [admitSchema(vocab)]),
           ],
         })
         // Trusted plugin writes use the same kernel boundary as store bookkeeping.
@@ -2384,8 +2333,6 @@ export class Store extends Durable {
     if (actor) this.#delegated.delete(this.#writerKey(actor))
   }
 
-  #lowering = lowering(() => this.#vocab)
-
   #staleGrant = (row: Bundle): boolean =>
     staleGrant(row, (person) => this.#vouched.get(person))
 
@@ -2579,6 +2526,18 @@ export class Store extends Durable {
     manifest: () => meant(this.#get('vocab')),
     broke: (what, error) => void this.#broke(what, error),
     now: () => this.#now(),
+    name: this.#get('name') ?? '',
+    weigh: this.#weigh,
+    rouse: this.#rouse,
+    embed: (bundles) => {
+      // Its triggers queued the text in the write's own statement, so finding
+      // whether anything is owed is a single-row seek, asked only of a write
+      // that names what a trigger watches.
+      if (this.#texts && queues(this.#texts.fields, bundles)) this.#embedding()
+      return bundles
+    },
+    ...(this.#lexis ? { tell: this.#telling } : {}),
+    log: this.#log.plugin,
   })
 
   #patch(bundles: Bundle[]) {
