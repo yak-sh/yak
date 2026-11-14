@@ -21,6 +21,24 @@ let line = (t: Tool) =>
   `- ${t.name}: ${t.title ?? t.description.split(/(?<=\.)\s/)[0].slice(0, 120)}`
 
 /**
+ * The tool among `known` a loaded name means: the name itself, or the name
+ * without the `<server>__` prefixes a caller wrote before it.
+ *
+ * ```ts
+ * let known = new Set(['task_list'])
+ * named('tasks__task_list', known) // 'task_list'
+ * named('mcp__tasks__task_list', known) // 'task_list'
+ * named('task_lists', known) // undefined
+ * ```
+ */
+export let named = (name: string, known: Set<string>): string | undefined => {
+  for (let n = name;; n = n.slice(n.indexOf('__') + 2)) {
+    if (known.has(n)) return n
+    if (!n.includes('__')) return undefined
+  }
+}
+
+/**
  * The tools a runner offers, with `tool_load` beside them when any is
  * deferred: its description lists each deferred one, and its call names
  * those to send from then on.
@@ -35,7 +53,7 @@ let line = (t: Tool) =>
 export let loading = (tools: Tool[]): Tool[] => {
   let later = tools.filter((t) => t.deferred)
   if (!later.length || tools.some((t) => t.name == LOAD)) return tools
-  let named = new Set(later.map((t) => t.name))
+  let known = new Set(later.map((t) => t.name))
   let load: Tool = {
     name: LOAD,
     title: 'Load tools',
@@ -56,14 +74,18 @@ export let loading = (tools: Tool[]): Tool[] => {
     readOnly: true,
     run: (args) => {
       let names = (args.names ?? []) as string[]
-      let missing = names.filter((n) => !named.has(n))
+      let missing = names.filter((n) => !named(n, known))
       if (missing.length) {
         throw new CallError(
           'tool',
-          `There is no tool to load called ${missing.join(', ')}.`,
+          `There is no tool to load called ${
+            missing.join(', ')
+          }. Load one by a name ${LOAD} lists.`,
         )
       }
-      return `Loaded ${names.join(', ')}. Call them directly.`
+      return `Loaded ${
+        names.map((n) => named(n, known)).join(', ')
+      }. Call them directly.`
     },
   }
   return [...tools, load]
@@ -80,7 +102,7 @@ export let loading = (tools: Tool[]): Tool[] => {
  *   ({ name, description: name, parameters: {}, deferred, run: () => name })
  * let load = {
  *   entity: { eid: 'c' },
- *   call: { to: toolEid('tool_load'), args: { names: ['buy'] } },
+ *   call: { to: toolEid('tool_load'), args: { names: ['shop__buy'] } },
  * }
  * let sold = { entity: { eid: 'd' }, call: { to: toolEid('sell') } }
  * let tools = [tool('search'), tool('buy', true), tool('sell', true)]
@@ -90,12 +112,14 @@ export let loading = (tools: Tool[]): Tool[] => {
  */
 export let schemas = (tools: Tool[], entries: Bundle[]): Tool[] => {
   if (!tools.some((t) => t.deferred)) return tools
+  let known = new Set(tools.filter((t) => t.deferred).map((t) => t.name))
   let load = toolEid(LOAD)
   let loaded = new Set(
     entries.flatMap((b) => {
       let to = (b[CALL] as { to?: unknown } | undefined)?.to
       if (to != load) return to ? [to] : []
-      return ((argsOf(b).names ?? []) as string[]).map(toolEid)
+      return ((argsOf(b).names ?? []) as string[])
+        .map((n) => toolEid(named(n, known) ?? n))
     }),
   )
   return tools.filter((t) => !t.deferred || loaded.has(toolEid(t.name)))
