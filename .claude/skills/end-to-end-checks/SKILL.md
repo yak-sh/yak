@@ -122,9 +122,10 @@ exits, which cuts off any Operator work still running. An Operator check that
 spans several calls (a chat, then `operator_read` until it settles, then an
 answer) signs in a test account that lasts instead, with
 `yak auth yaks.app --as <name>@bot.yak.sh`, and passes the same `--as` to each
-call. Use a new name for each check: an Operator follows what its conversation
-already did, so a space where it built once one way can build the same way again
-whatever its instructions now say. A check of yaks.app's own pages or funnel tags its
+call. Use a new name for each check: a free space holds five apps, and an
+earlier check's apps and unanswered decisions are in the next one's way. An
+Operator's model varies from run to run, so one run of a behavior proves little:
+send the same kind of request three or more times and count. A check of yaks.app's own pages or funnel tags its
 visit `utm_source=agent-check` (@yaks/platform/bots `CHECK`), in its link or
 its `yak_came` cookie, so whatever it clicks or starts counts apart from
 people's. Acting as the owner is his to grant (M-31958). The box's own server runs main after `yak restart`. The platform
