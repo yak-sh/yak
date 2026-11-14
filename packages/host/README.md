@@ -21,18 +21,18 @@ stop.abort()
 equal(stopped(), true)
 ```
 
-| Export                                        | Provides                                                                                                                                                             |
-| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/host`                                  | `assembly`, facet contracts, `Host`, `Config`, `Configured`, `Options`, `Plug`, `Role`, `Feed`, `MigrationMonitor`, `Message`, `Receipt`, `Sender`, `ROLES`, `every` |
-| `@yaks/host/assembly`                         | `assembly`, `prepare`, `assemble`, `Prepared`, `Assembly`, `AssemblyOpts`, `Binding`, `Meaning`                                                                      |
-| `@yaks/host/roles`                            | Role and facet selection data without loading the assembly runtime                                                                                                   |
-| `@yaks/host/senders`                          | `Message`, `Receipt`, `Sender`, `Built`, `afresh`, `Unsent`, `Undeliverable`, `Notice`, `Notices`, `Unsigned`, `Arrival`, `Incoming`                                 |
-| `@yaks/host/lending`                          | `lending`, `Lends`: what plugins lend a host by name                                                                                                                 |
-| `@yaks/host/payments`                         | `Payments`, `Plans`, `Shops`, `Door`, `Heard`, `Subscription`, `Checkout`, `Sale`, `Paid`, …: a payment provider's contract                                          |
-| `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                                                               |
-| `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`, `configured`, `revealed`, `holding`, `Reveal`, `meet`, `Unmet`, `numbering`                                          |
-| `@yaks/host/documents`, `@yaks/host/keywords` | Shared intrinsic declarations and vocabulary keywords                                                                                                                |
-| `@yaks/host/anatomy`                          | Composition evidence, projected when read                                                                                                                            |
+| Export                                        | Provides                                                                                                                                                                          |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/host`                                  | `assembly`, facet contracts, `Host`, `Config`, `Configured`, `Options`, `Plug`, `Role`, `Feed`, `MigrationMonitor`, `Message`, `Receipt`, `Sender`, `ROLES`, `every`              |
+| `@yaks/host/assembly`                         | `assembly`, `prepare`, `assemble`, `Prepared`, `Assembly`, `AssemblyOpts`, `Binding`, `Meaning`                                                                                   |
+| `@yaks/host/roles`                            | Role and facet selection data without loading the assembly runtime                                                                                                                |
+| `@yaks/host/senders`                          | `Message`, `Receipt`, `Sender`, `Built`, `afresh`, `Unsent`, `Undeliverable`, `Notice`, `Notices`, `Unsigned`, `Arrival`, `Incoming`, `MailDomains`, `MailDomain`, `DomainRecord` |
+| `@yaks/host/lending`                          | `lending`, `Lends`: what plugins lend a host by name                                                                                                                              |
+| `@yaks/host/payments`                         | `Payments`, `Plans`, `Shops`, `Door`, `Heard`, `Subscription`, `Checkout`, `Sale`, `Paid`, …: a payment provider's contract                                                       |
+| `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                                                                            |
+| `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`, `configured`, `revealed`, `holding`, `Reveal`, `meet`, `Unmet`, `numbering`                                                       |
+| `@yaks/host/documents`, `@yaks/host/keywords` | Shared intrinsic declarations and vocabulary keywords                                                                                                                             |
+| `@yaks/host/anatomy`                          | Composition evidence, projected when read                                                                                                                                         |
 
 ## Assembly
 
@@ -206,11 +206,14 @@ for what each lends by name: `senders`, the `notices` readers of a provider's
 signed word about a letter it carried (a `Notice`: the receipt, and the tags the
 letter was sent with, which say whose it was), and the `arrivals` that read a
 letter the runtime handed the host, in the runtime's own shape, as an
-`Incoming`. A request its provider did not sign rejects as `Unsigned`. The host
-reads each option a config writes as a reference through
-`configured(config,
-reveal)`: `{"secret": NAME}` and `{"binding": NAME}`, read
-when accessed; `holding(env)` reads both from a Worker's env.
+`Incoming`. A request its provider did not sign rejects as `Unsigned`. Its
+`mailDomains` set a domain up for sending and receiving (`setup`), read the DNS
+records it needs with whether each has `arrived` (`read`), and `remove` it, each
+domain named by its domain name, never the provider's id for it. The host reads
+each option a config writes as a reference through `configured(config,
+reveal)`:
+`{"secret": NAME}` and `{"binding": NAME}`, read when accessed; `holding(env)`
+reads both from a Worker's env.
 
 ## Embedders
 

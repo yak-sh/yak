@@ -5,6 +5,7 @@
     ".": "./mod.ts",
     "./sender": "./sender.ts",
     "./receive": "./receive.ts",
+    "./domains": "./domains.ts",
     "./graph": "./graph.ts",
     "./routes": "./routes.ts"
   },

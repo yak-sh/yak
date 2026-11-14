@@ -688,6 +688,23 @@ export let posts: Record<'platform' | 'apps', Post> = {
   apps: { via: 'binding', plugins: mailing('RESEND_TOKEN') },
 }
 
+/** The mail provider a space's own domains take mail through, both ways
+ * (mail-domains.ts): its plugin lends the domains it sets up under its name,
+ * with the `full_access` key domains are managed with, read from the Worker's
+ * environment at its use. Unset, no domain is set up and each verb says why. */
+export let mailDomains: Config & { via: string } = {
+  via: 'resend',
+  plugins: [{
+    use: '@yaks/resend',
+    facets: ['graph'],
+    with: {
+      base: { secret: 'RESEND_API' },
+      fetch: { binding: 'MAIL_FETCH' },
+      domains: { token: { secret: 'RESEND_DOMAINS_TOKEN' } },
+    },
+  }],
+}
+
 /** The arrival that reads a letter Email Routing hands `email()` (inbox.ts). */
 export let ARRIVAL = 'cloudflare'
 

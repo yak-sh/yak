@@ -2,8 +2,8 @@
 // key suffices: no account management or read credential leaves with a letter.
 // The API's `id` is not the RFC Message-ID, so it never becomes a thread id.
 import { Undeliverable, Unsent } from '@yaks/host/senders'
-type Fetch = (url: string, init: RequestInit) => Promise<Response>
 import type { Message, Sender } from '@yaks/host/senders'
+import { type Fetch, root, said as error } from './api.ts'
 
 /** Credentials and the HTTP boundary, supplied by the host. */
 export type Resend = {
@@ -34,19 +34,6 @@ let payload = (m: Message, tags: Record<string, string>) => ({
     : {}),
 })
 
-// Resend's error body, `{name, message}`, or empty strings where it has none.
-let error = (response: Response) =>
-  response.ok ? { name: '', message: '' } : response.json().then(
-    (body: unknown) => {
-      let { name, message } = (body ?? {}) as Record<string, unknown>
-      return {
-        name: typeof name == 'string' && /^[a-z_]+$/.test(name) ? name : '',
-        message: typeof message == 'string' ? message : '',
-      }
-    },
-    () => ({ name: '', message: '' }),
-  )
-
 // Whether Resend's message is about the letter's readers: it names the `to`
 // or `cc` field, or one of their addresses.
 let naming = (message: string, m: Message) =>
@@ -65,8 +52,7 @@ export let resend = (
   { token, base, fetch: call, tags = {} }: Resend,
 ): Sender => ({
   send: async (m) => {
-    let root = (base ?? 'https://api.resend.com').replace(/\/+$/, '')
-    let response = await (call ?? fetch)(`${root}/emails`, {
+    let response = await (call ?? fetch)(`${root(base)}/emails`, {
       method: 'POST',
       headers: {
         authorization: `Bearer ${token}`,

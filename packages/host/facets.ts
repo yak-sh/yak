@@ -16,7 +16,13 @@ import type { Runs } from '@yaks/graph/tools'
 import type { Contributions } from '@yaks/ui/contributions'
 import type { Keywords, Vocab, VocabDoc } from '@yaks/vocab'
 import type { Embedding, Feed, Host } from './mod.ts'
-import type { Arrival, Notices, Sender, Texter } from './senders.ts'
+import type {
+  Arrival,
+  MailDomains,
+  Notices,
+  Sender,
+  Texter,
+} from './senders.ts'
 import type { Payments } from './payments.ts'
 import type { Options } from './config.ts'
 /** `<plugin>/vocab` — what the plugin declares, and nothing that could not
@@ -80,6 +86,10 @@ export type GraphFacet = {
   /** The readers of a letter a runtime handed its host, by name, for a host
    * that receives one itself (./lending.ts). */
   arrivals?: (host: Host, options: Options) => Record<string, Arrival>
+  /** The mail domains this plugin's provider sets up, reads and removes, by
+   * name, for a host that gives its people mail at their own domains
+   * (./lending.ts). */
+  mailDomains?: (host: Host, options: Options) => Record<string, MailDomains>
   /** The payment providers this plugin lends, by name, for a host that takes
    * money itself (./payments.ts). */
   payments?: (host: Host, options: Options) => Record<string, Payments>

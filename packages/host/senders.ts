@@ -170,3 +170,37 @@ export class Unsigned extends Error {
 /** Reads one letter a runtime handed its host, in the runtime's own shape,
  * as an {@link Incoming}. Only the provider knows that shape. */
 export type Arrival = (message: unknown) => Promise<Incoming>
+
+/** A DNS record a mail domain needs, and whether its provider has seen it. */
+export type DomainRecord = {
+  /** `MX`, `TXT` or `CNAME` */
+  type: string
+  /** the name it is written at, fully qualified */
+  name: string
+  /** what it holds */
+  value: string
+  /** an MX record's priority */
+  priority?: number
+  /** whether the provider has found it in DNS as given */
+  arrived: boolean
+}
+
+/** A domain a provider sends and receives mail at, and the records it needs. */
+export type MailDomain = { name: string; records: DomainRecord[] }
+
+/** A provider's mail domains, each named by its domain name: the provider's
+ * own ids for them stay with the provider. Every verb rejects when the
+ * provider refuses it, its message naming no secret. */
+export type MailDomains = {
+  /** Set a domain up for sending and receiving, or answer it as it is when
+   * it already is. */
+  setup: (name: string) => Promise<MailDomain>
+  /** The domain's records as they stand, or none when it is not set up. A
+   * read asks the provider to look again for any record not yet arrived. */
+  read: (name: string) => Promise<MailDomain | undefined>
+  /** Remove the domain; removing one not set up does nothing. */
+  remove: (name: string) => Promise<void>
+  /** Why it cannot reach the provider yet, such as a credential not set.
+   * Absent or empty, it can. */
+  waiting?: () => string | undefined
+}

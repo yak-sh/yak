@@ -44,10 +44,26 @@ the notices named `resend` instead: they verify a request with the same
   "with": {
     "token": { "secret": "RESEND_TOKEN" },
     "tags": { "yak_host": "box" },
-    "receipts": { "secret": { "secret": "RESEND_WEBHOOK_SECRET" } }
+    "receipts": { "secret": { "secret": "RESEND_WEBHOOK_SECRET" } },
+    "domains": { "token": { "secret": "RESEND_DOMAINS_TOKEN" } }
   }
 }
 ```
+
+## Mail domains
+
+`domains({token, base?, fetch?})` lends `@yaks/host`'s `MailDomains` over
+Resend's Domains API: `setup(name)` adds a domain with sending and receiving
+both on, or turns on whichever an existing one lacks; `read(name)` answers its
+records, each fully qualified with whether Resend has `arrived` it, and starts
+Resend's check when some record has not arrived and none is being checked;
+`remove(name)` deletes it. A caller names a domain only by its name: Resend's id
+is looked up at each call and never returned. Managing domains needs a
+`full_access` key; a sending key is refused. As a plugin, the graph facet lends
+these as the mail domains named `resend`, with the key from `domains.token` read
+at each call, and `base` and `fetch` shared with the sender. `./testing` holds
+`domainsApi()`, a stand-in for the API that names its records the way Resend
+does.
 
 `received({token, base?, fetch?}, emailId)` retrieves incoming message content
 and attachments, and returns one neutral `Incoming` per recipient. Download URLs

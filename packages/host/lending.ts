@@ -7,7 +7,13 @@
 // parties answer to would depend on order.
 import { CallError } from '@yaks/tools/errors'
 import type { Embedding, Host } from './mod.ts'
-import type { Arrival, Notices, Sender, Texter } from './senders.ts'
+import type {
+  Arrival,
+  MailDomains,
+  Notices,
+  Sender,
+  Texter,
+} from './senders.ts'
 import type { Payments } from './payments.ts'
 import type { Taken } from './words.ts'
 
@@ -18,6 +24,7 @@ export type Lends = {
   embedders: Embedding
   notices: Notices
   arrivals: Arrival
+  mailDomains: MailDomains
   payments: Payments
 }
 

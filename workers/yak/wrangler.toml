@@ -562,7 +562,9 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 # cookie (lib/token.ts) and keys the sign-in code digests (signin.ts);
 # RESEND_PLATFORM_TOKEN and RESEND_TOKEN are the domain-restricted Resend
 # sending keys MAIL_VIA above selects; RESEND_WEBHOOK_SECRET verifies
-# Resend's receipts at /mail/resend. MAIL_TOKEN is Cloudflare Email Sending's,
+# Resend's receipts at /mail/resend; RESEND_DOMAINS_TOKEN is the `full_access`
+# key a space's mail domains are set up with (config.ts `mailDomains`), unset
+# until Jeff answers #a3030ebc6a. MAIL_TOKEN is Cloudflare Email Sending's,
 # for a deployment without MAIL_VIA. config.ts `posts` names the provider
 # each is lent to. Each is `wrangler secret put <NAME>` for
 # the deploy; locally a .dev.vars line, or `wrangler dev --var NAME:…` the way

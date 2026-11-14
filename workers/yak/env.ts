@@ -138,9 +138,12 @@ export type Env = {
   // root, and Cloudflare Email Sending's token and API root (its account is
   // CF_ACCOUNT). A probe
   // aims an API root somewhere else, and calls through MAIL_FETCH.
+  // RESEND_DOMAINS_TOKEN is the `full_access` key `mailDomains` there sets up
+  // a space's mail domains with.
   RESEND_WEBHOOK_SECRET?: string
   RESEND_TOKEN?: string
   RESEND_PLATFORM_TOKEN?: string
+  RESEND_DOMAINS_TOKEN?: string
   RESEND_API?: string
   MAIL_FETCH?: (url: string, init: RequestInit) => Promise<Response>
   MAIL_TOKEN?: string
