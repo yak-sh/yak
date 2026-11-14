@@ -14,6 +14,7 @@ contains:
   - icon
   - page
   - building
+  - directions
 ---
 
 Read the app's schema and rows before changing data. Ask when required details

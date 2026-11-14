@@ -76,6 +76,7 @@ test('the base comes first, then the space persona worn on it, then where it is'
     "An app's icon",
     'Where they are',
     'Making a new app',
+    'Several directions',
     space.operator,
     'Who you are',
   ])

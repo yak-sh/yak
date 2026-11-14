@@ -43,6 +43,23 @@ once never release each other's edits:
 - `app_files(app, op: 'discard', draft)` closes a draft unreleased. What it
   wrote stays in each file's history for `op: 'restore'`.
 
+### Several directions
+
+An open-ended request, where the right answer depends on the person's taste
+("make a landing page for churches"), gets two to four drafts and one choice:
+
+1. Make the drafts from one starting point, each after the first with
+   `draft: 'new'`. Where copy and layout can be separated, the drafts differ in
+   one of them: the same `copy.json` under different layouts, or one layout with
+   different words.
+2. Ask one decision with `decision_new`, a choice for each draft, its `shows`
+   the draft's id. The person sees each draft's preview above its button.
+3. Release the chosen draft with `app_deploy` and discard the rest.
+4. Save what was chosen and the reason they gave with `store_memory_save`, and
+   write the next round from the released draft with it.
+
+A request with one obvious answer gets one draft and no decision.
+
 ## Checking a draft with `app_preview`
 
 Build and check the app through the connector before releasing it. No local
