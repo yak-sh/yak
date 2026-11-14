@@ -25,6 +25,14 @@ state and handles presses; parts do not read a
 [graph](../graph/README.md#data-model). Their class names let CSS and terminal
 [sheets](../tui/README.md#style) style the same tree.
 
+`@yaks/ui/parts` exports every part without the themes, skins, kits and guide.
+Those name their stylesheets beside their modules
+(`new URL('./x.css', import.meta.url)`), and a bundled Worker has no address to
+resolve that against, so evaluating them there throws "Invalid URL string." A
+server that draws parts, and a package of components built on them such as
+[@yaks/ux](../ux/README.md), imports `@yaks/ui/parts`. The root exports the
+parts and the looks.
+
 ```ts
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
