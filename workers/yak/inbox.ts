@@ -4,11 +4,13 @@ import { copyOf } from './directory-copy.ts'
 // every address the specific rules did not claim to `email()` (index.ts), and
 // this is what that door does with one.
 //
-// The whole of the routing is the local part: `<space>.<app>@yaks.app` is that
-// app's store, `<space>@yaks.app` is the space's home app (post.ts `mailedTo`,
-// the same derivation an app's letters leave under), and `signup@yaks.app`
-// signs its sender up (`signingUp`). An address the app has left still
-// reaches it, the way its old hostname does. An address naming a space or an
+// Where a letter lands follows the web (post.ts `mailedTo`, the same
+// derivation an app's letters leave under): `<space>.<app>@yaks.app` is that
+// app's store, `<space>@yaks.app` is the space's home app, an address at a
+// space's hostname is the app its local part names or else the space's own
+// mailbox, and every address at a hostname aimed at one app is that app.
+// `signup@yaks.app` signs its sender up (`signingUp`). An address the app has
+// left still reaches it, the way its old hostname does. An address naming a space or an
 // app that is not there is refused — a bounce the sender reads — rather than
 // accepted and dropped, because silence is the one answer that cannot be
 // corrected later.
@@ -76,42 +78,27 @@ let opened = async (
   env: Env,
   to: string,
 ): Promise<{ space: Space; app: App }> => {
-  let box = mailedTo(to, env)
-  if (!box) throw new Refused(`no mailbox for ${to}`)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
     copy: copyOf(env),
     time: env.CLOCK,
   })
-  // A subdomain the space has left still finds it, as its old hostname does
-  // (apps.ts `served`, T-34658): a rename moves `space.slug` and keeps the old
-  // one in the space's `former`, so a letter to `<was>.<app>@yaks.app` lands
-  // where a link to `<was>.yaks.app/<app>/` lands — until another space takes
-  // the name, which then wins it (directory.ts `answering`, D-131924).
-  let space = await dir.answering(box.space)
-  // A space in the trash has no mailboxes at all (erase.ts, T-34431), for the
-  // reason a trashed app has none: the address is spelled right and nothing
-  // is behind it, and the sender is nobody we owe the news that somebody
-  // deleted their space. Refused before the app is looked for, so a letter to
-  // any address under it bounces the same way.
-  if (!space || space.trashed) throw new Refused(`no mailbox for ${to}`)
-  // An address the app has left still finds it, as its old hostname does
-  // (apps.ts `served`, directory.ts `former`): a rename moves `app.slug` and
-  // keeps the old name in the app's `former`, so a letter to
-  // `<space>.<was>@yaks.app` lands in the store a link to `/<was>/` reaches.
-  // A slug that was nobody's here has no such move to follow, and is refused.
-  let app = box.app
-    ? await dir.answeringApp(space, box.app)
-    : await dir.home(space)
-  // An app in the trash has no mailbox (erase.ts, T-34430): a letter to it
-  // bounces the way a letter to a slug nobody ever took does, and for the
-  // same reason — silence is the one answer that cannot be corrected later,
-  // and the sender is nobody we owe the news that an app was deleted. The
-  // home address needs no test of its own: a trashed app is not the front
-  // page (directory.ts `home`), so `<space>@yaks.app` is a space with none.
-  if (app?.trashed) throw new Refused(`no mailbox for ${to}`)
+  // Where the address lands follows the web (post.ts `mailedTo`, D-415): an
+  // address a space or app has left still finds it, as its old hostname does
+  // (apps.ts `served`, T-34658), until another place takes the name, which
+  // then wins it (directory.ts `answering`, D-131924). A space or app in the
+  // trash has no mailboxes at all (erase.ts, T-34431, T-34430): the address
+  // is spelled right and nothing is behind it, and the sender is nobody we
+  // owe the news that somebody deleted it.
+  let box = await mailedTo(to, dir, env)
+  if (!box) throw new Refused(`no mailbox for ${to}`)
+  let { space } = box
+  // The space's own mailbox, written by anyone who is not asking its
+  // Operator (`operatorMail`), is its front page's: a trashed app is not the
+  // front page (directory.ts `home`), so a space with none says so.
+  let app = box.app ?? await dir.home(space)
   if (!app) {
     throw new Refused(
-      box.app ? `no mailbox for ${to}` : `${space.slug} has no front page: ` +
+      `${space.slug} has no front page: ` +
         `write to ${mailFrom(space.slug, '<app>', env)}`,
     )
   }
@@ -293,11 +280,10 @@ let signingUp = async (m: Inbound, env: Env): Promise<string | null> => {
 // asks its operator, and so does a reply to a letter the Operator wrote for
 // one; other arrivals remain ordinary app mail.
 let operatorMail = async (m: Inbound, env: Env): Promise<string | null> => {
-  let box = mailedTo(m.to, env)
-  if (!box || box.app) return null
   let dir = directoryOf(env.STORE)
-  let space = await dir.answering(box.space)
-  if (!space || space.trashed) return null
+  let box = await mailedTo(m.to, dir, env)
+  if (!box || box.app) return null
+  let { space } = box
   let from = author(m).trim().toLowerCase()
   let person = await dir.personAt(from)
   if (!person || !writes(await dir.role(space, person))) {

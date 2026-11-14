@@ -26,32 +26,122 @@ import { FROM, mail, mailable, REPLY_TO, sending } from './mail.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { monthOf } from './meter.ts'
-import { mailedTo, mailFrom, outgoing } from './post.ts'
+import {
+  addressed,
+  heldBy,
+  mailedTo,
+  mailFrom,
+  outgoing,
+  type Reads,
+} from './post.ts'
+import type { App, Host, Space } from './directory.ts'
 
-test('an app writes from a local part at the apex', () => {
+test('an app writes from a local part at the apex, or at its mail domain', () => {
   assertEquals(mailFrom('ada', 'cookbook'), 'ada.cookbook@yaks.app')
   assertEquals(mailFrom('ada', null), 'ada@yaks.app')
+  assertEquals(
+    mailFrom('ada', 'cookbook', {}, 'ada.example'),
+    'cookbook@ada.example',
+  )
+  assertEquals(mailFrom('ada', null, {}, 'ada.example'), 'ada@ada.example')
 })
 
-test('the same derivation reads an arrival back', () => {
-  assertEquals(mailedTo('ada.cookbook@yaks.app'), {
+test('an address spells a place before the directory is asked', () => {
+  assertEquals(addressed('Ada.Cookbook@yaks.app'), {
     space: 'ada',
     app: 'cookbook',
   })
-  assertEquals(mailedTo('Ada@Yaks.App'), { space: 'ada', app: null })
-  // Not ours, not a name, not one dot: three ways to be nobody here.
-  assertEquals(mailedTo('ana@example.com'), null)
-  // A space's own hostname is not a mail domain and cannot become one
-  // (C-33769), so an address there is nobody's rather than that space's.
-  assertEquals(mailedTo('cookbook@ada.yaks.app'), null)
-  assertEquals(mailedTo('a.b.c@yaks.app'), null)
-  assertEquals(mailedTo('ada.@yaks.app'), null)
-  assertEquals(mailedTo('Ada_Lovelace@yaks.app'), null)
+  assertEquals(addressed('Clerk@Ada.Yaks.App'), {
+    space: 'ada',
+    local: 'clerk',
+  })
+  assertEquals(addressed('clerk@mail.ada.example'), {
+    host: 'mail.ada.example',
+    local: 'clerk',
+  })
+  for (
+    let nobody of [
+      'a.b.c@yaks.app',
+      'ada.@yaks.app',
+      'Ada_Lovelace@yaks.app',
+      'x@a.b.yaks.app',
+      'nope',
+    ]
+  ) assertEquals(addressed(nobody), null, nobody)
 })
 
-test('every address an app writes from is one it can be written to', () => {
-  for (let [space, app] of [['ada', 'cookbook'], ['ada', null]] as const) {
-    assertEquals(mailedTo(mailFrom(space, app)), { space, app })
+// A directory of one space, ada (once lovelace), with a front page, a
+// cookbook (once recipes), an app in the trash, a domain aimed at the space
+// and one aimed at the cookbook.
+let AT_ADA = { eid: 'ada', slug: 'ada' } as unknown as Space
+let APPS: Record<string, App> = {
+  home: { eid: 'home', slug: 'home', home: true } as unknown as App,
+  cookbook: { eid: 'cookbook', slug: 'cookbook' } as unknown as App,
+  gone: { eid: 'gone', slug: 'gone', trashed: '2026-11-01' } as unknown as App,
+}
+let FORMER: Record<string, string> = { recipes: 'cookbook' }
+let AIMED: Record<string, App | null> = {
+  'ada.example': null,
+  'cook.example': APPS.cookbook,
+}
+let dir: Reads = {
+  answering: (slug) =>
+    Promise.resolve(['ada', 'lovelace'].includes(slug) ? AT_ADA : null),
+  answeringApp: (_, slug) =>
+    Promise.resolve(APPS[FORMER[slug] ?? slug] ?? null),
+  serves: (host) =>
+    Promise.resolve(
+      host in AIMED
+        ? { space: AT_ADA, app: AIMED[host], host: {} as unknown as Host }
+        : null,
+    ),
+  home: () => Promise.resolve(APPS.home),
+}
+
+test('an address lands where its hostname does on the web', async () => {
+  // The app's eid, `ada` for the space's own mailbox, null for nobody's.
+  let cases: [string, string | null][] = [
+    ['ada.cookbook@yaks.app', 'cookbook'],
+    ['cookbook@ada.yaks.app', 'cookbook'],
+    ['cookbook@ada.example', 'cookbook'],
+    ['cookbook@mail.ada.example', 'cookbook'],
+    ['Ada@Yaks.App', 'ada'],
+    ['clerk@ada.yaks.app', 'ada'],
+    ['clerk@ada.example', 'ada'],
+    ['clerk@mail.ada.example', 'ada'],
+    ['john.doe@ada.example', 'ada'],
+    // Every address at a hostname aimed at one app is that app.
+    ['clerk@cook.example', 'cookbook'],
+    ['anything@mail.cook.example', 'cookbook'],
+    // A former slug answers, at the apex and on the subdomain.
+    ['lovelace.recipes@yaks.app', 'cookbook'],
+    ['recipes@lovelace.yaks.app', 'cookbook'],
+    ['clerk@lovelace.yaks.app', 'ada'],
+    // An app the apex names that the space has not got, or in the trash.
+    ['ada.nothere@yaks.app', null],
+    ['ada.gone@yaks.app', null],
+    ['gone@ada.yaks.app', null],
+    ['gone@ada.example', null],
+    // Nobody's space, and a hostname nobody attached.
+    ['clerk@bob.yaks.app', null],
+    ['ana@example.com', null],
+    ['ana@mail.example.com', null],
+  ]
+  for (let [address, held] of cases) {
+    let box = await mailedTo(address, dir)
+    assertEquals(box ? (box.app?.eid ?? box.space.eid) : null, held, address)
+  }
+})
+
+test('every address an app writes from is one it can be written to', async () => {
+  for (let domain of [null, 'ada.example', 'cook.example']) {
+    let to = mailFrom('ada', 'cookbook', {}, domain)
+    assertEquals(await heldBy(to, 'cookbook', dir), true, to)
+  }
+  for (let domain of [null, 'ada.example']) {
+    let to = mailFrom('ada', null, {}, domain)
+    assertEquals(await heldBy(to, 'home', dir), true, to)
+    assertEquals(await heldBy(to, 'cookbook', dir), false, to)
   }
 })
 

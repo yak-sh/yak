@@ -276,6 +276,7 @@ import type {
   NamedTool,
   Plugin,
   ReadOpts,
+  Tx,
 } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
 import { comps, dead as deleted, TOMBSTONE } from '@yaks/graph/bundle'
@@ -345,7 +346,7 @@ import { freely } from '@yaks/durable-object/sql'
 import { load } from './load.ts'
 import { metering } from './meter.ts'
 import { appTexter } from './app-texts.ts'
-import { mailTags, outgoing } from './post.ts'
+import { heldBy, mailTags, outgoing } from './post.ts'
 import { realtimeOf } from './rtc.ts'
 import { storedTools } from './package-tools.ts'
 import type { Env } from './env.ts'
@@ -859,6 +860,16 @@ let hold = (bundles: Bundle[]): boolean =>
       name == 'spend' && (b.spend as { held?: unknown }).held === true
     )
   )
+
+// A letter's envelope, and the eid a reference property names (a read hands
+// one back bare or as `{eid, name}`).
+let mailOf = (b: Bundle) => b[MAIL] as Comp | null | undefined
+let refOf = (v: unknown): string | null =>
+  typeof v == 'string'
+    ? v
+    : v && typeof v == 'object' && 'eid' in v
+    ? String((v as { eid: unknown }).eid)
+    : null
 
 export class Store extends Durable {
   #load: Load
@@ -2424,11 +2435,50 @@ export class Store extends Durable {
         [MAIL]: { ...(mail ?? {}), from: this.#get('mail') ?? '' },
       }
     }
+    // A reply leaves from the address the letter it answers was written to
+    // (D-415, "Sending"): `clerk@` is answered from `clerk@`. Only when the
+    // directory reads that address back to this app, by the derivation that
+    // routed the letter here, so a row a client wrote to look like an arrival
+    // lends no address that is not the app's own. Asked before the
+    // transaction, since the directory is another store.
+    let replying = async (bundles: Bundle[], tx: Tx): Promise<Bundle[]> => {
+      let own = this.#get('mail'), app = this.#get('app')
+      let ours = bundles.filter((b) => mailOf(b)?.from == own)
+      if (!own || !app || !this.#bind.STORE || !ours.length) return bundles
+      let drafted = ours.filter((b) => !mailOf(b)?.reply_to)
+      let kept = new Map(
+        (drafted.length
+          ? await tx.get(drafted.map((b) => b.entity.eid), [MAIL])
+          : []).map((r) => [r.entity.eid, mailOf(r)?.reply_to]),
+      )
+      let answers = (b: Bundle) =>
+        refOf(mailOf(b)?.reply_to ?? kept.get(b.entity.eid))
+      let asked = [...new Set(ours.map(answers).filter((e) => e != null))]
+      if (!asked.length) return bundles
+      let dir = this.#directory()
+      let from = new Map<string, string>()
+      for (let row of await tx.get(asked, [MAIL, DELIVER])) {
+        let { to, message_id } = mailOf(row) ?? {}
+        let arrived = !!message_id && !row[DELIVER]
+        if (
+          arrived && typeof to == 'string' &&
+          await heldBy(to, app, dir, this.#bind)
+        ) from.set(row.entity.eid, to)
+      }
+      return bundles.map((b) => {
+        let at = ours.includes(b) ? from.get(answers(b) ?? '') : undefined
+        return at ? { ...b, [MAIL]: { ...mailOf(b), from: at } } : b
+      })
+    }
     return {
       name: 'yak/post',
+      // Reading who holds an address leaves nothing behind, so a check that
+      // only admits a batch may run it.
+      admission: () => true,
       hooks: {
         normalize: (bundles) =>
           bundles.map((b) => this.#kernelling && !b[DELIVER] ? b : letter(b)),
+        prepare: hook([MAIL, DELIVER], replying),
       },
     }
   }

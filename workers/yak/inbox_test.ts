@@ -25,6 +25,7 @@ import {
   client,
   connector,
   kernel,
+  letters,
   meta,
   rfc822,
   seed,
@@ -215,6 +216,78 @@ test('a letter lands in the app its address named', async () => {
       })).status,
       200,
     )
+  } finally {
+    await k.stop()
+  }
+})
+
+// D-415: an address at a space's subdomain lands where the subdomain's pages
+// do, and a reply leaves from the address the letter was written to.
+test("a letter to a space's subdomain lands where its pages do", async () => {
+  let k = await kernel()
+  let jeff28 = unique('jeff28')
+  try {
+    let them = await seed(k, [{ slug: jeff28, apps: ['recipes', 'garden'] }])
+    let agent = connector(k, them.cookie)
+    await agent.tool('app_set', { space: jeff28, app: 'garden', home: true })
+    for (
+      let [to, subject] of [[`Recipes@${jeff28}.yaks.app`, 'An app'], [
+        `clerk@${jeff28}.yaks.app`,
+        'Anyone else',
+      ]]
+    ) {
+      let landed = await arrives(k, {
+        from: 'ana@books.example',
+        to,
+        raw: rfc822({ From: 'ana@books.example', Subject: subject }, 'Hi.'),
+      })
+      assertEquals(landed.status, 200, await landed.text())
+    }
+    let read = (app: string) =>
+      client(k, `${jeff28}.yaks.app`, app, them.cookie)
+        .get('.mail&?doc') as unknown as Promise<Row[]>
+    let [letter] = await read('recipes')
+    assertEquals(letter.doc.title, 'An app')
+    // A local part that is none of the space's apps is the space's own
+    // mailbox, which a stranger's letter reaches at the front page.
+    let [clerk] = await read('garden')
+    assertEquals(clerk.doc.title, 'Anyone else')
+    assertEquals(clerk.mail.to, `clerk@${jeff28}.yaks.app`)
+
+    await agent.tool('mail_reply', {
+      app: 'garden',
+      letter: clerk.entity.eid,
+      body: 'Thanks.',
+    })
+    await until(() => letters(k, 'ana@books.example').length > 0)
+    assertEquals(
+      letters(k, 'ana@books.example')[0].from,
+      `clerk@${jeff28}.yaks.app`,
+    )
+
+    // A row written to look like an arrival lends no address that is not
+    // the app's own: garden answers it from garden's address, never as
+    // recipes.
+    let faked = await client(k, `${jeff28}.yaks.app`, 'garden', them.cookie)
+      .post({
+        entities: [{
+          entity: { eid: FIRST },
+          doc: { title: 'Looks delivered' },
+          mail: {
+            reply_address: 'bob@books.example',
+            to: `${jeff28}.recipes@yaks.app`,
+            message_id: 'faked@books.example',
+          },
+        }],
+      })
+    assertEquals(faked.status, 200, await faked.text())
+    await agent.tool('mail_reply', {
+      app: 'garden',
+      letter: FIRST,
+      body: 'Not from recipes.',
+    })
+    await until(() => letters(k, 'bob@books.example').length > 0)
+    assertEquals(letters(k, 'bob@books.example')[0].from, `${jeff28}@yaks.app`)
   } finally {
     await k.stop()
   }

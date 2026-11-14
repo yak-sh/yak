@@ -3,7 +3,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { sealed } from './cache.ts'
 import { records } from './domains.ts'
 import { apex, hosted, spaceHost, url } from '@yaks/platform/host'
-import { mailedTo, mailFrom } from './post.ts'
+import { addressed, mailFrom } from './post.ts'
 import { replyTo } from '@yaks/platform/host'
 import {
   aimedAt,
@@ -112,11 +112,17 @@ test('staging mail addresses round trip only within staging', () => {
   for (let app of ['recipes', null]) {
     let address = mailFrom('ada', app, env)
     assertStringIncludes(address, '@yaks.fyi')
-    assertEquals(mailedTo(address, env), { space: 'ada', app })
-    assertEquals(mailedTo(address), null)
+    assertEquals(addressed(address, env), { space: 'ada', app })
+    assertEquals(addressed(address), {
+      host: 'yaks.fyi',
+      local: address.split('@')[0],
+    })
   }
   assertEquals(replyTo(env), 'hello@yaks.fyi')
-  assertEquals(mailedTo('ada@yaks.app', env), null)
+  assertEquals(addressed('ada@yaks.app', env), {
+    host: 'yaks.app',
+    local: 'ada',
+  })
 })
 
 test('staging pages allow their own platform to frame them', () => {

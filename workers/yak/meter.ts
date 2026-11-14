@@ -1197,11 +1197,9 @@ export let metering = (
 ): Sender => ({
   send: async (m) => {
     let ns = bind.STORE
-    let box = ns ? mailedTo(from() ?? '', bind) : null
+    let box = ns ? await mailedTo(from() ?? '', directoryOf(ns), bind) : null
     if (!ns || !box) return await sender.send(m)
-    let dir = directoryOf(ns)
-    let space = await dir.space(box.space)
-    if (!space) return await sender.send(m)
+    let { space } = box
     let no = refusedSpend(space, 'emails', bind)
     if (no) throw refuse('limit', no)
     let receipt = await sender.send(m)
