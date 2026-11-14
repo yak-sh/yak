@@ -1445,9 +1445,13 @@ if (import.meta.main) {
       command(argv) == 'versions' && argv.includes('upload')
     let log = capture ? io.makeTempFileSync({ suffix: '.log' }) : undefined
     try {
+      // Every other command talks to the person at the terminal as wrangler
+      // itself would: `secret put` reads the secret from stdin, and with none
+      // it uploads an empty one and says "Success".
       let child = spawnCommand(cmd, {
         args: [...args, ...argv],
         cwd: dir,
+        stdin: capture ? 'null' : 'inherit',
         ...(log
           ? {
             env: {
