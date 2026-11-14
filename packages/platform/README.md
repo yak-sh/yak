@@ -8,9 +8,10 @@ implementation.
 
 `space` is what a customer owns; `app` is what lives in it; `deploy` is one
 release of that app, and `published` is the name it was released under;
-`hostname` is a domain pointed at a space or an app, and `installed` records the
-source app and version of a copy, `install` that a space took one, credited to
-the space that shared it, and `upstream` where something someone outside the
+`hostname` is a domain pointed at a space or an app, and `mail_domain` on it
+where its mail is and which provider carries it; `installed` records the source
+app and version of a copy, `install` that a space took one, credited to the
+space that shared it, and `upstream` where something someone outside the
 platform wrote came from and under which licence; `plan` is what is being paid
 for, a mirror of one Stripe subscription, and `meter` is the usage it is billed
 on; `signin` is a sign-in in progress, and `report` is an error a deployed app

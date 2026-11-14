@@ -107,6 +107,7 @@ import {
   kept,
   type Listing,
   mailbox,
+  type MailDomain,
   META,
   MODES,
   NO_UPTAKE,
@@ -181,6 +182,15 @@ import {
   refresh,
   release,
 } from './domains.ts'
+import {
+  type Mail,
+  placed,
+  readMail,
+  ready,
+  setUp,
+  unmail,
+} from './domain-mail.ts'
+import type { DomainRecord } from '@yaks/host/senders'
 import { bound, type Env } from './env.ts'
 import { integrationEid } from '@yaks/connections'
 // The gallery is its own part (gallery.ts): the two stamps, the letter that
@@ -624,6 +634,54 @@ let serving = (host: string, app: App | null, to: string | null = null) =>
     ? `The app answers at https://${host}/.`
     : `Its front page answers at https://${host}/ and every app at ` +
       `https://${host}/<app>/.`
+
+// One DNS record as a line a person copies from, and an MX record's priority,
+// which their registrar asks for beside it.
+let recordLine = (
+  r: { type: string; name: string; value: string; priority?: number },
+) =>
+  `  ${r.type}  ${r.name}  →  ${r.value}` +
+  (r.priority == null ? '' : `  (priority ${r.priority})`)
+
+// The mailboxes a place has at its mail domain, as post.ts `mailedTo` reads
+// them: at an app's domain every one is the app's; at a space's, an app's name
+// is that app and any other is the space's own mailbox.
+let mailboxes = (
+  mail: string,
+  space: Space,
+  app: App | null,
+  apps: App[],
+  env: Env,
+) => {
+  if (app) return `Every address at ${mail} reaches ${place(space, app)}.`
+  let named = apps.filter((a) => !a.trashed).map((a) => `${a.slug}@${mail}`)
+  return `An app's name at ${mail} reaches that app` +
+    (named.length ? ` (${named.join(', ')})` : '') + `, and any other name, ` +
+    `such as clerk@${mail}, reaches the space's own mailbox, as ` +
+    `${mailFrom(space.slug, null, env)} does.`
+}
+
+// Why a mail domain has no records to show yet, and the verb that finishes it.
+let unready = (host: string, mail: string, m: Mail) =>
+  `Mail at ${mail} is not set up yet: ${
+    m.waiting ?? m.failed ?? 'its provider does not hold it'
+  }. domain_attach(hostname: '${host}') again sets it up and answers its ` +
+  'records.'
+
+// Where a domain's mail is, said once it is decided: beside any mail the
+// domain already takes, or below its CNAME, which leaves no room for an MX.
+let mailAt = (host: string, mail: string, via: string) =>
+  `Mail is at ${mail}, carried by ${via}` +
+  (mail == host
+    ? ''
+    : apex(host)
+    ? `, beside any mail ${host} already takes, which keeps working`
+    : `: ${host} is served by its CNAME, which DNS lets hold no MX`) +
+  '.'
+
+// A mail record's line in domain_status, marked as `reading` marks a step.
+let arrival = (r: DomainRecord) =>
+  `${r.arrived ? '✓' : '…'}${recordLine(r).slice(1)}`
 
 let TO = str(
   'another domain of the same space or app, already attached, that this one ' +
@@ -5571,14 +5629,35 @@ let OURS: Row[] = [
       // again says where it sends its visitors, and nothing else changes.
       let taken = await ctx.dir.serves(host)
       let mine = taken && rows.find((h) => h.name == host && h.serves == aim)
+      // A domain attached before it took mail is given mail now, and one
+      // whose mail could not be set up then is set up now.
       if (mine) {
+        let mail = mine.mail ?? await placed(ctx.env, host)
         await ctx.dir.apply({
-          entities: [{ entity: { eid: mine.eid }, hostname: { to } }],
+          entities: [{
+            entity: { eid: mine.eid },
+            hostname: { to },
+            ...mine.mail ? {} : { mail_domain: mail },
+          }],
         }, vouched(who))
+        let m = await setUp(ctx.env, mail)
         return {
-          text: `${host} is attached to ${place(space, app)}. ${
-            serving(host, app, to)
-          }`,
+          text:
+            `${host} is attached to ${place(space, app)}. ${
+              serving(host, app, to)
+            }\n\n${mailAt(host, mail.name, mail.via)} ${
+              mailboxes(
+                mail.name,
+                space,
+                app,
+                await ctx.dir.apps(space),
+                ctx.env,
+              )
+            }\n\n` +
+            (m.records.length
+              ? `Its records, where ${host}'s DNS is managed:\n\n` +
+                m.records.map(recordLine).join('\n')
+              : unready(host, mail.name, m)),
           space,
         }
       }
@@ -5594,6 +5673,7 @@ let OURS: Row[] = [
         )
       }
       reachable(ctx.env)
+      let mail = await placed(ctx.env, host)
       // The row first, then Cloudflare. The unique index on the name is what
       // decides who gets a hostname, so it decides before we spend a billable
       // custom hostname on it; an attach that Cloudflare then refuses takes
@@ -5611,6 +5691,7 @@ let OURS: Row[] = [
             at,
             to,
           },
+          mail_domain: mail,
         }],
       }, vouched(who))
       let custom
@@ -5628,15 +5709,23 @@ let OURS: Row[] = [
       if (!row) throw refuse('conflict', `${host} was detached while attaching`)
       let { how, records: recs } = await refresh(ctx.env, row, custom)
       if (!how) throw refuse('conflict', `${host} was detached while attaching`)
+      // Mail in the same list as the web, so the person adds them at once.
+      let m = await setUp(ctx.env, mail)
       return {
         text:
           `${host} is attached to ${place(space, app)}. ${
             serving(host, app, to)
           }\n\n` +
           `Add these records where ${host}'s DNS is managed:\n\n` +
-          recs.map((r) => `  ${r.type}  ${r.name}  →  ${r.value}`).join('\n') +
+          [...recs, ...m.records].map(recordLine).join('\n') +
           '\n\n' + (apex(host) ? apexHelp(ctx.env) : '') +
-          `${reading(how)}\n\nDNS usually takes minutes and can take a day; ` +
+          `${reading(how)}\n\n${mailAt(host, mail.name, mail.via)} ${
+            m.records.length
+              ? `The records from ${m.records[0].name} on are its own. `
+              : unready(host, mail.name, m) + ' '
+          }${
+            mailboxes(mail.name, space, app, await ctx.dir.apps(space), ctx.env)
+          }\n\nDNS usually takes minutes and can take a day; ` +
           'the certificate is issued within minutes of the record ' +
           `resolving. domain_status(hostname: '${host}') says where it is.`,
         space,
@@ -5675,6 +5764,31 @@ let OURS: Row[] = [
       }
       reachable(ctx.env)
       let apps = await ctx.dir.apps(space)
+      // Each record's arrival read from the provider, as the web's is read
+      // from Cloudflare, and the addresses the place has there.
+      let mailStatus = async (
+        host: string,
+        mail: MailDomain | null,
+        app: App | null,
+      ) => {
+        if (!mail) {
+          return `… mail: none yet — domain_attach(hostname: '${host}') ` +
+            'again gives it mail'
+        }
+        let m = await readMail(ctx.env, mail)
+        let them = mailboxes(mail.name, space, app, apps, ctx.env)
+        if (!m.records.length) {
+          return `${m.failed ? '✗' : '…'} mail: ${unready(host, mail.name, m)}`
+        }
+        if (ready(m)) {
+          return `✓ mail: every record at ${mail.name} has arrived, so mail ` +
+            `goes both ways. ${them}`
+        }
+        let arrived = m.records.filter((r) => r.arrived).length
+        return `… mail: ${arrived} of ${m.records.length} records at ` +
+          `${mail.name} have arrived. ${them}\n` +
+          m.records.map(arrival).join('\n')
+      }
       let lines = []
       for (let row of rows) {
         // What this domain points at. `hosts` answered only the rows aimed
@@ -5696,10 +5810,8 @@ let OURS: Row[] = [
               ? reading(how)
               : '✗ Cloudflare no longer has this hostname — domain_detach ' +
                 'it and domain_attach it again') +
-            (stage == 'active' ? '' : '\n' +
-              recs.map((r) => `  ${r.type}  ${r.name}  →  ${r.value}`).join(
-                '\n',
-              )),
+            (stage == 'active' ? '' : '\n' + recs.map(recordLine).join('\n')) +
+            '\n' + await mailStatus(row.name, row.mail, app),
         )
       }
       return { text: lines.join('\n\n'), space }
@@ -5735,6 +5847,9 @@ let OURS: Row[] = [
       // A domain that sent its visitors here serves its place again, since
       // here is gone.
       let had = await release(ctx.env, host)
+      // Its mail domain too, before the row that names it: a provider that
+      // refuses leaves the row for the next detach to finish.
+      let unreached = await unmail(ctx.env, row.mail)
       let senders = (await ctx.dir.hosts(space)).filter((h) => h.to == host)
       await ctx.dir.apply({
         entities: [
@@ -5757,8 +5872,17 @@ let OURS: Row[] = [
         text: `${host} is detached from ${place(space, app)}` +
           (had ? '' : ' (Cloudflare had already given it back)') +
           `. It still answers at ${back}.` +
-          `\n\nRemove the CNAME and ownership TXT record for ${host} ` +
-          'wherever its DNS is managed; this attachment no longer uses them.',
+          (row.mail
+            ? `\n\nIts mail at ${row.mail.name} is removed` +
+              (unreached
+                ? `, but ${row.mail.via} could not be reached to remove it ` +
+                  `(${unreached})`
+                : '') +
+              '.'
+            : '') +
+          `\n\nRemove the CNAME and ownership TXT record for ${host}` +
+          (row.mail ? `, and the mail records at ${row.mail.name},` : '') +
+          ' wherever its DNS is managed; this attachment no longer uses them.',
         space,
       }
     },

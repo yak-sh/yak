@@ -646,6 +646,8 @@ export let overdue = <T extends { trashed: Trashed | null }>(
 // opens (T-34596). How far provisioning has come, and when that was last read
 // from Cloudflare. `to` is another hostname of that place this one sends its
 // visitors to (kernel.ts `forwarded`), or null where it serves the place.
+// `mail` is where its mail is and the provider carrying it (mail-domains.ts),
+// null for a hostname attached before it took mail.
 export type HostStage = 'pending' | 'active' | 'error'
 /** A number the platform holds for a space, bought through the phone `via`
  * at its price in dollars (numbers.ts), and the toll-free verification
@@ -671,7 +673,11 @@ export type Host = {
   verification: Partial<Rec> | null
   verified: string | null
   to: string | null
+  mail: MailDomain | null
 }
+
+/** Where a hostname's mail is, and the provider's name that carries it. */
+export type MailDomain = { name: string; via: string }
 
 // A reference property, as a read hands it back: the bare eid, or `{eid, name}`
 // where the store could name what it points at (listing.ts `named`, T-32733).
@@ -853,6 +859,7 @@ export type Row = {
     verification?: Partial<Rec> | null
     to?: string | null
   }
+  mail_domain?: MailDomain
   verified?: { at?: string | null }
   deploy?: {
     app: Id
@@ -1691,6 +1698,9 @@ let hostOf = (r: Row): Host => ({
   verification: r.hostname!.verification ?? null,
   verified: r.verified?.at ?? null,
   to: r.hostname!.to || null,
+  mail: r.mail_domain?.name
+    ? { name: r.mail_domain.name, via: r.mail_domain.via }
+    : null,
 })
 
 // A deploy of an app, as versions.ts reads one: the manifest parsed, since
@@ -2948,7 +2958,7 @@ export let directoryRows = (rows: {
     // cached, so a domain serves the moment it is attached rather than a TTL
     // later.
     serves: async (host: string) => {
-      let row = await one(`.hostname.name=${host}&?verified`)
+      let row = await one(`.hostname.name=${host}&?verified&?mail_domain`)
       if (!row?.hostname) return null
       let eid = idOf(row.hostname.serves)
       let aimed = hostOf(row)
@@ -2968,7 +2978,7 @@ export let directoryRows = (rows: {
         space.eid,
         ...(await self.apps(space)).map((a) => a.eid),
       ])
-      return (await query('.hostname&?verified')).map(hostOf)
+      return (await query('.hostname&?verified&?mail_domain')).map(hostOf)
         .filter((h) => mine.has(h.serves))
     },
     // The app offered under a platform-wide name (T-32888), with the space it

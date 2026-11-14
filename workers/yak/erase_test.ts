@@ -91,6 +91,7 @@ let host = (name: string): Host => ({
   verification: null,
   verified: null,
   to: null,
+  mail: null,
   eid: `host-${name}`,
   name,
   serves: 'app-eid',

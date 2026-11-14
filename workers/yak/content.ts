@@ -48,8 +48,9 @@ export let PAGES: Record<string, Page> = {
     'slug': 'domains',
     'title': 'Custom Domains',
     'description':
-      'Serving a space or one of its apps at a domain the person already owns: domain_attach, domain_status and domain_detach, the CNAME and ownership TXT DNS records and where to add them at GoDaddy, Namecheap, Squarespace and the other registrars, apex domains and the three ways to serve one, what each provisioning status means, the HTTPS certificate, and why a domain stays pending.',
-    'brief': 'serving a space or an app at a custom domain (DNS, CNAME)',
+      'Serving a space or one of its apps at a domain the person already owns, and mail at it: domain_attach, domain_status and domain_detach, the CNAME and ownership TXT DNS records, the mail records and where mail goes when the domain already takes mail, and where to add them at GoDaddy, Namecheap, Squarespace and the other registrars, apex domains and the three ways to serve one, what each provisioning status means, the HTTPS certificate, and why a domain stays pending.',
+    'brief':
+      'serving a space or an app at a custom domain, with mail (DNS, CNAME, MX)',
   },
   'entities': {
     'slug': 'entities',

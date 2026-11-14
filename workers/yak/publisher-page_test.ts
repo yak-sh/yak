@@ -36,6 +36,7 @@ let domain = (over: Partial<Host> = {}): Host => ({
   verification: null,
   verified: listedAt,
   to: null,
+  mail: null,
   ...over,
 })
 

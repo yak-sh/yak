@@ -18,6 +18,7 @@ import { valueIn } from '@yaks/tools/value'
 import { parse } from 'smol-toml'
 import { endpoints } from './endpoints.ts'
 import { delivered, fakeSub } from '@yaks/stripe/testing'
+import { domainsApi } from '../../packages/resend/testing.ts'
 import { Ajv } from 'ajv'
 import { run as jq } from '@gabrielbryk/jq-ts'
 
@@ -86,6 +87,10 @@ export type Door = ReturnType<typeof driven>
 export type Kernel = Door & {
   owner: Person
   dir: Directory
+  // The stand-in for Resend's Domains API a space's mail domains are set up
+  // at (mail-domains.ts): what it holds, and `arrive` to mark a domain's
+  // records found in DNS.
+  mailDomains: ReturnType<typeof domainsApi>
   // Every data point the Visits dataset was handed: page views and funnel
   // steps.
   views: { points: { indexes?: string[]; blobs?: string[] }[] }
@@ -132,6 +137,7 @@ export let vars = (secret: string, cloudflare: string) => ({
   CF_ZONE: 'zone',
   CF_HOSTNAMES_TOKEN: 'a-token',
   HOSTNAMES_API: cloudflare,
+  RESEND_DOMAINS_TOKEN: 'a-token',
   DNS_API: `${cloudflare}/dns-query`,
   STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
   STRIPE_CONNECT_WEBHOOK_SECRET: WEBHOOK_SECRET,
@@ -175,6 +181,7 @@ let boot = async (
   let log = crypto.randomUUID()
   logs.set(log, '')
   let cf = cloudflare(log)
+  let domains = domainsApi('a-token')
   let views = dataset()
   let p = lasting(secret, {
     ...vars(secret, cf.url),
@@ -182,6 +189,12 @@ let boot = async (
     // `send_email` binding an app's letters leave through.
     CF_VERSION_METADATA: { id: crypto.randomUUID() },
     MAIL: cf.binding,
+    // Resend's Domains API, stood in for; every other call a mail provider
+    // makes goes where it always went.
+    MAIL_FETCH: (url: string, init: RequestInit) =>
+      new URL(url).pathname.startsWith('/domains')
+        ? domains.fetch(url, init)
+        : fetch(url, init),
     // The Visits dataset, kept in memory: what the kernel counts (views.ts,
     // funnel.ts) is read off `views`.
     VIEWS: views,
@@ -253,6 +266,7 @@ let boot = async (
       ...door,
       owner: await signIn({ ...door, deliveries }, `owner@${apex()}`),
       dir: directoryOf(p.env.STORE),
+      mailDomains: domains,
       views,
       reported,
       flushReports: () => reportClock.advance(10_000),
@@ -869,9 +883,10 @@ export let cloudflare = (log = crypto.randomUUID()) => {
       )
       return Response.json({ events_received: 1 })
     }
-    if (url.pathname == '/probe/txt') {
+    if (url.pathname == '/probe/txt' || url.pathname == '/probe/mx') {
       let { name, values } = await req.json()
-      dns.set(name, values)
+      let type = url.pathname == '/probe/mx' ? 'MX' : 'TXT'
+      dns.set(`${type} ${name}`, values)
       return ok(null)
     }
     if (url.pathname == '/probe/hostname') {
@@ -882,12 +897,13 @@ export let cloudflare = (log = crypto.randomUUID()) => {
     }
     if (url.pathname == '/dns-query') {
       let name = url.searchParams.get('name') ?? ''
+      let type = url.searchParams.get('type') ?? 'TXT'
       return Response.json({
         Status: 0,
-        Answer: (dns.get(name) ?? []).map((value) => ({
+        Answer: (dns.get(`${type} ${name}`) ?? []).map((value) => ({
           name,
-          type: 16,
-          data: JSON.stringify(value),
+          type: type == 'MX' ? 15 : 16,
+          data: type == 'MX' ? value : JSON.stringify(value),
         })),
       })
     }
@@ -1016,6 +1032,20 @@ export let dnsTxt = async (
   ...values: string[]
 ) => {
   let response = await fetch(`${k.cloudflare}/probe/txt`, {
+    method: 'POST',
+    body: JSON.stringify({ name, values }),
+  })
+  await response.body?.cancel()
+}
+
+/** The MX records served by the kernel's DNS stand-in, each written as DNS
+ * answers one: `10 mx.example.com.`. */
+export let dnsMx = async (
+  k: Pick<Kernel, 'cloudflare'>,
+  name: string,
+  ...values: string[]
+) => {
+  let response = await fetch(`${k.cloudflare}/probe/mx`, {
     method: 'POST',
     body: JSON.stringify({ name, values }),
   })

@@ -3,10 +3,12 @@ doc:
   title: Custom Domains
 guide:
   slug: domains
-  brief: serving a space or an app at a custom domain (DNS, CNAME)
+  brief: serving a space or an app at a custom domain, with mail (DNS, CNAME, MX)
   description: >-
-    Serving a space or one of its apps at a domain the person already owns:
-    domain_attach, domain_status and domain_detach, the CNAME and ownership TXT DNS records and where to add them at GoDaddy,
+    Serving a space or one of its apps at a domain the person already owns, and
+    mail at it: domain_attach, domain_status and domain_detach, the CNAME and
+    ownership TXT DNS records, the mail records and where mail goes when the
+    domain already takes mail, and where to add them at GoDaddy,
     Namecheap, Squarespace and the other registrars, apex domains and the three
     ways to serve one, what each provisioning status means, the HTTPS
     certificate, and why a domain stays pending.
@@ -25,6 +27,8 @@ A domain can be attached in two ways, depending on what you name:
   `yourname.yaks.app` does: the front page at `/`, every app at `/<app>/`. Each
   app is a path under the domain.
 - **One app.** `example.com` serves that app at its root, and nothing else.
+
+Either way the domain also takes mail (see "Mail at the domain" below).
 
 A space can have both at once, and an app in it can still have a domain of its
 own: at the app's domain the app is served at the root, and at the space's
@@ -61,18 +65,22 @@ existing `.yaks.app` address in the meantime.
 
 ## Tools: `domain_attach`, `domain_status`, `domain_detach`
 
-- `domain_attach(app?, hostname, to?)` — provisions the hostname and returns the
-  CNAME and ownership TXT record to add, with each record's full name and exact
-  value. With `app`, the domain is attached to that app; without it, to the
-  space. With `to`, another domain already attached to the same place, this one
-  sends every visitor there instead of serving the place itself. Attaching an
-  attached domain again sets `to` and changes nothing else. Only the space owner
-  may attach a domain.
-- `domain_status(hostname?)` — reports what each domain points at and how far
+- `domain_attach(app?, hostname, to?)` — provisions the hostname, sets up its
+  mail domain, and returns every record to add in one list: the CNAME and
+  ownership TXT record for the web, then the mail records, each with its full
+  name and exact value, and an MX record's priority. With `app`, the domain is
+  attached to that app; without it, to the space. With `to`, another domain
+  already attached to the same place, this one sends every visitor there instead
+  of serving the place itself. Attaching an attached domain again sets `to`,
+  finishes its mail if that could not be set up before, and changes nothing
+  else. Only the space owner may attach a domain.
+- `domain_status(hostname?)` — reports what each domain points at, how far
   provisioning has progressed, as the four steps that can be outstanding
-  (described below). Omit `hostname` to list every domain in the space.
-- `domain_detach(hostname)` — releases the hostname. What it served is
-  unchanged: same data, same files, same `<space>.yaks.app` address.
+  (described below), and which of its mail records have arrived. Omit `hostname`
+  to list every domain in the space.
+- `domain_detach(hostname)` — releases the hostname and removes its mail domain.
+  What it served is unchanged: same data, same files, same `<space>.yaks.app`
+  address.
 
 A domain points at one space or app, and a hostname can be attached to only one
 place on the whole platform. `www.example.com` and `example.com` are two
@@ -105,6 +113,36 @@ Cloudflare accepts the hostname, and its certificate is ready. A CNAME already
 pointing here proves where traffic goes, not who owns the hostname. Existing
 active hostnames keep serving. After ownership is verified, the TXT record can
 be removed; keep the CNAME for as long as the domain should serve here.
+
+## Mail at the domain
+
+An attached domain takes mail for the place it serves, so a township can have
+`clerk@example.org`. Where the mail goes depends on what the domain already has:
+
+- **An apex that takes no mail** (no MX record at `example.org`): mail is at the
+  domain itself, `clerk@example.org`.
+- **A domain that already takes mail**: mail is at `mail.example.org`, so the
+  mailboxes they already have keep working and nothing is forwarded. Their
+  existing MX record stays as it is; never tell them to change or delete it.
+- **A name below the apex** (`www.example.org`): mail is at
+  `mail.www.example.org`, because the CNAME there is the only record DNS allows
+  at that name. For mail at the bare domain, also attach `example.org` (with
+  `to: 'www.example.org'` to send its visitors to www).
+
+At a space's domain, an app's name is that app's address (`recipes@example.org`)
+and any other name (`clerk@`, `treasurer@`) is the space's own mailbox, which
+reaches the space as `<space>@yaks.app` does. At an app's domain every address
+is the app's. `domain_attach` and `domain_status` both say which addresses the
+place has.
+
+The mail records are five, at the mail domain: a DKIM TXT record at
+`resend._domainkey`, an MX and an SPF TXT record at `send`, a CNAME at `rsend`,
+and the MX that receives mail at the mail domain itself. Add them with the web
+records, copying each name, value and MX priority exactly. They take no part in
+serving the web; mail starts once all of them have arrived, which
+`domain_status` reads from the mail provider. If the mail domain could not be
+set up when the domain was attached, both tools say why, and attaching the
+domain again finishes it.
 
 ## Adding the records at each registrar
 
@@ -246,7 +284,8 @@ than changing anything.
 `domain_detach(hostname)` releases the hostname and leaves the app unchanged,
 still served at `<space>.yaks.app`. It does not change the person's DNS: those
 records are theirs, in their registrar. Tell them to delete the CNAME and
-ownership TXT record for the detached hostname.
+ownership TXT record for the detached hostname, and the mail records at its mail
+domain. Mail to its addresses stops arriving.
 
 Detach before attaching a domain somewhere else. A hostname belongs to one app
 on the whole platform, and `domain_attach` refuses a hostname that is already

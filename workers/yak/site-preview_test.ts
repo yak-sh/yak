@@ -66,6 +66,7 @@ await refresh(env, {
   verification: null,
   verified: null,
   to: null,
+  mail: null,
 }, null)
 let lifted = (await k.dir.app(space, 'grace'))!
 let opens = await agent.tool('app_set', { app: 'grace', access: 'public' })

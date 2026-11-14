@@ -272,21 +272,7 @@ export let steps = (c: Custom, owned = false): Step[] => {
 // nothing. DNS is consulted only until this attachment has a durable receipt.
 export let ownership = async (env: Env, record: Partial<Rec> | null) => {
   if (!txt(record)) return false
-  let at = new URL(env.DNS_API ?? 'https://cloudflare-dns.com/dns-query')
-  at.searchParams.set('name', record.name)
-  at.searchParams.set('type', 'TXT')
-  let r = await fetch(at, {
-    headers: { accept: 'application/dns-json' },
-    signal: AbortSignal.timeout(5000),
-  })
-  if (!r.ok) {
-    await r.body?.cancel()
-    throw new Error(`ownership TXT lookup answered ${r.status}`)
-  }
-  let reply = await r.json() as {
-    Status: number
-    Answer?: { name: string; type: number; data: string }[]
-  }
+  let reply = await lookup(env, record.name, 'TXT')
   if (reply.Status != 0) return false
   let name = (s: string) => s.toLowerCase().replace(/\.$/, '')
   return (reply.Answer ?? []).some((a) => {
@@ -295,6 +281,46 @@ export let ownership = async (env: Env, record: Partial<Rec> | null) => {
     if (!parts.length || parts.join(' ') != a.data) return false
     return parts.map((s) => JSON.parse(s)).join('') == record.value
   })
+}
+
+// What DNS answers for one name and type, through DNS over HTTPS. `Status` is
+// the DNS response code: 0 an answer (perhaps empty), 3 no such name.
+type Reply = {
+  Status: number
+  Answer?: { name: string; type: number; data: string }[]
+}
+
+let lookup = async (env: Env, name: string, type: 'TXT' | 'MX') => {
+  let at = new URL(env.DNS_API ?? 'https://cloudflare-dns.com/dns-query')
+  at.searchParams.set('name', name)
+  at.searchParams.set('type', type)
+  let r = await fetch(at, {
+    headers: { accept: 'application/dns-json' },
+    signal: AbortSignal.timeout(5000),
+  })
+  if (!r.ok) {
+    await r.body?.cancel()
+    throw new Error(`${type} lookup for ${name} answered ${r.status}`)
+  }
+  return await r.json() as Reply
+}
+
+/**
+ * Where a hostname's mail goes (D-415): the hostname itself when it is an
+ * apex that takes no mail yet, and `mail.<hostname>` otherwise. Beside mail
+ * the domain already takes, so its mailboxes keep working and nothing is
+ * forwarded; and below an apex, because the CNAME that serves the web there
+ * is the only record DNS lets a name have, which leaves no room for an MX.
+ * Rejects when DNS cannot say whether it takes mail.
+ */
+export let mailHost = async (env: Env, host: string) => {
+  if (!apex(host)) return `mail.${host}`
+  let reply = await lookup(env, host, 'MX')
+  if (reply.Status != 0 && reply.Status != 3) {
+    throw new Error(`MX lookup for ${host} answered DNS status ${reply.Status}`)
+  }
+  let mx = (reply.Answer ?? []).some((a) => a.type == 15)
+  return mx ? `mail.${host}` : host
 }
 
 // Both the connector and a visitor can advance provisioning. They use this

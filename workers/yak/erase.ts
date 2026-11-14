@@ -101,6 +101,7 @@ import * as dirPart from './directory.ts'
 import { drop } from './dispatch.ts'
 import { deleteBindings } from './bindings.ts'
 import { reachable, release } from './domains.ts'
+import { unmail } from './domain-mail.ts'
 import { bound, type Env } from './env.ts'
 import { apex, type Host as HostEnv } from '@yaks/platform/host'
 import { allAsleep, destroyedAll } from './sandbox.ts'
@@ -420,7 +421,10 @@ export let erase = async (
   // which its death would not take (directory-vocab.ts `phone_line`): a
   // number held past its space is billed every month with nobody to bill.
   for (let line of d.lines) await released(env, line)
-  for (let host of d.hosts) await release(env, host.name)
+  for (let host of d.hosts) {
+    await release(env, host.name)
+    await unmail(env, host.mail)
+  }
   let files = 0
   for (let app of d.apps) {
     files += (await emptied(env, d.space, app, who)).length

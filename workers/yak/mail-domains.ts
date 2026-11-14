@@ -1,28 +1,39 @@
 // The mail domains a space's own addresses live at: set up, read and removed
-// through the provider config.ts `mailDomains` names, lent under its name
+// through the providers config.ts `mailDomains` lends, each under its name
 // (lent.ts), its key read from the Worker's environment at its use. Nothing
-// here names a provider or holds its id for a domain: a domain is its name.
+// here holds a provider's id for a domain: a domain is its name, and a
+// hostname row names the provider that carries it (`mail_domain{via}`).
 import type { MailDomains } from '@yaks/host/senders'
 import { mailDomains as config } from './config.ts'
 
 // One lending per environment. Its options read the environment as they are
 // used, so a key put after the first call is used by the next.
-let held = new WeakMap<object, Promise<MailDomains>>()
+let held = new WeakMap<object, Promise<Record<string, MailDomains>>>()
 
-let lend = async (env: object) => {
-  let all = await (await import('./lent.ts')).lent(env, 'mailDomains', config)
-  if (!Object.hasOwn(all, config.via)) {
-    throw new Error(`no mail domains ${config.via} are lent`)
-  }
-  return all[config.via]
-}
-
-/** The mail domains config.ts `mailDomains` lends as its `via`. */
-export let mailDomains = (env: object): Promise<MailDomains> => {
+let lending = (env: object) => {
   let got = held.get(env)
   if (!got) {
-    held.set(env, got = lend(env))
+    held.set(
+      env,
+      got = import('./lent.ts').then((m) => m.lent(env, 'mailDomains', config)),
+    )
     got.catch(() => held.delete(env))
   }
   return got
 }
+
+/** The mail domains lent as `via`: config.ts `mailDomains`'s own by
+ * default, which is the provider a new mail domain is set up with. */
+export let mailDomains = async (
+  env: object,
+  via: string = config.via,
+): Promise<MailDomains> => {
+  let all = await lending(env)
+  if (!Object.hasOwn(all, via)) {
+    throw new Error(`no mail domains ${via} are lent`)
+  }
+  return all[via]
+}
+
+/** The provider a new mail domain is set up with. */
+export let MAIL_VIA = config.via
