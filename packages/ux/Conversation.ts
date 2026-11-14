@@ -13,17 +13,31 @@
  * event; the owner says where each goes, and spends the draft once the words
  * are taken.
  *
+ * Whether each fold in a line is open is `Disclosure{open}` in the same page
+ * graph, on the page entity of the line and the fold's place in it (`Folds`,
+ * `useFold`), so a line drawn again keeps its folds as the reader left them
+ * though its words changed ("Reading…" to "Read").
+ *
  * Only `h` and hooks, so it paints under any renderer that has them.
  *
  * @module
  */
 
-import { type ComponentChildren, h, type JSX } from 'preact'
-import { useLayoutEffect, useRef } from 'preact/hooks'
+import { type ComponentChildren, createContext, h, type JSX } from 'preact'
+import { useContext, useLayoutEffect, useRef } from 'preact/hooks'
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Button, Composer, Transcript } from '@yaks/ui/parts'
 import { type Drafts, useDrafts } from './host.ts'
+import {
+  type Disclosed,
+  disclosed,
+  Disclosure,
+  disclosureAt,
+  DisclosureMark,
+  type DisclosureProps,
+  isOpen,
+} from './Disclosure.ts'
 
 /** How many lines it draws before it is asked for more, and how many more
  * each time. */
@@ -83,6 +97,9 @@ export let shown = (
 export type ConversationProps = {
   e: Bundle
   onChange: (b: Bundle) => void
+  /** the page graph's state an eid names: its folds', which it emits through
+   * `onChange` too; without it every fold is drawn closed */
+  state?: (eid: string) => Bundle | undefined
   lines: Line[]
   /** what the conversation is doing now, said under its lines */
   now?: ComponentChildren
@@ -92,6 +109,57 @@ export type ConversationProps = {
   pane?: () => HTMLElement | null
   [attribute: string]: unknown
 }
+
+// The folds drawn under a conversation: where their state is read and goes;
+// and under a line, which line it is and how many folds it has drawn.
+type Held = {
+  state?: (eid: string) => Bundle | undefined
+  onChange?: (b: Bundle) => void
+  line?: { at: string; n: number }
+}
+let Held = createContext<Held>({})
+
+/** What is drawn under it is a line's, `line` its id: each fold in it is
+ * owned by the line and its place there. A conversation puts every line it
+ * draws under one, and a line inside a fold (a call's turn) is under one of
+ * its own. */
+export let Folds = (
+  { line, children }: { line: string; children?: ComponentChildren },
+): JSX.Element => {
+  let up = useContext(Held)
+  // How many folds it has drawn, kept while it is: a fold drawn again keeps
+  // its place though its line drew others before it.
+  let placed = useRef({ n: 0 })
+  return h(Held.Provider, {
+    value: { ...up, line: Object.assign(placed.current, { at: line }) },
+    children,
+  })
+}
+
+/** The state of a fold its line draws, for a `Disclosure` and its
+ * `DisclosureMark`: on `disclosureAt` its line and its place in it, the
+ * order its line first drew its folds in, which a server's drawing and the
+ * page's mounted over it share. Its conversation reads and keeps it; outside
+ * one it is closed, and outside a line it is none and the fold is a plain
+ * `details`. */
+export let useFold = (): Disclosed => {
+  let held = useContext(Held)
+  let place = useRef<number | null>(null)
+  if (!held.line) return {}
+  place.current ??= held.line.n++
+  let eid = disclosureAt(`${held.line.at} ${place.current}`)
+  return {
+    e: held.state?.(eid) ?? { entity: { eid } },
+    onChange: held.onChange,
+  }
+}
+
+/** A fold in a line: a `Disclosure` on the state `useFold` gives it. */
+export let Fold = (
+  props: Omit<DisclosureProps, keyof Disclosed>,
+): JSX.Element => h(Disclosure, { ...props, ...useFold() })
+
+export { Disclosure, DisclosureMark }
 
 // The nearest place around `at` that scrolls, or the page.
 let scroller = (at: HTMLElement): HTMLElement => {
@@ -223,15 +291,22 @@ let Box = (
 export let Conversation: ((p: ConversationProps) => JSX.Element) & {
   Box: (p: BoxProps) => JSX.Element
 } = Object.assign((
-  { e, onChange, lines, now, earlier, pane, ...rest }: ConversationProps,
+  { e, onChange, state, lines, now, earlier, pane, ...rest }: ConversationProps,
 ): JSX.Element => {
   let { take = TAKE, away = false } = conversingOf(e)
   let drawn = shown(lines, take, earlier)
   let root = useRef<HTMLElement>(null)
   // What the listeners read: the latest of what it was given, the place
   // that scrolls, and where the reader last was in it.
-  let at = useRef({ e, onChange, away, pane: null as HTMLElement | null, y: 0 })
-  at.current = { ...at.current, e, onChange }
+  let at = useRef({
+    e,
+    onChange,
+    state,
+    away,
+    pane: null as HTMLElement | null,
+    y: 0,
+  })
+  at.current = { ...at.current, e, onChange, state }
   let say = (away: boolean) => {
     if (away == at.current.away) return
     at.current.away = away
@@ -243,23 +318,18 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
     p.scrollTop = p.scrollHeight
     at.current.y = p.scrollTop
   }
-  // The folds the reader opened, each by its line and its place in it, open
-  // again whenever their line is drawn again, though its words changed
-  // ("Reading…" to "Read").
-  let folds = useRef(new Set<string>())
-  let foldOf = (fold: Element) => {
-    let row = fold.closest?.('[id^="row-"]')
-    if (!row || fold.localName != 'details') return
-    let all: Element[] = [...row.querySelectorAll('details')]
-    return `${row.id} ${all.indexOf(fold)}`
-  }
+  // A line kept as the server drew it holds folds and marks no state drew:
+  // each is opened or closed as the page holds it.
   useLayoutEffect(() => {
     let el = root.current
-    for (let key of folds.current) {
-      let [row, at] = key.split(' ')
-      let fold = el?.ownerDocument.getElementById(row)
-        ?.querySelectorAll('details')[Number(at)]
-      if (fold && el?.contains(fold)) fold.setAttribute('open', '')
+    if (!el || !state) return
+    for (let fold of el.querySelectorAll('[data-disclosure]')) {
+      let open = isOpen(state(fold.getAttribute('data-disclosure')!))
+      if (open != fold.hasAttribute('open')) fold.toggleAttribute('open', open)
+    }
+    for (let mark of el.querySelectorAll('[data-disclosure-mark]')) {
+      let open = isOpen(state(mark.getAttribute('data-disclosure-mark')!))
+      mark.setAttribute('aria-expanded', String(open))
     }
   })
   // Earlier lines are put above where the reader is, who stays there.
@@ -308,15 +378,28 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
       if (!at.current.away && !address()?.over) newest()
     }
     let hash = () => address()?.line ? opened() : grown()
-    // A fold the reader opens or closes, by its line and its place there.
+    // A fold of a line kept as the server drew it opens and closes as a
+    // browser's does, and the page then holds it so; one drawn from its
+    // state only says what it was told.
     let toggled = (ev: Event) => {
       let fold = ev.target as Element
-      let key = foldOf(fold)
-      if (!key) return
-      if (fold.hasAttribute('open')) folds.current.add(key)
-      else folds.current.delete(key)
+      let eid = fold.getAttribute?.('data-disclosure')
+      if (!eid) return
+      let open = fold.hasAttribute('open')
+      let was = at.current.state?.(eid) ?? { entity: { eid } }
+      if (isOpen(was) != open) at.current.onChange(disclosed(was, open))
+    }
+    // Its marks too, which no script drawn there presses; a mark drawn from
+    // its state has said so already.
+    let marked = (ev: Event) => {
+      let mark = (ev.target as Element).closest?.('[data-disclosure-mark]')
+      let eid = mark?.getAttribute('data-disclosure-mark')
+      if (!eid || ev.defaultPrevented) return
+      let was = at.current.state?.(eid) ?? { entity: { eid } }
+      at.current.onChange(disclosed(was, !isOpen(was)))
     }
     el.addEventListener('toggle', toggled, true)
+    el.addEventListener('click', marked)
     p.addEventListener('scroll', scroll, { passive: true })
     win.addEventListener('resize', grown)
     win.addEventListener('hashchange', hash)
@@ -325,6 +408,7 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
     sizes?.observe(el)
     return () => {
       el.removeEventListener('toggle', toggled, true)
+      el.removeEventListener('click', marked)
       p.removeEventListener('scroll', scroll)
       win.removeEventListener('resize', grown)
       win.removeEventListener('hashchange', hash)
@@ -345,28 +429,36 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
     at.current.y = p.scrollTop
   }, [take])
   return h(
-    Transcript,
-    { ...rest, elRef: root },
-    drawn.hidden
-      ? h(
-        Button,
-        { type: 'button', mod: 'quiet', onClick: older },
-        `Show ${drawn.hidden} earlier`,
-      )
-      : null,
+    Held.Provider,
+    { value: { state, onChange } },
     h(
-      Transcript.Lines,
-      {},
-      drawn.lines.map((line) =>
-        line.html == null
-          ? h(Transcript.Row, { key: line.id, id: `row-${line.id}` }, line.node)
-          : h(Transcript.Row, {
-            key: line.id,
-            id: `row-${line.id}`,
-            dangerouslySetInnerHTML: { __html: line.html },
-          })
+      Transcript,
+      { ...rest, elRef: root },
+      drawn.hidden
+        ? h(
+          Button,
+          { type: 'button', mod: 'quiet', onClick: older },
+          `Show ${drawn.hidden} earlier`,
+        )
+        : null,
+      h(
+        Transcript.Lines,
+        {},
+        drawn.lines.map((line) =>
+          line.html == null
+            ? h(
+              Folds,
+              { key: line.id, line: line.id },
+              h(Transcript.Row, { id: `row-${line.id}` }, line.node),
+            )
+            : h(Transcript.Row, {
+              key: line.id,
+              id: `row-${line.id}`,
+              dangerouslySetInnerHTML: { __html: line.html },
+            })
+        ),
       ),
+      now == null ? null : h(Transcript.Status, {}, now),
     ),
-    now == null ? null : h(Transcript.Status, {}, now),
   )
 }, { Box })

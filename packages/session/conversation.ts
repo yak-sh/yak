@@ -24,6 +24,7 @@ import { type ComponentChildren as Node, Fragment, h, type VNode } from 'preact'
 import { useContext } from 'preact/hooks'
 import { blocks, Host, type Options, parse } from '@yaks/markdown'
 import { Body, More, Notice, Pairs, Transcript } from '@yaks/ui/parts'
+import { Fold } from '@yaks/ux/conversation'
 import {
   type Bundle,
   define,
@@ -196,18 +197,13 @@ export let yours = (text: string, mark?: Node): VNode =>
 
 /** The one way a conversation draws anything that opens: a step, by what it
  * did, opening on what it holds; `on` while it runs, `no` once it did not
- * work. A fold in a fold is the same fold. */
+ * work. A fold in a fold is the same fold. Whether it is open is its line's
+ * fold state (@yaks/ux `Fold`), which a redrawn line keeps. */
 export let step = (
   name: Node,
   mod: '' | 'on' | 'no',
   ...inside: Node[]
-): VNode =>
-  h(
-    More,
-    { mod: ['quiet', mod] },
-    h(More.Summary, {}, name),
-    h(More.Body, {}, ...inside),
-  )
+): VNode => h(Fold, { mod: ['quiet', mod], summary: name }, ...inside) as VNode
 
 /** A value a tool was given or gave back, the way a person reads it: a list
  * of what it holds under names in words, never its JSON. Bounded in depth,

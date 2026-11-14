@@ -273,7 +273,6 @@ let game = (rows: Row[], page: Page, actions: Actions) => {
           onChange: actions.disclosure,
           summary: '☷  Build sites & field guide',
           class: 'Tactics_disclosure',
-          summaryProps: { mod: 'quiet' },
         },
         h(
           'div',

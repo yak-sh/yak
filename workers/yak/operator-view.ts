@@ -14,6 +14,7 @@ import type { H } from '@yaks/render'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { Host } from '@yaks/markdown'
+import { Folds } from '@yaks/ux/conversation'
 import { Button, Card, Rows } from '@yaks/ui/parts'
 import { moment } from './html.ts'
 import { chatPath } from '@yaks/platform/routes'
@@ -93,7 +94,11 @@ export let rows = (entries: Bundle[], names: Names, seen: Seen = {}): Row[] =>
   lines(entries, names, seen).map(({ id, node }) => ({
     id,
     html: renderToString(
-      h(Host.Provider, { value: opening(seen.mentions) }, node),
+      h(
+        Host.Provider,
+        { value: opening(seen.mentions) },
+        h(Folds, { line: id }, node),
+      ),
     ),
   }))
 

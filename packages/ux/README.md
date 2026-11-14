@@ -102,7 +102,7 @@ try {
 | `@yaks/ux`              | `Edit`, `Text`, `Disclosure`, `Conversation`, `Order`, `Fields`, `Submit`; `useRows`; `Ux`, `useHost`, `useOwner`; `useEdit`; state, emission, formatting and picker helpers; `defineKit`, `kitDocs`; `completion`; their types |
 | `@yaks/ux/views`        | `editorViews`, `views`: editor registrations and their registry                                                                                                                                                                 |
 | `@yaks/ux/vocab`        | `uxDoc`, `docs`, `description`: the UX vocabulary documents and package summary                                                                                                                                                 |
-| `@yaks/ux/conversation` | `Conversation` and its `Box`, their helpers and `TAKE`, alone, for a page that draws nothing else of this package                                                                                                               |
+| `@yaks/ux/conversation` | `Conversation` and its `Box`, their helpers and `TAKE`; `Fold`, `Folds`, `useFold`, `Disclosure`, `DisclosureMark`: alone, for a page that draws nothing else of this package                                                   |
 | `@yaks/ux/ui`           | `kit`, `ux`: the base UX kit and `{ base: kit }`                                                                                                                                                                                |
 | `@yaks/ux/completion`   | `completion`; `typed`, `placed`, `moved`, `taken`, `dismissed`, `act`, `CAP`; controller, input and transition types                                                                                                            |
 | `@yaks/ux/keys`         | `walk`, `keymap`, `walkKeys`, `chord`, `land`, `items`, `front`, `typing`; `Box`, `Move`: vim's keys walking a page                                                                                                             |
@@ -272,14 +272,20 @@ equal(editorViews().every((entry) => entry.view == 'Edit'), true)
 
 ## Disclosure
 
-A **disclosure** is a summary Button that opens optional content. `Disclosure`
-takes `e` and emits `Disclosure{open}` through `onChange`; its owner writes that
-bundle into the page graph and supplies it again. Missing state is closed.
-Content mounts only while open. `summary` supplies the Button's label and
-`summaryProps` supplies its presentation, such as a `mod` or `class`.
+A **disclosure** is the kit's fold (@yaks/ui `More`): a `details` whose summary
+opens what it holds. `Disclosure` takes `e` and emits `Disclosure{open}` through
+`onChange` when its summary is pressed; its owner writes that bundle into the
+page graph and supplies it again, and it is open as that state says. Missing
+state is closed. What it holds is drawn closed too, so a page a server drew
+opens it with no script; `lazy` draws it only while open, for content that asks
+for rows. `summary` is its line, and `mod` its look (`quiet` for a step).
+`DisclosureMark` is a second way to open it, drawn outside it: a button over the
+same `e`, such as a phone mark in a caller's words. Without `e` a disclosure is
+a plain `details` its host opens by itself.
 
 ```ts
 import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
 import { disclosed, Disclosure, disclosureAt, isOpen } from '@yaks/ux'
 import { equal } from '@yaks/testing'
 
@@ -292,10 +298,11 @@ let tree = h(Disclosure, {
   e,
   onChange: (b) => sent.push(b),
   summary: 'Completed',
-  summaryProps: { mod: 'quiet' },
+  mod: 'quiet',
 }, h('p', {}, 'Saved the village'))
-tree.props.onChange(opened)
+tree.props.onChange!(opened)
 equal(sent, [opened])
+equal(renderToString(tree).includes('<p>Saved the village</p>'), true)
 ```
 
 ## Conversation
@@ -315,6 +322,16 @@ Its state is `Conversation{take, away}` on `conversationAt(owner, session)`,
 emitted through `onChange` like a disclosure's. Its owner keeps the bundle and
 supplies it again; writing `away: false` takes the reader back to the newest
 line, which is what a page's "Newest" button does.
+
+Whether each fold in a line is open is `Disclosure{open}`, emitted through the
+same `onChange` and read through `state`, the page graph's state by eid. A fold
+in a line is a `Fold`, or a `Disclosure` and its `DisclosureMark` on what
+`useFold` gives them: the page entity of the line and the fold's place in it,
+the order the line first drew its folds in. So a line drawn again keeps its
+folds as the reader left them, though its words changed ("Reading…" to "Read").
+A fold of a line the server drew opens as a browser's does, or by its mark, and
+the page then holds it so; drawn again, it is open. A line inside a fold (a
+call's turn) owns its folds when it is drawn under a `Folds` of its own.
 
 ```ts
 import { h } from 'preact'

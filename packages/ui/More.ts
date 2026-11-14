@@ -8,28 +8,19 @@
  * still running and `More-no` one that did not work. A fold in a fold is the
  * same fold.
  *
- * A `More` that is not a `details` opens from its `More.Mark` alone, wherever
- * outside its body that mark is drawn: a mark inside a message's words leaves
- * the words ordinary text, to select and copy, and only the mark is pressed.
+ * `More.Mark` is a second way to open a fold, drawn outside it: a button,
+ * such as a phone mark inside a message's words, which leaves the words
+ * ordinary text to select and copy. What it opens is its caller's; it wears
+ * the accent while `aria-expanded` says the fold is open.
  *
  * @module
  */
 
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
-import { block, type Part, type Props } from './el.ts'
+import { block, type Part } from './el.ts'
 import type { Colors, Native, Specimen } from './theme.ts'
 import { Field } from './Field.ts'
-
-// A mark: a label pressed to flip the box beside it, whose state opens the
-// fold's body (More.css). `open` starts it open.
-let Mark = ({ open, children, ...props }: Props) =>
-  h(
-    'label',
-    props,
-    h('input', { type: 'checkbox', class: 'More_Open', checked: !!open }),
-    children,
-  )
 
 /** A fold and what it holds. */
 export let More:
@@ -40,7 +31,7 @@ export let More:
     {
       Summary: 'summary',
       Body: 'div',
-      Mark: Mark as Part,
+      Mark: 'button',
       Label: 'p',
       Value: 'span',
     },
@@ -81,7 +72,7 @@ let step = (mod: string[], open: boolean) =>
     ),
   )
 
-/** Folded, open, a step in each tone, and one opened by its mark. */
+/** Folded, open, a step in each tone, and a mark beside an open one. */
 export let specimens = (): Specimen[] => [
   ['More', fold(false)],
   ['More, open, Body', fold(true)],
@@ -91,10 +82,15 @@ export let specimens = (): Specimen[] => [
   [
     'More, Mark',
     h(
-      More,
-      { as: 'div', mod: 'quiet' },
-      h('p', null, h(More.Mark, { open: true }, '☎'), ' Any errors?'),
-      h(More.Body, {}, 'What was done with it.'),
+      'div',
+      null,
+      h(
+        'p',
+        null,
+        h(More.Mark, { type: 'button', 'aria-expanded': 'true' }, '☎'),
+        ' Any errors?',
+      ),
+      step(['quiet'], true),
     ),
   ],
 ]

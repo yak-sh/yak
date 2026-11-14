@@ -11,17 +11,20 @@
 }
 
 .Journal_Completed {
-  --ink: var(--amber);
-  justify-content: start;
+  color: var(--amber);
   width: 100%;
   font-size: 0.85rem;
+
+  &::before {
+    content: none;
+  }
 
   &::after {
     content: '+';
     margin-left: auto;
   }
 
-  &[aria-expanded='true']::after {
+  [open] > &::after {
     content: '−';
   }
 }

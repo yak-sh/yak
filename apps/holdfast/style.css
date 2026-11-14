@@ -365,7 +365,7 @@ canvas[data-stage] {
   pointer-events: auto;
   z-index: 3;
 }
-.Tactics > .Tactics_disclosure > .Button {
+.Tactics > .Tactics_disclosure > .More_Summary {
   font-size: 13px;
   background: #fffbeee8;
   border-radius: 7px;
@@ -758,7 +758,7 @@ canvas[data-stage] {
     left: 13px;
     top: 119px;
   }
-  .Tactics > .Tactics_disclosure > .Button {
+  .Tactics > .Tactics_disclosure > .More_Summary {
     min-height: 36px;
     font-size: 13px;
   }

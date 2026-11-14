@@ -209,10 +209,20 @@ type Ctx = {
   hidden?: Set<TElement>
 }
 
-// Whether an element shows; one its sheet hides is noted as hidden.
+// What a closed `details` holds but its summary, which a browser does not
+// show until it is opened.
+let shut = (el: TElement) => {
+  let up = el.parentNode as TElement | null
+  return up?.localName == 'details' && !up.hasAttribute('open') &&
+    el.localName != 'summary'
+}
+
+// Whether an element shows; one its sheet hides, or a closed `details`, is
+// noted as hidden.
 let shows = (el: TElement, o: Style, c: Ctx) => {
-  if (o.hidden) c.hidden?.add(el)
-  return !o.hidden
+  let hid = o.hidden || shut(el)
+  if (hid) c.hidden?.add(el)
+  return !hid
 }
 
 // Whether a spaced layout puts a space between what a line holds and the run
@@ -686,6 +696,14 @@ let layout = (
       c,
       o,
     )
+  if (el.localName == 'summary' && lines.length) {
+    // The mark a browser puts before a summary: whether it is open.
+    let open = (el.parentNode as TElement | null)?.hasAttribute('open')
+    lines = [
+      [{ text: open ? '▾ ' : '▸ ', style: s }, ...lines[0]],
+      ...lines.slice(1),
+    ]
+  }
   if (el.localName == 'li') {
     let marker = safe(el.attr('data-marker') ?? '• ')
     lines = lines.map((

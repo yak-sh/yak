@@ -24,6 +24,7 @@ import {
   operatorMemory,
   operatorModel,
   operatorService,
+  sentRows,
 } from './operator-testing.ts'
 import {
   attachmentTools,
@@ -64,6 +65,7 @@ import { REPLIES, textDoor, textSend } from './operator-texts.ts'
 import { textSigned } from './operator-channels.ts'
 import { PER_SEGMENT } from './text-spend.ts'
 import type { Bundle } from '@yaks/graph'
+import type { Lines } from './operator-draw.ts'
 import type { Binding } from '@yaks/cloudflare-mail'
 
 let fixture = async () => {
@@ -700,7 +702,7 @@ let email = (id: string, reply?: string, authenticated = true): Inbound => {
 // handshake leaves one (build.ts `#accept`), and a page watching a build.
 let watched = (operator: boolean) => {
   let sent: {
-    operator?: { task: string; rows: { html: string }[]; now: string }
+    operator?: { task: string; lines?: Lines; now: string }
   }[] = []
   let held: unknown = {
     person: f.person,
@@ -721,8 +723,14 @@ let operatorPage = watched(true)
 let buildPage = watched(false)
 let firstEmail = await arrived(email('request-1'), f.env)
 await f.drain()
+// Each step's frame, its lines drawn as the page draws them.
 let heard = operatorPage.flatMap((frame) =>
-  frame.operator ? [frame.operator] : []
+  frame.operator
+    ? [{
+      ...frame.operator,
+      rows: frame.operator.lines ? sentRows(frame.operator.lines) : [],
+    }]
+    : []
 )
 test('a page watching the Operator hears each step as the lines it changed, and a build page hears none', () => {
   assertEquals(heard.length > 1, true)

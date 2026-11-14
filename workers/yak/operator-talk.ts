@@ -5,7 +5,8 @@
 // The page holds the lines the server drew as it drew them, and a page graph
 // (@yaks/client) that the entries its socket sends (operator-draw.ts `Lines`)
 // are put into, with the reply being written and where its reader is
-// (`Conversation{take, away}`). A line a step sent is drawn here from the
+// (`Conversation{take, away}`) and which of its folds are open
+// (`Disclosure{open}`). A line a step sent is drawn here from the
 // entries it reads, as the server draws it; the rest stay as the server drew
 // them, since the data behind a whole conversation is about twice its
 // drawing. The reply being written is a page-only row of the shape the
@@ -71,6 +72,8 @@ export type TalkProps = {
   earlier?: number
   e: Bundle
   onChange: (b: Bundle) => void
+  /** the page graph's state, where its folds are open or closed */
+  state?: (eid: string) => Bundle | undefined
   pane?: () => HTMLElement | null
 }
 
@@ -255,14 +258,18 @@ export let mountTalk = (
   let asked = 0
   let state = (task: string) =>
     front.ent(readerAt(task)) ?? { entity: { eid: readerAt(task) } }
+  // What the conversation emits: where its reader is, or a fold opened or
+  // closed.
   let change = (b: Bundle) => {
     put([b])
-    let { take = TAKE, away: now = false } = conversingOf(
-      front.ent(b.entity.eid),
-    )
-    if (now != away) onAway(away = now)
-    if (held?.earlier && take > held.lines.length && take > asked) {
-      older(asked = take)
+    if (held && b.entity.eid == readerAt(held.task)) {
+      let { take = TAKE, away: now = false } = conversingOf(
+        front.ent(b.entity.eid),
+      )
+      if (now != away) onAway(away = now)
+      if (held.earlier && take > held.lines.length && take > asked) {
+        older(asked = take)
+      }
     }
     draw()
   }
@@ -286,6 +293,7 @@ export let mountTalk = (
         lines: shown(talk),
         e: state(talk.task),
         onChange: change,
+        state: (eid: string) => front.ent(eid),
         pane,
       }),
     )
@@ -345,7 +353,13 @@ export let mountTalk = (
       let lines = held.lines.some((l) => l.id == eid)
         ? held.lines
         : [...held.lines, { id: eid, uses: [eid] }]
-      held = { ...held, lines, now: 'Typing…', pending: true, doing: 'writing' }
+      held = {
+        ...held,
+        lines,
+        now: 'Typing…',
+        pending: true,
+        doing: 'writing',
+      }
       draw()
     },
     /** the whole conversation read again, as the `?talk=` answer drew it;

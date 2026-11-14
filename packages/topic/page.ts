@@ -26,7 +26,7 @@
 import { type ComponentChildren, h, type JSX } from 'preact'
 import { Markdown } from '@yaks/markdown'
 import * as ui from '@yaks/ui'
-import { Disclosure, disclosureAt, isOpen } from '@yaks/ux'
+import { Disclosure, disclosureAt } from '@yaks/ux'
 import {
   type Answer,
   type Asks,
@@ -206,8 +206,8 @@ let Beliefs = (
       ? h(Disclosure, {
         e: open,
         onChange: (b: Bundle) => io.set([b]),
-        summary: [isOpen(open) ? '▾ ' : '▸ ', `${kept} archived`],
-        summaryProps: { mod: 'quiet' },
+        summary: `${kept} archived`,
+        lazy: true,
       }, h(Archived, { e, io }))
       : null,
   )

@@ -29,7 +29,7 @@ import {
   Timeline,
   Value,
 } from '@yaks/ui'
-import { Disclosure, disclosureAt, isOpen } from '@yaks/ux'
+import { Disclosure, disclosureAt } from '@yaks/ux'
 import { comp, type Crumb, type Frame, str } from './model.ts'
 import { count, figure, headline, place, sha, thrown, whom } from './brief.ts'
 import { spread, tags, type Tally } from './spread.ts'
@@ -63,12 +63,12 @@ let More = (
     children?: ComponentChildren
   },
 ): JSX.Element => {
-  let eid = disclosureAt(at), e = io.state(eid) ?? { entity: { eid } }
+  let eid = disclosureAt(at)
   return h(Disclosure, {
-    e,
+    e: io.state(eid) ?? { entity: { eid } },
     onChange: (b: Bundle) => io.set([b]),
-    summary: [isOpen(e) ? '▾ ' : '▸ ', summary],
-    summaryProps: { mod: 'quiet' },
+    summary,
+    lazy: true,
   }, children)
 }
 
@@ -330,7 +330,9 @@ let BugPage = ({ e, io, got }: Props): JSX.Element => {
   )
   let newest = errors[0]
   let hits = Number(bug.hits ?? 0)
-  let first = Date.parse(str(bug.first) || str(comp(errors.at(-1), 'error').at))
+  let first = Date.parse(
+    str(bug.first) || str(comp(errors.at(-1), 'error').at),
+  )
   let ats = errors.map((b) => str(comp(b, 'error').at))
   return h(
     'article',

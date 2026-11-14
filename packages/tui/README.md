@@ -142,7 +142,9 @@ A `Style` may set `fg`, `bg`, `bold`, `dim`, `italic`, `underline`, `strike`,
 `inverse`, `glyph`, `indent`, `gap`, `block`, which lays an inline tag (a
 `button`, a `span`) out on lines of its own, as CSS's `display: block` does, and
 `hidden`, which paints nothing and takes no room, as `display: none` does. The
-painter also uses `href` internally for sanitized links.
+painter also uses `href` internally for sanitized links. A closed `details`
+paints its `summary` alone, and a summary paints `▸` before it, `▾` while its
+`details` is open, as a browser's do.
 
 ## Widgets
 

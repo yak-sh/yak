@@ -34,6 +34,7 @@ let Talk = ({ e, io }: Props): JSX.Element => {
   return h(Conversation, {
     e: io.state(at) ?? { entity: { eid: at } },
     onChange: (b) => io.set([b]),
+    state: io.state,
     lines,
   })
 }

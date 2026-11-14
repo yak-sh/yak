@@ -34,7 +34,10 @@ test('quest selection and tracking preserve list nodes, scroll and quest meaning
     let row = list.querySelector('[data-select]')!
     equal(row.querySelector('.Tile_Title')!.textContent, quest.title)
     ok(row.querySelector('.Tile_Icon .Glyph'))
-    equal(row.querySelector('.Tile_End')!.getAttribute('aria-label'), 'Tracked')
+    equal(
+      row.querySelector('.Tile_End')!.getAttribute('aria-label'),
+      'Tracked',
+    )
     equal(
       row.querySelector('.Tile_Sub')!.textContent,
       'Gather things · 1 / 3',
@@ -77,14 +80,16 @@ for (let pinned of [false, true]) {
         'Completed · 1',
       )
       equal(
-        body.querySelector('[data-completed]')!.getAttribute('aria-expanded'),
-        'false',
+        body.querySelector('[data-completed]')!.closest('details')!
+          .hasAttribute('open'),
+        false,
       )
       click('[data-completed]')
       equal(rows(), ['active', 'offer', 'finished'])
       equal(
-        body.querySelector('[data-completed]')!.getAttribute('aria-expanded'),
-        'true',
+        body.querySelector('[data-completed]')!.closest('details')!
+          .hasAttribute('open'),
+        true,
       )
       click('[data-select=finished]')
       equal(title()!.textContent, quests[2].title)

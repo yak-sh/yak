@@ -254,23 +254,40 @@ test("a call's turn draws the caller's words, whose phone mark opens the Operato
     let { document } = parseHTML(
       `<main>${rows(entries, names).map((r) => r.html).join('')}</main>`,
     )
-    return (q: string) =>
+    let texts = (q: string) =>
       [...document.querySelectorAll(q)].map((e) => e.textContent!.trim())
+    // The caller's words a phone mark is in, and the fold it opens.
+    let marked = () => {
+      let mark = document.querySelector('.Transcript_Via > .More_Mark')!
+      return {
+        mark,
+        words: mark.closest('.Transcript_Bubble')!.textContent!.trim(),
+        opens: document.getElementById(mark.getAttribute('aria-controls')!)!,
+      }
+    }
+    return Object.assign(texts, { marked })
   }
   let texts = drawn(turn)
   assertEquals(texts('.Transcript_Bubble'), ['Any errors?', 'Thanks'])
-  // The words are plain text, to select and copy: only their phone mark, a
-  // box's label holding nothing else, is pressed to open the turn.
-  assertEquals(texts('div.More > .Transcript_Bubble'), ['Any errors?'])
+  // The words are plain text, to select and copy: their phone mark, a button
+  // holding nothing else, opens the step under them, as its summary does.
+  let { mark, words: said, opens } = texts.marked()
+  assertEquals(said, 'Any errors?')
+  assertEquals(texts('summary .Transcript_Bubble'), [])
+  assertEquals(mark.localName, 'button')
   assertEquals(
-    texts('summary .Transcript_Bubble, label .Transcript_Bubble'),
-    [],
+    mark.getAttribute('title'),
+    'By phone: what the Operator did with it',
   )
+  assertEquals(mark.getAttribute('aria-expanded'), 'false')
+  let fold = opens.parentElement!
+  assertEquals(fold.localName, 'details')
+  assertEquals(fold.hasAttribute('open'), false)
   assertEquals(
-    texts('.Transcript_Bubble > .Transcript_Via > label.More_Mark[title]'),
-    [''],
+    fold.querySelector(':scope > summary')!.textContent,
+    'What the Operator did with it',
   )
-  assertEquals(texts('.More_Mark > input[type=checkbox]:not([checked])'), [''])
+  assertEquals(texts('input'), [])
   assertEquals(texts('.More_Body .Transcript_Reply'), ['None.'])
   assertEquals(texts('.More_Body .More > summary'), ['Did tool'])
   assertEquals(
@@ -280,9 +297,10 @@ test("a call's turn draws the caller's words, whose phone mark opens the Operato
   // The answer coming back redraws the caller's words and what is under them.
   assertEquals(touched(turn, names, 5).map((r) => r.id), ['h', 's', 'next'])
   // A request with no words of the caller's before it stands for them.
-  assertEquals(drawn(turn.slice(1))('div.More > .Transcript_Bubble'), [
+  assertEquals(
+    drawn(turn.slice(1)).marked().words,
     'User asks: any errors?',
-  ])
+  )
 })
 
 test('every line is a row under its id with its time and menu, inside a fold as at the top, and a step says it is one', () => {
@@ -332,7 +350,7 @@ test('every line is a row under its id with its time and menu, inside a fold as 
     ),
     [true, false],
   )
-  assert(document.querySelector('.Transcript_Entry-theirs > div.More'))
+  assert(document.querySelector('.Transcript_Entry-theirs > details.More'))
 })
 
 test("words the platform wrote read as the system's in one closed line, never as the person's", () => {

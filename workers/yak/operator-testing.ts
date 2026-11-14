@@ -29,6 +29,7 @@ import { type Ctx, TOOLS } from './tools.ts'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { Host } from '@yaks/markdown'
+import { Folds } from '@yaks/ux/conversation'
 import { opening } from '@yaks/session/conversation'
 import { drawLines, type Lines } from './operator-draw.ts'
 import type { Row } from './operator-view.ts'
@@ -224,6 +225,10 @@ export let sentRows = (sent: Lines, mentions?: string): Row[] =>
   drawLines(sent).map(({ id, node }) => ({
     id,
     html: renderToString(
-      h(Host.Provider, { value: opening(mentions) }, node),
+      h(
+        Host.Provider,
+        { value: opening(mentions) },
+        h(Folds, { line: id }, node),
+      ),
     ),
   }))

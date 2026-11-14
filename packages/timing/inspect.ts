@@ -17,7 +17,7 @@ import {
 } from '@yaks/inspect'
 import { all as baseViews } from '@yaks/inspect'
 import { Head, Loading, Section, Tabs, Tile } from '@yaks/ui'
-import { Disclosure, disclosureAt, isOpen } from '@yaks/ux'
+import { Disclosure, disclosureAt } from '@yaks/ux'
 import {
   amount,
   axes,
@@ -378,12 +378,12 @@ let More = (
     children?: ComponentChildren
   },
 ): JSX.Element => {
-  let eid = disclosureAt(at), e = io.state(eid) ?? { entity: { eid } }
+  let eid = disclosureAt(at)
   return h(Disclosure, {
-    e,
+    e: io.state(eid) ?? { entity: { eid } },
     onChange: (b: Bundle) => io.set([b]),
-    summary: [isOpen(e) ? '▾ ' : '▸ ', summary],
-    summaryProps: { mod: 'quiet' },
+    summary,
+    lazy: true,
   }, children)
 }
 
@@ -536,7 +536,8 @@ export let TraceList = (
 let Remote = (
   { io, params }: { io: Io; params: URLSearchParams },
 ): JSX.Element => {
-  let scope = params.get('scope') || 'platform', eid = params.get('trace') || ''
+  let scope = params.get('scope') || 'platform',
+    eid = params.get('trace') || ''
   let after = params.get('after') || ''
   let [page, setPage] = useState<
     { rows: Bundle[]; next?: string; error?: string }

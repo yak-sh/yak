@@ -10,8 +10,9 @@
  *
  * - `Edit`, `Edit.Text`, `Edit.Control`: a property's value changed where it
  *   stands, typed over in place, or its control alone (./Edit.ts, ./Text.ts).
- * - `Disclosure`: a summary opening optional content; `disclosureAt`,
- *   `isOpen`, `disclosed`, its page eid and bundles, pure (./Disclosure.ts).
+ * - `Disclosure`: the kit's fold, its summary opening what it holds, and
+ *   `DisclosureMark`, a second way to open it; `disclosureAt`, `isOpen`,
+ *   `disclosed`, its page eid and bundles, pure (./Disclosure.ts).
  * - `Fields`: controlled inputs and repeat groups (./Fields.ts).
  * - `Submit`: loading, durable drafts and submission lifecycle (./Submit.ts).
  * - `Ux`, `useHost`, `Host`: what a page hands down, once per tree
@@ -60,9 +61,11 @@ export { Text, type TextProps } from './Text.ts'
 export { Save, type SaveFieldProps, type SaveProps } from './Save.ts'
 export { bindSave, type SaveBinding, type SaveOptions } from './save-browser.ts'
 export {
+  type Disclosed,
   disclosed,
   Disclosure,
   disclosureAt,
+  DisclosureMark,
   type DisclosureProps,
   isOpen,
 } from './Disclosure.ts'
@@ -74,12 +77,15 @@ export {
   conversed,
   type Conversing,
   conversingOf,
+  Fold,
+  Folds,
   type Line,
   NEAR,
   scrolled,
   shown,
   stopped,
   TAKE,
+  useFold,
 } from './Conversation.ts'
 export { useRows } from './rows.ts'
 export { Fields, type FieldSpec, type FieldsProps } from './Fields.ts'

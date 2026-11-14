@@ -21,8 +21,8 @@ test("a view's own page state, set through the inspector's io, redraws it", asyn
     }, 'the rest')
   let mounted = mount(h(View, {}))
   try {
-    ;(mounted.root.querySelector('button') as HTMLElement).click()
-    await until(() => mounted.root.textContent!.includes('the rest'), {
+    ;(mounted.root.querySelector('summary') as HTMLElement).click()
+    await until(() => !!mounted.root.querySelector('details[open]'), {
       label: 'opened',
     })
   } finally {

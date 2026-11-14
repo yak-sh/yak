@@ -30,6 +30,12 @@ import {
 } from '@yaks/ui/parts'
 import { define, type Registry } from '@yaks/render'
 import {
+  Disclosure,
+  DisclosureMark,
+  Folds,
+  useFold,
+} from '@yaks/ux/conversation'
+import {
   type Beside,
   called,
   draw,
@@ -522,7 +528,11 @@ export let helped = (h: Helper, offers?: Offers, page?: Drawn) =>
 /** A line in its row, under its id, as the conversation and every fold in it
  * put one. */
 export let row = (line: { id: string; node: Node }) =>
-  h(Transcript.Row, { id: `row-${line.id}` }, line.node)
+  h(
+    Folds,
+    { key: line.id, line: line.id },
+    h(Transcript.Row, { id: `row-${line.id}` }, line.node),
+  )
 
 // Lines inside a fold, spaced as the conversation's are.
 let rows = (lines: { id: string; node: Node }[]) =>
@@ -771,27 +781,32 @@ let heard = (b?: Bundle) => {
   return said ? { b, said } : undefined
 }
 
-// The caller's words, whose phone mark opens what the Operator was asked of
-// them and did, under them.
-let Called = ({ said, nodes }: Fold) =>
-  h(
-    More,
-    { as: 'div', mod: 'quiet' },
+// The caller's words, and under them a step holding what the Operator was
+// asked of them and did, which their phone mark opens too.
+let Called = ({ said, nodes }: Fold) => {
+  let fold = useFold()
+  let did = 'What the Operator did with it'
+  let by = 'By phone: what the Operator did with it'
+  return h(
+    Fragment,
+    null,
     h(
       Transcript.Bubble,
       {},
       h(
         Transcript.Via,
         {},
-        h(More.Mark, {
-          title: 'By phone: what the Operator did with it',
-          'aria-label': 'By phone: what the Operator did with it',
+        h(DisclosureMark, {
+          ...fold,
+          title: by,
+          'aria-label': by,
         }, h(Icon, { of: icons.phone })),
       ),
       said,
     ),
-    h(More.Body, {}, rows(nodes)),
+    h(Disclosure, { ...fold, mod: 'quiet', summary: did }, rows(nodes)),
   )
+}
 
 /** What the Operator's kinds of line are drawn with: where a helper's own
  * conversation opens, by its id after `opens/`, and what each model was

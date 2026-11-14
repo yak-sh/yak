@@ -297,7 +297,7 @@ export let kit: Kit = defineKit({
     Disclosure: {
       Component: Disclosure,
       description:
-        'A summary that opens consumer-supplied content, emitting a page bundle',
+        'The kit’s fold, its summary opening consumer-supplied content, emitting a page bundle',
       state: ['Disclosure'],
       specimens: () => [
         [

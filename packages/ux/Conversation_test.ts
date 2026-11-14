@@ -13,11 +13,15 @@ import {
   conversationAt,
   conversed,
   conversingOf,
+  Disclosure,
+  DisclosureMark,
+  Fold,
   type Line,
   scrolled,
   shown,
   stopped,
   TAKE,
+  useFold,
 } from './Conversation.ts'
 import { signal } from '@preact/signals'
 import { docs } from './vocab.ts'
@@ -191,14 +195,44 @@ test('it draws the last hundred lines, and earlier ones above when asked, where 
   equal(p.root.querySelector('button'), null)
 })
 
-test('it mounts over the page a server drew, and a fold the reader opened stays open as its line is drawn again', () => {
-  let fold = (said: string) => `<details><summary>${said}</summary>x</details>`
-  let given: Line[] = [{ id: 'a', html: fold('Reading…') }, ...lines(1)]
-  let at = { entity: { eid: conversationAt('page', 's') } }
-  let props = { e: at, onChange: () => {}, lines: given, now: 'Now' }
-  let served = renderToString(h(Conversation, props))
+// A line's words with a mark beside them opening the fold under them, which
+// holds a fold of its own, as a call's turn is drawn.
+let Marked = ({ said }: { said: string }) => {
+  let fold = useFold()
+  return h(
+    'div',
+    {},
+    h(DisclosureMark, fold, '☎'),
+    h(
+      Disclosure,
+      { ...fold, summary: said },
+      h(Fold, { summary: 'inner' }, 'x'),
+    ),
+  )
+}
+
+// A conversation drawn by a server and mounted over on a page whose graph
+// holds its state. Its line `a` has two folds, the second inside the first,
+// and a mark opening the first;
+// `draw` draws it again saying `said`, or as the server drew it (`null`),
+// then `more` lines after it, as its owner draws it again on each change.
+let served = () => {
+  let held = new Map<string, Bundle>()
+  let line = (said: string | null): Line =>
+    said == null
+      ? { id: 'a', html: kept }
+      : { id: 'a', node: h(Marked, { said }) }
+  let last: [string | null, number] = ['Reading…', 0]
+  let props = (said: string | null, more: number) => ({
+    e: { entity: { eid: conversationAt('page', 's') } },
+    onChange: (b: Bundle) => (held.set(b.entity.eid, b), draw(...last)),
+    state: (eid: string) => held.get(eid),
+    lines: [line(said), ...lines(more)],
+  })
+  let kept = ''
+  let html = renderToString(h(Conversation, props('Reading…', 0)))
   let { document, Event } = parseHTML(
-    `<html><body><main>${served}</main></body></html>`,
+    `<html><body><main>${html}</main></body></html>`,
   )
   let main = document.querySelector('main')!
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -206,23 +240,74 @@ test('it mounts over the page a server drew, and a fold the reader opened stays 
     value: document,
     configurable: true,
   })
-  try {
-    hydrate(h(Conversation, props), main)
-    equal(main.innerHTML, served)
-    let opened = main.querySelector('details')!
-    opened.setAttribute('open', '')
-    // as a browser tells it, seen on its way down to the fold
-    opened.dispatchEvent(new Event('toggle', { bubbles: true }))
-    let again = [{ id: 'a', html: fold('Read') }, ...lines(2)]
-    render(h(Conversation, { ...props, lines: again }), main)
-    equal(main.querySelector('summary')!.textContent, 'Read')
-    equal(main.querySelector('details')!.hasAttribute('open'), true)
-    equal(main.querySelectorAll('[id^=row-]').length, 3)
-    render(null, main)
-  } finally {
-    if (prior) Object.defineProperty(globalThis, 'document', prior)
-    else Reflect.deleteProperty(globalThis, 'document')
+  kept = main.querySelector('#row-a')!.innerHTML
+  let draw = (said: string | null, more = 0) => (
+    last = [said, more], render(h(Conversation, props(said, more)), main)
+  )
+  hydrate(h(Conversation, props(null, 0)), main)
+  return {
+    main,
+    html,
+    draw,
+    folds: () =>
+      [...main.querySelectorAll('details')].map((d) => d.hasAttribute('open')),
+    // as a browser opens a details by itself and tells it, seen on its way
+    // down to the fold
+    toggle: (at: number) => {
+      let fold = main.querySelectorAll('details')[at]
+      fold.toggleAttribute('open')
+      fold.dispatchEvent(new Event('toggle', { bubbles: true }))
+    },
+    press: (at: number) =>
+      (main.querySelectorAll('summary')[at] as HTMLElement).click(),
+    mark: () => main.querySelector('[data-disclosure-mark]')!,
+    [Symbol.dispose]: () => {
+      render(null, main)
+      if (prior) Object.defineProperty(globalThis, 'document', prior)
+      else Reflect.deleteProperty(globalThis, 'document')
+    },
   }
+}
+
+test('it mounts over the page a server drew, whose folds are closed details that open with no script', () => {
+  using p = served()
+  equal(p.main.innerHTML, p.html)
+  equal(p.folds(), [false, false])
+  equal(p.main.querySelectorAll('details .More_Body').length, 2)
+})
+
+test('a fold opened on the line the server drew stays open as its line is drawn again in other words', () => {
+  using p = served()
+  p.toggle(1)
+  p.draw('Read', 1)
+  equal(p.main.querySelector('summary')!.textContent, 'Read')
+  equal(p.folds(), [false, true])
+  p.draw(null, 1)
+  equal(p.folds(), [false, true], 'and as the server drew it')
+})
+
+test('a fold pressed open stays open as its line is drawn again, and closes when pressed', () => {
+  using p = served()
+  p.draw('Reading…')
+  p.press(0)
+  equal(p.folds(), [true, false])
+  p.draw('Read', 2)
+  equal(p.folds(), [true, false])
+  p.press(0)
+  equal(p.folds(), [false, false])
+})
+
+test("a mark opens and closes its fold, on the server's line as on one drawn again", () => {
+  using p = served()
+  let pressed = () => (p.mark() as HTMLElement).click()
+  pressed()
+  equal(p.folds(), [true, false])
+  equal(p.mark().getAttribute('aria-expanded'), 'true')
+  p.draw('Read')
+  equal(p.folds(), [true, false])
+  pressed()
+  equal(p.folds(), [false, false])
+  equal(p.mark().getAttribute('aria-expanded'), 'false')
 })
 
 // A box on a linkedom page, its words kept in drafts held in a signal, as a

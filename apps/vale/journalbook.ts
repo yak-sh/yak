@@ -135,10 +135,10 @@ export let journal = (
               e: state.row(section(level)),
               summary: [mark('done'), `Completed · ${done.length}`],
               summaryProps: {
-                mod: 'quiet',
                 class: 'Journal_Completed',
                 'data-completed': level,
               },
+              lazy: true,
               onChange: (bundle) => {
                 state.mutate([bundle])
                 draw()

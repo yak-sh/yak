@@ -149,13 +149,14 @@ test('base and external specimens draw, Disclosure emits and keeps its controlle
         render(node, root)
         await tick()
         if (piece == kit.components.Disclosure) {
-          let shown = !!root.querySelector('p')
-          root.querySelector('button')!.click()
+          let open = () => !!root.querySelector('details[open]')
+          let shown = open()
+          root.querySelector('summary')!.click()
           await tick()
-          assertEquals(!!root.querySelector('p'), !shown)
-          root.querySelector('button')!.click()
+          assertEquals(open(), !shown)
+          root.querySelector('summary')!.click()
           await tick()
-          assertEquals(!!root.querySelector('p'), shown)
+          assertEquals(open(), shown)
         } else {
           assertEquals(!!root.textContent, true)
         }
