@@ -157,6 +157,34 @@ test('an association whose plural is taken is named by its property', () => {
   }
 })
 
+// A kind of two components, neither of them a kind on its own: what lacks
+// either one is the next kind it is, and what has both is only the couple, which sorts first.
+test('a kind of two components is named only where both are worn', () => {
+  let tag = { component: true, type: 'object', properties: {} } as const
+  let v = loadVocab({
+    $defs: { doc: { ...tag, kind: true }, left: tag, right: tag },
+    kinds: { couple: { is: ['left', 'right'] } },
+  })
+  let bs: Bundle[] = [
+    { entity: { eid: 'plain' }, doc: {} },
+    { entity: { eid: 'l' }, doc: {}, left: {} },
+    { entity: { eid: 'r' }, doc: {}, right: {} },
+    { entity: { eid: 'both' }, doc: {}, left: {}, right: {} },
+    { entity: { eid: 'bare' }, left: {}, right: {} },
+  ]
+  let s = loaded(v, bs)
+  for (
+    let [q, want] of [
+      ['.kind=couple', ['bare', 'both']],
+      ['.kind=couples', ['bare', 'both']],
+      ['.kind=doc', ['l', 'plain', 'r']],
+    ] as [string, string[]][]
+  ) {
+    assertEquals(eids(matcher(q, v, { now: NOW })(bs)).sort(), want, q)
+    assertEquals(eids(fromSql(s, q)).sort(), want, q)
+  }
+})
+
 test('a window cuts the whole alternation, on both sides', () => {
   let s = sql()
   let sides = [

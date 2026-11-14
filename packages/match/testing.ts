@@ -69,7 +69,23 @@ let doc: VocabDoc = {
       type: 'object',
       properties: {},
     },
+    // A job for the shop to do, and the question a decision puts to the
+    // owner. A task is a kind on its own; a task that is also a decision is
+    // the kind the `kinds` section names below.
+    task: {
+      component: true,
+      type: 'object',
+      kind: true,
+      properties: { done: { type: 'boolean' } },
+    },
+    decision: {
+      component: true,
+      type: 'object',
+      properties: { question: { type: 'string' } },
+    },
   },
+  // A kind made of two components: an entity is a decision when it has both.
+  kinds: { decision: { is: ['task', 'decision'] } },
 }
 
 /** The bookshop vocabulary. */
@@ -141,13 +157,26 @@ let rows: Bundle[] = [
     doc: { title: 'Opening hours', body: 'nine to five' },
   },
   { entity: { eid: 'r9' }, review: { stars: 1, book: 'b3' } },
+  { entity: { eid: 't1' }, task: { done: false } },
+  {
+    entity: { eid: 'q1' },
+    task: { done: false },
+    decision: { question: 'open on sundays?' },
+  },
+  // A decision component with no task makes no decision.
+  {
+    entity: { eid: 'q2' },
+    doc: { title: 'Restock' },
+    decision: { question: 'which wall?' },
+  },
 ]
 
 /** The eid of the entity that is deleted after the fixture is written. */
 export let DEAD = 'r9'
 
 // The letter each kind is numbered with.
-let letter = (b: Bundle) => b.review ? 'R' : b.member ? 'M' : b.book ? 'B' : 'D'
+let letter = (b: Bundle) =>
+  b.review ? 'R' : b.member ? 'M' : b.book ? 'B' : b.task ? 'T' : 'D'
 
 /** The fixture as it is written to storage, in order, each entity stating
  * its id: the number of its place in the list, under its kind's letter, so
@@ -235,6 +264,12 @@ export let QUERIES: string[] = [
   '.kind=doc',
   '.kind=review',
   '.kind=member',
+  // a kind of two components, and the kind of one of them
+  '.kind=decision',
+  '.kind=decisions',
+  '.kind=task',
+  '.kind=decision|.kind=task',
+  '.decision&.kind=doc',
   // references, forward and followed
   '.book.author=a1',
   '!book.author',

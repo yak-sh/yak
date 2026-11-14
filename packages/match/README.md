@@ -226,11 +226,16 @@ each component that declares it: `.price` answers
 
 ### Kinds
 
-A vocabulary marks some components as [kinds](../vocab/README.md#vocabulary) and
-orders them by precedence. `.kind=book` selects entities that have the `book`
-component and none of the kinds ordered before it — that is, entities whose most
-specific kind is `book`. A plural folds to the singular: `.kind=books` means
-`.kind=book`. A value that names no kind is refused.
+A vocabulary declares [kinds](../vocab/README.md#vocabulary), each the
+components an entity carries to be that kind (its `is`), and orders them by
+precedence. `.kind=book` selects entities that have every component `book` is
+and do not have all of any kind ordered before it, that is, entities whose most
+specific kind is `book`. A kind of two components,
+`decision: {is: [task,
+decision]}`, selects what has both, and sorts before
+`task`, so `.kind=task` leaves the decisions out. A plural folds to the
+singular: `.kind=books` means `.kind=book`. A value that names no kind is
+refused.
 
 ### References and paths
 

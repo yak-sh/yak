@@ -1399,9 +1399,10 @@ let leafRead = (ctx: Ctx, leaf: Hop, target: string): Read => {
   }
 }
 
-// `.kind=K`: the entity has the component K, and every kind that sorts before
-// it is absent — the exact, index-searchable form of "K is the most specific
-// kind present". A plural is accepted (`.kind=tasks` reads as `.kind=task`).
+// `.kind=K`: the entity has every component K is, and no kind that sorts
+// before it has all of its own — the exact, index-searchable form of "K is the
+// most specific kind the entity is". A plural is accepted (`.kind=tasks` reads
+// as `.kind=task`).
 let kindScope = (ctx: Ctx, value: string): Cond => {
   let kinds = ctx.v.kinds
   let k = kinds.includes(value)
@@ -1410,16 +1411,40 @@ let kindScope = (ctx: Ctx, value: string): Cond => {
     ? value.slice(0, -1)
     : null
   if (!k) throw new Unsupported('.kind', `${value} names no kind`)
-  // A backed spine's entities wear their one component and no other.
-  if (ctx.spine || !worn(ctx, k)) return ctx.spine == k ? TRUE : FALSE
-  let i = kinds.indexOf(k)
-  let shape = byArchetype(ctx, { all: [k], none: kinds.slice(0, i) })
-  if (shape) return shape
-  // A computed kind is never worn here, so it is absent without asking. Each
-  // earlier kind is a set to be outside of rather than a table to join, so a
-  // vocabulary of more kinds than SQLite joins in one statement still binds.
-  let earlier = kinds.slice(0, i).filter((e) => worn(ctx, e))
-  return and(owned(ctx, k), ...earlier.map((e) => not(owned(ctx, e))))
+  let is = (kind: string) => ctx.v.kind(kind)!.is
+  let mine = is(k)
+  // What each earlier kind needs beyond K's own components is what K's
+  // entities must lack. A computed component is never worn here, so a kind
+  // needing one is absent without asking, and a backed spine's entities wear
+  // their one component and no other. A rival needing nothing more is always
+  // present, and one needing all another needs and more is absent with it.
+  let rivals = kinds.slice(0, kinds.indexOf(k))
+    .map((e) => is(e).filter((c) => !mine.includes(c)))
+    .filter((rest) => rest.every((c) => worn(ctx, c)))
+  if (!mine.every((c) => worn(ctx, c)) || rivals.some((r) => !r.length)) {
+    return FALSE
+  }
+  if (ctx.spine) return rivals.length ? FALSE : TRUE
+  rivals = rivals.filter((r) =>
+    !rivals.some((o) =>
+      o != r && o.length < r.length && o.every((c) => r.includes(c))
+    )
+  )
+  let lone = rivals.filter((r) => r.length == 1).map(([c]) => c)
+  let several = rivals.filter((r) => r.length > 1)
+  // Each earlier kind is a set to be outside of rather than a table to join, so
+  // a vocabulary of more kinds than SQLite joins in one statement still binds.
+  let shape = byArchetype(ctx, { all: mine, none: lone }) ??
+    and(
+      ...mine.map((c) => owned(ctx, c)),
+      ...lone.map((c) => not(owned(ctx, c))),
+    )
+  return several.length
+    ? and(
+      shape,
+      ...several.map((r) => not(and(...r.map((c) => owned(ctx, c))))),
+    )
+    : shape
 }
 
 // The backlink union across every reference property: the entities that point
@@ -1991,7 +2016,7 @@ let reverse = (
 
 // The reference walk: `.fork.from->S-7` follows one reference property of one
 // component, so the step is that component's own rows read as (owner, referent)
-// pairs. A path of several reference properties composes into one step — the
+// several. A path of several reference properties composes into one step — the
 // hops joined to each other (`.fork.from.entry.session` is `fork` joined to the
 // `entry` its `from` names) — so `from` is the first component's owner and `to`
 // is the last hop's referent, and one rung of the CTE crosses the whole chain.
@@ -2094,7 +2119,7 @@ let wants = (v: Vocab, tags: Tags, c: Clause): string[] => {
   if (c.path.join('.') == 'kind') {
     let k = flat(c.value)
     k = v.kinds.includes(k) ? k : k.replace(/s$/, '')
-    return op == '' && computed(v, k) ? [k] : []
+    return op == '' ? (v.kind(k)?.is ?? []).filter((c) => computed(v, c)) : []
   }
   let hop: Hop | undefined
   try {

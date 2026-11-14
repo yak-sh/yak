@@ -303,9 +303,9 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Arm => {
   )
 }
 
-// `.kind=K`: the entity has component K and none of the kinds ordered before it
-// — that is, K is the most specific kind present. A plural folds to the
-// singular (`.kind=reviews` reads as `.kind=review`).
+// `.kind=K`: the entity has every component K is, and no kind ordered before
+// it has all of its own — that is, K is the most specific kind the entity is.
+// A plural folds to the singular (`.kind=reviews` reads as `.kind=review`).
 let kindScope = (ctx: Ctx, value: string): Arm => {
   let kinds = ctx.v.kinds
   let k = kinds.includes(value)
@@ -314,10 +314,13 @@ let kindScope = (ctx: Ctx, value: string): Arm => {
     ? value.slice(0, -1)
     : null
   if (!k) throw new Unsupported('.kind', `${value} names no kind`, BY)
-  let earlier = kinds.slice(0, kinds.indexOf(k))
+  let is = (kind: string) => ctx.v.kind(kind)!.is
+  let mine = is(k)
+  let earlier = kinds.slice(0, kinds.indexOf(k)).map(is)
+  let all = (b: Bundle, comps: string[]) => comps.every((c) => wears(b, c))
   return arm(
-    (b) => wears(b, k) && earlier.every((e) => !wears(b, e)),
-    wearing(k),
+    (b) => all(b, mine) && !earlier.some((e) => all(b, e)),
+    mine.flatMap(wearing),
   )
 }
 

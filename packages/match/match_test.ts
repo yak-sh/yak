@@ -121,6 +121,9 @@ test('a scalar filter selects, and an absent property is a value', () => {
     'r3',
     'm1',
     'd1',
+    't1',
+    'q1',
+    'q2',
   ])
   assertEquals(sel('.book.available=1'), ['b1', 'b3', 'b4'])
 })
@@ -198,8 +201,12 @@ test('a name alone is the component, never the property beside it', () => {
 test('the kind scope names the most specific kind', () => {
   assertEquals(sel('.kind=book'), ['b1', 'b2', 'b3', 'b4'])
   assertEquals(sel('.kind=books'), ['b1', 'b2', 'b3', 'b4'])
-  assertEquals(sel('.kind=doc'), ['a1', 'a2', 'd1'])
+  // a decision component without a task makes no decision: q2 is a doc
+  assertEquals(sel('.kind=doc'), ['a1', 'a2', 'd1', 'q2'])
   assertEquals(sel('.kind=member'), ['m1'])
+  // a kind of two components names what has both, before the kind of one
+  assertEquals(sel('.kind=decision'), ['q1'])
+  assertEquals(sel('.kind=task'), ['t1'])
 })
 
 test('a reference is followed through the set it was given', () => {
