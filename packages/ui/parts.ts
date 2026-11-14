@@ -1,16 +1,15 @@
 /**
- * @yaks/ui/parts: every part, without the looks. A theme, skin or kit names
- * its stylesheets beside its module (`new URL('./x.css', import.meta.url)`),
- * which a bundled Worker has no address for, so evaluating one there throws
- * "Invalid URL string." A host that draws parts and serves its look from
- * elsewhere, as a Worker rendering pages to HTML does, and every package of
- * components built on the parts (@yaks/ux), import from here. The package's
- * root is these and the looks.
+ * @yaks/ui/parts: every part, without the looks. A host that draws parts and
+ * serves its look from elsewhere, as a Worker rendering pages to HTML does,
+ * and every package of components built on the parts (@yaks/ux), import from
+ * here. The package's root is these and the looks. `beside` names a kit's
+ * stylesheets lazily (theme.ts `Stylesheet`).
  *
  * @module
  */
 
 export { block, el, type Part, type Props, Surround } from './el.ts'
+export { beside, type Stylesheet } from './theme.ts'
 export { Surface } from './Surface.ts'
 export { Dot, shapes, tones } from './Dot.ts'
 export { Id } from './Id.ts'

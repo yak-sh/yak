@@ -130,7 +130,9 @@ test('native anatomy keeps actual UI and later command/view loading separate', (
         },
       },
     },
-    themes: { forest: { css: new URL('https://example.invalid/theme.css') } },
+    themes: {
+      forest: { css: () => new URL('https://example.invalid/theme.css') },
+    },
   }
   Object.defineProperty(ui.kits, 'vault', {
     enumerable: true,

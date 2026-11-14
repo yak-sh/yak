@@ -5,7 +5,9 @@
  * @module
  */
 
-import type { Theme } from './theme.ts'
+import { beside, type Theme } from './theme.ts'
+
+let at = beside(import.meta.url)
 
 let moss = '#a7c080'
 let rose = '#e67e80'
@@ -16,7 +18,7 @@ let taupe = '#c9b19c'
 
 /** Linen: yaks.app's warm sheet in light, the same room at night in dark. */
 export let linen: Theme = {
-  css: new URL('./linen.css', import.meta.url),
+  css: at('./linen.css'),
   colors: {
     bg: '#2b231f',
     surface: '#392d27',

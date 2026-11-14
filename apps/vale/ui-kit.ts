@@ -1,6 +1,6 @@
 /** Vale's display-only parts and their carried stylesheet addresses, which
  * the game, the guide and the style guide draw with. */
-import { type Composition, type Kit, kits as base } from '@yaks/ui'
+import { beside, type Composition, type Kit, kits as base } from '@yaks/ui'
 import * as meter from './kit/ValeMeter.ts'
 import * as keycap from './kit/ValeKeycap.ts'
 import * as toast from './kit/ValeToast.ts'
@@ -10,6 +10,8 @@ import * as compass from './kit/ValeCompass.ts'
 import { kit as game } from '@yaks/game/hud'
 import * as badge from './kit/ValeBadge.ts'
 import { skin, theme } from './skin.ts'
+
+let here = beside(import.meta.url)
 
 export { ValeMeter } from './kit/ValeMeter.ts'
 export { ValeKeycap } from './kit/ValeKeycap.ts'
@@ -24,37 +26,37 @@ export let kit: Kit = {
   ValeRecording: {
     ...recording,
     Component: recording.ValeRecording,
-    css: new URL('./kit/ValeRecording.css', import.meta.url),
+    css: here('./kit/ValeRecording.css'),
   },
   ValeMeter: {
     ...meter,
     Component: meter.ValeMeter,
-    css: new URL('./kit/ValeMeter.css', import.meta.url),
+    css: here('./kit/ValeMeter.css'),
   },
   ValeKeycap: {
     ...keycap,
     Component: keycap.ValeKeycap,
-    css: new URL('./kit/ValeKeycap.css', import.meta.url),
+    css: here('./kit/ValeKeycap.css'),
   },
   ValeToast: {
     ...toast,
     Component: toast.ValeToast,
-    css: new URL('./kit/ValeToast.css', import.meta.url),
+    css: here('./kit/ValeToast.css'),
   },
   ValeOrb: {
     ...orb,
     Component: orb.ValeOrb,
-    css: new URL('./kit/ValeOrb.css', import.meta.url),
+    css: here('./kit/ValeOrb.css'),
   },
   ValeCompass: {
     ...compass,
     Component: compass.ValeCompass,
-    css: new URL('./kit/ValeCompass.css', import.meta.url),
+    css: here('./kit/ValeCompass.css'),
   },
   ValeBadge: {
     ...badge,
     Component: badge.ValeBadge,
-    css: new URL('./kit/ValeBadge.css', import.meta.url),
+    css: here('./kit/ValeBadge.css'),
   },
 }
 export let kits = { game, vale: kit }

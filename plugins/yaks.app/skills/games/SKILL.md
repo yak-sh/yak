@@ -237,7 +237,7 @@ import { kit, Stats } from '@yaks/game/hud'
 
 let css = document.createElement('link')
 css.rel = 'stylesheet'
-css.href = String(kit.Stats.css)
+css.href = kit.Stats.css().href
 document.head.append(css)
 render(
   h(

@@ -20,7 +20,8 @@ import {
 import { everforest } from './everforest.ts'
 import type { Composition, Kit } from './theme.ts'
 
-let css = (text: string) => new URL(`data:text/css,${encodeURIComponent(text)}`)
+let css = (text: string) => () =>
+  new URL(`data:text/css,${encodeURIComponent(text)}`)
 let Extra = el('span', 'Extra')
 let external: Kit = {
   Extra: {
@@ -149,7 +150,7 @@ test('missing external CSS is a composition failure, not an undressed page', asy
     stylesheet({
       ...c,
       skin: {
-        Extra: { css: new URL('file:///definitely-absent-ui.css') },
+        Extra: { css: () => new URL('file:///definitely-absent-ui.css') },
       },
     })
   )
@@ -201,7 +202,10 @@ test('inlined external styles retain their own relative asset and import address
     )
     let outside = {
       ...external,
-      Extra: { ...external.Extra, css: new URL(`file://${dir}/part.css`) },
+      Extra: {
+        ...external.Extra,
+        css: () => new URL(`file://${dir}/part.css`),
+      },
     }
     let css = await stylesheet({ kits: { outside }, theme: everforest })
     assert(css.includes(`@import "file://${dir}/theme.css"`))

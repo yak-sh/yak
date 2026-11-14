@@ -2,9 +2,9 @@
  * edges, hatched elevation and inset wells. Those tokens reach every kit,
  * including parts this skin does not name. Entries below supply layout and
  * component-specific details. */
-import type { Skin } from './theme.ts'
+import { beside, type Skin } from './theme.ts'
 
-let at = (path: string) => new URL(path, import.meta.url)
+let at = beside(import.meta.url)
 
 export let pencil: Skin = {
   Surface: { over: at('./pencil/Surface.css') },

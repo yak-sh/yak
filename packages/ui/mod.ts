@@ -65,8 +65,10 @@ export type {
   Skin,
   Specimen,
   Style,
+  Stylesheet,
   Theme,
 } from './theme.ts'
+export { beside } from './theme.ts'
 export { ledger } from './ledger.ts'
 export { paper } from './paper.ts'
 export { pencil } from './pencil.ts'

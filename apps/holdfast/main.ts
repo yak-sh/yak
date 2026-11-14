@@ -54,7 +54,7 @@ async function boot() {
   ) {
     let link = document.createElement('link')
     link.rel = 'stylesheet'
-    link.href = String(url)
+    link.href = url().href
     document.head.insertBefore(
       link,
       document.querySelector('link[rel=stylesheet]'),

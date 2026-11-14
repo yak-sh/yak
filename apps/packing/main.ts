@@ -14,7 +14,7 @@ for (
 ) {
   let link = document.createElement('link')
   link.rel = 'stylesheet'
-  link.href = String(url)
+  link.href = url().href
   document.head.append(link)
 }
 

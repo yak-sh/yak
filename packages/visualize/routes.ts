@@ -68,7 +68,7 @@ export let routes = (host: Hosting): Route[] => {
       asset(
         `/visualize/themes/${name}.css`,
         'text/css; charset=utf-8',
-        async () => halved(await text(theme.css)),
+        async () => halved(await text(theme.css())),
       )
     ),
     ...http(host),

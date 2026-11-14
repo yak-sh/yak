@@ -92,15 +92,19 @@ import { pencil } from './pencil.ts'
 import { rosepine } from './rosepine.ts'
 import { Fragment } from 'preact'
 import { text } from '@yaks/api/asset'
-import type {
-  Composition,
-  Contributions,
-  Kit,
-  Native,
-  Piece,
-  Skin,
-  Theme,
+import {
+  beside,
+  type Composition,
+  type Contributions,
+  type Kit,
+  type Native,
+  type Piece,
+  type Skin,
+  type Stylesheet,
+  type Theme,
 } from './theme.ts'
+
+let here = beside(import.meta.url)
 
 /** Every part, by what it is for: the document's defaults, what is said
  * inline, what is pressed or typed in, the way around, lists of things, and
@@ -194,7 +198,7 @@ export let groups: Record<string, Kit> = Object.fromEntries(
       Object.entries(parts).map(([name, part]) => [name, {
         ...part,
         Component: name == 'base' ? Fragment : Reflect.get(part, name),
-        css: new URL(`./${name}.css`, import.meta.url),
+        css: here(`./${name}.css`),
       } as Piece]),
     ),
   ]),
@@ -289,7 +293,8 @@ export let native = (c: Composition): Native =>
     ),
   )
 
-let read = async (url: URL) => {
+let read = async (sheet: Stylesheet) => {
+  let url = sheet()
   let css = await text(url)
   // Inlining must retain each external sheet's address for images and imports.
   let at = (path: string) =>
@@ -308,14 +313,14 @@ let read = async (url: URL) => {
 
 /** What every theme derives the same way, dressed after the theme whatever
  * the parts: the half gap, the faint wash, the touch floor, the type scale. */
-let DERIVED = new URL('./derived.css', import.meta.url)
+let DERIVED = here('./derived.css')
 
 /** Each sheet a browser gets, by what it dresses: `theme` first (the theme,
  * and what every theme derives), then one rendering per part, the skin's
  * where it replaces one, the kit's otherwise, and whatever the skin lays over
  * it. A host that layers its own CSS reads them apart. */
 export let sheets = async (c: Composition): Promise<[string, string][]> => {
-  let each = (urls: URL[]) => Promise.all(urls.map(read))
+  let each = (sheets: Stylesheet[]) => Promise.all(sheets.map(read))
   return await Promise.all([
     each([c.theme.css, DERIVED]).then((css): [string, string] => [
       'theme',

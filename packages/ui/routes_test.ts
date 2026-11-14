@@ -37,7 +37,9 @@ test('/ui switches theme and scheme by link', async () => {
   assert(
     page.includes('href="?theme=everforest&amp;scheme=light&amp;skin=paper"'),
   )
-  assert(page.includes('href="?theme=rosepine&amp;scheme=dark&amp;skin=paper"'))
+  assert(
+    page.includes('href="?theme=rosepine&amp;scheme=dark&amp;skin=paper"'),
+  )
   assert(page.includes('skin=paper" class="Tabs_Tab Tabs_Tab-on">rosepine<'))
   // What names nothing is the default: gouache on paper, the system's scheme.
   let fallback = await get('?theme=nope&scheme=sepia')
@@ -55,7 +57,7 @@ test('/ui keeps the base beside installed kits, skins and UX specimens', async (
         outside: {
           Sample: {
             Component: () => h('p', {}, 'outside'),
-            css: new URL('data:text/css,.Sample{display:block}'),
+            css: () => new URL('data:text/css,.Sample{display:block}'),
             sheet: () => ({}),
             description: 'an installed part',
             specimens: () => [['sample', h('p', {}, 'outside')]],
@@ -65,7 +67,7 @@ test('/ui keeps the base beside installed kits, skins and UX specimens', async (
       themes: { outside: everforest },
       skins: {
         outside: {
-          Sample: { css: new URL('data:text/css,.Sample{display:grid}') },
+          Sample: { css: () => new URL('data:text/css,.Sample{display:grid}') },
         },
       },
       ux: {
@@ -82,7 +84,8 @@ test('/ui keeps the base beside installed kits, skins and UX specimens', async (
     },
   })
   let page =
-    await (await route.handle(new Request('http://box/ui?skin=outside'))).text()
+    await (await route.handle(new Request('http://box/ui?skin=outside')))
+      .text()
   for (
     let text of [
       'id="Button"',

@@ -23,7 +23,8 @@ let composition: Composition = {
     extra: {
       Receipt: {
         Component: Receipt,
-        css: new URL('data:text/css,.Receipt { display: grid; gap: 1em }'),
+        css: () =>
+          new URL('data:text/css,.Receipt { display: grid; gap: 1em }'),
         description: 'A receipt',
         sheet: () => ({ Receipt: { gap: true } }),
         specimens: () => [],

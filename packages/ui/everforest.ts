@@ -5,7 +5,9 @@
  * @module
  */
 
-import type { Theme } from './theme.ts'
+import { beside, type Theme } from './theme.ts'
+
+let at = beside(import.meta.url)
 
 let red = '#e67e80'
 let orange = '#e69875'
@@ -17,7 +19,7 @@ let fg = '#d3c6aa'
 
 /** Everforest dark (medium). */
 export let everforest: Theme = {
-  css: new URL('./everforest.css', import.meta.url),
+  css: at('./everforest.css'),
   colors: {
     bg: '#232a2e',
     surface: '#2d353b',

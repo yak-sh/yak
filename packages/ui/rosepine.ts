@@ -5,7 +5,9 @@
  * @module
  */
 
-import type { Theme } from './theme.ts'
+import { beside, type Theme } from './theme.ts'
+
+let at = beside(import.meta.url)
 
 let love = '#eb6f92'
 let gold = '#f6c177'
@@ -17,7 +19,7 @@ let fg = '#e0def4'
 
 /** Rosé Pine (main). */
 export let rosepine: Theme = {
-  css: new URL('./rosepine.css', import.meta.url),
+  css: at('./rosepine.css'),
   colors: {
     bg: '#191724',
     surface: '#1f1d2e',

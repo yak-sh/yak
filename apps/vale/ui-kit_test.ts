@@ -32,7 +32,7 @@ test('Vale composition puts the theme before kit and skin fallback assets', asyn
     ),
   ]
   let originals = await Promise.all(
-    urls.map(async (url) => await (await fetch(url)).text()),
+    urls.map(async (url) => await (await fetch(url())).text()),
   )
   assert(
     css.startsWith(originals[0].slice(0, originals[0].indexOf('@import'))),
@@ -54,7 +54,7 @@ test('Vale composition puts the theme before kit and skin fallback assets', asyn
 })
 
 // Read the browser assets once; check their semantic colours against the terminal.
-let mapped = await (await fetch(composition.theme.css)).text()
+let mapped = await (await fetch(composition.theme.css())).text()
 let source = await (await fetch(new URL('./ui/theme.css', import.meta.url)))
   .text()
 let tokens = Object.fromEntries(

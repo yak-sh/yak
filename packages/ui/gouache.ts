@@ -6,7 +6,9 @@
  * @module
  */
 
-import type { Theme } from './theme.ts'
+import { beside, type Theme } from './theme.ts'
+
+let at = beside(import.meta.url)
 
 let teal = '#8cc5c3'
 let sienna = '#e5a888'
@@ -17,7 +19,7 @@ let muted = '#cbc4b6'
 
 /** Gouache: yak.sh's sheet in light, its terminal windows in dark. */
 export let gouache: Theme = {
-  css: new URL('./gouache.css', import.meta.url),
+  css: at('./gouache.css'),
   colors: {
     bg: '#272b35',
     surface: '#33363f',

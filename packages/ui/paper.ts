@@ -2,13 +2,15 @@
  * (paper/grain.css, which pencil shares) and its links and headings laid
  * over the kit's document defaults. Every part keeps the kit's rendering;
  * the skin only adds to the document's. */
-import type { Skin } from './theme.ts'
+import { beside, type Skin } from './theme.ts'
+
+let at = beside(import.meta.url)
 
 export let paper: Skin = {
   base: {
     over: [
-      new URL('./paper/grain.css', import.meta.url),
-      new URL('./paper/base.css', import.meta.url),
+      at('./paper/grain.css'),
+      at('./paper/base.css'),
     ],
   },
 }

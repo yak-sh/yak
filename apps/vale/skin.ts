@@ -1,7 +1,9 @@
 /** Vale's rendering of the base kit and its role mapping: the parts wear the
  * glass the game is painted in (kit/theme.css), and a terminal the same
  * colours, with no game or renderer state imported. */
-import { type Colors, type Skin, type Theme } from '@yaks/ui'
+import { beside, type Colors, type Skin, type Theme } from '@yaks/ui'
+
+let here = beside(import.meta.url)
 
 export let colors: Colors = {
   bg: '#fbf7ea',
@@ -33,7 +35,7 @@ export let colors: Colors = {
   hues: ['#567bb4', '#9a6a1c', '#9a3fd6', '#3f6f3a', '#d9670f', '#a8492a'],
 }
 export let theme: Theme = {
-  css: new URL('./kit/theme.css', import.meta.url),
+  css: here('./kit/theme.css'),
   colors,
 }
 
@@ -56,6 +58,6 @@ export let skin: Skin = Object.fromEntries(
     'Tip',
     'Turns',
   ].map((name) => [name, {
-    css: new URL(`./kit/skin/${name}.css`, import.meta.url),
+    css: here(`./kit/skin/${name}.css`),
   }]),
 )

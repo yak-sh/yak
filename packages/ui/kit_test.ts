@@ -10,6 +10,7 @@ import { Guide } from './guide.ts'
 import { sheet, stylesheet, themes } from './kit.ts'
 import { Menu } from './Menu.ts'
 import { Tabs } from './Tabs.ts'
+import { beside } from './theme.ts'
 
 // deno-lint-ignore no-control-regex -- the painter's colours, to read the words
 let plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
@@ -19,7 +20,7 @@ let dress = compose(sheet({ kits, theme: everforest }))
 
 test("a theme's colours are its stylesheet's dark ones", async () => {
   for (let [theme, { css, colors }] of Object.entries(themes)) {
-    let text = await (await fetch(css)).text()
+    let text = await (await fetch(css())).text()
     let said = Object.fromEntries(
       [...text.matchAll(/--([\w-]+):\s*light-dark\([^,]+,\s*([^)]+)\)/g)]
         .map(([, k, v]) => [k, v]),
@@ -114,4 +115,10 @@ test('the style guide paints in a terminal', () => {
   for (let label of ['Dot-ring', 'Id-retired', 'Stamp', 'Tip', 'table']) {
     assert(out.includes(label), label)
   }
+})
+
+test('a stylesheet resolves when read, and says its address as a string', () => {
+  let at = beside('file:///kit/mod.ts')
+  assertEquals(at('./Tile.css')().href, 'file:///kit/Tile.css')
+  assertEquals(String(at('./Tile.css')), 'file:///kit/Tile.css')
 })

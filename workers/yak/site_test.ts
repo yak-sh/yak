@@ -214,7 +214,10 @@ test('the connector icon is square, self-contained and on the ground', () => {
       `./public/${icon.src.slice(SITE_URL.length + 1)}`,
       import.meta.url,
     )
-    assert(Deno.statSync(file).size > 0, `${icon.src} is not a file in public/`)
+    assert(
+      Deno.statSync(file).size > 0,
+      `${icon.src} is not a file in public/`,
+    )
   }
   assertEquals(CONNECTOR.icons.map((i) => i.sizes), [['any'], ['512x512']])
 })
@@ -258,7 +261,7 @@ test('every jump names a section on its own page', () => {
 // shows is the kit's to add.
 let drawn = async (name: string) => {
   let { css, over } = pencil[name] ?? { css: kit[name].css }
-  let urls = [css, ...[over ?? []].flat()].filter((url) => !!url) as URL[]
+  let urls = [css, ...[over ?? []].flat()].flatMap((at) => at ? [at()] : [])
   let sheets = await Promise.all(
     urls.map(async (url) => (await fetch(url)).text()),
   )
@@ -642,7 +645,10 @@ test('every page carries the head an engine reads', () => {
       page,
     )
     for (let tag of ['og:title', 'og:description', 'og:site_name']) {
-      assert(meta(document, `meta[property="${tag}"]`), `${page} has no ${tag}`)
+      assert(
+        meta(document, `meta[property="${tag}"]`),
+        `${page} has no ${tag}`,
+      )
     }
     assertEquals(
       (html.match(/<h1[\s>]/g) ?? []).length,

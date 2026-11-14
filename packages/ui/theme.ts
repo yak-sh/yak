@@ -74,10 +74,24 @@ export type Colors = {
   hues: [string, string, string, string, string, string]
 }
 
+/** A stylesheet's address, resolved when the sheet is read, never when its
+ * module loads: a bundled Worker has no module address to resolve against,
+ * so `new URL('./x.css', import.meta.url)` at load throws there. */
+export type Stylesheet = () => URL
+
+/** Stylesheets named beside a module: `let at = beside(import.meta.url)`,
+ * then `css: at('./x.css')`. Each also says its address as a string, as the
+ * URL it replaced did, so shipped app code linking `String(part.css)` keeps
+ * its look. */
+export let beside = (base: string) => (path: string): Stylesheet => {
+  let url = () => new URL(path, base)
+  return Object.assign(url, { toString: () => url().href })
+}
+
 /** A theme: its custom properties, and their colours. */
 export type Theme = {
   /** the stylesheet defining the custom properties */
-  css: URL
+  css: Stylesheet
   colors: Colors
 }
 
@@ -99,7 +113,7 @@ export type Piece = {
   // Kits contain components with different props; consumers import their typed component.
   // deno-lint-ignore no-explicit-any -- heterogeneous component registry
   Component: ComponentType<any>
-  css: URL
+  css: Stylesheet
   description: string
   sheet: (c: Colors) => Sheet
   native?: (c: Colors) => Native
@@ -116,8 +130,8 @@ export type Kit = Record<string, Piece>
  * copying it, and two skins can share what they lay. Missing entries fall back
  * to the kit; a missing terminal sheet or native entry keeps the kit's. */
 export type Skin = Record<string, {
-  css?: URL
-  over?: URL | URL[]
+  css?: Stylesheet
+  over?: Stylesheet | Stylesheet[]
   sheet?: (c: Colors) => Sheet
   native?: (c: Colors) => Native
 }>

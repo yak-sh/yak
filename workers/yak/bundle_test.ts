@@ -43,3 +43,33 @@ test('every door the kernel opens imports only node modules the Worker has', asy
     await stop()
   }
 })
+
+// A bundled module's import.meta.url is no address a relative URL resolves
+// against, as a blob: URL's is not, so a module that resolves one when it
+// loads throws "Invalid URL string." in the Worker. @yaks/ui's root carries
+// every theme, skin and kit, and each names its stylesheets lazily.
+test("@yaks/ui's root loads in the Worker's bundle", async () => {
+  let root = dirname(fileURLToPath(import.meta.url))
+  try {
+    let { outputFiles } = await build({
+      ...options(root),
+      entryPoints: undefined,
+      stdin: {
+        contents: "export * from '@yaks/ui'",
+        resolveDir: root,
+        loader: 'ts',
+      },
+      splitting: false,
+      write: false,
+      minify: false,
+      sourcemap: false,
+    })
+    let code = outputFiles![0].text
+    let at = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }))
+    let ui = await import(at)
+    URL.revokeObjectURL(at)
+    assertEquals(typeof ui.themes.linen.css, 'function')
+  } finally {
+    await stop()
+  }
+})

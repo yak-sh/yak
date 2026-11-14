@@ -11,7 +11,7 @@ rendering `<span class="Dot">` (`Part`). A **variant** is a `mod` value that
 adds a class to a part: `mod: 'ring'` adds `Dot-ring`. `block` attaches named
 parts using an underscore: `Menu.Item` renders `Menu_Item`.
 
-A **piece** carries a part's `Component`, CSS URL, terminal `sheet` function,
+A **piece** carries a part's `Component`, stylesheet, terminal `sheet` function,
 optional `native` function, `description` and `specimens` function (`Piece`).
 `native(colors)` gives the React Native style of each class the part renders
 (`Native`), which a native host such as the iOS shell draws its views with
@@ -25,13 +25,17 @@ state and handles presses; parts do not read a
 [graph](../graph/README.md#data-model). Their class names let CSS and terminal
 [sheets](../tui/README.md#style) style the same tree.
 
-`@yaks/ui/parts` exports every part without the themes, skins, kits and guide.
-Those name their stylesheets beside their modules
-(`new URL('./x.css', import.meta.url)`), and a bundled Worker has no address to
-resolve that against, so evaluating them there throws "Invalid URL string." A
+`@yaks/ui/parts` exports every part without the themes, skins, kits and guide. A
 server that draws parts, and a package of components built on them such as
 [@yaks/ux](../ux/README.md), imports `@yaks/ui/parts`. The root exports the
 parts and the looks.
+
+A **stylesheet** is a function giving the sheet's URL (`Stylesheet`), called
+where the sheet is read, never when its module loads: a bundled Worker's
+`import.meta.url` is no address to resolve `./x.css` against, so a URL made at
+load throws "Invalid URL string." there. `beside(import.meta.url)` names
+stylesheets next to a module: `let at = beside(import.meta.url)`, then
+`css: at('./Tile.css')`.
 
 ```ts
 import { h } from 'preact'
@@ -299,8 +303,8 @@ full-size muted line for an empty list or a count of items left out.
 
 ## Themes and skins
 
-A **theme** supplies a CSS URL defining custom properties and the same colors as
-values for terminal sheets (`Theme`). `Colors` names color roles: background,
+A **theme** supplies a stylesheet defining custom properties and the same colors
+as values for terminal sheets (`Theme`). `Colors` names color roles: background,
 ink, links, headings, states, stored values and code syntax; `hues` holds six
 colors for `Chip`. `themes` names `gouache`, `everforest`, `rosepine` and
 `linen`; `gouache`, the colours of yak.sh's painted yak, is the default, and
@@ -349,9 +353,9 @@ unique names bare and qualifying shared names as `kit/name`. A skin can target
 one kit with `kit/name`; a bare skin key matches every kit, with scoped entries
 taking precedence. `stylesheet` loads the theme, then one CSS rendering per
 piece in kit order; it resolves relative CSS `url()` and quoted `@import`
-addresses against each CSS URL. `sheet` combines the selected terminal entries,
-including the base entries for [@yaks/tui](../tui/README.md)'s widgets, and
-`native` combines the native ones.
+addresses against each stylesheet's URL. `sheet` combines the selected terminal
+entries, including the base entries for [@yaks/tui](../tui/README.md)'s widgets,
+and `native` combines the native ones.
 
 ```ts
 import { composition, ledger, native, sheet, stylesheet } from '@yaks/ui'
@@ -373,7 +377,7 @@ equal(
 **Contributions** are named kits, UX specimens, themes and skins from a
 [plugin](../graph/README.md#data-model)'s browser-safe `./ui` facet
 (`Contributions`). `gather` combines facets and refuses duplicate contribution
-names. A kit's CSS URLs travel with its pieces, so pieces can live in another
+names. A kit's stylesheets travel with its pieces, so pieces can live in another
 package. `ux` holds descriptions and specimens for controlled
 [@yaks/ux](../ux/README.md) components; the guide does not load their behavior.
 
