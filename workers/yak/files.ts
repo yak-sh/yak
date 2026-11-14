@@ -31,6 +31,7 @@ import { elapsed, hop } from './lib/hops.ts'
 import { type Served, storeOf } from './door.ts'
 import { answered, metaOf } from './meta.ts'
 import { caught, relayed, responding } from './defects.ts'
+import { evicted, jittered, retried } from '@yaks/durable-object/resets'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from './versions.ts'
 import { drawn, ICON_SVG } from './raster.ts'
@@ -276,6 +277,12 @@ export let nearest = (path: string) => {
 // never answers with itself. That failure is reported, and the bytes are read
 // in-process the same way, so a person's image still loads.
 //
+// The hop itself can be cut off: the runtime fails it with its `retryable`
+// flag (`Network connection lost.`) when the entrypoint behind the binding is
+// reset or its connection drops. A read carries no body, so it is sent again
+// with the backoff a store's call takes (@yaks/durable-object `retried`); an
+// upload is its caller's to send again.
+//
 // Each trip is one `files` hop on the request's tally (hops.ts), and its wait
 // `files_wait`: a hit never reaches the bucket, so no `r2` counts it.
 export let door = (env: Env): Fetcher => ({
@@ -288,7 +295,13 @@ export let door = (env: Env): Fetcher => ({
 let through = async (env: Env, req: Request) => {
   if (!env.FILES) return relayed(await fetch(req, env))
   try {
-    let cached = await env.FILES.fetch(req)
+    let files = env.FILES, read = req.method == 'GET' || req.method == 'HEAD'
+    let cached = await retried(
+      () => files.fetch(read ? req.clone() : req),
+      read,
+      evicted,
+      jittered(env.CLOCK),
+    )
     if (cached.status < 520 || cached.status > 530) return relayed(cached)
     await cached.body?.cancel()
     caught(new Error(`the files cache answered ${cached.status}`), {
