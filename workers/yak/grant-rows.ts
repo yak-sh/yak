@@ -25,6 +25,7 @@
 import type { Bundle } from '@yaks/graph'
 import { identityEid } from '@yaks/graph'
 import type { GrantSummary } from '@cloudflare/workers-oauth-provider'
+import { Pending } from '@yaks/api/log'
 
 /** An `oauth_grant` row: what a listing shows of one grant. Times are unix
  * seconds, as the provider keeps them; `until` is when KV lets the grant go
@@ -128,7 +129,9 @@ let summary = (row: Row): GrantSummary => ({
  * The KV the provider is handed: KV itself, but a grant put is first written
  * as its row and a grant deleted loses its row after, so the rows never miss
  * a grant KV holds. A write of the rows that fails fails the provider's, and
- * the person or client asks again.
+ * the person or client asks again. One the directory keeps (`Pending`) lands
+ * as it recovers, in order with the rows written after it, so the provider's
+ * goes on: a code exchanged meanwhile is answered its token.
  */
 export let through = <T extends object>(
   kv: T,
@@ -136,21 +139,26 @@ export let through = <T extends object>(
   now = Date.now,
 ): T => {
   let store = kv as unknown as Kv
+  let write = async (bundles: Bundle[]) => {
+    try {
+      await book.write(bundles)
+    } catch (e) {
+      if (!(e instanceof Pending)) throw e
+    }
+  }
   let put: Kv['put'] = async (key, value, o) => {
     let grant = keyed(key)
     if (grant) {
       let ttl = o?.expirationTtl
       let until = ttl ? seconds(now()) + ttl : undefined
-      await book.write([
-        bundleOf(rowOf(grant.person, JSON.parse(value), until)),
-      ])
+      await write([bundleOf(rowOf(grant.person, JSON.parse(value), until))])
     }
     await store.put(key, value, o)
   }
   let gone: Kv['delete'] = async (key) => {
     await store.delete(key)
     let grant = keyed(key)
-    if (grant) await book.write([unlisted(grant.id)])
+    if (grant) await write([unlisted(grant.id)])
   }
   return new Proxy(kv, {
     get: (target, name) => {
