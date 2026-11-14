@@ -257,8 +257,18 @@ let grouped = (vocab: Vocab): string => {
   ).join('\n\n')
 }
 
-// One component in full, as a page.
-let page = (vocab: Vocab, name: string, guide?: Guide): string => {
+// A heading of `depth` levels.
+let hd = (depth: number, text: string) => `${'#'.repeat(depth)} ${text}`
+
+// One component in full, as a page under a heading of `depth` levels. Asked
+// for by name it says its kind and an example of its own; as part of a kind,
+// the kind's page says both, whole.
+let page = (
+  vocab: Vocab,
+  name: string,
+  guide?: Guide,
+  { depth = 1, part = false } = {},
+): string => {
   let def = vocab.def(name)!
   let info = vocab.comp(name)!
   let before = info.before.filter((n) => vocab.comp(n))
@@ -273,10 +283,10 @@ let page = (vocab: Vocab, name: string, guide?: Guide): string => {
     [name]: def.examples?.[0] ?? example(vocab, name),
   }
   return [
-    `# ${name}`,
+    hd(depth, name),
     [
       def.description && sentence(def.description),
-      info.kind &&
+      !part && info.kind &&
       `A kind: an entity with it is shown as a ${name}` +
         (before.length ? `, even beside ${listed(before)}.` : '.'),
       id.length &&
@@ -285,11 +295,51 @@ let page = (vocab: Vocab, name: string, guide?: Guide): string => {
       info.package && `Declared by ${info.package}.`,
     ].filter(Boolean).join('\n'),
     props.length &&
-    '## Properties\n\n' +
+    hd(depth + 1, 'Properties') + '\n\n' +
       props.map(([p, s]) => property(vocab, name, p, s)).join('\n'),
-    into.length && '## Referenced by\n\n' + into.join('\n'),
-    '## Example\n\n    ' + inline(bundle),
+    into.length && hd(depth + 1, 'Referenced by') + '\n\n' + into.join('\n'),
+    !part && hd(depth + 1, 'Example') + '\n\n    ' + inline(bundle),
     url && `Documentation: ${url}`,
+  ].filter(Boolean).join('\n\n')
+}
+
+// Names as a person lists them: `a`, `a and b`, `a, b and c`.
+let and = (xs: string[]): string =>
+  xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`
+
+// A kind as declared, as a page: what it is, the components that make one,
+// what a whole one also carries and who supplies it, and a whole example.
+// The components it is follow, each in full.
+let kindPage = (vocab: Vocab, name: string, guide?: Guide): string => {
+  let k = vocab.kind(name)!
+  let carried = Object.entries(k.with).map(([c, w]) => {
+    let how = w === true
+      ? 'the writer supplies it'
+      : `a rule gives it ${inline(w)} when a ${name} lacks it`
+    let what = vocab.def(c)?.description
+    return [`- ${c}: ${how}.`, ...(what ? [sentence(what)] : [])]
+      .join('\n  ')
+  })
+  let whole = k.examples[0] ?? Object.fromEntries([
+    ...k.is.map((c) => [c, example(vocab, c)]),
+    ...Object.entries(k.with).map(([c, w]) => [
+      c,
+      w === true ? example(vocab, c) : w,
+    ]),
+  ])
+  return [
+    `# ${name} (kind)`,
+    [
+      k.description && sentence(k.description),
+      `An entity carrying ${and(k.is)} is a ${name}.`,
+      k.prefix != null && `Its short ids read ${k.prefix}-1, ${k.prefix}-2, ….`,
+      k.package && `Declared by ${k.package}.`,
+    ].filter(Boolean).join('\n'),
+    carried.length && '## With\n\n' + carried.join('\n'),
+    '## Example\n\n    ' + inline({ entity: { eid: '$1' }, ...whole }),
+    ...k.is.filter((c) => vocab.comp(c)).map((c) =>
+      page(vocab, c, guide, { depth: 2, part: true })
+    ),
   ].filter(Boolean).join('\n\n')
 }
 
@@ -297,21 +347,13 @@ let page = (vocab: Vocab, name: string, guide?: Guide): string => {
  * unrendered: headings for structure and nothing bold. The index is a heading
  * for each package and one for each component it declares; a component asked
  * for is a page of its own, its properties nested beneath it; and a kind is
- * its page beside the components it is displayed with. */
+ * its declaration as a page, the components it is nested beneath it. */
 export let proseOf = (
   vocab: Vocab,
   about: About = {},
   guide?: Guide,
 ): string => {
-  if (about.kind) {
-    let { is, carried } = parts(vocab, about.kind)
-    return [
-      ...is.map((n) => page(vocab, n, guide)),
-      ...(carried.length
-        ? ['## Carried with', ...carried.map((n) => block(vocab, n, '###'))]
-        : []),
-    ].join('\n\n')
-  }
+  if (about.kind) return kindPage(vocab, about.kind, guide)
   if (about.comps?.length) {
     return about.comps.map((n) => page(vocab, n, guide)).join('\n\n')
   }
@@ -322,8 +364,8 @@ export let proseOf = (
       `An entity is shown as the first kind it carries: ${
         listed(vocab.kinds)
       }.`,
-      'Name a component for its properties in full, or a kind for the ' +
-      'components a whole one carries.',
+      'Name a component for its properties in full, or a kind for what ' +
+      'makes one and what a whole one carries.',
     ].filter(Boolean).join('\n'),
     grouped(vocab),
   ].join('\n\n')

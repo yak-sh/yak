@@ -1465,7 +1465,8 @@ equal((await g.get(['b1']))[0].book, { title: '42' })
 `schemaOf(vocab, about?)` returns a vocabulary document, and
 `proseOf(vocab, about?, guide?)` describes the same declarations as Markdown.
 Omit `about` for the component index, pass `{comps: ['book']}` for complete
-entries, or `{kind: 'book'}` for a kind and the components it is shown with.
+entries, or `{kind: 'book'}` for a kind as declared: what makes one, what a
+whole one carries, and an example.
 
 ```ts
 import { proseOf, schemaOf } from '@yaks/graph'

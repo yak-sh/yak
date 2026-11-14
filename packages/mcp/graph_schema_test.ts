@@ -112,7 +112,8 @@ test('named, it is the component as declared, with an example', async () => {
   assertStringIncludes(stamps, 'server-owned')
 })
 
-// A loan is a book and a borrower, and a whole one carries the book's doc.
+// A loan is a book and a borrower, and a whole one carries the book's doc,
+// which its writer gives, and a ledger, which a rule gives.
 let lending = loadVocab([...shop.docs, {
   $defs: {
     borrower: {
@@ -120,11 +121,18 @@ let lending = loadVocab([...shop.docs, {
       type: 'object',
       properties: { name: { type: 'string' } },
     },
+    ledger: {
+      component: true,
+      type: 'object',
+      description: 'where a lent thing is',
+      properties: { state: { type: 'string' } },
+    },
   },
   kinds: {
     loan: {
+      description: 'a book lent to somebody',
       is: ['book', 'borrower'],
-      with: { doc: true },
+      with: { doc: true, ledger: { state: 'out' } },
       examples: [{ book: {}, borrower: {}, doc: { title: 'Emma' } }],
     },
   },
@@ -132,7 +140,7 @@ let lending = loadVocab([...shop.docs, {
 
 test('a kind is what it is whole, beside what a whole one carries', () => {
   let doc = schemaOf(lending, { kind: 'loan' })
-  assertEquals(Object.keys(doc.$defs), ['book', 'borrower', 'doc'])
+  assertEquals(Object.keys(doc.$defs), ['book', 'borrower', 'doc', 'ledger'])
   assert(doc.$defs.book.examples)
   assertEquals(doc.$defs.doc.properties, {
     title: { type: 'string' },
@@ -141,17 +149,35 @@ test('a kind is what it is whole, beside what a whole one carries', () => {
   assertEquals(doc.kinds!.loan.is, ['book', 'borrower'])
   assert(doc.kinds!.loan.examples)
   assertEquals(loadVocab(doc).kindOf({ book: {}, borrower: {} }), 'loan')
+})
+
+test('a kind is said as declared: what makes one, what it carries, an example', () => {
   let said = proseOf(lending, { kind: 'loan' })
-  assertStringIncludes(said, '# book')
-  assertStringIncludes(said, '# borrower')
-  assertStringIncludes(said, '## Carried with\n\n### doc (kind)')
+  for (
+    let part of [
+      '# loan (kind)\n\nA book lent to somebody.\nAn entity carrying book ' +
+      'and borrower is a loan.',
+      '## With\n\n- doc: the writer supplies it.\n',
+      '- ledger: a rule gives it {"state": "out"} when a loan lacks it.\n' +
+      '  Where a lent thing is.',
+      '## Example\n\n    {"entity": {"eid": "$1"}, "book": {}, ' +
+      '"borrower": {}, "doc": {"title": "Emma"}}',
+      '## book\n\nA book on sale here.\n',
+      '### Properties',
+      '## borrower',
+    ]
+  ) assertStringIncludes(said, part)
+  // The components it is are said as parts: the kind's page names it and
+  // gives the example, whole.
+  assert(!said.includes('A kind: an entity with it'))
+  assertEquals(said.match(/## Example/g)!.length, 1)
 })
 
 test('a kind no component is named for is asked for as a kind', async () => {
   let { doc } = await asked({ kind: 'loan' }, {
     graph: graph({ storage: ram(lending), vocab: lending }),
   })
-  assertEquals(Object.keys(doc.$defs), ['book', 'borrower', 'doc'])
+  assertEquals(Object.keys(doc.$defs), ['book', 'borrower', 'doc', 'ledger'])
 })
 
 test('a JSON text property is exampled as valid JSON text', () => {
