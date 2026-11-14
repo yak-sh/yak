@@ -47,7 +47,7 @@ type Part_ = { e: Bundle; io: Io; notes: Map<string, Bundle[]> }
 let kept = (io: Io, name: string): string[] => {
   let c = io.vocab.comp(name)
   if (!c) return []
-  let prefix = c.keywords.prefix
+  let prefix = io.vocab.kind(name)?.prefix
   return [
     c.kind && 'a kind',
     typeof prefix == 'string' && `ids ${prefix}-`,

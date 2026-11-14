@@ -49,6 +49,7 @@ export let KERNEL = ['exception', 'error', 'refusal']
 export let DESCRIBED = [
   '_package',
   '_comp',
+  '_kind',
   '_effect',
   '_prop',
   '_extends',

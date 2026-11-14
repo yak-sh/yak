@@ -34,7 +34,13 @@
         },
         "slice": {
           "type": "string",
-          "enum": ["packages", "components", "relations", "archetypes"],
+          "enum": [
+            "packages",
+            "components",
+            "kinds",
+            "relations",
+            "archetypes"
+          ],
           "description": "the slice of the schema the map shows; packages when none is chosen"
         }
       }

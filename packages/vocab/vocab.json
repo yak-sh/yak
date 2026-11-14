@@ -41,10 +41,6 @@
           "death": "cascade",
           "description": "the package whose vocabulary declares it"
         },
-        "kind": {
-          "type": "boolean",
-          "description": "true = it names a display kind"
-        },
         "wire": {
           "type": "boolean",
           "description": "false = clients read it and never write it"
@@ -99,6 +95,45 @@
         "keywords": {
           "type": "object",
           "description": "every other keyword its entry says, as written: another package's (prefix, by_name, edge) and JSON Schema's own"
+        }
+      }
+    },
+    "_kind": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "kind": true,
+      "wire": false,
+      "before": ["doc"],
+      "description": "a kind a vocabulary declares: the components that make an entity that kind of thing, and what a whole one also carries. Its doc.title is its title, or its name where it has none; its doc.body its description",
+      "properties": {
+        "name": {
+          "type": "string",
+          "identity": true,
+          "description": "the name .kind= and an entity's kind answer it by"
+        },
+        "package": {
+          "type": "string",
+          "ref": "_package",
+          "death": "cascade",
+          "description": "the package whose vocabulary declares it"
+        },
+        "is": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "the components an entity carries to be this kind"
+        },
+        "with": {
+          "type": "object",
+          "description": "what a whole one also carries, by component: true where its writer supplies it, or the values a rule gives it where it is missing"
+        },
+        "prefix": {
+          "type": "string",
+          "description": "the letter its human ids are numbered in (@yaks/id)"
+        },
+        "examples": {
+          "type": "array",
+          "description": "whole bundles of one"
         }
       }
     },
@@ -299,7 +334,7 @@
       "type": "object",
       "edge": true,
       "wire": false,
-      "description": "the edge from a kind to a kind it sorts before; edge.ord keeps the order its entry lists them in"
+      "description": "the edge from a _kind to a _kind it sorts before, where containment does not settle it; edge.ord keeps the order its entry lists them in"
     },
     "_extends": {
       "component": true,

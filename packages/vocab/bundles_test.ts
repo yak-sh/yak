@@ -72,6 +72,7 @@ let kitchen: VocabDoc = {
       properties: { text: { type: 'string', store: 'blob' } },
     },
     recipe_list: { tool: true, noun: 'recipe', verb: 'list', input: {} },
+    menu: { component: true, type: 'object' },
     recipe_shop: {
       effect: true,
       created: ['recipe'],
@@ -80,6 +81,21 @@ let kitchen: VocabDoc = {
       tries: 3,
       sweep: '.recipe',
       description: 'buy what a recipe needs',
+    },
+  },
+  kinds: {
+    meal: {
+      title: 'A meal',
+      description: 'recipes served together',
+      is: ['recipe', 'menu'],
+      with: { doc: true, note: { text: 'enjoy' } },
+      before: ['note'],
+      prefix: 'M',
+      examples: [{
+        recipe: { slug: 'soup' },
+        menu: {},
+        doc: { title: 'Lunch' },
+      }],
     },
   },
 }
@@ -114,6 +130,18 @@ test('a vocabulary loads back from its bundles as it was', () => {
   assertEquals(facts(load(back)), facts(load(docs)))
   assertEquals(effectsIn(back), effectsIn(docs))
   assertEquals(back[0].$defs?.recipe_shop.sweep, '.recipe')
+})
+
+test('a kind of its own component’s name is said on that component', () => {
+  let doc: VocabDoc = {
+    package: '@t/menus',
+    $defs: { menu: { component: true } },
+    kinds: { menu: { prefix: 'M' } },
+  }
+  let [back] = fromBundles(toBundles(doc, plain))
+  assertEquals(back.kinds, undefined)
+  assertEquals(back.$defs!.menu.prefix, 'M')
+  assertEquals(load([back]).kind('menu'), load([doc]).kind('menu'))
 })
 
 test('a saved peer-relayed declaration survives a vocabulary bundle roundtrip', () => {
@@ -214,14 +242,31 @@ test('the queries that describe a vocabulary answer from its entities', async ()
     '_comp',
     '_effect',
     '_extends',
+    '_kind',
     '_package',
     '_prop',
     '_vocab',
     'doc',
+    'menu',
     'note',
     'recipe',
     'tag',
   ])
+  // Every kind, and what makes one.
+  assertEquals(
+    (await titles('._kind.package._package.name=@t/kitchen')).sort(),
+    ['A meal', 'note', 'recipe'],
+  )
+  let [meal] = await g.read('._kind.name=meal ?doc')
+  assertEquals(meal._kind, {
+    name: 'meal',
+    package: id('_package', { name: '@t/kitchen' }),
+    is: ['recipe', 'menu'],
+    with: { doc: true, note: { text: 'enjoy' } },
+    prefix: 'M',
+    examples: kitchen.kinds!.meal.examples,
+  })
+  assertEquals((meal.doc as { body: string }).body, 'recipes served together')
   // One component's properties, following the reference to its name, in the
   // order its package declares them; another package's come after.
   assertEquals(
@@ -247,11 +292,11 @@ test('the queries that describe a vocabulary answer from its entities', async ()
   )
   assertEquals(await titles('._prop.ref=note'), ['recipe.book'])
   let before = await g.read(
-    `._before .edge.from=${id('_comp', { name: 'recipe' })} .order=edge.ord`,
+    `._before .edge.from=${id('_kind', { name: 'recipe' })} .order=edge.ord`,
   )
   assertEquals(
     before.map((b) => (b.edge as { to: string }).to),
-    [id('_comp', { name: 'note' }), id('_comp', { name: 'doc' })],
+    [id('_kind', { name: 'note' }), id('_kind', { name: 'doc' })],
   )
   // The effects a package declares, and what owes each a run.
   let [shop] = await g.read('._effect.package._package.name=@t/kitchen')
@@ -264,8 +309,8 @@ test('the queries that describe a vocabulary answer from its entities', async ()
     tries: 3,
     keywords: { sweep: '.recipe' },
   })
-  // A word is found in a description.
-  assertEquals(await titles('dish'), ['recipe'])
+  // A word is found in a description: the component's, and its kind's.
+  assertEquals(await titles('dish'), ['recipe', 'recipe'])
   // And what the graph holds is the vocabulary it was given.
   // Each package, described.
   let [pkg] = await g.read('._package.name=@t/kitchen ?doc')
@@ -273,6 +318,7 @@ test('the queries that describe a vocabulary answer from its entities', async ()
   let rows = [
     ...await g.read('._package'),
     ...await g.read('._comp ?doc'),
+    ...await g.read('._kind ?doc'),
     ...await g.read('._effect ?doc'),
     ...await g.read('._extends ?doc'),
     ...await g.read('._prop ?doc'),
@@ -286,9 +332,11 @@ test('the queries that describe a vocabulary answer from its entities', async ()
 test('a document read again states each row whole', async () => {
   let { g, put } = described()
   await put([kitchen])
-  let { kind: _, description: __, ...plainer } = kitchen.$defs!.recipe
+  let { prefix: _, description: __, ...plainer } = kitchen.$defs!.recipe
   await put([{ ...kitchen, $defs: { ...kitchen.$defs, recipe: plainer } }])
   let [recipe] = await g.read('._comp.name=recipe ?doc')
-  assert(!(recipe._comp as { kind?: boolean }).kind)
   assert(!(recipe.doc as { body?: string }).body)
+  let [kind] = await g.read('._kind.name=recipe ?doc')
+  assert(!(kind._kind as { prefix?: string }).prefix)
+  assert(!(kind.doc as { body?: string }).body)
 })

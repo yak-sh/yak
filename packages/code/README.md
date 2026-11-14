@@ -26,7 +26,7 @@ imports                            @yaks/edge relation: module → module
 Where the config also lists `@yaks/vocab`, the vocabulary the graph is served
 with is described in it as
 [@yaks/vocab](../vocab/README.md#a-vocabulary-as-entities)'s `_package`,
-`_comp`, `_effect`, `_extends`, `_prop` and `_before` entities, by the
+`_comp`, `_kind`, `_effect`, `_extends`, `_prop` and `_before` entities, by the
 `vocab_describe` start-up effect (`start: true`, ./described.ts), owed each time
 a process starts working the effects. It is the composed vocabulary, not the
 files: a package the checkout holds and the config does not list is not

@@ -9,6 +9,10 @@
  *   its properties.
  * - Components: every component, its package, what it is and how many
  *   entities carry it, the most carried first.
+ * - Kinds: every kind, from the `_kind` rows the graph describes them in
+ *   (@yaks/vocab): the components that make one, what a whole one also
+ *   carries, the prefix its ids are numbered in, and how many entities are
+ *   one.
  * - Relations: every component that is an edge relation (@yaks/edge), what it
  *   reads as from the far end, and how many edges state it.
  * - Archetypes: every set of components entities are made of, the most
@@ -41,18 +45,25 @@ import {
   relations,
 } from './schema.ts'
 import { Part, under, useNotes } from './notes.ts'
-import { count, line, str, tables } from './read.ts'
-import { waiting } from './rows.ts'
+import { comp, count, line, str, tables } from './read.ts'
+import { rows, waiting } from './rows.ts'
 import { key, me, put } from './state.ts'
 
 /** The slices of the schema the map shows, the first when none is chosen. */
-export let SLICES = ['packages', 'components', 'relations', 'archetypes']
+export let SLICES = [
+  'packages',
+  'components',
+  'kinds',
+  'relations',
+  'archetypes',
+]
 
 // Each slice's heading, and the component its notes are about: what its
 // rows are made of.
 let SLICE: Record<string, { heading: string; concept: string }> = {
   packages: { heading: 'Packages', concept: '_package' },
   components: { heading: 'Components', concept: '_comp' },
+  kinds: { heading: 'Kinds', concept: '_kind' },
   relations: { heading: 'Relations', concept: 'edge' },
   archetypes: { heading: 'Archetypes', concept: 'archetype' },
 }
@@ -263,6 +274,56 @@ let ComponentList = ({ io, census: { carried, ready } }: Schema) => {
   })
 }
 
+// The query the kinds slice reads: every kind's row, by name.
+export let KINDS = '._kind&?doc&.order=_kind.name'
+
+// Every kind, from its `_kind` row: what makes one, what a whole one also
+// carries, its ids' prefix, what it is, and how many entities are one (each
+// set of components counted as the kind it names).
+let KindList = ({ io, census: { sets, tally, ready } }: Schema) => {
+  let { kinds } = io.ask({ kinds: KINDS })
+  let are = new Map<string, number>()
+  for (let s of sets) {
+    let k = io.vocab.kindOf(Object.fromEntries(tables(s).map((t) => [t, {}])))
+    if (k) are.set(k, (are.get(k) ?? 0) + (tally[s.entity.eid] ?? 0))
+  }
+  let name = (b: Bundle) => str(b, '_kind', 'name')
+  let is = (b: Bundle) => (comp(b, '_kind').is ?? []) as string[]
+  let has = (b: Bundle) => Object.keys(comp(b, '_kind').with ?? {})
+  let prefix = (b: Bundle) => str(b, '_kind', 'prefix')
+  return waiting(kinds) ?? h(Grid, {
+    io,
+    id: key('schema', 'Kinds'),
+    local: true,
+    rows: rows(kinds),
+    columns: [
+      { name: 'kind', value: name, cell: (b) => io.show(b, 'Inline') },
+      { name: 'is', cell: (b) => chips(io, is(b)) },
+      {
+        name: 'with',
+        cell: (b) =>
+          has(b).length ? chips(io, has(b)) : h(Value, { mod: 'nil' }, '—'),
+      },
+      {
+        name: 'ids',
+        value: prefix,
+        cell: (b) => prefix(b) ? `${prefix(b)}-` : '',
+      },
+      {
+        name: 'what it is',
+        mod: 'prose',
+        cell: (b) => line(str(b, 'doc', 'body'), 160),
+      },
+      {
+        name: 'entities',
+        mod: 'num',
+        value: (b) => are.get(name(b)) ?? 0,
+        cell: (b) => tallied(ready, are.get(name(b)) ?? 0),
+      },
+    ],
+  })
+}
+
 // Every edge relation, what it reads as from the far end, and its edges.
 let RelationList = ({ io, census: { carried, ready } }: Schema) => {
   let vocab = io.vocab
@@ -354,6 +415,12 @@ let BODY: Record<
     Body: ComponentList,
     size: (m) => m.io.vocab.all.length,
   },
+  kinds: {
+    sub: 'Every kind an entity is named by: the components that make one, ' +
+      'what a whole one also carries, and how many entities are one.',
+    Body: KindList,
+    size: (m) => m.io.vocab.kinds.length,
+  },
   relations: {
     sub: 'Every component that relates one entity to another, what it reads ' +
       'as from the far end, and how many edges state it.',
@@ -421,7 +488,8 @@ export let HomePage = ({ io }: { io: Io }): JSX.Element => {
         Head.Sub,
         {},
         "The graph's data model: the packages it is declared in, the " +
-          'components entities carry and their properties, the relations ' +
+          'components entities carry and their properties, the kinds they ' +
+          'make, the relations ' +
           'between them, and the sets of components entities are made of.',
       ),
       h(
@@ -429,6 +497,7 @@ export let HomePage = ({ io }: { io: Io }): JSX.Element => {
         {},
         h('span', {}, plural(named.length, 'package', 'packages')),
         h('span', {}, plural(vocab.all.length, 'component', 'components')),
+        h('span', {}, plural(vocab.kinds.length, 'kind', 'kinds')),
         h(
           'span',
           {},

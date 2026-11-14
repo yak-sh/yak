@@ -21,27 +21,28 @@ import { propViews } from './Prop.ts'
 
 // Schema names belong to inspect; every consumer asks for this renderer,
 // including the query table and any inline reference.
-let schemaTiles: View[] = ['_package', '_comp', '_prop', '_effect'].flatMap((
-  name,
-) => [
-  {
-    view: 'Tile',
-    match: parse(`.${name}`),
-    Render: ({ e, io }) =>
-      h(
-        Tile,
-        { href: io.link(e.entity.eid) },
-        h(Tile.Title, {}, str(e, name, 'name')),
-        h(Tile.Kind, {}, name.slice(1)),
-      ),
-  },
-  {
-    view: 'Inline',
-    match: parse(`.${name}`),
-    Render: ({ e, io }) =>
-      h('a', { href: io.link(e.entity.eid) }, str(e, name, 'name')),
-  },
-])
+let schemaTiles: View[] = ['_package', '_comp', '_kind', '_prop', '_effect']
+  .flatMap((
+    name,
+  ) => [
+    {
+      view: 'Tile',
+      match: parse(`.${name}`),
+      Render: ({ e, io }) =>
+        h(
+          Tile,
+          { href: io.link(e.entity.eid) },
+          h(Tile.Title, {}, str(e, name, 'name')),
+          h(Tile.Kind, {}, name.slice(1)),
+        ),
+    },
+    {
+      view: 'Inline',
+      match: parse(`.${name}`),
+      Render: ({ e, io }) =>
+        h('a', { href: io.link(e.entity.eid) }, str(e, name, 'name')),
+    },
+  ])
 
 /** The pages for vocabulary entities. */
 export let schemaPages: View[] = [

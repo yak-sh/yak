@@ -91,7 +91,8 @@ test('a graph describes what it is served with, and stops describing what it is 
   let note = identityEid('_comp', ['note'])
   let eids = (q: string) =>
     both(async (g) => (await g.read(q)).map((b) => b.entity.eid))
-  let befores = async () => (await eids(`._before .edge.from=${note}`)).length
+  let kind = identityEid('_kind', ['note'])
+  let befores = async () => (await eids(`._before .edge.from=${kind}`)).length
   await serve([p({ a: { type: 'string' }, b: { type: 'number' } }), q])
 
   assertEquals(await titles('._package'), ['@t/p', '@t/q'])
@@ -107,8 +108,9 @@ test('a graph describes what it is served with, and stops describing what it is 
   assertEquals(await titles('._effect.package._package.name=@t/q'), [
     'note_tidy',
   ])
+  assertEquals(await titles('._kind.package._package.name=@t/p'), ['note'])
   assertEquals(await befores(), 1)
-  assertEquals((await eids(`.refs=${note}`)).length, 5)
+  assertEquals((await eids(`.refs=${note}`)).length, 4)
   // A description is read by its eid, and a read that requires a component
   // no description wears answers none.
   assertEquals(await eids(`.entity.eid=${note}`), [note])
@@ -121,6 +123,7 @@ test('a graph describes what it is served with, and stops describing what it is 
     let query of [
       '._package ?doc',
       '._comp ?doc',
+      '._kind ?doc',
       '._effect ?doc',
       '._extends ?doc',
       '._prop ?doc',
@@ -151,6 +154,7 @@ test('a graph describes what it is served with, and stops describing what it is 
   // the same entity.
   await serve([])
   assertEquals(await titles('._comp.name=note'), [])
+  assertEquals(await titles('._kind.name=note'), [])
   await serve([p({ a: { type: 'string' } })])
   assertEquals(await eids('._comp.name=note'), [note])
 

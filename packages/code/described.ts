@@ -1,8 +1,8 @@
 // The vocabulary a graph is served with, described in it as @yaks/vocab's
-// `_package`, `_comp`, `_effect`, `_extends`, `_prop` and `_before` entities
-// (@yaks/vocab `toBundles`), so the graph's own model is read, searched and
-// linked like anything else, and a page about a component or an effect
-// resolves.
+// `_package`, `_comp`, `_kind`, `_effect`, `_extends`, `_prop` and `_before`
+// entities (@yaks/vocab `toBundles`), so the graph's own model is read,
+// searched and linked like anything else, and a page about a component, a
+// kind or an effect resolves.
 //
 // The served vocabulary is the one source: every document the host composed,
 // each written with the package that brought it and that package's
@@ -35,6 +35,7 @@ let str = (v: unknown) => v == null ? '' : String(v)
 let ROWS = [
   '_package',
   '_comp',
+  '_kind',
   '_effect',
   '_extends',
   '_prop',
@@ -65,8 +66,8 @@ let canon = (v: unknown): string =>
  *
  * ```ts
  * import { moves } from './described.ts'
- * let at = { entity: { eid: 'c' }, _comp: { name: 'note', kind: null } }
- * moves({ entity: { eid: 'c' }, _comp: { kind: null, name: 'note' } }, at) // false
+ * let at = { entity: { eid: 'c' }, _comp: { name: 'note', wire: null } }
+ * moves({ entity: { eid: 'c' }, _comp: { wire: null, name: 'note' } }, at) // false
  * moves({ entity: { eid: 'c' }, _comp: { name: 'task' } }, at) // true
  * moves({ entity: { eid: 'c' }, doc: { title: 'note' } }, at) // true
  * ```
@@ -155,6 +156,7 @@ export let described = async (
     : (await Promise.all([
       g.read('._package ?doc'),
       g.read('._comp ?doc'),
+      g.read('._kind ?doc'),
       g.read('._effect ?doc'),
       g.read('._extends ?doc'),
       g.read('._prop ?doc'),

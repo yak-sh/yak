@@ -13,6 +13,7 @@ import { inspector } from './door.ts'
 import { docs } from './front.ts'
 import { views } from './registry.ts'
 import { CENSUS } from './census.ts'
+import { KINDS } from './Home.ts'
 import { compEid, packEid } from './schema.ts'
 import type { Answer, Host } from './host.ts'
 
@@ -42,6 +43,10 @@ let vocab = loadVocab([{
       properties: {},
     },
   },
+  kinds: {
+    task: { prefix: 'T', description: 'Work to be done.' },
+    closed: { is: ['task', 'done'], with: { blocks: true } },
+  },
 }, { package: '@test/more', $defs: {} }], [edgeKeywords])
 
 let names = new Map([
@@ -64,6 +69,20 @@ let counted: Record<string, Answer> = {
     ready: true,
   },
   [CENSUS.tally]: { rows: [], ready: true, tally: { a1: 3, a2: 2, a3: 4 } },
+  [KINDS]: {
+    rows: [
+      {
+        entity: { eid: 'k1' },
+        _kind: { name: 'closed', is: ['task', 'done'], with: { blocks: true } },
+      },
+      {
+        entity: { eid: 'k2' },
+        _kind: { name: 'task', is: ['task'], prefix: 'T' },
+        doc: { title: 'task', body: 'Work to be done.' },
+      },
+    ],
+    ready: true,
+  },
 }
 
 let unanswered: Record<string, Answer> = {
@@ -187,6 +206,7 @@ let remembered = await page([
   { open: '@test/work' },
 ])
 let components = await page([{ tab: 'Components' }])
+let kinds = await page([{ tab: 'Kinds' }])
 let relations = await page([{ tab: 'Relations' }])
 let archetypes = await page([{ tab: 'Archetypes' }])
 let archetypesWaiting = await page([{ tab: 'Archetypes' }], unanswered)
@@ -203,7 +223,7 @@ test('the map paints its packages from the vocabulary before the census answers'
 test('the map counts packages, components, relations, archetypes and entities', () => {
   equal(
     initial.facts,
-    '2 packages·3 components·1 effect·1 relation·3 archetypes·9 entities',
+    '2 packages·3 components·2 kinds·1 effect·1 relation·3 archetypes·9 entities',
   )
   equal(initial.rows, [
     ['@test/more', '0 components', '', '0'],
@@ -261,6 +281,13 @@ test('the components slice lists every component, the most carried first', () =>
     ['task', '@test/work', 'Work to be done.', '5'],
     ['blocks', '@test/work', '', '4'],
     ['done', '@test/work', 'It was done.', '2'],
+  ])
+})
+
+test('the kinds slice lists each kind from its row, what makes one and how many are one', () => {
+  equal(kinds.rows, [
+    ['closed', 'task + done', 'blocks', '', '', '2'],
+    ['task', 'task', '—', 'T-', 'Work to be done.', '3'],
   ])
 })
 
