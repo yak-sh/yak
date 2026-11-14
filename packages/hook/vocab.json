@@ -9,11 +9,6 @@
     "hook": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": [
-        "doc"
-      ],
-      "prefix": "H",
       "properties": {
         "source": {
           "type": "string",
@@ -54,6 +49,15 @@
         }
       },
       "description": "an event another system delivered, kept as it arrived — the payload is the body that was sent, not a parsed version of it"
+    }
+  },
+  "kinds": {
+    "hook": {
+      "description": "an event another system delivered, kept as it arrived — the payload is the body that was sent, not a parsed version of it",
+      "with": {
+        "doc": true
+      },
+      "prefix": "H"
     }
   }
 }

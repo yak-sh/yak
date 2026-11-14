@@ -75,8 +75,6 @@
     "comment": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "prefix": "C",
       "properties": {
         "target": {
           "type": "string",
@@ -337,7 +335,6 @@
     "redaction": {
       "component": true,
       "type": "object",
-      "kind": true,
       "properties": {
         "target": {
           "type": "string",
@@ -647,6 +644,28 @@
       "type": "object",
       "properties": {},
       "description": "an entry awaiting a check against its sources; remove this mark once it has been checked"
+    }
+  },
+  "kinds": {
+    "comment": {
+      "description": "a comment on a thread: target is the entity it hangs on, reply_to the comment it answers; doc holds the text",
+      "with": {
+        "doc": true
+      },
+      "prefix": "C",
+      "examples": [
+        {
+          "comment": {
+            "target": "7c1e1f0a-3b5d-4c2e-9a41-2f6d8b0e5a13"
+          },
+          "doc": {
+            "body": "Done in the commit beside it"
+          }
+        }
+      ]
+    },
+    "redaction": {
+      "description": "one property of one entity, replaced — the hash proves what was there without keeping it"
     }
   }
 }

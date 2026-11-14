@@ -13,8 +13,10 @@ import type { PropSchema, VocabDoc } from './types.ts'
 import { kindOrder } from './order.ts'
 
 /** What a component in a kind's `with` is: `true` when the writer supplies
- * it, or the values a rule gives it when an entity of the kind lacks it. */
-export type With = true | Record<string, unknown>
+ * it, or the values a rule gives it when an entity of the kind lacks it. A
+ * `boolean`, as a JSON document's `true` is typed; the meta-schema refuses
+ * `false`. */
+export type With = boolean | Record<string, unknown>
 
 /** A kind, as a document declares it under `kinds`. */
 export type KindDecl = {

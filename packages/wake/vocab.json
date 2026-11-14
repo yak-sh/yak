@@ -4,8 +4,6 @@
     "wake": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "prefix": "W",
       "description": "a scheduled time to come back to something",
       "$comment": "A wake carries no patch to apply when it fires: a rule's produce already writes the entity it matched. Patching a wake's target declaratively would need a rule that names that target.",
       "properties": {
@@ -204,6 +202,21 @@
       "option": "run",
       "tries": 3,
       "description": "Do what a wake set for a person asks each time it fires: its call with no model turn (an occurrence records it), its note in their conversation, and its brief to a fresh session. The host that runs sessions handles it; owed only where @yaks/wake is given run: true"
+    }
+  },
+  "kinds": {
+    "wake": {
+      "description": "a scheduled time to come back to something",
+      "prefix": "W",
+      "examples": [
+        {
+          "wake": {
+            "at": "2026-12-01T09:00:00.000Z",
+            "target": "7c1e1f0a-3b5d-4c2e-9a41-2f6d8b0e5a13",
+            "note": "Check the deploy"
+          }
+        }
+      ]
     }
   }
 }

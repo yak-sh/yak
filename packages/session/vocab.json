@@ -276,7 +276,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "description": "a session\u2019s lock on the entity it is stored on",
       "properties": {
         "session": {
@@ -306,7 +305,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "description": "two sessions wanted one thing: written after the refusal, never by a client",
       "properties": {
         "target": {
@@ -365,7 +363,6 @@
     "entry": {
       "component": true,
       "type": "object",
-      "kind": true,
       "notice": true,
       "lazy": true,
       "unique": [
@@ -497,11 +494,6 @@
     "session": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": [
-        "process"
-      ],
-      "prefix": "S",
       "description": "a transcript something reacts to. Its chosen persona is kept here; what it is doing is read off its entries (`status`), where it runs is @yaks/process `process`, and what it was asked for is the `using` on its first entry",
       "properties": {
         "id": {
@@ -1247,6 +1239,24 @@
           "description": "each tool's name, description and parameters (JSON Schema)"
         }
       }
+    }
+  },
+  "kinds": {
+    "claim": {
+      "description": "a session’s lock on the entity it is stored on"
+    },
+    "conflict": {
+      "description": "two sessions wanted one thing: written after the refusal, never by a client"
+    },
+    "entry": {
+      "description": "one entry of a transcript; the component stored beside it is its kind; every model-bound message names its source independently of its provider turn role. Only the person’s own words are their user input"
+    },
+    "session": {
+      "description": "a transcript something reacts to. Its chosen persona is kept here; what it is doing is read off its entries (`status`), where it runs is @yaks/process `process`, and what it was asked for is the `using` on its first entry",
+      "before": [
+        "process"
+      ],
+      "prefix": "S"
     }
   }
 }

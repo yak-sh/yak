@@ -51,7 +51,6 @@
     "attachment": {
       "component": true,
       "type": "object",
-      "kind": true,
       "description": "A file attached to a session entry: the artifact entity holding its bytes, and the model call that produced it.",
       "properties": {
         "message": {
@@ -88,6 +87,11 @@
           "type": "string"
         }
       }
+    }
+  },
+  "kinds": {
+    "attachment": {
+      "description": "A file attached to a session entry: the artifact entity holding its bytes, and the model call that produced it."
     }
   }
 }

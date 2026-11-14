@@ -7,7 +7,6 @@
     "app": {
       "component": true,
       "type": "object",
-      "kind": true,
       "unique": [
         [
           "space",
@@ -86,15 +85,11 @@
           "description": "the bucket prefix its uploads are kept under, written once at birth with its store, so an app given a store it did not make keeps the bytes that store names"
         }
       },
-      "description": "one app in a space: its slug, the version currently served, and who may open it",
-      "before": [
-        "doc"
-      ]
+      "description": "one app in a space: its slug, the version currently served, and who may open it"
     },
     "deploy": {
       "component": true,
       "type": "object",
-      "kind": true,
       "unique": [
         [
           "app",
@@ -143,10 +138,7 @@
           "description": "the lens step per package this release's pages speak: its own vocabulary's steps and the session step it shipped with, recorded at deploy so a page's request reads no vocabulary file; absent on releases made before it was recorded"
         }
       },
-      "description": "one release of an app: the files it shipped, and the worker built from them",
-      "before": [
-        "doc"
-      ]
+      "description": "one release of an app: the files it shipped, and the worker built from them"
     },
     "last_deploy": {
       "component": true,
@@ -175,7 +167,6 @@
     "acts_for": {
       "component": true,
       "type": "object",
-      "kind": true,
       "properties": {
         "person": {
           "type": "string",
@@ -185,18 +176,11 @@
           "description": "the person it writes for"
         }
       },
-      "description": "an agent writing for a person (a connector client, the CLI), named for itself in doc.title: the actor its deploys and the apps it makes are stamped with, never the person",
-      "before": [
-        "doc"
-      ]
+      "description": "an agent writing for a person (a connector client, the CLI), named for itself in doc.title: the actor its deploys and the apps it makes are stamped with, never the person"
     },
     "hostname": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": [
-        "doc"
-      ],
       "properties": {
         "name": {
           "type": "string",
@@ -692,7 +676,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "properties": {
         "app": {
           "type": "string",
@@ -715,16 +698,12 @@
           "format": "date-time"
         }
       },
-      "description": "where somebody stood when they said something was wrong: the app, its deployed version and the platform's release, on a report an app filed about itself or a support thread feedback opened",
-      "before": [
-        "doc"
-      ]
+      "description": "where somebody stood when they said something was wrong: the app, its deployed version and the platform's release, on a report an app filed about itself or a support thread feedback opened"
     },
     "tool_refusal": {
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "identity": [
         "source"
       ],
@@ -762,21 +741,14 @@
           "description": "when it was refused"
         }
       },
-      "description": "one time a yaks.app tool refused a call, worn with the call's `refusal{code}` and its cause as `content{body}`: the words of the refusal with the values in them taken out. It keeps no arguments. Never a bug: refusals reach TaskMaster in an hourly `refusal_report`, and one counted in a delivered report is deleted 30 days after it was refused",
-      "before": [
-        "content"
-      ]
+      "description": "one time a yaks.app tool refused a call, worn with the call's `refusal{code}` and its cause as `content{body}`: the words of the refusal with the values in them taken out. It keeps no arguments. Never a bug: refusals reach TaskMaster in an hourly `refusal_report`, and one counted in a delivered report is deleted 30 days after it was refused"
     },
     "refusal_report": {
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "properties": {},
-      "description": "an hour's letter to TaskMaster grouping the tool refusals counted in it by tool, code and cause, worn with the letter's `doc{title, body}`, `mail` and `deliver`; `delivered{at}` once it has left",
-      "before": [
-        "doc"
-      ]
+      "description": "an hour's letter to TaskMaster grouping the tool refusals counted in it by tool, code and cause, worn with the letter's `doc{title, body}`, `mail` and `deliver`; `delivered{at}` once it has left"
     },
     "counted": {
       "component": true,
@@ -829,7 +801,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "properties": {
         "person": {
           "type": "string",
@@ -857,7 +828,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "properties": {
         "email": {
           "type": "string",
@@ -893,15 +863,11 @@
           "description": "why the letter or text carrying the code never left, as its sender said; absent while it went or is still going"
         }
       },
-      "description": "a sign-in in progress: the code mailed or texted out, when it expires, how many tries are left, and why its letter never left when it did not",
-      "before": [
-        "doc"
-      ]
+      "description": "a sign-in in progress: the code mailed or texted out, when it expires, how many tries are left, and why its letter never left when it did not"
     },
     "space": {
       "component": true,
       "type": "object",
-      "kind": true,
       "properties": {
         "slug": {
           "type": "string",
@@ -913,10 +879,7 @@
           "description": "the immutable handle its storage uses, independent of its current address"
         }
       },
-      "description": "one customer’s area of the platform, at its own slug",
-      "before": [
-        "doc"
-      ]
+      "description": "one customer’s area of the platform, at its own slug"
     },
     "operator": {
       "component": true,
@@ -1061,6 +1024,95 @@
         }
       },
       "wire": false
+    }
+  },
+  "kinds": {
+    "app": {
+      "description": "one app in a space: its slug, the version currently served, and who may open it",
+      "before": [
+        "doc"
+      ],
+      "examples": [
+        {
+          "app": {
+            "slug": "recipes",
+            "access": "private"
+          },
+          "doc": {
+            "title": "Recipes"
+          }
+        }
+      ]
+    },
+    "deploy": {
+      "description": "one release of an app: the files it shipped, and the worker built from them",
+      "before": [
+        "doc"
+      ]
+    },
+    "acts_for": {
+      "description": "an agent writing for a person (a connector client, the CLI), named for itself in doc.title: the actor its deploys and the apps it makes are stamped with, never the person",
+      "with": {
+        "doc": true
+      }
+    },
+    "hostname": {
+      "description": "a domain somebody owns, and the one place it serves",
+      "before": [
+        "doc"
+      ],
+      "examples": [
+        {
+          "hostname": {
+            "name": "recipes.example.com",
+            "serves": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+          }
+        }
+      ]
+    },
+    "report": {
+      "description": "where somebody stood when they said something was wrong: the app, its deployed version and the platform's release, on a report an app filed about itself or a support thread feedback opened",
+      "before": [
+        "doc"
+      ]
+    },
+    "tool_refusal": {
+      "description": "one time a yaks.app tool refused a call, worn with the call's `refusal{code}` and its cause as `content{body}`: the words of the refusal with the values in them taken out. It keeps no arguments. Never a bug: refusals reach TaskMaster in an hourly `refusal_report`, and one counted in a delivered report is deleted 30 days after it was refused",
+      "with": {
+        "refusal": true,
+        "content": true
+      }
+    },
+    "refusal_report": {
+      "description": "an hour's letter to TaskMaster grouping the tool refusals counted in it by tool, code and cause, worn with the letter's `doc{title, body}`, `mail` and `deliver`; `delivered{at}` once it has left",
+      "with": {
+        "doc": true
+      }
+    },
+    "screen": {
+      "description": "a TV or any screen paired, read-only, with one person by the code it showed (RFC 8628): it shows whatever draft that person's agent is building. Its eid is derived from the code, so nothing is written until the person pairs it"
+    },
+    "signin": {
+      "description": "a sign-in in progress: the code mailed or texted out, when it expires, how many tries are left, and why its letter never left when it did not",
+      "before": [
+        "doc"
+      ]
+    },
+    "space": {
+      "description": "one customer’s area of the platform, at its own slug",
+      "before": [
+        "doc"
+      ],
+      "examples": [
+        {
+          "space": {
+            "slug": "ada"
+          },
+          "doc": {
+            "title": "Ada"
+          }
+        }
+      ]
     }
   }
 }

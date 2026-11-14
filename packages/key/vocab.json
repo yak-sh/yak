@@ -8,7 +8,6 @@
     "key": {
       "component": true,
       "type": "object",
-      "kind": true,
       "description": "a value that identifies an entity; a second component beside it tags which kind of value it is",
       "properties": {
         "of": {
@@ -22,6 +21,11 @@
           "description": "the value itself; unique within its kind, because the key's own id is derived from the kind and the value"
         }
       }
+    }
+  },
+  "kinds": {
+    "key": {
+      "description": "a value that identifies an entity; a second component beside it tags which kind of value it is"
     }
   }
 }

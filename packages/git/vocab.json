@@ -10,7 +10,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "description": "one Git object; its entity id is its SHA-1 object id, so writing the same object twice writes one row",
       "properties": {
         "type": {
@@ -207,8 +206,6 @@
     "commit": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "prefix": "G",
       "properties": {
         "target": {
           "type": "string",
@@ -305,6 +302,26 @@
         }
       },
       "destructive": true
+    }
+  },
+  "kinds": {
+    "gitobj": {
+      "description": "one Git object; its entity id is its SHA-1 object id, so writing the same object twice writes one row",
+      "with": {
+        "blob": true
+      }
+    },
+    "commit": {
+      "description": "a commit that landed, attached to the work it is about; the commit sha is the entity id, so recording the same commit twice gives one entity",
+      "prefix": "G",
+      "examples": [
+        {
+          "commit": {
+            "target": "7c1e1f0a-3b5d-4c2e-9a41-2f6d8b0e5a13",
+            "message": "T-12 A design is put forward by its writer"
+          }
+        }
+      ]
     }
   }
 }

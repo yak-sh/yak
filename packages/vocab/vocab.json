@@ -9,9 +9,7 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "wire": false,
-      "before": ["doc"],
       "description": "a package whose vocabulary declares components or extends them. Its doc.title is its name, its doc.body its description",
       "properties": {
         "name": {
@@ -25,9 +23,7 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "wire": false,
-      "before": ["doc"],
       "description": "a component a vocabulary declares: one aspect an entity carries. Its doc.title is its name, its doc.body its description",
       "properties": {
         "name": {
@@ -102,9 +98,7 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "wire": false,
-      "before": ["doc"],
       "description": "a kind a vocabulary declares: the components that make an entity that kind of thing, and what a whole one also carries. Its doc.title is its title, or its name where it has none; its doc.body its description",
       "properties": {
         "name": {
@@ -141,9 +135,7 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "wire": false,
-      "before": ["doc"],
       "description": "an effect a vocabulary declares: what a commit owes a run of, by name (@yaks/effects runs it). Its doc.title is its name, its doc.body its description",
       "properties": {
         "name": {
@@ -213,9 +205,7 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "wire": false,
-      "before": ["doc"],
       "identity": ["comp", "name"],
       "description": "a property of a component. Its doc.title is comp.prop, its doc.body its description",
       "properties": {
@@ -340,9 +330,7 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "wire": false,
-      "before": ["doc"],
       "identity": ["comp", "package"],
       "description": "a package's extension of a component another package declares. The properties it adds are _prop rows; its doc.title is comp+package, its doc.body its description",
       "properties": {
@@ -375,6 +363,44 @@
           "type": "string",
           "description": "the SHA-256 of every row as the vocabulary described them"
         }
+      }
+    }
+  },
+  "kinds": {
+    "_package": {
+      "description": "a package whose vocabulary declares components or extends them. Its doc.title is its name, its doc.body its description",
+      "with": {
+        "doc": true
+      }
+    },
+    "_comp": {
+      "description": "a component a vocabulary declares: one aspect an entity carries. Its doc.title is its name, its doc.body its description",
+      "with": {
+        "doc": true
+      }
+    },
+    "_kind": {
+      "description": "a kind a vocabulary declares: the components that make an entity that kind of thing, and what a whole one also carries. Its doc.title is its title, or its name where it has none; its doc.body its description",
+      "with": {
+        "doc": true
+      }
+    },
+    "_effect": {
+      "description": "an effect a vocabulary declares: what a commit owes a run of, by name (@yaks/effects runs it). Its doc.title is its name, its doc.body its description",
+      "with": {
+        "doc": true
+      }
+    },
+    "_prop": {
+      "description": "a property of a component. Its doc.title is comp.prop, its doc.body its description",
+      "with": {
+        "doc": true
+      }
+    },
+    "_extends": {
+      "description": "a package's extension of a component another package declares. The properties it adds are _prop rows; its doc.title is comp+package, its doc.body its description",
+      "with": {
+        "doc": true
       }
     }
   }

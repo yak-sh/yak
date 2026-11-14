@@ -16,11 +16,6 @@
     "design": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": [
-        "alias"
-      ],
-      "prefix": "D",
       "properties": {},
       "description": "a change being proposed; what it is, is written in the doc beside it. `proposed` and `decided` carry its lifecycle"
     },
@@ -96,11 +91,6 @@
     "review": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": [
-        "comment",
-        "doc"
-      ],
       "properties": {
         "verdict": {
           "type": "string",
@@ -118,6 +108,45 @@
         }
       },
       "description": "one person's assessment of a design: the verdict, and the comment beside it"
+    }
+  },
+  "kinds": {
+    "design": {
+      "description": "a change being proposed; what it is, is written in the doc beside it. `proposed` and `decided` carry its lifecycle",
+      "with": {
+        "doc": true,
+        "proposed": {}
+      },
+      "prefix": "D",
+      "examples": [
+        {
+          "design": {},
+          "doc": {
+            "title": "Kinds are named shapes",
+            "body": "What makes each kind, declared once in vocab.json"
+          }
+        }
+      ]
+    },
+    "review": {
+      "description": "one person's assessment of a design: the verdict, and the comment beside it",
+      "with": {
+        "comment": true,
+        "doc": true
+      },
+      "examples": [
+        {
+          "review": {
+            "verdict": "approved"
+          },
+          "comment": {
+            "target": "4f9a2c7e-81b3-4d6a-b0c5-3e7d9f1a2b48"
+          },
+          "doc": {
+            "body": "Ship it"
+          }
+        }
+      ]
     }
   }
 }

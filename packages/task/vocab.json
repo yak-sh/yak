@@ -82,12 +82,6 @@
     "task": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": [
-        "claim",
-        "doc"
-      ],
-      "prefix": "T",
       "governed": true,
       "description": "a thing to do",
       "status": {
@@ -668,6 +662,59 @@
       "rule": true,
       "match": ".task .decision .decided !cancelled, +!completed",
       "description": "An answered decision finishes its task, so work requiring it can proceed."
+    }
+  },
+  "kinds": {
+    "task": {
+      "description": "a thing to do",
+      "with": {
+        "doc": true
+      },
+      "before": [
+        "claim"
+      ],
+      "prefix": "T",
+      "examples": [
+        {
+          "task": {},
+          "doc": {
+            "title": "Name the decision kind",
+            "body": "A task carrying a decision"
+          }
+        }
+      ]
+    },
+    "decision": {
+      "description": "a question somebody answers: a task carrying the choices and the asker’s recommendation",
+      "is": [
+        "task",
+        "decision"
+      ],
+      "with": {
+        "doc": true
+      },
+      "examples": [
+        {
+          "task": {},
+          "decision": {
+            "question": "Which name?",
+            "choices": [
+              {
+                "label": "decision",
+                "description": "the word the tools use"
+              },
+              {
+                "label": "question",
+                "description": "what it asks"
+              }
+            ],
+            "recommended": "decision"
+          },
+          "doc": {
+            "title": "Which name?"
+          }
+        }
+      ]
     }
   }
 }

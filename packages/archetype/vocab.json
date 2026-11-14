@@ -6,7 +6,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "description": "Immutable component-table set; its eid is derivedEid('archetype|' + bytewise-sorted table names joined with ',').",
       "properties": {
         "tables": {
@@ -21,6 +20,11 @@
       "journal": false,
       "type": "object",
       "description": "This archetype names a table that is no longer in the database file. Kept forever, never deleted."
+    }
+  },
+  "kinds": {
+    "archetype": {
+      "description": "Immutable component-table set; its eid is derivedEid('archetype|' + bytewise-sorted table names joined with ',')."
     }
   }
 }

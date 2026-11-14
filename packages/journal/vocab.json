@@ -7,7 +7,6 @@
     "_tx": {
       "component": true,
       "computed": true,
-      "kind": true,
       "type": "object",
       "description": "A committed transaction, read from the journal: one call to apply(), whose bundles all committed together.",
       "properties": {
@@ -45,7 +44,6 @@
     "_change": {
       "component": true,
       "computed": true,
-      "kind": true,
       "type": "object",
       "description": "One component a transaction wrote or removed, read from the journal.",
       "properties": {
@@ -160,6 +158,14 @@
       "positional": [
         "entity"
       ]
+    }
+  },
+  "kinds": {
+    "_tx": {
+      "description": "A committed transaction, read from the journal: one call to apply(), whose bundles all committed together."
+    },
+    "_change": {
+      "description": "One component a transaction wrote or removed, read from the journal."
     }
   }
 }

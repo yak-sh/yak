@@ -50,11 +50,6 @@
     "memory": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": [
-        "doc"
-      ],
-      "prefix": "M",
       "description": "a mark on the entity holding one thing a person said about how they want something built or handled, in their own words: a session entry, a comment, a doc. The words are that entity's own text (a doc's body, an entry's content) and are never edited; memory_save makes a doc to hold them only where the graph does not hold them yet. These properties record where the words belong and what is needed to read them, and at, by and via who marked them and when. Who said them, and when, is the entity's created{at, by}",
       "properties": {
         "scope": {
@@ -106,11 +101,6 @@
     "belief": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": [
-        "doc"
-      ],
-      "prefix": "I",
       "description": "what a builder concluded from memories: one point a person made, or everything they said about one subject. Its doc says it; its built names the build that made it, and its cites edges what it was built from. Never edited by hand: a wrong belief is fixed in the builder that made it",
       "properties": {
         "scope": {
@@ -346,6 +336,32 @@
       "positional": [
         "id"
       ]
+    }
+  },
+  "kinds": {
+    "memory": {
+      "description": "a mark on the entity holding one thing a person said about how they want something built or handled, in their own words: a session entry, a comment, a doc. The words are that entity's own text (a doc's body, an entry's content) and are never edited; memory_save makes a doc to hold them only where the graph does not hold them yet. These properties record where the words belong and what is needed to read them, and at, by and via who marked them and when. Who said them, and when, is the entity's created{at, by}",
+      "with": {
+        "doc": true
+      },
+      "prefix": "M",
+      "examples": [
+        {
+          "memory": {},
+          "doc": {
+            "title": "Tests run in seconds",
+            "body": "tests should take seconds"
+          }
+        }
+      ]
+    },
+    "belief": {
+      "description": "what a builder concluded from memories: one point a person made, or everything they said about one subject. Its doc says it; its built names the build that made it, and its cites edges what it was built from. Never edited by hand: a wrong belief is fixed in the builder that made it",
+      "with": {
+        "doc": true,
+        "built": true
+      },
+      "prefix": "I"
     }
   }
 }

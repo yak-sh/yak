@@ -7,10 +7,6 @@
     "conversation": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": [
-        "doc"
-      ],
       "description": "a thread with no other subject; doc holds the person's words and its first line as the title",
       "properties": {}
     },
@@ -207,6 +203,23 @@
       "idempotent": true,
       "positional": [
         "item"
+      ]
+    }
+  },
+  "kinds": {
+    "conversation": {
+      "description": "a thread with no other subject; doc holds the person's words and its first line as the title",
+      "with": {
+        "doc": true
+      },
+      "examples": [
+        {
+          "conversation": {},
+          "doc": {
+            "title": "Where does the recipe box live?",
+            "body": "Where does the recipe box live?"
+          }
+        }
       ]
     }
   }

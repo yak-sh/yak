@@ -9,9 +9,6 @@
     "dream": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": ["builder", "doc"],
-      "prefix": "Z",
       "properties": {
         "scope": {
           "type": "string",
@@ -71,6 +68,29 @@
         }
       },
       "description": "an edge relation: this entry recalled that entity, at this time"
+    }
+  },
+  "kinds": {
+    "dream": {
+      "description": "a standing intention filed under a project; it wears @yaks/builders' `builder`, which says when it runs",
+      "with": {
+        "builder": true
+      },
+      "before": [
+        "doc"
+      ],
+      "prefix": "Z",
+      "examples": [
+        {
+          "dream": {},
+          "builder": {
+            "query": ".task !completed"
+          },
+          "doc": {
+            "title": "Tidy the open tasks"
+          }
+        }
+      ]
     }
   }
 }

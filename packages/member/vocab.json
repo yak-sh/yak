@@ -4,7 +4,6 @@
     "member": {
       "component": true,
       "type": "object",
-      "kind": true,
       "description": "one person's membership in a space",
       "properties": {
         "space": {
@@ -33,7 +32,6 @@
     "grant": {
       "component": true,
       "type": "object",
-      "kind": true,
       "description": "what one principal is permitted to do with one app",
       "properties": {
         "app": {
@@ -156,6 +154,32 @@
           }
         }
       }
+    }
+  },
+  "kinds": {
+    "member": {
+      "description": "one person's membership in a space",
+      "examples": [
+        {
+          "member": {
+            "space": "b2d4e6f8-1a3c-4e5f-8a7b-9c0d1e2f3a4b",
+            "person": "e5f6a7b8-c9d0-4e1f-a2b3-c4d5e6f7a8b9",
+            "role": "member"
+          }
+        }
+      ]
+    },
+    "grant": {
+      "description": "what one principal is permitted to do with one app",
+      "examples": [
+        {
+          "grant": {
+            "app": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+            "person": "e5f6a7b8-c9d0-4e1f-a2b3-c4d5e6f7a8b9",
+            "access": "viewer"
+          }
+        }
+      ]
     }
   }
 }

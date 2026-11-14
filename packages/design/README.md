@@ -35,8 +35,9 @@ yak design decide <proposal-id> approved
 
 ## Tools
 
-- `design new <title> [body]` — creates a `design{}` component, a
-  `doc{title, body}` beside it, and the `proposed` component.
+- `design new <title> [body]` — creates a `design{}` component and a
+  `doc{title, body}` beside it. The `design` kind's rule adds `proposed`, so a
+  `design{}` written through any door is put forward the same way.
 - `design decide <design> [verdict]` — writes `decided{verdict}`, defaulting to
   `approved`; the other decision value is `declined`. This is distinct from the
   three review verdicts above. It does not automatically add `architecture`.

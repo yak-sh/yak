@@ -8,7 +8,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "identity": [
         "path",
         "root"
@@ -53,7 +52,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "embed": false,
       "identity": [
         "machine",
@@ -130,6 +128,14 @@
           "description": "the bytes each directory and file taking at least a thousandth of the volume holds, by its path from the mount; a directory's path ends in `/`. A directory listed holds everything listed under it"
         }
       }
+    }
+  },
+  "kinds": {
+    "file": {
+      "description": "a file, as a path read in a root, so anything in the graph can refer to one; its entity id is derived from the path and the root. It carries its contents as `content.body` where the graph keeps them, and goes without where the bytes are kept elsewhere"
+    },
+    "volume": {
+      "description": "a filesystem as a machine mounts it, and the root of the files on it; a path on the machine sits on the volume with the longest mount that contains it. Its entity id is derived from the machine and the mount, so the same disk mounted by another machine is another volume"
     }
   }
 }

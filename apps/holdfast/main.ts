@@ -6,7 +6,7 @@ import { replicate, syncOf } from '@yaks/sync'
 import { orderFeedback, recover } from './recovery.ts'
 import { mint } from '@yaks/graph/identity'
 import { parse } from '@yaks/query'
-import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { loadVocab, narrow, type VocabDoc } from '@yaks/vocab'
 import { docs as gameDocs } from '@yaks/game/vocab'
 import { docs as uxDocs } from '@yaks/ux/vocab'
 import { fixedStep, ownerOf } from '@yaks/game'
@@ -76,14 +76,13 @@ async function boot() {
   let front = client(
     loadVocab([
       ...manifest as VocabDoc[],
-      ...[...gameDocs, ...uxDocs].map((doc) => ({
-        ...doc,
-        $defs: Object.fromEntries(
-          Object.entries(doc.$defs ?? {}).filter(([name]) =>
-            !(manifest as VocabDoc[]).some((remote) => remote.$defs?.[name])
-          ),
-        ),
-      })),
+      ...[...gameDocs, ...uxDocs].map((doc) =>
+        narrow(
+          doc,
+          (name) =>
+            !(manifest as VocabDoc[]).some((remote) => remote.$defs?.[name]),
+        )
+      ),
     ]),
     [],
     {

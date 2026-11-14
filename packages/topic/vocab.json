@@ -10,11 +10,6 @@
     "topic": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": [
-        "doc"
-      ],
-      "prefix": "Q",
       "description": "a subject in the knowledge graph. Any entity may be one by wearing this: a subject of its own is topic + doc + content, and a project is its own topic, so what is known about it sits under it. What a topic belongs to is whatever contains it: one about a project sits under the project, and one about the world under none. Its doc is the cover: the title, and a line or two saying what belongs under it. Its content.body is the contents: what is understood about it, written as one document citing its sources. Its edges say what it holds (contains: a subtopic, or anything else, such as a memory, a design, a skill, a package or somebody's words), what to understand first (requires), what it reads or references, and what it cites; beliefs are about it (belief.about). A session opened on it (session.topic) starts from its tree, compiled (topic_read)",
       "properties": {
         "name": {
@@ -158,6 +153,26 @@
       "positional": [
         "topic",
         "ids..."
+      ]
+    }
+  },
+  "kinds": {
+    "topic": {
+      "description": "a subject in the knowledge graph. Any entity may be one by wearing this: a subject of its own is topic + doc + content, and a project is its own topic, so what is known about it sits under it. What a topic belongs to is whatever contains it: one about a project sits under the project, and one about the world under none. Its doc is the cover: the title, and a line or two saying what belongs under it. Its content.body is the contents: what is understood about it, written as one document citing its sources. Its edges say what it holds (contains: a subtopic, or anything else, such as a memory, a design, a skill, a package or somebody's words), what to understand first (requires), what it reads or references, and what it cites; beliefs are about it (belief.about). A session opened on it (session.topic) starts from its tree, compiled (topic_read)",
+      "with": {
+        "doc": true
+      },
+      "prefix": "Q",
+      "examples": [
+        {
+          "topic": {
+            "name": "search"
+          },
+          "doc": {
+            "title": "Search",
+            "body": "How full-text search and recall rank"
+          }
+        }
       ]
     }
   }

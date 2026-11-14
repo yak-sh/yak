@@ -7,9 +7,11 @@
 // point. A proposal is `design{}` for what it is, @yaks/doc's
 // `doc{title, body}` for its text, and @yaks/kernel's `proposed` and
 // `decided` for its lifecycle — anything can be proposed, so those two belong
-// to the kernel. A tool returns bundles, which are plain data, so naming
-// another package's component costs no import, and a server that composes
-// neither package refuses the write, naming the component it does not know.
+// to the kernel. The `design` kind (./vocab.json) adds `proposed` to a design
+// that lacks it, so the tool writes only the design and its words. A tool
+// returns bundles, which are plain data, so naming another package's
+// component costs no import, and a server that composes neither package
+// refuses the write, naming the component it does not know.
 //
 // A named decider records that person's explicit decision through the kernel's
 // request. The caller remains the writer used for authorization and journaling.
@@ -37,7 +39,6 @@ export let runs = (): Runs => ({
       entity: { eid: '$design' },
       design: {},
       doc: docIn(args),
-      proposed: {},
       ...(project ? { filed: { project } } : {}),
     }]
   },

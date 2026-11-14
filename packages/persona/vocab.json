@@ -10,13 +10,6 @@
     "person": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": [
-        "alias",
-        "doc",
-        "email"
-      ],
-      "prefix": "U",
       "by_name": true,
       "properties": {},
       "description": "a human being, as this graph knows them"
@@ -24,12 +17,6 @@
     "persona": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": [
-        "alias",
-        "doc"
-      ],
-      "prefix": "N",
       "by_name": true,
       "governed": true,
       "properties": {
@@ -114,11 +101,6 @@
     "skill": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": [
-        "doc",
-        "content"
-      ],
       "properties": {
         "invoke": {
           "type": "string",
@@ -196,6 +178,63 @@
       "start": true,
       "description": "reconcile repository skill files at startup and while the filesystem changes, only when skills mirroring is enabled",
       "option": "skills"
+    }
+  },
+  "kinds": {
+    "person": {
+      "description": "a human being, as this graph knows them",
+      "with": {
+        "doc": true
+      },
+      "before": [
+        "email"
+      ],
+      "prefix": "U",
+      "examples": [
+        {
+          "person": {},
+          "doc": {
+            "title": "Ada Lovelace"
+          }
+        }
+      ]
+    },
+    "persona": {
+      "description": "instructions an agent runs with: the doc body on the same entity is the instruction text",
+      "with": {
+        "doc": true
+      },
+      "prefix": "N",
+      "examples": [
+        {
+          "persona": {},
+          "doc": {
+            "title": "Reviewer",
+            "body": "Read the change and say what breaks"
+          }
+        }
+      ]
+    },
+    "skill": {
+      "description": "instructions loaded on demand: doc.title is the name and folder, doc.body the description an agent decides by, content.body the instructions. A references edge points to its repository file; names do not determine its identity",
+      "with": {
+        "doc": true,
+        "content": true
+      },
+      "examples": [
+        {
+          "skill": {
+            "invoke": "model"
+          },
+          "doc": {
+            "title": "testing",
+            "body": "Use when writing or running tests"
+          },
+          "content": {
+            "body": "Run deno task test without paths."
+          }
+        }
+      ]
     }
   }
 }

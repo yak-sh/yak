@@ -7,7 +7,6 @@
     "builder": {
       "component": true,
       "type": "object",
-      "kind": true,
       "properties": {
         "query": {
           "type": "string",
@@ -194,10 +193,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
-      "before": [
-        "doc"
-      ],
       "properties": {
         "build": {
           "type": "string",
@@ -532,6 +527,31 @@
       "positional": [
         "output"
       ]
+    }
+  },
+  "kinds": {
+    "builder": {
+      "description": "a query-to-tool transformation; content.body is its optional $var template and using chooses a model",
+      "with": {
+        "doc": true
+      },
+      "examples": [
+        {
+          "builder": {
+            "query": ".memory !belief"
+          },
+          "doc": {
+            "title": "Beliefs",
+            "body": "One point each memory makes"
+          }
+        }
+      ]
+    },
+    "built": {
+      "description": "one retained take in one named output slot; chosen marks the one in use",
+      "with": {
+        "doc": true
+      }
     }
   }
 }

@@ -13,18 +13,18 @@ import type { VocabDoc } from './types.ts'
 export type JsonSchema = Record<string, unknown>
 
 // The core yaks keywords: ref, death, computed, status, stamped, search,
-// sync, durable, pace, save, expire, kind, before, wire, aliases — what a component table
-// needs beyond native JSON Schema.
+// sync, durable, pace, save, expire, kind, before, wire, aliases — what a
+// component table needs beyond native JSON Schema.
 export let coreVocabulary: JsonSchema = coreDoc
 
 // The meta-schema: what a well-formed vocabulary document looks like.
 export let metaSchema: JsonSchema = schemaDoc
 
-/** The meta vocabulary: `_package`, `_comp`, `_extends`, `_prop`, `_effect`
- * and the `_before` relation, the components a vocabulary is described in as entities
- * (./bundles.ts). Its names start with `_`, which no authored name can: it
- * loads like any other document, and `storable` refuses it as one a person
- * wrote. */
+/** The meta vocabulary: `_package`, `_comp`, `_kind`, `_extends`, `_prop`,
+ * `_effect` and the `_before` relation, the components a vocabulary is
+ * described in as entities (./bundles.ts). Its names start with `_`, which no
+ * authored name can: it loads like any other document, and `storable` refuses
+ * it as one a person wrote. */
 export let metaDoc: VocabDoc = vocabDoc
 
 // The URI a vocabulary document declares under $vocabulary for the core layer.

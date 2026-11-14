@@ -8,7 +8,6 @@
     "doc": {
       "component": true,
       "type": "object",
-      "kind": true,
       "description": "the text a person reads: a title and a body",
       "properties": {
         "title": {
@@ -25,6 +24,19 @@
           "description": "the prose, as markdown — content-addressed when @yaks/blob is composed in, plain text otherwise"
         }
       }
+    }
+  },
+  "kinds": {
+    "doc": {
+      "description": "the text a person reads: a title and a body",
+      "examples": [
+        {
+          "doc": {
+            "title": "Reading list",
+            "body": "Books to start this winter"
+          }
+        }
+      ]
     }
   }
 }

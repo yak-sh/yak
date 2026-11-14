@@ -148,7 +148,10 @@ export let project = async <T>(
       let pkg = JSON.parse(
         await Deno.readTextFile(`${target}/${dir}/package.json`),
       )
-      await Deno.writeTextFile(path, JSON.stringify(jsr(pkg, JSON.parse(text))))
+      await Deno.writeTextFile(
+        path,
+        JSON.stringify(jsr(pkg, JSON.parse(text))),
+      )
     }
     let config = JSON.parse(await Deno.readTextFile(`${source}/deno.json`))
     await Deno.writeTextFile(

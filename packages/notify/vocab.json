@@ -31,9 +31,7 @@
     "knock": {
       "component": true,
       "type": "object",
-      "kind": true,
       "notice": true,
-      "prefix": "K",
       "properties": {
         "target": {
           "type": "string",
@@ -58,11 +56,7 @@
     "notification": {
       "component": true,
       "type": "object",
-      "kind": true,
       "notice": true,
-      "before": [
-        "doc"
-      ],
       "properties": {
         "about": {
           "type": "string",
@@ -76,7 +70,6 @@
     "subscription": {
       "component": true,
       "type": "object",
-      "kind": true,
       "unique": [
         [
           "actor",
@@ -103,6 +96,32 @@
           "description": "watch: notify this actor. mute: do not"
         }
       },
+      "description": "one actor’s attention to one entity; mode watches or mutes it, and archived/opened marks on this row record putting away or reading its thread"
+    }
+  },
+  "kinds": {
+    "knock": {
+      "description": "a nudge aimed at an entity, with the message that came with it",
+      "prefix": "K",
+      "examples": [
+        {
+          "knock": {
+            "target": "7c1e1f0a-3b5d-4c2e-9a41-2f6d8b0e5a13"
+          },
+          "doc": {
+            "body": "Your review is waiting"
+          }
+        }
+      ]
+    },
+    "notification": {
+      "description": "words emitted, not said, telling whoever its deliver{to} names (a person, or a project for everyone standing in it) what happened; doc{body} holds them, and it is a thread of its own",
+      "with": {
+        "doc": true,
+        "deliver": true
+      }
+    },
+    "subscription": {
       "description": "one actor’s attention to one entity; mode watches or mutes it, and archived/opened marks on this row record putting away or reading its thread"
     }
   }

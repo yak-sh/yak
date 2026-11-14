@@ -9,8 +9,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
-      "before": ["doc"],
       "description": "a package, read from its manifest; its entity id is derived from its name, so every checkout of it is one entity",
       "properties": {
         "name": {
@@ -34,8 +32,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
-      "before": ["doc", "file"],
       "description": "one file of a codebase, read from the file itself; it wears the `file` it was read from, which identifies it, and its `doc` is its opening paragraph",
       "properties": {
         "blob": {
@@ -54,8 +50,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
-      "before": ["doc"],
       "identity": ["module", "name"],
       "description": "a definition a module exports; identified by the module and its name, so a citation of it survives the file moving around it. Its `doc` is its doc comment",
       "properties": {
@@ -106,6 +100,27 @@
       "effect": true,
       "start": true,
       "description": "describe the vocabulary this graph is served with as @yaks/vocab's _package, _comp, _effect, _extends, _prop and _before entities whenever a process starts working the effects, clearing what it no longer declares; a graph already describing it is checked by the hash its _vocab holds and written nothing"
+    }
+  },
+  "kinds": {
+    "package": {
+      "description": "a package, read from its manifest; its entity id is derived from its name, so every checkout of it is one entity",
+      "with": {
+        "doc": true
+      }
+    },
+    "module": {
+      "description": "one file of a codebase, read from the file itself; it wears the `file` it was read from, which identifies it, and its `doc` is its opening paragraph",
+      "with": {
+        "doc": true,
+        "file": true
+      }
+    },
+    "symbol": {
+      "description": "a definition a module exports; identified by the module and its name, so a citation of it survives the file moving around it. Its `doc` is its doc comment",
+      "with": {
+        "doc": true
+      }
     }
   }
 }

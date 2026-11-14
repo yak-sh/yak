@@ -9,7 +9,6 @@
     "integration": {
       "component": true,
       "type": "object",
-      "kind": true,
       "description": "an outside service, as data: where a person signs in to it and where its codes are exchanged, for one reached by OAuth, the hosts its credential may be sent to, and how a page shows it. A built one is installed by the host from @yaks/connections' own seed data, and marked built; any other is a custom one, owned by the space or person that made it",
       "properties": {
         "name": {
@@ -229,10 +228,6 @@
     "connection": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": [
-        "secret"
-      ],
       "description": "one link between a space or a person and an outside service, through an integration. The entity is also the secret its credential is kept as: the graph holds the handle, the vault the key or the tokens",
       "properties": {
         "integration": {
@@ -437,6 +432,45 @@
       "effect": true,
       "start": true,
       "description": "install the integrations this package builds whenever a process starts working the effects; a graph already holding them as shipped is read once and written nothing"
+    }
+  },
+  "kinds": {
+    "integration": {
+      "description": "an outside service, as data: where a person signs in to it and where its codes are exchanged, for one reached by OAuth, the hosts its credential may be sent to, and how a page shows it. A built one is installed by the host from @yaks/connections' own seed data, and marked built; any other is a custom one, owned by the space or person that made it",
+      "examples": [
+        {
+          "integration": {
+            "name": "github",
+            "title": "GitHub",
+            "authorize": "https://github.com/login/oauth/authorize",
+            "token": "https://github.com/login/oauth/access_token",
+            "scopes": [
+              "repo"
+            ],
+            "hosts": [
+              "api.github.com"
+            ]
+          }
+        }
+      ]
+    },
+    "connection": {
+      "description": "one link between a space or a person and an outside service, through an integration. The entity is also the secret its credential is kept as: the graph holds the handle, the vault the key or the tokens",
+      "with": {
+        "secret": true
+      },
+      "examples": [
+        {
+          "connection": {
+            "integration": "github",
+            "owner": "e5f6a7b8-c9d0-4e1f-a2b3-c4d5e6f7a8b9",
+            "status": "needed"
+          },
+          "secret": {
+            "name": "github"
+          }
+        }
+      ]
     }
   }
 }

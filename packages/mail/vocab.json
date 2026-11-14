@@ -4,11 +4,6 @@
     "mail": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": [
-        "doc"
-      ],
-      "prefix": "E",
       "description": "one letter's envelope, sent or received; in an app, read only by its owners and editors, whatever the app's access",
       "readers": "editor",
       "properties": {
@@ -74,8 +69,6 @@
     "email": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "prefix": "A",
       "description": "an address, as an entity — what a person is reachable at",
       "properties": {
         "address": {
@@ -311,6 +304,40 @@
       "target": ".task",
       "option": "local",
       "description": "Archive the letter whose task was cancelled, with the cancel's time and actor: cancelling a letter's task says it needs no answer, so it leaves the unanswered list."
+    }
+  },
+  "kinds": {
+    "mail": {
+      "description": "one letter's envelope, sent or received; in an app, read only by its owners and editors, whatever the app's access",
+      "with": {
+        "doc": true
+      },
+      "prefix": "E",
+      "examples": [
+        {
+          "mail": {
+            "from": "ada@example.com"
+          },
+          "doc": {
+            "title": "Lunch on Friday",
+            "body": "Noon at the usual place?"
+          },
+          "deliver": {
+            "to": "bea@example.com"
+          }
+        }
+      ]
+    },
+    "email": {
+      "description": "an address, as an entity — what a person is reachable at",
+      "prefix": "A",
+      "examples": [
+        {
+          "email": {
+            "address": "ada@example.com"
+          }
+        }
+      ]
     }
   }
 }

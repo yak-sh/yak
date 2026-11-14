@@ -170,7 +170,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "description": "A registered tool that callers can invoke.",
       "properties": {
         "name": {
@@ -219,6 +218,11 @@
           ]
         }
       }
+    }
+  },
+  "kinds": {
+    "tool": {
+      "description": "A registered tool that callers can invoke."
     }
   }
 }

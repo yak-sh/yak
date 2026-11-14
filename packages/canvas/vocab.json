@@ -10,7 +10,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "unique": [
         [
           "client",
@@ -57,7 +56,6 @@
     "canvas": {
       "component": true,
       "type": "object",
-      "kind": true,
       "by_name": true,
       "sync": "server",
       "description": "a plane things are arranged on",
@@ -66,7 +64,6 @@
     "card": {
       "component": true,
       "type": "object",
-      "kind": true,
       "sync": "server",
       "description": "one entity shown on a canvas",
       "properties": {
@@ -86,7 +83,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "sync": "server",
       "description": "one open window — what a camera, a cursor, a fold and a shelf each belong to",
       "properties": {
@@ -111,7 +107,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "unique": [
         [
           "client"
@@ -142,7 +137,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "unique": [
         [
           "client",
@@ -173,8 +167,6 @@
     "layout": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "prefix": "L",
       "by_name": true,
       "sync": "server",
       "description": "a named split of the screen into panes",
@@ -190,7 +182,6 @@
     "pane": {
       "component": true,
       "type": "object",
-      "kind": true,
       "sync": "server",
       "description": "one region of a layout: either a split, or a region showing an entity",
       "properties": {
@@ -287,6 +278,65 @@
           "description": "the window holding it — when the window goes the shelf empties, and the entities on it remain"
         }
       }
+    }
+  },
+  "kinds": {
+    "camera": {
+      "description": "where one window is looking at one canvas — synced to the server so another tab, or a tool, can read it and move it"
+    },
+    "canvas": {
+      "description": "a plane things are arranged on",
+      "examples": [
+        {
+          "canvas": {}
+        }
+      ]
+    },
+    "card": {
+      "description": "one entity shown on a canvas",
+      "examples": [
+        {
+          "card": {
+            "target": "7c1e1f0a-3b5d-4c2e-9a41-2f6d8b0e5a13"
+          }
+        }
+      ]
+    },
+    "client": {
+      "description": "one open window — what a camera, a cursor, a fold and a shelf each belong to"
+    },
+    "cursor": {
+      "description": "what one window has open — synced to the server, so a tool can move someone there by writing it"
+    },
+    "fold": {
+      "description": "the sections of a list one window has collapsed"
+    },
+    "layout": {
+      "description": "a named split of the screen into panes",
+      "with": {
+        "doc": true
+      },
+      "prefix": "L",
+      "examples": [
+        {
+          "layout": {},
+          "doc": {
+            "title": "Two columns"
+          }
+        }
+      ]
+    },
+    "pane": {
+      "description": "one region of a layout: either a split, or a region showing an entity",
+      "examples": [
+        {
+          "pane": {
+            "dir": "h",
+            "size": 0.5,
+            "order": 0
+          }
+        }
+      ]
     }
   }
 }

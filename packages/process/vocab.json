@@ -5,10 +5,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
-      "before": [
-        "process"
-      ],
       "description": "a program that should be running. It is stored on the same entity its `process` component lands on: the service records what is wanted, the process records what is actually running, and a `stop` component beside it means the program is no longer wanted",
       "properties": {
         "command": {
@@ -38,7 +34,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "description": "a program observed on its launch workspace; its entity id, not a pid alone, is the durable process handle",
       "properties": {
         "pid": {
@@ -105,6 +100,17 @@
           "description": "the exit code it reported; absent when the end of the process was observed but the code was not (a signal killed the wrapper, or nothing was watching)"
         }
       }
+    }
+  },
+  "kinds": {
+    "service": {
+      "description": "a program that should be running. It is stored on the same entity its `process` component lands on: the service records what is wanted, the process records what is actually running, and a `stop` component beside it means the program is no longer wanted",
+      "before": [
+        "process"
+      ]
+    },
+    "process": {
+      "description": "a program observed on its launch workspace; its entity id, not a pid alone, is the durable process handle"
     }
   }
 }

@@ -2,8 +2,13 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { type Bundle, type Comp, type Graph, graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
+import { docDoc } from '@yaks/doc/vocab'
+import { kernelDoc } from '@yaks/kernel/vocab'
+import { loadVocab } from '@yaks/vocab'
+import { ram } from '@yaks/ram'
+import { examplesAreTheirKinds } from '../ram/testing.ts'
 import { designDoc } from './vocab.ts'
 import { runs } from './tools.ts'
 
@@ -26,14 +31,35 @@ test('every design tool is declared and implemented', () => {
   ])
 })
 
-test('a proposal is design{} plus the words, put forward', async () => {
+test('a proposal is design{} plus the words', async () => {
   let [said] = await tools.design_new!(
     ...asked({ title: 'One shape', body: 'why', project: 'p19' }),
   ) as Bundle[]
   assertEquals(comp(said, 'design'), {})
   assertEquals(comp(said, 'doc'), { title: 'One shape', body: 'why' })
-  assertEquals(comp(said, 'proposed'), {})
   assertEquals(comp(said, 'filed'), { project: 'p19' })
+})
+
+test('a design written through any door is put forward by its writer', () => {
+  let docs = [designDoc, docDoc, kernelDoc]
+  let vocab = loadVocab(docs)
+  let g = graph({ vocab, storage: ram(vocab) })
+  g.apply([{ entity: { eid: 'ada' }, doc: { title: 'Ada' } }])
+  let [b] = g.apply([{
+    entity: { eid: 'd1' },
+    design: {},
+    doc: { title: 'One shape' },
+    $actor: { by: 'ada' },
+  }]) as Bundle[]
+  assertEquals((b.proposed as Comp).by, 'ada')
+  assertEquals(typeof (b.proposed as Comp).at, 'string')
+})
+
+test('each design kind example is its kind', () => {
+  assertEquals(examplesAreTheirKinds([designDoc, docDoc, kernelDoc]), [
+    'design',
+    'review',
+  ])
 })
 
 test('a proposal nobody filed wears no filing', async () => {
@@ -42,7 +68,6 @@ test('a proposal nobody filed wears no filing', async () => {
     'design',
     'doc',
     'entity',
-    'proposed',
   ])
 })
 

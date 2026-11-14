@@ -8,7 +8,6 @@
     "edge": {
       "component": true,
       "type": "object",
-      "kind": true,
       "description": "a link between two entities; the kind of link is named by a second component stored beside this one",
       "properties": {
         "from": {
@@ -28,6 +27,20 @@
           "description": "the link's position among the other links of its relation, for relations where order matters"
         }
       }
+    }
+  },
+  "kinds": {
+    "edge": {
+      "description": "a link between two entities; the kind of link is named by a second component stored beside this one",
+      "examples": [
+        {
+          "edge": {
+            "from": "7c1e1f0a-3b5d-4c2e-9a41-2f6d8b0e5a13",
+            "to": "2e4c6a8b-0d1f-4a3c-b5e7-9f1b3d5a7c9e"
+          },
+          "cites": {}
+        }
+      ]
     }
   }
 }

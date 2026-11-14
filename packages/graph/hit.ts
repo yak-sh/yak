@@ -6,7 +6,7 @@
 // structured content keep every component.
 import type { Bundle, Comp } from './bundle.ts'
 import type { Vocab } from '@yaks/vocab'
-import { format, prefixOf } from '@yaks/id'
+import { format, seriesOf } from '@yaks/id'
 
 /** A search row's line: which row it is, what it is, what it is called, the
  * words around the match, and that words found it. */
@@ -23,7 +23,9 @@ export type Hit = {
 let kindOf = (vocab: Vocab, b: Bundle): string => vocab.kindOf(b) || 'entity'
 
 /** The id a line names a row by: its human id (`P-45602`) where it has a
- * number, which a reader copies without slipping a digit, else its eid. Not
+ * number, which a reader copies without slipping a digit, else its eid. A
+ * number with no stored letter takes the series its components are numbered
+ * in, so a decision (`task` + `decision`) reads as a task's `T-`. Not
  * the short handle a terminal shows (`#7e75052a20`): only @yaks/id's plugin
  * resolves one, and the eid is the id every graph takes.
  *
@@ -32,18 +34,26 @@ let kindOf = (vocab: Vocab, b: Bundle): string => vocab.kindOf(b) || 'entity'
  * import { loadVocab } from '@yaks/vocab'
  * import { equal } from '@yaks/testing'
  *
- * let project = { component: true, kind: true, properties: {} }
- * let say = called(loadVocab({ $defs: { project } }))
+ * let comp = { component: true, properties: {} }
+ * let say = called(loadVocab({
+ *   $defs: { project: comp, task: comp, decision: comp },
+ *   kinds: {
+ *     project: {},
+ *     task: { prefix: 'T' },
+ *     decision: { is: ['task', 'decision'] },
+ *   },
+ * }))
  * equal(say({ entity: { eid: 'e1', num: 45602, prefix: 'P' }, project: {} }), 'P-45602')
+ * equal(say({ entity: { eid: 'e1', num: 9 }, task: {}, decision: {} }), 'T-9')
  * equal(say({ entity: { eid: 'e1' }, project: {} }), 'e1')
  * equal(say({ entity: { eid: 'e1', num: 7 }, note: {} }), 'e1')
  * ```
  */
 export let called = (vocab: Vocab): (b: Bundle) => string => {
-  let letter = prefixOf(vocab)
+  let letter = seriesOf(vocab)
   return (b) => {
     let { eid, num, prefix } = b.entity
-    let series = num ? prefix || letter(kindOf(vocab, b)) : undefined
+    let series = num ? prefix || letter(Object.keys(b)) : undefined
     return series ? format(series, num!) : eid
   }
 }

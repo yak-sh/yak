@@ -9,11 +9,6 @@
     "goal": {
       "component": true,
       "type": "object",
-      "kind": true,
-      "before": [
-        "doc"
-      ],
-      "prefix": "V",
       "properties": {
         "scope": {
           "type": "string",
@@ -142,6 +137,24 @@
       ],
       "positional": [
         "goal"
+      ]
+    }
+  },
+  "kinds": {
+    "goal": {
+      "description": "a purpose that is never finished — work `satisfies` it rather than completing it",
+      "with": {
+        "doc": true
+      },
+      "prefix": "V",
+      "examples": [
+        {
+          "goal": {},
+          "doc": {
+            "title": "A fast, well-designed TUI",
+            "body": "Work satisfies it; nothing completes it"
+          }
+        }
       ]
     }
   }

@@ -9,7 +9,6 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "kind": true,
       "properties": {
         "of": {
           "type": "string",
@@ -22,6 +21,11 @@
           "description": "the target string tmux accepts: a pane id (`%42`), or `session:window.pane`"
         }
       },
+      "description": "a terminal somebody can watch: one tmux pane, and what is running in it"
+    }
+  },
+  "kinds": {
+    "tmux": {
       "description": "a terminal somebody can watch: one tmux pane, and what is running in it"
     }
   }
