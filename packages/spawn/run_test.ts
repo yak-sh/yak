@@ -297,6 +297,17 @@ test('a crashed run names its signal and what it last said on stderr', async () 
   ])
 })
 
+test('a run killed at its memory cap names the cap', async () => {
+  let ended = "the provider was ended by SIGKILL (exit 137) at its session's " +
+    "memory cap: the kernel's OOM killer ended 3 processes in the run"
+  assertEquals(await standin('capped'), [
+    'Provider exited 137',
+    ended,
+    [`run ended: Error: a spawned run ended: ${ended}`],
+    [],
+  ])
+})
+
 test('a run that played a recording says how it ended, and is not told', async () => {
   let ended = 'the provider exited 1: API Error: 500 overloaded'
   assertEquals(await standin('refusal', true), [

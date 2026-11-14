@@ -78,6 +78,7 @@ import { kept } from '@yaks/session/service'
 import {
   clean,
   EXIT,
+  type Exit,
   gone,
   launch,
   paths,
@@ -994,24 +995,33 @@ let SIGNALS: Record<number, string> = {
   15: 'SIGTERM',
 }
 
+// A SIGKILL in a run whose scope the OOM killer took processes from is the
+// session's memory cap (bin/limits), not a kill anyone sent.
+let capped = (oom: number) =>
+  ` at its session's memory cap: the kernel's OOM killer ended ${oom} ` +
+  `process${oom == 1 ? '' : 'es'} in the run`
+
 // How a run ended, as its row and its files show it: the code its wrapper
-// wrote, the signal that code names, or why there is none; then the last line
-// it printed on stderr, which is where a provider says what went wrong, unless
-// it said why in its transcript (`said`, a refusal's text), which comes first.
+// wrote, the signal that code names and whether the memory cap sent it, or
+// why there is none; then the last line it printed on stderr, which is where a
+// provider says what went wrong, unless it said why in its transcript
+// (`said`, a refusal's text), which comes first.
 let cause = async (
   session: string,
   row: Bundle | undefined,
   o: Opts,
   said?: string,
 ): Promise<string> => {
-  let code = comp(row, EXIT)?.code as number | null | undefined
+  let exit = comp(row, EXIT) as Exit | undefined
+  let code = exit?.code
   let signal = code != null && code > 128 ? SIGNALS[code - 128] : undefined
   let f = paths(session, o)
   let reported = proc(row)?.pid != null ||
     await disk.stat(f.pid).then(() => true, () => false)
+  let cap = signal == 'SIGKILL' && exit?.oom ? capped(exit.oom) : ''
   let how = code != null
     ? signal
-      ? `the provider was ended by ${signal} (exit ${code})`
+      ? `the provider was ended by ${signal} (exit ${code})${cap}`
       : `the provider exited ${code}`
     : reported
     ? 'the provider and its wrapper were killed, so no exit code was written'

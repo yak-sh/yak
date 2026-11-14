@@ -139,7 +139,7 @@ export let playing: typeof launch = async (store, spec, o = {}) => {
   await store.apply([{
     entity: { eid },
     process: { pid: 1, command: spec.command },
-    exit: { code: run.code },
+    exit: { code: run.code, ...run.oom ? { oom: run.oom } : {} },
   }])
   return { eid, pid: 1, done: Promise.resolve(run.code), elapsed: () => 0 }
 }

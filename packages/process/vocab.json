@@ -98,6 +98,10 @@
         "code": {
           "type": "integer",
           "description": "the exit code it reported; absent when the end of the process was observed but the code was not (a signal killed the wrapper, or nothing was watching)"
+        },
+        "oom": {
+          "type": "integer",
+          "description": "how many of the run's processes the kernel's OOM killer ended at its memory limit while it ran (Linux, its scope's memory.events); absent when none were or nothing counts them"
         }
       }
     }

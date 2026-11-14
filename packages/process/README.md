@@ -18,7 +18,7 @@ A **bundle** is one entity's components as a JSON object. This package defines:
 | `service{command, cwd, restart, attempts}` | a program that should run      |
 | `process{pid, command, cwd}`               | a tracked running process      |
 | `runtime{name, version, os}`               | what a process of ours runs on |
-| `exit{code}`                               | the observed end of a process  |
+| `exit{code, oom}`                          | the observed end of a process  |
 
 A process that opens a graph writes its own row when it starts (`started()`),
 with `runtime` beside `process`: `deno`, its version, and the operating system
@@ -81,11 +81,12 @@ one process is over: its row records an `exit`, or it is among the vanished.
 
 Launched processes run through a short-lived launcher and a wrapper in a session
 and process group of its own. The wrapper writes a pidfile and an exit-code
-file; the launch writes a start file. The pidfile contains the wrapper's
-process-group ID and the child's PID. Monitoring uses signals and the files
-because the tracked program is not a direct child; this package does not call
-`waitpid` or reap children. This allows a child to outlive the process that
-opened the graph and be monitored again after restart.
+file, which on Linux also counts the processes the kernel's OOM killer ended in
+the run's scope (`exit.oom`); the launch writes a start file. The pidfile
+contains the wrapper's process-group ID and the child's PID. Monitoring uses
+signals and the files because the tracked program is not a direct child; this
+package does not call `waitpid` or reap children. This allows a child to outlive
+the process that opened the graph and be monitored again after restart.
 
 Only the detaching differs by operating system:
 

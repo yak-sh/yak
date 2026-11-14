@@ -173,9 +173,18 @@ export let paths = (
 // path gives it nothing to expand. When the child ended is the exit-code
 // file's mtime, not a date(1) the wrapper runs: date's sub-second format is
 // not POSIX, macOS prints `%N` as a letter, and shell arithmetic on that
-// would end the wrapper before it wrote the code.
-let WRAPPER = '"$@" >> "$TASKS_OUT" 2>> "$TASKS_ERR" & trap "" INT TERM; ' +
-  'echo "$$ $!" > "$TASKS_PID"; wait $!; echo $? > "$TASKS_CODE"'
+// would end the wrapper before it wrote the code. After the code, on the same
+// line, comes what the platform counts of how the child ended (`count`).
+let wrapper = (count: string) =>
+  '"$@" >> "$TASKS_OUT" 2>> "$TASKS_ERR" & trap "" INT TERM; ' +
+  `echo "$$ $!" > "$TASKS_PID"; wait $!; c=$?; echo $c${count} > "$TASKS_CODE"`
+
+// How many processes the kernel's OOM killer has ended in the wrapper's own
+// cgroup, the run's scope: its memory.events, under the cgroup v2 path
+// /proc/self/cgroup names. Nothing when the run has no memory controller.
+let OOM = ' $(sed -n "s/^oom_kill //p" ' +
+  '"/sys/fs/cgroup$(sed -n "s/^0:://p" /proc/self/cgroup)/memory.events" ' +
+  '2>/dev/null)'
 
 // The launcher, our direct child: it backgrounds the detaching command and
 // exits at once. The whole command line arrives as its arguments, so nothing
@@ -212,6 +221,9 @@ type Platform = (launch: { unit: string; uid: number }) => {
   /** one word of the wrapper's command line, written so the detaching
    * command passes it on unchanged */
   word: (arg: string) => string
+  /** shell words the wrapper prints after the exit code: how many of the
+   * run's processes the machine's memory limit ended (none by default) */
+  count?: string
 }
 
 let platforms: Record<string, Platform> = {
@@ -228,6 +240,7 @@ let platforms: Record<string, Platform> = {
     ],
     env: bus(uid),
     word: literal,
+    count: OOM,
   }),
   // launchd stops a job by signalling its process group (launchd.plist(5),
   // AbandonProcessGroup), so a session of its own is the whole lift. macOS
@@ -270,21 +283,21 @@ let spawn = (
   platform: Platform,
 ) => {
   let f = files(dir, eid)
-  let wrapper = `${dir}/wrapper.sh`
+  let script = `${dir}/wrapper.sh`
+  let p = platform({ unit: unit(eid), uid: system.uid() ?? 0 })
   // Every launch shares this file, and a write truncates before it writes: a
   // `sh wrapper.sh` opened in between ran an empty script, so its child never
   // started. A rename replaces the file whole, and a shell already reading the
   // old one keeps reading all of it.
-  disk.writeFileSync(`${wrapper}.${eid}`, WRAPPER)
-  disk.renameSync(`${wrapper}.${eid}`, wrapper)
-  let p = platform({ unit: unit(eid), uid: system.uid() ?? 0 })
+  disk.writeFileSync(`${script}.${eid}`, wrapper(p.count ?? ''))
+  disk.renameSync(`${script}.${eid}`, script)
   let child = processCommand('sh', {
     args: [
       '-c',
       LAUNCHER,
       'sh',
       ...p.detach,
-      ...['sh', wrapper, ...argv].map(p.word),
+      ...['sh', script, ...argv].map(p.word),
     ],
     cwd,
     clearEnv: true,
@@ -345,15 +358,20 @@ let numberIn = (text: string) => {
 
 let codeOf = (path: string) => numberIn(textOf(path))
 
-// The exit code, once the wrapper has written all of it. Its `echo $code >
-// file` creates the file empty and writes the line a moment later; a load that
-// stretches that moment let a read see the empty file and stamp a clean exit on
-// a child that exited 3 (T-38290). echo ends the line with a newline, so a
-// complete write is one that ends with one.
-let exitIn = (path: string) => {
+// How the run ended, once the wrapper has written all of it: the exit code,
+// then the memory limit's kills where the platform counts them. Its `echo …
+// > file` creates the file empty and writes the line a moment later; a load
+// that stretches that moment let a read see the empty file and stamp a clean
+// exit on a child that exited 3 (T-38290). echo ends the line with a newline,
+// so a complete write is one that ends with one.
+let endingIn = (path: string): Exit | null => {
   let text = textOf(path)
-  return text.endsWith('\n') ? numberIn(text) : null
+  if (!text.endsWith('\n')) return null
+  let [code, oom] = text.trim().split(/\s+/).map(numberIn)
+  return code == null ? null : { code, ...oom ? { oom } : {} }
 }
+
+let exitIn = (path: string) => endingIn(path)?.code ?? null
 
 let mtimeOf = (path: string) => {
   try {
@@ -588,10 +606,10 @@ let WRITE = 10_000
 let reported = (f: ReturnType<typeof files>, o: Opts) => async () => {
   let wrapper = groupOf(f.pid)
   for (let i = 0, end = Date.now() + WRITE;; i++) {
-    let code = exitIn(f.code)
-    if (code != null) return code
+    let ending = endingIn(f.code)
+    if (ending) return ending
     let over = wrapper ? !(await alive(o)(wrapper)) : i >= 20
-    if (over || Date.now() >= end) return exitIn(f.code)
+    if (over || Date.now() >= end) return endingIn(f.code) ?? { code: null }
     await sleep(beat(o))
   }
 }
@@ -601,14 +619,14 @@ let follow = async (
   store: Store,
   eid: string,
   pid: number,
-  code: () => number | null | Promise<number | null>,
+  ending: () => Exit | Promise<Exit>,
   o: Opts,
 ) => {
   let poll = o.poll ?? 1000
   while (pid && await alive(o)(pid)) await sleep(poll)
-  let ended = await code()
-  await store.apply([{ entity: { eid }, [EXIT]: { code: ended } }])
-  return ended
+  let ended = await ending()
+  await store.apply([{ entity: { eid }, [EXIT]: ended }])
+  return ended.code ?? null
 }
 
 /**
@@ -691,7 +709,7 @@ export let adopt = async (
     eid,
     pid,
     elapsed: elapsedOf(dirOf(o), eid),
-    done: follow(store, eid, pid, o.code ?? (() => null), o),
+    done: follow(store, eid, pid, () => ({ code: o.code?.() ?? null }), o),
   }
 }
 

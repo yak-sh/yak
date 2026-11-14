@@ -102,6 +102,10 @@ export type Exit = {
   /** the exit code it reported; absent when the end was observed but the code
    * was not */
   code?: number | null
+  /** how many of the run's processes the kernel's OOM killer ended at its
+   * memory limit while it ran (Linux, its scope's memory.events); absent when
+   * none were or nothing counts them */
+  oom?: number
 }
 
 /** A bundle carrying a process, as {@link Store.running} returns. */

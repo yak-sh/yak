@@ -17,9 +17,11 @@
 // dbc37007 and f9b77269), whose own logs were not kept.
 
 /** How a recorded run went: what it printed, and the code it exited with. */
-export type Played = { out: string; err: string; code: number }
+/** What a stand-in run prints and ends with; `oom`, the processes a memory
+ * cap killed in its scope, is what its wrapper counts beside the code. */
+export type Played = { out: string; err: string; code: number; oom?: number }
 
-type Recording = { lines: unknown[]; err?: string; code: number }
+type Recording = { lines: unknown[]; err?: string; code: number; oom?: number }
 
 let say = (text: string, more: Record<string, unknown> = {}) => ({
   type: 'assistant',
@@ -75,6 +77,9 @@ export let endings: Record<string, Recording> = {
   // The process was killed mid-turn: no closing line, and the code a wrapper
   // records for SIGKILL.
   crash: { lines: [say('starting')], err: 'out of memory', code: 137 },
+  // Killed at its session's memory cap, beside two test runtimes the cap
+  // killed first.
+  capped: { lines: [say('starting')], code: 137, oom: 3 },
 }
 
 // The value after a flag on a command line, before the `--` that ends them.
@@ -101,7 +106,7 @@ let flag = (argv: string[], name: string): string | undefined => {
  */
 export let played = (argv: string[]): Played => {
   let model = flag(argv, '--model')
-  let { lines, err, code } = endings[model ?? ''] ?? endings.clean
+  let { lines, err, code, oom } = endings[model ?? ''] ?? endings.clean
   let init = {
     type: 'system',
     subtype: 'init',
@@ -112,6 +117,7 @@ export let played = (argv: string[]): Played => {
     out: [init, ...lines].map((l) => JSON.stringify(l) + '\n').join(''),
     err: err ? err + '\n' : '',
     code,
+    ...oom ? { oom } : {},
   }
 }
 

@@ -211,3 +211,22 @@ test('an exit-code file read before it is written is waited for, never read as 0
   let [run] = await watch(store(g), { dir: d, running })
   assertEquals(await run.done, 3)
 })
+
+test("an ending records the memory limit's kills the wrapper counted beside its code", async () => {
+  let ended = async (line: string) => {
+    let g = tracked()
+    let d = dir()
+    await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: 7002 } }])
+    Deno.writeTextFileSync(`${d}/p1.code`, line)
+    Deno.writeTextFileSync(`${d}/p1.pid`, '7001 7002\n')
+    let [run] = await watch(store(g), {
+      dir: d,
+      running: () => Promise.resolve(false),
+    })
+    return [await run.done, comp((await g.read(`.${PROCESS}&*`))[0], EXIT)]
+  }
+  assertEquals(await ended('137 2\n'), [137, { code: 137, oom: 2 }])
+  assertEquals(await ended('1 0\n'), [1, { code: 1 }])
+  assertEquals(await ended('0 \n'), [0, { code: 0 }])
+  assertEquals(await ended('3\n'), [3, { code: 3 }])
+})
