@@ -46,6 +46,7 @@ import {
 } from '@yaks/platform/meter'
 import type { Tier } from '@yaks/platform/plans'
 import type { Sample } from '@yaks/platform/visits'
+import type { Tunnel } from '@yaks/tunnel/hosted'
 import { type Host as HostEnv, spaceHost } from '@yaks/platform/host'
 import { type Upstream, upstreamOf } from '@yaks/platform/upstream'
 import type { Actor, Bundle, Tx } from '@yaks/graph'
@@ -196,11 +197,6 @@ export type Seller = {
   ready: boolean
   submitted: boolean
 }
-
-/** The tunnel a space has to a machine (tunnel.ts, @yaks/tunnel): the tunnel
- * it dials out on, the Workers VPC Service the tunnel's gateway is bound to, and
- * whether the platform made the pair or only records one made elsewhere. */
-export type Tunnel = { id: string; service: string; adopted: boolean }
 
 /** A space as the directory reads it: what its plan and meter read
  * (@yaks/platform/meter `Metered`), and everything else it is. */

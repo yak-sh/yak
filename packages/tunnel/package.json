@@ -6,11 +6,12 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./routes": "./routes.ts",
+    "./hosted": "./hosted.ts",
     "./service": "./service.ts",
     "./effects": "./effects.ts"
   },
   "license": "Apache-2.0",
-  "description": "Reaches a machine from a hosted space through a Cloudflare Tunnel and a Workers VPC Service: the account calls that make one, the connector that runs it on the machine, the machine's word on what comes through: the paths it opened, the tools it offers and who a caller writes as, and what the machine tells the platform back.",
+  "description": "Reaches a machine from a hosted space through a Cloudflare Tunnel and a Workers VPC Service: the account calls that make one, the hosting platform's door onto them and the requests it passes through one, the connector that runs it on the machine, the machine's word on what comes through: the paths it opened, the tools it offers and who a caller writes as, and what the machine tells the platform back.",
   "dependencies": {
     "@yaks/api": "0.2.29",
     "@yaks/connections": "0.2.28",

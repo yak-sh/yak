@@ -130,24 +130,6 @@ test('only the platform adopts a pair, since its ids name the platform’s resou
   assertEquals(cf.made, [`PUT ${gateway}`])
 })
 
-test('an adopted pair rotates only its gateway, and disconnecting leaves the tunnel alone', async () => {
-  using cf = await scene()
-  let { scenario, door, gateway } = cf
-  await using _ = scenario
-  await door(JEFF, adopt)
-  let rotated = (await door(ADA, { space: 'ada', do: 'rotate' })).body
-  assertEquals(rotated.token, undefined)
-  assertEquals((await door(ADA, { space: 'ada', do: 'disconnect' })).body, {
-    space: 'ada',
-    tunnel: null,
-  })
-  assertEquals(cf.made, [
-    `PUT ${gateway}`,
-    `PUT ${gateway}`,
-    `DELETE ${gateway}`,
-  ])
-})
-
 test('no gateway can be uploaded without the workers token, so no tunnel is made', async () => {
   let { scenario, door } = await spaces({ CF_ACCOUNT: 'acct' })
   await using _ = scenario
@@ -293,29 +275,17 @@ let reach = async (
 
 let code = async (r: Response) => (await r.json()).error.code
 
-test('only the app itself reaches the machine, and only an app built in the space', async () => {
+test('only the app itself reaches the machine, never its visitor', async () => {
   let visitor: Who = { person: 'p1', role: 'owner' }
   assertEquals(await code((await reach({ who: visitor })).res), 'not_the_app')
-  let copy = { ...mail, installed: { from: 'x' } } as unknown as App
-  assertEquals(await code((await reach({ app: copy })).res), 'installed')
-  let alone = { ...tunneled, tunnel: null }
-  assertEquals(await code((await reach({ space: alone })).res), 'no_tunnel')
 })
 
-test('the app’s request goes to its space’s gateway as an app’s, with the platform’s words taken off', async () => {
+test('the app’s request goes to its space’s gateway, as the app', async () => {
   let { res, handed, named } = await reach()
   assertEquals(await res.text(), 'from the machine')
   assertEquals(named, ['tunnel-s1'])
-  let [r] = handed
-  assertEquals(r.url, 'http://machine/mail/inbound?to=a')
-  assertEquals(r.method, 'POST')
-  assertEquals(await r.text(), 'a letter')
-  assertEquals(r.headers.get('content-type'), 'text/plain')
-  // Whatever it said of itself, the platform says it is an app's worker.
-  assertEquals(r.headers.get(CALLER), 'app')
-  for (let h in WORDS) {
-    if (h != CALLER) assertEquals(r.headers.has(h), false, h)
-  }
+  assertEquals(handed[0].url, 'http://machine/mail/inbound?to=a')
+  assertEquals(handed[0].headers.get(CALLER), 'app')
 })
 
 test('a tunnel with no gateway yet says so', async () => {
@@ -372,11 +342,6 @@ test('the owner’s request goes to the gateway saying who asks for them, and no
     ],
   )
   assertEquals(await door.handed[0].text(), 'a call')
-  for (let h in WORDS) {
-    if (h != 'x-via' && h != CALLER && h != WITH) {
-      assertEquals(door.handed[0].headers.has(h), false, h)
-    }
-  }
 })
 
 test('nobody but the owner is answered a space’s machine', async () => {

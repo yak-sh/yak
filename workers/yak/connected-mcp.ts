@@ -4,11 +4,9 @@ import { url } from '@yaks/platform/host'
 import { type Ask, type Offered, remoteCommands } from './mcp-remote.ts'
 import { asCaller, type Ctx, refuse, str } from './tool.ts'
 import type { Row } from './tool-words.ts'
-import type { Calling } from './tunnel.ts'
+import type { Calling } from '@yaks/tunnel/hosted'
 import { argsOf, type Tool as GraphTool } from '@yaks/graph'
 import { nameOf } from '@yaks/mcp-client'
-
-export type { Calling }
 
 // The tunnel's code is loaded by the first server on a machine, which almost
 // nobody has.

@@ -19,6 +19,7 @@ import { refuse } from './tool.ts'
 import { caught } from './defects.ts'
 import { connectedEnv } from './connections.ts'
 import { scriptName } from './dispatch.ts'
+import { barred } from '@yaks/tunnel/hosted'
 
 type Read = (path: string) => Promise<Uint8Array<ArrayBuffer> | null>
 
@@ -36,17 +37,12 @@ export let configured = async (read: Read) => {
 }
 
 // Why a `vpc_services` door cannot reach the machine the app's space has a
-// tunnel to, or null when it can; tunnel.ts `reach` asks again on every
-// request. Only an app built in the space reaches it: an installed copy's code
-// was written elsewhere, and a tunnel reaches into the owner's own machine.
-let unreached = (space: Space, app: App, config: Config) =>
-  !config.vpc_services?.length
-    ? null
-    : app.installed
-    ? `refused vpc_services: ${app.slug} is an installed copy, and only an app built in ${space.slug} reaches the machine its tunnel goes to`
-    : !space.tunnel
-    ? `refused vpc_services: ${space.slug} has no tunnel to a machine; its owner makes one first`
-    : null
+// tunnel to (@yaks/tunnel/hosted `barred`), or null when it can; tunnel.ts
+// `reach` asks again on every request.
+let unreached = (space: Space, app: App, config: Config) => {
+  let why = config.vpc_services?.length ? barred(space, app) : null
+  return why && `refused vpc_services: ${why.message}`
+}
 
 /**
  * The app's worker, deployed: `parsed` is its wrangler config as

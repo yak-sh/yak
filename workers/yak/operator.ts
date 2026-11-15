@@ -49,7 +49,7 @@ import {
 } from '@yaks/model'
 import { forwarding, PATH } from '@yaks/model/step'
 import { AWAY, falling, MACHINE, namesFor } from './operator-machine.ts'
-import type { Calling } from './tunnel.ts'
+import type { Calling } from '@yaks/tunnel/hosted'
 import { platform, ready, served } from './providers.ts'
 import { attachmentRows, shownFiles } from './operator-attachments.ts'
 import { attached, fileContext } from './operator-inputs.ts'

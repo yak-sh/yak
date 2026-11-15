@@ -40,6 +40,9 @@ Entry points:
 - `@yaks/tunnel`: the account calls (`connect`, `disconnect`, `tunnels`,
   `services`, `gateways`), the tunnel's two ends (`GATEWAY`, `HEADER`, `CALLER`,
   `filter`, `opens`, `offered`, `named`) and the vocabulary.
+- `@yaks/tunnel/hosted`: the hosting platform's end: the door its spaces' owners
+  make and change a tunnel at, who may reach a machine through one, and the
+  request as it goes on to the gateway ([Hosting tunnels](#hosting-tunnels)).
 - `@yaks/tunnel/routes`: what a machine's server puts in front of its routes:
   the filter over the paths its config opens, who a request through the tunnel
   writes as, and the tools it is offered.
@@ -80,6 +83,51 @@ The API token the tunnel and service calls are made with needs **Cloudflare
 Tunnel Write** and the **Connectivity Directory Admin** role. The one a gateway
 is uploaded with needs **Workers Scripts Edit** and **Connectivity Directory
 Bind**. An account holds at most 1,000 VPC Services.
+
+## Hosting tunnels
+
+`@yaks/tunnel/hosted` is what a platform that hosts spaces answers about their
+tunnels, whatever it runs on. The platform lends it what only it knows: who is
+asking and where they stand, the account and the gateways' namespace, where the
+record is written, and the one call that hands a request to a space's gateway (a
+`Relay`, which answers null for a tunnel with no gateway and throws for a
+machine that did not answer). yaks.app's is a Workers for Platforms dispatch
+binding.
+
+```ts ignore
+import { door, machine, reach } from '@yaks/tunnel/hosted'
+
+let answer = await door(req, keeping) // GET ?space=ada, POST do=connect …
+let fromApp = await reach(req, '/tunneled/mail/inbound', {
+  space,
+  app,
+  itself: true,
+}, relay)
+let box = machine(space, owner, { caller: 'connector' }, relay)
+await box('http://machine/mcp')
+```
+
+- `door` is the platform's door onto a space's tunnel (`/api/tunnel` on
+  yaks.app). A GET answers the space's tunnel to its owner. A POST changes it:
+  `connect` with the machine's `port` makes the pair and its gateway and answers
+  the token once, `rotate` puts the gateway again with a new token for a pair
+  the platform made, `disconnect` removes what the platform made and forgets the
+  record, and `adopt` records a pair made elsewhere. The space's owner does the
+  first three; adopting names the platform's own resources, so only the
+  platform's owner does it. `tell` is the machine telling its owner what changed
+  there (`@yaks/tunnel/effects`, the `tunnel_tell` effect), by their own
+  connection to the platform: it names the conversation it is news for and the
+  knock that says it, and the platform takes it in (yaks.app's Operator hears it
+  on its `machine` channel).
+- `reach` is an app's own worker asking for its space's machine, at a path under
+  `TUNNELED`. Only the app itself does, never its visitor, and only an app built
+  in the space (`barred`): an installed copy's code was written elsewhere.
+- `machine` is the space's owner asking with no app between, as their connector
+  or their Operator, which reaches only its own space's machine (`owners`).
+- Either way the request goes on (`onward`) with the platform's own headers
+  taken off and `x-yak-caller` put on, and `x-via`, `x-yak-with` and `x-yak-by`
+  where the owner's Operator says them. Every way a request fails to arrive is
+  an answer: `no_tunnel` (404), `no_gateway` (503) and `unreached` (502).
 
 ## The token is a credential
 

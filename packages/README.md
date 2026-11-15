@@ -582,8 +582,10 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/tunnel](./tunnel)** — a hosted space's tunnel to a machine without an
   open port: the Cloudflare Tunnel and Workers VPC Service that carry a Worker's
   requests to one service on the machine, the account calls that make and remove
-  them, `./routes`, which keeps what comes through the link to the paths the
-  machine opened, and `./service`, which keeps `cloudflared` running there.
+  them, `./hosted`, the hosting platform's door onto its spaces' tunnels and the
+  requests it relays through one, `./routes`, which keeps what comes through the
+  link to the paths the machine opened, and `./service`, which keeps
+  `cloudflared` running there.
 - **[@yaks/platform](./platform)** — what a hosting platform keeps about the
   apps it serves: `space`, `app`, `deploy`, `published`, `hostname`,
   `installed`, `plan`, `meter`, `signin` and `report`, and the names and rules
