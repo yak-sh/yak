@@ -54,6 +54,36 @@ yak admin errors --as admin
 yak admin errors --since 14d --resolved --as admin
 ```
 
+## Keeping the platform admin private
+
+On the shared box, `@yaks/admin` config names `forward` as
+`http://127.0.0.1:5176`. Selecting `--as admin` or `--as admin@bot.yak.sh` then
+passes requests through `bin/admin-forward.ts`; a CLI or MCP process receives
+only this transport address. The admin's connection is removed from the shared
+graph and vault after migration. Ordinary account selection, including the
+owner's own connection, stays with @yaks/connections. Connector commands such as
+`yak app_list --as admin` use that ordinary selection and require their own
+account; the private account is available through admin operations.
+
+`yak-admin-forward.service` runs a bundled copy of that entry under the separate
+`yak-admin` Unix identity. Its root-owned code and runtime live in
+`/usr/local/lib/yak-admin`. The bundled Homebrew runtime uses a root-owned copy
+of its shared libraries under `lib/` there, invoked through the system ELF
+loader; it loads nothing from an agent-writable home directory. Its private
+`account.json` lives in `/var/lib/yak-admin`, directory 0700 and file 0600. The
+record holds the existing OAuth provider/client description and tokens,
+including the website session. The service refreshes through @yaks/oauth and
+persists cookie renewal there. Credentials never enter its command line or
+environment. Rebuilding the service uses
+`deno bundle bin/admin-forward.ts -o .scratch/admin-forward.js`, followed by
+installing that bundle and restarting the system service.
+
+The forwarding door accepts only HTTPS platform control and built-in store
+paths. It never follows redirects, and strips credential headers and plaintext
+credential echoes from responses. Unix ownership isolates the record from the
+ordinary agent user; a user with unrestricted sudo can still read it. Removing
+that host-wide privilege is a separate administrative change.
+
 ## Space comps
 
 `comp` grants a space the Plus or Pro plan without a subscription. Only the

@@ -10,13 +10,14 @@
 //
 //   deno task app-deploy:time
 //
-// It signs in as a test account (`yak auth yaks.app --as`, NAME) and mints a
+// It holds a temporary test account for NAME and mints a
 // one-hour grant narrowed to that account's own space for the run: never the
 // owner's account, never an account key. The grant is read from `yak grant`'s
 // answer, kept in memory, never printed, and revoked at the end. HOST defaults
 // to production because staging (yaks.fyi) cannot sign anyone in until it can
 // mail (T-34979). The app is a throwaway, deleted forever at the end; this
-// records and never commits or pushes.
+// records and never commits or pushes. The account and its local connection
+// end with the run unless they were already connected before it.
 import { RECORD, type Row, type Stat } from '../bench/app-deploy.ts'
 
 let who = Deno.env.get('NAME') ?? 'app-deploy-bench'
@@ -33,6 +34,7 @@ let id = 0
 let yak = async (...args: string[]) => {
   let out = await new Deno.Command('yak', {
     args: ['--host', host, '--as', who, '--json', ...args],
+    env: { YAKS_TOKEN: '' },
     stdout: 'piped',
     stderr: 'piped',
   }).output()
@@ -45,14 +47,7 @@ let yak = async (...args: string[]) => {
 // The run's grant, minted once. Its token only ever sits in `grant`.
 let grant = ''
 let mint = async () => {
-  let said = await yak('grant', '--space', space).catch(async () => {
-    await new Deno.Command('yak', {
-      args: ['auth', 'yaks.app', '--as', `${who}@bot.yak.sh`],
-      stdout: 'null',
-      stderr: 'null',
-    }).output()
-    return await yak('grant', '--space', space)
-  })
+  let said = await yak('grant', '--space', space)
   let body: string = JSON.parse(said).result?.[0]?.content?.body ?? ''
   let m = body.match(/^yak login (\S+)/)
   if (!m) throw new Error('grant: no token in the answer')
@@ -189,7 +184,7 @@ let summary = (lap: Lap) => ({
   live: stats(lap.live),
 })
 
-export let main = async () => {
+let measure = async () => {
   console.log(`app ${space}.${host}/${app}/ runs=${runs}`)
   await mint()
   await call('app_new', { slug: app, title: 'bench (throwaway)', space })
@@ -252,6 +247,21 @@ export let main = async () => {
   await Deno.writeTextFile(record, JSON.stringify(row) + '\n', { append: true })
   console.log(table(row))
   console.log(`recorded → ${record}`)
+}
+
+export let main = async () => {
+  let { accountHost, closeAccounts } = await import(
+    '../packages/cli/accounts.ts'
+  )
+  let { configPath } = await import('@yaks/cli/config')
+  let { temporary } = await import('../packages/admin/throwaway.ts')
+  let path = configPath()
+  if (!path) throw new Error('A configured graph is required to sign in')
+  try {
+    await temporary(await accountHost(path), who, measure)
+  } finally {
+    await closeAccounts()
+  }
 }
 
 if (import.meta.main) await main()

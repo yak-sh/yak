@@ -57,7 +57,12 @@ let box = async () => {
   let erased: string[] = []
   // yaks.app's account door: it erases the account the request names, or
   // answers `status` without erasing it.
-  let go = async (run: Run, args: Record<string, unknown>, status = 200) => {
+  let go = async (
+    run: Run,
+    args: Record<string, unknown>,
+    status = 200,
+    failSignIn = false,
+  ) => {
     let was = globalThis.fetch
     globalThis.fetch = ((url: string) => {
       let address = new URL(url).searchParams.get('address')!
@@ -75,6 +80,7 @@ let box = async () => {
       return await throwaway(run, async (_host, _owner, address) => {
         signIns.push(address)
         await kept(address)
+        if (failSignIn) throw new Error('sign-in interrupted')
       })(
         { command: 'probe', ...args },
         host,
@@ -162,6 +168,20 @@ test('an account the platform could not erase still loses its connection', async
   try {
     equal(await go(() => Promise.resolve(0), { name: 'reviewer' }, 503), 0)
     equal(erased, [])
+    equal(await accounts(), ['own@example.com'])
+  } finally {
+    await host.close()
+  }
+})
+
+test('a sign-in that writes its connection and then fails still loses it', async () => {
+  let { host, accounts, go } = await box()
+  try {
+    await assertRejects(
+      () => go(() => Promise.resolve(0), { name: 'partial' }, 200, true),
+      Error,
+      'sign-in interrupted',
+    )
     equal(await accounts(), ['own@example.com'])
   } finally {
     await host.close()

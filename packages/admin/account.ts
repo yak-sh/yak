@@ -3,6 +3,9 @@
 import type { Comp } from '@yaks/graph'
 import type { Host } from '@yaks/host'
 import { person } from '@yaks/cli/host'
+import { given, used } from '@yaks/cli/config'
+import { ADMIN } from '@yaks/platform/bots'
+import { FORWARDED } from './forward.ts'
 import { accountCredential } from '@yaks/connections'
 import { records } from '@yaks/secrets'
 import { renewing } from './api.ts'
@@ -14,6 +17,15 @@ export let account = (
   host: Pick<Host, 'vault' | 'config' | 'graph'>,
 ) =>
 async (as?: string): Promise<Account> => {
+  let plugin = host.config.plugins?.find((p) => used(p) == '@yaks/admin')
+  let endpoint = plugin && given(plugin).forward
+  if (typeof endpoint == 'string' && (as == ADMIN || as == 'admin')) {
+    return {
+      address: ADMIN,
+      bearer: FORWARDED + endpoint,
+      session: FORWARDED + endpoint,
+    }
+  }
   let owner = await person(host)
   if (!owner) throw new Refused('A configured person is required')
   let at = await accountCredential(host, owner, 'yaks.app', as)

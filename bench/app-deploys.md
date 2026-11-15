@@ -9,17 +9,18 @@ deno task bench:check app-deploy   # reports the latest recorded waits
 ```
 
 `app-deploy:time` signs in as a test account (`NAME`, default
-`app-deploy-bench`; `yak auth yaks.app --as`) on `HOST` (default `yaks.app`) and
-mints a one-hour grant narrowed to that account's own space, so it never touches
-the owner's account or an account key. The grant stays in memory, is never
-printed, and is revoked at the end. Then `RUNS` (default 5) times it ships three
-small files (`app_files` stages them, `app_deploy` puts them live) and polls the
-app URL until the new bytes answer, then ships a one-file change the same way.
-The app is deleted forever at the end. One row per run of the script is appended
-to `bench/app-deploys.jsonl`: median and p95 of the write call, the deploy call
-and the whole change until live, plus the median `Server-Timing` per stage from
-the answers, so a number that moved says which hop moved it. Commit the row with
-the next change.
+`app-deploy-bench`) on `HOST` (default `yaks.app`) and mints a one-hour grant
+narrowed to that account's own space, so it never touches the owner's account or
+an account key. The grant stays in memory, is never printed, and is revoked at
+the end. The temporary account and its local connection end with the run,
+including a failed run; an account already connected before the run stays. Then
+`RUNS` (default 5) times it ships three small files (`app_files` stages them,
+`app_deploy` puts them live) and polls the app URL until the new bytes answer,
+then ships a one-file change the same way. The app is deleted forever at the
+end. One row per run of the script is appended to `bench/app-deploys.jsonl`:
+median and p95 of the write call, the deploy call and the whole change until
+live, plus the median `Server-Timing` per stage from the answers, so a number
+that moved says which hop moved it. Commit the row with the next change.
 
 Before `app_files` writes were staged until `app_deploy`, the rows measured
 `files → live`, `deploy` and `one file → live`. Those rows (the `files3` ones)

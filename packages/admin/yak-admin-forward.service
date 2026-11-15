@@ -1,0 +1,25 @@
+[Unit]
+Description=yaks.app admin credential forwarding
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=yak-admin
+Group=yak-admin
+StateDirectory=yak-admin
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/lib64/ld-linux-x86-64.so.2 --inhibit-rpath "" --library-path /usr/local/lib/yak-admin/lib /usr/local/lib/yak-admin/deno run --no-config --allow-read=/var/lib/yak-admin --allow-write=/var/lib/yak-admin --allow-net=127.0.0.1:5173,127.0.0.1:5176,yaks.app,*.yaks.app /usr/local/lib/yak-admin/forward.js /var/lib/yak-admin/account.json
+Restart=on-failure
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectProc=invisible
+ProcSubset=pid
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

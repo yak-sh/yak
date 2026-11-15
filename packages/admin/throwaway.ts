@@ -56,29 +56,36 @@ let erased = async (host: Host, address: string) => {
   }
 }
 
-/** The command, with the seams a test replaces. A connection that was there
- * before the command stays after it, with its account: a name can land on an
- * account someone signed in to on purpose, `admin` among them. */
+/** Keep a test account for one operation, including a sign-in that fails
+ * after writing its connection. An existing connection and account stay. */
+export let temporary = async <T>(
+  host: Host,
+  name: string,
+  run: (address: string) => Promise<T>,
+  enter: typeof signIn = signIn,
+): Promise<T> => {
+  let owner = await person(host)
+  if (!owner) throw new Refused('A configured person is required')
+  let address = `${name}${BOT}`
+  let kept = await held(host, owner, address)
+  try {
+    if (!kept) await enter(host, owner, address)
+    return await run(address)
+  } finally {
+    if (!kept && await held(host, owner, address)) await erased(host, address)
+  }
+}
+
+/** The command, with the seams a test replaces. */
 export let throwaway = (
   run: Run = shell,
   enter: typeof signIn = signIn,
 ): CliCommand['run'] =>
-async (args, host) => {
-  let owner = await person(host)
-  if (!owner) throw new Refused('A configured person is required')
+(args, host) => {
   let name = typeof args.name == 'string' && args.name
     ? args.name
     : `probe-${crypto.randomUUID().slice(0, 6)}`
-  let address = `${name}${BOT}`
-  let kept = await held(host, owner, address)
-  if (!kept) await enter(host, owner, address)
-  try {
+  return temporary(host, name, (address) =>
     // A token in the environment outranks any selection (@yaks/cli accounts).
-    return await run(String(args.command), {
-      YAK_AS: address,
-      YAKS_TOKEN: '',
-    })
-  } finally {
-    if (!kept && await held(host, owner, address)) await erased(host, address)
-  }
+    run(String(args.command), { YAK_AS: address, YAKS_TOKEN: '' }), enter)
 }

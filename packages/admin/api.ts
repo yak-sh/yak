@@ -36,6 +36,7 @@ import {
 import type { Swept } from '@yaks/platform/mover'
 import type { Asked } from './move.ts'
 import { COOKIE } from '@yaks/platform/cookie'
+import { forwarded } from './forward.ts'
 
 // The zone this client points at, so a probe can aim somewhere else.
 export let zone = () => systemProcess.env.get('YAKS_ZONE') ?? PLATFORM
@@ -148,7 +149,8 @@ let sent = async (
     ...rest,
     headers: { ...init.headers, ...(session ? head(session, browser) : {}) },
   }
-  let go = () => again(() => fetch(url, asked), rereads)
+  let destination = forwarded(url, session, browser, asked)
+  let go = () => again(() => fetch(destination.url, destination.init), rereads)
   let r = timing.on && !quiet
     ? await timed(timing.say, go)(new Request(url, asked))
     : await go()
