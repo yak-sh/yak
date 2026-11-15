@@ -26,6 +26,33 @@ export let closure = (meta: Metafile, entry: string): Set<string> => {
   return held
 }
 
+// The node modules workerd lacks under wrangler.toml's compatibility_date
+// and flags: at 2025-05-08 with nodejs_compat, workerd 1.20261104 has no
+// node:fs, node:os or node:child_process (node:fs/promises it has).
+let ABSENT = new Set(['node:fs', 'node:os', 'node:child_process'])
+
+// Opened only with a `cwd` (@yaks/mcp/skills), which a box passes and the
+// Worker never does.
+let HOST = new Set(['../../packages/mcp/skills-host.ts'])
+
+/** Each chunk that imports a node module the Worker lacks, with those modules
+ * and the source files importing them. A door whose chunk imports one fails
+ * each time it is opened, after a deploy that uploaded fine. */
+export let lacking = (meta: Metafile): Record<string, string[]> => {
+  let failing: Record<string, string[]> = {}
+  for (let [file, chunk] of Object.entries(meta.outputs)) {
+    if (chunk.entryPoint && HOST.has(chunk.entryPoint)) continue
+    let absent = [...new Set(chunk.imports.map((i) => i.path))]
+      .filter((path) => ABSENT.has(path))
+    if (!absent.length) continue
+    let from = Object.keys(chunk.inputs).filter((input) =>
+      meta.inputs[input]?.imports.some((i) => ABSENT.has(i.path))
+    )
+    failing[chunk.entryPoint ?? file] = [...absent, ...from]
+  }
+  return failing
+}
+
 let native = (name: string) =>
   name.startsWith('node:') || name.startsWith('cloudflare:')
 
@@ -82,6 +109,14 @@ export let bundle = async (root: string, output: string, meta: string) => {
     let names = planned(join(root, 'public')).names
     let built = await build({ ...options(root, names), outdir: scratch })
     let source = built.metafile!
+    let failing = lacking(source)
+    if (Object.keys(failing).length) {
+      throw new Error(
+        `a Worker chunk imports a node module workerd lacks: ${
+          JSON.stringify(failing, null, 2)
+        }`,
+      )
+    }
     let entry = Object.keys(source.outputs).find((file) =>
       source.outputs[file].entryPoint == 'index.ts'
     )!
