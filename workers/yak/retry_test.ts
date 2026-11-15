@@ -7,11 +7,12 @@ import type { Space } from './directory.ts'
 import { space as spaceOf } from './directory-fixture.ts'
 import type { Namespace } from '@yaks/durable-object/door'
 import type { Env } from './env.ts'
-import { platform, sandboxes, workspaces } from './testing.ts'
-import { destroyed, named, workbench } from './sandbox.ts'
+import { platform, sandboxes } from './testing.ts'
+import { destroyed, workbench } from './sandbox.ts'
 import {
   type Box,
   cloudflareProvider,
+  named,
   type Sandboxes,
 } from '@yaks/sandbox/cloudflare'
 import { backoff, evicted, retried } from '@yaks/durable-object'
@@ -267,7 +268,7 @@ for (let { method, args, result } of methods) {
           let calls = 0
           let ns: Sandboxes = {
             idFromName: (name) => {
-              assertEquals(name, named(space, who.person!))
+              assertEquals(name, named(space.eid, who.person!))
               return name
             },
             get: () => {
@@ -287,10 +288,10 @@ for (let { method, args, result } of methods) {
             },
           }
           let provider = cloudflareProvider(ns, {
-            legacyRecreation: true,
+            ephemeral: true,
             retry: (send) => retried(send, true, evicted, pause),
           })
-          let ref = { id: named(space, who.person!) }
+          let ref = { id: named(space.eid, who.person!) }
           let { workspace: machine } = await provider.connect(ref)
           assertEquals(gets, 0, 'take the stub per invocation, not per box')
           let call = () =>
@@ -333,7 +334,7 @@ test('sandbox cleanup and initial sleep also retry evictions', async () => {
     }),
   }
   await settled(workbench(
-    { WORKBENCH: ns, WORKSPACES: workspaces(ns), CLOCK: time },
+    { WORKBENCH: ns, CLOCK: time },
     space,
     who.person,
     { since: null },

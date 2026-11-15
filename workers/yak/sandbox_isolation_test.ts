@@ -1,18 +1,21 @@
 // A leftover process must never see a different member's command environment.
 import { equal, match, test } from '@yaks/testing'
-import { kv, sandboxes, workspaces } from './testing.ts'
+import { kv, sandboxes } from './testing.ts'
 import type { Space } from './directory.ts'
 import { held, ledger, mint } from './grants.ts'
+import { type Bundle, graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { kernelDoc } from '@yaks/kernel'
+import { sandboxDoc } from '@yaks/sandbox/vocab'
 import {
   destroyed,
   destroyedAll,
   lent,
-  named,
-  shared,
   spending,
   workbench,
 } from './sandbox.ts'
-import { cloudflareProvider } from '@yaks/sandbox/cloudflare'
+import { cloudflareProvider, named } from '@yaks/sandbox/cloudflare'
 
 let space = { eid: 'isolation', slug: 'isolation' } as Space
 let secret = 'sandbox isolation probe'
@@ -68,8 +71,8 @@ let isolated = async () => {
     OAUTH_KV: oauth,
     SESSION_SECRET: secret,
   }
-  let [theirs, mine] = [named(space, 'editor'), named(space, 'owner')]
-  let provider = cloudflareProvider(box.WORKBENCH, { legacyRecreation: true })
+  let [theirs, mine] = [named(space.eid, 'editor'), named(space.eid, 'owner')]
+  let provider = cloudflareProvider(box.WORKBENCH, { ephemeral: true })
   let editor = await provider.connect({ id: theirs })
   let leftover = await editor.workspace.start('leftover-process')
   let owner = await provider.connect({ id: mine })
@@ -106,7 +109,7 @@ test('ending a build leaves another member’s running work alone', async () => 
 
 test('a personal sandbox keeps its files and process across calls and a space rename', async () => {
   let box = containers()
-  let env = { WORKBENCH: box.WORKBENCH, WORKSPACES: workspaces(box.WORKBENCH) }
+  let env = { WORKBENCH: box.WORKBENCH }
   let first = await workbench(env, space, 'owner', spending())
   await first.workspace.write('/workspace/artifact', 'compiled')
   let process = await first.workspace.start('leftover-process')
@@ -121,49 +124,30 @@ test('a personal sandbox keeps its files and process across calls and a space re
   equal((await next.workspace.look(process))?.exit, undefined)
 })
 
-let legacyFixture = async () => {
-  let box = containers()
-  let env = {
-    WORKBENCH: box.WORKBENCH,
-    WORKSPACES: workspaces(box.WORKBENCH),
-    OAUTH_KV: kv(),
-    SESSION_SECRET: secret,
+// Who the space lent a sandbox to is in the store its `lent` rows are kept in,
+// and a member who has since left is among them.
+let lending = async () => {
+  let vocab = loadVocab([kernelDoc, sandboxDoc])
+  let store = graph({ storage: ram(vocab), vocab })
+  await store.apply(
+    [space.eid, 'owner', 'former-member'].map((eid) => ({
+      entity: { eid },
+      opened: {},
+    })),
+  )
+  return {
+    query: async (line: string) => await store.read(line),
+    apply: async (bundles: Bundle[]) => await store.apply(bundles),
   }
-  let old = cloudflareProvider(box.WORKBENCH, { legacyRecreation: true })
-  let ref = { id: shared(space) }
-  let sharedBox = await old.connect(ref)
-  await sharedBox.workspace.write('/workspace/artifact', 'compiled')
-  let process = await sharedBox.workspace.start('leftover-process')
-  return { box, env, old, ref, process }
 }
-let legacyIsolation = await legacyFixture()
-let continuedLegacy = await legacyFixture()
-let continuedOwner = await workbench(
-  continuedLegacy.env,
-  space,
-  'owner',
-  spending(),
-)
-await continuedOwner.workspace.start('owner-command')
 
-test('a legacy compile and workspace survive without giving its leftover code fresh credentials', async () => {
-  let { env, old, ref, process } = legacyIsolation
-  let owner = await workbench(env, space, 'owner', spending())
-  await owner.workspace.start('owner-command')
-  equal(await owner.workspace.read('/workspace/artifact'), 'compiled')
-  equal((await owner.workspace.look(process))?.exit, undefined)
-  equal((await old.exec(ref, 'read-owner-environment')).stdout, 'absent')
-})
-
-test('a migrated personal workspace keeps later edits and destroys every sandbox', async () => {
-  let { box, env, ref } = continuedLegacy, owner = continuedOwner
-  await owner.workspace.write('/workspace/artifact', 'new work')
-  let next = await workbench(env, space, 'owner', spending())
-  equal(await next.workspace.read('/workspace/artifact'), 'new work')
-  box.calls.length = 0
-  equal(await next.workspace.look('unknown-process'), null)
-  equal(box.calls.includes(ref.id), false)
-  await workbench(env, space, 'former-member', spending())
+test('erasing a space destroys every sandbox it lent, a former member’s too', async () => {
+  let box = containers()
+  let env = { WORKBENCH: box.WORKBENCH, META: await lending() }
+  for (let person of ['owner', 'former-member']) {
+    await workbench(env, { ...space, tier: 'plus' }, person, spending())
+  }
+  equal(box.box.alive.size, 2)
   await destroyedAll(env, space)
   equal([...box.box.alive], [])
 })

@@ -19,7 +19,6 @@ import { Wire as Wired } from './stream.ts'
 import { durable as raw } from '../../packages/durable-object/testing.ts'
 import type { Limiter } from '@yaks/workerd/rate'
 import { digest } from '@yaks/graph/sha256'
-import { workspaces } from './workspace-probe.ts'
 
 // The HTMLRewriter binding: the runtime's own lol-html, compiled to
 // WebAssembly (html-rewriter-wasm, as Miniflare runs it), behind the
@@ -460,8 +459,6 @@ export let bindings = (secret: string, vars: Vars = {}) => {
       }),
     },
     ...vars,
-    WORKSPACES: vars.WORKSPACES ??
-      (vars.WORKBENCH ? workspaces(vars.WORKBENCH) : undefined),
   } as unknown as Env
   // These bindings finish their work inside each request; no background
   // work remains for their holder to drain. Store hosts add their own drain.

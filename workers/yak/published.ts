@@ -35,7 +35,7 @@ import {
   rebind,
   type Using,
 } from './connections.ts'
-import { CWD, TIMEOUT } from './sandbox.ts'
+import { CWD, TIMEOUT } from '@yaks/sandbox/cloudflare'
 import { vaulted } from './vault.ts'
 import {
   APP,

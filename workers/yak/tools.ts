@@ -255,15 +255,8 @@ import {
 import { mail } from './mail.ts'
 import { NARROW, PAGES, uriOf, whole } from './guide.ts'
 import { asset, EITHER, NO_ARGS, PUBLIC, publics, what } from './preauth.ts'
-import {
-  awake,
-  BUDGET,
-  CWD,
-  paid,
-  seconds,
-  spending,
-  workbench,
-} from './sandbox.ts'
+import { BUDGET, paid, seconds, spending, workbench } from './sandbox.ts'
+import { CWD } from '@yaks/sandbox/cloudflare'
 import { attachmentBytes, attachmentText } from './attachments.ts'
 import { logoed } from './logo.ts'
 import { machineDeclared, machineTools } from '@yaks/harness/machine'
@@ -2967,8 +2960,8 @@ export let call = (ctx: Ctx, name: string, args: Args): Promise<Out> => {
  *
  * Two things are asked before the container is reached (T-37882, T-37883):
  * the month's sandbox seconds, the account's on a free space, with what this
- * build has held so far; and whether the caller already holds as many
- * sandboxes awake in other spaces as the plan allows.
+ * build has held so far; then, in `workbench`, whether other members already
+ * hold as many sandboxes awake in this space as its plan allows.
  */
 let bench = async <T>(
   ctx: Ctx,
@@ -2978,7 +2971,6 @@ let bench = async <T>(
   let spend = ctx.spend ?? spending()
   let no = refusedSpend(space, 'seconds', ctx.env, seconds(spend))
   if (no) throw refuse('limit', no)
-  await awake(ctx.env, space, ctx.person)
   let box = await workbench(ctx.env, space, ctx.person, spend)
   try {
     return await body(box)

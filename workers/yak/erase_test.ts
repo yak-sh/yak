@@ -41,7 +41,8 @@ import { builders } from './builder-probe.ts'
 import { durable } from './store-state-probe.ts'
 import { platform as directoryPlatform } from './directory-rows-probe.ts'
 import { platform } from './deploy-probe.ts'
-import { named, spending, workbench } from './sandbox.ts'
+import { spending, workbench } from './sandbox.ts'
+import { named } from '@yaks/sandbox/cloudflare'
 import type { Who } from './session.ts'
 import { KERNEL, meta } from './meta.ts'
 import { call } from './tools.ts'
@@ -475,7 +476,7 @@ test('a deleted space takes its conversation and its workbench', async () => {
   assertEquals(builder(space.eid).said().length, 2)
   let bench = await workbench(env, space, ADA, spending())
   await bench.provider.exec(bench.ref, 'cargo build')
-  assertEquals([...box.alive], [named(space, ADA)])
+  assertEquals([...box.alive], [named(space.eid, ADA)])
 
   await erase(env, dir, await census(dir, space), who)
 

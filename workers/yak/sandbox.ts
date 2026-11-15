@@ -41,7 +41,7 @@
 // number made of both is a number nobody can add up.
 //
 // What keeps it from running forever: the build destroys it when it ends, and
-// {@link SLEEP} is the backstop for a build that never says so — the container
+// @yaks/sandbox/cloudflare `SLEEP` is the backstop for a build that never says so — the container
 // sleeps on its own after that long idle, which is where the billing stops.
 // Idle shutdown ends its processes and temporary files; ship artifacts before it sleeps.
 //
@@ -68,23 +68,28 @@
 // env and is never exported into a shell.
 import {
   cloudflareProvider,
+  hold,
+  type Lending,
+  lending,
+  named,
   NAP,
   type Sandboxes,
+  slept,
   TIMEOUT,
 } from '@yaks/sandbox/cloudflare'
-export { CWD, NAP, SLEEP, TIMEOUT } from '@yaks/sandbox/cloudflare'
 import { granted, Refused } from '@yaks/egress'
 import { sentinel } from '@yaks/secrets'
-import type { Space } from './directory.ts'
+import { type Space, stamp } from './directory.ts'
 import type { Tier } from '@yaks/platform/plans'
 import { evicted, jittered, retried } from '@yaks/durable-object/resets'
+import type { Namespace } from '@yaks/durable-object/door'
 import type { Clock } from '@yaks/fp'
-import { type Grant, type Kv, ledger, mint, tokenOf } from './grants.ts'
+import { type Grant, ledger, mint, tokenOf } from './grants.ts'
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 import { refuse } from './tool.ts'
 import { plans } from '@yaks/platform/standing'
 import { caught } from './defects.ts'
-import type { Workspaces } from './workspaces.ts'
+import { type Meta, meta } from './meta.ts'
 
 /**
  * The container time one build has spent, and when it started spending it.
@@ -103,8 +108,6 @@ export type Spend = {
   signing?: Promise<Record<string, string>>
   preparing?: Promise<void>
   person?: string
-  legacy?: string[]
-  copying?: Promise<string[]>
 }
 
 export let spending = (): Spend => ({ since: null })
@@ -165,23 +168,20 @@ export let NO_BOX =
  * member working in a space wakes one of the space's. */
 export let AWAKE: Record<Tier, number> = { free: 1, plus: 2, pro: 2 }
 
-/** How long one call keeps a sandbox awake, in seconds: the longest command,
- * then the nap before it sleeps on its own. */
-export let HELD = TIMEOUT / 1000 + NAP
-
-// The sandboxes a space holds, in the KV the grants live in: one row per
-// space, person eid → the unix second their sandbox is asleep by. One row
-// rather than a row per sandbox because a count is one read of it, where a KV
-// listing is neither consistent nor cheap. Nothing sweeps it: a sandbox past
-// its second has slept, and the row dies a minute after the last of them.
-let hold = (space: Space) => `awake:${space.eid}`
-
-let held = async (kv: Kv, space: Space, now: number) =>
-  Object.fromEntries(
-    Object.entries(
-      JSON.parse(await kv.get(hold(space)) ?? '{}') as Record<string, number>,
-    ).filter(([, until]) => until > now),
-  )
+// Who is awake in each space is the directory's: a `lent` row per person and
+// space (@yaks/sandbox/cloudflare `hold`), written by the platform, never by a
+// person. No directory bound (a probe, a test of the container alone) holds
+// nothing.
+let lendingOf = (
+  env: { STORE?: unknown; META?: Meta },
+): Lending | undefined => {
+  if (!env.STORE && !env.META) return
+  let bound = env as { STORE: Namespace; META?: Meta }
+  return {
+    read: (line) => meta(bound).query(line),
+    apply: (bundles) => stamp(bound, { entities: bundles }),
+  }
+}
 
 /** Past the space's limit. Said as the way out: wait, or the Plus plan. */
 export let tooAwake = (space: Space, awake: number, env: Host = {}) =>
@@ -198,61 +198,35 @@ export let tooAwake = (space: Space, awake: number, env: Host = {}) =>
 
 /**
  * This person's sandbox in this space, counted awake — refused where other
- * members already hold as many in this space as its plan allows. No KV or no
- * container bound (a probe, a test) holds nothing.
- *
- * The row is written only when this sandbox's second is half spent: KV takes
- * one write a second per key, and a build calls the tools faster than that.
+ * members already hold as many in this space as its plan allows.
  */
 export let awake = async (
-  env: { WORKBENCH?: Sandboxes; OAUTH_KV?: unknown } & Host,
+  env: Bound,
   space: Space,
   person: string,
   now = Date.now(),
 ) => {
-  let kv = env.OAUTH_KV as Kv | undefined
-  if (!env.WORKBENCH || !kv?.get) return
-  let t = Math.floor(now / 1000)
-  let rows = await held(kv, space, t)
-  let others = Object.keys(rows).filter((p) => p != person).length
-  if (others >= AWAKE[space.tier ?? 'free']) {
-    throw refuse('limit', tooAwake(space, others, env))
-  }
-  if ((rows[person] ?? 0) - t > HELD / 2) return
-  await kv.put(
-    hold(space),
-    JSON.stringify({ ...rows, [person]: t + HELD }),
-    {
-      expirationTtl: HELD + 60,
-    },
+  let store = lendingOf(env)
+  if (!env.WORKBENCH || !store) return
+  let was = await hold(
+    store,
+    space.eid,
+    person,
+    AWAKE[space.tier ?? 'free'],
+    now,
   )
+  if (!was.held) throw refuse('limit', tooAwake(space, was.awake, env))
 }
 
 /** This person's sandbox in this space, asleep: a build that destroyed its
  * container gives the place back at once rather than when the nap would. */
 export let asleep = async (
-  env: { OAUTH_KV?: unknown },
+  env: { STORE?: unknown; META?: Meta },
   space: Space,
   person: string,
-  now = Date.now(),
 ) => {
-  let kv = env.OAUTH_KV as Kv | undefined
-  if (!kv?.get) return
-  let rows = await held(kv, space, Math.floor(now / 1000))
-  if (!(person in rows)) return
-  delete rows[person]
-  if (Object.keys(rows).length) {
-    await kv.put(hold(space), JSON.stringify(rows), {
-      expirationTtl: HELD + 60,
-    })
-  } else await kv.delete(hold(space))
-}
-
-/** Every sandbox in this space, asleep: a space erased gives its places
- * back at once. */
-export let allAsleep = async (env: { OAUTH_KV?: unknown }, space: Space) => {
-  let kv = env.OAUTH_KV as Kv | undefined
-  if (kv?.get) await kv.delete(hold(space))
+  let store = lendingOf(env)
+  if (store) await slept(store, space.eid, person)
 }
 
 /** Past the budget. It says what is already built is built, the way every
@@ -262,25 +236,13 @@ export let overBudget = (spent: number) =>
   `${BUDGET}. Whatever is already shipped into the app is shipped — ask me ` +
   'again and I will pick it up with a fresh one.'
 
-/** This build session's container, by name — the id the object is addressed
- * by, and the name its grant is written down under. The space's EID rather
- * than its slug: a slug is renamed and an eid is not, and a workbench that
- * followed a rename to a fresh container would lose the half-built tree
- * inside it. */
-export let named = (space: Space, person: string) =>
-  `build-${space.eid}-${person}`
-
-// The old shared box is the workspace source; WORKSPACES holds the durable
-// census of clean personal copies. The source receives no new command environment. Keeping it
-// reachable also lets a compile already running finish across the deploy.
-export let shared = (space: Space) => `build-${space.eid}`
-
 /** What a grant is made and unmade with: the secret it is sealed under and
  * the ledger it is written in (grants.ts). */
 type Keys = Host & { SESSION_SECRET?: string; OAUTH_KV?: unknown }
 type Bound = Keys & {
   WORKBENCH?: Sandboxes
-  WORKSPACES?: Workspaces
+  STORE?: unknown
+  META?: Meta
   CLOCK?: Clock
 }
 
@@ -418,7 +380,8 @@ export let LAUNCHER = `#!/bin/sh
 exec deno run --quiet --no-config --reload --allow-net --allow-env --allow-read --allow-write --allow-run=deno "$YAKS_HOST/_cli/launch.ts" "$@"
 `
 
-/** The host lends its configured provider after checking the build's budget.
+/** The host lends its configured provider after checking the build's budget
+ * and the space's count of sandboxes awake, holding this one awake in it.
  * Billing starts at first need; grants are supplied only to command invocations. */
 export let workbench = async (
   env: Bound,
@@ -436,35 +399,16 @@ export let workbench = async (
     throw new Error('a sandbox build belongs to one person')
   }
   spend.person = person
+  await awake(env, space, person, now())
   spend.since ??= now()
-  let ref = { id: named(space, person) }
-  let source = { id: shared(space) }
+  let ref = { id: named(space.eid, person) }
   let provider = cloudflareProvider(ns, {
-    legacyRecreation: true,
+    ephemeral: true,
     retry: retrying(env),
     env: () => spend.signing ??= signed(env, idOf(ns, ref.id), space, person),
     sleepError: (e) =>
       caught(e, { request: 'sandbox sleep', space: space.slug }),
   })
-  // Snapshot only the workspace into a clean container, never its processes,
-  // system files or environment. The source records completed copies so a
-  // retry or another command cannot overwrite the person's later work.
-  let old = cloudflareProvider(ns, {
-    legacyRecreation: true,
-    retry: retrying(env),
-  })
-  if (!env.WORKSPACES) throw new Error('no sandbox workspace coordinator')
-  let workspace = env.WORKSPACES.get(env.WORKSPACES.idFromName(source.id))
-  spend.copying ??= retrying(env)(() => workspace.fork(source.id, ref.id)).then(
-    async (processes) => {
-      await bared(env, space, idOf(ns, source.id))
-      return processes
-    },
-  ).catch((error) => {
-    spend.copying = undefined
-    throw error
-  })
-  spend.legacy = await spend.copying
   let lent = await (first ? provider.request!(ref) : provider.connect(ref))
   spend.preparing ??= (async () => {
     await lent.workspace.write('/usr/local/bin/yak', LAUNCHER)
@@ -479,23 +423,7 @@ export let workbench = async (
     }
   })()
   await spend.preparing
-  if (!spend.legacy?.length) return { ...lent, provider, ref }
-  let legacy = (await old.connect(source)).workspace
-  let processes = new Set(spend.legacy)
-  let target = lent.workspace
-  let of = (id: string) => processes.has(id) ? legacy : target
-  return {
-    ...lent,
-    workspace: {
-      ...target,
-      look: (id: string) => of(id).look(id),
-      tail: (id: string, n: number) => of(id).tail(id, n),
-      kill: (id: string, signal: 'SIGTERM' | 'SIGKILL') =>
-        of(id).kill(id, signal),
-    },
-    provider,
-    ref,
-  }
+  return { ...lent, provider, ref }
 }
 
 /**
@@ -503,7 +431,7 @@ export let workbench = async (
  * destroy one through at all.
  *
  * A container that would not die is telemetry, never a failed caller: it
- * sleeps on its own ({@link SLEEP}) and stops billing there. Both callers want
+ * sleeps on its own (@yaks/sandbox/cloudflare `SLEEP`) and stops billing there. Both callers want
  * that — a build that has ended ({@link released}) and a space that is being
  * closed (erase.ts, T-34371), where the half-built tree inside it is part of
  * what `/privacy` says goes with the space.
@@ -516,11 +444,9 @@ export let destroyed = async (
   if (!env.WORKBENCH) return false
   try {
     await cloudflareProvider(env.WORKBENCH, {
-      legacyRecreation: true,
+      ephemeral: true,
       retry: retrying(env),
-    }).dispose({
-      id: named(space, person),
-    })
+    }).dispose({ id: named(space.eid, person) })
   } catch (e) {
     caught(e, { request: 'sandbox destroy', space: space.slug })
   }
@@ -528,30 +454,19 @@ export let destroyed = async (
   // container is a bearer nobody is holding. It is read off the ledger rather
   // than passed in, so erasing a space (erase.ts) revokes the grant a build
   // minted in some other request just as a build's own end does.
-  await bared(env, space, idOf(env.WORKBENCH, named(space, person)))
+  await bared(env, space, idOf(env.WORKBENCH, named(space.eid, person)))
   return true
 }
 
-/** Erase every copy, including those of members who have since left. */
-export let destroyedAll = async (
-  env: Bound,
-  space: Space,
-) => {
-  let ns = env.WORKBENCH
-  if (!ns) return false
-  let provider = cloudflareProvider(ns, {
-    legacyRecreation: true,
-    retry: retrying(env),
-  })
-  let source = { id: shared(space) }
-  if (!env.WORKSPACES) throw new Error('no sandbox workspace coordinator')
-  let workspace = env.WORKSPACES.get(env.WORKSPACES.idFromName(source.id))
-  let copies = await retrying(env)(() => workspace.retire())
-  for (let ref of [...copies.map((id) => ({ id })), source]) {
-    await provider.dispose(ref)
-    await bared(env, space, idOf(ns, ref.id))
+/** Every member's container in the space, destroyed, those of members who
+ * have since left included: every sandbox the space has lent. Its `lent`
+ * rows go with the space's own row, which they die with. */
+export let destroyedAll = async (env: Bound, space: Space) => {
+  let store = lendingOf(env)
+  if (!env.WORKBENCH || !store) return false
+  for (let { to } of await lending(store, space.eid)) {
+    await destroyed(env, space, to)
   }
-  await retrying(env)(() => workspace.destroy())
   return true
 }
 

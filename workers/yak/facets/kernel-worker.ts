@@ -117,12 +117,6 @@ export let BUILDER = [
   'enter',
   'behind',
 ] as const
-export let WORKSPACES = [
-  'fork',
-  'retire',
-  'destroy',
-  ...DURABLE,
-] as const
 export let PUBLIC_DIRECTORY = [
   'valid',
   'publish',
@@ -188,16 +182,7 @@ export let classes: Record<string, Deferred> = {
         new Built(ctx, agent(env))
     },
   },
-  Workspaces: {
-    base: DurableObject,
-    methods: WORKSPACES,
-    load: async () =>
-      made(
-        await instrumented(
-          import('../workspaces.ts').then((m) => m.WorkspaceStore),
-        ),
-      ),
-  },
+
   // Independent of yak/platform: only a missed directory deadline reads here
   // (public-directory.ts).
   PublicDirectory: {

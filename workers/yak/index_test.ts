@@ -12,12 +12,10 @@ import {
   PURGER,
   STORE,
   WIRE,
-  WORKSPACES,
 } from './facets/kernel-worker.ts'
 import { Store } from './graph.ts'
 import { Wire } from './stream.ts'
 import { Builder } from './build.ts'
-import { WorkspaceStore } from './workspaces.ts'
 import { PublicDirectoryStore } from './public-directory.ts'
 import { Purger } from './purge.ts'
 import { Outlast } from './outlast-object.ts'
@@ -33,7 +31,6 @@ test('each deferred object answers every method its class has', () => {
       STORE,
       WIRE,
       BUILDER,
-      WORKSPACES,
       PUBLIC_DIRECTORY,
       PURGER,
       OUTLAST,
@@ -44,7 +41,6 @@ test('each deferred object answers every method its class has', () => {
       Store,
       Wire,
       Builder,
-      WorkspaceStore,
       PublicDirectoryStore,
       Purger,
       Outlast,

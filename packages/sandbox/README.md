@@ -45,7 +45,7 @@ release a sandbox.
 | `./docker`     | `dockerSandboxes`                                            |
 | `./pve`        | `pveClones`                                                  |
 | `./bubblewrap` | `sandboxProvider`, limits and options                        |
-| `./cloudflare` | `cloudflareProvider`, archive and SDK types                  |
+| `./cloudflare` | `cloudflareProvider`, `hold` and `lending`, SDK types        |
 
 ## Docker Sandboxes
 
@@ -112,14 +112,6 @@ The host supplies `options.env` at command invocation (for example, a scoped
 grant), `options.retry` for transient RPC failures, and `options.sleepError` to
 report a failed idle configuration. This provider knows no account or meter.
 
-`archive(ref)` streams a tar snapshot of `/workspace`, with its byte length and
-an explicit `dispose()` for callers that stop reading early.
-`restore(ref, body)` restores that stream into a clean destination and refuses
-writes outside `/workspace`. Transfers use bounded chunks and carry no
-invocation environment. `active(ref)` reads the container's state without
-starting it; `processes(ref)` returns process data without the SDK's control
-methods.
-
 The namespace in this example is a stand-in for the deployed binding:
 
 ```ts
@@ -151,14 +143,49 @@ Cloudflare placement is unknown: the connection supplies a `Workspace` and
 `CloudflareOptions.lifecycle.locked`, backed by storage outside the container
 and distributed serialization. The callback's `save` must commit before it
 returns. `connect` refuses stopped/missing storage instead of recreating it;
-`dispose` keeps a durable tombstone. Hosted archive migration explicitly uses
-`legacyRecreation` until that caller's resource history is migrated.
+`dispose` keeps a durable tombstone. A deployed Cloudflare Container's disk does
+not outlive its nap, so a host that lends them as they are passes
+`ephemeral: true`: connect wakes a fresh container and no receipts are kept.
 
 Unlike the common relative-only export contract, Cloudflare also accepts
 absolute export paths for the hosted `sandbox_ship` published API. SDK process
 ids remain scoped to this container; durable graph process-handle migration is
-not supplied by this adapter. Archive/restore streaming preserves the hosted
-worker's existing copy protocol.
+not supplied by this adapter.
+
+### Lent sandboxes
+
+A host that lends one container per person within a group (yaks.app lends one
+per member of a space) names it `named(group, person)` and keeps who has one as
+**lent** rows, `lent{to, within, until}`, in whichever store keeps the group.
+`hold(store, group, person, allowed)` holds the person's sandbox awake for
+`HELD` seconds, the longest command and then the nap, unless `allowed` others
+already are; it answers how many and writes nothing then. It rewrites the row
+only once half the hold is spent. `slept` gives the place back when the host
+destroys the container. `lending(store, group)` is every sandbox the group has
+lent, asleep ones included, which is what the group's erasure destroys. A row
+dies with its group.
+
+```ts
+import { equal } from '@yaks/testing'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { kernelDoc } from '@yaks/kernel'
+import { sandboxDoc } from '@yaks/sandbox'
+import { hold, lending } from '@yaks/sandbox/cloudflare'
+
+let vocab = loadVocab([kernelDoc, sandboxDoc])
+let store = graph({ storage: ram(vocab), vocab })
+let [space, ada, bob] = ['a', 'b', 'c'].map((n) =>
+  `a0000000-0000-4000-8000-00000000000${n}`
+)
+await store.apply(
+  [space, ada, bob].map((eid) => ({ entity: { eid }, opened: {} })),
+)
+equal(await hold(store, space, ada, 1), { held: true })
+equal(await hold(store, space, bob, 1), { held: false, awake: 1 })
+equal((await lending(store, space)).map((l) => l.to), [ada])
+```
 
 ## Bubblewrap sandboxes
 
@@ -299,13 +326,11 @@ from the deployment: `from`, `image` and foreign addresses are refused. Computer
 placement remains unknown when the backend cannot disclose it. Cloudflare
 requires a durable, serialized lifecycle seam to distinguish a requested
 resource from missing or disposed writable storage. Connecting does not silently
-rebuild that storage. Its archive/restore helpers support a host that explicitly
-preserves files before eviction; the host owns billing, grants and archive
-storage. Cloudflare SDK process ids are recovered through that namespace, and
-commands retain the SDK timeout. Unlike the other adapters, absolute export
-names are accepted for the published sandbox ship interface. The Workers archive
-coordinator selects its explicit historical recreation behavior at its own
-consumer boundary.
+rebuild that storage, unless the host says it is ephemeral. The host owns
+billing, grants and the store its lent rows are kept in. Cloudflare SDK process
+ids are recovered through that namespace, and commands retain the SDK timeout.
+Unlike the other adapters, absolute export names are accepted for the published
+sandbox ship interface.
 
 ## Configure graph provisioning
 

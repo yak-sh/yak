@@ -1,6 +1,7 @@
 // Cloudflare containers as sandbox providers. The namespace supplies the
 // deployed image; the host supplies invocation environment and RPC retry policy.
 // Grants, accounts and billing are not container concerns.
+import { type Bundle, type Comp, identityEid } from '@yaks/graph'
 import { shellStat, type Workspace } from '@yaks/machine'
 import type {
   SandboxFile,
@@ -18,7 +19,6 @@ type Run = { cwd?: string; timeout?: number; env?: Record<string, string> }
  * objects carrying methods as well; only their data is read here. */
 export type Box = {
   getState(): Promise<{ status: string }>
-  listProcesses(): Promise<BoxProcess[]>
   exec(
     cmd: string,
     opts?: Run,
@@ -59,6 +59,86 @@ export let TIMEOUT = 240_000
 /** Idle containers shut down after five minutes; their files are temporary. */
 export let NAP = 300
 export let SLEEP = `${NAP / 60}m`
+/** How long one call keeps a container awake, in seconds: the longest
+ * command, then the nap before it sleeps on its own. */
+export let HELD = TIMEOUT / 1000 + NAP
+
+/** The container a group lends one person, by name: one each, so the
+ * person's every way in reaches one workbench. The group's id rather than a
+ * name of it, since a renamed group keeps its containers. */
+export let named = (within: string, to: string) => `build-${within}-${to}`
+
+/** Where a group's lent sandboxes are kept: a graph store's reads and
+ * writes, `lent` among its words. */
+export type Lending = {
+  read(line: string): Bundle[] | Promise<Bundle[]>
+  apply(bundles: Bundle[]): unknown
+}
+
+/** One lent sandbox: whom it is lent to, and the second it sleeps by (0 once
+ * it is known to be asleep). */
+export type Lent = { to: string; until: number }
+
+let lentRow = (within: string, to: string, until: number | null): Bundle => ({
+  entity: { eid: identityEid('lent', [within, to]) },
+  lent: {
+    to,
+    within,
+    until: until == null ? null : new Date(until * 1000).toISOString(),
+  },
+})
+
+/** Every sandbox the group has lent, awake or asleep: what its erasure
+ * destroys, members who have since left included. */
+export let lending = async (
+  store: Lending,
+  within: string,
+): Promise<Lent[]> =>
+  (await store.read(`.lent.within=${within}`)).map((row) => {
+    let { to, until } = row.lent as Comp
+    return {
+      to: String(to),
+      until: until ? Math.floor(Date.parse(String(until)) / 1000) : 0,
+    }
+  })
+
+/** How many of the group's sandboxes are awake at second `now` beside `to`'s. */
+export let awakeBeside = (lent: Lent[], to: string, now: number): number =>
+  lent.filter((l) => l.to != to && l.until > now).length
+
+/**
+ * `to`'s sandbox in the group, held awake for {@link HELD} more seconds —
+ * unless `allowed` others already are, when nothing is written and the answer
+ * is how many. The row is written only once its hold is half spent: a build
+ * calls faster than its store need hear about it.
+ */
+export let hold = async (
+  store: Lending,
+  within: string,
+  to: string,
+  allowed: number,
+  now: number = Date.now(),
+): Promise<{ held: true } | { held: false; awake: number }> => {
+  let t = Math.floor(now / 1000)
+  let lent = await lending(store, within)
+  let awake = awakeBeside(lent, to, t)
+  if (awake >= allowed) return { held: false, awake }
+  let mine = lent.find((l) => l.to == to)
+  if (!mine || mine.until - t <= HELD / 2) {
+    await store.apply([lentRow(within, to, t + HELD)])
+  }
+  return { held: true }
+}
+
+/** `to`'s sandbox in the group, asleep: a container destroyed gives its place
+ * back at once rather than when its nap would. */
+export let slept = async (
+  store: Lending,
+  within: string,
+  to: string,
+): Promise<void> => {
+  await store.apply([lentRow(within, to, null)])
+}
 
 /** Stored outside the container. locked serializes lifecycle calls across
  * hosts; save is durable before it resolves. Disposal receipts must be kept. */
@@ -75,10 +155,12 @@ export type CloudflareLifecycle = {
 }
 
 export type CloudflareOptions = {
-  /** Mandatory for durable sandbox lifecycle. Hosted archive migration opts
-   * into legacy recreation explicitly instead of inventing lifecycle facts. */
+  /** Mandatory for durable sandbox lifecycle, unless `ephemeral`. */
   lifecycle?: CloudflareLifecycle
-  legacyRecreation?: boolean
+  /** The container's disk does not outlive its {@link NAP}: connect wakes a
+   * fresh one from the deployed image and keeps no lifecycle receipts, as a
+   * deployed Cloudflare Container does. */
+  ephemeral?: boolean
   env?: () => Promise<Record<string, string>>
   retry?: <T>(send: () => T | Promise<T>) => Promise<T>
   sleepError?: (error: unknown) => void
@@ -87,33 +169,11 @@ export type CloudflareOptions = {
 /** Cloudflare's synchronous exec is also used to expand artifact globs. */
 export type CloudflareProvider = SandboxProvider & {
   exec(ref: SandboxRef, command: string): ReturnType<Box['exec']>
-  archive(ref: SandboxRef): Promise<WorkspaceArchive>
-  restore(ref: SandboxRef, body: ReadableStream<Uint8Array>): Promise<void>
-  active(ref: SandboxRef): Promise<boolean>
-  processes(ref: SandboxRef): Promise<BoxProcess[]>
   /** writes one file's bytes, as `export` reads them: an absolute path is
    * kept, a relative one is under {@link CWD}, and its directory is made */
   put(ref: SandboxRef, file: SandboxFile): Promise<void>
 }
 
-/** Process data detached from the SDK's process-control methods. */
-export type BoxProcess = {
-  id: string
-  status: string
-  pid?: number
-  exitCode?: number
-}
-
-/** A bounded stream of a workspace's tar archive, with its temporary file's
- * lifetime explicit for callers that stop reading before the end. */
-export type WorkspaceArchive = {
-  body: ReadableStream<Uint8Array>
-  size: number
-  dispose(): Promise<void>
-}
-
-let CHUNK = 256 * 1024
-let quoted = (value: string) => `'${value.replaceAll("'", "'\\''")}'`
 let base64 = (bytes: Uint8Array): string => {
   let parts: string[] = []
   for (let i = 0; i < bytes.length; i += 8192) {
@@ -127,124 +187,6 @@ let checked = async (box: Box, command: string): Promise<string> => {
     throw new Error(`cloudflare: workspace command failed: ${result.stderr}`)
   }
   return result.stdout
-}
-
-let archive = async (box: Box): Promise<WorkspaceArchive> => {
-  let path = quoted(`/tmp/yak-workspace-${crypto.randomUUID()}.tar`)
-  let disposed = false
-  let dispose = async () => {
-    if (!disposed) {
-      await checked(box, `rm -f -- ${path}`)
-      disposed = true
-    }
-  }
-  try {
-    let stdout = await checked(
-      box,
-      `tar -C ${quoted(CWD)} -cf ${path} . && wc -c < ${path}`,
-    )
-    let size = Number(stdout.trim())
-    if (!Number.isSafeInteger(size) || size < 0 || !stdout.trim()) {
-      throw new Error('cloudflare: invalid workspace archive size')
-    }
-    let offset = 0
-    let body = new ReadableStream<Uint8Array>({
-      async pull(controller) {
-        try {
-          if (disposed || offset === size) {
-            await dispose()
-            controller.close()
-            return
-          }
-          let content = await checked(
-            box,
-            `set -o pipefail; dd if=${path} bs=${CHUNK} skip=${
-              offset / CHUNK
-            } count=1 status=none | base64`,
-          )
-          let bytes = Uint8Array.from(
-            atob(content.trim()),
-            (c) => c.charCodeAt(0),
-          )
-          if (bytes.length !== Math.min(CHUNK, size - offset)) {
-            throw new Error('cloudflare: incomplete workspace archive')
-          }
-          offset += bytes.length
-          controller.enqueue(bytes)
-        } catch (error) {
-          let failure = error
-          try {
-            await dispose()
-          } catch (cleanup) {
-            failure = new AggregateError(
-              [error, cleanup],
-              'workspace archive failed',
-            )
-          }
-          controller.error(failure)
-        }
-      },
-      cancel: dispose,
-    }, { highWaterMark: 0 })
-    return { body, size, dispose }
-  } catch (error) {
-    await dispose()
-    throw error
-  }
-}
-
-let restore = async (
-  box: Box,
-  body: ReadableStream<Uint8Array>,
-): Promise<void> => {
-  let path = `/tmp/yak-workspace-${crypto.randomUUID()}.tar`
-  let part = `${path}.part`
-  let reader = body.getReader()
-  try {
-    await checked(box, `: > ${quoted(path)}`)
-    let offset = 0
-    for (;;) {
-      let next = await reader.read()
-      if (next.done) break
-      for (let i = 0; i < next.value.length; i += CHUNK) {
-        let bytes = next.value.subarray(i, i + CHUNK)
-        await box.writeFile(part, base64(bytes), { encoding: 'base64' })
-        // An RPC retry overwrites precisely the same bytes instead of appending.
-        await checked(
-          box,
-          `dd if=${quoted(part)} of=${
-            quoted(path)
-          } bs=${CHUNK} seek=${offset} oflag=seek_bytes conv=notrunc status=none`,
-        )
-        offset += bytes.length
-      }
-    }
-    // Root in the source can replace its tar binary or forge an archive. The
-    // clean target's data filter refuses writes through escaping paths,
-    // hardlinks and devices. Symbolic links themselves are workspace data
-    // (a Python venv normally points at /usr/bin/python3); allow their targets
-    // while still refusing any later member that writes through such a link.
-    let extract = `import os, pathlib, tarfile
-def workspace(member, dest):
- if not member.issym(): return tarfile.data_filter(member, dest)
- root = os.path.realpath(dest)
- path = pathlib.Path(dest, member.name)
- if member.name.startswith('/') or os.path.commonpath([root, str(path.parent.resolve())]) != root:
-  raise tarfile.OutsideDestinationError(member, str(path))
- if path.is_symlink(): path.unlink()
- filtered = tarfile.data_filter(member.replace(linkname='.'), dest)
- return filtered.replace(linkname=member.linkname)
-with tarfile.open(${JSON.stringify(path)}) as archive:
- archive.extractall(${JSON.stringify(CWD)}, filter=workspace)`
-    await checked(box, `python3 -I -c ${quoted(extract)}`)
-  } finally {
-    try {
-      await reader.cancel()
-    } finally {
-      reader.releaseLock()
-      await checked(box, `rm -f -- ${quoted(path)} ${quoted(part)}`)
-    }
-  }
 }
 
 /** A provider bound to one deployed container namespace. Stable request ids
@@ -263,7 +205,7 @@ export let cloudflareProvider = (
     }
     let call = <T>(send: (box: Box) => T | Promise<T>) =>
       retry(async () => {
-        if (options.legacyRecreation || internal) {
+        if (options.ephemeral || internal) {
           return await send(ns.get(ns.idFromName(ref.id)))
         }
         if (!options.lifecycle) {
@@ -295,7 +237,6 @@ export let cloudflareProvider = (
       exec: (cmd, opts) =>
         call(async (box) => box.exec(cmd, await dressed(opts))),
       getState: () => call((box) => box.getState()),
-      listProcesses: () => call((box) => box.listProcesses()),
       startProcess: (cmd, opts) =>
         call(async (box) => box.startProcess(cmd, await dressed(opts))),
       getProcess: (id) => call((box) => box.getProcess(id)),
@@ -336,13 +277,13 @@ export let cloudflareProvider = (
       let prepare = async () => {
         let box = boxOf(request, true, true)
         // mkdir is idempotent and starts the namespace's deployed image.
-        if (!options.legacyRecreation) await box.mkdir(CWD, { recursive: true })
+        if (!options.ephemeral) await box.mkdir(CWD, { recursive: true })
         await Promise.resolve(box.setSleepAfter?.(SLEEP)).catch((e) =>
           options.sleepError?.(e)
         )
         return connection(request)
       }
-      if (options.legacyRecreation) return await prepare()
+      if (options.ephemeral) return await prepare()
       return await lifecycle(request, async (receipt) => {
         if (receipt.state == 'released' || receipt.state == 'disposing') {
           throw new Error('cloudflare: sandbox was disposed; request a new id')
@@ -373,7 +314,7 @@ export let cloudflareProvider = (
       })
     },
     connect: async (ref) => {
-      if (options.legacyRecreation) return connection(ref)
+      if (options.ephemeral) return connection(ref)
       return await lifecycle(ref, async ({ state }) => {
         if (state != 'ready') {
           throw new Error('cloudflare: sandbox is not ready or was disposed')
@@ -388,7 +329,7 @@ export let cloudflareProvider = (
       })
     },
     dispose: async (ref) => {
-      if (options.legacyRecreation) {
+      if (options.ephemeral) {
         await boxOf(ref, true, true).destroy()
         return
       }
@@ -400,21 +341,6 @@ export let cloudflareProvider = (
       })
     },
     exec: (ref, command) => boxOf(ref).exec(command, { cwd: CWD }),
-    archive: (ref) => archive(boxOf(ref, false)),
-    restore: (ref, body) => restore(boxOf(ref, false), body),
-    active: async (ref) => {
-      let { status } = await boxOf(ref).getState()
-      return status === 'running' || status === 'healthy'
-    },
-    processes: async (ref) =>
-      (await boxOf(ref).listProcesses()).map((
-        { id, status, pid, exitCode },
-      ) => ({
-        id,
-        status,
-        ...pid === undefined ? {} : { pid },
-        ...exitCode === undefined ? {} : { exitCode },
-      })),
     put: async (ref, { path, bytes }) => {
       let box = boxOf(ref)
       let at = path.startsWith('/') ? path : `${CWD}/${path}`

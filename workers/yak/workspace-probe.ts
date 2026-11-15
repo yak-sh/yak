@@ -1,5 +1,3 @@
-import type { Env } from './env.ts'
-
 /** One command, as the stand-in sandbox was told to answer it. */
 export type Ran = {
   stdout?: string
@@ -26,7 +24,6 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
   let env: Record<string, string>[] = []
   let files = new Map<string, string>()
   let alive = new Set<string>()
-  let copies = new Map<string, Set<string>>()
   let states = new Map<
     string,
     { files: Map<string, string>; processes: typeof processes }
@@ -62,10 +59,6 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
   let box = (name: string) => ({
     getState: () =>
       Promise.resolve({ status: alive.has(name) ? 'healthy' : 'stopped' }),
-    listProcesses: () =>
-      Promise.resolve(
-        [...state(name).processes].map(([id, p]) => ({ id, ...p })),
-      ),
     exec: (cmd: string, opts?: Opts) => {
       let said = heard(name, cmd, opts)
       return Promise.resolve({
@@ -133,26 +126,10 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
           : held,
       })
     },
-    fork: (target: string) => {
-      let children = copies.get(name) ?? new Set<string>()
-      if (!children.has(target)) {
-        children.add(target)
-        copies.set(name, children)
-        let source = states.get(name)
-        if (source) {
-          let next = state(target)
-          for (let [path, value] of source.files) next.files.set(path, value)
-        }
-      }
-      return Promise.resolve([...states.get(name)?.processes.keys() ?? []])
-    },
-    forks: () => Promise.resolve([...copies.get(name) ?? []]),
-    retire: () => Promise.resolve([...copies.get(name) ?? []]),
     destroy: () => {
       alive.delete(name)
       states.get(name)?.files.clear()
       states.get(name)?.processes.clear()
-      copies.delete(name)
       return Promise.resolve()
     },
   })
@@ -172,21 +149,3 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
     },
   }
 }
-
-// The test namespace's coordinator records filesystem copies independently
-// of command invocations, as WORKSPACES does beside WORKBENCH in production.
-export let workspaces = (
-  ns: NonNullable<Env['WORKBENCH']>,
-): NonNullable<Env['WORKSPACES']> => ({
-  idFromName: (name) => name,
-  get: (id) => {
-    let source = ns.get(ns.idFromName(String(id))) as ReturnType<
-      ReturnType<typeof sandboxes>['WORKBENCH']['get']
-    >
-    return {
-      fork: (_name, target) => source.fork(target),
-      retire: () => source.retire(),
-      destroy: () => Promise.resolve(),
-    }
-  },
-})

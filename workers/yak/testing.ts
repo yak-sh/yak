@@ -15,7 +15,7 @@ export {
   kvStorage,
   limiter,
 } from './binding-probe.ts'
-export { type Ran, sandboxes, workspaces } from './workspace-probe.ts'
+export { type Ran, sandboxes } from './workspace-probe.ts'
 export { ai, embeds, modelPage, type Turn } from './model-probe.ts'
 export { app, declared, owned, space } from './directory-fixture.ts'
 // The platform in memory: the kernel's own bindings, stood up under Deno so a

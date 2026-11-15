@@ -5,7 +5,7 @@ import { machineTools } from '@yaks/harness/machine'
 import { SENTINEL } from '@yaks/secrets'
 import { called, transcribed } from './builder.ts'
 import { kv } from './binding-probe.ts'
-import { sandboxes, workspaces } from './workspace-probe.ts'
+import { sandboxes } from './workspace-probe.ts'
 import { GRANT } from './grants.ts'
 import { HOST, routed, spending, workbench } from './sandbox.ts'
 import type { Space } from './directory.ts'
@@ -54,7 +54,6 @@ let placeholder = async () => {
   let box = sandboxes(() => ({ stdout: 'ok' }))
   let env = {
     WORKBENCH: box.WORKBENCH,
-    WORKSPACES: workspaces(box.WORKBENCH),
     OAUTH_KV: kv(),
     SESSION_SECRET: SECRET,
   }

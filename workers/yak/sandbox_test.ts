@@ -30,7 +30,7 @@ import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import * as apps from './apps.ts'
 import { owned } from './directory-fixture.ts'
-import { type Ran, sandboxes, workspaces } from './workspace-probe.ts'
+import { type Ran, sandboxes } from './workspace-probe.ts'
 import { platform } from './deploy-probe.ts'
 import { held, ledger } from './grants.ts'
 import {
@@ -38,10 +38,8 @@ import {
   awake,
   BUDGET,
   destroyed,
-  HELD,
   HOST,
   LIFE,
-  named,
   NO_BOX,
   released,
   seconds,
@@ -50,6 +48,8 @@ import {
   workbench,
 } from './sandbox.ts'
 import { SENTINEL } from '@yaks/secrets'
+import { HELD, named } from '@yaks/sandbox/cloudflare'
+import { meta } from './meta.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { PUBLISHED } from './published.ts'
 import type { Who } from './session.ts'
@@ -100,7 +100,7 @@ let seeded = async (vars: Partial<Env> = {}) => {
 // A workbench needs its container binding and space data alone.
 let bare = (answer?: (cmd: string) => Ran | void) => {
   let box = sandboxes(answer)
-  let env = { WORKBENCH: box.WORKBENCH, WORKSPACES: workspaces(box.WORKBENCH) }
+  let env = { WORKBENCH: box.WORKBENCH }
   let space = spaceOf({
     entity: { eid: ADA },
     space: { slug: 'ada', store: 'ada' },
@@ -250,7 +250,7 @@ test('the machine tools write, run and read, and a ship copies out', async () =>
   assertStringIncludes(listed.text, 'chess.js')
 
   // Every one of those touched the same container, under the space's own id.
-  assertEquals([...box.alive], [named(space, ADA)])
+  assertEquals([...box.alive], [named(space.eid, ADA)])
 })
 
 test('sandbox_exec, as the directory listed it, runs its cmd and answers as sandbox_shell does', async () => {
@@ -505,7 +505,7 @@ test('a release answers the seconds held, and the container goes', async () => {
   let spend = spending()
   let bench = await workbench(env, space, ADA, spend, () => clock)
   await bench.provider.exec(bench.ref, 'sleep 42')
-  assertEquals([...box.alive], [named(space, ADA)])
+  assertEquals([...box.alive], [named(space.eid, ADA)])
   clock = 42_300
   let spent = await released(env, space, spend, () => clock)
 
@@ -581,7 +581,7 @@ test('every command is signed in as the caller, with one grant', async () => {
   assertEquals((await book.ids(ADA)).length, 1)
   let { bearer } = await sent(
     env,
-    named(space, ADA),
+    named(space.eid, ADA),
     `${HOST}/mcp`,
     first.YAKS_TOKEN,
   )
@@ -595,7 +595,7 @@ test('every command is signed in as the caller, with one grant', async () => {
 test('destroying the container revokes what it was wearing', async () => {
   let { box, env, space } = await bench(() => ({ stdout: 'ok' }))
   let lone: Ctx = { env, dir: dirOf(env), person: ADA }
-  let mine = named(space, ADA)
+  let mine = named(space.eid, ADA)
   await tool('sandbox_shell').run(lone, { command: 'ls' })
   let placeholder = box.env.at(-1)!.YAKS_TOKEN
   let token = (await sent(env, mine, `${HOST}/mcp`, placeholder)).bearer!
@@ -864,7 +864,7 @@ test('a lone connector call pays for itself and leaves the container', async () 
   // It is counted — a second at least, since the call rounds up — and the
   // container is still there for the next call.
   assert(((await dirOf(env).space('ada'))!.meter?.seconds ?? 0) >= 1)
-  assertEquals([...box.alive], [named(space, ADA)])
+  assertEquals([...box.alive], [named(space.eid, ADA)])
 })
 
 // D-131886: a free space holds one sandbox awake at a time, whoever wakes
@@ -916,7 +916,7 @@ test('a free space holds one sandbox awake, and each space counts its own', asyn
   // On the Plus plan, two; and once one has slept, another wakes.
   let now = Date.now()
   await awake(env, { ...space, tier: 'plus' }, BOB, now)
-  await asleep(env, space, ADA, now)
+  await asleep(env, space, ADA)
   await awake(env, space, BOB, now)
   await assertRejects(() => awake(env, space, ADA, now), Error, 'free tier')
   await awake(env, space, ADA, now + (HELD + 1) * 1000)
@@ -927,7 +927,7 @@ test('a free space holds one sandbox awake, and each space counts its own', asyn
   await tool('space_delete').run(ada, { space: 'ada', forever: true })
   assertEquals(await ada.dir.space('ada'), null)
   assert(![...box.alive].some((n) => n.includes(space.eid)))
-  await awake(env, space, BOB)
+  assertEquals(await meta(env).query(`.lent.within=${space.eid}`), [])
 })
 
 test("the month of sandbox time is the space's, and it refuses", async () => {

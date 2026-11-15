@@ -245,10 +245,6 @@ name = "WORKBENCH"
 class_name = "Workbench"
 script_name = "yak-sandbox"
 
-[[durable_objects.bindings]]
-name = "WORKSPACES"
-class_name = "Workspaces"
-
 # The one object every purge of Site's cache goes through (index.ts `Purger`),
 # since Cloudflare keeps one purge budget for the whole account (purge.ts).
 [[durable_objects.bindings]]
@@ -326,6 +322,14 @@ new_sqlite_classes = ["Lexicon"]
 [[migrations]]
 tag = "v10"
 deleted_classes = ["Sandbox"]
+
+# Workspaces copied the files of a space's one shared sandbox into each
+# member's own once (T-37893). Every shared container has slept since, and a
+# sleeping container keeps no files, so nothing was left to copy; who has a
+# sandbox in a space is the directory's `lent` rows now.
+[[migrations]]
+tag = "v11"
+deleted_classes = ["Workspaces"]
 
 # Outbound mail as a binding rather than the REST API (T-33684): Cloudflare
 # Email Sending, authorized by this deploy instead of by a token, so nothing
@@ -698,10 +702,6 @@ class_name = "Workbench"
 script_name = "yak-sandbox-staging"
 
 [[env.staging.durable_objects.bindings]]
-name = "WORKSPACES"
-class_name = "Workspaces"
-
-[[env.staging.durable_objects.bindings]]
 name = "PURGER"
 class_name = "Purger"
 
@@ -761,6 +761,10 @@ new_sqlite_classes = ["Lexicon"]
 [[env.staging.migrations]]
 tag = "v10"
 deleted_classes = ["Sandbox"]
+
+[[env.staging.migrations]]
+tag = "v11"
+deleted_classes = ["Workspaces"]
 
 [[env.staging.send_email]]
 name = "MAIL"

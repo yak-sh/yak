@@ -61,6 +61,31 @@
         }
       }
     },
+    "lent": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "description": "a sandbox lent to one person within a group that allows only so many awake at once; kept while it sleeps, so the group's erasure finds every one",
+      "properties": {
+        "to": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the person it is lent to; a group lends each person one"
+        },
+        "within": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "description": "the group whose allowance of awake sandboxes it counts against, such as a space"
+        },
+        "until": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when it sleeps on its own unless called again; absent once it is known to be asleep"
+        }
+      }
+    },
     "sandbox_provision": {
       "effect": true,
       "created": [

@@ -21,7 +21,6 @@ import type { Outlasts } from './outlast.ts'
 import type { Lexicons } from './lexicon.ts'
 import type { Limiter } from '@yaks/workerd/rate'
 import type { Sandboxes } from '@yaks/sandbox/cloudflare'
-import type { Workspaces } from './workspaces.ts'
 import type { Inference } from '@yaks/model'
 import type { Clock } from '@yaks/fp'
 import type { Strip } from '@yaks/esbuild'
@@ -313,7 +312,6 @@ export type Env = {
   // browser (browser.ts), including under local dev. Absent in a test run and
   // the workerd probes.
   BROWSER?: Fetcher
-  WORKSPACES?: Workspaces
   // The single static token OpenAI's apps directory fetches to verify the
   // domain (apex.ts serves it at /.well-known/openai-apps-challenge). A
   // secret so the open-source repo carries no token; unset, that path 404s.

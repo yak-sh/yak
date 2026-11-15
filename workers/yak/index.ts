@@ -12,7 +12,6 @@ export let {
   Store,
   Wire,
   Builder,
-  Workspaces,
   Purger,
   PublicDirectory,
   Outlast,
