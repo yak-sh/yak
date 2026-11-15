@@ -296,7 +296,8 @@ export let due = async (g: Graph, at: Scope = scope(true)): Promise<Due[]> => {
  * session and item, so saying it again writes nothing new. */
 export let input = (session: Eid, item: Eid, body: string): Bundle => ({
   entity: { eid: derivedEid(`session bus ${session} ${item}`) },
-  entry: { session, item },
+  entry: { session },
+  taken: { item },
   content: { body },
 })
 

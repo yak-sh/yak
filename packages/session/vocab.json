@@ -165,7 +165,7 @@
           "type": "string",
           "ref": "session",
           "death": "keep",
-          "description": "the session the item this entry says was written through, where this transcript started it (`spawned.parent`): its worker\u2019s report, never a person\u2019s words"
+          "description": "the session the item this entry says was written through, where this transcript started it (`spawned.parent`): its worker’s report, never a person’s words"
         }
       },
       "description": "an entry to be read before the next ask: what the session bus says to a native transcript"
@@ -175,7 +175,7 @@
       "journal": false,
       "type": "object",
       "properties": {},
-      "description": "on a session: its harness reports the tool calls of its own line of work to the hook door (POST /session/hook), where the bus says what the session is owed. Every context the harness runs shares the session\u2019s id, so a tool reply never says it"
+      "description": "on a session: its harness reports the tool calls of its own line of work to the hook door (POST /session/hook), where the bus says what the session is owed. Every context the harness runs shares the session’s id, so a tool reply never says it"
     },
     "brief": {
       "component": true,
@@ -186,7 +186,7 @@
           "store": "blob"
         }
       },
-      "description": "the session\u2019s own account of itself, written at the end and quoted in the next one"
+      "description": "the session’s own account of itself, written at the end and quoted in the next one"
     },
     "cancel": {
       "component": true,
@@ -276,19 +276,19 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "description": "a session\u2019s lock on the entity it is stored on",
+      "description": "a session’s lock on the entity it is stored on",
       "properties": {
         "session": {
           "type": "string",
           "ref": "session",
           "death": "release",
-          "description": "the session holding it \u2014 when that session\u2019s entity dies the lock goes and the entity lives"
+          "description": "the session holding it — when that session’s entity dies the lock goes and the entity lives"
         },
         "at": {
           "type": "string",
           "format": "date-time",
           "stamped": true,
-          "description": "when it was taken \u2014 stamped when the lock is new"
+          "description": "when it was taken — stamped when the lock is new"
         }
       }
     },
@@ -371,7 +371,7 @@
           "seq"
         ]
       ],
-      "description": "one entry of a transcript; the component stored beside it is its kind; every model-bound message names its source independently of its provider turn role. Only the person\u2019s own words are their user input",
+      "description": "one entry of a transcript; the component stored beside it is its kind; every model-bound message names its source independently of its provider turn role. Only the person’s own words are their user input",
       "search": [
         "content.body"
       ],
@@ -390,10 +390,17 @@
         "from": {
           "type": "string",
           "description": "Who wrote these words, rendered as From <from> by generic prompt assembly for every provider: the system, checkpoint summarizer, parent session, helper, TaskMaster or named person. Set for injected messages; never impersonate the person through created.by. Older rows infer their source from transcript components and writer stamps."
-        },
+        }
+      }
+    },
+    "taken": {
+      "component": true,
+      "type": "object",
+      "description": "on an input, the item its words came in: the request, letter, comment or knock they say. A session takes an item's words once (@yaks/session/intake `take`), and the files they came with are attached to the item. Kept beside the entry, not in it, so a transcript's hot reads stay as narrow as they were",
+      "properties": {
         "item": {
           "type": "string",
-          "description": "On an input, the eid of the item its words came in: the request, letter, comment or knock they say. A session takes an item's words once (@yaks/session bus `take`), and the files they came with are attached to the item. Not a reference, so an entry's one reference stays its session and `.entries` stays its transcript's reverse name."
+          "description": "The item's eid. Not a reference, so `.entries` stays the transcript's reverse name and an item's death keeps its words."
         }
       }
     },
@@ -518,13 +525,13 @@
         "id": {
           "type": "string",
           "index": true,
-          "description": "the runner\u2019s own id for it"
+          "description": "the runner’s own id for it"
         },
         "actor": {
           "type": "string",
           "ref": "entity",
           "death": "detach",
-          "description": "who it speaks as \u2014 the identity that survives a /clear, where `created.via` is the run"
+          "description": "who it speaks as — the identity that survives a /clear, where `created.via` is the run"
         },
         "source": {
           "type": "string",
@@ -742,13 +749,13 @@
           "type": "string",
           "ref": "provider",
           "death": "keep",
-          "description": "the provider asked \u2014 kept as history when that entity is deleted, so a past ask still records what answered it"
+          "description": "the provider asked — kept as history when that entity is deleted, so a past ask still records what answered it"
         },
         "model": {
           "type": "string",
           "ref": "model",
           "death": "keep",
-          "description": "the model asked \u2014 kept as history when that entity is deleted, so a past ask still records what answered it"
+          "description": "the model asked — kept as history when that entity is deleted, so a past ask still records what answered it"
         },
         "effort": {
           "type": "string"
@@ -765,7 +772,7 @@
       "noun": "claim",
       "verb": "take",
       "title": "Claim an entity",
-      "description": "Claim any entity for a session. Another session\u2019s claim fails the batch; release it first. Reclaiming by the same session is a no-op refresh. Returns applied bundles.",
+      "description": "Claim any entity for a session. Another session’s claim fails the batch; release it first. Reclaiming by the same session is a no-op refresh. Returns applied bundles.",
       "input": {
         "target": {
           "type": "string",
@@ -792,7 +799,7 @@
       "noun": "claim",
       "verb": "release",
       "title": "Release a claim",
-      "description": "Release any entity\u2019s claim, unguarded to permit handover and recovery of dead sessions. Returns applied bundles.",
+      "description": "Release any entity’s claim, unguarded to permit handover and recovery of dead sessions. Returns applied bundles.",
       "input": {
         "target": {
           "type": "string",
@@ -813,7 +820,7 @@
       "destructive": false,
       "noun": "session",
       "verb": "context",
-      "title": "Read a session\u2019s context",
+      "title": "Read a session’s context",
       "description": "Find/create a session and return its changes plus content.body identifying it and its claims for context injection. A hook cwd supplies the checkout persona when none is set. UserPromptSubmit instead returns timing from transcript_path, without writes: queued submissions supply sent time, otherwise hook time is labeled observed; unreadable transcripts return nothing. Explicit session overrides hook except for UserPromptSubmit. No session id means no writes or output.",
       "input": {
         "session": {
@@ -853,7 +860,7 @@
         },
         "brief": {
           "type": "string",
-          "description": "Session\u2019s account of its work.",
+          "description": "Session’s account of its work.",
           "short": "b"
         }
       },
@@ -869,13 +876,13 @@
       ],
       "noun": "session",
       "verb": "listen",
-      "title": "Listen for a session\u2019s work",
-      "description": "Print one line for each thing addressed to an agent work session as it arrives: a comment on a stored record (entity) the session has claimed, or a person-written comment on one it created (the comment\u2019s own created.via is not a session), a knock at the session or at that record, a letter delivered to it, a letter answering one it wrote, and a reply held for its project (also a person-written comment on a record filed there once its creating session ended): one answering a letter another session wrote, sent to the project the listening session works for (its persona\u2019s home, or a project filed under it) after that other session ended. Each item is marked notified once printed, so it is printed once, including anything that arrived while nothing was listening; the session\u2019s own writes are never printed. Meant for a command line under a monitor that reads each printed line as an event, such as Claude Code\u2019s Monitor tool: `yak session listen --session \"$CLAUDE_CODE_SESSION_ID\"`, which does not return while the process is up. With once, it waits until something is addressed to the session, prints it, keeps printing what arrives until nothing new has come for quiet seconds, and ends, so one ending carries everything that was waiting; this is for a harness that wakes its agent when a background command ends, such as Claude Code\u2019s background Bash: `yak session listen --session \"$CLAUDE_CODE_SESSION_ID\" --once`, run again each time it ends. Each line is the item whole, and a knock left at two addresses the session hears is printed once. A managed run\u2019s final report is one line, `knock \u2026 on T-\u2026 (done)`, with where its task stands. A printed line counts as heard, so its output must reach the agent itself, never a file.",
+      "title": "Listen for a session’s work",
+      "description": "Print one line for each thing addressed to an agent work session as it arrives: a comment on a stored record (entity) the session has claimed, or a person-written comment on one it created (the comment’s own created.via is not a session), a knock at the session or at that record, a letter delivered to it, a letter answering one it wrote, and a reply held for its project (also a person-written comment on a record filed there once its creating session ended): one answering a letter another session wrote, sent to the project the listening session works for (its persona’s home, or a project filed under it) after that other session ended. Each item is marked notified once printed, so it is printed once, including anything that arrived while nothing was listening; the session’s own writes are never printed. Meant for a command line under a monitor that reads each printed line as an event, such as Claude Code’s Monitor tool: `yak session listen --session \"$CLAUDE_CODE_SESSION_ID\"`, which does not return while the process is up. With once, it waits until something is addressed to the session, prints it, keeps printing what arrives until nothing new has come for quiet seconds, and ends, so one ending carries everything that was waiting; this is for a harness that wakes its agent when a background command ends, such as Claude Code’s background Bash: `yak session listen --session \"$CLAUDE_CODE_SESSION_ID\" --once`, run again each time it ends. Each line is the item whole, and a knock left at two addresses the session hears is printed once. A managed run’s final report is one line, `knock … on T-… (done)`, with where its task stands. A printed line counts as heard, so its output must reach the agent itself, never a file.",
       "input": {
         "session": {
           "type": "string",
           "ref": "session",
-          "description": "the session to listen for (default: the caller\u2019s session); pass its id or registered name"
+          "description": "the session to listen for (default: the caller’s session); pass its id or registered name"
         },
         "every": {
           "type": "number",
@@ -897,7 +904,7 @@
       "noun": "session",
       "verb": "handup",
       "title": "Hand something up to the operator",
-      "description": "Hand up what needs the operator\u2019s judgment, as one short line about the entity it concerns. It knocks the operator of the project the calling session works for, or waits at the project until a person opens a session for it. From a helper, or from a session opened on a topic, the operator\u2019s own session hears it; such a session reaches no other session any other way. What needs a person is a decision or a task assigned to them (decision_new, task_new), not a hand-up. Returns the knock.",
+      "description": "Hand up what needs the operator’s judgment, as one short line about the entity it concerns. It knocks the operator of the project the calling session works for, or waits at the project until a person opens a session for it. From a helper, or from a session opened on a topic, the operator’s own session hears it; such a session reaches no other session any other way. What needs a person is a decision or a task assigned to them (decision_new, task_new), not a hand-up. Returns the knock.",
       "input": {
         "about": {
           "type": "string",
@@ -906,7 +913,7 @@
         },
         "text": {
           "type": "string",
-          "description": "One short line: what needs the operator\u2019s judgment."
+          "description": "One short line: what needs the operator’s judgment."
         }
       },
       "required": [
@@ -923,7 +930,7 @@
       "destructive": false,
       "noun": "session",
       "verb": "brief",
-      "title": "Record a session\u2019s brief",
+      "title": "Record a session’s brief",
       "description": "Replace a session brief, creating a missing named transcript. session overrides hook.session_id, then defaults to caller. Returns the written bundle; does not inject context elsewhere.",
       "input": {
         "session": {
@@ -952,7 +959,7 @@
       "noun": "hooks",
       "verb": "install",
       "title": "Install the lifecycle hooks",
-      "description": "Install Claude-compatible lifecycle hooks: session/subagent start reads context, prompt submission adds transcript timing, and session end wraps up. PreToolUse posts MCP calls to the server for session attribution; PostToolUse delivers notifications to the parent agent, and Stop delivers what arrived during its last answer. Transcript import supplies intervening turns. Replaces this install\u2019s hooks, preserving unrelated settings. Also writes this graph's MCP server into Claude Code's config, its headersHelper naming the session behind every call, so a write is stamped with its caller whether or not its hook arrives. Writes on this machine; answers the paths written and what to do next. remove uninstalls both.",
+      "description": "Install Claude-compatible lifecycle hooks: session/subagent start reads context, prompt submission adds transcript timing, and session end wraps up. PreToolUse posts MCP calls to the server for session attribution; PostToolUse delivers notifications to the parent agent, and Stop delivers what arrived during its last answer. Transcript import supplies intervening turns. Replaces this install’s hooks, preserving unrelated settings. Also writes this graph's MCP server into Claude Code's config, its headersHelper naming the session behind every call, so a write is stamped with its caller whether or not its hook arrives. Writes on this machine; answers the paths written and what to do next. remove uninstalls both.",
       "input": {
         "path": {
           "type": "string",
@@ -1045,7 +1052,9 @@
     },
     "session_result": {
       "effect": true,
-      "created": ["model_result"],
+      "created": [
+        "model_result"
+      ],
       "target": ".ask .entry",
       "tries": 8,
       "description": "deliver a saved complete model result on its original request, including passive compaction exchanges, without repeating generation"
@@ -1174,7 +1183,7 @@
       "component": true,
       "type": "object",
       "properties": {},
-      "description": "on a session, or on the persona it wears: its requests leave out what it has replied past. When a request starts after the provider\u2019s cache of the one before has expired, each of its earlier calls with their results, and each worker\u2019s report (`delivery`, `attention{worker}`), that came before the request its newest reply answered is marked `archived`, with no model call; where a summary checkpoint is due while the cache is warm, the same is done first. A person\u2019s words and the session\u2019s own replies always stay, and an archived entry keeps its row"
+      "description": "on a session, or on the persona it wears: its requests leave out what it has replied past. When a request starts after the provider’s cache of the one before has expired, each of its earlier calls with their results, and each worker’s report (`delivery`, `attention{worker}`), that came before the request its newest reply answered is marked `archived`, with no model call; where a summary checkpoint is due while the cache is warm, the same is done first. A person’s words and the session’s own replies always stay, and an archived entry keeps its row"
     },
     "tool_async": {
       "component": true,

@@ -40,7 +40,7 @@ export type Intake = {
 export let inputOf = (id: string): Eid => derivedEid('operator-input|' + id)
 
 /** The rows that give a session these words: its input, linked back to the
- * item it came in (`entry.item`), and each file's attachment to that item, or
+ * item it came in (`taken{item}`), and each file's attachment to that item, or
  * to the input where no item names them (@yaks/blob/attachment). */
 export let intake = (words: Intake): Bundle[] => {
   let { session, item, from, channel, using } = words
@@ -49,7 +49,8 @@ export let intake = (words: Intake): Bundle[] => {
   return [
     {
       entity: { eid },
-      entry: { session, ...from ? { from } : {}, ...item ? { item } : {} },
+      entry: { session, ...from ? { from } : {} },
+      ...item ? { taken: { item } } : {},
       content: { body: words.body },
       ...channel ? { channel } : {},
       ...using ? { using } : {},

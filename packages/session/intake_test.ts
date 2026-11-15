@@ -66,7 +66,8 @@ test('an item is taken in once, with its channel, model and files', async () => 
   assertEquals((await g.get(['a', 'b'])).map((b) => b.entity.eid), ['a'])
   assertEquals(await lines(g), [{
     entity: { eid: inputOf('request') },
-    entry: { session: 'talk', item: 'request' },
+    entry: { session: 'talk' },
+    taken: { item: 'request' },
     content: { body: 'By text: hello' },
     channel: { name: 'text', framing: 'By text: ' },
     using: { model: 'small' },
