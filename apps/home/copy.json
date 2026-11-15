@@ -31,7 +31,7 @@
     "description": "Build, host and share web apps. Say what you need, and yaks.app builds the app, puts it online at your own address and shares it with the people it is for.",
     "hello": {
       "kicker": "Build, host and share web apps",
-      "title": "Build your ideas by asking",
+      "title": "Build your ideas by asking.",
       "hint": "What should it do, and who is it for?",
       "go": "Build it",
       "note": "Free to start. Your app goes online at your own address, for any phone or computer. %{price} for unlimited apps. %{examples}",
