@@ -21,14 +21,8 @@ import {
 } from './directory.ts'
 import type { Env } from './env.ts'
 import { card, listed, type Shown } from './gallery.ts'
-import {
-  pageAt,
-  PUBLISHER,
-  publisherAt,
-  type Reputation,
-  reputation,
-  reputationOf,
-} from './gallery-row.ts'
+import { pageAt, PUBLISHER, publisherAt } from '@yaks/platform/routes'
+import { type Reputation, reputation, reputationOf } from './gallery-row.ts'
 import { type Rated, rating } from './integrations.ts'
 import { paged, skillAt } from './skill-page.ts'
 import { type ComponentChildren, h } from 'preact'

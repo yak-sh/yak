@@ -41,7 +41,7 @@ import {
   type StoreDoor,
 } from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
-import { PLATFORM_BACKGROUND } from './apps.ts'
+import { PLATFORM_BACKGROUND } from '@yaks/platform/woven'
 import {
   type File,
   keepFile,

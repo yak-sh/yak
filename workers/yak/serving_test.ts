@@ -37,6 +37,11 @@ import {
   storeName,
 } from './directory.ts'
 import { pageScript } from './page-script.ts'
+import {
+  badgeOf,
+  PLATFORM_BACKGROUND,
+  PLATFORM_THEME,
+} from '@yaks/platform/woven'
 import { from, plan } from './sheet-assets.ts'
 import { client as clientNamed } from './sheets.ts'
 import * as dirPart from './directory.ts'
@@ -217,7 +222,7 @@ test('a free space wears the badge, and the Plus plan sheds it', async () => {
       ASSETS,
       '/cookbook/',
       1,
-      { badge: apps.badgeOf(space(plan), cookbook, {}) },
+      { badge: badgeOf(space(plan), cookbook, {}) },
     )).tags.includes('Made with ')
   assert(await badged({}), 'the free plan')
   assert(!await badged({ plan: { tier: 'plus' } }), 'the Plus plan')
@@ -539,8 +544,8 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
     start_url: '/cookbook/',
     scope: '/cookbook/',
     display: 'standalone',
-    background_color: apps.PLATFORM_BACKGROUND,
-    theme_color: apps.PLATFORM_THEME,
+    background_color: PLATFORM_BACKGROUND,
+    theme_color: PLATFORM_THEME,
     icons: [
       { src: '/cookbook/icon.png', type: 'image/png', sizes: '512x512' },
       { src: '/cookbook/icon.png', type: 'image/png', sizes: '192x192' },
@@ -2282,8 +2287,8 @@ test('an open visitor cannot choose generated media, and the editor browser can'
 
 // A build's pages (T-124410): every HTML file answers at the address a static
 // host gives it, and a page that is not there is the app's own 404.html. The
-// files door says which file answered (`FILE`), and `baseOf` where its
-// relative URLs start from.
+// files door says which file answered (`FILE`), and @yaks/platform/woven
+// `baseOf` where its relative URLs start from.
 let site = (written: Record<string, string>) => {
   let b = bucket()
   for (let [path, body] of Object.entries(written)) {
@@ -2452,15 +2457,15 @@ test("a published app's badge opens its own page", async () => {
   } as unknown as App
   let unshared = { published: null } as unknown as App
   assertEquals(
-    apps.badgeOf(space, shared, {}),
+    badgeOf(space, shared, {}),
     'https://yaks.app/apps/recipes',
   )
-  assertEquals(apps.badgeOf(space, unshared, {}), 'https://yaks.app/')
+  assertEquals(badgeOf(space, unshared, {}), 'https://yaks.app/')
   let { tags } = await pageScript(
     ASSETS,
     '/recipes/',
     1,
-    { badge: apps.badgeOf(space, shared, {}) },
+    { badge: badgeOf(space, shared, {}) },
   )
   assertStringIncludes(tags, 'data-yak-badge="https://yaks.app/apps/recipes"')
 })

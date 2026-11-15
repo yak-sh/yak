@@ -22,8 +22,8 @@
 import type { Directory, SkillOffer, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
+import { publisherAt } from '@yaks/platform/routes'
 import {
-  publisherAt,
   type Reputation,
   reputation,
   reputationOf,

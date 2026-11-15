@@ -260,7 +260,7 @@ export let used = (m: Meter, what: Spend): number =>
 
 /** A space on the free tier: not on a paid plan, and not comped
  * (`tierOf` reads a comp as the Plus plan). */
-export let free = (space: Metered): boolean => !paid(space.tier)
+export let free = (space: Pick<Metered, 'tier'>): boolean => !paid(space.tier)
 
 /** Whether a space is at an allowance this month; `more` is what the caller
  * holds that is not counted yet — the dollars and seconds of a build still

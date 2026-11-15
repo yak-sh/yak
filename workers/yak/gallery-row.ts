@@ -1,22 +1,9 @@
-// Where an app stands in the gallery, read off its row, and where its own page
-// is: what a space's page shows of the gallery, apart from gallery.ts so a page
-// that only serves a space never compiles the gallery's pages and letters
-// (T-148886).
+// Where an app stands in the gallery, read off its row: what a space's page
+// shows of the gallery, apart from gallery.ts so a page that only serves a
+// space never compiles the gallery's pages and letters (T-148886). Where its
+// own page is, is @yaks/platform/routes `pageAt`.
 import type { Rated, Shared, Uptake } from './directory.ts'
-import { type Host, url as siteUrl } from '@yaks/platform/host'
 import { h } from 'preact'
-
-// Where each published app's own page lives (app-page.ts): one address per
-// platform-wide name, listed or not.
-export let PAGE = '/apps/'
-export let pageAt = (name: string, env: Host = {}) =>
-  siteUrl(env, `${PAGE}${encodeURIComponent(name)}`)
-
-// Where the page of a space that shares anything in public lives
-// (publisher-page.ts): one address per space slug.
-export let PUBLISHER = '/spaces/'
-export let publisherAt = (slug: string, env: Host = {}) =>
-  siteUrl(env, `${PUBLISHER}${encodeURIComponent(slug)}`)
 
 /** How many other spaces installed a copy of something shared, said as a
  * line: what its maker is credited with (T-131912). */

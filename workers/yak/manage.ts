@@ -83,7 +83,8 @@ import { gauges } from '@yaks/platform/standing'
 import { DAYS, NOT_ON, statsFor } from './views.ts'
 import { refuse } from './tool.ts'
 import { letIn, letOut, reachOf } from './operator-reach.ts'
-import { json, kernels, moved, redirect, shelf } from './apps.ts'
+import { json } from '@yaks/platform/refused'
+import { kernels, moved, redirect, shelf } from './apps.ts'
 
 // The identity part, asked for at request time rather than imported at the
 // top: it carries the OAuth provider, whose `cloudflare:` modules exist only

@@ -86,23 +86,11 @@ export let prefixOf = (
 // Which file answered, told back to the gateway: its path inside the served
 // folder (`about/index.html`, `404.html`), which is where the page's own
 // relative URLs start from. Encoded as a URL path, since a header carries no
-// other characters and the gateway writes it into a base href.
+// other characters and the gateway writes it into a base href
+// (@yaks/platform/woven `baseOf`).
 export let FILE = 'x-yak-file'
 let encoded = (path: string) =>
   path.split('/').map(encodeURIComponent).join('/')
-
-/// baseOf('/cookbook/', 'docs/index.html', false) -> '/cookbook/docs/'
-/// baseOf('/cookbook/', 'about.html', false) -> '/cookbook/'
-/// baseOf('/cookbook/', '404.html', false) -> '/cookbook/'
-/// baseOf('/cookbook/', 'admin/index.html', true) -> '/cookbook/'
-/** Where a page resolves its relative URLs from, as anywhere on the web: its
- * own folder under the mount `at`, so about/index.html's `../style.css` is the
- * app's. A route, and the 404 page at any depth, answer with a page at the
- * root, so their base is the mount. An app whose folder pages were written
- * against the root base keeps it (`rooted`). `file` is the path that answered
- * (`FILE`). */
-export let baseOf = (at: string, file: string, rooted: boolean) =>
-  at + (rooted ? '' : file.slice(0, file.lastIndexOf('/') + 1))
 
 // A release never gains a file after its source is selected. A later release
 // gets a different key, so its file can answer after this 404 was cached.

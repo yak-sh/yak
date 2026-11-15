@@ -87,7 +87,7 @@ import {
   type Visitor,
 } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
-import { pageAt, pilled, standing } from './gallery-row.ts'
+import { pilled, standing } from './gallery-row.ts'
 import { buying, type Product } from './sell.ts'
 import {
   addressed,
@@ -139,6 +139,7 @@ import {
   hostOf,
   MANAGE,
   manageAt,
+  MANIFEST,
   MOUNT,
   movedFor,
   OURS,
@@ -175,7 +176,18 @@ import {
   webPage,
   webPath,
 } from './web.ts'
-import { admitted, pageScript, type Scripts } from './page-script.ts'
+import { pageScript, type Scripts } from './page-script.ts'
+import {
+  admitted,
+  badged,
+  based,
+  baseOf,
+  hasBase,
+  intoHead,
+  manifesting,
+  pinned,
+} from '@yaks/platform/woven'
+import { json, MEMBER, SAYS, WAITING } from '@yaks/platform/refused'
 import type { Bundle } from '@yaks/graph'
 import { Refused, Stale } from '@yaks/graph/errors'
 import { mistaken } from './mistake.ts'
@@ -228,7 +240,6 @@ import {
   visitOf,
 } from './visit.ts'
 import { full, fullFiles } from './usage.ts'
-import { free } from '@yaks/platform/meter'
 import { scheduleBy } from './used.ts'
 import { seen } from './views.ts'
 import { refuse } from './tool.ts'
@@ -322,50 +333,9 @@ let formPath = (path: string, req: Request) =>
   (path == '/api/blob' && req.method == 'POST' &&
     new URL(req.url).searchParams.has('form'))
 
-// A refusal is read — by the page that catches it, and by the person's agent
-// after that — so it answers a sentence beside its code (C-32574 item 2, where
-// a club member's vote showed them `{"error":{"code":"not_a_writer"}}`). The
-// code is the machine's half and never moves; the message is what someone is
-// told. When signing in is the way through it also answers `signIn`, the
-// address that does it and comes back (T-32593).
-let SAYS: Record<string, string> = {
-  method_not_allowed: 'that door does not answer this method',
-  expected_websocket: 'the live door takes a websocket upgrade',
-  // Names no doors: `api` below is their one list.
-  not_found: "no such door under this app's api",
-  not_a_writer: 'sign in to change this app',
-  not_a_reader: 'sign in to see this app',
-  // Join, by somebody the app's own rows do not list (join.ts).
-  not_listed: 'only the people this app lists may join it',
-  no_bytes: 'an upload needs a body: post the file itself',
-  upload_gone: 'that upload is no longer under way — begin it again',
-  too_large: 'that file is bigger than this app takes',
-  unsupported_media_type: 'this app does not take that kind of file',
-  no_such_file: 'no file at that address in this app',
-  // What the store said no to — an unknown component, a `$was` that moved, a
-  // dead entity. Its own sentence rides in `message`; this is the fallback.
-  refused: 'the app store would not take that',
-  // A stranger's first write, when no store of their own can be made for it
-  // (visit.ts): too many made from one place, or the app holds all it keeps.
-  sign_up: 'sign up to keep your own copy of this app: too many people are ' +
-    'trying it right now to keep one in this browser',
-}
-
-// The same refusals to someone who is signed in: signing in is no longer the
-// way through, so the sentence says whose it is to grant.
-let MEMBER: Record<string, string> = {
-  not_a_writer: 'you can read this app but not change it — its owner can ' +
-    'make you an editor',
-  not_a_reader: "this app is its owner's — they can let you in",
-}
-
-// Signed in and refused, with an invitation they have not accepted: the owner
-// already let them in, and the one thing left is the click in the letter,
-// which no page of the app may make for them (invite.ts). A viewer's
-// invitation does not lift a refusal to write, so it is not mentioned there.
-let WAITING = 'you have an invitation to this app waiting — accept it from ' +
-  'the letter yaks.app sent you, then come back'
-
+// Whether the owner already let `person` in and an invitation waits for them
+// to accept (invite.ts), which is what a refusal then tells them
+// (@yaks/platform/refused `WAITING`).
 export let waiting = async (
   dir: Pick<ReturnType<typeof directory>, 'invite'>,
   space: Space,
@@ -434,17 +404,6 @@ export let shut = async (
     )
     : nothingHere(env)
 }
-
-export let json = (
-  status: number,
-  code: string,
-  says = SAYS[code],
-  signIn?: string,
-) =>
-  Response.json(
-    { error: { code, message: says ?? code, ...(signIn ? { signIn } : {}) } },
-    { status },
-  )
 
 // The wait an error asks for (a stopped store's), as the header a page reads.
 export let waited = (error: unknown): Record<string, string> => {
@@ -584,14 +543,14 @@ let namedClient = async (req: Request, env: Env, path: string) => {
 // where the prefix is an address the browser asking cannot reach (T-33040).
 //
 // A page answered with a policy of its own (an app's worker can send one) has
-// that policy admit the scripts by their hashes (page-script.ts `admitted`),
-// so its own rules hold for everything else. A `<meta>` policy governs only
-// what follows it, and the tags come first.
+// that policy admit the scripts by their hashes (@yaks/platform/woven
+// `admitted`), so its own rules hold for everything else. A `<meta>` policy
+// governs only what follows it, and the tags come first.
 //
 // A page of a space on the free plan wears the badge too (public/badge.js,
-// `badgeOf`), and a visitor's page their bar (public/visit.js, `barOf`):
-// decided as it is served, so every version and release an app serves wears
-// them, and none of their files change.
+// @yaks/platform/woven `badgeOf`), and a visitor's page their bar
+// (public/visit.js, `barOf`): decided as it is served, so every version and
+// release an app serves wears them, and none of their files change.
 let appPreview = (app: App, at: string): Preview =>
   app.access == 'private' ? APP : {
     title: app.title || app.slug,
@@ -638,7 +597,6 @@ export let reported = async (
 // release. CSS URLs and module imports then resolve below the same release
 // address without rewriting their contents. Authenticated API calls and page
 // navigation keep their ordinary addresses.
-let hasBase = (html: string) => /<base[\s>][^>]*\bhref\b/i.test(html)
 let mapped = (
   html: string,
   at: string,
@@ -683,171 +641,6 @@ let released = (
   })
   return rewrite.transform(page)
 }
-
-// Where the parser will read a tag the kernel weaves in: inside the head if
-// the page has one, else after the doctype, which must stay the document's
-// first thing or the browser reads the whole page in quirks mode. A page with
-// neither gets it in front of everything. The base and the links below are
-// placed by this one rule.
-let intoHead = (page: string, tag: string) => {
-  let head = /<head[^>]*>/i.exec(page)
-  if (head) return page.replace(head[0], `${head[0]}${tag}`)
-  let doctype = /^\s*<!doctype[^>]*>/i.exec(page)
-  return doctype ? page.replace(doctype[0], `${doctype[0]}${tag}`) : tag + page
-}
-
-// An app's own files must not name the app. The code is copied under
-// whatever address the installer took it at (`app_install`), so a page
-// written with `/chores/api/client.js` in it is a 404 the moment the copy
-// lands at `/chore-chart/` — which is how a shared app rendered as bare HTML,
-// no stylesheet and no script, and nothing said so (C-32905 item 1). Every
-// page the kernel serves is given a `<base href>` at the app's own address
-// instead, so `./api/client.js` and `./style.css` resolve from wherever the
-// page is opened, pretty paths included. An absolute `/<app>/…` a page
-// already carries is untouched — a base moves relative URLs only.
-//
-// A page carrying its own `<base>` keeps it, and is given none: the first in
-// tree order is the document's, and an author who wrote one meant it.
-// declared.ts hands a view to an MCP host by the same rule, at that app's
-// absolute address.
-export let based = (href: string, page: string) =>
-  hasBase(page) ? page : intoHead(page, `<base href="${href}">`)
-
-// Whether the page already names a tag — one token of the attribute that
-// says what it IS, so `rel="shortcut icon"` and `rel="apple-touch-icon-
-// precomposed"` both count as the author having answered, and a `<meta
-// name="theme-color">` is asked the same way a `<link rel="manifest">` is:
-// one test, parameterised on the tag and the attribute that names it.
-let declares = (page: string, tag: string, attr: string, value: string) =>
-  new RegExp(
-    `<${tag}\\b[^>]*\\b${attr}\\s*=\\s*['"]?[^'">]*\\b${value}\\b`,
-    'i',
-  ).test(page)
-
-// The platform's own palette (@yaks/ui's linen theme: `--accent`, `--bg`), for an
-// app that never set its own (T-33055): the one look a generated manifest and
-// the tags beside it can give honestly, since the browser's grey chrome and
-// blank splash read as broken while a borrowed brand at least reads as
-// intentional. An app carries its own instead (directory.ts `App.theme`, set
-// through `app_set`), and this is only ever the fallback.
-export let PLATFORM_THEME = '#4c773e'
-export let PLATFORM_BACKGROUND = '#fdf7ee'
-
-// The colour this app's chrome paints with: its own, if its owner set one
-// (`app_set(theme_color: …)`), else the platform's. A stored colour is woven
-// straight into a `<meta content>` attribute and the manifest JSON below, so it
-// must be safe here, not only where app_set wrote it — the generic graph_apply
-// tier can set the `theme` component past that validator. The charset (the twin
-// of tools.ts `CSS_COLOR`, kept in step) admits hex, rgb()/hsl() and named
-// colours but no quote, angle bracket or backslash, so a value that fails it is
-// junk or an injection attempt: fall back to the platform's rather than emit it.
-let CSS_COLOR = /^[#a-zA-Z0-9(),.%\s-]{1,64}$/
-let safeColor = (v: string | null | undefined, fallback: string) =>
-  v && CSS_COLOR.test(v) ? v : fallback
-let themeColorOf = (app: App) =>
-  safeColor(app.theme?.themeColor, PLATFORM_THEME)
-let backgroundColorOf = (app: App) =>
-  safeColor(app.theme?.backgroundColor, PLATFORM_BACKGROUND)
-
-// The tags an app added to a home screen needs, and almost no app writes
-// (T-34493, T-33055). iOS takes its icon from `<link rel="apple-touch-icon">`
-// and nowhere else — Apple's *Configuring Web Applications*: a page names
-// its icon there, 180×180 for current displays, `sizes` only when it offers
-// several, and the smallest icon larger than the device wants is the one
-// scaled, so one square file serves every device. Every other platform reads
-// the manifest's `icons` instead, at the address the manifest link names.
-// `mobile-web-app-capable` is the standard word for the same (Chrome warns
-// on the Apple one alone), and the Apple one stays for iOS Safari.
-// `apple-mobile-web-app-capable` is what makes iOS open the page as a window
-// rather than a browser tab at all, and `apple-mobile-web-app-status-bar-
-// style` is the one Apple still reads past `theme-color` for its own status
-// bar. A page written here has none of it unless its agent thought of all
-// five, so an app somebody kept on their phone came out blank or grey —
-// owner, 2026-09-06: "the app's PWAs aren't getting icons (i tested iOS),
-// even when the site itself has an image icon."
-//
-// So a page is given every tag it did not write, at the app's own root: the
-// icon, the manifest (`manifest.webmanifest`, generated below), the chrome
-// colour, and the two Apple words. Each is decided on its own — a page naming
-// one gets the other four still — and what the page declares is never
-// touched, because a second answer beside the author's own is a second
-// answer to a question they already answered. The one exception is how the
-// browser fetches a manifest (`credentialed` below), which no author chose.
-//
-// The hrefs are absolute at the mount, like the reporter's, rather than
-// relative: a page carrying its own `<base>` keeps it (`based` above), and a
-// relative `icon.png` would then resolve against the author's base instead of
-// against the app.
-export let pinned = (at: string, page: string, app: App) => {
-  let tags =
-    (declares(page, 'link', 'rel', 'apple-touch-icon')
-      ? ''
-      : `<link rel="apple-touch-icon" href="${at}icon.png">`) +
-    (declares(page, 'link', 'rel', 'manifest')
-      ? ''
-      : `<link rel="manifest" href="${at}manifest.webmanifest" ` +
-        `crossorigin="${local(app) ? 'anonymous' : 'use-credentials'}">`) +
-    (declares(page, 'meta', 'name', 'theme-color')
-      ? ''
-      : `<meta name="theme-color" content="${themeColorOf(app)}">`) +
-    (declares(page, 'meta', 'name', 'mobile-web-app-capable')
-      ? ''
-      : '<meta name="mobile-web-app-capable" content="yes">') +
-    (declares(page, 'meta', 'name', 'apple-mobile-web-app-capable')
-      ? ''
-      : '<meta name="apple-mobile-web-app-capable" content="yes">') +
-    (declares(page, 'meta', 'name', 'apple-mobile-web-app-status-bar-style')
-      ? ''
-      : '<meta name="apple-mobile-web-app-status-bar-style" content="default">')
-  return credentialed(tags ? intoHead(page, tags) : page, !local(app))
-}
-
-// A browser fetches the manifest a page links without the person's cookies
-// unless the link says `crossorigin="use-credentials"`, and the door of an
-// app that is not public answers nobody without them: it sends the fetch to
-// sign in, on yaks.app's own origin, where it fails. So every manifest link
-// on the app's own origin is given that attribute, the platform's and the
-// author's alike, and on a public app it costs nothing. A link naming a
-// `crossorigin` of its own keeps it, and one to another origin is left as
-// written, since that origin admits credentials only if it says so.
-let elsewhere = /^\s*(?:[a-z][a-z\d+.-]*:|\/\/)/i
-let hrefOf = (tag: string) =>
-  /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(tag)
-    ?.slice(1).find((v) => v != null) ?? ''
-let credentialed = (page: string, cookies = true) =>
-  page.replace(
-    /<link\b[^>]*>/gi,
-    (tag) =>
-      declares(tag, 'link', 'rel', 'manifest') &&
-        !/\scrossorigin\b/i.test(tag) && !elsewhere.test(hrefOf(tag))
-        ? tag.replace(
-          /^<link/i,
-          `<link crossorigin="${cookies ? 'use-credentials' : 'anonymous'}"`,
-        )
-        : tag,
-  )
-
-// What an app's manifest says when the app wrote none: its name, its own root
-// as the scope a standalone window stays inside, the icon at the two sizes an
-// installer looks for, and the two colours — the app's own, or the platform's
-// (`themeColorOf`/`backgroundColorOf` above). The same icon file at both
-// sizes — one square png, the app's own or its icon.svg drawn at 512
-// (raster.ts), and resizing it at the edge would be a second set of bytes to
-// serve and cache for an installer that scales anyway.
-export let manifesting = (app: App, at: string) => ({
-  name: app.title || app.slug,
-  short_name: app.title || app.slug,
-  start_url: at,
-  scope: at,
-  display: 'standalone',
-  background_color: backgroundColorOf(app),
-  theme_color: themeColorOf(app),
-  icons: ['512x512', '192x192'].map((sizes) => ({
-    src: `${at}icon.png`,
-    type: 'image/png',
-    sizes,
-  })),
-})
 
 // What the browser may keep, and for how long. A new release moves the source
 // pointer, so nothing here may be held past a revalidation: `no-cache` is
@@ -915,11 +708,11 @@ let media = async (
 }
 
 // The two addresses the kernel answers for an app that wrote neither file
-// (T-34493), so the links `pinned` wove in are never dead. Both are the
-// fallback and nothing more: an app with its own `icon.png` or its own
-// `manifest.webmanifest` is served that, and one with an icon.svg is served
-// its drawing (files.ts `icon`), because this is only reached where the files
-// door had nothing.
+// (T-34493), so the links @yaks/platform/woven `pinned` wove in are never
+// dead. Both are the fallback and nothing more: an app with its own `icon.png`
+// or its own `manifest.webmanifest` is served that, and one with an icon.svg
+// is served its drawing (files.ts `icon`), because this is only reached where
+// the files door had nothing.
 //
 // The icon is its space's logo, drawn square (logo.ts `logoIcon`, T-151744),
 // so a church's or a shop's apps wear its picture; or, in a space without
@@ -962,7 +755,7 @@ export let unwritten = async (
       },
     })
   }
-  if (path != '/manifest.webmanifest') return null
+  if (path != `/${MANIFEST}`) return null
   // The app's own colours (`app.theme`, set through `app_set`), or the
   // platform's where it named none — `manifesting` decides, off the row
   // already in hand, so this needs no trip to the app's own front page.
@@ -1033,32 +826,10 @@ let redirected = async (
   })
 }
 
-// What the badge on an app's page opens (public/badge.js, T-131901), or null
-// for no badge, which is the Plus plan's. A published app's badge opens its
-// own page on yaks.app (app-page.ts), where whoever followed it can open the
-// app and make their own copy; an app that is not published opens yaks.app.
-export let badgeOf = (space: Space, app: App, env: Host) =>
-  !free(space)
-    ? null
-    : app.published?.name
-    ? pageAt(app.published.name, env)
-    : hostUrl(env, '/')
-
-// The badge and what it says of a site's preview (newcomer.ts
-// `previewing`): every plan's preview wears it, saying whose site it is not.
-export let badged = (space: Space, app: App, env: Host): Scripts => {
-  let preview = app.preview
-    ? URL.parse(app.preview.site)?.hostname.replace(/^www\./, '') ?? null
-    : null
-  return preview
-    ? { badge: badgeOf(space, app, env) ?? hostUrl(env, '/'), preview }
-    : { badge: badgeOf(space, app, env) }
-}
-
 // The platform's scripts a page wears as the files door hands it: none when
 // an app's worker asked for it, since what the worker answers is woven on its
 // way out (`reported`), and the browser would run each script twice.
-// Otherwise its badge is `badgeOf` and its bar `barOf`.
+// Otherwise its badge is @yaks/platform/woven `badgeOf` and its bar `barOf`.
 export let worn = (
   req: Request,
   space: Space,
@@ -1277,7 +1048,7 @@ let asset = async (
   // router passing a path on) reaches the browser inside the worker's answer,
   // which is woven the platform's scripts on its way out (`served`), so it
   // gets none here, or the browser would run each of them twice.
-  let base = files.baseOf(at, got.headers.get(files.FILE) ?? '', !!app.rooted)
+  let base = baseOf(at, got.headers.get(files.FILE) ?? '', !!app.rooted)
   refresh(env, space, app)
   let page = await c.time('render', async () =>
     woven(
@@ -1344,7 +1115,12 @@ export let woven = async (
   address = hostUrl(env, at),
   copy: Copy | null = null,
 ) => {
-  let own = pinned(at, mapped(original, at, bare, app.source, base), app)
+  let own = pinned(
+    at,
+    mapped(original, at, bare, app.source, base),
+    app,
+    !local(app),
+  )
   let page = filled(
     released(
       new Response(based(base, tags ? intoHead(own, tags) : own)),

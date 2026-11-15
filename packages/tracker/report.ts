@@ -654,6 +654,47 @@ export let door =
     return new Response(null, { status: 204 })
   }
 
+/** A break as the error and context a host's telemetry files it with
+ * (@yaks/host `Host.report`): thrown in a browser, by the release its page
+ * ran, with `tags` beside its own.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { thrown } from '@yaks/tracker/report'
+ *
+ * let [error, context] = thrown(
+ *   { version: 3, request: 'page /', message: 'boom', stack: 'at x' },
+ *   { user_id: 'ada' },
+ * )
+ * equal([error.message, error.stack, context.version], ['boom', 'at x', 3])
+ * equal(context.tags, {
+ *   entrypoint: 'browser report',
+ *   request: 'page /',
+ *   user_id: 'ada',
+ * })
+ * ```
+ */
+export let thrown = (
+  b: Break,
+  tags: Record<string, string> = {},
+): [Error, Partial<Context>] => [
+  Object.assign(
+    new Error(b.message, b.cause ? { cause: b.cause } : undefined),
+    { stack: b.stack },
+  ),
+  {
+    mechanism: b.mechanism,
+    breadcrumbs: b.breadcrumbs,
+    ...b.version != null ? { version: b.version } : {},
+    tags: {
+      entrypoint: 'browser report',
+      request: b.request,
+      ...tags,
+      ...b.agent ? { agent: b.agent } : {},
+    },
+  },
+]
+
 export let queue =
   (binding: { send: (body: Bundle[]) => Promise<void> }): Sink => (rows) =>
     binding.send(rows)

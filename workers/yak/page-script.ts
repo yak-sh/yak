@@ -5,32 +5,24 @@
 // (public/edit.js) in a page served to a member who may write the app, and the
 // visitor's bar (public/visit.js) in a page served to a stranger from a
 // published app's sample or their own store of it (visit.ts), woven into
-// the page's text rather than named by a `src`. Both must run before the
-// page's own code, which made them blocking scripts, and a blocking script is
-// a round trip the parser waits on before anything paints, on every load,
-// warm or cold. Inline, they cost the page a few kilobytes and no request.
+// the page's text inline, as @yaks/platform/woven `tagged` weaves them.
 //
-// Each tag says where its app is mounted for this browser (`data-yak-at`) and
-// which release the page is (`data-yak-version`): the scripts read their doors
-// off the first, and client.js sends the second with every request. The
-// release listener's and the pencil's also say where the app's own `api/` is
-// when it is not under the mount (`data-yak-api`). The badge's says what it
-// opens (`data-yak-badge`): the app's own page on yaks.app, or yaks.app
-// itself. The pencil's says where the Operator's chat for the app is
-// (`data-yak-edit`). The bar's says where keeping it goes and what its button
-// says (`data-yak-keep`, `data-yak-keep-says`). Attributes are not hashed, so
-// the scripts' text and a policy's hashes are the same on every page.
+// Beside the mount and release every tag says, the release listener's and
+// the pencil's also say where the app's own `api/` is when it is not under
+// the mount (`data-yak-api`). The badge's says what it opens
+// (`data-yak-badge`): the app's own page on yaks.app, or yaks.app itself. The
+// pencil's says where the Operator's chat for the app is (`data-yak-edit`).
+// The bar's says where keeping it goes and what its button says
+// (`data-yak-keep`, `data-yak-keep-says`).
 //
-// A page with a Content-Security-Policy of its own may refuse inline scripts.
-// Its policy is given the scripts' hashes (`admitted`), which lets these run
-// and nothing else.
+// A page with a Content-Security-Policy of its own is given the scripts'
+// hashes (@yaks/platform/woven `admitted`).
 import { caught } from './defects.ts'
-import { esc } from './html.ts'
 import type { Bar } from './visit.ts'
 import { sharing } from './lib/shared.ts'
+import { inline, type Script, tagged } from '@yaks/platform/woven'
 
 type Assets = { fetch: (req: Request) => Promise<Response> }
-type Script = { text: string; hash: string }
 
 let FILES = [
   '/report.js',
@@ -59,23 +51,11 @@ export type Scripts = {
   bar?: Bar | null
 }
 
-let digest = async (text: string) =>
-  `'sha256-${
-    btoa(String.fromCharCode(
-      ...new Uint8Array(
-        await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)),
-      ),
-    ))
-  }'`
-
 let read = (assets: Assets) =>
   Promise.all(FILES.map(async (path): Promise<Script> => {
     let res = await assets.fetch(new Request(`https://assets.invalid${path}`))
     if (!res.ok) throw new Error(`page script ${path}: ${res.status}`)
-    // `</script` inside the text would end the element early; `<\/` is the
-    // same string to JavaScript.
-    let text = (await res.text()).replace(/<\/(script)/gi, '<\\/$1')
-    return { text, hash: await digest(text) }
+    return await inline(await res.text())
   }))
 
 // Read once per isolate: the files are the deploy's own and never change
@@ -99,100 +79,34 @@ export let pageScript = async (
     let [report, release, badged, barred, location, pencil] = await scripts(
       assets,
     )
-    let tag = ({ text }: Script, more = '') =>
-      `<script data-yak-at="${at}" data-yak-version="${version}"${more}>${text}</script>`
     if (draft) {
-      return {
-        tags: tag(location) + tag(release, ` data-yak-draft="${esc(draft)}"`),
-        hashes: [location.hash, release.hash],
-      }
+      return tagged(at, version, [
+        [location],
+        [release, { 'data-yak-draft': draft }],
+      ])
     }
-    let doors = api ? ` data-yak-api="${esc(api)}"` : ''
-    let worn: [Script, string][] = [
-      [report, ''],
+    let doors: Record<string, string> = api ? { 'data-yak-api': api } : {}
+    let worn: [Script, Record<string, string>][] = [
+      [report, {}],
       [release, doors],
-      [location, ''],
+      [location, {}],
     ]
     if (badge != null) {
-      worn.push([
-        badged,
-        ` data-yak-badge="${esc(badge)}"` +
-        (preview ? ` data-yak-preview="${esc(preview)}"` : ''),
-      ])
+      worn.push([badged, {
+        'data-yak-badge': badge,
+        ...preview ? { 'data-yak-preview': preview } : {},
+      }])
     }
-    if (edit) worn.push([pencil, ` data-yak-edit="${esc(edit)}"${doors}`])
+    if (edit) worn.push([pencil, { 'data-yak-edit': edit, ...doors }])
     if (bar) {
-      worn.push([
-        barred,
-        ` data-yak-keep="${esc(bar.keep)}" data-yak-keep-says="${
-          esc(bar.says)
-        }"`,
-      ])
+      worn.push([barred, {
+        'data-yak-keep': bar.keep,
+        'data-yak-keep-says': bar.says,
+      }])
     }
-    return {
-      tags: worn.map(([script, more]) => tag(script, more)).join(''),
-      hashes: worn.map(([{ hash }]) => hash),
-    }
+    return tagged(at, version, worn)
   } catch (e) {
     caught(e, { request: 'page script' })
     return { tags: '', hashes: [] }
   }
 }
-
-// One directive's sources with the hashes added, unless adding them would
-// change what the author allowed: `'unsafe-inline'` stops counting once a
-// hash is present, and `'none'` means no script at all.
-let admit = (directive: string, hashes: string[]) => {
-  let words = directive.split(/\s+/)
-  let inline = words.includes("'unsafe-inline'") &&
-    !words.some((w) => /^'(sha\d+|nonce)-/.test(w))
-  return inline || words.includes("'none'")
-    ? directive
-    : [...words, ...hashes].join(' ')
-}
-
-/**
- * A Content-Security-Policy that also runs the platform's inline scripts.
- * Each comma-separated policy is enforced on its own, so each is given the
- * hashes in whichever directive governs a `<script>` element.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * let h = ["'sha256-a'"]
- * assertEquals(
- *   admitted("default-src 'self'; script-src 'self'", h),
- *   "default-src 'self'; script-src 'self' 'sha256-a'",
- * )
- * assertEquals(
- *   admitted("default-src 'self'", h),
- *   "default-src 'self'; script-src 'self' 'sha256-a'",
- * )
- * assertEquals(admitted("img-src 'self'", h), "img-src 'self'")
- * assertEquals(
- *   admitted("script-src 'self' 'unsafe-inline'", h),
- *   "script-src 'self' 'unsafe-inline'",
- * )
- * assertEquals(
- *   admitted("script-src 'none', script-src-elem 'self'", h),
- *   "script-src 'none', script-src-elem 'self' 'sha256-a'",
- * )
- * ```
- */
-export let admitted = (policy: string, hashes: string[]) =>
-  !hashes.length ? policy : policy.split(',').map((one) => {
-    let parts = one.split(';').map((d) => d.trim()).filter(Boolean)
-    let named = (name: string) =>
-      parts.findIndex((d) => d.split(/\s+/)[0].toLowerCase() == name)
-    let at = named('script-src-elem')
-    if (at < 0) at = named('script-src')
-    if (at >= 0) parts[at] = admit(parts[at], hashes)
-    else {
-      let fallback = named('default-src')
-      if (fallback < 0) return one.trim()
-      let copy = parts[fallback].replace(/^\S+/, 'script-src')
-      let made = admit(copy, hashes)
-      if (made == copy) return one.trim()
-      parts.push(made)
-    }
-    return parts.join('; ')
-  }).join(', ')

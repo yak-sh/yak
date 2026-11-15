@@ -213,7 +213,6 @@ import {
   type Verdict,
 } from './gallery.ts'
 import {
-  pageAt,
   reputation,
   reputed,
   type Standing,
@@ -276,7 +275,7 @@ import {
   spaceHost,
   url as hostUrl,
 } from '@yaks/platform/host'
-import { foreign, planSettings } from '@yaks/platform/routes'
+import { foreign, pageAt, planSettings } from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
 import { globs, platformPath } from './router.ts'
 import { vocabAt } from './reach.ts'

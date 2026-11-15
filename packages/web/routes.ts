@@ -39,7 +39,7 @@ import { page as html } from './page.ts'
 import { preload } from './preload.ts'
 import { person } from '@yaks/cli/host'
 import type { Config } from '@yaks/cli/config'
-import { type Context, door, flood } from '@yaks/tracker/report'
+import { type Context, door, flood, thrown } from '@yaks/tracker/report'
 import type { Vault } from '@yaks/secrets'
 import { authorization } from './authorize.ts'
 import { bytes, text } from '@yaks/api/asset'
@@ -281,23 +281,7 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
         file: async (b) => {
           if (b.message.includes(OUTDATED.message)) return
           let by = await owner()
-          await host.report?.(
-            Object.assign(
-              new Error(b.message, b.cause ? { cause: b.cause } : undefined),
-              { stack: b.stack },
-            ),
-            {
-              mechanism: b.mechanism,
-              breadcrumbs: b.breadcrumbs,
-              ...b.version != null ? { version: b.version } : {},
-              tags: {
-                entrypoint: 'browser report',
-                request: b.request,
-                ...by ? { user_id: by } : {},
-                ...b.agent ? { agent: b.agent } : {},
-              },
-            },
-          )
+          await host.report?.(...thrown(b, by ? { user_id: by } : {}))
         },
       }),
     },

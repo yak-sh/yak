@@ -7,7 +7,7 @@ import { answer } from './app-page.ts'
 import type { App, Directory, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { screenshot } from './gallery.ts'
-import { pageAt } from './gallery-row.ts'
+import { pageAt } from '@yaks/platform/routes'
 import { app, space } from './testing.ts'
 import { parseHTML } from 'linkedom'
 

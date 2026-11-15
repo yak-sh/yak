@@ -2,18 +2,19 @@
 // `<base>` that makes an installed copy's relative URLs resolve, the tags
 // that make it installable at all — the icon, the manifest link, the chrome
 // colour, the two Apple words — and the manifest generated for an app that
-// wrote none (apps.ts, T-34493, T-33055). The serving half — which bytes
-// answer `icon.png` and `manifest.webmanifest` — is serving_test.ts.
+// wrote none (T-34493, T-33055). yaks.app's serving half — which bytes
+// answer `icon.png` and `manifest.webmanifest` — is workers/yak
+// serving_test.ts.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import type { App } from './directory.ts'
 import {
   based,
   manifesting,
   pinned,
   PLATFORM_BACKGROUND,
   PLATFORM_THEME,
-} from './apps.ts'
+  type Theme,
+} from './woven.ts'
 
 let ICON = '<link rel="apple-touch-icon" href="/cookbook/icon.png">'
 let MANIFEST = '<link rel="manifest" href="/cookbook/manifest.webmanifest" ' +
@@ -26,10 +27,11 @@ let PLATFORM_META = `<meta name="theme-color" content="${PLATFORM_THEME}">`
 
 let page = (head: string) => `<!doctype html><html><head>${head}</head><body>`
 
-let app = (
-  title: string,
-  theme: App['theme'] = null,
-) => ({ eid: 'e', slug: 'cookbook', title, theme } as unknown as App)
+let app = (title: string, theme: Theme | null = null) => ({
+  slug: 'cookbook',
+  title,
+  theme,
+})
 
 test('a page with none of the five tags is given all of them, in its head', () => {
   let out = pinned(
@@ -108,6 +110,12 @@ test("a manifest on the app's own origin is fetched with the person's cookies", 
     let out = pinned('/cookbook/', page(tag), app('Cookbook'))
     assert(out.includes(becomes(tag)), out)
   }
+})
+
+test('a store that answers anyone has its manifest fetched without cookies', () => {
+  let out = pinned('/', page(''), app('Cookbook'), false)
+  assert(out.includes('crossorigin="anonymous"'), out)
+  assert(!out.includes('use-credentials'), out)
 })
 
 test('a page with no head at all still gets its tags', () => {

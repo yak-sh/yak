@@ -137,11 +137,29 @@ export let logoPath = (
     ? `${MANAGE}/${encodeURIComponent(space.slug)}/logo/${space.logo.sha}`
     : undefined
 let SHA = /^[0-9a-f]{64}$/
-let MANIFEST = 'manifest.webmanifest'
+/** The name a web manifest answers at, under an app's mount or a space's
+ * Operator. */
+export let MANIFEST = 'manifest.webmanifest'
 /** What a space's Operator page installs from (operator-page.ts
  * `installing`). */
 export let manifestPath = (space: string) =>
   `${MANAGE}/${encodeURIComponent(space)}/${MANIFEST}`
+// Where each published app's own page lives (workers/yak app-page.ts): one
+// address per platform-wide name, listed or not.
+export let PAGE = '/apps/'
+/** A published app's own page on the platform. */
+/// pageAt('recipes') -> 'https://yaks.app/apps/recipes'
+export let pageAt = (name: string, env: Host = {}): string =>
+  url(env, `${PAGE}${encodeURIComponent(name)}`)
+
+// Where the page of a space that shares anything in public lives
+// (workers/yak publisher-page.ts): one address per space slug.
+export let PUBLISHER = '/spaces/'
+/** The page of a space that shares anything in public. */
+/// publisherAt('ada') -> 'https://yaks.app/spaces/ada'
+export let publisherAt = (slug: string, env: Host = {}): string =>
+  url(env, `${PUBLISHER}${encodeURIComponent(slug)}`)
+
 /** The doors of a space's Operator store, as @yaks/api names them, under its
  * Operator's own path: `/manage/<space>/operator/query`.
  *

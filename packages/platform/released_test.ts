@@ -38,16 +38,39 @@ test('a write in the release’s first words reads in its declared rename', asyn
   equal(await headed('Pie'), ['Pie'])
 })
 
+// A page as the browser reads it: its status, its base, the mount and
+// release its reporter is told, whether that reporter posts to
+// `./api/report`, and its own text.
 let got = async (path: string) => {
   let res = await door(path)
-  return [res.status, res.status == 200 ? await res.text() : null]
+  let html = await res.text()
+  let reporter = /<script data-yak-at="([^"]*)" data-yak-version="(\d+)">/
+    .exec(html)
+  return [
+    res.status,
+    /<base href="([^"]*)">/.exec(html)?.[1],
+    reporter?.slice(1),
+    html.includes('api/report'),
+    html.replace(/^.*<\/script>/s, '').replace(/<base[^>]*>/, ''),
+  ]
 }
 
-test('the release’s pages answer at their addresses', async () => {
-  equal(await got('/'), [200, '<h1>Recipes</h1>\n'])
-  equal(await got('/about'), [200, '<h1>About</h1>\n'])
-  equal(await got('/docs/'), [200, '<h1>Docs</h1>\n'])
+test('the release’s pages answer at their addresses, dressed as yaks.app dresses them', async () => {
+  equal(await got('/'), [200, '/', ['/', '0'], true, '<h1>Recipes</h1>\n'])
+  equal(await got('/about'), [200, '/', ['/', '0'], true, '<h1>About</h1>\n'])
+  equal(await got('/docs/'), [
+    200,
+    '/docs/',
+    ['/', '0'],
+    true,
+    '<h1>Docs</h1>\n',
+  ])
   equal((await door('/docs')).headers.get('location'), 'docs/')
+})
+
+test('what a page’s reporter posts, the release answers', async () => {
+  let res = await door('/api/report', { message: 'boom', stack: '' })
+  equal(res.status, 204)
 })
 
 test('the release’s inside answers at no address', async () => {
