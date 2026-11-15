@@ -37,6 +37,8 @@ import {
   stamped,
   type Via,
 } from '../signin.ts'
+import { texts } from '../operator-texts.ts'
+import { consentEid } from '@yaks/phone'
 import { inside, newcomerIs, ownOf, type Row, seatsLine } from '../directory.ts'
 
 type Guess = {
@@ -45,6 +47,9 @@ type Guess = {
   code: string
   via?: Via
   newcomer?: string
+  person?: string
+  space?: string
+  source?: string
 }
 
 // Every row an address's codes left.
@@ -143,17 +148,68 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
       if (b.$guess) {
         let g = b.$guess as Guess
         let address = addressOf(g)
-        return after(rows(tx, address), (all) => {
-          let wrote = guessed(all, g.code, now)
-          if (!wrote.some((w) => w.tombstone)) return wrote
-          return after(
-            arrival(tx, address, b.entity.eid, new Date(now).toISOString(), g),
-            (
-              [who, ...home],
-            ) => [...wrote, { ...who, $alias: b.$alias }, ...home],
+        let consent = () =>
+          after(tx.read(personLine(address)), (holders) => {
+            if (holders.some((r) => r.entity.eid != g.person)) {
+              throw new Refused(
+                'That contact belongs to another account. Sign in with it to use that account.',
+              )
+            }
+            return after(
+              tx.read(`.entity.eid=${consentEid(g.person!)}`),
+              ([before]) => {
+                let welcome = !holders.length || !before?.sms_consent
+                return texts(
+                  g.person!,
+                  address,
+                  true,
+                  new Date(now).toISOString(),
+                  g.space,
+                ).map((row) =>
+                  row.phone ? { ...row, $alias: b.$alias } : {
+                    ...row,
+                    ...(welcome ? { $alias: '$welcome' } : {}),
+                    sms_consent: {
+                      ...row.sms_consent as object,
+                      source: g.source ?? null,
+                    },
+                  }
+                )
+              },
+            )
+          })
+        let decide = () =>
+          after(rows(tx, address), (all) => {
+            let scoped = all.filter((r) =>
+              r.signin.person == g.person && r.signin.space == g.space
+            )
+            let wrote = guessed(scoped, g.code, now)
+            if (!wrote.some((w) => w.tombstone)) return wrote
+            if (g.person) {
+              return after(consent(), (agreed) => [...wrote, ...agreed])
+            }
+            return after(
+              arrival(
+                tx,
+                address,
+                b.entity.eid,
+                new Date(now).toISOString(),
+                g,
+              ),
+              (
+                [who, ...home],
+              ) => [...wrote, { ...who, $alias: b.$alias }, ...home],
+            )
+          })
+        return g.person
+          ? after(
+            tx.read(personLine(address)),
+            (held) =>
+              held.some((r) => r.entity.eid == g.person) ? consent() : decide(),
           )
-        })
+          : decide()
       }
+
       if (asking(b)) {
         return after(
           rows(tx, addressOf(b.signin as Signin['signin'])),

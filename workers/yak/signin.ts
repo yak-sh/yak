@@ -72,6 +72,8 @@ export type Signin = {
     email?: string
     phone?: string
     from?: string
+    person?: string
+    space?: string
     code: string
     expires: string
     tries: number
@@ -332,9 +334,12 @@ export let mint = async (
   secret: string,
   address: string,
   from = '',
+  contact?: { person: string; space: string },
 ) => {
   let ask = drawn()
-  return await lodge(store, secret, address, ask, from) ? ask.code : null
+  return await lodge(store, secret, address, ask, from, contact)
+    ? ask.code
+    : null
 }
 
 /** A code about to be asked for: its digits and when it dies, drawn before
@@ -355,12 +360,14 @@ export let lodge = async (
   address: string,
   ask: Ask,
   from = '',
+  contact?: { person: string; space: string },
 ): Promise<string | null> => {
   let applied = await apply(store, [{
     entity: { eid: '$code' },
     signin: {
       [key(address)]: canon(address),
       ...(from && texted(canon(address)) ? { from } : {}),
+      ...contact,
       code: await mac(address, ask.code, secret),
       expires: ask.expires,
       tries: 0,
@@ -392,7 +399,13 @@ export let spend = async (
 /** How a guess arrives: `newcomer` is who this browser is signed in as, taken
  * when they are a newcomer and nobody holds the address yet, and `via` is how
  * the code came, a code typed or a letter's link followed (link.ts). */
-export type Arrival = { newcomer?: string; via?: Via }
+export type Arrival = {
+  newcomer?: string
+  via?: Via
+  person?: string
+  space?: string
+  source?: string
+}
 
 export type Via = 'code' | 'link'
 
@@ -402,6 +415,7 @@ export type Via = 'code' | 'link'
 export type Arrived = {
   person: string
   first: boolean
+  contact?: boolean
   own?: { eid: string; slug: string }
 }
 
@@ -414,7 +428,7 @@ export let guess = async (
   store: Meta,
   address: string,
   want: string,
-  { newcomer, via = 'code' }: Arrival = {},
+  { newcomer, via = 'code', person, space, source }: Arrival = {},
 ): Promise<Arrived | null> => {
   for (;;) {
     try {
@@ -425,6 +439,7 @@ export let guess = async (
           code: want,
           via,
           ...(newcomer ? { newcomer } : {}),
+          ...(person ? { person, space, source } : {}),
         },
       }])
       let who = applied.find((b) => b.$alias == '$who')
@@ -434,6 +449,9 @@ export let guess = async (
       return {
         person: who.entity.eid,
         first: !!signed?.first,
+        ...(person
+          ? { contact: applied.some((b) => b.$alias == '$welcome') }
+          : {}),
         ...own
           ? {
             own: {

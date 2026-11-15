@@ -51,14 +51,7 @@ import { gathered } from './bytes.ts'
 import { inApp, refuse } from './tool.ts'
 import { MOVES } from './mascot.ts'
 import { Ask, type Asking } from './operator-box.ts'
-import {
-  CONSENT,
-  REPLIES,
-  stopping,
-  tell,
-  type Texting,
-  texts,
-} from './operator-texts.ts'
+import { CONSENT, stopping, type Texting } from './operator-texts.ts'
 import {
   type Alerting,
   alertsRow,
@@ -97,6 +90,7 @@ import { r2RawObjects } from './lib/objects.ts'
 import { linkOf } from './preview.ts'
 import { VOCABS } from '@yaks/platform/manifest'
 import { DOCUMENTS } from '@yaks/platform/documents'
+import { provePhone } from './phone-contact.ts'
 import { phoneAt } from './phones.ts'
 import { icons } from './icons.ts'
 import {
@@ -346,6 +340,23 @@ let agreeing = (label: string) => [
     { style: 'align-items:flex-start' },
     h(Check.Input, { type: 'checkbox', name: 'agreed', value: 'yes' }),
     h('span', null, terms(CONSENT)),
+  ),
+  field(
+    'texts-code',
+    'Verification code',
+    h(Field, {
+      id: 'texts-code',
+      name: 'code',
+      inputmode: 'numeric',
+      autocomplete: 'one-time-code',
+      pattern: '[0-9]{6}',
+      maxlength: 6,
+    }),
+  ),
+  h(
+    'p',
+    null,
+    'Save to receive a code, then enter it and save again to confirm a new number.',
   ),
 ]
 
@@ -610,29 +621,24 @@ export let operatorAnswer = async (
             id: String(form.get('contact')),
             number: String(form.get('number') ?? ''),
             agreed: form.get('agreed') == 'yes',
+            code: String(form.get('code') ?? '').trim(),
           }),
         )
       }
-      let before = await dir.texting(person)
-      await dir.apply({
-        entities: form.has('stop') ? stopping(person) : texts(
-          person,
-          String(form.get('number') ?? ''),
-          form.get('agreed') == 'yes',
-          undefined,
-          space.eid,
-        ),
-      }, vouched(who))
-      let now = await dir.texting(person)
-      // The welcome the campaign promises, once for each number agreed to.
-      if (now && now.number != before?.number) {
-        await tell(
-          env,
-          { to: now.number, text: REPLIES.welcome },
-          'text welcome',
-        )
+      if (form.has('stop')) {
+        await dir.apply({ entities: stopping(person) }, vouched(who))
+        return Response.json(null)
       }
-      return Response.json(now)
+      let proof = await provePhone(
+        env,
+        person,
+        space,
+        String(form.get('number') ?? ''),
+        form.get('agreed') == 'yes',
+        String(form.get('code') ?? '').trim(),
+      )
+      if (proof) return Response.json(proof, { status: 202 })
+      return Response.json(await dir.texting(person))
     } catch (e) {
       if (!(e instanceof CallError)) throw e
       return Response.json({ message: e.message }, { status: 400 })
@@ -2300,6 +2306,13 @@ document.addEventListener('submit', async (event) => {
     let response = await fetch(contact.action, { method: 'POST', body: new FormData(contact) })
     let answer = await response.json()
     if (!response.ok) throw new Error(answer?.message ?? 'Your contact could not be saved. Try again.')
+    if (answer.pending) {
+      contact.querySelector('[data-contact-code]').hidden = false
+      contact.querySelector('[name=code]').focus()
+      contact.querySelector('[type=submit]').textContent = 'Confirm number'
+      said.textContent = answer.message
+      return
+    }
     said.textContent = 'Confirmed. Your Operator can text you here.'
     contact.querySelector('[type=submit]').disabled = true
   } catch (error) { said.textContent = error.message }

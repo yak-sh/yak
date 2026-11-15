@@ -1,5 +1,5 @@
 import { h } from 'preact'
-import { Button, Check, Form } from '@yaks/ui/parts'
+import { Button, Check, Field, Form } from '@yaks/ui/parts'
 import { CONSENT } from './operator-consent.ts'
 
 /** A proposed mobile number stays a proposal until the person submits the
@@ -31,6 +31,18 @@ export let contactCard = (body: string) => {
         required: true,
       }),
       h('span', null, CONSENT),
+    ),
+    h(
+      Form.Field,
+      { hidden: true, 'data-contact-code': '' },
+      h(Form.Label, null, 'Verification code'),
+      h(Field, {
+        name: 'code',
+        inputmode: 'numeric',
+        autocomplete: 'one-time-code',
+        pattern: '[0-9]{6}',
+        maxlength: 6,
+      }),
     ),
     h(Button, { type: 'submit' }, 'Agree to texts'),
     h('p', { role: 'status', 'data-contact-status': '' }),

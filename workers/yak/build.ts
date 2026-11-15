@@ -937,6 +937,7 @@ export class Builder extends Durable {
           String(args.id ?? ''),
           String(args.number ?? ''),
           args.agreed === true,
+          String(args.code ?? ''),
         ),
       )
     }

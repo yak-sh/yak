@@ -325,52 +325,6 @@ test('the operator page names its email address, sends conversations to the chat
   )
 })
 
-let textsAt = 'https://yaks.app/manage/clerk/operator?texts=1'
-let choose = async (fields: Record<string, string>) => {
-  let body = new FormData()
-  for (let [k, v] of Object.entries(fields)) body.set(k, v)
-  let response = (await operatorAnswer(
-    new Request(textsAt, { method: 'POST', body }),
-    f.env,
-    f.space,
-    f.held,
-  ))!
-  return { status: response.status, said: await response.json() }
-}
-let unticked = await choose({ number: '269-555-0142' })
-let wrong = await choose({ number: '555-0142', agreed: 'yes' })
-let agreed = await choose({ number: '(269) 555-0142', agreed: 'yes' })
-let textsHtml = await operatorBody(f.env, f.space, f.held)
-let blank = await choose({ number: '', agreed: 'yes' })
-let bare = await choose({})
-let still = await directoryOf(f.env.STORE).texting(f.held.person)
-let stopped = await choose({ stop: '1', number: '269-555-0142' })
-let kept = await directoryOf(f.env.STORE).known(f.held.person)
-test('a person agrees to texts with a ticked box and a mobile number, and stops them', () => {
-  assertEquals(unticked.status, 400)
-  assertStringIncludes(unticked.said.message, 'Tick the box')
-  assertEquals(wrong.status, 400)
-  assertEquals(agreed.said.number, '+12695550142')
-  assertStringIncludes(agreed.said.consent, 'Msg & data rates may apply')
-  assertStringIncludes(textsHtml, '269-555-0142')
-  // The box is never ticked for them, whatever else the page has chosen.
-  assertEquals(
-    parseHTML(textsHtml).document.querySelector('[name=agreed]')
-      ?.hasAttribute('checked'),
-    false,
-  )
-  assertEquals(stopped.said, null)
-})
-test('a Save with no number refuses and never stops texts; only Stop texts does', () => {
-  assertEquals([blank.status, bare.status], [400, 400])
-  assertStringIncludes(blank.said.message, 'Enter a US mobile number')
-  assertEquals(still?.number, '+12695550142')
-})
-test("a person's number stays on them, beside their address, after texts stop", () => {
-  assertEquals(kept?.phone, '+12695550142')
-  assertEquals(kept?.email, 'clerk@example.com')
-})
-
 // Telnyx at its HTTP boundary: the "yaks.app" profile with a 269 number and
 // a toll-free one, and every text posted to it. A number in `blocked` is
 // refused the way a carrier refuses one before a campaign is approved.
@@ -407,6 +361,56 @@ Object.assign(f.env, {
     await crypto.subtle.exportKey('raw', signer.publicKey),
   ),
 })
+let textsAt = 'https://yaks.app/manage/clerk/operator?texts=1'
+let choose = async (fields: Record<string, string>) => {
+  let body = new FormData()
+  for (let [k, v] of Object.entries(fields)) body.set(k, v)
+  let response = (await operatorAnswer(
+    new Request(textsAt, { method: 'POST', body }),
+    f.env,
+    f.space,
+    f.held,
+  ))!
+  return { status: response.status, said: await response.json() }
+}
+let unticked = await choose({ number: '269-555-0142' })
+let wrong = await choose({ number: '555-0142', agreed: 'yes' })
+let proposed = await choose({ number: '(269) 555-0142', agreed: 'yes' })
+let code = texted.at(-1)!.text.match(/\d{6}/)![0]
+let agreed = await choose({ number: '(269) 555-0142', agreed: 'yes', code })
+texted.splice(0)
+let textsHtml = await operatorBody(f.env, f.space, f.held)
+let blank = await choose({ number: '', agreed: 'yes' })
+let bare = await choose({})
+let still = await directoryOf(f.env.STORE).texting(f.held.person)
+let stopped = await choose({ stop: '1', number: '269-555-0142' })
+let kept = await directoryOf(f.env.STORE).known(f.held.person)
+test('a person agrees to texts with a ticked box and a mobile number, and stops them', () => {
+  assertEquals(proposed.status, 202)
+  assertEquals(unticked.status, 400)
+  assertStringIncludes(unticked.said.message, 'Tick the box')
+  assertEquals(wrong.status, 400)
+  assertEquals(agreed.said.number, '+12695550142')
+  assertStringIncludes(agreed.said.consent, 'Msg & data rates may apply')
+  assertStringIncludes(textsHtml, '269-555-0142')
+  // The box is never ticked for them, whatever else the page has chosen.
+  assertEquals(
+    parseHTML(textsHtml).document.querySelector('[name=agreed]')
+      ?.hasAttribute('checked'),
+    false,
+  )
+  assertEquals(stopped.said, null)
+})
+test('a Save with no number refuses and never stops texts; only Stop texts does', () => {
+  assertEquals([blank.status, bare.status], [400, 400])
+  assertStringIncludes(blank.said.message, 'Enter a US mobile number')
+  assertEquals(still?.number, '+12695550142')
+})
+test("a person's number stays on them, beside their address, after texts stop", () => {
+  assertEquals(kept?.phone, '+12695550142')
+  assertEquals(kept?.email, 'clerk@example.com')
+})
+
 let texting = async (id: string, text: string, sign = true) => {
   let body = JSON.stringify({
     data: {
@@ -450,12 +454,14 @@ let byText = async () =>
     .filter((r) =>
       (r.operator_request as { channel: string }).channel == 'text'
     )
+let priorTexts = (await f.dir.at(f.space.eid))!.meter!.texts ?? 0
 let unsigned = await texting('t0', 'Post the agenda', false)
 let afterUnsigned = (await byText()).length
 let signedIn = await texting('t1', 'Post the agenda')
 let [asked] = await byText()
 let answered = texted.splice(0)
 let textsSpent = (await f.dir.at(f.space.eid))!.meter!.texts
+
 await texting('t2', 'help')
 await texting('t3', 'STOP')
 let replies = texted.splice(0)
@@ -479,7 +485,7 @@ test("a signed text reaches the space's Operator, which answers by text; an unsi
   }])
 })
 test("the text in and the Operator's answer each spend a segment of the space's budget", () => {
-  assertAlmostEquals(textsSpent!, 2 * PER_SEGMENT)
+  assertAlmostEquals(textsSpent! - priorTexts, 2 * PER_SEGMENT)
 })
 test('HELP and STOP are answered in the campaign words, and STOP ends consent', () => {
   assertEquals(replies.map((r) => r.text), [REPLIES.help, REPLIES.stop])

@@ -16,7 +16,8 @@ import { canon, LIFE, mac, mint, TRIES } from './signin.ts'
 import { KERNEL, meta } from './meta.ts'
 import { type Mail, mail } from './mail.ts'
 import { managePath } from '@yaks/platform/routes'
-import { CONSENT, REPLIES, tell, texts } from './operator-texts.ts'
+import { CONSENT } from './operator-texts.ts'
+import { provePhone } from './phone-contact.ts'
 import { alert, alertsRow } from './operator-alerts.ts'
 
 type Contact = {
@@ -148,14 +149,9 @@ let confirmed = async (
 ) => {
   let c = row.operator_contact as Contact
   await available(ctx, c.address)
-  let at = new Date().toISOString()
   let sms = !!mobile(c.address)
   let entities = sms
-    ? texts(ctx.person, c.address, true, at, space.eid).map((b) =>
-      b.sms_consent
-        ? { ...b, sms_consent: { ...b.sms_consent as Comp, source } }
-        : b
-    )
+    ? []
     : [{ entity: { eid: ctx.person }, email: { address: c.address } }]
   await meta(env).apply([
     ...entities,
@@ -169,13 +165,6 @@ let confirmed = async (
       ...(sms ? { consent: CONSENT, consent_source: source } : {}),
     },
   }], { trusted: true })
-  if (sms) {
-    await tell(
-      env,
-      { to: c.address, text: REPLIES.welcome },
-      'contact text welcome',
-    )
-  }
   // A completion written while the address was still unverified stays owed.
   let [request] = await store.g.get([c.request ?? c.source], ['created'])
   let since = String(
@@ -212,7 +201,7 @@ export let contactAdd = (
   name: 'contact_add',
   title: 'Add your contact',
   description:
-    'Add the email address or US mobile number the person asked you to reach them at, including in an anonymous conversation. source is their own entry id: find it with graph_query(self:true). A mobile number shows an inline optional consent form for them to confirm; you cannot agree for them. An email receives an ownership verification code. Ask them to type it here, then call with code and source naming their code entry. Until confirmed it is not a contact and receives no work or alerts. On confirmation it becomes their directory email{address} or phone{number} + sms_consent{person,consent,at,space,source}, and chosen notification channel. Use notification_send for their requested completion, even while verification is pending; it waits for confirmation. Read confirmed contacts by calling without address. Never use mail_send to bypass verification of their own new address. Pending requests are operator_contact{person,address,source,session,code,expires,tries} in your graph; only this confirmation path changes directory contacts.',
+    'Add the email address or US mobile number the person asked you to reach them at, including in an anonymous conversation. source is their own entry id: find it with graph_query(self:true). A mobile number shows an inline optional consent form and texts an ownership code for them to enter; you cannot agree for them. An email receives an ownership verification code. Ask them to type it here, then call with code and source naming their code entry. Until confirmed it is not a contact and receives no work or alerts. On confirmation it becomes their directory email{address} or phone{number} + sms_consent{person,consent,at,space,source}, and chosen notification channel. Use notification_send for their requested completion, even while verification is pending; it waits for confirmation. Read confirmed contacts by calling without address. Never use mail_send to bypass verification of their own new address. Pending requests are operator_contact{person,address,source,session,code,expires,tries} in your graph; only this confirmation path changes directory contacts.',
   parameters: {
     type: 'object',
     properties: {
@@ -390,6 +379,7 @@ export let confirmTextContact = async (
   id: string,
   number: string,
   agreed: boolean,
+  code = '',
 ) => {
   let [row] = await store.g.get([id])
   let c = row?.operator_contact as Contact | undefined
@@ -403,6 +393,8 @@ export let confirmTextContact = async (
   if (!agreed) throw refuse('arguments', 'Tick the box to agree to texts.')
   if (row.verified) return { confirmed: c.address }
   await sourceOf(store, ctx, space, c.source)
+  let proof = await provePhone(env, ctx.person, space, number, agreed, code, id)
+  if (proof) return proof
   await confirmed(env, ctx, space, store, row, id)
   return { confirmed: c.address }
 }

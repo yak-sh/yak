@@ -55,6 +55,10 @@ export let settings = (root: Document = document) => {
         body,
         headers: { accept: 'text/html, application/json' },
       })
+      if (response.status == 202) {
+        let answer = await response.json()
+        throw new CallError('arguments', answer.message)
+      }
       if (!response.ok) {
         throw rejected(
           response,

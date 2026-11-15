@@ -13,6 +13,7 @@ import { effects, type Handlers } from '@yaks/effects'
 import { cleanup } from '@yaks/testing'
 import { plugins as trash } from '@yaks/platform/trash-graph'
 import { plugins as meter } from '@yaks/platform/meter-graph'
+import { plugins as signin } from './facets/signin-graph.ts'
 import { plugins as owning } from './facets/directory-graph.ts'
 import { vaultOf } from './vault.ts'
 import type { Options } from './facets/store.ts'
@@ -56,6 +57,7 @@ export let rows = (
       ...trash(undefined, options),
       ...meter(undefined, options),
       ...owning(),
+      ...signin(undefined, { store: { now: () => Date.now() } } as Options),
     ]
   ) g.use(plugin)
   let failures: unknown[] = []

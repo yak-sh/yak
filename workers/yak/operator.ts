@@ -2138,10 +2138,19 @@ export let operating = (
 
   return {
     store,
-    confirmContact: async (held, id, number, agreed) => {
+    confirmContact: async (held, id, number, agreed, code) => {
       let space = (await dir().at(held.space))!
       let ctx = await operatorContext(env, held, space, options.directory)
-      return confirmTextContact(env, ctx, space, store, id, number, agreed)
+      return confirmTextContact(
+        env,
+        ctx,
+        space,
+        store,
+        id,
+        number,
+        agreed,
+        code,
+      )
     },
     reads,
     ask,
@@ -2196,7 +2205,8 @@ export type Operator = {
     id: string,
     number: string,
     agreed: boolean,
-  ) => Promise<{ confirmed: string }>
+    code?: string,
+  ) => Promise<{ confirmed: string } | import('./phone-contact.ts').PhoneProof>
   /** What the model that answers `held`'s words in `space` reads as it is,
    * beside text (@yaks/model `Model.reads`). */
   reads: (

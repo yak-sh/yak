@@ -88,6 +88,22 @@ let setup = async (name: string, email?: string, time?: Clock) => {
     }], { trusted: true })
     return eid
   }
+  let confirm = async (id: string, number: string) => {
+    let pending = await confirmTextContact(
+      env,
+      ctx,
+      space,
+      store,
+      id,
+      number,
+      true,
+    )
+    if ('pending' in pending) {
+      let code = sent.at(-1)!.text.match(/\d{6}/)![0]
+      return confirmTextContact(env, ctx, space, store, id, number, true, code)
+    }
+    return pending
+  }
   let add = contactAdd(env, ctx, space, store)
   let invoke = async (args: Record<string, unknown>) =>
     JSON.parse(String(await add.run(args)))
@@ -117,6 +133,7 @@ let setup = async (name: string, email?: string, time?: Clock) => {
     sent,
     entry,
     invoke,
+    confirm,
     notify,
   }
 }
@@ -167,15 +184,7 @@ let unticked = await assertRejects(() =>
     false,
   )
 )
-await confirmTextContact(
-  sms.env,
-  sms.ctx,
-  sms.space,
-  sms.store,
-  proposal.contact.id,
-  '+12695550142',
-  true,
-)
+await sms.confirm(proposal.contact.id, '+12695550142')
 let [consent] = await meta(sms.env).query(
   `.entity.eid=${consentEid(sms.person)}`,
 )
@@ -202,8 +211,8 @@ test('a contact proposal asks for optional SMS consent and waits before texting 
   assertEquals(read.email, 'old@example.com')
   assertEquals((consent.sms_consent as Comp).source, proposal.contact.id)
   assertEquals((consent.sms_consent as Comp).consent, CONSENT)
-  assertEquals(smsAfter.length, 2)
-  assertStringIncludes(smsAfter[1].text, 'The report is finished.')
+  assertEquals(smsAfter.length, 3)
+  assertStringIncludes(smsAfter[2].text, 'The report is finished.')
   assertEquals(oldAfter.delivered, undefined)
 })
 
@@ -222,15 +231,7 @@ let denied = await assertRejects(() =>
     true,
   )
 )
-await confirmTextContact(
-  sms.env,
-  sms.ctx,
-  sms.space,
-  sms.store,
-  next.contact.id,
-  '+12695550143',
-  true,
-)
+await sms.confirm(next.contact.id, '+12695550143')
 let changed = await sms.dir.texting(sms.person)
 test('another number needs new consent and another person cannot confirm it', () => {
   assertEquals(still!.number, '+12695550142')
@@ -474,15 +475,7 @@ let parallelBefore = {
   letters: parallel.letters.length,
   texts: parallel.sent.length,
 }
-await confirmTextContact(
-  parallel.env,
-  parallel.ctx,
-  parallel.space,
-  parallel.store,
-  parallelProposal.entity.eid,
-  '+12695550144',
-  true,
-)
+await parallel.confirm(parallelProposal.entity.eid, '+12695550144')
 let [parallelDelivered] = await parallel.store.g.get([parallelNote.entity.eid])
 test('ordinary Operator tools called in parallel hold completion for the inline contact confirmation', () => {
   assertEquals(parallelReceipt.reaches, 'pending contact confirmation')

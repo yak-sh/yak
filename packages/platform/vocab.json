@@ -839,6 +839,20 @@
           "stamped": true,
           "description": "the US mobile number the code was texted to, in E.164 form; set instead of `email`"
         },
+        "person": {
+          "type": "string",
+          "ref": "person",
+          "death": "cascade",
+          "stamped": true,
+          "description": "when present, this code proves a contact for this person; it cannot sign anyone in"
+        },
+        "space": {
+          "type": "string",
+          "ref": "space",
+          "death": "cascade",
+          "stamped": true,
+          "description": "the space in which the person requested contact verification"
+        },
         "from": {
           "type": "string",
           "stamped": true,
