@@ -9,6 +9,7 @@ import type { Bundle } from '@yaks/graph'
 import {
   type Beside,
   draw,
+  files,
   joined,
   type Kind,
   kind,
@@ -154,4 +155,21 @@ test('which entries make a line: a result joins its call, a run of repeats is on
   equal(ids(joined(entries, (a, b) => !!a.tick && !!b.tick)).slice(2), [
     ['t3', undefined, 3],
   ])
+})
+
+test('the files with a line: a picture as itself, any other file as its kind, name and size', () => {
+  let drawn = (...sent: Parameters<typeof files>[0]) =>
+    renderToString(h(Fragment, null, files(sent)))
+  let picture = drawn({ name: 'a.png', mime: 'image/png', href: '?f=0' })
+  equal(picture.includes('<img src="?f=0" alt="a.png"'), true)
+  let held = drawn({
+    name: 'notes.pdf',
+    size: 2_400_000,
+    remove: { 'data-drop-remove': 0 },
+  })
+  let text = held.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  equal(text, 'PDF notes.pdf 2.4 MB ✕')
+  equal(held.includes('aria-label="Remove notes.pdf"'), true)
+  equal(drawn({ name: 'a.svg', mime: 'image/svg+xml' }).includes('<img'), false)
+  equal(files([]), null)
 })

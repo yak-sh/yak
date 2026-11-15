@@ -3,7 +3,7 @@
 // (operator-rows.ts). Only page code imports it, as operator-talk-browser.ts
 // says why.
 import { h, render } from 'preact'
-import { type Filed, PICTURES } from './operator-draw.ts'
+import { type Filed, PICTURES } from '@yaks/session/conversation'
 import { Ask, type AskProps, type Held, reads, UNREAD } from './operator-box.ts'
 
 // The files an input holds, as the box draws them: a picture by a source of

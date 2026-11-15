@@ -3,8 +3,10 @@
  * as a bubble on their side, a reply as formatted text, each tool call as one
  * short line in plain words that opens on what it asked for and what came
  * back, a failure said in words with what went wrong inside a closed
- * "Details", and a stop. Drawn with @yaks/ui's `Transcript`, `More`, `Pairs`
- * and `Notice`, so it bundles for a server, a browser and the iOS shell alike.
+ * "Details", a stop, and the files that came with a line ({@link files}).
+ * Drawn with @yaks/ui's `Transcript`, `More`, `Pairs`, `Notice` and
+ * `Attachments`, so it bundles for a server, a browser and the iOS shell
+ * alike.
  *
  * Each kind of line is a {@link Kind}: a `Conversation.Line` registration
  * (@yaks/render) that matches on the components an entry wears, and draws it.
@@ -23,7 +25,14 @@
 import { type ComponentChildren as Node, Fragment, h, type VNode } from 'preact'
 import { useContext } from 'preact/hooks'
 import { blocks, Host, type Options, parse } from '@yaks/markdown'
-import { Body, More, Notice, Pairs, Transcript } from '@yaks/ui/parts'
+import {
+  Attachments,
+  Body,
+  More,
+  Notice,
+  Pairs,
+  Transcript,
+} from '@yaks/ui/parts'
 import { Fold } from '@yaks/ux/conversation'
 import {
   type Bundle,
@@ -194,6 +203,75 @@ export let reply = (text: string): VNode =>
 /** A person's words, on their side. `mark` sits before them: how they came. */
 export let yours = (text: string, mark?: Node): VNode =>
   h(Transcript.Bubble, {}, mark ?? null, text)
+
+/** A file as a line names it: its name, and its media type where known. */
+export type Sent = { name: string; mime?: string }
+
+/** What a person said who sent files and no words. */
+export let unsaid = (files: Sent[]): string =>
+  'Attached: ' + files.map((f) => f.name).join(', ')
+
+/** The kinds a browser draws as a picture, never a drawing that runs (SVG). */
+export let PICTURES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+
+/** A file's kind as a person names it: its extension, else "File". */
+export let fileKind = (name: string): string =>
+  name.match(/\.([a-z0-9]{1,5})$/i)?.[1].toUpperCase() ?? 'File'
+
+/** A size in bytes as a person reads it. */
+export let fileSize = (n: number): string =>
+  n < 1000
+    ? `${n} B`
+    : n < 1e6
+    ? `${Math.round(n / 1e3)} KB`
+    : `${(n / 1e6).toFixed(n < 1e7 ? 1 : 0)} MB`
+
+/** A file as a conversation draws it, sent or held in a box to send: a
+ * picture as itself, any other file as its kind and name. What differs is
+ * given: where its original opens (`href`), a picture's source where that is
+ * not it (`src`), and for one held, its `size`, a `note` and how to take it
+ * back (`remove`, what its button carries). */
+export type Filed = Sent & {
+  href?: string
+  src?: string
+  size?: number
+  note?: string
+  remove?: Record<string, unknown>
+}
+
+/** One file, as `Filed` says. */
+export let Filed = (
+  { name, mime, href, src, size, note, remove }: Filed,
+): VNode => {
+  let away = remove
+    ? h(Attachments.Remove, {
+      type: 'button',
+      'aria-label': `Remove ${name}`,
+      ...remove,
+    }, '✕')
+    : null
+  return PICTURES.includes(mime ?? '')
+    ? h(
+      Attachments.Picture,
+      { href, target: href ? '_blank' : undefined },
+      h(Attachments.Image, { src: src ?? href, alt: name, loading: 'lazy' }),
+      away,
+    )
+    : h(
+      Attachments.File,
+      { href },
+      h(Attachments.Kind, null, fileKind(name)),
+      h(Attachments.Name, null, name),
+      size == null ? null : h(Attachments.Size, null, fileSize(size)),
+      note ? h(Attachments.Note, null, note) : null,
+      away,
+    )
+}
+
+/** The files that came with a line, under it as a chat app shows them: a
+ * person's sit at the `end`, on their side. None draws nothing. */
+export let files = (sent: Filed[], mod?: 'end'): VNode | null =>
+  sent.length ? h(Attachments, { mod }, sent.map((f) => h(Filed, f))) : null
 
 /** The one way a conversation draws anything that opens: a step, by what it
  * did, opening on what it holds; `on` while it runs, `no` once it did not

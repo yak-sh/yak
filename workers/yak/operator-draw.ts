@@ -19,7 +19,6 @@ import { HUMAN } from '@yaks/id'
 import { type ComponentChildren as Node, Fragment, h } from 'preact'
 import {
   Annotated,
-  Attachments,
   Body,
   Icon,
   Menu,
@@ -39,6 +38,7 @@ import {
   type Beside,
   called,
   draw,
+  files,
   joined,
   type Kind,
   kind,
@@ -52,9 +52,11 @@ import {
   readable,
   reply,
   type Said,
+  type Sent,
   step,
   theirs,
   trouble,
+  unsaid,
   words,
   yours,
 } from '@yaks/session/conversation'
@@ -129,93 +131,29 @@ let stamp = (b: Bundle) => {
   return h(Transcript.When, { at, tabindex: -1 })
 }
 
-type Sent = { name: string; mime?: string }
-
-/** What a person said who sent files and no words. */
-export let unsaid = (files: Sent[]) =>
-  'Attached: ' + files.map((f) => f.name).join(', ')
-
-// The kinds a browser draws as a picture, never a drawing that runs (SVG).
-export let PICTURES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
-
-/** A file's kind as a person names it: its extension, else "File". */
-export let kindOf = (name: string) =>
-  name.match(/\.([a-z0-9]{1,5})$/i)?.[1].toUpperCase() ?? 'File'
-
-/** A size in bytes as a person reads it. */
-export let sized = (n: number) =>
-  n < 1000
-    ? `${n} B`
-    : n < 1e6
-    ? `${Math.round(n / 1e3)} KB`
-    : `${(n / 1e6).toFixed(n < 1e7 ? 1 : 0)} MB`
-
-/** A file as the Operator page draws it, sent or held in its box to send: a
- * picture as itself, any other file as its kind and name. What differs is
- * given: where its original opens (`href`), a picture's source where that is
- * not it (`src`), and for one held, its `size`, a `note` and how to take it
- * back (`remove`, what its button carries). */
-export type Filed = Sent & {
-  href?: string
-  src?: string
-  size?: number
-  note?: string
-  remove?: Record<string, unknown>
-}
-
-/** One file, as `Filed` says. */
-export let Filed = ({ name, mime, href, src, size, note, remove }: Filed) => {
-  let away = remove
-    ? h(Attachments.Remove, {
-      type: 'button',
-      'aria-label': `Remove ${name}`,
-      ...remove,
-    }, '✕')
-    : null
-  return PICTURES.includes(mime ?? '')
-    ? h(
-      Attachments.Picture,
-      { href, target: href ? '_blank' : undefined },
-      h(Attachments.Image, { src: src ?? href, alt: name, loading: 'lazy' }),
-      away,
-    )
-    : h(
-      Attachments.File,
-      { href },
-      h(Attachments.Kind, null, kindOf(name)),
-      h(Attachments.Name, null, name),
-      size == null ? null : h(Attachments.Size, null, sized(size)),
-      note ? h(Attachments.Note, null, note) : null,
-      away,
-    )
-}
-
-/** The files a person sent, under their words as a chat app shows them, or
- * a step brought back, under the step, each opening the original
- * (operator-page.ts `?attachment=`, answered on either page). `row` is the
- * request or the step's result the files came with; a person's sit at the
- * `end`, on their side. */
-export let attached = (row: string, files: Sent[], mod?: 'end') =>
-  files.length
-    ? h(
-      Attachments,
-      { mod },
-      files.map(({ name, mime }, i) =>
-        h(Filed, { name, mime, href: `?attachment=${row}&file=${i}` })
-      ),
-    )
-    : null
+/** The files a person sent, or a step brought back, each opening the
+ * original (operator-page.ts `?attachment=`, answered on either page). `row`
+ * is the request or the step's result the files came with. */
+export let attached = (row: string, sent: Sent[], mod?: 'end') =>
+  files(
+    sent.map(({ name, mime }, i) => ({
+      name,
+      mime,
+      href: `?attachment=${row}&file=${i}`,
+    })),
+    mod,
+  )
 
 /** A person's input: their words, and the files that came with them. */
 export let input = (b: Bundle, body: string) => {
   let sent = comp(b, 'operator_files')
-  let files = (sent?.files ?? []) as Sent[]
+  let held = (sent?.files ?? []) as Sent[]
   let said = spoken(b, body)
   return h(
     Fragment,
     null,
-    said && said != unsaid(files) ? yours(said, via(b)) : null,
-    sent ? attached(String(sent.request), files, 'end') : null,
+    said && said != unsaid(held) ? yours(said, via(b)) : null,
+    sent ? attached(String(sent.request), held, 'end') : null,
   )
 }
 

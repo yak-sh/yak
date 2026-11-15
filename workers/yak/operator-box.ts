@@ -8,7 +8,7 @@
 // `chatScript`). The page's own along it: who the words go to on a helper's
 // page, the yak beside it (mascot.ts `Idle`), the files held to send (picked,
 // pasted or dropped anywhere on it, public/drop.js), each drawn as a sent one
-// is (operator-draw.ts `Filed`), the microphone (public/voice.js), and over
+// is (@yaks/session/conversation `Filed`), the microphone (public/voice.js), and over
 // it Newest, while the reader has scrolled up from the newest line.
 // operator-box-browser.ts mounts it (`mountAsk`).
 import { h } from 'preact'
@@ -18,7 +18,7 @@ import { Conversation } from '@yaks/ux/conversation'
 import { Attachments, Button, Composer, Drop, Icon } from '@yaks/ui/parts'
 import { Idle } from './mascot.ts'
 import { icons } from './icons.ts'
-import { Filed } from './operator-draw.ts'
+import { Filed } from '@yaks/session/conversation'
 
 /** What the page's box is, as the server says it, the same on the page. */
 export type Asking = {

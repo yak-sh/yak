@@ -91,15 +91,8 @@ import { type Changed, talks, type Underway } from './operator-view.ts'
 import type { HelperPage } from './operator-host.ts'
 import { inputOf, outcomeOf } from './operator-root.ts'
 import { Aside, type Aside as Asided, Work } from './operator-aside.ts'
-import {
-  framed,
-  input,
-  type Line,
-  type Lines,
-  PICTURES,
-  row,
-} from './operator-draw.ts'
-import { reply, trouble } from '@yaks/session/conversation'
+import { framed, input, type Line, type Lines, row } from './operator-draw.ts'
+import { PICTURES, reply, trouble } from '@yaks/session/conversation'
 import { does, keeps, type Made, madeOf, type Page, pagesOf } from './made.ts'
 import { drafting, draftsOf, theirs } from './written.ts'
 import { r2RawObjects } from './lib/objects.ts'
