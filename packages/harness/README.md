@@ -1385,6 +1385,14 @@ sessions, newest first: operator sessions holding the owner's words that work
 for the project by filing, by `session.actor` or by the persona they wear.
 `conversation_inbox({limit?})` uses the shared inbox reader for that owner.
 
+Another host answers the same tools over its own store by giving
+`conversations(host)` what it makes of a conversation (`Conversing`,
+`@yaks/harness/conversations`): who a call speaks for (`owner`), the words as it
+takes them with the rows it writes beside them (`given`), and how a conversation
+begins (`start`). yaks.app gives a space's Operator: the person its door vouched
+for, the model it chooses and the files that are theirs, and a fork of their own
+conversation under a private task.
+
 These tools require an authenticated human principal. An owner-only box that
 already trusts its network perimeter may resolve only its **exact host process**
 fallback identity through the server's configured `person`. That setting is not

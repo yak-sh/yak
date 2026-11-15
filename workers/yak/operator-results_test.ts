@@ -7,7 +7,7 @@ import { toolEid } from '@yaks/tools'
 import { platform } from './directory-probe.ts'
 import { directoryOf } from './directory.ts'
 import { operating, operatorContext, operatorRoster } from './operator.ts'
-import { operatorMemory, operatorModel } from './operator-testing.ts'
+import { chatted, operatorMemory, operatorModel } from './operator-testing.ts'
 import { compiler } from './testing.ts'
 import { evaluate } from '../../packages/code-mode/testing.ts'
 
@@ -125,7 +125,7 @@ test('Operator keeps extension tool results at its loop and realtime model bound
       run: () => JSON.stringify(value),
     }],
   })
-  let finished = await operator.run({ person }, space, {
+  let finished = await chatted(operator, { person }, space, {
     say: 'Read the external rows.',
   })
   equal(finished.text, 'done')

@@ -31,6 +31,7 @@ import { ram } from '@yaks/ram'
 import type { Env } from './env.ts'
 import { directoryOf } from './directory.ts'
 import {
+  chatted,
   operatorMemory,
   operatorModel,
   operatorService,
@@ -403,7 +404,7 @@ let direct = operating(
     })
   }),
 )
-let directRun = await direct.run({ person: k.owner.person }, sourceSpace, {
+let directRun = await chatted(direct, { person: k.owner.person }, sourceSpace, {
   say: message,
 })
 

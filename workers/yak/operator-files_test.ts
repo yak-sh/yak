@@ -330,7 +330,7 @@ test('past the most files the box takes, the rest are left out, and it says so',
 
 // A model choice applies to file admission as well as the generated answer.
 let { operating } = await import('./operator.ts')
-let { operatorMemory } = await import('./operator-testing.ts')
+let { chatted, operatorMemory } = await import('./operator-testing.ts')
 let { keepFile } = await import('./operator-channels.ts')
 let { drain } = await import('./operator-store.ts')
 let store = operatorMemory()
@@ -381,20 +381,20 @@ await operator.ask(who, space, { say: 'Keep these files.' }, {
   files: [docx, note],
 })
 await drain(store)
-let fileRun = await operator.run(who, space, {
+let fileRun = await chatted(operator, who, space, {
   provider: 'openai',
   model: 'files',
   say: 'Read the document.',
   attachments: [docx.key.split('/').at(-1)],
 })
 let fileAsk = nativeAsks.at(-1)!
-let noteRun = await operator.run(who, space, {
+let noteRun = await chatted(operator, who, space, {
   provider: 'openai',
   model: 'files',
   say: 'Keep this note.',
   attachments: [note.key.split('/').at(-1)],
 })
-let textRun = await operator.run(who, space, {
+let textRun = await chatted(operator, who, space, {
   task: noteRun.task,
   provider: 'openai',
   model: 'text-only',
@@ -440,7 +440,7 @@ test('a later turn whose selected model cannot read an earlier file receives its
 test('a run refuses unavailable providers, unlisted models and another persons attachment', async () => {
   await assertRejects(
     () =>
-      operator.run(who, space, {
+      chatted(operator, who, space, {
         provider: 'missing',
         model: 'files',
         say: 'Read it.',
@@ -450,7 +450,7 @@ test('a run refuses unavailable providers, unlisted models and another persons a
   )
   await assertRejects(
     () =>
-      operator.run(who, space, {
+      chatted(operator, who, space, {
         provider: 'openai',
         model: 'missing',
         say: 'Read it.',
@@ -460,7 +460,7 @@ test('a run refuses unavailable providers, unlisted models and another persons a
   )
   await assertRejects(
     () =>
-      operator.run({ person: crypto.randomUUID() }, space, {
+      chatted(operator, { person: crypto.randomUUID() }, space, {
         provider: 'openai',
         model: 'files',
         say: 'Read it.',

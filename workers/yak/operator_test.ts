@@ -7,7 +7,7 @@ import type { Item, Model, Request } from '@yaks/model'
 import { comp } from '../../packages/graph/testing.ts'
 import { stopAll } from '@yaks/session'
 import { platform } from './directory-rows-probe.ts'
-import { operatorMemory, operatorModel } from './operator-testing.ts'
+import { chatted, operatorMemory, operatorModel } from './operator-testing.ts'
 import { appStore } from './directory.ts'
 import { stores } from './app-store-probe.ts'
 import { operating, readOperator } from './operator.ts'
@@ -173,7 +173,7 @@ let model: Model = async (req) => {
 }
 let answer = model
 let operator = operate(f.store, f, operatorModel((req) => answer(req)))
-let out = await operator.run(f.held, f.space, {
+let out = await chatted(operator, f.held, f.space, {
   say:
     'Post a special meeting Thursday at 7 about the road millage in notices.',
 })
@@ -271,7 +271,7 @@ answer = (req) =>
     items: [{ kind: 'assistant', text: 'Which date and time?' }],
     cost: 0.001,
   })
-let continued = await operator.run(f.held, f.space, {
+let continued = await chatted(operator, f.held, f.space, {
   task: out.task,
   say: 'Schedule another meeting.',
 })
@@ -292,20 +292,25 @@ let roundsId = await roundsDir.mint(owner, 'rounds', 'Rounds', {
 let roundsSpace = (await roundsDir.at(roundsId))!
 let roundsHeld = { person: owner, role: 'owner' as const, space: roundsId }
 let rounds = 0
-let pastTwelve = await operate(
-  operatorMemory(),
-  roundsPlatform,
-  operatorModel((req) =>
-    Promise.resolve({
-      id: crypto.randomUUID(),
-      model: req.model,
-      items: ++rounds < 14
-        ? calls('graph_query', { q: '.doc&.limit=1' })
-        : [{ kind: 'assistant', text: 'Inspected.' }],
-      cost: 0.001,
-    })
+let pastTwelve = await chatted(
+  operate(
+    operatorMemory(),
+    roundsPlatform,
+    operatorModel((req) =>
+      Promise.resolve({
+        id: crypto.randomUUID(),
+        model: req.model,
+        items: ++rounds < 14
+          ? calls('graph_query', { q: '.doc&.limit=1' })
+          : [{ kind: 'assistant', text: 'Inspected.' }],
+        cost: 0.001,
+      })
+    ),
   ),
-).run(roundsHeld, roundsSpace, { say: 'Inspect the app.' })
+  roundsHeld,
+  roundsSpace,
+  { say: 'Inspect the app.' },
+)
 test('the space budget, rather than twelve model rounds, bounds the operator', () => {
   assertEquals(rounds, 14)
   assertEquals(pastTwelve.status, 'settled')
@@ -313,19 +318,24 @@ test('the space budget, rather than twelve model rounds, bounds the operator', (
 
 let efforts: (string | undefined)[] = []
 let reasoned = (effort?: string) =>
-  operate(
-    operatorMemory(),
-    roundsPlatform,
-    operatorModel((req) => {
-      efforts.push(req.effort)
-      return Promise.resolve({
-        id: crypto.randomUUID(),
-        model: req.model,
-        items: [{ kind: 'assistant', text: 'Done.' }],
-        cost: 0.001,
-      })
-    }),
-  ).run(roundsHeld, roundsSpace, { say: 'Look.', ...effort ? { effort } : {} })
+  chatted(
+    operate(
+      operatorMemory(),
+      roundsPlatform,
+      operatorModel((req) => {
+        efforts.push(req.effort)
+        return Promise.resolve({
+          id: crypto.randomUUID(),
+          model: req.model,
+          items: [{ kind: 'assistant', text: 'Done.' }],
+          cost: 0.001,
+        })
+      }),
+    ),
+    roundsHeld,
+    roundsSpace,
+    { say: 'Look.', ...effort ? { effort } : {} },
+  )
 await reasoned('xhigh')
 await reasoned()
 test("a run's effort is what its model is asked with, and the model's default where it names none", () => {
@@ -342,19 +352,24 @@ let pa = await operatorContext(
 let paGraph = await reaching(pa, await inReach(pa))
 let paMeetings = await paGraph.read('.meeting')
 let paAsked: Request[] = []
-await operate(
-  operatorMemory(),
-  f,
-  operatorModel((req) => {
-    paAsked.push(req)
-    return Promise.resolve({
-      id: crypto.randomUUID(),
-      model: req.model,
-      items: [{ kind: 'assistant', text: 'Your spaces.' }],
-      cost: 0.001,
-    })
-  }),
-).run(f.held, homeSpace, { say: 'What can you reach?' })
+await chatted(
+  operate(
+    operatorMemory(),
+    f,
+    operatorModel((req) => {
+      paAsked.push(req)
+      return Promise.resolve({
+        id: crypto.randomUUID(),
+        model: req.model,
+        items: [{ kind: 'assistant', text: 'Your spaces.' }],
+        cost: 0.001,
+      })
+    }),
+  ),
+  f.held,
+  homeSpace,
+  { say: 'What can you reach?' },
+)
 let refused = await TOOLS.find((t) => t.name == 'app_new')!
   .run(pa, { space: 'peek', slug: 'notes', title: 'Notes' })
   .then(() => null, (e: Error) => e.message)
@@ -501,7 +516,7 @@ begun = await halter.ask(roundsHeld, roundsSpace, {
 await drain(halted)
 let afterStop = halting.length
 let stopRead = await readOperator(halted, begun.task)
-let again = await halter.run(roundsHeld, roundsSpace, {
+let again = await chatted(halter, roundsHeld, roundsSpace, {
   task: begun.task,
   say: 'Go on.',
 })
@@ -543,7 +558,9 @@ let writer = operate(streamed, roundsPlatform, {
   }),
   typing: (session, text) => void pieces.push([session, text]),
 })
-let written = await writer.run(roundsHeld, roundsSpace, { say: 'Post it.' })
+let written = await chatted(writer, roundsHeld, roundsSpace, {
+  say: 'Post it.',
+})
 test('the Operator tells its host each piece of a reply once it is stored', () => {
   assertEquals(pieces, [[written.session, 'Posting '], [
     written.session,
@@ -680,10 +697,12 @@ let caller = operate(operatorMemory(), roundsPlatform, {
   name: 'claude-sonnet-5-5',
   stepped: (session) => void steps.push(session),
 })
-let byCall = await caller.run(roundsHeld, roundsSpace, { say: 'Hello.' }, {
+let byCall = await chatted(caller, roundsHeld, roundsSpace, {
+  say: 'Hello.',
   model: 'claude-haiku-5-5',
 })
-await caller.run(roundsHeld, roundsSpace, { say: 'Hello again.' }, {
+await chatted(caller, roundsHeld, roundsSpace, {
+  say: 'Hello again.',
   task: byCall.task,
 })
 test('words given with a model are answered by it, and the next words by the Operator’s own', () => {
@@ -914,6 +933,8 @@ test('the Operator of a space in the trash asks no model', async () => {
       return Promise.reject('no model')
     }),
   )
-  await op.run(held, binned, { say: 'A plant watering log' }).catch(() => {})
+  await chatted(op, held, binned, { say: 'A plant watering log' }).catch(
+    () => {},
+  )
   assertEquals(asked, 0)
 })

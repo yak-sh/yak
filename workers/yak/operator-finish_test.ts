@@ -7,7 +7,7 @@ import type { Bundle } from '@yaks/graph'
 import { messages } from '@yaks/anthropic'
 import { platform } from './directory-probe.ts'
 import { directoryOf } from './directory.ts'
-import { operatorMemory } from './operator-testing.ts'
+import { chatted, operatorMemory } from './operator-testing.ts'
 import { operating } from './operator.ts'
 import { within } from './defects.ts'
 
@@ -135,7 +135,7 @@ let ask = async (say: string) => {
   let out = await within(
     env,
     {},
-    () => operator.run({ person: owner }, space, { say }),
+    () => chatted(operator, { person: owner }, space, { say }),
   )
   return { ...out, reports: JSON.stringify(reports.slice(from)) }
 }
@@ -227,16 +227,16 @@ test("a conversation long enough to compact is summarized at its space's cost, a
   })
   let space = (await dir.at(id))!
   let from = reports.length
-  let task = crypto.randomUUID()
-  let out
+  let out: Awaited<ReturnType<typeof chatted>> | undefined
   for (let i = 0; i < 6; i++) {
     out = await within(
       env,
       {},
       () =>
-        operator.run({ person: owner }, space, {
+        chatted(operator, { person: owner }, space, {
           say: `Part ${i} of my garden: ` + 'tomatoes and beans. '.repeat(4000),
-        }, { task }),
+          ...out ? { task: out.task } : {},
+        }),
     )
   }
   assertEquals([out!.text, JSON.stringify(reports.slice(from))], [

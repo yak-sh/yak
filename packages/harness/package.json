@@ -10,6 +10,7 @@
     "./vocab": "./vocab.ts",
     "./machine": "./machine.ts",
     "./tools": "./runs.ts",
+    "./conversations": "./conversations.ts",
     "./cli": "./cli.ts",
     "./effects": "./effects.ts",
     "./routes": "./routes.ts",

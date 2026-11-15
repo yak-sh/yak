@@ -8,7 +8,7 @@ import type { Tool } from '@yaks/session'
 import { parseHTML } from 'linkedom'
 import { renderToString } from 'preact-render-to-string'
 import { platform } from './directory-rows-probe.ts'
-import { operatorMemory, operatorModel } from './operator-testing.ts'
+import { chatted, operatorMemory, operatorModel } from './operator-testing.ts'
 import { operating, operatorContext } from './operator.ts'
 import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { contactCard } from './operator-contact-card.ts'
@@ -462,7 +462,7 @@ let parallelOperator = operating(parallel.store, parallel.env, {
   ),
 })
 handleChannels(parallelOperator, parallel.env)
-let parallelRunning = parallelOperator.run(parallel.held, parallel.space, {
+let parallelRunning = chatted(parallelOperator, parallel.held, parallel.space, {
   say: 'Text me at 269-555-0144 when you finish.',
 })
 await notificationFinished.promise
@@ -549,7 +549,7 @@ let failureOperator = operating(failedParallel.store, failedParallel.env, {
   ),
 })
 handleChannels(failureOperator, failedParallel.env)
-await failureOperator.run(failedParallel.held, failedParallel.space, {
+await chatted(failureOperator, failedParallel.held, failedParallel.space, {
   say: 'Finish the check.',
 })
 await failureTime.advance(10)

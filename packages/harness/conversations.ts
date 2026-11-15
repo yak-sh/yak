@@ -259,117 +259,161 @@ let contextAt = async (g: Graph, owner: string, project: Bundle) => {
   ]
 }
 
-export let conversations = (host?: Pick<Host, 'me' | 'config'>): Runs => ({
-  conversation_projects: async (call, g) => {
-    let owner = await conversationOwner(call, g, host)
-    let rows = await g.read(
-      '.project !archived ?doc .order=doc.title .limit=100',
-    )
-    return answer(call, {
-      owner,
-      projects: rows.map((b) => ({
-        id: b.entity.eid,
-        title: String(part(b, 'doc').title ?? b.entity.eid),
-      })),
-    })
-  },
-  conversation_start: async (call, g) => {
-    let args = argsOf(call)
-    let owner = await conversationOwner(call, g, host)
-    let project = await projectAt(g, args)
-    let prompt = required(args, 'prompt')
-    // Started again under the same request, it is the conversation started.
-    let request = named(args)
-    let eid = request
-      ? derivedEid(`conversation ${owner} ${request}`)
-      : crypto.randomUUID()
-    let [held] = request ? await g.get([eid], ['session']) : []
-    if (!held?.session) {
-      let using = await defaultUsing(g)
-      let first = await words(g, args, eid, prompt, owner, using)
+/** What a host makes of a conversation, where it is not the box's: who a
+ * call speaks for (the box's authenticated person, else its process
+ * fallback), the words as it takes them and what it writes beside them (as
+ * given), and how a conversation begins for its first words, as given and
+ * as the owner said them, answering what to write beside them (the box's: a
+ * session with the project's context, titled by them). */
+export type Conversing = Partial<Pick<Host, 'me' | 'config'>> & {
+  owner?: (call: Bundle, g: Graph) => Promise<string>
+  given?: (
+    g: Graph,
+    words: Intake,
+  ) => Promise<{ words: Intake; beside?: Bundle[] }>
+  start?: (
+    g: Graph,
+    first: { words: Intake; said: string; project: Bundle },
+  ) => Promise<Bundle[]>
+}
+
+export let conversations = (host: Conversing = {}): Runs => {
+  let { me, config } = host
+  let ownerOf = host.owner ??
+    ((call: Bundle, g: Graph) =>
+      conversationOwner(call, g, me && config ? { me, config } : undefined))
+  let given: NonNullable<Conversing['given']> = host.given ??
+    ((_: Graph, words: Intake) => Promise.resolve({ words }))
+  // The box's beginning: a session wearing the default model, with what the
+  // owner said and did lately in the project in front of it.
+  let start: NonNullable<Conversing['start']> = host.start ??
+    (async (g, { words, said, project }) => {
       await begin(g, undefined, {
-        eid,
-        by: owner,
-        files: await contextAt(g, owner, project),
-        using: first.using ?? using,
+        eid: words.session,
+        by: words.by,
+        files: await contextAt(g, words.by, project),
+        using: words.using ?? await defaultUsing(g),
         project: project.entity.eid,
-        title: headline(prompt),
+        title: headline(said),
       })
-      await take(g, first)
-    }
-    let [s] = await g.get([eid], ['session'])
-    return answer(call, summary(s, project.entity.eid))
-  },
-  conversation_send: async (call, g) => {
-    let args = argsOf(call)
-    let owner = await conversationOwner(call, g, host)
-    let p = (await projectAt(g, args)).entity.eid
-    let s = await sessionAt(g, args, owner, p)
-    let text = required(args, 'text')
-    await take(g, await words(g, args, s.entity.eid, text, owner))
-    let [now] = await g.get([s.entity.eid], ['session'])
-    return answer(call, summary(now, p))
-  },
-  conversation_read: async (call, g) => {
-    let args = argsOf(call)
-    let owner = await conversationOwner(call, g, host)
-    let p = (await projectAt(g, args)).entity.eid
-    let s = await sessionAt(g, args, owner, p)
-    let n = limit(args)
-    let before = args.before
-    if (
-      before != null &&
-      (typeof before != 'number' || !Number.isInteger(before) || before < 1)
-    ) {
-      throw new Refused('before must be a positive entry sequence')
-    }
-    let rows = await g.read(
-      `.entry.session=${quote(s.entity.eid)}${
-        before == null ? '' : ` .entry.seq<${before}`
-      } * .order=-entry.seq .limit=${n + 1}`,
-    )
-    let more = rows.length > n
-    let entries = rows.slice(0, n).reverse()
-    let messages = entries.filter((b) =>
-      b.content && !b.prompt && !b.notice && !b.meta && !b.reasoning &&
-      !b.call && !b.result && !b.ask && !b.cancel && !b.checkpoint &&
-      !b.exception && !b.stop
-    ).map((b) => ({
-      id: b.entity.eid,
-      seq: part(b, 'entry').seq,
-      role: b.output ? 'assistant' : 'user',
-      text: textOf(b),
-    }))
-    return answer(call, {
-      ...summary(s, p),
-      messages,
-      before: more,
-      nextBefore: more ? Number(part(entries[0], 'entry').seq) : null,
+      return []
     })
-  },
-  conversation_recent: async (call, g) => {
-    let args = argsOf(call)
-    let owner = await conversationOwner(call, g, host)
-    let p = (await projectAt(g, args)).entity.eid
-    let rows = await g.read(
-      `${conversation(owner, p)} ?doc ?updated .order=-updated.at .limit=${
-        limit(args, 20)
-      }`,
-    )
-    return answer(call, {
-      conversations: await Promise.all(rows.map(async (s) => ({
+  return {
+    conversation_projects: async (call, g) => {
+      let owner = await ownerOf(call, g)
+      let rows = await g.read(
+        '.project !archived ?doc .order=doc.title .limit=100',
+      )
+      return answer(call, {
+        owner,
+        projects: rows.map((b) => ({
+          id: b.entity.eid,
+          title: String(part(b, 'doc').title ?? b.entity.eid),
+        })),
+      })
+    },
+    conversation_start: async (call, g) => {
+      let args = argsOf(call)
+      let owner = await ownerOf(call, g)
+      let project = await projectAt(g, args)
+      let prompt = required(args, 'prompt')
+      // Started again under the same request, it is the conversation started.
+      let request = named(args)
+      let eid = request
+        ? derivedEid(`conversation ${owner} ${request}`)
+        : crypto.randomUUID()
+      let [held] = request ? await g.get([eid], ['session']) : []
+      let input = ''
+      if (!held?.session) {
+        let using = host.start ? undefined : await defaultUsing(g)
+        let { words: first, beside = [] } = await given(
+          g,
+          await words(g, args, eid, prompt, owner, using),
+        )
+        let begun = await start(g, { words: first, said: prompt, project })
+        ;({ input } = await take(g, first, [...begun, ...beside]))
+      }
+      let [s] = await g.get([eid], ['session'])
+      return answer(call, {
+        ...summary(s, project.entity.eid),
+        ...input ? { input } : {},
+      })
+    },
+    conversation_send: async (call, g) => {
+      let args = argsOf(call)
+      let owner = await ownerOf(call, g)
+      let p = (await projectAt(g, args)).entity.eid
+      let s = await sessionAt(g, args, owner, p)
+      let text = required(args, 'text')
+      let { words: said, beside } = await given(
+        g,
+        await words(g, args, s.entity.eid, text, owner),
+      )
+      let { input } = await take(g, said, beside)
+      let [now] = await g.get([s.entity.eid], ['session'])
+      return answer(call, { ...summary(now, p), input })
+    },
+    conversation_read: async (call, g) => {
+      let args = argsOf(call)
+      let owner = await ownerOf(call, g)
+      let p = (await projectAt(g, args)).entity.eid
+      let s = await sessionAt(g, args, owner, p)
+      let n = limit(args)
+      let before = args.before
+      if (
+        before != null &&
+        (typeof before != 'number' || !Number.isInteger(before) || before < 1)
+      ) {
+        throw new Refused('before must be a positive entry sequence')
+      }
+      let rows = await g.read(
+        `.entry.session=${quote(s.entity.eid)}${
+          before == null ? '' : ` .entry.seq<${before}`
+        } * .order=-entry.seq .limit=${n + 1}`,
+      )
+      let more = rows.length > n
+      let entries = rows.slice(0, n).reverse()
+      let messages = entries.filter((b) =>
+        b.content && !b.prompt && !b.notice && !b.meta && !b.reasoning &&
+        !b.call && !b.result && !b.ask && !b.cancel && !b.checkpoint &&
+        !b.exception && !b.stop
+      ).map((b) => ({
+        id: b.entity.eid,
+        seq: part(b, 'entry').seq,
+        role: b.output ? 'assistant' : 'user',
+        text: textOf(b),
+      }))
+      return answer(call, {
         ...summary(s, p),
-        title: await titleOf(g, s, owner),
-        updatedAt: part(s, 'updated').at,
-      }))),
-    })
-  },
-  conversation_inbox: async (call, g) => {
-    let owner = await conversationOwner(call, g, host)
-    let found = await readInbox(g, g.vocab, owner, {})
-    return found.slice(0, limit(argsOf(call))).map((t) => ({
-      entity: { eid: t.eid },
-      ...t.row.comps,
-    }))
-  },
-})
+        messages,
+        before: more,
+        nextBefore: more ? Number(part(entries[0], 'entry').seq) : null,
+      })
+    },
+    conversation_recent: async (call, g) => {
+      let args = argsOf(call)
+      let owner = await ownerOf(call, g)
+      let p = (await projectAt(g, args)).entity.eid
+      let rows = await g.read(
+        `${conversation(owner, p)} ?doc ?updated .order=-updated.at .limit=${
+          limit(args, 20)
+        }`,
+      )
+      return answer(call, {
+        conversations: await Promise.all(rows.map(async (s) => ({
+          ...summary(s, p),
+          title: await titleOf(g, s, owner),
+          updatedAt: part(s, 'updated').at,
+        }))),
+      })
+    },
+    conversation_inbox: async (call, g) => {
+      let owner = await ownerOf(call, g)
+      let found = await readInbox(g, g.vocab, owner, {})
+      return found.slice(0, limit(argsOf(call))).map((t) => ({
+        entity: { eid: t.eid },
+        ...t.row.comps,
+      }))
+    },
+  }
+}

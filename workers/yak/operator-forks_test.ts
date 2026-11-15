@@ -6,7 +6,7 @@ import { deliverChild, statusOf, stopAll, transcript } from '@yaks/session'
 import { directoryOf } from './directory.ts'
 import { platform } from './directory-rows-probe.ts'
 import { operating } from './operator.ts'
-import { operatorMemory, operatorModel } from './operator-testing.ts'
+import { chatted, operatorMemory, operatorModel } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { CHAT_QUIET, chatFork } from './operator-chat.ts'
 
@@ -41,13 +41,13 @@ let main = await operator.ask({ ...held, administrative: true }, space, {
   say: 'Remember the blue notebook.',
 })
 await drain(store)
-let first = await operator.run(held, space, { say: 'Check my notes.' })
+let first = await chatted(operator, held, space, { say: 'Check my notes.' })
 let firstAsk = asked.at(-1)!
 let [chat] = await store.g.get([first.session])
 let original = await transcript(store.g, main.session)
 let before = asked.length
 let firstDue = await drain(store)
-let second = await operator.run(held, space, {
+let second = await chatted(operator, held, space, {
   task: first.task,
   say: 'Which date is still open?',
 })
@@ -86,7 +86,10 @@ let resumed = operating(
     })
   }),
 )
-await resumed.run(held, space, { task: first.task, say: 'Choose Tuesday.' })
+await chatted(resumed, held, space, {
+  task: first.task,
+  say: 'Choose Tuesday.',
+})
 let ending = await drain(store)
 await deliverChild(store.g, first.session, Number(ending))
 let refreshed = (await transcript(store.g, main.session)).filter((b) =>
@@ -94,7 +97,9 @@ let refreshed = (await transcript(store.g, main.session)).filter((b) =>
 )
 
 // Explicit stop closes a settled chat immediately, even before quiet.
-let stopping = await operator.run(held, space, { say: 'Check another note.' })
+let stopping = await chatted(operator, held, space, {
+  say: 'Check another note.',
+})
 let stopped = await stopAll(store.g, stopping.session, person)
 await drain(store)
 let stoppedNotice = (await transcript(store.g, main.session)).find((b) =>
@@ -212,7 +217,9 @@ test('a chat fork excludes an in-flight response and its partial output', () => 
 
 // A descendant remains in the sub-thread. The chat waits for that helper,
 // even if its quiet interval has already passed.
-let waiting = await operator.run(held, space, { say: 'Check with a helper.' })
+let waiting = await chatted(operator, held, space, {
+  say: 'Check with a helper.',
+})
 let helper = crypto.randomUUID(), helperInput = crypto.randomUUID()
 await store.g.apply([
   {
@@ -267,7 +274,9 @@ test('helpers report to the outside chat and hold its closing notice until they 
   )
 })
 
-let failed = await operator.run(held, space, { say: 'Check this failure.' })
+let failed = await chatted(operator, held, space, {
+  say: 'Check this failure.',
+})
 await store.g.apply([{
   entity: { eid: crypto.randomUUID() },
   entry: { session: failed.session },

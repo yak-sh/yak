@@ -1,5 +1,4 @@
 import { inputSource } from './operator-provenance.ts'
-import { system } from '@yaks/fp'
 import { chatFork } from './operator-chat.ts'
 import { questionNotice } from './operator-helpers.ts'
 import {
@@ -12,16 +11,15 @@ import {
   namedTool,
 } from '@yaks/graph'
 import { begin, lend } from '@yaks/harness'
+import type { Conversing } from '@yaks/harness/conversations'
 import { skillItems, skillRead } from '@yaks/harness/skills'
 import {
   answerOf,
   inputOf,
   type Intake,
   recall,
-  replyOf,
   running,
   sessionTools,
-  statusOf,
   take,
   taskSession,
   type Tool,
@@ -90,7 +88,7 @@ import { platformFault } from './unseen.ts'
 import { bound, type Env } from './env.ts'
 import type { Held } from './build-door.ts'
 import { accounted, resultOf } from './meter.ts'
-import { background, caught, defect } from './defects.ts'
+import { caught, defect } from './defects.ts'
 import { hearing } from './refusals.ts'
 import {
   ambient,
@@ -102,7 +100,7 @@ import {
   tallying,
   traced,
 } from './lib/hops.ts'
-import { drain, type OperatorStore } from './operator-store.ts'
+import type { OperatorStore } from './operator-store.ts'
 import {
   mailSend,
   messageReference,
@@ -838,8 +836,6 @@ let working = async (
   return { eid: o.space, space, here, ctx, files: o.files ?? [] }
 }
 
-let ENDED = ['settled', 'failed', 'stopped']
-
 // Each step of an Operator session is counted and remembered as a request
 // is (lib/hops.ts): what it reads of the directory is asked once, until it
 // writes there, and its tool roster, instructions and payer share the
@@ -918,7 +914,7 @@ let routeOf = (request?: Comp) =>
   )
 
 // Who the Operator's replies name: yaks.app, where it failed, and itself.
-let NAMING = { host: 'yaks.app', name: 'the Operator' }
+export let NAMING = { host: 'yaks.app', name: 'the Operator' }
 
 // What a conversation is told when its person's own machine could not answer
 // a step and a hosted model answers instead (`operating`'s `fell`).
@@ -1937,19 +1933,8 @@ export let operating = (
         $actor: { by },
       },
     ], { trusted: true })
-    let forks: Bundle[] = []
     if (!newest) {
       await started(session, by, space)
-      if (o.chat) {
-        let parent = await rootAt(store, space.eid, held.person)
-        if (!await conversed(store, parent)) {
-          await started(parent, held.person, space)
-          await g.apply([await carrying(parent, held, space, {}, true)], {
-            trusted: true,
-          })
-        }
-        forks = await chatFork(g, parent, session)
-      }
       await g.apply([{
         entity: { eid: crypto.randomUUID() },
         edge: { from: task, to: session },
@@ -1962,13 +1947,12 @@ export let operating = (
       words(
         session,
         id,
-        (newest || o.chat ? text : JSON.stringify({ task: row })) + reference,
+        (newest ? text : JSON.stringify({ task: row })) + reference,
         by,
         o,
         sourceFile,
       ),
       [
-        ...forks,
         await carrying(session, held, space, o),
         ...old
           ? [{
@@ -2073,70 +2057,89 @@ export let operating = (
     }
   }
 
-  // Connector chats own a fork and a private task; only their closing
-  // notice reaches the person's conversation.
-  let run: Operator['run'] = async (held, space, args, o = {}) => {
-    let files = await attached(store, held, space, args.attachments)
-    let selected = await chosen(
-      o.model ?? (typeof args.model == 'string' ? args.model : undefined),
-      o.provider ??
-        (typeof args.provider == 'string' ? args.provider : undefined),
-      servedTo(held, space),
-    )
-    if (typeof args.model == 'string' && selected.model != args.model) {
-      throw await unknown(args.model, selected.provider)
-    }
-    let effort = typeof args.effort == 'string' ? args.effort : undefined
-    let { task, session, input } = await ask(held, space, args, {
-      task: crypto.randomUUID(),
-      chat: true,
-      from: 'an outside agent',
-      ...selected,
-      ...effort ? { effort } : {},
-      ...files.length ? { files } : {},
-      ...o,
-    })
-    let time = env.CLOCK ?? system
-    let work = (async () => {
-      let entries = await transcript(g, session)
-      while (!ENDED.includes(statusOf(entries))) {
-        let next = await drain(store, undefined, watching)
-        entries = await transcript(g, session)
-        if (ENDED.includes(statusOf(entries)) || next == null) break
-        await new Promise<void>((ok) =>
-          time.after(Math.min(1000, Math.max(0, next - time.now())), ok)
-        )
-      }
-    })()
-    // The task outlives its caller's HTTP request; a long turn is read with
-    // operator_read rather than holding every HTTP door until it ends.
-    background(
-      work.catch((e) => caught(e, { request: 'operator run', session })),
-    )
-    let cancel = () => {}
-    try {
-      await Promise.race([
-        work,
-        new Promise<void>((done) => cancel = time.after(25_000, done)),
-      ])
-    } finally {
-      cancel()
-    }
-    let entries = await transcript(g, session)
-    let mine = entries.slice(entries.findIndex((b) => b.entity.eid == input))
-    let status = statusOf(entries)
+  // A conversation an outside agent has with the Operator for the person
+  // (@yaks/harness `conversations`): theirs, in the model chosen for it,
+  // with the files of theirs it names. Each begins as a fork of the
+  // person's own conversation under a private task, which only its closing
+  // notice reaches.
+  // Words carrying on a task's conversation open the task again, and are
+  // said on it.
+  let reopened = async ({ session, body, by }: Intake) => {
+    let [link] = await g.read(`.contains .edge.to=${session}`)
+    let task = comp(link, 'edge')?.from as string | undefined
+    return task
+      ? [{ entity: { eid: task }, completed: null, cancelled: null }, {
+        entity: { eid: crypto.randomUUID() },
+        comment: { target: task },
+        doc: { body },
+        $actor: { by },
+      }]
+      : []
+  }
+  let chats: Operator['chats'] = async (held, space) => {
+    // The space is the project it talks in, and the person its owner.
+    await readying(held, space)
     return {
-      task,
-      session,
-      text: ENDED.includes(status)
-        ? replyOf(mine, NAMING).text
-        : `The Operator is still working. Use operator_read with task ${task} to read its progress and answer.`,
-      status,
-      cost: mine.reduce(
-        (sum, b) => sum + Number(comp(b, 'cost')?.dollars ?? 0),
-        0,
-      ),
-      model: selected.model,
+      owner: () => Promise.resolve(held.person),
+      given: async (_, words) => {
+        let asked = (words.using ?? {}) as Record<string, string | undefined>
+        let selected = await chosen(
+          asked.model,
+          asked.provider,
+          servedTo(held, space),
+        )
+        if (asked.model && selected.model != asked.model) {
+          throw await unknown(asked.model, selected.provider)
+        }
+        let files = await attached(
+          store,
+          held,
+          space,
+          words.files?.map((f) => f.address),
+        )
+        // The words as they were sent are kept as a file the model may read
+        // or pass on by its reference.
+        let { reference, file } = await messageReference(env, space, words.body)
+        return {
+          words: {
+            ...words,
+            body: words.body + reference,
+            from: 'an outside agent',
+            using: usingOf(selected.model, selected.provider, asked.effort),
+            files: [...files, ...file ? [file] : []].map(attachedOf),
+          },
+          beside: [
+            await carrying(words.session, held, space, { files }),
+            ...await reopened(words),
+          ],
+        }
+      },
+      start: async (_, { words: { session }, said: body }) => {
+        let task = derivedEid('operator-chat|' + session)
+        await g.apply([{
+          entity: { eid: task },
+          task: {},
+          doc: { title: body.split('\n')[0].slice(0, 160), body },
+          filed: { project: space.eid },
+          $actor: { by: held.person },
+        }], { trusted: true })
+        await started(session, held.person, space)
+        let parent = await rootAt(store, space.eid, held.person)
+        if (!await conversed(store, parent)) {
+          await started(parent, held.person, space)
+          await g.apply([await carrying(parent, held, space, {}, true)], {
+            trusted: true,
+          })
+        }
+        return [
+          ...await chatFork(g, parent, session),
+          {
+            entity: { eid: derivedEid('operator-chat-task|' + session) },
+            edge: { from: task, to: session },
+            contains: {},
+          },
+        ]
+      },
     }
   }
 
@@ -2165,7 +2168,7 @@ export let operating = (
     ask,
     note,
     tools,
-    run,
+    chats,
     choose,
     named,
     watching,
@@ -2181,8 +2184,6 @@ export type Asking = {
   request?: string
   // Exact original words before channel framing or attachment extraction.
   source?: string
-  // Open a connector chat as a passive-reporting fork.
-  chat?: boolean
   // The task the words carry on; without one they go to the person's
   // conversation with the Operator (`rootAt`).
   task?: string
@@ -2250,16 +2251,9 @@ export type Operator = {
     tools: { name: string; description: string; parameters: object }[]
     run: (name: string, args: Record<string, unknown>) => Promise<string>
   }>
-  /** operator_chat's door: work the pool for up to 25 seconds, then return
-   * the answer or the running task, whose work continues behind the reply. */
-  run: (held: Asker, space: Space, args: Args, o?: Asking) => Promise<{
-    task: string
-    session: string
-    text: string
-    status: string
-    cost: number
-    model: string
-  }>
+  /** How an outside agent's conversation with the Operator for `held` in
+   * `space` goes (@yaks/harness `conversations`). */
+  chats: (held: Asker, space: Space) => Promise<Conversing>
   /** The model that answers words given naming `model` (and `provider`),
    * else the Operator's own, with the rows any words given need written: one
    * its provider does not list is refused. */

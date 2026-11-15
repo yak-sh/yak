@@ -16,7 +16,9 @@ import { assertEquals } from '@std/assert'
 import { refusing } from './defects.ts'
 import type { Held } from './build-door.ts'
 import type { Env } from './env.ts'
-import { operating, type Options } from './operator.ts'
+import { operating, type Operator, type Options } from './operator.ts'
+import { chat, settled } from './operator-conversations.ts'
+import type { Space } from './directory.ts'
 import {
   type Listener,
   operatorFrames,
@@ -36,6 +38,19 @@ import type { Row } from './operator-view.ts'
 
 /** What an ask could call: the tools it was sent, and the ones `tool_load`
  * lists for it to load (@yaks/session `tool_load`). */
+/** operator_chat as the Builder answers it, with the store worked as the
+ * wait reads it, as a store's alarm would. */
+export let chatted = (
+  operator: Operator,
+  held: Parameters<Operator['chats']>[0],
+  space: Space,
+  args: Record<string, unknown>,
+) =>
+  chat(operator, held, space, args, (s) =>
+    settled(operator.store.g, s, {
+      work: () => drain(operator.store, undefined, operator.watching),
+    }))
+
 export let callable = (req: Pick<Ask, 'tools'>): string[] => [
   ...req.tools.map((t) => t.name),
   ...(req.tools.find((t) => t.name == 'tool_load')?.description ?? '')
@@ -178,7 +193,7 @@ export let operatorService = (
           let { spawnHelper } = await import('./operator-helpers.ts')
           return Response.json(await spawnHelper(operator, held, space, args))
         }
-        return Response.json(await operator.run(held, space, args))
+        return Response.json(await chatted(operator, held, space, args))
       }
       throw new Error(`Unhandled Operator route: ${req.url}`)
     } catch (e) {

@@ -944,7 +944,18 @@ export class Builder extends Durable {
       let { spawnHelper } = await import('./operator-helpers.ts')
       return Response.json(await spawnHelper(operator, held, space, args))
     }
-    return Response.json(await operator.run(held, space, args))
+    // A chat's words are worked by the store's own alarm, which they arm,
+    // and its answer read once it ends or the wait does.
+    let { chat, settled } = await import('./operator-conversations.ts')
+    return Response.json(
+      await chat(
+        operator,
+        held,
+        space,
+        args,
+        (s) => settled(operator.store.g, s),
+      ),
+    )
   }
 
   // The Operator's store, what to call a person, and what the pages watching

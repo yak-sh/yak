@@ -11,7 +11,7 @@ import { transcript } from '@yaks/session'
 import { platform } from './directory-probe.ts'
 import { directoryOf, META, stamp } from './directory.ts'
 import type { Env } from './env.ts'
-import { operatorMemory, operatorModel } from './operator-testing.ts'
+import { chatted, operatorMemory, operatorModel } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating, operatorChoice } from './operator.ts'
 
@@ -172,10 +172,10 @@ test('a machine that is off passes each step to the hosted model, which is told 
 test('a run names the machine’s provider and a model of it, and only its owner may', async () => {
   let say = { say: 'Hello', provider: 'machine', model: 'gpt-6-astra' }
   box.length = 0
-  let out = await operator.run({ person: jeff }, space, say)
+  let out = await chatted(operator, { person: jeff }, space, say)
   assertEquals([box, out.model, out.cost], [['gpt-6-astra'], 'gpt-6-astra', 0])
   await assertRejects(
-    () => operator.run({ person: bob }, space, say),
+    () => chatted(operator, { person: bob }, space, say),
     Error,
     'no available machine provider',
   )
