@@ -47,7 +47,7 @@ export let kernelDoc: VocabDoc = {
       // platform. One word, both meanings, so a store never has to choose.
       properties: { at: owned(time), message: owned(text), code: text },
     },
-    // The two rows a page's upload makes (apps.ts `took`): the content,
+    // The two rows a page's upload makes (./uploads.ts): the content,
     // addressed by its sha, and the use of it, addressed off that. They stay
     // apart because they are two things, and because a component may not point
     // at its own entity.

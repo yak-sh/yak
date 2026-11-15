@@ -29,7 +29,8 @@ import {
   text,
 } from './tool.ts'
 import { type Row } from './tool-words.ts'
-import { acceptsOf, belowFloor, Untaken, uploaded } from './uploads.ts'
+import { acceptsOf, belowFloor, uploaded } from './uploads.ts'
+import { Untaken } from '@yaks/blob/upload'
 
 // What the library sends as itself, and the token a robots.txt group names
 // it by.

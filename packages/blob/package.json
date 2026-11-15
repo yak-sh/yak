@@ -13,6 +13,7 @@
     "./vocab": "./vocab.ts",
     "./graph": "./graph.ts",
     "./routes": "./routes.ts",
+    "./upload": "./upload.ts",
     "./serve": "./serve.ts"
   },
   "license": "Apache-2.0",

@@ -52,7 +52,6 @@ import { parse as parseRedirects, sentOn } from './redirects.ts'
 import { prefixOf, VERSION } from './files.ts'
 import { appCopy, type Copy, filled } from './page-copy.ts'
 import { door as publicDoor, served as publicFile } from './public-files.ts'
-import { blobPrefix, servable, uploadPrefix } from './blob-key.ts'
 import {
   type App,
   appStore,
@@ -61,7 +60,6 @@ import {
   directory,
   type Role,
   type Space,
-  storeAt,
   storeName,
   url as urlOf,
 } from './directory.ts'
@@ -78,32 +76,11 @@ import {
 import { bound, type Env } from './env.ts'
 import { pilled, standing } from './gallery-row.ts'
 import { buying, type Product } from './sell.ts'
-import {
-  addressed,
-  Gone,
-  mimeOf,
-  parts,
-  representation,
-  represents,
-  type Served,
-  servedVia as fencedVia,
-  Wrong,
-} from '@yaks/blob'
-import { contentType } from '@yaks/blob/identify'
+import { addressed } from '@yaks/blob'
 import { declarationOf } from './declaration.ts'
-import { KERNEL, type Meta, metaOf } from './meta.ts'
+import { KERNEL, metaOf } from './meta.ts'
 import { Pending } from '@yaks/api/log'
-import {
-  acceptsOf,
-  admit,
-  belowFloor,
-  blobKey,
-  described,
-  type File,
-  Untaken,
-  uploaded,
-  useOf,
-} from './uploads.ts'
+import { belowFloor, blobDoor } from './uploads.ts'
 import {
   batched,
   lined,
@@ -174,13 +151,11 @@ import {
   pinned,
 } from '@yaks/platform/woven'
 import { json, MEMBER, SAYS, WAITING } from '@yaks/platform/refused'
-import type { Bundle } from '@yaks/graph'
-import { Refused, Stale } from '@yaks/graph/errors'
+import { Refused } from '@yaks/graph/errors'
 import { mistaken } from './mistake.ts'
-import { digest, token } from '@yaks/graph/sha256'
+import { digest } from '@yaks/graph/sha256'
 import { edits, mode, reads, writes } from '@yaks/member'
 import { USES } from './door.ts'
-import { type Door } from '@yaks/durable-object/door'
 import { type Clock, clock, timed } from './timing.ts'
 import { asked, keep, shown, told, unkept } from './page-cache.ts'
 import {
@@ -199,14 +174,7 @@ import { door as reportDoor, flood } from '@yaks/tracker/report'
 import { writer } from '@yaks/platform/app-authority'
 import { ADDRESS } from '@yaks/platform/routes'
 import { FORM } from '@yaks/forms/routes'
-import {
-  background,
-  caught,
-  defect,
-  failing,
-  refusing,
-  stopped,
-} from './defects.ts'
+import { background, caught, defect, failing, refusing } from './defects.ts'
 import {
   barOf,
   births,
@@ -232,7 +200,7 @@ import {
   toldStores,
 } from './visit.ts'
 import { MOVED } from '@yaks/sync'
-import { full, fullFiles } from './usage.ts'
+import { full } from './usage.ts'
 import { scheduleBy } from './used.ts'
 import { seen } from './views.ts'
 import { refuse } from './tool.ts'
@@ -415,14 +383,6 @@ let rejection = (error: unknown, tags: Record<string, string>) =>
       ...(error instanceof Error ? { name: error.name } : {}),
     },
   }, { status: refusing(error, tags), headers: waited(error) })
-
-// A blob its store could not say how to serve: a stopped store's refusal
-// keeps its status and wait, and anything else is reported and unavailable.
-let unavailable = (error: unknown, tags: Record<string, string>) => {
-  if (stopped(error)) return rejection(error, tags)
-  caught(error, tags)
-  return json(503, 'blob_unavailable')
-}
 
 // A store's answer read as `read` reads it, or, where it refused, the answer
 // itself to relay as it came: its status, and a stopped store's wait.
@@ -1188,221 +1148,6 @@ let reporting = (
 let over = flood(30)
 let flooding = (space: Space, app: App) => over(`${space.eid}/${app.eid}`)
 
-// What the upload says these bytes are, and what to call them. The mime is
-// the request's own content-type, minus its parameters; the name rides
-// `x-yak-name` percent-encoded, since a header is ASCII and a file's name is
-// not (public/client.js encodes it).
-let mimeSent = (req: Request) => {
-  let said = (req.headers.get('content-type') ?? '').split(';')[0].trim()
-    .slice(0, 120)
-  return said && said.toLowerCase() != 'application/octet-stream'
-    ? said
-    : mimeOf(nameSent(req))
-}
-
-let nameSent = (req: Request) => {
-  let sent = req.headers.get('x-yak-name')
-  if (!sent) return ''
-  try {
-    return decodeURIComponent(sent).slice(0, 200)
-  } catch {
-    return sent.slice(0, 200)
-  }
-}
-
-// Untaken, as a page reads it.
-let untaken = (e: unknown) => {
-  if (e instanceof Untaken) return json(e.status, e.code, e.message)
-  throw e
-}
-
-// An upload's rows, written as the uploader through the app's own /apply, and
-// the door's answer.
-let recorded = async (
-  graph: Meta,
-  file: File,
-  bytes: number,
-  tags: Record<string, string>,
-) => {
-  try {
-    await graph.apply(file.bundles, KERNEL)
-  } catch (e) {
-    // Kept by the store's write log (@yaks/api/log): the bytes are stored and their
-    // row lands when the app recovers, so the upload is not told it failed.
-    if (!(e instanceof Pending)) return rejection(e, tags)
-  }
-  return answer(file, bytes)
-}
-
-// A page hands the app bytes and gets back an address (T-32677). The rows are
-// the uploader's, written through the app's own /apply with them vouched for,
-// so `.created` says who put it there.
-let took = async (
-  req: Request,
-  env: Env,
-  space: Space,
-  app: App,
-  store: Door,
-  headers: Record<string, string>,
-) => {
-  let accepts = await acceptsOf(env, space, app)
-  // A header is a claim, so the bytes are measured again once read (`filed`).
-  admit(accepts, Number(req.headers.get('content-length') ?? 0))
-  let bytes = new Uint8Array(await req.arrayBuffer())
-  if (!bytes.byteLength) return json(400, 'no_bytes')
-  let graph = metaOf(store, headers)
-  let file: File
-  try {
-    file = await uploaded(env, space, app, graph, bytes, {
-      mime: mimeSent(req),
-      name: nameSent(req),
-      accepts,
-    })
-  } catch (e) {
-    if (e instanceof Untaken) throw e
-    return rejection(e, {
-      request: 'POST /api/blob',
-      space: space.slug,
-      app: app.slug,
-    })
-  }
-  return answer(file, bytes.byteLength)
-}
-
-// What every upload door answers: the eid to point a row at, the address to
-// read it from, and what it is.
-export let answer = (file: File, bytes: number) =>
-  Response.json({
-    eid: file.sha,
-    attachment: file.use,
-    url: file.url,
-    mime: file.mime,
-    bytes,
-    ...file.size,
-  })
-
-// The size of each part a file goes up in but the last (@yaks/blob `parts`),
-// measured from this box and from a Worker (T-124790). At least 5 MiB, the
-// least R2 takes.
-export let PART = 8 * 1024 * 1024
-
-// A file too big to send well in one request goes up in parts, resumably
-// (@yaks/blob `parts`), addressed by its SHA-256 as a whole upload is:
-//
-//   POST blob/<sha> {bytes, name, mime}  where it stands: `{part, need}`, the
-//                                        part size and the parts still to
-//                                        send; once none are, it is finished
-//                                        and answers as `POST blob` does
-//   PUT  blob/<sha>/<n>                  part n, `part` bytes but the last,
-//                                        `x-yak-state` the SHA-256 state the
-//                                        bytes before it leave
-//
-// Every call is safe to send again, so a page that lost its connection, or
-// its tab, asks where it stands and sends what is missing. What the app takes
-// and the space's room are checked against the size it declares, and the
-// parts' states must chain to the address before they are assembled, so what
-// lands is what it said. Its type is read off the whole once assembled, and a
-// whole the app does not take is deleted again. `writer` is whom the rows are
-// written as, asked only when there are rows to write.
-let inParts = async (
-  req: Request,
-  env: Env,
-  space: Space,
-  app: App,
-  store: Door,
-  writer: () => Promise<Record<string, string>>,
-  path: string,
-) => {
-  let [sha, n, ...rest] = path.split('/')
-  if (!/^[0-9a-f]{64}$/.test(sha) || rest.length) {
-    return json(404, 'no_such_file')
-  }
-  let key = blobKey(space, app, sha)
-  let up = parts(r2Objects(env.BLOBS), env.BLOBS, {
-    key,
-    sha,
-    ledger: uploadPrefix(app),
-    part: PART,
-  })
-  try {
-    if (n != null) {
-      if (req.method != 'PUT') return json(405, 'method_not_allowed')
-      if (!/^[1-9][0-9]*$/.test(n)) return json(404, 'no_such_file')
-      await up.put(
-        Number(n),
-        req.body ?? new Response('').body!,
-        Number(req.headers.get('content-length') ?? NaN),
-        req.headers.get('x-yak-state') ?? undefined,
-      )
-      return Response.json({ n: Number(n) })
-    }
-    if (req.method != 'POST') return json(405, 'method_not_allowed')
-    let said = await req.json().catch(() => ({})) as {
-      bytes?: unknown
-      name?: unknown
-      mime?: unknown
-    }
-    let bytes = Number(said.bytes)
-    if (!(Number.isInteger(bytes) && bytes > 0)) return json(400, 'no_bytes')
-    let accepts = await acceptsOf(env, space, app)
-    admit(accepts, bytes)
-    // Bytes the app already holds count nothing (usage.ts `fullFiles`).
-    let stopped = await fullFiles(env, space, [{ key, bytes }])
-    if (stopped) return json(413, 'space_full', stopped)
-    let { part, need, whole } = await up.post(bytes)
-    if (!whole) return Response.json({ part, need })
-    let graph = metaOf(store, await writer())
-    let name = String(said.name ?? '').slice(0, 200)
-    let mime = String(said.mime ?? '').split(';')[0].trim().slice(0, 120)
-    let file = await described(
-      graph,
-      app,
-      sha,
-      whole.head,
-      mime && mime.toLowerCase() != 'application/octet-stream'
-        ? mime
-        : mimeOf(name),
-      name,
-      whole.bytes,
-    )
-    try {
-      admit(accepts, whole.bytes, file.mime)
-    } catch (e) {
-      if (whole.made) await r2Objects(env.BLOBS).delete(key)
-      throw e
-    }
-    return recorded(graph, file, whole.bytes, {
-      request: 'POST /api/blob/<sha>',
-      space: space.slug,
-      app: app.slug,
-    })
-  } catch (e) {
-    if (e instanceof Gone) return json(409, 'upload_gone', e.message)
-    if (e instanceof Wrong) return json(400, 'refused', e.message)
-    return untaken(e)
-  }
-}
-
-/** Whether the bytes are served at all, which is the store's to say
- * (`servable`). For an app anyone may read, Files keeps a yes (files.ts
- * `servedAs`), so a burst of image reads is not a burst of store reads; a no
- * from it, and every read of a private or sandboxed app's, is asked here as
- * the reader. A store that could not say throws. */
-export let servedTo = async (
-  env: Env,
-  space: Space,
-  app: App,
-  graph: Pick<Meta, 'query'>,
-  sha: string,
-  eid: string,
-) => {
-  let read = () => servable((q) => graph.query(q), app, sha, eid)
-  return !sandboxed(app) && mode(app.access) != 'private'
-    ? await files.servableOf(env, app, storeAt(space, app, env), sha, eid) ??
-      await read()
-    : await read()
-}
-
 /** Whether a request reads one of the app's files by its address: an upload
  * (`/api/blob/<sha>` or `/api/blob/<sha>/<representation>`), a release's
  * asset (`/api/assets/<release>/<path>`) or a platform module its pages
@@ -1425,166 +1170,6 @@ export let apiAllowed = (
   itself || person || fileRead(req, path)
     ? Promise.resolve(true)
     : within(limit, source(req), failing('rate limit'))
-
-// The bare hash is the current attachment; the second path segment names an
-// immutable representation. Only the bare address reads mutable metadata.
-// The reader's browser keeps what it was given, the redirect for a week: every
-// representation of one sha is the same bytes, so a kept redirect at worst
-// names a file by an older name, and a removed file's representation is gone
-// as its bare address is.
-let REDIRECT = 'private, max-age=604800'
-let gave = async (
-  req: Request,
-  env: Env,
-  space: Space,
-  app: App,
-  store: Door,
-  headers: Record<string, string>,
-  path: string,
-) => {
-  let address = addressed(path)
-  if (!address) return json(404, 'no_such_file')
-  let { sha, eid } = address
-  let graph = metaOf(store, headers)
-  let blobs = r2Objects(env.BLOBS)
-  if (!eid) {
-    let current = async () => {
-      let rows = await graph.query(`.entity.eid=${await useOf(sha)},${sha}&*`)
-      let file = (rows as {
-        attachment?: { mime?: string; name?: string }
-      }[]).find((r) => r.attachment)?.attachment
-      let artifact = (rows as { artifact?: { media_type?: string } }[])
-        .find((r) => r.artifact)?.artifact
-      if (!file && !artifact) return null
-      let mime = file?.mime ?? artifact?.media_type ?? ''
-      let name = file?.name ?? ''
-      let rep = representation(app.eid, sha, mime, name)
-      if ((await graph.query(`.entity.eid=${rep.eid}`)).length) return rep
-      let bytes = await blobs.read(blobKey(space, app, sha))
-      if (!bytes) return null
-      let fixed = await contentType(bytes, mime)
-      rep = representation(app.eid, sha, fixed, name)
-      let bundles: Bundle[] = [{
-        entity: { eid: rep.eid },
-        representation: rep.row,
-      }]
-      if (fixed != mime) {
-        if (file) {
-          bundles.push({
-            entity: { eid: await useOf(sha) },
-            attachment: { mime: fixed },
-            $was: {
-              attachment: {
-                blob: token(sha),
-                mime: token(file.mime),
-                name: token(file.name),
-              },
-            },
-          })
-        } else if (artifact) {
-          bundles.push({
-            entity: { eid: sha },
-            artifact: { media_type: fixed },
-            $was: { artifact: { media_type: token(artifact.media_type) } },
-          })
-        }
-      }
-      let applied = await graph.apply(bundles, KERNEL)
-      if (
-        !applied.some((b) =>
-          b.entity.eid == rep.eid && b.representation &&
-          represents(rep.eid, b.representation as typeof rep.row)
-        )
-      ) {
-        throw new Error(
-          `blob representation write was not applied: ${rep.eid}`,
-        )
-      }
-      return rep
-    }
-    let rep
-    try {
-      try {
-        rep = await current()
-      } catch (e) {
-        if (!(e instanceof Stale)) throw e
-        rep = await current()
-      }
-    } catch (e) {
-      return unavailable(e, {
-        request: 'GET /api/blob',
-        space: space.slug,
-        app: app.slug,
-      })
-    }
-    if (!rep) return json(404, 'no_such_file')
-    let to = new URL(req.url)
-    to.pathname += `/${rep.eid}`
-    return new Response(null, {
-      status: 302,
-      headers: { location: to.href, 'cache-control': REDIRECT },
-    })
-  }
-  let rep
-  try {
-    rep = await servedTo(env, space, app, graph, sha, eid)
-  } catch (e) {
-    return unavailable(e, {
-      request: 'GET /api/blob',
-      space: space.slug,
-      app: app.slug,
-    })
-  }
-  if (!rep) return json(404, 'no_such_file')
-  let response: Served = {
-    mime: rep.media_type,
-    name: rep.name,
-    etag: `"${eid}"`,
-    cache: 'browser',
-  }
-  return blobResponse(
-    (seek) =>
-      files.blobBytes(
-        env,
-        app,
-        blobPrefix(space, app),
-        sha,
-        seek.headers.get('range'),
-        seek.method,
-      ),
-    sha,
-    response,
-    req,
-    { request: 'GET /api/blob', space: space.slug, app: app.slug },
-  )
-}
-
-// The public blob answer after access and representation selection: only
-// byte failures become the uncached unavailable response.
-export let blobResponse = async (
-  read: (seek: Request) => Promise<Response>,
-  sha: string,
-  response: Served,
-  req: Request,
-  tags: Record<string, string>,
-): Promise<Response> => {
-  try {
-    let bytes = await fencedVia(read, response, req)
-    if (bytes.status == 404) {
-      await bytes.body?.cancel()
-      caught(new Error(`missing blob ${sha}`), tags)
-      return json(404, 'no_such_file')
-    }
-    if (![200, 206, 304, 416].includes(bytes.status)) {
-      await bytes.body?.cancel()
-      throw new Error(`blob bytes answered ${bytes.status}`)
-    }
-    return bytes
-  } catch (e) {
-    caught(e, tags)
-    return json(503, 'blob_unavailable')
-  }
-}
 
 // What to call this person, for the store to write beside their rows: the
 // write door's half of the vouch (session.ts `titling`), over this door's own
@@ -2166,52 +1751,27 @@ export let api = async (
       )
       : null
   }
-  if (path == '/blob') {
-    if (req.method != 'POST') return json(405, 'method_not_allowed')
-    let form = new URL(req.url).searchParams.has('form')
+  if (path == '/blob' || path.startsWith('/blob/')) {
+    let writes = req.method == 'POST' || req.method == 'PUT'
+    let looks = req.method == 'GET' || req.method == 'HEAD'
+    if (path == '/blob' ? req.method != 'POST' : !writes && !looks) {
+      return json(405, 'method_not_allowed')
+    }
+    // A form's uploads are the app's own, whoever sends them (forms.ts).
+    let form = path == '/blob' && new URL(req.url).searchParams.has('form')
     if (form) {
       let denied = await (await import('./forms.ts')).formUpload(req, store)
       if (denied) return denied
-    } else {
+    } else if (writes) {
       if (!mayPost) return refused()
       let below = await unfloored()
       if (below) return below
-    }
-    return await took(req, env, space, app, store, {
-      ...headers,
-      ...(form ? KERNEL : await named(env, who, app)),
-    }).catch(untaken)
-  }
-  if (
-    path.startsWith('/blob/') && (req.method == 'POST' || req.method == 'PUT')
-  ) {
-    if (!mayPost) return refused()
-    let below = await unfloored()
-    if (below) return below
-    return inParts(
-      req,
-      env,
-      space,
-      app,
-      store,
-      async () => ({ ...headers, ...(await named(env, who, app)) }),
-      path.slice('/blob/'.length),
-    )
-  }
-  if (path.startsWith('/blob/')) {
-    if (req.method != 'GET' && req.method != 'HEAD') {
-      return json(405, 'method_not_allowed')
-    }
-    if (!mayRead) return refused('not_a_reader')
-    return gave(
-      req,
-      env,
-      space,
-      app,
-      store,
-      headers,
-      path.slice('/blob/'.length),
-    )
+    } else if (!mayRead) return refused('not_a_reader')
+    return await blobDoor(req, env, space, app, store, path, {
+      reader: headers,
+      writer: async () =>
+        form ? headers : { ...headers, ...await named(env, who, app) },
+    })
   }
   if (path.startsWith('/files/')) {
     if (req.method != 'PUT') return json(405, 'method_not_allowed')

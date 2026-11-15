@@ -4,7 +4,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import * as apps from './apps.ts'
-import { filed } from './uploads.ts'
+import { filed, servedTo } from './uploads.ts'
 import * as files from './files.ts'
 import { storage } from '@yaks/durable-object'
 import { Store } from './graph.ts'
@@ -232,7 +232,7 @@ test('a yes to whether a blob is served is kept, a no or a failure is not', asyn
 
 // The gateway asks Files first for an app anyone may read, and the store
 // itself for a private app or when Files has no yes; a Files that could not
-// say is a throw, which the gateway answers with a 503 (apps.ts `servedTo`).
+// say is a throw, which the gateway answers with a 503 (uploads.ts `servedTo`).
 test('the gateway asks Files about an app anyone may read, and the store when Files says no', async () => {
   let asked = 0
   let graph = {
@@ -245,7 +245,7 @@ test('the gateway asks Files about an app anyone may read, and the store when Fi
     },
   }
   let gateway = (said: keyof typeof answers, access = 'public') =>
-    apps.servedTo(
+    servedTo(
       { FILES: { fetch: () => files.servedAs(answers[said]) } } as never,
       { eid: 'space', slug: 'ada' } as Space,
       { eid: 'app', slug: 'cookbook', space: 'space', access } as App,

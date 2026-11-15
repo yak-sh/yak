@@ -51,7 +51,8 @@ import {
   type ManageView,
 } from '@yaks/platform/routes'
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
-import { type Ceiling, count, share, size } from '@yaks/platform/standing'
+import { size } from '@yaks/fp'
+import { type Ceiling, count, share } from '@yaks/platform/standing'
 import { PRICE, WARN } from '@yaks/platform/plans'
 import { columns } from '@yaks/ui/chart'
 

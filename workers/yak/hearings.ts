@@ -22,9 +22,11 @@ import { blobPrefix } from './blob-key.ts'
 import { appStore, directoryOf } from './directory.ts'
 import type { Stored } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { size, unaffordable } from '@yaks/platform/standing'
+import { size } from '@yaks/fp'
+import { unaffordable } from '@yaks/platform/standing'
 import { hearing, paused, speechOf } from './speech.ts'
-import { blobKey, useOf } from './uploads.ts'
+import { blobKey } from './uploads.ts'
+import { useOf } from '@yaks/blob/upload'
 
 /// shaOf('/cookbook/api/blob/' + 'a'.repeat(64) + '/' + 'b'.repeat(64)) -> 'a'.repeat(64)
 /// shaOf('./api/blob/' + 'c'.repeat(64)) -> 'c'.repeat(64)

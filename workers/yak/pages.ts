@@ -69,12 +69,12 @@ import { type Preview, tags as previewTags } from './link-preview.ts'
 import { decodeHTML } from 'entities'
 
 import { BLOCK, type Budget } from '@yaks/platform/meter'
+import { size } from '@yaks/fp'
 import {
   type Ceiling,
   count,
   dollars,
   type Gauge,
-  size,
 } from '@yaks/platform/standing'
 import { ceilings, PRICE, YEARLY } from '@yaks/platform/plans'
 

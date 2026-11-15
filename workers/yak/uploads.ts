@@ -1,42 +1,38 @@
-// An upload's write half, without a request anywhere in it: bytes into the
-// app's bucket and the rows that name them there, as whoever the caller
-// decided is writing. Bytes arrive by many doors (apps.ts `POST ./api/blob`,
-// inbox.ts a letter's attachments, library-tools.ts a fetched document), and
-// each keeps them through here.
+// An app's uploads on yaks.app: @yaks/blob's write half (@yaks/blob/upload)
+// and its door (@yaks/blob/routes), in the app's words
+// (@yaks/platform/uploads), over what only the Worker knows. That is where in
+// the bucket the app keeps its bytes, the room its space has, what the
+// release serving the app takes, whom its rows are written as, and Files'
+// cache of what it serves. Bytes arrive by many doors (`blobDoor`, a page's
+// `./api/blob`; inbox.ts, a letter's attachments; library-tools.ts, a fetched
+// document), and each keeps them through here.
 
 import type { Bundle, Comp } from '@yaks/graph'
+import { type Accepts, prefixed } from '@yaks/blob'
 import {
-  type Accepts,
-  fits,
-  representation,
-  type Size,
-  sizeOf,
-  taken,
-  takes,
-} from '@yaks/blob'
-import { contentType } from '@yaks/blob/identify'
-import { Denied, stands } from '@yaks/member'
+  type File as Filed,
+  filed as kept,
+  servable,
+  type Upload,
+} from '@yaks/blob/upload'
+import { routes } from '@yaks/blob/routes'
+import { routed } from '@yaks/api/routed'
+import type { Door } from '@yaks/durable-object/door'
+import { Denied, mode, stands } from '@yaks/member'
 import { uploadFloor } from '@yaks/platform/app-authority'
-import { blobPrefix } from './blob-key.ts'
+import { sandboxed } from '@yaks/platform/installs'
+import { json } from '@yaks/platform/refused'
+import { uploads } from '@yaks/platform/uploads'
+import { blobPrefix, uploadPrefix } from './blob-key.ts'
 import { declarationOf } from './declaration.ts'
-import type { App, Space } from './directory.ts'
+import { type App, type Space, storeAt } from './directory.ts'
 import type { Env } from './env.ts'
+import * as files from './files.ts'
 import { r2Objects } from './lib/objects.ts'
-import { size } from '@yaks/platform/standing'
-import { KERNEL, type Meta } from './meta.ts'
+import { KERNEL, type Meta, metaOf } from './meta.ts'
 import type { Who } from './session.ts'
 import { fullFiles } from './usage.ts'
-import { digest } from '@yaks/graph/sha256'
 import { Pending } from '@yaks/api/log'
-
-// The bytes' own name (@yaks/graph/sha256 `digest`, the content address a
-// version's manifest is made of) is the object's key and the entity's eid
-// here, so the same photo sent twice is one object and one row.
-//
-// The app's one use of those bytes, addressed off them: derived, so an upload
-// finds its own attachment row without reading for it, and the same file sent
-// again is that row renamed.
-export let useOf = (sha: string) => digest(`attachment:${sha}`)
 
 // Where an app's uploaded bytes live: the prefix its row was born with
 // (blob-key.ts `blobPrefix`), which no rename moves and erasing the app
@@ -45,155 +41,70 @@ export let useOf = (sha: string) => digest(`attachment:${sha}`)
 export let blobKey = (space: Space, app: App, sha: string) =>
   blobPrefix(space, app) + sha
 
-/**
- * A blob the app does not take (`"blob"` in its vocab.json, @yaks/blob
- * `Accepts`): bigger than it says, or of a type it does not list, read off the
- * bytes. Nothing declared takes everything; the limits are its author's.
- */
-export class Untaken extends Error {
-  status: number
-  code: string
-  constructor(status: number, code: string, says: string) {
-    super(says)
-    this.status = status
-    this.code = code
-  }
-}
-
 /** What the app takes as a blob, from the release serving it. */
 export let acceptsOf = async (env: Env, space: Space, app: App) =>
   (await declarationOf(env, space, app)).vocab.blob as Accepts | undefined
 
-// Refused, when `bytes` bytes, or bytes read as `type`, are not taken.
-export let admit = (a: Accepts | undefined, bytes: number, type?: string) => {
-  if (!fits(a, bytes)) {
-    throw new Untaken(
-      413,
-      'too_large',
-      `this app takes files of at most ${size(a!.maxLength!)}`,
-    )
-  }
-  if (type != null && !takes(a, type)) {
-    throw new Untaken(
-      415,
-      'unsupported_media_type',
-      `this app takes ${taken(a)}, and this file is ${type}`,
-    )
+/** Where the app's uploads are kept: its prefix in the bucket, counted as
+ * every trip to it is (lib/objects.ts), in its own scope and words, held to
+ * the room its space has. The bucket takes whatever Cloudflare lets through,
+ * so it sets no limit of its own. */
+export let keptAt = (env: Env, space: Space, app: App): Upload => {
+  let prefix = blobPrefix(space, app)
+  return {
+    store: prefixed(r2Objects(env.BLOBS), prefix),
+    scope: app.eid,
+    limit: Infinity,
+    // Bytes the app already holds count nothing (usage.ts `fullFiles`).
+    room: (sha, bytes) => fullFiles(env, space, [{ key: prefix + sha, bytes }]),
+    naming: uploads,
   }
 }
+
+/** {@link keptAt}, and what the app takes: `accepts`, else its release's. */
+export let uploadOf = async (
+  env: Env,
+  space: Space,
+  app: App,
+  accepts?: Accepts,
+): Promise<Upload> => ({
+  ...keptAt(env, space, app),
+  accepts: accepts ?? await acceptsOf(env, space, app),
+})
+
+/** Kept bytes, the rows that name them, and where the app serves them. */
+export type File = Filed & { url: string }
+
+// A store as the write half reads it.
+let reading = (graph: Pick<Meta, 'query'>) => (line: string) =>
+  graph.query(line)
 
 /**
  * Bytes into the app's bucket, and the rows that name them there — the
  * write half of an upload, without a request anywhere in it, because bytes
  * arrive by other doors too (inbox.ts: a letter's attachments). Bytes the app
- * does not take (`accepts`) throw {@link Untaken} before any are kept.
- *
- * The object lands in the bucket first and the rows are only returned, because
- * a row pointing at nothing is the failure a reader sees, while bytes nobody
- * has named yet are invisible until the next arrival of the same file names
- * them. The caller applies the bundles, as whoever it decided is writing.
+ * does not take (`accepts`), or a space with no room, throw @yaks/blob/upload
+ * `Untaken` before any are kept. The caller applies the bundles, as whoever
+ * it decided is writing.
  */
 export let filed = async (
   env: Env,
   space: Space,
   app: App,
-  graph: Meta,
+  graph: Pick<Meta, 'query'>,
   bytes: Uint8Array<ArrayBuffer>,
   mime: string,
   name: string,
   accepts?: Accepts,
 ): Promise<File> => {
-  admit(accepts, bytes.byteLength)
-  let sha = await digest(bytes)
-  let file = await described(graph, app, sha, bytes, mime, name)
-  admit(accepts, bytes.byteLength, file.mime)
-  // Put without asking first: the key is the bytes' own name, so the same
-  // file again writes what is already there, and a new one, the usual
-  // arrival, saves the bucket's round trip of a look (T-124298).
-  await r2Objects(env.BLOBS).put(blobKey(space, app, sha), bytes)
-  return file
-}
-
-/** Kept bytes, and the rows that name them. */
-export type File = {
-  sha: string
-  use: string
-  size: Size | undefined
-  mime: string
-  url: string
-  bundles: Bundle[]
-}
-
-/**
- * The rows that name the `bytes` bytes kept at `sha`, read off `head`: their
- * first bytes, or all of them.
- *
- * The content row, the way the fleet shapes a file (src/blob.ts),
- * addressed by its sha and carrying what is true of the bytes — how many they
- * are, and what they measure (@yaks/blob `sizeOf`, off the file's own header) —
- * and the use of it, carrying what it is called and what it is. They stay
- * apart because they are two things, and because a component may not point at
- * its own entity. The use is addressed off the content, so the same bytes sent
- * twice are one attachment renamed rather than a second row saying the same
- * thing. A listing shows the use and not the content, which is right: a doc's
- * body is a blob row as well, and nobody saved that.
- */
-export let described = async (
-  graph: Meta,
-  app: App,
-  sha: string,
-  head: Uint8Array,
-  mime: string,
-  name: string,
-  bytes = head.byteLength,
-): Promise<File> => {
-  let use = await useOf(sha)
-  if (!name || mime == 'application/octet-stream') {
-    let [prior] = await graph.query(`.entity.eid=${use}`) as {
-      attachment?: { name?: string; mime?: string }
-    }[]
-    name ||= prior?.attachment?.name ?? ''
-    if (mime == 'application/octet-stream') {
-      mime = prior?.attachment?.mime ?? mime
-    }
-  }
-  let whole = bytes == head.byteLength
-  let rep = representation(
-    app.eid,
-    sha,
-    await contentType(head, mime, whole),
+  let file = await kept(
+    reading(graph),
+    await uploadOf(env, space, app, accepts),
+    bytes,
+    mime,
     name,
   )
-  let size = sizeOf(head)
-  return {
-    sha,
-    use,
-    size,
-    mime: rep.row.media_type,
-    url: `/${app.slug}/api/blob/${rep.path}`,
-    bundles: [
-      {
-        entity: { eid: sha },
-        blob: { bytes },
-        ...(size ? { image: size } : {}),
-      },
-      {
-        entity: { eid: rep.eid },
-        representation: rep.row,
-      },
-      {
-        entity: { eid: use },
-        // A patch, so an arrival that names nothing leaves the name the
-        // first one gave these bytes: the same file is the same file,
-        // whatever the page had to call it the second time.
-        attachment: {
-          blob: sha,
-          mime: rep.row.media_type,
-          ...(name ? { name } : {}),
-        },
-      },
-    ],
-  }
+  return { ...file, url: `/${app.slug}/api/blob/${file.path}` }
 }
 
 /** Whether `who` is below the app's upload floor (app-authority.ts
@@ -214,12 +125,12 @@ export let belowFloor = async (
 /**
  * One whole upload, as whoever `graph` writes as: the bytes kept and the rows
  * that name them applied, so the app's rules (extraction among them) run on
- * it. What `POST ./api/blob` does once it has read the bytes, and what the
- * connector's library tools do with a document they fetched or were handed
- * (library-tools.ts). Bytes the app does not take, or a space with no room,
- * throw {@link Untaken}; a store's refusal of the rows throws as it answered.
- * A write the store's log keeps (`Pending`) lands when the app recovers, so it
- * is no failure here. `source` is the web address the file came from.
+ * it. What the connector's library tools do with a document they fetched or
+ * were handed (library-tools.ts). Bytes the app does not take, or a space
+ * with no room, throw `Untaken`; a store's refusal of the rows throws as it
+ * answered. A write the store's log keeps (`Pending`) lands when the app
+ * recovers, so it is no failure here. `source` is the web address the file
+ * came from.
  */
 export let uploaded = async (
   env: Env,
@@ -235,12 +146,6 @@ export let uploaded = async (
     protect?: (rows: Bundle[], sha: string) => Bundle[]
   },
 ): Promise<File> => {
-  let accepts = o.accepts ?? await acceptsOf(env, space, app)
-  let stopped = await fullFiles(env, space, [{
-    key: blobKey(space, app, await digest(bytes)),
-    bytes: bytes.byteLength,
-  }])
-  if (stopped) throw new Untaken(413, 'space_full', stopped)
   let file = await filed(
     env,
     space,
@@ -249,7 +154,7 @@ export let uploaded = async (
     bytes,
     o.mime,
     o.name,
-    accepts,
+    o.accepts,
   )
   if (o.source) {
     file.bundles = file.bundles.map((b) =>
@@ -267,4 +172,107 @@ export let uploaded = async (
     if (!(e instanceof Pending)) throw e
   }
   return file
+}
+
+/** Whether the bytes are served at all, which is the store's to say
+ * (@yaks/blob/upload `servable`). For an app anyone may read, Files keeps a
+ * yes (files.ts `servedAs`), so a burst of image reads is not a burst of
+ * store reads; a no from it, and every read of a private or sandboxed app's,
+ * is asked here as the reader. A store that could not say throws. */
+export let servedTo = async (
+  env: Env,
+  space: Space,
+  app: App,
+  graph: Pick<Meta, 'query'>,
+  sha: string,
+  eid: string,
+) => {
+  let read = () =>
+    servable(reading(graph), { scope: app.eid, naming: uploads }, sha, eid)
+  return !sandboxed(app) && mode(app.access) != 'private'
+    ? await files.servableOf(env, app, storeAt(space, app, env), sha, eid) ??
+      await read()
+    : await read()
+}
+
+// A refusal of the door's, in the page's envelope as the gateway's own are:
+// `{error: {code, message}}` (@yaks/platform/refused), with its status and
+// the wait it asks for.
+let enveloped = async (answer: Response) => {
+  if (answer.ok || answer.status == 302 || answer.status == 304) return answer
+  if (!answer.headers.get('content-type')?.includes('json')) return answer
+  let said = await answer.json()
+  let out = Response.json({
+    error: {
+      code: said.code ?? 'refused',
+      message: said.message ?? said.code,
+      ...said.error ? { name: said.error } : {},
+    },
+  }, { status: answer.status })
+  let wait = answer.headers.get('retry-after')
+  if (wait) out.headers.set('retry-after', wait)
+  return out
+}
+
+/**
+ * A page's file door, `./api/blob` (@yaks/blob/routes), once the gateway has
+ * asked who may read and write: its rows read as `reader` and written as
+ * `writer`, which is asked only when there are rows to write. `path` is the
+ * request's own below the app's `./api`, so the door answers where the page
+ * asked it, whatever mount that came through.
+ */
+export let blobDoor = async (
+  req: Request,
+  env: Env,
+  space: Space,
+  app: App,
+  store: Door,
+  path: string,
+  as: {
+    reader: Record<string, string>
+    writer: () => Promise<Record<string, string>>
+  },
+) => {
+  let url = new URL(req.url)
+  let at = `${url.pathname.slice(0, url.pathname.length - path.length)}/blob/`
+  let reader = metaOf(store, as.reader)
+  let writing = req.method == 'POST' || req.method == 'PUT'
+  let { store: artifacts, ...taken } = keptAt(env, space, app)
+  let prefix = blobPrefix(space, app)
+  let objects = r2Objects(env.BLOBS)
+  let door = routes({
+    artifacts,
+    graph: {
+      read: reading(reader),
+      // Who may write was asked at the gateway (apps.ts: the app's access and
+      // its upload floor), and the store's guard holds the rows themselves,
+      // so a check has nothing left to ask before the bytes are kept.
+      apply: async (bundles, o) =>
+        o.check
+          ? bundles
+          : await (writing ? metaOf(store, await as.writer()) : reader)
+            .apply(bundles, KERNEL),
+    },
+  }, {
+    ...taken,
+    // Only an upload is held to what the app takes.
+    accepts: writing ? await acceptsOf(env, space, app) : undefined,
+    at,
+    parts: { objects, bucket: env.BLOBS, prefix, ledger: uploadPrefix(app) },
+    served: (sha, eid) => servedTo(env, space, app, reader, sha, eid),
+    bytes: (seek, sha) =>
+      files.blobBytes(
+        env,
+        app,
+        prefix,
+        sha,
+        seek.headers.get('range'),
+        seek.method,
+      ),
+    tags: { space: space.slug, app: app.slug },
+  })
+  let route = door.find((r) => routed(r, req.method, url.pathname))
+  return route
+    ? await enveloped(await route.handle(req))
+    : json(404, 'no_such_file')
 }

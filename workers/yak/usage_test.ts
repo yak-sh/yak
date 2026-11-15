@@ -55,6 +55,7 @@ import {
   countedSpend,
   weighed,
 } from './meter.ts'
+import { size } from '@yaks/fp'
 import {
   atCeiling,
   atStored,
@@ -62,7 +63,6 @@ import {
   gauged,
   level,
   refusedSpend,
-  size,
 } from '@yaks/platform/standing'
 
 let ANSWER = {

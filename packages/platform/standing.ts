@@ -2,6 +2,7 @@
 // the line an agent hears near a ceiling, and every refusal a spend or a
 // write meets there. The arithmetic is ./meter.ts's and the figures
 // ./plans.ts's; each line ends at the page that describes the plans.
+import { size } from '@yaks/fp'
 import type { Host } from './host.ts'
 import { planSettings } from './routes.ts'
 import {
@@ -58,20 +59,6 @@ export type SpaceStanding = {
 
 /** Where a space stands: nothing to say, near a ceiling, or past one. */
 export type Level = 'ok' | 'near' | 'over'
-// Bytes as a person says them. The meter is read out loud in tool answers,
-// where `241 MB` is the number and `252706816` is noise.
-export let size = (bytes: number): string => {
-  let units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let n = 0
-  while (bytes >= 1024 && n < units.length - 1) {
-    bytes /= 1024
-    n++
-  }
-  // A tenth where it says something — 1.5 KB — and never where it does not:
-  // the ceiling is 1 GB, and `1.0 GB` reads like a measurement of it.
-  let round = !n || bytes >= 10 || Number.isInteger(bytes)
-  return `${round ? Math.round(bytes) : bytes.toFixed(1)} ${units[n]}`
-}
 
 /** The line a space's owner hears at a {@link capped} standing: what it
  * is, for which space, and where the cap is raised or credit bought. */

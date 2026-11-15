@@ -23,9 +23,13 @@ export let artifactsAt = (path: string): Blobs =>
 /** Build the backend named by a config, or explain why it cannot serve. */
 export let backend = (
   said: Backend,
-  host: { blobs: Blobs },
+  host: { blobs?: Blobs },
 ): { store?: Blobs; waiting?: string } => {
-  if (said.via == 'sqlite') return { store: host.blobs }
+  if (said.via == 'sqlite') {
+    return host.blobs
+      ? { store: host.blobs }
+      : { waiting: 'a SQLite store needs a host that keeps one' }
+  }
   if (said.via == 'file') {
     return said.dir
       ? { store: fileBlobs(said.dir) }

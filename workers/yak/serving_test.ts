@@ -55,7 +55,7 @@ import { PLATFORM_STORE } from '@yaks/platform/names'
 import { sweep } from './usage.ts'
 import { FREE, PLUS } from '@yaks/platform/plans'
 import { monthOf } from '@yaks/platform/meter'
-import { size } from '@yaks/platform/standing'
+import { size } from '@yaks/fp'
 import {
   ADA,
   ADA_OWNS,

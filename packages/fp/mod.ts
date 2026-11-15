@@ -419,6 +419,26 @@ export let wellFormed = (text: string): string =>
     (c) => c.length == 2 ? c : '�',
   )
 
+/// size(512) -> '512 B'
+/// size(1536) -> '1.5 KB'
+/// size(252706816) -> '241 MB'
+/// size(1024 ** 3) -> '1 GB'
+/**
+ * Bytes as a person says them: `241 MB` is the number, and `252706816` is
+ * noise. A tenth where it says something, and never where it does not, since
+ * `1.0 GB` reads like a measurement of a ceiling of 1 GB.
+ */
+export let size = (bytes: number): string => {
+  let units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let n = 0
+  while (bytes >= 1024 && n < units.length - 1) {
+    bytes /= 1024
+    n++
+  }
+  let round = !n || bytes >= 10 || Number.isInteger(bytes)
+  return `${round ? Math.round(bytes) : bytes.toFixed(1)} ${units[n]}`
+}
+
 /**
  * A promise with its resolve and reject: `Promise.withResolvers`, which
  * browsers before Safari 17.4 and Chrome 119 lack.

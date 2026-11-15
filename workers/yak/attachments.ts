@@ -2,9 +2,15 @@
 // the bucket under its space, named by the digest of its bytes
 // (operator-channels.ts `keepFile`). That digest is its attachment id: what
 // the conversation calls it, and what library_add and sandbox_write read it by.
+import { artifactBytes, type Blobs, prefixed } from '@yaks/blob'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
+import { r2Objects } from './lib/objects.ts'
 import { refuse } from './tool.ts'
+
+/** Where the space keeps the Operator's attachments in the bucket. */
+let attachmentPrefix = (space: Pick<Space, 'store'>) =>
+  `${space.store}/.operator/`
 
 /** Where the attachment with this digest is kept in the space's bucket.
  *
@@ -15,10 +21,18 @@ import { refuse } from './tool.ts'
  * ```
  */
 export let attachmentKey = (space: Pick<Space, 'store'>, sha: string) =>
-  `${space.store}/.operator/${sha}`
+  attachmentPrefix(space) + sha
+
+/** The space's Operator attachments, a @yaks/blob store under their prefix,
+ * counted as every trip to the bucket is (lib/objects.ts). */
+export let attachments = (
+  env: Pick<Env, 'BLOBS'>,
+  space: Pick<Space, 'store'>,
+): Blobs => prefixed(r2Objects(env.BLOBS), attachmentPrefix(space))
 
 /** The bytes of the space's attachment by its id, or null when the space
- * keeps none by it; an id that cannot be one is refused. */
+ * keeps none by it; an id that cannot be one is refused, and bytes that are
+ * not the ones it names throw (@yaks/blob `artifactBytes`). */
 export let attached = async (
   env: Pick<Env, 'BLOBS'>,
   space: Pick<Space, 'store'>,
@@ -27,8 +41,8 @@ export let attached = async (
   if (!/^[0-9a-f]{64}$/.test(id)) {
     throw refuse('arguments', `attachment: ${id} is not an attachment id`)
   }
-  let kept = await env.BLOBS.get(attachmentKey(space, id))
-  return kept && new Uint8Array(await kept.arrayBuffer())
+  let kept = await artifactBytes(attachments(env, space), { address: id })
+  return (kept ?? null) as Uint8Array<ArrayBuffer> | null
 }
 
 /** An attachment where a caller requires its bytes, refused when absent. */

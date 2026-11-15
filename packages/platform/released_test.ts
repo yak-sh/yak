@@ -7,7 +7,7 @@ import type { Comp } from '@yaks/graph'
 import { mint } from '@yaks/graph/identity'
 import { faulted, toolEid } from '@yaks/tools/result'
 import { opened } from './released.ts'
-import { store } from './client.js'
+import { digest, store } from './client.js'
 
 let dir = new URL('./fixtures/recipes', import.meta.url).pathname
 let host = await opened(dir, ['graph', 'web'], { db: ':memory:' })
@@ -146,6 +146,35 @@ test('a page uses its store through its client at ./api/', async () => {
   )
   await heard.promise
   stop()
+  page.outbox.close()
+})
+
+// A page's file goes up through its client as it does on yaks.app: an
+// address back, the app's own rows naming it, and the bytes at its url.
+test('a page uploads a file through its client at ./api/', async () => {
+  await using box = Deno.serve(
+    { port: 0, hostname: '127.0.0.1', onListen() {} },
+    host.handler!,
+  )
+  let origin = `http://127.0.0.1:${box.addr.port}`
+  let page = store(`${origin}/api/`)
+  let bytes = new TextEncoder().encode('flour, butter, sugar\n')
+  let file = await page.upload(
+    new File([bytes], 'shortbread.txt', { type: 'text/plain' }),
+  )
+  equal([file.eid, file.mime, file.bytes], [
+    await digest(new Blob([bytes])),
+    'text/plain',
+    bytes.length,
+  ])
+  let [named] = await page.query(`.attachment.blob=${file.eid}`)
+  equal(named.attachment, {
+    blob: file.eid,
+    mime: 'text/plain',
+    name: 'shortbread.txt',
+  })
+  let got = await fetch(`${origin}${file.url}`)
+  equal(new Uint8Array(await got.arrayBuffer()), bytes)
   page.outbox.close()
 })
 

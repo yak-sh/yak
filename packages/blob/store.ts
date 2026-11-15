@@ -28,6 +28,11 @@ export type Blobs = {
   /** Writes share the graph's transaction and must roll back with its rows.
    * Other stores prepare their content before the graph takes its write lock. */
   transactional?: boolean
+  /** The store holds any bytes exactly as it was given them, so keeping an
+   * object is one `put`, neither asked about first nor read back
+   * (./artifact.ts `keep`): a bucket, where each look is a round trip. A text
+   * table is not: handed a PNG, it keeps something else. */
+  exact?: boolean
   /** whether the store already holds an object under this hash */
   has: (sha: string) => boolean | Promise<boolean>
   /** the bytes stored under this hash, or `undefined` if there are none */

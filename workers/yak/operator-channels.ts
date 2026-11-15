@@ -9,7 +9,8 @@ import { isPdf, supported } from '@yaks/platform/documents'
 import { outgoing } from './post.ts'
 import { mailFrom } from '@yaks/platform/host'
 import { digest } from '@yaks/graph/sha256'
-import { attachmentKey } from './attachments.ts'
+import { attachmentKey, attachments } from './attachments.ts'
+import { keep } from '@yaks/blob'
 import { type Attached, attachmentRows } from '@yaks/blob/attachment'
 import { sourceReference } from './operator-source.ts'
 import { type Ctx, inApp, refuse } from './tool.ts'
@@ -139,10 +140,11 @@ let fileOf = async (
 // its reference from reaching the Operator.
 let retainFile = async (
   env: Env,
+  space: Space,
   file: File,
   bytes: Uint8Array<ArrayBuffer>,
 ) => {
-  await env.BLOBS.put(file.key, bytes)
+  await keep(attachments(env, space), attachmentId(file), bytes)
   return file
 }
 
@@ -152,6 +154,7 @@ export let messageReference = async (env: Env, space: Space, body: string) => {
   let bytes = new TextEncoder().encode(body)
   let message = await retainFile(
     env,
+    space,
     await fileOf(space, 'message.txt', 'text/plain', bytes),
     bytes,
   )
@@ -177,7 +180,7 @@ export let keepFile = async (
     bytes: bytes.byteLength,
   }])
   if (full) throw refuse('space_full', full)
-  return retainFile(env, file, bytes)
+  return retainFile(env, space, file, bytes)
 }
 
 let UNREAD_PICTURE =

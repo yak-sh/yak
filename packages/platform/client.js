@@ -71,8 +71,9 @@ export { qr } from './qr.ts'
 // person's agent reads next.
 
 // A refusal, as one Error. The kernel and the store both answer a sentence —
-// `{error: {code, message}}` from the kernel, plain words from the store —
-// and that sentence is the whole of what a page shows and an agent reads.
+// `{error: {code, message}}` from the kernel, `{error, message}` from a
+// store's own doors (@yaks/api), as a box serves them — and that sentence is
+// the whole of what a page shows and an agent reads.
 // A body that is neither is a page (a 404 answers the platform's "Nothing
 // here yet." HTML), so it never rides the throw: the status and a short line
 // of it say what happened without dumping a document into an error message.
@@ -86,7 +87,8 @@ export { qr } from './qr.ts'
 let refused = (r, body) => {
   let said = null
   try {
-    said = JSON.parse(body).error
+    let { error, message, code } = JSON.parse(body)
+    said = typeof error == 'string' ? { code: code ?? error, message } : error
   } catch { /* not JSON: the status and a short line of whatever it was */ }
   let line = body.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
     .slice(0, 120)

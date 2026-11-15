@@ -1,5 +1,5 @@
 import { base64, unbase64 } from './bytes.ts'
-import { groupBy } from '@yaks/fp'
+import { groupBy, size } from '@yaks/fp'
 import { tell } from './operator-updates.ts'
 import { operatorTools } from './operator-tools.ts'
 import { mcpConnect } from './connected-mcp.ts'
@@ -310,7 +310,6 @@ import {
   type Held,
   heldAloud,
   refusedSpend,
-  size,
   standingOf,
   tooManySpaces,
 } from '@yaks/platform/standing'

@@ -8,7 +8,9 @@
 //
 // The release's own files answer at its addresses through the `yak/files`
 // routes facet (./files-routes.ts), read from the directory as it stands; the
-// forms its pages link at `./api/form/<name>` through @yaks/forms/routes; and
+// forms its pages link at `./api/form/<name>` through @yaks/forms/routes; the
+// files its pages upload at `./api/blob` through `yak/blob`
+// (./blob-routes.ts); and
 // the client its pages import at `./api/client.js` through `yak/client`
 // (./client-routes.ts), which answers its doors in the page's wire, with the
 // store's own beside them under `/api`, and
@@ -82,12 +84,14 @@ let doors = (plug: Plug): Plug =>
     : plug
 
 /** What a release's store composes: an app's store with its forms' doors,
- * its files and its pages' client, and @yaks/api's doors to answer for it. */
+ * its files, its file door and its pages' client, and @yaks/api's doors to
+ * answer for it. */
 export let releaseConfig = (at: Placing & { db: string }): Config => ({
   ...at,
   plugins: [
     ...appConfig.plugins!.map(doors),
     'yak/files',
+    'yak/blob',
     'yak/client',
     // A page's client finds its store's doors beside itself, at `./api/`.
     { use: '@yaks/api', with: { under: '/api' } },

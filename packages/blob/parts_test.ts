@@ -3,7 +3,6 @@ import { equal, test } from '@yaks/testing'
 import { assertRejects } from '@std/assert'
 import {
   addressOf,
-  type Bucket,
   bucketObjects,
   fold,
   Gone,
@@ -12,6 +11,7 @@ import {
   START,
   Wrong,
 } from './mod.ts'
+import { memoryBucket } from './testing.ts'
 
 // These doors pass bytes, not HTTP metadata.
 let stream = (bytes: Uint8Array) =>
@@ -25,43 +25,7 @@ let stream = (bytes: Uint8Array) =>
 // A bucket in memory, its multipart held beside it, and an upload of `file`
 // into it in parts of one block, 64 bytes.
 let setup = async (file: Uint8Array, sha?: string) => {
-  let held = new Map<string, Uint8Array>()
-  let at = new Map<string, number>()
-  let clock = 0
-  let now = <T>(v: T) => Promise.resolve(v)
-  let bucket: Bucket = {
-    head: (key) =>
-      now(held.has(key) ? { size: held.get(key)!.length, etag: 'v' } : null),
-    get: (key, options) => {
-      let bytes = held.get(key)
-      if (!bytes) return now(null)
-      let from = options?.range.offset ?? 0
-      let part = bytes.slice(
-        from,
-        options ? from + options.range.length : undefined,
-      )
-      return now({
-        etag: 'v',
-        body: stream(part),
-        arrayBuffer: () => now(part.buffer),
-      })
-    },
-    put: (key, value) => {
-      held.set(key, new Uint8Array(value as Uint8Array))
-      return now(at.set(key, ++clock))
-    },
-    delete: (keys) => now([keys].flat().forEach((key) => held.delete(key))),
-    list: ({ prefix }) =>
-      now({
-        truncated: false,
-        objects: [...held].filter(([key]) => key.startsWith(prefix))
-          .map(([key, bytes]) => ({
-            key,
-            size: bytes.length,
-            uploaded: new Date(at.get(key)!),
-          })),
-      }),
-  }
+  let { bucket, held } = memoryBucket()
   let objects = bucketObjects(bucket)
   // Each upload the bucket begins, so a test can abort one behind the
   // ledger's back, as R2 does a week on.

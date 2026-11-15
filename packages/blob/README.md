@@ -88,7 +88,7 @@ host records that, and refuses the store to a config without @yaks/blob
 | `Blobs`, `memoryBlobs`, `address`, `encode`, `decode`                                         | Store interface and text addressing                      |
 | `sqliteBlobs`, `blobSchema`, `dropSql`, `Layout`                                              | SQLite text storage                                      |
 | `objectBlobs`, `Bucket`, `patient`                                                            | Object storage                                           |
-| `Objects`, `Opened`, `Loaded`, `bucketObjects`                                                | A bucket keyed by name: read, delete, list               |
+| `Objects`, `Opened`, `Loaded`, `bucketObjects`, `prefixed`                                    | A bucket keyed by name: read, delete, list               |
 | `parts`, `Multipart`, `Assembly`, `memoryMultipart`, `sized`, `Gone`, `Wrong`, `MOST`, `MiB`  | Resumable uploads in parts, checked against their hash   |
 | `hasher`, `fold`, `START`                                                                     | SHA-256 carried from one piece of bytes to the next      |
 | `Accepts`, `acceptsErrors`, `fits`, `takes`, `taken`                                          | Which blobs an application takes, by size and media type |
@@ -110,6 +110,7 @@ host records that, and refuses the store to a config without @yaks/blob
 | `@yaks/blob/store`      | `Blobs`, `memoryBlobs()`, `address`: the store shape and the memory store, without the rest of the package                                                                     |
 | `@yaks/blob/serve`      | the HTTP responses above, `matches` among them, without the rest of the package                                                                                                |
 | `@yaks/blob/attachment` | `attachmentRows`, `attachmentOf`, `artifactsOf`, `attachmentsSeen`: a file's artifact and its use beside each message, and a reader shown only the attachments a clause admits |
+| `@yaks/blob/upload`     | `filed`, `described`, `admit`, `Untaken`, `useOf`, `servable`, `Naming`: an upload's write half and the words its rows speak                                                   |
 
 ## Addresses
 
@@ -658,29 +659,53 @@ equal(await forwarded.text(), 'ell')
 ## The HTTP endpoints
 
 `@yaks/blob/routes` exports `routes(host, options)` for plugin servers such as
-[`yak serve`](../cli/README.md). It mounts `/blob/<sha256>` and
-`/blob/<sha256>/<representation>`:
+[`yak serve`](../cli/README.md). It mounts its doors under `options.at` (default
+`/blob/`):
 
-- A bare `GET` or `HEAD` redirects to the current representation and
-  revalidates. An address without a representation gets one on first read.
+- `POST /blob` keeps the body's bytes. `content-type` says their type and
+  `x-yak-name` their name, percent-encoded.
+- `PUT /blob/<sha256>` does the same for bytes hashing to that address, which
+  must be 64 lowercase hex digits; either mismatch returns 400.
+- `POST /blob/<sha256>` with `{bytes, name, mime}` begins or resumes an
+  [upload in parts](#uploads-in-parts) where `options.parts` names a bucket for
+  them: it answers `{part, need}`, the part size and the parts still missing,
+  until none are, and then it answers as an upload does.
+  `PUT
+  /blob/<sha256>/<n>` sends part `n`, with `x-yak-state` the SHA-256
+  state the bytes before it leave. A door with no bucket for parts answers 501.
+- A bare `GET` or `HEAD` redirects to the current representation, which the
+  browser keeps for a week. An address its rows name without a representation
+  gets one on first read.
 - A versioned `GET` or `HEAD` returns bytes and immutable media type and
-  filename headers. Public responses cache for one year. Invalid addresses and
-  missing objects return 404. The route itself performs no authentication check.
-- `PUT` requires 64 lowercase hex digits and bytes hashing to that address;
-  either mismatch returns 400. It counts streamed body bytes and returns 413
-  above the configured limit. It records a normalized media type from
-  `content-type` when the bytes are text, identifies known binary signatures,
-  and returns artifact metadata as JSON with the versioned URL in `Location`.
+  filename headers, cached by the browser for a year, while a row still names
+  the bytes. Invalid addresses, missing objects and bytes no row names return
+  404. The route itself performs no authentication check.
 
-An upload first checks its proposed artifact write with
-`graph.apply(...,
-{ check: true })`, then stores/verifies bytes, then applies
-the artifact write. The graph's write rules determine whether the artifact is
-allowed. `host.who`, when configured, supplies actor attribution as it does for
-`/apply`. This route adds no separate upload permission policy.
+Each upload answers `{eid, attachment, url, mime, bytes}`, with `w` and `h` for
+a picture, and the versioned `url` again in `Location`. `eid` is the address and
+the content row's eid; `attachment` is the eid of its use, `useOf(eid)`, the row
+saying what the bytes are called and what they are. The rows are an `artifact`
+and an `attachment` naming it, or the words a host passes as `naming`
+(`@yaks/blob/upload` `Naming`). The same bytes again are the same two rows, and
+an upload that names nothing keeps the name they had.
 
-If the final graph write fails, stored content may remain without an artifact
-entity. Repeating a successful upload uses the same address and entity ID.
+Every upload counts streamed body bytes. It returns 413 above the `limit`, above
+the `maxLength` of `accepts` (which blobs are taken), or past the `room` a host
+says its store has, and 415 for bytes whose type, read off them, `accepts` does
+not list. A refusal carries the door's word for it as `code`: `too_large`,
+`unsupported_media_type`, `space_full`, `no_bytes` or `upload_gone`.
+
+An upload first checks its proposed rows with
+`graph.apply(..., { check: true
+})`, then stores/verifies bytes, then applies
+the rows. The graph's write rules determine whether the upload is allowed.
+`host.who`, when configured, supplies actor attribution as it does for `/apply`.
+This route adds no separate upload permission policy. The same write half
+without a request is `@yaks/blob/upload` `filed`, for bytes that arrive another
+way.
+
+If the final graph write fails, stored content may remain without its rows.
+Repeating a successful upload uses the same address and entity IDs.
 
 ```json
 {
@@ -770,7 +795,7 @@ let response = await upload.handle(
   }),
 )
 equal(response.status, 200)
-equal((await response.json()).size, 5)
+equal((await response.json()).bytes, 5)
 let versioned = new URL(response.headers.get('location')!, url)
 equal((await read.handle(new Request(url))).status, 302)
 equal(await (await read.handle(new Request(versioned))).text(), 'Hello')

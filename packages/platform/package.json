@@ -67,6 +67,8 @@
     "./meter-graph": "./meter-graph.ts",
     "./files": "./files.ts",
     "./files-routes": "./files-routes.ts",
+    "./blob-routes": "./blob-routes.ts",
+    "./uploads": "./uploads.ts",
     "./kept": "./kept.ts",
     "./client": "./client.js",
     "./qr": "./qr.ts",

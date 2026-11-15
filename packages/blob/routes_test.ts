@@ -8,9 +8,12 @@ import { tally } from '@yaks/sql'
 import { type Blobs, memoryBlobs } from './store.ts'
 import { ram } from '@yaks/ram'
 import { addressOf, type Artifact, artifactDoc } from './artifact.ts'
-import { mem } from './testing.ts'
-import type { Bucket } from './object.ts'
+import { mem, memoryBucket } from './testing.ts'
+import { bucketObjects, objectBlobs } from './object.ts'
+import { memoryMultipart } from './parts.ts'
+import { fold, START } from './sha256.ts'
 import { type Backend, type Options, PREFIX, routes } from './routes.ts'
+import { useOf } from './upload.ts'
 import { blobSchema, sqliteBlobs } from './sqlite.ts'
 import { representations } from './representation_rules.ts'
 
@@ -65,7 +68,7 @@ let host = () => {
 }
 
 let door = (
-  h: { blobs: Blobs; graph: Graph; who?: Authenticate; artifacts?: Blobs },
+  h: { blobs?: Blobs; graph: Graph; who?: Authenticate; artifacts?: Blobs },
   options?: Options,
 ) => {
   let table: Route[] = routes(h, options)
@@ -125,19 +128,26 @@ test('a PUT to an address stores the bytes and mints the artifact', async () => 
   let made = await ask(put(sha, text, 'text/plain; charset=utf-8'))
   assertEquals(made.status, 200)
   // The media type is kept without its parameters — it becomes a header.
-  assertEquals(await made.json(), {
-    address: sha,
-    media_type: 'text/plain',
-    size: text.length,
+  let file = await made.json()
+  let use = await useOf(sha)
+  assertEquals(file, {
+    eid: sha,
+    attachment: use,
+    url: made.headers.get('location'),
+    mime: 'text/plain',
+    bytes: text.length,
   })
   let [row] = await h.graph.read(`.entity.eid=${sha}`)
   assertEquals((row.artifact as Artifact).size, text.length)
+  // …and beside the artifact, its use: what it is called and what it is.
+  let [named] = await h.graph.read(`.entity.eid=${use}`)
+  assertEquals(named.attachment, { artifact: sha, media_type: 'text/plain' })
 
-  let versioned = new URL(made.headers.get('location')!, at(sha)).href
+  let versioned = new URL(file.url, at(sha)).href
   let alias = await ask(new Request(at(sha)))
   assertEquals(alias.status, 302)
   assertEquals(alias.headers.get('location'), versioned)
-  assertEquals(alias.headers.get('cache-control'), 'public, no-cache')
+  assertEquals(alias.headers.get('cache-control'), 'private, max-age=604800')
   let got = await ask(new Request(versioned))
   assertEquals(got.status, 200)
   assertEquals(new Uint8Array(await got.arrayBuffer()), text)
@@ -145,7 +155,7 @@ test('a PUT to an address stores the bytes and mints the artifact', async () => 
   assertEquals(got.headers.get('content-type'), 'text/plain')
   assertEquals(
     got.headers.get('cache-control'),
-    'public, max-age=31536000, immutable',
+    'private, max-age=31536000, immutable',
   )
   let part = await ask(
     new Request(versioned, {
@@ -287,39 +297,7 @@ test('a text store that cannot keep the bytes says so at the write', async () =>
 })
 
 test('the store a host names is where the bytes land', async () => {
-  let cells = new Map<string, Uint8Array>()
-  let bucket: Pick<Bucket, 'head' | 'get' | 'put'> = {
-    head: (key) => {
-      let bytes = cells.get(key)
-      return Promise.resolve(
-        bytes ? { size: bytes.byteLength, etag: key } : null,
-      )
-    },
-    get: (key, options) => {
-      let found = cells.get(key)
-      let at = options?.range.offset ?? 0
-      let end = at + (options?.range.length ?? found?.byteLength ?? 0)
-      let part = found?.slice(at, end)
-      return Promise.resolve(
-        part
-          ? {
-            etag: key,
-            body: new ReadableStream<Uint8Array>({
-              start(controller) {
-                controller.enqueue(part)
-                controller.close()
-              },
-            }),
-            arrayBuffer: () => Promise.resolve(part.buffer as ArrayBuffer),
-          }
-          : null,
-      )
-    },
-    put: (key, value) => {
-      cells.set(key, new Uint8Array(value as Uint8Array))
-      return Promise.resolve()
-    },
-  }
+  let { bucket, held: cells } = memoryBucket()
   let h = host()
   let ask = door(h, { store: { via: 'object', bucket, prefix: 'art/' } })
   let sha = pngAddress
@@ -391,4 +369,163 @@ test('a door that knows nobody uploads as nobody, not as the caller', async () =
   assertEquals((await ask(put(sha, text))).status, 200)
   let [row] = await h.graph.read(`.entity.eid=${sha}`)
   assertEquals((row.created as { by?: string }).by, undefined)
+})
+
+// A door over a bucket in memory, which takes uploads in parts of 64 bytes.
+let bucketed = (options: Options = {}) => {
+  let { bucket, held } = memoryBucket()
+  let g = graph({
+    storage: ram(vocab),
+    vocab,
+    provenance: false,
+    plugins: [representations()],
+  })
+  let ask = door({ graph: g, artifacts: objectBlobs(bucket, 'app/') }, {
+    parts: {
+      objects: bucketObjects(bucket),
+      bucket: memoryMultipart(bucket.put),
+      prefix: 'app/',
+      ledger: 'ledger/',
+      part: 64,
+    },
+    ...options,
+  })
+  return { ask, held, g }
+}
+
+let sent = (body: BodyInit, headers: Record<string, string> = {}) =>
+  new Request('http://host/blob', { method: 'POST', body, headers })
+
+test('bytes handed to the door are kept as named and typed, once', async () => {
+  let { ask, g } = bucketed()
+  let name = { 'x-yak-name': encodeURIComponent('ça.png') }
+  let made = await ask(sent(png, { 'content-type': 'image/png', ...name }))
+  let file = await made.json()
+  assertEquals([file.eid, file.attachment, file.mime, file.bytes], [
+    pngAddress,
+    await useOf(pngAddress),
+    'image/png',
+    png.length,
+  ])
+  // The same bytes with no name, and no type, are the same file as named.
+  let again = await (await ask(sent(png))).json()
+  assertEquals([again.eid, again.url], [file.eid, file.url])
+  let uses = await g.read('.attachment')
+  assertEquals(uses.map((r) => r.attachment), [{
+    artifact: pngAddress,
+    media_type: 'image/png',
+    name: 'ça.png',
+  }])
+  let got = await ask(new Request(`http://host${file.url}`))
+  assertEquals(new Uint8Array(await got.arrayBuffer()), png)
+  let none = await ask(sent(new Uint8Array()))
+  assertEquals([none.status, (await none.json()).code], [400, 'no_bytes'])
+})
+
+test('every upload is held to what the store takes', async () => {
+  for (
+    let [options, status, code, says] of [
+      [{ limit: 4 }, 413, 'too_large', 'a file is at most 4 B here'],
+      [
+        { accepts: { maxLength: 4 } },
+        413,
+        'too_large',
+        'this app takes files of at most 4 B',
+      ],
+      [
+        { accepts: { contentMediaType: 'image/*' } },
+        415,
+        'unsupported_media_type',
+        'this app takes image/*, and this file is text/plain',
+      ],
+      [{ room: () => 'ada is full' }, 413, 'space_full', 'ada is full'],
+    ] as [Options, number, string, string][]
+  ) {
+    let { ask, held, g } = bucketed(options)
+    let sha = await addressOf(text)
+    for (
+      let refused of [
+        await ask(sent(text, { 'content-type': 'text/plain' })),
+        await ask(put(sha, text, 'text/plain')),
+      ]
+    ) {
+      let { code: said, message } = await refused.json()
+      assertEquals([refused.status, said, message], [status, code, says])
+    }
+    assertEquals([held.size, (await g.read('.attachment')).length], [0, 0])
+  }
+})
+
+// Part n of `bytes` as a page sends it: its bytes, and where the hash stood.
+let part = (sha: string, bytes: Uint8Array, n: number) => {
+  let body = bytes.slice((n - 1) * 64, n * 64)
+  return new Request(`http://host/blob/${sha}/${n}`, {
+    method: 'PUT',
+    body,
+    headers: {
+      'x-yak-state': fold(START, bytes.slice(0, (n - 1) * 64)),
+      'content-length': String(body.length),
+    },
+  })
+}
+
+// Where an upload in parts of `bytes` bytes stands, asked as a page asks.
+let stand = (ask: ReturnType<typeof door>, sha: string, said: object) =>
+  ask(
+    new Request(`http://host/blob/${sha}`, {
+      method: 'POST',
+      body: JSON.stringify(said),
+    }),
+  )
+
+test('an upload in parts lands whole once its parts chain to its address', async () => {
+  let { ask, g } = bucketed()
+  let bytes = new Uint8Array(150).map((_, i) => i)
+  let sha = await addressOf(bytes)
+  let said = { bytes: 150, name: 'run.bin' }
+  assertEquals(await (await stand(ask, sha, said)).json(), {
+    part: 64,
+    need: [1, 2, 3],
+  })
+  assertEquals(await (await ask(part(sha, bytes, 2))).json(), { n: 2 })
+  assertEquals((await (await stand(ask, sha, said)).json()).need, [1, 3])
+  for (let n of [1, 3]) await ask(part(sha, bytes, n))
+  let file = await (await stand(ask, sha, said)).json()
+  assertEquals([file.eid, file.bytes], [sha, 150])
+  let [use] = await g.read('.attachment')
+  assertEquals((use.attachment as { name: string }).name, 'run.bin')
+  let got = await ask(new Request(`http://host${file.url}`))
+  assertEquals(new Uint8Array(await got.arrayBuffer()), bytes)
+})
+
+test('a whole in parts the store does not take is let go of again', async () => {
+  let { ask, held } = bucketed({ accepts: { contentMediaType: 'image/*' } })
+  let sha = await addressOf(text)
+  let said = { bytes: text.length }
+  await stand(ask, sha, said)
+  await ask(part(sha, text, 1))
+  assertEquals((await stand(ask, sha, said)).status, 415)
+  assert(!held.has(`app/${sha}`))
+  assertEquals((await (await stand(ask, sha, said)).json()).need, [1])
+})
+
+test('a door with no bucket for parts refuses them', async () => {
+  let ask = door(host(), { limit: 64 })
+  let sha = 'a'.repeat(64)
+  assertEquals((await stand(ask, sha, { bytes: 65 })).status, 413)
+  assertEquals((await stand(ask, sha, { bytes: 64 })).status, 501)
+})
+
+test('bytes no row names any more are not served', async () => {
+  let h = host(), ask = door(h)
+  let sha = await addressOf(text)
+  let file = await (await ask(put(sha, text, 'text/plain'))).json()
+  let read = () => ask(new Request(`http://host${file.url}`))
+  assertEquals((await read()).status, 200)
+  await h.graph.apply([
+    { entity: { eid: sha }, artifact: null },
+    { entity: { eid: file.attachment }, attachment: null },
+  ])
+  assertEquals((await read()).status, 404)
+  assertEquals((await ask(new Request(at(sha)))).status, 404)
 })

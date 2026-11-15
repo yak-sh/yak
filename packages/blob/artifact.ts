@@ -50,12 +50,15 @@ export let addressOf = async (bytes: Uint8Array): Promise<string> => {
 /** Put bytes under their address, once, and verify the store kept them. Writing
  * the same pair twice is a no-op — the second copy is the first one — and a
  * store that hands back anything else has not kept this object, which throws
- * here rather than returning corrupt bytes later. */
+ * here rather than returning corrupt bytes later. A store that keeps any bytes
+ * as given (`exact`) is put to once: the same pair again writes what is
+ * already there, and a bucket's look first would be a second round trip. */
 export let keep = async (
   blobs: Blobs,
   address: string,
   bytes: Uint8Array,
 ): Promise<void> => {
+  if (blobs.exact) return void await blobs.put(address, bytes)
   let equal = (stored: Uint8Array | undefined) =>
     stored?.length == bytes.length && stored.every((b, i) => b == bytes[i])
   if (!equal(await blobs.get(address))) await blobs.put(address, bytes)
@@ -68,15 +71,16 @@ export let keep = async (
  * `undefined` when the store holds nothing under its address, and an error
  * when what it holds is not those bytes — another size, or another SHA-256.
  * A row is a promise about the bytes, and this is where the promise is
- * checked, so a reader never hands on bytes the row did not name. */
+ * checked, so a reader never hands on bytes the row did not name. Bytes known
+ * by their address alone are checked against it alone. */
 export let artifactBytes = async (
   blobs: Blobs,
-  artifact: Artifact,
+  artifact: Pick<Artifact, 'address'> & Partial<Artifact>,
 ): Promise<Uint8Array | undefined> => {
   let bytes = await blobs.get(artifact.address)
   if (!bytes) return
   if (
-    bytes.length != artifact.size ||
+    (artifact.size != null && bytes.length != artifact.size) ||
     await addressOf(bytes) != artifact.address
   ) {
     throw new Error(

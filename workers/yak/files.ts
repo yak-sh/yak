@@ -25,7 +25,8 @@ import {
   rangedOpen,
   type Representation,
 } from '@yaks/blob'
-import { servable } from './blob-key.ts'
+import { servable } from '@yaks/blob/upload'
+import { uploads } from '@yaks/platform/uploads'
 import {
   inside,
   pretty,
@@ -358,7 +359,7 @@ export let keptBytes = async (
 }
 
 /** The representation `rep` of the bytes at `sha` that an app anyone may
- * read still serves, as this part keeps it, or none known (blob-key.ts
+ * read still serves, as this part keeps it, or none known (@yaks/blob/upload
  * `servable`). A store that could not say throws what it said. */
 export let servableOf = async (
   env: Env,
@@ -387,7 +388,7 @@ export let servableOf = async (
 let SERVED = 'public, max-age=30'
 
 // Whether an app's rows still name an upload's bytes, asked before a frozen
-// blob address of an app anyone may read is served (apps.ts `gave`). The
+// blob address of an app anyone may read is served (uploads.ts `blobDoor`). The
 // store is asked what it would tell a stranger, which is the same for
 // everyone the gateway lets in, so a yes is kept: a page loading a hundred
 // images, or a hundred visitors loading one, costs the store one read per
@@ -401,7 +402,9 @@ let serves = (req: Request, env: Env, path: string) => {
   if (!match || !store) return Promise.resolve(no(400))
   let [, app, sha, rep] = match
   let graph = metaOf(storeOf(env.STORE, store.name, store.app))
-  return servedAs(() => servable((q) => graph.query(q), { eid: app }, sha, rep))
+  return servedAs(() =>
+    servable((q) => graph.query(q), { scope: app, naming: uploads }, sha, rep)
+  )
 }
 
 let no = (status: number, body: unknown = null) =>

@@ -20,7 +20,8 @@ import {
   stampOf,
   type Writers,
 } from '../stamps.ts'
-import { count, dollars, size } from '@yaks/platform/standing'
+import { size } from '@yaks/fp'
+import { count, dollars } from '@yaks/platform/standing'
 
 /** What one row uses, as the page counted it. */
 export type Uses = {

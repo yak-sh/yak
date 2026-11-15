@@ -60,7 +60,8 @@ import { and, eq, every, list, stringify } from '@yaks/query'
 import { author, inbound, messageId } from '@yaks/mail'
 import { automated } from '@yaks/mail/answers'
 import { writes } from '@yaks/member'
-import { acceptsOf, filed, Untaken } from './uploads.ts'
+import { acceptsOf, filed } from './uploads.ts'
+import { Untaken } from '@yaks/blob/upload'
 import * as dirPart from './directory.ts'
 import {
   type App,

@@ -89,7 +89,7 @@ test('the frame policy rides even on a door with its own cache policy', () => {
 })
 
 test('the frame policy stacks with a response CSP, never clobbers it', () => {
-  // The blob door (apps.ts `gave`) serves user bytes under a sandbox CSP.
+  // The blob door (@yaks/blob/routes) serves user bytes under a sandbox CSP.
   // Appending keeps that inert-content protection and adds our framing rule;
   // setting would have wiped the sandbox.
   let csp = sealed(

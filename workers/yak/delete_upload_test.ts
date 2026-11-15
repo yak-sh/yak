@@ -1,9 +1,10 @@
 // Deleting an upload: the row at the upload's eid goes, and the bytes leave the
 // app's bucket with it (facets/app-effects.ts `delete_upload`), unless a row
 // the app keeps still names them. Who may delete that row is the app's write
-// guard (graph.ts `appGuard`), whether bytes are still served is `servable`,
-// and whether they leave the bucket is `released`: each checks its own seam
-// over the rows an upload writes (apps.ts `filed`).
+// guard (graph.ts `appGuard`), whether bytes are still served is
+// @yaks/blob/upload `servable`, and whether they leave the bucket is
+// `released`: each checks its own seam over the rows an upload writes
+// (@yaks/platform/uploads).
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, graph, mint, sha256, signed } from '@yaks/graph'
@@ -11,7 +12,9 @@ import { representation } from '@yaks/blob'
 import { Denied } from '@yaks/member'
 import { matcher, type Query } from '@yaks/match'
 import { ram } from '@yaks/ram'
-import { blobPrefix, naming, released, servable } from './blob-key.ts'
+import { blobPrefix, released } from './blob-key.ts'
+import { servable } from '@yaks/blob/upload'
+import { uploads } from '@yaks/platform/uploads'
 import { appGuard } from '@yaks/platform/app-authority'
 import { loadVocab, pick } from '@yaks/vocab'
 import { spineDoc } from '@yaks/kernel/vocab'
@@ -39,7 +42,9 @@ let keptRows = [
   { entity: { eid: sha(3) }, attachment: { artifact: sha(3) } },
 ]
 let plans = new Map(
-  [1, 2, 3].map((n) => [naming(sha(n)), matcher(naming(sha(n)), vocab)]),
+  [1, 2, 3].map((
+    n,
+  ) => [uploads.names(sha(n)), matcher(uploads.names(sha(n)), vocab)]),
 )
 let kept = {
   read: (q: Query) => (plans.get(String(q)) ?? matcher(q, vocab))(keptRows),
@@ -73,7 +78,7 @@ for (
 // An open cookbook, its store guarded as the platform guards it: Ada owns it,
 // and a stranger holds no level on it, so the app's mode lets them in. A
 // person's write goes through the guard; the kernel's (an upload's rows, signed
-// as the uploader, apps.ts `took`) stands outside it, over the same rows.
+// as the uploader, uploads.ts `blobDoor`) stands outside it, over the same rows.
 let ADA = 'a0000000-0000-4000-8000-0000000000a0'
 let STRANGER = 'b0000000-0000-4000-8000-0000000000b0'
 let app = {
@@ -130,7 +135,13 @@ let serving = new Map<string, ReturnType<typeof matcher>>()
 let read = (q: string) =>
   Promise.resolve((serving.get(q) ?? matcher(q, vocab))(serveRows))
 let served = async (upload: { sha: string; eid: string }, of = app) =>
-  (await servable(read, of, upload.sha, upload.eid))?.address ?? null
+  (await servable(
+    read,
+    { scope: of.eid, naming: uploads },
+    upload.sha,
+    upload.eid,
+  ))
+    ?.address ?? null
 
 let forbidden = signed(
   [{ entity: { eid: cake.sha }, $delete: true } as Bundle],
@@ -178,6 +189,8 @@ test('the same bytes sent again are served again', async () => {
 // The serving door reads a stable snapshot, independent of the guard's writes.
 serveRows = rows.read('.entity')
 for (let upload of [bread, bun, returned]) {
-  let q = `.entity.eid=${upload.eid} .representation|${naming(upload.sha)}`
+  let q = `.entity.eid=${upload.eid} .representation|${
+    uploads.names(upload.sha)
+  }`
   serving.set(q, matcher(q, vocab))
 }

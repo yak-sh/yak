@@ -1,9 +1,11 @@
-// The gateway reaches the named Files entrypoint through a response, so a
+// The gateway's file door (@yaks/blob/routes, as uploads.ts `blobDoor` binds
+// it) reads bytes through the named Files entrypoint, a response, so a
 // reported storage failure must keep its cause across that boundary.
 import { assertRejects } from '@std/assert'
 import { equal, test } from '@yaks/testing'
 import type { Bundle, Comp } from '@yaks/graph'
-import { blobResponse } from './apps.ts'
+import { memoryBlobs, representation } from '@yaks/blob'
+import { routes } from '@yaks/blob/routes'
 import * as files from './files.ts'
 import { within } from './defects.ts'
 import { r2RawObjects } from './lib/objects.ts'
@@ -74,9 +76,15 @@ let setup = async (
     reports,
     counts: () => [calls, waits],
     run: () =>
-      within(env, {}, () =>
-        blobResponse(
-          (seek) =>
+      within(env, {}, () => {
+        let rep = representation('app', sha, 'application/octet-stream')
+        let [get] = routes({
+          graph: { read: () => [], apply: () => [] },
+          artifacts: memoryBlobs(),
+        }, {
+          at: '/photos/api/blob/',
+          served: () => Promise.resolve(rep.row),
+          bytes: (seek) =>
             files.blobBytes(
               env,
               { eid: 'app' },
@@ -85,14 +93,14 @@ let setup = async (
               seek.headers.get('range'),
               seek.method,
             ),
-          sha,
-          { etag: '"representation"' },
-          new Request('https://ada.yaks.app/photos/api/blob/' + sha, {
+        })
+        return get.handle(
+          new Request(`https://ada.yaks.app/photos/api/blob/${rep.path}`, {
             method,
             headers: range ? { range } : {},
           }),
-          { request: 'GET /api/blob' },
-        )),
+        )
+      }),
   }
 }
 
@@ -140,7 +148,9 @@ for (
     try {
       let answer = await run()
       equal([answer.status, await answer.json()], [503, {
-        error: { code: 'blob_unavailable', message: 'blob_unavailable' },
+        error: 'Unavailable',
+        message: 'these bytes cannot be read just now',
+        code: 'blob_unavailable',
       }])
       equal(counts(), [attempts, attempts - 1])
       let errors = reports.filter((row) => row.exception)

@@ -258,6 +258,7 @@ export let objectBlobs = (
   prefix = '',
   pause: Pause = sleep,
 ): Blobs => ({
+  exact: true,
   has: async (sha) =>
     (await patient(() => bucket.head(prefix + sha), 5, 100, pause)) != null,
   get: async (sha) => {
@@ -268,6 +269,26 @@ export let objectBlobs = (
   put: async (sha, bytes) => {
     await patient(() => bucket.put(prefix + sha, bytes), 5, 100, pause)
   },
+})
+
+/**
+ * The {@link Blobs} kept in `objects` under `prefix`, each by its address
+ * after it: a host's bucket as the host reaches it, counted or cached,
+ * holding one app's files beside every other's.
+ *
+ * ```ts
+ * import { bucketObjects, prefixed } from '@yaks/blob'
+ *
+ * // in a Worker, where `env.BLOBS` is an R2 binding
+ * // let photos = prefixed(bucketObjects(env.BLOBS), 'ada/photos/blobs/')
+ * ```
+ */
+export let prefixed = (objects: Objects, prefix: string): Blobs => ({
+  exact: true,
+  has: (sha) => objects.has(prefix + sha),
+  get: async (sha) => (await objects.read(prefix + sha)) ?? undefined,
+  open: (sha) => objects.open(prefix + sha),
+  put: (sha, bytes) => objects.put(prefix + sha, bytes),
 })
 
 /**

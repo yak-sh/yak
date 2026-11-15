@@ -29,7 +29,8 @@ import {
   type Tier,
   YEARLY,
 } from '@yaks/platform/plans'
-import { count, size } from '@yaks/platform/standing'
+import { size } from '@yaks/fp'
+import { count } from '@yaks/platform/standing'
 import { GET_PLAN, installAt } from '@yaks/platform/routes'
 import { DEEPGRAM } from '@yaks/speech'
 import * as townships from './site/townships.tsx'
