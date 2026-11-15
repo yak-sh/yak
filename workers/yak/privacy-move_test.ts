@@ -8,7 +8,7 @@ import { ram } from '@yaks/ram'
 import { personal } from '@yaks/member'
 import { appVocab } from './vocab.ts'
 import { privacyRules } from './privacy-move.ts'
-import { THROUGH } from './config.ts'
+import { THROUGH } from '@yaks/platform/config'
 import type { Query } from '@yaks/query'
 
 let vocab = appVocab({})

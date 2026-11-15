@@ -49,7 +49,7 @@ import {
 } from './migrate.ts'
 import { appDerived, appWords, numbered, storeWords } from './vocab.ts'
 import { texts } from './embedding-read.ts'
-import { versions } from './config.ts'
+import { versions } from '@yaks/platform/config'
 
 let storeKind = (name: string) =>
   name == PLATFORM_STORE ? 'directory' : name == GIT_STORE ? 'git' : 'app'

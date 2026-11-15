@@ -3753,6 +3753,9 @@ importers:
       '@yaks/graph':
         specifier: 0.2.33
         version: link:../graph
+      '@yaks/host':
+        specifier: 0.2.29
+        version: link:../host
       '@yaks/mail':
         specifier: 0.2.23
         version: link:../mail

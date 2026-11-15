@@ -32,7 +32,8 @@
     "./models-vocab": "./models-vocab.ts",
     "./attribution-vocab": "./attribution-vocab.ts",
     "./refusals-vocab": "./refusals-vocab.ts",
-    "./lower-graph": "./lower-graph.ts"
+    "./lower-graph": "./lower-graph.ts",
+    "./config": "./config.ts"
   },
   "license": "Apache-2.0",
   "description": "What a hosting platform keeps about the apps it serves — spaces, apps, deploys, hostnames, plans and meters.",
@@ -43,6 +44,7 @@
     "@yaks/fp": "0.2.23",
     "@yaks/fts": "0.2.30",
     "@yaks/graph": "0.2.33",
+    "@yaks/host": "0.2.29",
     "@yaks/mail": "0.2.23",
     "@yaks/member": "0.2.25",
     "@yaks/model": "0.2.32",

@@ -11,7 +11,7 @@ import { declarationsOf, type Personal, privacy } from '@yaks/member'
 import { given, used } from '@yaks/host/config'
 import type { Vocab } from '@yaks/vocab'
 import type { Mark } from '@yaks/platform/mover'
-import { appConfig } from './config.ts'
+import { appConfig } from '@yaks/platform/config'
 import type { Rule } from './mover.ts'
 
 // What an app store's @yaks/member is configured with (config.ts).

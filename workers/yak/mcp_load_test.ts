@@ -18,7 +18,7 @@ import {
   vocabFile,
 } from './probe.ts'
 import type { Load } from '@yaks/host'
-import { appConfig } from './config.ts'
+import { appConfig } from '@yaks/platform/config'
 import { load } from './load.ts'
 import { HAS_NOTES } from './standing.ts'
 import { ROOM } from '@yaks/api/log'

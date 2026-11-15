@@ -4,7 +4,7 @@ import { type Graph, graph } from '@yaks/graph'
 import { aliases } from '@yaks/alias'
 import { keys } from '@yaks/key'
 import { personal } from '@yaks/member'
-import { THROUGH } from './config.ts'
+import { THROUGH } from '@yaks/platform/config'
 import { ram, type Store } from '@yaks/ram'
 import type { Vocab } from '@yaks/vocab'
 
