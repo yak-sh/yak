@@ -13,10 +13,16 @@ import { directoryOf } from './directory.ts'
 import { connecting, ctxOf } from './connections.ts'
 import { credential } from '@yaks/connections'
 import { reveal } from '@yaks/secrets'
-import { callable, operatorModel, operatorService } from './operator-testing.ts'
+import {
+  callable,
+  operatorMemory,
+  operatorModel,
+  operatorService,
+} from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { signupTools, textControl } from './operator-signup.ts'
 import { rootOf } from './operator-root.ts'
+import { lineBackfill, LINES } from './line-move.ts'
 import { conversationOf, workOf } from './operator-host.ts'
 import { listed as listing } from './operator-view.ts'
 import { parseHTML } from 'linkedom'
@@ -425,6 +431,70 @@ let campaignRelisted = await campaignOf(env, '+12695550100')
 await setting({ number: '+12695550100', campaign: '' })
 let campaignTaken = await campaignOf(env, '+12695550100')
 
+// A retained Operator upgrades its callbacks without a settings edit.
+let upgrade = operatorMemory()
+let receipts = new Map<string, string>()
+let upgrading = {
+  ...upgrade,
+  marks: {
+    get: (key: string) => receipts.get(key),
+    set: (key: string, value: string) => void receipts.set(key, value),
+  },
+}
+let settingId = crypto.randomUUID()
+await upgrade.g.apply([{
+  entity: { eid: settingId },
+  operator_line: {
+    connection: connection.entity.eid,
+    number: '+12695550111',
+    inbound: true,
+  },
+}, {
+  entity: { eid: crypto.randomUUID() },
+  operator_session: { space: eid, person },
+}])
+let did = dids.find((d) => d.did == '2695550111')!
+did.sms_url_callback = 'https://yaks.app/voipms/' + oldTicket
+let upgradeStart = of('setSMS').length
+let firstUpgrade = await lineBackfill(upgrading, env)
+let upgraded = did.sms_url_callback
+let upgradeDone = await lineBackfill(upgrading, env)
+let upgradeAgain = await lineBackfill(upgrading, env)
+let upgradeMark = receipts.get(LINES)
+let upgradeWrites = of('setSMS').length - upgradeStart
+let { opened } = await import('./lib/token.ts')
+let upgradedClaims = await opened(
+  'line',
+  new URL(upgraded).pathname.slice('/voipms/'.length),
+  env.SESSION_SECRET!,
+)
+// Before explicit settings existed the account itself named its inbound line.
+await upgrade.g.apply([{ entity: { eid: settingId }, $delete: true }])
+await local.apply([{
+  entity: connection.entity,
+  connection: { account: '+12695550111' },
+}])
+did.sms_url_callback = 'https://yaks.app/voipms/' + oldTicket
+receipts.clear()
+let legacyUpgrade = await lineBackfill(upgrading, env)
+let legacyCallback = did.sms_url_callback
+await local.apply([{
+  entity: connection.entity,
+  connection: { account: previousAccount },
+}])
+
+test('retained inbound callbacks upgrade once to number-bound tickets without a settings edit', () => {
+  assertEquals([firstUpgrade, upgradeDone, upgradeAgain], [true, false, false])
+  assertEquals(upgradeWrites, 1)
+  assertEquals(upgradeMark, 'done')
+  assertEquals(upgradedClaims, {
+    connection: connection.entity.eid,
+    number: '+12695550111',
+  })
+  assertEquals([legacyUpgrade, legacyCallback], [true, upgraded])
+  assertEquals(keptChurch.callback, church)
+})
+
 test('a voip.ms connection is checked and lists every number on the account, changing none', () => {
   assertEquals(unfilled, { say: 'Fill in API password first.', no: true })
   assertEquals(refused.no, true)
@@ -517,7 +587,7 @@ test('an inbound number has its callback pointed here, keeping how texts reach t
     ['2695550111', '1'],
   )
   assertEquals(restored.get('url_callback'), church)
-  assertEquals(of('setSMS').length, 4)
+  assertEquals(upgradeStart, 4)
 })
 
 test('a text an inbound number sent itself is answered to the provider and asks the Operator nothing', async () => {

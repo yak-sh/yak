@@ -27,6 +27,7 @@ import { OWNERS } from '@yaks/platform/operator-owner'
 import { due, soonest, tick } from '@yaks/wake'
 import type { Watching } from './operator-schedules.ts'
 import { WAKES, wakesMoved } from './wake-move.ts'
+import { LINES } from './line-move.ts'
 import { caught } from './defects.ts'
 import { RETRY, SLICE } from '@yaks/durable-object/alarm'
 import { adopt, indexed, schema as ftsSchema, search } from '@yaks/fts'
@@ -149,6 +150,7 @@ export let operatorStore = async (
       if (born) marks.set(WAKES, 'done')
       // Nor anything kept before it numbered what it keeps.
       if (born) marks.set(NUMBERED, 'done')
+      if (born) marks.set(LINES, 'done')
       // Nor a file a tool made before its call attached it.
       if (born) marks.set(OUTPUTS, 'done')
       // Nor a line saying how its words came in the Operator's old word,
