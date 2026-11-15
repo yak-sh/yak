@@ -10,7 +10,9 @@
 // call, its result and a model's output are also the person's whose
 // conversation made them. An entity naming nobody is nobody's; one naming
 // one person is theirs; one naming more than one, or a component that names
-// nobody, is nobody's to read, and keeps an owner with no person.
+// nobody, is nobody's to read, and keeps an owner with no person. An item a
+// person's words came in (a letter, a text: @yaks/session/intake `take`) is
+// the person's whose session took it, read through the input that names it.
 //
 // The rule (`owning`) writes it in the commit that makes or changes what it
 // is read from, so no read sees an entity without its owner or with an old
@@ -20,6 +22,7 @@
 import type { Bundle, Comp, Plugin, Tx } from '@yaks/graph'
 import { dead } from '@yaks/graph/bundle'
 import { minted } from '@yaks/graph/identity'
+import { inputOf } from '@yaks/session/intake'
 import { after, each } from '@yaks/fp'
 
 /** What names its person as an owner, by the property that names them:
@@ -83,13 +86,23 @@ let named = (b: Bundle | undefined): (string | null)[] =>
     return c ? [typeof v == 'string' && minted(v) ? v : null] : []
   })
 
-/** Everyone named as an entity's owner: by it, and by what it hangs on, read
- * through `at`; null where something names nobody. */
+// The input that took an item's words, where one did: the one its eid
+// derives, and only when that input names it.
+let takenBy = (e: Bundle, at: (eid?: string) => Bundle | undefined) => {
+  let input = at(inputOf(e.entity.eid))
+  return ref(input, 'intake', 'item') == e.entity.eid ? input : undefined
+}
+
+/** Everyone named as an entity's owner: by it, by what it hangs on, and for
+ * an item, by the session that took its words, read through `at`; null where
+ * something names nobody. */
 export let owners = (
   e: Bundle,
   at: (eid?: string) => Bundle | undefined,
 ): (string | null)[] => {
-  let session = at(ref(e, 'entry', 'session'))
+  let session = at(
+    ref(e, 'entry', 'session') ?? ref(takenBy(e, at), 'entry', 'session'),
+  )
   let via = MADE.some((c) => e[c]) ? at(ref(e, 'created', 'via')) : undefined
   return [
     ...named(e),
@@ -134,28 +147,49 @@ export let reckon = (get: Get, eids: string[]): Maybe<Bundle[]> => {
   }
   return after(get(eids, [...BEARING, 'owner']), (rows) => {
     let live = rows.filter((r) => !dead(r))
-    let up = live.flatMap((e) => [
-      ref(e, 'spawned', 'parent'),
-      ref(e, 'entry', 'session'),
-      MADE.some((c) => e[c]) ? ref(e, 'created', 'via') : undefined,
-    ])
-    return after(read(up, PART), () =>
-      after(
-        read(
-          live.map((e) =>
-            ref(at(ref(e, 'entry', 'session')), 'spawned', 'parent')
-          ),
-          NAMING,
-        ),
-        () =>
-          live.flatMap((e) => {
-            let want = owner(owners(e, at))
-            let had = (e.owner as Comp | undefined) ?? null
-            return !had == !want && had?.person == want?.person
-              ? []
-              : [{ entity: { eid: e.entity.eid }, owner: want }]
-          }),
-      ))
+    // An entity that hangs on nothing may be an item whose words a session
+    // took: its input is read, then that input's session.
+    let loose = live.filter((e) =>
+      !e.entry && !e.spawned && !MADE.some((c) => e[c])
+    )
+    let up = (inputs: Bundle[]) =>
+      live.flatMap((e) => [
+        ref(e, 'spawned', 'parent'),
+        ref(e, 'entry', 'session'),
+        MADE.some((c) => e[c]) ? ref(e, 'created', 'via') : undefined,
+      ]).concat(inputs.map((b) => ref(b, 'entry', 'session')))
+    return after(
+      loose.length
+        ? get(loose.map((e) => inputOf(e.entity.eid)), ['intake', 'entry'])
+        : [],
+      (inputs) => {
+        for (let b of inputs) held.set(b.entity.eid, b)
+        return after(read(up(inputs), PART), () =>
+          after(
+            read(
+              live.map((e) =>
+                ref(
+                  at(
+                    ref(e, 'entry', 'session') ??
+                      ref(takenBy(e, at), 'entry', 'session'),
+                  ),
+                  'spawned',
+                  'parent',
+                )
+              ),
+              NAMING,
+            ),
+            () =>
+              live.flatMap((e) => {
+                let want = owner(owners(e, at))
+                let had = (e.owner as Comp | undefined) ?? null
+                return !had == !want && had?.person == want?.person
+                  ? []
+                  : [{ entity: { eid: e.entity.eid }, owner: want }]
+              }),
+          ))
+      },
+    )
   })
 }
 
@@ -233,6 +267,11 @@ export let owning = (): Plugin => ({
         patch: (bundles) => {
           let bearing = bundles.filter((b) => touches(b, WRITES))
           for (let b of bearing) dirty.add(b.entity.eid)
+          // The item an input takes words from is the input's person's.
+          for (let b of bundles) {
+            let item = ref(b, 'intake', 'item')
+            if (item) dirty.add(item)
+          }
           let naming = bearing.filter((b) => touches(b, PART))
             .map((b) => b.entity.eid)
           return after(looked(naming), () => tx.patch(bundles))

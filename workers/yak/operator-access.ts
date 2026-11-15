@@ -8,6 +8,7 @@ import type { Conversing } from '@yaks/harness/conversations'
 import type { OperatorStore } from './operator-store.ts'
 import { spaceOf } from './operator-root.ts'
 import { ORACLES } from './oracle-move.ts'
+import { inputOf } from '@yaks/session/intake'
 
 type Store = OperatorStore
 type Owner = Pick<Held, 'person' | 'space'>
@@ -25,11 +26,13 @@ const OWNING = [
   'output',
   'task',
   'tombstone',
+  'intake',
 ]
 
 // Ownership comes from the stored request, session, or wake (a wake-up or a
-// subscription), including the parent a helper works for. An id, including a
-// derived conversation id, grants none.
+// subscription), including the parent a helper works for, and for an item
+// a person's words came in, from the input that took them. An id, including
+// a derived conversation id, grants none.
 export let ownerOf = async (
   store: Store,
   open: string,
@@ -65,6 +68,12 @@ export let ownerOf = async (
   let set = (row.wake as { for?: string } | undefined)?.for
   let space = set && await spaceOf(store)
   if (set && space) return { person: set, space }
+  // An item is the person's whose session took its words: the input its id
+  // derives, when that input names it (@yaks/session/intake).
+  let [input] = await store.g.get([inputOf(open)], ['intake', 'entry'])
+  if ((input?.intake as { item?: string } | undefined)?.item == open) {
+    return ownerOf(store, input.entity.eid, seen)
+  }
   // A task is its sessions' owner's, and a deleted wake-up or subscription
   // the owner's of the requests it fired, when they all agree.
   let by = row.task
@@ -133,10 +142,12 @@ export let owned = (store: { g: Graph; marks?: Pick<Meta, 'get'> }) => {
 }
 
 /** The attachments a person sees of their own in a space: each that came
- * with a request of theirs, an entry of their conversation, or the
- * conversation itself (@yaks/blob/attachment `attachmentsSeen`). */
+ * with a request of theirs, an entry of their conversation, the conversation
+ * itself, or an item of theirs whose words it took (a letter, a text), kept
+ * theirs by its owner (@yaks/blob/attachment `attachmentsSeen`). */
 export let theirFiles = (held: Pick<Held, 'person' | 'space'>) =>
   or(
+    eq('attachment.message.owner.person', held.person),
     ...[
       'operator_request',
       'entry.session.operator_session',

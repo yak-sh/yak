@@ -106,6 +106,8 @@ import {
   mailSend,
   messageReference,
   OWN,
+  replyRows,
+  TAKING,
   UNASKED,
 } from './operator-channels.ts'
 import { attachedOf, type File } from './operator-files.ts'
@@ -1359,9 +1361,32 @@ export let operating = (
         },
       }
     })
+    // Words a channel's door took in itself name the item they arrived as
+    // (@yaks/session `intake`), and are answered in its package's words
+    // (operator-channels.ts `replyRows`).
+    let heard = reply.given.flatMap((b) => {
+      let item = comp(b, 'intake')?.item
+      let channel = String(comp(b, 'channel')?.name ?? '')
+      return item && TAKING.has(channel)
+        ? [{ item: String(item), channel }]
+        : []
+    })
+    let from = heard.length && space ? await dir().at(space) : undefined
+    let items = from ? await g.get(heard.map((h) => h.item)) : []
+    let sent = heard.flatMap(({ channel }, i) =>
+      items[i] && from
+        ? replyRows(env, from, channel, items[i], {
+          eid: derivedEid(
+            `operator-reply|${items[i].entity.eid}|${mark.entity.eid}`,
+          ),
+          text: reply.text,
+        })
+        : []
+    )
     let ids = [
       ...comment ? [comment] : [],
       ...answers.map((b) => b.entity.eid),
+      ...sent.filter((b) => b.deliver).map((b) => b.entity.eid),
     ]
     let kept = (await g.get(ids)).some(Boolean)
     // A conversation that could not finish reaches the tracker once, when
@@ -1412,6 +1437,7 @@ export let operating = (
         }]
         : [],
       ...answers,
+      ...sent,
     ], { trusted: true })
   }
 
@@ -1867,6 +1893,39 @@ export let operating = (
     return selected
   }
 
+  // Where words for a person go, ready for the session bus to take them in
+  // (@yaks/session `take`): their one conversation, begun where it has not
+  // been, or the one a sign-up by text has; the model chosen for them; and
+  // what is written beside them.
+  let listening: Operator['listening'] = async (held, space, o = {}) => {
+    let selected = await readying(held, space, o.model, o.provider)
+    let session = o.signup
+      ? derivedEid(`operator-signup|${space.eid}|${held.person}`)
+      : await rootAt(store, space.eid, held.person)
+    if (!await conversed(store, session)) {
+      await started(session, held.person, space)
+    }
+    return {
+      session,
+      using: usingOf(selected.model, selected.provider, o.effort),
+      beside: async (words, { files = [], said = '' } = {}) => {
+        let channel = words.channel?.name
+        let theirs = words.by == held.person && !o.signup && !words.system
+        return [
+          await carrying(
+            session,
+            held,
+            space,
+            { files, channel, ...o.signup ? { signup: o.signup } : {} },
+            !o.signup,
+          ),
+          ...theirs ? await before(session, said, held, space) : [],
+        ]
+      },
+      told: () => options.tell?.(session),
+    }
+  }
+
   let ask: Operator['ask'] = async (held, space, args, o = {}) => {
     let text = typeof args.say == 'string' ? args.say : ''
     let named = typeof args.task == 'string' ? args.task : o.task
@@ -1874,36 +1933,40 @@ export let operating = (
     let by = o.by ?? held.person
     let id = o.request ?? crypto.randomUUID()
     let input = inputOf(id)
+    // A person's words with no task are the next input of their one
+    // conversation with the Operator.
+    if (!named) {
+      if ((await g.get([input]))[0]) {
+        let session = o.signup
+          ? derivedEid(`operator-signup|${space.eid}|${held.person}`)
+          : await rootAt(store, space.eid, held.person)
+        return { task: '', session, input }
+      }
+      let open = await listening(held, space, o)
+      let { reference, file: sourceFile } = await messageReference(
+        env,
+        space,
+        o.source ?? text,
+      )
+      let given = {
+        ...words(open.session, id, text + reference, by, o, sourceFile),
+        using: open.using,
+      }
+      await take(
+        g,
+        given,
+        await open.beside(given, { files: o.files, said: text }),
+        { trusted: true },
+      )
+      open.told()
+      return { task: '', session: open.session, input }
+    }
     o = { ...o, ...await readying(held, space, o.model, o.provider) }
     let { reference, file: sourceFile } = await messageReference(
       env,
       space,
       o.source ?? String(args.say ?? ''),
     )
-    // A person's words with no task are the next input of their one
-    // conversation with the Operator.
-    if (!named) {
-      let session = o.signup
-        ? derivedEid(`operator-signup|${space.eid}|${held.person}`)
-        : await rootAt(store, space.eid, held.person)
-      if ((await g.get([input]))[0]) return { task: '', session, input }
-      if (!await conversed(store, session)) {
-        await started(session, held.person, space)
-      }
-      let theirs = by == held.person && !o.signup &&
-        !OWN.has(o.channel ?? '')
-      await take(
-        g,
-        words(session, id, text + reference, by, o, sourceFile),
-        [
-          await carrying(session, held, space, o, !o.signup),
-          ...theirs ? await before(session, text, held, space) : [],
-        ],
-        { trusted: true },
-      )
-      options.tell?.(session)
-      return { task: '', session, input }
-    }
     let task = named
     let [old] = await g.get([task])
     if (args.task && !old?.task) {
@@ -2162,6 +2225,7 @@ export let operating = (
       )
     },
     reads,
+    listening,
     ask,
     note,
     tools,
@@ -2171,6 +2235,17 @@ export let operating = (
     watching,
     scheduled,
   }
+}
+
+/** Where words for a person go ({@link Operator.listening}). */
+export type Listening = {
+  session: string
+  using: Comp
+  beside: (
+    words: Intake,
+    o?: { files?: File[]; said?: string },
+  ) => Promise<Bundle[]>
+  told: () => void
 }
 
 export type Asking = {
@@ -2224,6 +2299,20 @@ export type Operator = {
     held?: Asker,
     space?: Space,
   ) => Promise<Record<string, number>>
+  /** Where words that came for `held` in `space` go, for the session bus to
+   * take them in (@yaks/session `take`): their one conversation, begun where
+   * it has not been, or the one signing up by text (`signup`, their number);
+   * what they are answered by (`using`): the model named, on its provider,
+   * where that provider serves it, else the Operator's own;
+   * the rows written beside them (`beside`): the conversation carried on
+   * with the files they came with and how they came, and for the person's
+   * own words what they said before on the subject (`said`, @yaks/session
+   * `recall`); and `told`, which wakes whoever watches it once they are in. */
+  listening: (
+    held: Asker,
+    space: Space,
+    o?: { model?: string; provider?: string; effort?: string; signup?: string },
+  ) => Promise<Listening>
   /** Words given: the next input of the person's conversation, or on a task
    * a new task and session or the next input of the task's newest session.
    * Answers at once with where they went (`task` is '' in a conversation). */

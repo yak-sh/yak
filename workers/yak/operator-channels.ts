@@ -33,6 +33,9 @@ import type { OperatorStore } from './operator-store.ts'
 import { onPage } from './operator-view.ts'
 import { REBUILDING } from './newcomer.ts'
 import { unsaid } from '@yaks/session/conversation'
+import { inputOf, type Intake, take } from '@yaks/session/intake'
+import { owed, sending, Undeliverable } from '@yaks/mail'
+import { channelOf } from './operator-view.ts'
 import { handover, naming } from './handover.ts'
 import { rootOf } from './operator-root.ts'
 import { kindOf } from './operator-escalate.ts'
@@ -258,6 +261,170 @@ export let receive = async (
     ...options.also ?? [],
   ], { trusted: true })
   return id
+}
+
+/** The channels whose doors take their words in themselves ({@link hear});
+ * the rest keep a request that `operator_receive` takes in, until each moves. */
+export let TAKING = new Set(['email'])
+
+/** Who wrote words that came by a channel, where not the person they are
+ * for (@yaks/session `Intake.from`). */
+let FROM: Record<string, (request: Request) => string | undefined> = {
+  wake: () => 'the system (your wake-up)',
+  subscription: () => 'the system (your subscription)',
+  error: () => 'the system',
+  machine: () => 'the system (their machine)',
+  app: () => 'the system (an app in the space)',
+  escalated: (r) => `your conversation with ${r.address ?? 'the writer'}`,
+  voice: (r) => r.call ? 'your voice on the call' : 'the person on the phone',
+  letter: (r) => r.address,
+  texted: (r) => r.address,
+}
+
+/**
+ * Words that came by a channel, taken in at the door they came to. The item
+ * they arrived as (`item`, in its own package's words: a @yaks/mail letter)
+ * is kept first, so nothing a person sent is lost; then its words, said
+ * after how they came (`BY`), are the next input of the person's
+ * conversation (@yaks/session `take`), with the files they came with
+ * attached to the item. Given again, they write nothing (`fresh` false).
+ * Words that could not be taken in keep why on the item, and their channel
+ * answers what the person reads: a refusal written for them, else
+ * {@link TROUBLE}. The person is the door's to have checked.
+ */
+export let hear = async (
+  operator: Pick<Operator, 'store' | 'listening'>,
+  env: Env,
+  space: Space,
+  request: Request,
+  text: string,
+  item: Bundle,
+): Promise<{ fresh: boolean }> => {
+  let { g } = operator.store
+  let id = item.entity.eid
+  let files = request.files ?? []
+  if ((await g.get([inputOf(id)], ['entry']))[0]?.entry) return { fresh: false }
+  if (!text.trim() && !files.length) {
+    throw refuse('arguments', 'Say what you want done or attach a document.')
+  }
+  await g.apply([item], { trusted: true })
+  let { channel } = request
+  try {
+    let [about] = request.about ? await g.get([request.about]) : []
+    let framing = BY[channel]?.(request, id, about) ?? ''
+    let open = await operator.listening(
+      { person: request.person, administrative: request.administrative },
+      space,
+      {
+        ...request.model ? { model: request.model } : {},
+        ...request.provider ? { provider: request.provider } : {},
+      },
+    )
+    let { reference, file } = await messageReference(env, space, text)
+    let from = FROM[channel]?.(request)
+    let words: Intake = {
+      session: open.session,
+      body: framing + (text.trim() || unsaid(files)) + reference,
+      by: OWN.has(channel) ? space.eid : request.person,
+      item: id,
+      ...from ? { from } : {},
+      channel: channelOf(channel, framing),
+      files: [...files, ...file ? [file] : []].map(attachedOf),
+      using: open.using,
+      system: OWN.has(channel),
+    }
+    let { fresh } = await take(
+      g,
+      words,
+      await open.beside(words, { files, said: text }),
+      { trusted: true },
+    )
+    open.told()
+    return { fresh }
+  } catch (error) {
+    if ((error as { retry?: unknown })?.retry) throw error
+    caught(error, { request: 'operator intake', channel, space: space.slug })
+    // The person reads a refusal written for them (a spent budget, a file it
+    // cannot read), and anything else in plain words; the error itself is
+    // kept for whoever fixes it.
+    let reason = error instanceof Error ? error.message : String(error)
+    await g.apply([
+      { entity: item.entity, failed: { reason } },
+      ...attachmentRows(id, files.map(attachedOf)),
+      ...replyRows(env, space, channel, item, {
+        eid: derivedEid('operator-answer|' + id),
+        text: error instanceof CallError ? error.message : TROUBLE,
+      }),
+    ], { trusted: true })
+    return { fresh: true }
+  }
+}
+
+/** A channel's door as the Operator's object serves it (build.ts
+ * `#operate`): the words it brings and how they came, as `/operator/receive`
+ * names them, taken in ({@link hear}), answering 202 when they are new. A
+ * letter is kept as it arrived (@yaks/mail `inbound`), titled by its
+ * subject. */
+export let heardAt = async (
+  operator: Pick<Operator, 'store' | 'listening'>,
+  env: Env,
+  held: { person: string; space: string; administrative?: boolean },
+  space: Space,
+  args: Record<string, unknown>,
+) => {
+  let o = (args.options ?? {}) as { id?: string; mail?: Comp; title?: string }
+  let id = o.id ?? crypto.randomUUID()
+  let text = String(args.say ?? '')
+  let request: Request = {
+    ...args.request as Request,
+    person: held.person,
+    space: held.space,
+    administrative: held.administrative === true,
+  }
+  let { fresh } = await hear(operator, env, space, request, text, {
+    entity: { eid: id },
+    ...o.mail ? { mail: o.mail } : {},
+    doc: { title: o.title ?? text.split('\n')[0].slice(0, 160), body: text },
+  })
+  return Response.json({ request: id }, { status: fresh ? 202 : 200 })
+}
+
+/**
+ * What answers words that came by a channel, in the package of the item
+ * they arrived as, for its own effect to send: a letter answering a letter
+ * in its thread (@yaks/mail `deliver`), from the space's Operator and signed
+ * by it, sent by `mail_post` (`handleChannels`). Words answered where they
+ * were said need nothing written.
+ */
+export let replyRows = (
+  env: Env,
+  space: Space,
+  channel: string,
+  item: Bundle,
+  reply: { eid: string; text: string },
+): Bundle[] => {
+  if (channel != 'email') return []
+  let to = String(part<Comp>(item, 'mail')?.from ?? '').trim().toLowerCase()
+  let address = derivedEid('operator-address|' + to)
+  return [
+    { entity: { eid: address }, email: { address: to }, recipient: {} },
+    {
+      entity: { eid: reply.eid },
+      mail: {
+        from: mailFrom(space.slug, null, env),
+        name: space.operator,
+        reply_to: item.entity.eid,
+        at: new Date().toISOString(),
+      },
+      doc: {
+        title: re(String(part<Comp>(item, 'doc')?.title || 'Your request')),
+        body: `${reply.text}\n\n${signed(space)}`,
+      },
+      deliver: { to: address },
+      // The space's Operator writes it, which `mail_post` sends it as.
+      $actor: { by: space.eid },
+    },
+  ]
 }
 
 /** Whom a scheduled run is for: the space, and the person it runs as. */
@@ -874,21 +1041,7 @@ export let handleChannels = (
             channel: request.channel,
             ...request.channel == 'signup' ? { signup: request.address } : {},
             framing,
-            from: ({
-              wake: 'the system (your wake-up)',
-              subscription: 'the system (your subscription)',
-              error: 'the system',
-              machine: 'the system (their machine)',
-              app: 'the system (an app in the space)',
-              escalated: `your conversation with ${
-                request.address ?? 'the writer'
-              }`,
-              voice: request.call
-                ? 'your voice on the call'
-                : 'the person on the phone',
-              letter: request.address,
-              texted: request.address,
-            } as Record<string, string | undefined>)[request.channel],
+            from: FROM[request.channel]?.(request),
             ...request.call ? { call: request.call } : {},
             ...request.model ? { model: request.model } : {},
             ...request.provider ? { provider: request.provider } : {},
@@ -923,6 +1076,28 @@ export let handleChannels = (
           },
         }], { trusted: true })
       }
+    },
+    // A letter the Operator writes goes out through the platform's sender
+    // from the space's address, counted against its mail allowance
+    // (`postOf`). A letter the allowance refuses never leaves, and only
+    // bounces, saying why.
+    mail_post: async (event, _g, _mark, attempt) => {
+      let [letter] = await g.get([event.entity.eid])
+      if (!owed(letter)) return
+      let by = part<Comp | undefined>(letter, 'created')?.by
+      let space = by ? await directoryOf(env.STORE).at(String(by)) : null
+      if (!space) throw new Error('An Operator letter names no space')
+      let { sender } = postOf(env, space, 'answer')
+      return sending({
+        sender: {
+          send: (m) =>
+            sender.send(m).catch((error) => {
+              throw error instanceof CallError
+                ? new Undeliverable(error.message)
+                : error
+            }),
+        },
+      })(event, g, (bundles) => g.apply(bundles, { trusted: true }), attempt)
     },
     // The Operator's name, set on its persona by its people or itself, is
     // copied to its space's directory row, which the platform reads it off.

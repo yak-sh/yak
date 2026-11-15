@@ -25,7 +25,11 @@ import {
   operatorReply,
   operatorRequest,
 } from './operator-host.ts'
-import { attachmentTools, handleChannels } from './operator-channels.ts'
+import {
+  attachmentTools,
+  handleChannels,
+  heardAt,
+} from './operator-channels.ts'
 import { drain } from './operator-store.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { h } from 'preact'
@@ -189,7 +193,8 @@ export let operatorService = (
       if (response) return response
       if (
         path == '/operator/run' || path == '/operator/helper' ||
-        path == '/operator/settings' || path == '/operator/talk'
+        path == '/operator/settings' || path == '/operator/talk' ||
+        path == '/operator/receive'
       ) {
         let { directoryOf } = await import('./directory.ts')
         let space = await directoryOf(env.STORE).at(held.space)
@@ -205,6 +210,9 @@ export let operatorService = (
               (entities) => directoryOf(env.STORE).apply({ entities }),
             ),
           )
+        }
+        if (path == '/operator/receive') {
+          return await heardAt(operator, env, held, space, args)
         }
         if (path == '/operator/helper') {
           let { spawnHelper } = await import('./operator-helpers.ts')

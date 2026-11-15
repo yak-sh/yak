@@ -14,6 +14,13 @@
             "ann@example.com"
           ]
         },
+        "name": {
+          "type": "string",
+          "description": "the name it is from, as the reader's mail shows it beside the address",
+          "examples": [
+            "Ann at the Book Club"
+          ]
+        },
         "to": {
           "type": "string",
           "description": "the address it is written to — absent when `deliver.to` names the recipient as an entity instead",

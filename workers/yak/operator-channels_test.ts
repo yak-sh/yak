@@ -35,6 +35,7 @@ import {
 import { operating, operatorContext } from './operator.ts'
 import { answering, operatorRequest } from './operator-host.ts'
 import { drain, type OperatorStore } from './operator-store.ts'
+import { inputOf } from '@yaks/session/intake'
 
 // One Operator per store, as the Builder object keeps, answered by `model`.
 let operatorOf = (
@@ -145,6 +146,8 @@ let fixture = async () => {
     held,
     ctx,
     sockets: service.sockets,
+    // The store the Builder's doors write, which a channel's words reach.
+    served: service.store,
     drain: service.drain,
   }
 }
@@ -742,20 +745,16 @@ let secondEmail = await arrived(
   f.env,
 )
 await f.drain()
-let messages = await operatorDoor(
-  f.env,
-  f.space,
-  f.held,
-  'messages',
-  {},
-) as import('@yaks/graph').Bundle[]
-// Both letters reach the person's one conversation with the Operator.
-let sessionOf = (id: string) =>
-  (messages.find((row) => row.entity.eid == id)!.operator_request as {
-    session: string
-  }).session
-let emailTask = sessionOf(firstEmail)
-let followedTask = sessionOf(secondEmail)
+// Both letters reach the person's one conversation with the Operator, each
+// kept as it arrived and taken in once, with no request of its own.
+let sessionOf = async (id: string) => {
+  let [input] = await f.served.g.get([inputOf(id)])
+  return (input.entry as { session: string }).session
+}
+let emailTask = await sessionOf(firstEmail)
+let followedTask = await sessionOf(secondEmail)
+let arrivedLetters = await f.served.g.get([firstEmail, secondEmail])
+let answeredLetters = await f.served.g.read('.deliver .mail.reply_to *')
 let emailMeter = (await f.dir.at(f.space.eid))!.meter!.emails
 let rejected: unknown
 try {
@@ -770,6 +769,17 @@ test('a clerk email queues durable work, answers once, threads a follow-up and m
   assertEquals(letters[0].headers?.['In-Reply-To'], '<request-1>')
   assertEquals(letters[1].headers?.['In-Reply-To'], '<request-2>')
   assertEquals(emailTask, followedTask)
+  assertEquals(
+    arrivedLetters.map((b) => !!b.mail && !b.operator_request),
+    [true, true],
+  )
+  assertEquals(
+    answeredLetters.map((b) => [
+      (b.mail as { name: string }).name,
+      !!b.delivered,
+    ]),
+    [[f.space.operator, true], [f.space.operator, true]],
+  )
   assertEquals(emailMeter, 4)
   assertEquals(rejected instanceof Refused, true)
 })

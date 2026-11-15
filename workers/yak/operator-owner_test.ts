@@ -11,6 +11,7 @@ import { durable } from '../../packages/durable-object/testing.ts'
 import { seenBy } from './operator-access.ts'
 import { OWNERS } from '@yaks/platform/operator-owner'
 import { ownerBackfill } from './owner-move.ts'
+import { inputOf } from '@yaks/session/intake'
 
 let [space, ada, bea] = Array.from({ length: 3 }, () => crypto.randomUUID())
 let id = () => crypto.randomUUID()
@@ -72,6 +73,33 @@ test('what hangs on a conversation is its person’s from the commit that makes 
     undefined,
   ])
   await agree()
+})
+
+test('an item a person’s words came in is theirs once their session takes it', async () => {
+  let letter = id(), text = id()
+  let item = (eid: string) => ({
+    entity: { eid },
+    mail: { from: 'ada@example.com' },
+    doc: { title: 'Hi', body: 'hi' },
+  })
+  let taking = (eid: string) => ({
+    entity: { eid: inputOf(eid) },
+    entry: { session: root },
+    intake: { item: eid },
+    content: { body: 'hi' },
+  })
+  await write([item(letter)])
+  equal(await owners(letter), [undefined])
+  await write([taking(letter)])
+  await write([item(text), taking(text)])
+  equal(await owners(letter, text), [ada, ada])
+  // An id that derives no input naming it is nobody’s.
+  let named = id()
+  await write([item(named), {
+    ...taking(named),
+    intake: { item: letter },
+  }])
+  equal(await owners(named), [undefined])
 })
 
 test('a call is also the person’s whose conversation made it', async () => {

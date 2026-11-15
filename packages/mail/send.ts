@@ -138,6 +138,7 @@ export let message = (
   let body = str(doc, BODY)
   return {
     from: str(mail, 'from'),
+    ...(str(mail, 'name') ? { name: str(mail, 'name') } : {}),
     to,
     ...(str(mail, 'cc') ? { cc: str(mail, 'cc') } : {}),
     subject: str(doc, TITLE),

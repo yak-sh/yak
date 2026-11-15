@@ -1597,7 +1597,14 @@ export let operatorRequest = async (
     if (Array.isArray(args.bundles)) drafted(kept)
     return Response.json({ bundles: kept })
   }
-  if (path == '/operator/receive') {
+  // Words a channel's door takes in itself go to the Operator (build.ts
+  // `#operate`, operator-channels.ts `heardAt`).
+  if (
+    path == '/operator/receive' &&
+    !(await channels()).TAKING.has(
+      String((args.request as Request | undefined)?.channel),
+    )
+  ) {
     let intake = {
       ...args.request as Request,
       person,

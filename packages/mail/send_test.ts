@@ -258,6 +258,17 @@ test('the address is canonical however it was written', async () => {
   assertEquals(comp(cy, 'email')?.address, 'cyrus@books.example')
 })
 
+test('a letter that names whom it is from leaves with that name', async () => {
+  let { g, post } = await seeded()
+  await g.apply([{
+    entity: { eid: letter },
+    doc: { title: 'hi', body: 'hi' },
+    mail: { from: 'hello@books.example', name: 'The Book Club' },
+    deliver: { to: ana },
+  }])
+  assertEquals(post.last()?.name, 'The Book Club')
+})
+
 test('message: the composition, without a transport anywhere', () => {
   assertEquals(
     message(

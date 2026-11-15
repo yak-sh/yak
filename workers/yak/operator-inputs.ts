@@ -102,9 +102,24 @@ export let fileContext = (
     held.catch(() => bytes.delete(file.key))
     return held
   }
-  let textOf = (file: File, space: Space) => {
+  // The words read from a file are kept on its attachment beside `message`
+  // as they are first read, so no later step reads them again.
+  let textOf = (file: File, space: Space, message: string) => {
     let key = textKey(file)
-    let held = texts.get(key) ?? fileText(env, space, file)
+    let held = texts.get(key) ?? fileText(env, space, file).then(
+      async (text) => {
+        let uses = await store.g.read(
+          `.attachment.message=${message}&.attachment.artifact=${
+            attachmentId(file)
+          }&.fields=entity.eid`,
+        )
+        await store.g.apply(
+          uses.map((b) => ({ entity: b.entity, attachment: { text } })),
+          { trusted: true },
+        )
+        return text
+      },
+    )
     texts.set(key, held)
     held.catch(() => texts.delete(key))
     return held
@@ -153,7 +168,7 @@ export let fileContext = (
           )
           return prose(
             file,
-            file.text ?? held?.text ?? await textOf(file, at),
+            file.text ?? held?.text ?? await textOf(file, at, message!),
           )
         }
         if (file.size! > room) {

@@ -941,6 +941,10 @@ export class Builder extends Durable {
         ),
       )
     }
+    if (new URL(request.url).pathname == '/operator/receive') {
+      let { heardAt } = await import('./operator-channels.ts')
+      return await heardAt(operator, this.#env, held, space, args)
+    }
     if (new URL(request.url).pathname == '/operator/helper') {
       let { spawnHelper } = await import('./operator-helpers.ts')
       return Response.json(await spawnHelper(operator, held, space, args))
