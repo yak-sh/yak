@@ -145,6 +145,34 @@ let refused = [letter.status, (await letter.json()).error.message]
 let ownerAfter = await titles(owner)
 let nobodyRows = await titles(nobody)
 
+// The app's own doors, keyed on the app: a visit holds no level there, on the
+// sample or in a store of its own, so each answers as it did before the app
+// was published.
+let APP_DOORS: [string, RequestInit?][] = [
+  ['/env'],
+  ['/fetch?url=' + encodeURIComponent('https://api.hub.test/?key=k')],
+  ['/stats'],
+  ['/line'],
+  ['/commands'],
+  ['/command'],
+  ['/ai/run', { method: 'POST', body: '{}' }],
+  ['/pdf?page=1', { method: 'POST', body: 'x' }],
+]
+let doors = (c: ReturnType<typeof client>) =>
+  Promise.all(APP_DOORS.map(async ([path, init]) => {
+    let res = await k.at(host, `/notes/api${path}`, {
+      ...init,
+      headers: c.headers,
+    })
+    await res.body?.cancel()
+    return res.status
+  }))
+let atDoors = {
+  sample: await doors(nobody),
+  own: await doors(out),
+  signedIn: await doors(ada),
+}
+
 let vias = (await meta(env).query('.visit')).length
 let app = (await dir.app((await dir.space('owner'))!, 'notes'))!
 
@@ -436,6 +464,11 @@ test('signed out, a browser reads the sample and its first write gives it a stor
   assertEquals(outEditStatus, 200)
   assertEquals(nobodyRows, ['Sample'])
   assertEquals(ownerAfter, ['Owner only', 'Sample'])
+})
+
+test('a visitor holds no level at the app’s own doors: no key, no budget', () => {
+  let all = (status: number) => APP_DOORS.map(() => status)
+  assertEquals(atDoors, { sample: all(401), own: all(401), signedIn: all(403) })
 })
 
 test('a visitor sends no mail from the app’s address', () => {

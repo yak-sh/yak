@@ -189,7 +189,7 @@ let through = (
   env: Pick<Env, 'DISPATCH'>,
   space: Pick<Space, 'eid'>,
   app: Pick<App, 'eid'>,
-  who: Pick<Who, 'person' | 'role'>,
+  who: Pick<Who, 'person' | 'role' | 'visit'>,
 ): Relay =>
 async (out) => {
   if (!env.DISPATCH) return null

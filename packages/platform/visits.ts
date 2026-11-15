@@ -14,7 +14,10 @@
  * Who is served what ({@link visiting}): a member is served the app as it is;
  * a stranger with no store of their own reads the sample; a stranger with one
  * is its editor. Everything below the door reads the app's `store`, so the app
- * it is handed is all that changes. A stranger is served the published
+ * it is handed is all that changes. A visitor's level is one in that store and not on the
+ * app: the doors keyed on the app itself (its connections and the keys they
+ * call out with, its stats, its line, its commands, its models and the
+ * space's budget) read a visitor as holding none ({@link atApp}). A stranger is served the published
  * version, the one the sample was made at: a version the owner hasn't
  * published is theirs alone.
  *
@@ -181,6 +184,12 @@ export let visitAt = (handle: string, id: string) => ({
  * not: their browser is who they are. */
 export let visitable = (app: Offered, who: Stranger) =>
   !who.role && !!who.via && sampling(app) && !!app.demo
+
+/** The caller as the app's own doors read them: a visit's level is in its
+ * store, the sample or the stranger's copy, so at a door keyed on the app
+ * itself they hold none, as a stranger at an app that keeps no sample. */
+export let atApp = <W extends Stranger>(who: W): W =>
+  who.visit ? { ...who, role: null } : who
 
 /** Whether the app is served from its sample: to a stranger who has not
  * written yet. */

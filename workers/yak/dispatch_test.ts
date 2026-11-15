@@ -220,24 +220,27 @@ test('the worker acts as its vouched browser without receiving the browser cooki
 })
 
 test('what the worker sends out is said to be the app’s, for this visitor', async () => {
-  let asked: unknown[] = []
-  let m = mirror()
-  await ran(
-    envOf((...args: unknown[]) => (asked = args, m.get())),
-    space,
-    app,
-    visit(),
-    who,
-  )
-  assertEquals(asked, ['jeff_recipes', {}, {
-    outbound: {
-      CALLER: {
-        app: app.eid,
-        level: 'editor',
-        person: 'p1',
-      },
-    },
+  let caller = async (asking: Who) => {
+    let asked: unknown[] = []
+    let m = mirror()
+    await ran(
+      envOf((...args: unknown[]) => (asked = args, m.get())),
+      space,
+      app,
+      visit(),
+      asking,
+    )
+    return asked
+  }
+  assertEquals(await caller(who), ['jeff_recipes', {}, {
+    outbound: { CALLER: { app: app.eid, level: 'editor', person: 'p1' } },
   }])
+  // A stranger's visit is an editor of its own store, and nothing at the app.
+  let [, , { outbound }] = await caller({
+    ...who,
+    visit: { kept: false },
+  }) as [string, object, { outbound: { CALLER: unknown } }]
+  assertEquals(outbound.CALLER, { app: app.eid, level: null, person: 'p1' })
 })
 
 test('declared commands have bounded CPU and only scheduled calls have context', async () => {

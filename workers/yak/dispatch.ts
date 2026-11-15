@@ -52,6 +52,7 @@ import type { Caller } from '@yaks/egress'
 import { type Clock, sleep, system } from '@yaks/fp'
 import { COOKIE, opened, seal } from './lib/token.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
+import { atApp } from '@yaks/platform/visits'
 import { sha256 } from '@yaks/graph/sha256'
 import type { App, Role, Space } from './directory.ts'
 import { scriptOf, storeName, url } from './directory.ts'
@@ -564,20 +565,21 @@ let hostOnly = (res: Response): Response => {
 /** A script in the apps' namespace, run for `app` and its visitor `who`: the
  * namespace's outbound Worker (outbound.ts) is handed them as the caller of
  * every fetch the script makes, the app from the directory's row and the
- * visitor and their role on it from the kernel's own vouch. Throws for a
- * script that is not there (`nowhere`). */
+ * visitor and their role on it from the kernel's own vouch, which a stranger's
+ * visit holds none of (@yaks/platform/visits `atApp`). Throws for a script
+ * that is not there (`nowhere`). */
 export let script = (
   dispatch: Dispatch,
   name: string,
   app: Pick<App, 'eid'>,
-  who: Pick<Who, 'person' | 'role'>,
+  who: Pick<Who, 'person' | 'role' | 'visit'>,
   cpuMs?: number,
 ) =>
   dispatch.get(name, {}, {
     outbound: {
       CALLER: {
         app: app.eid,
-        level: who.role,
+        level: atApp(who).role,
         person: who.person,
       } satisfies Caller,
     },

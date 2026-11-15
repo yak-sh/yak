@@ -169,6 +169,7 @@ import { ADDRESS } from '@yaks/platform/routes'
 import { FORM } from '@yaks/forms/routes'
 import { background, caught, defect, failing, refusing } from './defects.ts'
 import {
+  atApp,
   barOf,
   births,
   crowded,
@@ -1365,23 +1366,28 @@ export let api = async (
     let { serviceRoute } = await import('./service-api.ts')
     return serviceRoute(req, env, dir, { space, app }, who, path)
   }
+  // The app's own doors, its commands and DOORS below, are keyed on the app
+  // and not on the store this request reads, so a stranger's visit holds no
+  // level at them (@yaks/platform/visits `atApp`).
+  let caller = atApp(who)
+  let mayUse = reads(mode(app.access), caller.role)
   if (path == '/commands') {
     if (req.method != 'GET') return json(405, 'method_not_allowed')
-    if (!mayRead) return refused('not_a_reader')
-    return Response.json(await commandsIn(env, space, app, who))
+    if (!mayUse) return refused('not_a_reader')
+    return Response.json(await commandsIn(env, space, app, caller))
   }
   if (path == '/command') {
-    if (!mayRead) return refused('not_a_reader')
+    if (!mayUse) return refused('not_a_reader')
     let [route] = commandRoutes({
       command: (name, args) =>
         commandIn(
           env,
           space,
           app,
-          who,
+          caller,
           name,
           args,
-          acting(env, space, app, who),
+          acting(env, space, app, caller),
         ),
     })
     return route.handle(req)
@@ -1453,7 +1459,16 @@ export let api = async (
       : Response.json({ joined: role })
   }
   // The app's platform doors use the same refusals as its store doors.
-  let asked: Asked = { env, req, path, space, app, who, refuse: refused, json }
+  let asked: Asked = {
+    env,
+    req,
+    path,
+    space,
+    app,
+    who: caller,
+    refuse: refused,
+    json,
+  }
   let door = DOORS.get(path.split('/')[1])
   let mine = door && await (await door())(asked)
   if (mine) return mine
