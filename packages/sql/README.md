@@ -412,7 +412,7 @@ equal(
   ['number', 'text', 'bool'].map((tag) =>
     tallied(tag as 'number' | 'text' | 'bool')
   ),
-  ['number', 'text', null],
+  ['number', 'text', 'number'],
 )
 ```
 
@@ -806,10 +806,10 @@ Numeric cursors require a vocabulary declaring `entity.num`; an eid cursor also
 works without numbering.
 
 `.count` returns `value: ''` and `n`. `.distinct` returns `value`, and `.tally`
-returns `value` and `n` per group. `tallied` permits numbers as numbers and
-text, enum or eid as text; other types are refused. Reference aggregates group
-by the stored integer and read each group's eid once. Absent values and empty
-text are dropped.
+returns `value` and `n` per group. `tallied` permits numbers, priorities and
+booleans as numbers, binary as binary, and text, enum or eid as text; other
+types are refused. Reference aggregates group by the stored integer and read
+each group's eid once. Absent values and empty text are dropped.
 
 ## Identity, references and walks
 
