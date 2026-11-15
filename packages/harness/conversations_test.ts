@@ -400,3 +400,66 @@ test('words given again under their request say nothing twice, with the model an
   assertEquals(intake.chosen, true)
   assertEquals(intake.file, { name: 'notes.txt', artifact: 'c0ffee' })
 })
+
+let opened = await (async () => {
+  let { h, call, request, project } = await fixture()
+  try {
+    let { session } = await call('conversation_start', {
+      project,
+      prompt: 'hi',
+    })
+    let helper = crypto.randomUUID(), task = crypto.randomUUID()
+    let line = (session: string, seq: number, rest: Comp) => ({
+      entity: { eid: crypto.randomUUID() },
+      entry: { session, seq },
+      ...rest,
+    })
+    await h.g.apply([
+      { entity: { eid: helper }, session: {}, spawned: { parent: session } },
+      line(helper, 1, { content: { body: 'Check it.' } }),
+      line(helper, 2, { content: { body: 'Done.' }, notice: {} }),
+      { entity: { eid: task }, task: {}, doc: { title: 'Work' } },
+      {
+        entity: { eid: crypto.randomUUID() },
+        edge: { from: task, to: session },
+        contains: {},
+      },
+      {
+        entity: { eid: crypto.randomUUID() },
+        comment: { target: task },
+        doc: { body: 'More.' },
+      },
+    ], { trusted: true })
+    let read = (args: Record<string, unknown>) =>
+      call('conversation_read', { project, ...args })
+    let helped = await read({ session: helper, lines: true })
+    let tasked = await read({ session: task })
+    let stranger = crypto.randomUUID()
+    await h.g.apply([{ entity: { eid: stranger }, session: {} }], {
+      trusted: true,
+    })
+    let refused = await request('conversation_read', {
+      project,
+      session: stranger,
+    })
+    return frozen({
+      helper: helped.entries.map((b: Bundle) =>
+        Object.keys(b).filter((k) => k == 'notice' || k == 'content')
+      ),
+      task: [
+        tasked.task.entity.eid == task,
+        tasked.comments.length,
+        tasked.sessions.length,
+        tasked.messages.map((m: { text: string }) => m.text),
+      ],
+      refused: refused.isError,
+    })
+  } finally {
+    await h.close()
+  }
+})()
+test('a helper under an owned conversation reads with every line, and a task with its comments and conversations', () => {
+  assertEquals(opened.helper, [['content'], ['content', 'notice']])
+  assertEquals(opened.task, [true, 1, 1, ['hi']])
+  assertEquals(opened.refused, true)
+})

@@ -13,11 +13,11 @@ import {
 } from './operator-store.ts'
 import type { Listed, Model, Request as Ask } from '@yaks/model'
 import { assertEquals } from '@std/assert'
-import { refusing } from './defects.ts'
+import { background, caught, refusing } from './defects.ts'
 import type { Held } from './build-door.ts'
 import type { Env } from './env.ts'
 import { operating, type Operator, type Options } from './operator.ts'
-import { chat, settled } from './operator-conversations.ts'
+import { chat, ended } from './operator-conversations.ts'
 import type { Space } from './directory.ts'
 import {
   type Listener,
@@ -38,18 +38,35 @@ import type { Row } from './operator-view.ts'
 
 /** What an ask could call: the tools it was sent, and the ones `tool_load`
  * lists for it to load (@yaks/session `tool_load`). */
-/** operator_chat as the Builder answers it, with the store worked as the
- * wait reads it, as a store's alarm would. */
+/** operator_chat as the Builder answers it, with the store worked while
+ * it waits, as its alarm would, for up to the Builder's wait on `clock`.
+ * The work goes on behind the answer. */
 export let chatted = (
   operator: Operator,
   held: Parameters<Operator['chats']>[0],
   space: Space,
   args: Record<string, unknown>,
+  clock: Clock = runtimeClock,
 ) =>
-  chat(operator, held, space, args, (s) =>
-    settled(operator.store.g, s, {
-      work: () => drain(operator.store, undefined, operator.watching),
-    }))
+  chat(operator, held, space, args, async (session) => {
+    let work = (async () => {
+      for (;;) {
+        let next = await drain(operator.store, undefined, operator.watching)
+        if (next == null || await ended(operator.store.g, session)) return
+        await new Promise<void>((ok) =>
+          clock.after(Math.min(1000, Math.max(0, next - clock.now())), ok)
+        )
+      }
+    })()
+    background(
+      work.catch((e) => caught(e, { request: 'operator run', session })),
+    )
+    let cancel = () => {}
+    await Promise.race([
+      work,
+      new Promise<void>((done) => cancel = clock.after(25_000, done)),
+    ]).finally(() => cancel())
+  })
 
 export let callable = (req: Pick<Ask, 'tools'>): string[] => [
   ...req.tools.map((t) => t.name),
@@ -193,7 +210,9 @@ export let operatorService = (
           let { spawnHelper } = await import('./operator-helpers.ts')
           return Response.json(await spawnHelper(operator, held, space, args))
         }
-        return Response.json(await chatted(operator, held, space, args))
+        return Response.json(
+          await chatted(operator, held, space, args, env.CLOCK),
+        )
       }
       throw new Error(`Unhandled Operator route: ${req.url}`)
     } catch (e) {

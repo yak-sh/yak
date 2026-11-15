@@ -8,7 +8,14 @@ import type { Host } from '@yaks/host'
 import { owed } from '@yaks/persona'
 import { lineage } from '@yaks/project'
 import { snapshot } from '@yaks/context'
-import { humanCaller, type Intake, take, textOf } from '@yaks/session'
+import {
+  humanCaller,
+  type Intake,
+  take,
+  textOf,
+  transcript,
+  transcriptWindow,
+} from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
 import { readInbox } from '@yaks/inbox/read'
 import { begin } from './agent.ts'
@@ -100,6 +107,65 @@ let sessionAt = async (
   }
   return s
 }
+// What a read may open: a conversation, a task, or a line of either, which
+// reads as the conversation it is in.
+let openAt = async (g: Graph, args: Record<string, unknown>) => {
+  let said = required(args, 'session')
+  let id = (await g.address([said])).get(said) ?? said
+  let [row] = await g.get([id])
+  let line = part(row, 'entry').session
+  let [held] = line ? await g.get([String(line)]) : [row]
+  return held?.session || held?.task ? held : undefined
+}
+// The box's reading: a conversation the owner talks in, or one working
+// under it (a helper, a fork), up the sessions that spawned it; a task, by a
+// conversation of it they may read.
+let readable = async (
+  g: Graph,
+  row: Bundle,
+  owner: string,
+  project: string,
+): Promise<boolean> => {
+  if (row.task) {
+    return (await Promise.all(
+      (await sessionsOf(g, row.entity.eid)).map((s) =>
+        readable(g, s, owner, project)
+      ),
+    )).some(Boolean)
+  }
+  for (let eid = row.entity.eid, hops = 0; eid && hops < 8; hops++) {
+    let [s] = await g.read(
+      `.entity.eid=${quote(eid)} ${
+        conversation(owner, project)
+      } .fields=entity.eid`,
+    )
+    if (s) return true
+    let [up] = await g.get([eid], ['spawned'])
+    eid = String(part(up, 'spawned').parent ?? '')
+  }
+  return false
+}
+let sessionsOf = async (g: Graph, task: string) => {
+  let links = g.vocab.comp('contains')
+    ? await g.read(`.contains .edge.from=${quote(task)}`)
+    : []
+  return await g.get(links.map((b) => String(part(b, 'edge').to)))
+}
+// A transcript's lines as a read gives them: whole, without the model
+// instruction snapshots unless `context`, or as the messages said in it.
+let message = (b: Bundle) =>
+  b.content && !b.prompt && !b.notice && !b.meta && !b.reasoning &&
+  !b.call && !b.result && !b.ask && !b.cancel && !b.checkpoint &&
+  !b.exception && !b.stop
+let said = (entries: Bundle[]) =>
+  entries.filter(message).map((b) => ({
+    id: b.entity.eid,
+    seq: part(b, 'entry').seq,
+    role: b.output ? 'assistant' : 'user',
+    text: textOf(b),
+  }))
+let whole = (entries: Bundle[], context: boolean) =>
+  context ? entries : entries.map(({ sending: _, ...entry }) => entry)
 let headline = (words: string) =>
   words.trim().split(/\r?\n/, 1)[0].slice(0, 160)
 // Most transcripts are never titled: they read as what the owner said first.
@@ -267,6 +333,16 @@ let contextAt = async (g: Graph, owner: string, project: Bundle) => {
  * session with the project's context, titled by them). */
 export type Conversing = Partial<Pick<Host, 'me' | 'config'>> & {
   owner?: (call: Bundle, g: Graph) => Promise<string>
+  /** The project a call talks in, in place of the active project it names. */
+  project?: (g: Graph, args: Record<string, unknown>) => Promise<Bundle>
+  /** Whether `owner` may read `row`, a conversation or a task, in place of
+   * the box's rule (theirs, or working under theirs). */
+  reads?: (
+    g: Graph,
+    row: Bundle,
+    owner: string,
+    project: string,
+  ) => Promise<boolean>
   given?: (
     g: Graph,
     words: Intake,
@@ -282,6 +358,8 @@ export let conversations = (host: Conversing = {}): Runs => {
   let ownerOf = host.owner ??
     ((call: Bundle, g: Graph) =>
       conversationOwner(call, g, me && config ? { me, config } : undefined))
+  let reads = host.reads ?? readable
+  let projectOf = host.project ?? projectAt
   let given: NonNullable<Conversing['given']> = host.given ??
     ((_: Graph, words: Intake) => Promise.resolve({ words }))
   // The box's beginning: a session wearing the default model, with what the
@@ -315,7 +393,7 @@ export let conversations = (host: Conversing = {}): Runs => {
     conversation_start: async (call, g) => {
       let args = argsOf(call)
       let owner = await ownerOf(call, g)
-      let project = await projectAt(g, args)
+      let project = await projectOf(g, args)
       let prompt = required(args, 'prompt')
       // Started again under the same request, it is the conversation started.
       let request = named(args)
@@ -342,7 +420,7 @@ export let conversations = (host: Conversing = {}): Runs => {
     conversation_send: async (call, g) => {
       let args = argsOf(call)
       let owner = await ownerOf(call, g)
-      let p = (await projectAt(g, args)).entity.eid
+      let p = (await projectOf(g, args)).entity.eid
       let s = await sessionAt(g, args, owner, p)
       let text = required(args, 'text')
       let { words: said, beside } = await given(
@@ -356,9 +434,55 @@ export let conversations = (host: Conversing = {}): Runs => {
     conversation_read: async (call, g) => {
       let args = argsOf(call)
       let owner = await ownerOf(call, g)
-      let p = (await projectAt(g, args)).entity.eid
-      let s = await sessionAt(g, args, owner, p)
+      let p = (await projectOf(g, args)).entity.eid
+      let row = await openAt(g, args)
+      if (!row || !await reads(g, row, owner, p)) {
+        throw new Refused('Conversation not found for this owner and project')
+      }
+      let lines = args.lines === true
+      let context = args.context === true
+      // A task is read whole: its comments, its conversations and every
+      // line of them.
+      if (row.task) {
+        let sessions = await sessionsOf(g, row.entity.eid)
+        let entries = (await Promise.all(sessions.map((s) =>
+          transcript(g, s.entity.eid)
+        )))
+          .flat()
+        return answer(call, {
+          task: row,
+          comments: g.vocab.comp('comment')
+            ? await g.read(
+              `.comment.target=${quote(row.entity.eid)} ?doc .order=created.at`,
+            )
+            : [],
+          sessions,
+          ...lines ? { entries: whole(entries, context) } : {
+            messages: said(entries),
+          },
+        })
+      }
       let n = limit(args)
+      // Whole lines are paged by the line they come before, through every
+      // conversation a fork goes on from.
+      if (lines) {
+        let beforeLine = args.beforeLine
+        if (beforeLine != null && typeof beforeLine != 'string') {
+          throw new Refused('beforeLine must be the id of a line')
+        }
+        let page = await transcriptWindow(g, row.entity.eid, {
+          limit: n,
+          ...beforeLine ? { before: beforeLine } : {},
+        })
+        let count = page.before ? page.offset ?? 0 : 0
+        return answer(call, {
+          ...summary(row, p),
+          entries: whole(page.entries, context),
+          ...count
+            ? { earlier: { count, before: page.entries[0].entity.eid } }
+            : {},
+        })
+      }
       let before = args.before
       if (
         before != null &&
@@ -367,25 +491,15 @@ export let conversations = (host: Conversing = {}): Runs => {
         throw new Refused('before must be a positive entry sequence')
       }
       let rows = await g.read(
-        `.entry.session=${quote(s.entity.eid)}${
+        `.entry.session=${quote(row.entity.eid)}${
           before == null ? '' : ` .entry.seq<${before}`
         } * .order=-entry.seq .limit=${n + 1}`,
       )
       let more = rows.length > n
       let entries = rows.slice(0, n).reverse()
-      let messages = entries.filter((b) =>
-        b.content && !b.prompt && !b.notice && !b.meta && !b.reasoning &&
-        !b.call && !b.result && !b.ask && !b.cancel && !b.checkpoint &&
-        !b.exception && !b.stop
-      ).map((b) => ({
-        id: b.entity.eid,
-        seq: part(b, 'entry').seq,
-        role: b.output ? 'assistant' : 'user',
-        text: textOf(b),
-      }))
       return answer(call, {
-        ...summary(s, p),
-        messages,
+        ...summary(row, p),
+        messages: said(entries),
         before: more,
         nextBefore: more ? Number(part(entries[0], 'entry').seq) : null,
       })
@@ -393,7 +507,7 @@ export let conversations = (host: Conversing = {}): Runs => {
     conversation_recent: async (call, g) => {
       let args = argsOf(call)
       let owner = await ownerOf(call, g)
-      let p = (await projectAt(g, args)).entity.eid
+      let p = (await projectOf(g, args)).entity.eid
       let rows = await g.read(
         `${conversation(owner, p)} ?doc ?updated .order=-updated.at .limit=${
           limit(args, 20)

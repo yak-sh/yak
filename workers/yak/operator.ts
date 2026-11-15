@@ -25,7 +25,6 @@ import {
   type Tool,
   topOf,
   transcript,
-  transcriptWindow,
 } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
 import { CALLED, channelOf, HEARD } from './operator-view.ts'
@@ -73,7 +72,8 @@ import * as directoryPart from './directory.ts'
 import { copyOf } from './directory-copy.ts'
 import { narrowed } from './grants.ts'
 import { reachOf } from './operator-reach.ts'
-import { seenBy } from './operator-access.ts'
+import { conversant, seenBy } from './operator-access.ts'
+import { NAMING } from './operator-conversations.ts'
 import { writes } from '@yaks/member'
 import { inReach } from './declared.ts'
 import { connected, reaching } from './agent.ts'
@@ -714,58 +714,6 @@ export let machineFor = async (
   return chief ? fetch : null
 }
 
-/** This space's operator work as operator_read answers it: the latest tasks
- * and conversations, a task with all its lines, or a conversation's newest
- * lines, a page at a time back from `before` (an entry), with how many come
- * before them and the `before` to pass for the page preceding (`earlier`).
- * Model instruction snapshots are left out unless `context`. */
-export let readOperator = async (
-  { g }: Store,
-  task?: string,
-  { context = false, before }: { context?: boolean; before?: string } = {},
-) => {
-  if (!task) {
-    return {
-      tasks: await g.read('.task ?doc .order=-created.at .limit=20'),
-      conversations: await g.read(
-        '.operator_session ?session ?updated .order=-updated.at .limit=20',
-      ),
-    }
-  }
-  let [row] = await g.get([task])
-  // A conversation is its session: its newest lines, as a task's are read.
-  if (row?.session) {
-    let page = await transcriptWindow(g, task, { limit: LINES, before })
-    let count = page.before ? page.offset ?? 0 : 0
-    return {
-      sessions: [row],
-      entries: sent(page.entries, context),
-      ...count
-        ? { earlier: { count, before: page.entries[0].entity.eid } }
-        : {},
-    }
-  }
-  if (!row?.task) throw refuse('missing', `no operator task ${task}`)
-  let comments = await g.read(`.comment.target=${task} ?doc .order=created.at`)
-  let links = await g.read(`.contains .edge.from=${task}`)
-  let sessions = await g.get(links.map((b) => String(comp(b, 'edge')!.to)))
-  let entries =
-    (await Promise.all(sessions.map((b) => transcript(g, b.entity.eid))))
-      .flat()
-  return {
-    task: row,
-    comments,
-    sessions,
-    entries: sent(entries, context),
-  }
-}
-
-// How many of a conversation's newest lines a read answers.
-let LINES = 64
-// Lines as read: without the model instruction snapshots unless asked.
-let sent = (entries: Bundle[], context: boolean) =>
-  context ? entries : entries.map(({ sending: _sending, ...entry }) => entry)
-
 // What an Operator session works with, kept on it (`operator_session`) so
 // every step, in whichever wake of the object, reads it again: the space, and
 // the person whose reach it has.
@@ -914,7 +862,6 @@ let routeOf = (request?: Comp) =>
   )
 
 // Who the Operator's replies name: yaks.app, where it failed, and itself.
-export let NAMING = { host: 'yaks.app', name: 'the Operator' }
 
 // What a conversation is told when its person's own machine could not answer
 // a step and a hosted model answers instead (`operating`'s `fell`).
@@ -2080,7 +2027,7 @@ export let operating = (
     // The space is the project it talks in, and the person its owner.
     await readying(held, space)
     return {
-      owner: () => Promise.resolve(held.person),
+      ...conversant(store, { ...held, space: space.eid }),
       given: async (_, words) => {
         let asked = (words.using ?? {}) as Record<string, string | undefined>
         let selected = await chosen(

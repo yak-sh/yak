@@ -1380,17 +1380,25 @@ No caller-supplied actor, machine or model is accepted.
 `conversation_read({project,session,limit?,before?})` returns a chronological
 page of visible user/assistant messages, status, and `nextBefore` for older
 entries. Poll the current tail to receive same-id text revisions; preserve older
-loaded pages. `conversation_recent({project,limit?})` reopens owned project
-sessions, newest first: operator sessions holding the owner's words that work
-for the project by filing, by `session.actor` or by the persona they wear.
+loaded pages. With `lines` it returns every line instead, tool calls and results
+included (snapshots only with `context`), paged back from `beforeLine` with
+`earlier{count, before}`, through every conversation a fork goes on from. Its
+`session` may be a conversation, a helper or fork under one, a task, or any line
+of one: the owner reads a session when they talk in it or in one above it, and a
+task, read whole with its comments and conversations, when they may read one of
+those. `conversation_recent({project,limit?})` reopens owned project sessions,
+newest first: operator sessions holding the owner's words that work for the
+project by filing, by `session.actor` or by the persona they wear.
 `conversation_inbox({limit?})` uses the shared inbox reader for that owner.
 
 Another host answers the same tools over its own store by giving
 `conversations(host)` what it makes of a conversation (`Conversing`,
-`@yaks/harness/conversations`): who a call speaks for (`owner`), the words as it
-takes them with the rows it writes beside them (`given`), and how a conversation
+`@yaks/harness/conversations`): who a call speaks for (`owner`), the project it
+talks in (`project`), what the owner may read (`reads`), the words as it takes
+them with the rows it writes beside them (`given`), and how a conversation
 begins (`start`). yaks.app gives a space's Operator: the person its door vouched
-for, the model it chooses and the files that are theirs, and a fork of their own
+for, in the space, reading what is theirs (anything, for the platform's admin),
+with the model it chooses and the files that are theirs, and a fork of their own
 conversation under a private task.
 
 These tools require an authenticated human principal. An owner-only box that

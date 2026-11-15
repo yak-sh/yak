@@ -11,7 +11,10 @@ import { replyOf, statusOf, taskSession, transcript } from '@yaks/session'
 import { changes } from '@yaks/session/wait'
 import type { Space } from './directory.ts'
 import { type Args, refuse } from './tool.ts'
-import { NAMING, type Operator } from './operator.ts'
+import type { Operator } from './operator.ts'
+
+/** Who the Operator's replies name: yaks.app, where it failed, and itself. */
+export let NAMING = { host: 'yaks.app', name: 'the Operator' }
 
 type Chatting = Pick<Operator, 'store' | 'chats' | 'choose'>
 type Asker = Parameters<Operator['chats']>[0]
@@ -40,20 +43,20 @@ export let converse = async (
 
 let ENDED = new Set(['settled', 'failed', 'stopped'])
 
-/** Until the conversation `session` ends, or `timeout` passes: read again
- * as the store writes, while its own alarm works it, or each time `work`
- * (a test's) has. */
+/** Whether the conversation `session` has ended its turn. */
+export let ended = async (g: Graph, session: string) =>
+  ENDED.has(statusOf(await transcript(g, session)))
+
+/** Until the conversation `session` ends, or `timeout` passes, read again
+ * as the store writes while its own alarm works it. */
 export let settled = async (
   g: Graph,
   session: string,
-  o: { timeout?: number; clock?: Clock; work?: () => Promise<unknown> } = {},
+  o: { timeout?: number; clock?: Clock } = {},
 ) => {
   for await (
     let done of changes(g, { timeout: o.timeout ?? 25_000, clock: o.clock })
-  ) {
-    if (done || ENDED.has(statusOf(await transcript(g, session)))) return
-    await o.work?.()
-  }
+  ) if (done || await ended(g, session)) return
 }
 
 /** operator_chat: the person's words begin a conversation, or carry on the

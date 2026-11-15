@@ -4,6 +4,7 @@ import type { Meta } from '@yaks/sqlite'
 import { absent, and, eq, or } from '@yaks/query/core'
 import { MADE, ON, OWNED, OWNERS } from '@yaks/platform/operator-owner'
 import type { Held } from './build-door.ts'
+import type { Conversing } from '@yaks/harness/conversations'
 import type { OperatorStore } from './operator-store.ts'
 import { spaceOf } from './operator-root.ts'
 
@@ -228,3 +229,22 @@ export let mayWrite = async (store: Store, who: Owner, bundles: Bundle[]) => {
     )
   }
 }
+
+/** Whom @yaks/harness's conversation tools speak for in a space's store,
+ * the person its door vouched for, the project they talk in, the space, and
+ * what they may read there: what is
+ * theirs, or for the platform's admin anything, as operator_read reads. */
+export let conversant = (
+  store: Store,
+  held: Pick<Held, 'person' | 'space' | 'administrative'>,
+): Pick<Conversing, 'owner' | 'project' | 'reads'> => ({
+  owner: () => Promise.resolve(held.person),
+  // The project is the space, whether or not its row is kept here yet.
+  project: async (g) =>
+    (await g.get([held.space]))[0] ?? {
+      entity: { eid: held.space },
+      project: {},
+    },
+  reads: async (_, row) =>
+    held.administrative === true || await owns(store, row.entity.eid, held),
+})

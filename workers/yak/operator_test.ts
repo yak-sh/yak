@@ -10,8 +10,13 @@ import { platform } from './directory-rows-probe.ts'
 import { chatted, operatorMemory, operatorModel } from './operator-testing.ts'
 import { appStore } from './directory.ts'
 import { stores } from './app-store-probe.ts'
-import { operating, readOperator } from './operator.ts'
-import { conversationOf, frameOf, workOf } from './operator-host.ts'
+import { operating } from './operator.ts'
+import {
+  conversationOf,
+  frameOf,
+  operatorRead,
+  workOf,
+} from './operator-host.ts'
 import { sentRows } from './operator-testing.ts'
 import { TOOLS } from './tools.ts'
 import { operatorContext } from './operator.ts'
@@ -178,9 +183,9 @@ let out = await chatted(operator, f.held, f.space, {
     'Post a special meeting Thursday at 7 about the road millage in notices.',
 })
 
-let history = await readOperator(f.store, out.task)
-let listing = await readOperator(f.store)
-let talked = await readOperator(f.store, out.session)
+let history = (await operatorRead(f.store, f.held, { task: out.task }))!
+let listing = (await operatorRead(f.store, f.held, {}))!
+let talked = (await operatorRead(f.store, f.held, { task: out.session }))!
 let drawn = await conversationOf(f.store, '/manage/clerk/operator', out.task)
 let work = await workOf(f.store, f.space.eid, f.held.person)
 test('operator_read lists the conversations and reads one by its session, as its task reads it', () => {
@@ -275,7 +280,7 @@ let continued = await chatted(operator, f.held, f.space, {
   task: out.task,
   say: 'Schedule another meeting.',
 })
-let clarified = await readOperator(f.store, out.task)
+let clarified = (await operatorRead(f.store, f.held, { task: out.task }))!
 test('a follow-up reopens completed work and a clarification leaves it open', () => {
   assertEquals(continued.status, 'settled')
   assertEquals(comp(clarified.task, 'task').status, 'open')
@@ -420,7 +425,8 @@ given = await steerer.ask(roundsHeld, roundsSpace, {
 let before = steering.length
 let { drain } = await import('./operator-store.ts')
 await drain(steered)
-let steeredRead = await readOperator(steered, given.task)
+let steeredRead =
+  (await operatorRead(steered, roundsHeld, { task: given.task }))!
 test('words given while the Operator works land in its running session, which answers after them', () => {
   assertEquals(before, 0)
   assertEquals(steeredRead.sessions?.length, 1)
@@ -477,7 +483,9 @@ toolGiven = await painter.ask(roundsHeld, roundsSpace, {
   say: 'Paint the notices app.',
 }, { task: crypto.randomUUID() })
 await drain(toolSteered)
-let toolRead = await readOperator(toolSteered, toolGiven.task)
+let toolRead = (await operatorRead(toolSteered, roundsHeld, {
+  task: toolGiven.task,
+}))!
 test('words given during a tool call change what the running turn does next', () => {
   assertEquals(toolRead.sessions?.length, 1)
   assertEquals(toolSteering.length, 2)
@@ -515,7 +523,7 @@ begun = await halter.ask(roundsHeld, roundsSpace, {
 }, { task: crypto.randomUUID() })
 await drain(halted)
 let afterStop = halting.length
-let stopRead = await readOperator(halted, begun.task)
+let stopRead = (await operatorRead(halted, roundsHeld, { task: begun.task }))!
 let again = await chatted(halter, roundsHeld, roundsSpace, {
   task: begun.task,
   say: 'Go on.',

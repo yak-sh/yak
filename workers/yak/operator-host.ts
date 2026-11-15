@@ -9,7 +9,13 @@ import { derivedEid } from '@yaks/graph/identity'
 import { sha256 } from '@yaks/graph/sha256'
 import { short } from '@yaks/id'
 import { eids } from '@yaks/markdown/structural'
-import { ownerOf, owns, placed, theirFiles } from './operator-access.ts'
+import {
+  conversant,
+  ownerOf,
+  owns,
+  placed,
+  theirFiles,
+} from './operator-access.ts'
 import type { Held } from './build-door.ts'
 import type { Copy } from './operator-skills.ts'
 import type { Operator } from './operator.ts'
@@ -1835,52 +1841,96 @@ export let operatorRequest = async (
     return Response.json({ removed: await remove(store, ids) })
   }
   if (path == '/operator/read') {
-    // The Operator's code loads for what it runs, not with every read.
-    let { readOperator } = await import('./operator.ts')
-    // The platform's admin reads every person's, as on the admin page.
-    let readable = (id: string) => access.administrative === true || own(id)
-    // Not found and not theirs read alike, and say what `task` takes.
-    let unread = () =>
-      Response.json({
-        message:
-          'That conversation is missing. task takes the id of a task or a ' +
-          "conversation's session that operator_read with no task lists, or " +
-          'of any line in one.',
-      }, { status: 404 })
-    let [open = ''] = typeof args.task == 'string' && args.task
-      ? await addressed(store.g, [args.task])
-      : []
-    if (open && !await readable(open)) return unread()
-    if (!open) {
-      let { tasks = [], conversations = [] } = await readOperator(store)
-      let mine = async (rows: Bundle[]) => {
-        let allowed = await Promise.all(
-          rows.map((r) => readable(r.entity.eid)),
-        )
-        return rows.filter((_, i) => allowed[i])
-      }
-      return Response.json({
-        tasks: await mine(tasks),
-        conversations: await mine(conversations),
-      })
-    }
-    // Found as the chat app finds it; a request no session has taken is
-    // read alone, as it waits.
-    let found = await openedOf(store, open)
-    let read = found.session ?? found.task
-    if (!read) {
-      return found.waiting
-        ? Response.json({ waiting: found.waiting })
-        : unread()
-    }
-    return Response.json(
-      await readOperator(store, read.entity.eid, {
-        context: args.context === true,
-        before: typeof args.before == 'string' ? args.before : undefined,
-      }),
-    )
+    let read = await operatorRead(store, held, args)
+    return read ? Response.json(read) : Response.json({
+      message:
+        'That conversation is missing. task takes the id of a task or a ' +
+        "conversation's session that operator_read with no task lists, or " +
+        'of any line in one.',
+    }, { status: 404 })
   }
   return null
+}
+
+/** What operator_read answers (`operatorRead`). */
+export type OperatorRead = {
+  tasks?: Bundle[]
+  conversations?: Bundle[]
+  task?: Bundle
+  comments?: Bundle[]
+  sessions?: Bundle[]
+  entries?: Bundle[]
+  earlier?: { count: number; before: string }
+  waiting?: Bundle[]
+}
+
+// How many of a conversation's newest lines operator_read answers.
+let LINES = 64
+
+/**
+ * operator_read: this space's newest tasks and conversations that `held`
+ * may read (the platform's admin every person's), or one of them as
+ * @yaks/harness's `conversation_read` reads it whole, found as the chat
+ * app finds it (a task, a conversation, a helper, any line of one, or a
+ * request no session has taken yet, which reads alone as it waits): a task
+ * with its comments and every line of its conversations, or a
+ * conversation's newest lines a page at a time back from `before`, with how
+ * many come before them (`earlier`). Model instruction snapshots are left
+ * out unless `context`. Answers nothing for what is missing or not theirs,
+ * which read alike.
+ */
+export let operatorRead = async (
+  store: Store,
+  held: Pick<Held, 'person' | 'space' | 'administrative'>,
+  args: Record<string, unknown>,
+): Promise<OperatorRead | null> => {
+  let readable = (id: string) =>
+    held.administrative === true || owns(store, id, held)
+  let [open = ''] = typeof args.task == 'string' && args.task
+    ? await addressed(store.g, [args.task])
+    : []
+  if (!open) {
+    let mine = async (rows: Bundle[]) => {
+      let allowed = await Promise.all(rows.map((r) => readable(r.entity.eid)))
+      return rows.filter((_, i) => allowed[i])
+    }
+    return {
+      tasks: await mine(
+        await store.g.read('.task ?doc .order=-created.at .limit=20'),
+      ),
+      conversations: await mine(
+        await store.g.read(
+          '.operator_session ?session ?updated .order=-updated.at .limit=20',
+        ),
+      ),
+    }
+  }
+  if (!await readable(open)) return null
+  let found = await openedOf(store, open)
+  let row = found.session ?? found.task
+  if (!row) return found.waiting ? { waiting: found.waiting } : null
+  let { conversations } = await import('@yaks/harness/conversations')
+  let [said] = await conversations(conversant(store, held)).conversation_read!({
+    entity: { eid: crypto.randomUUID() },
+    call: {
+      to: 'conversation_read',
+      args: {
+        project: held.space,
+        session: row.entity.eid,
+        lines: true,
+        limit: LINES,
+        context: args.context === true,
+        ...typeof args.before == 'string' ? { beforeLine: args.before } : {},
+      },
+    },
+    $actor: { by: held.person },
+  }, store.g) as Bundle[]
+  let { task, comments, sessions, entries, earlier } = JSON.parse(
+    String(comp(said, 'content')?.body),
+  )
+  return task
+    ? { task, comments, sessions, entries }
+    : { sessions: [row], entries, ...earlier ? { earlier } : {} }
 }
 
 /** A kernel-vouched delivery receipt for this space's private mail. */
