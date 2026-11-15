@@ -614,13 +614,20 @@ export let sockets = (
       return after(
         over(Object.entries(asks(ws)), ([id, ask]) => {
           if (openings) {
-            openings.push({ sink: send, id, query: ask, opts: reading(held) })
+            openings.push({
+              sink: send,
+              id,
+              query: ask,
+              opts: reading(held),
+              writer: held?.writer,
+            })
           } else {
             return subs.restore([{
               sink: send,
               id,
               query: ask,
               opts: reading(held),
+              writer: held?.writer,
             }], deferStatic)
           }
         }),

@@ -360,7 +360,7 @@ let dispatch = (
     id = 'id' in msg && msg.id != null ? String(msg.id) : ''
     let subscribe = 'subscribe' in msg ? msg.subscribe : undefined
     if (typeof subscribe == 'string' || subscribe === true) {
-      return subs.open(to, id, subscribe, opts)
+      return subs.open(to, id, subscribe, opts, writer)
     }
     if ('unsubscribe' in msg && msg.unsubscribe != null) {
       return subs.close(to, String(msg.unsubscribe))

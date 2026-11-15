@@ -120,8 +120,15 @@ export type Sink = (frame: Frame) => void
  * every committed transaction. */
 export type Ask = string | true
 
-/** Saved watches recovered together after their owner lost its memory. */
-export type Opening = { sink: Sink; id: string; query: Ask; opts?: ReadOpts }
+/** Saved watches recovered together after their owner lost its memory, each
+ * with its opener: the read it asks as and the writer its socket holds. */
+export type Opening = {
+  sink: Sink
+  id: string
+  query: Ask
+  opts?: ReadOpts
+  writer?: PeerWriter
+}
 
 /** The subscription registry: what the socket layer talks to, and what an
  * application can drive directly. */
@@ -141,12 +148,15 @@ export type Subs = {
     query: Query,
     opts?: ReadOpts,
   ) => Bundle[] | Reduced | Promise<Bundle[] | Reduced>
-  /** open (or replace) a subscription and send its current set */
+  /** open (or replace) a subscription and send its current set, as `opts`
+   * reads; `writer` is who opened it, for a registry that vouches its opener
+   * onward ({@link import('./reached.ts').reached}) */
   open: (
     sink: Sink,
     id: string,
     query: Ask,
     opts?: ReadOpts,
+    writer?: PeerWriter,
   ) => void | Promise<void>
   /** Reopen saved watches. A cold peer-only recovery may register proven
    * static durable interests without repeating the page's held snapshot. */

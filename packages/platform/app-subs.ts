@@ -62,20 +62,20 @@ export let naming = (
         typeof line == 'string' ? query(line) : line,
         opts,
       ),
-    open: (sink, id, line, opts) =>
+    open: (sink, id, line, opts, writer) =>
       subs.open(
         by(sink),
         id,
         line === true ? line : query(line),
         opts,
+        writer,
       ),
     restore: (openings, deferStatic) =>
       subs.restore(
-        openings.map(({ sink, id, query: line, opts }) => ({
+        openings.map(({ sink, query: line, ...rest }) => ({
+          ...rest,
           sink: by(sink),
-          id,
           query: line === true ? line : query(line),
-          opts,
         })),
         deferStatic,
       ),

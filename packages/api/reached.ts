@@ -14,11 +14,19 @@ import type { Bundle, ReadOpts, Reduced } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { fault, refusal, type Tags } from './refuse.ts'
 import type { Ask, Frame, Opening, Sink, Subs } from './subs.ts'
+import type { PeerWriter } from './save.ts'
 
 /** A registry over a reach, as {@link reached} makes one. */
 export type Reached = {
-  /** Watch a line as `opts` says who asks, and send its answer. */
-  open: (sink: Sink, id: string, line: string, opts?: ReadOpts) => void
+  /** Watch a line as `opts` and `writer` say who asks, and send its
+   * answer. */
+  open: (
+    sink: Sink,
+    id: string,
+    line: string,
+    opts?: ReadOpts,
+    writer?: PeerWriter,
+  ) => void
   /** Reopen saved watches. With `quiet`, each is held and not asked until
    * {@link Reached.resume} or the next {@link Reached.hear}: a page that
    * kept its answers through its host's sleep is not sent them again. */
@@ -34,7 +42,13 @@ export type Reached = {
   watching: () => boolean
 }
 
-type Watch = { line: string; asked: number; opts?: ReadOpts; said?: string }
+type Watch = {
+  line: string
+  asked: number
+  opts?: ReadOpts
+  writer?: PeerWriter
+  said?: string
+}
 
 /**
  * Subscriptions answered by `read`, the reach's one answer to a line, and
@@ -57,9 +71,14 @@ type Watch = { line: string; asked: number; opts?: ReadOpts; said?: string }
  * ```
  */
 export let reached = (opts: {
-  /** the reach's answer to a line, asked as the watch's opener: its
+  /** the reach's answer to a line, asked as the watch's opener (the read it
+   * asks as, and its writer, whom a host vouches to the members): its
    * bundles, or a reduction */
-  read: (line: string, opts?: ReadOpts) => Promise<Bundle[] | Reduced>
+  read: (
+    line: string,
+    opts?: ReadOpts,
+    writer?: PeerWriter,
+  ) => Promise<Bundle[] | Reduced>
   /** told of every answer refused, with its line, for a host that knows
    * whose line it was */
   refused?: (error: unknown, line: string) => void
@@ -73,7 +92,7 @@ export let reached = (opts: {
     let asked = ++watch.asked
     let current = () =>
       held.get(sink)?.get(id) === watch && watch.asked == asked
-    return opts.read(watch.line, watch.opts).then((answer) => {
+    return opts.read(watch.line, watch.opts, watch.writer).then((answer) => {
       if (!current()) return
       let frame: Frame = Array.isArray(answer)
         ? { id, bundles: answer, reset: true }
@@ -96,19 +115,20 @@ export let reached = (opts: {
     id: string,
     line: string,
     read?: ReadOpts,
+    writer?: PeerWriter,
     quiet = false,
   ) => {
     let mine = held.get(sink) ?? new Map<string, Watch>()
     held.set(sink, mine)
-    let watch: Watch = { line, asked: 0, opts: read }
+    let watch: Watch = { line, asked: 0, opts: read, writer }
     mine.set(id, watch)
     if (!quiet) void ask(sink, id, watch)
   }
   return {
-    open: (sink, id, line, read) => open(sink, id, line, read),
+    open: (sink, id, line, read, writer) => open(sink, id, line, read, writer),
     restore: (openings, quiet) => {
-      for (let { sink, id, query, opts: read } of openings) {
-        if (query !== true) open(sink, id, query, read, quiet)
+      for (let { sink, id, query, opts: read, writer } of openings) {
+        if (query !== true) open(sink, id, query, read, writer, quiet)
       }
     },
     resume: () => {
@@ -180,16 +200,16 @@ export let beside = (
   }
   return {
     ...subs,
-    open: (sink, id, query, opts) => {
+    open: (sink, id, query, opts, writer) => {
       let was = lend(sink, id, theirs(query))
       if (theirs(query)) {
         return after(
           was ? undefined : subs.close(sink, id),
-          () => lent.open(sink, id, query, opts),
+          () => lent.open(sink, id, query, opts, writer),
         )
       }
       if (was) lent.close(sink, id)
-      return subs.open(sink, id, query, opts)
+      return subs.open(sink, id, query, opts, writer)
     },
     restore: (openings, deferStatic) => {
       for (let o of openings) lend(o.sink, o.id, theirs(o.query))

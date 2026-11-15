@@ -98,33 +98,41 @@ test("a page's words are its store's and the ones it borrows", async () => {
   equal([same, Array.isArray(keywords)], [docs, true])
 })
 
+// A page of `app` watching the books it borrows, as the door that let its
+// socket in vouched `who`, with the app as the directory has it now: the
+// next `n` answers it is sent.
+let watching = async (slug: string, who: Record<string, string>) => {
+  let app = (await dir.app(space, slug))!
+  let undo = installPair()
+  let opened = await appStore(env.STORE, space, app, env)(
+    '/ws',
+    { headers: { upgrade: 'websocket' } },
+    who,
+  )
+  await opened.body?.cancel()
+  let ws = made.at(-1)![1]
+  undo()
+  await runtime.object(storeName(space, app)).webSocketMessage(
+    ws,
+    JSON.stringify({ subscribe: '.book', id: 'books' }),
+  )
+  let heard = async (n = 1) => {
+    let said: unknown[] = []
+    await until(() => {
+      said.push(
+        ...(ws.taken() as Frame[]).filter((f) => f.id == 'books')
+          .map((f) => f.refused ? f.refused.error : titles(f.bundles ?? [])),
+      )
+      return said.length >= n
+    })
+    return said
+  }
+  return { ws, heard }
+}
+
 // Ada's loans page watches the books its app borrows from the shelf.
 let name = storeName(space, loans)
-let undo = installPair()
-let opened = await appStore(env.STORE, space, loans, env)(
-  '/ws',
-  { headers: { upgrade: 'websocket' } },
-  ADA_OWNS,
-)
-await opened.body?.cancel()
-let ws = made.at(-1)![1]
-undo()
-await runtime.object(name).webSocketMessage(
-  ws,
-  JSON.stringify({ subscribe: '.book', id: 'books' }),
-)
-// The next `n` answers the page is sent.
-let heard = async (n = 1) => {
-  let said: unknown[] = []
-  await until(() => {
-    said.push(
-      ...(ws.taken() as Frame[]).filter((f) => f.id == 'books')
-        .map((f) => titles(f.bundles ?? [])),
-    )
-    return said.length >= n
-  })
-  return said
-}
+let { ws, heard } = await watching('loans', ADA_OWNS)
 
 // It was answered before Kim was written, and again once she was.
 test('a watch of a borrowed word is answered from its home', async () =>
@@ -156,4 +164,29 @@ test('a store-scoped app keeps the homes of the words it uses out of its reach',
     { book: 'shelf' },
   )
   equal(found?.homes, [])
+})
+
+let access = (app: string, access: string) =>
+  call(ctx, 'app_set', { space: 'ada', app, access })
+
+test('a visitor watches a borrowed word with the standing their visit holds', async () => {
+  await access('loans', 'private')
+  await access('shelf', 'private')
+  let visit = { 'x-yak-via': crypto.randomUUID(), 'x-yak-role': 'viewer' }
+  equal(await (await watching('loans', visit)).heard(), [[
+    'Dune',
+    'Emma',
+    'Kim',
+  ]])
+})
+
+test('a home made private leaves the next answer of a watch it fed', async () => {
+  await access('loans', 'public')
+  await access('shelf', 'public')
+  let guest = await watching('loans', {})
+  equal(await guest.heard(), [['Dune', 'Emma', 'Kim']])
+  await access('shelf', 'private')
+  await shelved('Ulysses')
+  // Refused as the page's read of it is: the app knows no such word alone.
+  equal(await guest.heard(), ['CallError'])
 })

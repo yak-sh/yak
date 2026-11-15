@@ -5007,32 +5007,24 @@ export class Store extends Durable {
   // watch's opener (@yaks/api/reached), asked again on each commit here
   // and on each home's news (`/heard`). Each read asks the homes with this
   // store's name beside (`HEED`), so a home knows whom to tell. Where its
-  // homes are is the directory's word, asked once while the words stand.
+  // homes are, and who may read them, is the directory's word as each round
+  // of reads asks it: the reads one commit or one home's news raises share
+  // one answer, and the next round asks again, so a home made private is
+  // left out of the next answer as it is of the next page's read.
   #lending(branch: number | undefined, feed: () => void): Reached {
-    let found: [string, Promise<Homes | null>] | undefined
+    let asking: Promise<Homes | null> | undefined
     let homes = () => {
-      let uses = this.#uses(), said = JSON.stringify(uses)
-      if (found?.[0] != said) {
-        let app = this.#get('app')
-        let asked = app
-          ? homesOf(this.#directory(), app, uses)
-          : Promise.resolve(null)
-        asked.catch(() => {
-          if (found?.[1] == asked) found = undefined
-        })
-        found = [said, asked]
-      }
-      return found[1]
+      let app = this.#get('app')
+      return asking ??=
+        (app
+          ? homesOf(this.#directory(), app, this.#uses())
+          : Promise.resolve(null)).finally(() => asking = undefined)
     }
     return reached({
-      read: async (line, opts) => {
+      read: async (line, opts, writer) => {
         feed()
         let name = this.#name() ?? ''
-        let asker: Who = {
-          person: opts?.person ?? null,
-          role: (opts?.level ?? null) as Role | null,
-          ...(opts?.administrative ? { administrative: true } : {}),
-        }
+        let asker = this.#opener(opts, writer)
         let speaks: Record<string, string> = opts?.speaks
           ? { 'x-yak-speaks': JSON.stringify(opts.speaks) }
           : {}
@@ -5060,6 +5052,25 @@ export class Store extends Durable {
       refused: (error, line) => this.#mistook(error, line),
       tags: this.#tags(),
     })
+  }
+
+  // Who opened a socket's watch, as the door that let the socket in vouched
+  // them (`#auth`, `#authority`): what its HTTP door hands a store it asks
+  // (`vouchedAs`), so a home hears the same caller from a page's watch as
+  // from its read, a visitor's instrument and standing included. Its person
+  // and level are the socket's as they stand now (`sockets`' `read`).
+  #opener(opts?: ReadOpts, writer?: PeerWriter): Who {
+    let v = this.#authority(writer?.actor)
+    let via = v?.via ?? writer?.actor?.via
+    return {
+      person: opts?.person ?? null,
+      role: (opts?.level ?? null) as Role | null,
+      ...(v?.actor ? { actor: v.actor } : {}),
+      ...(via ? { via } : {}),
+      ...(v?.browsers?.length ? { browsers: v.browsers } : {}),
+      ...(opts?.administrative ? { administrative: true } : {}),
+      ...(v?.visit ? { visit: { kept: false } } : {}),
+    }
   }
 
   // The stores to tell of a commit here (`#herald`), as this store keeps them.
