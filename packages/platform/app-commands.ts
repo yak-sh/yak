@@ -1,4 +1,13 @@
-// The commands a kind is worth (T-34513). An app that declares a `recipe` in
+// An app's commands as its release declares them: the ones its manifest
+// writes, in the grammar every kept release still reads, and the two each of
+// its kinds is worth. What a deploy keeps for its store (workers/yak tools.ts)
+// and what `yak release serve` offers (./released.ts) are the same `commandsOf`.
+//
+// Kept app releases still declare the old command grammar (`options`), which
+// is translated here, at the boundary; the packages and callers share the new
+// declaration (@yaks/tools/declared).
+//
+// The commands a kind is worth. An app that declares a `recipe` in
 // its vocab.json gets `add_recipe` and `find_recipe` for nothing, so the next
 // agent the person talks to — one that has never read this app's pages —
 // discovers there is somewhere to put a recipe the way it discovers anything
@@ -13,7 +22,7 @@
 //
 // Nothing new answers them. They are ordinary declared tools (@yaks/tools/declared
 // ToolDef), planted in the app's store beside the ones its vocab.json declares
-// and listed, called, titled and described through the one seam (declared.ts) — so
+// and listed, called, titled and described through the one seam (workers/yak declared.ts) — so
 // `readOnly` on the find and the app's title and address on the description
 // come for free.
 //
@@ -31,7 +40,14 @@ import {
   type PropSchema,
   type VocabDoc,
 } from '@yaks/vocab'
-import type { Arg, ToolDef, Tools } from '@yaks/tools/declared'
+import { CallError } from '@yaks/tools/errors'
+import {
+  type Arg,
+  parseTools,
+  type ToolDef,
+  type Tools,
+} from '@yaks/tools/declared'
+import { errorsText, toolCheck } from '@yaks/vocab/tools'
 
 // What an argument takes from the property it fills: the type the column
 // holds, what an object or a list holds, and the words saying what it is.
@@ -71,7 +87,7 @@ let article = (word: string) => /^[aeiou]/.test(word) ? 'an' : 'a'
 // that declared no `description` says nothing, and the sentence stops early
 // rather than inventing a meaning the app never claimed. No full stop: the door
 // appends the app's title and address to every declared tool's sentence
-// (declared.ts), and that reads as one line.
+// (workers/yak declared.ts), and that reads as one line.
 let means = (kind: Kind) =>
   kind.description ? `: ${kind.description.replace(/\.$/, '')}` : ''
 
@@ -252,3 +268,112 @@ export let withKinds = (tools: Tools, doc: VocabDoc, at: string): Tools => {
   }
   return out
 }
+
+let object = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v == 'object' && !Array.isArray(v)
+
+let legacy = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    positional: { type: 'array', items: { type: 'string' }, uniqueItems: true },
+    rest: { type: 'string' },
+    short: {
+      type: 'object',
+      propertyNames: { pattern: '^[a-zA-Z]$' },
+      additionalProperties: { type: 'string' },
+    },
+  },
+}
+
+let translated = (entry: unknown, name: string): unknown => {
+  if (!object(entry) || !('options' in entry)) return entry
+  let { options, ...next } = entry
+  if (options == null) return next
+  try {
+    if ('positional' in entry) {
+      throw new Error('declare positional or the legacy options, never both')
+    }
+    let errors = toolCheck(legacy)(options)
+    if (errors.length) {
+      throw new Error(`Invalid tool arguments: ${errorsText(errors)}`)
+    }
+    let old = options as {
+      positional?: string[]
+      rest?: string
+      short?: Record<string, string>
+    }
+    let positional = (old.positional ?? []).filter((name) => name != old.rest)
+    if (old.rest) positional.push(`${old.rest}...`)
+    if (old.positional || old.rest) next.positional = positional
+    if (old.short) {
+      let input = { ...(object(entry.input) ? entry.input : {}) }
+      for (let [short, prop] of Object.entries(old.short)) {
+        if (!object(input[prop])) {
+          throw new Error(`short references unknown input: ${prop}`)
+        }
+        input[prop] = { ...input[prop], short }
+      }
+      next.input = input
+    }
+    return next
+  } catch (error) {
+    throw new CallError(
+      'arguments',
+      `${name}.options: ${(error as Error).message}`,
+    )
+  }
+}
+
+/** A manifest entering through deploy, including files a kept release holds. */
+export let appTools = (
+  source: unknown,
+  words: string[] = [],
+  file = 'vocab.json',
+): Tools => {
+  if (typeof source == 'string') {
+    try {
+      source = JSON.parse(source)
+    } catch {
+      return parseTools(source, words, file)
+    }
+  }
+  if (object(source) && object(source.$defs)) {
+    source = {
+      ...source,
+      $defs: Object.fromEntries(
+        Object.entries(source.$defs).map(([name, entry]) => [
+          name,
+          object(entry) && entry.tool === true
+            ? translated(entry, name)
+            : entry,
+        ]),
+      ),
+    }
+  }
+  return parseTools(source, words, file)
+}
+
+/** Stored commands predate this rename; adapt without rewriting their slots. */
+export let readTools = (source: string): Tools =>
+  Object.fromEntries(
+    Object.entries(JSON.parse(source || '{}')).map(([name, entry]) => [
+      name,
+      translated(entry, name),
+    ]),
+  ) as Tools
+
+/**
+ * What a release declares its store runs: the manifest's own commands, read
+ * from `source` (its text or value, named `file` in a refusal) and checked
+ * against `words`, the components its store knows, with the two each kind of
+ * `doc` (the manifest as one document) is worth. `at` is the app's address,
+ * which each kind's command names.
+ */
+export let commandsOf = (
+  source: unknown,
+  doc: VocabDoc,
+  at: string,
+  words: string[],
+  file = 'vocab.json',
+): Tools => withKinds(appTools(source, words, file), doc, at)

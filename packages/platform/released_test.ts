@@ -1,8 +1,10 @@
 // A release directory opens on this machine as the store yaks.app keeps for
 // its app, answering through @yaks/api's doors in its own words and the
-// renames it declares.
+// renames it declares, and running the commands it declares.
 import { equal, test } from '@yaks/testing'
 import { packageEid } from '@yaks/lens'
+import { mint } from '@yaks/graph/identity'
+import { faulted, toolEid } from '@yaks/tools/result'
 import { opened } from './released.ts'
 
 let dir = new URL('./fixtures/recipes', import.meta.url).pathname
@@ -77,5 +79,27 @@ test('a page imports its client from ./api/client.js', async () => {
   equal(
     [res.status, res.headers.get('content-type'), /export\s*\{/.test(code)],
     [200, 'text/javascript; charset=utf-8', true],
+  )
+})
+
+let called = async (tool: string, args: Record<string, unknown>) => {
+  let eid = mint()
+  let landed = await host.runner.call({
+    entity: { eid },
+    call: { to: toolEid(tool), args },
+  })
+  return faulted(landed, eid)
+}
+
+test('a command the release declares writes to its store', async () => {
+  equal(await called('jot', { heading: 'Soup' }), false)
+  equal(await headed('Soup'), ['Soup'])
+})
+
+test('each kind the release declares is worth its two commands', () => {
+  let names = host.tools.map((t) => t.name)
+  equal(
+    ['jot', 'add_recipe', 'find_recipe'].filter((n) => names.includes(n)),
+    ['jot', 'add_recipe', 'find_recipe'],
   )
 })

@@ -20,7 +20,7 @@ import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
 import type { ServingCopyDoor } from './directory-copy.ts'
 import { KERNEL } from './meta.ts'
 import { appDoc, appVocab } from './vocab.ts'
-import { withKinds } from './kinds.ts'
+import { withKinds } from '@yaks/platform/app-commands'
 import { declared } from './directory-fixture.ts'
 import { trashSpace } from './erase.ts'
 

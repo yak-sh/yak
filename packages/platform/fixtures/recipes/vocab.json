@@ -8,6 +8,16 @@
       "lens": true,
       "step": 20261003140000,
       "ops": [{ "rename": { "from": "recipe.title", "to": "recipe.heading" } }]
+    },
+    "jot": {
+      "tool": true,
+      "description": "Write down a recipe by its heading",
+      "input": { "heading": { "type": "string" } },
+      "required": ["heading"],
+      "apply": {
+        "entity": { "eid": "$recipe" },
+        "recipe": { "heading": "$heading" }
+      }
     }
   }
 }

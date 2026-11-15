@@ -1,6 +1,6 @@
 // The commands an app declares (T-32685, T-34541): the tool entries of the
 // `vocab.json` a deploy handed its store (@yaks/tools/declared) and the two tools each word it holds is
-// worth (kinds.ts), read back here and run through the platform's `command`
+// worth (@yaks/platform/app-commands), read back here and run through the platform's `command`
 // tool. tools.ts owns the tools the platform has; this owns the verbs a
 // person's own app grew.
 //

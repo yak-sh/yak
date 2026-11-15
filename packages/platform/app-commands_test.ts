@@ -1,10 +1,17 @@
 // The two tools a kind is worth: what they are called, what they ask for, what
 // they say, and the two ways an app declines them. The kernel half — the same
-// manifest through app_deploy and a call at the MCP door — is in mcp_test.ts.
+// manifest through app_deploy and a call at the MCP door — is in workers/yak mcp_test.ts. Below them, the old command grammar
+// a kept release declares, read as the new.
 import { test } from '@yaks/testing'
-import { assertEquals, assertStringIncludes } from '@std/assert'
-import { generated, index, withKinds } from './kinds.ts'
-import { appDoc } from './vocab.ts'
+import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
+import {
+  appTools,
+  generated,
+  index,
+  readTools,
+  withKinds,
+} from './app-commands.ts'
+import { manifest as appDoc } from './manifest.ts'
 import { filled, schemaOf } from '@yaks/tools/declared'
 
 let box = {
@@ -251,4 +258,50 @@ test('the index says each kind, what it is and what a whole one carries', () => 
   assertEquals(index(appDoc(box)), [
     'recipe: recipe{serves, cuisine}',
   ])
+})
+
+let old = {
+  description: 'Keep a note',
+  input: { title: { type: 'string' }, limit: { type: 'integer' } },
+  required: ['title'],
+  options: { positional: ['title'], rest: 'title', short: { n: 'limit' } },
+  query: '.doc.title=$title&.limit=$limit',
+}
+
+test('kept app declarations translate their grammar without changing input requirements', () => {
+  let manifest = { $defs: { note: { tool: true, ...old } } }
+  let tool = appTools(manifest).note
+  assertEquals(tool.positional, ['title...'])
+  assertEquals(tool.input.limit, { type: 'integer', short: 'n' })
+  assertEquals(schemaOf(tool), {
+    type: 'object',
+    properties: old.input,
+    required: old.required,
+  })
+  assertEquals(filled(tool, { title: 'The old release', limit: 3 }), {
+    query: '.doc.title=The%20old%20release&.limit=3',
+  })
+  assertThrows(() => filled(tool, {}), Error, 'title')
+  assertEquals(manifest.$defs.note.options, old.options)
+})
+
+test('stored app commands translate the same grammar when the store wakes', () => {
+  let stored = readTools(JSON.stringify({ note: old })).note
+  assertEquals(stored.positional, ['title...'])
+  assertEquals(stored.required, ['title'])
+  assertEquals(stored.input.limit, { type: 'integer', short: 'n' })
+  assertEquals('options' in stored, false)
+})
+
+test('legacy declarations are checked before their grammar is translated', () => {
+  for (
+    let options of [{ rest: 'missing' }, { short: { nn: 'limit' } }, {
+      forward: 'title',
+    }]
+  ) {
+    assertThrows(
+      () => appTools({ $defs: { note: { tool: true, ...old, options } } }),
+      Error,
+    )
+  }
 })

@@ -331,7 +331,7 @@ import { workerAnatomy } from './anatomy.ts'
 import { answerOf, toolEid } from '@yaks/tools/result'
 import { runner } from '@yaks/tools'
 import { commands, type Tools } from '@yaks/tools/declared'
-import { readTools } from './tool-grammar.ts'
+import { readTools } from '@yaks/platform/app-commands'
 import { soonest, tick, type Ticked } from '@yaks/wake'
 import {
   asking,
@@ -418,7 +418,8 @@ import {
 } from './used.ts'
 import * as funnel from './funnel.ts'
 import { instrumentActor, instrumentEid } from '@yaks/platform/instrument'
-import { commandAt, commandReply } from './app-command.ts'
+import { commandAt } from './app-command.ts'
+import { commandReply } from '@yaks/platform/app-command'
 import { vaultOf } from './vault.ts'
 import {
   decoded,
@@ -2782,7 +2783,6 @@ export class Store extends Durable {
   #commands = (g: Graph, declared: Tools): NamedTool[] =>
     commands(declared).map((tool) => ({
       ...tool,
-      name: tool.name!,
       applied: true,
       run: async (call: Bundle) => {
         let ns = this.#bind.STORE, appId = this.#get('app')

@@ -83,7 +83,7 @@ test('an app declares its own commands, and command runs them', async () => {
     let commands = (args: Record<string, unknown> = {}) =>
       commandsOf(agent, args)
     let all = await commands()
-    // The two it declared, and the two its `jog` is worth (kinds.ts).
+    // The two it declared, and the two its `jog` is worth (@yaks/platform/app-commands).
     assertEquals(all.map((c) => c.name), [
       'log_run',
       'leaderboard',
@@ -565,7 +565,7 @@ test(
       // nothing of hers — her app is in her space, and he is nobody there.
       let commands = (agent: ReturnType<typeof connector>) => commandsOf(agent)
       // Each app's own, and the two every word it declares is worth beside
-      // them (kinds.ts).
+      // them (@yaks/platform/app-commands).
       assertEquals((await commands(club.agent)).map((c) => c.name), [
         'log_run',
         'add_jog',

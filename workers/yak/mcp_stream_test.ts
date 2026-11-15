@@ -163,7 +163,7 @@ test(
       assertStringIncludes(first, 'commands, command')
 
       // An app of his own declares a command, and the deploy plants it —
-      // beside the two the `jog` it declares is worth (kinds.ts, T-34513).
+      // beside the two the `jog` it declares is worth (@yaks/platform/app-commands).
       let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
         .exec(
           await agent.tool('app_new', { slug: 'runs', title: 'Run club' }),

@@ -110,6 +110,8 @@ or a handler over a graph and the host functions it is given.
 | `@yaks/platform/app-subs`                                                                                                          | `kinded` and `naming`, a page's subscriptions in the same rows as its query door                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `@yaks/platform/app-storage`                                                                                                       | `weighing`, a committed write's measured size, and `eraseStore`                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `@yaks/platform/listing`                                                                                                           | what a listing carries: `STAMPS`, `KERNEL`, `PLATFORM`, `asking`, `listed`, `named`, `listing`                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `@yaks/platform/app-commands`                                                                                                      | an app's commands as its release declares them: `commandsOf`, its manifest's own (`appTools`, the old grammar a kept release still writes translated, and `readTools` for a store's kept ones) with the two each kind is worth (`withKinds`, `kindsOf`, `generated`), and `index`, each kind in a line                                                                                                                                                                                                               |
+| `@yaks/platform/app-command`                                                                                                       | running one for a caller through the acts its host lends (`Acts`): `commandReply`, its floor checked and its answer said; `listed`, the commands a caller can discover; `workerReply`, the app worker's answer as a command's                                                                                                                                                                                                                                                                                        |
 | `@yaks/platform/instrument`                                                                                                        | `instrumentEid` and `instrumentActor`, a credential's one graph identity; `agentEid` and `agentRow`, an agent writing for a person                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ## Serving a release on this machine
@@ -118,25 +120,31 @@ or a handler over a graph and the host functions it is given.
 store yaks.app keeps for its app and serves it through @yaks/api: the
 directory's `vocab.json` (or `vocab.yml`) is the graph's own words, read by
 `manifest`, over `appConfig`'s plugins with the `yak/*` ones resolved through
-`facets` and lent the store by `bare`. Its commands run through @yaks/tools and
-its effects through @yaks/effects, and its own files answer at their addresses
-through the `yak/files` routes facet, read from the directory as it stands, by
-the rules yaks.app serves them by (`@yaks/platform/files`): its inside
-(vocab.json, worker.js, seeds) and `.yak/` answer nothing. Its pages import
-their store client (`@yaks/platform/client`) from `./api/client.js`, which the
-`yak/client` routes facet bundles as the host warms, and the store's doors
-answer beside it under `/api` as well as at the root (@yaks/api `under`), so a
-page's `query`, `apply` and `subscribe` reach this store. The store is kept in
-`.yak/store.db` in the directory unless `--db` names another file or `:memory:`;
-`--port` and `--hostname` say where it listens.
+`facets` and lent the store by `bare`. The commands its manifest declares, and
+the two each of its kinds is worth (`app-commands` `commandsOf`), are the
+store's own tools, called through its runner like any host's. Its commands run
+through @yaks/tools and its effects through @yaks/effects, and its own files
+answer at their addresses through the `yak/files` routes facet, read from the
+directory as it stands, by the rules yaks.app serves them by
+(`@yaks/platform/files`): its inside (vocab.json, worker.js, seeds) and `.yak/`
+answer nothing. Its pages import their store client (`@yaks/platform/client`)
+from `./api/client.js`, which the `yak/client` routes facet bundles as the host
+warms, and the store's doors answer beside it under `/api` as well as at the
+root (@yaks/api `under`), so a page's `query`, `apply` and `subscribe` reach
+this store. The store is kept in `.yak/store.db` in the directory unless `--db`
+names another file or `:memory:`; `--port` and `--hostname` say where it
+listens.
 
 `@yaks/platform/released` is the same in code: `release(dir)`, the directory's
 app name and manifest; `releaseConfig`, what its store composes; `reader(dir)`,
 the directory's files as `Lent.file` reads them; `opened(dir, roles)`, its store
 composed by @yaks/cli's host; and `serve`. yaks.app's own effects facets
 (letters, models, the trash sweep, attribution) are the Worker's Cloudflare
-work, so a release served here runs none of them. Compiled TypeScript page
-scripts are yaks.app's, and are not served here yet.
+work, so a release served here runs none of them. A command whose template calls
+the app's own worker (`worker`) answers that the worker is unavailable, since
+nothing here runs `worker.js`, and a command's `floor` is not asked: this
+machine's store has no members. Compiled TypeScript page scripts are yaks.app's,
+and are not served here yet.
 
 ## Compatibility
 

@@ -37,7 +37,7 @@ let object = (v: unknown): v is Record<string, unknown> =>
  * about a row — an entity wearing `recipe` is a recipe, not the `doc` it also
  * wears for its title — so it is a kind sorting before `doc` unless the
  * manifest says otherwise, which is also what earns it its two tools
- * (kinds.ts). A manifest that declares `kinds` says which its kinds are, so
+ * (./app-commands.ts). A manifest that declares `kinds` says which its kinds are, so
  * there a component is one only where it says `kind: true` itself. */
 let mine = (schema: PropSchema, implicit: boolean): PropSchema =>
   schema.lens === true ? schema : ({
@@ -215,7 +215,7 @@ export let VOCABS: string[] = ['vocab.yml', 'vocab.json']
  * `"tools": false`, `"models": "open"`, `"rtc": "open"` and `"blob"` are the
  * words a manifest says about itself rather than about a component, so each is
  * lifted off and carried on the document. `tools: false` synthesizes no tools
- * for its kinds (kinds.ts, T-34513); a boolean tells it from a component named
+ * for its kinds (./app-commands.ts); a boolean tells it from a component named
  * `tools`, which is an object of properties like any other. `models` and `rtc`
  * are each {@link OPENS}: who may spend the space's budget through the
  * app. `blob` is which uploads the app takes (@yaks/blob `Accepts`), checked

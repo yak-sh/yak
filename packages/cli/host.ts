@@ -65,6 +65,7 @@ import type {
   Eid,
   Graph,
   Lent,
+  NamedTool,
   Storage,
 } from '@yaks/graph'
 import { Refused, Stale } from '@yaks/graph/errors'
@@ -330,6 +331,10 @@ export type ComposeOpts = {
    * shadowing a plugin's of the same name (@yaks/host `AssemblyOpts.docs`):
    * an app's vocab.json. A config's graph has none. */
   docs?: VocabDoc[]
+  /** The graph's own commands, offered beside this host's operations: an
+   * app's, which its vocab.json declares (@yaks/platform `released`). A
+   * config's graph has none. */
+  tools?: (host: Host) => NamedTool[]
   /** What each plugin is given beside its configured options (@yaks/host
    * `Binding.options`): what only the caller can lend it. */
   options?: Binding['options']
@@ -752,7 +757,10 @@ let composed = async (
       unobserved: !!mode && 'branch' in mode,
       tools: {
         package: '@yaks/cli',
-        offer: (host) => operations(host, { config: opts.path }),
+        offer: (host) => [
+          ...operations(host, { config: opts.path }),
+          ...opts.tools?.(host) ?? [],
+        ],
       },
       host: {
         fetch: freshFetch(),

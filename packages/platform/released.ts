@@ -9,7 +9,9 @@
 // The release's own files answer at its addresses through the `yak/files`
 // routes facet (./files-routes.ts), read from the directory as it stands, and
 // the client its pages import at `./api/client.js` through `yak/client`
-// (./client-routes.ts), with the store's doors beside it under `/api`.
+// (./client-routes.ts), with the store's doors beside it under `/api`, and
+// its commands (./app-commands.ts `commandsOf`) are the store's own tools,
+// called through its runner as any host's are.
 // The Worker's own effects facets (yak/app, yak/trash, yak/models,
 // yak/attribution) are yaks.app's Cloudflare work, so nothing here runs them.
 import { compose, facet, type Role, type Served } from '@yaks/cli/host'
@@ -20,15 +22,24 @@ import type { Loaded } from '@yaks/blob'
 import * as disk from '@yaks/file/io'
 import { mint } from '@yaks/graph/identity'
 import { faulted, toolEid } from '@yaks/tools/result'
+import { commands } from '@yaks/tools/declared'
+import { read } from '@yaks/yaml'
+import { commandsOf } from './app-commands.ts'
 import { appConfig } from './config.ts'
 import { resolved } from './facets.ts'
 import { bare, lends } from './lent.ts'
 import { appDocs, manifest, VOCABS } from './manifest.ts'
 
 /** A release directory as its store reads it: its app's name, the
- * directory's own, and its manifest as one document (./release.ts `Release`
- * is a release as its pages were built with it). */
-export type Released = { name: string; vocab: VocabDoc }
+ * directory's own, its manifest as one document, and the manifest's value as
+ * written (`source`, in `file`), which its commands are read from (./release.ts
+ * `Release` is a release as its pages were built with it). */
+export type Released = {
+  name: string
+  vocab: VocabDoc
+  source: unknown
+  file: string
+}
 
 /** Where a release's store lives and answers. */
 export type Placing = {
@@ -50,9 +61,12 @@ export let release = async (dir: string): Promise<Released> => {
       if (disk.isNotFound(e)) return undefined
       throw e
     })
-    if (text !== undefined) return { name, vocab: manifest(text, file) }
+    if (text !== undefined) {
+      let vocab = manifest(text, file)
+      return { name, vocab, source: text.trim() ? read(text, file) : {}, file }
+    }
   }
-  return { name, vocab: {} }
+  return { name, vocab: {}, source: {}, file: VOCABS[0] }
 }
 
 /** What a release's store composes: an app's store, its files and its
@@ -96,10 +110,14 @@ export let opened = async (
   at: Placing = {},
   load: Load = facet,
 ): Promise<Served> => {
-  let { name, vocab } = await release(dir)
+  let { name, vocab, source, file } = await release(dir)
   let db = at.db ?? disk.join(dir, KEPT, 'store.db')
   return compose(releaseConfig({ ...at, db }), roles, resolved(load), {
     docs: appDocs(vocab),
+    // Checked against every component the store knows, as a deploy checks
+    // them, once the store's words are composed.
+    tools: (host) =>
+      commands(commandsOf(source, vocab, name, host.graph.vocab.all, file)),
     options: lends({ ...bare(name, vocab), file: reader(dir) }),
   })
 }

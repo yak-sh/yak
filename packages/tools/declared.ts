@@ -56,7 +56,7 @@
 // ordinary doors with the caller's identity and the app's access rule
 // (workers/yak/declared.ts). So a tool can do exactly what the person
 // calling it could do on the page, and never more.
-import type { Bundle, Graph, Tool } from '@yaks/graph'
+import type { Bundle, Graph, NamedTool } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import {
   publicToolSchema,
@@ -682,7 +682,7 @@ export let commands = (
     args: Record<string, unknown>,
     call: Bundle,
   ) => Promise<Bundle[]>,
-): Tool[] =>
+): NamedTool[] =>
   Object.entries(said).map(([name, def]) => ({
     name,
     description: def.description,

@@ -53,7 +53,6 @@ import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { filesAt, staged, viewOf } from './release.ts'
 import { fullFiles } from './usage.ts'
 import { TOOLS_EXAMPLE, viewsOf } from '@yaks/tools/declared'
-import { appTools } from './tool-grammar.ts'
 import type { Actor, Bundle } from '@yaks/graph'
 import { VERSION } from './running.ts'
 import { unlike } from '@yaks/people'
@@ -75,7 +74,7 @@ import {
   wordsOf,
 } from './vocab.ts'
 import { EXAMPLE, VOCABS } from '@yaks/platform/manifest'
-import { withKinds } from './kinds.ts'
+import { commandsOf } from '@yaks/platform/app-commands'
 import { mode } from '@yaks/member'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { Props, Sheet } from './csv.ts'
@@ -1631,14 +1630,17 @@ let published = async (
     ...componentsOf([accepting, ...lentDocs(accepting)]),
     ...Object.keys(JSON.parse(borrowed)),
   ]
-  // And the two tools every kind this app declares is worth (kinds.ts,
-  // T-34513), beside whatever the manifest said: an app that declared a recipe
-  // and no tool of its own still has a verb for putting one in and one for
-  // finding it again, which is how the next agent discovers the app at all.
-  let checked = withKinds(
-    appTools(sent, words, vocabFile),
+  // And the two tools every kind this app declares is worth
+  // (@yaks/platform/app-commands), beside whatever the manifest said: an app
+  // that declared a recipe and no tool of its own still has a verb for
+  // putting one in and one for finding it again, which is how the next agent
+  // discovers the app at all.
+  let checked = commandsOf(
+    sent,
     manifest,
     `${space.slug}/${app.slug}`,
+    words,
+    vocabFile,
   )
   // What this release declares is now known, and nothing below changes it, so
   // it goes to the bucket while the seed, the commands and the worker are

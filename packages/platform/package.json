@@ -65,7 +65,9 @@
     "./client": "./client.js",
     "./qr": "./qr.ts",
     "./escape": "./escape.ts",
-    "./client-routes": "./client-routes.ts"
+    "./client-routes": "./client-routes.ts",
+    "./app-commands": "./app-commands.ts",
+    "./app-command": "./app-command.ts"
   },
   "license": "Apache-2.0",
   "description": "What a hosting platform keeps about the apps it serves \u2014 spaces, apps, deploys, hostnames, plans and meters.",

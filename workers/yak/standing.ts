@@ -58,7 +58,7 @@ import {
 } from './declared.ts'
 import { at, vocabAt } from './reach.ts'
 import { told } from './memory.ts'
-import { generated, index, kindsOf } from './kinds.ts'
+import { generated, index, kindsOf } from '@yaks/platform/app-commands'
 import { meant, shapeOf, unwritten } from './vocab.ts'
 import { background, caught } from './defects.ts'
 import type { Ctx } from './tools.ts'
@@ -98,14 +98,14 @@ export let tooLong = (path: string, n: number): string =>
 export type Listed = {
   space: Space
   app: App
-  /** the kinds its vocab.json declares (kinds.ts) */
+  /** the kinds its vocab.json declares (@yaks/platform/app-commands) */
   kinds: string[]
-  /** each kind, what it is and what a whole one carries (kinds.ts `index`) */
+  /** each kind, what it is and what a whole one carries (@yaks/platform/app-commands `index`) */
   shapes: string[]
   /** the commands it declares, as `command` takes them (declared.ts) */
   commands: string[]
   /** of those, the ones its vocab.json wrote rather than the add_ and find_
-   * each kind is given (kinds.ts): what the app does beyond holding rows */
+   * each kind is given (@yaks/platform/app-commands): what the app does beyond holding rows */
   does: string[]
   /** whether it keeps a NOTES.md */
   noted: boolean
