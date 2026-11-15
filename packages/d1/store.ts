@@ -104,7 +104,15 @@ import {
 } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import { type D1Like, prepare, type Prepared, type Row, unbind } from './d1.ts'
-import { bundles, gatherSql, type Query, sql, whole, wholeSql } from './read.ts'
+import {
+  ast,
+  bundles,
+  gatherSql,
+  type Query,
+  sql,
+  whole,
+  wholeSql,
+} from './read.ts'
 
 export type { Query }
 
@@ -256,9 +264,11 @@ export let storage = <S extends Prepared<S>>(
     await send(pointSql([...owners.values()]))
   }
 
-  let rows = async (query: Query, opts: BindOpts = {}): Promise<Row[]> =>
-    (await one(sql(vocab, query, { ...base, ...opts })))
-      .map((r) => projected(vocab, r))
+  let rows = async (query: Query, opts: BindOpts = {}): Promise<Row[]> => {
+    let parsed = ast(query)
+    return (await one(sql(vocab, parsed, { ...base, ...opts })))
+      .map((r) => projected(vocab, r, parsed))
+  }
 
   // Every named entity in one batch, whole or carrying the components `names`
   // names: the gather asks each entity's spine and each of those components as

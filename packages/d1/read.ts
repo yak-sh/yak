@@ -46,7 +46,7 @@ import type { Row } from './d1.ts'
  * through, so a caller may hand-build one with @yaks/query's builders. */
 export type Query = string | And
 
-let ast = (q: Query): And => typeof q == 'string' ? parse(q) : q
+export let ast = (q: Query): And => typeof q == 'string' ? parse(q) : q
 
 /** The compiled statement for a query. */
 export let sql = (v: Vocab, query: Query, opts: BindOpts = {}): Raw =>

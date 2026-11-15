@@ -501,7 +501,8 @@ export let rows = (
       return (bs: Source) => [{ value: '', n: select(bs).length }]
     }
     let path = (agg as Distinct | Tally).path.join('.')
-    let { read, tag } = field(ctx, path)
+    let f = field(ctx, path)
+    let read = said(f), tag = f.tag
     let counted = tag == 'binary' ? 'binary' : tallied(tag)
     if (!counted) {
       throw new Unsupported('.distinct/.tally', `over a ${tag} property`, BY)

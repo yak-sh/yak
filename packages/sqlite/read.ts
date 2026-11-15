@@ -151,7 +151,7 @@ export let rows = (
       }),
     )
     return (compiled.answer ?? driver.query(compiled)).map((r) =>
-      projected(vocab, r)
+      projected(vocab, r, parsed)
     )
   }
   // The catalog and entity statement must see the same commit. Otherwise a

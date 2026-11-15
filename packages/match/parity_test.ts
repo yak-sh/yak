@@ -222,8 +222,15 @@ test('an aggregate answers the same rows on both sides', () => {
       '.tally=book.price',
       '.distinct=book.price',
       '.tally=review.book.book.price',
+      // a boolean is counted as false and true
+      '.tally=book.available',
+      '.distinct=review.book.book.available',
     ]
   ) assertEquals(rows(q, shop, { now: NOW })(bundles), s.rows(q), q)
+  assertEquals(s.rows('.tally=book.available'), [
+    { value: false, n: 1 },
+    { value: true, n: 3 },
+  ])
   assertEquals(s.rows('.tally=review.book.book.price'), [
     { value: 12, n: 2 },
     { value: 30, n: 1 },
@@ -313,7 +320,6 @@ test('a query neither side can answer is declined by both', () => {
       // a path through a hop that is no reference, or to a whole component
       '.review&.fields=review.stars.doc.title',
       '.order=book.author.member',
-      '.tally=book.available',
       '.distinct=book.released',
     ]
   ) {

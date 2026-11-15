@@ -19,6 +19,7 @@
 // reads a `.fields` projection in a query's raw rows the same way, so a value
 // comes back as one type whichever door asked for it.
 
+import type { And } from '@yaks/query'
 import type { Hop, Vocab } from '@yaks/vocab'
 import { type Expr, fn, lit, op, type Param } from '@yaks/sql/core'
 
@@ -81,14 +82,24 @@ let leafOf = (v: Vocab, path: string): Hop | null => {
 /** A row of a query's raw answer, each `.fields` projection read as
  * {@link decoded} reads it in a component. A projected column is named by its
  * path (`comp.prop`, or one through references, `review.book.book.price`),
- * and read as the property it ends on; the rest of the row (`eid`, an
- * aggregate's `value` and `n`) is left as the statement returned it. */
+ * and read as the property it ends on. A `.distinct` or `.tally` row's `value`
+ * is read as the property the query counts (`counted`, a boolean as
+ * `true`/`false`); the rest of the row (`eid`, `n`) is left as the statement
+ * returned it. */
 export let projected = <R extends Record<string, unknown>>(
   v: Vocab,
   row: R,
+  counted?: And,
 ): R => {
+  let agg = counted?.clauses.find((c) =>
+    c.kind == 'distinct' || c.kind == 'tally'
+  ) as { path: string[] } | undefined
   for (let [k, raw] of Object.entries(row)) {
-    let leaf = k.includes('.') ? leafOf(v, k) : null
+    let leaf = k.includes('.')
+      ? leafOf(v, k)
+      : k == 'value' && agg
+      ? leafOf(v, agg.path.join('.'))
+      : null
     if (leaf) {
       ;(row as Record<string, unknown>)[k] = value(v, leaf.comp, leaf.prop, raw)
     }
