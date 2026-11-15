@@ -15,6 +15,7 @@ import { ADA, ADA_OWNS, SECRET, seeded } from './serving-data-probe.ts'
 import { type App, appStore, storeName } from './directory.ts'
 import { ACROSS } from './door.ts'
 import { KERNEL } from './meta.ts'
+import { homesOf } from './homes.ts'
 
 let runtime = platform(SECRET, { BUILDER: operators })
 let { env } = runtime
@@ -142,4 +143,17 @@ test('a home stops telling a store nobody there watches', async () => {
     KERNEL,
   )
   equal(told.status, 410)
+})
+
+test('a store-scoped app keeps the homes of the words it uses out of its reach', async () => {
+  let scoped = { ...loans, scope: 'store' } as App
+  let found = await homesOf(
+    {
+      appAt: () => Promise.resolve({ space, app: scoped }),
+      app: () => Promise.resolve(shelf),
+    } as unknown as Parameters<typeof homesOf>[0],
+    scoped.eid,
+    { book: 'shelf' },
+  )
+  equal(found?.homes, [])
 })

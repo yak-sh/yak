@@ -24,7 +24,7 @@ import { open } from '@yaks/sqlite/db'
 import { cleanup } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { PLATFORM_OBJECT, USES } from './door.ts'
+import { PLATFORM_OBJECT } from './door.ts'
 import type { Env } from './env.ts'
 import { appGuard, authenticating, vouchOf } from '@yaks/platform/app-authority'
 import { appDoc, appVocab } from './vocab.ts'
@@ -191,15 +191,12 @@ export let appWire = (vocab: Vocab, name: string, composition: Composition) => {
       req,
       () => path == '/query' && query ? query(req) : serve(req),
     )
-    if (path == '/query') {
-      if (answer.ok && !query) {
-        let rows = await answer.json()
-        answer = json(
-          Array.isArray(rows) ? rows.map((row) => kinded(vocab, row)) : rows,
-          answer.status,
-        )
-      }
-      answer.headers.set(USES, '{}')
+    if (path == '/query' && answer.ok && !query) {
+      let rows = await answer.json()
+      answer = json(
+        Array.isArray(rows) ? rows.map((row) => kinded(vocab, row)) : rows,
+        answer.status,
+      )
     }
     return answer
   }

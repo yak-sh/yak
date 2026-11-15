@@ -9,7 +9,6 @@ import { platform } from './directory-rows-probe.ts'
 import { operators } from './operator-service-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
 import { type Ctx, TOOLS } from './tools.ts'
-import { homed } from './page-graph.ts'
 import { digest } from '@yaks/graph/sha256'
 import { h } from 'preact'
 import { client } from '@yaks/client'
@@ -215,15 +214,6 @@ test('preview API cannot publish live files or use live platform connections', a
       .status,
     200,
   )
-})
-
-test('a store-scoped page keeps borrowed component homes out of its graph', async () => {
-  let graph = await homed(env, space, { ...app, scope: 'store' }, {
-    person: ADA,
-    role: 'owner',
-  }, { doc: 'cookbook' })
-  equal(graph.reach.length, 1)
-  equal(graph.uses, {})
 })
 
 // The store a draft's link pages are on: its branch of the app's store, as

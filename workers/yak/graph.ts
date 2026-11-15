@@ -372,7 +372,6 @@ import {
   placed,
   STATIC_QUERY,
   storeOf,
-  USES,
   WAKE,
   WARM,
 } from './door.ts'
@@ -3769,14 +3768,8 @@ export class Store extends Durable {
       return on.route(new Request(new URL('/vocab', request.url), request))
     }
     if (path == '/vocab.json') return Response.json(on.graph.vocab.docs)
-    if (path == '/query') return await this.#paged(request, on.reading)
+    if (path == '/query') return await on.reading(request)
     if (path == '/ws') {
-      let said = new URL(request.url).searchParams.get('uses') == '1'
-        ? this.#held(request, 'uses')
-        : '{}'
-      if (Object.keys(JSON.parse(said)).length) {
-        return new Response(null, { status: 204, headers: { [USES]: said } })
-      }
       let actor
       try {
         actor = await this.#auth(request)
@@ -5770,19 +5763,9 @@ export class Store extends Durable {
     // The socket is a read that stays open, and it is the one door @yaks/api
     // does not answer here — hibernation is the runtime's, so `sockets` takes
     // it — which would leave it the one door with no policy on it. So it asks
-    // the same seam, by hand, at the handshake.
-    //
-    // A page's socket asks with `uses=1`, as its query does (`#paged`): an app
-    // that uses words from other homes is answered 204 with those words, not a
-    // socket, and the kernel opens one across every home (page-graph.ts
-    // `listened`).
+    // the same seam, by hand, at the handshake. A watch of a word this app
+    // borrows is answered across its home (`#lending`).
     if (path == '/ws') {
-      let said = new URL(request.url).searchParams.get('uses') == '1'
-        ? this.#held(request, 'uses')
-        : '{}'
-      if (Object.keys(JSON.parse(said)).length) {
-        return new Response(null, { status: 204, headers: { [USES]: said } })
-      }
       let actor
       try {
         actor = await this.#auth(request)
@@ -5795,7 +5778,7 @@ export class Store extends Durable {
     if (path == '/query') {
       let heed = request.headers.get(HEED)
       if (heed && storeKind(this.#get('name') ?? '') == 'app') this.#heed(heed)
-      return await this.#paged(request)
+      return await this.#asked(request)
     }
     if (path == READS && this.#get('name') == PLATFORM_STORE) {
       return await this.#reads(request)
@@ -5817,30 +5800,6 @@ export class Store extends Durable {
       )
     }
     return await readsAnswer(answers)
-  }
-
-  // A page's query asks with `uses=1` (page-graph.ts `queried`), so the one
-  // round trip that answers it also says, in `x-yak-uses`, which words this
-  // app uses from other homes, refusals included. A line naming one is not
-  // this store's to answer alone: it is answered 204, unread, and the kernel
-  // composes it from this store and those homes (@yaks/reach `read`).
-  async #paged(
-    request: Request,
-    ask: Handler = this.#asked,
-  ): Promise<Response> {
-    let url = new URL(request.url)
-    if (url.searchParams.get('uses') != '1') return await ask(request)
-    let said = this.#held(request, 'uses')
-    let answer = borrows(url.searchParams.get('q') ?? '', JSON.parse(said))
-      ? new Response(null, { status: 204 })
-      : await ask(request)
-    let headers = new Headers(answer.headers)
-    headers.set(USES, said)
-    return new Response(answer.body, {
-      status: answer.status,
-      statusText: answer.statusText,
-      headers,
-    })
   }
 
   // `/query`, watched as @yaks/api watches its own doors (`served`): a

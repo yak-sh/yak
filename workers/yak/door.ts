@@ -145,9 +145,6 @@ export let HEED = 'x-yak-heed'
 /** The store path a home tells a store that borrows from it of a commit at,
  * kernel only: 204 while its pages watch, 410 once none does. */
 export let HEARD = '/heard'
-/** The words an app uses from other homes (its `/uses`), said beside the
- * answer to a page's query (graph.ts `#paged`, page-graph.ts `queried`). */
-export let USES = 'x-yak-uses'
 /** The store path that only starts its object (graph.ts): the runtime makes
  * it and its plugins load, and nothing it holds is read or written, so an
  * object nobody goes on to use keeps nothing. A birth sends it while the

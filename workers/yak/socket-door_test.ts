@@ -1,11 +1,10 @@
 // A page's socket through the app door (apps.ts `/ws`): one round trip to its
-// store, which answers the socket, or says the words the app uses from other
-// homes, so the door opens one across them (page-graph.ts `listened`) instead.
+// store, which answers the socket whatever words its app borrows (graph.ts
+// `#lending`).
 import { equal, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { installPair, made } from '../../packages/workerd/testing.ts'
 import * as apps from './apps.ts'
-import { USES } from './door.ts'
 import { KERNEL } from './meta.ts'
 import { ADA, as, platform, seeded, visit } from './serving-probe.ts'
 
@@ -54,36 +53,12 @@ let opened = async (uses?: Record<string, string>) => {
 }
 
 let own = await opened()
-test('a page socket of its own words opens in one round trip to its store', () =>
-  equal(own, { status: 101, asked: ['/ws?uses=1'] }))
-
-let store = await (async () => {
-  await using scenario = platform()
-  let { env } = scenario
-  let { app } = await seeded(env)
-  let object = env.STORE.get(env.STORE.idFromName(app.store!))
-  let ask = (path: string, init: RequestInit = {}) =>
-    object.fetch(
-      new Request(`https://store${path}`, {
-        ...init,
-        headers: {
-          'x-store': app.store!,
-          'x-yak-app': app.eid,
-          'x-yak-access': app.access,
-          upgrade: 'websocket',
-          ...KERNEL,
-        },
-      }),
-    )
-  await (await ask('/uses', {
-    method: 'POST',
-    body: JSON.stringify({ shelf: 'library' }),
-  })).body?.cancel()
-  let answer = await ask('/ws?uses=1')
-  return { status: answer.status, uses: answer.headers.get(USES) }
-})()
-test('a store whose app uses words from other homes answers its socket with them', () =>
-  equal(store, { status: 204, uses: JSON.stringify({ shelf: 'library' }) }))
+let borrowing = await opened({ shelf: 'library' })
+test('a page socket opens in one round trip to its store, whatever it borrows', () =>
+  equal([own, borrowing], [
+    { status: 101, asked: ['/ws'] },
+    { status: 101, asked: ['/ws'] },
+  ]))
 
 // A watch the app's store cannot read is the page's code wrong: the store
 // files it as the app's break, once however often the page asks it again, and

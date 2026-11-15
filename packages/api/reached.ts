@@ -1,40 +1,40 @@
 // Subscriptions over graphs this host can ask but not watch: the members of a
 // reach (@yaks/reach), several graphs answering as one. No member's commit
 // passes through here as a transaction the registry could route, so a member
-// feeding news says only that something moved: every query is asked again,
+// feeding news says only that something moved: every line is asked again,
 // whole, and its answer is sent when it moved. Like a tide table read again
 // whenever any harbour reports, rather than a harbour's own log.
 //
-// It speaks the frames `subscriptions` speaks and a socket serves it the same
-// way (./socket.ts `attach`): `{subscribe: line}` is answered whole, with
-// `reset`, and again after each change that moved it; `{subscribe: true}` is
-// the raw feed, the first member's own frames as it sent them; a relayed value
-// goes where the host sends it, which is the member that holds its words.
-// {@link beside} puts it next to a graph's own registry, so one socket asks
-// each line of whichever answers it.
+// A line is answered in the frames `subscriptions` speaks: whole, with
+// `reset`, and again after each change that moved it. {@link beside} puts it
+// next to a graph's own registry, which keeps the raw feed and relayed
+// values, so one socket asks each line of whichever answers it.
 
 import type { Bundle, ReadOpts, Reduced } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { fault, refusal, type Tags } from './refuse.ts'
-import type { Ask, Frame, Listening, Opening, Sink, Subs } from './subs.ts'
+import type { Ask, Frame, Opening, Sink, Subs } from './subs.ts'
 
 /** A registry over a reach, as {@link reached} makes one. */
-export type Reached = Listening & {
-  /** A member's feed spoke: every query is asked again, settled when each
-   * answer is. A frame of the first member's (`own`) is also the raw feed's,
-   * sent on as it came. */
-  hear: (frame?: Frame, own?: boolean) => Promise<void>
+export type Reached = {
+  /** Watch a line as `opts` says who asks, and send its answer. */
+  open: (sink: Sink, id: string, line: string, opts?: ReadOpts) => void
   /** Reopen saved watches. With `quiet`, each is held and not asked until
    * {@link Reached.resume} or the next {@link Reached.hear}: a page that
    * kept its answers through its host's sleep is not sent them again. */
   restore: (openings: Opening[], quiet?: boolean) => void
   /** Ask every watch held quiet. */
   resume: () => void
+  close: (sink: Sink, id: string) => void
+  drop: (sink: Sink) => void
+  /** A member's graph moved: every line is asked again, settled when each
+   * answer is. */
+  hear: () => Promise<void>
   /** Whether any line is watched. */
   watching: () => boolean
 }
 
-type Watch = { ask: Ask; asked: number; opts?: ReadOpts; said?: string }
+type Watch = { line: string; asked: number; opts?: ReadOpts; said?: string }
 
 /**
  * Subscriptions answered by `read`, the reach's one answer to a line, and
@@ -52,8 +52,7 @@ type Watch = { ask: Ask; asked: number; opts?: ReadOpts; said?: string }
  * subs.open((f) => frames.push(f), 'all', '.book')
  * await until(() => frames.length == 1)
  * books = [...books, { entity: { eid: 'emma' }, book: {} }]
- * subs.hear({ id: 'feed', bundles: [] })
- * await until(() => frames.length == 2)
+ * await subs.hear()
  * equal(frames[1], { id: 'all', bundles: books, reset: true })
  * ```
  */
@@ -61,8 +60,6 @@ export let reached = (opts: {
   /** the reach's answer to a line, asked as the watch's opener: its
    * bundles, or a reduction */
   read: (line: string, opts?: ReadOpts) => Promise<Bundle[] | Reduced>
-  /** where a relayed value goes */
-  relay?: (bundles: Bundle[]) => void
   /** told of every answer refused, with its line, for a host that knows
    * whose line it was */
   refused?: (error: unknown, line: string) => void
@@ -72,13 +69,11 @@ export let reached = (opts: {
   let held = new Map<Sink, Map<string, Watch>>()
   // A newer ask, a replacement or a close makes an answer still on its way
   // nobody's.
-  let ask = (sink: Sink, id: string, watch: Watch) => {
-    let line = watch.ask
-    if (line === true) return
+  let ask = (sink: Sink, id: string, watch: Watch): Promise<void> => {
     let asked = ++watch.asked
     let current = () =>
       held.get(sink)?.get(id) === watch && watch.asked == asked
-    return opts.read(line, watch.opts).then((answer) => {
+    return opts.read(watch.line, watch.opts).then((answer) => {
       if (!current()) return
       let frame: Frame = Array.isArray(answer)
         ? { id, bundles: answer, reset: true }
@@ -91,7 +86,7 @@ export let reached = (opts: {
       if (!current()) return
       watch.said = undefined
       fault(error, 'reached subscription', opts.tags)
-      opts.refused?.(error, line)
+      opts.refused?.(error, watch.line)
       sink({ id, refused: refusal(error) })
     })
   }
@@ -99,48 +94,41 @@ export let reached = (opts: {
   let open = (
     sink: Sink,
     id: string,
-    query: Ask,
+    line: string,
     read?: ReadOpts,
     quiet = false,
   ) => {
     let mine = held.get(sink) ?? new Map<string, Watch>()
     held.set(sink, mine)
-    let watch: Watch = { ask: query, asked: 0, opts: read }
+    let watch: Watch = { line, asked: 0, opts: read }
     mine.set(id, watch)
-    if (!quiet) return ask(sink, id, watch)
+    if (!quiet) void ask(sink, id, watch)
   }
   return {
-    open: (sink, id, query, read) => open(sink, id, query, read),
+    open: (sink, id, line, read) => open(sink, id, line, read),
     restore: (openings, quiet) => {
       for (let { sink, id, query, opts: read } of openings) {
-        open(sink, id, query, read, quiet)
+        if (query !== true) open(sink, id, query, read, quiet)
       }
     },
     resume: () => {
       for (let [sink, mine] of held) {
         for (let [id, watch] of mine) {
-          if (!watch.asked) ask(sink, id, watch)
+          if (!watch.asked) void ask(sink, id, watch)
         }
       }
     },
-    watching: () =>
-      [...held.values()].some((mine) =>
-        [...mine.values()].some((w) => w.ask !== true)
-      ),
+    watching: () => [...held.values()].some((mine) => mine.size > 0),
     close: (sink, id) => {
       held.get(sink)?.delete(id)
     },
     drop: (sink) => {
       held.delete(sink)
     },
-    relay: (_sink, bundles) => opts.relay?.(bundles),
-    hear: async (frame, own = false) => {
+    hear: async () => {
       let asked: Promise<void>[] = []
       for (let [sink, mine] of held) {
-        for (let [id, watch] of mine) {
-          if (watch.ask !== true) asked.push(ask(sink, id, watch)!)
-          else if (own && frame) sink({ ...frame, id })
-        }
+        for (let [id, watch] of mine) asked.push(ask(sink, id, watch))
       }
       await Promise.all(asked)
     },
@@ -178,7 +166,7 @@ export let beside = (
   lent: Reached,
   borrows: (line: string) => boolean,
 ): Subs => {
-  let theirs = (query: Ask) => query !== true && borrows(query)
+  let theirs = (query: Ask): query is string => query !== true && borrows(query)
   // Which of a sink's watches the lent registry holds, so a close goes to
   // the one holding it and a replacement leaves the other.
   let away = new Map<Sink, Set<string>>()

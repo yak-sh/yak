@@ -120,14 +120,7 @@ import {
   whoIs,
 } from './session.ts'
 import { asking } from './asking.ts'
-import {
-  borrowed,
-  homed,
-  listened,
-  queried,
-  sources,
-  vocabulary,
-} from './page-graph.ts'
+import { queried } from './page-graph.ts'
 import { local } from './homes.ts'
 import { dataAsset, webAsset, webPage } from './web.ts'
 import {
@@ -155,7 +148,7 @@ import { Refused } from '@yaks/graph/errors'
 import { mistaken } from './mistake.ts'
 import { digest } from '@yaks/graph/sha256'
 import { edits, mode, reads, writes } from '@yaks/member'
-import { USES } from './door.ts'
+import { ACROSS } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { asked, keep, shown, told, unkept } from './page-cache.ts'
 import {
@@ -1209,29 +1202,12 @@ export let acting = (env: Env, space: Space, app: App, who: Who) => {
   return {
     apply: async (mutation: unknown) => {
       if (!edits(mode(app.access), who.role)) no('not_a_writer')
-      let mine = { space, app, who }
-      let homes = await borrowed(env, space, app, who)
-      let bundles = batched(mutation)
-      // A word this app uses lives in another app's store (T-32728), so a
-      // bundle naming one is split the way the agent door splits it: the
-      // borrowed word to its home, everything else here. One logical batch —
-      // every part is admitted before any of them commits.
-      if (homes.length) {
-        let out = await (await import('./reach.ts')).written(
-          env,
-          [mine, ...homes],
-          mine,
-          bundles,
-          await named(env, who),
-        )
-        return {
-          entities: [...new Set(out.bundles.map((b) => b.entity.eid))],
-          aliases: out.aliases,
-        }
-      }
+      // A word this app uses lives in another app's store (T-32728), and
+      // its store splits a bundle naming one the way the agent door does: the
+      // borrowed word to its home, everything else there (graph.ts `#across`).
       let applied = await metaOf(store).apply(
-        bundles,
-        { ...vouched(who), ...await named(env, who) },
+        batched(mutation),
+        { ...vouched(who), ...await named(env, who), [ACROSS]: '1' },
       )
       return {
         entities: [...new Set(applied.map((b) => b.entity.eid))],
@@ -1518,26 +1494,16 @@ export let api = async (
     return Response.json({ ...r.read, person: who.person, role: who.role })
   }
   // The vocabulary a page's local graph loads: this store's words and the
-  // borrowed words its own manifest uses, from their component homes.
+  // borrowed words its own manifest uses, from their component homes, as
+  // documents (`vocab.json`) or with the keywords they are written in.
   if (path == '/vocab') {
     if (req.method != 'GET') return json(405, 'method_not_allowed')
     if (!mayRead) return refused('not_a_reader')
-    let wire = await store.consume(
-      '/api/vocab',
-      readOr(async (res) =>
-        (await res.json() as { keywords: unknown[] }).keywords
-      ),
-      {},
-      headers,
-    )
-    if ('failed' in wire) return wire.failed
-    let docs = await vocabulary(env, space, app, who, headers)
-    if (!docs.ok) return docs
-    return Response.json({ docs: await docs.json(), keywords: wire.read })
+    return store('/api/vocab', {}, { ...headers, [ACROSS]: '1' })
   }
   if (path == '/vocab.json') {
     if (!mayRead) return refused('not_a_reader')
-    return vocabulary(env, space, app, who, headers)
+    return store('/vocab.json', {}, { ...headers, [ACROSS]: '1' })
   }
   if (path == '/query') {
     if (!mayRead) return refused('not_a_reader')
@@ -1566,31 +1532,14 @@ export let api = async (
       })
     }
   }
-  // A page with only its own words listens straight to its store. A page that
-  // uses another app's word listens to every component home through one
-  // socket (page-graph.ts `listened`); each frame answers its filters with the same
-  // ownership rule as /query. The handshake is a read, and writes use /apply.
+  // A page listens to its store, which answers a watch of another app's word
+  // across that word's home, told by the home of each commit (graph.ts
+  // `#lending`). The handshake is a read, and writes use /apply.
   if (path == '/ws') {
     if (req.headers.get('upgrade') != 'websocket') {
       return json(426, 'expected_websocket')
     }
     if (!mayRead) return refused('not_a_reader')
-    // One round trip: the store answers the socket, or says which words the
-    // app uses from other homes (graph.ts `/ws`), and only then are they read.
-    let answer = await store(
-      local(app) ? '/ws' : '/ws?uses=1',
-      req,
-      headers,
-    )
-    let uses = answer.status == 204 ? answer.headers.get(USES) : null
-    if (uses == null) return answer
-    let graph = await c.time(
-      'uses',
-      () => homed(env, space, app, who, JSON.parse(uses)),
-    )
-    if (graph.reach.length > 1) {
-      return listened(req, env, space, app, graph, headers)
-    }
     return store('/ws', req, headers)
   }
   if (path == '/choose') {
@@ -1669,21 +1618,12 @@ export let api = async (
     let sent: unknown
     try {
       sent = JSON.parse(body)
-      let graph = await sources(env, space, app, who, headers)
-      let as = {
+      let applied = await metaOf(store).apply(batched(sent), {
+        ...headers,
         ...(await named(env, who, app)),
         ...resend(req),
-      }
-      let applied = graph.reach.length > 1 || check
-        ? (await (await import('./reach.ts')).written(
-          env,
-          graph.reach,
-          graph.reach[0],
-          batched(sent),
-          as,
-          check,
-        )).bundles
-        : await metaOf(store).apply(batched(sent), { ...headers, ...as })
+        [ACROSS]: '1',
+      }, { check })
       return Response.json(
         receipt(sent, applied),
       )

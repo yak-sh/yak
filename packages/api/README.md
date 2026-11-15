@@ -441,17 +441,14 @@ was to report.
 
 `@yaks/api/reached` is a registry over graphs a host can ask but not watch, such
 as the members of a [@yaks/reach](../reach/README.md) composition. It answers a
-line with `read`, whole and with `reset`, and asks every line again when a
-member's feed speaks (`hear`), sending an answer only when it moved. A refusal
-is sent under its id and the subscription stays open for the next change. The
-first member's own frames are the raw feed, and relayed values go to `relay`.
-`attach` serves it as it serves `subscriptions`; both are a `Listening`. Each
-line is read as its opener (`read(line, opts)`); `restore` with `quiet` holds
-watches unasked until `resume` or the next `hear`.
-`beside(subs, reached,
-borrows)` is one `Subs` of the two: the lines `borrows`
-names go to the reach, and everything else (the graph's own lines, the raw feed,
-relays) to `subs`, so a Durable Object's hibernatable sockets serve both.
+line with `read(line, opts)`, as the watch's opener, whole and with `reset`, and
+asks every line again when a member's graph moved (`hear`), sending an answer
+only when it moved. A refusal is sent under its id and the subscription stays
+open for the next change. `restore` with `quiet` holds watches unasked until
+`resume` or the next `hear`. `beside(subs, reached, borrows)` is one `Subs` of
+the two: the lines `borrows` names go to the reach, and everything else (the
+graph's own lines, the raw feed, relayed values) to `subs`, so a Durable
+Object's hibernatable sockets serve both.
 
 ### Relayed values
 

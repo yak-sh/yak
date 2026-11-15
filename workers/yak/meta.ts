@@ -47,11 +47,12 @@ export type Meta = {
       names?: boolean
     },
   ) => Promise<Bundle[]>
-  /** a batch of bundles → the batch as applied, aliases resolved */
+  /** a batch of bundles → the batch as applied, aliases resolved; with
+   * `check`, rehearsed and kept nowhere */
   apply: (
     bundles: Bundle[],
     headers?: Record<string, string>,
-    opts?: { stamp?: boolean },
+    opts?: { stamp?: boolean; check?: boolean },
   ) => Promise<Bundle[]>
 }
 
@@ -103,9 +104,12 @@ export let written = async (r: Response): Promise<Bundle[]> => {
   // A precondition that no longer holds (409, @yaks/api refuse.ts) comes back
   // as the graph's own `Stale`, so a caller that wrote on `$was` can tell
   // "read again" from a failure.
+  // Another 409 (a home's, said across a reach) is its refusal as it came.
   if (r.status == 409) {
-    let s = await r.json() as Stale
-    throw new Stale(s.eid, s.comp, s.prop, s.current)
+    let text = await r.text()
+    let s = refusal(text) as Partial<Stale> & { error?: unknown }
+    if (s.error != 'Stale') throw answeredBody(r, text)
+    throw new Stale(s.eid!, s.comp!, s.prop!, s.current)
   }
   // Kept by the store's write log and applied later (@yaks/api/log): the batch as
   // applied does not exist yet, so there is nothing to return, but how long
@@ -146,9 +150,13 @@ export let metaOf = (
     )
   },
   apply: (bundles, headers = {}, opts = {}) => {
-    knownOptions(opts, ['stamp'])
+    knownOptions(opts, ['stamp', 'check'])
+    let asked = new URLSearchParams({
+      ...opts.stamp === false ? { stamp: '0' } : {},
+      ...opts.check ? { check: '1' } : {},
+    })
     return store.consume(
-      opts.stamp === false ? '/apply?stamp=0' : '/apply',
+      `/apply${asked.size ? `?${asked}` : ''}`,
       written,
       {
         method: 'POST',
