@@ -123,7 +123,7 @@ import {
 } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { HELD, previewing } from './newcomer.ts'
-import { latestSpeaks, ownSpeaks } from './lenses.ts'
+import { latestSpeaks, ownSpeaks } from '@yaks/platform/lenses'
 import { sandboxed, sandboxing } from './installed.ts'
 import { unbranched, watching } from './preview.ts'
 import { tools as previewTools } from './preview-tools.ts'
@@ -2126,7 +2126,9 @@ export let released = async (
       // What serves, as app_files compares a draft with it.
       let live = await served(blobs, standing)
       let candidate = files.manifest()
-      if (!candidate) throw new Error('release has a file without a pinned sha')
+      if (!candidate) {
+        throw new Error('release has a file without a pinned sha')
+      }
       let paths = own(Object.keys(live)).sort()
       return {
         version: standing.version!,
@@ -3973,7 +3975,10 @@ let OURS: Row[] = [
       // comparing and finding a file read no bytes; only a file asked for
       // whole is read, from its content address.
       let draft = () =>
-        c.time('draft', async () => drafting(blobs, ctx.dir, app, await mine()))
+        c.time(
+          'draft',
+          async () => drafting(blobs, ctx.dir, app, await mine()),
+        )
       let at = (d: Draft, path: string) => `${d.root}/${path}`
       if (op == 'discard') {
         // A released draft's preview rows its release left on the branch go
@@ -4217,7 +4222,10 @@ let OURS: Row[] = [
       // half of what somebody reading a history is trying to work out.
       if (op == 'history') {
         let path = named(text(args.path, 'path'))
-        let [d, all] = await Promise.all([draft(), history(ctx.dir, app, path)])
+        let [d, all] = await Promise.all([
+          draft(),
+          history(ctx.dir, app, path),
+        ])
         let now = d.files[path] ?? null
         let gone = replaced(all)
         let sized = sizes(blobs, all)
@@ -4308,7 +4316,10 @@ let OURS: Row[] = [
       }
       if (op == 'restore') {
         let path = named(text(args.path, 'path'))
-        let [d, all] = await Promise.all([draft(), history(ctx.dir, app, path)])
+        let [d, all] = await Promise.all([
+          draft(),
+          history(ctx.dir, app, path),
+        ])
         let now = d.files[path] ?? null
         let gone = replaced(all)
         if (!all.length) {
@@ -6294,9 +6305,13 @@ let OURS: Row[] = [
         throw e
       }
       let row = (await ctx.dir.hosts(space)).find((h) => h.eid == eid)
-      if (!row) throw refuse('conflict', `${host} was detached while attaching`)
+      if (!row) {
+        throw refuse('conflict', `${host} was detached while attaching`)
+      }
       let { how, records: recs } = await refresh(ctx.env, row, custom)
-      if (!how) throw refuse('conflict', `${host} was detached while attaching`)
+      if (!how) {
+        throw refuse('conflict', `${host} was detached while attaching`)
+      }
       // Mail in the same list as the web, so the person adds them at once.
       let m = await setUp(ctx.env, mail)
       return {
@@ -6565,7 +6580,11 @@ let OURS: Row[] = [
           ? sampled(ctx.env, ctx.dir, space, offered, await byCaller(ctx, who))
           : unsampled(ctx.env, ctx.dir, offered).then(() => null))
           .catch((e) => {
-            caught(e, { tool: 'app_publish', space: space.slug, app: app.slug })
+            caught(e, {
+              tool: 'app_publish',
+              space: space.slug,
+              app: app.slug,
+            })
             return undefined
           })
       // What the answer has to carry is whether the name moved, because that
@@ -7997,7 +8016,10 @@ let OURS: Row[] = [
       if (verdict !== 'approve' && verdict !== 'reject') {
         throw refuse('arguments', 'verdict is approve or reject')
       }
-      let code: Verdict = { verdict, findings: text(args.findings, 'findings') }
+      let code: Verdict = {
+        verdict,
+        findings: text(args.findings, 'findings'),
+      }
       let owner = await ctx.dir.nameAt(await ownerOf(ctx.dir, at.space)) ??
         at.space.slug
       // The letter first, as an ask sends it: a review recorded with no

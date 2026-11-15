@@ -5,12 +5,12 @@ import { ram } from '@yaks/ram'
 import { lenses } from '@yaks/lens'
 import { loadVocab } from '@yaks/vocab'
 import { appVocab } from './vocab.ts'
+import { sessionMove } from './session-move.ts'
 import {
-  sessionMove,
   sessionPackage,
   sessionRows,
   sessionSource,
-} from './session-lens.ts'
+} from '@yaks/platform/lenses'
 let vocab = loadVocab([...appVocab().docs, sessionSource])
 let storage = ram(vocab)
 let bare = graph({ vocab, storage })

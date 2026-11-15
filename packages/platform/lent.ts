@@ -2,6 +2,7 @@
 // write owes where the store runs. yaks.app's Store lends its own (workers/yak
 // graph.ts `Stored`); another host lends what it has.
 import type { Bundle, Plugin } from '@yaks/graph'
+import type { VocabDoc } from '@yaks/vocab'
 
 export type Lent = {
   /** the store's name: an app's address, or the platform's own store */
@@ -17,6 +18,8 @@ export type Lent = {
   tell?: (bundles: Bundle[]) => Bundle[]
   /** the write log's hook, which keeps a keyed write's answer as it commits */
   log: Plugin
+  /** the app's manifest, its `vocab.json`, as deployed now */
+  manifest: () => VocabDoc
 }
 
 /** The options each of these facets is bound with. */

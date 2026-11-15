@@ -18,9 +18,9 @@ import words from './vocab.json' with { type: 'json' }
 import {
   contractedLenses,
   contractPaths,
-  lensRule,
   retainedLenses,
-} from '../../workers/yak/lenses.ts'
+} from '../../packages/platform/lenses.ts'
+import { lensRule } from '../../workers/yak/lenses.ts'
 import { grew } from '../../workers/yak/vocab.ts'
 
 let app = { ...words, package: '@app/vale-compat' }

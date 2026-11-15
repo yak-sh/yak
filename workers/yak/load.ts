@@ -237,7 +237,7 @@ let facets: Record<string, () => Promise<unknown>> = {
   'yak/git/graph': () => import('./facets/git-graph.ts'),
   'yak/git/effects': () => import('./facets/git-effects.ts'),
   'yak/kills/graph': () => import('./facets/kills-graph.ts'),
-  'yak/lenses/graph': () => import('./facets/lenses-graph.ts'),
+  'yak/lenses/graph': () => import('@yaks/platform/lenses-graph'),
   'yak/lexicon/graph': () => import('@yaks/platform/lexicon-graph'),
   'yak/log/graph': () => import('@yaks/platform/log-graph'),
   'yak/lower/graph': () => import('@yaks/platform/lower-graph'),

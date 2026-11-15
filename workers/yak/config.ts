@@ -575,7 +575,7 @@ export let domains = {
     effects: './facets/refusals-effects.ts',
   },
   'yak/pages': { graph: './facets/pages-graph.ts' },
-  'yak/lenses': { graph: './facets/lenses-graph.ts' },
+  'yak/lenses': { graph: '@yaks/platform/lenses-graph' },
   'yak/lower': { graph: '@yaks/platform/lower-graph' },
   'yak/describe': { graph: '@yaks/platform/describe-graph' },
   'yak/weigh': { graph: '@yaks/platform/weigh-graph' },

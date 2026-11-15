@@ -1,4 +1,3 @@
-import { sessionPackage } from './session-lens.ts'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Frame } from '@yaks/api'
@@ -15,11 +14,11 @@ import { state } from './testing.ts'
 import {
   latestSpeaks,
   lensDocAt,
-  lensRule,
   ownSpeaks,
-  pageSpeaks,
   retainedLenses,
-} from './lenses.ts'
+  sessionPackage,
+} from '@yaks/platform/lenses'
+import { lensRule, pageSpeaks } from './lenses.ts'
 
 let name = 'throwaway/lens-recipes'
 let old = {

@@ -41,10 +41,12 @@
     "./weigh-graph": "./weigh-graph.ts",
     "./log-graph": "./log-graph.ts",
     "./lexicon-graph": "./lexicon-graph.ts",
-    "./rouse-graph": "./rouse-graph.ts"
+    "./rouse-graph": "./rouse-graph.ts",
+    "./lenses": "./lenses.ts",
+    "./lenses-graph": "./lenses-graph.ts"
   },
   "license": "Apache-2.0",
-  "description": "What a hosting platform keeps about the apps it serves — spaces, apps, deploys, hostnames, plans and meters.",
+  "description": "What a hosting platform keeps about the apps it serves \u2014 spaces, apps, deploys, hostnames, plans and meters.",
   "dependencies": {
     "@yaks/api": "0.2.29",
     "@yaks/archetype": "0.2.24",
@@ -54,10 +56,12 @@
     "@yaks/fts": "0.2.30",
     "@yaks/graph": "0.2.33",
     "@yaks/host": "0.2.29",
+    "@yaks/lens": "0.2.24",
     "@yaks/mail": "0.2.23",
     "@yaks/member": "0.2.25",
     "@yaks/model": "0.2.32",
     "@yaks/query": "0.2.32",
+    "@yaks/session": "0.2.33",
     "@yaks/tools": "0.2.30",
     "@yaks/vocab": "0.2.32"
   },

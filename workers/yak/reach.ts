@@ -1,4 +1,3 @@
-import { sessionRows } from './session-lens.ts'
 // yaks.app's reach (@yaks/reach): every store a caller can read, each one a
 // member of one composition. A read that names no app is one question asked
 // of every store, answered as one bundle per eid, and a write sends each
@@ -26,7 +25,11 @@ import { vouched, type Who } from './session.ts'
 import { edits, mode } from '@yaks/member'
 import { declarationOf } from './declaration.ts'
 import { compile, lensesIn } from '@yaks/lens'
-import { lensDocAt, spoken as lensSpoken } from './lenses.ts'
+import {
+  lensDocAt,
+  sessionRows,
+  spoken as lensSpoken,
+} from '@yaks/platform/lenses'
 import {
   appKeywords,
   appVocab,

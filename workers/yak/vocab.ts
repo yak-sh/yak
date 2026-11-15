@@ -36,8 +36,12 @@ import { sessionDerived } from '@yaks/session/status'
 import { read } from '@yaks/yaml'
 import { parse } from '@yaks/query'
 import { docs as lensDocs } from '@yaks/lens/vocab'
-import { declaredLenses, lensPaths, retainedLenses } from './lenses.ts'
-import { sessionLens } from './session-lens.ts'
+import {
+  declaredLenses,
+  lensPaths,
+  retainedLenses,
+  sessionLens,
+} from '@yaks/platform/lenses'
 import { worker } from './config.ts'
 import { vocabsOf } from './vocabs.ts'
 import {

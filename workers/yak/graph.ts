@@ -71,13 +71,17 @@ import {
   type Expiry,
 } from './expires.ts'
 import {
+  contractPaths,
+  lensDocAt,
   sessionLens,
-  sessionMove,
   sessionPackage,
   sessionRows,
   sessionStep,
-} from './session-lens.ts'
+  spoken,
+} from '@yaks/platform/lenses'
+import { sessionMove } from './session-move.ts'
 import { statements } from '@yaks/sqlite'
+import type { Context as Reported } from '@yaks/tracker/report'
 import { planting, recovering } from './models.ts'
 import { hits as documentHits } from './document-search.ts'
 import { metered as meteredModel } from './metered.ts'
@@ -91,7 +95,7 @@ import {
   lensesIn,
   packageEid,
 } from '@yaks/lens'
-import { contractPaths, lensDocAt, lensRule, spoken } from './lenses.ts'
+import { lensRule } from './lenses.ts'
 // The Store Durable Object, built out of the packages (T-33810, D-33490): one
 // app's graph, and nothing of the fleet's. It is composition, not code —
 //
@@ -589,8 +593,6 @@ export type Stored = Lent & {
   /** the app's own commands, as its manifest declares them now
    * (@yaks/tools/declared) */
   commands: () => Tools
-  /** the app's manifest, its `vocab.json`, as deployed now */
-  manifest: () => VocabDoc
   /** a failure noted in the app's break log and reported, never thrown */
   broke: (what: string, error: unknown) => void
   /** the store's clock (`Time`), which its own decisions read the hour by */
@@ -1735,8 +1737,11 @@ export class Store extends Durable {
       end: () => {
         throw new Error('a store does not host processes')
       },
-      report: (error: unknown) =>
-        defect(error, { request: 'plugin', store: name }),
+      report: (error: unknown, context?: Partial<Reported>) =>
+        defect(error, {
+          request: context?.during?.request ?? 'plugin',
+          store: name,
+        }),
       meaning: ranking(() => this.#embedder(), this.#texts),
     }
     let composed = plan.bind({
