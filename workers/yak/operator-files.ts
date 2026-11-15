@@ -1,6 +1,6 @@
 // The files a line of an Operator's conversation came with, or a step of it
 // brought back: the attachments (@yaks/blob/attachment) beside the item a
-// person's words came in (@yaks/session `taken{item}`), beside the line
+// person's words came in (@yaks/session `intake{item}`), beside the line
 // itself where no item brought them, or beside the call a result answers
 // (operator-channels.ts `madeFiles`). A line kept before its store's pass
 // (files-move.ts) names its files on itself, as `operator_files{request,
@@ -102,7 +102,7 @@ export let filesOf = async (
       asked.set(
         b.entity.eid,
         [
-          str(comp(b, 'taken')?.item),
+          str(comp(b, 'intake')?.item),
           b.entity.eid,
           str(comp(b, 'result')?.call),
         ].filter(Boolean),

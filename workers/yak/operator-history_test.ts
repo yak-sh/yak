@@ -27,7 +27,7 @@ await store.g.apply([
   {
     entity: { eid: input },
     entry: { session, seq: 1 },
-    taken: { item: request },
+    intake: { item: request },
     content: { body: 'Read these people' },
   },
   ...attachmentRows(request, [attachedOf(file)]),

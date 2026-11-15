@@ -393,7 +393,7 @@
         }
       }
     },
-    "taken": {
+    "intake": {
       "component": true,
       "type": "object",
       "description": "on an input, the item its words came in: the request, letter, comment or knock they say. A session takes an item's words once (@yaks/session/intake `take`), and the files they came with are attached to the item. Kept beside the entry, not in it, so a transcript's hot reads stay as narrow as they were",

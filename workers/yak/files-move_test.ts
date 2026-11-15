@@ -93,7 +93,7 @@ test("a line's files are found among the attachments once its store's pass is do
   equal((await store.g.read('.operator_files')).length, 0)
   equal(first.operator_files, undefined)
   equal(
-    (first.taken as { item?: string }).item,
+    (first.intake as { item?: string }).item,
     asked[0][0].entity.eid,
   )
   equal(

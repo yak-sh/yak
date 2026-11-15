@@ -297,7 +297,7 @@ export let due = async (g: Graph, at: Scope = scope(true)): Promise<Due[]> => {
 export let input = (session: Eid, item: Eid, body: string): Bundle => ({
   entity: { eid: derivedEid(`session bus ${session} ${item}`) },
   entry: { session },
-  taken: { item },
+  intake: { item },
   content: { body },
 })
 

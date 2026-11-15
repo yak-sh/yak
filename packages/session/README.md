@@ -1126,7 +1126,7 @@ A native transcript is recognized by a `using` entry and no `process`.
 
 A person's words that reach a session by a page, a channel or a conversation
 tool are its next input, taken in by `take` (`@yaks/session/intake`). The input
-says the item they came in (`taken{item}`, a request or letter), the channel
+says the item they came in (`intake{item}`, a request or letter), the channel
 they came by and the framing said before them (`channel{name,
 framing}`), and
 the model chosen to answer them (`using`). The files sent with them are attached

@@ -3,7 +3,7 @@
 // (@yaks/blob/attachment) once its store's pass reaches it, in bounded alarm
 // batches beside the store's other passes, never in boot: the words a
 // person gave link back to the request they came in (@yaks/session
-// `taken{item}`), beside which their files are attached; the words read from
+// `intake{item}`), beside which their files are attached; the words read from
 // a file the model could not read as it is move from the request onto the
 // file's attachment (`attachment.text`); and the line's own copy goes. A
 // step's result keeps nothing more: what it made is attached beside its call
@@ -52,7 +52,7 @@ export let filesBackfill = async (store: {
     return true
   }
   let rows = await g.read(
-    `.operator_files&.limit=${BATCH}&.fields=operator_files.request,taken.item`,
+    `.operator_files&.limit=${BATCH}&.fields=operator_files.request,intake.item`,
   )
   let asked = (b: Bundle) => {
     let request = String(comp(b, 'operator_files')?.request ?? '')
@@ -79,7 +79,9 @@ export let filesBackfill = async (store: {
   )
   let lines = rows.map((b) => ({
     entity: b.entity,
-    ...asked(b) && !comp(b, 'taken')?.item ? { taken: { item: asked(b) } } : {},
+    ...asked(b) && !comp(b, 'intake')?.item
+      ? { intake: { item: asked(b) } }
+      : {},
     operator_files: null,
   }))
   if (lines.length) {
