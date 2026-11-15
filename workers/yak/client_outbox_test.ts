@@ -139,6 +139,18 @@ test('public apply retains deliberate refusal until explicitly retried or forgot
   }
 })
 
+// A store that names nobody answers `who` with null (@yaks/api `/who`), as
+// `yak release serve` does for a page: nobody's writes still go out.
+test('public apply writes for nobody when who answers null', async () => {
+  using _fetch = wire(() => json(receipt), () => json(null))
+  let client = store(base)
+  try {
+    assertEquals((await client.apply(payload)).aliases, receipt.aliases)
+  } finally {
+    client.outbox.close()
+  }
+})
+
 test('public outbox never sends when identity fails or changes under the cookie', async () => {
   let person = 'jo', fail = true, sends = 0
   using _fetch = wire(() => {

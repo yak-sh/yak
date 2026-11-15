@@ -504,7 +504,10 @@ export let store = (base, { clock = system } = {}) => {
       .catch((error) => {
         starting = undefined
         throw error
-      }).then(async ({ person }) => {
+        // `who` answers null for nobody (@yaks/api `/who`), where yaks.app
+        // answers a standing whose person is null.
+      }).then(async (said) => {
+        let person = said?.person ?? null
         if (closed) throw new Error('Write outbox is closed')
         queue = durableOutbox({
           scope: `${base}:${person ?? 'anonymous'}`,
@@ -515,7 +518,7 @@ export let store = (base, { clock = system } = {}) => {
             // Closing while identity is in flight must not start another write
             // after the page (or its transport) has gone away.
             if (closed) throw new Error('Write outbox is closed')
-            if (current.person !== person) {
+            if ((current?.person ?? null) !== person) {
               throw new Error(
                 'Write is unsaved: the signed-in person has changed',
               )
