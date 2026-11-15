@@ -50,30 +50,6 @@ export let sink = <T extends string | string[]>(
 let sunk = (env: Pick<Env, 'MAIL_SINK'>, to: string[]) =>
   !!env.MAIL_SINK && !to.every((one) => one.toLowerCase().endsWith(BOT))
 
-/**
- * The address an app writes from: `<space>.<app>@yaks.app`, and
- * `<space>@yaks.app` for the space's HOME app — the one whose address is the
- * bare hostname (directory.ts `url`), so its mailbox is the bare name too.
- * Given the mail domain its place sends from (D-415), the app's name at that
- * domain, and the space's name there for the home app: the space's own
- * mailbox at a space's domain, as `<space>@yaks.app` is at the apex.
- *
- * ```ts
- * mailFrom('ada', 'cookbook')                     // 'ada.cookbook@yaks.app'
- * mailFrom('ada', null)                           // 'ada@yaks.app'
- * mailFrom('ada', 'cookbook', {}, 'ada.example')  // 'cookbook@ada.example'
- * ```
- */
-export let mailFrom = (
-  space: string,
-  app: string | null,
-  env: Host = {},
-  domain?: string | null,
-): string =>
-  domain
-    ? `${app ?? space}@${domain}`
-    : `${app ? `${space}.${app}` : space}@${apex(env)}`
-
 /** What an address spells, as {@link addressed} reads it. */
 export type Addressed =
   | { space: string; app: string | null }

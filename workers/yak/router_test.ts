@@ -7,7 +7,8 @@
 // globs, and the platform's own paths are nobody's.
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
-import { covers, firstOf, globs } from './router.ts'
+import { covers, globs } from './router.ts'
+import { firstOf } from '@yaks/platform/routes'
 
 // The kernel's own slug, the way app_set passes it (directory.ts META).
 let KERNELS = ['platform']

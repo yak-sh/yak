@@ -271,7 +271,7 @@ import {
 } from './sell.ts'
 import { payments } from './payments.ts'
 import { pair } from './screen.ts'
-import { mailFrom } from './post.ts'
+import { mailFrom } from '@yaks/platform/host'
 import {
   apex as platformHost,
   replyTo,

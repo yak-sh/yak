@@ -136,21 +136,3 @@ export let globs = (first: unknown, kernels: string[]): string[] => {
     return glob
   })
 }
-
-/// firstOf({first: '["/recipes/*"]'}) -> ['/recipes/*']
-/// firstOf(undefined) -> []
-/// firstOf({first: 'not json'}) -> []
-/**
- * The property as the App row reads it (directory.ts `appOf`): the JSON array
- * in `home.first`, or nothing at all. Lenient where {@link globs} is strict — a
- * read must answer whatever the row holds, since the graph tier writes this
- * property too, and a listing must not fall over on one somebody typed by hand.
- */
-export let firstOf = (home?: { first?: string | null } | null): string[] => {
-  try {
-    let held = JSON.parse(home?.first || '[]')
-    return Array.isArray(held) ? held.filter((g) => typeof g == 'string') : []
-  } catch {
-    return []
-  }
-}

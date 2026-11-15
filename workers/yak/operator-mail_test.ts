@@ -10,7 +10,7 @@ import { operatorContext } from './operator.ts'
 import { mailSend, receive, signedFor } from './operator-channels.ts'
 import { rootOf } from './operator-root.ts'
 import { conversationOf } from './operator-host.ts'
-import { mailFrom } from './post.ts'
+import { mailFrom } from '@yaks/platform/host'
 import { arrived, reading } from './inbox.ts'
 import type { Inbound } from './env.ts'
 

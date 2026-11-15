@@ -3,7 +3,8 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { sealed } from './cache.ts'
 import { records } from './domains.ts'
 import { apex, hosted, spaceHost, url } from '@yaks/platform/host'
-import { addressed, mailFrom } from './post.ts'
+import { addressed } from './post.ts'
+import { mailFrom } from '@yaks/platform/host'
 import { replyTo } from '@yaks/platform/host'
 import {
   aimedAt,

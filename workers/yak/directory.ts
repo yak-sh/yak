@@ -66,9 +66,9 @@ import {
   written,
 } from './meta.ts'
 import { caught, refusing } from './defects.ts'
-import { mailFrom } from './post.ts'
+import { mailFrom } from '@yaks/platform/host'
 import { payments } from './config.ts'
-import { firstOf } from './router.ts'
+import { firstOf } from '@yaks/platform/routes'
 import { nameOf } from './names.ts'
 import type { Texting } from './operator-texts.ts'
 import type { Alerting } from './operator-alerts.ts'

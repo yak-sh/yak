@@ -47,7 +47,7 @@ import {
   keepFile,
   type Request as Intake,
 } from './operator-channels.ts'
-import { mailFrom } from './post.ts'
+import { mailFrom } from '@yaks/platform/host'
 import { subdomainMail } from './space-mail.ts'
 import { parts } from './form.ts'
 import { gathered } from './bytes.ts'

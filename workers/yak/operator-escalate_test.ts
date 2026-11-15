@@ -11,7 +11,7 @@ import { receive } from './operator-channels.ts'
 import { escalate, escalationAnswer } from './operator-escalate.ts'
 import { rootOf } from './operator-root.ts'
 import { conversationOf } from './operator-host.ts'
-import { mailFrom } from './post.ts'
+import { mailFrom } from '@yaks/platform/host'
 import { arrived, reading } from './inbox.ts'
 import type { Inbound } from './env.ts'
 

@@ -29,7 +29,7 @@
 // web serves them from.
 import { PAGES as CONTENT_PAGES } from './content.ts'
 import { apex, type Host, url } from '@yaks/platform/host'
-import { mailFrom } from './post.ts'
+import { mailFrom } from '@yaks/platform/host'
 
 export type Page = {
   slug: string

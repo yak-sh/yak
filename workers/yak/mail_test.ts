@@ -26,14 +26,8 @@ import { FROM, mail, mailable, REPLY_TO, sending } from './mail.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { monthOf } from './meter.ts'
-import {
-  addressed,
-  heldBy,
-  mailedTo,
-  mailFrom,
-  outgoing,
-  type Reads,
-} from './post.ts'
+import { addressed, heldBy, mailedTo, outgoing, type Reads } from './post.ts'
+import { mailFrom } from '@yaks/platform/host'
 import type { App, Host, Space } from './directory.ts'
 
 test('an app writes from a local part at the apex, or at its mail domain', () => {
