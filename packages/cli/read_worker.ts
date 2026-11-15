@@ -4,7 +4,7 @@
 // graph over another SQLite WAL connection so a long query cannot hold the
 // thread its requests and duties run on.
 import { read } from './config.ts'
-import { record } from '@yaks/trace'
+import { channel, context, record, scope } from '@yaks/trace'
 import { compose, facet, type Served } from './host.ts'
 import type { Heard, Said } from './read_thread.ts'
 import { thread } from './stall.ts'
@@ -73,42 +73,47 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
       activity?.say(`entering graph.${data.op}`)
       stop = readOperations(graph, (text) => activity?.say(text))
       let call = data
-      let query = () => {
-        switch (call.op) {
-          case 'rawRead':
-            return graph.storage.read(call.query, call.opts, call.comps)
-          case 'rawRows':
-            return graph.storage.rows(call.query, call.opts)
-          case 'rawGet':
-            return graph.storage.get(call.eids, call.comps, call.opts)
-          case 'revision':
-            return graph.storage.revision?.()
-          case 'buried':
-            return graph.storage.buried?.(call.before, call.page) ??
-              { eids: [] }
-          case 'bindings': {
-            if (!graph.storage.bindings) {
-              throw new Error('this storage evaluates no bindings')
+      // A storage read begins no span of its own, so its statements are told
+      // to the graph's channel here, and the operation `readOperations` shows
+      // is the statement a read waits in, not only the read it entered.
+      let query = () =>
+        scope(context() ?? { channel: channel(graph) }, () => {
+          switch (call.op) {
+            case 'rawRead':
+              return graph.storage.read(call.query, call.opts, call.comps)
+            case 'rawRows':
+              return graph.storage.rows(call.query, call.opts)
+            case 'rawGet':
+              return graph.storage.get(call.eids, call.comps, call.opts)
+            case 'revision':
+              return graph.storage.revision?.()
+            case 'buried':
+              return graph.storage.buried?.(call.before, call.page) ??
+                { eids: [] }
+            case 'bindings': {
+              if (!graph.storage.bindings) {
+                throw new Error('this storage evaluates no bindings')
+              }
+              return graph.storage.bindings(...call.args)
             }
-            return graph.storage.bindings(...call.args)
-          }
-          case 'statement':
-            return statements(served.storage).query(call.stmt)
+            case 'statement':
+              return statements(served.storage).query(call.stmt)
 
-          case 'get':
-            return graph.get(call.eids, call.comps, call.opts)
-          case 'read':
-            return graph.read(call.query, call.opts)
-          case 'rows':
-            return graph.rows(call.query, call.opts)
-          case 'hits':
-            return served.hits?.(call.words, call.opts?.limit ?? 20) ?? []
-          case 'said':
-            return served.said?.(call.words, call.found, call.opts.limit) ?? []
-          case 'meaning':
-            return served.meaning?.(call.words, call.opts) ?? []
-        }
-      }
+            case 'get':
+              return graph.get(call.eids, call.comps, call.opts)
+            case 'read':
+              return graph.read(call.query, call.opts)
+            case 'rows':
+              return graph.rows(call.query, call.opts)
+            case 'hits':
+              return served.hits?.(call.words, call.opts?.limit ?? 20) ?? []
+            case 'said':
+              return served.said?.(call.words, call.found, call.opts.limit) ??
+                []
+            case 'meaning':
+              return served.meaning?.(call.words, call.opts) ?? []
+          }
+        })
       if (!data.observed) {
         let value = await query()
         activity?.say('posting the read result to the main thread')
