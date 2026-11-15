@@ -213,20 +213,36 @@ export let durable = (from?: Snapshot): DurableStorage & {
     // Empty, all of it — tables, indexes and the virtual tables a full-text
     // index is made of. The runtime throws the whole object's storage away;
     // this drops everything in the schema, which over one in-memory database
-    // is the same end state.
+    // is the same end state. A table another still references by foreign key,
+    // or a shadow table its virtual table holds, cannot be dropped first, so
+    // what refuses waits for the next round; a round that drops nothing is a
+    // failure, thrown rather than left behind as a half-emptied object.
     deleteAll: () => {
       kept.clear()
-      let names = said(select({
+      let kinds = ['trigger', 'view', 'index', 'table']
+      let left = said(select({
         cols: [col('type'), col('name')],
         from: table('sqlite_master'),
         where: not(op('like', col('name'), lit('sqlite_%'))),
-      }))
-      for (let kind of ['trigger', 'view', 'index', 'table'] as const) {
-        for (let it of names.filter((n) => n.type == kind)) {
+      })).sort((a, b) =>
+        kinds.indexOf(String(a.type)) - kinds.indexOf(String(b.type))
+      )
+      while (left.length) {
+        let refused: [typeof left[number], unknown][] = []
+        for (let it of left) {
           try {
-            said({ t: 'drop', kind, name: String(it.name), ifExists: true })
-          } catch { /* a shadow table its virtual table already took */ }
+            said({
+              t: 'drop',
+              kind: it.type as 'table',
+              name: String(it.name),
+              ifExists: true,
+            })
+          } catch (e) {
+            refused.push([it, e])
+          }
         }
+        if (refused.length == left.length) throw refused[0][1]
+        left = refused.map(([it]) => it)
       }
       return Promise.resolve()
     },
