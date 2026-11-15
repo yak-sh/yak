@@ -123,8 +123,14 @@ type Grant = {
   person: string | null
   role: Role | null
   via?: string
+  // On the app's own grant, the visitor its worker answers (`owning`).
+  visitor?: Visitor
   exp: number
 }
+
+/** The visitor a worker's grant was minted while answering: their browser
+ * (`via`) and the person signed in on it. */
+export type Visitor = { via: string; person: string | null }
 
 // The script's name in the namespace: the app's handle (directory.ts
 // `storeName` — written at birth, which no rename moves), with every character
@@ -293,6 +299,7 @@ export let granting = (
   store: string,
   who: Who,
   policy?: number,
+  visitor?: Visitor,
 ) =>
   seal(
     'visit',
@@ -303,6 +310,7 @@ export let granting = (
       person: who.person,
       role: who.role,
       ...(who.via ? { via: who.via } : {}),
+      ...(visitor ? { visitor } : {}),
       exp: Math.floor(Date.now() / 1000) + LIFE,
     } satisfies Grant,
     secret,
@@ -313,13 +321,20 @@ export let granting = (
 // `access` mode and no further — the two rules @yaks/member keeps for an
 // editor still hold, so `env.APP` writes the app's data and never its roster
 // (@yaks/member `guarding`, `governs`). The eid comes from the directory's own
-// row for the app, never from the request.
-export let owning = (secret: string, store: string, app: App) =>
+// row for the app, never from the request. It names the visitor the worker
+// answers too, whose store a write on a stranger's sample goes to.
+export let owning = (
+  secret: string,
+  store: string,
+  app: App,
+  visitor?: Pick<Who, 'person' | 'via'>,
+) =>
   granting(
     secret,
     store,
     { person: app.eid, role: 'editor', via: app.eid },
     app.policy,
+    visitor?.via ? { via: visitor.via, person: visitor.person } : undefined,
   )
 
 /** Whether this caller is the app acting as itself rather than as its visitor
@@ -347,11 +362,20 @@ let held = async (req: Request, secret: string | undefined) => {
   return g && g.exp * 1000 > Date.now() ? g : null
 }
 
-/** The store a worker's grant was minted for, whoever it names: the door asks
- * it before `granted`, since a stranger's visit is served from a store that is
- * not the app's own (visit.ts `revisited`). */
-export let grantedStore = async (req: Request, secret: string | undefined) =>
-  (await held(req, secret))?.store ?? null
+/** The store a worker's grant was minted for and the visitor it answered,
+ * whoever the grant names: the door asks it before `granted`, since a
+ * stranger's visit is served from a store that is not the app's own (visit.ts
+ * `revisited`), and their first write there gives them one (visit.ts `born`). */
+export let grantedStore = async (
+  req: Request,
+  secret: string | undefined,
+): Promise<{ store: string; visitor: Visitor | null } | null> => {
+  let g = await held(req, secret)
+  if (!g) return null
+  let visitor = g.visitor ??
+    (g.via ? { via: g.via, person: g.person ?? null } : null)
+  return { store: g.store, visitor }
+}
 
 // Who this request is, when it is an app's own worker coming back through
 // its service binding — and null for anything else: no header, a forged or
@@ -449,7 +473,7 @@ let handed = async (
   if (at) headers.set(COMMAND_AT, at)
   if (source) headers.set(COMMAND_SOURCE, source)
   headers.set(GRANT, await granting(secret, store, who, app.policy))
-  headers.set(SELF, await owning(secret, store, app))
+  headers.set(SELF, await owning(secret, store, app, who))
   return new Request(url, new Request(req, { headers }))
 }
 

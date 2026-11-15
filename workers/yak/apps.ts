@@ -77,6 +77,7 @@ import {
   grantedStore,
   itsApp,
   ran,
+  type Visitor,
 } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { pageAt, pilled, standing } from './gallery-row.ts'
@@ -207,9 +208,11 @@ import {
   tellBorn,
   toldStores,
   used,
+  type Visit,
   visitable,
   type Visiting,
   visiting,
+  visitOf,
 } from './visit.ts'
 import { full, fullFiles } from './usage.ts'
 import { free } from './meter.ts'
@@ -2760,6 +2763,32 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
   })
 }
 
+// A store of a stranger's own, born for their first write (visit.ts `born`),
+// or null where it costs too much now: a store costs the platform until it is
+// installed, so a source makes only so many a minute, and an app's strangers
+// hold only so many.
+let birth = async (
+  env: Env,
+  req: Request,
+  space: Space,
+  app: App,
+  { via, person }: Visitor,
+): Promise<Visit | null> =>
+  await within(env.BIRTH_RATE, source(req), failing('rate limit')) &&
+    !await crowded(env, app.eid)
+    ? await born(env, space, app, via, person)
+    : null
+
+// What a stranger refused a store of their own is told: signed up, they keep
+// one.
+let unborn = (req: Request, env: Env) =>
+  json(
+    429,
+    'sign_up',
+    SAYS.sign_up,
+    signInAt(req.headers.get('referer') || req.url, env),
+  )
+
 // Serving an app, with the stopwatch running (timing.ts): every stage below
 // that waits is named, so `Server-Timing` on the answer says where the time
 // went — the directory, the app's own worker, the bytes — instead of leaving
@@ -3150,19 +3179,45 @@ let served = async (
   // A stranger's visit is served from the sample or from a store of their
   // own, so the worker it ran comes back holding grants for that store and
   // not the app's: it is served as the visit was (visit.ts `revisited`).
+  //
+  // The sample is every stranger's at once, so nothing writes there. The
+  // worker's first write for a stranger on it gives them a store of their
+  // own, as the page's does (`moved`), and from then on the worker is served
+  // from that store, its reads after the write included.
   let theirs = app
-  let named = bearing(req) && !walls
+  let grant = bearing(req) && !walls
     ? await grantedStore(req, env.SESSION_SECRET)
     : null
-  if (named && named != store && revisited(space, app, named)) {
-    app = revisited(space, app, named, await releaseFor(dir, app))!
-    store = named
+  // The store the grant must name: the app's own, or the one it revisits.
+  let minted = store
+  let moving = false
+  if (grant && grant.store != store && revisited(space, app, grant.store)) {
+    let release = await releaseFor(dir, app)
+    app = revisited(space, app, grant.store, release)!
+    store = minted = grant.store
+    let visitor = onSample(app) ? grant!.visitor : null
+    let own = visitor ? await visitOf(env, visitor.via, theirs.eid) : null
+    if (!own && visitor && path == '/api/apply' && req.method == 'POST') {
+      own = await c.time(
+        'birth',
+        () => birth(env, req, space!, theirs, visitor),
+      )
+      if (!own) {
+        await req.body?.cancel()
+        return unborn(req, env)
+      }
+    }
+    if (own && !own.adopted) {
+      app = revisited(space, theirs, own.store, release)!
+      store = own.store
+      moving = true
+    }
   }
   // The app acting as itself (`owning`) has no seat: its standing is its own.
   let itself = await granted(
     req,
     env.SESSION_SECRET,
-    store,
+    minted,
     app.policy,
     (p) => p == app!.eid ? Promise.resolve('editor') : seatOf(p),
   )
@@ -3173,9 +3228,10 @@ let served = async (
       'This worker grant does not open this app',
     )
   }
-  // The sample is every stranger's at once, so the worker reads it and
-  // writes nothing there, as the app no more than as its visitor.
-  if (itself && named == store && onSample(app)) itself.role = 'viewer'
+  // On the sample the worker reads and writes nothing, as the app no more
+  // than as its visitor; in the visitor's own store both are its editors.
+  if (itself && onSample(app)) itself.role = 'viewer'
+  if (itself && moving) itself.role = 'editor'
   if (itself?.service) {
     let { verifyService } = await import('./service-call.ts')
     if (
@@ -3435,29 +3491,18 @@ let served = async (
     let moved = visit == 'sample' && path == '/api/apply' &&
       req.method == 'POST'
     if (moved) {
-      // A store costs the platform until it is installed, so a source makes
-      // only so many a minute, and an app's strangers hold only so many.
-      if (
-        !await within(env.BIRTH_RATE, source(req), failing('rate limit')) ||
-        await crowded(env, stranger.app.eid)
-      ) {
-        await req.body?.cancel()
-        return wall(reporting(
-          json(
-            429,
-            'sign_up',
-            SAYS.sign_up,
-            signInAt(req.headers.get('referer') || req.url, env),
-          ),
-          req,
-          at,
-          app,
-        ))
-      }
       let own = await c.time(
         'birth',
-        () => born(env, space!, stranger.app, who.via!, who.person),
+        () =>
+          birth(env, req, space!, stranger.app, {
+            via: who.via!,
+            person: who.person,
+          }),
       )
+      if (!own) {
+        await req.body?.cancel()
+        return wall(reporting(unborn(req, env), req, at, app))
+      }
       tellBorn(visitor, who.via!, stranger.app.eid)
       ;({ app, who, visit } = visiting(
         space,
@@ -3564,6 +3609,13 @@ let served = async (
   let own = itself
     ? null
     : await c.time('worker', () => ran(env, space!, app!, req, who))
+  // A write the worker made for a stranger on the sample gave them a store of
+  // their own (above): their browser is told it holds one, as the page's own
+  // write tells it.
+  if (own && visit == 'sample' && !['GET', 'HEAD'].includes(req.method)) {
+    let mine = await visitOf(env, who.via!, stranger.app.eid)
+    if (mine && !mine.adopted) tellBorn(visitor, who.via!, stranger.app.eid)
+  }
   // The worker's 404 is its pass. The files answer behind it, and where they
   // hold nothing either, that 404 is the app's answer: a stranger is sent to
   // sign in for a page the app has, never for one it does not.

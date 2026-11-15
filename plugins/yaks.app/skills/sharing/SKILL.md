@@ -343,11 +343,15 @@ replaces it, and people who already have a store of their own keep theirs.
 **Their own store.** A stranger's first write (`apply`) copies the sample into a
 store of their own, and the write goes there. The answer carries `x-yak-moved`,
 and the page's client opens its socket again on the new store, so nothing on the
-page has to change. The store is reached by that browser alone: no member of the
-app, no other visitor, and not the same person in another browser. The visitor
-is its editor, and the seed rows are theirs to change. Their uploads are kept
-apart from the app's. They still cannot write `deliver` (send email), `using` or
-`builder` (ask the space's models, unless the app's `vocab.json` says
+page has to change. A write the app's worker makes for them through `env.APP` or
+`env.STORE` (`api/apply`) gives them their store the same way, and the worker
+reads and writes it from then on; the worker's answer carries no `x-yak-moved`,
+so a page already open keeps its socket on the sample until it loads again. The
+sample itself is never written. The store is reached by that browser alone: no
+member of the app, no other visitor, and not the same person in another browser.
+The visitor is its editor, and the seed rows are theirs to change. Their uploads
+are kept apart from the app's. They still cannot write `deliver` (send email),
+`using` or `builder` (ask the space's models, unless the app's `vocab.json` says
 `"models": "open"`), and a component with `"floor": "person"` needs them signed
 in.
 

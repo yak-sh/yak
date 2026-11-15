@@ -144,13 +144,23 @@ let refused = [letter.status, (await letter.json()).error.message]
 let ownerAfter = await titles(owner)
 let nobodyRows = await titles(nobody)
 
+let vias = (await meta(env).query('.visit')).length
+let app = (await dir.app((await dir.space('owner'))!, 'notes'))!
+
 // The app's worker, as the shim runs it: it reads the store as the app and
 // its page as the visitor, each through the kernel with the grant it was
-// handed, which names the store the visit is served from.
+// handed, which names the store the visit is served from; then it writes as
+// the app, and reads again.
 let back = (path: string, grant: string) =>
   k.at(host, `/notes/${path}`, { headers: { [GRANT]: grant } })
     .then(async (res) => `${res.status} ${await res.text()}`)
-env.DISPATCH = {
+let notes = (rows: string) =>
+  rows.startsWith('200 ')
+    ? JSON.parse(rows.slice(4)).map((r: { note: { title: string } }) =>
+      r.note.title
+    ).sort()
+    : rows
+let worker = {
   get: () => ({
     fetch: async (r: Request) => {
       if (!new URL(r.url).pathname.endsWith('/held')) {
@@ -163,29 +173,25 @@ env.DISPATCH = {
         headers: { [GRANT]: r.headers.get(SELF)! },
         body: JSON.stringify([{ entity: { eid: '$w' }, note: { title: 'W' } }]),
       })).status
-      return Response.json({ rows, page, wrote })
+      let after = await back('api/query?.note', r.headers.get(GRANT)!)
+      return Response.json({ rows, page, wrote, after })
     },
   }),
 } as unknown as Env['DISPATCH']
-let worked = async (c: ReturnType<typeof client>) => {
-  let { rows, page, wrote } = await (await k.at(host, '/notes/held', {
-    headers: c.headers,
-  })).json()
+let worked = async (res: Response) => {
+  let { rows, page, wrote, after } = await res.json()
   return {
-    rows: rows.startsWith('200 ')
-      ? JSON.parse(rows.slice(4)).map((r: { note: { title: string } }) =>
-        r.note.title
-      ).sort()
-      : rows,
+    rows: notes(rows),
     page: page.slice(0, 3),
     wrote,
+    after: notes(after),
   }
 }
-let workedSample = await worked(nobody)
-let workedOwn = await worked(out)
+env.DISPATCH = worker
+let workedOwn = await worked(
+  await k.at(host, '/notes/held', { method: 'POST', headers: out.headers }),
+)
 delete (env as Partial<Env>).DISPATCH
-let app = (await dir.app((await dir.space('owner'))!, 'notes'))!
-let vias = (await meta(env).query('.visit')).length
 
 // Ada installs, keeping what she made.
 let install = () =>
@@ -300,6 +306,18 @@ let deeSample = await dee.rows()
 let deeMoved = await dee.write('Dee')
 let deeHolds = dee.jar.get(storeCookie(app.eid)) == dee.jar.get(STORES)
 let deeOwn = await dee.rows()
+
+// A browser that has only read the sample, whose app's worker writes for it.
+let hal = browser()
+await (await hal.at('/')).res.body?.cancel()
+env.DISPATCH = worker
+let workedSample = await worked(
+  (await hal.at('/held', { method: 'POST' })).res,
+)
+delete (env as Partial<Env>).DISPATCH
+let halHolds = hal.jar.get(storeCookie(app.eid)) == hal.jar.get(STORES)
+let halRows = (await hal.rows()).titles
+let sampleAfterHal = await titles(nobody)
 // Bo's store is from before the cookies: his browser has none.
 let boBrowser = browser(boIn.cookie)
 let boFirst = await boBrowser.rows()
@@ -375,12 +393,24 @@ test('a signed-in stranger’s store is theirs from its first write', () => {
 })
 
 test('the app’s worker reads the store its stranger is served from', () => {
-  assertEquals(workedSample, { rows: ['Sample'], page: '200', wrote: 403 })
   assertEquals(workedOwn, {
     rows: ['Out', 'Sample, mine'],
     page: '200',
     wrote: 200,
+    after: ['Out', 'Sample, mine', 'W'],
   })
+})
+
+test('the app’s worker writing for a stranger on the sample gives them a store of their own', () => {
+  assertEquals(workedSample, {
+    rows: ['Sample'],
+    page: '200',
+    wrote: 200,
+    after: ['Sample', 'W'],
+  })
+  assert(halHolds)
+  assertEquals(halRows, ['Sample', 'W'])
+  assertEquals(sampleAfterHal, ['Sample'])
 })
 
 test('the sample is not the app’s store', () => {
