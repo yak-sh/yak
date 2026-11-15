@@ -4,7 +4,7 @@
 // outlast, leaving the release's fence behind. So a page served from a release
 // whose toolkit has moved on asks for its remake (apps.ts `refresh`): a wake
 // row of the directory's, one per release, named for it, which the remake
-// sweep does when its alarm fires it (facets/remake-graph.ts).
+// sweep does when its alarm fires it (jobs.ts `remake`).
 //
 // Its compile is yaks.app's to pay for, never the space's (esbuild.ts
 // `Payer`): the person did not ask for it and gains only our fix. A deploy

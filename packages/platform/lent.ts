@@ -1,7 +1,7 @@
 // What a host lends an app store's own graph facets: the work a committed
 // write owes where the store runs. yaks.app's Store lends its own (workers/yak
 // graph.ts `Stored`); another host lends what it has.
-import type { Bundle, Plugin } from '@yaks/graph'
+import type { Bound, Bundle, Plugin } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 
 export type Lent = {
@@ -20,6 +20,10 @@ export type Lent = {
   log: Plugin
   /** the app's manifest, its `vocab.json`, as deployed now */
   manifest: () => VocabDoc
+  /** the platform's own job a rule's row asks for by name (a sweep its wake
+   * row's kind names, a held number's month), lent only by the store that
+   * keeps the platform's schedules */
+  job?: (name: string, row: Bound) => Promise<undefined>
 }
 
 /** The options each of these facets is bound with. */

@@ -563,7 +563,7 @@ export let domains = {
   },
   'yak/trash': {
     vocab: '@yaks/platform/trash-vocab',
-    graph: './facets/trash-graph.ts',
+    graph: '@yaks/platform/trash-graph',
     effects: './facets/trash-effects.ts',
   },
   'yak/meter': {
@@ -595,15 +595,15 @@ export let domains = {
   },
   'yak/git': {
     vocab: './facets/git-vocab.ts',
-    graph: './facets/git-graph.ts',
+    graph: '@yaks/platform/git-graph',
     effects: './facets/git-effects.ts',
   },
   'yak/operator': {
     vocab: './facets/operator-vocab.ts',
     graph: './facets/operator-graph.ts',
   },
-  'yak/wrap': { graph: './facets/wrap-graph.ts' },
-  'yak/remake': { graph: './facets/remake-graph.ts' },
-  'yak/kills': { graph: './facets/kills-graph.ts' },
+  'yak/wrap': { graph: '@yaks/platform/wrap-graph' },
+  'yak/remake': { graph: '@yaks/platform/remake-graph' },
+  'yak/kills': { graph: '@yaks/platform/kills-graph' },
   'yak/signin': { graph: './facets/signin-graph.ts' },
 }

@@ -43,7 +43,12 @@
     "./lexicon-graph": "./lexicon-graph.ts",
     "./rouse-graph": "./rouse-graph.ts",
     "./lenses": "./lenses.ts",
-    "./lenses-graph": "./lenses-graph.ts"
+    "./lenses-graph": "./lenses-graph.ts",
+    "./trash-graph": "./trash-graph.ts",
+    "./kills-graph": "./kills-graph.ts",
+    "./wrap-graph": "./wrap-graph.ts",
+    "./remake-graph": "./remake-graph.ts",
+    "./git-graph": "./git-graph.ts"
   },
   "license": "Apache-2.0",
   "description": "What a hosting platform keeps about the apps it serves \u2014 spaces, apps, deploys, hostnames, plans and meters.",

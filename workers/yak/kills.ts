@@ -7,7 +7,7 @@
 // Cloudflare's own: the outcome of every invocation, by the object's name,
 // minute and version, in the same analytics the meter reads (usage.ts).
 //
-// The directory's kill sweep (facets/kills-graph.ts) reads the minutes since
+// The directory's kill sweep (jobs.ts `kills`) reads the minutes since
 // the last run finished and reports each kill it finds, once.
 import { ask, said } from '@yaks/cloudflare/analytics'
 import { defect } from './defects.ts'

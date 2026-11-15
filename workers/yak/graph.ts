@@ -80,6 +80,7 @@ import {
   spoken,
 } from '@yaks/platform/lenses'
 import { sessionMove } from './session-move.ts'
+import { jobs } from './jobs.ts'
 import { statements } from '@yaks/sqlite'
 import type { Context as Reported } from '@yaks/tracker/report'
 import { planting, recovering } from './models.ts'
@@ -273,6 +274,7 @@ import type {
   Actor,
   AdmitOpts,
   ApplyOpts,
+  Bound,
   Bundle,
   Comp,
   Eid,
@@ -1587,6 +1589,10 @@ export class Store extends Durable {
     let context = () => this.#expires?.context
     let at: Stored = {
       ...this.#stored(this.#graph),
+      // Only the directory keeps the platform's schedules and runs its jobs.
+      ...meta
+        ? { job: (job: string, row: Bound) => jobs[job](env() as Env, row) }
+        : {},
       get context() {
         return context()
       },

@@ -1,11 +1,8 @@
 // The platform domain’s rules, composed through its graph facet.
 import type { Bound, Plugin } from '@yaks/graph'
 import type { Options } from './store.ts'
-import type { Env } from '../env.ts'
-import { reporting } from '../wake.ts'
 import { added, credited, trended, unaffordable } from '../meter.ts'
-import { idOf, paid, type Row, spaceOf, stamp } from '../directory.ts'
-import { monthOf } from '../meter.ts'
+import { paid, type Row, spaceOf } from '../directory.ts'
 import { Refused } from '@yaks/graph/errors'
 
 let props = (c: unknown): Record<string, unknown> =>
@@ -58,46 +55,23 @@ let spending = (row: Bound) => {
   }
 }
 
-export let plugins = (_host: unknown, options: Options): Plugin[] => [{
+export let plugins = (_host: unknown, { store }: Options): Plugin[] => [{
   name: 'yak/meter',
   admission: () => true,
-  resources: {
-    MeterEnv: () => options.store.meta ? options.store.env : undefined,
-  },
   rules: [{
+    // The hourly meter, fired by its wake row: the platform's job `meter`
+    // (@yaks/platform/lent `job`).
     name: 'meter',
     phase: 'effect',
-    match: '.wake, *fired, .sweep, sweep.kind=meter, #MeterEnv, #Now',
-    run: async (row) => {
-      let { MeterEnv: env, Now } = row
-      // Every store composes the rules; only the directory gets the bindings
-      // that authorize a platform job, even if an app declares the same tags.
-      if (!env) return
-      return await reporting(env as unknown as Env, row, async () => {
-        let { metered } = await import('../usage.ts')
-        await metered(env as unknown as Env, new Date(Now.at))
-      })
-    },
+    match: '.wake, *fired, .sweep, sweep.kind=meter, #Now',
+    run: (row) => store.job?.('meter', row),
   }, {
-    // Each month after the first that a space holds a number (numbers.ts
-    // `number_buy`), its monthly price spent from the space's budget under
-    // its texts. Never refused: the provider bills the platform for the month
-    // whether or not the budget has room, so the spend counts all the same.
+    // A held number's month, spent from its space's budget: the platform's
+    // job `lines`.
     name: 'lines',
     phase: 'effect',
-    match: '.wake, *fired, .phone_line, #MeterEnv, #Now',
-    run: async (row) => {
-      let { MeterEnv: env, Now, phone_line: line } = row
-      if (!env) return
-      let { space, monthly } = props(line)
-      if (!monthly) return
-      await stamp(env as unknown as Env, {
-        entities: [{
-          entity: { eid: idOf(space as string) },
-          spend: { month: monthOf(new Date(Now.at)), texts: Number(monthly) },
-        }],
-      })
-    },
+    match: '.wake, *fired, .phone_line, #Now',
+    run: (row) => store.job?.('lines', row),
   }, {
     // A spend, added to the month's meter inside the write's own transaction
     // and taken off again (vocab.ts `spend`): the sum is the directory's, never

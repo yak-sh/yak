@@ -234,9 +234,9 @@ let facets: Record<string, () => Promise<unknown>> = {
   'yak/directory/graph': () => import('./facets/directory-graph.ts'),
   'yak/directory/effects': () => import('./facets/directory-effects.ts'),
   'yak/embed/graph': () => import('@yaks/platform/embed-graph'),
-  'yak/git/graph': () => import('./facets/git-graph.ts'),
+  'yak/git/graph': () => import('@yaks/platform/git-graph'),
   'yak/git/effects': () => import('./facets/git-effects.ts'),
-  'yak/kills/graph': () => import('./facets/kills-graph.ts'),
+  'yak/kills/graph': () => import('@yaks/platform/kills-graph'),
   'yak/lenses/graph': () => import('@yaks/platform/lenses-graph'),
   'yak/lexicon/graph': () => import('@yaks/platform/lexicon-graph'),
   'yak/log/graph': () => import('@yaks/platform/log-graph'),
@@ -246,13 +246,13 @@ let facets: Record<string, () => Promise<unknown>> = {
   'yak/pages/graph': () => import('./facets/pages-graph.ts'),
   'yak/publishing/graph': () => import('./facets/publishing-graph.ts'),
   'yak/refusals/effects': () => import('./facets/refusals-effects.ts'),
-  'yak/remake/graph': () => import('./facets/remake-graph.ts'),
+  'yak/remake/graph': () => import('@yaks/platform/remake-graph'),
   'yak/rouse/graph': () => import('@yaks/platform/rouse-graph'),
   'yak/signin/graph': () => import('./facets/signin-graph.ts'),
-  'yak/trash/graph': () => import('./facets/trash-graph.ts'),
+  'yak/trash/graph': () => import('@yaks/platform/trash-graph'),
   'yak/trash/effects': () => import('./facets/trash-effects.ts'),
   'yak/weigh/graph': () => import('@yaks/platform/weigh-graph'),
-  'yak/wrap/graph': () => import('./facets/wrap-graph.ts'),
+  'yak/wrap/graph': () => import('@yaks/platform/wrap-graph'),
 }
 /** A plugin's facet, its words at once and anything else when first asked. */
 export let load: Load = async (plugin, facet) => {
