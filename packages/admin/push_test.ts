@@ -209,6 +209,28 @@ test('a stale push keeps its base through a fresh list and explicit confirmation
   assertEquals(seen, [3])
 })
 
+// The catch-up's release of main: a version made since its base (a copy edit
+// saved on the page) is deployed over from live, and a rollback still holds.
+test('a push from the source deploys from live over a base behind it, and holds a rollback', async () => {
+  let p = platform({ mail: held('index.html') })
+  await push(p.ask, [file('index.html'), file('new.js')], { app: 'mail' })
+  let seen: number[] = []
+  let opts = {
+    base: 1,
+    review: false,
+    remember: (version: number) => void seen.push(version),
+  }
+  let said = await push(p.ask, [file('index.html')], { app: 'mail' }, opts)
+  assertEquals([p.bases, p.deployed.length, seen], [[1, 2], 2, [2, 3]])
+  assert(!said.some((line) => line.includes('confirm')))
+  said = await push(p.ask, [file('new.js')], { app: 'mail' }, {
+    ...opts,
+    base: 9,
+  })
+  assertEquals([p.deployed.length, seen], [2, [2, 3]])
+  assert(said.at(-1)?.includes('--confirm'))
+})
+
 test('a base past live writes nothing until confirmed, then pushes from live', async () => {
   let p = platform({ mail: held('index.html') })
   let seen: number[] = []

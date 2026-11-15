@@ -86,11 +86,17 @@ export type Checkout = {
 }
 
 /** A push's base version, confirmation and progress, its bounded wait for
- * the connector's file data contract, and the checkout its copy merges into. */
+ * the connector's file data contract, and the checkout its copy merges into.
+ * `review: false` is a push from the app's source (the deploy catch-up's
+ * release of main): a base behind live deploys from live without asking, since
+ * what was deployed since (a copy edit saved on the page, another push from the
+ * same source) is not lost to it, and a deploy that answers it deployed nothing
+ * is an error. A base ahead of live still waits for `confirm`. */
 export type PushOptions = {
   checkout?: Checkout
   base?: number
   confirm?: boolean
+  review?: boolean
   remember?: (version: number) => void | Promise<void>
   wait?: number
   poll?: number
@@ -361,7 +367,8 @@ export let push = async (
       '--confirm to deploy these files over it',
     ]
   }
-  let base = opts.base != null && opts.base <= held.version
+  let base = opts.base != null && opts.base <= held.version &&
+      opts.review !== false
     ? opts.base
     : held.version
   if (base != opts.base) await opts.remember?.(base)
@@ -457,7 +464,9 @@ export let push = async (
   ) throw new Error('app_deploy answered malformed version data')
   said.push(saidBy(deployed))
   if (value.deployed) await opts.remember?.(value.version)
-  else said.push('confirm with --confirm to deploy these files')
+  else if (opts.review === false) {
+    throw new Error(`app_deploy deployed nothing: ${said.join('; ')}`)
+  } else said.push('confirm with --confirm to deploy these files')
   opts.progress?.({ phase: 'deploy', state: 'done', deployed: value.deployed })
   return said
 }

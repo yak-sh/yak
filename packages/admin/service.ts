@@ -344,6 +344,7 @@ export let box = (
       let key = JSON.stringify([zone(), at.address, 'main', to.space, to.app])
       return await push(rpc(at.bearer), files, to, {
         ...await versions(homeOf(host.config.db), key),
+        review: false,
         checkout: {
           earlier: async function* (path) {
             let log = await run([
@@ -629,7 +630,7 @@ export let releases = (
         let said = await doors.release(sha, to)
         done.set(to.dir, tree)
         console.log(
-          `@yaks/admin — released ${to.dir} at ${sha.slice(0, 8)}: ${
+          `@yaks/admin — pushed ${to.dir} at ${sha.slice(0, 8)}: ${
             said.join('; ')
           }`,
         )

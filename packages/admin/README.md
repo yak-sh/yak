@@ -258,12 +258,15 @@ the `yak` space. It pushes the directory as the head holds it, as
 `yak admin push apps/home --space yak --as admin@bot.yak.sh` would from a clean
 checkout of main: the same `push`, signed in as the admin, its base kept beside
 the graph so a rollback made elsewhere holds until someone confirms a push over
-it. It pushes once for each git tree the directory has, so a commit that left
-the app alone pushes nothing, and a process that starts asks the app for its
-file list once. A release that fails is tried again at each look and reported
-once for its tree as `release:home`. Edits made on the app's page to `copy.json`
-are kept, as any push keeps them; they reach git only through a push from a
-checkout.
+it. A version deployed since its base (a copy edit saved on the page, a push
+from another checkout of main) is no rollback: main is the app's source and the
+push keeps the page's copy edits, so the release deploys from live without a
+review, and a deploy that answers it deployed nothing fails. It pushes once for
+each git tree the directory has, so a commit that left the app alone pushes
+nothing, and a process that starts asks the app for its file list once. A
+release that fails is tried again at each look and reported once for its tree as
+`release:home`. Edits made on the app's page to `copy.json` are kept, as any
+push keeps them; they reach git only through a push from a checkout.
 
 ```json
 { "use": "@yaks/admin", "with": { "hook": { "secret": "BUILD_HOOK" } } }
