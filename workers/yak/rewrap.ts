@@ -6,10 +6,11 @@
 // reached an app only when that app next deployed, and a kept release that a
 // rollback puts back never. This pass closes that. Every script in the
 // namespace not tagged with this release's `WRAP` has its wrapper replaced
-// through Cloudflare's content door, which swaps the modules and leaves the
-// bindings, secrets, limits and Durable Object classes as they were
-// (https://developers.cloudflare.com/api/resources/workers_for_platforms/subresources/dispatch/subresources/namespaces/subresources/scripts/subresources/content/methods/update/).
-// The app's own modules go back byte for byte, and the script is then tagged.
+// through Cloudflare's script upload. Its settings go back unchanged and its
+// bindings are inherited by name, except the kernel service binding apps once
+// held. The wrapper and removal land in one upload; secrets stay unread
+// (https://developers.cloudflare.com/api/resources/workers_for_platforms/subresources/dispatch/subresources/namespaces/subresources/scripts/methods/update/).
+// The app's own modules go back byte for byte, tagged in that same upload.
 // The directory runs it at each release and daily after (facets/wrap-*.ts),
 // so a script an older kernel uploaded while a release rolled out is caught
 // by the next pass.
@@ -113,6 +114,30 @@ let tags = async (
 ) =>
   (await answered(await sent(env, `/${name}/tags`, {}, wait)) ?? []) as string[]
 
+type Settings = Record<string, unknown> & {
+  bindings?: { name: string }[]
+}
+
+// `inherit` keeps the binding itself, including secret values and provisioned
+// namespaces, without reading or reconstructing it. The settings response's
+// reconciliation report is read-only, and tags are read again before upload.
+let retained = (held: Settings) => {
+  let {
+    bindings = [],
+    exports_reconciliation: _report,
+    tags: _tags,
+    ...settings
+  } = held
+  return {
+    ...settings,
+    bindings: bindings.filter((b) => b.name != 'KERNEL').map(({ name }) => ({
+      name,
+      type: 'inherit',
+    })),
+    keep_assets: true,
+  }
+}
+
 /** One script's wrapper made this release's: true when it was rewrapped,
  * false when it is not a script the platform wrapped or a deploy has just
  * uploaded it new. */
@@ -125,6 +150,9 @@ export let rewrap = async (
   let entry = modules.find((m) => m.name == WRAPPER)
   let was = entry && wrapping(DEC.decode(entry.bytes))
   if (!was) return false
+  let settings = await answered(
+    await sent(env, `/${name}/settings`, {}, wait),
+  ) as Settings
   let worn = await tags(env, name, wait)
   if (worn.includes(WRAP)) return false
   let body = new FormData()
@@ -132,24 +160,18 @@ export let rewrap = async (
     body.append(name, new Blob([bytes], { type: moduleType(name) }), name)
   body.append(
     'metadata',
-    new Blob([JSON.stringify({ main_module: WRAPPER })], {
+    new Blob([JSON.stringify({
+      ...retained(settings),
+      main_module: WRAPPER,
+      tags: [...worn.filter((t) => !t.startsWith('wrap-')), WRAP],
+    })], {
       type: 'application/json',
     }),
   )
   part(WRAPPER, shim(was.main, was.tunneled, was.ai))
   for (let m of modules) if (m.name != WRAPPER) part(m.name, m.bytes)
   await answered(
-    await sent(env, `/${name}/content`, { method: 'PUT', body }, wait),
-  )
-  await answered(
-    await sent(env, `/${name}/tags`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify([
-        ...worn.filter((t) => !t.startsWith('wrap-')),
-        WRAP,
-      ]),
-    }, wait),
+    await sent(env, `/${name}`, { method: 'PUT', body }, wait),
   )
   return true
 }

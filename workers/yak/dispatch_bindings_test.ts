@@ -39,11 +39,7 @@ test('staging app workers and their secrets stay in their own namespace', async 
     if (req.method == 'PUT' && !path.endsWith('/secrets')) {
       let body = await req.formData()
       let sent = JSON.parse(await (body.get('metadata') as File).text())
-      assertEquals(sent.bindings, [{
-        type: 'service',
-        name: 'KERNEL',
-        service: 'yak-staging',
-      }])
+      assertEquals(sent.bindings, [])
     }
     return Response.json({ success: true, result: [] })
   }) as typeof fetch

@@ -6,9 +6,8 @@
 // makes arrives here instead of leaving, by way of yak-out (outbound/), which
 // hands it to the kernel's `Outbound` entrypoint with the caller dispatch.ts
 // said for that request — from the directory's row and the kernel's own vouch.
-// Nothing else reaches that entrypoint. A fetch to the platform's own zone goes
-// out and comes back in like anybody's (wrangler.toml
-// `global_fetch_strictly_public`).
+// Nothing else reaches that entrypoint. Calls to the platform run through its
+// router here, with the app's eid as their source. App code cannot choose it.
 //
 // The fetch door (T-33450): a page's own fetch never passes through us, so an
 // app with no worker asks `./api/env` for its sentinels and sends the call to
@@ -39,11 +38,13 @@ import {
 import type { Comp } from '@yaks/graph'
 import { callsOut, mode, reads } from '@yaks/member'
 import { ctxOf } from './connections.ts'
-import type { Env } from './env.ts'
+import { bound, type Env } from './env.ts'
 import type { Answer } from './apps.ts'
 import { background, caught, defect } from './defects.ts'
-import { directoryOf } from './directory.ts'
+import { directory, directoryOf } from './directory.ts'
+import * as dirPart from './directory.ts'
 import { manageAt } from '@yaks/platform/routes'
+import { apex } from '@yaks/platform/host'
 
 // The outside service's own failure, carried past the catch below unchanged.
 class Wire extends Error {
@@ -143,6 +144,25 @@ export let outbound = (
   env: Partial<Env> & Pick<Env, 'STORE'>,
   caller: Caller,
 ): Promise<Response> => sent(env, caller, req)
+
+/** The dispatch namespace's trusted caller: platform requests enter the
+ * same router as a public request, keyed by the app that made them. */
+export let fromApp = async (
+  req: Request,
+  env: Env,
+  caller: Caller,
+  serve: (req: Request) => Promise<Response>,
+): Promise<Response> => {
+  let host = new URL(req.url).hostname
+  let ours = host == apex(env) || host.endsWith(`.${apex(env)}`) ||
+    await directory(bound(env.DIRECTORY, dirPart.fetch, env)).serves(host)
+  if (!ours) return sent(env, caller, req)
+  let headers = new Headers(req.headers)
+  headers.set('cf-connecting-ip', caller.app)
+  // The runtime's caller, rather than anything the app put in its request,
+  // names the source at every platform door, including custom domains.
+  return serve(new Request(req, { headers }))
+}
 
 // What a page's request says about the page and the platform, none of which
 // the outside service is owed.

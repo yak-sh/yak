@@ -471,10 +471,9 @@ A request from your worker never re-enters your worker, so
 ## Other env bindings and wrangler.jsonc
 
 Every connection the app uses is on `env` under its binding name: `env.WEATHER`,
-`env.OPENAI` (below). The service binding the platform uses to build `STORE`,
-`APP` and `FILES` is also there, as `env.KERNEL`. It is internal: it requires
-absolute URLs and a grant header your code is never given, and the three
-bindings above are built on it so you do not have to use it. Use those.
+`env.OPENAI` (below). Use `STORE`, `APP` and `FILES` to reach this app's data
+and files. Calls to the platform from an app worker count toward that app's
+request limits.
 
 An app may carry `wrangler.jsonc` or `wrangler.json` beside `worker.js`. The
 supported keys are `main` (the app-relative server source path, `worker.js` by

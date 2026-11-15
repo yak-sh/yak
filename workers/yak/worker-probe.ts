@@ -33,18 +33,14 @@ export let workerKernel = async (
       DISPATCH: {
         get: () => ({
           fetch: (req: Request) =>
-            worker.fetch(req, {
-              KERNEL: {
-                fetch: (asked: Request) => {
-                  let url = new URL(asked.url)
-                  return k.at(url.hostname, url.pathname + url.search, {
-                    method: asked.method,
-                    headers: Object.fromEntries(asked.headers),
-                    body: asked.body,
-                  })
-                },
-              },
-            }, {}),
+            worker.fetch(req, {}, {}, (asked: Request) => {
+              let url = new URL(asked.url)
+              return k.at(url.hostname, url.pathname + url.search, {
+                method: asked.method,
+                headers: Object.fromEntries(asked.headers),
+                body: asked.body,
+              })
+            }),
         }),
       },
     })

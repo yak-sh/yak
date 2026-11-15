@@ -42,6 +42,9 @@ export default { fetch: (req, env, ctx) => app.fetch(req, env, ctx) }
 type Script = {
   modules: Record<string, Uint8Array> | null
   tags: string[] | null
+  settings?: Record<string, unknown> & {
+    bindings: (Record<string, unknown> & { name: string })[]
+  }
   content?: Response
   failing?: number
 }
@@ -51,8 +54,8 @@ let account = async (
   scripts: Record<string, Script>,
   run: () => Promise<unknown>,
 ) => {
-  let writes: { name: string; form?: FormData; tags?: string[] }[] = []
-  let answer = (input: string, init: RequestInit): Response => {
+  let writes: { name: string; form: FormData }[] = []
+  let answer = async (input: string, init: RequestInit): Promise<Response> => {
     let url = new URL(input)
     let ok = (result: unknown) =>
       Response.json({ success: true, errors: [], messages: [], result })
@@ -66,9 +69,26 @@ let account = async (
     }
     let [name, door] = url.pathname.slice(AT.length + 1).split('/')
     let script = scripts[name]
-    if (door == 'content' && init.method == 'PUT') {
-      writes.push({ name, form: init.body as FormData })
+    if (!door && init.method == 'PUT') {
+      let form = init.body as FormData
+      let metadata = JSON.parse(await (form.get('metadata') as File).text())
+      let bindings = metadata.bindings.map((
+        b: { name: string; type: string },
+      ) =>
+        b.type == 'inherit'
+          ? script.settings!.bindings.find((h) => h.name == b.name)
+          : b
+      )
+      script.settings = { ...metadata, bindings }
+      script.tags = metadata.tags
+      writes.push({ name, form })
       return ok({})
+    }
+    if (door == 'settings') {
+      script.settings ??= {
+        bindings: [{ name: 'KERNEL', type: 'service', service: 'yak' }],
+      }
+      return ok(script.settings)
     }
     if (door == 'content') {
       if (!script.modules || script.failing && script.failing--) {
@@ -87,17 +107,12 @@ let account = async (
         },
       })
     }
-    if (door == 'tags' && init.method == 'PUT') {
-      script.tags = JSON.parse(init.body as string)
-      writes.push({ name, tags: script.tags! })
-      return ok(script.tags)
-    }
     return ok(script.tags)
   }
   let was = globalThis.fetch
   globalThis.fetch =
     ((input: string, init: RequestInit = {}) =>
-      Promise.resolve(answer(input, init))) as typeof fetch
+      answer(input, init)) as typeof fetch
   try {
     return { out: await run(), writes }
   } finally {
@@ -153,14 +168,76 @@ test("a stale script gets this release's wrapper and keeps its own modules", asy
   assertEquals(out, { rewrapped: 1, failed: 0, left: 0 })
   let form = writes[0].form!
   let meta = JSON.parse(await (form.get('metadata') as File).text())
-  assertEquals(meta, { main_module: '__yak_entry.js' })
+  assertEquals(meta, {
+    main_module: '__yak_entry.js',
+    bindings: [],
+    keep_assets: true,
+    tags: [WRAP],
+  })
   assertEquals(
     await (form.get('__yak_entry.js') as File).text(),
     staleWrapper,
   )
   assertEquals(await bytes(form, 'src/lib.wasm'), WASM)
+  assertEquals(await bytes(form, 'src/app.js'), ENC.encode('export default {}'))
   assertEquals((form.get('src/lib.wasm') as File).type, 'application/wasm')
   assertEquals(scripts.jeff_recipes.tags, [WRAP])
+  assertEquals(scripts.jeff_recipes.settings!.bindings, [])
+})
+
+test('rewrapping removes the kernel binding while retaining resources and secrets in the same upload', async () => {
+  let bindings = [
+    { name: 'KERNEL', type: 'service', service: 'yak' },
+    { name: 'SECRET', type: 'secret_text' },
+    { name: 'DATA', type: 'd1', id: 'database' },
+    { name: 'BUCKET', type: 'r2_bucket', bucket_name: 'files' },
+    {
+      name: 'ROOM',
+      type: 'durable_object_namespace',
+      namespace_id: 'namespace',
+    },
+    { name: 'INDEX', type: 'vectorize', index_name: 'vectors' },
+    { name: 'CONFIG', type: 'json', json: { enabled: true } },
+    { name: 'OTHER', type: 'service', service: 'another-worker' },
+  ]
+  let settings = {
+    compatibility_date: '2025-10-01',
+    compatibility_flags: ['nodejs_compat'],
+    limits: { cpu_ms: 50, subrequests: 50 },
+    observability: { enabled: true },
+    placement: { mode: 'smart' },
+    cache_options: { enabled: true, cross_version_cache: true },
+    usage_model: 'standard',
+    tail_consumers: [{ service: 'logs' }],
+    logpush: false,
+  }
+  let scripts: Record<string, Script> = {
+    recipes: {
+      modules: { '__yak_entry.js': ENC.encode(OLD), 'src/lib.wasm': WASM },
+      tags: ['customer-tag', 'wrap-old'],
+      settings: {
+        ...settings,
+        bindings,
+        exports_reconciliation: { created: [] },
+      },
+    },
+  }
+  let { out, writes } = await account(
+    scripts,
+    () => rewrapped(env, undefined, wait),
+  )
+  assertEquals(out, { rewrapped: 1, failed: 0, left: 0 })
+  assertEquals(writes.length, 1)
+  let form = writes[0].form!
+  assertEquals(JSON.parse(await (form.get('metadata') as File).text()), {
+    ...settings,
+    bindings: bindings.slice(1).map(({ name }) => ({ name, type: 'inherit' })),
+    keep_assets: true,
+    main_module: '__yak_entry.js',
+    tags: ['customer-tag', WRAP],
+  })
+  assertEquals(scripts.recipes.settings!.bindings, bindings.slice(1))
+  assertEquals(await bytes(form, 'src/lib.wasm'), WASM)
 })
 
 test('a pass after it finds nothing left to do', async () => {

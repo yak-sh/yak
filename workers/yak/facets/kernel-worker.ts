@@ -272,9 +272,16 @@ export let classes: Record<string, Deferred> = {
   // Worker, yak-out (outbound/), hands each fetch back here with the CALLER
   // dispatch.ts said. It answers RPC and no fetch.
   Outbound: entered(WorkerEntrypoint, ['send'], async (_ctx, env) => {
-    let { outbound } = await import('../outbound.ts')
+    let { fromApp } = await import('../outbound.ts')
     return {
-      send: (req: Request, caller: Caller) => outbound(req, env, caller),
+      send: (req: Request, caller: Caller) =>
+        fromApp(
+          req,
+          env,
+          caller,
+          async (asked) =>
+            (await import('../index.ts')).default.fetch(asked, env),
+        ),
     }
   }),
   // A sandbox container's calls to this platform and its spaces, handed here

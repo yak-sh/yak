@@ -14,8 +14,8 @@
 // app's own code ever sees it and holds it in a closure, handing the app
 // `env.STORE` and `env.FILES` — fetchers onto the app's own doors that add
 // the grant on the way out. So `env.STORE.fetch('/query?.doc')` works, and
-// an app that tries to reach another app's store through the same service
-// binding has no grant that names it. Nothing durable is handed to app code:
+// an app that tries to reach another app's store has no grant that names it.
+// Nothing durable is handed to app code:
 // the grant dies in a minute and belongs to one request.
 //
 // The second door is `env.APP`, and it is the same machinery pointed at a
@@ -175,7 +175,7 @@ let TUNNELED = ${JSON.stringify(tunneled)}
 let AI = ${JSON.stringify(ai)}
 
 export default {
-  fetch(req, env, ctx) {
+  fetch(req, env, ctx, send = globalThis.fetch) {
     let grant = req.headers.get(GRANT) || ''
     let self = req.headers.get(SELF) || ''
     let headers = new Headers(req.headers)
@@ -209,7 +209,7 @@ export default {
       fetch: (input, init) => {
         let out = toward(input, init, (at) => origin + under + within(under)(at))
         out.headers.set(GRANT, held)
-        return env.KERNEL.fetch(out)
+        return send(out)
       },
     })
     let mount = req.headers.get('x-yak-mount') || '/' + slug + '/'
@@ -222,7 +222,7 @@ export default {
           return origin + api + 'tunneled' + url.pathname + url.search
         })
         out.headers.set(GRANT, self)
-        return env.KERNEL.fetch(out)
+        return send(out)
       },
     }
     // The models, as Workers AI's binding is called: what the model said,
@@ -246,13 +246,14 @@ export default {
         throw e
       },
     }
+    let { KERNEL, ...bindings } = env
     return app.fetch(new Request(req, { headers }), {
       STORE: door(api, grant),
       FILES: door(mount, grant),
       APP: door(api, self),
       // An explicitly requested binding keeps its name, even when it names
       // one of the convenience doors supplied to apps without that binding.
-      ...env,
+      ...bindings,
       ...Object.fromEntries(TUNNELED.map((name) => [name, machine])),
       ...(AI ? { [AI]: models } : {}),
     }, ctx)
@@ -373,7 +374,7 @@ export let grantedStore = async (
 }
 
 // Who this request is, when it is an app's own worker coming back through
-// its service binding — and null for anything else: no header, a forged or
+// its scoped doors — and null for anything else: no header, a forged or
 // expired one, or one minted for a store that is not this app's. The app door
 // refuses a presented grant that failed, so it never falls back to a visitor.
 //
@@ -978,8 +979,9 @@ export let carried = async (
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/reference/platform-examples/,
 // https://developers.cloudflare.com/workers/configuration/multipart-upload-metadata/).
 //
-// The KERNEL service binding carries the app's graph and file doors. Its
-// configured resources come from directory records and are resent on every
+// The app's scoped doors return through the namespace's outbound worker;
+// its script holds no kernel binding. Configured resources come from
+// directory records and are resent on every
 // deploy. Only secret_text bindings are kept: retaining resources would keep
 // a removed binding attached, while secrets cannot be read back to resend
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/bindings/).
@@ -1031,7 +1033,7 @@ export let upload = async (
     'metadata',
     new Blob([
       JSON.stringify({
-        ...metadata(config, bound, tag, env.WORKER_NAME, durableOwner, secrets),
+        ...metadata(config, bound, tag, durableOwner, secrets),
         // Born wearing this release's wrapper, so rewrap.ts passes it by.
         tags: [WRAP],
       }),

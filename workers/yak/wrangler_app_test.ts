@@ -233,11 +233,11 @@ test('app config: Vectorize creation options become requests, not upload binding
   ])
 })
 
-test('app metadata: no config keeps the current entry, compatibility date, kernel and limits', () => {
+test('app metadata: no config keeps the current entry, compatibility date and limits', () => {
   assertEquals(metadata(), {
     main_module: '__yak_entry.js',
     compatibility_date: '2025-05-08',
-    bindings: [{ type: 'service', name: 'KERNEL', service: 'yak' }],
+    bindings: [],
     keep_bindings: ['secret_text'],
     limits: { cpu_ms: 50, subrequests: 50 },
   })
@@ -288,7 +288,6 @@ test('app metadata: every allowed binding uses its own shape and only graph reso
     compatibility_date: '2026-09-01',
     compatibility_flags: ['nodejs_compat'],
     bindings: [
-      { type: 'service', name: 'KERNEL', service: 'yak' },
       { type: 'plain_text', name: 'TEXT', text: 'hello' },
       { type: 'json', name: 'NUMBER', json: 42 },
       { type: 'json', name: 'JSON', json: { nested: [true, null] } },

@@ -782,6 +782,7 @@ test('the shim gives the app its doors and keeps the grant', async () => {
             self: req.headers.get('x-yak-app-grant'),
             person: req.headers.get('x-yak-person'),
             secret: env.SPOON,
+            kernel: typeof env.KERNEL,
             asked: [await rows.text(), await page.text(), await mine.text()],
           })
         },
@@ -809,6 +810,7 @@ test('the shim gives the app its doors and keeps the grant', async () => {
       }),
       env,
       {},
+      env.KERNEL.fetch,
     )
     let said = await out.json()
     // The app's code never sees either grant — it sees who is looking, and
@@ -817,6 +819,7 @@ test('the shim gives the app its doors and keeps the grant', async () => {
     assertEquals(said.self, null)
     assertEquals(said.person, 'p1')
     assertEquals(said.secret, 'the app is told its own secrets')
+    assertEquals(said.kernel, 'undefined')
     // A leading slash is the APP's root, not the hostname's, every door.
     assertEquals(said.asked, [
       '/recipes/api/query',
@@ -879,7 +882,7 @@ for (
       new Response(`${req.method} ${req.url} ${await req.text()}`),
   }
   let env = envOf(() => ({
-    fetch: (req) => domainWorker.fetch(req, { KERNEL: kernel }, {}),
+    fetch: (req) => domainWorker.fetch(req, {}, {}, kernel.fetch),
   }))
   test(`an invitation redirect stays on ${host}`, async () => {
     let req = visit('/?invite=key', {
@@ -939,8 +942,9 @@ test('a door takes a Request or a URL as a Fetcher does', async () => {
   let visit = (url: string) =>
     doors.fetch(
       new Request(url, { headers: { 'x-yak-app': 'recipes' } }),
-      { KERNEL: kernel },
       {},
+      {},
+      kernel.fetch,
     ).then((r: Response) => r.json())
   assertEquals(await visit('https://jeff.yaks.app/recipes/style.css'), [
     'GET /recipes/style.css ',
@@ -990,6 +994,7 @@ test('a vpc_services name is a door to the kernel as the app, never a binding', 
       }),
       env,
       {},
+      env.KERNEL.fetch,
     )
     assertEquals(asked.map((r) => r.url), [
       'https://jeff.yaks.app/mail/api/tunneled/mail/inbound?to=a',
@@ -1049,6 +1054,7 @@ test('an ai binding is the app asking ./api/ai/run, and a refusal throws its sen
       }),
       env,
       {},
+      env.KERNEL.fetch,
     )
     assertEquals(await res.json(), [
       { response: 'hello' },
@@ -1119,7 +1125,7 @@ let AT = 'https://api.cloudflare.com/client/v4/accounts/acct/workers/dispatch' +
 
 let source = (text: string) => new TextEncoder().encode(text)
 
-test('an upload sends the shim, the app, and one way home', async () => {
+test('an upload sends the shim and app without a kernel binding', async () => {
   let { calls } = await recorded(
     () => ok({ startup_time_ms: 3, id: 'jeff_recipes' }),
     () =>
@@ -1143,13 +1149,7 @@ test('an upload sends the shim, the app, and one way home', async () => {
     await (form.get('worker.js') as File).text(),
     'export default { fetch: () => {} }',
   )
-  // One binding, and it is the way back to the kernel — there is nothing
-  // else for an app's code to hold.
-  assertEquals(meta.bindings, [{
-    type: 'service',
-    name: 'KERNEL',
-    service: 'yak',
-  }])
+  assertEquals(meta.bindings, [])
   // A deploy replaces the binding list whole, so this is what carries what
   // the app's connections bound across one (connections.ts `rebind`).
   assertEquals(meta.keep_bindings, ['secret_text'])
