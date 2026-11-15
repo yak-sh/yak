@@ -121,7 +121,7 @@ let watching = async (slug: string, who: Record<string, string>) => {
     await until(() => {
       said.push(
         ...(ws.taken() as Frame[]).filter((f) => f.id == 'books')
-          .map((f) => f.refused ? f.refused.error : titles(f.bundles ?? [])),
+          .map((f) => f.refused ? f.refused.message : titles(f.bundles ?? [])),
       )
       return said.length >= n
     })
@@ -166,6 +166,8 @@ test('a store-scoped app keeps the homes of the words it uses out of its reach',
   equal(found?.homes, [])
 })
 
+let UNLENT =
+  ".book is borrowed from shelf, which is private, so it can't be read here now"
 let access = (app: string, access: string) =>
   call(ctx, 'app_set', { space: 'ada', app, access })
 
@@ -187,6 +189,21 @@ test('a home made private leaves the next answer of a watch it fed', async () =>
   equal(await guest.heard(), [['Dune', 'Emma', 'Kim']])
   await access('shelf', 'private')
   await shelved('Ulysses')
-  // Refused as the page's read of it is: the app knows no such word alone.
-  equal(await guest.heard(), ['CallError'])
+  // Refused as the page's read of it is.
+  equal(await guest.heard(), [UNLENT])
+})
+
+test("a read of a word borrowed from a home made private says it can't be read now", async () => {
+  let read = () =>
+    appStore(env.STORE, space, loans, env).consume(
+      '/query?q=.book&listing=1',
+      (r) => r.json(),
+      {},
+      { [ACROSS]: '1' },
+    )
+  await access('shelf', 'public')
+  equal(titles(await read()), ['Dune', 'Emma', 'Kim', 'Ulysses'])
+  await access('shelf', 'private')
+  let { error, message } = await read()
+  equal([error, message], ['Denied', UNLENT])
 })

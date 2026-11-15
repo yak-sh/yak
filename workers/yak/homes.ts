@@ -7,10 +7,12 @@
 //
 // The store asks the directory which apps those homes are and vouches its
 // caller to each, who reads there what their standing lets them: a home they
-// may not read is left out, as if the app borrowed nothing from it.
+// may not read is left out, as if the app borrowed nothing from it, and a
+// read naming one of its words is refused as borrowed from there (`unlent`).
 import type { Eid } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
-import { mode, reads } from '@yaks/member'
+import { Denied, mode, reads } from '@yaks/member'
+import { borrowed } from '@yaks/reach'
 import { sandboxed } from '@yaks/platform/installs'
 import type { App, Directory, Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -40,6 +42,41 @@ export let homesOf = async (
   return { ...at, homes }
 }
 
+// Whether the caller may read a home now: a private one is its members'.
+let readable = (who: Who) => (home: App) => reads(mode(home.access), who.role)
+
+/** A read naming words the app borrows from a home its caller may not read
+ * now. Alone, the app's store knows no such word, and would say so; this says
+ * what happened instead. A `Denied`, so it answers as any read refused. */
+export class Unlent extends Denied {
+  constructor(who: Who, home: App, words: string[]) {
+    super(who.person, home.eid, 'viewer', 'read', words[0])
+    let one = words.length == 1
+    this.message = `${words.map((w) => `.${w}`).join(', ')} ${
+      one ? 'is' : 'are'
+    } borrowed from ${home.slug}, which is private, so ${
+      one ? 'it' : 'they'
+    } can't be read here now`
+  }
+}
+
+/** The refusal of `line` where it names words borrowed from a home the
+ * caller may not read now, or null where it names none. */
+export let unlent = (
+  { homes }: Homes,
+  who: Who,
+  line: string,
+  uses: Record<string, string>,
+): Unlent | null => {
+  let words = borrowed(line, uses)
+  let home = homes.find((one) =>
+    !readable(who)(one) && words.some((w) => uses[w] == one.slug)
+  )
+  return home
+    ? new Unlent(who, home, words.filter((w) => uses[w] == home.slug))
+    : null
+}
+
 /**
  * The stores a caller of the app's store is answered from: the store itself,
  * reached as `self` says, then each home the caller may read, asked with
@@ -52,7 +89,7 @@ export let reachIn = (
   heed: Record<string, string> = {},
 ): Reach[] => [
   { space, app, who, ...self },
-  ...homes.filter((one) => reads(mode(one.access), who.role))
+  ...homes.filter(readable(who))
     .map((home) => ({ space, app: home, who, headers: heed })),
 ]
 

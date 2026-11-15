@@ -381,7 +381,7 @@ import {
   IDEMPOTENCY,
   type Namespace,
 } from '@yaks/durable-object/door'
-import { borrowedDocs, type Homes, homesOf, reachIn } from './homes.ts'
+import { borrowedDocs, type Homes, homesOf, reachIn, unlent } from './homes.ts'
 import { type Reach, read, written } from './reach.ts'
 import { vouched, vouchedAs, type Who } from './session.ts'
 import type { Role } from './directory.ts'
@@ -4915,8 +4915,11 @@ export class Store extends Durable {
     let app = request.headers.get('x-yak-app') ?? this.#get('app')
     if (!app) return null
     let found = await homesOf(this.#directory(), app, uses)
+    let who = vouchedAs(request.headers)
+    let refusal = found && path == '/query' && unlent(found, who, line, uses)
+    if (refusal) return this.#refusal(refusal)
     let speaks = request.headers.get('x-yak-speaks')
-    let reach = found && reachIn(found, vouchedAs(request.headers), {
+    let reach = found && reachIn(found, who, {
       door: this.#itself(request.headers),
       headers: speaks ? { 'x-yak-speaks': speaks } : {},
     })
@@ -4971,13 +4974,18 @@ export class Store extends Durable {
         )
         return Response.json({ docs, keywords })
       } catch (e) {
-        return Response.json({
-          error: e instanceof Error ? e.name : 'Error',
-          message: e instanceof Error ? e.message : String(e),
-          ...(misfit(e) ? { misfit: true } : {}),
-        }, { status: refusing(e, this.#tags()) })
+        return this.#refusal(e)
       }
     }, { route: () => 'across', tags: () => this.#tags() })
+
+  // A refusal across homes, in the store's own wire, at the status the
+  // kernel's doors give it (defects.ts `refusing`).
+  #refusal = (e: unknown): Response =>
+    Response.json({
+      error: e instanceof Error ? e.name : 'Error',
+      message: e instanceof Error ? e.message : String(e),
+      ...(misfit(e) ? { misfit: true } : {}),
+    }, { status: refusing(e, this.#tags()) })
 
   // This store as a member of its own reach: each request made with `base`'s
   // headers beneath its own, its caller and words included, and answered by
@@ -5042,6 +5050,8 @@ export class Store extends Durable {
           )
           return Array.isArray(rows) ? listed(rows, line) as Bundle[] : rows
         }
+        let refusal = unlent(at, asker, line, this.#uses())
+        if (refusal) throw refusal
         let reach = reachIn(at, asker, { door, headers: speaks }, {
           [HEED]: name,
         })

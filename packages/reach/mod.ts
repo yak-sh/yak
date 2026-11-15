@@ -247,21 +247,37 @@ export let split = (line: string): {
   return { parts, global }
 }
 
-/** Whether a line names a word another member keeps (`uses`, word → its
- * home), which one member cannot answer alone.
+/** The words a line names that another member keeps (`uses`, word → its
+ * home), in the line's order.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(borrowed('.fire&?doc&.ash', { ash: 'a', fire: 'b' }), [
+ *   'fire',
+ *   'ash',
+ * ])
+ * assertEquals(borrowed('.constructor', {}), [])
+ * ```
+ */
+export let borrowed = (
+  line: string,
+  uses: Record<string, string>,
+): string[] =>
+  [...split(line).parts.keys()].filter((name) => Object.hasOwn(uses, name))
+
+/** Whether a line names a word another member keeps, which one member cannot
+ * answer alone.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * assertEquals(borrows('.fire&?doc', { fire: 'probe' }), true)
  * assertEquals(borrows('.doc&.limit=5', { fire: 'probe' }), false)
- * assertEquals(borrows('.constructor', {}), false)
  * ```
  */
 export let borrows = (
   line: string,
   uses: Record<string, string>,
-): boolean =>
-  [...split(line).parts.keys()].some((name) => Object.hasOwn(uses, name))
+): boolean => borrowed(line, uses).length > 0
 
 let eidOf = (b: Bundle) => b.entity?.eid ?? ''
 
