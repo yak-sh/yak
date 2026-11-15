@@ -2,7 +2,7 @@ import type { Bundle, Graph, ReadOpts } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
 import type { Meta } from '@yaks/sqlite'
 import { absent, and, eq, or } from '@yaks/query/core'
-import { MADE, ON, OWNED, OWNERS } from './operator-owner.ts'
+import { MADE, ON, OWNED, OWNERS } from '@yaks/platform/operator-owner'
 import type { Held } from './build-door.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { spaceOf } from './operator-root.ts'
@@ -97,7 +97,7 @@ export let owns = async (store: Store, open: string, who: Owner) => {
 }
 
 // The entities `person` may read, by the paths an owner is named on: each
-// names nobody else, here or on what it hangs on (operator-owner.ts). A store
+// names nobody else, here or on what it hangs on (@yaks/platform/operator-owner). A store
 // is read by this only until every entity's owner is written there.
 let claimed = (person: string) =>
   and(
@@ -121,7 +121,7 @@ let theirs = (person: string) =>
 let written = new WeakSet<Graph>()
 
 /** Whether `store` keeps every entity's owner: once its marks say the pass
- * has written them (operator-owner.ts `OWNERS`), and always for a store kept
+ * has written them (@yaks/platform/operator-owner `OWNERS`), and always for a store kept
  * nowhere, which is made in memory with the rule. */
 export let owned = (store: { g: Graph; marks?: Pick<Meta, 'get'> }) => {
   if (written.has(store.g)) return true

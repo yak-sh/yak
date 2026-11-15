@@ -1,12 +1,12 @@
 // Every entity of an Operator store kept before its owners were (T-155781)
-// given the owner it makes (operator-owner.ts), in bounded alarm batches
+// given the owner it makes (@yaks/platform/operator-owner), in bounded alarm batches
 // beside the store's other passes, never in boot. An entity written since is
 // the rule's. The pass walks the store in eid order from where it stopped;
 // until it is done, the store is read by the paths an owner is named on
 // (operator-access.ts `owned`), never by owners it has yet to write.
 import type { Meta } from '@yaks/sqlite'
 import type { Graph } from '@yaks/graph'
-import { MADE, OWNED, OWNERS, reckon } from './operator-owner.ts'
+import { MADE, OWNED, OWNERS, reckon } from '@yaks/platform/operator-owner'
 
 // What can name an owner, on an entity or by what it hangs on.
 let BEARING = [

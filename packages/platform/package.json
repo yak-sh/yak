@@ -70,7 +70,10 @@
     "./app-commands": "./app-commands.ts",
     "./app-command": "./app-command.ts",
     "./app-effects": "./app-effects.ts",
-    "./publishing-graph": "./publishing-graph.ts"
+    "./publishing-graph": "./publishing-graph.ts",
+    "./operator-vocab": "./operator-vocab.ts",
+    "./operator-owner": "./operator-owner.ts",
+    "./operator-graph": "./operator-graph.ts"
   },
   "license": "Apache-2.0",
   "description": "What a hosting platform keeps about the apps it serves — spaces, apps, deploys, hostnames, plans and meters.",

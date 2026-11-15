@@ -140,7 +140,7 @@ export let operatorDoc: VocabDoc = {
         files: { type: 'array', items: { type: 'object' } },
       },
     },
-    // Kept by the store's rule (operator-owner.ts `owning`) in the commit
+    // Kept by the store's rule (./operator-owner.ts `owning`) in the commit
     // that makes or changes what it is read from; nobody else writes it.
     owner: {
       component: true,
@@ -453,3 +453,6 @@ export let operatorDoc: VocabDoc = {
     },
   },
 }
+
+/** The `yak/operator` vocab facet: the Operator store's own words. */
+export let docs: VocabDoc[] = [operatorDoc]

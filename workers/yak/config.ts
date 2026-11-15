@@ -206,7 +206,7 @@ export let operatorConfig: Config = {
     { use: '@yaks/edge', facets: ['vocab'] },
     { use: '@yaks/mail', facets: ['vocab'] },
     // Its own words, and the `owner{person}` a person's reads are screened
-    // by, which no package owns yet (T-163656).
+    // by (@yaks/platform/operator-vocab, operator-graph).
     { use: 'yak/operator', facets: ['vocab', 'graph'] },
     // A skill installed from another space keeps where it came from and the
     // version it took, and one someone outside yaks.app wrote keeps its
@@ -566,10 +566,6 @@ export let domains = beside({
   'yak/git': {
     vocab: './facets/git-vocab.ts',
     effects: './facets/git-effects.ts',
-  },
-  'yak/operator': {
-    vocab: './facets/operator-vocab.ts',
-    graph: './facets/operator-graph.ts',
   },
   'yak/signin': { graph: './facets/signin-graph.ts' },
 })

@@ -1,5 +1,5 @@
 // Whose each entity of the Operator's store is, kept by its rule
-// (operator-owner.ts): through creation and every change along the paths an
+// (@yaks/platform/operator-owner): through creation and every change along the paths an
 // owner is named on, the kept owner admits for each person what the paths
 // themselves admit, and a person's whole `.session` read answers under
 // workerd's SQLite.
@@ -9,7 +9,7 @@ import { operatorMemory } from './operator-testing.ts'
 import { operatorStore } from './operator-store.ts'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { seenBy } from './operator-access.ts'
-import { OWNERS } from './operator-owner.ts'
+import { OWNERS } from '@yaks/platform/operator-owner'
 import { ownerBackfill } from './owner-move.ts'
 
 let [space, ada, bea] = Array.from({ length: 3 }, () => crypto.randomUUID())

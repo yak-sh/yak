@@ -29,7 +29,7 @@ import * as eager0_25 from '@yaks/tools/vocab'
 import * as eager0_26 from '@yaks/topic/vocab'
 import * as eager0_27 from '@yaks/trial/vocab'
 import * as eager0_28 from '@yaks/wake/vocab'
-import * as eager0_29 from './facets/operator-vocab.ts'
+import * as eager0_29 from '@yaks/platform/operator-vocab'
 /** Each plugin's words, by plugin. */
 export let vocabFacets: Record<string, VocabFacet> = {
   '@yaks/alias': eager0_0,
@@ -74,7 +74,7 @@ let facets: Record<string, () => Promise<unknown>> = {
   '@yaks/session/graph': () => import('@yaks/session/graph'),
   '@yaks/topic/graph': () => import('@yaks/topic/graph'),
   '@yaks/wake/graph': () => import('@yaks/wake/graph'),
-  'yak/operator/graph': () => import('./facets/operator-graph.ts'),
+  'yak/operator/graph': () => import('@yaks/platform/operator-graph'),
 }
 /** A plugin's facet, its words at once and anything else when first asked. */
 export let load: Load = async (plugin, facet) => {

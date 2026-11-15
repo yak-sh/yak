@@ -37,6 +37,7 @@ export let facets: Record<string, Specifiers> = {
   'yak/kills': { graph: at('kills-graph') },
   'yak/files': { routes: at('files-routes') },
   'yak/publishing': { graph: at('publishing-graph') },
+  'yak/operator': { vocab: at('operator-vocab'), graph: at('operator-graph') },
   'yak/client': { routes: at('client-routes') },
 }
 

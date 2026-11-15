@@ -21,8 +21,8 @@ import { type Blobs, blobSchema, memoryBlobs, sqliteBlobs } from '@yaks/blob'
 import { prefixes } from '@yaks/id'
 import { phoneTexts } from './phone-move.ts'
 import { channeled } from './channel-move.ts'
-import { operatorDoc } from './operator-vocab.ts'
-import { OWNERS } from './operator-owner.ts'
+import { operatorDoc } from '@yaks/platform/operator-vocab'
+import { OWNERS } from '@yaks/platform/operator-owner'
 import { due, soonest, tick } from '@yaks/wake'
 import type { Watching } from './operator-schedules.ts'
 import { WAKES, wakesMoved } from './wake-move.ts'
@@ -245,7 +245,7 @@ let drawing =
     readable(vocab, await known())(answer)
 
 /**
- * The Operator's own effects (operator-vocab.ts), and a trial round's run,
+ * The Operator's own effects (@yaks/platform/operator-vocab), and a trial round's run,
  * owed by every write from
  * the moment its store is made, before the Operator whose code runs them
  * (operator-channels.ts `handleChannels`) is: a commit owes runs only for

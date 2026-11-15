@@ -8,7 +8,7 @@ import { unit } from '@yaks/sqlite/unit'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { operatorStore } from './operator-store.ts'
 import { ownerBackfill } from './owner-move.ts'
-import { OWNERS } from './operator-owner.ts'
+import { OWNERS } from '@yaks/platform/operator-owner'
 
 test('owner backfill pauses before spending the serving window and resumes its page after the window turns', async () => {
   using file = durable()

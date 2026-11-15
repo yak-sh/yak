@@ -1,5 +1,5 @@
 // Whose each entity in the Operator's store is, kept on it as
-// `owner{person}` (operator-vocab.ts), so a person's read is screened by one
+// `owner{person}` (./operator-vocab.ts), so a person's read is screened by one
 // component rather than by every path an owner is named on: that screen, made
 // per derived read, was past what workerd's SQLite takes (T-155781).
 //
@@ -15,8 +15,8 @@
 // The rule (`owning`) writes it in the commit that makes or changes what it
 // is read from, so no read sees an entity without its owner or with an old
 // one. A store kept before the rule had its owners written by a pass
-// (./owner-move.ts), and is read by the paths themselves until the pass says
-// it is done (operator-access.ts `owned`).
+// (yaks.app's owner-move.ts), and is read by the paths themselves until the pass says
+// it is done (yaks.app's operator-access.ts `owned`).
 import type { Bundle, Comp, Plugin, Tx } from '@yaks/graph'
 import { dead } from '@yaks/graph/bundle'
 import { minted } from '@yaks/graph/identity'
@@ -30,7 +30,7 @@ export const OWNED: [string, string][] = [
   ['operator_session', 'person'],
   ['operator_request', 'person'],
   ['wake', 'for'],
-  // Retired, kept on a wake until contraction (operator-vocab.ts).
+  // Retired, kept on a wake until contraction (./operator-vocab.ts).
   ['operator_ask', 'person'],
   ['operator_letter', 'person'],
   ['operator_text', 'person'],
@@ -50,7 +50,7 @@ export const ON = [
 export const MADE = ['call', 'result', 'output']
 
 /** Where a store says every entity's owner is written: the pass's cursor
- * while it goes on (./owner-move.ts), `done` once it has. A store made new
+ * while it goes on (yaks.app's owner-move.ts), `done` once it has. A store made new
  * is born done. */
 export let OWNERS = 'operator:owners'
 
@@ -75,7 +75,7 @@ let ref = (b: Bundle | undefined, comp: string, prop: string) => {
 
 // Whom an entity's own components name: one for each that names an owner,
 // null where it names nobody. A person is named by their id; a reader that
-// is a key, a public snapshot's `public:<app>` (result-tools.ts), names
+// is a key, a public snapshot's `public:<app>` (yaks.app's result-tools.ts), names
 // nobody.
 let named = (b: Bundle | undefined): (string | null)[] =>
   !b || dead(b) ? [] : OWNED.flatMap(([name, by]) => {
