@@ -3,13 +3,16 @@
 // up. Each is drawn from the sections the page draws (site.ts) when it is
 // asked for (worker.ts), so an agent reads what the page says, and what the
 // guides on yaks.app and the READMEs in the repository say is linked, not
-// copied.
+// copied. For a search engine, `robots.txt` welcomes every crawler and names
+// `sitemap.xml`, which lists the page and each of these that is its own
+// canonical address.
 import { ANCHORS, SECTIONS } from './site.ts'
 
 type Section = (typeof SECTIONS)[number]
 
-/** A page an agent reads: its content type and its text. */
-export type Doc = { type: string; text: string }
+/** A page an agent reads: its content type, its text, and, where another
+ * page is the one to index, that page's address. */
+export type Doc = { type: string; text: string; canonical?: string }
 
 // The blocks only the page acts on: what a beat shows, its letters and the
 // session it starts. The commands and calls around them stay.
@@ -115,10 +118,35 @@ let setup = (base: string) =>
 let page = () =>
   [section(hero, 1), ...rest.map((s) => section(s)), ''].join('\n\n')
 
-/** Every page an agent reads, by its file name, with `base` the address the
- * site is served under. */
-export let pages = (base: string): Record<string, Doc> => ({
-  'llms.txt': { type: 'text/plain', text: llms(base) },
-  'setup.md': { type: 'text/markdown', text: setup(base) },
-  'index.md': { type: 'text/markdown', text: page() },
-})
+let robots = (base: string) =>
+  `User-agent: *\nAllow: /\n\nSitemap: ${base}sitemap.xml\n`
+
+/** The page at `base`, and every doc indexed at its own address. */
+let sitemap = (base: string, docs: Record<string, Doc>) =>
+  [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ...[
+      base,
+      ...Object.entries(docs).flatMap(([name, doc]) =>
+        doc.canonical ? [] : [`${base}${name}`]
+      ),
+    ].map((url) => `  <url><loc>${url}</loc></url>`),
+    '</urlset>',
+    '',
+  ].join('\n')
+
+/** Every page an agent or a crawler reads, by its file name, with `base` the
+ * address the site is served under. */
+export let pages = (base: string): Record<string, Doc> => {
+  let docs: Record<string, Doc> = {
+    'llms.txt': { type: 'text/plain', text: llms(base) },
+    'setup.md': { type: 'text/markdown', text: setup(base) },
+    'index.md': { type: 'text/markdown', text: page(), canonical: base },
+  }
+  return {
+    ...docs,
+    'robots.txt': { type: 'text/plain', text: robots(base) },
+    'sitemap.xml': { type: 'application/xml', text: sitemap(base, docs) },
+  }
+}

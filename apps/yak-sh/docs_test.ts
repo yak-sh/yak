@@ -55,3 +55,29 @@ test('anything else falls through to the files', async () => {
     equal((await get(url)).status, 404)
   }
 })
+
+test('robots.txt welcomes crawlers and names the sitemap', async () => {
+  let { status, type, text } = await get('https://yak.sh/robots.txt')
+  equal([status, type], [200, 'text/plain; charset=utf-8'])
+  equal(
+    text,
+    'User-agent: *\nAllow: /\n\nSitemap: https://yak.sh/sitemap.xml\n',
+  )
+})
+
+test('sitemap.xml lists the page and each doc indexed at its own address', async () => {
+  let { type, text } = await get('https://yak.sh/sitemap.xml')
+  equal(type, 'application/xml; charset=utf-8')
+  let locs = [...text.matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1])
+  equal(locs, [
+    'https://yak.sh/',
+    'https://yak.sh/llms.txt',
+    'https://yak.sh/setup.md',
+  ])
+  for (let url of locs.slice(1)) equal((await get(url)).status, 200)
+})
+
+test('index.md names the page as its canonical address', async () => {
+  let res = await worker.fetch(new Request('https://yak.sh/index.md'))
+  equal(res.headers.get('link'), '<https://yak.sh/>; rel="canonical"')
+})
