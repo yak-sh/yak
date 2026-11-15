@@ -14,21 +14,18 @@ import {
 import { begin, lend } from '@yaks/harness'
 import { skillItems, skillRead } from '@yaks/harness/skills'
 import {
-  kindOf,
-  ordered,
+  answerOf,
+  replyOf,
   running,
   sessionTools,
   spawnChild,
   statusOf,
-  textOf,
   type Tool,
   transcript,
-  transcriptBack,
   transcriptWindow,
 } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
 import { human } from '@yaks/id'
-import { LIMIT } from '@yaks/session/status'
 import {
   CALLED,
   channelOf,
@@ -934,171 +931,16 @@ let routeOf = (request?: Comp) =>
     ['channel', 'address', 'reply_to', 'via'].map((k) => request?.[k] ?? ''),
   )
 
-// The inputs a turn ending at `end` answers: each line given since the reply
-// before it. A helper's result stands for the inputs of the turn that started
-// it, so its answer goes where they came from.
-// `calls` names the call that started each child (`spawned{parent, call}`).
-// Of a transcript's newest lines alone (`whole` false), it is undefined where
-// the inputs lie before them.
-export let origins = (
-  entries: Bundle[],
-  end: number,
-  calls: Map<string, string>,
-  whole = true,
-): Bundle[] | undefined => {
-  let from = entries.findLastIndex((b, i) =>
-    i < end && kindOf(b) == 'output' && !!b.content
-  )
-  if (from < 0 && !whole) return
-  let found: Bundle[] = []
-  for (let b of entries.slice(from + 1, end).filter(words)) {
-    let child = comp(b, 'delivery')?.child
-    if (!child) {
-      found.push(b)
-      continue
-    }
-    let call = entries.findIndex((c) =>
-      c.entity.eid == calls.get(String(child))
-    )
-    if (call < 0 && !whole) return
-    let more = call < 0 ? [] : origins(entries, call, calls, whole)
-    if (!more) return
-    found.push(...more)
-  }
-  return found
-}
-
-// A turn's answer: the newest words given, and the inputs the turn that
-// followed them answers. The turn ends at its reply, or where the transcript
-// does when it ended without one (stopped, failed). Undefined where they lie
-// before the lines read (`whole` false).
-let turnAt = (
-  entries: Bundle[],
-  calls: Map<string, string>,
-  whole = true,
-) => {
-  let mark = entries.findLast(words)
-  if (!mark) return whole ? { mark, given: [] } : undefined
-  let said = entries.findLastIndex((b) => kindOf(b) == 'output' && !!b.content)
-  let end = said > entries.indexOf(mark) ? said : entries.length
-  let given = origins(entries, end, calls, whole)
-  return given && { mark, given }
-}
-
-// What a model's refusal tells the person, by its code (@yaks/model
-// `ModelError`); any other is a refused request. A ceiling (@yaks/session
-// `LIMIT`) is said in its own sentence. yaks.app's own credit with the
-// provider spent (@yaks/anthropic `credit`) is no ceiling of the space's.
-let REFUSED: Record<string, string> = {
-  refusal: 'the model declined to do this',
-  busy: 'the model is too busy to answer right now',
-  credit: 'the Operator is unavailable for now',
-}
-let couldnt = (why: string) => `I couldn't finish this: ${why}.`
 // What a conversation is told when its person's own machine could not answer
 // a step and a hosted model answers instead (`operating`'s `fell`).
 let HOSTED =
   "The person's own machine did not answer this request, so a hosted model is answering instead of their subscription, and the space pays for it. Tell them so in one short sentence in your reply, once. Carry on with what they asked."
-let TOLD = ' The people who run yaks.app have been told.'
 // The failures of a machine's step that say its tunnel did not reach it, and
 // how long a turn waits after its machine's providers refused it (ms).
 let REACHES = new Set(['unreachable', 'stalled'])
 let SPENT = 60 * 60_000
 // How long a person's words wait for what they said before (`before`).
 let RECALL = 700
-
-/**
- * What ended a session's work: its newest reply, else what kept it from one,
- * in plain words. `fault` is what went wrong, for the tracker: a refusal, a
- * failure, or an end with no reply. A person's stop is no fault, nor a
- * ceiling met (a spent budget says so in its own words), and a step that threw
- * was reported where it threw (@yaks/session `report`).
- *
- * ```ts
- * import { equal } from '@yaks/testing'
- * import { replyOf } from './operator.ts'
- * let line = (seq: number, b: object) => ({
- *   entity: { eid: `e${seq}` }, entry: { session: 's', seq }, ...b,
- * })
- * let said = line(2, { output: { source: 'a' }, content: { body: 'Done.' } })
- * equal(replyOf([said]), { text: 'Done.' })
- * equal(replyOf([said, line(3, {
- *   output: { source: 'a' }, refusal: { code: 'request' },
- *   content: { body: '400 tools.26: input_schema does not support oneOf' },
- * })]), {
- *   text: "I couldn't finish this: the model refused the request." +
- *     ' The people who run yaks.app have been told.',
- *   fault: 'request: 400 tools.26: input_schema does not support oneOf',
- * })
- * equal(replyOf([line(3, {
- *   output: { source: 'a' }, refusal: { code: 'limit' },
- *   content: { body: "clerk's model and voice budget for this month is spent" },
- * })]), { text: "clerk's model and voice budget for this month is spent" })
- * equal(replyOf([]).fault, 'ended without an answer')
- * let refused = line(4, {
- *   result: { call: 'c' }, refusal: { code: 'arguments' },
- *   content: { body: 'Invalid tool arguments: missing command' },
- * })
- * equal(replyOf([said, refused, line(5, { ask: {} })]).fault,
- *   'ended without an answer')
- * ```
- */
-export let replyOf = (
-  entries: Bundle[],
-): { text: string; fault?: string } => {
-  // A model asked after its calls were answered, a refusal among them, is
-  // where the work stands: what it answered, or that it answered nothing.
-  let end = ordered(entries).findLast((b) =>
-    b.content && (b.output || b.refusal || b.exception) || b.failed ||
-    kindOf(b) == 'stop' || kindOf(b) == 'ask'
-  )
-  if (end && kindOf(end) == 'ask' && !end.failed) end = undefined
-  let said = end ? textOf(end) : ''
-  let kind = end && kindOf(end)
-  if (kind == 'stop') return { text: said }
-  if (kind == 'refusal' && comp(end, 'refusal')?.code == LIMIT) {
-    return { text: said }
-  }
-  if (kind == 'output' && !end!.notice && said) return { text: said }
-  let broke = couldnt('something in yaks.app failed while working on it')
-  if (kind == 'exception') return { text: broke + TOLD }
-  let code = String(comp(end, 'refusal')?.code)
-  let fault = kind == 'refusal'
-    ? `${code}: ${said}`
-    : String(comp(end, 'failed')?.reason ?? '') || said ||
-      'ended without an answer'
-  let why = kind == 'refusal'
-    ? couldnt(REFUSED[code] ?? 'the model refused the request')
-    : end
-    ? broke
-    : 'This ended without an answer.'
-  return { text: why + TOLD, fault }
-}
-
-// Words given to a session. A notice the runner writes with prose, as a
-// compaction's checkpoint, is no one's words, so it never starts a turn.
-let words = (b: Bundle) => kindOf(b) == 'input' && !b.notice
-
-/**
- * The entries since the newest words given: the turn being answered.
- *
- * ```ts
- * import { equal } from '@yaks/testing'
- * import { replyOf, turnOf } from './operator.ts'
- * let line = (seq: number, b: object) => ({
- *   entity: { eid: `e${seq}` }, entry: { session: 's', seq }, ...b,
- * })
- * let stopped = turnOf([
- *   line(1, { content: { body: 'Check the app' } }),
- *   line(2, { stop: {}, content: { body: 'Stopped by the person watching.' } }),
- *   line(3, { notice: {}, checkpoint: {}, content: { body: 'Summary' } }),
- * ])
- * equal(stopped.length, 3)
- * equal(replyOf(stopped), { text: 'Stopped by the person watching.' })
- * ```
- */
-export let turnOf = (entries: Bundle[]) =>
-  entries.slice(Math.max(0, entries.findLastIndex(words)))
 
 /**
  * The space's Operator: @yaks/harness's runner registered on the store's
@@ -1513,53 +1355,9 @@ export let operating = (
       space: space ? (await dir().at(space))?.slug : null,
     })
   }
-  // What a step's end reads of its transcript, oldest first, never every
-  // line a conversation has held for weeks: a fork's or helper's own turn,
-  // and a conversation's back to the reply before the words it answers and
-  // before each call that started a helper whose result stands for words.
-  // A call's lines are context, never a turn's words or its reply. `calls`
-  // names the call that started each child these lines deliver from.
-  let ending = async (session: string, spawned: boolean) => {
-    let calls = new Map<string, string>()
-    let looked = new Set<string>()
-    let lines = (read: Bundle[]) =>
-      read.filter((b) => !(b.notice && b.operator_call))
-    let starts = async (entries: Bundle[]) => {
-      let children = [
-        ...new Set(entries.flatMap((b) => {
-          let child = comp(b, 'delivery')?.child
-          return child && !looked.has(String(child)) ? [String(child)] : []
-        })),
-      ]
-      for (let child of children) looked.add(child)
-      for (let b of await g.get(children, ['spawned'])) {
-        let call = comp(b, 'spawned')?.call
-        if (call) calls.set(b.entity.eid, String(call))
-      }
-    }
-    let read = await transcriptBack(g, session, async (read) => {
-      let entries = lines(read)
-      if (spawned) return entries.some(words)
-      await starts(entries)
-      return !!turnAt(entries, calls, false)
-    })
-    let entries = lines(read.entries)
-    if (!spawned) await starts(entries)
-    return { entries, calls, whole: read.whole }
-  }
   let answered = async (session: string) => {
-    let [row] = await g.get([session], [
-      'spawned',
-      'occurrence',
-      'operator_session',
-      'completed',
-      'failed',
-    ])
-    let { entries, calls, whole } = await ending(
-      session,
-      !!row?.spawned && comp(row, 'spawned')?.quiet == null,
-    )
-    let reply = replyOf(turnOf(entries))
+    let [row] = await g.get([session], ['spawned', 'occurrence'])
+    let reply = await answerOf(g, session, 'yaks.app')
     if (row?.occurrence) {
       await workFinished(store, row, reply.text, reply.fault)
       return
@@ -1572,12 +1370,11 @@ export let operating = (
     }
     // One answer for each time it was given words: the turn ended again
     // (stopped, then a step in flight finishing) says it anew.
-    let turn = turnAt(entries, calls, whole)
-    if (!turn?.mark) return
-    let { mark } = turn
+    let { mark } = reply
+    if (!mark) return
     let task = await taskOf(store, session)
     let space = (await workingOf(store, session))?.space
-    let given = new Set(turn.given.map((b) => b.entity.eid))
+    let given = new Set(reply.given.map((b) => b.entity.eid))
     let requests = (await g.read(
       `.operator_request.session=${session} .order=created.at`,
     )).filter((r) => given.has(inputOf(r.entity.eid)))
@@ -1957,11 +1754,7 @@ export let operating = (
         [map, told(ctx, space), accounts, said].filter(Boolean).join('\n\n'),
       )
     },
-    each: async (step, session) => {
-      if (!session) return
-      if (ENDED.includes(step.status)) await answered(session)
-      options.tell?.(session)
-    },
+    each: (_, session) => void (session && options.tell?.(session)),
     report: (e, where) => caught(e, { request: 'operator', ...where }),
     // Each refusal a tool gave the conversation, with its space
     // (refusals.ts): a connector tool's is its own call's, heard here once.
@@ -1978,6 +1771,12 @@ export let operating = (
   // run of their own, which does not wait.
   fx.handle(stepwise(running(g, {
     ...runner,
+    // Its answer goes back the way the words it answers came, however its
+    // turn ended: a reply, a failure, or a stop.
+    ended: async (session) => {
+      await answered(session)
+      options.tell?.(session)
+    },
     waiting: AWAY / 2,
     answers: async (using, session) =>
       (await runner.answers?.(using, session) ?? true) &&
@@ -2348,7 +2147,7 @@ export let operating = (
       task,
       session,
       text: ENDED.includes(status)
-        ? replyOf(mine).text
+        ? replyOf(mine, 'yaks.app').text
         : `The Operator is still working. Use operator_read with task ${task} to read its progress and answer.`,
       status,
       cost: mine.reduce(
@@ -2479,7 +2278,6 @@ export let operating = (
       ],
       { trusted: true },
     )
-    if (busy.includes(session)) await answered(session)
     for (let s of [session, ...heard]) options.tell?.(s)
     return { task: open, session, stopped: true }
   }

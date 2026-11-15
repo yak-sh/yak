@@ -345,22 +345,27 @@ more afterwards, unless the step wrote every change that joined it and left no
 turn owed: a step's own reply wakes its transcript, and the step that wrote it
 has answered that wake already. A run a stopping worker cuts short owes one more
 too while its transcript owes a turn, or has ended and its end is not yet told
-(a child's parent, its dispatch). `session_input` performs the same step for a
-new input that inherits `using`, leaving an input that selects `using` to
-`session_run` so it owes only one turn. Each `session_tool` effect claims and
-executes one call independently, so several calls can run together. A background
-call (`tool_async`) is answered by `PENDING` ("Pending; its result will
-follow."), which a request derives from the call. A model turn starts while
-calls run only when there is something new to read: an input, a result, or the
-Pending entry (`tool_progress`) a call is given when it outlasts its patience
-(`PATIENCE`, 10 seconds; `Deps.patience`), since a call that has run that long
-leaves other work worth doing. An input asks at once; a result or a Pending
-waits until each call of its reply has answered or outlasted its patience, since
-the model asked for them together. A call that answers sooner costs two entries,
-the call and its result, and no turn of its own. A tool that `waits` (on a
-process, a child, a task) is never given one: the model chose to wait. Older
-transcripts hold a `tool_progress` entry beside every background call, which
-still answers it.
+(a child's parent, its dispatch). A host that answers the words a turn took (a
+reply sent back by text or mail) is told each time a pass finds a transcript
+ended (`Runner.ended`), whether its step ended it or a stop was written while it
+rested, and reads what to send with `answerOf(g, session)`: the reply in plain
+words, a fault for its tracker where there was one, and the inputs the turn
+answers, a helper's report standing for the words whose turn started it.
+`session_input` performs the same step for a new input that inherits `using`,
+leaving an input that selects `using` to `session_run` so it owes only one turn.
+Each `session_tool` effect claims and executes one call independently, so
+several calls can run together. A background call (`tool_async`) is answered by
+`PENDING` ("Pending; its result will follow."), which a request derives from the
+call. A model turn starts while calls run only when there is something new to
+read: an input, a result, or the Pending entry (`tool_progress`) a call is given
+when it outlasts its patience (`PATIENCE`, 10 seconds; `Deps.patience`), since a
+call that has run that long leaves other work worth doing. An input asks at
+once; a result or a Pending waits until each call of its reply has answered or
+outlasted its patience, since the model asked for them together. A call that
+answers sooner costs two entries, the call and its result, and no turn of its
+own. A tool that `waits` (on a process, a child, a task) is never given one: the
+model chose to wait. Older transcripts hold a `tool_progress` entry beside every
+background call, which still answers it.
 
 A request carries each call's answer right after the reply's last call, in the
 order of the calls, since many models pair a result with its call by position

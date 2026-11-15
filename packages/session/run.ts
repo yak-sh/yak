@@ -73,6 +73,11 @@ export type Runner = Deps & ChildLimits & {
   waiting?: number
   /** each step, as it lands */
   each?: (step: Step, session?: string) => void | Promise<void>
+  /** a transcript that ended (settled, failed or stopped), however it did: a
+   * step's end, or a stop written while it rested. Told again on a later pass
+   * that finds it ended, so what it does is idempotent (./answer.ts
+   * `answerOf` reads its answer). */
+  ended?: (session: Eid) => Promise<void>
   /** reconcile borrowed resources after this pass releases its lease */
   idle?: (session: Eid) => Promise<void>
   /** how long a transcript's lease stands between renewals (ms) */
@@ -131,6 +136,7 @@ let holds = (g: Graph) =>
 let ended = async (g: Graph, session: Eid, r: Runner) => {
   await rouse(g, session)
   if (await currentStatus(g, session) == 'pending') return
+  await r.ended?.(session)
   if (g.vocab.comp('provisional')) {
     let owed = await g.read(`.entry.session=${session}&.ask&.provisional`)
     if (owed.length) {

@@ -1248,3 +1248,29 @@ test('terminal transcripts do not defer work for an unavailable provider', () =>
 test('a transcript another command line runs leaves no work waiting for a host', () => {
   assertEquals(availability.outside, [])
 })
+
+// A transcript that ends is told to its host, however it ended: a reply, and
+// a stop written later while it rested, which no step of its own took.
+let ending = await (async () => {
+  let ends: string[] = []
+  let p = proc(store(), 'w1', fake().model, {
+    ended: async (session) =>
+      void ends.push(statusOf(await transcript(p.g, session))),
+  })
+  await p.g.apply(ask('told'))
+  await p.fx.work(p.g)
+  await p.fx.idle()
+  let replied = ends.length
+  await p.g.apply([{
+    entity: { eid: 'told:stop' },
+    entry: { session: 'told' },
+    stop: {},
+  }])
+  await p.fx.work(p.g)
+  await p.fx.idle()
+  return { replied, last: ends.at(-1) }
+})()
+
+test('a transcript that ends is told so, a stop written while it rests too', () => {
+  assertEquals([ending.replied > 0, ending.last], [true, 'stopped'])
+})
