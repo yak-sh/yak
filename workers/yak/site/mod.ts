@@ -9,13 +9,15 @@
 // (packages/admin service.ts `RELEASED`). The deploy's
 // build (client-assets.ts) writes them into public/ too, with the style
 // guide, which is no page of the app's (`deployed`): the Worker's own file
-// answers a page until the app does, and whenever it can't (site.ts
-// `sitePage`). Those are made, not kept, as `_ui.css` is: public/*.html is
+// answers a page until the app does, whenever it can't, and while the
+// app's is another drawing (site.ts `sitePage`, drawing.ts). Those are made, not kept, as `_ui.css` is: public/*.html is
 // gitignored.
 import * as io from '@yaks/file/io'
 import { type FunctionComponent, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
+import { DRAWING } from '../drawing.ts'
 import { AcceptableUse } from './acceptable-use.tsx'
 import { Build } from './build.tsx'
 import { Churches } from './churches.tsx'
@@ -61,9 +63,14 @@ let APP = Object.keys(PAGES).filter((name) => !OWN.includes(name))
 /** Where the home app's files are kept. */
 export let HOME = new URL('../../../apps/home/', import.meta.url)
 
-/** A page's file, as a browser is sent it. */
-export let page = (name: string) =>
-  `<!doctype html>\n${renderToString(h(PAGES[name], {}))}\n`
+/** A page's file, as a browser is sent it, naming its drawing (drawing.ts). */
+export let page = (name: string) => {
+  let html = renderToString(h(PAGES[name], {}))
+  let hash = createHash('sha256').update(html).digest('hex').slice(0, 10)
+  return `<!doctype html>\n${
+    html.replace('<head>', `<head><meta name="${DRAWING}" content="${hash}">`)
+  }\n`
+}
 
 // The site's files a page loads (its sheet, its scripts, the mascot) are
 // yaks.app's, not the app's, so the app's pages name yaks.app as their base:

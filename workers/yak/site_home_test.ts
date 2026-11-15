@@ -16,27 +16,32 @@ import { edged, fetch as appsFetch } from './apps.ts'
 import { unfound } from './asset_url.ts'
 import { aim } from '@yaks/platform/routes'
 
-let html = (body: string) =>
-  `<!doctype html><html><head><link rel="stylesheet" href="style.css"></head><body>${body}</body></html>`
+// A page, of the drawing `drawn` where one is given (drawing.ts).
+let html = (body: string, drawn?: string) =>
+  `<!doctype html><html><head>${
+    drawn ? `<meta name="yak-drawing" content="${drawn}">` : ''
+  }<link rel="stylesheet" href="style.css"></head><body>${body}</body></html>`
 
-// The deploy's own files: a page of the site as the Worker drew it, anything
-// else (the woven scripts) from public/.
+// The deploy's own files: a page of the site as the Worker drew it, of the
+// drawing `drawn`, anything else (the woven scripts) from public/.
 let disk = assets(new URL('./public/', import.meta.url))
-let ASSETS = {
-  fetch: (req: Request) => {
-    let path = new URL(req.url).pathname
-    return ['/', '/pricing', '/help'].includes(path)
-      ? Promise.resolve(
-        new Response(html(`the Worker's ${path}`), {
-          headers: { 'content-type': 'text/html' },
-        }),
-      )
-      : disk.fetch(req)
-  },
-} as unknown as Env['ASSETS']
+let deploy = (drawn?: string) =>
+  ({
+    fetch: (req: Request) => {
+      let path = new URL(req.url).pathname
+      return ['/', '/pricing', '/help'].includes(path)
+        ? Promise.resolve(
+          new Response(html(`the Worker's ${path}`, drawn), {
+            headers: { 'content-type': 'text/html' },
+          }),
+        )
+        : disk.fetch(req)
+    },
+  }) as unknown as Env['ASSETS']
 
-// A platform, with the home app holding `files` where `files` is given.
-let site = async (files?: Record<string, string>) => {
+// A platform deployed with `ASSETS`, with the home app holding `files` where
+// `files` is given.
+let site = async (files?: Record<string, string>, ASSETS = deploy()) => {
   let scenario = platform({ ASSETS })
   let { env } = scenario
   let dir = directory({ fetch: (r: Request) => directoryDoor(r, env) })
@@ -268,4 +273,21 @@ let missing = await unfound(
 
 test("the home app's pages load nothing its release lacks: the site's files are yaks.app's", () => {
   assertEquals(missing, [])
+})
+
+// A deploy drawn as `b`, and the home app's release a page of each drawing.
+let drawn = await site({
+  'wrangler.jsonc': await Deno.readTextFile(
+    new URL('../../apps/home/wrangler.jsonc', import.meta.url),
+  ),
+  'index.html': html('<h1>the app from before</h1>', 'a'),
+  'pricing.html': html('<h1>the app prices</h1>', 'b'),
+}, deploy('b'))
+let [older, same] = await Promise.all(['/', '/pricing'].map(drawn))
+
+test("the home app's page of another drawing than the deploy's is the Worker's own until a release brings it, never kept", () => {
+  assertStringIncludes(older.text, "the Worker's /")
+  assertEquals(older.kept, 'private, no-store')
+  assertStringIncludes(same.text, 'the app prices')
+  assert(same.tags.includes('app:'), same.tags)
 })

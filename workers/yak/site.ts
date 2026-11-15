@@ -26,6 +26,7 @@ import {
 } from './kept-page.ts'
 import { kept, passed } from './page-cache.ts'
 import { caught } from './defects.ts'
+import { drawing } from './drawing.ts'
 import {
   aim,
   API_AT,
@@ -188,8 +189,9 @@ let fromHome = async (
 }
 
 /** A page of the site: the home app's, else this deploy's own file
- * (site/mod.ts `deployed`), which answers until the app does and whenever it
- * can't, kept only where the app has none. */
+ * (site/mod.ts `deployed`), which answers until the app does, whenever it
+ * can't, and while its page is another drawing (`beside`), kept only where
+ * the app has none. */
 let sitePage = async (
   env: Env,
   path: string,
@@ -197,10 +199,28 @@ let sitePage = async (
   dir: dirPart.Directory,
   visitor?: Request,
 ) => {
-  let home = await fromHome(env, path, dir, visitor)
-  if (home.page) return home.page
-  let file = await env.ASSETS.fetch(req)
+  let [home, file] = await Promise.all([
+    fromHome(env, path, dir, visitor),
+    env.ASSETS.fetch(req),
+  ])
+  let page = home.page && await beside(home.page, file)
+  if (page) {
+    await file.body?.cancel()
+    return page
+  }
   return home.kept ? file : uncached(file)
+}
+
+// The home app's page where it is the drawing this deploy's own file is
+// (drawing.ts), else null: between a deploy and the release of the app that
+// follows it, or a push from a checkout and the deploy that follows that, the
+// file answers, never kept, so the page a visitor gets is the one the
+// deploy's scripts and sheet read.
+let beside = async (page: Response, file: Response) => {
+  let body = await page.text()
+  return file.ok && drawing(body) != drawing(await file.clone().text())
+    ? null
+    : new Response(body, page)
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {

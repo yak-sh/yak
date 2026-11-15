@@ -18,4 +18,8 @@ yak admin push apps/home --space yak --as admin@bot.yak.sh
 ```
 
 does by hand. Until the app holds a page, and whenever it can't answer one, the
-Worker's own copy of it answers instead.
+Worker's own copy of it answers instead. So does it while the app's page is
+another drawing than the deploy's: each page names its drawing, a hash of its
+markup (workers/yak drawing.ts), and the Worker's scripts and sheet were made
+beside its own copy, so between a deploy and the release that follows it a
+visitor is served the markup those scripts read.
