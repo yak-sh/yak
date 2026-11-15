@@ -54,6 +54,23 @@ test('a file grows a whole MiB at a time', () => {
   }
 })
 
+test('a WAL that starts over is cut back, so its frames are appended, never written over', () => {
+  let dir = Deno.makeTempDirSync()
+  let sql = open(`${dir}/graph.db`)
+  let wal = () => Deno.statSync(`${dir}/graph.db-wal`).size
+  try {
+    sql.query({ t: 'create table', name: 't', cols: [{ name: 'x' }] })
+    for (let i = 0; i < 50; i++) sql.query(insert('t', { x: 'x'.repeat(3000) }))
+    let full = wal()
+    sql.query({ t: 'pragma', name: 'wal_checkpoint' })
+    sql.query(insert('t', { x: 1 }))
+    assert(wal() < full / 10, `the WAL kept ${wal()} of ${full} bytes`)
+  } finally {
+    sql.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
 test('a file opened without WAL keeps its writes in the one file', () => {
   let dir = Deno.makeTempDirSync()
   let sql = open(`${dir}/copy.db`, { wal: false })

@@ -572,12 +572,16 @@ size, defaulting to `@yaks/sql`'s conservative `ARMS`; the embedded driver uses
 itself, so a driver swap touches only this package. `open` creates a missing
 directory and turns on foreign keys; a file also runs in WAL mode with
 `synchronous = normal`, a 64 MiB WAL, a 64 MiB page cache, and a one-minute busy
-timeout. No commit checkpoints: once a commit leaves the WAL at 64 MiB, a hook
-asks the process's checkpoint thread (./checkpoint.ts), which runs a `PASSIVE`
-checkpoint on a connection of its own, so the sync it waits for holds neither
-the committing thread nor any other writer. The thread holds no process open;
-one that exits mid-checkpoint leaves the WAL for the next commit past the mark
-to ask again. The busy timeout sleeps the thread that asked, so a graph's write
+timeout. A WAL that starts over is cut back to the commit that starts it, so
+every later frame is appended: kept whole, it is written over in place, and
+since a frame never fills a file page, each write reads the page it covers back
+from the disk wherever memory pressure dropped it, on the committing thread. No
+commit checkpoints: once a commit leaves the WAL at 64 MiB, a hook asks the
+process's checkpoint thread (./checkpoint.ts), which runs a `PASSIVE` checkpoint
+on a connection of its own, so the sync it waits for holds neither the
+committing thread nor any other writer. The thread holds no process open; one
+that exits mid-checkpoint leaves the WAL for the next commit past the mark to
+ask again. The busy timeout sleeps the thread that asked, so a graph's write
 asks the store's `tx` with `wait: false`: a lock another connection holds
 refuses at once, `retryable: true`, and @yaks/graph waits for that writer
 between tries, the same minute, with the thread free. Closing a connection

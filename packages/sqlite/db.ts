@@ -38,7 +38,7 @@ let CACHE = 64 * 1024 * 1024
  * Every connection runs with foreign keys on. A file is one other processes
  * may have open too, so it also runs in WAL mode, with WAL's crash-safe pairing
  * `synchronous = normal`, a 64 MiB WAL checkpointed on a thread of its own
- * once it fills (`wal` sets the size, for a test; `wal: false` keeps a
+ * once it fills and cut back as it starts over (`wal` sets the size, for a test; `wal: false` keeps a
  * rollback journal instead, for one file to copy elsewhere), a 64 MiB page cache, no
  * checkpoint on close or commit, and a one-minute busy timeout, and a new file starts in incremental
  * auto-vacuum mode, so the pages a delete frees can be given back (./owe.ts `reclaim`); a database in memory
@@ -133,7 +133,16 @@ let logged = (
     d.query({ t: 'pragma', name, value })
   set('journal_mode', 'wal')
   set('synchronous', 'normal')
-  set('journal_size_limit', wal)
+  // Once a checkpoint has moved all of the WAL, the next commit starts it over
+  // at its first frame, and a WAL kept at its size is then written over in
+  // place. A frame is a 24-byte header and a page, so every write covers part
+  // of a file page, and the kernel reads that page back first wherever memory
+  // pressure dropped it: on the committing thread, behind every other
+  // process's queue at the disk, where it held a server's main thread 11 s
+  // (bug bace8585, T-675). A limit of 0 cuts the WAL back to the commit that
+  // starts it over, so every later frame is appended past its end and no
+  // commit reads. The checkpoint's mark is the hook's below.
+  set('journal_size_limit', 0)
   // The last connection to close leaves the WAL for the next to append to.
   // A checkpoint on close syncs both files, and the next process's first
   // commit then starts the WAL afresh and syncs its header: together a
