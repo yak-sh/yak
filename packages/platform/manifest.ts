@@ -3,7 +3,7 @@
 // names the platform already says, and what a deploy keeps of the manifest
 // before it, are the deploying host's to say.
 import { CallError } from '@yaks/tools/errors'
-import { floored, isFloor } from '@yaks/member'
+import { conditioned, floored, isFloor, permitted, unowned } from '@yaks/member'
 import { acceptsErrors } from '@yaks/blob'
 import { read } from '@yaks/yaml'
 import { parse } from '@yaks/query'
@@ -12,6 +12,7 @@ import {
   metaDoc,
   type PropSchema,
   storable,
+  type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
 import { docs as lensDocs } from '@yaks/lens/vocab'
@@ -338,6 +339,25 @@ export let manifest = (source: unknown, file = 'vocab.json'): VocabDoc => {
   let errs = [...storable(doc), ...floored(doc)]
   if (errs.length) throw refuse('arguments', `${file}: ${errs.join('; ')}`)
   return doc
+}
+
+/** Whether a manifest names a permission or an owner, whose names resolve
+ * only in the words its store composes ({@link owned}). */
+/// owns({ $defs: { note: { personal: 'by' } } }) -> true
+/// owns({ $defs: { note: { type: 'object' } } }) -> false
+export let owns = (doc: VocabDoc): boolean =>
+  Object.values(doc.$defs ?? {}).some((s) =>
+    s?.permit !== undefined || s?.personal !== undefined ||
+    typeof s?.readers == 'object'
+  )
+
+/** Refuses a manifest in `file` whose permission and owner names do not
+ * resolve in `vocab`, the words its store composes, by the rules its load
+ * reads them with (@yaks/member), so a manifest the store could not load is
+ * refused in one sentence before it opens. */
+export let owned = (vocab: Vocab, file = 'vocab.json'): void => {
+  let errors = [...permitted(vocab), ...unowned(vocab), ...conditioned(vocab)]
+  if (errors.length) throw refuse('arguments', `${file}: ${errors.join('; ')}`)
 }
 
 /** What an app's store speaks beside its plugins' words, its manifest's

@@ -1,7 +1,7 @@
 // A release directory opens on this machine as the store yaks.app keeps for
 // its app, answering through @yaks/api's doors in its own words and the
 // renames it declares, and running the commands it declares.
-import { equal, test } from '@yaks/testing'
+import { equal, test, throws } from '@yaks/testing'
 import { packageEid } from '@yaks/lens'
 import { mint } from '@yaks/graph/identity'
 import { faulted, toolEid } from '@yaks/tools/result'
@@ -101,5 +101,13 @@ test('each kind the release declares is worth its two commands', () => {
   equal(
     ['jot', 'add_recipe', 'find_recipe'].filter((n) => names.includes(n)),
     ['jot', 'add_recipe', 'find_recipe'],
+  )
+})
+
+test('a release whose owner names no reference is refused before its store opens', async () => {
+  let unowned = new URL('./fixtures/unowned', import.meta.url).pathname
+  await throws(
+    () => opened(unowned, ['graph'], { db: ':memory:' }),
+    'vocab.json: note.personal names by, which is no reference',
   )
 })

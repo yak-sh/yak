@@ -1,0 +1,10 @@
+{
+  "$defs": {
+    "note": {
+      "component": true,
+      "type": "object",
+      "personal": "by",
+      "properties": { "by": { "type": "string" }, "text": { "type": "string" } }
+    }
+  }
+}

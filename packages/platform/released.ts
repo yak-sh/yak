@@ -15,7 +15,8 @@
 // The Worker's own effects facets (yak/app, yak/trash, yak/models,
 // yak/attribution) are yaks.app's Cloudflare work, so nothing here runs them.
 import { compose, facet, type Role, type Served } from '@yaks/cli/host'
-import type { Config } from '@yaks/host/config'
+import { type Config, configured } from '@yaks/host/config'
+import { taking, wordsOf } from '@yaks/host/words'
 import type { Load } from '@yaks/host'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Loaded } from '@yaks/blob'
@@ -28,7 +29,7 @@ import { commandsOf } from './app-commands.ts'
 import { appConfig } from './config.ts'
 import { resolved } from './facets.ts'
 import { bare, lends } from './lent.ts'
-import { appDocs, manifest, VOCABS } from './manifest.ts'
+import { appDocs, manifest, owned, owns, VOCABS } from './manifest.ts'
 
 /** A release directory as its store reads it: its app's name, the
  * directory's own, its manifest as one document, and the manifest's value as
@@ -112,8 +113,17 @@ export let opened = async (
 ): Promise<Served> => {
   let { name, vocab, source, file } = await release(dir)
   let db = at.db ?? disk.join(dir, KEPT, 'store.db')
-  return compose(releaseConfig({ ...at, db }), roles, resolved(load), {
-    docs: appDocs(vocab),
+  let config = releaseConfig({ ...at, db })
+  let docs = appDocs(vocab)
+  // Its permission and owner names resolve in the words the store composes,
+  // or the release is refused in one sentence before its store opens, as a
+  // deploy of it is.
+  if (owns(vocab)) {
+    let vocabs = await taking(configured(config), 'vocab', resolved(load))
+    owned(wordsOf(vocabs, docs).vocab, file)
+  }
+  return compose(config, roles, resolved(load), {
+    docs,
     // Checked against every component the store knows, as a deploy checks
     // them, once the store's words are composed.
     tools: (host) =>

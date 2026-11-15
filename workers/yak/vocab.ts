@@ -20,7 +20,7 @@ import {
 import { blobKeywords } from '@yaks/blob'
 import { edgeKeywords } from '@yaks/edge'
 import { keyKeywords } from '@yaks/key'
-import { conditioned, memberKeywords, permitted, unowned } from '@yaks/member'
+import { memberKeywords } from '@yaks/member'
 import { idKeywords, prefixes } from '@yaks/id'
 import type { Series } from '@yaks/graph/storage'
 import { derived as builds } from '@yaks/builders/vocab'
@@ -42,7 +42,14 @@ import { selected } from '@yaks/host/documents'
 import { dependencies, Unplanned } from '@yaks/esbuild'
 import { vocabFacets } from './load.ts'
 import { once } from '@yaks/fp'
-import { appDocs, EXAMPLE, GUIDE, manifest } from '@yaks/platform/manifest'
+import {
+  appDocs,
+  EXAMPLE,
+  GUIDE,
+  manifest,
+  owned,
+  owns,
+} from '@yaks/platform/manifest'
 export {
   appsDoc,
   classificationDoc,
@@ -494,21 +501,9 @@ export let livesIn = (uses: Record<string, string>) =>
 export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   let doc = manifest(source, file)
   // A companion can be supplied by the platform, so permission and owner names
-  // resolve in the same composed vocabulary the store will hold, by the rules
-  // its load reads them with: a manifest the store could not load never
-  // deploys.
-  if (
-    Object.values(doc.$defs ?? {}).some((s) =>
-      s.permit !== undefined || s.personal !== undefined ||
-      typeof s.readers == 'object'
-    )
-  ) {
-    let v = composed(pluginsOf(doc), [doc], appOptions).vocab
-    let errors = [...permitted(v), ...unowned(v), ...conditioned(v)]
-    if (errors.length) {
-      throw refuse('arguments', `${file}: ${errors.join('; ')}`)
-    }
-  }
+  // resolve in the same composed vocabulary the store will hold: a manifest
+  // the store could not load never deploys.
+  if (owns(doc)) owned(composed(pluginsOf(doc), [doc], appOptions).vocab, file)
   return doc
 }
 /**
