@@ -15,6 +15,7 @@ import { begin, lend } from '@yaks/harness'
 import { skillItems, skillRead } from '@yaks/harness/skills'
 import {
   answerOf,
+  recall,
   replyOf,
   running,
   sessionTools,
@@ -47,7 +48,6 @@ import { agents, operatorProviders } from './config.ts'
 import { inputSchemaOf } from '@yaks/tools/schema'
 import { CallError, invoke, runner as toolRunner } from '@yaks/tools'
 import { loadTools, textSearch } from '@yaks/graph/tools'
-import { earlier } from '@yaks/memory/earlier'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { trialDoc } from '@yaks/trial/vocab'
 import { type Options as Trials, runs as trialRuns } from '@yaks/trial/tools'
@@ -921,8 +921,6 @@ let HOSTED =
 // how long a turn waits after its machine's providers refused it (ms).
 let REACHES = new Set(['unreachable', 'stalled'])
 let SPENT = 60 * 60_000
-// How long a person's words wait for what they said before (`before`).
-let RECALL = 700
 
 /**
  * The space's Operator: @yaks/harness's runner registered on the store's
@@ -1816,30 +1814,24 @@ export let operating = (
     $actor: { by, via: session },
   })
   // What the person said before on the subject of the words they now give
-  // their conversation, as a note beside those words: what its
-  // model no longer has in front of it, said in another session or before
-  // this one's newest checkpoint. A recall slower than RECALL or one that
-  // fails is reported or left out, and the words go on alone.
+  // their conversation, as a note beside those words: what its model no
+  // longer has in front of it (@yaks/session `recall`). A recall slower than
+  // RECALL or one that fails is reported or left out, and the words go on
+  // alone.
+  let recalling = recall({
+    graph: g,
+    report: (e) => void caught(e, { request: 'operator recall' }),
+  })
   let before = async (
     session: string,
     text: string,
     held: Asker,
     space: Space,
   ): Promise<Bundle[]> => {
-    let [cut] = g.vocab.comp('checkpoint')
-      ? await g.read(
-        `.entry.session=${session}&.checkpoint&.order=-entry.seq&.limit=1&.fields=created.at`,
-      )
-      : []
-    let at = comp(cut, 'created')?.at
-    let body = await earlier(g, {
-      person: held.person,
-      words: text,
-      before: new Date().toISOString(),
-      among: `(.entry.session!=${session})` +
-        (at ? `|(.created.at<${JSON.stringify(at)})` : ''),
-      wait: RECALL,
-    }).catch((e) => (caught(e, { request: 'operator recall' }), ''))
+    let body = await recalling.said(text, new Date().toISOString(), {
+      by: held.person,
+      session,
+    })
     return body
       ? [{
         entity: { eid: crypto.randomUUID() },

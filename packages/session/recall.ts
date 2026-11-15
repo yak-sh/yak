@@ -8,7 +8,7 @@
 // out the same way.
 
 import { earlier } from '@yaks/memory/earlier'
-import type { Bundle, Comp, Graph } from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import type { Host, Meaning } from '@yaks/host'
 import { words } from './listen.ts'
 
@@ -30,14 +30,36 @@ export type Beside = <T extends { item: Bundle; line: string }>(
   owed: T[],
 ) => Promise<T[]>
 
+/** Whose words a recall answers, and for which session's model. */
+export type Saying = {
+  /** who said them, where not the host's person */
+  by?: string
+  /** the session whose model is given what is recalled: what it still has in
+   * front of it (its own lines since its newest checkpoint) is left out */
+  session?: Eid
+}
+
 /** A host's recall. */
 export type Recall = {
   /** what the host's person (or `by`) said before `before` on the subject of
-   * `words` */
-  said: (words: string, before: string, by?: string) => Promise<string>
+   * `words`, beyond what `session` already holds */
+  said: (words: string, before: string, o?: Saying) => Promise<string>
   /** these items, with it under the line of each one the person wrote where
    * there is any */
   beside: Beside
+}
+
+// What `session`'s model no longer has in front of it: what was said in
+// another session, or in this one before its newest checkpoint.
+let unseen = async (g: Graph, session: Eid) => {
+  let [cut] = g.vocab.comp('checkpoint')
+    ? await g.read(
+      `.entry.session=${session}&.checkpoint&.order=-entry.seq&.limit=1&.fields=created.at`,
+    )
+    : []
+  let at = cut && comp(cut, 'created').at
+  return `(.entry.session!=${session})` +
+    (at ? `|(.created.at<${JSON.stringify(at)})` : '')
 }
 
 /** A host's recall, each given `wait` ms; a null `wait` waits as long as it
@@ -52,14 +74,15 @@ export let recall = (
       ? (await host.graph.address([said])).get(said) ?? said
       : undefined
   }
-  let said = async (text: string, before: string, by?: string) => {
+  let said = async (text: string, before: string, o: Saying = {}) => {
     try {
       return await earlier(host.graph, {
-        person: by ?? await person(),
+        person: o.by ?? await person(),
         words: text,
         before,
         meaning: host.meaning,
         wait,
+        ...o.session ? { among: await unseen(host.graph, o.session) } : {},
       })
     } catch (error) {
       if (!host.report) throw error
@@ -76,7 +99,7 @@ export let recall = (
       let found = await said(
         words(o.item),
         String(comp(o.item, 'created').at),
-        by,
+        { by },
       )
       return found ? { ...o, line: `${o.line}\n\n${found}` } : o
     }))

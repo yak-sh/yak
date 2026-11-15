@@ -78,7 +78,21 @@ let seen = async () => {
   let hook = await heard(host, { session_id: 'outside' }) as {
     hookSpecificOutput?: { additionalContext: string }
   }
+  let words = 'are attachment files still immutable?'
+  let now = '2026-03-01T00:00:00Z'
+  // A ranking that keeps, as the host's does, to the rows it is asked within.
+  let within = {
+    ...host,
+    meaning: async (_: string, o: { within?: string } = {}) =>
+      (await g.read(`${o.within} .fields=entity.eid`)).map((b) => ({
+        entity: b.entity.eid,
+        similarity: .9,
+        excerpt: '',
+      })),
+  }
   return {
+    elsewhere: await recall(within).said(words, now, { session: 'native' }),
+    within: await recall(within).said(words, now, { session: 'outside' }),
     hers: await body('hers'),
     other: await body('other'),
     hook: hook.hookSpecificOutput?.additionalContext ?? '',
@@ -102,4 +116,8 @@ test('the hook door sets it under a comment owed to an outside session', () => {
 })
 test('the recall is asked with the comment as it was written', () => {
   equal(saw.asked.includes('are attachment files still immutable?'), true)
+})
+test('a recall for a session leaves out what its model still has in front of it', () => {
+  equal(saw.elsewhere.includes(EARLIER), true)
+  equal(saw.within.includes(EARLIER), false)
 })
