@@ -324,25 +324,26 @@ words to `./api/operator/tell`, through `env.APP`:
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        say: 'Proposed minutes of the November 9 meeting are due Friday, Nov 20. Email the clerk.',
+        say: 'Proposed minutes of the November 9 meeting are due Friday, Nov 20.',
         key: 'proposed-minutes|' + meeting.entity.eid,
       }),
     })
     let { request } = await r.json()
 
-- **`say`** is what the Operator is told, up to 4,000 characters. It arrives in
-  the conversation of the space's owner, said by the app and not by them, as
-  `The app <slug> says: …`, and the Operator acts on it with that owner's
-  permissions: it can email someone with `mail_send`, write a row, or decide
-  nothing needs doing. What it answers reaches the owner in their Updates.
+- **`say`** is what the owner is told, up to 4,000 characters. It reaches their
+  Updates as `The app <slug> says: …` and the way they chose to be alerted. It
+  also appears as information in their conversation with the Operator, if they
+  have one. It starts no Operator turn, reads no private context and spends no
+  model budget. The app's words grant no permission to email someone, write rows
+  or use the owner's connections: the owner asks the Operator when they want it
+  to act on a notice.
 - **`key`** names what is told, up to 200 characters. The same key from the same
   app is one request however often it is told, so a schedule that runs again, or
   a retried call, tells the Operator once. Answered `202` with `{request}` the
   first time, and `200` with the same `request` after.
 - **Only the app's own worker tells it.** A page's request, a visitor's or a
-  member's, is refused `403 not_the_app`, since each tell is an Operator turn
-  paid from the space's budget. A page that should tell the Operator asks a
-  route of the worker, which decides.
+  member's, is refused `403 not_the_app`. A page that should tell the Operator
+  asks a route of the worker, which decides.
 
 When to tell is the app's to decide, with the scheduling above. A command
 declared `"worker": "/remind"` and a schedule row that calls it each weekday
@@ -360,7 +361,8 @@ morning:
 The worker's `/remind` route reads what is due, computes from the rows which
 deadline is three days off, and tells the Operator about each, keyed by the
 deadline, so nothing derived is stored and a deadline whose rows changed is told
-as it now stands. A route that tells nothing costs no Operator turn.
+as it now stands. Sending a notice costs no Operator turn; a text alert uses the
+space's text budget and an email alert counts against its mail allowance.
 
 ## Where a firing runs, and its limits
 
