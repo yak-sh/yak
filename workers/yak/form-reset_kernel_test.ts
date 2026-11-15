@@ -2,6 +2,7 @@
 // never reaches them: the door sends it again, and a submission that had
 // already landed is not filed twice (T-134279).
 import { equal, test } from '@yaks/testing'
+import { FORM } from '@yaks/forms/routes'
 import { connector, fresh, signIn } from './probe.ts'
 
 test('a submission whose answer a restart cuts off is sent again and filed once', async () => {
@@ -16,7 +17,7 @@ test('a submission whose answer a restart cuts off is sent again and filed once'
           ...store,
           fetch: async (req: Request) => {
             let answer = await store.fetch(req)
-            let submit = new URL(req.url).pathname == '/form' &&
+            let submit = new URL(req.url).pathname.startsWith(FORM) &&
               req.method == 'POST'
             if (submit && cut++ == 0) {
               throw new Error(

@@ -9,13 +9,13 @@ import {
   open,
   prefilled,
   step,
+  texterEid,
 } from '@yaks/forms'
 import { type Bundle, type Comp, mint, signed } from '@yaks/graph'
 import { consentEid } from '@yaks/phone'
 import { withPhone } from '@yaks/people'
 import { Refused } from '@yaks/graph/errors'
 import type { Stored } from './graph.ts'
-import { texterEid } from './form-phone.ts'
 import { calendarScope, personalFeed } from './calendar.ts'
 
 let comp = (row: Bundle | undefined, name: string): Comp =>

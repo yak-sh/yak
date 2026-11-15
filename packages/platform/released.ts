@@ -7,7 +7,8 @@
 // host @yaks/cli composes, and @yaks/api's doors answer for it.
 //
 // The release's own files answer at its addresses through the `yak/files`
-// routes facet (./files-routes.ts), read from the directory as it stands, and
+// routes facet (./files-routes.ts), read from the directory as it stands; the
+// forms its pages link at `./api/form/<name>` through @yaks/forms/routes; and
 // the client its pages import at `./api/client.js` through `yak/client`
 // (./client-routes.ts), which answers its doors in the page's wire, with the
 // store's own beside them under `/api`, and
@@ -17,7 +18,7 @@
 // (./app-effects.ts); the rest are yaks.app's Cloudflare work, which owes no
 // run here.
 import { compose, facet, type Role, type Served } from '@yaks/cli/host'
-import { type Config, configured } from '@yaks/host/config'
+import { type Config, configured, type Plug } from '@yaks/host/config'
 import { taking, wordsOf } from '@yaks/host/words'
 import type { Load } from '@yaks/host'
 import type { VocabDoc } from '@yaks/vocab'
@@ -72,12 +73,20 @@ export let release = async (dir: string): Promise<Released> => {
   return { name, vocab: {}, source: {}, file: VOCABS[0] }
 }
 
-/** What a release's store composes: an app's store, its files and its
- * pages' client, and @yaks/api's doors to answer for it. */
+// The plugins of an app's store whose own doors a release answers beside
+// its pages, as yaks.app answers them under the app's `/api/`: its forms.
+let DOORS = ['@yaks/forms']
+let doors = (plug: Plug): Plug =>
+  typeof plug != 'string' && DOORS.includes(plug.use)
+    ? { ...plug, facets: [...plug.facets ?? [], 'routes'] }
+    : plug
+
+/** What a release's store composes: an app's store with its forms' doors,
+ * its files and its pages' client, and @yaks/api's doors to answer for it. */
 export let releaseConfig = (at: Placing & { db: string }): Config => ({
   ...at,
   plugins: [
-    ...appConfig.plugins!,
+    ...appConfig.plugins!.map(doors),
     'yak/files',
     'yak/client',
     // A page's client finds its store's doors beside itself, at `./api/`.

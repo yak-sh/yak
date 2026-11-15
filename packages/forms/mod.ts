@@ -3,6 +3,7 @@
 
 import { same } from '@yaks/fp'
 import { Refused } from '@yaks/graph/errors'
+import { derivedEid } from '@yaks/graph/identity'
 
 /** The kinds a question can ask. */
 export type Kind =
@@ -328,6 +329,12 @@ export let accepted = (id: string, capacity: number): string =>
   `.registration.form=${
     JSON.stringify(id)
   }&.completed&!cancelled&!waitlisted&.limit=${Math.max(1, capacity)}`
+
+/** The phone row a sign-up by text makes for the texter vouched as
+ * `submitter`, where no row holds their number: one row across forms, worn
+ * as `form_phone{submitter}`. */
+export let texterEid = (submitter: string): string =>
+  derivedEid('form-texter|' + submitter)
 
 /** What one reply in a sign-up by conversation does: `value` recorded at
  * `path`, the place of the question {@link next} owes. */

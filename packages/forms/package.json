@@ -8,11 +8,13 @@
     "./fill": "./fill.ts",
     "./graph": "./graph.ts",
     "./effects": "./effects.ts",
-    "./text": "./text.ts"
+    "./text": "./text.ts",
+    "./routes": "./routes.ts"
   },
   "license": "Apache-2.0",
-  "description": "Form, question and registration rows, with pure functions for the next question, missing required answers and sign-up availability, the rules a registration is accepted by and the letters a completed one owes.",
+  "description": "Form, question and registration rows, with pure functions for the next question, missing required answers and sign-up availability, the rules a registration is accepted by and the letters a completed one owes, and the door a page’s form is shown and sent at.",
   "dependencies": {
+    "@yaks/api": "0.2.29",
     "@yaks/effects": "0.2.33",
     "@yaks/fp": "0.2.23",
     "@yaks/graph": "0.2.33",

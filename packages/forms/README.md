@@ -6,7 +6,9 @@ these functions read no storage and perform no effects. The `./fill` export
 adapts form rows and HTTP calls to the interface components in @yaks/ux.
 `./graph` and `./effects` are the plugin a store runs forms with: the rules a
 registration is accepted by and the letters a completed one owes (see
-[The plugin](#the-plugin)). `./text` says which texts answer a sign-up by text.
+[The plugin](#the-plugin)). `./routes` is the door a page shows and sends a form
+at (see [The door](#the-door)). `./text` says which texts answer a sign-up by
+text.
 
 A **question** is a graph bundle with `entity.eid` and
 `question{form, label,
@@ -191,7 +193,8 @@ accepted-registration count. Opening is inclusive, closing exclusive, and
 capacity is reached when `count >= capacity`. Absent dates or capacity impose no
 limit; zero capacity accepts nobody. Invalid dates or a non-finite instant
 return false. While `open` is false a page shows `form.closed`. The core
-implements no HTTP door, tools or registration side effects.
+implements no HTTP door, tools or registration side effects; the door is
+`./routes`.
 
 ## Screening bots
 
@@ -238,6 +241,34 @@ records a reply to the question `next` owes, refusing one for another question
 or a skipped required one, and says whether the sign-up is complete.
 `formKeyword` from `@yaks/forms/text` tells a carrier's STOP or HELP from a
 reply, a bare yes being a reply.
+
+## The door
+
+`routes(host, options)` from `@yaks/forms/routes` answers `FORM` (`/api/form/`)
+followed by a form's alias or eid, whoever asks. GET answers the form a page
+draws (`Door`, below): its `doc` title and body, its `form` settings but never
+`notify`, whether it is `open` now, and its questions. POST takes
+`{answers,
+signs}` in JSON, or a native post's fields (`posted`, `signsOf`),
+files a registration and answers 204; what it refuses it answers 400 in one
+sentence. A submission carrying an `idempotency-key` it has filed before is not
+filed again. A sending `screened` as a bot's is filed `held` and not
+`completed`.
+
+The host says who is asking (`host.who`, whose `by` is the registration's
+`submitter`), how the registration is written (`options.post`, the host's graph
+by default, such as signed as the app), and which of the app's own people a
+signed-in person is (`options.known`): that row's values fill in the questions
+whose `fills` names them, and the registration's `person` names it.
+
+`door(host, options)` is the door answering in JSON, and
+`native(handle,
+address)` answers a browser's native post to it with a 303 back
+to the page it came from, told the door's answer in `yak-form` (`returned`
+below). A host that answers the browser in one process and holds the form in
+another wraps its forward in `native` and answers the rest with `door`.
+`noFile(form, question)` says why a form as its door showed it takes no file for
+a question now.
 
 ## Filling forms
 

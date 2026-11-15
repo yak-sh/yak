@@ -142,9 +142,12 @@ warms. The same facet answers the client's `query`, `apply` and `vocab.json` in
 the page's wire (`@yaks/platform/page-wire`), asking each of the store's own
 door, and the store's doors answer beside it under `/api` as well as at the root
 (@yaks/api `under`), so `ws` and `who` are the store's own and a page's `query`,
-`apply` and `subscribe` reach this store. The store is kept in `.yak/store.db`
-in the directory unless `--db` names another file or `:memory:`; `--port` and
-`--hostname` say where it listens.
+`apply` and `subscribe` reach this store. The forms its pages link answer at
+`./api/form/<name>` through @yaks/forms/routes, as on yaks.app, though nobody
+here is known as one of the app's own people and a form's file question takes no
+upload (no `./api/blob`). The store is kept in `.yak/store.db` in the directory
+unless `--db` names another file or `:memory:`; `--port` and `--hostname` say
+where it listens.
 
 `@yaks/platform/released` is the same in code: `release(dir)`, the directory's
 app name and manifest; `releaseConfig`, what its store composes; `reader(dir)`,

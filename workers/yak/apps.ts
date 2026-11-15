@@ -206,6 +206,7 @@ import { noted, refusal, serving } from './unseen.ts'
 import { door as reportDoor, flood } from '@yaks/tracker/report'
 import { writer } from '@yaks/platform/app-authority'
 import { ADDRESS } from '@yaks/platform/routes'
+import { FORM } from '@yaks/forms/routes'
 import {
   background,
   caught,
@@ -3190,11 +3191,11 @@ let served = async (
     if (edge) return passed()
     let name = decodedPath(path.slice('/form/'.length))
     if (!name) return json(404, 'not_found')
-    // The store shows a form it holds (an empty 204 on code from before it
-    // did), and only that it holds one matters here. The form is the app's
-    // own, whatever store a stranger's visit serves the page from.
+    // The store shows a form it holds, and only that it holds one matters
+    // here. The form is the app's own, whatever store a stranger's visit
+    // serves the page from.
     let found = await appStore(env.STORE, space, stranger.app, env).consume(
-      `/form?${new URLSearchParams({ name })}`,
+      `${FORM}${encodeURIComponent(name)}`,
       async (r) => {
         await r.body?.cancel()
         return r.ok ? null : r.status

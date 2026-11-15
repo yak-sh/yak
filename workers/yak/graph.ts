@@ -300,7 +300,7 @@ import { actorOf as writerOf } from '@yaks/graph/provenance'
 import { Refused, status } from '@yaks/graph/errors'
 import { DELIVER, MAIL } from '@yaks/mail'
 import { subscription } from './notices.ts'
-import { formIn } from './forms.ts'
+import { door as formDoor, FORM } from '@yaks/forms/routes'
 import { signupIn } from './signup.ts'
 import { formsOptions } from './forms-host.ts'
 import { calendarIn } from './calendar.ts'
@@ -4866,8 +4866,18 @@ export class Store extends Durable {
     if (path == '/calendar' && kernel) {
       return calendarIn(request, this.#stored(this.#graph))
     }
-    if (path == '/form' && kernel) {
-      return formIn(request, this.#stored(this.#graph))
+    // An app's form, whoever asks (@yaks/forms/routes): the edge vouches the
+    // person and answers the browser (forms.ts).
+    if (path.startsWith(FORM) && kernel) {
+      let at = this.#stored(this.#graph)
+      if (!at.app) return new Response('No such form.', { status: 404 })
+      return formDoor({
+        graph: at.graph,
+        who: (req) => {
+          let by = req.headers.get('x-yak-person')
+          return by ? { by } : null
+        },
+      }, formsOptions(at))(request)
     }
     if (path == '/notices' && kernel) {
       return subscription(request, this.#stored(this.#graph))

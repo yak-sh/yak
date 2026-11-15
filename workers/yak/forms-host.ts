@@ -1,10 +1,12 @@
 // What an app's store gives @yaks/forms: its clock, the app it writes a
-// sign-up's letters as, where the app's pages are, and the address an app's
-// own people keep (@yaks/people).
+// sign-up and its letters as, where the app's pages are, the address an app's
+// own people keep (@yaks/people), and which of them a signed-in person is
+// (recognized.ts).
 import { type Bundle, signed } from '@yaks/graph'
 import type { Options } from '@yaks/forms/graph'
 import { emailOf } from '@yaks/people'
 import type { Stored } from './graph.ts'
+import { recognized } from './recognized.ts'
 
 /** Where an app's pages are served, from the address its letters leave under:
  * `<space>.<app>@<apex>`, or `<space>@<apex>` for the app that is the
@@ -20,13 +22,14 @@ export let siteOf = (mail: string | null): string | undefined => {
 }
 
 /** The forms plugin's options in the store `at`: a store that holds no app
- * writes no letters. */
+ * writes nothing. */
 export let formsOptions = (
-  at: Pick<Stored, 'app' | 'graph' | 'mail' | 'now'>,
+  at: Pick<Stored, 'app' | 'env' | 'graph' | 'mail' | 'now'>,
 ): Options => ({
   now: at.now,
-  post: (letters: Bundle[]) =>
-    at.app ? at.graph.apply(signed(letters, { by: at.app })) : [],
+  post: (rows: Bundle[]) =>
+    at.app ? at.graph.apply(signed(rows, { by: at.app })) : [],
   site: () => siteOf(at.mail()),
   addressOf: emailOf,
+  known: (person) => recognized(at, person),
 })

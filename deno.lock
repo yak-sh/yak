@@ -3547,6 +3547,7 @@
       "packages/forms": {
         "packageJson": {
           "dependencies": [
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/client@0.2.24",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/draft@0.2.24",

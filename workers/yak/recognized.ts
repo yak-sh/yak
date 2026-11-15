@@ -12,7 +12,7 @@ import type { Stored } from './graph.ts'
 
 /** What the platform proved of `person`: the number and the address they
  * sign in with, each null where they have none. */
-export let proved = async (at: Stored, person: string) => {
+export let proved = async (at: Pick<Stored, 'env'>, person: string) => {
   let dir = directoryOf(at.env.STORE!)
   let [phone, email] = await Promise.all([
     dir.phoneAt(person),
@@ -23,7 +23,7 @@ export let proved = async (at: Stored, person: string) => {
 
 /** The row of this app's own people that `person` is, or undefined. */
 export let recognized = async (
-  at: Stored,
+  at: Pick<Stored, 'env' | 'graph'>,
   person: string | null,
 ): Promise<Bundle | undefined> => {
   if (!person || !at.env.STORE) return undefined

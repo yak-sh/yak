@@ -3,6 +3,7 @@
 // renames it declares, and running the commands it declares.
 import { equal, test, throws } from '@yaks/testing'
 import { packageEid } from '@yaks/lens'
+import type { Comp } from '@yaks/graph'
 import { mint } from '@yaks/graph/identity'
 import { faulted, toolEid } from '@yaks/tools/result'
 import { opened } from './released.ts'
@@ -84,6 +85,24 @@ test('the release’s inside answers at no address', async () => {
   ) {
     equal((await door(path)).status, 404, path)
   }
+})
+
+// A form a page links, shown and sent at `./api/form/<name>` as on yaks.app.
+test('the release answers its forms', async () => {
+  await door('/apply', [{ entity: { eid: 'supper' }, form: {} }, {
+    entity: { eid: 'guests' },
+    question: { form: 'supper', label: 'Guests', kind: 'line' },
+  }])
+  let shown = await (await door('/api/form/supper')).json()
+  equal([shown.open, shown.questions.length], [true, 1])
+  equal(
+    (await door('/api/form/supper', { answers: { guests: '4' } })).status,
+    204,
+  )
+  // A sign-up is the app's to read, not its visitor's.
+  equal(await (await door('/query?q=.registration')).json(), [])
+  let [row] = await host.graph.read('.registration')
+  equal((row.registration as Comp).answers, { guests: '4' })
 })
 
 // A page's client finds its store beside itself, at `./api/`: the store's

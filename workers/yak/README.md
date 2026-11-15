@@ -624,6 +624,10 @@ reports the bucket to empty in the R2 dashboard before retrying.
 
 ## Form submissions
 
+The form door is @yaks/forms/routes `door`, answered in the app's store; the
+edge (forms.ts) says who is asking and sends a browser's native post back to its
+page (`native`).
+
 `POST ./api/form/<form>` takes JSON `{answers: {<question eid>: <value>}}`. The
 form can be addressed by eid or `alias{name}`. The door writes a completed
 registration as the app, matches the directory, and answers an empty 204. It
