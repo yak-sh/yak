@@ -59,6 +59,9 @@
     return clips.get(el)
   }
 
+  // His own: the hero's slot, and himself with what he holds wherever he is.
+  let his = (el) => slot.contains(el) || el.closest('.Wander')
+
   // The left edge of the nearest word, picture or control, in css px.
   let edge = () => {
     let left = innerWidth
@@ -72,7 +75,7 @@
     }
     let words = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) =>
-        n.data.trim() && !slot.contains(n) &&
+        n.data.trim() && !his(n.parentElement) &&
           n.parentElement.checkVisibility?.() !== false
           ? NodeFilter.FILTER_ACCEPT
           : NodeFilter.FILTER_REJECT,
@@ -88,7 +91,7 @@
       'img, svg, button, input, select, textarea, video, canvas, iframe, .Card'
     for (let el of document.querySelectorAll(things)) {
       if (
-        !slot.contains(el) && !el.closest('.Sky, .Birds') &&
+        !his(el) && !el.closest('.Sky, .Birds') &&
         el.checkVisibility?.() !== false
       ) {
         take(el.getBoundingClientRect(), el.parentElement)

@@ -33,8 +33,14 @@ let page = async (column = 144, decode = () => Promise.resolve()) => {
       top: 150 - env.scrollY,
       bottom: 278 - env.scrollY,
     }) as DOMRect
-  window.HTMLElement.prototype.getBoundingClientRect = () =>
-    ({ width: 0 }) as DOMRect
+  // only his own pictures, out in the margin, take up room
+  window.HTMLElement.prototype.getBoundingClientRect = function (
+    this: HTMLElement,
+  ) {
+    return (this.closest('.Wander') && !slot.contains(this)
+      ? { left: 21, right: 149, top: 0, bottom: 128, width: 128, height: 128 }
+      : { width: 0 }) as DOMRect
+  }
   window.HTMLImageElement.prototype.decode = decode
   Object.defineProperty(document, 'currentScript', {
     value: { src: 'https://yaks.app/wander.js' },
@@ -133,7 +139,17 @@ let page = async (column = 144, decode = () => Promise.resolve()) => {
     (e) => asked.push((e as CustomEvent).detail),
   )
   let click = () => yak().dispatchEvent(new Event('click'))
-  return { step, scroll, where, click, asked, told, started: env.started! }
+  let resize = async () => (env.on.resize(), await step(16))
+  return {
+    step,
+    scroll,
+    resize,
+    where,
+    click,
+    asked,
+    told,
+    started: env.started!,
+  }
 }
 
 test('the home page draws the yak as its logo, and loads what moves him', async () => {
@@ -202,6 +218,15 @@ test('he gets up, telling the page, before every walk, even carried far out of f
   await p.scroll(0)
   await p.step(9000)
   assertEquals(p.told.slice(5), ['rise', 'up', 'home'])
+})
+
+test('a resize while he sits in the margin measures the page without him', async () => {
+  let p = await page()
+  await p.scroll(1500)
+  await p.step(3000)
+  await p.resize()
+  await p.step(3000)
+  assertEquals(p.where(), 'translate(21px, 1568px) sitting')
 })
 
 test('with no margin to walk in, he stays the logo', async () => {
