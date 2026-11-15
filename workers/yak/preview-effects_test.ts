@@ -119,7 +119,7 @@ p.env.BLOBS.delete = (keys) => {
   deleted.push(...[keys].flat())
   return Promise.resolve()
 }
-await effects({}, { store: at }).delete_upload!(
+await effects({} as never, { store: at }).delete_upload!(
   { entity: { eid: sha } } as never,
   {} as never,
   {} as never,

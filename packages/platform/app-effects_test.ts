@@ -1,19 +1,23 @@
+// A store's builders keep their provenance once a release brings them, on any
+// host that runs yak/app's effects.
 import { assert, assertEquals } from '@std/assert'
 import { type Comp, type Graph, graph } from '@yaks/graph'
+import type { Host } from '@yaks/host'
+import { loadVocab, metaDoc } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { current, supply } from '@yaks/builders'
 import { keys } from '@yaks/key'
 import { edges } from '@yaks/edge'
 import { toolEid, toolRow } from '@yaks/tools'
 import { test } from '@yaks/testing'
-import { workshop } from '../../packages/builders/testing.ts'
+import { workshop } from '../builders/testing.ts'
 import { modelTool } from '@yaks/builders/model'
-import { effects as appEffects } from './facets/app-effects.ts'
-import type { Stored } from './graph.ts'
-import { platformVocab } from './vocab.ts'
+import { effects } from './app-effects.ts'
+import { bare } from './lent.ts'
 
-let install = async (g: Graph, meta: boolean, app: string | null) => {
-  let handler = appEffects({}, { store: { graph: g, meta, app } as Stored })
+// The host's own graph, as a host that lends the store none writes through.
+let install = async (g: Graph) => {
+  let handler = effects({ graph: g } as Host, { store: bare('recipes', {}) })
     .builder_install
   await handler(
     { entity: { eid: 'startup' }, name: 'builder_install', kind: 'created' },
@@ -23,13 +27,11 @@ let install = async (g: Graph, meta: boolean, app: string | null) => {
 }
 
 test('builders install succeeds in stores without builder vocabulary', async () => {
-  let vocab = platformVocab()
+  let vocab = loadVocab([metaDoc])
   let g = graph({ storage: ram(vocab), vocab })
   assertEquals(vocab.comp('builder'), undefined)
-  for (let meta of [true, false]) {
-    await install(g, meta, null)
-    assertEquals(await g.read('.entity'), [])
-  }
+  await install(g)
+  assertEquals(await g.read('.entity'), [])
 })
 
 test('builders install preserves legacy provenance in a store declaring builders', async () => {
@@ -74,8 +76,7 @@ test('builders install preserves legacy provenance in a store declaring builders
   }], { trusted: true })
   let before = await g.get([output, 'builder'])
   let calls = await g.read('.call&*')
-  // Provenance must run even before a store has an app assigned.
-  await install(g, false, null)
+  await install(g)
   let [run, builder] = await g.get([build, 'builder'])
   assertEquals((run.build as Comp).key, 'legacy')
   assert(typeof (run.build as Comp).inputs == 'string')
@@ -88,6 +89,6 @@ test('builders install preserves legacy provenance in a store declaring builders
   )
   assertEquals(await g.read('.call&*'), calls)
   let after = await g.get([build, 'builder', output])
-  await install(g, false, null)
+  await install(g)
   assertEquals(await g.get([build, 'builder', output]), after)
 })

@@ -4,7 +4,6 @@
 // records each retired query spelling an app's code still sends, so a
 // translation in the grammar goes only once nothing sends it (T-123000).
 import type { Comp, Plugin } from '@yaks/graph'
-import type { Handler } from '@yaks/effects'
 import { parse, retired } from '@yaks/query'
 import { ahead, storeOf, WAKE, WARM } from './door.ts'
 import { type Namespace } from '@yaks/durable-object/door'
@@ -26,9 +25,6 @@ export let useUntil = (now = Date.now()) =>
 export let returned = (previous: unknown, at: string) =>
   typeof previous == 'string' &&
   Date.parse(at) - Date.parse(previous) >= 86_400_000
-
-export let maintenance = (run: Handler): Handler & { maintenance: true } =>
-  Object.assign(run, { maintenance: true as const })
 
 let receipts = new WeakMap<Namespace, Map<string, string>>()
 let pending = new WeakMap<Namespace, Map<string, Promise<string | null>>>()

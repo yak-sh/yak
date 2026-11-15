@@ -11,7 +11,11 @@ export type Specifiers = Partial<Record<FacetName, string>>
 let at = (name: string): string => `@yaks/platform/${name}`
 
 export let facets: Record<string, Specifiers> = {
-  'yak/app': { vocab: at('app-vocab'), graph: at('app-graph') },
+  'yak/app': {
+    vocab: at('app-vocab'),
+    graph: at('app-graph'),
+    effects: at('app-effects'),
+  },
   'yak/directory': { vocab: at('directory-vocab') },
   'yak/trash': { vocab: at('trash-vocab'), graph: at('trash-graph') },
   'yak/meter': { vocab: at('meter-vocab'), graph: at('meter-graph') },

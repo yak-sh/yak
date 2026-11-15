@@ -1,11 +1,13 @@
-// Keep builder provenance when a release arrives, and delete an upload's
-// bytes once its row is gone.
+// yaks.app's yak/app effects: the Cloudflare work beside what
+// @yaks/platform/app-effects runs on any host (a store's builders kept with
+// their provenance): a document's text, a hearing, an upload's bytes deleted
+// once its row is gone, a death told to the space, a refund and a notice.
 import { extraction } from '../documents.ts'
-import { preserve } from '@yaks/builders'
-import type { Bundle } from '@yaks/graph'
+import { effects as everywhere } from '@yaks/platform/app-effects'
+import type { Host } from '@yaks/host'
 import type { Handlers } from '@yaks/effects'
 import type { Options } from './store.ts'
-import { maintenance } from '../used.ts'
+import { maintenance } from '@yaks/platform/lent'
 import { mourned } from '../deaths.ts'
 import { blobPrefix, released } from '../blob-key.ts'
 import { r2Objects } from '../lib/objects.ts'
@@ -13,9 +15,10 @@ import { noticePost } from '../notices.ts'
 import { refundSale } from '../service-refunds.ts'
 import { noticeEnabled } from '@yaks/platform/notices-vocab'
 
-export let effects = (_host: unknown, options: Options): Handlers => {
+export let effects = (host: Host, options: Options): Handlers => {
   let at = options.store
   return {
+    ...everywhere(host, options),
     refund_sale: refundSale(at),
     ...(noticeEnabled(at.graph.vocab) ? { notice_post: noticePost(at) } : {}),
     document_extract: maintenance((event, _tx, _write, attempt) =>
@@ -28,19 +31,6 @@ export let effects = (_host: unknown, options: Options): Handlers => {
         event.entity.eid,
         attempt,
       ),
-    builder_install: maintenance(async () => {
-      let writes: Bundle[] = []
-      if (at.graph.vocab.comp('builder')) {
-        for (let builder of await at.graph.read('.builder&*')) {
-          writes.push(
-            ...await at.graph.storage.tx((tx) =>
-              preserve(tx, builder, at.graph.vocab)
-            ),
-          )
-        }
-      }
-      if (writes.length) await at.graph.apply(writes, { trusted: true })
-    }),
     // The bytes sit under the app's current address, so the directory is
     // asked for it at run time, and what names them is read last, after that
     // wait: an upload of the same file meanwhile names them again and keeps

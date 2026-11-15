@@ -5,7 +5,7 @@ import { effectsIn } from '@yaks/vocab'
 import type { Options } from './store.ts'
 import { contributed } from '../attribution.ts'
 import { KERNEL } from '../meta.ts'
-import { maintenance } from '../used.ts'
+import { maintenance } from '@yaks/platform/lent'
 
 export let effects = (_host: unknown, options: Options): Handlers => {
   let at = options.store

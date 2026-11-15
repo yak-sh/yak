@@ -2,7 +2,8 @@
 // write owes where the store runs. yaks.app's Store lends its own (workers/yak
 // graph.ts `Stored`); another host lends what it has.
 import type { Loaded } from '@yaks/blob'
-import type { Bound, Bundle, Plugin } from '@yaks/graph'
+import type { Handler } from '@yaks/effects'
+import type { Bound, Bundle, Graph, Plugin } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 
 export type Lent = {
@@ -30,6 +31,9 @@ export type Lent = {
    * the release's files beside its store (./files-routes.ts); yaks.app
    * serves them from R2 at its gateway instead */
   file?: (path: string) => Promise<Loaded | null>
+  /** the graph this package's own effects write the store's bookkeeping
+   * through, the host's own where it lends none */
+  graph?: Graph
 }
 
 /** The options each of these facets is bound with. */
@@ -64,3 +68,8 @@ export type Lend = <O extends Record<string, unknown>>(
   plugin: string,
   options: O,
 ) => O
+
+/** A handler that is the store's own upkeep, not anyone's use of it: a host
+ * that measures use does not count its run (yaks.app's dormancy). */
+export let maintenance = (run: Handler): Handler & { maintenance: true } =>
+  Object.assign(run, { maintenance: true as const })

@@ -13,8 +13,9 @@
 // store's own beside them under `/api`, and
 // its commands (./app-commands.ts `commandsOf`) are the store's own tools,
 // called through its runner as any host's are.
-// The Worker's own effects facets (yak/app, yak/trash, yak/models,
-// yak/attribution) are yaks.app's Cloudflare work, so nothing here runs them.
+// Of the effects the store's plugins declare it runs this package's own
+// (./app-effects.ts); the rest are yaks.app's Cloudflare work, which owes no
+// run here.
 import { compose, facet, type Role, type Served } from '@yaks/cli/host'
 import { type Config, configured } from '@yaks/host/config'
 import { taking, wordsOf } from '@yaks/host/words'
