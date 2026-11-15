@@ -16,6 +16,7 @@ import {
   type Upload,
 } from '@yaks/blob/upload'
 import { routes } from '@yaks/blob/routes'
+import type { Refusal } from '@yaks/api'
 import { routed } from '@yaks/api/routed'
 import type { Door } from '@yaks/durable-object/door'
 import { Denied, mode, stands } from '@yaks/member'
@@ -195,13 +196,14 @@ export let servedTo = async (
     : await read()
 }
 
-// A refusal of the door's, in the page's envelope as the gateway's own are:
+// A refusal of the door's (@yaks/api `Refusal`, with the door's `code` for
+// it), in the page's envelope as the gateway's own are:
 // `{error: {code, message}}` (@yaks/platform/refused), with its status and
 // the wait it asks for.
 let enveloped = async (answer: Response) => {
   if (answer.ok || answer.status == 302 || answer.status == 304) return answer
   if (!answer.headers.get('content-type')?.includes('json')) return answer
-  let said = await answer.json()
+  let said: Refusal & { code?: string } = await answer.json()
   let out = Response.json({
     error: {
       code: said.code ?? 'refused',
