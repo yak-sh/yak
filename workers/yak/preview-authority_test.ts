@@ -96,19 +96,15 @@ let { default: dispatch } = await import(data(entry))
 p.env.DISPATCH = {
   get: () => ({
     fetch: (req: Request) =>
-      dispatch.fetch(req, {
-        KERNEL: {
-          fetch: async (inner: Request) => {
-            await ctx.dir.apply({
-              entities: [{
-                entity: { eid: crypto.randomUUID() },
-                doc: { title: 'Concurrent edit' },
-              }],
-            })
-            return handler.fetch(inner, p.env)
-          },
-        },
-      }, {}),
+      dispatch.fetch(req, {}, {}, async (inner: Request) => {
+        await ctx.dir.apply({
+          entities: [{
+            entity: { eid: crypto.randomUUID() },
+            doc: { title: 'Concurrent edit' },
+          }],
+        })
+        return handler.fetch(inner, p.env)
+      }),
   }),
 }
 // The draft's worker.js makes the link's next state upload one, here to a
