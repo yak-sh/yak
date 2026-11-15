@@ -3577,7 +3577,19 @@ let indexedRelation = (
     // census bounded above instead of counting the entire visible table.
     if (ranged) {
       let probe = { ...ctx, tables: new Set<string>(), correlated: true }
-      let range = clause(probe, root.pred!)
+      // The range is every bound the query puts on the indexed property. One
+      // bound alone measures the wrong side: `.created.at<NEXT` holds every
+      // row ever created, so a day of usage was read by driving all 601,944
+      // usage rows where the day's own range seeks 55,796.
+      let at = root.pred!.path.join('.')
+      let range = and(
+        ...flattened(clauses).filter((c): c is Pred =>
+          c.kind == 'pred' && !c.not && !c.where &&
+          c.path.join('.') == at && ['<', '<=', '>', '>='].includes(opOf(c))
+        ).map((c) =>
+          clause(probe, c)
+        ),
+      )
       // Compare physical keys before reading content or visibility. The
       // range stops after the component population plus one; COUNT(*) on
       // the bare component uses SQLite's B-tree count, with no row decoding.
