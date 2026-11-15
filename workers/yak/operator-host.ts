@@ -1971,17 +1971,17 @@ export let operatorRead = async (
     : { sessions: [row], entries, ...earlier ? { earlier } : {} }
 }
 
-/** A kernel-vouched delivery receipt for this space's private mail. */
+/** A kernel-vouched delivery receipt for this space's private mail. The
+ * letter's own row says where its Message-ID goes: an answer kept the old way
+ * on its `operator_answer`, any other letter on its `mail`. An alert's
+ * recorded words are a notification, whose envelope joins that same row. */
 export let operatorReceipt = async (
   operator: { store: { g: Pick<Graph, 'get' | 'apply'> } },
-  args: { letter: string; id: string; kind?: string },
+  args: { letter: string; id: string },
 ): Promise<Response> => {
   let [row] = await operator.store.g.get([args.letter])
-  let name = args.kind == 'answer' ? 'operator_answer' : 'mail'
-  // An alert's recorded words are a notification. Its email envelope joins
-  // that same row when the provider supplies its Message-ID.
-  let alert = args.kind == 'alert' && row?.notification && row?.deliver
-  if (!row?.[name] && !alert) {
+  let name = row?.operator_answer ? 'operator_answer' : 'mail'
+  if (!row?.[name] && !(row?.notification && row?.deliver)) {
     throw new Error('Operator receipt awaits its recorded letter')
   }
   let before = comp(row, name)?.message_id

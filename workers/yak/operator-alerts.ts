@@ -272,7 +272,7 @@ let sent = async (
     return textPerson(env, space, route.to, words)
   }
   let { htmlOf, postOf, signed } = await import('./operator-channels.ts')
-  let { from, sender } = postOf(env, space, 'alert')
+  let { from, sender } = postOf(env, space)
   let text = `${words}\n\nYour Updates: ${updates}\n\n${signed(space)}`
   await store.g.apply([{
     entity: { eid: id },

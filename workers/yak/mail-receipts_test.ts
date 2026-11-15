@@ -47,7 +47,6 @@ test('a signed Operator alert receipt recovers its envelope and preserves its Up
       tags: {
         yak_letter: alert.entity.eid,
         yak_operator: space,
-        yak_kind: 'alert',
       },
     },
   }
@@ -69,7 +68,6 @@ test('a signed Operator alert receipt recovers its envelope and preserves its Up
       operatorReceipt(operator, {
         letter: alert.entity.eid,
         id: 'different@example.com',
-        kind: 'alert',
       }),
     Error,
     'disagrees with the recorded Message-ID',
@@ -82,7 +80,6 @@ test('an alert receipt still waits for its recorded notification', async () => {
       operatorReceipt(operator, {
         letter: crypto.randomUUID(),
         id: 'unknown@example.com',
-        kind: 'alert',
       }),
     Error,
     'awaits its recorded letter',

@@ -58,7 +58,7 @@ export let receipts = async (
           [SPACE]: tags.yak_operator,
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ ...found, kind: tags.yak_kind }),
+        body: JSON.stringify(found),
       })
     )
     if (!response.ok) throw new Error('Operator receipt was not recorded')

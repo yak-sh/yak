@@ -12,6 +12,11 @@ let letters: Bundle[] = [
     entity: { eid: '3e8382d2-6b7e-4a5a-aa5a-2c201bf8d96a' },
     operator_answer: { text: 'Done.' },
   },
+  {
+    entity: { eid: '0d7c1f2e-5b8a-4c3d-9e6f-1a2b3c4d5e6f' },
+    mail: { from: 'operator@yaks.app', reply_to: 'a letter it answers' },
+    deliver: { to: 'clerk@example.com' },
+  },
 ]
 let writes = 0
 let operator = {
@@ -39,16 +44,16 @@ let operator = {
   },
 }
 for (
-  let [index, name, kind] of [[0, 'mail', 'mail'], [
-    1,
-    'operator_answer',
-    'answer',
-  ]] as const
+  let [index, name, kind] of [
+    [0, 'mail', 'letter'],
+    [1, 'operator_answer', 'answer'],
+    [2, 'mail', 'emailed reply'],
+  ] as const
 ) {
   test(`an Operator ${kind} receipt threads the same stored words once`, async () => {
     let row = letters[index]
     let before = writes
-    let request = { letter: row.entity.eid, id: 'thread@example.com', kind }
+    let request = { letter: row.entity.eid, id: 'thread@example.com' }
     equal((await operatorReceipt(operator, request)).status, 200)
     equal((await operatorReceipt(operator, request)).status, 200)
     equal((row[name] as Comp).message_id, 'thread@example.com')

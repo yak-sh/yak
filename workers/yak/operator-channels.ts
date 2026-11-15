@@ -586,14 +586,14 @@ let said = (sent?: Bundle) => {
 
 // The Operator's own address, and the sender its letters leave on, counted
 // against the space's mail allowance (@yaks/platform/plans).
-export let postOf = (env: Env, space: Space, kind = 'mail') => {
+export let postOf = (env: Env, space: Space) => {
   let from = mailFrom(space.slug, null, env)
   return {
     from,
     sender: metering(
       env,
       () => from,
-      outgoing(env, { yak_operator: space.eid, yak_kind: kind }),
+      outgoing(env, { yak_operator: space.eid }),
     ),
   }
 }
@@ -652,7 +652,7 @@ export let channels = (env: Env): Record<string, Channel> => {
   let email: Channel = async (request, answer, subject) => {
     let space = await directoryOf(env.STORE).at(request.space)
     if (!space) throw new Error('Operator reply has no space')
-    let { from, sender } = postOf(env, space, 'answer')
+    let { from, sender } = postOf(env, space)
     let text = `${answer.text}\n\n${signed(space)}`
     return sender.send({
       id: answer.id,
@@ -1087,7 +1087,7 @@ export let handleChannels = (
       let by = part<Comp | undefined>(letter, 'created')?.by
       let space = by ? await directoryOf(env.STORE).at(String(by)) : null
       if (!space) throw new Error('An Operator letter names no space')
-      let { sender } = postOf(env, space, 'answer')
+      let { sender } = postOf(env, space)
       return sending({
         sender: {
           send: (m) =>
