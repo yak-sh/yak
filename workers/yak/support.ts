@@ -139,7 +139,9 @@ let supportOf = (said: Said) => ({
 })
 
 // The letter a message owes, its eid following the message's, ending with
-// the thread and how TaskMaster answers in it.
+// the thread and how TaskMaster answers in it. Both are code, so the letter
+// keeps the thread's whole eid (@yaks/mail md.ts): the box that reads it holds
+// no platform row a shorter id could name.
 let letterRows = (
   env: Host,
   thread: string,
@@ -149,8 +151,8 @@ let letterRows = (
 ): Bundle[] => {
   let lines = [
     ...letter.lines,
-    `thread ${thread}`,
-    `answer: yak admin support ${thread} '<reply>' [--fix <id>] [--complete]`,
+    `thread \`${thread}\``,
+    `answer: \`yak admin support ${thread} '<reply>' [--fix <id>] [--complete]\``,
   ]
   return toPlatform(replyTo(env), derived('letter', about), {
     subject: letter.subject,

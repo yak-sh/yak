@@ -165,6 +165,7 @@ test('feedback reaches the platform, in the words it was said in', async () => {
     // arrived first. Its answer goes in the thread it names.
     assertEquals(sent.to, ['hello@yaks.app'])
     assertStringIncludes(sent.body, `thread ${thread}`)
+    assertStringIncludes(sent.body, `yak admin support ${thread} '<reply>'`)
 
     // The row, in the meta store: the words, who said them, and where they
     // were standing — the app, the deploy it was serving, and the platform's

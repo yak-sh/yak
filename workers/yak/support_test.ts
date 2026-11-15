@@ -273,7 +273,7 @@ test('a thread is opened, answered and read in the same place', async () => {
   equal(link, `https://yaks.app/support/${thread}`)
   let sent = (await letterOf(thread))!
   ok(sent.delivered, 'the letter went')
-  assertStringIncludes(String(sent.doc.body), `thread ${thread}`)
+  assertStringIncludes(String(sent.doc.body), `thread \`${thread}\``)
 
   // TaskMaster sees it waiting, and answers it as the platform's admin.
   let listed = await (await support()).json()

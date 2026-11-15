@@ -217,10 +217,11 @@ export let letter = (report: string, rows: Row[]) => {
       'named them; nothing kept here holds them.',
       ...said,
       ...rest > 0 ? [`and ${rest} more groups`] : [],
+      // Code, so the report's eid stays whole for the box to query by.
       `Every occurrence, for ${KEPT / DAY} days: ` +
-      `yak admin query yak/platform '${
+      `\`yak admin query yak/platform '${
         countedIn(report)
-      }' --as admin@bot.yak.sh`,
+      }' --as admin@bot.yak.sh\``,
     ].join('\n\n'),
   }
 }
