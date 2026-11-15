@@ -1,7 +1,8 @@
-// Repository routes, visibility and credentials through the in-memory door.
-// The git protocol and history are covered through @yaks/git's own interface.
+// Which app a repository is and who is cloning it, through the in-memory
+// door. Its addresses, refusals and protocol are covered through @yaks/git's
+// own interface (door_test.ts, http_test.ts).
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assertEquals } from '@std/assert'
 import { r2Objects } from './lib/objects.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -99,24 +100,6 @@ let basic = (token: string) => ({
   authorization: `Basic ${btoa(`x:${token}`)}`,
 })
 
-test('the browser address redirects to the repository, query and all', async () => {
-  let p = platform(SECRET)
-  let { env } = p
-  await standing(env, 'public')
-  let res = await asked(env, '/recipes/info/refs?service=git-upload-pack', {
-    'git-protocol': 'version=2',
-  })
-  assertEquals(res!.status, 301)
-  assertEquals(
-    res!.headers.get('location'),
-    'https://ada.yaks.app/recipes.git/info/refs?service=git-upload-pack',
-  )
-  // A browser asking for the app's own `info/refs`, and the fetch endpoint
-  // under the app: both are the app's to answer, which is what `null` says.
-  assertEquals(await asked(env, '/recipes/info/refs'), null)
-  assertEquals(await asked(env, '/recipes/git-upload-pack'), null)
-})
-
 test('a private app asks for a credential, and judges the one it gets', async () => {
   let p = platform(SECRET)
   let { env } = p
@@ -163,43 +146,16 @@ test('a trashed app is gone to a credential as much as to nobody', async () => {
   let { app } = await standing(env, 'private', true)
   await deploy(p, app, 1, { 'index.html': '<h1>hi</h1>\n' })
   let hers = await tokenFor(env, ADA)
-  for (let head of [{}, basic(hers)]) {
-    let res = await asked(env, '/recipes.git/info/refs', {
-      'git-protocol': 'version=2',
-      ...head,
-    })
+  let cases: [string, HeadersInit][] = [
+    ['/recipes.git/info/refs', {}],
+    ['/recipes.git/info/refs', basic(hers)],
+    ['/nothing.git/info/refs', basic(hers)],
+  ]
+  for (let [path, head] of cases) {
+    let res = await asked(env, path, { 'git-protocol': 'version=2', ...head })
     assertEquals(res!.status, 404)
     // Not a challenge: there is nothing here to sign in to.
     assertEquals(res!.headers.get('www-authenticate'), null)
     assertEquals(await res!.text(), 'git: no such repository\n')
   }
-})
-
-test('an app that is not there, and a path that is no repository', async () => {
-  let p = platform(SECRET)
-  let { env } = p
-  await standing(env, 'public')
-  let gone = await asked(env, '/nothing.git/info/refs', {
-    'git-protocol': 'version=2',
-  })
-  assertEquals(gone!.status, 404)
-  // Everything else falls through to the apps, which is what `null` says.
-  for (let path of ['/recipes/', '/recipes.git', '/recipes.git/objects/info']) {
-    assertEquals(await asked(env, path), null, path)
-  }
-})
-
-test('the advertisement is served at info/refs on a public app', async () => {
-  let p = platform(SECRET)
-  let { env } = p
-  await standing(env, 'public')
-  let res = await asked(env, '/recipes.git/info/refs?service=git-upload-pack', {
-    'git-protocol': 'version=2',
-  })
-  assert(res, 'the door answers')
-  assertEquals(
-    res.headers.get('content-type'),
-    'application/x-git-upload-pack-advertisement',
-  )
-  assertEquals((await res.text()).includes('000eversion 2\n'), true)
 })

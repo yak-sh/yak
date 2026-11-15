@@ -3800,6 +3800,9 @@ importers:
       '@yaks/fts':
         specifier: 0.2.30
         version: link:../fts
+      '@yaks/git':
+        specifier: 0.2.30
+        version: link:../git
       '@yaks/graph':
         specifier: 0.2.33
         version: link:../graph

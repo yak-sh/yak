@@ -67,7 +67,8 @@ export let CAPS: string[] = [
   'server-option',
 ]
 
-let SERVICE = 'git-upload-pack'
+/** The one service served: a clone's and a fetch's. */
+export let SERVICE = 'git-upload-pack'
 
 let plain = (status: number, says: string) =>
   new Response(says, {
@@ -242,8 +243,8 @@ let fetch = async (
  * The response to `POST <repo>/git-upload-pack`: one command in, one response
  * out.
  *
- * The caller has already decided that this repository may be read. A private
- * app answers 404 rather than 403 at the endpoint its pages are served from.
+ * The caller has already decided that this repository may be read
+ * (./door.ts).
  */
 export let uploadPack = async (
   req: Request,

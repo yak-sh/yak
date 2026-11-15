@@ -18,6 +18,7 @@
  *
  * @module
  */
+import { knocks } from '@yaks/git/door'
 import { apex, type Host, spaceHost, url } from './host.ts'
 import { PLATFORM, SLUG } from './names.ts'
 
@@ -388,13 +389,12 @@ export let GRANT = 'x-yak-grant'
 /** Whether a request carries one, valid or not: it is the kernel's to open. */
 export let bearing = (req: Request): boolean => req.headers.has(GRANT)
 
-// The addresses on a space's hostname its apps never answer: a repository
-// (git_door.ts) and a service's webhooks (connections.ts). They come before
-// the apps and before the edge's kept pages.
-export let DOORS = /^\/([^/.]+)\.git\/(info\/refs|git-upload-pack)$/
-export let BARE = /^\/([^/.]+)\/info\/refs$/
+// The addresses on a space's hostname its apps never answer: a repository's
+// (@yaks/git/door, mounted by workers/yak git_door.ts) and a service's
+// webhooks (connections.ts). They come before the apps and before the edge's
+// kept pages.
 export let spaceDoor = (path: string): boolean =>
-  DOORS.test(path) || BARE.test(path) || path.startsWith(`${OURS}/hooks/`)
+  knocks(path) || path.startsWith(`${OURS}/hooks/`)
 
 /** The browser-facing URL retained when the router aims a custom domain. */
 export let ADDRESS = 'x-yak-address'

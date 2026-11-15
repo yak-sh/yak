@@ -5,6 +5,7 @@
   "exports": {
     ".": "./mod.ts",
     "./cites": "./cites.ts",
+    "./door": "./door.ts",
     "./host": "./host.ts",
     "./land": "./land.ts",
     "./hold": "./hold.ts",

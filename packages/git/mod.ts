@@ -52,8 +52,8 @@
  *
  * The only platform APIs it uses are `crypto.subtle`, `CompressionStream` and
  * `Request`/`Response`, so the same code runs on a server, in a worker and in
- * a browser tab. It does no routing: which repository a URL names, and who may
- * read it, are decided by whatever mounts it.
+ * a browser tab. Its door (`@yaks/git/door`) answers a repository's addresses;
+ * which repository a name is, and who may read it, are its host's.
  *
  * @module
  */

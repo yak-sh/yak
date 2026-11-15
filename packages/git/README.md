@@ -21,6 +21,9 @@ Entry points:
 
 - `@yaks/git`: object builders and storage, refs, packfiles, smart HTTP, and the
   commit plugin.
+- `@yaks/git/door`: a repository's door, the clone and fetch addresses of
+  repositories its host finds by name, with the credential challenge and the
+  refusals.
 - `@yaks/git/workspace`: explicit filesystem transport discovery, creation and
   reclamation.
 - `@yaks/git/host`: local checkout discovery, and creating, taking back and
@@ -413,10 +416,44 @@ object that no ref reaches is refused with an `ERR` line — the same rule as
 Git's `uploadpack.allowAnySHA1InWant=false` — because serving an object to
 whoever guesses its id would publish something nobody published.
 
-The module does no routing: which repository a URL names, and who is allowed to
-read it, belong to whatever mounts these two handlers. yaks.app mounts an app's
-deploy history at `<app>.git` and responds to a request for the app's own
-address — the URL you would type in a browser — with a 301 redirect to it, so
+Those two handlers do no routing. `@yaks/git/door` is the door that mounts them:
+it answers a repository's addresses, `<name>.git/info/refs` and
+`<name>.git/git-upload-pack`, and asks its host for the repository a name is, as
+the request may see it. Where the refs and objects are kept, and who may read
+them, are the host's.
+
+```ts
+import { door } from '@yaks/git/door'
+import { objects } from '@yaks/git'
+import type { Graph } from '@yaks/graph'
+import type { Blobs } from '@yaks/blob'
+
+let repositories = (g: Graph, store: Blobs, main: string) =>
+  door({
+    realm: 'example',
+    // `password` is what a Basic credential carried, or null.
+    find: async (name, _req, password) =>
+      name == 'recipes'
+        ? {
+          reads: password == 'open sesame',
+          proven: password == 'open sesame',
+          refs: { list: async () => [{ name: 'refs/heads/main', oid: main }] },
+          objects: objects(g, store),
+        }
+        : null,
+  })
+// repositories(g, store, main)(req) is a Response, or null for an address
+// that is no repository's.
+```
+
+A repository the request may not read answers `401` with a Basic challenge while
+nobody has proved who they are, which is what prompts git for a password, and
+`403` once somebody has, which is final. A name the host does not find is `404`
+to everyone.
+
+A clone of the address a browser shows, `<name>/`, asks for the advertisement at
+`<name>/info/refs?service=git-upload-pack`, and the door redirects it to
+`<name>.git` with a 301. yaks.app mounts an app's deploy history this way, so
 either address can be cloned:
 
 ```sh
@@ -426,12 +463,8 @@ git clone https://ada.yaks.app/recipes.git   # where the first one lands
 
 The query string is what distinguishes a clone from a page request:
 `?service=git-upload-pack` is something no browser sends, and Git follows that
-first redirect and fetches from where it landed.
-
-For a private repository, the server that mounts these handlers must
-authenticate the request and check access before calling them. HTTP Basic
-authentication is what prompts a Git client for credentials; validating the
-credentials is that server's job.
+first redirect and fetches from where it landed. A name holds no dot, so the two
+addresses never overlap.
 
 ## Landing a branch
 
