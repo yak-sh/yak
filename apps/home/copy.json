@@ -34,9 +34,14 @@
       "title": "Build your ideas by asking.",
       "hint": "What should it do, and who is it for?",
       "go": "Build it",
-      "note": "Free to start. Your app goes online at your own address, for any phone or computer. %{price} for unlimited apps. %{examples}",
+      "note": "Free to start, with no card. An AI assistant builds what you ask for while you watch. Your first 5 are free, and %{price} covers as many as you like. %{examples}",
       "price": "$9 a month",
       "examples": "See examples %{arrow}"
+    },
+    "sheet": {
+      "said": "Someone typed “a potluck sign-up sheet” and got this page. Try it: add a dish.",
+      "title": "A potluck sign-up sheet you can type in",
+      "open": "See it full size %{arrow}"
     },
     "examples": {
       "title": "Apps made with yaks.app",
@@ -50,37 +55,59 @@
       "title": "Build it, host it and share it here",
       "build": {
         "term": "Build an app by saying what you need",
-        "detail": "Describe it in plain words, and yaks.app builds it. For a new feature or a fix, ask your Operator, the AI assistant that comes with your apps, and it makes the change."
+        "detail": "Describe it in plain words, and an AI assistant builds it while you watch. For a new feature or a fix, ask it by chat or email, and it makes the change. In your account it is called your Operator."
       },
       "online": {
         "term": "It stays online and saves what people add",
-        "detail": "Your app lives at your own address, like %{yours}, on any phone or computer. Sign-ups, recipes, photos and files are saved for everyone you share with."
+        "detail": "Your app gets a web address of its own, like %{yours}, and opens on any phone or computer. Sign-ups, recipes, photos and files are saved for everyone you share with."
       },
       "share": {
         "term": "Share it with the people it's for",
-        "detail": "Keep an app to yourself, send its link, or invite as many people as you like to view or edit it, free. Publish it, and others can get a copy of their own."
+        "detail": "Send its link, and people open it without an account. Or make it private, so only the people you invite can open it, signing in with a code sent to their email. Publish it, and others can get a copy of their own, with nothing you saved in yours."
       }
+    },
+    "work": {
+      "title": "Your app does the follow-up for you",
+      "note": "A form by itself only collects answers, and the rest is left to you. Say what should happen next, and your app does it each time.",
+      "signup": {
+        "term": "Someone signs up, and you both get an email",
+        "detail": "They get a confirmation. You get their name and what they wrote, a few seconds later."
+      },
+      "hold": {
+        "term": "A date someone asks for is held",
+        "detail": "It goes on a calendar everyone can see, and a second request for that day is turned down. People can add the calendar to the one on their phone."
+      },
+      "friday": {
+        "term": "The list arrives every Friday",
+        "detail": "Ask for the list of who is coming on Saturday, emailed to you each Friday, or a reminder about a request that has waited two days. Nobody has to press anything."
+      },
+      "minutes": {
+        "term": "Email it, and the page is updated",
+        "detail": "Send the meeting minutes to your app's email address. They are posted on its page seconds later, and the people who asked to be told get an email."
+      },
+      "asked": "Each of these was asked for in a few sentences. %{office}",
+      "office": "See what it does for an office %{arrow}"
     },
     "how": {
       "title": "How yaks.app works",
       "say": {
         "name": "Say what you need",
-        "detail": "Type it in the box above, like a chore chart for your household."
+        "detail": "Type it in the box above, in your own words. Not sure where to start? Think of something you do by hand every week."
       },
       "open": {
         "name": "Open it anywhere",
-        "detail": "yaks.app builds it and puts it online. Open it on your phone or computer, or send its link to the people it's for."
+        "detail": "Your AI assistant builds it and puts it online while you watch. Open it on your phone or computer, or send its link to the people it's for."
       },
       "keep": {
         "name": "Sign up free to keep it",
-        "detail": "Enter your email, and the app is yours, at your own address like %{yours}."
+        "detail": "Enter your email, and the app is yours to keep, at a web address like %{yours}."
       },
       "agent": "Already use Claude or ChatGPT? Paste %{agent} into it, and it can build your apps too.",
       "address": "yaks.app/agent"
     },
     "cost": {
       "title": "Free to start, a plan for more",
-      "note": "A space is your address, like %{yours}, with its apps, their data and the people you invite. Your first space is free.",
+      "note": "A space is your web address, like %{yours}, with its apps, their data and the people you invite. Your first space is free.",
       "per": "a month",
       "free": {
         "price": "Free",
@@ -116,6 +143,21 @@
       },
       "limits": "Tax is included. Going over a limit never deletes your apps or data. %{plans}.",
       "plans": "Compare plans and limits"
+    },
+    "made": {
+      "title": "Made by a small company in Michigan",
+      "us": {
+        "term": "You can write to us",
+        "detail": "yaks.app is made by Yak Shaving LLC, in Sturgis, Michigan. Write to %{mail} and we answer."
+      },
+      "fixed": {
+        "term": "A broken page is noticed and fixed",
+        "detail": "When a page fails or a form doesn't save, it is recorded that moment, and your assistant starts on a fix. When the fault is in our own software, we are told as it happens, and we fix it."
+      },
+      "yours": {
+        "term": "What is in your apps is yours",
+        "detail": "Ask for everything in an app as a spreadsheet, or delete it, whenever you like. We never sell it or share it with advertisers."
+      }
     },
     "join": {
       "title": "What app would you like to build?",

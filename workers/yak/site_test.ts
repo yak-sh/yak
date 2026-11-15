@@ -724,7 +724,7 @@ test('the pages beside the home page say where they live and count their buttons
   })
   assertEquals(at('build.html'), {
     canonical: 'https://yaks.app/',
-    ctas: ['start', 'examples', 'plus', 'pro', 'join'],
+    ctas: ['start', 'examples', 'sheet', 'plus', 'pro', 'join'],
   })
   assertEquals(at('churches.html'), {
     canonical: 'https://yaks.app/churches',

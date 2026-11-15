@@ -559,8 +559,8 @@
   }
 
   /* The home page's hero stands on the grass under its sky (.Sky): it
-     starts well down the page, and its examples start level with the
-     kicker. */
+     starts well down the page, and the sheet beside it starts level with
+     its heading. */
   .Home .Hello {
     gap: 2.5rem;
     align-items: start;
@@ -1169,10 +1169,45 @@
     display: none;
   }
 
+  /* The sheet a visitor types in (home.tsx `Sheet`): an app in a frame,
+     under the words that built it, the app's own page reaching the frame's
+     line. */
+  .Sheet {
+    display: grid;
+    gap: var(--gap);
+    min-width: 0;
+    margin: 0;
+  }
+
+  .Sheet_Said {
+    font-weight: 700;
+    text-wrap: balance;
+  }
+
+  .Sheet_Frame {
+    border: var(--stroke) solid var(--graphite);
+    border-radius: var(--radius);
+    background: var(--card);
+    overflow: hidden;
+  }
+
+  .Sheet_Page {
+    display: block;
+    width: 100%;
+    height: 30rem;
+    border: 0;
+  }
+
   .Demo {
     display: grid;
     gap: var(--gap);
     min-width: 0;
+  }
+
+  /* On a page of its own row, the carousel keeps a card's width. */
+  .Page > .Demo {
+    width: min(100%, 40rem);
+    justify-self: center;
   }
 
   .Demo_Title {
@@ -1269,8 +1304,14 @@
       padding-top: 9rem;
     }
 
-    .Home .Hello > .Demo {
-      margin-top: 9.25rem;
+    /* The sheet's caption starts level with the heading, clear of the
+       hills' shade. */
+    .Home .Hello > .Sheet {
+      margin-top: 12.5rem;
+    }
+
+    .Sheet_Page {
+      height: 34rem;
     }
 
     .Hello_Copy {
@@ -1287,7 +1328,8 @@
     }
   }
 
-  .How {
+  .How,
+  .Work {
     display: grid;
     gap: 1.5rem;
   }

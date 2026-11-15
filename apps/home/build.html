@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <base href="https://yaks.app/">
-    <meta name="yak-drawing" content="5b3d3da1b5">
+    <meta name="yak-drawing" content="3df15ead5d">
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title
@@ -754,55 +754,17 @@
           <p class="Note Note-small"
             data-copy="build.hello.note">Free for 5 apps. <a href="#examples" data-cta="examples" data-copy="home.hello.examples" data-copy-slot="examples">See examples <span aria-hidden="true" data-copy-slot="arrow">↓</span></a></p>
         </div>
-        <section class="Demo" aria-labelledby="examples"
-          aria-roledescription="carousel" data-carousel>
-          <h2 class="Demo_Title" id="examples"
-            data-copy="home.examples.title">Apps made with yaks.app</h2>
-          <ul class="Demo_Slides">
-            <li data-demo="menu" class="Surface Card Make_Card">
-              <header class="Card_Head">
-                <h3
-                  class="Card_Title"><a href="https://yourname.yaks.app/menu/" class="Card_Link">Wren’s Bakery <span aria-hidden="true">↗</span></a></h3>
-              </header>
-              <p
-                class="Card_Sub">A market stall’s menu with prices, marked sold out from a phone.</p>
-            </li>
-            <li data-demo="directory" class="Surface Card Make_Card">
-              <header class="Card_Head">
-                <h3
-                  class="Card_Title"><a href="https://yourname.yaks.app/directory/" class="Card_Link">Church Directory <span aria-hidden="true">↗</span></a></h3>
-              </header>
-              <p
-                class="Card_Sub">A members-only directory with families, photos and birthdays.</p>
-            </li>
-            <li data-demo="trip" class="Surface Card Make_Card">
-              <header class="Card_Head">
-                <h3
-                  class="Card_Title"><a href="https://yourname.yaks.app/trip/" class="Card_Link">Travel Planner <span aria-hidden="true">↗</span></a></h3>
-              </header>
-              <p
-                class="Card_Sub">Plan the days, who's coming and what to pack.</p>
-            </li>
-            <li data-demo="recipes" class="Surface Card Make_Card">
-              <header class="Card_Head">
-                <h3
-                  class="Card_Title"><a href="https://yourname.yaks.app/recipes/" class="Card_Link">Recipe Box <span aria-hidden="true">↗</span></a></h3>
-              </header>
-              <p class="Card_Sub">Save recipes and share them with family.</p>
-            </li>
-            <li data-demo="chores" class="Surface Card Make_Card">
-              <header class="Card_Head">
-                <h3
-                  class="Card_Title"><a href="https://yourname.yaks.app/chores/" class="Card_Link">Chore Chart <span aria-hidden="true">↗</span></a></h3>
-              </header>
-              <p class="Card_Sub">Keep track of whose turn it is.</p>
-            </li>
-          </ul>
-          <div class="Demo_Controls"
-            hidden><button type="button" data-step="-1" aria-label="Previous app" data-copy-aria-label="home.examples.previous" class="Surface_Press Button Demo_Step">‹</button> <div class="Demo_Dots"></div> <button type="button" data-step="1" aria-label="Next app" data-copy-aria-label="home.examples.next" class="Surface_Press Button Demo_Step">›</button> <button type="button" data-copy="home.examples.pause" class="Surface_Press Button Demo_Pause">Pause</button></div>
-          <p class="Note Note-small"
-            data-copy="build.examples.note">Each of these apps runs on yaks.app. Open one to try it, or get a copy of your own and ask for changes. <a href="/gallery" data-copy="home.examples.gallery" data-copy-slot="gallery">See more in the gallery</a>.</p>
-        </section>
+        <figure class="Sheet">
+          <figcaption class="Sheet_Said"
+            data-copy="home.sheet.said">Someone typed “a potluck sign-up sheet” and got this page. Try it: add a dish.</figcaption>
+          <div class="Sheet_Frame">
+            <iframe class="Sheet_Page" src="https://yourname.yaks.app/potluck/"
+              loading="lazy" title="A potluck sign-up sheet you can type in"
+              data-copy-title="home.sheet.title"></iframe>
+          </div>
+          <p
+            class="Note Note-small"><a href="https://yourname.yaks.app/potluck/" data-cta="sheet" data-copy="home.sheet.open">See it full size <span aria-hidden="true" data-copy-slot="arrow">↗</span></a></p>
+        </figure>
       </section>
       <section class="Yours" aria-labelledby="does">
         <h2 class="Title" id="does"
@@ -828,6 +790,89 @@
           </div>
         </dl>
       </section>
+      <section class="Work" aria-labelledby="work">
+        <h2 class="Title" id="work"
+          data-copy="home.work.title">Your app does the follow-up for you</h2>
+        <p class="Note"
+          data-copy="home.work.note">A form by itself only collects answers, and the rest is left to you. Say what should happen next, and your app does it each time.</p>
+        <dl class="Yours_List Yours_List-pairs">
+          <div>
+            <dt class="Yours_Term"
+              data-copy="home.work.signup.term">Someone signs up, and you both get an email</dt>
+            <dd class="Yours_Detail"
+              data-copy="home.work.signup.detail">They get a confirmation. You get their name and what they wrote, a few seconds later.</dd>
+          </div>
+          <div>
+            <dt class="Yours_Term"
+              data-copy="home.work.hold.term">A date someone asks for is held</dt>
+            <dd class="Yours_Detail"
+              data-copy="home.work.hold.detail">It goes on a calendar everyone can see, and a second request for that day is turned down. People can add the calendar to the one on their phone.</dd>
+          </div>
+          <div>
+            <dt class="Yours_Term"
+              data-copy="home.work.friday.term">The list arrives every Friday</dt>
+            <dd class="Yours_Detail"
+              data-copy="home.work.friday.detail">Ask for the list of who is coming on Saturday, emailed to you each Friday, or a reminder about a request that has waited two days. Nobody has to press anything.</dd>
+          </div>
+          <div>
+            <dt class="Yours_Term"
+              data-copy="home.work.minutes.term">Email it, and the page is updated</dt>
+            <dd class="Yours_Detail"
+              data-copy="home.work.minutes.detail">Send the meeting minutes to your app's email address. They are posted on its page seconds later, and the people who asked to be told get an email.</dd>
+          </div>
+        </dl>
+        <p class="Note Note-small"
+          data-copy="home.work.asked">Each of these was asked for in a few sentences. <a href="/organizations" data-copy="home.work.office" data-copy-slot="office">See what it does for an office <span aria-hidden="true" data-copy-slot="arrow">→</span></a></p>
+      </section>
+      <section class="Demo" aria-labelledby="examples"
+        aria-roledescription="carousel" data-carousel>
+        <h2 class="Demo_Title" id="examples"
+          data-copy="home.examples.title">Apps made with yaks.app</h2>
+        <ul class="Demo_Slides">
+          <li data-demo="menu" class="Surface Card Make_Card">
+            <header class="Card_Head">
+              <h3
+                class="Card_Title"><a href="https://yourname.yaks.app/menu/" class="Card_Link">Wren’s Bakery <span aria-hidden="true">↗</span></a></h3>
+            </header>
+            <p
+              class="Card_Sub">A market stall’s menu with prices, marked sold out from a phone.</p>
+          </li>
+          <li data-demo="directory" class="Surface Card Make_Card">
+            <header class="Card_Head">
+              <h3
+                class="Card_Title"><a href="https://yourname.yaks.app/directory/" class="Card_Link">Church Directory <span aria-hidden="true">↗</span></a></h3>
+            </header>
+            <p
+              class="Card_Sub">A members-only directory with families, photos and birthdays.</p>
+          </li>
+          <li data-demo="trip" class="Surface Card Make_Card">
+            <header class="Card_Head">
+              <h3
+                class="Card_Title"><a href="https://yourname.yaks.app/trip/" class="Card_Link">Travel Planner <span aria-hidden="true">↗</span></a></h3>
+            </header>
+            <p
+              class="Card_Sub">Plan the days, who's coming and what to pack.</p>
+          </li>
+          <li data-demo="recipes" class="Surface Card Make_Card">
+            <header class="Card_Head">
+              <h3
+                class="Card_Title"><a href="https://yourname.yaks.app/recipes/" class="Card_Link">Recipe Box <span aria-hidden="true">↗</span></a></h3>
+            </header>
+            <p class="Card_Sub">Save recipes and share them with family.</p>
+          </li>
+          <li data-demo="chores" class="Surface Card Make_Card">
+            <header class="Card_Head">
+              <h3
+                class="Card_Title"><a href="https://yourname.yaks.app/chores/" class="Card_Link">Chore Chart <span aria-hidden="true">↗</span></a></h3>
+            </header>
+            <p class="Card_Sub">Keep track of whose turn it is.</p>
+          </li>
+        </ul>
+        <div class="Demo_Controls"
+          hidden><button type="button" data-step="-1" aria-label="Previous app" data-copy-aria-label="home.examples.previous" class="Surface_Press Button Demo_Step">‹</button> <div class="Demo_Dots"></div> <button type="button" data-step="1" aria-label="Next app" data-copy-aria-label="home.examples.next" class="Surface_Press Button Demo_Step">›</button> <button type="button" data-copy="home.examples.pause" class="Surface_Press Button Demo_Pause">Pause</button></div>
+        <p class="Note Note-small"
+          data-copy="build.examples.note">Each of these apps runs on yaks.app. Open one to try it, or get a copy of your own and ask for changes. <a href="/gallery" data-copy="home.examples.gallery" data-copy-slot="gallery">See more in the gallery</a>.</p>
+      </section>
       <section class="How" aria-labelledby="how">
         <h2 class="Title" id="how"
           data-copy="home.how.title">How yaks.app works</h2>
@@ -848,7 +893,7 @@
             <h3 class="Step_Name"
               data-copy="home.how.keep.name">Sign up free to keep it</h3>
             <p class="Note"
-              data-copy="home.how.keep.detail">Enter your email, and the app is yours, at your own address like <span data-copy-slot="yours" class="Address"><strong class="Address_Name">yourname</strong>.yaks.app</span>.</p>
+              data-copy="home.how.keep.detail">Enter your email, and the app is yours to keep, at a web address like <span data-copy-slot="yours" class="Address"><strong class="Address_Name">yourname</strong>.yaks.app</span>.</p>
           </li>
           <li class="Steps_Item">
             <h3 class="Step_Name"
@@ -864,7 +909,7 @@
         <h2 class="Title" id="cost"
           data-copy="home.cost.title">Free to start, a plan for more</h2>
         <p class="Note"
-          data-copy="home.cost.note">A space is your address, like <span data-copy-slot="yours" class="Address"><strong class="Address_Name">yourname</strong>.yaks.app</span>, with its apps, their data and the people you invite. Your first space is free.</p>
+          data-copy="home.cost.note">A space is your web address, like <span data-copy-slot="yours" class="Address"><strong class="Address_Name">yourname</strong>.yaks.app</span>, with its apps, their data and the people you invite. Your first space is free.</p>
         <div class="Plans">
           <div
             class="Surface Card Plan"><h3 class="Plan_Price" data-copy="home.cost.free.price">Free</h3><p class="Note Note-small" data-copy="home.cost.free.note">Your first space.</p><ul class="Plan_List"><li class="Plan_Item" data-copy="home.cost.free.apps">5 apps</li><li class="Plan_Item" data-copy="home.cost.free.visitors">Unlimited visitors</li><li class="Plan_Item" data-copy="home.cost.free.storage">1 GB of app data, 1 GB of photos and files</li><li class="Plan_Item" data-copy="home.cost.free.emails">100 emails a month</li><li class="Plan_Item" data-copy="home.cost.free.address">An address like <span data-copy-slot="yours" class="Address"><strong class="Address_Name">yourname</strong>.yaks.app</span></li></ul> <a data-copy="home.cost.free.go" href="/login" class="Surface_Press Button Button-go">Start Free</a></div>
@@ -875,6 +920,30 @@
         </div>
         <p class="Note Note-small"
           data-copy="home.cost.limits">Tax is included. Going over a limit never deletes your apps or data. <a href="/pricing" data-copy="home.cost.plans" data-copy-slot="plans">Compare plans and limits</a>.</p>
+      </section>
+      <section class="Yours" aria-labelledby="made">
+        <h2 class="Title" id="made"
+          data-copy="home.made.title">Made by a small company in Michigan</h2>
+        <dl class="Yours_List">
+          <div>
+            <dt class="Yours_Term"
+              data-copy="home.made.us.term">You can write to us</dt>
+            <dd class="Yours_Detail"
+              data-copy="home.made.us.detail">yaks.app is made by Yak Shaving LLC, in Sturgis, Michigan. Write to <a href="mailto:hello@yaks.app" data-copy-slot="mail">hello@yaks.app</a> and we answer.</dd>
+          </div>
+          <div>
+            <dt class="Yours_Term"
+              data-copy="home.made.fixed.term">A broken page is noticed and fixed</dt>
+            <dd class="Yours_Detail"
+              data-copy="home.made.fixed.detail">When a page fails or a form doesn't save, it is recorded that moment, and your assistant starts on a fix. When the fault is in our own software, we are told as it happens, and we fix it.</dd>
+          </div>
+          <div>
+            <dt class="Yours_Term"
+              data-copy="home.made.yours.term">What is in your apps is yours</dt>
+            <dd class="Yours_Detail"
+              data-copy="home.made.yours.detail">Ask for everything in an app as a spreadsheet, or delete it, whenever you like. We never sell it or share it with advertisers.</dd>
+          </div>
+        </dl>
       </section>
       <section aria-labelledby="join" class="Surface Card Join">
         <h2 class="Title" id="join"

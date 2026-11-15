@@ -5,15 +5,30 @@
 // private one's picture (gallery.ts `featured`); an app added here is featured
 // with `gallery_feature` so its card has its picture.
 
+/** The sheet a home page frames beside its box (site/home.tsx `Sheet`): the
+ * potluck sign-up sheet the demo space's Operator built from the words the
+ * page quotes. It is private and published, so a stranger reads its sample
+ * and what they add goes to a store of their own (visit.ts). */
+export let SHEET = 'https://yourname.yaks.app/potluck/'
+
 /** One example: its address, its name, and what it is for. */
 export type Example = [slug: string, title: string, sub: string]
 
-/** The carousel of the home page that pitches the Operator, and of
- * /operator. */
+/** The carousel of the home page and of /operator, things for work
+ * first. */
 export let HOME: Example[] = [
-  ['garden', 'Garden Diary', 'Note what you planted and how it grew.'],
-  ['bookclub', 'Book Club', 'Choose books and plan your next meeting.'],
+  [
+    'menu',
+    'Wren’s Bakery',
+    'A market stall’s menu with prices, marked sold out from a phone.',
+  ],
+  [
+    'directory',
+    'Church Directory',
+    'A members-only directory with families, photos and birthdays.',
+  ],
   ['trip', 'Travel Planner', "Plan the days, who's coming and what to pack."],
+  ['bookclub', 'Book Club', 'Choose books and plan your next meeting.'],
   ['recipes', 'Recipe Box', 'Save recipes and share them with family.'],
   [
     'guestbook',
@@ -26,6 +41,7 @@ export let HOME: Example[] = [
     'Housebook',
     'Your home’s manual: appliances, upkeep, paint colors and papers.',
   ],
+  ['garden', 'Garden Diary', 'Note what you planted and how it grew.'],
   [
     'sound-lab',
     'Sound Lab',

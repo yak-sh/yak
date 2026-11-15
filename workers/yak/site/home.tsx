@@ -7,7 +7,7 @@ import { Data, Page, Yours } from './frame.tsx'
 import { attr, COPY, said, type Slots, text } from './copy.ts'
 import { Idle } from '../mascot.ts'
 import { Sky, Walk } from './sky.tsx'
-import { BUILD, type Example, HOME } from '../demos.ts'
+import { BUILD, type Example, HOME, SHEET } from '../demos.ts'
 
 // A plan's price in dollars, as its card says it: "Free" is none.
 let dollars = (plan: string) =>
@@ -78,7 +78,7 @@ export let data = () => ({
   ],
 })
 
-/** The examples, one card at a time (carousel.js): apps in yourname's space,
+/** More examples, one card at a time (carousel.js): apps in yourname's space,
  * each named by its address there (`data-demo`), which the served page swaps
  * for the gallery's cards (gallery.ts `showcase`), and under them what a
  * visitor can do with one, the snippet at `note` with its `slots`. */
@@ -136,6 +136,31 @@ export let Examples = (
     </div>
     <p class='Note Note-small' {...text(note, slots)} />
   </section>
+)
+
+/** The sheet a visitor can type in, beside the box: an app in yourname's
+ * space (demos.ts `SHEET`), framed live under the words that built it. What
+ * a stranger adds goes to a store of their own (visit.ts), so the next
+ * visitor finds the sheet as it was published. */
+export let Sheet = () => (
+  <figure class='Sheet'>
+    <figcaption class='Sheet_Said' {...text('home.sheet.said')} />
+    <div class='Sheet_Frame'>
+      <iframe
+        class='Sheet_Page'
+        src={SHEET}
+        loading='lazy'
+        {...attr('title', 'home.sheet.title')}
+      />
+    </div>
+    <p class='Note Note-small'>
+      <a
+        href={SHEET}
+        data-cta='sheet'
+        {...text('home.sheet.open', { arrow: arrow('↗') })}
+      />
+    </p>
+  </figure>
 )
 
 // A plan's card on the home page: its price, its note, its list and its
@@ -260,6 +285,11 @@ export let DESCRIBE: Pitch = {
   steps: ['describe', 'builds', 'keep', 'change'],
 }
 
+// What an app does after someone uses it, and who stands behind it: each a
+// term and its detail under `home.work` and `home.made`, on every home page.
+let WORK = ['signup', 'hold', 'friday', 'minutes']
+let MADE = ['us', 'fixed', 'yours']
+
 // The key of the snippet a pitch shows at `rest`: its own, else the home
 // page's.
 let worded = ({ copy }: Pitch) => (rest: string) =>
@@ -325,13 +355,7 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
             })}
           />
         </div>
-        <Examples
-          apps={pitch.apps}
-          note={key('examples.note')}
-          slots={{
-            gallery: <a href='/gallery' {...text(key('examples.gallery'))} />,
-          }}
-        />
+        <Sheet />
       </section>
       <section class='Yours' aria-labelledby='does'>
         <h2 class='Title' id='does' {...text(key('does.title'))} />
@@ -347,6 +371,36 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
           ))}
         </dl>
       </section>
+      <section class='Work' aria-labelledby='work'>
+        <h2 class='Title' id='work' {...text('home.work.title')} />
+        <p class='Note' {...text('home.work.note')} />
+        <dl class='Yours_List Yours_List-pairs'>
+          {WORK.map((item) => (
+            <div>
+              <dt class='Yours_Term' {...text(`home.work.${item}.term`)} />
+              <dd class='Yours_Detail' {...text(`home.work.${item}.detail`)} />
+            </div>
+          ))}
+        </dl>
+        <p
+          class='Note Note-small'
+          {...text('home.work.asked', {
+            office: (
+              <a
+                href='/organizations'
+                {...text('home.work.office', { arrow: arrow('→') })}
+              />
+            ),
+          })}
+        />
+      </section>
+      <Examples
+        apps={pitch.apps}
+        note={key('examples.note')}
+        slots={{
+          gallery: <a href='/gallery' {...text(key('examples.gallery'))} />,
+        }}
+      />
       <section class='How' aria-labelledby='how'>
         <h2 class='Title' id='how' {...text(key('how.title'))} />
         <ol class='Steps'>
@@ -365,6 +419,27 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
         />
       </section>
       <Cost />
+      <section class='Yours' aria-labelledby='made'>
+        <h2 class='Title' id='made' {...text('home.made.title')} />
+        <dl class='Yours_List'>
+          {MADE.map((item) => (
+            <div>
+              <dt class='Yours_Term' {...text(`home.made.${item}.term`)} />
+              <dd
+                class='Yours_Detail'
+                {...text(
+                  `home.made.${item}.detail`,
+                  item == 'us'
+                    ? {
+                      mail: <a href='mailto:hello@yaks.app'>hello@yaks.app</a>,
+                    }
+                    : {},
+                )}
+              />
+            </div>
+          ))}
+        </dl>
+      </section>
       <Card class='Join' aria-labelledby='join'>
         <h2 class='Title' id='join' {...text(key('join.title'))} />
         <p class='Join_Doors'>
