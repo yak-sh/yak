@@ -66,7 +66,8 @@ export let ROLES: Role[] = [
   },
 ]
 
-/** The supervised handover waits for readiness without holding its caller. */
+/** How long the supervised handover waits for its replacements to be ready,
+ * from when they start, without holding its caller. */
 export let PATIENCE = 120_000
 
 /** One systemctl or systemd-run call only queues a job, but on a box busy with
@@ -287,7 +288,6 @@ let handover = async (options: RestartOptions): Promise<string> => {
       }`,
     )
   }
-  let deadline = now() + PATIENCE
   // Snapshot every role first: no candidate can be mistaken for an old unit.
   let listed = await call(
     'list-units',
@@ -339,7 +339,10 @@ let handover = async (options: RestartOptions): Promise<string> => {
     }
   })
   try {
+    // Patience runs from the start of the replacements: judging the old units
+    // must never cut short the warming of a new one.
     let began = now()
+    let deadline = began + PATIENCE
     if (candidates.length) {
       await call('--no-block', 'start', ...candidates.map((c) => c.unit))
     }

@@ -615,12 +615,15 @@ it. A process given `--ready` keeps a code record beside its ready file
 (`<unit>-<instance>.code`, ./code.ts): the tree it runs from, the modules it
 imported by a computed specifier (a plugin's facets, the bundler and the browser
 modules it bundled), the files it read in that tree, and its config's digest.
-The handover proves the record against its own tree as the test runner proves a
+Once its imports have been quiet for ten seconds, the process computes its own
+module graph by `deno info` in its tree and keeps the files it reaches in the
+record too; its tree never changes, so the graph holds while it runs. The
+handover proves the record against its own tree as the test runner proves a
 pass: the module graph of the record's roots, literal dynamic imports included,
-computed by `deno info` in the tree the process runs from, with every file it
-reaches, the `deno.json` and `package.json` over each, the lock and every file
-read, compared byte for byte. A unit with no record, or one that cannot be
-proved, is replaced, and its journal line says why each old unit went.
+taken from the record and computed only for the roots it does not cover, with
+every file it reaches, the `deno.json` and `package.json` over each, the lock
+and every file read, compared byte for byte. A unit with no record, or one that
+cannot be proved, is replaced, and its journal line says why each old unit went.
 
 A worker is ready once its pool and graph are assembled; the old worker drains
 its steps in flight. A web listens on the old web's shared port before that web
@@ -628,11 +631,11 @@ stops taking requests ([@yaks/api](../api/README.md)). Inactive optional units
 stay untouched. A second restart waits for the running handover, then coalesces
 into a later one that began after it was called, or else rolls again, so it
 always ends with code at least as new as its caller's. Readiness has one
-two-minute deadline for the background job. A failure preserves the old units
-and any ready replacements, cleans up unready replacements, and reports through
-the ordinary `unit failure` tracker spool. The report captures the candidate's
-systemd state before cleanup unloads its instance. Nobody waits on that job
-before finishing a landing.
+two-minute deadline, counted from when the replacements start. A failure
+preserves the old units and any ready replacements, cleans up unready
+replacements, and reports through the ordinary `unit failure` tracker spool. The
+report captures the candidate's systemd state before cleanup unloads its
+instance. Nobody waits on that job before finishing a landing.
 
 `yak --no-duties` turns inline duties off for a host that stays up: it takes no
 lease, works no effects, and runs neither the services nor the start-up passes

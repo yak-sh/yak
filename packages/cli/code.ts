@@ -23,14 +23,16 @@ import { runtimeTree } from './runtime.ts'
 // every file it read compared byte for byte.
 
 /** What a process runs: the tree it runs from, by path and by id, the roots
- * beyond its entry and the files it read there, as paths in the tree, and
- * the digest of its config. */
+ * beyond its entry and the files it read there, as paths in the tree, the
+ * digest of its config, and the files the module graph of some of its roots
+ * reaches, once resolved. */
 export type Code = {
   root: string
   tree: string
   imports: string[]
   reads: string[]
   config?: { path: string; sum: string }
+  graph?: { roots: string[]; files: string[] }
 }
 
 /** The entry every `yak` process starts from, in its tree. */
@@ -64,16 +66,32 @@ export let inside = (root: string, at: string | URL): string | undefined => {
   return /(^|\/)node_modules(\/|$)/.test(rel) || !rel ? undefined : rel
 }
 
+// The files in the tree at `root` that the module graph of `roots` (paths
+// in it) reaches, or undefined when deno can't say.
+let reach = async (root: string, roots: string[]) => {
+  let graph = await modules(roots.map((p) => `file://${root}/${p}`), root)
+  if (!graph) return
+  let files = new Set<string>()
+  for (let m of graph.modules) {
+    let rel = m.local ? inside(root, m.local) : undefined
+    if (rel) files.add(rel)
+  }
+  return files
+}
+
 /** Keep what this process runs in `file`, if it runs from a pinned tree,
  * from now until `stop` removes it; `now` is what it holds. The record is
- * rewritten, whole, within a second of learning more. */
+ * rewritten, whole, within a second of learning more, and its graph
+ * resolved once no import has been learned for `quiet` milliseconds. */
 export let record = (
   file: string,
   config?: string,
   tree = runtimeTree(),
+  quiet = 10_000,
 ): { now: () => Code | undefined; stop: () => Promise<void> } => {
   if (!tree) return { now: () => undefined, stop: async () => {} }
   let imports = new Set<string>(), reads = new Set<string>()
+  let graphed = new Set<string>(), reached = new Set<string>()
   let said = config
     ? { path: disk.resolve(config), sum: sum(disk.readFileSync(config)) }
     : undefined
@@ -83,8 +101,13 @@ export let record = (
     imports: [...imports].sort(),
     reads: [...reads].sort(),
     ...said ? { config: said } : {},
+    ...graphed.size
+      ? { graph: { roots: [...graphed].sort(), files: [...reached].sort() } }
+      : {},
   })
   let pending: ReturnType<typeof setTimeout> | undefined
+  let settling: ReturnType<typeof setTimeout> | undefined
+  let resolving = false
   let written = Promise.resolve()
   let stopped = false
   let write = () => {
@@ -96,19 +119,50 @@ export let record = (
       await disk.rename(next, file)
     }).catch((error) => fault(error, `writing ${file}`))
   }
+  let later = () => {
+    if (pending || stopped) return
+    pending = setTimeout(write, 1000)
+    system.unrefTimer(pending)
+  }
+  // One resolution at a time, of the roots not yet graphed; roots learned
+  // meanwhile settle again after it.
+  let graph = async () => {
+    settling = undefined
+    let roots = [ENTRY, ...imports].filter((p) => !graphed.has(p))
+    if (stopped || resolving || !roots.length) return
+    resolving = true
+    try {
+      let files = await reach(tree.root, roots)
+      if (!files || stopped) return
+      for (let p of roots) graphed.add(p)
+      for (let f of files) reached.add(f)
+      later()
+    } catch (error) {
+      fault(error, `resolving what ${file} runs`)
+    } finally {
+      resolving = false
+    }
+    if (!settling && [ENTRY, ...imports].some((p) => !graphed.has(p))) settle()
+  }
+  let settle = () => {
+    if (stopped) return
+    clearTimeout(settling)
+    settling = setTimeout(graph, quiet)
+    system.unrefTimer(settling)
+  }
   let learn = (into: Set<string>, at: string | URL) => {
     let rel = inside(tree.root, at)
     if (!rel || into.has(rel)) return
     into.add(rel)
-    if (pending || stopped) return
-    pending = setTimeout(write, 1000)
-    system.unrefTimer(pending)
+    if (into == imports) settle()
+    later()
   }
   let offImports = watchImports((specifier) => {
     if (specifier.startsWith('file:')) learn(imports, specifier)
   })
   let offReads = watchReads((path) => learn(reads, path))
   write()
+  settle()
   return {
     now,
     stop: async () => {
@@ -116,6 +170,7 @@ export let record = (
       offImports()
       offReads()
       clearTimeout(pending)
+      clearTimeout(settling)
       await written
       await disk.remove(file).catch(() => {})
     },
@@ -134,7 +189,8 @@ let held = async (path: string): Promise<string | undefined> => {
 
 /** Why the process `code` describes would run differently from one started
  * from the tree `tree`, or undefined when it runs the same: the config, or
- * the first file, that differs. */
+ * the first file, that differs. Only the roots its record's graph doesn't
+ * cover are resolved here. */
 export let stale = async (
   code: Code,
   tree: { root: string; id: string },
@@ -143,19 +199,15 @@ export let stale = async (
     return `${code.config.path} differs`
   }
   if (code.tree == tree.id) return
-  let graph = await disk.stat(code.root).then(
-    () =>
-      modules(
-        [ENTRY, ...code.imports].map((p) => `file://${code.root}/${p}`),
-        code.root,
-      ),
-    () => undefined,
-  )
-  if (!graph) return `deno can't say what ${code.root} loads`
+  let covered = new Set(code.graph?.roots)
+  let rest = [ENTRY, ...code.imports].filter((p) => !covered.has(p))
+  if (!(await disk.stat(code.root).then(() => true, () => false))) {
+    return `${code.root} is gone`
+  }
+  let reached = rest.length ? await reach(code.root, rest) : new Set<string>()
+  if (!reached) return `deno can't say what ${code.root} loads`
   let files = new Set([...SHARED, ...code.reads])
-  for (let m of graph.modules) {
-    let rel = m.local ? inside(code.root, m.local) : undefined
-    if (!rel) continue
+  for (let rel of [...code.graph?.files ?? [], ...reached]) {
     files.add(rel)
     for (let dir = rel; dir.includes('/');) {
       dir = dir.slice(0, dir.lastIndexOf('/'))
@@ -163,11 +215,13 @@ export let stale = async (
       files.add(`${dir}/package.json`)
     }
   }
-  for (let rel of [...files].sort()) {
-    let [was, now] = await Promise.all([
-      held(`${code.root}/${rel}`),
-      held(`${tree.root}/${rel}`),
-    ])
-    if (was != now) return `${rel} differs`
-  }
+  // Every file at once, the first that differs in order reported.
+  let sorted = [...files].sort()
+  let same = await Promise.all(
+    sorted.map(async (rel) =>
+      (await held(`${code.root}/${rel}`)) == (await held(`${tree.root}/${rel}`))
+    ),
+  )
+  let first = same.indexOf(false)
+  if (first >= 0) return `${sorted[first]} differs`
 }

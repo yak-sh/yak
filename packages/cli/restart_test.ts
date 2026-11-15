@@ -300,6 +300,22 @@ test('every role shares the same readiness deadline', async () => {
   assertEquals(stopped(f), [[started(f)[1]]])
 })
 
+test('judging the old units leaves the replacements their whole patience', async () => {
+  let f = fixture()
+  let sleep = f.options.sleep!
+  f.options.stale = async () => {
+    await sleep(PATIENCE)
+    return 'a.ts differs'
+  }
+  f.options.ready = async () => {
+    await sleep(PATIENCE / 4)
+    return true
+  }
+  let said = await restart(f.options)
+  assertMatch(said, /ready in/)
+  assertEquals(stopped(f).flat().length, 3)
+})
+
 let evidence = fixture()
 let evidenceRun = evidence.options.run!
 evidence.options.run = async (command, args) => {

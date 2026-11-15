@@ -89,6 +89,47 @@ test('a computed import and a file read are part of what a process runs', async 
   )
 })
 
+test("a record's graph speaks for its roots, and only the rest are resolved", async () => {
+  let edit = { 'packages/web/views.ts': 'export let c = 2' }
+  let graph = { roots: [ENTRY], files: ['packages/web/views.ts'] }
+  assertEquals(
+    await trees(FILES, edit, { graph }),
+    'packages/web/views.ts differs',
+  )
+  assertEquals(
+    await trees(FILES, { 'packages/cli/main.ts': 'export let a = 2' }, {
+      graph,
+    }),
+    undefined,
+  )
+  assertEquals(
+    await trees(FILES, { 'packages/cli/main.ts': 'export let a = 2' }, {
+      graph: { roots: [], files: [] },
+    }),
+    'packages/cli/main.ts differs',
+  )
+})
+
+test('a supervised process resolves its graph once its imports go quiet', async () => {
+  let dir = await disk.makeTempDir({ prefix: 'yak-code-' })
+  for (let [path, text] of Object.entries(FILES)) {
+    await disk.mkdir(disk.dirname(`${dir}/${path}`), { recursive: true })
+    await disk.writeTextFile(`${dir}/${path}`, text)
+  }
+  let kept = record(`${dir}/web.code`, undefined, { root: dir, id: 'a' }, 0)
+  let graph
+  for (let i = 0; i < 200 && !graph; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    graph = kept.now()!.graph
+  }
+  assertEquals(graph, {
+    roots: [ENTRY],
+    files: ['packages/cli/lazy.ts', 'packages/cli/main.ts', ENTRY],
+  })
+  await kept.stop()
+  await disk.remove(dir, { recursive: true })
+})
+
 test('a supervised process keeps what it imports and reads in its tree, and its config', async () => {
   let dir = await disk.makeTempDir({ prefix: 'yak-code-' })
   let config = `${dir}/yak.json`
