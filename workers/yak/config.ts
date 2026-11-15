@@ -15,6 +15,7 @@ import {
   storePlugins,
   toolFacets,
 } from '@yaks/platform/config'
+import { beside } from '@yaks/platform/facets'
 import { memoryDoc } from '@yaks/memory/vocab'
 
 export let directoryConfig: Config = {
@@ -547,63 +548,30 @@ export let mailDomains: Config & { via: string } = {
 /** The arrival that reads a letter Email Routing hands `email()` (inbox.ts). */
 export let ARRIVAL = 'cloudflare'
 
-/** Worker domains export the same store facets as packages: at local paths
- * for what is still the Worker's, at @yaks/platform for what moved there. */
-export let domains = {
+/** Worker domains export the same store facets as packages: @yaks/platform's
+ * for what moved there (`facets`), and beside them at local paths what is
+ * still the Worker's own. */
+export let domains = beside({
   'yak/kernel': { worker: './facets/kernel-worker.ts' },
-  'yak/app': {
-    vocab: '@yaks/platform/app-vocab',
-    graph: '@yaks/platform/app-graph',
-    effects: './facets/app-effects.ts',
-  },
+  'yak/app': { effects: './facets/app-effects.ts' },
   'yak/directory': {
-    vocab: '@yaks/platform/directory-vocab',
     graph: './facets/directory-graph.ts',
     effects: './facets/directory-effects.ts',
   },
-  'yak/trash': {
-    vocab: '@yaks/platform/trash-vocab',
-    graph: '@yaks/platform/trash-graph',
-    effects: './facets/trash-effects.ts',
-  },
-  'yak/meter': {
-    vocab: '@yaks/platform/meter-vocab',
-    graph: './facets/meter-graph.ts',
-  },
-  'yak/refusals': {
-    vocab: '@yaks/platform/refusals-vocab',
-    effects: './facets/refusals-effects.ts',
-  },
+  'yak/trash': { effects: './facets/trash-effects.ts' },
+  'yak/meter': { graph: './facets/meter-graph.ts' },
+  'yak/refusals': { effects: './facets/refusals-effects.ts' },
   'yak/pages': { graph: './facets/pages-graph.ts' },
-  'yak/lenses': { graph: '@yaks/platform/lenses-graph' },
-  'yak/lower': { graph: '@yaks/platform/lower-graph' },
-  'yak/describe': { graph: '@yaks/platform/describe-graph' },
-  'yak/weigh': { graph: '@yaks/platform/weigh-graph' },
-  'yak/rouse': { graph: '@yaks/platform/rouse-graph' },
-  'yak/embed': { graph: '@yaks/platform/embed-graph' },
-  'yak/lexicon': { graph: '@yaks/platform/lexicon-graph' },
-  'yak/log': { graph: '@yaks/platform/log-graph' },
-  'yak/admit': { graph: '@yaks/platform/admit-graph' },
   'yak/publishing': { graph: './facets/publishing-graph.ts' },
-  'yak/attribution': {
-    vocab: '@yaks/platform/attribution-vocab',
-    effects: './facets/attribution-effects.ts',
-  },
-  'yak/models': {
-    vocab: '@yaks/platform/models-vocab',
-    effects: './facets/models-effects.ts',
-  },
+  'yak/attribution': { effects: './facets/attribution-effects.ts' },
+  'yak/models': { effects: './facets/models-effects.ts' },
   'yak/git': {
     vocab: './facets/git-vocab.ts',
-    graph: '@yaks/platform/git-graph',
     effects: './facets/git-effects.ts',
   },
   'yak/operator': {
     vocab: './facets/operator-vocab.ts',
     graph: './facets/operator-graph.ts',
   },
-  'yak/wrap': { graph: '@yaks/platform/wrap-graph' },
-  'yak/remake': { graph: '@yaks/platform/remake-graph' },
-  'yak/kills': { graph: '@yaks/platform/kills-graph' },
   'yak/signin': { graph: './facets/signin-graph.ts' },
-}
+})

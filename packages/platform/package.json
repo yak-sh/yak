@@ -51,7 +51,8 @@
     "./git-graph": "./git-graph.ts",
     "./documents": "./documents.ts",
     "./document-graph": "./document-graph.ts",
-    "./app-graph": "./app-graph.ts"
+    "./app-graph": "./app-graph.ts",
+    "./facets": "./facets.ts"
   },
   "license": "Apache-2.0",
   "description": "What a hosting platform keeps about the apps it serves \u2014 spaces, apps, deploys, hostnames, plans and meters.",
