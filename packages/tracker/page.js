@@ -372,6 +372,14 @@
     } ${where.href}`
     try {
       let r = await plain(input, init)
+      // This browser's store for the app moved at this answer: a stranger's
+      // first write, the page's own or one the app's worker made for them,
+      // gave them a store of their own (visit.ts). Every answer the page sees
+      // passes here, so this is where ./api/client.js hears it
+      // (`yak-moved`), and opens its socket again on the new store.
+      if (mine(where) && r.headers.has('x-yak-moved')) {
+        dispatchEvent(new CustomEvent('yak-moved', { detail: where.href }))
+      }
       if (mine(where) && where.pathname.includes('/api/')) {
         crumb('fetch', `${r.status} ${where.pathname}`)
       }

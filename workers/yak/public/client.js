@@ -765,6 +765,22 @@ export let store = (base, { clock = system } = {}) => {
     }
     return s
   }
+  // An answer said this browser's store for the app moved (x-yak-moved): a
+  // stranger's first write gave them a store of their own. The socket still
+  // on the old store is let go, nothing it says lands, and a new one opens at
+  // once and declares every subscription again, which the new store answers
+  // whole. The page's reporter hears every answer the page gets, its own
+  // fetches and this module's alike, and says so (report.js `yak-moved`);
+  // an answer under this app's address is this store's.
+  let app = new URL('..', base).href
+  globalThis.addEventListener?.('yak-moved', (e) => {
+    if (!sock || !String(e.detail).startsWith(app)) return
+    let s = sock
+    sock = null
+    s.onopen = s.onclose = s.onmessage = null
+    s.close()
+    if (subs.size) open()
+  })
   let tell = (frame) => {
     let s = open()
     if (s.readyState == 1) s.send(stringify(frame))

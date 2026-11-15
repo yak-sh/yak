@@ -25,12 +25,21 @@ let at = 'https://yaks.app/manage/ada/chat/new'
 // whoever put the script there.
 // The reporter run first in `html`, at `page`, with the server answering
 // each fetch `status`.
-let loaded = (html: string, page: string, status = 204) => {
+let loaded = (
+  html: string,
+  page: string,
+  status = 204,
+  headers: Record<string, string> = {},
+) => {
   let { document, window } = parseHTML(html)
   let [first, ...rest] = [...document.querySelectorAll('script')]
   let sent: { url: string; body: Blob }[] = []
   Object.defineProperty(document, 'currentScript', { value: first })
-  let fetch = () => Promise.resolve(new Response(null, { status }))
+  // linkedom resolves no base, and the wrapper reads addresses against it.
+  Object.defineProperty(document, 'baseURI', { value: page })
+  let fetch = (_url?: string) =>
+    Promise.resolve(new Response(null, { status, headers }))
+  let scope = { fetch, console: { error: () => {} } }
   new Function(
     'document',
     'location',
@@ -40,6 +49,8 @@ let loaded = (html: string, page: string, status = 204) => {
     'fetch',
     'addEventListener',
     'removeEventListener',
+    'dispatchEvent',
+    'CustomEvent',
     'setTimeout',
     'clearTimeout',
     reporter,
@@ -48,14 +59,16 @@ let loaded = (html: string, page: string, status = 204) => {
     new URL(page),
     { sendBeacon: (url: string, body: Blob) => sent.push({ url, body }) },
     { origin: new URL(page).origin },
-    { fetch, console: { error: () => {} } },
+    scope,
     fetch,
     window.addEventListener.bind(window),
     window.removeEventListener.bind(window),
+    window.dispatchEvent.bind(window),
+    window.CustomEvent,
     () => 0,
     () => {},
   )
-  return { document, window, first, rest, sent }
+  return { document, window, first, rest, sent, fetch: scope.fetch }
 }
 
 let ran = async (own: string, frame = at, page = at) => {
@@ -255,4 +268,24 @@ test('a platform page whose module will not link is filed, placed where it broke
   let [row] = await filed(sent[0].body)
   let filedAs = row.error as { tags: Record<string, string> }
   equal(filedAs.tags.page, '/manage/ada/chat/new')
+})
+
+test('an answer saying the store moved is told to the page’s client', async () => {
+  let html = await shell({}, 'Operator', null, 200, '').text()
+  let heard = (headers: Record<string, string>) => {
+    let { window, fetch } = loaded(html, at, 200, headers)
+    let told: string[] = []
+    window.addEventListener(
+      'yak-moved',
+      (e: Event) => told.push((e as CustomEvent).detail),
+    )
+    return { fetch, told }
+  }
+  let moved = heard({ 'x-yak-moved': '1' })
+  await moved.fetch('https://yaks.app/pavilion/request')
+  await moved.fetch('https://elsewhere.test/pavilion/request')
+  equal(moved.told, ['https://yaks.app/pavilion/request'])
+  let still = heard({})
+  await still.fetch('https://yaks.app/pavilion/request')
+  equal(still.told, [])
 })

@@ -183,3 +183,33 @@ test('a watch a stopped store refused is declared again after the wait it asked'
   await time.advance(1)
   assertEquals(sent, [{ subscribe, id }, { subscribe, id }])
 })
+
+test('a store that moved is watched from a new socket at once, and only its own', () => {
+  type Sock = { sent: unknown[]; closed: boolean; onopen?: () => void }
+  let opened: Sock[] = []
+  using _fetch = stub(globalThis, 'fetch', () => new Promise(() => {}))
+  using _socket = stub(globalThis, 'WebSocket', function () {
+    let s: Sock & Record<string, unknown> = {
+      readyState: 1,
+      sent: [],
+      closed: false,
+      send: (frame: string) => void s.sent.push(JSON.parse(frame)),
+      close: () => void (s.closed = true),
+    }
+    opened.push(s)
+    return s
+  })
+  store('https://moved-client.test/house/api/').subscribe(
+    '.house_item',
+    () => {},
+  )
+  let moved = (url: string) =>
+    dispatchEvent(new CustomEvent('yak-moved', { detail: url }))
+  moved('https://moved-client.test/garden/request')
+  assertEquals(opened.length, 1)
+  moved('https://moved-client.test/house/request')
+  assertEquals(opened.map((s) => s.closed), [true, false])
+  let [first, second] = opened
+  second.onopen!()
+  assertEquals(second.sent, first.sent)
+})

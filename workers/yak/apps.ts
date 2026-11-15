@@ -3610,11 +3610,15 @@ let served = async (
     ? null
     : await c.time('worker', () => ran(env, space!, app!, req, who))
   // A write the worker made for a stranger on the sample gave them a store of
-  // their own (above): their browser is told it holds one, as the page's own
-  // write tells it.
+  // their own (above): their browser is told it holds one, and the page that
+  // asked that its store moved, as the page's own write tells them.
   if (own && visit == 'sample' && !['GET', 'HEAD'].includes(req.method)) {
     let mine = await visitOf(env, who.via!, stranger.app.eid)
-    if (mine && !mine.adopted) tellBorn(visitor, who.via!, stranger.app.eid)
+    if (mine && !mine.adopted) {
+      tellBorn(visitor, who.via!, stranger.app.eid)
+      own = new Response(own.body, own)
+      own.headers.set(MOVED, '1')
+    }
   }
   // The worker's 404 is its pass. The files answer behind it, and where they
   // hold nothing either, that 404 is the app's answer: a stranger is sent to

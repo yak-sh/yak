@@ -188,9 +188,12 @@ let worked = async (res: Response) => {
   }
 }
 env.DISPATCH = worker
-let workedOwn = await worked(
-  await k.at(host, '/notes/held', { method: 'POST', headers: out.headers }),
-)
+let ownAnswer = await k.at(host, '/notes/held', {
+  method: 'POST',
+  headers: out.headers,
+})
+let ownMoved = ownAnswer.headers.get(MOVED)
+let workedOwn = await worked(ownAnswer)
 delete (env as Partial<Env>).DISPATCH
 
 // Ada installs, keeping what she made.
@@ -311,9 +314,9 @@ let deeOwn = await dee.rows()
 let hal = browser()
 await (await hal.at('/')).res.body?.cancel()
 env.DISPATCH = worker
-let workedSample = await worked(
-  (await hal.at('/held', { method: 'POST' })).res,
-)
+let halAnswer = (await hal.at('/held', { method: 'POST' })).res
+let halMoved = halAnswer.headers.get(MOVED)
+let workedSample = await worked(halAnswer)
 delete (env as Partial<Env>).DISPATCH
 let halHolds = hal.jar.get(storeCookie(app.eid)) == hal.jar.get(STORES)
 let halRows = (await hal.rows()).titles
@@ -399,6 +402,7 @@ test('the app’s worker reads the store its stranger is served from', () => {
     wrote: 200,
     after: ['Out', 'Sample, mine', 'W'],
   })
+  assertEquals(ownMoved, null)
 })
 
 test('the app’s worker writing for a stranger on the sample gives them a store of their own', () => {
@@ -409,6 +413,7 @@ test('the app’s worker writing for a stranger on the sample gives them a store
     after: ['Sample', 'W'],
   })
   assert(halHolds)
+  assertEquals(halMoved, '1')
   assertEquals(halRows, ['Sample', 'W'])
   assertEquals(sampleAfterHal, ['Sample'])
 })
