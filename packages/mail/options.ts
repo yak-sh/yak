@@ -37,6 +37,10 @@ export type Options = {
    * entity, for letters posted to the door and letters pulled from an edge
    * alike. With none, such a letter is recorded with no target. */
   triage?: Eid
+  /** where an entity a letter names opens: an address with `{id}` where its
+   * id goes (`https://tasks.yak.sh/{id}`). Each entity a body names then reads
+   * as its id linked there; with none, as its id alone. */
+  mentions?: string
   /** the transport outbound letters go through; with none, none are sent */
   sender?: Transport
   /** where letters arrive, and who may post one to this graph */

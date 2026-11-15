@@ -30,7 +30,8 @@ import { after } from '@yaks/fp'
 import type { Handler } from '@yaks/effects'
 import { BODY, DOC, TITLE } from '@yaks/doc'
 import { at } from './addr.ts'
-import { html, text } from './md.ts'
+import { human } from '@yaks/id'
+import { eids, html, type Names, text } from './md.ts'
 import { BOUNCED, DELIVER, DELIVERED, EMAIL, MAIL } from './comp.ts'
 import type { Message, Sender } from '@yaks/host/senders'
 import { Undeliverable, Unsent } from '@yaks/host/senders'
@@ -46,6 +47,10 @@ export type Post = {
   /** a domain whose addresses belong to this graph rather than to a mail
    * server. A letter to one is delivered by writing it — see below. */
   local?: string
+  /** where an entity a letter names opens: an address with `{id}` where its
+   * id goes (`https://tasks.yak.sh/{id}`). Each eid a body holds then reads as
+   * the entity's id, linked there; with none, as the id alone. */
+  mentions?: string
 }
 
 let clock = () => new Date().toISOString()
@@ -76,6 +81,31 @@ export let owed = (letter: Bundle | undefined): boolean =>
   comp(letter, DELIVER)?.tried == null &&
   !comp(letter, DELIVERED) && !comp(letter, BOUNCED)
 
+/** What a letter calls each entity its body names: the entity's id (`T-453`),
+ * and its page at `mentions`, read from the store at send. One the store does
+ * not hold names nothing, and stays as written. */
+export let namesOf = (
+  tx: ReadTx,
+  body: string,
+  mentions?: string,
+): Names | Promise<Names> => {
+  let named = eids(body)
+  let id = human()
+  return after(named.length ? tx.get(named) : [], (found: Bundle[]) => {
+    let at = new Map(
+      found.filter(Boolean).map((b) => {
+        let name = id(b)
+        let href = mentions?.replaceAll(
+          '{id}',
+          encodeURIComponent(name.replace(/^#/, '')),
+        )
+        return [b.entity.eid.toLowerCase(), { id: name, href }]
+      }),
+    )
+    return (eid: string) => at.get(eid)
+  })
+}
+
 /** The address an entity is reachable at: its own `email.address`. */
 export let addressOf = (
   tx: ReadTx,
@@ -101,6 +131,7 @@ export let message = (
   letter: Bundle,
   to: string,
   replyTo?: string,
+  names?: Names,
 ): Message => {
   let mail = comp(letter, MAIL)
   let doc = comp(letter, DOC)
@@ -110,8 +141,8 @@ export let message = (
     to,
     ...(str(mail, 'cc') ? { cc: str(mail, 'cc') } : {}),
     subject: str(doc, TITLE),
-    text: text(body),
-    html: html(body),
+    text: text(body, names),
+    html: html(body, names),
     ...(replyTo ? { replyTo } : {}),
     ...(str(mail, 'reply_address')
       ? { replyAddress: str(mail, 'reply_address') }
@@ -164,7 +195,8 @@ export let message = (
  * graph is only the record.
  */
 export let sending =
-  ({ sender, now = clock, local }: Post): Handler => (event, tx, write) =>
+  ({ sender, now = clock, local, mentions }: Post): Handler =>
+  (event, tx, write) =>
     after(letterOf(tx, event.entity), (letter) => {
       // Not a letter, not a request to send one, or one already handed over.
       if (!owed(letter)) return
@@ -232,14 +264,18 @@ export let sending =
           }
           throw error
         }
+        let body = str(comp(letter, DOC), BODY)
         return after(
-          answered ? threadOf(tx, answered) : '',
-          (replyTo) =>
+          Promise.all([
+            answered ? threadOf(tx, answered) : '',
+            namesOf(tx, body, mentions),
+          ]),
+          ([replyTo, names]) =>
             tried().then(
               (claimed) =>
                 claimed
                   ? sender.send({
-                    ...message(letter!, to, replyTo || undefined),
+                    ...message(letter!, to, replyTo || undefined, names),
                     id: letter!.entity.eid,
                   })
                   : undefined,

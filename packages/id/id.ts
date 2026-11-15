@@ -133,7 +133,7 @@ export let parse = (id: string): Parsed | undefined => {
  * prefix. Config-first over a loaded vocabulary — `let id = idOf(v)`, then
  * `id(book)`.
  */
-export let idOf = (_v: Vocab): (e: Named) => string => (e) =>
+export let idOf = (_v?: Vocab): (e: Named) => string => (e) =>
   e.num && e.prefix ? format(e.prefix, e.num) : short(e.eid)
 
 /** A bundle, as this file reads one: the `entity` row, and the components
@@ -150,7 +150,7 @@ export type Wearing = {
  * `let id = human(vocab)`, then `id(row)` — so that no caller has to assemble
  * a {@link Named} by hand.
  */
-export let human = (v: Vocab): (b: Wearing) => string => {
+export let human = (v?: Vocab): (b: Wearing) => string => {
   let id = idOf(v)
   return (b) => id(b.entity)
 }

@@ -62,6 +62,7 @@ export let effects = (
           sender,
           // Local addresses are already where they are going.
           ...(options.local && options.domain ? { local: options.domain } : {}),
+          ...(options.mentions ? { mentions: options.mentions } : {}),
         })
         : waiting(reason!)
       return run(event, tx, write, attempt)

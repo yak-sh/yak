@@ -74,10 +74,10 @@ let clean = (fix: (a: string) => string) => (b: Bundle): Bundle => {
  * which is all a graph that only receives mail needs.
  */
 export let mailbox = (
-  { domain, effects, sender, now, local }: Mailbox = {},
+  { domain, effects, sender, now, local, mentions }: Mailbox = {},
 ): Plugin => {
   if (effects && sender) {
-    effects.handle({ mail_post: sending({ sender, now, local }) })
+    effects.handle({ mail_post: sending({ sender, now, local, mentions }) })
   }
   let fix = domain ? clean(canon(domain)) : null
   return {

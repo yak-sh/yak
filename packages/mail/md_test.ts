@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { html, linkable, text } from './md.ts'
+import { eids, html, linkable, text } from './md.ts'
 
 test('html: markup a body wrote is text, never markup', () => {
   assertEquals(
@@ -56,4 +56,21 @@ test('an underscore inside a word is never emphasis', () => {
     html('snake_case and _this_'),
     '<p>snake_case and <em>this</em></p>',
   )
+})
+
+test('an eid the sender names reads as its id; code keeps it literal', () => {
+  let eid = '711bade7-5f16-468f-a176-0db6c616ff65'
+  let names = (e: string) =>
+    e == eid ? { id: 'T-453', href: 'https://t.example/T-453' } : undefined
+  let body = `${eid.toUpperCase()} and \`${eid}\` in https://x.example/${eid}`
+  assertEquals(eids(body), [eid])
+  assertEquals(
+    text(body, names),
+    `T-453 (https://t.example/T-453) and ${eid} in https://x.example/${eid}`,
+  )
+  assertEquals(
+    html(body, names),
+    `<p><a href="https://t.example/T-453">T-453</a> and <code>${eid}</code> in https://x.example/${eid}</p>`,
+  )
+  assertEquals(text(body), body.replaceAll('`', ''))
 })

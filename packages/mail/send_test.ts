@@ -37,8 +37,9 @@ let read = async (g: { read: (q: string) => unknown }, eid: string) =>
 let posting = (
   rig: Omit<Mailbox, 'effects'>,
   ask: Record<string, Comp> = { [DELIVER]: { to: ana } },
+  more: Bundle[] = [],
 ) => {
-  let { tx, write } = committed([{
+  let { tx, write } = committed([...more, {
     entity: { eid: ana },
     email: { address: 'ana@books.example' },
   }, {
@@ -275,6 +276,38 @@ test('message: the composition, without a transport anywhere', () => {
       html: '<p><strong>b</strong></p>',
     },
   )
+})
+
+// A stored body holds the eid of each entity it names (@yaks/graph `Prose`).
+let plan = '711bade7-5f16-468f-a176-0db6c616ff65'
+let lost = '0e513227-de00-4000-8000-000000000009'
+let naming = async (mentions?: string) => {
+  let post = stash()
+  let { go } = posting({ sender: post, mentions }, {
+    [DELIVER]: { to: ana },
+    doc: { title: 'hi', body: `See ${plan}, [the plan](${plan}) and ${lost}.` },
+  }, [{ entity: { eid: plan, num: 453, prefix: 'T' }, person: { name: 'P' } }])
+  await go()
+  return post.last()!
+}
+
+test('a letter names each entity it holds by its id, linked to its page', async () => {
+  let { text, html } = await naming('https://tasks.yak.sh/{id}')
+  let at = 'https://tasks.yak.sh/T-453'
+  assertEquals(
+    text,
+    `See T-453 (${at}), the plan (${at}) and ${lost}.`,
+  )
+  assertEquals(
+    html,
+    `<p>See <a href="${at}">T-453</a>, <a href="${at}">the plan</a> and ${lost}.</p>`,
+  )
+})
+
+test('with nowhere to open it, an entity a letter names is its id alone', async () => {
+  let { text, html } = await naming()
+  assertEquals(text, `See T-453, the plan and ${lost}.`)
+  assertEquals(html, `<p>See T-453, the plan and ${lost}.</p>`)
 })
 
 // Local delivery: the domain is the graph's own namespace, so a letter to it
