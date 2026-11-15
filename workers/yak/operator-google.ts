@@ -191,8 +191,8 @@ let textOf = (p: Part): string => {
 
 let titled = (i: Integration) => i.title || i.name
 
-// Ask Google through a connection; a refusal it gives is said in its words.
-let asking = async (
+/** Ask Google through a connection; a refusal it gives is said in its words. */
+export let askGoogle = async (
   env: Env,
   connection: Bundle,
   url: string,
@@ -354,7 +354,7 @@ let calendarTools = (env: Env, connection: Bundle): Tool[] => [{
       maxResults: '100',
       ...str(args.words) ? { q: str(args.words) } : {},
     })
-    let got = await asking(
+    let got = await askGoogle(
       env,
       connection,
       `${CALENDAR_API}/calendars/primary/events?${q}`,
@@ -410,7 +410,7 @@ let calendarTools = (env: Env, connection: Bundle): Tool[] => [{
     }
     let zone = str(args.zone)
     if (!zone && !DAY.test(start) && !OFFSET.test(start)) {
-      let mine = await asking(
+      let mine = await askGoogle(
         env,
         connection,
         `${CALENDAR_API}/users/me/calendarList/primary`,
@@ -418,7 +418,7 @@ let calendarTools = (env: Env, connection: Bundle): Tool[] => [{
       zone = str(mine.timeZone)
     }
     let invite = list(args.invite)
-    let made = await asking(
+    let made = await askGoogle(
       env,
       connection,
       `${CALENDAR_API}/calendars/primary/events${
@@ -485,7 +485,7 @@ let gmailSend = (
     }
     if (!text) throw refuse('arguments', 'Say what the email says.')
     let me = await ctx.dir.known(ctx.person)
-    let sent = await asking(env, connection, `${GMAIL_API}/messages/send`, {
+    let sent = await askGoogle(env, connection, `${GMAIL_API}/messages/send`, {
       method: 'POST',
       body: JSON.stringify({
         raw: letterOf({
@@ -521,7 +521,7 @@ let gmailRead = (env: Env, connection: Bundle): Tool => ({
     let id = str(args.id)
     if (id) {
       return JSON.stringify(messageOf(
-        await asking(
+        await askGoogle(
           env,
           connection,
           `${GMAIL_API}/messages/${encodeURIComponent(id)}?format=full`,
@@ -529,7 +529,7 @@ let gmailRead = (env: Env, connection: Bundle): Tool => ({
       ))
     }
     let q = new URLSearchParams({ maxResults: '10', q: str(args.search) })
-    let found = await asking(env, connection, `${GMAIL_API}/messages?${q}`)
+    let found = await askGoogle(env, connection, `${GMAIL_API}/messages?${q}`)
     let ids = ((found.messages ?? []) as { id: string }[]).map((m) => m.id)
     let shown = new URLSearchParams({ format: 'metadata' })
     for (let h of ['From', 'To', 'Subject', 'Date']) {
@@ -538,7 +538,11 @@ let gmailRead = (env: Env, connection: Bundle): Tool => ({
     return JSON.stringify(
       await Promise.all(ids.map(async (m) =>
         messageOf(
-          await asking(env, connection, `${GMAIL_API}/messages/${m}?${shown}`),
+          await askGoogle(
+            env,
+            connection,
+            `${GMAIL_API}/messages/${m}?${shown}`,
+          ),
         )
       )),
     )

@@ -5,6 +5,7 @@ import { operatorTools } from './operator-tools.ts'
 import { mcpConnect } from './connected-mcp.ts'
 import { libraryTools } from './library-tools.ts'
 import { numberTools } from './numbers.ts'
+import { searchConsoleTools } from './search-console.ts'
 import { ownedPrefix, rootedPrefix } from './file-root.ts'
 // The connector's platform tools (D-32318 §Code, build, deploy): the least
 // that makes an app. The generic graph tier is no longer here — @yaks/mcp
@@ -8055,4 +8056,5 @@ export let TOOLS: Tool[] = [
   ...connectionTools,
   worded(mcpConnect),
   ...numberTools.map(worded),
+  ...searchConsoleTools.map(worded),
 ]

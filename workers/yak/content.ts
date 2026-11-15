@@ -698,6 +698,24 @@ export let WORDS: Record<string, Words> = {
     'description':
       'File the toll-free verification carriers require before a toll-free number texts: the organization\'s legal name, address, kind (a church is non_profit, a township government) and EIN, a contact, what the texts are for (use_case, in the provider\'s list: "Religious Services", "Public Works", "Events & Planning" and so on), a sample text, the monthly volume, and how people agree to be texted with a picture of it. Ask the person for each; never invent them. yaks.app files as the reseller. Carriers review it over days; number_status reads where it stands, and a verification waiting on the sender says what they ask. Only the space owner may file.',
   },
+  'search_stats': {
+    'title': 'Read Google Search numbers',
+    'step': {
+      'doing': 'Reading Search Console…',
+      'done': 'Read Search Console',
+    },
+    'description':
+      "How a site does in Google Search, from the person's own Google Search Console: the clicks, impressions, click-through rate and average position of each page, each query, or each page and query, over the last days. Leave site out for the properties their Google account holds. When Search Console is not connected, the answer gives the link where they connect it.",
+  },
+  'search_sitemap': {
+    'title': 'Submit a sitemap to Google',
+    'step': {
+      'doing': 'Submitting the sitemap…',
+      'done': 'Submitted the sitemap',
+    },
+    'description':
+      "Submit a sitemap for a site in the person's own Google Search Console, so Google reads its pages, and say how Google last read it. Leave sitemap out for every sitemap Google has for the site, with when it was read and its errors.",
+  },
   'number_status': {
     'title': 'Check phone numbers',
     'step': {

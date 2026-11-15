@@ -102,9 +102,13 @@ so yaks.app offers it only on a connections page opened with
 app (`broker: {name: 'nango', integration: 'google-mail'}`, D-439), whose grant
 reads and sends mail, and it sends its token to `gmail.googleapis.com` alone. A
 gmail connection made earlier, directly as the `google` client asking for
-`gmail.send`, keeps signing in that way. `openai` is built for the native
-harness's ChatGPT sign-in; it uses a public OAuth client, asks for a refreshable
-grant, and sends its bearer to `chatgpt.com`.
+`gmail.send`, keeps signing in that way. `google-search-console` is built on the
+same `google` client: it asks for `webmasters`, which reads a site's search
+numbers and submits its sitemaps, asks for offline access, sends its token to
+`searchconsole.googleapis.com` alone, and is `testing: true` as google-calendar
+is. `openai` is built for the native harness's ChatGPT sign-in; it uses a public
+OAuth client, asks for a refreshable grant, and sends its bearer to
+`chatgpt.com`.
 
 An integration reached by OAuth signs in as the client it names
 (`client: 'google'`), registered once with the service and shared by every
