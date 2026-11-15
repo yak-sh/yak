@@ -20,6 +20,14 @@
 // death after that says so again. A burst of deploys longer than `STUCK` kills
 // every run in it, and the run after the last one is what finishes.
 //
+// A run has its own limit besides: the runtime ends an alarm at fifteen
+// minutes of wall time (exceededWallTime), and a day's sweep can hold more
+// work than that, every erasure waiting on its purge (purge.ts). So a run is
+// handed `spent`, true once it has gone `STEP`, and a job with more to do
+// checks it between one piece of work and the next, stops, and answers
+// `MORE`: its row fires again at once, and the next run goes on from what
+// this one left (T-440).
+//
 // A run Cloudflare could not answer for now (@yaks/cloudflare/api `Unavailable`:
 // its own failure, through every resend) is the same: no fault of the job's,
 // and the next run does what it could not. It is a line in the log and the
@@ -95,7 +103,11 @@ let reported = async (env: Env, job: string, error: unknown): Promise<void> => {
 }
 
 /** The wake row a job fired from, as its rule is handed it. */
-export type Fired = { entity: { eid: string }; sweep?: unknown }
+export type Fired = {
+  entity: { eid: string }
+  sweep?: unknown
+  wake?: unknown
+}
 
 let jobOf = (row: Fired) =>
   (row.sweep as { kind?: string } | undefined)?.kind ?? row.entity.eid
@@ -105,24 +117,43 @@ type Marks = Record<string, string | null>
 /** Where a job's failure is written down: the directory's exception log. */
 export type Report = (job: string, error: unknown) => Promise<unknown>
 
+/** What a job's run answers when it stopped at {@link STEP} with more to do:
+ * its row fires again at once. */
+export let MORE = Symbol('more')
+
+// A recurrence without an instant is paused. A one-shot's own firing cleared
+// its `at` (@yaks/wake `ring`), so a run it owes is still owed.
+let paused = (row: Fired) => {
+  let wake = row.wake as Partial<Schedule> | undefined
+  return !!(wake?.every || wake?.while?.length) && wake.at == null
+}
+let again = (row: Fired) =>
+  paused(row) ? {} : { wake: { at: new Date().toISOString() } }
+
 /** Run a platform job with its row marked begun until it ends, and keep a
  * failure in the directory's exception log; one Cloudflare could not answer
- * only once no run has finished for {@link STUCK}. */
+ * only once no run has finished for {@link STUCK}. The run is handed `spent`,
+ * true once it has gone {@link STEP}, and one that answers {@link MORE}
+ * fires its row again. */
 export let reporting = async (
   env: Env,
   row: Fired,
-  run: () => Promise<unknown>,
+  run: (spent: () => boolean) => Promise<unknown>,
   now = () => Date.now(),
   report: Report = (job, error) => reported(env, job, error),
 ): Promise<undefined> => {
-  let mark = (sweep: Marks) =>
-    meta(env).apply([{ entity: row.entity, sweep }], KERNEL)
   let job = jobOf(row)
   let began = new Date(now()).toISOString()
+  let mark = (sweep: Marks, more = false) =>
+    meta(env).apply(
+      [{ entity: row.entity, sweep, ...(more ? again(row) : {}) }],
+      KERNEL,
+    )
   await mark({ began })
   let ended: Marks = { began: null, since: null, reported: null }
+  let more = false
   try {
-    await run()
+    more = await run(() => now() - Date.parse(began) >= STEP) === MORE
   } catch (error) {
     if (
       !(error instanceof Unavailable) && !(error instanceof BucketUnavailable)
@@ -132,7 +163,7 @@ export let reporting = async (
     }
     ended = await unanswered(row, began, error, now(), report)
   } finally {
-    await mark(ended).catch((e) => report(job, e))
+    await mark(ended, more).catch((e) => report(job, e))
   }
 }
 
@@ -177,6 +208,10 @@ let unanswered = async (
  * burst of deploys, shorter than anyone waits for a sweep. */
 export let STUCK = 15 * 60_000
 
+/** How long a run goes before a job with more to do stops and fires again:
+ * well inside the runtime's fifteen minutes for an alarm. */
+export let STEP = 10 * 60_000
+
 /** The jobs an object died in the middle of: a run marked begun before this
  * incarnation was `born`, which only a dead one could have left. Each is
  * fired again, unless its recurrence was paused, and reported once no run has
@@ -204,14 +239,10 @@ export let resumed = async (
         ),
       )
     }
-    // A recurrence without an instant is paused. A one-shot's own firing
-    // cleared its `at` (@yaks/wake `ring`), so the run it died in is owed.
-    let wake = row.wake as Partial<Schedule> | undefined
-    let paused = !!(wake?.every || wake?.while?.length) && wake.at == null
     await graph.apply([{
       entity: row.entity,
       sweep: { began: null, since },
-      ...(paused ? {} : { wake: { at: new Date().toISOString() } }),
+      ...again(row as Fired),
     }])
   }
 }

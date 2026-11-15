@@ -29,6 +29,7 @@ import {
 } from './erase.ts'
 import { daysLeft, directory, due, GRACE, overdue } from './directory.ts'
 import { PLATFORM_OBJECT } from './door.ts'
+import { MORE } from './wake.ts'
 import * as dirPart from './directory.ts'
 import type { App, Host, Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -540,6 +541,10 @@ test(
       }],
     }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
 
+    // A run out of time stops before the next piece of work and leaves it
+    // for the run after (wake.ts `STEP`).
+    assertEquals(await collected(env, new Date(), () => true), MORE)
+    assertEquals((await dir.apps(space)).length, 3)
     assertEquals(await collected(env), 1)
     assertEquals(
       (await dir.app(space, 'live'))!.title,

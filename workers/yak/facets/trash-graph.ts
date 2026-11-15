@@ -24,9 +24,9 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
     run: async (row) => {
       let { TrashEnv: env, Now } = row
       if (!env) return
-      return await reporting(env as unknown as Env, row, async () => {
+      return await reporting(env as unknown as Env, row, async (spent) => {
         let { collected } = await import('../erase.ts')
-        await collected(env as unknown as Env, new Date(Now.at))
+        return await collected(env as unknown as Env, new Date(Now.at), spent)
       })
     },
   }],

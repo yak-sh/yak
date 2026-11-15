@@ -75,6 +75,7 @@ import {
   type Row,
 } from './idle-spaces.ts'
 import { KERNEL, meta } from './meta.ts'
+import { MORE } from './wake.ts'
 import { type Given, lapsed, VISITS, visits } from './visit.ts'
 import { opened, seal } from './lib/token.ts'
 import { wiped } from './build-door.ts'
@@ -804,25 +805,39 @@ let retitled = async (
   if (entities.length) await dir.apply({ entities })
 }
 
-export let collected = async (env: Env, now = new Date()) => {
+/** Erase what is due and let go of what nothing holds: the trash sweep's
+ * run, answering how many it erased, or `MORE` (wake.ts) once `spent` says
+ * the run has gone long enough, stopping between one piece of work and the
+ * next. What it did stays done, so the next run goes on from there. */
+export let collected = async (
+  env: Env,
+  now = new Date(),
+  spent: () => boolean = () => false,
+): Promise<number | typeof MORE> => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let gone = 0
+  let more = () => {
+    if (gone) console.log(`yak-trash: ${gone} erased, and more to do`)
+    return MORE
+  }
   // A newcomer's budget is a month's (newcomer.ts `KEEPING`): trashed, the
   // space spends nothing in the next one, and each one on its own, so one
   // that will not go holds up none of the rest. A newcomer holding nothing
   // is one whose keeping or erasing died before their row went, finished.
   for (let { person, spaces } of await unkept(env, dir, now)) {
+    if (spent()) return more()
     let who = { person, role: 'owner' as const }
     if (!spaces.length) {
       await vacated(env, dir, person, who)
         .catch((why) => caught(why, { request: 'erase a vacant newcomer' }))
     }
     for (let space of spaces.filter((s) => !s.trashed)) {
+      if (spent()) return more()
       await trashSpace(env, dir, space, who)
         .catch((why) => caught(why, { request: 'trash an unkept space' }))
     }
   }
   let idle = new Set(await abandoned(env, now))
-  let gone = 0
   // Every app left standing when the erasures are done, which is exactly the
   // set of things that can name a pinned blob. It is collected rather than
   // acted on app by app because the pins are one key space for the whole bucket
@@ -830,9 +845,11 @@ export let collected = async (env: Env, now = new Date()) => {
   // be a file another app serves. A trashed app inside its thirty days is in
   // the list on purpose — the erasure above is what frees its bytes, not its
   // mark — and so is the platform's own space, which is skipped for erasure and
-  // holds pins like any other.
+  // holds pins like any other. A run that stops before the walk is done has
+  // not seen them all, so it lets go of nothing.
   let standing: Pinner[] = []
   for (let space of await dir.all()) {
+    if (spent()) return more()
     // Never the directory itself, whatever its row says: the app that holds
     // every space on the platform is not one a sweep may erase (`refused`
     // above and tools.ts app_delete hold the same line at the doors).
@@ -899,11 +916,13 @@ export let collected = async (env: Env, now = new Date()) => {
   // The visitors' stores nobody can reach any more (visit.ts `lapsed`), each
   // on its own, so one that will not empty holds up none of the rest.
   for (let given of await lapsed(env, now)) {
+    if (spent()) return more()
     await unvisited(env, given)
       .catch((why) => caught(why, { request: 'erase a visitor store' }))
   }
   let rows = await meta(env).query(CENSUS) as unknown as Row[]
   for (let eid of idleAccounts(rows, now.getTime())) {
+    if (spent()) return more()
     let address = rows.find((r) => r.entity.eid == eid)!.email!.address
     await closed(env, dir, address, { person: eid, role: 'owner' })
       .catch((why) => caught(why, { request: 'erase an idle test account' }))

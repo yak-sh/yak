@@ -22,7 +22,7 @@ import { GIT_STORE, PLATFORM_OBJECT, storeOf } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { KERNEL, metaOf } from './meta.ts'
 import type { Env } from './env.ts'
-import { reporting, resumed, STUCK } from './wake.ts'
+import { MORE, reporting, resumed, STEP, STUCK } from './wake.ts'
 import { Unavailable } from '@yaks/cloudflare/api'
 import { appStore, storeName } from './directory.ts'
 import { trash, trashSpace, untrash, untrashSpace } from './erase.ts'
@@ -178,6 +178,37 @@ test('a job is marked begun on its row while it runs, and cleared after', async 
   })
   assert((marks[0] as { began: string }).began)
   assertEquals(marks[1], { began: null, since: null, reported: null })
+})
+
+// A day with more to do than one alarm can hold: the run is told when it has
+// gone a step, and one that stops there fires its row again, unless paused.
+let stepped = async (wake: Record<string, unknown>, answer: unknown) => {
+  let writes: Bundle[] = []
+  let META = {
+    apply: (b: Bundle[]) => (writes.push(b[0]), Promise.resolve(b)),
+  }
+  let row = { entity: { eid: 'yak-trash' }, sweep: { kind: 'trash' }, wake }
+  let now = at('04:20'), told: boolean[] = []
+  await reporting({ META } as unknown as Env, row, (spent) => {
+    told.push(spent())
+    now += STEP
+    told.push(spent())
+    return Promise.resolve(answer)
+  }, () => now)
+  return { told, ended: writes[1] }
+}
+
+test('a run with more to do than a step stops, and its row fires again', async () => {
+  let every = '20 4 * * *'
+  let more = await stepped({ at: iso('04:20'), every }, MORE)
+  assertEquals(more.told, [false, true])
+  assertEquals(more.ended.sweep, { began: null, since: null, reported: null })
+  assert((more.ended.wake as { at: string }).at)
+  assertEquals(
+    (await stepped({ at: iso('04:20'), every }, 3)).ended.wake,
+    undefined,
+  )
+  assertEquals((await stepped({ at: null, every }, MORE)).ended.wake, undefined)
 })
 
 // A run Cloudflare could not answer through every resend, on a row holding
