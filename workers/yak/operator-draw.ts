@@ -785,9 +785,9 @@ let onCall = (b: Bundle): Said | null | undefined => {
     : { node: input(b, said(b)), is: 'theirs' }
 }
 
-// A helper the person stopped (operator.ts `stop`, the only stop here), told
-// to the session that started it in its report or, up the conversation, in a
-// line of theirs.
+// A helper the person stopped (@yaks/session `stopAll`, the only stop here),
+// told to the session that started it in its report and, up the
+// conversation, in a notice of its end (older rows: `operator_stopped`).
 let halted = (helper: unknown, { opens }: Heard): Said => ({
   node: h(
     Notice,

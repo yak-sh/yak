@@ -234,7 +234,7 @@ export class Builder extends Durable {
   // What a read of the Operator needs, made without it (`#stored`), and its
   // store's @yaks/api door (operator-api.ts).
   #store?: Promise<
-    Pick<import('./operator.ts').Operator, 'store' | 'named' | 'stop'> & {
+    Pick<import('./operator.ts').Operator, 'store' | 'named'> & {
       door: ReturnType<typeof import('./operator-api.ts').operatorApi>
     }
   >
@@ -1015,9 +1015,6 @@ export class Builder extends Durable {
           store,
           named,
           door,
-          // Stopping a task is the Operator's own.
-          stop: async (task: string, by: string) =>
-            (await this.#work()).stop(task, by),
         }
       },
     )

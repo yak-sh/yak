@@ -5,8 +5,7 @@ import { CallError } from '@yaks/tools'
 import { rootOf } from './operator-root.ts'
 import type { Item, Model, Request } from '@yaks/model'
 import { comp } from '../../packages/graph/testing.ts'
-import { kindOf } from '@yaks/session'
-import { stoppedHere } from './operator-view.ts'
+import { stopAll } from '@yaks/session'
 import { platform } from './directory-rows-probe.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { appStore } from './directory.ts'
@@ -483,7 +482,9 @@ let halter = operate(
   roundsPlatform,
   operatorModel(async (req) => {
     halting.push(req)
-    if (halting.length == 1) await halter.stop(begun!.task, roundsHeld.person)
+    if (halting.length == 1) {
+      await stopAll(halted.g, begun!.session, roundsHeld.person)
+    }
     return {
       id: crypto.randomUUID(),
       model: req.model,
@@ -693,11 +694,6 @@ test('words given with a model are answered by it, and the next words by the Ope
 // Helpers forking helpers: Stop on the conversation reaches every one of
 // them, however deep, and the conversation waiting on them stops too.
 let deep = operatorMemory()
-let deeper = operate(
-  deep,
-  roundsPlatform,
-  operatorModel(() => Promise.reject(new Error('no model here'))),
-)
 let line = (session: string) => ({
   entity: { eid: crypto.randomUUID() },
   entry: { session },
@@ -714,10 +710,10 @@ await deep.g.apply([
   },
   ...[child, grandchild].map(line),
 ], { trusted: true })
-let deepStop = await deeper.stop(top, roundsHeld.person)
+let deepStop = await stopAll(deep.g, top, roundsHeld.person)
 let stops = await deep.g.read('.stop&.entry')
 test('Stop reaches a helper a helper started', () => {
-  assertEquals(deepStop.stopped, true)
+  assertEquals(deepStop, true)
   assertEquals(
     new Set(stops.map((b) => comp(b, 'entry').session)),
     new Set([top, child, grandchild]),
@@ -729,11 +725,6 @@ test('Stop reaches a helper a helper started', () => {
 // conversation it works for hear it from the person, as words of theirs
 // that tell it to leave the helper stopped until they talk.
 let watched = operatorMemory()
-let watcher = operate(
-  watched,
-  roundsPlatform,
-  operatorModel(() => Promise.reject(new Error('no model here'))),
-)
 let [root, middle, below] = [0, 1, 2].map(() => crypto.randomUUID())
 await watched.g.apply([
   { entity: { eid: root }, session: { id: root } },
@@ -749,26 +740,24 @@ await watched.g.apply([
   },
   ...[middle, below].map(line),
 ], { trusted: true })
-let helperStop = await watcher.stop(below, roundsHeld.person)
+let helperStop = await stopAll(watched.g, below, roundsHeld.person)
 let heard = await watched.g.read(
-  '.operator_stopped&.entry ?created ?content ?system',
+  '.notice&.delivery&.entry ?created ?content',
 )
-test('Stop on a nested helper stops it alone, and the conversation it works for hears it from the system', async () => {
-  assertEquals(helperStop.stopped, true)
+test('Stop on a nested helper stops it alone, and the conversation it works for is told in a notice', async () => {
+  assertEquals(helperStop, true)
   let stops = await watched.g.read('.stop&.entry ?content')
   assertEquals(stops.map((b) => comp(b, 'entry').session), [below])
   assertStringIncludes(
     String(comp(stops[0], 'content').body),
-    `stopped helper ${below} from the chat page`,
+    `stopped helper ${below}, so leave it stopped`,
   )
   // The session that started it hears it in its report; the conversation
-  // above, which no report reaches, in a line of theirs.
+  // above, which no report reaches, in a notice of its end, by them.
   assertEquals(heard.map((b) => comp(b, 'entry').session), [root])
   let [b] = heard
-  assertEquals(kindOf(b), 'input')
-  assertEquals(b.system, {})
   assertEquals(comp(b, 'created').by, roundsHeld.person)
-  assertEquals(comp(b, 'operator_stopped').helper, below)
+  assertEquals(comp(b, 'delivery'), { child: below, outcome: 'stopped' })
   assertStringIncludes(String(comp(b, 'content').body), '"Check the draft."')
 })
 
@@ -843,7 +832,7 @@ await heldBack.g.apply([
   line(started),
 ], { trusted: true })
 let asked0 = rootAsks.length
-await holder.stop(started, roundsHeld.person)
+await stopAll(heldBack.g, started, roundsHeld.person)
 await drain(heldBack)
 let after = rootAsks.slice(asked0)
 let read = (r: Request) => (r.items.at(-1) as { text?: string }).text ?? ''
@@ -857,7 +846,7 @@ test('a stopped helper reaches its conversation once, from the system, saying th
   assertStringIncludes(said, 'From the system:\n[Sent')
   assertStringIncludes(
     said,
-    `child ${started} stopped\n${stoppedHere(person, started)}`,
+    `child ${started} stopped\nThe person (${person}) stopped helper ${started}, so leave it stopped`,
   )
 })
 

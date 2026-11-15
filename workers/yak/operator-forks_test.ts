@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Comp } from '@yaks/graph'
 import type { Request } from '@yaks/model'
-import { deliverChild, statusOf, transcript } from '@yaks/session'
+import { deliverChild, statusOf, stopAll, transcript } from '@yaks/session'
 import { directoryOf } from './directory.ts'
 import { platform } from './directory-rows-probe.ts'
 import { operating } from './operator.ts'
@@ -95,7 +95,7 @@ let refreshed = (await transcript(store.g, main.session)).filter((b) =>
 
 // Explicit stop closes a settled chat immediately, even before quiet.
 let stopping = await operator.run(held, space, { say: 'Check another note.' })
-let stopped = await operator.stop(stopping.task, person)
+let stopped = await stopAll(store.g, stopping.session, person)
 await drain(store)
 let stoppedNotice = (await transcript(store.g, main.session)).find((b) =>
   (b.delivery as Comp | undefined)?.child == stopping.session
@@ -144,7 +144,7 @@ test('a resumed chat refreshes its single notice and explicit stop closes immedi
     (refreshed[0].content as Comp).body as string,
     'chose Tuesday',
   )
-  assertEquals(stopped.stopped, true)
+  assertEquals(stopped, true)
   assertEquals((stoppedNotice!.delivery as Comp).outcome, 'stopped')
 })
 

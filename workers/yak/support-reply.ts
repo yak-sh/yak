@@ -27,6 +27,7 @@ import { ownOf, type Row, seatsLine } from './directory.ts'
 import { type Message, noted, read, type Thread, told } from './support.ts'
 import type { Telling } from './operator-updates.ts'
 import type { OperatorStore } from './operator-store.ts'
+import { topOf } from '@yaks/session'
 
 type Store = OperatorStore
 
@@ -142,8 +143,7 @@ let conversation = async (store: Store, session: string, person: string) => {
   let [row] = await store.g.get([session], ['operator_session'])
   let o = row?.operator_session as Comp | undefined
   if (!o || o.person != person) return null
-  let { topOf } = await import('./operator.ts')
-  return await topOf(store, session)
+  return await topOf(store.g, session)
 }
 
 /** The Builder's half: keep the person's Update and, where `session` is an

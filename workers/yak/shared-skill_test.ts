@@ -21,9 +21,6 @@ import { call, type Ctx } from './tools.ts'
 
 // Each space's Operator store, answered at its routes as the Builder does.
 let stores = new Map<string, ReturnType<typeof operatorMemory>>()
-let never = (): never => {
-  throw new Error('nothing stops here')
-}
 let storeOf = (space: string) => {
   if (!stores.has(space)) stores.set(space, operatorMemory())
   return stores.get(space)!
@@ -41,7 +38,7 @@ let { env } = platform('shared-skill', {
           return Response.json(await results(store.g, skill, space))
         }
         let answer = await operatorRequest(
-          { store, named: () => Promise.resolve(null), stop: () => never() },
+          { store, named: () => Promise.resolve(null) },
           {
             person: request.headers.get('x-yak-person')!,
             role: request.headers.get('x-yak-role') as 'owner',

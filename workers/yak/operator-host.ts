@@ -1480,7 +1480,7 @@ let told = async (
  * asks the Operator itself, which its object makes for what it runs
  * (build.ts `#work`). */
 export let operatorRequest = async (
-  operator: Pick<Operator, 'store' | 'named' | 'stop'>,
+  operator: Pick<Operator, 'store' | 'named'>,
   held: Held,
   path: string,
   args: Record<string, unknown>,
@@ -1514,8 +1514,20 @@ export let operatorRequest = async (
     (path == '/operator/stop' || path == '/operator/run') && args.task &&
     !stopping && !await own(String(args.task))
   ) return missing()
+  // A conversation stops with every helper under it, and a task with its
+  // newest session (@yaks/session `stopAll`).
   if (path == '/operator/stop') {
-    return Response.json(await operator.stop(String(args.task ?? ''), person))
+    let task = String(args.task ?? '')
+    let [row] = task ? await store.g.get([task]) : []
+    let session = row?.session
+      ? task
+      : row?.task
+      ? (await sessionsOf(store, task)).at(-1)?.entity.eid
+      : undefined
+    if (!session) throw refuse('missing', `no operator conversation ${task}`)
+    let { stopAll } = await import('@yaks/session')
+    let stopped = await stopAll(store.g, session, person)
+    return Response.json({ task, session, stopped })
   }
   // The space's tasks and goals, as the connector reaches them
   // (operator-tasks.ts), their prose drawn as its reader reads it.

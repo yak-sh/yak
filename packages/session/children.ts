@@ -541,6 +541,99 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
   }]
 }
 
+/** The session `session` works for: up its `spawned` links to a person's
+ * conversation, or to a session started on its own (`spawned.quiet`). */
+export let topOf = async (g: Graph, session: Eid): Promise<Eid> => {
+  let link = comp(await row(g, session, ['spawned']), 'spawned')
+  if (!link?.parent || link.quiet != null) return session
+  return topOf(g, String(link.parent))
+}
+
+// What a helper was asked, in a line: its title, else the first words it
+// was started with.
+let askedOf = async (g: Graph, helper: Eid) => {
+  let title = String(comp(await row(g, helper, ['doc']), 'doc')?.title ?? '')
+  if (title) return title
+  let opening = await g.read(
+    `.entry.session=${helper}&.order=entry.seq&.limit=3&*`,
+  )
+  let first = opening.find((b) => !b.prompt && b.content)
+  return textOf(first ?? { entity: { eid: helper } }).trim().split('\n')[0]
+    .slice(0, 80) || 'a piece of work'
+}
+
+/**
+ * Stop `session` and every helper under it, however deep, in one write: the
+ * step each is in is withdrawn (./run.ts), and none goes on past it until new
+ * words reopen it. A helper `by` stops says who stopped it in its stop, which
+ * the session that started it reads in its report (`deliverChild`), and the
+ * conversation it works for ({@link topOf}), where that is further up, is told
+ * of its end in a notice, as a passive child's is (./child-notice.ts), which
+ * no report of its own would tell it and which starts no turn. Answers whether
+ * any of them was working; where none was, nothing is written.
+ */
+export let stopAll = async (
+  g: Graph,
+  session: Eid,
+  by: Eid,
+): Promise<boolean> => {
+  let helpers: Eid[] = []
+  for (let parents = [session]; parents.length;) {
+    parents = (await g.read(`.spawned.parent=${parents.join(',')}`))
+      .map((b) => b.entity.eid)
+    helpers.push(...parents)
+  }
+  // Each one's status as the store computes it (`session.status`): a tree of
+  // hundreds read transcript by transcript costs more than a request has.
+  let busy: Eid[] = [], idle: Eid[] = []
+  for (let b of await g.get([session, ...helpers], ['session'])) {
+    let status = comp(b, 'session')?.status
+    if (status == 'pending' || status == 'running') busy.push(b.entity.eid)
+    else if (status != 'stopped') idle.push(b.entity.eid)
+  }
+  let link = comp(await row(g, session, ['spawned']), 'spawned')
+  if (!busy.length && !link?.notice) return false
+  // The person as the model knows them: the id their own words are labeled
+  // with (@yaks/harness `senders`).
+  let person = link
+    ? human(g.vocab)(await row(g, by) ?? { entity: { eid: by } })
+    : ''
+  let parent = String(link?.parent ?? '')
+  let top = link ? await topOf(g, parent) : ''
+  let leave =
+    "so leave it stopped, and don't start its work again another way, until you have talked with them."
+  await g.apply([
+    ...top && top != parent
+      ? [{
+        entity: { eid: crypto.randomUUID() },
+        entry: { session: top },
+        notice: { child: session },
+        delivery: { child: session, outcome: 'stopped' },
+        content: {
+          body:
+            `The person (${person}) stopped helper ${session} ("${await askedOf(
+              g,
+              session,
+            )}"), which one of your helpers started, ${leave}`,
+        },
+        $actor: { by, via: top },
+      }]
+      : [],
+    ...[...busy, ...idle].map((s) => ({
+      entity: { eid: crypto.randomUUID() },
+      entry: { session: s },
+      stop: {},
+      content: {
+        body: link && s == session
+          ? `The person (${person}) stopped helper ${session}, ${leave}`
+          : 'Stopped by the person watching.',
+      },
+      $actor: { by, via: s },
+    })),
+  ], { trusted: true })
+  return true
+}
+
 // Whether any of a session's helpers, at any depth, has yet to end and be
 // told. A child's dispatch settles after its report is written, or held for
 // helpers of its own (./run.ts), so a settled child still works while one of

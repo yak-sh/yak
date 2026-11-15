@@ -21,18 +21,12 @@ import {
   spawnChild,
   statusOf,
   type Tool,
+  topOf,
   transcript,
   transcriptWindow,
 } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
-import { human } from '@yaks/id'
-import {
-  CALLED,
-  channelOf,
-  HEARD,
-  stoppedBy,
-  stoppedHere,
-} from './operator-view.ts'
+import { CALLED, channelOf, HEARD } from './operator-view.ts'
 import { fetchable } from './newcomer.ts'
 import { listing } from '@yaks/mcp'
 import {
@@ -114,7 +108,7 @@ import {
   UNASKED,
 } from './operator-channels.ts'
 import { escalate, escalationAnswer, REPLIES } from './operator-escalate.ts'
-import { askedAt, inputOf, rootAt, spaceOf } from './operator-root.ts'
+import { inputOf, rootAt, spaceOf } from './operator-root.ts'
 import { textSend } from './operator-texts.ts'
 import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { SIGNUP, signupTools } from './operator-signup.ts'
@@ -535,7 +529,7 @@ export let operatorRoster = async (
     // Their own words, sent on to their machine as theirs: only someone who
     // writes in the space, as the rest of what changes anything is.
     ...member
-      ? relayTools(ctx, work, remote, (s) => topOf(work, s), asking)
+      ? relayTools(ctx, work, remote, (s) => topOf(work.g, s), asking)
       : [],
     ...apps.map((t): Tool => {
       let ours = own.get(t.name)
@@ -901,26 +895,15 @@ let operatorAsking = (
   return {
     caller: 'operator',
     space,
-    via: session ? () => top ??= topOf(store, session) : undefined,
+    via: session ? () => top ??= topOf(store.g, session) : undefined,
   }
 }
 
-// The session a helper works for, up its `spawned` links: a person's
-// conversation, or a task's session.
-export let topOf = async (
-  store: Store,
-  session: string,
-): Promise<string> => {
-  let [row] = await store.g.get([session], ['spawned'])
-  let parent = comp(row, 'spawned')?.parent
-  if (comp(row, 'spawned')?.quiet != null) return session
-  return parent ? topOf(store, String(parent)) : session
-}
 // The task a session (or the session its helper works for) carries on, or ''
 // for a person's conversation.
 let taskOf = async (store: Store, session: string) => {
   let [link] = await store.g.read(
-    `.contains .edge.to=${await topOf(store, session)}`,
+    `.contains .edge.to=${await topOf(store.g, session)}`,
   )
   return String(comp(link, 'edge')?.from ?? '')
 }
@@ -1021,7 +1004,7 @@ export let operating = (
     let o = session ? await workingOf(store, session) : undefined
     let space = o ? await dir().at(o.space) : undefined
     if (!session || !o || !space || space.trashed) return null
-    return reachMachine(space, o.person, () => topOf(store, session))
+    return reachMachine(space, o.person, () => topOf(g, session))
   }
   // Whether the turn a session takes was started without its person asking
   // at that moment: the newest words of its conversation are routine news
@@ -1031,7 +1014,7 @@ export let operating = (
   // waits for its person's machine.
   let unasked = async (session?: string) => {
     if (!session) return false
-    let top = await topOf(store, session)
+    let top = await topOf(g, session)
     let [[work], [said]] = await Promise.all([
       g.get([top], ['occurrence']),
       g.read(
@@ -1259,7 +1242,7 @@ export let operating = (
   let fell = async (req: Step, error: ModelError): Promise<Step> => {
     let session = await sessionOf(req.call)
     if (
-      !session || await topOf(store, session) != session ||
+      !session || await topOf(g, session) != session ||
       await hosting(session)
     ) return req
     clear.delete(session)
@@ -1528,7 +1511,7 @@ export let operating = (
       replied,
       member ? [] : g.read(
         `.operator_request.session=${await topOf(
-          store,
+          g,
           session,
         )} .operator_request.channel=text,texted .order=-created.at .limit=1 .fields=operator_request.address`,
       ),
@@ -2201,87 +2184,6 @@ export let operating = (
     }
   }
 
-  // The harness's interrupt (runtime.ts): a stop that withdraws the step in
-  // flight, its model request or tool call, and that no step goes on past
-  // (@yaks/session run.ts `withdrawn`). A person's conversation stops with
-  // the helpers working for it.
-  let stop: Operator['stop'] = async (open, by) => {
-    let [row] = await g.get([open])
-    let links = row?.task ? await g.read(`.contains .edge.from=${open}`) : []
-    let newest = row?.session ? row : (await g.get(
-      links.map((b) => String(comp(b, 'edge')!.to)),
-    ))
-      .filter((b) => b?.session)
-      .sort((a, b) =>
-        String(comp(a, 'created')?.at).localeCompare(
-          String(comp(b, 'created')?.at),
-        )
-      ).at(-1)
-    if (!newest) throw refuse('missing', `no operator conversation ${open}`)
-    let session = newest.entity.eid
-    // Every helper under it, however deep: a helper a helper started works
-    // for the same conversation.
-    let helpers: string[] = []
-    for (let parents = [session]; parents.length;) {
-      parents = (await g.read(`.spawned.parent=${parents.join(',')}`))
-        .map((b) => b.entity.eid)
-      helpers.push(...parents)
-    }
-    // Each one's status as the store computes it (`session.status`): a tree
-    // of hundreds read transcript by transcript cost more CPU than a request
-    // has.
-    let busy: string[] = [], idle: string[] = []
-    for (let b of await g.get([session, ...helpers], ['session'])) {
-      let status = comp(b, 'session')?.status
-      if (status == 'pending' || status == 'running') busy.push(b.entity.eid)
-      else if (status != 'stopped') idle.push(b.entity.eid)
-    }
-    if (!busy.length && !comp(newest, 'spawned')?.notice) {
-      return { task: open, session, stopped: false }
-    }
-    // A helper the person stopped is theirs to start again. The session that
-    // started it reads so in the helper's report, as from them
-    // (@yaks/session `deliverChild`); the conversation it works for, when
-    // that is further up, hears it from them here.
-    let helper = !!row?.spawned
-    let parent = String(comp(row, 'spawned')?.parent ?? '')
-    let top = helper ? await topOf(store, parent) : ''
-    let heard = helper && top != parent ? [top] : []
-    let asked = heard.length ? await askedAt(store, session) : ''
-    // The person as the model knows them: the id their own words are
-    // labeled with (@yaks/harness `senders`).
-    let [them] = helper ? await g.get([by]) : []
-    let person = helper ? human(g.vocab)(them ?? { entity: { eid: by } }) : ''
-    // One waiting on a helper stops too, so the helper's report does not
-    // wake it again (@yaks/session children.ts `deliverChild`).
-    await g.apply(
-      [
-        ...heard.map((s) => ({
-          entity: { eid: crypto.randomUUID() },
-          entry: { session: s },
-          content: { body: stoppedBy(person, asked, session) },
-          operator_stopped: { helper: session },
-          system: {},
-          $actor: { by, via: s },
-        })),
-        ...[...busy, ...idle].map((s) => ({
-          entity: { eid: crypto.randomUUID() },
-          entry: { session: s },
-          stop: {},
-          content: {
-            body: helper && s == session
-              ? stoppedHere(person, session)
-              : 'Stopped by the person watching.',
-          },
-          $actor: { by, via: s },
-        })),
-      ],
-      { trusted: true },
-    )
-    for (let s of [session, ...heard]) options.tell?.(s)
-    return { task: open, session, stopped: true }
-  }
-
   // What to call a person in what the Operator shows of its work.
   let named = (person: string) => dir().nameAt(person)
 
@@ -2298,7 +2200,6 @@ export let operating = (
     tools,
     run,
     helper,
-    stop,
     named,
     watching,
     scheduled,
@@ -2382,13 +2283,6 @@ export type Operator = {
     tools: { name: string; description: string; parameters: object }[]
     run: (name: string, args: Record<string, unknown>) => Promise<string>
   }>
-  /** Stop a conversation (with its helpers) or a task's running session at
-   * once, the step in flight included: nothing more is done until new words
-   * reopen it. */
-  stop: (
-    open: string,
-    by: string,
-  ) => Promise<{ task: string; session: string; stopped: boolean }>
   /** operator_chat's door: work the pool for up to 25 seconds, then return
    * the answer or the running task, whose work continues behind the reply. */
   run: (held: Asker, space: Space, args: Args, o?: Asking) => Promise<{
