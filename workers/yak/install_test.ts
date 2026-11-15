@@ -5,7 +5,8 @@ import type { Env } from './env.ts'
 import { answer, at } from './install.ts'
 import { sign } from './lib/token.ts'
 
-// A directory where this browser visited nothing (visit.ts `visitOf`).
+// A directory where this browser visited nothing (@yaks/platform/visits
+// `visitOf`).
 let env = {
   SESSION_SECRET: 'install-test',
   META: { query: () => Promise.resolve([]) },

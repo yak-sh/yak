@@ -42,9 +42,10 @@ export let effects = (_host: unknown, options: Options): Handlers => {
       let by = (browser?.browser as Comp | undefined)?.by
       if (!by) return
       let { appStore, directoryOf } = await import('../directory.ts')
-      // A browser given a store of its own at the app (visit.ts) wrote its
-      // rows there, not in the app's: the store as a stranger is served it,
-      // or the app it became, which is the only app it may be told it holds.
+      // A browser given a store of its own at the app (@yaks/platform/visits)
+      // wrote its rows there, not in the app's: the store as a stranger is
+      // served it, or the app it became, which is the only app it may be told
+      // it holds.
       let dir = directoryOf(at.env.STORE!)
       let visit = receipt.visit as Comp | undefined
       let adopted = typeof visit?.adopted == 'string' ? visit.adopted : null

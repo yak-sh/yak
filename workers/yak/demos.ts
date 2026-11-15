@@ -8,7 +8,7 @@
 /** The sheet a home page frames beside its box (site/home.tsx `Sheet`): the
  * potluck sign-up sheet the demo space's Operator built from the words the
  * page quotes. It is private and published, so a stranger reads its sample
- * and what they add goes to a store of their own (visit.ts). */
+ * and what they add goes to a store of their own (@yaks/platform/visits). */
 export let SHEET = 'https://yourname.yaks.app/potluck/'
 
 /** One example: its address, its name, and what it is for. */

@@ -123,7 +123,15 @@ import {
 import * as dirPart from './directory.ts'
 import { HELD, previewing } from './newcomer.ts'
 import { latestSpeaks, ownSpeaks } from '@yaks/platform/lenses'
-import { sandboxed, sandboxing } from './installed.ts'
+import {
+  copying,
+  landing,
+  pinned,
+  reloads,
+  sandboxed,
+  sandboxing,
+  taken,
+} from '@yaks/platform/installs'
 import { unbranched, watching } from './preview.ts'
 import { tools as previewTools } from './preview-tools.ts'
 import { demonstrate, ours } from './gallery-demo.ts'
@@ -335,7 +343,6 @@ import {
 import {
   addressed,
   backTo,
-  BUILT,
   crossed,
   deployedOver,
   type Files,
@@ -416,7 +423,8 @@ import { carried, rebind } from './connections.ts'
 import { connectionTools } from './connection-tools.ts'
 import { background, caught, failing } from './defects.ts'
 import { step } from './funnel.ts'
-import { adopt, unadopt, type Visit, visitOf } from './visit.ts'
+import { adopt, unadopt, type Visit, visitOf } from '@yaks/platform/visits'
+import { ledgerOf } from './visit.ts'
 import { Stale } from '@yaks/graph/errors'
 import { sendable } from '@yaks/mail'
 
@@ -1088,11 +1096,11 @@ let vocabs = async (ctx: Ctx, space: Space, app?: App) => {
 // every app's manifest beside it, since growing a home means writing the
 // home's whole manifest back.
 //
-// A sandboxed app (installed.ts, T-37926) is on neither side of that: it
-// borrows no word, so every word it declares is planted in its own store, and
-// it is no home, so the space's own apps never write their rows into a store
-// whose code is a stranger's. Sandboxing it, or letting it out, moves its
-// words at its next release.
+// A sandboxed app (@yaks/platform/installs, T-37926) is on neither side of
+// that: it borrows no word, so every word it declares is planted in its own
+// store, and it is no home, so the space's own apps never write their rows into
+// a store whose code is a stranger's. Sandboxing it, or letting it out, moves
+// its words at its next release.
 let homesIn = async (ctx: Ctx, space: Space, slug: string, app?: App) => {
   let said = await vocabs(ctx, space, app)
   let ours = said.get(slug)?.$defs ?? {}
@@ -2223,9 +2231,6 @@ export let recompileRelease = async (
 
 // Select the publication, rather than whatever its publisher currently serves.
 // Older versions without a release source still have their pinned file bytes.
-let transferable = (path: string) =>
-  !!own([path]).length || path.startsWith(BUILT)
-
 let offered = async (
   ctx: Ctx,
   from: { space: Space; app: App },
@@ -2240,12 +2245,11 @@ let offered = async (
       `published version ${number} has no retained release`,
     )
   }
-  let files = version.source
-    ? await filesAt(r2RawObjects(ctx.env.BLOBS), version.source)
-    : version.files
-  return Object.fromEntries(
-    Object.entries(files).filter(([path]) => transferable(path)),
-  ) as Files
+  return taken(
+    version.source
+      ? await filesAt(r2RawObjects(ctx.env.BLOBS), version.source)
+      : version.files,
+  )
 }
 
 // A publication's source and completed build travel together, named by their
@@ -2266,16 +2270,8 @@ let copied = async (
     onto.app,
     who,
     (draft) => {
-      let gone = Object.keys(draft.files).filter((path) =>
-        transferable(path) && !(path in from)
-      )
-      return Promise.resolve({
-        changes: [
-          ...Object.entries(from).map(([path, sha]) => ({ path, sha })),
-          ...gone.map((path) => ({ path })),
-        ],
-        value: { wrote: own(Object.keys(from)), gone: own(gone) },
-      })
+      let { changes, wrote, gone } = copying(from, draft.files)
+      return Promise.resolve({ changes, value: { wrote, gone } })
     },
     watching(ctx.env, onto.space, onto.app),
     anew(NEW, ctx.call),
@@ -2370,8 +2366,8 @@ let taking = async (
  * resolves, because the handle everything the platform keeps for this app is
  * named by is made out of it (directory.ts `handle`) and there is no second
  * moment to write it in. `former` opens at the slug it is born at: the first
- * line of an address history, which is all that word is now (T-34657).
- * An app installed over a visit (visit.ts) takes that visit's store and
+ * line of an address history, which is all that word is now (T-34657). An app
+ * installed over a visit (@yaks/platform/visits) takes that visit's store and
  * uploads, so nothing moves.
  */
 // Born in a space the box was given a site's address for, an app is that
@@ -5420,8 +5416,9 @@ let OURS: Row[] = [
             'sandboxed, forget, or all',
         )
       }
-      // Whether a copy is walled off from its space is the space owner's:
-      // what letting it out costs is everything in the space (installed.ts).
+      // Whether a copy is walled off from its space is the space owner's: what
+      // letting it out costs is everything in the space
+      // (@yaks/platform/installs).
       if (wall != null) {
         if (who.role != 'owner') {
           throw refuse('access', `not the owner of ${space.slug}`)
@@ -6783,11 +6780,13 @@ let OURS: Row[] = [
             'offer',
         )
       }
-      // The store this browser was given at the published app (visit.ts),
-      // which the copy takes over rather than starting from the seed. Only
-      // the browser that holds it may, and only once.
+      // The store this browser was given at the published app
+      // (@yaks/platform/visits), which the copy takes over rather than starting
+      // from the seed. Only the browser that holds it may, and only once.
       let via = visiting ? ctx.who?.instrument : undefined
-      let kept = via ? await visitOf(ctx.env, via, offer.app.eid) : null
+      let kept = via
+        ? await visitOf(ledgerOf(ctx.env), via, offer.app.eid)
+        : null
       if (visiting && !kept) {
         throw refuse(
           'missing',
@@ -6840,17 +6839,12 @@ let OURS: Row[] = [
         let held = await ctx.dir.app(space, at)
         return !RESERVED.has(at) && (!held || !!held.trashed)
       }
-      let s = args.as != null
-        ? fresh(args.as, 'as')
-        : await vacant(offer.app.slug)
-        ? offer.app.slug
-        : name
-      if (args.as == null) {
-        for (let n = 2; !(await vacant(s)); n++) {
-          let suffix = `-${n}`
-          s = name.slice(0, 63 - suffix.length) + suffix
-        }
-      }
+      let s = await landing(
+        offer.app.slug,
+        name,
+        vacant,
+        args.as == null ? null : fresh(args.as, 'as'),
+      )
       let claims = await taking(ctx, space, s, who)
       let version = offer.app.published.version
       let source = await offered(ctx, offer)
@@ -6881,17 +6875,13 @@ let OURS: Row[] = [
           kept,
           previews,
         }),
-        installed: { of: offer.app.eid, version, ...sandboxing(false) },
         // A visit's store was seeded from the sample, and holds what they
         // made of it since.
-        ...kept
-          ? {
-            seeded: {
-              at: new Date().toISOString(),
-              version: offer.app.demo?.version ?? version,
-            },
-          }
-          : {},
+        ...pinned(
+          offer.app.eid,
+          version,
+          kept ? { seeded: offer.app.demo?.version ?? null } : null,
+        ),
       }
       warmed(ctx.env, row)
       // What the copy asks this space for: a needed connection for each one
@@ -6913,19 +6903,27 @@ let OURS: Row[] = [
       // The visit is taken before the row is written, so two installs never
       // share one store, and given back if the row could not be.
       if (kept) {
-        await adopt(ctx.env, via!, offer.app.eid, row.entity.eid).catch(
-          (error) => {
-            if (!(error instanceof Stale)) throw error
-            throw refuse(
-              'conflict',
-              `what this browser made at ${name} is being installed already`,
-            )
-          },
-        )
+        await adopt(ledgerOf(ctx.env), via!, offer.app.eid, row.entity.eid)
+          .catch(
+            (error) => {
+              if (!(error instanceof Stale)) throw error
+              throw refuse(
+                'conflict',
+                `what this browser made at ${name} is being installed already`,
+              )
+            },
+          )
       }
       let applied = await ctx.dir.stamp({ entities }, vouched(maker.who)).catch(
         async (error) => {
-          if (kept) await unadopt(ctx.env, via!, offer.app.eid, row.entity.eid)
+          if (kept) {
+            await unadopt(
+              ledgerOf(ctx.env),
+              via!,
+              offer.app.eid,
+              row.entity.eid,
+            )
+          }
           throw error
         },
       )
@@ -7061,12 +7059,7 @@ let OURS: Row[] = [
         await fits(ctx, space, app, store, said.source, said.file, accepted)
       }
       let theirs = await ctx.dir.deploys(from.app)
-      let reload: Reload | undefined = to < was ||
-          theirs.some((v) =>
-            v.version > was && v.version <= to && v.reload == 'required'
-          )
-        ? 'required'
-        : undefined
+      let reload = reloads(theirs, was, to)
       let { wrote, gone, draft } = await copied(
         ctx,
         source,

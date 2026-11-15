@@ -45,7 +45,7 @@ import { refuse, rejected } from './tool.ts'
 import { caught } from './defects.ts'
 import { said as told } from '@yaks/api/log'
 import { answered } from './meta.ts'
-import { sandboxed } from './installed.ts'
+import { sandboxed } from '@yaks/platform/installs'
 
 export type { Ask }
 

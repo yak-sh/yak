@@ -14,8 +14,8 @@ export let copyOf = (apps: App[], source: App) =>
   apps.find((app) => !app.trashed && app.installed?.of == source.eid)
 
 /** Install code into the demo space, private and published, so each stranger
- * there reads its sample and writes in a store of their own (visit.ts); the
- * source store is never read. */
+ * there reads its sample and writes in a store of their own
+ * (@yaks/platform/visits); the source store is never read. */
 export let demonstrate = async (
   ctx: Ctx,
   space: Space,

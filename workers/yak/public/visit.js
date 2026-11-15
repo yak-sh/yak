@@ -1,8 +1,8 @@
-// The bar a stranger's page wears at a published app (visit.ts, D-134327):
-// what they change goes to a store of their own, which this browser alone
-// reaches, and keeping it is installing the app. Its button opens the page
-// that does (`data-yak-keep`, page-script.ts), saying `data-yak-keep-says`:
-// "Sign up to keep it" signed out, "Keep it" signed in.
+// The bar a stranger's page wears at a published app (@yaks/platform/visits,
+// D-134327): what they change goes to a store of their own, which this browser
+// alone reaches, and keeping it is installing the app. Its button opens the
+// page that does (`data-yak-keep`, page-script.ts), saying
+// `data-yak-keep-says`: "Sign up to keep it" signed out, "Keep it" signed in.
 //
 // Like the badge (badge.js) it lives in a closed shadow root on an element of
 // its own beside <body>, so the page's styles cannot reach in, its own cannot

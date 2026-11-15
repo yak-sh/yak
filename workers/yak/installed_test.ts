@@ -1,9 +1,9 @@
-// An app installed from somebody else's release runs like the space's own
-// apps (C-37980), and the sandbox (installed.ts, D-37901) is its owner's
+// An app installed from somebody else's release runs like the space's own apps
+// (C-37980), and the sandbox (@yaks/platform/installs, D-37901) is its owner's
 // option, on a local kernel. Unsandboxed, a copy is served clean, hears the
 // cookie and borrows the space's words. Sandboxed, its page is walled, its API
-// hears its page token and never the cookie, one app's token opens no other,
-// it keeps its words to itself, and it keeps a page's storage.
+// hears its page token and never the cookie, one app's token opens no other, it
+// keeps its words to itself, and it keeps a page's storage.
 import { test } from '@yaks/testing'
 import {
   assert,

@@ -350,7 +350,7 @@ test('askable: asking for a code, from the pages of ours that ask', () => {
   }
 })
 
-// A sandboxed app's page speaking to its own doors (installed.ts): the token
+// A sandboxed app's page speaking to its own doors (./installs.ts): the token
 // leads the app's path, or the path itself at a front page or on a domain.
 test('paged: the token segment, where an app path starts', () => {
   let paths: [string, boolean][] = [

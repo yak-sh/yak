@@ -326,7 +326,7 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { at: time, version: num },
     },
-    // A private published app's sample store (sample.ts, D-134327): the
+    // A private published app's sample store (./visits.ts, D-134327): the
     // handle of the store holding its published seed, which strangers read,
     // the sha of the declaration and seed it was made from, and the version
     // and release it was made at, which strangers are served. Server-owned:
@@ -341,7 +341,7 @@ export let directoryDoc: VocabDoc = {
         release: owned(text),
       },
     },
-    // A browser's own store of an app it visited without a seat (visit.ts,
+    // A browser's own store of an app it visited without a seat (./visits.ts,
     // D-134327), on its `worked` edge to the app: the store's handle and where
     // its uploads go, both written once at its first write, when it was last
     // used (at most hourly), and the app it became when its person installed

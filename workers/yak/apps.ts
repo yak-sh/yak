@@ -217,24 +217,29 @@ import {
 } from './defects.ts'
 import {
   barOf,
-  born,
+  births,
   crowded,
   due,
-  MOVED,
   onSample,
-  ownOf,
-  type Release,
-  releaseFor,
   revisited,
-  tellBorn,
-  toldStores,
+  unborn,
   used,
   type Visit,
   visitable,
   type Visiting,
   visiting,
   visitOf,
+} from '@yaks/platform/visits'
+import {
+  born,
+  ledgerOf,
+  ownOf,
+  type Release,
+  releaseFor,
+  tellBorn,
+  toldStores,
 } from './visit.ts'
+import { MOVED } from '@yaks/sync'
 import { full, fullFiles } from './usage.ts'
 import { scheduleBy } from './used.ts'
 import { seen } from './views.ts'
@@ -244,14 +249,12 @@ import { commandIn, commandsIn } from './app-command.ts'
 import { type Limiter, source, tooMany, within } from '@yaks/workerd/rate'
 import {
   bearerOf,
-  lasting,
-  paged,
-  paging,
   sandboxed,
   stored,
   tokenOf,
   walled,
-} from './installed.ts'
+} from '@yaks/platform/installs'
+import { lasting, paged, paging } from './page-token.ts'
 
 // The runtime's streaming HTML rewriter, the slice this file asks for, so
 // `deno check` reads the Worker without @cloudflare/workers-types (env.ts).
@@ -2502,19 +2505,9 @@ let birth = async (
   { via, person }: Visitor,
 ): Promise<Visit | null> =>
   await within(env.BIRTH_RATE, source(req), failing('rate limit')) &&
-    !await crowded(env, app.eid)
+    !await crowded(ledgerOf(env), app.eid)
     ? await born(env, space, app, via, person)
     : null
-
-// What a stranger refused a store of their own is told: signed up, they keep
-// one.
-let unborn = (req: Request, env: Env) =>
-  json(
-    429,
-    'sign_up',
-    SAYS.sign_up,
-    signInAt(req.headers.get('referer') || req.url, env),
-  )
 
 // Serving an app, with the stopwatch running (timing.ts): every stage below
 // that waits is named, so `Server-Timing` on the answer says where the time
@@ -2805,13 +2798,18 @@ let served = async (
   // The store the grant must name: the app's own, or the one it revisits.
   let minted = store
   let moving = false
-  if (grant && grant.store != store && revisited(space, app, grant.store)) {
+  if (
+    grant && grant.store != store &&
+    revisited(storeName(space, app), app, grant.store)
+  ) {
     let release = await releaseFor(dir, app)
-    app = revisited(space, app, grant.store, release)!
+    app = revisited(storeName(space, app), app, grant.store, release)!
     store = minted = grant.store
     let visitor = onSample(app) ? grant!.visitor : null
-    let own = visitor ? await visitOf(env, visitor.via, theirs.eid) : null
-    if (!own && visitor && path == '/api/apply' && req.method == 'POST') {
+    let own = visitor
+      ? await visitOf(ledgerOf(env), visitor.via, theirs.eid)
+      : null
+    if (!own && visitor && births(path, req.method)) {
       own = await c.time(
         'birth',
         () => birth(env, req, space!, theirs, visitor),
@@ -2822,7 +2820,7 @@ let served = async (
       }
     }
     if (own && !own.adopted) {
-      app = revisited(space, theirs, own.store, release)!
+      app = revisited(storeName(space, theirs), theirs, own.store, release)!
       store = own.store
       moving = true
     }
@@ -2994,9 +2992,15 @@ let served = async (
       ]))
     if (!invited) {
       stranger.release = release
-      ;({ app, who, visit } = visiting(space, app, who, own, release))
+      ;({ app, who, visit } = visiting(
+        storeName(space, app),
+        app,
+        who,
+        own,
+        release,
+      ))
     }
-    if (own && due(own.seen)) background(used(env, who.via!, app.eid))
+    if (own && due(own.seen)) background(used(ledgerOf(env), who.via!, app.eid))
     // Their store is an app of their own now: the page they open is there.
     let mine = visit == 'kept' && req.method == 'GET' &&
         req.headers.get('sec-fetch-mode') == 'navigate'
@@ -3089,8 +3093,7 @@ let served = async (
     // A stranger's first write gives their browser a store of its own, a copy
     // of the sample, and goes there; the answer tells the page's client to
     // open its socket again, which now reaches it.
-    let moved = visit == 'sample' && path == '/api/apply' &&
-      req.method == 'POST'
+    let moved = visit == 'sample' && births(path, req.method)
     if (moved) {
       let own = await c.time(
         'birth',
@@ -3106,7 +3109,7 @@ let served = async (
       }
       tellBorn(visitor, who.via!, stranger.app.eid)
       ;({ app, who, visit } = visiting(
-        space,
+        storeName(space, stranger.app),
         stranger.app,
         stranger.who,
         own,
@@ -3196,7 +3199,7 @@ let served = async (
   // their own (above): their browser is told it holds one, and the page that
   // asked that its store moved, as the page's own write tells them.
   if (own && visit == 'sample' && !['GET', 'HEAD'].includes(req.method)) {
-    let mine = await visitOf(env, who.via!, stranger.app.eid)
+    let mine = await visitOf(ledgerOf(env), who.via!, stranger.app.eid)
     if (mine && !mine.adopted) {
       tellBorn(visitor, who.via!, stranger.app.eid)
       own = new Response(own.body, own)

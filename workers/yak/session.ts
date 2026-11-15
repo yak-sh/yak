@@ -61,13 +61,13 @@ export type Who = {
    * app's bytes stays a member's act (apps.ts, public/docs/sharing.md). */
   guest?: boolean
   /** A stranger at a private published app, served it from its sample or
-   * from a store of their own (visit.ts): `kept` once that store became an
-   * app of theirs. Their role is that store's, and it never reaches the
-   * floors only an owner stands on (graph.ts `VISITING`). */
+   * from a store of their own (@yaks/platform/visits): `kept` once that store
+   * became an app of theirs. Their role is that store's, and it never reaches
+   * the floors only an owner stands on (graph.ts `VISITING`). */
   visit?: { kept: boolean }
   /** The unix second the credential this caller came in on dies at: the
    * cookie's `exp`, or a page token's. A sandboxed app's page token is minted
-   * to die with it (installed.ts). */
+   * to die with it (page-token.ts). */
   until?: number
 }
 
@@ -291,8 +291,8 @@ let sets = (res: Response) =>
   new RegExp(`(?:^|,\\s*)${COOKIE}=`).test(res.headers.get('set-cookie') ?? '')
 
 // The instrument each request's browser was given on it, where it came with
-// none: nothing has been written with it, so it holds nothing (visit.ts
-// `ownOf` asks the directory nothing for it).
+// none: nothing has been written with it, so it holds nothing
+// (@yaks/platform/visits `ownOf` asks the directory nothing for it).
 let born = new WeakMap<Request, string>()
 
 /** Whether `via` was minted for this request, which `browsing` served. */

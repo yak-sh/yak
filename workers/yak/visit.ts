@@ -1,83 +1,46 @@
-// A stranger at a private published app (D-134327). They are served the app
-// itself, furnished from its sample (sample.ts), and their first write gives
-// them a store of their own, a copy of the sample, which their browser alone
-// reaches. Signing up and installing makes that store theirs.
+// A stranger at a private published app (D-134327), as yaks.app's Worker
+// serves one. Who is served which store, when a visit becomes a store of
+// one's own and what the directory keeps of it are @yaks/platform/visits';
+// this is what the Worker lends them: the directory (`ledgerOf`), the copy a
+// birth makes of the sample's Durable Object, the cookies a browser is told
+// its stores in, and the published release a stranger is served.
 //
-// The door (apps.ts) asks `visiting` right after it knows who is asking: a
-// member is served the app as it is; a stranger with no store of their own
-// reads the sample; a stranger with one is its editor. Everything below the
-// door reads `storeName(space, app)`, so the app it is handed is all that
-// changes. A stranger is served the published version, the one the sample was
-// made at: a version the owner hasn't published is theirs alone.
-//
-// The store a browser was given is on its `worked` edge to the app, as
-// `visit{store, blobs, seen, adopted}`, in the directory. It is written only
-// once the copy has answered, so nobody is ever sent to a store that isn't
-// there, and only by the first birth: a second one racing it finds the edge
-// written, empties its own copy and takes the first.
-//
-// The platform pays for these stores until one is installed, so they are
-// bounded: a source makes at most BIRTH_RATE of them a minute (apps.ts), an
-// app's strangers hold at most CAP, and the daily sweep erases what nobody can
-// reach any more (erase.ts `unvisited`): a store nobody claimed, unused for
-// as long as the cookie that alone reaches it lives, and one whose person
-// closed their account without installing it. The app's own schedule runs in
-// each store as it does in the app's, and stops with it.
+// The door (apps.ts) asks `visiting` right after it knows who is asking, and
+// a birth (`born`) is bounded there: a source makes at most BIRTH_RATE stores
+// a minute, and an app's strangers hold at most `CAP`. The daily sweep erases
+// what nobody can reach any more (erase.ts `unvisited`). The app's own
+// schedule runs in each store as it does in the app's, and stops with it.
 //
 // Installing with `visit` (tools.ts app_install) makes the store an app of the
-// installer's own: a new app row names it, and `adopted` names that row. From
-// then on the store is that app's, and the door never serves it as this one
-// again, which would tell it it belongs to another app: the page sends the
-// browser to its own app, and what the old page still asks reads the sample.
-import { edgeEid, link } from '@yaks/edge'
-import { MOVED } from '@yaks/sync'
-import type { Comp } from '@yaks/graph'
-import { Stale } from '@yaks/graph/errors'
-import { cookieValue } from '@yaks/platform/cookie'
+// installer's own (@yaks/platform/visits `adopt`).
 import {
-  type App,
-  type Directory,
-  scriptOf,
-  type Space,
-  storeName,
-} from './directory.ts'
+  claim,
+  holder,
+  holding,
+  type Ledger,
+  settled,
+  storeCookie,
+  type Visit,
+  visitAt,
+} from '@yaks/platform/visits'
+import { type App, type Directory, type Space, storeName } from './directory.ts'
 import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
-import { type Host, url } from '@yaks/platform/host'
+import type { Host } from '@yaks/platform/host'
 import { instrumentEid } from '@yaks/platform/instrument'
 import { KERNEL, meta } from './meta.ts'
 import { COPY } from './relocate.ts'
-import { installAt, signInAt } from '@yaks/platform/routes'
-import { cleared, sampling } from './sample.ts'
-import { domainOf, newcomer, SESSION, type Who } from './session.ts'
+import { cleared } from './sample.ts'
+import { domainOf, newcomer, SESSION } from './session.ts'
 import { background } from './defects.ts'
 import { sharing } from './lib/shared.ts'
 
-/** A browser's own store of an app: its handle, where its uploads go, when it
- * was last used, and the app it became once installed. */
-export type Visit = {
-  store: string
-  blobs: string
-  seen: string | null
-  adopted: string | null
-}
-
-/** The answer on a write that gave its browser a store of its own: the page's
- * client opens its socket again, which now reaches that store. */
-export { MOVED }
-
-/** How long a store nobody claimed is kept unused: the life of the browser
- * cookie that alone reaches it (session.ts), which use renews as it renews
- * `seen`. */
-export let KEPT = 90 * 86_400_000
-
-/** How many stores an app's strangers may hold before it is installed: past
- * it, a stranger's first write is asked to sign up instead. */
-export let CAP = 10_000
-
-/** Where every visitor's uploads are kept, each store under a prefix of its
- * own: never an app's files, so erasing one touches nobody else's bytes. */
-export let VISITS = '.visits/'
+/** The directory as @yaks/platform/visits reads and writes it: every write
+ * the kernel's own. */
+export let ledgerOf = (env: Pick<Env, 'STORE'>): Ledger => ({
+  query: (line) => meta(env).query(line),
+  apply: (bundles) => meta(env).apply(bundles, KERNEL),
+})
 
 /** What a stranger is served of a published release that is no longer the
  * app's live one: its files, its worker and its words. */
@@ -86,276 +49,18 @@ export type Release = Pick<
   'version' | 'source' | 'script' | 'worker' | 'lenses'
 >
 
-/** How a stranger is served: from the sample, from a store of their own, or,
- * once that store became an app of theirs, from the sample again, read-only,
- * while the page sends them on to their own app. */
-export type Visiting = 'sample' | 'own' | 'kept'
-
-/**
- * The app and caller a request is served as. A member, an app with no sample,
- * and someone whose invitation waits are served as they came. A stranger with
- * a store of their own is its editor; one without reads the sample, and so
- * does one whose store became an app of theirs, with nothing to write there. Either is
- * served the published version (`release`, where it is no longer the live
- * one), pinned to the app's own worker script, which its store name no longer
- * names.
- *
- * ```ts
- * import { onSample, visiting } from './visit.ts'
- * import { assertEquals } from '@std/assert'
- * let space = { slug: 'ada' } as Parameters<typeof visiting>[0]
- * let app = {
- *   eid: 'a', slug: 'notes', store: 'ada/notes.1f7c3e', access: 'private',
- *   published: { name: 'notes', version: 2, at: '', about: '' }, version: 2,
- *   demo: { store: 'ada/notes.1f7c3e/demo/d', seed: '', version: 2, release: '2' },
- * } as Parameters<typeof visiting>[1]
- * let who = { person: 'p', role: null, via: 'v' }
- * let sample = visiting(space, app, who, null)
- * assertEquals(sample.visit, 'sample')
- * assertEquals(sample.app.store, 'ada/notes.1f7c3e/demo/d')
- * assertEquals(sample.who.role, 'viewer')
- * assertEquals(sample.who.visit, { kept: false })
- * let own = { store: 'ada/notes.1f7c3e/visit/o', blobs: '.visits/o/blobs/', seen: null, adopted: null }
- * assertEquals(visiting(space, app, who, own).app.store, own.store)
- * assertEquals(visiting(space, app, who, own).who.role, 'editor')
- * assertEquals(visiting(space, app, { ...who, role: 'owner' }, own).visit, null)
- * let kept = visiting(space, app, who, { ...own, adopted: 'b' })
- * assertEquals([kept.visit, kept.app.store, kept.who.role], ['kept', 'ada/notes.1f7c3e/demo/d', 'viewer'])
- * assertEquals(onSample(kept.app), false)
- * let browser = { person: null, role: null, via: 'v' }
- * assertEquals(visiting(space, app, browser, own).who.role, 'editor')
- * ```
- */
-export let visiting = (
-  space: Space,
-  app: App,
-  who: Who,
-  visit: Visit | null,
-  release: Release | null = null,
-): { app: App; who: Who; visit: Visiting | null } => {
-  if (!visitable(app, who)) return { app, who, visit: null }
-  let served = servedOf(space, app, release)
-  let kept = { kept: !!visit?.adopted }
-  // A sample they no longer write to: their first write would give them
-  // a second store.
-  if (visit?.adopted) {
-    return {
-      app: { ...served, store: app.demo!.store, demo: null },
-      who: { ...who, role: 'viewer', guest: true, visit: kept },
-      visit: 'kept',
-    }
-  }
-  return visit
-    ? {
-      app: { ...served, store: visit.store, blobs: visit.blobs },
-      who: { ...who, role: 'editor', guest: true, visit: kept },
-      visit: 'own',
-    }
-    : {
-      app: { ...served, store: app.demo!.store },
-      who: { ...who, role: 'viewer', guest: true, visit: kept },
-      visit: 'sample',
-    }
-}
-
-// The app as a stranger is served it, whichever store: the published
-// release, pinned to the app's own worker script. A release from before each
-// had a script of its own runs the one named by the app's handle.
-let servedOf = (space: Space, app: App, release: Release | null): App => ({
-  ...app,
-  ...release,
-  script: release
-    ? release.script || storeName(space, app)
-    : scriptOf(space, app),
-  declaration: app.demo!.release ?? app.declaration,
-})
-
-/**
- * The app a stranger's visit was served as, for its worker coming back: the
- * grants it was handed name the store that visit read (dispatch.ts
- * `handed`), the sample or a browser's own store, and each is named beneath
- * the app's own. Null for any other store, or once the app keeps no sample.
- *
- * ```ts
- * import { revisited } from './visit.ts'
- * import { assertEquals } from '@std/assert'
- * let space = { slug: 'ada' } as Parameters<typeof revisited>[0]
- * let app = {
- *   eid: 'a', slug: 'notes', store: 'ada/notes.1f7c3e', access: 'private',
- *   published: { name: 'notes', version: 2, at: '', about: '' }, version: 2,
- *   demo: { store: 'ada/notes.1f7c3e/demo/d', seed: '', version: 2, release: '2' },
- * } as Parameters<typeof revisited>[1]
- * assertEquals(revisited(space, app, app.demo!.store)?.store, app.demo!.store)
- * let own = revisited(space, app, 'ada/notes.1f7c3e/visit/o')
- * assertEquals([own?.store, own?.blobs], ['ada/notes.1f7c3e/visit/o', '.visits/o/blobs/'])
- * assertEquals(revisited(space, app, 'ada/other.2a/visit/o'), null)
- * assertEquals(revisited(space, app, 'ada/notes.1f7c3e/visit/o/x'), null)
- * assertEquals(revisited(space, { ...app, demo: null }, app.demo!.store), null)
- * ```
- */
-export let revisited = (
-  space: Space,
-  app: App,
-  store: string,
-  release: Release | null = null,
-): App | null => {
-  if (!sampling(app) || !app.demo) return null
-  if (store == app.demo.store) {
-    return { ...servedOf(space, app, release), store }
-  }
-  let under = `${storeName(space, app)}/visit/`
-  let id = store.startsWith(under) ? store.slice(under.length) : ''
-  if (!id || id.includes('/')) return null
-  return { ...servedOf(space, app, release), store, blobs: blobsOf(id) }
-}
-
-// Where the uploads of the browser store with this id are kept.
-let blobsOf = (id: string) => `${VISITS}${id}/blobs/`
-
-/** What the bar on a visitor's page offers (public/visit.js): the page that
- * keeps what they made, and what its button says. */
-export type Bar = { keep: string; says: string }
-
-/**
- * The bar a visitor's page wears, or null for anyone else. Keeping it is
- * installing the app: a stranger who is signed in goes straight to the
- * install page, and one who is not signs up on the way there.
- *
- * ```ts
- * import { barOf } from './visit.ts'
- * import { assertEquals } from '@std/assert'
- * let app = { published: { name: 'notes' } } as Parameters<typeof barOf>[1]
- * let visit = { kept: false }
- * assertEquals(barOf({}, app, { person: 'p', role: 'editor', visit }), {
- *   keep: 'https://yaks.app/install?name=notes',
- *   says: 'Keep it',
- * })
- * assertEquals(
- *   barOf({}, app, { person: null, role: 'editor', visit })?.says,
- *   'Sign up to keep it',
- * )
- * assertEquals(barOf({}, app, { person: 'p', role: 'editor' }), null)
- * ```
- */
-export let barOf = (env: Host, app: App, who: Who): Bar | null => {
-  let name = app.published?.name
-  if (!who.visit || who.visit.kept || !name) return null
-  let keep = url(env, installAt(name))
-  return who.person
-    ? { keep, says: 'Keep it' }
-    : { keep: signInAt(keep, env), says: 'Sign up to keep it' }
-}
-
-/** Whether the app is served from its sample: to a stranger who has not
- * written yet. */
-export let onSample = (app: App) => !!app.demo && app.store == app.demo.store
-
-/** Whether this caller is a stranger the app keeps a sample for, signed in or
- * not: their browser is who they are (graph.ts `vouchOf`). */
-export let visitable = (app: App, who: Who) =>
-  !who.role && !!who.via && sampling(app) && !!app.demo
-
-/** The edge a browser's visits to an app are kept on (attribution.ts
- * `contributed` writes the same one). */
-export let visitEdge = (via: string, app: string) =>
-  edgeEid(instrumentEid(via), 'worked', app)
-
-/**
- * What a signed-out browser holds in the store it stands in, by the app and
- * its visit as the directory says now: the viewer of the sample, the editor
- * of the store its visit gave it, and nothing anywhere else. This is the
- * standing {@link visiting} serves, read again for a socket that outlives the
- * request that opened it (app-serving-authority.ts `recheck`).
- *
- * ```ts
- * import { visitorRole } from './visit.ts'
- * import { assertEquals } from '@std/assert'
- * let app = {
- *   access: 'private',
- *   published: { name: 'notes', version: 2, at: '', about: '' },
- *   demo: { store: 'ada/notes.1f/demo/d', seed: '', version: 2, release: '2' },
- * } as Parameters<typeof visitorRole>[0]
- * let own = { store: 'ada/notes.1f/visit/o', blobs: '', seen: null, adopted: null }
- * assertEquals(visitorRole(app, 'ada/notes.1f/demo/d', null), 'viewer')
- * assertEquals(visitorRole(app, own.store, own), 'editor')
- * assertEquals(visitorRole(app, own.store, null), null)
- * assertEquals(visitorRole(app, 'ada/notes.1f/visit/x', own), null)
- * assertEquals(visitorRole(app, own.store, { ...own, adopted: 'b' }), null)
- * assertEquals(visitorRole({ ...app, published: null }, own.store, own), null)
- * ```
- */
-export let visitorRole = (
-  app: Pick<App, 'access' | 'published' | 'demo'>,
-  store: string | null,
-  visit: Visit | null,
-): 'viewer' | 'editor' | null =>
-  !sampling(app) || !app.demo || !store
-    ? null
-    : store == app.demo.store
-    ? 'viewer'
-    : store == visit?.store && !visit.adopted
-    ? 'editor'
-    : null
-
-/** A browser's visit as its edge's `visit` component holds it. */
-export let visitOfRow = (comp: Comp | undefined): Visit | null =>
-  typeof comp?.store == 'string'
-    ? {
-      store: comp.store,
-      blobs: String(comp.blobs ?? ''),
-      seen: typeof comp.seen == 'string' ? comp.seen : null,
-      adopted: typeof comp.adopted == 'string' ? comp.adopted : null,
-    }
-    : null
-
-/** This browser's own store of the app, read from the directory itself and
- * never a copy of it: a store just born is asked for at once. */
-export let visitOf = async (
-  env: Pick<Env, 'STORE'>,
-  via: string,
-  app: string,
-): Promise<Visit | null> => {
-  let [row] = await meta(env).query(
-    `.entity.eid=${visitEdge(via, app)} .visit`,
-  )
-  return visitOfRow(row?.visit as Comp | undefined)
-}
-
-// ── The stores a browser says it holds ───────────────────────────────────
-//
-// Almost no stranger holds a store of the app they look at, yet each of their
-// requests (the page, each file, each query) asked the directory whether they
-// did: 35 of the 50 ms each one spent at ORD (T-133873). The browser says so
-// itself instead, in cookies set on the answers that learn it: `yak_stores`
-// once all its stores were read, and `yak_store_<app>` for each one, every
-// cookie holding the instrument it speaks for. The directory is still asked
-// about a store the cookies name, so a cookie only ever spares a read, and
-// cookies of another instrument, or none at all, mean its stores are read
-// whole, once; a browser that came with no instrument at all holds nothing,
-// and is told so unasked. A cookie of its own per store, because the answer that read
-// the stores and the one that made a store can cross: each sets only its own
-// names, and neither undoes the other.
-
-/** The cookie saying a browser's stores were read, and so that each store it
- * holds has a cookie of its own. */
-export let STORES = 'yak_stores'
-
-let tag = (eid: string) => eid.replaceAll('-', '').slice(0, 16)
-
-/** The cookie naming a browser's store of one app. */
-export let storeCookie = (app: string) => `yak_store_${tag(app)}`
-
 // What each answer has to tell its browser, by the request it answers.
 let telling = new WeakMap<Request, { via: string; names: string[] }>()
 let tell = (req: Request, via: string, names: string[]) => {
+  if (!names.length) return
   let held = telling.get(req)
   telling.set(req, { via, names: [...held?.names ?? [], ...names] })
 }
 
 /**
- * This browser's own store of the app, as {@link visitOf} answers it, read
- * only where its cookies leave the answer open. `req` is the request as the
- * browser sent it: its cookies are what it says.
+ * This browser's own store of the app (@yaks/platform/visits `holding`), its
+ * cookies read and what they are to say remembered for its answer. `req` is
+ * the request as the browser sent it: its cookies are what it says.
  */
 export let ownOf = async (
   env: Pick<Env, 'STORE'>,
@@ -363,21 +68,17 @@ export let ownOf = async (
   via: string,
   app: string,
 ): Promise<Visit | null> => {
-  let me = tag(instrumentEid(via)), header = req.headers.get('cookie')
-  if (newcomer(req, via)) {
-    tell(req, via, [STORES])
-    return null
-  }
-  if (cookieValue(header, STORES) == me) {
-    return cookieValue(header, storeCookie(app)) == me
-      ? await visitOf(env, via, app)
-      : null
-  }
-  let held = given(
-    await meta(env).query(`.visit .edge.from=${instrumentEid(via)} ?edge`),
+  let { visit, tell: names } = await holding(
+    ledgerOf(env),
+    {
+      cookie: req.headers.get('cookie'),
+      newcomer: newcomer(req, via),
+    },
+    via,
+    app,
   )
-  tell(req, via, [STORES, ...held.map((g) => storeCookie(g.app))])
-  return held.find((g) => g.app == app)?.visit ?? null
+  tell(req, via, names)
+  return visit
 }
 
 /** The store just made for this browser, told to it on the answer. */
@@ -388,7 +89,7 @@ export let tellBorn = (req: Request, via: string, app: string) =>
 export let toldStores = (req: Request, res: Response, env: Host): Response => {
   let said = telling.get(req)
   if (!said || res.status == 101) return res
-  let me = tag(instrumentEid(said.via)), domain = domainOf(req, env)
+  let me = holder(said.via), domain = domainOf(req, env)
   let out = new Response(res.body, res)
   for (let name of said.names) {
     out.headers.append(
@@ -406,11 +107,12 @@ let births = new Map<string, Promise<Visit>>()
 
 /**
  * A store of this browser's own, copied from the app's sample at one instant,
- * then written on its edge. Answers the store the edge holds, which is another
- * birth's where one won the race; the loser's copy is emptied. A browser
- * someone is signed in on is theirs before the copy is made (`by`, the way
- * attribution.ts `claimed` writes it at sign-in), so what they make there is
- * claimed from its first write, and no sweep takes it for nobody's.
+ * then written on its edge (@yaks/platform/visits `settled`). Answers the
+ * store the edge holds, which is another birth's where one won the race; the
+ * loser's copy is emptied. A browser someone is signed in on is theirs before
+ * the copy is made (`claim`, the way attribution.ts `claimed` writes it at
+ * sign-in), so what they make there is claimed from its first write, and no
+ * sweep takes it for nobody's.
  */
 export let born = (
   env: Env,
@@ -423,7 +125,7 @@ export let born = (
   let key = `${app.eid} ${instrumentEid(via)}`
   let held = births.get(key)
   if (held) return held
-  let birth = bear(env, space, app, instrumentEid(via), by, now)
+  let birth = bear(env, space, app, via, by, now)
     .finally(() => births.delete(key))
   births.set(key, birth)
   // Another request may await this birth: held to its end (lib/shared.ts).
@@ -439,175 +141,23 @@ let bear = async (
   by: string | null,
   now: Date,
 ): Promise<Visit> => {
-  if (by) await owned(env, via, by)
-  let id = crypto.randomUUID()
-  let store = `${storeName(space, app)}/visit/${id}`
+  let l = ledgerOf(env)
+  if (by) await claim(l, via, by)
+  let visit: Visit = {
+    ...visitAt(storeName(space, app), crypto.randomUUID()),
+    seen: now.toISOString(),
+    adopted: null,
+  }
   let copy = await storeOf(env.STORE, app.demo!.store)(
-    `${COPY}?to=${encodeURIComponent(store)}`,
+    `${COPY}?to=${encodeURIComponent(visit.store)}`,
     { method: 'POST' },
     KERNEL,
   )
   if (!copy.ok) throw new Error(`visit copy: ${await copy.text()}`)
   await copy.body?.cancel()
-  let visit: Visit = {
-    store,
-    blobs: blobsOf(id),
-    seen: now.toISOString(),
-    adopted: null,
-  }
-  try {
-    await meta(env).apply([
-      { entity: { eid: via }, browser: {} },
-      {
-        ...link(via, 'worked', app.eid),
-        visit: { store: visit.store, blobs: visit.blobs, seen: visit.seen },
-        $was: { visit: { store: null } },
-      },
-    ], KERNEL)
-    return visit
-  } catch (error) {
-    if (!(error instanceof Stale)) throw error
-    await cleared(env, store)
-    let kept = await visitOf(env, via, app.eid)
-    if (!kept) throw error
-    return kept
-  }
-}
-
-/** The browser `via` made `by`'s, unless it is somebody's already: the first
- * person to hold a browser keeps it, as at sign-in. */
-let owned = async (env: Pick<Env, 'STORE'>, via: string, by: string) => {
-  try {
-    await meta(env).apply([{
-      entity: { eid: via },
-      browser: { by },
-      $was: { browser: { by: null } },
-    }], KERNEL)
-  } catch (error) {
-    if (!(error instanceof Stale)) throw error
-  }
-}
-
-/** Whether the app's strangers hold as many stores as it keeps. */
-export let crowded = async (
-  env: Pick<Env, 'STORE'>,
-  app: string,
-  cap = CAP,
-) => {
-  let { count } = await meta(env).query(
-    `.visit .edge.to=${app} !visit.adopted .count`,
-  ) as unknown as { count: number }
-  return count >= cap
-}
-
-/** A store a browser was given, with the edge that names it and its app. */
-export type Given = { eid: string; app: string; visit: Visit }
-
-let given = (rows: Record<string, unknown>[]): Given[] =>
-  rows.flatMap((row) => {
-    let visit = visitOfRow(row.visit as Comp | undefined)
-    let eid = (row.entity as { eid: string }).eid
-    let app = String((row.edge as Comp | undefined)?.to ?? '')
-    return visit ? [{ eid, app, visit }] : []
-  })
-
-/** Every store a browser was given that nobody installed, or only those of
- * one person's browsers, or of one app: an installed one is its app's store,
- * and is reached as the app's. */
-export let visits = async (
-  env: Pick<Env, 'STORE'>,
-  only: { by?: string; app?: string } = {},
-): Promise<Given[]> =>
-  given(
-    await meta(env).query(
-      [
-        '.visit !visit.adopted',
-        ...only.by ? [`.edge.from.browser.by=${only.by}`] : [],
-        ...only.app ? [`.edge.to=${only.app}`] : [],
-        '?edge',
-      ].join(' '),
-    ),
-  )
-
-/**
- * The stores nobody can reach any more, which the sweep erases: one nobody
- * claimed, unused for {@link KEPT}, and one whose person closed their account
- * without installing it. `by` keeps a dead person's id (attribution-vocab.ts),
- * so a closed account is a `by` with no person behind it.
- */
-export let lapsed = async (
-  env: Pick<Env, 'STORE'>,
-  now = new Date(),
-): Promise<Given[]> => {
-  let since = new Date(now.getTime() - KEPT).toISOString()
-  let g = meta(env)
-  return given([
-    ...await g.query(
-      `.visit !visit.adopted !edge.from.browser.by .visit.seen<"${since}" ?edge`,
-    ),
-    ...await g.query(
-      '.visit !visit.adopted .edge.from.browser.by ' +
-        '!edge.from.browser.by.email ?edge',
-    ),
-  ])
-}
-
-/** The visit's store taken by the app row `eid`, unless another install took
- * it first, which refuses with Stale. */
-export let adopt = async (
-  env: Pick<Env, 'STORE'>,
-  via: string,
-  app: string,
-  eid: string,
-) => {
-  await meta(env).apply([{
-    entity: { eid: visitEdge(via, app) },
-    visit: { adopted: eid },
-    $was: { visit: { adopted: null } },
-  }], KERNEL)
-}
-
-/** An adoption whose app row could not be written, put back so the store
- * waits for the next install. */
-export let unadopt = async (
-  env: Pick<Env, 'STORE'>,
-  via: string,
-  app: string,
-  eid: string,
-) => {
-  await meta(env).apply([{
-    entity: { eid: visitEdge(via, app) },
-    visit: { adopted: null },
-    $was: { visit: { adopted: eid } },
-  }], KERNEL)
-}
-
-/** Whether a visit's last use is old enough to write down again: at most
- * once an hour, the way used.ts keeps its receipts.
- *
- * ```ts
- * import { due } from './visit.ts'
- * import { assert } from '@std/assert'
- * let at = new Date('2026-11-03T12:00:00Z')
- * assert(due(null, at))
- * assert(!due('2026-11-03T11:30:00Z', at))
- * assert(due('2026-11-03T10:59:00Z', at))
- * ```
- */
-export let due = (seen: string | null, now = new Date()) =>
-  !seen || now.getTime() - Date.parse(seen) >= 3_600_000
-
-/** This visit's last use written down. */
-export let used = async (
-  env: Pick<Env, 'STORE'>,
-  via: string,
-  app: string,
-  now = new Date(),
-) => {
-  await meta(env).apply([{
-    entity: { eid: visitEdge(via, app) },
-    visit: { seen: now.toISOString() },
-  }], KERNEL)
+  let kept = await settled(l, via, app.eid, visit)
+  if (kept.store != visit.store) await cleared(env, visit.store)
+  return kept
 }
 
 /** The published release a stranger is served when the app has moved past

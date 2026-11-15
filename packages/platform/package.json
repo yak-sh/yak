@@ -16,6 +16,8 @@
     "./routes": "./routes.ts",
     "./ladder": "./ladder.ts",
     "./preview": "./preview.ts",
+    "./visits": "./visits.ts",
+    "./installs": "./installs.ts",
     "./upstream": "./upstream.ts",
     "./app-authority": "./app-authority.ts",
     "./app-writes": "./app-writes.ts",

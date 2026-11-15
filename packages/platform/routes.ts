@@ -322,7 +322,7 @@ export let GET_PLAN = `/login?return=${
   encodeURIComponent(managePath('billing'))
 }`
 /** The page that installs a published app by its name (install.ts). Here
- * beside the sign-in address, since a visitor's bar (visit.ts) sends a
+ * beside the sign-in address, since a visitor's bar (./visits.ts) sends a
  * stranger through the one to the other. */
 export let INSTALL = '/install'
 export let installAt = (name: string): string =>
@@ -764,7 +764,7 @@ export let askable = (
   origin: string | null,
 ): boolean => method == 'POST' && pathname == '/login' && asker(origin)
 
-// A sandboxed app's page asking its own doors (installed.ts, D-37901): the
+// A sandboxed app's page asking its own doors (./installs.ts, D-37901): the
 // path carries its page token as `/<app>/~<token>/…`, or `/~<token>/…` for a
 // front page or an app on its own domain. Such a page has an opaque origin,
 // so it sends `Origin: null`, which `sameOrigin` refuses — and it should,

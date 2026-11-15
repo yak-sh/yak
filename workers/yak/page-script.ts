@@ -1,11 +1,11 @@
 // The platform's own script in every page an app serves: the reporter
 // (public/report.js), the release listener (public/release.js), the framed
-// address reporter (public/location.js), the
-// badge (public/badge.js) in a page of a space on the free plan, the pencil
-// (public/edit.js) in a page served to a member who may write the app, and the
-// visitor's bar (public/visit.js) in a page served to a stranger from a
-// published app's sample or their own store of it (visit.ts), woven into
-// the page's text inline, as @yaks/platform/woven `tagged` weaves them.
+// address reporter (public/location.js), the badge (public/badge.js) in a page
+// of a space on the free plan, the pencil (public/edit.js) in a page served to
+// a member who may write the app, and the visitor's bar (public/visit.js) in a
+// page served to a stranger from a published app's sample or their own store of
+// it (@yaks/platform/visits), woven into the page's text inline, as
+// @yaks/platform/woven `tagged` weaves them.
 //
 // Beside the mount and release every tag says, the release listener's and
 // the pencil's also say where the app's own `api/` is when it is not under
@@ -18,7 +18,7 @@
 // A page with a Content-Security-Policy of its own is given the scripts'
 // hashes (@yaks/platform/woven `admitted`).
 import { caught } from './defects.ts'
-import type { Bar } from './visit.ts'
+import type { Bar } from '@yaks/platform/visits'
 import { sharing } from './lib/shared.ts'
 import { inline, type Script, tagged } from '@yaks/platform/woven'
 

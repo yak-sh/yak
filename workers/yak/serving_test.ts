@@ -2432,8 +2432,8 @@ test("an app worker's own request is woven no scripts, and no badge", () => {
   })
 })
 
-// A stranger served a published app's sample, or their own store of it,
-// wears the bar that keeps it (visit.ts `barOf`), beside the badge.
+// A stranger served a published app's sample, or their own store of it, wears
+// the bar that keeps it (@yaks/platform/visits `barOf`), beside the badge.
 test("a visitor's page wears the bar that keeps what they made", async () => {
   let { tags, hashes } = await pageScript(ASSETS, '/notes/', 1, {
     badge: null,

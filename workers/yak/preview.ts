@@ -106,7 +106,7 @@ import {
 import type { Objects } from '@yaks/blob'
 import type { Cookie, View, Visit } from './browser/capture.ts'
 import { sourceOf } from './wrangler_app.ts'
-import { walled } from './installed.ts'
+import { walled } from '@yaks/platform/installs'
 import { screen as screenAt } from './screen.ts'
 import { sharing } from './lib/shared.ts'
 

@@ -67,7 +67,7 @@ export type Use =
   | 'erase' // a space's deletion ticket (erase.ts)
   | 'review' // a gallery review ticket (gallery.ts)
   | 'invite' // an invitation's accept link (workers/yak/invite.ts)
-  | 'page' // a sandboxed app's page speaking to its own API (installed.ts)
+  | 'page' // a sandboxed app's page speaking to its own API (page-token.ts)
   | 'service' // retained cross-app customer authority, rechecked against its connection
   | 'connect' // a connection's sign-in, on its way back (connections.ts)
   | 'line' // a person's own number's SMS callback (operator-line.ts)

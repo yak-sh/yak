@@ -358,8 +358,9 @@ let held = async (req: Request, secret: string | undefined) => {
 
 /** The store a worker's grant was minted for and the visitor it answered,
  * whoever the grant names: the door asks it before `granted`, since a
- * stranger's visit is served from a store that is not the app's own (visit.ts
- * `revisited`), and their first write there gives them one (visit.ts `born`). */
+ * stranger's visit is served from a store that is not the app's own
+ * (@yaks/platform/visits `revisited`), and their first write there gives them
+ * one (visit.ts `born`). */
 export let grantedStore = async (
   req: Request,
   secret: string | undefined,

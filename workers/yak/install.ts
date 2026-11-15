@@ -11,7 +11,8 @@ import { whoIs } from './session.ts'
 import { drawn, head } from './shell.ts'
 import { call } from './tools.ts'
 import { step } from './funnel.ts'
-import { visitOf } from './visit.ts'
+import { visitOf } from '@yaks/platform/visits'
+import { ledgerOf } from './visit.ts'
 
 export { INSTALL as PATH, installAt as at } from '@yaks/platform/routes'
 
@@ -112,9 +113,11 @@ export let answer = async (req: Request, env: Env, dir: Directory) => {
   let spaces = (await dir.seats(who.person))
     .filter((s) => !s.space.trashed && writes(s.role)).map((s) => s.space)
   let title = `Install ${offer.app.title}`
-  // What this browser made at the app before signing up (visit.ts) is the
-  // copy's, unless it already became an app.
-  let visit = who.via ? await visitOf(env, who.via, offer.app.eid) : null
+  // What this browser made at the app before signing up (@yaks/platform/visits)
+  // is the copy's, unless it already became an app.
+  let visit = who.via
+    ? await visitOf(ledgerOf(env), who.via, offer.app.eid)
+    : null
   let kept = !!visit && !visit.adopted
   // Asked again once it became one, the install answers that app.
   let shown = (why = '', status = 200, selected = '') =>

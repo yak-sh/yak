@@ -7,7 +7,7 @@ import { EPOCH, FENCE_WAIT } from './directory-copy.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { VISIT, type Vouch, vouchOf } from '@yaks/platform/app-authority'
 import { appAbout, type Row } from './directory.ts'
-import { visitEdge, visitOfRow, visitorRole } from './visit.ts'
+import { visitEdge, visitOfRow, visitorRole } from '@yaks/platform/visits'
 
 type Word = 'name' | 'app' | 'access' | 'mail' | 'phone' | 'policy'
 type Host = {
@@ -63,14 +63,14 @@ export let servingAuthority = (host: Host) => {
 
   // Reread metadata and standing in one directory snapshot; never carry an
   // old role into a newly accepted revision. A stranger with no seat stands
-  // by their browser's visit to the app (visit.ts `visitorRole`).
+  // by their browser's visit to the app (@yaks/platform/visits `visitorRole`).
   let recheck = async (req: Request): Promise<number> => {
     let app = req.headers.get('x-yak-app') ?? host.read('app')
     let person = req.headers.get('x-yak-person')
     let via = req.headers.get('x-yak-via')
     let edge = via ? visitEdge(via, app!) : null
-    // A query returns only what it names, and a visitor's standing is read
-    // from the app's offer and its sample (visit.ts `visitorRole`).
+    // A query returns only what it names, and a visitor's standing is read from
+    // the app's offer and its sample (@yaks/platform/visits `visitorRole`).
     let q = `.entity.eid=${app}&?app&?published&?demo`
     if (person) {
       q +=

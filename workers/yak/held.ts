@@ -6,18 +6,17 @@ import { ownedPrefix } from './file-root.ts'
 // decide by it and say it (usage.ts `full`, `fullFiles`), app_list says it
 // (tools.ts), and the admin's directory counts it (admin.ts).
 //
-// App data is what each app's store last told the directory it weighs
-// (meter.ts `weighed`). A trashed app's store keeps its rows until it is
-// erased, so it counts. Photos and files are the space's objects in the
-// bucket, everything under `<handle>/` (the space's own, directory.ts
-// `spaceHandle`), each counted for the app whose prefix
-// holds it (file-root.ts `ownedPrefix`): its files,
+// App data is what each app's store last told the directory it weighs (meter.ts
+// `weighed`). A trashed app's store keeps its rows until it is erased, so it
+// counts. Photos and files are the space's objects in the bucket, everything
+// under `<handle>/` (the space's own, directory.ts `spaceHandle`), each counted
+// for the app whose prefix holds it (file-root.ts `ownedPrefix`): its files,
 // uploads, kept versions and history. An app installed over a visit
-// (visit.ts) keeps its uploads where the visit put them, outside the space
-// (`app.blobs`), and they count for it and its space too (`prefixes`). A key
-// under no app's prefix still counts for the space, so the apps' files can sum
-// to less than the space's.
-// The shapes, `Held` and `Holding`, are @yaks/platform/standing's.
+// (@yaks/platform/visits) keeps its uploads where the visit put them, outside
+// the space (`app.blobs`), and they count for it and its space too
+// (`prefixes`). A key under no app's prefix still counts for the space, so the
+// apps' files can sum to less than the space's. The shapes, `Held` and
+// `Holding`, are @yaks/platform/standing's.
 import type { App, Space } from './directory.ts'
 import type { Held, Holding } from '@yaks/platform/standing'
 

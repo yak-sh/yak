@@ -186,7 +186,7 @@ let pageVersion = () => {
 // resolved against this origin, and a path that names the api directory
 // without saying so keeps its meaning: the doors are under it, so the base
 // ends in a slash or `query` would replace the last segment. A sandboxed
-// app's page (installed.ts) has an opaque origin, which reads "null" and is no
+// app's page (./installs.ts) has an opaque origin, which reads "null" and is no
 // base either, so its own address stands in: the hostname is the same.
 // A path as a URL carries it, each segment escaped.
 let encodedPath = (path) =>

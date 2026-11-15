@@ -40,7 +40,8 @@ import { KERNEL } from './meta.ts'
 import { adminWho } from './asking.ts'
 import { vouched, type Who } from './session.ts'
 import { LEAVE, WHERE } from './relocate.ts'
-import { visits } from './visit.ts'
+import { visits } from '@yaks/platform/visits'
+import { ledgerOf } from './visit.ts'
 import { builderOf } from './build-door.ts'
 import { type Asked, COPY } from './store-copy.ts'
 
@@ -58,8 +59,8 @@ let json = (status: number, code: string, message: string) =>
 
 /** Every store there is, trashed apps' included: a restore brings one back
  * holding whatever shape it was left in. An app's sample and the stores its
- * visitors were given (visit.ts) hold its words too, so a migration reaches
- * them as well. */
+ * visitors were given (@yaks/platform/visits) hold its words too, so a
+ * migration reaches them as well. */
 export let stores = async (env: Env): Promise<Swept[]> => {
   let dir = dirOf(env)
   let spaces = await dir.all()
@@ -75,7 +76,7 @@ export let stores = async (env: Env): Promise<Swept[]> => {
       ...app.demo ? [{ store: app.demo.store, at: `${name} sample` }] : [],
     ]
   })
-  let visited = (await visits(env)).flatMap(({ app, visit }) =>
+  let visited = (await visits(ledgerOf(env))).flatMap(({ app, visit }) =>
     at.has(app) ? [{ store: visit.store, at: `${at.get(app)} visit` }] : []
   )
   let all = [

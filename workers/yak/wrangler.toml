@@ -390,7 +390,7 @@ dataset = "yak_views"
 #   RTC_RATE        60 requests a minute to an app's voice door (rtc.ts), per
 #                   visitor per app; members are not counted
 #   BIRTH_RATE      10 stores of their own a minute, made by strangers'
-#                   first writes at published apps (visit.ts)
+#                   first writes at published apps (@yaks/platform/visits)
 [[ratelimits]]
 name = "SIGNIN_RATE"
 namespace_id = "1001"

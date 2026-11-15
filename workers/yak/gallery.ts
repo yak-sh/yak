@@ -92,7 +92,7 @@ import { caught } from './defects.ts'
 import { DEMO } from './gallery-demo.ts'
 import { DEMOS } from './demos.ts'
 import { PICTURES } from './kept-page.ts'
-import { opens } from './sample.ts'
+import { opens } from '@yaks/platform/visits'
 import type { Args, Ctx, Out } from './tool.ts'
 
 // Where the gallery lives, and where a letter's links land. What the page says

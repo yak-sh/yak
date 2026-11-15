@@ -516,8 +516,9 @@ test('a public app keeps the address its own letter is for from visitors, and sh
   equal(await asked('.recipient .count', owner.cookie), [200, '{"count":1}'])
 })
 
-// A stranger at a private published app is served its sample (visit.ts), and
-// still meets the app's own forms at its form door.
+// A stranger at a private published app is served its sample
+// (@yaks/platform/visits), and still meets the app's own forms at its form
+// door.
 let gallery = `formsdemo${crypto.randomUUID().slice(0, 6)}`
 await agent.answer('app_new', {
   slug: gallery,

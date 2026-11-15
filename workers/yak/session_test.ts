@@ -28,7 +28,7 @@ import {
   vouched,
   whoIs,
 } from './session.ts'
-import { paged, paging } from './installed.ts'
+import { paged, paging } from './page-token.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
 
 let SECRET = 'a-probe-secret'

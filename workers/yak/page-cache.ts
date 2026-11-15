@@ -43,7 +43,7 @@
 import { mode } from '@yaks/member'
 import { type App, offered } from './directory.ts'
 import type { Env } from './env.ts'
-import { sandboxed } from './installed.ts'
+import { sandboxed } from '@yaks/platform/installs'
 import {
   type Alone,
   asked as askedOf,

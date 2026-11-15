@@ -62,7 +62,7 @@ import { blobPrefix, receiptPrefix, uploadPrefix } from './blob-key.ts'
 import { type Bundle, minted } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { declarationOf, keepDeclaration } from './declaration.ts'
-import { sandboxed } from './installed.ts'
+import { sandboxed } from '@yaks/platform/installs'
 import { componentsOf } from './vocab.ts'
 import { isTestAddress } from '@yaks/platform/bots'
 import {
@@ -76,7 +76,8 @@ import {
 } from './idle-spaces.ts'
 import { KERNEL, meta } from './meta.ts'
 import { MORE } from './wake.ts'
-import { type Given, lapsed, VISITS, visits } from './visit.ts'
+import { type Given, lapsed, VISITS, visits } from '@yaks/platform/visits'
+import { ledgerOf } from './visit.ts'
 import { opened, seal } from './lib/token.ts'
 import { wiped } from './build-door.ts'
 import { reachChanged, toolsOf, viewsMoved } from './declared.ts'
@@ -345,10 +346,10 @@ let swept = async (env: Env, prefix: string) => {
 let under = (space: Space, app?: App) =>
   app ? `${ownedPrefix(space, app)}/` : `${space.store}/`
 
-// A visitor's store gone (visit.ts): what it saved, its uploads, and the
-// record on its browser's edge that sent them there, last, so an erase that
-// dies halfway is found again by the next sweep. Their next write at the app
-// starts a store afresh from its sample.
+// A visitor's store gone (@yaks/platform/visits): what it saved, its uploads,
+// and the record on its browser's edge that sent them there, last, so an erase
+// that dies halfway is found again by the next sweep. Their next write at the
+// app starts a store afresh from its sample.
 export let unvisited = async (env: Env, { eid, visit }: Given) => {
   await cleared(env, visit.store)
   // Only ever a visitor's own prefix: an empty one would be the whole bucket.
@@ -401,7 +402,7 @@ export let emptied = async (
   if (!r.ok) throw new Error(await r.text())
   await r.body?.cancel()
   if (app.demo) await cleared(env, app.demo.store)
-  for (let given of await visits(env, { app: app.eid })) {
+  for (let given of await visits(ledgerOf(env), { app: app.eid })) {
     await unvisited(env, given)
   }
   return files
@@ -940,9 +941,10 @@ export let collected = async (
     standing,
     now.getTime(),
   )
-  // The visitors' stores nobody can reach any more (visit.ts `lapsed`), each
-  // on its own, so one that will not empty holds up none of the rest.
-  for (let given of await lapsed(env, now)) {
+  // The visitors' stores nobody can reach any more (@yaks/platform/visits
+  // `lapsed`), each on its own, so one that will not empty holds up none of the
+  // rest.
+  for (let given of await lapsed(ledgerOf(env), now)) {
     if (spent()) return more()
     await unvisited(env, given)
       .catch((why) => caught(why, { request: 'erase a visitor store' }))
@@ -1071,7 +1073,7 @@ let buried = async (env: Env, dir: Directory, person: string, who: Who) => {
   await dir.stamp({
     entities: [{ entity: { eid: person }, tombstone: {} }],
   }, vouched(who))
-  for (let given of await visits(env, { by: person })) {
+  for (let given of await visits(ledgerOf(env), { by: person })) {
     await unvisited(env, given)
   }
 }

@@ -25,7 +25,7 @@ import { Button, Card } from '@yaks/ui/parts'
 import { type Host, spaceHost } from '@yaks/platform/host'
 import { at as installAt } from './install.ts'
 import { lost } from './pages.ts'
-import { opens } from './sample.ts'
+import { opens } from '@yaks/platform/visits'
 import { drawn, head } from './shell.ts'
 
 export let page = (a: Shown, env: Host = {}) => {

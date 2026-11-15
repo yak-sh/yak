@@ -45,6 +45,7 @@ import {
   meterOf,
 } from '@yaks/platform/meter'
 import type { Tier } from '@yaks/platform/plans'
+import type { Sample } from '@yaks/platform/visits'
 import { type Host as HostEnv, spaceHost } from '@yaks/platform/host'
 import { type Upstream, upstreamOf } from '@yaks/platform/upstream'
 import type { Actor, Bundle, Tx } from '@yaks/graph'
@@ -367,10 +368,11 @@ export type AppInfo = {
   // When this app's store was seeded and by which release (seed.ts), null
   // until it has been. A release reads it to know the seed has already run.
   seeded: Sowed | null
-  // The sample a stranger at a private published app reads (sample.ts,
-  // D-134327): a store of its own holding the published version's seed and
-  // nothing else. Null for every app that keeps none.
-  demo?: Demo | null
+  // The sample a stranger at a private published app reads
+  // (@yaks/platform/visits, D-134327): a store of its own holding the
+  // published version's seed and nothing else. Null for every app that keeps
+  // none.
+  demo?: Sample | null
   // In the trash, and since when (erase.ts, T-34430). Null for every app that
   // is not — which is almost all of them — and every reader of an app asks
   // it: a trashed app serves nothing, declares nothing, is nobody's front
@@ -448,11 +450,11 @@ export type Offer = {
  * only the one on offer: each is named by an id only its own pages carry
  * (asset_url.ts). The app's data stays its own people's. */
 export let offered = (app: { published?: Offer | null }) => !!app.published
-// Where an installed app came from, and the version it took (T-32889). The
-// pin is what makes `app_update` a deliberate act. `of` is null once the app
-// it came from is gone, and the copy is still a copy. `sandboxed` is when its
-// space's owner walled it off (installed.ts), null while it runs like the
-// space's own apps.
+// Where an installed app came from, and the version it took (T-32889). The pin
+// is what makes `app_update` a deliberate act. `of` is null once the app it
+// came from is gone, and the copy is still a copy. `sandboxed` is when its
+// space's owner walled it off (@yaks/platform/installs), null while it runs
+// like the space's own apps.
 export type Pin = {
   of: string | null
   version: number
@@ -500,17 +502,6 @@ export type SkillOffer = Shared & {
 // That the app's store carries the data its files seed it with, and the
 // release that put it there (seed.ts, T-34327).
 export type Sowed = { at: string; version: number }
-
-// An app's sample store (sample.ts): its handle, the sha of the declaration
-// and seed it was made from, so a republish that changed neither keeps it, and
-// the published version and the release it was selected at, which is what a
-// stranger is served (visit.ts).
-export type Demo = {
-  store: string
-  seed: string
-  version: number | null
-  release: string | null
-}
 
 // When an app or a space was thrown away and by whom (erase.ts, T-34430,
 // T-34431). `at` is what the thirty days are counted from, and `by` is the

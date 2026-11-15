@@ -121,7 +121,7 @@ for (let app of cases) {
       .tool('gallery_search', { words: app })
     assertStringIncludes(shown, `app_install(name: 'private-${app}')`)
     // A stranger at the private original, or at its copy, is served its
-    // sample, never its records (visit.ts).
+    // sample, never its records (@yaks/platform/visits).
     let original = await k.at('home.yaks.app', `/${app}/api/query?q=.note`)
     assertEquals(original.status, 200)
     assertEquals(await original.json(), [])

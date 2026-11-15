@@ -43,8 +43,8 @@
       })
       // A beacon always sends credentials, and a sandboxed app's page — an
       // opaque origin, `self.origin` "null" — reports to a door that answers
-      // any origin only because it takes none (installed.ts), so the browser
-      // refuses the beacon. A keepalive fetch sends none from there.
+      // any origin only because it takes none (@yaks/platform/installs), so the
+      // browser refuses the beacon. A keepalive fetch sends none from there.
       let beacon = self.origin != 'null' && navigator.sendBeacon
       if (!beacon || !navigator.sendBeacon(door, blob)) {
         Promise.resolve(
@@ -373,9 +373,9 @@
     try {
       let r = await plain(input, init)
       // This browser's store for the app moved at this answer: a stranger's
-      // first write, the page's own or one the app's worker made for them,
-      // gave them a store of their own (visit.ts). Every answer the page sees
-      // passes here, so this is where ./api/client.js hears it
+      // first write, the page's own or one the app's worker made for them, gave
+      // them a store of their own (@yaks/platform/visits). Every answer the
+      // page sees passes here, so this is where ./api/client.js hears it
       // (`yak-moved`), and opens its socket again on the new store.
       if (mine(where) && r.headers.has('x-yak-moved')) {
         dispatchEvent(new CustomEvent('yak-moved', { detail: where.href }))

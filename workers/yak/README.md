@@ -637,9 +637,9 @@ still applies.
 
 `GET ./api/form/<form>` shows the form, so a page in any app can draw one kept
 in another, private one. It answers anyone, as POST does, from the app's own
-store: a stranger served a published app's sample (visit.ts) still meets the
-app's forms. It answers `cache-control: no-store`, with the form's own rows and
-nothing else in the store:
+store: a stranger served a published app's sample (@yaks/platform/visits) still
+meets the app's forms. It answers `cache-control: no-store`, with the form's own
+rows and nothing else in the store:
 
 ```json
 {
@@ -903,8 +903,8 @@ page alone once main's head goes live, and reports it not answering.
 A private gallery app owned by the platform staff gets a copy in `yourname`,
 installed from its published version, kept private and published. Each stranger
 there reads the copy's sample, made from its seed, and their first write gives
-them a store of their own (visit.ts). Republishing a listed source refreshes the
-copy.
+them a store of their own (@yaks/platform/visits). Republishing a listed source
+refreshes the copy.
 
 ## App archetype indexing
 

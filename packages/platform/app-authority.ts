@@ -21,7 +21,7 @@ import { noticeComponents } from './notices-vocab.ts'
 
 /** What the kernel vouched for one request: who is asking, the level the
  * platform says they hold on this app, what to call them, and whether they
- * stand in the app as a visitor (visit.ts). */
+ * stand in the app as a visitor (./visits.ts). */
 export type Vouch = {
   person: string | null
   browsers?: string[]
@@ -33,7 +33,7 @@ export type Vouch = {
 }
 
 /** The header the kernel marks a visitor's request with: a stranger reading
- * the sample or standing in a store of their own (visit.ts, session.ts
+ * the sample or standing in a store of their own (./visits.ts, session.ts
  * `vouched`). */
 export let VISIT = 'x-yak-visit'
 
@@ -191,11 +191,11 @@ export let FLOORS: Floors = {
 }
 
 /**
- * The floors a visitor stands below in a store of their own (visit.ts), where
- * the door makes them its editor: the letter that would leave under the app's
- * address, and the model turns and builders the owner's space pays for. Only
- * the owner reaches these, and nobody is the owner of a visitor's store until
- * it is installed.
+ * The floors a visitor stands below in a store of their own (./visits.ts),
+ * where the door makes them its editor: the letter that would leave under the
+ * app's address, and the model turns and builders the owner's space pays for.
+ * Only the owner reaches these, and nobody is the owner of a visitor's store
+ * until it is installed.
  */
 let VISITING: Floors = { [DELIVER]: 'owner', using: 'owner', builder: 'owner' }
 

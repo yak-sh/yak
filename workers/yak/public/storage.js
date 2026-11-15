@@ -1,9 +1,9 @@
 // localStorage and sessionStorage for a walled page: a sandboxed app
-// (installed.ts) or a draft's preview (preview.ts). Either runs in an opaque
-// origin of its own, where the browser's own storage throws. The kernel
-// weaves this script into the page's head, ahead of every script of the
-// page's own, with the person's saved keys in a JSON block beside it, so
-// reads are synchronous from the first line the page runs.
+// (@yaks/platform/installs) or a draft's preview (preview.ts). Either runs in
+// an opaque origin of its own, where the browser's own storage throws. The
+// kernel weaves this script into the page's head, ahead of every script of the
+// page's own, with the person's saved keys in a JSON block beside it, so reads
+// are synchronous from the first line the page runs.
 //
 // localStorage is the person's own keys in this app's store: a write lands in
 // memory at once and is saved in the background, through the same page token

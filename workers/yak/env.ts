@@ -181,13 +181,13 @@ export type Env = {
       doubles?: number[]
     }): void
   }
-  // The per-source ceilings on the doors a stranger can knock on (@yaks/workerd/rate,
-  // wrangler.toml `[[ratelimits]]`): sign-in code requests, OAuth client
-  // registration, anonymous connector calls, anonymous feedback, and anonymous
-  // requests for an app's data (its `/api/` doors), and a visitor's knocks on
-  // an app's voice door (rtc.ts), and a stranger's first write at a published
-  // app, which makes them a store (visit.ts). Absent in the in-process
-  // harness, where nothing is limited.
+  // The per-source ceilings on the doors a stranger can knock on
+  // (@yaks/workerd/rate, wrangler.toml `[[ratelimits]]`): sign-in code
+  // requests, OAuth client registration, anonymous connector calls, anonymous
+  // feedback, and anonymous requests for an app's data (its `/api/` doors), and
+  // a visitor's knocks on an app's voice door (rtc.ts), and a stranger's first
+  // write at a published app, which makes them a store (@yaks/platform/visits).
+  // Absent in the in-process harness, where nothing is limited.
   SIGNIN_RATE?: Limiter
   REGISTER_RATE?: Limiter
   TOOL_RATE?: Limiter

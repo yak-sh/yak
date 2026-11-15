@@ -2418,7 +2418,7 @@ export class Store extends Durable {
       if (!ns || !app) return false
       if (this.#bind.SERVING_COPY) {
         // The browser is asked about too: a stranger with no seat stands by
-        // its visit to the app (visit.ts `visitorRole`).
+        // its visit to the app (@yaks/platform/visits `visitorRole`).
         let via = instrumentActor(actor)?.via
         let req = new Request('http://store', {
           headers: {

@@ -1,21 +1,16 @@
-// A private published app's sample store (D-134327): a store of its own that
-// holds the published version's seed and nothing else, which every stranger
-// at the app reads until their first write gives them a store of their own.
+// A private published app's sample store (D-134327), as yaks.app's Worker
+// makes one: what a sample is, who reads it and when a publish keeps it are
+// @yaks/platform/visits'; this reads what was published and stages the store.
 //
-// It is made at app_publish from what was published: the version's
-// declaration, kept in the bucket beside its release (declaration.ts), and its
-// seed files. The owner's own store is never read for it. It is staged the way
-// a first deploy stages an app's store (tools.ts `published`): the words, the
-// commands and the seed posted as a candidate over release '0', then selected
-// by the first request that names the release. A republish that changed
-// neither the declaration nor the seed keeps the store it has; one that
-// changed either makes a new one, and the old one is emptied. A visitor's own
-// store is a copy, so it never depends on the sample it came from.
-import { sha256 } from '@yaks/graph/sha256'
+// It is made at app_publish from the version's declaration, kept in the
+// bucket beside its release (declaration.ts), and its seed files. The owner's
+// own store is never read for it. It is staged the way a first deploy stages
+// an app's store (tools.ts `published`): the words, the commands and the seed
+// posted as a candidate over release '0', then selected by the first request
+// that names the release.
 import {
   type App,
   appStore,
-  type Demo,
   type Directory,
   releaseOf,
   type Space,
@@ -31,25 +26,14 @@ import { KERNEL } from './meta.ts'
 import { filesAt } from './release.ts'
 import { applying } from './release-seed.ts'
 import { seedy } from '@yaks/platform/files'
-import { addressed, type Files } from '@yaks/platform/versions'
-
-/** Whether an app keeps a sample: a private app on offer. An open or public
- * app is one store everyone already shares. */
-export let sampling = (app: Pick<App, 'access' | 'published'>) =>
-  app.access == 'private' && !!app.published
-
-/** Whether a stranger can open the app: one everyone shares, or a private
- * one that keeps a sample for them. */
-export let opens = (app: App) =>
-  app.access != 'private' || (sampling(app) && !!app.demo)
-
-/** What a sample is made from, as one sha: the declaration and the seed
- * files' own shas, so a republish that changed neither is the same sample. */
-export let seedOf = (declared: unknown, files: Files) =>
-  sha256(JSON.stringify([
-    declared,
-    Object.keys(files).filter(seedy).sort().map((path) => [path, files[path]]),
-  ]))
+import { addressed } from '@yaks/platform/versions'
+import {
+  resampled,
+  type Sample,
+  sampleAt,
+  sampling,
+  seedOf,
+} from '@yaks/platform/visits'
 
 let decoder = new TextDecoder()
 
@@ -106,7 +90,7 @@ export let sampled = async (
   space: Space,
   app: App,
   head: Record<string, string>,
-): Promise<Demo | null> => {
+): Promise<Sample | null> => {
   if (!sampling(app)) {
     await unsampled(env, dir, app)
     return null
@@ -133,17 +117,14 @@ export let sampled = async (
     }),
   )
   let seed = seedOf(declared, files)
-  // The same words and seed at a new version keep the store, which the
-  // strangers already in it go on reading.
-  if (app.demo?.seed == seed) {
-    if (app.demo.version == number && app.demo.release == release) {
-      return app.demo
-    }
-    let demo = { ...app.demo, version: number, release }
+  let next = resampled(app.demo, { seed, version: number, release })
+  if (next.to == 'kept') return next.sample
+  if (next.to == 'moved') {
+    let demo = next.sample
     await dir.stamp({ entities: [{ entity: { eid: app.eid }, demo }] })
     return demo
   }
-  let store = `${storeName(space, app)}/demo/${crypto.randomUUID()}`
+  let store = sampleAt(storeName(space, app), crypto.randomUUID())
   let serving = storeAt(space, app, env).app
   let draft = storeOf(env.STORE, store, { ...serving, release, base: '0' })
   await asked(draft, '/vocab', {

@@ -14,11 +14,12 @@ import {
   crowded,
   KEPT,
   lapsed,
-  MOVED,
   storeCookie,
   STORES,
   visits,
-} from './visit.ts'
+} from '@yaks/platform/visits'
+import { MOVED } from '@yaks/sync'
+import { ledgerOf } from './visit.ts'
 import { stores } from './sweep.ts'
 import { closed, collected } from './erase.ts'
 import { BOT } from '@yaks/platform/bots'
@@ -112,7 +113,7 @@ let boStatuses = [x.status, y.status]
 await x.body?.cancel()
 await y.body?.cancel()
 let boRows = await titles(bo)
-let boClaimed = (await visits(env, { by: boIn.person })).length
+let boClaimed = (await visits(ledgerOf(env), { by: boIn.person })).length
 
 // A browser nobody is signed in on: its cookie is all it is.
 let opened = await k.at(host, '/notes/api/who')
@@ -239,29 +240,33 @@ let adoptedAgain = await titles(adopted)
 // What a sweep reaches, and what makes no store.
 let listed = (await stores(env)).map((s) => s.at)
 // Ada's store is her app's now, so it is neither a visit nor counted.
-let crowding = [await crowded(env, app.eid, 2), await crowded(env, app.eid, 3)]
+let crowding = [
+  await crowded(ledgerOf(env), app.eid, 2),
+  await crowded(ledgerOf(env), app.eid, 3),
+]
 let cy = await signIn(k, `cy-${crypto.randomUUID()}${BOT}`)
 let cyc = client(k, host, 'notes', cy.cookie)
 env.BIRTH_RATE = { limit: () => Promise.resolve({ success: false }) }
 let held = await cyc.post([{ entity: { eid: '$c' }, note: { title: 'C' } }])
 let heldAnswer = { status: held.status, ...await held.json() }
 delete env.BIRTH_RATE
-let before = new Set((await visits(env)).map((g) => g.eid))
+let before = new Set((await visits(ledgerOf(env))).map((g) => g.eid))
 let made = await cyc.post([{ entity: { eid: '$c' }, note: { title: 'C' } }])
 await made.body?.cancel()
 let cys = (await meta(env).query('.visit ?edge'))
   .find((r) => !before.has(r.entity.eid))!
 
-let claimedLapsed = (await lapsed(env, new Date(Date.now() + 2 * KEPT)))
-  .filter((g) => g.eid == cys.entity.eid).length
+let claimedLapsed =
+  (await lapsed(ledgerOf(env), new Date(Date.now() + 2 * KEPT)))
+    .filter((g) => g.eid == cys.entity.eid).length
 // A closed account takes its store; a store nobody claimed lasts 90 days.
 await closed(env, dir, cy.email, { person: k.owner.person, role: 'owner' })
-let afterClosing = (await visits(env)).length
-let soon = (await lapsed(env)).length
+let afterClosing = (await visits(ledgerOf(env))).length
+let soon = (await lapsed(ledgerOf(env))).length
 let later = new Date(Date.now() + KEPT + 86_400_000)
-let lapsing = (await lapsed(env, later)).length
+let lapsing = (await lapsed(ledgerOf(env), later)).length
 await collected(env, later)
-let afterSweep = (await visits(env)).length
+let afterSweep = (await visits(ledgerOf(env))).length
 let adaAgain = await titles(ada)
 let adoptedSwept = await titles(adopted)
 

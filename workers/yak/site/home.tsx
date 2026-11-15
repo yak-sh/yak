@@ -139,9 +139,9 @@ export let Examples = (
 )
 
 /** The sheet a visitor can type in, beside the box: an app in yourname's
- * space (demos.ts `SHEET`), framed live under the words that built it. What
- * a stranger adds goes to a store of their own (visit.ts), so the next
- * visitor finds the sheet as it was published. */
+ * space (demos.ts `SHEET`), framed live under the words that built it. What a
+ * stranger adds goes to a store of their own (@yaks/platform/visits), so the
+ * next visitor finds the sheet as it was published. */
 export let Sheet = () => (
   <figure class='Sheet'>
     <figcaption class='Sheet_Said' {...text('home.sheet.said')} />
