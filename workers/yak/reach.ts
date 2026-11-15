@@ -10,7 +10,7 @@ import { listed, names, type Row, STAMPS } from '@yaks/platform/listing'
 import type { Bundle } from '@yaks/graph'
 import { requested } from '@yaks/graph/bundle'
 import { sha256 } from '@yaks/graph'
-import { IDEMPOTENCY } from '@yaks/durable-object/door'
+import { type Door, IDEMPOTENCY } from '@yaks/durable-object/door'
 import { durable, INTENT } from '@yaks/api/log'
 import { misfit } from '@yaks/graph/errors'
 import {
@@ -75,6 +75,9 @@ export type Reach = {
   who: Who
   /** This store's caller vocabulary, retained throughout a composed read. */
   headers?: Record<string, string>
+  /** How the store is reached, where it is not through its Durable Object's
+   * stub: a store composing its own reach answers its own part itself. */
+  door?: Door
 }
 
 export let at = (r: { space: Space; app: App }) =>
@@ -109,6 +112,9 @@ let fan = once(() =>
   })
 )
 
+let doorAt = (env: Env, r: Reach): Door =>
+  r.door ?? appStore(env.STORE, r.space, r.app, env)
+
 // One store as a member: its /query and /apply doors, vouched, and its words.
 //
 // A read is answered by the listing rule every other door answers by
@@ -136,7 +142,7 @@ let memberOf = (
   vocab: () => vocabAt(env, r.space, r.app, r.headers),
   read: async (line, { said, live = false } = {}) => {
     let asked = bareLine(line)
-    let door = appStore(env.STORE, r.space, r.app, env)
+    let door = doorAt(env, r)
     let bundles = await door.consume(
       `/query?q=${encodeURIComponent(asked)}${live ? '&live=1' : ''}&listing=1`,
       async (res) => {
@@ -156,26 +162,30 @@ let memberOf = (
     if (!edits(mode(r.app.access), r.who.role)) {
       throw refuse('access', `not a writer of ${at(r)}`)
     }
-    let door = appStore(env.STORE, r.space, r.app, env)
-    return door.consume(`/apply${check ? '?check=1' : ''}`, async (res) => {
-      // A write the store's log kept (@yaks/api/log) lands later, in order: the
-      // agent is told so rather than that it failed, so it does not send it
-      // twice.
-      if (res.status == 202) {
-        throw refuse('unavailable', `${at(r)}: ${await told(res)}`)
-      }
-      if (!res.ok) {
-        // A write that did not fit the store's words still says so, so the
-        // page's door can file it as the app's break (apps.ts `mistaken`).
-        let no = await answered(res)
-        let e = rejected(res.status, `${at(r)}: ${no.message}`)
-        throw misfit(no) ? Object.assign(e, { misfit: true }) : e
-      }
-      return await res.json() as Bundle[]
-    }, {
-      method: 'POST',
-      body: JSON.stringify(entities),
-    }, { ...vouched(r.who), ...r.headers, ...headers })
+    return doorAt(env, r).consume(
+      `/apply${check ? '?check=1' : ''}`,
+      async (res) => {
+        // A write the store's log kept (@yaks/api/log) lands later, in order: the
+        // agent is told so rather than that it failed, so it does not send it
+        // twice.
+        if (res.status == 202) {
+          throw refuse('unavailable', `${at(r)}: ${await told(res)}`)
+        }
+        if (!res.ok) {
+          // A write that did not fit the store's words still says so, so the
+          // page's door can file it as the app's break (apps.ts `mistaken`).
+          let no = await answered(res)
+          let e = rejected(res.status, `${at(r)}: ${no.message}`)
+          throw misfit(no) ? Object.assign(e, { misfit: true }) : e
+        }
+        return await res.json() as Bundle[]
+      },
+      {
+        method: 'POST',
+        body: JSON.stringify(entities),
+      },
+      { ...vouched(r.who), ...r.headers, ...headers },
+    )
   },
 })
 

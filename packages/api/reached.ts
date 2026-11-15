@@ -10,19 +10,31 @@
 // `reset`, and again after each change that moved it; `{subscribe: true}` is
 // the raw feed, the first member's own frames as it sent them; a relayed value
 // goes where the host sends it, which is the member that holds its words.
+// {@link beside} puts it next to a graph's own registry, so one socket asks
+// each line of whichever answers it.
 
-import type { Bundle, Reduced } from '@yaks/graph'
+import type { Bundle, ReadOpts, Reduced } from '@yaks/graph'
+import { after } from '@yaks/fp'
 import { fault, refusal, type Tags } from './refuse.ts'
-import type { Ask, Frame, Listening, Sink } from './subs.ts'
+import type { Ask, Frame, Listening, Opening, Sink, Subs } from './subs.ts'
 
 /** A registry over a reach, as {@link reached} makes one. */
 export type Reached = Listening & {
-  /** A member's feed spoke: every query is asked again. A frame of the first
-   * member's (`own`) is also the raw feed's, sent on as it came. */
-  hear: (frame: Frame, own?: boolean) => void
+  /** A member's feed spoke: every query is asked again, settled when each
+   * answer is. A frame of the first member's (`own`) is also the raw feed's,
+   * sent on as it came. */
+  hear: (frame?: Frame, own?: boolean) => Promise<void>
+  /** Reopen saved watches. With `quiet`, each is held and not asked until
+   * {@link Reached.resume} or the next {@link Reached.hear}: a page that
+   * kept its answers through its host's sleep is not sent them again. */
+  restore: (openings: Opening[], quiet?: boolean) => void
+  /** Ask every watch held quiet. */
+  resume: () => void
+  /** Whether any line is watched. */
+  watching: () => boolean
 }
 
-type Watch = { ask: Ask; asked: number; said?: string }
+type Watch = { ask: Ask; asked: number; opts?: ReadOpts; said?: string }
 
 /**
  * Subscriptions answered by `read`, the reach's one answer to a line, and
@@ -46,8 +58,9 @@ type Watch = { ask: Ask; asked: number; said?: string }
  * ```
  */
 export let reached = (opts: {
-  /** the reach's answer to a line: its bundles, or a reduction */
-  read: (line: string) => Promise<Bundle[] | Reduced>
+  /** the reach's answer to a line, asked as the watch's opener: its
+   * bundles, or a reduction */
+  read: (line: string, opts?: ReadOpts) => Promise<Bundle[] | Reduced>
   /** where a relayed value goes */
   relay?: (bundles: Bundle[]) => void
   /** told of every answer refused, with its line, for a host that knows
@@ -65,7 +78,7 @@ export let reached = (opts: {
     let asked = ++watch.asked
     let current = () =>
       held.get(sink)?.get(id) === watch && watch.asked == asked
-    return opts.read(line).then((answer) => {
+    return opts.read(line, watch.opts).then((answer) => {
       if (!current()) return
       let frame: Frame = Array.isArray(answer)
         ? { id, bundles: answer, reset: true }
@@ -82,14 +95,38 @@ export let reached = (opts: {
       sink({ id, refused: refusal(error) })
     })
   }
+  // Held, and asked unless `quiet`.
+  let open = (
+    sink: Sink,
+    id: string,
+    query: Ask,
+    read?: ReadOpts,
+    quiet = false,
+  ) => {
+    let mine = held.get(sink) ?? new Map<string, Watch>()
+    held.set(sink, mine)
+    let watch: Watch = { ask: query, asked: 0, opts: read }
+    mine.set(id, watch)
+    if (!quiet) return ask(sink, id, watch)
+  }
   return {
-    open: (sink, id, query) => {
-      let mine = held.get(sink) ?? new Map<string, Watch>()
-      held.set(sink, mine)
-      let watch: Watch = { ask: query, asked: 0 }
-      mine.set(id, watch)
-      return ask(sink, id, watch)
+    open: (sink, id, query, read) => open(sink, id, query, read),
+    restore: (openings, quiet) => {
+      for (let { sink, id, query, opts: read } of openings) {
+        open(sink, id, query, read, quiet)
+      }
     },
+    resume: () => {
+      for (let [sink, mine] of held) {
+        for (let [id, watch] of mine) {
+          if (!watch.asked) ask(sink, id, watch)
+        }
+      }
+    },
+    watching: () =>
+      [...held.values()].some((mine) =>
+        [...mine.values()].some((w) => w.ask !== true)
+      ),
     close: (sink, id) => {
       held.get(sink)?.delete(id)
     },
@@ -97,13 +134,95 @@ export let reached = (opts: {
       held.delete(sink)
     },
     relay: (_sink, bundles) => opts.relay?.(bundles),
-    hear: (frame, own = false) => {
+    hear: async (frame, own = false) => {
+      let asked: Promise<void>[] = []
       for (let [sink, mine] of held) {
         for (let [id, watch] of mine) {
-          if (watch.ask !== true) ask(sink, id, watch)
-          else if (own) sink({ ...frame, id })
+          if (watch.ask !== true) asked.push(ask(sink, id, watch)!)
+          else if (own && frame) sink({ ...frame, id })
         }
       }
+      await Promise.all(asked)
+    },
+  }
+}
+
+/**
+ * One registry of two: the lines `borrows` names asked of `lent`, and every
+ * other subscription (its own lines, the raw feed) and every relayed value
+ * of `subs`, so a host's socket serves both as one ({@link Subs}). A watch
+ * replaced by a line the other answers moves to it.
+ *
+ * ```ts
+ * import { reached, beside } from '@yaks/api/reached'
+ * import { subscriptions } from '@yaks/api'
+ * import { graph } from '@yaks/graph'
+ * import { ram } from '@yaks/ram'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { equal, until } from '@yaks/testing'
+ *
+ * let vocab = loadVocab({ $defs: { book: { component: true, type: 'object' } } })
+ * let own = subscriptions(graph({ vocab, storage: ram(vocab) }))
+ * let lent = reached({
+ *   read: () => Promise.resolve([{ entity: { eid: 'loan' }, loan: {} }]),
+ * })
+ * let both = beside(own, lent, (line) => line.includes('loan'))
+ * let frames: unknown[] = []
+ * both.open((f) => frames.push(f), 'loans', '.loan')
+ * await until(() => frames.length == 1)
+ * equal(lent.watching(), true)
+ * ```
+ */
+export let beside = (
+  subs: Subs,
+  lent: Reached,
+  borrows: (line: string) => boolean,
+): Subs => {
+  let theirs = (query: Ask) => query !== true && borrows(query)
+  // Which of a sink's watches the lent registry holds, so a close goes to
+  // the one holding it and a replacement leaves the other.
+  let away = new Map<Sink, Set<string>>()
+  let lend = (sink: Sink, id: string, yes: boolean) => {
+    let ids = away.get(sink) ?? new Set<string>()
+    away.set(sink, ids)
+    let was = ids.has(id)
+    if (yes) ids.add(id)
+    else ids.delete(id)
+    return was
+  }
+  return {
+    ...subs,
+    open: (sink, id, query, opts) => {
+      let was = lend(sink, id, theirs(query))
+      if (theirs(query)) {
+        return after(
+          was ? undefined : subs.close(sink, id),
+          () => lent.open(sink, id, query, opts),
+        )
+      }
+      if (was) lent.close(sink, id)
+      return subs.open(sink, id, query, opts)
+    },
+    restore: (openings, deferStatic) => {
+      for (let o of openings) lend(o.sink, o.id, theirs(o.query))
+      lent.restore(openings.filter((o) => theirs(o.query)), deferStatic)
+      return subs.restore(
+        openings.filter((o) => !theirs(o.query)),
+        deferStatic,
+      )
+    },
+    resume: () => {
+      lent.resume()
+      return subs.resume?.()
+    },
+    close: (sink, id) => {
+      if (lend(sink, id, false)) return lent.close(sink, id)
+      return subs.close(sink, id)
+    },
+    drop: (sink) => {
+      away.delete(sink)
+      lent.drop(sink)
+      return subs.drop(sink)
     },
   }
 }

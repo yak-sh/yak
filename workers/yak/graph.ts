@@ -282,6 +282,7 @@ import type {
   NamedTool,
   Plugin,
   ReadOpts,
+  Reduced,
   Tx,
 } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
@@ -297,7 +298,7 @@ import {
   REQUESTS,
 } from '@yaks/graph'
 import { actorOf as writerOf } from '@yaks/graph/provenance'
-import { Refused, status } from '@yaks/graph/errors'
+import { misfit, Refused, status } from '@yaks/graph/errors'
 import { DELIVER, MAIL } from '@yaks/mail'
 import { subscription } from './notices.ts'
 import { door as formDoor, FORM } from '@yaks/forms/routes'
@@ -335,6 +336,7 @@ import { readTools } from '@yaks/platform/app-commands'
 import { soonest, tick, type Ticked } from '@yaks/wake'
 import {
   asking,
+  listed,
   mentions,
   named,
   type Names,
@@ -361,22 +363,37 @@ import { conditionalWakes } from './conditional-wakes.ts'
 import { resumed } from './wake.ts'
 import { ledger } from './ledger.ts'
 import {
+  ACROSS,
   BRANCH,
   doorOf,
   GIT_STORE,
+  HEARD,
+  HEED,
   placed,
   STATIC_QUERY,
+  storeOf,
   USES,
   WAKE,
   WARM,
 } from './door.ts'
-import { IDEMPOTENCY, type Namespace } from '@yaks/durable-object/door'
+import {
+  type Door as StoreDoor,
+  doorOf as opened,
+  IDEMPOTENCY,
+  type Namespace,
+} from '@yaks/durable-object/door'
+import { borrowedDocs, type Homes, homesOf, reachIn } from './homes.ts'
+import { type Reach, read, written } from './reach.ts'
+import { vouched, vouchedAs, type Who } from './session.ts'
+import type { Role } from './directory.ts'
+import { beside, type Reached, reached } from '@yaks/api/reached'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { type Mark, type Stamp, type Standing } from '@yaks/platform/mover'
 import { borrows } from '@yaks/reach'
 import { BEAT, owed, ran, refused, skewed } from './running.ts'
 import { type Relocating, relocation } from './relocate.ts'
-import { type Meta, metaOf } from './meta.ts'
+import { answered, KERNEL, type Meta, metaOf } from './meta.ts'
+import { BINARY } from '@yaks/vocab/wire'
 import { minted } from '@yaks/platform/page-wire'
 import { caught, defect, refusing, stopped } from './defects.ts'
 import { noted } from './unseen.ts'
@@ -471,6 +488,25 @@ export let vocabOfStore = (name: string, declared: unknown = {}): Vocab =>
     ? gitVocab()
     : appVocab(declared)
 
+// The doors a store answers across the homes of the words its app borrows
+// (`#across`), and what each is answered with.
+type Uses = Record<string, string>
+let ACROSSED = ['/query', '/apply', '/vocab.json', '/api/vocab']
+
+// A write that may cross into a home: a batch in JSON, as a page's door sends
+// one. A bulk load or a packed batch is the store's own wire, applied here.
+let crosses = (request: Request) => {
+  let type = request.headers.get('content-type') ?? ''
+  return request.method == 'POST' && !type.includes('ndjson') &&
+    type.split(';')[0].trim() != BINARY
+}
+
+// An answer's body read as JSON, or its refusal thrown as the store said it.
+let whole = async (r: Response) => {
+  if (!r.ok) throw await answered(r)
+  return await r.json()
+}
+
 let storeKind = (name: string): keyof typeof worker.stores =>
   name == PLATFORM_STORE ? 'directory' : name == GIT_STORE ? 'git' : 'app'
 // Which plan a store composes: its kind's, or, for an app store whose data
@@ -552,6 +588,8 @@ type Pages = {
   live: Sockets
   route: Handler
   reading: Handler
+  /** its pages' watches of lines naming a borrowed word (`#afar`) */
+  afar: Reached
 }
 
 // The tag a branch's sockets are held under (`State`), and the word its
@@ -684,6 +722,9 @@ type Word =
   | 'lexicon'
   // The lines its query door answered under the words it holds (answered.ts).
   | 'answered'
+  // The stores whose pages watch the words this app homes (`#heed`), told
+  // of each commit here (`#herald`).
+  | 'borrowers'
   // One person's localStorage in a walled page (page-storage.ts): their keys
   // as one JSON object, kept here rather than as rows, which the app's other
   // readers could query.
@@ -944,6 +985,9 @@ export class Store extends Durable {
   }
   #people = new Map<string, string | null>()
   #live!: Sockets
+  #afar!: Reached
+  // Opens this graph's raw feed to the news it owes (`#pages`).
+  #feed: () => void = () => {}
   #route!: Handler
   #reading!: Handler
   #auth!: Authenticate
@@ -2064,8 +2108,13 @@ export class Store extends Durable {
       () => this.#get('app'),
       (v) => this.#vouch(v),
     )
-    ;({ live: this.#live, route: this.#route, reading: this.#reading } = this
-      .#pages(g, subs, own, this.#socketsOn(null), this.#applying))
+    ;({
+      live: this.#live,
+      route: this.#route,
+      reading: this.#reading,
+      afar: this.#afar,
+    } = this.#pages(g, subs, own, this.#socketsOn(null), this.#applying))
+    if (this.#borrowers().length) this.#feed()
     // The registry is fresh, and the sockets are not: they belong to the
     // runtime and outlive every incarnation of this object, so whatever they
     // are watching is re-opened against the new one. Without this a deploy
@@ -2090,8 +2139,32 @@ export class Store extends Durable {
   ) {
     let name = this.#name() ?? ''
     let spared = screened((w) => !!g.vocab.comp(w), own)
+    // The lines naming a word another app homes are answered across those
+    // homes (`#lending`), and asked again on each commit here and on each
+    // home's word (`/heard`), which this graph's raw feed says first.
+    let fed = false
+    let feed = () => {
+      if (fed) return
+      fed = true
+      subs.open(
+        (frame) => {
+          if (!frame.bundles?.length) return
+          let heard = afar.watching() ? afar.hear() : undefined
+          if (heard) this.#ctx.waitUntil?.(heard)
+          if (branch == null) this.#herald()
+        },
+        'news',
+        true,
+      )
+    }
+    let afar = this.#lending(branch, feed)
+    if (branch == null) this.#feed = feed
     let live = sockets(
-      this.#naming(subs, spared),
+      beside(
+        this.#naming(subs, spared),
+        afar,
+        (line) => borrows(line, this.#uses()),
+      ),
       at,
       (error) => defect(error, { request: 'socket restore', store: name }),
       {
@@ -2133,7 +2206,7 @@ export class Store extends Durable {
       speak: this.#speak,
       taught: (answer) => this.#taught(answer),
     })
-    return { graph: g, live, route, reading }
+    return { graph: g, live, route, reading, afar }
   }
 
   // The sockets of a branch (`tagOf`), or main's, the untagged, as the
@@ -4705,6 +4778,8 @@ export class Store extends Durable {
     let stop = this.ceiling.refusal(writing)
     if (stop && (!writing || !this.#sql)) return refuse(stop)
     if (!stop) await this.#ensureStarted(request)
+    let across = stop ? null : await this.#across(request)
+    if (across) return across
     let tally = this.#pending
     this.#pending = new Map()
     waited(tally, waking, woke, this.#now())
@@ -4813,6 +4888,254 @@ export class Store extends Durable {
     for (let run of selected.effects) await run()
 
     return null
+  }
+
+  // ---- across the homes of the words this app borrows (homes.ts) ----------
+  // A door that asks for it (`ACROSS`) is answered across this store and the
+  // homes of the words its app uses (@yaks/reach): a read naming one of them,
+  // any write while it borrows from a home the caller may read, and the
+  // words its pages load. It is taken ahead of the write log and the draft
+  // gate, since this store's own part comes back through this door as any
+  // caller's does (`#itself`), and so is logged, gated and counted as one.
+  // Null where this store answers alone.
+  async #across(request: Request): Promise<Response | null> {
+    let url = new URL(request.url), path = url.pathname
+    if (request.headers.get(ACROSS) != '1' || !ACROSSED.includes(path)) {
+      return null
+    }
+    if (storeKind(this.#get('name') ?? '') != 'app') return null
+    // The words it uses are the release it serves, selected as any request
+    // finds one; a store that cannot start answers as it answers alone.
+    let leave = await this.#enter(false)
+    try {
+      if (await this.#ready(request)) return null
+    } finally {
+      leave()
+    }
+    let uses = JSON.parse(this.#held(request, 'uses')) as Uses
+    if (!Object.keys(uses).length) return null
+    let line = url.searchParams.get('q') ?? ''
+    if (path == '/query' && !borrows(line, uses)) return null
+    if (path == '/apply' && !crosses(request)) return null
+    let app = request.headers.get('x-yak-app') ?? this.#get('app')
+    if (!app) return null
+    let found = await homesOf(this.#directory(), app, uses)
+    let speaks = request.headers.get('x-yak-speaks')
+    let reach = found && reachIn(found, vouchedAs(request.headers), {
+      door: this.#itself(request.headers),
+      headers: speaks ? { 'x-yak-speaks': speaks } : {},
+    })
+    if (!reach || reach.length < 2) return null
+    return await this.#composed(reach, uses)(request)
+  }
+
+  // The answer across `reach`, in the store's own wire, refusals included at
+  // the status the kernel's doors give them (defects.ts `refusing`): a home's
+  // refusal keeps its own.
+  #composed = (reach: Reach[], uses: Uses): Handler =>
+    served(async (request) => {
+      let env = this.#bind as Env
+      let url = new URL(request.url)
+      try {
+        if (url.pathname == '/query') {
+          return Response.json(
+            await read(
+              env,
+              reach,
+              url.searchParams.get('q') ?? '',
+              url.searchParams.get('live') == '1',
+            ),
+          )
+        }
+        if (url.pathname == '/apply') {
+          let said = (name: string) => {
+            let value = request.headers.get(name)
+            return value == null ? {} : { [name]: value }
+          }
+          let out = await written(
+            env,
+            reach,
+            reach[0],
+            JSON.parse(await readBody(request)),
+            { ...said('x-yak-title'), ...said(IDEMPOTENCY) },
+            url.searchParams.has('check'),
+          )
+          return Response.json(out.bundles)
+        }
+        // The words a page loads: this store's, as it answers them alone,
+        // and the borrowed ones, from their homes' declarations.
+        let own = reach[0].door!
+        let docs = [
+          ...await own.consume('/vocab.json', whole),
+          ...await borrowedDocs(env, reach, uses),
+        ]
+        if (url.pathname == '/vocab.json') return Response.json(docs)
+        let { keywords } = await own.consume(
+          '/api/vocab',
+          whole,
+        )
+        return Response.json({ docs, keywords })
+      } catch (e) {
+        return Response.json({
+          error: e instanceof Error ? e.name : 'Error',
+          message: e instanceof Error ? e.message : String(e),
+          ...(misfit(e) ? { misfit: true } : {}),
+        }, { status: refusing(e, this.#tags()) })
+      }
+    }, { route: () => 'across', tags: () => this.#tags() })
+
+  // This store as a member of its own reach: each request made with `base`'s
+  // headers beneath its own, its caller and words included, and answered by
+  // this object alone.
+  #itself(base: HeadersInit): StoreDoor {
+    let held = new Headers(base)
+    for (let h of [ACROSS, IDEMPOTENCY, 'content-type', 'content-length']) {
+      held.delete(h)
+    }
+    return opened((req) => {
+      let headers = new Headers(held)
+      req.headers.forEach((value, name) => headers.set(name, value))
+      return this.#fetch(new Request(req, { headers }))
+    })
+  }
+
+  // The words this app uses from other homes, as the serving release says.
+  #uses = (): Uses => {
+    let said = this.#get('uses') ?? '{}'
+    if (said != this.#usesSaid?.[0]) this.#usesSaid = [said, JSON.parse(said)]
+    return this.#usesSaid![1]
+  }
+  #usesSaid?: [string, Uses]
+
+  // A page's watches of lines naming a borrowed word, on main or a branch:
+  // each answered across this store and the homes of its words as the
+  // watch's opener (@yaks/api/reached), asked again on each commit here
+  // and on each home's news (`/heard`). Each read asks the homes with this
+  // store's name beside (`HEED`), so a home knows whom to tell. Where its
+  // homes are is the directory's word, asked once while the words stand.
+  #lending(branch: number | undefined, feed: () => void): Reached {
+    let found: [string, Promise<Homes | null>] | undefined
+    let homes = () => {
+      let uses = this.#uses(), said = JSON.stringify(uses)
+      if (found?.[0] != said) {
+        let app = this.#get('app')
+        let asked = app
+          ? homesOf(this.#directory(), app, uses)
+          : Promise.resolve(null)
+        asked.catch(() => {
+          if (found?.[1] == asked) found = undefined
+        })
+        found = [said, asked]
+      }
+      return found[1]
+    }
+    return reached({
+      read: async (line, opts) => {
+        feed()
+        let name = this.#name() ?? ''
+        let asker: Who = {
+          person: opts?.person ?? null,
+          role: (opts?.level ?? null) as Role | null,
+          ...(opts?.administrative ? { administrative: true } : {}),
+        }
+        let speaks: Record<string, string> = opts?.speaks
+          ? { 'x-yak-speaks': JSON.stringify(opts.speaks) }
+          : {}
+        let door = this.#itself({
+          'x-store': name,
+          ...(branch == null ? {} : { [BRANCH]: String(branch) }),
+          ...vouched(asker),
+          ...speaks,
+        })
+        let at = await homes()
+        if (!at) {
+          let rows = await door.consume(
+            `/query?q=${encodeURIComponent(line)}&listing=1`,
+            whole,
+          )
+          return Array.isArray(rows) ? listed(rows, line) as Bundle[] : rows
+        }
+        let reach = reachIn(at, asker, { door, headers: speaks }, {
+          [HEED]: name,
+        })
+        return await read(this.#bind as Env, reach, line) as
+          | Bundle[]
+          | Reduced
+      },
+      refused: (error, line) => this.#mistook(error, line),
+      tags: this.#tags(),
+    })
+  }
+
+  // The stores to tell of a commit here (`#herald`), as this store keeps them.
+  #borrowers = (): string[] => JSON.parse(this.#get('borrowers') ?? '[]')
+
+  // Which store was heard asking for whom when (a count, not a clock, which
+  // stands still in an object), so a store that answered nobody watches is
+  // forgotten only if it asked nothing since it was told.
+  #heeded = new Map<string, number>()
+  #heeds = 0
+
+  // A store whose pages watch words this app homes asked a read of them:
+  // it is told of the next commit here.
+  #heed(name: string) {
+    this.#heeded.set(name, ++this.#heeds)
+    let held = this.#borrowers()
+    if (!held.includes(name)) {
+      this.#put('borrowers', JSON.stringify([...held, name].sort()))
+    }
+    this.#feed()
+  }
+
+  // A commit here, told to each store that borrows from it a beat later, so
+  // a burst of commits is told once and the write that made it never waits
+  // on the telling (running.ts `BEAT`). A store that answers nobody watches
+  // any more, or that is gone, is forgotten (`#heed`).
+  #heralding = false
+  #herald() {
+    let ns = this.#bind.STORE
+    if (this.#heralding || !ns || !this.#borrowers().length) return
+    this.#heralding = true
+    let told = new Promise<void>((done) =>
+      clockOf(this.#time).after(BEAT, () => {
+        this.#heralding = false
+        let names = this.#borrowers()
+        Promise.all(names.map(async (name) => {
+          let asked = this.#heeded.get(name)
+          let r = await storeOf(ns, name)(HEARD, { method: 'POST' }, KERNEL)
+          await r.body?.cancel()
+          return [410, 404].includes(r.status) &&
+              this.#heeded.get(name) == asked
+            ? name
+            : null
+        })).then((gone) => {
+          let left = this.#borrowers().filter((n) => !gone.includes(n))
+          if (left.length < this.#borrowers().length) {
+            this.#put('borrowers', JSON.stringify(left))
+          }
+        }).catch((e) =>
+          defect(e, { request: 'tell borrowers', store: this.#name() })
+        ).finally(done)
+      })
+    )
+    this.#ctx.waitUntil?.(told)
+  }
+
+  // A home's word moved (`#herald`): every page watching a line across homes
+  // is answered again. Nobody watching here is said with 410, so the home
+  // stops telling; a branch's sockets keep it telling while they stand.
+  async #homesSpoke(): Promise<Response> {
+    let branches = await Promise.all(
+      [...this.#branchDoors.values()].map((on) => on.catch(() => null)),
+    )
+    let watching = [this.#afar, ...branches.map((on) => on?.afar)]
+      .filter((one): one is Reached => !!one?.watching())
+    for (let one of watching) this.#ctx.waitUntil?.(one.hear())
+    let held = watching.length ||
+      this.#ctx.getWebSockets().some((ws) =>
+        branchOfSocket(this.#ctx, ws) != null
+      )
+    return new Response(null, { status: held ? 204 : 410 })
   }
 
   // ---- the write log's door (T-37968, @yaks/api/receipts `door`) -----------
@@ -5234,6 +5557,12 @@ export class Store extends Durable {
       this.#owedEffects()
       return Response.json({ retried: bundles.length })
     }
+    // A home of words this app borrows committed (`#herald`). Kernel only:
+    // only a store tells another.
+    if (path == HEARD && request.method == 'POST') {
+      if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
+      return await this.#homesSpoke()
+    }
     // Entities that died in another app of the space (deaths.ts): what
     // refers to them here follows its death rules, as the platform's own
     // write. Kernel only, like the effect retry.
@@ -5462,7 +5791,11 @@ export class Store extends Durable {
       let read = this.#callerRead(request)
       return this.#live.accept(request, read, { actor, speaks: read.speaks })
     }
-    if (path == '/query') return await this.#paged(request)
+    if (path == '/query') {
+      let heed = request.headers.get(HEED)
+      if (heed && storeKind(this.#get('name') ?? '') == 'app') this.#heed(heed)
+      return await this.#paged(request)
+    }
     if (path == READS && this.#get('name') == PLATFORM_STORE) {
       return await this.#reads(request)
     }

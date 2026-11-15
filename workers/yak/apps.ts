@@ -124,11 +124,11 @@ import {
   borrowed,
   homed,
   listened,
-  local,
   queried,
   sources,
   vocabulary,
 } from './page-graph.ts'
+import { local } from './homes.ts'
 import { dataAsset, webAsset, webPage } from './web.ts'
 import {
   appApi,

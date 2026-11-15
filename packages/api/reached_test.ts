@@ -6,7 +6,7 @@ import type { Bundle, Reduced } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { fake } from './testing.ts'
 import { attach } from './socket.ts'
-import { reached } from './reached.ts'
+import { beside, reached } from './reached.ts'
 import type { Frame } from './subs.ts'
 
 let book = (eid: string) => ({ entity: { eid }, book: {} })
@@ -125,4 +125,33 @@ test('through a socket: clock replies ask nothing, acks hold the raw feed, relay
     entity: { eid: 'c' },
     cursor: { x: 1 },
   }]], 0])
+})
+
+test('restored quiet, a line is held unasked until resumed', async () => {
+  let r = reach([book('dune')])
+  r.subs.restore([{ sink: r.sink, id: 'all', query: '.book' }], true)
+  await tick()
+  equal([r.taken(), r.state.reads, r.subs.watching()], [[], 0, true])
+  r.subs.resume()
+  await tick()
+  equal(r.taken(), [{ id: 'all', bundles: [book('dune')], reset: true }])
+})
+
+test('beside a graph, a borrowed line is the reach’s and the rest the graph’s', async () => {
+  let r = reach([book('loan')])
+  let said: string[] = []
+  let own = {
+    open: (_: unknown, id: string) => void said.push(`open ${id}`),
+    close: (_: unknown, id: string) => void said.push(`close ${id}`),
+  } as unknown as Parameters<typeof beside>[0]
+  let both = beside(own, r.subs, (line) => line.includes('loan'))
+  both.open(r.sink, 'a', '.loan')
+  both.open(r.sink, 'b', '.book')
+  both.open(r.sink, 'a', '.doc')
+  await tick()
+  equal([said, r.state.reads, r.subs.watching()], [
+    ['close a', 'open b', 'open a'],
+    1,
+    false,
+  ])
 })

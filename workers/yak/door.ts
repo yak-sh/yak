@@ -134,6 +134,17 @@ export let placed = (ns: Namespace, name: string): Stub =>
 
 /** Word names vouched for by a previously accepted immutable release. */
 export let ACCEPTED = 'x-yak-accepted'
+/** The header a door asks a store with to be answered across the homes of
+ * the words its app borrows (graph.ts `#across`, homes.ts), as an app's own
+ * pages and tools read and write it. Without it a store answers its own words
+ * alone, as each member of a reach is asked. */
+export let ACROSS = 'x-yak-across'
+/** The header a store's read of a home's words names itself with, while its
+ * pages watch them: the home tells it of each commit (graph.ts `#heed`). */
+export let HEED = 'x-yak-heed'
+/** The store path a home tells a store that borrows from it of a commit at,
+ * kernel only: 204 while its pages watch, 410 once none does. */
+export let HEARD = '/heard'
 /** The words an app uses from other homes (its `/uses`), said beside the
  * answer to a page's query (graph.ts `#paged`, page-graph.ts `queried`). */
 export let USES = 'x-yak-uses'
@@ -166,6 +177,8 @@ export let STATIC_QUERY = 'x-yak-static-query'
 // seen with the answer it gave (@yaks/api/log): only the kernel mints one.
 let VOUCH = [
   IDEMPOTENCY,
+  ACROSS,
+  HEED,
   ACCEPTED,
   STATIC_QUERY,
   'x-store',

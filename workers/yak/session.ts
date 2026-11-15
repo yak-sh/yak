@@ -163,6 +163,33 @@ export let vouched = (who: Who): Record<string, string> => ({
   ...(who.visit ? { 'x-yak-visit': '1' } : {}),
 })
 
+/** The caller a store was handed, read back off the headers {@link vouched}
+ * wrote, so a store can vouch the same caller to another store. The headers
+ * say that a stranger is visiting, never whether their store is kept yet.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let who = { person: 'ada', role: 'editor' as const, via: crypto.randomUUID() }
+ * assertEquals(vouched(vouchedAs(new Headers(vouched(who)))), vouched(who))
+ * ```
+ */
+export let vouchedAs = (headers: Headers): Who => {
+  let browsers = headers.get('x-yak-browsers')
+  return {
+    person: headers.get('x-yak-person'),
+    role: headers.get('x-yak-role') as Role | null,
+    ...(headers.has('x-yak-actor')
+      ? { actor: headers.get('x-yak-actor')! }
+      : {}),
+    ...(headers.has('x-yak-via') ? { via: headers.get('x-yak-via')! } : {}),
+    ...(browsers ? { browsers: browsers.split(',') } : {}),
+    ...(headers.get('x-yak-administrative') == '1'
+      ? { administrative: true }
+      : {}),
+    ...(headers.get('x-yak-visit') == '1' ? { visit: { kept: false } } : {}),
+  }
+}
+
 /** The writer a platform record of this caller's act names (M-31958): the
  * agent holding the person's credential, or the person at their own browser.
  * `rows` is the agent's directory row, written with the record. */

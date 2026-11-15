@@ -23,8 +23,7 @@ import { vouched, type Who } from './session.ts'
 import { caught } from './defects.ts'
 import type { VocabDoc } from '@yaks/vocab'
 import { mode, reads } from '@yaks/member'
-
-export let local = (app: App) => app.scope == 'store' || sandboxed(app)
+import { local } from './homes.ts'
 
 let usesAnswer = async (r: Response) => {
   if (!r.ok) {
