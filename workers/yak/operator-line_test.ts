@@ -1,4 +1,5 @@
 import { ok, test } from '@yaks/testing'
+import { identityEid } from '@yaks/graph'
 import {
   assert,
   assertEquals,
@@ -441,7 +442,10 @@ let upgrading = {
     set: (key: string, value: string) => void receipts.set(key, value),
   },
 }
-let settingId = crypto.randomUUID()
+let settingId = identityEid('operator_line', [
+  connection.entity.eid,
+  '+12695550111',
+])
 await upgrade.g.apply([{
   entity: { eid: settingId },
   operator_line: {
@@ -469,10 +473,20 @@ let upgradedClaims = await opened(
   env.SESSION_SECRET!,
 )
 // Before explicit settings existed the account itself named its inbound line.
+let editor = crypto.randomUUID()
+await dir.apply({
+  entities: [
+    { entity: { eid: editor }, person: {} },
+    {
+      entity: { eid: crypto.randomUUID() },
+      member: { person: editor, space: eid, role: 'editor' },
+    },
+  ],
+}, owner)
 await upgrade.g.apply([{ entity: { eid: settingId }, $delete: true }])
 await local.apply([{
   entity: connection.entity,
-  connection: { account: '+12695550111' },
+  connection: { account: '+12695550111', owner: editor },
 }])
 did.sms_url_callback = 'https://yaks.app/voipms/' + oldTicket
 receipts.clear()
@@ -480,7 +494,7 @@ let legacyUpgrade = await lineBackfill(upgrading, env)
 let legacyCallback = did.sms_url_callback
 await local.apply([{
   entity: connection.entity,
-  connection: { account: previousAccount },
+  connection: { account: previousAccount, owner: person },
 }])
 
 test('retained inbound callbacks upgrade once to number-bound tickets without a settings edit', () => {
