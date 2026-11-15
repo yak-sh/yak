@@ -289,8 +289,28 @@ let replyOperator = operating(
   }),
 )
 handleChannels(replyOperator, env, {
+  chat: () => Promise.resolve({}),
   letter: () => Promise.resolve({}),
 })
+box.say('Personal server instructions.')
+await receive(
+  replyStore,
+  { space: eid, person: ada, channel: 'chat' },
+  'trusted first input',
+)
+await drain(replyStore)
+let authenticated = replySeen.splice(0)
+let warm = async () => {
+  let asks = await replyStore.g.read('.ask')
+  await replyStore.g.apply(
+    asks.map((row) => ({
+      entity: row.entity,
+      openai: { cache_expires_at: '2099-01-01T00:00:00Z' },
+    })),
+    { trusted: true },
+  )
+}
+await warm()
 await receive(replyStore, {
   space: eid,
   person: ada,
@@ -308,6 +328,7 @@ await replyStore.g.apply(
   { trusted: true },
 )
 let legacyTools = await replyOperator.tools({ person: ada }, space)
+await warm()
 await receive(
   replyStore,
   { space: eid, person: ada, channel: 'chat' },
@@ -315,9 +336,15 @@ await receive(
 )
 await drain(replyStore)
 let restored = replySeen.splice(0)
+box.say(undefined)
 
 test('a seated reply and its helper omit personal MCP tools and a later authenticated turn restores them', () => {
   assertEquals(restricted.length >= 2, true)
+  let personal = (req: ModelRequest) =>
+    req.instructions?.includes('Personal server instructions.') ?? false
+  assertEquals(authenticated.some(personal), true)
+  assertEquals(restricted.some(personal), false)
+  assertEquals(restored.some(personal), true)
   assertEquals(
     legacyTools.tools.some((t) => t.name.startsWith('tasks__')),
     false,

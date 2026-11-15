@@ -312,6 +312,8 @@ export type Deps = {
    * step in flight is let finish */
   stopping?: AbortSignal
   instructions?: string
+  /** The host authority or context whose cached instructions may be reused. */
+  instructionScope?: (session: Eid) => string | Promise<string>
   /** Resolve inherited base instructions for future asks without rewriting
    * history; a host whose instructions differ by transcript reads its own. */
   resolveInstructions?: (
@@ -1275,7 +1277,14 @@ export let react = async (
   // instructions this session's newest ask sent stand while its cached prefix
   // lasts. Once it has expired they are read again, and the conversation is
   // replayed on whatever they now say.
-  const cached = deps.runCall ? undefined : cachedInstructions(entries, session)
+  const scope = !deps.runCall && deps.instructionScope
+    ? await deps.instructionScope(session)
+    : undefined
+  const sameScope = scope == null ||
+    comp(newestAsk(entries) ?? {} as Bundle, 'sending')?.scope === scope
+  const cached = deps.runCall || !sameScope
+    ? undefined
+    : cachedInstructions(entries, session)
   // A step that will ask the model reads its instructions while its tools are
   // found: neither waits on the other, and each may be round trips away.
   const resolve = cached == null ? deps.resolveInstructions : undefined
@@ -1640,7 +1649,7 @@ export let react = async (
     await drop(g, session, entries)
   ) return react(g, session, deps, undefined, true)
   let checkpoint = checkpointOf(entries)
-  const sameModel = asked &&
+  const sameModel = asked && sameScope &&
     comp(asked, ASK)?.pruning === pruning(entries) &&
     (!checkpoint || seqOf(asked) > seqOf(checkpoint)) &&
     comp(asked, 'entry')?.session === session &&
@@ -1940,6 +1949,7 @@ export let react = async (
         sending: {
           ...sending,
           instructions: req.instructions ?? null,
+          ...scope == null ? {} : { scope },
           // What it was offered, deferred tools too: a resumed ask sends
           // again what these entries loaded of them.
           ...executor ? { tools: tools.map((tool) => tool.name) } : {},

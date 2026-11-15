@@ -8,7 +8,11 @@ import { harness } from './testing.ts'
 
 // Two turns, the context changing between them, on a provider whose cache
 // lasts `retention` seconds from each request, or that says when it expires.
-let turns = async (retention?: number, expires?: string) => {
+let turns = async (
+  retention?: number,
+  expires?: string,
+  scoped = false,
+) => {
   let h = await harness()
   let asked: Request[] = []
   let said = 'Two apps.'
@@ -36,6 +40,7 @@ let turns = async (retention?: number, expires?: string) => {
     name: 'fake',
     model,
     instructions: () => Promise.resolve(said),
+    ...scoped ? { instructionScope: () => said } : {},
   })
   let session = await begin(h.g, 'hello', { using: { model: a.model } })
   await a.idle(session)
@@ -65,4 +70,11 @@ test('once the cached prefix has expired, the changed context is the prefix and 
 
 test('a provider that does not say how long its cache lasts is sent the context as it reads now', async () => {
   equal((await turns()).map((r) => r.told), ['Two apps.', 'Three apps.'])
+})
+
+test('a changed host scope refreshes instructions while the provider prefix remains warm', async () => {
+  equal((await turns(300, undefined, true)).map((r) => r.told), [
+    'Two apps.',
+    'Three apps.',
+  ])
 })

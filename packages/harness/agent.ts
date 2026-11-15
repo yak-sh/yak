@@ -189,6 +189,8 @@ export type Opts<H extends Host = Host> = ChildLimits & {
    * read again for every ask, so what it reads (a name, the apps in reach)
    * is current in a transcript that runs for weeks. */
   instructions?: string | ((session: Eid) => Promise<string>)
+  /** Changing this scope refreshes instructions even with a warm prefix cache. */
+  instructionScope?: Deps['instructionScope']
   /** What every system prompt this agent composes opens with, ahead of the
    * persona and `instructions`: the same for every transcript and every ask,
    * so it stays in a provider's cached prefix (the box's kinds index, @yaks/vocab
@@ -554,6 +556,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     instructions: typeof opts.instructions == 'string'
       ? opened(opts.instructions)
       : undefined,
+    instructionScope: opts.instructionScope,
     resolveInstructions: async (inherited, session) => {
       if (!opts.wear) {
         return typeof opts.instructions == 'function'

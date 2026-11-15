@@ -1676,6 +1676,15 @@ export let operating = (
         (value, source) => keepResult(g, value, source, work.person),
       )
     },
+    instructionScope: async (session) => {
+      let work = await workingOf(store, session)
+      return JSON.stringify([
+        work?.person,
+        work?.administrative,
+        work?.signup,
+        ANSWERING.has(await channelAt(store, session, work)),
+      ])
+    },
     // The conversation and its work forks share a short topic map. Only a
     // session opened on a topic carries that topic's compiled context.
     instructions: async (session) => {
