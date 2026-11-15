@@ -35,9 +35,11 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
     top: 0,
     width: 6000,
   })
-  // the Start Free button is 97px across
+  // the Start Free button is 97px across, and 46px with its words stacked
   Object.defineProperty(window.HTMLElement.prototype, 'offsetWidth', {
-    get: () => 97,
+    get(this: HTMLElement) {
+      return this.dataset.narrow == null ? 97 : 46
+    },
     configurable: true,
   })
   window.Element.prototype.animate = function (this: Element) {
@@ -75,11 +77,12 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
   // a touch at a point in his units, landing on `on` (the hero, by default)
   let touch = (x: number, y: number, target = el('.Hello')) =>
     on.click({ target, clientX: x + 3000, clientY: y + 800 })
-  // the wandering yak, sat down out in the margin at `left`, 72px across
-  let sat = (left: number) => {
+  // the wandering yak, sat down out in the margin at `left`, 72px across,
+  // with the words beginning at `words`
+  let sat = (left: number, words = 1440) => {
     let yak = document.createElement('div')
     yak.getBoundingClientRect = rect({ left, width: 72 })
-    on.sat({ target: yak })
+    on.sat({ target: yak, detail: words })
     return yak.querySelector('.Sign') as HTMLElement
   }
   return { el, all, touch, moved, wait, watch, sat, on, scope }
@@ -148,9 +151,12 @@ test('birds cross the dusk now and then, and a shooting star the night', () => {
   let birds = day.all('.Sky_Bird')
   assert(birds.length >= 1 && birds.length <= 7, `${birds.length} birds`)
   assertEquals(day.all('.Sky_Shoot').length, 0)
-  let was = birds[0].getAttribute('d')
-  day.watch(10)
-  assert(birds[0].getAttribute('d') != was, 'its wings are where they were')
+  // a glide holds its wings for up to 2.2s; in 3s they beat
+  let shapes = new Set<string | null>()
+  for (let n = 0; n < 60; n++) {
+    day.watch(1), shapes.add(birds[0].getAttribute('d'))
+  }
+  assert(shapes.size > 1, 'its wings are where they were')
   day.watch()
   assertEquals(day.all('.Sky_Bird').length, 0)
 
@@ -198,6 +204,22 @@ test('the button he holds up is slid along its post to stay in the window', () =
   assertEquals(shift(200), '0.0px')
   // and end at 1400 + 36 + 48.5 = 1484.5, past the right
   assertEquals(shift(1400), '-52.5px')
+})
+
+test('the button he holds up keeps clear of the words beside him', () => {
+  let { sat } = sky()
+  let place = (left: number, words: number) => {
+    let sign = sat(left, words)
+    return [sign.style.getPropertyValue('--shift'), 'narrow' in sign.dataset]
+  }
+  // a wide margin: centred over him it ends at 160 + 36 + 48.5 = 244.5
+  assertEquals(place(160, 300), ['0.0px', false])
+  // it would end at 40 + 36 + 48.5 = 124.5, past the words at 120 - 8
+  assertEquals(place(40, 120), ['-12.5px', false])
+  // a margin of 100 has 84 for it: stacked, it is 46 and centred over him
+  assertEquals(place(10, 100), ['0.0px', true])
+  // stacked at 46 it would end at 20 + 36 + 23 = 79, past the words at 75 - 8
+  assertEquals(place(20, 75), ['-12.0px', true])
 })
 
 test('he lowers the button as he gets up, and it is gone once he is home', () => {

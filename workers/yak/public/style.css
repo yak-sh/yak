@@ -989,7 +989,9 @@
      asks for less motion, since then he never walks. Out there he keeps
      room in the window above him for it: its post and button, about 3rem,
      and the wave's lift (wander.js reads his scroll margins). sky.js slides
-     the button along its post (--shift) to keep it in the window. */
+     the button along its post (--shift) to keep it in the window and clear
+     of the words, and stacks its words (data-narrow) where the margin is
+     narrower than it. */
   .Wander-out {
     scroll-margin-top: 3.5rem;
   }
@@ -1015,6 +1017,12 @@
     font-size: 0.8125rem;
     padding: 0.3rem 0.7rem;
     min-height: 0;
+  }
+  .Sign[data-narrow] .Sign_Button {
+    width: min-content;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.15;
   }
   .Hello_Yak > .Sign {
     position: absolute;

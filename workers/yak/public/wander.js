@@ -15,7 +15,8 @@
 // A click on him while he sits plays his nose lick.
 //
 // He tells the page what he does, as events on him that a listener on the
-// window hears by capturing: `sat` when he sits down out in the margin, `rise`
+// window hears by capturing: `sat` when he sits down out in the margin (its
+// detail the x in the window where the words begin), `rise`
 // when he gets up from there, always before he walks, and `home` when he is
 // back in his place (sky.js holds up a button by them). What the page has him
 // hold out there gets room in the window: his box's scroll margins, kept
@@ -132,16 +133,18 @@
     yak.append(still, ...Object.values(strips))
     slot.append(yak)
 
-    // His lane in the margin: his size, and the x that keeps his figure
-    // clear of the words; size 0 when there is no room.
-    let lane = { x: 0, size: 0 }
+    // His lane in the margin: his size, the x that keeps his figure clear of
+    // the words, and where they begin; size 0 when there is no room.
+    let lane = { x: 0, size: 0, words: 0 }
     let measure = () => {
-      let right = edge() - PAD
+      let words = edge(), right = words - PAD
       let size = Math.min(
         slot.offsetWidth,
         Math.floor((right - PAD) / (FIG[1] - FIG[0])),
       )
-      lane = size < MIN ? { x: 0, size: 0 } : { x: right - size * FIG[1], size }
+      lane = size < MIN
+        ? { x: 0, size: 0, words }
+        : { x: right - size * FIG[1], size, words }
     }
     measure()
     addEventListener('resize', measure)
@@ -263,7 +266,11 @@
         phase += dt * STEP * .6
         if (phase < FRAMES) show(strips.plop, Math.floor(phase))
         else if (homing) return homing = false, home()
-        else act = 'sit', show(still), yak.dispatchEvent(new Event('sat'))
+        else {act = 'sit',
+            show(still),
+            yak.dispatchEvent(
+              new CustomEvent('sat', { detail: lane.words - scrollX }),
+            )}
       }
       yak.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
     }

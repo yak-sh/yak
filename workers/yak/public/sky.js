@@ -222,11 +222,15 @@
     e.target.append(sign)
     delete sign.dataset.away
     sign.dataset.out = ''
-    // it stands centred over him: slid along so all of it is in the window
-    let r = e.target.getBoundingClientRect()
-    let mid = r.left + r.width / 2, half = sign.offsetWidth / 2
-    let shift = Math.max(0, EDGE - (mid - half)) ||
-      Math.min(0, innerWidth - EDGE - (mid + half))
+    // it stands centred over him, slid along so all of it is in the window
+    // and clear of the words (e.detail, where they begin); where the margin
+    // is narrower than it, its words stack, Start over Free
+    let r = e.target.getBoundingClientRect(), mid = r.left + r.width / 2
+    let lo = EDGE, hi = Math.min(innerWidth, e.detail ?? innerWidth) - EDGE
+    delete sign.dataset.narrow
+    if (sign.offsetWidth > hi - lo) sign.dataset.narrow = ''
+    let w = sign.offsetWidth, at = mid - w / 2
+    let shift = Math.max(lo, Math.min(at, hi - w)) - at
     sign.style.setProperty('--shift', `${shift.toFixed(1)}px`)
   }, true)
   // for anyone who asks for less motion he never walks: he sits as the logo
