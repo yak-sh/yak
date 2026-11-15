@@ -265,6 +265,8 @@ test('what no kept page may answer goes to the kernel without asking Site', asyn
   let cases: [string, RequestInit?][] = [
     ['https://ada.yaks.app/cookbook/api/query'],
     ['https://ada.yaks.app/cookbook/~token/index.html'],
+    ['https://ada.yaks.app/cookbook/_preview/t/'],
+    ['https://ada.yaks.app/cookbook/_preview/t/about/'],
     ['https://ada.yaks.app/cookbook/', { method: 'POST', body: 'x' }],
     ['https://ada.yaks.app/cookbook/', { headers: { authorization: 'x' } }],
     ['https://ada.yaks.app/cookbook/', { headers: { range: 'bytes=0-1' } }],

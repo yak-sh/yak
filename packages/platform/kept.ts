@@ -63,7 +63,7 @@ import { COOKIE, cookieValue } from './cookie.ts'
 import { decoded } from './files.ts'
 import { apex, type Host, url } from './host.ts'
 import { offered, sandboxed } from './installs.ts'
-import { bearing, MOUNT } from './routes.ts'
+import { bearing, MOUNT, previews } from './routes.ts'
 import { assetPath } from './versions.ts'
 
 // ── An app's bytes, at Files ───────────────────────────────────────────────
@@ -348,8 +348,8 @@ export let fixed = (path: string): boolean => {
 
 /** Whether a request could be answered by a kept page: a read with nothing
  * that requires the gateway (a grant, a bearer, a byte range), and not an
- * app's `/api/` (but for its `fixed` bytes) or a sandboxed page's token
- * path, which never are. */
+ * app's `/api/` (but for its `fixed` bytes), a sandboxed page's token path
+ * or a draft's preview link, which never are. */
 export let shareable = (
   req: Request,
   path: string = new URL(req.url).pathname,
@@ -359,7 +359,7 @@ export let shareable = (
   !req.headers.has('range') &&
   !req.headers.has('upgrade') && !bearing(req) &&
   (fixed(path) || !/^(?:\/[^/]+)?\/(?:api\/|_web(?:\/|$))/.test(path)) &&
-  !path.includes('/~')
+  !path.includes('/~') && !previews(path)
 
 /** What a page may say of itself as it answers from the edge: its app, its
  * space and slug, the store its app keeps, which a page that `opens` starts,
