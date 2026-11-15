@@ -48,7 +48,7 @@ let SECOND = 'd0000000-0000-4000-8000-000000000005'
 // A signed letter, as the receiving MTA hands one over: the verdict is a
 // header it wrote, and the parser's own words are what a person reads.
 let signed = (dkim: 'pass' | 'fail') =>
-  `mx.yaks.app; dkim=${dkim} header.i=@books.example; spf=pass`
+  `mx.cloudflare.net; dkim=${dkim} header.i=@books.example; spf=pass`
 
 test('a letter lands in the app its address named', async () => {
   let k = await kernel()

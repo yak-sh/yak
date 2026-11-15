@@ -15,8 +15,10 @@ export type Inbound = {
 // counts for that: a signature on somebody else's domain does not vouch for
 // the From.
 // https://developers.cloudflare.com/email-service/api/route-emails/email-handler/
-let first = (header: string | null) =>
-  (header ?? '').split(/,(?=\s*[^;,]+;)/)[0]
+let first = (header: string | null) => {
+  let said = (header ?? '').split(/,(?=\s*[^;,]+;)/)[0]
+  return /^\s*mx\.cloudflare\.net\s*;/i.test(said) ? said : ''
+}
 
 /** Whether Email Routing's DMARC verdict passed for the domain of `from`. */
 export let vouched = (header: string | null, from: string): boolean => {
@@ -24,8 +26,7 @@ export let vouched = (header: string | null, from: string): boolean => {
   let domain = from.toLowerCase().split('@')[1]
   let dmarc = said.split(';').find((s) => /^\s*dmarc=pass\b/i.test(s))
   let aligned = dmarc?.match(/\bheader\.from\s*=\s*"?([^\s;"()]+)/i)?.[1]
-  return !!domain && /^\s*mx\.cloudflare\.net\s*;/i.test(said) &&
-    !!dmarc && aligned?.toLowerCase() == domain
+  return !!domain && !!dmarc && aligned?.toLowerCase() == domain
 }
 
 /** Decode one Email Worker delivery without writing or interpreting it. */
@@ -48,7 +49,7 @@ export let received = async (message: Inbound): Promise<Incoming> => {
     html: mail.html,
     ...checked == null
       ? {}
-      : { verified: /\bdkim\s*=\s*pass\b/i.test(checked) },
+      : { verified: /(?:^|;)\s*dkim\s*=\s*pass\b/i.test(first(checked)) },
     vouched: vouched(checked, mail.from?.address || message.from),
     attachments: mail.attachments.map((a) => ({
       name: a.filename ?? '',

@@ -2,6 +2,41 @@
 import { equal, test } from '@yaks/testing'
 import { received, vouched } from './receive.ts'
 
+for (
+  let [header, verified] of [
+    [null, undefined],
+    ['mx.cloudflare.net; dkim=pass header.d=other.example', true],
+    ['mx.cloudflare.net; dkim=fail', false],
+    ['sender.example; dkim=pass', false],
+    [
+      'mx.cloudflare.net; dkim=fail, sender.example; dkim=pass',
+      false,
+    ],
+    [
+      'mx.cloudflare.net; dkim=fail, mx.cloudflare.net; dkim=pass',
+      false,
+    ],
+    [
+      'mx.cloudflare.net; spf=pass, sender.example; dkim=pass',
+      false,
+    ],
+    ['mx.cloudflare.net; dkim=fail; dkim=pass header.d=other.example', true],
+  ] as const
+) {
+  test(`Email Routing DKIM verdict: ${header ?? 'absent'}`, async () => {
+    let headers = new Headers()
+    if (header != null) headers.set('Authentication-Results', header)
+    let mail = await received({
+      from: 'bounce@example.com',
+      to: 'one@books.example',
+      headers,
+      raw: new Response('From: Ann <ann@example.com>\r\n\r\nHello.').body!,
+    })
+    equal(mail.verified, verified)
+    equal(mail.vouched, false)
+  })
+}
+
 test('Email Routing decodes the author and subject without losing transport headers', async () => {
   let raw =
     'From: Ann <ann@example.com>\r\nTo: one@books.example\r\nSubject: =?UTF-8?B?VGh1cnNkYXk=?=\r\nMessage-ID: <incoming@example.com>\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nAt seven.'
