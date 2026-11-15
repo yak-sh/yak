@@ -636,7 +636,7 @@ export let servingDoc: VocabDoc = {
     // a request at any other path goes on to the app without asking. The list
     // is JSON in one text property, sorted, as `home.first` is. The directory
     // keeps it in the transaction that writes the files themselves
-    // (facets/publishing-graph.ts); an app that never published wears none.
+    // (./publishing-graph.ts); an app that never published wears none.
     publishing: {
       description:
         'The paths an app has published files at, so a request at one of them is answered its file before the app runs.',

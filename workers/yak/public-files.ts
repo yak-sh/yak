@@ -13,7 +13,7 @@ import { ownedPrefix } from './file-root.ts'
 // own prefix, where they count against the space's files, move with a rename
 // and go with an erase, as uploads do. No release holds one, so a deploy or a
 // rollback never moves it. The app's own row lists the paths it published
-// at (`publishing{paths}`, kept by facets/publishing-graph.ts), so a request
+// at (`publishing{paths}`, kept by @yaks/platform/publishing-graph), so a request
 // at any other path goes on to the app without asking the directory, and
 // only one at a listed path reads its file's row (apps.ts `served`).
 //
@@ -189,7 +189,7 @@ let published = async (ask: Ask, path: string) => {
     size: bytes.byteLength,
   }
   // The directory lists the path on the app's row as it writes the file
-  // (facets/publishing-graph.ts), and that write purges the app's kept pages
+  // (@yaks/platform/publishing-graph), and that write purges the app's kept pages
   // (facets/pages-graph.ts).
   await dir.stamp({
     entities: [{ entity: { eid: publicEid(app, path) }, public_file: file }],

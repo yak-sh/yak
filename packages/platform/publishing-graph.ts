@@ -1,4 +1,5 @@
-// The paths an app has published files at (public-files.ts), kept on its own
+// The `yak/publishing` graph facet: the paths an app has published files at
+// (yaks.app's public-files.ts writes them as `public_file` rows), kept on its own
 // row as `publishing{paths}` by the transaction that writes the files. Every
 // request to an app reads that row anyway, so the row is what says nothing is
 // published at a path, and a page view of a publishing app asks the directory
@@ -17,7 +18,7 @@ import {
   TOMBSTONE,
   type Tx,
 } from '@yaks/graph'
-import { type Id, idOf } from '../directory.ts'
+import { type Id, idOf } from './listing.ts'
 
 type File = { app?: Id; path?: string }
 
@@ -27,7 +28,7 @@ type File = { app?: Id; path?: string }
  * leaves it, null where the batch deletes it. Sorted, each once.
  *
  * ```ts
- * import { pathsOf } from './publishing-graph.ts'
+ * import { pathsOf } from '@yaks/platform/publishing-graph'
  * import { assertEquals } from '@std/assert'
  * let stored = [
  *   { entity: { eid: 'a' }, public_file: { app: 'x', path: 'notes/1' } },

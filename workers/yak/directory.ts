@@ -84,6 +84,7 @@ import type { Subscription } from '@yaks/push'
 import type { Row as GrantRow } from './grant-rows.ts'
 import { principals, type Stamp, stampOf, writers } from './stamps.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
+import { type Id, idOf } from '@yaks/platform/listing'
 import { sharing } from './lib/shared.ts'
 
 // The slugs no space or app may take, because at `<slug>.yaks.app` and at
@@ -577,12 +578,9 @@ export type Host = {
 /** Where a hostname's mail is, and the provider's name that carries it. */
 export type MailDomain = { name: string; via: string }
 
-// A reference property, as a read hands it back: the bare eid, or `{eid, name}`
-// where the store could name what it points at (listing.ts `named`, T-32733).
-// What the directory wants either way is the id — the same lowering client.ts
-// `where` does on the write side.
-export type Id = string | { eid: string }
-export let idOf = (v: Id): string => typeof v == 'string' ? v : v.eid
+// A reference property as a read hands it back, and the id the directory
+// wants of it either way (@yaks/platform/listing).
+export { type Id, idOf }
 
 /** That `space` installed `of`, something another space shared (T-131912):
  * one row a space and thing, which `install`'s declared identity finds again
@@ -1620,7 +1618,7 @@ export let writtenOf = (r: Row) => ({
 /// publishingOf(undefined) -> []
 /// publishingOf({paths: 'not json'}) -> []
 /** The paths an app has published files at, as its row keeps them: the JSON
- * array in `publishing.paths` (facets/publishing-graph.ts), or none. */
+ * array in `publishing.paths` (@yaks/platform/publishing-graph), or none. */
 export let publishingOf = (publishing?: Row['publishing']): string[] => {
   try {
     let held = JSON.parse(publishing?.paths || '[]')

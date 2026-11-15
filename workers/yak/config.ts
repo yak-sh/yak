@@ -561,7 +561,6 @@ export let domains = beside({
   'yak/trash': { effects: './facets/trash-effects.ts' },
   'yak/refusals': { effects: './facets/refusals-effects.ts' },
   'yak/pages': { graph: './facets/pages-graph.ts' },
-  'yak/publishing': { graph: './facets/publishing-graph.ts' },
   'yak/attribution': { effects: './facets/attribution-effects.ts' },
   'yak/models': { effects: './facets/models-effects.ts' },
   'yak/git': {

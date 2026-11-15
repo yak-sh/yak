@@ -276,3 +276,12 @@ export let listing = (body: string, asked: string): string => {
   if (!Array.isArray(rows)) return body
   return JSON.stringify(listed(rows as Row[], asked))
 }
+
+/** A reference property as a read hands it back: the bare eid, or `{eid,
+ * name}` where the store named what it points at ({@link named}). */
+export type Id = string | { eid: string }
+
+/** The eid a reference holds, however it was read back. */
+/// idOf('a') -> 'a'
+/// idOf({ eid: 'a' }) -> 'a'
+export let idOf = (v: Id): string => typeof v == 'string' ? v : v.eid

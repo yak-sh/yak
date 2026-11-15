@@ -244,7 +244,7 @@ let facets: Record<string, () => Promise<unknown>> = {
   'yak/meter/graph': () => import('@yaks/platform/meter-graph'),
   'yak/models/effects': () => import('./facets/models-effects.ts'),
   'yak/pages/graph': () => import('./facets/pages-graph.ts'),
-  'yak/publishing/graph': () => import('./facets/publishing-graph.ts'),
+  'yak/publishing/graph': () => import('@yaks/platform/publishing-graph'),
   'yak/refusals/effects': () => import('./facets/refusals-effects.ts'),
   'yak/remake/graph': () => import('@yaks/platform/remake-graph'),
   'yak/rouse/graph': () => import('@yaks/platform/rouse-graph'),
