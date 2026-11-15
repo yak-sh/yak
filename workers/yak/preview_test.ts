@@ -3,6 +3,9 @@ import { appStore, releaseOf, storeName } from './directory.ts'
 import { declarationOf, keepDeclaration } from './declaration.ts'
 import { handler } from './kernel.ts'
 import { fetch as preview, viewport } from './preview.ts'
+import { opened, seal } from './lib/token.ts'
+import { LASTS, type Ticket } from '@yaks/platform/preview'
+import { system } from '@yaks/fp'
 import { tools } from './preview-tools.ts'
 import { ADA, ADA_OWNS, SECRET, seeded } from './serving-data-probe.ts'
 import { platform } from './directory-rows-probe.ts'
@@ -172,6 +175,17 @@ test('a preview ticket never exposes server source or another app', async () => 
     (await kernel(new Request(url.replace(token, tampered)), env)).status,
     404,
   )
+})
+
+test('a link opens nothing once it expires, nor one sealed with no expiry', async () => {
+  let later = (ms: number) => ({ ...system, now: () => Date.now() + ms })
+  let at = (CLOCK = system) => kernel(new Request(url), { ...env, CLOCK })
+  equal((await at(later(LASTS * 1000 - 60_000))).status, 200)
+  equal((await at(later(2 * LASTS * 1000))).status, 404)
+  let held = await opened<Ticket>('preview', token, SECRET)
+  let { exp: _, ...forever } = held!
+  let old = await seal('preview', forever, SECRET)
+  equal((await kernel(new Request(url.replace(token, old)), env)).status, 404)
 })
 
 test('a walled preview page gets the platform localStorage, kept in the preview store', async () => {
@@ -405,6 +419,20 @@ test("an open link rides through its draft's release: its pages hear it and see 
   let page = await at()
   equal(page.status, 200)
   ok((await page.text()).includes('Before'))
+  // Released, the link reads the live rows and never writes them.
+  equal((await at('api/query?q=.doc')).status, 200)
+  let wrote = await kernel(
+    new Request(new URL('api/apply', link), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        entities: [{ entity: { eid: '$x' }, doc: { title: 'Through' } }],
+      }),
+    }),
+    env,
+  )
+  equal(wrote.status, 403)
+  await wrote.body?.cancel()
   await write('index.html', '<html><head></head><body>After</body></html>')
   let next = (await dir.drafts(app)).map((d) => d.eid)
   equal(next.length, 1)

@@ -11,7 +11,8 @@
  * reads the directory and the draft's rows, keeps each state in R2 and runs a
  * state's worker in its dispatch namespace (workers/yak preview.ts). This
  * module says what those readings make: where a link is mounted (`mountOf`,
- * `aimed`), whom a ticket still admits and as whom (`admits`, `viewer`), which
+ * `aimed`), whom a ticket still admits, until when and as whom (`admits`,
+ * `until`, `reading`, `viewer`), which
  * draft and link it shows (`shows`, `linkFor`), which of the link's doors a
  * request goes to (`door`), where a state is kept and what building it sets
  * up again (`stateOf`, `starting`, `resets`, `seeding`, `outside`), the states
@@ -24,7 +25,7 @@
  * let at = aimed('/cookbook/_preview/t/api/apply')!
  * assertEquals(at.mount, '/cookbook/_preview/t/')
  * assertEquals(
- *   door({ path: at.path, method: 'POST', screen: true, waiting: false }),
+ *   door({ path: at.path, method: 'POST', reads: true, waiting: false }),
  *   { to: 'nothing', status: 403 },
  * )
  * ```
@@ -78,28 +79,31 @@ export let within = (value: unknown): string | null => {
   return parsed.pathname.slice(1) + parsed.search + parsed.hash
 }
 
-/** What a link's ticket names: the draft it shows (`of`), as whom. A ticket
- * sealed before each draft had its own link names the app's (`app.followed`)
- * as `link`, or before that as `draft`, and shows the draft no author holds.
- * A ticket for a paired TV names its `screen`: it reads the draft as a
- * viewer, and only while that screen stays paired with the person. */
+/** What a link's ticket names: the draft it shows (`of`), as whom, and the
+ * unix second it stops opening at (`exp`). A ticket for a paired TV names its
+ * `screen`: it reads the draft as a viewer, and only while that screen stays
+ * paired with the person. */
 export type Ticket = {
   app: string
   space: string
   person: string
-  of?: string
-  link?: string
-  draft?: string
+  of: string
+  exp: number
   screen?: string
 }
 
-/** The draft, or the app's link, a ticket names; null where it names none. */
-/// named({ app: 'a', space: 's', person: 'p', link: 'l', draft: 'd' }) -> 'l'
-/// named({ app: 'a', space: 's', person: 'p' }) -> null
-export let named = (t: Ticket): string | null => {
-  let name = t.of ?? t.link ?? t.draft
-  return typeof name == 'string' ? name : null
-}
+/** How long a link opens for at least, in seconds. */
+export let LASTS = 12 * 3600
+
+/** The `exp` a ticket sealed at `now` (milliseconds) carries: the end of the
+ * window after the one `now` falls in, so a link lasts from {@link LASTS} to
+ * twice that, and one sealed again within a window is the same link, which
+ * a TV following it does not reload for. */
+/// until(0) -> 86400
+/// until(43199999) -> 86400
+/// until(43200000) -> 129600
+export let until = (now: number): number =>
+  (Math.floor(now / 1000 / LASTS) + 2) * LASTS
 
 /** A draft as a link reads it: its id, and the author holding it, none for
  * the draft from before each draft had an author. */
@@ -115,17 +119,16 @@ export type Linked = {
 
 /** The link a draft's preview serves from and is told at: its own eid, or
  * for the draft no author holds, the app's link from before each draft had
- * its own (`followed`), so a link sealed then keeps showing it. */
+ * its own (`followed`), where that draft's states are already kept. */
 /// linkFor({ slug: 'a', followed: 'old' }, { eid: 'd', by: null }) -> 'old'
 /// linkFor({ slug: 'a', followed: 'old' }, { eid: 'd', by: 'p' }) -> 'd'
 export let linkFor = (app: Linked, d: Drafting): string =>
   !d.by && app.followed ? app.followed : d.eid
 
-/** The draft a ticket shows among the app's: the one it names, or for a
- * ticket from before each draft had a link, the one no author holds; null
- * once that draft is closed, when the link shows what was released. */
+/** The draft a ticket shows among the app's: the one it names; null once
+ * that draft is closed, when the link shows what was released, read-only. */
 export let shows = <D extends Drafting>(t: Ticket, drafts: D[]): D | null =>
-  (t.of ? drafts.find((d) => d.eid == t.of) : drafts.find((d) => !d.by)) ?? null
+  drafts.find((d) => d.eid == t.of) ?? null
 
 /** What the directory holds of a ticket's space and app now, and the level
  * its person holds there. */
@@ -136,38 +139,50 @@ export type Holding = {
 }
 
 /** Whether a ticket still opens its link, asked at `host` for the app `app`
- * names: its app is where it was, in the space it was sealed for, out of the
- * trash, and its person still writes there. A ticket from before each draft
- * had a link holds while the app still follows that link, and a TV's while
- * its screen is still paired with the person (`paired`, whom it is paired
- * with). */
+ * names at `now` (milliseconds): it has not expired, its app is where it was,
+ * in the space it was sealed for, out of the trash, and its person still
+ * writes there. A TV's holds while its screen is still paired with the person
+ * (`paired`, whom it is paired with). A ticket sealed before tickets expired
+ * carries no `exp`, and opens nothing. */
 export let admits = (
   t: Ticket,
   { space, app, role }: Holding,
-  at: { host: string; app: string; paired?: string | null },
+  at: { host: string; app: string; now: number; paired?: string | null },
   env: Host = {},
 ): boolean =>
+  typeof t.of == 'string' && typeof t.exp == 'number' &&
+  t.exp * 1000 > at.now &&
   (!t.screen || at.paired == t.person) &&
   space.eid == t.space &&
   at.host == spaceHost(env, space.slug) &&
   app.slug == at.app &&
-  (!!t.of || app.followed == named(t)) &&
   !app.trashed && !space.trashed && writes(role)
+
+/** Whether a link only reads: a TV's always, and anyone's once its draft is
+ * closed (`open` false), when it shows the release over the live rows. */
+/// reading({ app: 'a', space: 's', person: 'p', of: 'd', exp: 1 }, true) -> false
+/// reading({ app: 'a', space: 's', person: 'p', of: 'd', exp: 1 }, false) -> true
+/// reading({ app: 'a', space: 's', person: 'p', of: 'd', exp: 1, screen: 'tv' }, true) -> true
+export let reading = (t: Ticket, open: boolean): boolean => !!t.screen || !open
 
 /** Who a link's request is: a TV reads as a viewer; the app's own worker
  * coming back through its `grant` is who it carries, at the ticket person's
  * level where it carries them; anyone else is the ticket's person, at the
- * level they hold. */
+ * level they hold. A link that only reads (`reading`) holds no more than a
+ * viewer's level, so nothing it reaches writes the live rows. */
 export let viewer = <G extends { person: string | null; role: Level | null }>(
   t: Ticket,
   role: Level,
   grant: G | null,
-): G | { person: string; role: Level; via: string } =>
-  t.screen
+  open: boolean,
+): G | { person: string; role: Level; via: string } => {
+  let level: Level = reading(t, open) ? 'viewer' : role
+  return t.screen
     ? { person: t.person, role: 'viewer', via: t.screen }
     : grant
-    ? { ...grant, role: grant.person == t.person ? role : grant.role }
-    : { person: t.person, role, via: t.app }
+    ? { ...grant, role: grant.person == t.person ? level : grant.role }
+    : { person: t.person, role: level, via: t.app }
+}
 
 /** The store doors a link's pages reach, from the app's `/api`. */
 export let DOORS = [
@@ -198,20 +213,20 @@ export type Door =
 
 /** Which door `path`, from the app's root, goes to. An open draft's pages
  * read and write its branch alone, never the live rows, so until it has one
- * (`waiting`) its store doors wait. A TV (`screen`) only reads: its page's
- * writes are refused, and what the page keeps for the person stays in the
- * page. */
-/// door({ path: '/api/query', method: 'GET', screen: false, waiting: false }) -> { to: 'api', door: '/query' }
-/// door({ path: '/api/query', method: 'GET', screen: false, waiting: true }) -> { to: 'nothing', status: 503 }
-/// door({ path: '/api/blob', method: 'GET', screen: false, waiting: false }) -> { to: 'nothing', status: 404 }
-/// door({ path: '/api/storage', method: 'PUT', screen: true, waiting: false }) -> { to: 'nothing', status: 403 }
-/// door({ path: '/a%20b.css', method: 'GET', screen: false, waiting: false }) -> { to: 'page', file: '/a b.css' }
-/// door({ path: '/vocab.json', method: 'GET', screen: false, waiting: false }) -> { to: 'nothing', status: 404 }
+ * (`waiting`) its store doors wait. A link that only `reads` (a TV's, or one
+ * whose draft is closed): its page's writes are refused, and what the page
+ * keeps for the person stays in the page. */
+/// door({ path: '/api/query', method: 'GET', reads: false, waiting: false }) -> { to: 'api', door: '/query' }
+/// door({ path: '/api/query', method: 'GET', reads: false, waiting: true }) -> { to: 'nothing', status: 503 }
+/// door({ path: '/api/blob', method: 'GET', reads: false, waiting: false }) -> { to: 'nothing', status: 404 }
+/// door({ path: '/api/storage', method: 'PUT', reads: true, waiting: false }) -> { to: 'nothing', status: 403 }
+/// door({ path: '/a%20b.css', method: 'GET', reads: false, waiting: false }) -> { to: 'page', file: '/a b.css' }
+/// door({ path: '/vocab.json', method: 'GET', reads: false, waiting: false }) -> { to: 'nothing', status: 404 }
 export let door = (
-  { path, method, screen, waiting }: {
+  { path, method, reads, waiting }: {
     path: string
     method: string
-    screen: boolean
+    reads: boolean
     waiting: boolean
   },
 ): Door => {
@@ -219,7 +234,7 @@ export let door = (
     if (waiting) return { to: 'nothing', status: 503 }
     let at = path.slice(4)
     if (!DOORS.includes(at)) return { to: 'nothing', status: 404 }
-    if (screen && (at == '/apply' || (at == '/storage' && method != 'GET'))) {
+    if (reads && (at == '/apply' || (at == '/storage' && method != 'GET'))) {
       return { to: 'nothing', status: 403 }
     }
     return { to: 'api', door: at }

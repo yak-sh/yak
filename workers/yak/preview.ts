@@ -57,6 +57,7 @@ import { r2RawObjects } from './lib/objects.ts'
 import { COOKIE, opened, seal, sign } from './lib/token.ts'
 import { onHold } from './model-spend.ts'
 import { ModelError } from '@yaks/model'
+import { system } from '@yaks/fp'
 import { filesIn, staged } from './release.ts'
 import { loaded, pinned } from './seed.ts'
 import {
@@ -65,11 +66,12 @@ import {
   type Built,
   door,
   entered,
+  LASTS,
   linkFor,
   mountOf,
-  named,
   outside,
   PRIVATE,
+  reading,
   RECORD,
   resets,
   scriptOf,
@@ -79,6 +81,7 @@ import {
   stateOf,
   type Ticket,
   undone,
+  until,
   viewer,
   within,
 } from '@yaks/platform/preview'
@@ -186,7 +189,8 @@ let post = (
 
 // The app as its link serves one state of its draft: the app's store on the
 // draft's branch, and its own dispatch script where the state has a worker.
-// A link whose draft is closed has no branch, and shows the live app's rows.
+// A link whose draft is closed has no branch, and reads the live app's rows,
+// as a viewer (@yaks/platform/preview `viewer`).
 // The store is told of the app as it serves (its release and access), since
 // it is the live app's.
 let previewing = (
@@ -507,6 +511,7 @@ export let sealed = async (
       space: space.eid,
       person: ctx.person,
       of,
+      exp: until((ctx.env.CLOCK ?? system).now()),
       ...screen ? { screen } : {},
     } satisfies Ticket,
     ctx.env.SESSION_SECRET!,
@@ -691,7 +696,9 @@ export let preview = async (ctx: Ctx, args: Args) => {
     cost: 0,
   }
   let follows =
-    `It shows draft ${draft.eid} over the app's live rows as they stood when it was first previewed, on a branch of its own: what its pages write stays there, out of the live app, until app_deploy merges it with rows: all; a release without it takes only the draft's files and keeps those rows on the branch until merged or discarded. An open page takes each write to that draft as it lands, a stylesheet in place and anything else by reloading, keeping its scroll and typed fields, and once app_deploy releases the draft shows what was released. Each draft of the app has its own link and branch; discarding the draft drops its branch.`
+    `It shows draft ${draft.eid} over the app's live rows as they stood when it was first previewed, on a branch of its own: what its pages write stays there, out of the live app, until app_deploy merges it with rows: all; a release without it takes only the draft's files and keeps those rows on the branch until merged or discarded. An open page takes each write to that draft as it lands, a stylesheet in place and anything else by reloading, keeping its scroll and typed fields, and once app_deploy releases the draft shows what was released, read-only. The link opens for at least ${
+      LASTS / 3600
+    } hours; app_preview again gives a new one. Each draft of the app has its own link and branch; discarding the draft drops its branch.`
   if (!screenshot) {
     return {
       text:
@@ -717,8 +724,7 @@ let target = async (req: Request, env: Env) => {
   let aim = aimed(url.pathname)
   if (!aim || !env.SESSION_SECRET) return null
   let ticket = await opened<Ticket>('preview', aim.ticket, env.SESSION_SECRET)
-  let name = ticket && named(ticket)
-  if (!ticket || !name) return null
+  if (!ticket) return null
   let dir = directory(bound(env.DIRECTORY, directoryPart.fetch, env), {
     copy: copyOf(env),
     time: env.CLOCK,
@@ -734,13 +740,14 @@ let target = async (req: Request, env: Env) => {
     !admits(ticket, { space, app: held, role }, {
       host: url.hostname,
       app: aim.app,
+      now: (env.CLOCK ?? system).now(),
       paired: paired?.person,
     }, env)
   ) return null
   // The draft it shows while that draft is open, and the release once it is
-  // closed.
+  // closed, read-only.
   let of = shows(ticket, withLegacy(held, rows))
-  let link = of ? linkFor(held, of) : name
+  let link = of ? linkFor(held, of) : ticket.of
   let { mount } = aim
   // An open draft previewed before drafts had branches takes one now, as the
   // person whose link it is. One its store cannot make yet is made later, and
@@ -777,8 +784,8 @@ let target = async (req: Request, env: Env) => {
     of,
     link,
     preview: app,
-    who: viewer(ticket, role!, grant),
-    screen: !!ticket.screen,
+    who: viewer(ticket, role!, grant, !!of),
+    reads: reading(ticket, !!of),
     path: aim.path,
     mount,
   }
@@ -796,7 +803,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let to = door({
     path,
     method: req.method,
-    screen: found.screen,
+    reads: found.reads,
     waiting: !!found.of && found.of.branch == null,
   })
   if (to.to == 'nothing') return no(to.status)
