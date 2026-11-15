@@ -19,11 +19,10 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { DRAWING } from '../drawing.ts'
 import { AcceptableUse } from './acceptable-use.tsx'
-import { Build } from './build.tsx'
 import { Churches } from './churches.tsx'
 import { Cookies } from './cookies.tsx'
 import { Help } from './help.tsx'
-import { Home } from './home.tsx'
+import { ASK, DESCRIBE, Home } from './home.tsx'
 import { Operator } from './operator.tsx'
 import { Organizations } from './organizations.tsx'
 import { Pricing } from './pricing.tsx'
@@ -34,15 +33,15 @@ import { Townships } from './townships.tsx'
 
 /** Each page by the file it is served from. */
 export let PAGES: Record<string, FunctionComponent> = {
-  'index.html': Home,
+  'index.html': () => h(Home, { pitch: ASK }),
   // The Operator's home page, asking for a number or, until one can be
   // texted, an email (site.ts `drawn`).
   'operator.html': () => h(Operator, { by: 'text' }),
   'operator-email.html': () => h(Operator, { by: 'email' }),
-  // The home page that leads with the app a visitor gets, and the landing
-  // pages for a church office, a township and any organization's
-  // (variant.ts).
-  'build.html': Build,
+  // The home page that leads with the app a visitor gets (home.tsx
+  // `DESCRIBE`), and the landing pages for a church office, a township and
+  // any organization's (variant.ts).
+  'build.html': () => h(Home, { pitch: DESCRIBE }),
   'churches.html': Churches,
   'organizations.html': Organizations,
   'townships.html': Townships,

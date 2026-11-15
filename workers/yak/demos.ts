@@ -1,4 +1,4 @@
-// The apps the home pages show (site/home.tsx, site/build.tsx): each one's
+// The apps the home pages show (site/home.tsx): each one's
 // address in the demo space (gallery-demo.ts `DEMO`), its name and what it is
 // for. A page names its demos in its file. Each wears the platform's
 // `featured` mark (featured-move.ts), which is what lets the gallery serve a

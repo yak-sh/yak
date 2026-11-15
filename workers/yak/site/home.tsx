@@ -1,5 +1,5 @@
 /** @jsxImportSource preact */
-import { keys } from '@yaks/copy'
+import { keys, read } from '@yaks/copy'
 import { Button, Card, Field } from '@yaks/ui'
 import { GET_PLAN } from '@yaks/platform/routes'
 import { START } from '../newcomer.ts'
@@ -7,7 +7,7 @@ import { Data, Page, Yours } from './frame.tsx'
 import { attr, COPY, said, type Slots, text } from './copy.ts'
 import { Idle } from '../mascot.ts'
 import { Sky, Walk } from './sky.tsx'
-import { type Example, HOME } from '../demos.ts'
+import { BUILD, type Example, HOME } from '../demos.ts'
 
 // A plan's price in dollars, as its card says it: "Free" is none.
 let dollars = (plan: string) =>
@@ -229,119 +229,154 @@ export let Cost = () => (
  * snippet. */
 export let arrow = (glyph: string) => <span aria-hidden='true'>{glyph}</span>
 
-export let Home = () => (
-  <Page
-    copy='home'
-    path='/'
-    kind='Home'
-    head={
-      <>
-        <script src='carousel.js' defer />
-        <Walk />
-        <script src='cta.js' defer />
-        <Data of={data()} />
-      </>
-    }
-    before={<Sky />}
-  >
-    <section class='Hello' aria-labelledby='hello'>
-      <div class='Hello_Copy'>
-        <div class='Hello_Yak' data-wander=''>
-          <Idle class='Wander_Image' base='.' />
+/**
+ * What one of the home pages `/` is split between (variant.ts) says of its
+ * own: `copy`, the key its words are under, and the examples it shows, what
+ * it says every app does and the steps it says it takes, each by its name
+ * under `does` and `how`. A word its copy lacks is the home page's, so a
+ * change to one reaches both.
+ */
+export type Pitch = {
+  copy: string
+  apps: Example[]
+  does: string[]
+  steps: string[]
+}
+
+/** The home page that asks what a visitor needs (variant.ts `ask`). */
+export let ASK: Pitch = {
+  copy: 'home',
+  apps: HOME,
+  does: ['build', 'online', 'share'],
+  steps: ['say', 'open', 'keep'],
+}
+
+/** The home page that leads with the app a visitor gets, and names the
+ * Operator only once the app is in hand (variant.ts `describe`). */
+export let DESCRIBE: Pitch = {
+  copy: 'build',
+  apps: BUILD,
+  does: ['saves', 'opens', 'yours'],
+  steps: ['describe', 'builds', 'keep', 'change'],
+}
+
+// The key of the snippet a pitch shows at `rest`: its own, else the home
+// page's.
+let worded = ({ copy }: Pitch) => (rest: string) =>
+  read(COPY, `${copy}.${rest}`) == null ? `home.${rest}` : `${copy}.${rest}`
+
+export let Home = ({ pitch }: { pitch: Pitch }) => {
+  let key = worded(pitch), yours = { yours: <Yours /> }
+  return (
+    <Page
+      copy={pitch.copy}
+      path='/'
+      kind='Home'
+      head={
+        <>
+          <script src='carousel.js' defer />
+          <Walk />
+          <script src='cta.js' defer />
+          <Data of={data()} />
+        </>
+      }
+      before={<Sky />}
+    >
+      <section class='Hello' aria-labelledby='hello'>
+        <div class='Hello_Copy'>
+          <div class='Hello_Yak' data-wander=''>
+            <Idle class='Wander_Image' base='.' />
+          </div>
+          <p class='Hello_Kicker' {...text(key('hello.kicker'))} />
+          <h1 class='Title Title-hero' id='hello'>
+            <label for='say' {...text(key('hello.title'))} />
+          </h1>
+          {read(COPY, key('hello.lead')) != null && (
+            <p class='Note' {...text(key('hello.lead'))} />
+          )}
+          <form class='Hello_Ask' method='post' action={START}>
+            <Field
+              class='Hello_Field'
+              lines
+              id='say'
+              name='say'
+              required
+              maxLength={4000}
+              {...attr('placeholder', key('hello.hint'))}
+            />
+            <Button
+              mod='go'
+              type='submit'
+              data-cta='start'
+              {...text(key('hello.go'))}
+            />
+          </form>
+          <p
+            class='Note Note-small'
+            {...text(key('hello.note'), {
+              price: <a href='#cost' {...text(key('hello.price'))} />,
+              examples: (
+                <a
+                  href='#examples'
+                  data-cta='examples'
+                  {...text(key('hello.examples'), { arrow: arrow('↓') })}
+                />
+              ),
+            })}
+          />
         </div>
-        <p class='Hello_Kicker' {...text('home.hello.kicker')} />
-        <h1 class='Title Title-hero' id='hello'>
-          <label for='say' {...text('home.hello.title')} />
-        </h1>
-        <form class='Hello_Ask' method='post' action={START}>
-          <Field
-            class='Hello_Field'
-            lines
-            id='say'
-            name='say'
-            required
-            maxLength={4000}
-            {...attr('placeholder', 'home.hello.hint')}
-          />
-          <Button
-            mod='go'
-            type='submit'
-            data-cta='start'
-            {...text('home.hello.go')}
-          />
-        </form>
+        <Examples
+          apps={pitch.apps}
+          note={key('examples.note')}
+          slots={{
+            gallery: <a href='/gallery' {...text(key('examples.gallery'))} />,
+          }}
+        />
+      </section>
+      <section class='Yours' aria-labelledby='does'>
+        <h2 class='Title' id='does' {...text(key('does.title'))} />
+        <dl class='Yours_List'>
+          {pitch.does.map((item) => (
+            <div>
+              <dt class='Yours_Term' {...text(key(`does.${item}.term`))} />
+              <dd
+                class='Yours_Detail'
+                {...text(key(`does.${item}.detail`), yours)}
+              />
+            </div>
+          ))}
+        </dl>
+      </section>
+      <section class='How' aria-labelledby='how'>
+        <h2 class='Title' id='how' {...text(key('how.title'))} />
+        <ol class='Steps'>
+          {pitch.steps.map((step) => (
+            <li class='Steps_Item'>
+              <h3 class='Step_Name' {...text(key(`how.${step}.name`))} />
+              <p class='Note' {...text(key(`how.${step}.detail`), yours)} />
+            </li>
+          ))}
+        </ol>
         <p
           class='Note Note-small'
-          {...text('home.hello.note', {
-            price: <a href='#cost' {...text('home.hello.price')} />,
-            examples: (
-              <a
-                href='#examples'
-                data-cta='examples'
-                {...text('home.hello.examples', { arrow: arrow('↓') })}
-              />
-            ),
+          {...text(key('how.agent'), {
+            agent: <a href='/agent' {...text(key('how.address'))} />,
           })}
         />
-      </div>
-      <Examples
-        note='home.examples.note'
-        slots={{
-          gallery: <a href='/gallery' {...text('home.examples.gallery')} />,
-        }}
-      />
-    </section>
-    <section class='Yours' aria-labelledby='does'>
-      <h2 class='Title' id='does' {...text('home.does.title')} />
-      <dl class='Yours_List'>
-        {Object.entries<Slots>({
-          build: {},
-          online: { yours: <Yours /> },
-          share: {},
-        }).map(([item, slots]) => (
-          <div>
-            <dt class='Yours_Term' {...text(`home.does.${item}.term`)} />
-            <dd
-              class='Yours_Detail'
-              {...text(`home.does.${item}.detail`, slots)}
-            />
-          </div>
-        ))}
-      </dl>
-    </section>
-    <section class='How' aria-labelledby='how'>
-      <h2 class='Title' id='how' {...text('home.how.title')} />
-      <ol class='Steps'>
-        {Object.entries<Slots>({
-          say: {},
-          open: {},
-          keep: { yours: <Yours /> },
-        }).map(([step, slots]) => (
-          <li class='Steps_Item'>
-            <h3 class='Step_Name' {...text(`home.how.${step}.name`)} />
-            <p class='Note' {...text(`home.how.${step}.detail`, slots)} />
-          </li>
-        ))}
-      </ol>
-      <p
-        class='Note Note-small'
-        {...text('home.how.agent', {
-          agent: <a href='/agent' {...text('home.how.address')} />,
-        })}
-      />
-    </section>
-    <Cost />
-    <Card class='Join' aria-labelledby='join'>
-      <h2 class='Title' id='join' {...text('home.join.title')} />
-      <p class='Join_Doors'>
-        <Button
-          mod='go'
-          href='#say'
-          data-cta='join'
-          {...text('home.join.go')}
-        />
-      </p>
-      <p class='Note Note-small' {...text('home.join.note')} />
-    </Card>
-  </Page>
-)
+      </section>
+      <Cost />
+      <Card class='Join' aria-labelledby='join'>
+        <h2 class='Title' id='join' {...text(key('join.title'))} />
+        <p class='Join_Doors'>
+          <Button
+            mod='go'
+            href='#say'
+            data-cta='join'
+            {...text(key('join.go'))}
+          />
+        </p>
+        <p class='Note Note-small' {...text(key('join.note'))} />
+      </Card>
+    </Page>
+  )
+}

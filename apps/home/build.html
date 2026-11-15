@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <base href="https://yaks.app/">
-    <meta name="yak-drawing" content="2e9355f83d">
+    <meta name="yak-drawing" content="5b3d3da1b5">
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title
@@ -46,6 +46,104 @@
     <script src="wander.js" defer></script>
     <script src="sky.js" defer></script>
     <script src="cta.js" defer></script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://yaks.app/#website",
+          "url": "https://yaks.app/",
+          "name": "yaks.app",
+          "alternateName": "Yak Shaving",
+          "description": "Build, host and share web apps.",
+          "inLanguage": "en-US",
+          "publisher": {
+            "@id": "https://yaks.app/#organization"
+          }
+        },
+        {
+          "@type": "Organization",
+          "@id": "https://yaks.app/#organization",
+          "name": "Yak Shaving LLC",
+          "url": "https://yaks.app/",
+          "logo": "https://yaks.app/icon-512.png",
+          "email": "hello@yaks.app"
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://yaks.app/#software",
+          "name": "yaks.app",
+          "url": "https://yaks.app/",
+          "applicationCategory": "DeveloperApplication",
+          "operatingSystem": "Web browser",
+          "description": "Build, host and share web apps. Say what you need, from a menu for your side business to a recipe box for your family, and yaks.app builds the app and puts it online at yourname.yaks.app, with its own data, file uploads, email address and optional custom domain. Share it with the people it is for.",
+          "featureList": [
+            "Apps built from what you say you need",
+            "Changes and fixes made by your Operator",
+            "Apps built by your own AI assistant over MCP",
+            "A graph data store per app, shared across devices",
+            "File and photo uploads",
+            "Live updates for everyone using an app, and voice calls",
+            "AI models and server code for apps",
+            "An email address per app",
+            "Publish an app for other people to install",
+            "A custom domain"
+          ],
+          "publisher": {
+            "@id": "https://yaks.app/#organization"
+          },
+          "offers": [
+            {
+              "@type": "Offer",
+              "name": "Free",
+              "price": "0",
+              "priceCurrency": "USD",
+              "url": "https://yaks.app/pricing",
+              "availability": "https://schema.org/InStock",
+              "description": "For one space: 5 apps, unlimited visitors, 1 GB of app data, 1 GB of photos and files, and 100 emails a month. A person's first space is free."
+            },
+            {
+              "@type": "Offer",
+              "name": "Plus",
+              "price": "9",
+              "priceCurrency": "USD",
+              "url": "https://yaks.app/pricing",
+              "availability": "https://schema.org/InStock",
+              "description": "For one space: unlimited apps, unlimited visitors, 10 GB of app data, 50 GB of photos and files, 2,500 emails a month, and a custom domain.",
+              "priceSpecification": {
+                "@type": "UnitPriceSpecification",
+                "price": "9",
+                "priceCurrency": "USD",
+                "valueAddedTaxIncluded": true,
+                "billingDuration": 1,
+                "billingIncrement": 1,
+                "unitCode": "MON"
+              }
+            },
+            {
+              "@type": "Offer",
+              "name": "Pro",
+              "price": "49",
+              "priceCurrency": "USD",
+              "url": "https://yaks.app/pricing",
+              "availability": "https://schema.org/InStock",
+              "description": "For one space: unlimited apps, where staff ask for a change by email or chat and yaks.app makes it, document search, notices by email, AI use included, email support, unlimited visitors, 10 GB of app data, 50 GB of photos and files, 2,500 emails a month, and a custom domain. Or $490 a year.",
+              "priceSpecification": {
+                "@type": "UnitPriceSpecification",
+                "price": "49",
+                "priceCurrency": "USD",
+                "valueAddedTaxIncluded": true,
+                "billingDuration": 1,
+                "billingIncrement": 1,
+                "unitCode": "MON"
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
   </head>
   <body class="Home">
     <div class="Sky" aria-hidden="true" data-sink="8"
