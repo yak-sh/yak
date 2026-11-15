@@ -60,6 +60,15 @@ export let ticket = async (
   return token
 }
 
+// A space's tracker is a Durable Object behind the tracker Worker, which sends
+// a call again while the runtime moves the object (@yaks/durable-object
+// `retried`, whose pauses add up to 22.6 seconds), as each deploy does: a move
+// holds or refuses calls for ten to twenty seconds. The deadline outlasts that
+// and cuts off only a tracker that stopped answering, well inside the minute
+// after which a request that has not answered is a defect (defects.ts
+// `watched`).
+let DEADLINE = 30_000
+
 let sent = async (
   env: Env,
   space: Space,
@@ -81,7 +90,7 @@ let sent = async (
           authorization: `Bearer ${token}`,
           'content-type': 'application/json',
         },
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(DEADLINE),
       }),
     ))
   if (!response.ok) {
