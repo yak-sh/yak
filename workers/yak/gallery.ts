@@ -213,6 +213,12 @@ export let shown = async (
   })
 }
 
+/** Whether a stranger can open a listing at its `at`: the app opens to
+ * strangers, or `at` is its copy in the demo space. A private app with
+ * neither opens only for its own people. */
+export let openable = (a: Shown, env: Host = {}) =>
+  opens(a.app) || a.at != url(a.space, a.app, env)
+
 /** Each listing with what yaks.app says of it: its review, its installs,
  * counted in one read, and whether we feature it or its space. */
 export let reputing = async (

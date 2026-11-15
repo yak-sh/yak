@@ -168,11 +168,19 @@ test('a space that shares nothing in public, or none at all, has no page', async
 
 test('the sitemap lists each listed app, skill and publisher', async () => {
   let other = space({ eid: 'other-eid', slug: 'acme' })
+  // A private app a stranger cannot open has its page and not its address.
+  let shut = app({
+    eid: 'shut-eid',
+    slug: 'diary',
+    access: 'private',
+    published: { ...app().published!, name: 'diary' },
+    gallery: { ...live, listedAt: '2026-09-05T12:00:00.000Z' },
+  })
   assertEquals(
     await addresses(
       held({
         spaces: [space(), other],
-        apps: [app({ gallery: live })],
+        apps: [app({ gallery: live }), shut],
         skills: [skill()],
         integrations: [{
           name: 'acme',
@@ -183,6 +191,8 @@ test('the sitemap lists each listed app, skill and publisher', async () => {
     ),
     [
       pageAt('recipes'),
+      pageAt('diary'),
+      'https://jeff.yaks.app/recipes/',
       skillAt('pitch-copy'),
       publisherAt('jeff'),
       publisherAt('acme'),

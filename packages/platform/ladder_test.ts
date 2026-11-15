@@ -146,6 +146,7 @@ test('rung: a renamed app is sent to its slug, path and query', async () => {
 
 test('rung: a space with no front page is its index at `/`', async () => {
   assertEquals(await stop('/'), ['index', {}])
+  assertEquals(await stop('/robots.txt'), ['robots', {}])
   assertEquals(await stop('/about.html'), ['nothing', { kept: true }])
   assertEquals(await stop('/nope/', { former: '' }), [
     'nothing',

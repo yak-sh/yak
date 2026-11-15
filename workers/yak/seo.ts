@@ -12,9 +12,11 @@
 // two lists — `SITE` here and `PAGES` in guide.ts — and neither can go stale
 // against the other.
 //
-// APEX ONLY. A space's hostname is the customer's face and its `robots.txt` is
-// its own (@yaks/platform/routes): what a person publishes there is theirs to say. The door
-// in kernel.ts calls `answer` only at the apex.
+// The apex's. A space's hostname is the customer's face and its `robots.txt` is
+// its own (@yaks/platform/routes): what a person publishes there is theirs to
+// say. The door in kernel.ts calls `answer` only at the apex. Where a space's
+// apps say nothing at `/robots.txt`, the platform's `spaceRobots` answers
+// (@yaks/platform/ladder `last`).
 import { AGENT, DOCS, DRAWN, MARKDOWN, TECH } from './docs.ts'
 import { INTEGRATIONS } from './integrations.ts'
 import type { Env } from './env.ts'
@@ -115,8 +117,9 @@ export let RENDERED = [GALLERY, INTEGRATIONS, DOCS, TECH, AGENT]
 // own address plus `.md` (docs.ts `MARKDOWN`), which is what the connector
 // hands an agent (guide.ts). They are markdown rather than HTML and they are
 // indexed anyway, which is the point of publishing them at a URL. Last, the
-// pages read from the directory: each listed app's, each listed skill's and
-// each publisher's (publisher-page.ts `addresses`).
+// pages read from the directory: each listed app's, the app itself where a
+// stranger can open it, each listed skill's and each publisher's
+// (publisher-page.ts `addresses`).
 export let addresses = (env: Host = {}, listed: string[] = []) => [
   ...SITE.map((path) => at(path, env)),
   ...RENDERED.map((p) => at(p.path, env)),
@@ -168,6 +171,25 @@ export let robots = (env: Host = {}) =>
       ...CLOSED.map((path) => `Disallow: ${path}`),
       '',
     ]),
+    `Sitemap: ${at('/sitemap.xml', env)}`,
+    '',
+  ].join('\n')
+
+// A space's hostname, or a custom domain on one, where none of its apps has a
+// robots file of its own. Everything is crawlable but the store doors, which
+// answer JSON, and the sitemap is the apex's: naming it here is what lets the
+// apex's sitemap list this hostname's addresses (sitemaps.org "Sitemaps & Cross
+// Submits"), so the gallery's apps are found at their own address, not only at
+// their page on yaks.app. A private app sends a crawler to sign in, which the
+// apex's robots file closes, and a preview says `noindex` (apps.ts
+// `reporting`).
+export let spaceRobots = (env: Host = {}) =>
+  [
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /api/',
+    'Disallow: /*/api/',
+    '',
     `Sitemap: ${at('/sitemap.xml', env)}`,
     '',
   ].join('\n')

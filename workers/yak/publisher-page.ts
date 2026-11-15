@@ -20,7 +20,7 @@ import {
   type Space,
 } from './directory.ts'
 import type { Env } from './env.ts'
-import { card, listed, type Shown } from './gallery.ts'
+import { card, listed, openable, type Shown } from './gallery.ts'
 import { pageAt, PUBLISHER, publisherAt } from '@yaks/platform/routes'
 import { type Reputation, reputation, reputationOf } from './gallery-row.ts'
 import { type Rated, rating } from './integrations.ts'
@@ -105,7 +105,9 @@ export let publishedBy = async (
 }
 
 /** Every page drawn from the directory, for the sitemap (seo.ts): each
- * listed app's, each listed skill's, and each publisher's. */
+ * listed app's, then the app itself at its own address where a stranger can
+ * open it (its space's robots file names this sitemap, seo.ts `spaceRobots`),
+ * each listed skill's, and each publisher's. */
 export let addresses = async (dir: Directory, env: Host = {}) => {
   let [apps, skills, integrations] = await Promise.all([
     listed(dir, env),
@@ -124,6 +126,7 @@ export let addresses = async (dir: Directory, env: Host = {}) => {
   }
   return [
     ...apps.map((a) => pageAt(a.name, env)),
+    ...apps.filter((a) => openable(a, env)).map((a) => a.at),
     ...skills.map((s) => skillAt(s.skill.published.name, env)),
     ...[...spaces.values()].map((slug) => publisherAt(slug, env)),
   ]

@@ -1848,6 +1848,13 @@ export let index = async (
   return { page, alone }
 }
 
+// A space's robots file where none of its apps has one (rung 4): crawl it all,
+// and read the sitemap that lists its listed apps (seo.ts `spaceRobots`).
+let robotsOf = async (env: Env) =>
+  new Response((await import('./seo.ts')).spaceRobots(env), {
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+  })
+
 // A space in the trash, at any of its addresses (erase.ts, T-34431). Nothing
 // under it serves — not an app, not a file, not a store door — so this stands
 // ahead of every rung of `served` below, and what it answers is what a wrong
@@ -2154,6 +2161,7 @@ let served = async (
       }, env)
       : nothingHere(env)
   }
+  if (step.to == 'robots') return edge ? passed() : await robotsOf(env)
   if (step.to == 'index') {
     // A stranger's view is the same for every stranger, so Site keeps it for
     // them, and a person is never answered it (kept-page.ts `asked`): one
@@ -2739,10 +2747,13 @@ let served = async (
   }
   // Rung 4, and it is last rather than fourth in the code because rungs 3 and
   // 5 are the one call above.
-  if (indexes(url.pathname, page.status)) {
+  let word = indexes(url.pathname, page.status)
+  if (word) {
     await page.body?.cancel()
     return edge
       ? passed()
+      : word == 'robots'
+      ? await robotsOf(env)
       : (await index(req, env, space, routing.roster!, seatOf)).page
   }
   // Site's page is counted by the gateway that sends it (page-cache.ts). A

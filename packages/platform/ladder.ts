@@ -20,7 +20,9 @@
  *     asked exactly the way rung 2 asks an app.
  *  4. The space's index is `/`'s last word, where the space has no home app
  *     or the home app has nothing there, so a space that exists is a door and
- *     not a 404.
+ *     not a 404. `/robots.txt` has the platform's last word the same way: the
+ *     space's own apps say it first, and where none does, the platform's
+ *     points search engines at the gallery's sitemap (workers/yak seo.ts).
  *  5. Every other path is a missing page: a 404 where the space has no home
  *     app, and where it has one, the home app's own answer.
  *
@@ -119,8 +121,10 @@ export type Rung<R extends Reading> =
   | ({ to: 'binned'; app: App<R> } & At<R>)
   /** the builder's socket, or its `script` */
   | ({ to: 'build'; script: boolean } & At<R>)
-  /** the space's index */
+  /** the space's index, at `/` */
   | ({ to: 'index' } & At<R>)
+  /** the platform's robots file, at `/robots.txt` */
+  | ({ to: 'robots' } & At<R>)
   /** `/<app>` sent to its slash, kept as the app's own pages are */
   | ({ to: 'slash'; href: string; app: App<R> } & At<R>)
   /** the app answers `path` from its own root, mounted for the browser at
@@ -137,6 +141,17 @@ export type Rung<R extends Reading> =
  * (workers/yak router.ts PLATFORM_PATHS `/api/*`), because a person with no
  * app yet is exactly who the builder is for. */
 export let BUILD = '/api/build'
+
+/** What the space says, rather than an app of it, at the addresses where it
+ * has the last word (rung 4): its index at `/`, and its robots file. */
+export type Last = 'index' | 'robots'
+
+/** The space's last word at `pathname`, if it has one there. */
+/// last('/') -> 'index'
+/// last('/robots.txt') -> 'robots'
+/// last('/about') -> null
+export let last = (pathname: string): Last | null =>
+  pathname == '/' ? 'index' : pathname == '/robots.txt' ? 'robots' : null
 
 /** Whether `path`, under an app's root, is the app's @yaks/web page. */
 /// webPath('/_web') -> true
@@ -254,10 +269,13 @@ export let rung = async <R extends Reading>(
   }
   if (!app) {
     // No front page at all, the ordinary state of a space: rung 4 at the bare
-    // address, rung 5's 404 anywhere else.
+    // address and the robots file, rung 5's 404 anywhere else.
     if (!home || kernels(space.slug, home.slug)) {
-      return pathname == '/'
+      let word = last(pathname)
+      return word == 'index'
         ? { to: 'index', ...at }
+        : word == 'robots'
+        ? { to: 'robots', ...at }
         : { to: 'nothing', kept: true, ...at }
     }
     // `/<x>/api/…` named an app that is not here. That is a wrong address,
@@ -446,12 +464,13 @@ export let behind = async (
   return seen == 'sign-in' ? 'sign-in' : 'shut'
 }
 
-/** Whether a page's answer gives way to its space's index (rung 4): a 404 at
- * `/`, the one address only the home app can be at, so its worker passed and
- * its files have no front page. Any other path keeps the 404: an address
- * inside a space that nothing answers is nothing, not a listing. */
-/// indexes('/', 404) -> true
-/// indexes('/about', 404) -> false
-/// indexes('/', 200) -> false
-export let indexes = (pathname: string, status: number): boolean =>
-  status == 404 && pathname == '/'
+/** Which of its space's last words a page's answer gives way to (rung 4): a
+ * 404 at `/` or `/robots.txt`, addresses only the home app can be at, so its
+ * worker passed and its files have neither. Any other path keeps the 404: an
+ * address inside a space that nothing answers is nothing, not a listing. */
+/// indexes('/', 404) -> 'index'
+/// indexes('/robots.txt', 404) -> 'robots'
+/// indexes('/about', 404) -> null
+/// indexes('/', 200) -> null
+export let indexes = (pathname: string, status: number): Last | null =>
+  status == 404 ? last(pathname) : null

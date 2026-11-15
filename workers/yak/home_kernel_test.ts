@@ -28,6 +28,7 @@ import {
 import { parseHTML } from 'linkedom'
 import { chatPath, managePath } from '@yaks/platform/routes'
 import { accepted, connector, kernel, seed, signIn, unique } from './probe.ts'
+import { spaceRobots } from './seo.ts'
 
 // What the cases read, made once for the file by the first that asks: one
 // owner, and a space of each case's own, so that no case reads another's
@@ -42,6 +43,7 @@ let build = async () => {
     trips: unique('trips'),
     reached: unique('reached'),
     whose: unique('whose'),
+    crawled: unique('crawled'),
   }
   let them = await seed(k, [
     { slug: at.shown, apps: ['recipes', 'garden'] },
@@ -51,6 +53,7 @@ let build = async () => {
     { slug: at.trips, apps: ['one', 'two'] },
     { slug: at.reached, apps: [] },
     { slug: at.whose, apps: [] },
+    { slug: at.crawled, apps: ['site'] },
   ])
   let agent = connector(k, them.cookie)
   // The listed space shows a stranger an app once it is released: before, it
@@ -389,6 +392,29 @@ test('the front page is served at the space root', async () => {
 // dashboard page asks everything it can at once: who the person is, where they
 // sit, the space with every app in it, and the rows of a page's own, by the
 // walk to the space's address.
+test("a space whose apps have no robots file answers the platform's", async () => {
+  let { k, at, agent } = await world()
+  let robots = async (space: string) => {
+    let r = await k.at(`${space}.yaks.app`, '/robots.txt')
+    return [r.status, await r.text()]
+  }
+  let platform = [200, spaceRobots()]
+  assertEquals(await robots(at.bare), platform)
+  // A front page that has none passes it on, as it passes `/` to the index.
+  await agent.tool('app_files', {
+    space: at.crawled,
+    app: 'site',
+    files: [{ path: 'index.html', content: '<h1>Hers</h1>' }],
+  })
+  await agent.tool('app_deploy', { space: at.crawled, app: 'site' })
+  await agent.tool('app_set', { space: at.crawled, app: 'site', home: true })
+  assertEquals(await robots(at.crawled), platform)
+  assertEquals(
+    (await k.at(`${at.crawled}.yaks.app`, '/nothing.txt')).status,
+    404,
+  )
+})
+
 test('a dashboard page reads the directory in one trip', async () => {
   let { k, at: { trips: slug, reached: other }, them: { cookie }, agent } =
     await world()

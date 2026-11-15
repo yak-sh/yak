@@ -14,10 +14,10 @@
 // the gallery has listed it (gallery.ts). Unpublishing takes it away at once,
 // since it reads the offers (`shown`) and is served uncached, as the install
 // page is.
-import { type Directory, url as appUrl } from './directory.ts'
+import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
 import { caught } from './defects.ts'
-import { pictureOf, reputing, type Shown, shown } from './gallery.ts'
+import { openable, pictureOf, reputing, type Shown, shown } from './gallery.ts'
 import { PAGE, pageAt, publisherAt } from '@yaks/platform/routes'
 import { reputationOf } from './gallery-row.ts'
 import { type ComponentChildren, h } from 'preact'
@@ -25,13 +25,11 @@ import { Button, Card } from '@yaks/ui/parts'
 import { type Host, spaceHost } from '@yaks/platform/host'
 import { at as installAt } from './install.ts'
 import { lost } from './pages.ts'
-import { opens } from '@yaks/platform/visits'
 import { drawn, head } from './shell.ts'
 
 export let page = (a: Shown, env: Host = {}) => {
-  // A private app with no sample and no copy in the demo space opens only for
-  // its own people, so a stranger is offered the copy and nothing to open.
-  let opened = opens(a.app) || a.at != appUrl(a.space, a.app, env)
+  // A stranger who cannot open it is offered the copy and nothing to open.
+  let opened = openable(a, env)
   let listed = !!a.app.gallery?.listedAt
   let shot = a.shot && (a.app.access != 'private' || listed) ? a.shot : ''
   let small = (...said: ComponentChildren[]) =>
