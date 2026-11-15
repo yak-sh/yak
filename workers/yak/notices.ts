@@ -12,7 +12,7 @@ import type { Answer } from './apps.ts'
 import { appStore, url } from './directory.ts'
 import { KERNEL } from './meta.ts'
 import { opened, seal } from './lib/token.ts'
-import { noticeEnabled } from './notices-vocab.ts'
+import { noticeEnabled } from '@yaks/platform/notices-vocab'
 import { source, tooMany, within } from '@yaks/workerd/rate'
 import { failing } from './defects.ts'
 
@@ -98,7 +98,9 @@ let subscribe = async (at: Stored, email: unknown, root: string) => {
     return reply('Enter an email address.', 400)
   }
   address = `${split[0]}@${split[1].toLowerCase()}`
-  let eid = derivedEid(JSON.stringify(['notice_subscription', at.app, address]))
+  let eid = derivedEid(
+    JSON.stringify(['notice_subscription', at.app, address]),
+  )
   let [held] = await at.graph.get([eid]) as Subscription[]
   let now = Date.now()
   // A repeat cannot cancel consent, rotate a working link or flood an inbox.
@@ -179,7 +181,9 @@ let accept = async (at: Stored, action: string, raw: string) => {
       entity: row.entity,
       notice_confirmed: { at: new Date().toISOString() },
     }])
-    if (!saved) return reply('This subscription link is no longer active.', 400)
+    if (!saved) {
+      return reply('This subscription link is no longer active.', 400)
+    }
   }
   return reply(
     'Your email address is confirmed. You will receive this app’s notices. Every letter has an unsubscribe link.',

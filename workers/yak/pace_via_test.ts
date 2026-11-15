@@ -17,7 +17,7 @@ import { COOKIE, seal, sign } from './lib/token.ts'
 import { browserOf, SESSION } from './session.ts'
 import { GRANT, granting } from './dispatch.ts'
 import { link } from '@yaks/edge'
-import { instrumentEid } from './instrument.ts'
+import { instrumentEid } from '@yaks/platform/instrument'
 
 let setup = async (k: Kernel) => {
   let space = `pace${crypto.randomUUID().slice(0, 8)}`

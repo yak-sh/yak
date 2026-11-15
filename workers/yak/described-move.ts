@@ -7,7 +7,7 @@
 // (@yaks/lens) and stays. The platform's own stores describe theirs in rows,
 // so only an app's store owes this.
 import type { Bundle } from '@yaks/graph'
-import { DESCRIBED as ROWS } from './listing.ts'
+import { DESCRIBED as ROWS } from '@yaks/platform/listing'
 import type { Rule } from './mover.ts'
 
 export let describedRule: Rule = {

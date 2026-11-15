@@ -31,8 +31,8 @@ import {
 } from './directory-copy.ts'
 import { queryCache } from './query-cache.ts'
 import { answers, recalling } from './answered.ts'
-import { appRead } from './app-read.ts'
-import { eraseStore, weighing } from './app-storage.ts'
+import { appRead } from '@yaks/platform/app-read'
+import { eraseStore, weighing } from '@yaks/platform/app-storage'
 import { reviveStore, suspendStore } from './app-dormancy.ts'
 import {
   candidate,
@@ -51,7 +51,7 @@ import {
   type Vouch,
   vouchOf,
   writer,
-} from './app-authority.ts'
+} from '@yaks/platform/app-authority'
 export {
   appGuard,
   authenticating,
@@ -60,9 +60,9 @@ export {
   VISIT,
   type Vouch,
   vouchOf,
-} from './app-authority.ts'
-import { staleGrant, vouching } from './app-writes.ts'
-export { grantEid } from './app-writes.ts'
+} from '@yaks/platform/app-authority'
+import { staleGrant, vouching } from '@yaks/platform/app-writes'
+export { grantEid } from '@yaks/platform/app-writes'
 import {
   type Context as AppContext,
   expired,
@@ -263,7 +263,7 @@ import { type RequestState, sampleRequest, selectRequest } from '@yaks/timing'
 import { phases } from './store-inspect.ts'
 import { MOURN, MOURNED, mourned } from './deaths.ts'
 import { broadcast, drafted, released as releaseNotice } from './page-notice.ts'
-import { kinded, naming } from './app-subs.ts'
+import { kinded, naming } from '@yaks/platform/app-subs'
 import type {
   Actor,
   AdmitOpts,
@@ -333,7 +333,7 @@ import {
   type Names,
   type Row,
   screened,
-} from './listing.ts'
+} from '@yaks/platform/listing'
 import { type Assembling, lent, planned } from '@yaks/durable-object/compose'
 import { type Host as PluginHost, type Load } from '@yaks/host'
 import type { Words } from '@yaks/host/words'
@@ -409,7 +409,7 @@ import {
   using,
 } from './used.ts'
 import * as funnel from './funnel.ts'
-import { instrumentActor, instrumentEid } from './instrument.ts'
+import { instrumentActor, instrumentEid } from '@yaks/platform/instrument'
 import { commandAt, commandReply } from './app-command.ts'
 import { vaultOf } from './vault.ts'
 import {
@@ -2421,7 +2421,9 @@ export class Store extends Durable {
         await this.#recheck(req)
         await this.#learn(req)
         let v = vouchOf(req)
-        if (!reads(mode(req.headers.get('x-yak-access')), v.level)) return false
+        if (!reads(mode(req.headers.get('x-yak-access')), v.level)) {
+          return false
+        }
         if (person) {
           this.#vouch({
             ...v,
@@ -3913,7 +3915,10 @@ export class Store extends Durable {
           }),
         ),
       }
-      let vocab = words = loadVocab([...this.#vocab.docs, source], metaKeywords)
+      let vocab = words = loadVocab(
+        [...this.#vocab.docs, source],
+        metaKeywords,
+      )
       let derived = {
         ...blobRead(vocab),
         ...(!ownStore(this.#get('name') ?? '')
@@ -4226,7 +4231,9 @@ export class Store extends Durable {
   // `drained`, `failed`), kept in the object's own memory so that a wait
   // outlives the incarnations its retries wake.
   #ride = (store: string | null, ride: Ride) => {
-    let was: Outage | null = JSON.parse(this.#get('embedding-outage') ?? 'null')
+    let was: Outage | null = JSON.parse(
+      this.#get('embedding-outage') ?? 'null',
+    )
     let { outage, report, log } = ride(was, this.#now())
     if (outage != was) this.#put('embedding-outage', JSON.stringify(outage))
     if (log) console.warn('yak store embedding', store, log)
@@ -4371,7 +4378,9 @@ export class Store extends Durable {
       read: for (let s of lexis.sources()) {
         for (let row of this.#sql.query(s)) {
           for (let v of Object.values(row)) {
-            if (typeof v == 'string') { for (let w of lexemes(v)) words.add(w) }
+            if (typeof v == 'string') {
+              for (let w of lexemes(v)) words.add(w)
+            }
           }
           if (words.size > LIMIT) break read
         }

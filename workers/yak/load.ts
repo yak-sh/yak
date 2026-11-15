@@ -76,14 +76,14 @@ import * as eager0_71 from '@yaks/ux/vocab'
 import * as eager0_72 from '@yaks/visualize/vocab'
 import * as eager0_73 from '@yaks/vocab/vocab'
 import * as eager0_74 from '@yaks/wake/vocab'
-import * as eager0_75 from './facets/app-vocab.ts'
-import * as eager0_76 from './facets/attribution-vocab.ts'
-import * as eager0_77 from './facets/directory-vocab.ts'
+import * as eager0_75 from '@yaks/platform/app-vocab'
+import * as eager0_76 from '@yaks/platform/attribution-vocab'
+import * as eager0_77 from '@yaks/platform/directory-vocab'
 import * as eager0_78 from './facets/git-vocab.ts'
-import * as eager0_79 from './facets/meter-vocab.ts'
-import * as eager0_80 from './facets/models-vocab.ts'
-import * as eager0_81 from './facets/refusals-vocab.ts'
-import * as eager0_82 from './facets/trash-vocab.ts'
+import * as eager0_79 from '@yaks/platform/meter-vocab'
+import * as eager0_80 from '@yaks/platform/models-vocab'
+import * as eager0_81 from '@yaks/platform/refusals-vocab'
+import * as eager0_82 from '@yaks/platform/trash-vocab'
 import * as eager1_0 from '@yaks/anthropic/provider'
 import * as eager1_1 from '@yaks/openai/provider'
 import * as eager1_2 from '@yaks/openrouter/provider'
@@ -240,7 +240,7 @@ let facets: Record<string, () => Promise<unknown>> = {
   'yak/lenses/graph': () => import('./facets/lenses-graph.ts'),
   'yak/lexicon/graph': () => import('./facets/lexicon-graph.ts'),
   'yak/log/graph': () => import('./facets/log-graph.ts'),
-  'yak/lower/graph': () => import('./facets/lower-graph.ts'),
+  'yak/lower/graph': () => import('@yaks/platform/lower-graph'),
   'yak/meter/graph': () => import('./facets/meter-graph.ts'),
   'yak/models/effects': () => import('./facets/models-effects.ts'),
   'yak/pages/graph': () => import('./facets/pages-graph.ts'),

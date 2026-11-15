@@ -51,7 +51,7 @@
 import type { Caller } from '@yaks/egress'
 import { type Clock, sleep, system } from '@yaks/fp'
 import { COOKIE, opened, seal } from './lib/token.ts'
-import { instrumentEid } from './instrument.ts'
+import { instrumentEid } from '@yaks/platform/instrument'
 import { sha256 } from '@yaks/graph/sha256'
 import type { App, Role, Space } from './directory.ts'
 import { scriptOf, storeName, url } from './directory.ts'

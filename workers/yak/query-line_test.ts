@@ -6,7 +6,7 @@ import { ram } from '@yaks/ram'
 import { matcher } from '@yaks/match'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { scope, unasked } from './query-line.ts'
-import { asking, screened } from './listing.ts'
+import { asking, screened } from '@yaks/platform/listing'
 
 // A line naming only its app reads nothing, and an empty answer reads as an
 // empty app; the refusal hands over a line that reads what the app keeps.

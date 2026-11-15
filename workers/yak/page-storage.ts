@@ -6,7 +6,7 @@
 // a second database beside the graph. The host supplies its own memory; this
 // door is the same for either graph host.
 import { json, readBody } from '@yaks/api'
-import { vouchOf } from './app-authority.ts'
+import { vouchOf } from '@yaks/platform/app-authority'
 
 type Read = (key: string) => string | null
 type Write = (key: string, value: string) => void

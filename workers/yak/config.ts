@@ -762,35 +762,36 @@ export let mailDomains: Config & { via: string } = {
 /** The arrival that reads a letter Email Routing hands `email()` (inbox.ts). */
 export let ARRIVAL = 'cloudflare'
 
-/** Worker domains export the same store facets as packages, at local paths. */
+/** Worker domains export the same store facets as packages: at local paths
+ * for what is still the Worker's, at @yaks/platform for what moved there. */
 export let domains = {
   'yak/kernel': { worker: './facets/kernel-worker.ts' },
   'yak/app': {
-    vocab: './facets/app-vocab.ts',
+    vocab: '@yaks/platform/app-vocab',
     graph: './facets/app-graph.ts',
     effects: './facets/app-effects.ts',
   },
   'yak/directory': {
-    vocab: './facets/directory-vocab.ts',
+    vocab: '@yaks/platform/directory-vocab',
     graph: './facets/directory-graph.ts',
     effects: './facets/directory-effects.ts',
   },
   'yak/trash': {
-    vocab: './facets/trash-vocab.ts',
+    vocab: '@yaks/platform/trash-vocab',
     graph: './facets/trash-graph.ts',
     effects: './facets/trash-effects.ts',
   },
   'yak/meter': {
-    vocab: './facets/meter-vocab.ts',
+    vocab: '@yaks/platform/meter-vocab',
     graph: './facets/meter-graph.ts',
   },
   'yak/refusals': {
-    vocab: './facets/refusals-vocab.ts',
+    vocab: '@yaks/platform/refusals-vocab',
     effects: './facets/refusals-effects.ts',
   },
   'yak/pages': { graph: './facets/pages-graph.ts' },
   'yak/lenses': { graph: './facets/lenses-graph.ts' },
-  'yak/lower': { graph: './facets/lower-graph.ts' },
+  'yak/lower': { graph: '@yaks/platform/lower-graph' },
   'yak/describe': { graph: './facets/describe-graph.ts' },
   'yak/weigh': { graph: './facets/weigh-graph.ts' },
   'yak/rouse': { graph: './facets/rouse-graph.ts' },
@@ -800,11 +801,11 @@ export let domains = {
   'yak/admit': { graph: './facets/admit-graph.ts' },
   'yak/publishing': { graph: './facets/publishing-graph.ts' },
   'yak/attribution': {
-    vocab: './facets/attribution-vocab.ts',
+    vocab: '@yaks/platform/attribution-vocab',
     effects: './facets/attribution-effects.ts',
   },
   'yak/models': {
-    vocab: './facets/models-vocab.ts',
+    vocab: '@yaks/platform/models-vocab',
     effects: './facets/models-effects.ts',
   },
   'yak/git': {

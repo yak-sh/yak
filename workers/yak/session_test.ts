@@ -29,7 +29,7 @@ import {
   whoIs,
 } from './session.ts'
 import { paged, paging } from './installed.ts'
-import { instrumentEid } from './instrument.ts'
+import { instrumentEid } from '@yaks/platform/instrument'
 
 let SECRET = 'a-probe-secret'
 let ENV = { SESSION_SECRET: SECRET, APEX: 'yaks.app' }

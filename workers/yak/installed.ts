@@ -29,7 +29,7 @@
 // early. The role it carries is never a claim — it is read live, on every
 // call, like the cookie's.
 import { opened, seal } from './lib/token.ts'
-import { instrumentEid } from './instrument.ts'
+import { instrumentEid } from '@yaks/platform/instrument'
 import { sha256 } from '@yaks/graph/sha256'
 import type { App } from './directory.ts'
 import { SESSION } from './session.ts'

@@ -32,7 +32,7 @@ import {
 } from './directory.ts'
 import type { Env } from './env.ts'
 import { builderOf, SPACE } from './build-door.ts'
-import { instrumentEid } from './instrument.ts'
+import { instrumentEid } from '@yaks/platform/instrument'
 import { acting, vouched, type Who } from './session.ts'
 import type { AppDraft } from './written.ts'
 
@@ -93,7 +93,9 @@ export let rowsOn = (store: Door, branch: number): Promise<number> =>
   store.consume(
     `/branches/${branch}/changes`,
     async (res) => {
-      if (!res.ok) throw new Error(`changes: ${res.status} ${await res.text()}`)
+      if (!res.ok) {
+        throw new Error(`changes: ${res.status} ${await res.text()}`)
+      }
       let { changes } = await res.json() as { changes: { eid: string }[] }
       return new Set(changes.map((c) => c.eid)).size
     },

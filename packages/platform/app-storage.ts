@@ -10,7 +10,7 @@ export let weighing = (host: {
   remember: (bytes: number) => void
   failed: (error: unknown) => void
   wait: (work: Promise<void>) => void
-}) => {
+}): () => void => {
   let pending: Promise<void> | null = null
   let report = async () => {
     try {
@@ -39,7 +39,7 @@ export let eraseStore = async <T extends Page>(name: string, host: {
   close: (page: T) => void
   clear: () => Promise<void>
   plant: (name: string) => Response
-}) => {
+}): Promise<Response> => {
   if (name == PLATFORM_STORE) {
     throw new Refused('The directory cannot be erased')
   }

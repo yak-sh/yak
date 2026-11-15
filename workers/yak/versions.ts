@@ -35,7 +35,7 @@ import { token } from '@yaks/graph/sha256'
 import type { App, Directory, Space } from './directory.ts'
 import type { Reload } from '@yaks/platform'
 import { acting, vouched, type Who } from './session.ts'
-import { instrumentEid } from './instrument.ts'
+import { instrumentEid } from '@yaks/platform/instrument'
 import { refuse } from './tool.ts'
 import type { AppDraft } from './written.ts'
 

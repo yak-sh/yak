@@ -12,7 +12,7 @@ import words from './vocab.json' with { type: 'json' }
 import { parties } from './party.ts'
 import { writer } from './chat.ts'
 import { type Bundle, connect } from './net.ts'
-import { asking, listed } from '../../workers/yak/listing.ts'
+import { asking, listed } from '@yaks/platform/listing'
 import { seedDesigns } from './designs_fixture.ts'
 import type { Frame } from './play.ts'
 

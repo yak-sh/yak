@@ -3,7 +3,7 @@ import { ownedBy } from './directory-fixture.ts'
 import { derivedEid, graph, signed } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { useDoc } from './facets/directory-vocab.ts'
+import { useDoc } from '@yaks/platform/directory-vocab'
 import { recordUse, scheduleBy, scheduleUse, using } from './used.ts'
 import { directory, fetch as directoryFetch } from './directory.ts'
 import { PLATFORM_OBJECT, storeOf } from './door.ts'
@@ -30,7 +30,11 @@ let vocab = loadVocab({
 
 let observed = (() => {
   let allowed = true
-  let g = graph({ storage: ram(vocab), vocab, plugins: [using(() => allowed)] })
+  let g = graph({
+    storage: ram(vocab),
+    vocab,
+    plugins: [using(() => allowed)],
+  })
   let patch = (title: string) => [{ entity: { eid: 'app' }, doc: { title } }]
   let use = () =>
     (g.read('.entity.eid=app') as { used?: { at: string } }[])[0].used

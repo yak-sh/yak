@@ -20,8 +20,8 @@ is called, a copy of its persona's title for what reads the space without the
 Operator's store; its other properties are retired, read only by a store moving
 its persona from before they were the persona's.
 
-yaks.app's directory (`workers/yak`) loads these declarations from this package.
-The Worker declares its own directory words alongside them.
+yaks.app's directory (`workers/yak`) loads these declarations from this package,
+and the store words and serving plugins below beside them.
 
 An entity is a record identified by `entity.eid`; each of the names above is a
 component, a named object on that record. `deploy.files` and `deploy.worker` are
@@ -74,6 +74,26 @@ neither restates the other's names. Each is pure.
 | `@yaks/platform/host`     | `Host`, a deployment's addresses read from its bindings; `apex`, `spaceHost` and `url`, its hostnames and pages; `hosted`, the platform's text said at them                                                   |
 | `@yaks/platform/routes`   | where a request goes: `route(host, path)`, its space, app and path; `hostOf`, `foreign`, `platform`; `admitted`, space isolation by `Origin`, and `cors`; the dashboard's and sign-in's addresses             |
 | `@yaks/platform/upstream` | `Upstream`, where something shared came from when someone outside the platform wrote it; `hostable(licence)`, whether its licence allows a hosted copy; `linked`, a listing that is only a link to its source |
+
+## An app store's plugins
+
+What yaks.app's stores compose beyond the package words, so any host can serve
+an app's graph the same way. Each export is pure: a vocabulary, a graph plugin,
+or a handler over a graph and the host functions it is given.
+
+| export                                                                                                                             | holds                                                                                                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@yaks/platform/app-vocab`, `directory-vocab`, `trash-vocab`, `meter-vocab`, `models-vocab`, `attribution-vocab`, `refusals-vocab` | the `docs` of the `yak/app`, `yak/directory`, `yak/trash`, `yak/meter`, `yak/models`, `yak/attribution` and `yak/refusals` plugins' vocab facets |
+| `@yaks/platform/notices-vocab`                                                                                                     | `noticesDoc`, an app's notice subscriptions and letters, and `noticeEffects`, the effects an app that keeps them runs                            |
+| `@yaks/platform/schema`                                                                                                            | the scalar and ownership property shapes those words are written with                                                                            |
+| `@yaks/platform/lower-graph`                                                                                                       | the `yak/lower` graph facet: named references lowered to the eid the vocabulary stores                                                           |
+| `@yaks/platform/app-authority`                                                                                                     | `Vouch` and `vouchOf`, who the kernel vouches a request for; `authenticating`; `FLOORS` and `floorsOf`, the level each write needs; `appGuard`   |
+| `@yaks/platform/app-writes`                                                                                                        | `lowering` and `vouching`, the graph plugins a write passes through; `grantEid` and `staleGrant`                                                 |
+| `@yaks/platform/app-read`                                                                                                          | `appRead`, an app's query door: listings, aggregates and ranked answers                                                                          |
+| `@yaks/platform/app-subs`                                                                                                          | `kinded` and `naming`, a page's subscriptions in the same rows as its query door                                                                 |
+| `@yaks/platform/app-storage`                                                                                                       | `weighing`, a committed write's measured size, and `eraseStore`                                                                                  |
+| `@yaks/platform/listing`                                                                                                           | what a listing carries: `STAMPS`, `KERNEL`, `PLATFORM`, `asking`, `listed`, `named`, `listing`                                                   |
+| `@yaks/platform/instrument`                                                                                                        | `instrumentEid` and `instrumentActor`, a credential's one graph identity; `agentEid` and `agentRow`, an agent writing for a person               |
 
 ## Compatibility
 

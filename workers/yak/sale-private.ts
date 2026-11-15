@@ -3,7 +3,7 @@
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { owns } from '@yaks/member'
-import { instrumentEid } from './instrument.ts'
+import { instrumentEid } from '@yaks/platform/instrument'
 import { opened, seal } from './lib/token.ts'
 
 export type SaleAccess = { buyer?: string | null; via?: string | null }

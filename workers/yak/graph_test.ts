@@ -33,7 +33,7 @@ import { metaOf } from './meta.ts'
 import type { Load } from '@yaks/host'
 import { appConfig } from './config.ts'
 import { load } from './load.ts'
-import { named as spoken, type Names } from './listing.ts'
+import { named as spoken, type Names } from '@yaks/platform/listing'
 import { col, isNull, lit, select, table, tally } from '@yaks/sql'
 import { ddl as journalDdl } from '@yaks/journal'
 import { db, keep, slot, unclassified } from './testing.ts'
@@ -678,7 +678,10 @@ test('an app store bounds a derived value over the final patched row', async () 
     entity: { eid },
     move: { effects: [{ scale }] },
   })
-  assertEquals((await post(store, '/apply', [row(CAKE, 2)], owner)).status, 200)
+  assertEquals(
+    (await post(store, '/apply', [row(CAKE, 2)], owner)).status,
+    200,
+  )
   let denied = await post(store, '/apply', [row('too-strong', 4)], owner)
   assertEquals(denied.status, 400, await denied.text())
   denied = await post(store, '/apply', [row(CAKE, 4)], owner)
@@ -1349,7 +1352,10 @@ test('a subscription asking `*` answers what /query answers', async () => {
   ctx.live.push(ws)
   let line = '.recipe&*'
 
-  await store.webSocketMessage(ws, JSON.stringify({ subscribe: line, id: 'r' }))
+  await store.webSocketMessage(
+    ws,
+    JSON.stringify({ subscribe: line, id: 'r' }),
+  )
   assertEquals(ws.sent, [{ id: 'r', bundles: [], transientReset: [] }])
 
   await post(store, '/apply', [{
@@ -1497,7 +1503,10 @@ test('a stranger is refused on an app made private after it was written', async 
   assertEquals((await get(store, '/query?q=.recipe', mine)).status, 200)
   // The mode reaches this store's own rows, so nobody is refused by the store
   // itself, as well as by the kernel in front of it.
-  assertEquals((await get(store, '/query?q=.recipe', { app: APP })).status, 401)
+  assertEquals(
+    (await get(store, '/query?q=.recipe', { app: APP })).status,
+    401,
+  )
   assertEquals((await write({ app: APP }, 1)).status, 401)
 })
 
@@ -1925,7 +1934,12 @@ test('app archetype descriptors are read-only and vocabulary extension tracks ne
     owner,
   )
   assertEquals(extended.status, 200)
-  await post(store, '/apply', [{ entity: { eid: CAKE }, specialty: {} }], owner)
+  await post(
+    store,
+    '/apply',
+    [{ entity: { eid: CAKE }, specialty: {} }],
+    owner,
+  )
   let got = await (await get(store, '/query?q=.recipe%26.specialty', owner))
     .json() as Bundle[]
   assertEquals(got.length, 1)

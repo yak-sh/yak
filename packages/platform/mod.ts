@@ -6,8 +6,9 @@
  * a `report` of where somebody stood when something went wrong, and the
  * `support` a feedback thread and its messages came from.
  *
- * Declarations and pure release comparisons. The Worker that serves them is
- * `workers/yak`.
+ * Declarations and pure release comparisons. An app store's own words and
+ * serving plugins are at their own exports (README.md, "An app store's
+ * plugins"); the Worker that serves them is `workers/yak`.
  */
 
 export { platformDoc } from './vocab.ts'

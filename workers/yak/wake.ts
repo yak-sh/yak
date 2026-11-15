@@ -51,7 +51,7 @@ import type { Wake as Schedule } from '@yaks/wake'
 export type Wake = Bundle & { wake: Schedule }
 
 /** The job a directory wake asks its plugin to do when `fired` is written. */
-export { sweepDoc } from './facets/sweep-vocab.ts'
+export { sweepDoc } from '@yaks/platform/sweep-vocab'
 
 // A missing row as it is first written: at its first instant, unless it says
 // its own, and only if nobody wrote it first.

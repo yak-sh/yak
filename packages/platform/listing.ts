@@ -79,7 +79,10 @@ export let STORAGE = ['archetype', 'retired', 'effect', 'lease', 'provisional']
  * those it `has`: its storage everywhere, and the platform's rows in an app's
  * store. The platform's own two stores are made of those rows, so only their
  * description pages (`_comp`, …) go there. */
-export let screened = (has: (word: string) => boolean, own: boolean) =>
+export let screened = (
+  has: (word: string) => boolean,
+  own: boolean,
+): string[] =>
   [...STORAGE, ...PLATFORM.filter((w) => !own || w.startsWith('_'))]
     .filter(has)
 
@@ -94,7 +97,7 @@ export let projects = (line: string): string[][] =>
 /** Whether a filter line names a component, in any of the three ways a clause
  * can: present (`.created`), absent (`!created`) or wanted (`?created`), or on
  * a path its projection reads (`.fields=created.at`). */
-export let names = (line: string, word: string) =>
+export let names = (line: string, word: string): boolean =>
   ['.', '!', '?'].some((mark) => line.includes(mark + word)) ||
   projects(line).some((path) => path.includes(word))
 
@@ -119,7 +122,7 @@ export let asking = (
   line: string,
   words: string[] = PLATFORM,
   personal: Personal = {},
-) => {
+): string => {
   let ask = line.replace(/^[?&]+/, '')
   if (!ask || line.includes('id=')) return line
   let aspect = Object.entries(personal).some(([name, owner]) =>
@@ -226,7 +229,10 @@ let places = function* (rows: Row[], ref: Ref) {
 }
 
 /** The eids the rows point at, and the properties that hold them. */
-export let mentions = (rows: Row[], ref: Ref) => {
+export let mentions = (
+  rows: Row[],
+  ref: Ref,
+): { eids: string[]; refs: string[] } => {
   let eids = new Set<string>()
   let refs = new Set<string>()
   for (let { comp, prop, v } of places(rows, ref)) {
@@ -260,7 +266,7 @@ export let named = (rows: Row[], { refs, names }: Names): Row[] => {
 
 // The same rule over a door's JSON body — what the kernel hands a page back
 // from the store's own answer.
-export let listing = (body: string, asked: string) => {
+export let listing = (body: string, asked: string): string => {
   let rows: unknown
   try {
     rows = JSON.parse(body)

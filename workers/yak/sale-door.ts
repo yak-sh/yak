@@ -9,7 +9,7 @@ import { blobPrefix } from './blob-key.ts'
 import { blobBytes } from './files.ts'
 import { Untaken, uploaded, useOf } from './uploads.ts'
 import { quoteDoor, refundDoor } from './sell.ts'
-import { instrumentEid } from './instrument.ts'
+import { instrumentEid } from '@yaks/platform/instrument'
 import {
   ARTIFACT_LIFE,
   artifactPermit,

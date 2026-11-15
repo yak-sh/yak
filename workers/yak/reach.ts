@@ -7,7 +7,7 @@ import { sessionRows } from './session-lens.ts'
 // store's Durable Object, asked at `GET /query` and `POST /apply`, vouched for
 // the caller, and its vocabulary as the directory last accepted it. tools.ts
 // owns which stores are in reach.
-import { listed, names, type Row, STAMPS } from './listing.ts'
+import { listed, names, type Row, STAMPS } from '@yaks/platform/listing'
 import type { Bundle } from '@yaks/graph'
 import { requested } from '@yaks/graph/bundle'
 import { sha256 } from '@yaks/graph'

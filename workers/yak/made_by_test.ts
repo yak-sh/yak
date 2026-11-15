@@ -5,7 +5,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { bearerFor, connector, kernel, meta, signIn, unique } from './probe.ts'
 import { HELLO } from './mcp-probe.ts'
-import { agentEid } from './instrument.ts'
+import { agentEid } from '@yaks/platform/instrument'
 import { relative } from '@yaks/ui/relative'
 import { managePath } from '@yaks/platform/routes'
 

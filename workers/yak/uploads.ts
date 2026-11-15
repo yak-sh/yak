@@ -16,7 +16,7 @@ import {
 } from '@yaks/blob'
 import { contentType } from '@yaks/blob/identify'
 import { Denied, stands } from '@yaks/member'
-import { uploadFloor } from './app-authority.ts'
+import { uploadFloor } from '@yaks/platform/app-authority'
 import { blobPrefix } from './blob-key.ts'
 import { declarationOf } from './declaration.ts'
 import type { App, Space } from './directory.ts'

@@ -6,7 +6,7 @@ import { graph, Stale } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel'
-import { directoryDoc } from './facets/directory-vocab.ts'
+import { directoryDoc } from '@yaks/platform/directory-vocab'
 import { sellerRule } from './seller-move.ts'
 
 let vocab = loadVocab([kernelDoc, directoryDoc, sellerRule.source!])

@@ -11,7 +11,7 @@ import { blobPrefix, released } from '../blob-key.ts'
 import { r2Objects } from '../lib/objects.ts'
 import { noticePost } from '../notices.ts'
 import { refundSale } from '../service-refunds.ts'
-import { noticeEnabled } from '../notices-vocab.ts'
+import { noticeEnabled } from '@yaks/platform/notices-vocab'
 
 export let effects = (_host: unknown, options: Options): Handlers => {
   let at = options.store

@@ -1,4 +1,4 @@
-// Scalar and ownership shapes shared by the Worker's vocabulary facets.
+// Scalar and ownership shapes shared by the store words' vocabulary facets.
 import type { PropSchema } from '@yaks/vocab'
 export let ref = (death: string): PropSchema => ({
   type: 'string',

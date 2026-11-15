@@ -1,10 +1,10 @@
-// The Worker’s own app and store words; package words stay in their facets.
+// An app store's own words, plugin `yak/app`'s; package words stay in their facets.
 import { CORE_URI, type VocabDoc } from '@yaks/vocab'
 import { edgeKeywords } from '@yaks/edge/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { archetypeDoc } from '@yaks/archetype/vocab'
 import { num, owned, ref, text, time } from './schema.ts'
-import { noticesDoc } from '../notices-vocab.ts'
+import { noticesDoc } from './notices-vocab.ts'
 let referencedDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true, [edgeKeywords.uri]: true },
   title: 'relations',

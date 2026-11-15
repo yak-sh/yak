@@ -75,7 +75,7 @@ import type { Alerting } from './operator-alerts.ts'
 import type { Subscription } from '@yaks/push'
 import type { Row as GrantRow } from './grant-rows.ts'
 import { principals, type Stamp, stampOf, writers } from './stamps.ts'
-import { instrumentEid } from './instrument.ts'
+import { instrumentEid } from '@yaks/platform/instrument'
 import { sharing } from './lib/shared.ts'
 
 // The slugs no space or app may take, because at `<slug>.yaks.app` and at
@@ -1687,7 +1687,10 @@ export let appAbout = (r: Row): AppInfo => ({
 })
 
 type ReadRow = Row & { policy: { revision: number } }
-let appOf = (r: ReadRow): App => ({ ...appAbout(r), policy: r.policy.revision })
+let appOf = (r: ReadRow): App => ({
+  ...appAbout(r),
+  policy: r.policy.revision,
+})
 
 /** A published app with the space it stands in. */
 export type OnOffer = { space: Space; app: App }
@@ -3159,7 +3162,9 @@ export let directoryRows = (rows: {
     installers: async (
       made: { of: string; maker: string }[],
     ): Promise<Map<string, Set<string>>> => {
-      let ofs = [...new Set(made.map((m) => m.of).filter((of) => EID.test(of)))]
+      let ofs = [
+        ...new Set(made.map((m) => m.of).filter((of) => EID.test(of))),
+      ]
       let spaces = new Map(ofs.map((of) => [of, new Set<string>()]))
       if (ofs.length) {
         let list = ofs.join(',')
@@ -3383,7 +3388,10 @@ export let directoryRows = (rows: {
             `&.fields=deploy.app,${who('created')}`,
         ),
       ])
-      let of = new Map<string, { made: Stamp | null; deployed: Stamp | null }>()
+      let of = new Map<
+        string,
+        { made: Stamp | null; deployed: Stamp | null }
+      >()
       let by = new Set<string>()
       let stamped = (s: { by?: Id | null } | undefined) => {
         if (s?.by) by.add(idOf(s.by))
@@ -3404,7 +3412,9 @@ export let directoryRows = (rows: {
         of.set(app, was)
       }
       let rows = [...made, ...releases]
-      let theirs = new Set(principals(rows.filter((r) => by.has(r.entity.eid))))
+      let theirs = new Set(
+        principals(rows.filter((r) => by.has(r.entity.eid))),
+      )
       let named = rows.filter((r) =>
         by.has(r.entity.eid) || theirs.has(r.entity.eid)
       )

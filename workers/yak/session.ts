@@ -32,7 +32,7 @@ import type { Role } from './directory.ts'
 import type { Env } from './env.ts'
 import { apex, type Host } from '@yaks/platform/host'
 import { hostOf } from '@yaks/platform/routes'
-import { agentEid, agentRow, instrumentEid } from './instrument.ts'
+import { agentEid, agentRow, instrumentEid } from '@yaks/platform/instrument'
 import type { Bundle } from '@yaks/graph'
 import { sha256 } from '@yaks/graph/sha256'
 

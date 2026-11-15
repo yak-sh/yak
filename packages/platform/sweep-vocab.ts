@@ -1,4 +1,4 @@
-// The directory's calendar job tag, shared by its domain facets.
+// The directory's calendar job tag, shared by its store words.
 import type { VocabDoc } from '@yaks/vocab'
 export let sweepDoc: VocabDoc = {
   $defs: {

@@ -2,7 +2,7 @@
 // owner is the app itself, so an ordinary public query cannot read addresses
 // or the confirmation and unsubscribe links stored in outgoing letters.
 import { effectsIn, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { owned, ref, text, time } from './facets/schema.ts'
+import { owned, ref, text, time } from './schema.ts'
 
 export let noticesDoc: VocabDoc = {
   $defs: {

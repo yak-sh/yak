@@ -26,13 +26,13 @@ import { assertEquals } from '@std/assert'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { PLATFORM_OBJECT, USES } from './door.ts'
 import type { Env } from './env.ts'
-import { appGuard, authenticating, vouchOf } from './app-authority.ts'
+import { appGuard, authenticating, vouchOf } from '@yaks/platform/app-authority'
 import { appDoc, appVocab } from './vocab.ts'
-import { appRead } from './app-read.ts'
-import { lowering, staleGrant, vouching } from './app-writes.ts'
+import { appRead } from '@yaks/platform/app-read'
+import { lowering, staleGrant, vouching } from '@yaks/platform/app-writes'
 import type { Hit } from '@yaks/fts'
-import { kinded, naming } from './app-subs.ts'
-import { asking, screened } from './listing.ts'
+import { kinded, naming } from '@yaks/platform/app-subs'
+import { asking, screened } from '@yaks/platform/listing'
 
 let base = appVocab()
 let vocab = loadVocab([...base.docs, apiDoc], base.keywords)

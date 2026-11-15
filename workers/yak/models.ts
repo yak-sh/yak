@@ -47,7 +47,7 @@ import { lending } from './inference.ts'
 import { modelInputs } from './model-inputs.ts'
 import { bare, connection, names, served } from './providers.ts'
 import { serving } from './config.ts'
-import { grantEid } from './app-writes.ts'
+import { grantEid } from '@yaks/platform/app-writes'
 import { visitorKey } from '@yaks/workerd/rate'
 
 export let guess = (sent: unknown) =>

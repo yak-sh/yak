@@ -1,4 +1,4 @@
-// The directory’s Worker-owned words beside the package platform vocabulary.
+// The directory's store words, beside platformDoc's.
 import { CORE_URI, type VocabDoc } from '@yaks/vocab'
 import { sweepDoc } from './sweep-vocab.ts'
 import { bool, num, owned, ref, text, time, unique } from './schema.ts'

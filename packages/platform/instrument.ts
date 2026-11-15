@@ -19,7 +19,11 @@ export let agentEid = (person: string, name: string): string =>
   identityEid('yak/agent', [person, name])
 
 /** The directory row an agent's stamps name: its name, and who it writes for. */
-export let agentRow = (person: string, name: string) => ({
+export let agentRow = (person: string, name: string): {
+  entity: { eid: string }
+  doc: { title: string }
+  acts_for: { person: string }
+} => ({
   entity: { eid: agentEid(person, name) },
   doc: { title: name },
   acts_for: { person },

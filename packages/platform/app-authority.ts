@@ -43,7 +43,7 @@ export let VISIT = 'x-yak-visit'
  * editor of a store of their own and the viewer of the sample (D-134327).
  *
  * ```ts
- * import { vouchOf } from './app-authority.ts'
+ * import { vouchOf } from '@yaks/platform/app-authority'
  * import { assertEquals } from '@std/assert'
  * let v = vouchOf(new Request('http://store', {
  *   headers: {
@@ -116,7 +116,7 @@ async (req) => {
  * instrument it came through. Nobody at all is `null`.
  *
  * ```ts
- * import { signer, vouchOf } from './app-authority.ts'
+ * import { signer, vouchOf } from '@yaks/platform/app-authority'
  * import { assertEquals } from '@std/assert'
  * let said = (headers: Record<string, string>) =>
  *   signer(vouchOf(new Request('http://store', { headers })))
@@ -204,7 +204,7 @@ let VISITING: Floors = { [DELIVER]: 'owner', using: 'owner', builder: 'owner' }
  * editors. Unsaid, anyone who may write the app may.
  *
  * ```ts
- * import { uploadFloor } from './app-authority.ts'
+ * import { uploadFloor } from '@yaks/platform/app-authority'
  * import { assertEquals } from '@std/assert'
  * assertEquals(uploadFloor({ blob: { floor: 'editor' } }), 'editor')
  * assertEquals(uploadFloor({ blob: { maxLength: 1024 } }), undefined)
@@ -221,7 +221,7 @@ export let uploadFloor = (manifest: VocabDoc): Floor | undefined => {
  * the bytes; for a visitor, raised to {@link VISITING}.
  *
  * ```ts
- * import { floorsOf } from './app-authority.ts'
+ * import { floorsOf } from '@yaks/platform/app-authority'
  * import { assertEquals } from '@std/assert'
  * assertEquals(floorsOf({}).deliver, 'editor')
  * assertEquals(floorsOf({}, true).deliver, 'owner')

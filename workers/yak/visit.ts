@@ -44,7 +44,7 @@ import {
 import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import { type Host, url } from '@yaks/platform/host'
-import { instrumentEid } from './instrument.ts'
+import { instrumentEid } from '@yaks/platform/instrument'
 import { KERNEL, meta } from './meta.ts'
 import { COPY } from './relocate.ts'
 import { installAt, signInAt } from '@yaks/platform/routes'

@@ -12,7 +12,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import type { VocabDoc } from '@yaks/vocab'
 import { PLATFORM_STORE } from '@yaks/platform/names'
-import { bool, owned, text } from './facets/schema.ts'
+import { bool, owned, text } from '@yaks/platform/schema'
 import type { Rule } from './mover.ts'
 
 let OLD = ['account', 'charges_enabled', 'details_submitted']

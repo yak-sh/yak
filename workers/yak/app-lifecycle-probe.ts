@@ -32,7 +32,7 @@ import { ramApp } from './ram-app-probe.ts'
 import { PLATFORM_OBJECT } from './door.ts'
 import type { Env } from './env.ts'
 import { mode } from '@yaks/member'
-import { eraseStore, weighing } from './app-storage.ts'
+import { eraseStore, weighing } from '@yaks/platform/app-storage'
 import { reviveStore, suspendStore } from './app-dormancy.ts'
 import { weighed } from './meter.ts'
 import {

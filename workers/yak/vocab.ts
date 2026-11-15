@@ -50,14 +50,14 @@ import { selected } from '@yaks/host/documents'
 import { dependencies, Unplanned } from '@yaks/esbuild'
 import { vocabFacets } from './load.ts'
 import { once } from '@yaks/fp'
-import { noticeEffects } from './notices-vocab.ts'
+import { noticeEffects } from '@yaks/platform/notices-vocab'
 export {
   appsDoc,
   classificationDoc,
   exceptionDoc,
   kernelDoc,
-} from './facets/app-vocab.ts'
-export { directoryDoc } from './facets/directory-vocab.ts'
+} from '@yaks/platform/app-vocab'
+export { directoryDoc } from '@yaks/platform/directory-vocab'
 
 /** The keyword vocabularies the stores have always understood. */
 export let appKeywords: Keywords[] = [

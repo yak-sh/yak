@@ -8,7 +8,7 @@ import { token } from '@yaks/graph/sha256'
 import { KERNEL, meta } from './meta.ts'
 import type { Env } from './env.ts'
 import { browserOf, type Who } from './session.ts'
-import { instrumentEid } from './instrument.ts'
+import { instrumentEid } from '@yaks/platform/instrument'
 
 /** Current directory claims, read afresh for this caller. A grant carries
  * identity, while the directory keeps which earlier guest work it owns. */
@@ -117,4 +117,7 @@ export let attributed = async (
   return { filled: bundles.length, more: bundles.length == size }
 }
 
-export { attributionDoc, registrationDoc } from './facets/attribution-vocab.ts'
+export {
+  attributionDoc,
+  registrationDoc,
+} from '@yaks/platform/attribution-vocab'

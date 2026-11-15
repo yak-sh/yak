@@ -1,7 +1,7 @@
 // The graph one app page can use: its own store and the homes of components
 // it declares as uses. A filter naming one of those components reads through
 // the same composition as the agent door; other filters stay app-local.
-import { listed, type Row } from './listing.ts'
+import { listed, type Row } from '@yaks/platform/listing'
 import { type App, appStore, directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { copyOf } from './directory-copy.ts'

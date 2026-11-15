@@ -12,13 +12,13 @@ import { Denied } from '@yaks/member'
 import { matcher, type Query } from '@yaks/match'
 import { ram } from '@yaks/ram'
 import { blobPrefix, naming, released, servable } from './blob-key.ts'
-import { appGuard } from './app-authority.ts'
+import { appGuard } from '@yaks/platform/app-authority'
 import { loadVocab, pick } from '@yaks/vocab'
 import { spineDoc } from '@yaks/kernel/vocab'
 import { provenanceDoc } from '@yaks/provenance/vocab'
 import { artifactDoc } from '@yaks/blob/vocab'
 import { memberDoc } from '@yaks/member/vocab'
-import { kernelDoc as uploadDoc } from './facets/app-vocab.ts'
+import { kernelDoc as uploadDoc } from '@yaks/platform/app-vocab'
 
 let vocab = loadVocab([
   spineDoc,
