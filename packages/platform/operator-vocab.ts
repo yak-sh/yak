@@ -127,10 +127,15 @@ export let operatorDoc: VocabDoc = {
         space: { type: 'string', ref: 'entity', death: 'keep' },
         person: { type: 'string', ref: 'person', death: 'keep' },
         administrative: { type: 'boolean' },
+        channel: {
+          type: 'string',
+          description:
+            'The newest input channel, inherited by helpers; reply channels carry no personal remote tools.',
+        },
         signup: {
           type: 'string',
           description:
-            'The vouched phone of a reply-only form conversation; its tools are only sign-up operations.',
+            'The reply phone of a form conversation; its tools are only sign-up operations.',
         },
         conversation: {
           type: 'boolean',

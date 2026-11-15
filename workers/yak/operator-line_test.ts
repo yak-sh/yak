@@ -25,6 +25,7 @@ import {
   campaignOf,
   chosen,
   lineDoor,
+  lineSender,
   numbersOf,
   owned,
   phoneNumbers,
@@ -182,7 +183,9 @@ let service = operatorService(
       : said(req, /By text: Is the hall free/)
       ? (memberOffered = req.tools, reply('The hall is free Sunday.'))
       : said(req, /By text, signing up for a form:/)
-      ? (signupOffered = req.tools, reply('Which form would you like?'))
+      ? (signupOffered = req.tools,
+        memberOffered = req.tools,
+        reply('Which form would you like?'))
       : said(req, /By text from \+12695550142/)
       ? (offered = req.tools, reply('Thank you; I will tell Jeff.'))
       : said(req, /Texted Dr Alvarez/)
@@ -255,6 +258,14 @@ let texted = (id: string, from: string, message: string) =>
     'voipms',
     voipms,
   )
+let victim = crypto.randomUUID()
+await dir.apply({
+  entities: [{
+    entity: { eid: victim },
+    person: {},
+    phone: { number: '+12695550142' },
+  }],
+}, owner)
 let answered = await texted('77', '2695550142', 'Tuesday at 3 works for us.')
 let stranger = await texted('78', '2695550199', 'Are we still on for golf?')
 await service.drain()
@@ -275,9 +286,7 @@ await service.drain()
 let afterStart = (await store.g.read('.operator_request')).length
 await texted('member', '2695550177', 'Is the hall free Sunday?')
 await service.drain()
-let memberBack = of('sendSMS').find((t) =>
-  t.get('message')?.startsWith('The hall is free')
-)!
+let memberBack = of('sendSMS').find((t) => t.get('dst') == '2695550177')!
 // The line's own text, come back to it.
 let heard = async () => [
   (await store.g.read('.operator_request')).length,
@@ -288,12 +297,37 @@ let echoed = await texted('echo', '2695550111', 'Is the hall free Sunday?')
 await service.drain()
 let afterEcho = await heard()
 let root = await conversationOf(store, '/at', rootOf(eid, person))
-let writer = (await dir.phoned('+12695550142'))!
+let writer = lineSender(connection.entity.eid, '+12695550111', '+12695550142')
 let theirs = await conversationOf(store, '/at', rootOf(eid, writer))
 let answeredBack = of('sendSMS').find((t) =>
   t.get('message')?.startsWith('Thank you')
 )!
 let [update] = await store.g.read(`.deliver.to=${person}&*`)
+
+let wrongNumber = await lineDoor(
+  new Request(
+    callback.replace('{ID}', 'wrong-line').replace('{FROM}', '2695550142')
+      .replace('{TO}', '2695550100').replace('{MESSAGE}', 'forged'),
+  ),
+  env,
+  'voipms',
+  voipms,
+)
+let { seal } = await import('./lib/token.ts')
+let oldTicket = await seal(
+  'line',
+  { connection: connection.entity.eid },
+  env.SESSION_SECRET!,
+)
+let oldCallback = await lineDoor(
+  new Request(
+    'https://yaks.app/voipms/' + oldTicket +
+      '?id=old&from=2695550142&to=2695550111&message=forged',
+  ),
+  env,
+  'voipms',
+  voipms,
+)
 
 // And no longer: its callback goes back to the church's own.
 await setting({ number: 'Church line', inbound: false })
@@ -499,7 +533,9 @@ test('a helper is listed as one, and the step that started it opens its conversa
 test("a text back is answered in its writer's own conversation, with only their permissions, and told to the person it was sent for; anyone else's stays theirs", async () => {
   assertEquals([answered.status, await answered.text()], [200, 'ok'])
   assertEquals([stranger.status, await stranger.text()], [200, 'ok'])
-  assert(writer && writer != person)
+  assert(writer && writer != person && writer != victim)
+  assertEquals(await dir.phoneAt(writer), null)
+  assertEquals(await dir.phoned('+12695550142'), victim)
   assertStringIncludes(theirs.html, 'Tuesday at 3 works for us.')
   assertStringIncludes(theirs.html, 'Thank you; I will tell Jeff.')
   let names = offered.map((t) => t.name)
@@ -523,6 +559,8 @@ test("a text back is answered in its writer's own conversation, with only their 
   )
   assert(!root.html.includes('golf') && !theirs.html.includes('golf'))
   assertEquals(forged.status, 403)
+  assertEquals(wrongNumber.status, 403)
+  assertEquals(oldCallback.status, 403)
 })
 
 test('a voip.ms key kept as its email and password joined by a colon is read as its fields, and kept as them', async () => {
@@ -573,9 +611,15 @@ test('the Operator lists the numbers of a connection saved before numbers were l
   assertEquals(pointedByRead, 0)
 })
 
-test("a member's text to the inbound number is their own Operator's, answered from that number", () => {
-  ok(callable({ tools: memberOffered }).includes('phone_numbers'))
-  ok(!callable({ tools: memberOffered }).some((n) => n.startsWith('signup_')))
+test("an inbound customer callback claiming a member's phone stays a sign-up without their seat", async () => {
+  ok(!callable({ tools: memberOffered }).includes('phone_numbers'))
+  ok(callable({ tools: memberOffered }).some((n) => n.startsWith('signup_')))
+  let [request] = await store.g.read(
+    '.operator_request.address="+12695550177"&*',
+  )
+  let sender = (request.operator_request as { person: string }).person
+  assert(sender != person)
+  assertEquals(await dir.phoneAt(sender), null)
   assertEquals(memberBack.get('did'), '2695550111')
   assertEquals(memberBack.get('dst'), '2695550177')
 })

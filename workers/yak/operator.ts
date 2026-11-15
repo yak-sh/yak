@@ -102,6 +102,7 @@ import {
 } from './lib/hops.ts'
 import type { OperatorStore } from './operator-store.ts'
 import {
+  ANSWERING,
   mailSend,
   messageReference,
   OWN,
@@ -346,6 +347,8 @@ let ownNamed = new Set([
   'operator_run',
   'operator_read',
   'helper_spawn',
+  'conversation_start',
+  'conversation_send',
 ])
 // Where the Operator finds what it no longer holds in front of it, which
 // `SELF` and the memory loop give it, is the base persona's
@@ -406,11 +409,20 @@ let BULK: Record<string, string> = {
 export let operatorRoster = async (
   ctx: Ctx,
   work: Store,
-  { space, tasked = false, member = true, session, connecting, trials }: {
+  {
+    space,
+    tasked = false,
+    member = true,
+    session,
+    connecting,
+    trials,
+    remote: allowRemote = member,
+  }: {
     space: string
     tasked?: boolean
     member?: boolean
     session?: string
+    remote?: boolean
     /** who would answer a trial's calls, which prices a round */
     trials?: Trials
     // The person's servers, when the step already asked for them.
@@ -424,7 +436,10 @@ export let operatorRoster = async (
   // for, so a fork's calls and a helper's are the conversation's there too.
   // What the person connected is read beside their reach, needing none of it.
   let asking = operatorAsking(work, space, session)
-  connecting ??= connectedTools(ctx, asking)
+  ctx.remote = allowRemote
+  connecting = allowRemote
+    ? connecting ?? connectedTools(ctx, asking)
+    : Promise.resolve([])
   connecting.catch(() => {})
   let reach = reached('reach', await inReach(ctx))
   let g = reached('vocab', await reaching(ctx, reach))
@@ -722,11 +737,21 @@ type Working = {
   person: string
   administrative?: boolean
   signup?: string
+  channel?: string
   files?: File[]
 }
 let workingOf = async ({ g }: Store, session: string) => {
   let [row] = await g.get([session], ['operator_session'])
   return comp(row, 'operator_session') as Working | undefined
+}
+// Pre-change sessions keep the source on their request rather than the session.
+let channelAt = async (store: Store, session: string, work?: Working) => {
+  if (work?.channel) return work.channel
+  let top = await topOf(store.g, session)
+  let [request] = await store.g.read(
+    `.operator_request.session=${top} .order=-created.at .limit=1 .fields=operator_request.channel`,
+  )
+  return String(comp(request, 'operator_request')?.channel ?? '')
 }
 // Whether a conversation has begun: its row is a session. Presence is
 // counted, so its computed status is never read.
@@ -776,7 +801,10 @@ let working = async (
     if (!s || s.trashed) throw refuse('missing', 'That space is gone.')
     return s
   })
-  let { here, ctx } = opened(env, o, o.space, space, reading, reach, session)
+  let openedFor = opened(env, o, o.space, space, reading, reach, session)
+  let remote = !o.signup && !ANSWERING.has(await channelAt(store, session, o))
+  let here = { ...openedFor.here, remote }
+  let ctx = openedFor.ctx.then((ctx) => ({ ...ctx, remote }))
   let google = googleAccounts(env, here, { eid: o.space })
   for (let asked of [reach, apps, platform, space, ctx, google]) {
     asked.catch(() => {})
@@ -1418,14 +1446,17 @@ export let operating = (
       ])
     // The person's servers need only them and the space's eid, so they are
     // asked beside the reach and the space.
-    let connecting = connectedTools(here, operatorAsking(store, eid, session))
+    let work = await workingOf(store, session)
+    let remote = !work?.signup &&
+      !ANSWERING.has(await channelAt(store, session, work))
+    let connecting = remote
+      ? connectedTools(here, operatorAsking(store, eid, session))
+      : Promise.resolve([])
     connecting.catch(() => {})
     let space = await at
-    let work = await workingOf(store, session)
     if (work?.signup) return signupTools(env, space, here.person, work.signup)
     reached('working', space)
-    // A person who does not write here is offered their servers and not
-    // their Google accounts.
+    // Only a writer's authenticated channels can reach personal accounts.
     let accounts = googleTools(env, here, space)
     accounts.catch(() => {})
     let persona = await spaced(g.storage, space, env)
@@ -1450,6 +1481,7 @@ export let operating = (
         member,
         session,
         connecting,
+        remote,
         trials,
       })
         .then((r) => reached('roster', r)),
@@ -1653,15 +1685,14 @@ export let operating = (
           working(env, store, session, options.directory),
           g.read(`.entity.eid=${session}&.fields=session.topic`),
         ])
-      // What the person's own servers say of the tools they are offered,
-      // whatever their seat here, as those tools are, asked beside the reach.
-      let servers = connectedInstructions(
-        here,
-        operatorAsking(store, eid, session),
-      )
+      // Reply channels carry no personal server instructions.
+      let work = await workingOf(store, session)
+      let servers =
+        work?.signup || ANSWERING.has(await channelAt(store, session, work))
+          ? Promise.resolve('')
+          : connectedInstructions(here, operatorAsking(store, eid, session))
       servers.catch(() => {})
       let space = await at
-      let work = await workingOf(store, session)
       if (work?.signup) return outside(space) + '\n\n' + SIGNUP
       let topic = topicOf(row)
       let google = googleTold(env, here, space)
@@ -1736,6 +1767,7 @@ export let operating = (
       operator_session: {
         space: space.eid,
         person: held.person,
+        channel: o.channel ?? null,
         ...o.signup ? { signup: o.signup } : {},
         administrative: held.administrative ?? null,
         ...conversation ? { conversation } : {},

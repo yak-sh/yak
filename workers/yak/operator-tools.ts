@@ -11,6 +11,12 @@ let ask = async (
   path: string,
   write = path != '/operator/read',
 ) => {
+  if (write && ctx.remote === false) {
+    throw refuse(
+      'access',
+      'A reply cannot start an authenticated Operator conversation.',
+    )
+  }
   let { space, who } = await inSpace(ctx, args, write, true)
   if (!writes(who.role)) {
     throw refuse('access', 'only a member who writes can read operator work')

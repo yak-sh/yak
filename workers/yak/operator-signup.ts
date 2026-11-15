@@ -183,8 +183,9 @@ export let controlText = async (
   env: Env,
   space: Space,
   arrival: Arrival,
+  person?: string,
 ) => {
-  let person = await phonedIn(env, arrival.from)
+  person ??= await phonedIn(env, arrival.from)
   let response = await builderOf(env, space.eid)(() =>
     new Request('https://builder/operator/control', {
       method: 'POST',
@@ -226,10 +227,13 @@ export let spaceArrived = async (
   env: Env,
   space: Space,
   arrival: Arrival & { via: string },
+  sender?: string,
 ) => {
   let word = formKeyword(arrival.text)
-  let { stopped } = await controlText(env, space, arrival)
-  let person = word || stopped ? '' : await phonedIn(env, arrival.from)
+  let { stopped } = await controlText(env, space, arrival, sender)
+  let person = word || stopped
+    ? ''
+    : sender ?? await phonedIn(env, arrival.from)
   let { role } = person
     ? await reachOf(directoryOf(env.STORE), space, person)
     : { role: null }

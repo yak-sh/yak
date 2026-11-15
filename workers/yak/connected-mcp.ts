@@ -11,7 +11,7 @@ import { nameOf } from '@yaks/mcp-client'
 // The tunnel's code is loaded by the first server on a machine, which almost
 // nobody has.
 let commands = (ctx: Ctx, asking?: Calling) =>
-  remoteCommands(ctx.person, {
+  remoteCommands(ctx.remote === false ? '' : ctx.person, {
     ...ctxOf(ctx.env, asCaller(ctx, null)),
     report: (e) => caught(e, { request: 'connected MCP' }),
     signIn: url(ctx.env, '/manage/connections'),
@@ -167,6 +167,12 @@ export let mcpConnect: Row = {
     required: ['name', 'url'],
   },
   run: async (ctx, args) => {
+    if (ctx.remote === false) {
+      throw refuse(
+        'access',
+        'This channel cannot connect personal MCP servers.',
+      )
+    }
     let on = typeof args.machine == 'string'
       ? await ctx.dir.space(args.machine)
       : undefined

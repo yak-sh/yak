@@ -751,7 +751,7 @@ export let attachmentTools = (env: Env) => (ctx: Ctx, files: File[]): Tool[] =>
 // The channels someone who does not write in the space arrives on: their
 // answer to a letter or text the Operator sent them. Their conversation has
 // only their permissions (operator.ts `roster`).
-let ANSWERING = new Set(['letter', 'texted', 'signup'])
+export let ANSWERING = new Set(['letter', 'texted', 'signup'])
 
 /** The channels whose words are the Operator's or the platform's own, never
  * those of the person they are said for: a break to fix, what another

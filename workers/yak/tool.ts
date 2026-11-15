@@ -42,6 +42,8 @@ export type Ctx = {
   /** Start a new authorization operation; no standing crosses this boundary. */
   reopen?: () => Directory
   person: string
+  /** Whether this channel can reach the person’s connected MCP servers. */
+  remote?: boolean
   /** The invocation whose work a forwarded store call records as its source. */
   call?: string
   // How this caller got in, when a door knows (mcp.ts sets it from

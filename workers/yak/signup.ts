@@ -17,6 +17,7 @@ import { withPhone } from '@yaks/people'
 import { Refused } from '@yaks/graph/errors'
 import type { Stored } from './graph.ts'
 import { calendarScope, personalFeed } from './calendar.ts'
+import { proved, recognized } from './recognized.ts'
 
 let comp = (row: Bundle | undefined, name: string): Comp =>
   row?.[name] as Comp ?? {}
@@ -69,12 +70,13 @@ let progress = async (
   calendar: await link(at, person),
 })
 
-// The texting number is theirs: the platform received the text from it.
-let initial = async (at: Stored, form: Form, phone: string) => {
-  let [person] = await at.graph.read(
-    `.phone.number=${quoted(phone)}&*&.limit=1`,
-  )
-  return prefilled(form, withPhone(person, phone))
+// Customer callbacks claim a phone; only platform proof joins app people.
+let initial = async (at: Stored, form: Form, person: string) => {
+  let [known, proof] = await Promise.all([
+    recognized(at, person),
+    proved(at, person),
+  ])
+  return prefilled(form, proof.phone ? withPhone(known, proof.phone) : {})
 }
 
 export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
@@ -134,7 +136,7 @@ export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
       if (!await available(at, source)) {
         throw new Refused('This form is closed or full.')
       }
-      let answers = await initial(at, form, args.phone)
+      let answers = await initial(at, form, args.person)
       let id = mint()
       await at.graph.apply(signed([{
         entity: { eid: id },
@@ -175,7 +177,9 @@ export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
     if (!took) return Response.json(await progress(at, row, form, args.person))
     let updated = took.answers
     let question = took.question.question
-    let agreed = question.fills == 'sms_consent.consent' &&
+    let proof = await proved(at, args.person)
+    let agreed = proof.phone == args.phone &&
+      question.fills == 'sms_consent.consent' &&
       (args.value === true ||
         typeof args.value == 'string' && /^yes$/i.test(args.value.trim()))
     let [texter] = agreed

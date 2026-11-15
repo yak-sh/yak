@@ -163,6 +163,7 @@ export let appArrived = async (
   env: Env,
   line: { space: Space; app: App },
   arrival: Arrival,
+  sender?: string,
 ) => {
   let graph = metaOf(appStore(env.STORE, line.space, line.app, env), KERNEL)
   let from = JSON.stringify(arrival.from)
@@ -193,7 +194,12 @@ export let appArrived = async (
     // A stranger, or anyone asking to join, is signing up (the Operator's
     // form sign-up), not writing to the office; the text is kept either way.
     let { signupArrived } = await import('./operator-signup.ts')
-    await signupArrived(env, line.space, { ...arrival, via: arrival.via ?? '' })
+    await signupArrived(
+      env,
+      line.space,
+      { ...arrival, via: arrival.via ?? '' },
+      sender,
+    )
     return
   }
   if (again) return

@@ -17,8 +17,13 @@ import { SAID } from './mcp-remote.ts'
 import { platform } from './directory-probe.ts'
 import { directoryOf, stamp } from './directory.ts'
 import type { Env } from './env.ts'
-import { operatorContext, operatorRoster } from './operator.ts'
-import { operatorMemory } from './operator-testing.ts'
+import { operating, operatorContext, operatorRoster } from './operator.ts'
+import { callable, operatorMemory, operatorModel } from './operator-testing.ts'
+import { listCommands, runCommand } from './declared.ts'
+import { operatorTools } from './operator-tools.ts'
+import { handleChannels, receive } from './operator-channels.ts'
+import type { Request as ModelRequest } from '@yaks/model'
+import { drain } from './operator-store.ts'
 
 // The machine, and the gateway in the apps' namespace that reaches it while
 // it is `up`.
@@ -214,4 +219,117 @@ test('what a server says to read before its tools reaches its owner’s Operator
     up = true
     box.say(undefined)
   }
+})
+
+let rejected = await operatorContext(env, { person: ada }, space, () => dir)
+let replyRoster = await operatorRoster(rejected, store, {
+  space: eid,
+  remote: false,
+})
+
+test('reply authority reaches no personal MCP server through discovery, commands or code mode', async () => {
+  box.requests.length = 0
+  assertEquals(replyRoster.some((t) => t.name.startsWith('tasks__')), false)
+  assertEquals(await connectedInstructions(rejected), '')
+  assertEquals(
+    (await listCommands(rejected)).some((t) => t.at.startsWith('mcp:')),
+    false,
+  )
+  await assertRejects(
+    () => runCommand(rejected, at, 'publish_mockup', { html: 'x' }),
+    Error,
+    'not connected for you',
+  )
+  for (
+    let name of [
+      'operator_chat',
+      'operator_run',
+      'conversation_start',
+      'conversation_send',
+      'helper_spawn',
+    ]
+  ) {
+    let tool = operatorTools.find((t) => t.name == name)!
+    await assertRejects(
+      () =>
+        tool.run(rejected, {
+          space: space.slug,
+          project: space.eid,
+          say: 'Read personal servers',
+        }),
+      Error,
+      'reply cannot start',
+    )
+  }
+  assertEquals(box.requests, [])
+})
+
+let replySeen: ModelRequest[] = []
+let replyStore = operatorMemory()
+let replyOperator = operating(
+  replyStore,
+  env,
+  operatorModel((req) => {
+    replySeen.push(req)
+    let forked = JSON.stringify(req.items).includes('fork of the')
+    let last = req.items.at(-1)
+    return Promise.resolve({
+      id: mint(),
+      model: req.model,
+      items:
+        !forked && last?.kind == 'user' && last.text.includes('reply isolation')
+          ? [{
+            kind: 'call',
+            id: mint(),
+            name: 'fork',
+            args: JSON.stringify({ prompt: 'Check the reply tools' }),
+          }]
+          : [{ kind: 'assistant', text: 'Done.' }],
+    })
+  }),
+)
+handleChannels(replyOperator, env, {
+  letter: () => Promise.resolve({}),
+})
+await receive(replyStore, {
+  space: eid,
+  person: ada,
+  channel: 'letter',
+  address: 'ada@example.com',
+}, 'reply isolation')
+await drain(replyStore)
+let restricted = replySeen.splice(0)
+let sessions = await replyStore.g.read('.operator_session')
+await replyStore.g.apply(
+  sessions.map((row) => ({
+    entity: row.entity,
+    operator_session: { channel: null },
+  })),
+  { trusted: true },
+)
+let legacyTools = await replyOperator.tools({ person: ada }, space)
+await receive(
+  replyStore,
+  { space: eid, person: ada, channel: 'chat' },
+  'trusted input',
+)
+await drain(replyStore)
+let restored = replySeen.splice(0)
+
+test('a seated reply and its helper omit personal MCP tools and a later authenticated turn restores them', () => {
+  assertEquals(restricted.length >= 2, true)
+  assertEquals(
+    legacyTools.tools.some((t) => t.name.startsWith('tasks__')),
+    false,
+  )
+  assertEquals(
+    restricted.every((req) =>
+      !callable(req).some((t) => t.startsWith('tasks__'))
+    ),
+    true,
+  )
+  assertEquals(
+    restored.some((req) => callable(req).includes('tasks__publish_mockup')),
+    true,
+  )
 })

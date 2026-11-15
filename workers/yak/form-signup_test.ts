@@ -12,6 +12,16 @@ import { signupIn } from './signup.ts'
 import { formRules } from '@yaks/forms/graph'
 import { plugins as people } from '@yaks/people/graph'
 import type { Stored } from './graph.ts'
+import { platform } from './directory-rows-probe.ts'
+
+let { env, dir } = platform('form-signup')
+await dir.apply({
+  entities: [{
+    entity: { eid: 'sender' },
+    person: {},
+    phone: { number: '+12695550142' },
+  }],
+}, { 'x-yak-person': 'sender', 'x-yak-role': 'owner' })
 
 let vocab = loadVocab([kernelDoc, formsDoc, eventsDoc, docDoc, phoneDoc, {
   $defs: {
@@ -35,10 +45,12 @@ let fixture = async (questions: Bundle[], extras: Bundle[] = []) => {
     })
   let g = reopen()
   await g.apply([
-    ...['app', 'sender', 'someone-else', 'church', 'private'].map((eid) => ({
-      entity: { eid },
-      doc: { title: eid },
-    })),
+    ...['app', 'sender', 'someone-else', 'unverified', 'church', 'private'].map(
+      (eid) => ({
+        entity: { eid },
+        doc: { title: eid },
+      }),
+    ),
     {
       entity: { eid: 'form' },
       form: { thanks: 'See you Sunday.', notify: ['private'] },
@@ -63,7 +75,7 @@ let fixture = async (questions: Bundle[], extras: Bundle[] = []) => {
           ...args,
         }),
       }),
-      { graph: reopen(), app: 'app', env: {}, now: () => 1000 } as Stored,
+      { graph: reopen(), app: 'app', env, now: () => 1000 } as Stored,
     )
     return { status: r.status, value: await r.json() }
   }
@@ -282,4 +294,36 @@ test('agreeing to texts keeps an existing app-owned phone row as the app wrote i
     ((await known.g.read('.sms_consent'))[0].sms_consent as Comp).person,
     'staff',
   )
+})
+
+let unproved = await fixture([
+  question('phone', { kind: 'phone', fills: 'individual.phone', order: 0 }),
+  question('consent', {
+    kind: 'check',
+    fills: 'sms_consent.consent',
+    order: 1,
+  }),
+], [{
+  entity: { eid: 'victim' },
+  individual: { first: 'Private name', phone: '+12695550142' },
+  phone: { number: '+12695550142' },
+}])
+let unprovedStart = await unproved.run('start', {}, 'unverified')
+let unprovedAnswer = await unproved.run('answer', {
+  registration: unprovedStart.value.registration,
+  path: ['phone'],
+  value: null,
+}, 'unverified')
+let unprovedConsent = await unproved.run('answer', {
+  registration: unprovedStart.value.registration,
+  path: ['consent'],
+  value: true,
+}, 'unverified')
+let unprovedRows = await unproved.g.read('.sms_consent')
+test('a callback phone with no platform proof cannot prefill a matching person or change their text consent', () => {
+  equal(unprovedStart.status, 200)
+  equal(unprovedStart.value.answers, {})
+  equal(unprovedAnswer.status, 200)
+  equal(unprovedConsent.status, 200)
+  equal(unprovedRows, [])
 })

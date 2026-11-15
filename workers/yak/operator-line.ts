@@ -10,9 +10,10 @@
 // outbound, its texts go from it (`phoneSend`); inbound, its callback is
 // pointed at `/<via>/<ticket>` here (`pointed`), and put back as it was once
 // it is no longer. A callback is signed by nothing, so the ticket is the
-// kernel's own seal naming the connection, and a text back from someone the
-// Operator texted is answered in that writer's own conversation, with only
-// their permissions, and told to the person it was sent for (`lineDoor`,
+// kernel's own seal naming the connection and receiving number. The holder
+// can claim any sender, so callbacks use an unverified identity scoped to
+// that line, with no seat or personal servers. A text back is answered in
+// that identity's conversation and told to the person it was sent for (`lineDoor`,
 // operator-host.ts `operatorReply`). The Operator's texts to the person
 // themselves stay operator-texts.ts's, from the platform's number.
 //
@@ -29,7 +30,7 @@
 // voip.ms's API answers only addresses its allowlist names, and a Worker
 // calls from Cloudflare's, which change: the person enters 0.0.0.0 there,
 // which lets any address call with the API password.
-import { type Bundle, type Comp, identityEid } from '@yaks/graph'
+import { type Bundle, type Comp, derivedEid, identityEid } from '@yaks/graph'
 import { writes } from '@yaks/member'
 import {
   CONNECTION,
@@ -91,9 +92,9 @@ let accountOf = async (
   })
 }
 
-// The kernel's seal on a connection, which its callback URL carries.
-let ticketOf = (env: Env, connection: string) =>
-  seal('line', { connection }, secretOf(env))
+// The kernel's seal on one connected number, carried by its callback URL.
+let ticketOf = (env: Env, connection: string, number: string) =>
+  seal('line', { connection, number }, secretOf(env))
 let secretOf = (env: Env) => {
   if (!env.SESSION_SECRET) throw new Error('SESSION_SECRET is not set')
   return env.SESSION_SECRET
@@ -102,8 +103,22 @@ let secretOf = (env: Env) => {
 // Where a connected number's texts are sent: its phone's door, then the
 // query its provider fills in.
 let doorOf = (env: Env, via: string) => `https://${apex(env)}/${via}/`
-let callbackOf = async (env: Env, own: Own, via: string, connection: string) =>
-  `${doorOf(env, via)}${await ticketOf(env, connection)}?${own.callback}`
+let callbackOf = async (
+  env: Env,
+  own: Own,
+  via: string,
+  connection: string,
+  number: string,
+) =>
+  `${doorOf(env, via)}${await ticketOf(
+    env,
+    connection,
+    number,
+  )}?${own.callback}`
+
+// A customer holding the callback can choose from: it proves no phone.
+export let lineSender = (connection: string, number: string, from: string) =>
+  derivedEid(JSON.stringify(['line-sender', connection, number, from]))
 
 /** A number a connection's account holds, as kept beside it. */
 export type Owned = {
@@ -269,11 +284,9 @@ export let pointed = async (
   await listed(env, via, connection, lines)
   for (let held of lines) {
     let ours = !!held.callback?.startsWith(here)
-    if (inbound.has(held.number) && !ours) {
-      await account.point(
-        held.number,
-        await callbackOf(env, own, via, connection),
-      )
+    if (inbound.has(held.number)) {
+      let callback = await callbackOf(env, own, via, connection, held.number)
+      if (held.callback != callback) await account.point(held.number, callback)
     } else if (off.has(held.number) && ours) {
       await account.point(held.number, kept.get(held.number)?.callback)
     }
@@ -654,12 +667,14 @@ export let lineDoor = async (
 ): Promise<Response> => {
   let url = new URL(req.url)
   let ticket = decodeURIComponent(url.pathname.slice(`/${via}/`.length))
-  let held = await opened<{ connection?: string }>(
+  let held = await opened<{ connection?: string; number?: string }>(
     'line',
     ticket,
     secretOf(env),
   )
-  if (!held?.connection) return new Response('not ours', { status: 403 })
+  if (!held?.connection || !held.number) {
+    return new Response('not ours', { status: 403 })
+  }
   let ok = () =>
     new Response('ok', { headers: { 'content-type': 'text/plain' } })
   let arrival = own.called(url.searchParams)
@@ -668,6 +683,11 @@ export let lineDoor = async (
   )
   let owner = String(comp(line, CONNECTION).owner ?? '')
   if (!arrival || echo(arrival) || !line || !owner) return ok()
+  if (held.number != arrival.to) {
+    return new Response('not this line', { status: 403 })
+  }
+  let person = lineSender(held.connection, arrival.to, arrival.from)
+  await meta(env).apply([{ entity: { eid: person }, person: {} }])
   let { directoryOf } = await import('./directory.ts')
   let dir = directoryOf(env.STORE)
   // A connection is its own space's, or a person's, whose Operator may have
@@ -682,7 +702,7 @@ export let lineDoor = async (
   let app = await dir.lined(arrival.to)
   if (app && spaces.some((s) => s.eid == app.space.eid)) {
     let { appArrived } = await import('./app-texts.ts')
-    await appArrived(env, app, { ...arrival, via })
+    await appArrived(env, app, { ...arrival, via }, person)
     return ok()
   }
   let { builderOf, SPACE } = await import('./build-door.ts')
@@ -703,24 +723,22 @@ export let lineDoor = async (
     }
     if ((await response.json() as { inbound: boolean }).inbound) {
       let { spaceArrived } = await import('./operator-signup.ts')
-      await spaceArrived(env, space, { ...arrival, via })
+      await spaceArrived(env, space, { ...arrival, via }, person)
       return ok()
     }
   }
-  await lineArrived(env, spaces, { ...arrival, via })
+  await lineArrived(env, spaces, { ...arrival, via }, person)
   return ok()
 }
 
-/** A reply from any provider enters the conversation of whoever sent it,
- * the platform's person wearing their number (operator-texts.ts
- * `phonedIn`), in
- * the space whose Operator sent the text it answers: that space, with
- * whether it is new there (a provider posts a text again until it is
- * answered), or null when no space's Operator sent one. */
+/** A customer-line reply enters its scoped sender's conversation in the
+ * space whose Operator texted them. The callback supplies an unverified
+ * sender, never a platform person found by the claimed phone. */
 export let lineArrived = async (
   env: Env,
   spaces: Space[],
   arrival: import('@yaks/phone').Arrival & { via: string },
+  person: string,
 ) => {
   let { requestId } = await import('./operator-channels.ts')
   let { builderOf, SPACE } = await import('./build-door.ts')
@@ -743,7 +761,6 @@ export let lineArrived = async (
     await found.body?.cancel()
     if (found.status == 404) continue
     if (!found.ok) throw new Error(`Operator text lookup: ${found.status}`)
-    let { phonedIn } = await import('./operator-texts.ts')
     let response = await asked(space, '/operator/replied', {
       say: arrival.text,
       request: {
@@ -757,7 +774,7 @@ export let lineArrived = async (
         id: requestId(space.eid, `${arrival.via}:${arrival.id}`),
       },
       texted,
-    }, await phonedIn(env, arrival.from))
+    }, person)
     if (!response.ok) {
       throw new Error('Operator text intake failed: ' + await response.text())
     }
