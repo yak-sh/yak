@@ -40,6 +40,7 @@ import { refuse } from './tool.ts'
 import { META } from './release_index.ts'
 import { GRACE, LANES, type Pinner, versions, waiting } from './versions.ts'
 import { addressed, type Files, KEEP, same, SHA } from '@yaks/platform/versions'
+import { linkFor } from '@yaks/platform/preview'
 
 /** One file written into an app (the directory's `written` row): the sha it
  * left at the path, null where it deleted the file, and the sha it replaced,
@@ -315,12 +316,6 @@ export let theirs = (drafts: AppDraft[], who: Who) =>
 let byAt = (a: AppDraft, b: AppDraft) =>
   (a.at ?? '') < (b.at ?? '') ? -1 : (a.at ?? '') > (b.at ?? '') ? 1 : 0
 
-/** Where a draft's preview link serves from and is told: its own eid, or
- * for the draft no author holds, the app's link from before each draft had
- * its own (`app.followed`), so a link sealed then keeps showing it. */
-export let linkFor = (app: App, d: AppDraft) =>
-  !d.by && app.followed ? app.followed : d.eid
-
 /** What a write into `d` carries on the app's row: for the draft
  * `app.draft` names, that pointer gone, since the draft's row is written in
  * the same write (`opening`). */
@@ -465,7 +460,7 @@ let over = async (
 /** One change to what a draft's preview link serves, as its pages hear it:
  * a write to the draft, naming the files it left, each at its sha, null for a
  * delete; or its release, `draft` null and no files, after which the link
- * serves what was released. `link` is the draft's (`linkFor`). */
+ * serves what was released. `link` is the draft's (@yaks/platform/preview `linkFor`). */
 export type Drafted = {
   app: string
   link: string

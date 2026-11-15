@@ -16,10 +16,12 @@
 // once per sha (esbuild.ts), and the worker, the branch's vocabulary and its
 // seed rows are set up again only by the write that changed them. Each write
 // is told to the link's pages (`watching`); public/release.js takes it there.
-import { writes } from '@yaks/member'
-import { derivedEid } from '@yaks/graph/identity'
+//
+// The rules are @yaks/platform/preview's: where a link is mounted, whom its
+// ticket admits, which door a request goes to, where a state is kept and
+// what building it sets up again. This file does the reading and building
+// they name: the directory, the draft's rows, R2 and the dispatch namespace.
 import { stated } from './vocab.ts'
-import { VOCABS } from '@yaks/platform/manifest'
 import { ACCEPTED } from './door.ts'
 import { declarationOf } from './declaration.ts'
 import { api, copyFor, storing, unwritten, woven } from './apps.ts'
@@ -57,12 +59,34 @@ import { onHold } from './model-spend.ts'
 import { ModelError } from '@yaks/model'
 import { filesIn, staged } from './release.ts'
 import { loaded, pinned } from './seed.ts'
-import { inside, seedy } from '@yaks/platform/files'
+import {
+  admits,
+  aimed,
+  type Built,
+  door,
+  entered,
+  linkFor,
+  mountOf,
+  named,
+  outside,
+  PRIVATE,
+  RECORD,
+  resets,
+  scriptOf,
+  seeding,
+  shows,
+  starting,
+  stateOf,
+  type Ticket,
+  undone,
+  viewer,
+  within,
+} from '@yaks/platform/preview'
 import { vouched, type Who } from './session.ts'
 import { clock, headed } from './timing.ts'
 import { type Args, type Ctx, inApp, refuse, rejected } from './tool.ts'
 import { CallError } from '@yaks/tools/errors'
-import { addressed, BUILT, type Files } from '@yaks/platform/versions'
+import { addressed } from '@yaks/platform/versions'
 import { digest } from '@yaks/graph/sha256'
 import {
   type AppDraft,
@@ -71,7 +95,6 @@ import {
   drafting,
   draftsOf,
   guessed,
-  linkFor,
   newest,
   overlaid,
   previewed,
@@ -83,7 +106,6 @@ import {
 import type { Objects } from '@yaks/blob'
 import type { Cookie, View, Visit } from './browser/capture.ts'
 import { sourceOf } from './wrangler_app.ts'
-import { decodedPath } from './request-path.ts'
 import { walled } from './installed.ts'
 import { screen as screenAt } from './screen.ts'
 import { sharing } from './lib/shared.ts'
@@ -93,32 +115,9 @@ let encode = (value: string) => new TextEncoder().encode(value)
 let decode = (value: Uint8Array | null) =>
   value && new TextDecoder().decode(value)
 
-// What a link names: the draft it shows (`of`), as whom. A ticket sealed
-// before each draft had its own link names the app's (`app.followed`) as
-// `link`, or before that as `draft`, and shows the draft no author holds. A
-// ticket for a paired TV names its screen (screen.ts): it reads the draft as
-// a viewer, and only while that screen stays paired with the person.
-type Ticket = {
-  app: string
-  space: string
-  person: string
-  of?: string
-  link?: string
-  draft?: string
-  screen?: string
-}
-
-let privateHeaders = {
-  'cache-control': 'private, no-store',
-  'referrer-policy': 'no-referrer',
-  'x-robots-tag': 'noindex, nofollow',
-}
-
 let privateResponse = (res: Response) => {
   let headers = new Headers(res.headers)
-  for (let [name, value] of Object.entries(privateHeaders)) {
-    headers.set(name, value)
-  }
+  for (let [name, value] of Object.entries(PRIVATE)) headers.set(name, value)
   return walled(headed(res, headers))
 }
 
@@ -148,18 +147,14 @@ export let viewport = (args: Args) => {
 }
 
 let page = (value: unknown) => {
-  let path = value == null ? '' : String(value).replace(/^\/+/, '')
-  let parsed = new URL(path, 'https://preview.invalid/')
-  if (
-    parsed.origin != 'https://preview.invalid' ||
-    parsed.pathname.includes('/_preview/')
-  ) {
+  let path = within(value)
+  if (path == null) {
     throw refuse(
       'arguments',
       'path: a page within this app, such as about/ or details.html',
     )
   }
-  return parsed.pathname.slice(1) + parsed.search + parsed.hash
+  return path
 }
 
 let post = (
@@ -202,7 +197,7 @@ let previewing = (
   branch: number | null,
   worker = false,
 ): App => {
-  let script = worker ? scriptOf(app, link) : undefined
+  let script = worker ? scriptOf(app.eid, link) : undefined
   return {
     ...app,
     ...branch != null ? { branch } : {},
@@ -217,9 +212,6 @@ let previewing = (
     mount,
   }
 }
-
-// The dispatch script a link's states with a worker run in.
-let scriptOf = (app: App, link: string) => `app-${app.eid}-preview-${link}`
 
 /** A branch of the app's store for a draft's preview (graph.ts
  * `#branching`), made on its first preview. The store's first branch turns
@@ -257,23 +249,10 @@ export let unbranched = async (
     await dropBranch(appStore(env.STORE, space, app, env), d.branch)
   }
   if (env.CF_WORKERS_TOKEN) {
-    await drop(env, scriptOf(app, linkFor(app, d)), true)
+    await drop(env, scriptOf(app.eid, linkFor(app, d)), true)
   }
 }
 
-// Where one state of a draft is served from: a release named for the files
-// it holds, so whichever isolate built it, the next request finds it.
-let stateOf = (space: Space, app: App, link: string, files: Files) =>
-  `${space.store}/.releases/${app.eid}/${
-    derivedEid(
-      `preview|${link}|${JSON.stringify(Object.entries(files).sort())}`,
-    )
-  }`
-
-// What a built state says of itself beside its index: the digest of the
-// worker it uploaded, null where it has none.
-let RECORD = `${BUILT}.preview.json`
-type Built = { worker: string | null }
 let recorded = async (raw: Objects, source: string) => {
   let files = await filesIn(raw, source)
   let bytes = files?.[RECORD] && await raw.read(addressed(files[RECORD]))
@@ -287,9 +266,6 @@ let fingerprint = async (modules: Module[], config: unknown) =>
       modules.map(async (m) => [m.name, await digest(m.bytes)]),
     ),
   ]))
-
-// The files whose change sets the store up again.
-let VOCAB = [...VOCABS, 'package.json']
 
 /**
  * Build one state of a draft for its link: stage its files, compile what the
@@ -314,35 +290,21 @@ let built = async (
   if (had) return { worker: !!had.worker }
   let last = newest(d.rows)[0]?.at
   let before = stateOf(
-    space,
-    app,
+    space.store,
+    app.eid,
     link,
     overlaid(await served(raw, app), d.rows.filter((w) => w.at != last)),
   )
   let prev = before == source ? null : await filesIn(raw, before)
   let was = prev && await recorded(raw, before)
-  let start = {
-    ...d.files,
-    ...Object.fromEntries(
-      Object.entries(prev ?? {}).filter(([path]) => path.startsWith(BUILT)),
-    ),
-  }
+  let start = starting(d.files, prev)
   let files = staged(raw, start, source)
   let read = (path: string) => files.files.read(`${source}/${path}`)
   let parsed = await configured(read)
   if (parsed.refused.length) {
     throw refuse('arguments', parsed.refused.join('\n'))
   }
-  // Preview code never receives the live app's D1/R2/Vectorize/DO bindings.
-  // App-owned resources require a release; the graph store is isolated here.
-  let resources = [
-    'd1_databases',
-    'r2_buckets',
-    'vectorize',
-    'durable_objects',
-    'migrations',
-  ] as const
-  if (resources.some((name) => parsed.config[name] != null)) {
+  if (outside(parsed.config).length) {
     throw refuse(
       'arguments',
       'Draft previews support the app graph store; remove external resource bindings from the draft to preview it',
@@ -374,10 +336,9 @@ let built = async (
     }
     await upload(ctx.env, candidate.script!, modules, config)
   }
-  let changed = (path: string) => !prev || prev[path] != d.files[path]
   // Only a branch is set up: a link with none shows what was released, whose
   // words and rows are the live app's own.
-  if (branch != null && VOCAB.some(changed)) {
+  if (branch != null && resets(d.files, prev)) {
     let vocabFile = keys.includes('vocab.yml') ? 'vocab.yml' : 'vocab.json'
     let doc = stated(
       decode(await read(vocabFile)) ?? '{}',
@@ -393,7 +354,7 @@ let built = async (
   }
   // The rows a release would seed: only an app no release has seeded yet
   // takes its seed files (tools.ts `willSeed`), and its draft's branch with it.
-  let seeds = keys.filter((path) => seedy(path) && changed(path))
+  let seeds = seeding(d.files, prev)
   if (branch != null && !app.seeded && seeds.length) {
     let seed = loaded(
       await Promise.all(seeds.map(async (path) => ({
@@ -428,7 +389,7 @@ let following = async (
 ) => {
   let d = await drafting(r2RawObjects(ctx.env.BLOBS), ctx.dir, app, of)
   let branch = of?.branch ?? null
-  let source = stateOf(space, app, link, d.files)
+  let source = stateOf(space.store, app.eid, link, d.files)
   let state = sharing(
     states,
     source,
@@ -450,40 +411,24 @@ let reached = async (
 ): Promise<Drafted> => {
   if (!before) return news
   let raw = r2RawObjects(env.BLOBS)
-  let files = { ...before.files }
-  let rows = newest(before.rows)
-  while (true) {
-    let source = stateOf(space, app, news.link, files)
-    let index = await filesIn(raw, source)
-    let pages = index &&
-      await pageInputs((path) =>
-        index[path] ? raw.read(addressed(index[path])) : Promise.resolve(null)
+  let plan = async () => {
+    for (let files of undone(before.files, newest(before.rows))) {
+      let index = await filesIn(
+        raw,
+        stateOf(space.store, app.eid, news.link, files),
       )
-    if (index && !pages) return news
-    if (!index && !rows.length && app.source) {
-      pages = await pageInputs((path) =>
-        before.view.read(`${app.source}/${path}`)
-      )
-    }
-    if (pages) {
-      return {
-        ...news,
-        files: news.files.map((file) => {
-          let entries = Object.entries(pages).filter(([, paths]) =>
-            paths.includes(file.path)
-          ).map(([entry]) => entry)
-          return entries.length ? { ...file, entries } : file
-        }),
+      if (index) {
+        return pageInputs((path) =>
+          index[path] ? raw.read(addressed(index[path])) : Promise.resolve(null)
+        )
       }
     }
-    if (!rows.length) return news
-    let at = rows[0].at
-    while (rows.length && rows[0].at == at) {
-      let row = rows.shift()!
-      if (row.was) files[row.path] = row.was
-      else delete files[row.path]
-    }
+    return app.source
+      ? pageInputs((path) => before.view.read(`${app.source}/${path}`))
+      : null
   }
+  let pages = await plan()
+  return pages ? { ...news, files: entered(news.files, pages) } : news
 }
 
 /** Each write to a draft, and its release, told to the pages of the draft's
@@ -566,7 +511,7 @@ export let sealed = async (
     } satisfies Ticket,
     ctx.env.SESSION_SECRET!,
   )
-  let mount = `/${app.slug}/_preview/${ticket}/`
+  let mount = mountOf(app.slug, ticket)
   return {
     mount,
     at: `https://${spaceHost(ctx.env, space.slug)}${mount}`,
@@ -769,11 +714,11 @@ export let preview = async (ctx: Ctx, args: Args) => {
 
 let target = async (req: Request, env: Env) => {
   let url = new URL(req.url)
-  let match = /^\/([^/]+)\/_preview\/([^/]+)\/(.*)$/.exec(url.pathname)
-  if (!match || !env.SESSION_SECRET) return null
-  let ticket = await opened<Ticket>('preview', match[2], env.SESSION_SECRET)
-  let named = ticket?.of ?? ticket?.link ?? ticket?.draft
-  if (!ticket || typeof named != 'string') return null
+  let aim = aimed(url.pathname)
+  if (!aim || !env.SESSION_SECRET) return null
+  let ticket = await opened<Ticket>('preview', aim.ticket, env.SESSION_SECRET)
+  let name = ticket && named(ticket)
+  if (!ticket || !name) return null
   let dir = directory(bound(env.DIRECTORY, directoryPart.fetch, env), {
     copy: copyOf(env),
     time: env.CLOCK,
@@ -783,70 +728,58 @@ let target = async (req: Request, env: Env) => {
     ticket.screen ? screenAt(dir, ticket.screen) : null,
     dir.drafts({ eid: ticket.app } as App),
   ])
-  if (ticket.screen && paired?.person != ticket.person) return null
-  let pair = found.space && found.app
-    ? { space: found.space, app: found.app }
-    : null
-  let role = found.role
+  let { space, app: held, role } = found
   if (
-    !pair || pair.space.eid != ticket.space ||
-    url.hostname != spaceHost(env, pair.space.slug) ||
-    pair.app.slug != match[1] ||
-    (!ticket.of && pair.app.followed != named) ||
-    pair.app.trashed || pair.space.trashed || !writes(role)
+    !space || !held ||
+    !admits(ticket, { space, app: held, role }, {
+      host: url.hostname,
+      app: aim.app,
+      paired: paired?.person,
+    }, env)
   ) return null
   // The draft it shows while that draft is open, and the release once it is
-  // closed; a ticket from before each draft had a link shows the draft no
-  // author holds.
-  let drafts = withLegacy(pair.app, rows)
-  let of = ticket.of
-    ? drafts.find((d) => d.eid == ticket.of) ?? null
-    : drafts.find((d) => !d.by) ?? null
-  let link = of ? linkFor(pair.app, of) : named
-  let mount = url.pathname.slice(0, url.pathname.length - match[3].length)
+  // closed.
+  let of = shows(ticket, withLegacy(held, rows))
+  let link = of ? linkFor(held, of) : name
+  let { mount } = aim
   // An open draft previewed before drafts had branches takes one now, as the
   // person whose link it is. One its store cannot make yet is made later, and
   // its pages' doors wait for it (`fetch`).
   if (of && of.branch == null) {
     of = await previewed(
       dir,
-      pair.space,
-      pair.app,
+      space,
+      held,
       of,
       { person: ticket.person, role: role!, via: ticket.app },
-      branching(env, pair.space, pair.app),
+      branching(env, space, held),
     ).catch((e) => {
       if (e instanceof CallError) return of
       throw e
     })
   }
   let app = previewing(
-    pair.app,
+    held,
     link,
-    pair.app.source ?? null,
+    held.source ?? null,
     mount,
     of?.branch ?? null,
   )
   // The ticket's writer is checked above on every callback. A directory
   // edit cannot revoke its scoped worker grant; current membership does.
-  let grant = await granted(req, env.SESSION_SECRET, grantee(pair.space, app))
+  let grant = await granted(req, env.SESSION_SECRET, grantee(space, app))
   if (bearing(req) && !grant) return null
-  let who: Who = ticket.screen
-    ? { person: ticket.person, role: 'viewer', via: ticket.screen }
-    : grant
-    ? { ...grant, role: grant.person == ticket.person ? role! : grant.role }
-    : { person: ticket.person, role: role!, via: ticket.app }
   return {
     dir,
-    space: pair.space,
-    app: pair.app,
+    space,
+    app: held,
     person: ticket.person,
     of,
     link,
     preview: app,
-    who,
-    screen: ticket.screen ?? null,
-    path: '/' + match[3],
+    who: viewer(ticket, role!, grant),
+    screen: !!ticket.screen,
+    path: aim.path,
     mount,
   }
 }
@@ -860,40 +793,28 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   headers.delete('cookie')
   headers.delete('authorization')
   req = new Request(req, { headers })
-  if (path.startsWith('/api/')) {
-    // An open draft's pages read and write its branch alone, never the
-    // live rows: until it has one, they wait.
-    if (found.of && found.of.branch == null) return no(503)
-    let at = path.slice(4)
-    if (
-      ![
-        '/client.js',
-        '/storage.js',
-        '/storage',
-        '/_draft.js',
-        '/_outbox.js',
-        '/_wire.js',
-        '/me',
-        '/graph',
-        '/query',
-        '/apply',
-        '/ws',
-        '/vocab',
-        '/vocab.json',
-      ].includes(at)
-    ) return no()
-    // A TV only reads: its page's writes are refused, and what the page
-    // keeps for the person stays in the page (public/storage.js).
-    if (
-      found.screen &&
-      (at == '/apply' || (at == '/storage' && req.method != 'GET'))
-    ) return no(403)
+  let to = door({
+    path,
+    method: req.method,
+    screen: found.screen,
+    waiting: !!found.of && found.of.branch == null,
+  })
+  if (to.to == 'nothing') return no(to.status)
+  if (to.to == 'api') {
     return privateResponse(
-      await api(req, env, dir, space, found.preview, at, who, clock(), mount),
+      await api(
+        req,
+        env,
+        dir,
+        space,
+        found.preview,
+        to.door,
+        who,
+        clock(),
+        mount,
+      ),
     )
   }
-  let decoded = decodedPath(path)
-  if (!decoded || inside(decoded)) return no()
   let app: App
   try {
     app = await following(
@@ -955,7 +876,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       // app's does, kept in the preview's own store.
       await storing(env, space, found.preview, who, mount),
       { badge: null, draft: found.link },
-      baseOf(mount, res.headers.get('x-yak-file') ?? decoded.slice(1), false),
+      baseOf(mount, res.headers.get('x-yak-file') ?? to.file.slice(1), false),
       undefined,
       // The draft's own copy, so a preview shows the copy as drafted.
       await copyFor(env, space, app),

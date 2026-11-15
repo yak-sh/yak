@@ -87,6 +87,7 @@ import {
   whereIn,
 } from './files.ts'
 import { seedy } from '@yaks/platform/files'
+import { linkFor } from '@yaks/platform/preview'
 import { perusal, peruse } from './files_read.ts'
 import { drawn, ICON_SVG } from './raster.ts'
 import { type Unfound, unfound } from './asset_url.ts'
@@ -366,7 +367,6 @@ import {
   goingBack,
   guessed,
   history,
-  linkFor,
   modifying,
   NEW,
   releasing,

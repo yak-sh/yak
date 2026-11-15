@@ -772,10 +772,25 @@ export let askable = (
 // cookie off before the request is served and marks the answer readable by
 // any origin (`admitted`), because the credential is the token in the URL,
 // which no browser attaches on its own. What the token opens is the one app
-// it was sealed for; every other request on such a path is anonymous.
+// it was sealed for; every other request on such a path is anonymous. A
+// draft's preview link is read the same way: its ticket is its path's
+// (`previews`).
 export let paged = (pathname: string): boolean =>
-  /^(?:\/[^/]+)?\/~[^/]+(?:\/|$)/.test(pathname) ||
-  /^\/[^/]+\/_preview\/[^/]+(?:\/|$)/.test(pathname)
+  /^(?:\/[^/]+)?\/~[^/]+(?:\/|$)/.test(pathname) || previews(pathname)
+
+/** The segment under an app its drafts' preview links are mounted at
+ * (@yaks/platform/preview `mountOf`). */
+export let PREVIEW = '_preview'
+
+let PREVIEWS = new RegExp(`^/[^/]+/${PREVIEW}(?:/|$)`)
+
+/** Whether `pathname` is under an app's preview links, which the platform
+ * answers and no app routes. */
+/// previews('/cookbook/_preview/t/about') -> true
+/// previews('/cookbook/_preview') -> true
+/// previews('/cookbook/_previews/') -> false
+/// previews('/_preview/t/') -> false
+export let previews = (pathname: string): boolean => PREVIEWS.test(pathname)
 
 // One page, one address: a doubled slash (`/printbound//refund`, from a typed
 // link or a crawler's join) names the page its single slash names. Collapsed
