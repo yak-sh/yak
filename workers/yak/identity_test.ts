@@ -1789,7 +1789,8 @@ test(
           headers: { cookie },
         })
         await r.body?.cancel()
-        return r.headers.get('set-cookie')
+        return r.headers.getSetCookie()
+          .find((c) => c.startsWith(`${COOKIE}=`)) ?? null
       }
       assertMatch((await home(await aged(46))) ?? '', /^yak_session=/)
       assertEquals(await home(await aged(30)), null)

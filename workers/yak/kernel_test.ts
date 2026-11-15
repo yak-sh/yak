@@ -29,7 +29,7 @@ for (let host of ['yaks.app', 'hsts.yaks.app']) {
   for (let status of [200, 302, 404, 503, 101]) {
     test(`HSTS covers ${host} responses with status ${status}`, async () => {
       let res = await handler.fetch(
-        new Request(`https://${host}/`),
+        new Request(`https://${host}/login`),
         env(() =>
           new Response(status == 101 ? null : 'answer', {
             status,
