@@ -344,7 +344,6 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     }
     return pairing(
       {
-        code: url.searchParams.get('code') ?? '',
         done: url.searchParams.has('paired')
           ? 'paired'
           : url.searchParams.has('unpaired')

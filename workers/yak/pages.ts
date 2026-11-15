@@ -1306,10 +1306,10 @@ let TV = `(() => {
 
 let pairAt = (env: Host) => url(env, '/tv/pair')
 
-/** The TV before it is paired: its code, where to type it, and the same
- * address as a code a phone's camera opens with the code filled in. */
+/** The TV before it is paired: its code and where to type it. The QR opens
+ * a blank form: a shared link must not supply another screen's code. */
 export let screenCode = (code: string, left: number, env: Host = {}) => {
-  let at = `${pairAt(env)}?code=${code.replace('-', '')}`
+  let at = pairAt(env)
   return page(
     env,
     { title: 'Show your drafts on this screen', layout: 'Tv' },
@@ -1399,7 +1399,7 @@ export let pairing = (
     {
       title: 'Pair a screen',
       lead:
-        'Enter the code your TV shows. The TV then shows, read-only, whatever draft your agent is building.',
+        'Enter the code shown on the TV in front of you, never a code someone sent you. That screen will be able to read your drafts.',
       status,
     },
     at.why || at.done

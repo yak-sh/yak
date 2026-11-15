@@ -100,7 +100,7 @@ test('a TV shows a code, the same one until it runs out, and writes nothing to s
   let one = await tv()
   ok(/^[A-Z]{4}-[A-Z]{4}$/.test(one.code), one.code)
   let pair = one.page.querySelector('.Tv_Qr')!.getAttribute('href')!
-  equal(pair, `https://yaks.app/tv/pair?code=${one.code.replace('-', '')}`)
+  equal(pair, 'https://yaks.app/tv/pair')
   ok(one.page.querySelector('.Tv_Qr svg'))
   let again = await doc(await one.open())
   equal(again.querySelector('.Tv_Code')!.textContent, one.code)
@@ -117,9 +117,23 @@ test('a code runs out after ten minutes, and a pairing made before the TV showed
   ok(after.held.code != held.code)
 })
 
+test("opening and submitting a pairing link cannot pair the sender's screen", async () => {
+  let sender = await tv()
+  let phone = await doc(
+    await at(`/tv/pair?code=${sender.code}`, { cookie: ada }),
+  )
+  let input = phone.querySelector('input[name=code]')!
+  equal(input.getAttribute('value'), '')
+  let submitted = await form('/tv/pair', ada, {
+    code: input.getAttribute('value')!,
+  })
+  equal(submitted.status, 400)
+  equal(await sender.now(), { paired: false, code: sender.code })
+})
+
 test('the person types the code on their phone, and the TV shows the draft their agent last wrote, read-only', async () => {
   let screen = await tv()
-  // Signed out, the phone signs in first and comes back with the code.
+  // A link can carry another screen's code, but cannot fill the form.
   let out = await at(`/tv/pair?code=${screen.code}`)
   equal(out.status, 302)
   equal(
@@ -131,7 +145,7 @@ test('the person types the code on their phone, and the TV shows the draft their
   )
   equal(
     phone.querySelector('input[name=code]')!.getAttribute('value'),
-    screen.code,
+    '',
   )
 
   let paired = await form('/tv/pair', ada, { code: screen.code.toLowerCase() })
