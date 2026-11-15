@@ -8,7 +8,7 @@ import { assetPath } from './asset_url.ts'
 import { matches } from './public-cache.ts'
 import type { Fetcher } from './env.ts'
 import { bearing, MOUNT } from '@yaks/platform/routes'
-import { PATHS, shown } from './variant.ts'
+import { PATHS } from './variant.ts'
 import { COOKIE, cookieValue } from '@yaks/platform/cookie'
 import { sha256 } from '@yaks/graph/sha256'
 import { claimed } from './site-data.ts'
@@ -331,10 +331,6 @@ export let stranger = (req: Request) =>
 export let isListing = (path: string) =>
   LISTINGS.includes(path) || path.startsWith(PICTURES) || isStatic(path) ||
   path == LOGIN
-
-/** The listing a visit to this apex path is answered with: the home page its
- * visitor is shown (variant.ts), else the path's own. */
-export let listed = (req: Request, path: string) => shown(req)?.path ?? path
 
 /** Where Site keeps one of them. The hostname is a placeholder for a service
  * binding; the apex is in the path because Workers Caching keys by path and

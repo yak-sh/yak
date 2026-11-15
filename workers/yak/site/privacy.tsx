@@ -19,7 +19,7 @@ export let Privacy = () => (
     copy='privacy'
     path='/privacy'
   >
-    <Top at='privacy.top' updated='2026-11-10T00:00:00Z' />
+    <Top at='privacy.top' updated='2026-11-15T00:00:00Z' />
     <Section at='privacy.about' says={{ questions: { mail } }}>
       <Postal at='privacy.about.address' />
     </Section>
@@ -30,7 +30,6 @@ export let Privacy = () => (
           called: {},
           session: { cookies: cookies('session') },
           campaign: { cookies: cookies('campaign') },
-          variant: { cookies: cookies('variant') },
           codes: {},
           content: {},
           apps: {},

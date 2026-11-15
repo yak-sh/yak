@@ -1,5 +1,5 @@
 // The home page's sky (site/sky.tsx, public/sky.js) run over index.html, and
-// over every other home page `/` draws (variant.ts). Its far scene is laid
+// over every other home page (variant.ts). Its far scene is laid
 // out one pixel to his unit from the corner of a window 1440 by 860, so a
 // point in his units (x, y) is at (x + 3000, y + 800) in the window. Its
 // timers and frames wait to be run: `wait` lets every "now and then" come
@@ -9,7 +9,6 @@ import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { page as home } from './site/mod.ts'
 import { MOON, moon, PHASES, SINK, SUN } from './site/sky.tsx'
-import { VARIANTS } from './variant.ts'
 
 // The page Site keeps a home page's path in (site.ts `HOME`).
 let file = (path: string) =>
@@ -97,10 +96,8 @@ test('the line he sits on is set where his tail touches it', () => {
   )
 })
 
-test('every home page / draws stands under the same sky', () => {
-  let drawn = VARIANTS.filter((v) => v.share > 0).map((v) => v.path)
-  assert(drawn.length > 1)
-  for (let path of drawn) {
+test('the home page and the describe page stand under the same sky', () => {
+  for (let path of ['/', '/build']) {
     let { el } = sky({ path })
     assert((el('.Sky') as HTMLElement).style.getPropertyValue('--feet'), path)
   }

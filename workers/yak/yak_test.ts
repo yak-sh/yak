@@ -3,7 +3,6 @@
 // the session cookie forged and signed, the file door, the graph API, and a
 // route that threw becoming an error entity behind a soft page.
 import { test } from '@yaks/testing'
-import { COOKIE as HOME } from './variant.ts'
 import {
   assert,
   assertEquals,
@@ -54,9 +53,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
   let k = await kernel()
   try {
     // The apex: the home page, its assets, and a soft 404 in its voice.
-    let home = await k.at('yaks.app', '/', {
-      headers: { cookie: `${HOME}=ask` },
-    })
+    let home = await k.at('yaks.app', '/')
     assertEquals(home.status, 200)
     assertMatch(home.headers.get('x-yak-version') ?? '', /^[a-f\d-]{36}$/i)
     assertStringIncludes(flat(await home.text()), hello)

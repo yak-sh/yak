@@ -207,12 +207,8 @@ test('the apex answers the crawler and the model', async () => {
       let etag = first.headers.get('etag') ?? ''
       assert(etag.startsWith('W/"'), path)
       await first.body?.cancel()
-      // The home page is split (variant.ts): the visitor keeps the variant
-      // they were drawn by its cookie, as a browser does.
-      let cookie = first.headers.getSetCookie().map((c) => c.split(';')[0])
-        .join('; ')
       let again = await k.at('yaks.app', path, {
-        headers: { 'if-none-match': etag, cookie },
+        headers: { 'if-none-match': etag },
       })
       assertEquals(again.status, 304, path)
       assertEquals(await again.text(), '', path)

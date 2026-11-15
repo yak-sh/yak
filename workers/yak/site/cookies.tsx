@@ -12,7 +12,7 @@ let privacy = (
 
 export let Cookies = () => (
   <Page copy='cookies' path='/cookies'>
-    <Top at='cookies.head' updated='2026-11-10T00:00:00Z' />
+    <Top at='cookies.head' updated='2026-11-15T00:00:00Z' />
     <Section
       at='cookies.session'
       says={{ use: { cookie: cookie('yak_session') }, clear: {} }}
@@ -27,10 +27,6 @@ export let Cookies = () => (
           privacy,
         },
       }}
-    />
-    <Section
-      at='cookies.home'
-      says={{ text: { cookie: cookie('yak_home') } }}
     />
     <Section at='cookies.other' says={{ text: { privacy } }} />
     <Section at='cookies.apps' says={{ text: {} }} />

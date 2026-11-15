@@ -166,7 +166,7 @@ let night = () => {
 /** What a page whose hero has the wandering yak carries in its head: his
  * walk (public/wander.js) and the sky he walks under (public/sky.js). Every
  * such page lays the `Sky` first in its body (frame.tsx `Page` `before`), so
- * each home page `/` draws (variant.ts) wears the same hero. */
+ * each home page (variant.ts) wears the same hero. */
 export let Walk = () => (
   <>
     <script src='wander.js' defer />

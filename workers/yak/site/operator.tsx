@@ -7,9 +7,9 @@
 // T-138775), so the page is drawn twice and Site serves the one that holds:
 // asking for a number (`by='text'`), or for an email with that said beside it
 // (`by='email'`). Each says its own words under `operator.<by>`, and the
-// words both say under `operator`. It is a home page of the split
-// (variant.ts), served at `/` as well as its own address, so its canonical
-// address is the home page's.
+// words both say under `operator`. It is a home page
+// (variant.ts) shown at its own address, and its canonical address is the
+// home page's.
 import { Button, Card, Field, Form } from '@yaks/ui'
 import { attr, type Slots, text } from './copy.ts'
 import { Page, Yours } from './frame.tsx'

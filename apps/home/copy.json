@@ -1027,11 +1027,6 @@
         "item": "%{lead} If the link you followed to yaks.app carries campaign tags or an ad's click id, we keep them, and when you arrived, in a second cookie for ninety days, so a sign-up can be counted against the campaign that brought it. Our own counts of each step from the home page to signing up keep the campaign's name, never who took the step. The %{cookies} has the details.",
         "cookies": "cookies page"
       },
-      "variant": {
-        "lead": "Which home page you saw.",
-        "item": "%{lead} We sometimes show different visitors different versions of our home page. A third cookie keeps the name of the version you saw for ninety days, so you see the same one next time, and our counts of each step keep that name, never who took the step. The %{cookies} has the details.",
-        "cookies": "cookies page"
-      },
       "codes": {
         "lead": "Your sign-in codes, briefly.",
         "item": "%{lead} A code lasts ten minutes and allows five guesses. We never store the digits, only a one-way hash of them, so nobody reading our records can sign in as you."
@@ -1144,7 +1139,7 @@
     "head": {
       "title": "Cookies",
       "updated": "Last updated %{date}",
-      "intro": "yaks.app sets one cookie, a second one when an ad or a campaign link brought you, and a third when you open our home page. This page explains what they do."
+      "intro": "yaks.app sets one cookie, and a second one when an ad or a campaign link brought you. This page explains what they do."
     },
     "privacy": "privacy policy",
     "session": {
@@ -1155,10 +1150,6 @@
     "campaign": {
       "title": "The campaign cookie",
       "text": "We set %{cookie} on yaks.app only when the link you followed carries campaign tags (%{tags} and the like) or an ad's click id (such as Meta's %{click}). It holds those tags, that id and when you arrived, and nothing else: no name, address or session. It lets us count which campaigns bring people who sign up, and tell the ad network whose ad you clicked that its click led to a visit or a sign-up (the %{privacy} says exactly what). It expires after ninety days, and a later campaign link replaces it. Clearing or refusing it changes nothing you can see."
-    },
-    "home": {
-      "title": "The home page cookie",
-      "text": "We sometimes show different visitors different versions of our home page, to learn which one explains yaks.app best. When you open one, we set %{cookie} on yaks.app. It holds the name of the version you saw, and nothing else: no name, address or session. It lets us show you the same version next time, and count how many visitors to each version went on to sign up. It expires after ninety days. Clearing or refusing it changes only which version of the home page you see."
     },
     "other": {
       "title": "Other cookies",

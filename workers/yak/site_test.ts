@@ -1241,7 +1241,7 @@ test("the Operator's page asks for a number first, with what giving it agrees to
   assertEquals(number.type, 'tel')
   assertStringIncludes(number.hint, CODE_NOTE)
   assertEquals(number.again, '#start')
-  // A home page of the split (variant.ts): counted and indexed as the home
+  // A home page (variant.ts): counted and indexed as the home
   // page is.
   assertEquals(number.ctas, ['start', 'join'])
   assertEquals(number.canonical, 'https://yaks.app/')

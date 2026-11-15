@@ -230,7 +230,7 @@ export let Cost = () => (
 export let arrow = (glyph: string) => <span aria-hidden='true'>{glyph}</span>
 
 /**
- * What one of the home pages `/` is split between (variant.ts) says of its
+ * What one of the home pages (variant.ts), `/` or /build, says of its
  * own: `copy`, the key its words are under, and the examples it shows, what
  * it says every app does and the steps it says it takes, each by its name
  * under `does` and `how`. A word its copy lacks is the home page's, so a

@@ -253,8 +253,8 @@ let by = (column: string) => (since: Date, dataset = DATASET) =>
  * (arrival.ts `campaign`). */
 export let campaigns = by(CAMPAIGN)
 
-/** The home pages visitors were shown, and how many of them clicked a call to
- * action, began a build, signed up and started a checkout (variant.ts). */
+/** The home pages visitors were shown, and the steps taken on them
+ * (variant.ts). */
 export let variants = by(VARIANT)
 
 /** How many times each call to action was clicked, busiest first. */

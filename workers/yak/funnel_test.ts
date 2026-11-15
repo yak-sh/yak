@@ -16,7 +16,6 @@ import { stopped } from '@yaks/platform/funnel'
 import { FUNNEL, isHome, type Visited } from './view-point.ts'
 import { analytics, dataset } from './testing.ts'
 import { page } from './site/mod.ts'
-import { START } from './newcomer.ts'
 import type { Env } from './env.ts'
 import { connector, kernel, mailed, unique } from './probe.ts'
 
@@ -32,7 +31,7 @@ let visit = (ua = BROWSER, path = '/', cf?: Visited['cf']) =>
     { cf },
   )
 
-test("a step is written under the platform, saying what a view says and its campaign, and a crawler's or a script's is not", () => {
+test("a step is written under the platform, saying what a view says, its campaign and the home page it is on, and a crawler's or a script's is not", () => {
   let views = dataset()
   step({ VIEWS: views }, 'code_sent', visit())
   step({ VIEWS: views }, 'signup', visit('yaks-e2e-bot'))
@@ -57,7 +56,7 @@ test("a step is written under the platform, saying what a view says and its camp
         'browser',
         '',
         '',
-        '',
+        'ask',
       ],
       doubles: [0],
     },
@@ -89,7 +88,7 @@ test("a step is written under the platform, saying what a view says and its camp
         'browser',
         'meta//pilot',
         '',
-        '',
+        'ask',
       ],
       doubles: [0],
     },
@@ -386,7 +385,7 @@ let read = (points: { indexes?: string[]; blobs?: string[] }[]) => {
   )
 }
 
-test('a landing page visited at its own address is a home page visit, and the build begun from its box counts under it', async () => {
+test('a landing page visited at its own address is a home page visit counted under it, and keeps no cookie', async () => {
   let k = await kernel()
   for (
     let [path, kicker, name] of [
@@ -400,25 +399,12 @@ test('a landing page visited at its own address is a home page visit, and the bu
       headers: { 'user-agent': BROWSER },
     })
     assertStringIncludes(await seen.text(), kicker)
-    let cookie = seen.headers.getSetCookie().map((c) => c.split(';')[0])
-      .find((c) => c.startsWith('yak_home='))
-    assertEquals(cookie, `yak_home=${name}`)
-    let built = await k.at(k.host, START, {
-      method: 'POST',
-      redirect: 'manual',
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        'user-agent': BROWSER,
-        cookie: cookie!,
-      },
-      body: new URLSearchParams({ say: 'A sign-up form' }).toString(),
-    })
-    await built.body?.cancel()
+    assertEquals(seen.headers.get('set-cookie'), null)
     assertEquals(
       k.views.points.slice(before)
         .filter((p) => p.indexes?.[0] == FUNNEL)
         .map((p) => [p.blobs![1], p.blobs![8]]),
-      [['home', name], ['started', name]],
+      [['home', name]],
     )
   }
 })

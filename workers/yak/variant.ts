@@ -1,120 +1,36 @@
-// Which home page a visitor to yaks.app is shown, and which one every step
-// they take counts under (funnel.ts). A home page is data: a name, the page
-// Site keeps it at, and its share of the visitors `/` draws. A page with a
-// share is one `/` is split between. A page with none is a landing page: only
-// its own address shows it, which is where an ad for one audience points.
-//
-// A visit to `/` shows the page its visitor holds, when that page has a
-// share, else one drawn by the shares; a visit to a page's own address shows
-// that page. Whichever is shown is kept in a cookie of its own on the apex,
-// beside the arrival's (arrival.ts), so the click, the build and the sign-up
-// that follow count under the page the visitor last saw. A crawler is drawn
-// nothing and keeps nothing: `/` answers it with the first page that has a
-// share, so an engine indexes one home page. Nothing here imports past
-// @yaks/platform/cookie and crawlers.ts, so yak-front (front/) holds it.
-import { isPerson } from './crawlers.ts'
-import { cookieValue } from '@yaks/platform/cookie'
+// Which home page a visitor to yaks.app is shown, and which one a step of the
+// funnel (funnel.ts) counts under. A home page is data: a name in the funnel
+// and the page Site keeps it at. `/` is the "ask" page for everyone; every
+// other page shows only at its own address, which is where an ad for one
+// audience points. Nothing here imports anything, so yak-front (front/) holds
+// it.
 
-/** The cookie a visitor's variant is kept in. */
-export let COOKIE = 'yak_home'
-
-/** How long a variant is kept: as long as the arrival is (arrival.ts). */
-export let DAYS = 90
-
-/** One home page: its name in the funnel, where Site keeps it, and its share
- * of the visitors `/` draws. */
-export type Variant = { name: string; path: string; share: number }
+/** One home page: its name in the funnel and where Site keeps it. */
+export type Variant = { name: string; path: string }
 
 /** The page that pitches the Operator (site/operator.tsx). */
 export let OPERATOR = '/operator'
 
-/** The home pages: the two `/` is split between, and the landing pages. */
+/** The home pages: `/` first, then each one shown at its own address. */
 export let VARIANTS: Variant[] = [
-  { name: 'ask', path: '/', share: 1 },
-  { name: 'describe', path: '/build', share: 1 },
-  { name: 'operator', path: OPERATOR, share: 0 },
-  { name: 'church', path: '/churches', share: 0 },
-  { name: 'organization', path: '/organizations', share: 0 },
-  { name: 'township', path: '/townships', share: 0 },
+  { name: 'ask', path: '/' },
+  { name: 'describe', path: '/build' },
+  { name: 'operator', path: OPERATOR },
+  { name: 'church', path: '/churches' },
+  { name: 'organization', path: '/organizations' },
+  { name: 'township', path: '/townships' },
 ]
 
 /** The pages Site keeps for the home page (kept-page.ts `LISTINGS`). */
-export let PATHS = [...new Set(VARIANTS.map((v) => v.path))]
+export let PATHS = VARIANTS.map((v) => v.path)
 
-let drawable = (all: Variant[]) => all.filter((v) => v.share > 0)
-
-/**
- * The variant `roll` (a number in [0, 1)) lands on, by the shares.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * let all = [
- *   { name: 'a', path: '/', share: 1 },
- *   { name: 'b', path: '/b', share: 3 },
- * ]
- * assertEquals(drawn(all, 0.2).name, 'a')
- * assertEquals(drawn(all, 0.3).name, 'b')
- * ```
- */
-export let drawn = (all: Variant[], roll: number): Variant => {
-  let open = drawable(all), total = open.reduce((n, v) => n + v.share, 0)
-  let at = roll * total
-  return open.find((v) => (at -= v.share) < 0) ?? open.at(-1) ?? all[0]
+/** The home page this request is shown: the one at its path, or none. */
+export let shown = (req: Request, all = VARIANTS): Variant | undefined => {
+  let path = new URL(req.url).pathname
+  return all.find((v) => v.path == path)
 }
 
-// What a request's visitor holds and is shown, decided once, so the page it
-// answers, the step it counts and the cookie it keeps all say one variant.
-let decided = new WeakMap<Request, { variant: Variant; fresh: boolean }>()
-
-let held = (req: Request, all: Variant[]) => {
-  let name = cookieValue(req.headers.get('cookie'), COOKIE)
-  return all.find((v) => v.name == name)
-}
-
-/**
- * The home page this request is shown, or none when it asks for no home
- * page: at `/`, the one its visitor holds if `/` still draws it, else one
- * drawn, and for a crawler the first; at a page's own address, that page.
- */
-export let shown = (
-  req: Request,
-  all = VARIANTS,
-  roll = Math.random,
-): Variant | undefined => {
-  let was = decided.get(req)
-  if (was) return was.variant
-  let path = new URL(req.url).pathname, kept = held(req, all)
-  let person = isPerson(req)
-  let variant = path != '/'
-    ? all.find((v) => v.path == path)
-    : kept && kept.share > 0
-    ? kept
-    : drawn(all, person ? roll() : 0)
-  if (variant) decided.set(req, { variant, fresh: person && variant != kept })
-  return variant
-}
-
-/**
- * The home page a step of this request counts under (funnel.ts): the one it
- * was shown, else the one its visitor holds, else '' for a visitor who never
- * saw one.
- */
+/** The home page a step of this request counts under (funnel.ts): the one it
+ * is shown, else '' for a request that shows none. */
 export let variant = (req: Request, all = VARIANTS): string =>
-  (decided.get(req)?.variant ?? held(req, all))?.name ?? ''
-
-/**
- * The answer to a home page, keeping the one shown where its visitor held
- * another or none; any other answer as it was. Apex only: no app's host ever
- * sees it.
- */
-export let keep = (req: Request, res: Response): Response => {
-  let was = decided.get(req)
-  if (res.status >= 400 || !was?.fresh) return res
-  let out = new Response(res.body, res)
-  out.headers.append(
-    'set-cookie',
-    `${COOKIE}=${was.variant.name}; Max-Age=${DAYS * 86400}; Path=/; ` +
-      'Secure; HttpOnly; SameSite=Lax',
-  )
-  return out
-}
+  shown(req, all)?.name ?? ''

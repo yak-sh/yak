@@ -1,7 +1,7 @@
 // One page view as Analytics Engine keeps it: what views.ts counts and reads
 // back, and what yak-front (front/) writes for a page it answers from the edge.
 // Nothing here imports past arrival.ts, crawlers.ts and variant.ts, which
-// import only @yaks/platform/cookie, so the front Worker can hold it.
+// import at most @yaks/platform/cookie, so the front Worker can hold it.
 import { arrival, campaign } from './arrival.ts'
 import { classed, isPerson, type Visited } from './crawlers.ts'
 import { PATHS, variant } from './variant.ts'
@@ -89,7 +89,7 @@ export let FUNNEL = 'yaks.app'
  * platform itself, whose slug is the step. The request, where there is one,
  * says what a view says of it, and after it the campaign its arrival names
  * (arrival.ts), the call to action clicked, for a click (funnel.ts
- * `clicked`), and the home page variant its visitor was shown (variant.ts); a
+ * `clicked`), and the home page the request was shown (variant.ts); a
  * step taken away from any request (a person coming back, a newcomer's first
  * app) says only the step and the campaign `came`, the one its taker arrived
  * by (directory.ts `stepper`). A step a test account took

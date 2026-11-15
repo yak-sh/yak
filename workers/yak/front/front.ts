@@ -20,7 +20,6 @@ import {
   asked,
   homed,
   isListing,
-  listed,
   listing,
   LOGIN,
   opens,
@@ -50,7 +49,6 @@ import {
   sameOrigin,
   spaceDoor,
 } from '@yaks/platform/routes'
-import * as variant from '../variant.ts'
 import type { Clock } from '@yaks/fp'
 import { overdue, watch } from '../lib/watch.ts'
 import { VERSION } from '@yaks/workerd/worker'
@@ -186,7 +184,7 @@ export let kept = (
       !isListing(path) || (path == LOGIN && !stranger(req)) ||
       (homed(path) && session(req))
     ) return null
-    return listing(req, env.SITE, apex(env), listed(req, path)).then(
+    return listing(req, env.SITE, apex(env), path).then(
       async (page) => {
         if (page.status >= 500) return null
         // Site keeps no page that isn't found (site.ts `rendered`), so a 4xx
@@ -210,7 +208,7 @@ export let kept = (
             ),
           )
         }
-        return variant.keep(req, keep(req, page))
+        return keep(req, page)
       },
     )
   }

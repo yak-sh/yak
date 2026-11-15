@@ -9,7 +9,6 @@
 // holds one. Nothing here knows the code before the kernel mails it. The
 // directory itself is read back through the MCP graph tier as the owner of
 // `yak` — the one door into the meta store (probe.ts `meta`, T-32585).
-import { COOKIE as HOME } from './variant.ts'
 import {
   assert,
   assertEquals,
@@ -1786,10 +1785,8 @@ test(
           k.secret,
         )}`
       let home = async (cookie: string) => {
-        // Holding today's home page, so the split (variant.ts) keeps no
-        // cookie of its own.
         let r = await k.at('yaks.app', '/', {
-          headers: { cookie: `${cookie}; ${HOME}=ask` },
+          headers: { cookie },
         })
         await r.body?.cancel()
         return r.headers.get('set-cookie')

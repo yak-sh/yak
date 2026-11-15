@@ -19,7 +19,7 @@ import * as install from './install.ts'
 import * as appPage from './app-page.ts'
 import * as publisherPage from './publisher-page.ts'
 import { call } from './tools.ts'
-import { isListing, listed } from './kept-page.ts'
+import { isListing } from './kept-page.ts'
 import { sprite } from './icons.ts'
 import { lost } from './pages.ts'
 import { callback } from './connections.ts'
@@ -39,7 +39,6 @@ import * as site from './site.ts'
 import * as funnel from './funnel.ts'
 import { isHome, isPage } from './view-point.ts'
 import { keep } from './arrival.ts'
-import * as variant from './variant.ts'
 import * as ads from './ads.ts'
 
 // Doors loaded when a request first reaches one (T-37977). What they import,
@@ -214,7 +213,7 @@ let atApex = async (req: Request, env: Env, path: string) => {
   // The apex's public pages are cached behind a separate entrypoint; only
   // these paths reach it, without credentials or unbounded query strings.
   if ((req.method == 'GET' || req.method == 'HEAD') && isListing(path)) {
-    let page = await site.forward(req, env, listed(req, path))
+    let page = await site.forward(req, env, path)
     if (isHome(req, path, page)) funnel.step(env, 'home', req)
     return page
   }
@@ -252,7 +251,7 @@ let atApex = async (req: Request, env: Env, path: string) => {
 // (ads.ts).
 let seen = (req: Request, env: Env, page: Response) => {
   if (isPage(req, page)) ads.after(env, 'view', req)
-  return variant.keep(req, keep(req, page))
+  return keep(req, page)
 }
 
 /** An apex request's answer, leaving through `seen`. */

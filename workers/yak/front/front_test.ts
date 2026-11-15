@@ -5,12 +5,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { FRONT_VERSION, type FrontEnv, serve, settled } from './front.ts'
 import { pageAt, personal, SEEN } from '../kept-page.ts'
 import type { Conversion } from '../arrival.ts'
-import { COOKIE } from '../variant.ts'
 import { routes, VERSION } from '@yaks/workerd/worker'
-
-// A visitor who already holds today's home page, where the home page is split
-// (variant.ts).
-let held = `${COOKIE}=ask`
 
 let body = (claims: unknown) => `${btoa(JSON.stringify(claims))}.mac`
 let days = (n: number) => Date.now() / 1000 + n * 24 * 60 * 60
@@ -406,7 +401,7 @@ test("the apex's listings come from Site, with their own lifetime", async () => 
       },
     })
   )
-  let res = await f.go('https://yaks.app/', { headers: { cookie: held } })
+  let res = await f.go('https://yaks.app/')
   assertEquals(await res.text(), 'home')
   assertEquals(f.asked, ['https://site.invalid/yaks.app/'])
   assertEquals(
@@ -465,7 +460,7 @@ test("a listing an ad's click opened keeps its arrival and hands the kernel the 
   // A visit no ad sent keeps nothing and tells nobody.
   let plain = front(home)
   let none = await plain.go('https://yaks.app/', {
-    headers: { ...ua, cookie: held },
+    headers: ua,
   })
   assertEquals(none.headers.get('set-cookie'), null)
   assertEquals(plain.told, [])
