@@ -372,7 +372,7 @@ for (let init of bypasses) {
 test('a signed-in API read and a private page never receive a shared page', async () => {
   let g = gateway(() => passed())
   let init = { headers: { cookie: 'yak_session=person-one' } }
-  assertEquals(await g.get('https://ada.yaks.app/cookbook/api/me', init), null)
+  assertEquals(await g.get('https://ada.yaks.app/cookbook/api/who', init), null)
   assertEquals(g.site.asks(), 0)
   assertEquals(await g.get(undefined, init), null)
   assertEquals(g.site.held.size, 1) // Only the pass is kept, never a private body.

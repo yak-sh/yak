@@ -124,7 +124,7 @@ test('each buyer receives only their own receipt without provider identifiers', 
         rows: await orders.graph.query(
           `.entity.eid=${id} .order|.order.quote=${id}`,
         ),
-        me: await (await orders.ask('me', buyer)).json(),
+        me: await (await orders.ask('who', buyer)).json(),
       }),
     )
     assertEquals(response.headers.get('cache-control'), 'private, no-store')

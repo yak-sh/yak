@@ -135,7 +135,7 @@ export let keep = (
  * let published = { name: 'notes', version: 2, at: '', about: '' }
  * let app = { access: 'private', worker: '', published } as const
  * assert(keepable(app, css) && keepable(app, '/api/client.js'))
- * assert(keepable(app) && !keepable(app, '/') && !keepable(app, '/api/me'))
+ * assert(keepable(app) && !keepable(app, '/') && !keepable(app, '/api/who'))
  * assert(!keepable({ ...app, published: null }))
  * ```
  */

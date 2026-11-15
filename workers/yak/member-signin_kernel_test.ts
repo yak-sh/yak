@@ -134,7 +134,7 @@ let pray = (cookie: string | undefined, words: string, to = 'Our church') =>
     body: JSON.stringify({ answers: { [said]: words, [share]: to } }),
   })
 let joinFor = async (cookie: string) =>
-  (await (await at('api/me', cookie)).json()).join
+  (await (await at('api/who', cookie)).json()).join
 
 test('a member signed in by address or number finds their sign-up filled in', async () => {
   equal(await shown(ann.cookie), {
@@ -195,7 +195,7 @@ test('published, the directory shows a member Join and a stranger its sample', a
   let sample = await at('', stranger.cookie)
   await sample.body?.cancel()
   equal(sample.status, 200)
-  equal((await (await at('api/me', stranger.cookie)).json()).visit, {
+  equal((await (await at('api/who', stranger.cookie)).json()).visit, {
     kept: false,
   })
 })

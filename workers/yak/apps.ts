@@ -1,5 +1,10 @@
 import { browsersOf } from './attribution.ts'
-import { refuse as refusedOptions, waits, writeOptions } from '@yaks/api'
+import {
+  refuse as refusedOptions,
+  waits,
+  whoDoor,
+  writeOptions,
+} from '@yaks/api'
 import { decodedPath } from './request-path.ts'
 import { serves, stamped } from './site-data.ts'
 import { BINARY } from '@yaks/vocab/wire'
@@ -185,6 +190,7 @@ import { type Alone, CLIENT, fixed, NAMED_CLIENT } from './kept-page.ts'
 import { cookieValue } from '@yaks/platform/cookie'
 import { noted, refusal, serving } from './unseen.ts'
 import { door as reportDoor, flood } from '@yaks/tracker/report'
+import { writer } from '@yaks/platform/app-authority'
 import { ADDRESS } from '@yaks/platform/routes'
 import {
   background,
@@ -379,7 +385,7 @@ export let refusedSaid = async (
   what: string,
 ) => await waiting(dir, space, app, person, what) ? WAITING : MEMBER[what]
 
-/** Whether a page asking who is looking (`/me`) hears that an invitation
+/** Whether a page asking who is looking (`/who`) hears that an invitation
  * waits for them: signed in, unable to write here, and let in by the owner,
  * so the page can say so before they type. */
 export let invitedHere = async (
@@ -2078,51 +2084,58 @@ export let api = async (
     })
     return route.handle(req)
   }
-  // Who is looking, before the first write (T-32679). A page could only learn
-  // this from a refusal, which is too late twice over: on an `open` app a
-  // signed-out write has no `created.by`, so the page must ask a guest their
-  // name and nothing said so; on a `public` one the sign-in bounce arrives
-  // after the guest typed, and their work goes with them (C-32675 items 5 and
-  // 6). `person` is null signed out, `via` is this browser's vouched instrument,
-  // `name` is what to call them (never an
-  // address — T-32654), `reads`/`writes` are this app's own access answered
-  // for this caller, and `signIn` is where a signed-out visitor signs in,
-  // holding this page as its return address — null once they are in.
-  // `invited` is what a refusal would tell a signed-in friend the owner let in
-  // (WAITING): their way through is the click in the letter, so the page
-  // can say so before they type rather than offer them nothing (T-124071).
-  // `visit` is null unless this is a stranger served the app from its sample
-  // or a store of their own (visit.ts), when `kept` says whether that store is
-  // an app of theirs yet: an app can word its own prompt to keep what they
-  // made, beside the platform's bar.
-  // Answered to anyone: a stranger learning they must sign in is the point.
-  if (path == '/me') {
-    let person = who.person
-    // Asked together, so they travel as one trip (directory-copy.ts
-    // `gathered`): each in turn was a round trip of the page's first wait.
-    let [name, invited, join] = await Promise.all([
-      person ? dir.nameAt(person) : null,
-      invitedHere(dir, space, app, person, mayRead, mayPost),
-      // The role pressing Join gives them, where the app's own rows list
-      // them and it is more than they hold (join.ts), else null.
-      joinable(env, dir, space, app, who),
-    ])
-    return Response.json({
-      person,
-      via: who.via ?? null,
-      name,
-      role: who.role,
-      reads: mayRead,
-      // A stranger reading the sample writes, and their first write gives
-      // them a store of their own (visit.ts).
-      writes: mayPost || onSample(app),
-      signIn: person
-        ? null
-        : signInAt(req.headers.get('referer') || req.url, env),
-      invited,
-      join,
-      visit: who.visit ?? null,
-    })
+  // Who is looking, before the first write (T-32679), as @yaks/api's `/who`
+  // answers it: the actor the store signs this caller's writes as, and beside
+  // it their standing here. A page could only learn this from a refusal,
+  // which is too late twice over: on an `open` app a signed-out write has no
+  // `created.by`, so the page must ask a guest their name and nothing said
+  // so; on a `public` one the sign-in bounce arrives after the guest typed,
+  // and their work goes with them (C-32675 items 5 and 6). `person` is null
+  // signed out, `name` is what to call them (never an address — T-32654),
+  // `reads`/`writes` are this app's own access answered for this caller, and
+  // `signIn` is where a signed-out visitor signs in, holding this page as its
+  // return address — null once they are in. `invited` is what a refusal would
+  // tell a signed-in friend the owner let in (WAITING): their way through is
+  // the click in the letter, so the page can say so before they type rather
+  // than offer them nothing (T-124071). `visit` is null unless this is a
+  // stranger served the app from its sample or a store of their own
+  // (visit.ts), when `kept` says whether that store is an app of theirs yet:
+  // an app can word its own prompt to keep what they made, beside the
+  // platform's bar. Answered to anyone: a stranger learning they must sign in
+  // is the point. `/me` is the same door by the name shipped pages ask it by
+  // (@yaks/platform/client.js `me()` before it asked `who`, and store.md's).
+  if (path == '/who' || path == '/me') {
+    return await whoDoor({
+      authenticate: () => writer(new Request(req.url, { headers })),
+      standing: async () => {
+        let person = who.person
+        // Asked together, so they travel as one trip (directory-copy.ts
+        // `gathered`): each in turn was a round trip of the page's first
+        // wait.
+        let [name, invited, join] = await Promise.all([
+          person ? dir.nameAt(person) : null,
+          invitedHere(dir, space, app, person, mayRead, mayPost),
+          // The role pressing Join gives them, where the app's own rows list
+          // them and it is more than they hold (join.ts), else null.
+          joinable(env, dir, space, app, who),
+        ])
+        return {
+          person,
+          name,
+          role: who.role,
+          reads: mayRead,
+          // A stranger reading the sample writes, and their first write gives
+          // them a store of their own (visit.ts).
+          writes: mayPost || onSample(app),
+          signIn: person
+            ? null
+            : signInAt(req.headers.get('referer') || req.url, env),
+          invited,
+          join,
+          visit: who.visit ?? null,
+        }
+      },
+    })(req)
   }
   // Joining an app whose own rows list them (join.ts): signed in, and the
   // rows asked again here rather than taken from the page that offered it.
@@ -2864,9 +2877,10 @@ let served = async (
     if (page) return page
   }
   let routing = c.time('route', () => dir.page(r.space!, r.app, person))
-  // What `/me` tells a person beside their standing (api `/me`), asked with
-  // the route so a page's first question waits on that one trip.
-  if (person && !edge && url.pathname.endsWith('/api/me')) {
+  // The name `/who` tells a person beside their standing (api `/who`, and
+  // `/me`, its shipped name), asked with the route so a page's first question
+  // waits on that one trip.
+  if (person && !edge && /\/api\/(?:who|me)$/.test(url.pathname)) {
     dir.nameAt(person).catch(() => {})
   }
   let reading = routing.then((route) => route.space)

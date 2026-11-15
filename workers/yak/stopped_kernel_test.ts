@@ -11,7 +11,7 @@ let { eids, cookie } = await seed(k, [{
   slug: 'stoppedprobe',
   apps: ['notes'],
 }])
-// Its rows list who may join it (join.ts), so a stranger's `/api/me` asks
+// Its rows list who may join it (join.ts), so a stranger's `/api/who` asks
 // the store, and meets the stop where that door does not catch it.
 let agent = connector(k, cookie)
 let at = { space: 'stoppedprobe', app: 'notes' }
@@ -50,7 +50,7 @@ for (
     ['the vocabulary', 'vocab', {}, 429],
     ['a blob', `blob/${'a'.repeat(64)}`, {}, 429],
     ['a write it keeps', 'apply', wrote, 202],
-    ['who is asking', 'me', { headers: { cookie: stranger.cookie } }, 429],
+    ['who is asking', 'who', { headers: { cookie: stranger.cookie } }, 429],
   ] as [string, string, RequestInit, number][]
 ) {
   test(`a stopped store's wait reaches the page at ${door}`, async () => {

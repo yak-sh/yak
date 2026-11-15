@@ -57,9 +57,10 @@ export let VIA = 'x-via'
 
 /**
  * Callers named by another graph's door: a request naming a run in `x-via` is
- * whoever the door at `url` says it is (its `GET /who`), so a graph that keeps
- * no sessions of its own, such as the box's tracker, signs a session's writes
- * as the graph that keeps them does. A request naming none is nobody here.
+ * whoever the door at `url` says it is (its `GET /who`, read for its `by` and
+ * `via` alone), so a graph that keeps no sessions of its own, such as the
+ * box's tracker, signs a session's writes as the graph that keeps them does.
+ * A request naming none is nobody here.
  *
  * ```ts
  * import { api, asking } from '@yaks/api'
@@ -92,6 +93,14 @@ export let asking = (url: string, go: typeof fetch = fetch): Authenticate => {
       await response.body?.cancel()
       throw new Error(`${at} answered ${response.status}`)
     }
-    return await response.json()
+    // The door may say more of its caller than who they are (route.ts
+    // `Standing`); only who they are signs a write here.
+    let said = await response.json() as Actor | null
+    return said?.by || said?.via
+      ? {
+        ...said.by ? { by: said.by } : {},
+        ...said.via ? { via: said.via } : {},
+      }
+      : null
   }
 }

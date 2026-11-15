@@ -217,7 +217,7 @@ test('staging tool URLs and app mail use the same configured host', async () => 
 // The listing answers who the caller is in each space it lists, off the
 // directory's own `member` row (T-35384). It is the only door that says a role
 // for every space at once: before this, a client had to ask each space's front
-// app `/me`, one round trip apiece, for a fact the directory already held.
+// app `/who`, one round trip apiece, for a fact the directory already held.
 test('app_list says the caller’s role in each space it lists', async () => {
   let { env } = rows('member-role-secret', {
     MAIL: { send: () => Promise.resolve({ messageId: 'sent' }) },

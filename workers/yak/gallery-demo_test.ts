@@ -173,7 +173,7 @@ test('relisting updates the demo copy and keeps its records', async () => {
   )
   let rows = await k.at('yourname.yaks.app', '/skip/api/query?q=.note')
   assertEquals(await rows.json(), [])
-  let who = await k.at('yourname.yaks.app', '/skip/api/me').then((r) =>
+  let who = await k.at('yourname.yaks.app', '/skip/api/who').then((r) =>
     r.json()
   )
   assertEquals([who.role, who.writes], ['viewer', true])

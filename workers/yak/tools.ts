@@ -5971,7 +5971,7 @@ let OURS: Row[] = [
           url: at,
           // What the caller is here — the directory's `member` row, which this
           // listing already read to answer at all. A client that asked an
-          // app's `/me` for it instead would wake a Durable Object per space
+          // app's `/who` for it instead would wake a Durable Object per space
           // to learn what this one answer already knows (T-35384).
           role,
           // The space itself may be in the trash (erase.ts, T-34431), and then

@@ -59,7 +59,7 @@ let press = (cookie: string) =>
     redirect: 'manual',
   })
 let me = async (cookie: string) =>
-  (await (await k.at(host, `/${app}/api/me`, { headers: { cookie } })).json())
+  (await (await k.at(host, `/${app}/api/who`, { headers: { cookie } })).json())
     .join
 
 test('a person the rows list presses Join once and is in', async () => {

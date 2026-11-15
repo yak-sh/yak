@@ -76,13 +76,13 @@ let owner = client(k, host, 'notes', k.owner.cookie)
 let nobody = client(k, host, 'notes')
 
 let sampleBefore = await titles(ada)
-let me = await (await k.at(host, '/notes/api/me', { headers: ada.headers }))
+let me = await (await k.at(host, '/notes/api/who', { headers: ada.headers }))
   .json()
 let page = async (headers: HeadersInit) =>
   await (await k.at(host, '/notes/', { headers })).text()
 let adaPage = await page(ada.headers)
 let ownerPage = await page(owner.headers)
-let ownerMe = await (await k.at(host, '/notes/api/me', {
+let ownerMe = await (await k.at(host, '/notes/api/who', {
   headers: owner.headers,
 })).json()
 let first = await ada.post([{ entity: { eid: '$n' }, note: { title: 'Mine' } }])
@@ -115,7 +115,7 @@ let boRows = await titles(bo)
 let boClaimed = (await visits(env, { by: boIn.person })).length
 
 // A browser nobody is signed in on: its cookie is all it is.
-let opened = await k.at(host, '/notes/api/me')
+let opened = await k.at(host, '/notes/api/who')
 let cookie = opened.headers.get('set-cookie')!.split(';')[0]
 let meOut = await opened.json()
 let out = client(k, host, 'notes', cookie)
@@ -347,7 +347,7 @@ let strangerNext = await stranger.rows()
 let fay = browser((await signIn(k)).cookie)
 await (await fay.at('/')).res.body?.cancel()
 let fayAsked = []
-for (let path of ['/', '/api/me']) {
+for (let path of ['/', '/api/who']) {
   let { res, hops } = await fay.at(path)
   fayAsked.push([res.status, hops])
   await res.body?.cancel()

@@ -78,7 +78,7 @@ test('an installed copy runs like its space, or sandboxed', async () => {
     )
     assertStringIncludes(await free.text(), '<base href="/notes/">')
     assertEquals(
-      (await json(await at('/notes/api/me', { headers: cookie }))).person,
+      (await json(await at('/notes/api/who', { headers: cookie }))).person,
       me.person,
     )
     await add('notes')
@@ -233,20 +233,20 @@ test('an installed copy runs like its space, or sandboxed', async () => {
     // cookie. The page's origin is opaque, so it says `null`.
     let opaque = { origin: 'null' }
     assertEquals(
-      (await json(await at('/other/api/me', { headers: cookie }))).person,
+      (await json(await at('/other/api/who', { headers: cookie }))).person,
       null,
     )
-    let viaPath = await at(`${mine}api/me`, { headers: opaque })
+    let viaPath = await at(`${mine}api/who`, { headers: opaque })
     assertEquals(viaPath.headers.get('access-control-allow-origin'), '*')
     let said = await json(viaPath)
     assertEquals([said.person, said.role], [me.person, 'owner'])
     let bearer = { authorization: `Bearer ${token}` }
     assertEquals(
-      (await json(await at('/other/api/me', { headers: bearer }))).person,
+      (await json(await at('/other/api/who', { headers: bearer }))).person,
       me.person,
     )
     // A cookie riding along on the token's path is taken off, not added.
-    let both = await at(`${mine}api/me`, {
+    let both = await at(`${mine}api/who`, {
       headers: { ...cookie, ...opaque },
     })
     assertEquals((await json(both)).person, me.person)
@@ -294,7 +294,7 @@ test('an installed copy runs like its space, or sandboxed', async () => {
     await nav.body?.cancel()
 
     // Its token opens no other app.
-    let elsewhere = await at(`/notes/~${token}/api/me`, { headers: opaque })
+    let elsewhere = await at(`/notes/~${token}/api/who`, { headers: opaque })
     assertEquals(elsewhere.status, 404)
     await elsewhere.body?.cancel()
 

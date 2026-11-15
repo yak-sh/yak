@@ -74,7 +74,7 @@ await agent.tool('app_publish', {
 // told, and whether any of the requests waited on it.
 let visit = async () => {
   let waited = false
-  for (let path of ['/notes/', '/notes/notes.js', '/notes/api/me']) {
+  for (let path of ['/notes/', '/notes/notes.js', '/notes/api/who']) {
     let r = await k.at(`yourname.${k.host}`, path)
     equal(r.status, 200)
     waited ||= /copy_wait/.test(r.headers.get('server-timing') ?? '')

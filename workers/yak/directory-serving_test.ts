@@ -440,7 +440,7 @@ let kept = async (published?: Row['published']) => {
       `/cookbook/api/assets/${RELEASE}/style.css`,
       '/cookbook/api/client.js',
       '/cookbook/',
-      '/cookbook/api/me',
+      '/cookbook/api/who',
     ]
   ) {
     let answer = await f.site(path)

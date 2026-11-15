@@ -836,7 +836,7 @@ export let keepClient = (
 export let keepBroker = (session: string, name: string, key: string) =>
   storeApply(session, PLATFORM_STORE, [brokerKey(name, key)])
 
-// An app's `/me` (workers/yak/apps.ts) is deliberately absent from this file.
+// An app's `/who` (workers/yak/apps.ts) is deliberately absent from this file.
 // It answers for ONE app's store, so asking it a question about the person —
 // their role — cost a round trip per space and woke a Durable Object to say
 // what the directory already knew. `app_list` answers the role beside each

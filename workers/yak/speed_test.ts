@@ -46,7 +46,7 @@ let numbered = () => {
     await Promise.resolve()
     heard = Math.max(heard, round)
     return Response.json(
-      path == 'me' ? { person: 'jo', name: 'Jo', reads: true } : ROWS,
+      path == 'who' ? { person: 'jo', name: 'Jo', reads: true } : ROWS,
     )
   })
   let socket = stub(
@@ -66,7 +66,7 @@ test("the guide's fast page loads its data in one round", async () => {
   using wire = numbered()
   await run(store(base))
   await until(() => document.querySelectorAll('li').length == 2, { poll: 0 })
-  assertEquals(wire.rounds, { 'me': 1, 'query?(.recipe|.chore)&?doc': 1 })
+  assertEquals(wire.rounds, { 'who': 1, 'query?(.recipe|.chore)&?doc': 1 })
   assertEquals(
     [...document.querySelectorAll('li')].map((li) => li.textContent),
     ['Cook: Soup', 'Do: Dishes'],

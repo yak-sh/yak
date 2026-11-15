@@ -78,7 +78,7 @@ let transport = (
   }
   let fetcher = stub(globalThis, 'fetch', (input, init) => {
     let url = new URL(String(input))
-    if (url.pathname.endsWith('/me')) return me()
+    if (url.pathname.endsWith('/who')) return me()
     if (url.pathname.endsWith('/query')) return Promise.resolve(json([]))
     assert(url.pathname.endsWith('/apply'), url.href)
     let body = String(init?.body)

@@ -710,7 +710,7 @@ export let sameOrigin = (
 // Writes are not here and must not be. An `open` app lets a stranger write —
 // with the link, from its own page — and a cross-origin write is the forgery
 // origin_test.ts fires. Nor is `/ws`, which is a read but carries the
-// write grant on the same socket, nor `/graph`, `/me` or `/blob`: this is the
+// write grant on the same socket, nor `/graph`, `/who` or `/blob`: this is the
 // door the answer is data at, and nothing else has asked to be shared.
 //
 // No preflight door is needed and none is built: a GET with no author-set

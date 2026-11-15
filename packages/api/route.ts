@@ -1,5 +1,5 @@
-// The route table. Four paths, and the two callbacks the application
-// supplies; every answer is watched for breaking by ./request.ts `served`.
+// The route table. Five paths, and the callbacks the application supplies;
+// every answer is watched for breaking by ./request.ts `served`.
 //
 // Attribution is decided here. `authenticate` runs on every request — a read,
 // a write and a WebSocket upgrade alike — and what it returns is what signs
@@ -48,9 +48,19 @@ export type Told = (
   request: Request,
 ) => string | undefined | Promise<string | undefined>
 
+/** What a host says of a caller beside the actor `authenticate` named, which
+ * `/who` answers with it: whether they may read and write, say, or where they
+ * sign in. The host's own words; this package reads none of them. */
+export type Standing = (
+  request: Request,
+  actor: Actor | null,
+) => Record<string, unknown> | Promise<Record<string, unknown>>
+
 /** How a handler is built: the graph it serves, the callbacks the
  * application supplies, and what its apply door is made of ({@link Applying}). */
 export type Options = Applying & {
+  /** what `/who` says of a caller beside its actor (default: nothing) */
+  standing?: Standing
   /** Caller read context for queries, write replies and socket frames. */
   read?: (
     request: Request,
@@ -73,16 +83,59 @@ export type Options = Applying & {
 
 let nobody: Authenticate = () => null
 
+let no = (message: string, code: number) =>
+  json({ error: code == 404 ? 'NotFound' : 'NotAllowed', message }, code)
+
+// Who this door says is calling: the actor, for a graph that names its
+// callers by asking this one (./actor.ts `asking`), and beside it what the
+// host says of them, which never renames the actor.
+let introduced = async (
+  request: Request,
+  actor: Actor | null,
+  standing: Standing | undefined,
+) =>
+  request.method != 'GET'
+    ? no('/who takes GET', 405)
+    : json(standing ? { ...await standing(request, actor), ...actor } : actor)
+
+/**
+ * `GET /who` alone, as {@link api} answers it: the actor `authenticate` names
+ * and what `standing` says beside it, for a host whose other doors are its
+ * own.
+ *
+ * ```ts
+ * import { whoDoor } from '@yaks/api'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let door = whoDoor({
+ *   authenticate: () => ({ by: 'ada' }),
+ *   standing: () => ({ writes: true }),
+ * })
+ * let answer = await door(new Request('http://notes.test/who'))
+ * assertEquals(await answer.json(), { by: 'ada', writes: true })
+ * ```
+ */
+export let whoDoor = (
+  opts: Pick<Options, 'authenticate' | 'standing'>,
+): Handler =>
+async (request) =>
+  await introduced(
+    request,
+    await (opts.authenticate ?? nobody)(request),
+    opts.standing,
+  )
+
 /** The paths {@link api} answers itself. */
 export let DOORS: string[] = ['/apply', '/query', '/ws', '/vocab', '/who']
 
 /**
  * Build the request handler for a graph: `POST /apply`, `GET|POST /query`,
  * `/ws` for live subscriptions, `GET /vocab`, the vocabulary, and `GET /who`,
- * the actor `authenticate` names for the request. Everything
- * else is a 404, every thrown error becomes the refusal body it describes (see
- * the README's Refusals), and an answer at 500 or over goes to `report` as a
- * `request` bundle (./request.ts `served`).
+ * the actor `authenticate` names for the request with what `standing` says
+ * beside it ({@link whoDoor}). Everything else is a 404, every thrown error
+ * becomes the refusal body it describes (see the README's Refusals), and an
+ * answer at 500 or over goes to `report` as a `request` bundle (./request.ts
+ * `served`).
  *
  * ```ts ignore
  * Deno.serve(api({ graph, authenticate }))
@@ -95,8 +148,6 @@ export let api = (opts: Options): Handler => {
   let authenticate = opts.authenticate ?? nobody
   let upgrade = opts.upgrade ?? denoUpgrade
   let apply = applier(opts)
-  let no = (message: string, code: number) =>
-    json({ error: code == 404 ? 'NotFound' : 'NotAllowed', message }, code)
 
   let door: Handler = async (request) => {
     let path = pathOf(request, opts.under)
@@ -134,11 +185,7 @@ export let api = (opts: Options): Handler => {
         ? json({ docs, keywords })
         : no('/vocab takes GET', 405)
     }
-    // Who this door says is calling, for a graph that names its callers by
-    // asking this one (./actor.ts `asking`).
-    if (path == '/who') {
-      return request.method == 'GET' ? json(who) : no('/who takes GET', 405)
-    }
+    if (path == '/who') return await introduced(request, who, opts.standing)
     if (path == '/ws') {
       if (
         (request.headers.get('upgrade') ?? '').toLowerCase() != 'websocket'

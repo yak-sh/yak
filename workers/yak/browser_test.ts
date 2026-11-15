@@ -158,7 +158,9 @@ test('guest writes and commands belong only to the sealed browser, never a claim
       exp: Math.floor(Date.now() / 1000) + SESSION,
     }, k.secret)}`
     for (let i = 0; i < 2; i++) {
-      let read = await k.at(host, '/notes/api/me', { headers: { cookie: old } })
+      let read = await k.at(host, '/notes/api/who', {
+        headers: { cookie: old },
+      })
       assertEquals(read.status, 200)
       let me = await read.json()
       assertEquals(me.person, owner.person)

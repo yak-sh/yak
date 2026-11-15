@@ -678,7 +678,7 @@ directly from `curl`, from another page, or from your own `worker.js` through
     GET ./api/query?.doc&.count
     → {"count": 12}
 
-    GET ./api/me
+    GET ./api/who
     → {"person": null, "name": null, "role": null, "reads": true,
        "writes": false, "signIn": "https://yaks.app/login?return=…",
        "invited": false, "visit": null}

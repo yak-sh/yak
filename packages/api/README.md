@@ -72,7 +72,7 @@ equal((await declarations.json()).docs, vocab.docs)
 | `POST /query`    | JSON string or `{"q":"…"}`                                        | Same as GET                          |
 | `/ws`            | WebSocket upgrade                                                 | Subscription frames                  |
 | `GET /vocab`     | GET                                                               | `{ docs, keywords }` for `loadVocab` |
-| `GET /who`       | GET                                                               | The actor `authenticate` names       |
+| `GET /who`       | GET                                                               | The actor, and what `standing` says  |
 
 `/apply` returns [patches](../graph/README.md#data-model) and graph-generated
 changes, rather than every stored component. `?check=1` runs the write pipeline
@@ -214,6 +214,13 @@ A graph that keeps no sessions of its own names its callers by asking the door
 of one that does: `asking(url)` sends a request's `x-via` to that door's
 `GET /who` and answers its actor. A host composes it as `@yaks/api` with
 `{ "who": "<base URL>" }`, as the box's tracker asks the box.
+
+`standing(request, actor)` is what `GET /who` says of a caller beside the actor
+`authenticate` named: whether they may read and write, say, or where they sign
+in. It is the host's to word, and its keys never replace `by` or `via`, so a
+graph asking the door is told only who is calling. Without it, `/who` answers
+the actor alone, `null` for nobody. `whoDoor({authenticate, standing})` is that
+door by itself, for a host whose other doors are its own.
 
 `write(request, bundles)` adds caller context before signing a JSON batch or
 each NDJSON chunk, including checked writes. `read(request)` supplies graph

@@ -33,7 +33,7 @@ let asked = (
 
 test('reads asked together are one request, each caller its own rows', async () => {
   using wire = asked((path) =>
-    path == 'me' ? { person: 'jo' } : [{ entity: { eid: path } }]
+    path == 'who' ? { person: 'jo' } : [{ entity: { eid: path } }]
   )
   let client = store(base)
   let [one, two] = await Promise.all([client.me(), client.me()])
@@ -42,7 +42,7 @@ test('reads asked together are one request, each caller its own rows', async () 
     client.query('.house_item'),
     client.query('.house_file'),
   ])
-  assertEquals(wire.paths, ['me', 'query?.house_item', 'query?.house_file'])
+  assertEquals(wire.paths, ['who', 'query?.house_item', 'query?.house_file'])
   assertEquals([one, two], [{ person: 'jo' }, { person: 'jo' }])
   assertNotStrictEquals(one, two)
   assertEquals(rows, same)
@@ -55,7 +55,7 @@ test('a read asked again after its answer is asked again', async () => {
   let client = store(base)
   await client.me()
   await client.me()
-  assertEquals(wire.paths, ['me', 'me'])
+  assertEquals(wire.paths, ['who', 'who'])
 })
 
 test('a read on its way when a write lands answers nobody who asks after', async () => {
@@ -146,7 +146,7 @@ test('a write made while the connection is away waits for who is writing', async
   using wire = dropping(
     8,
     (path) =>
-      path == 'me'
+      path == 'who'
         ? { person: 'jo' }
         : { ok: true, aliases: {}, bundles: [{ entity: { eid: 'a' } }] },
   )
@@ -154,7 +154,7 @@ test('a write made while the connection is away waits for who is writing', async
   let receipt = store(base, { clock: time }).apply({ entity: { eid: 'a' } })
   await pass(time, 120_000)
   assertEquals((await receipt).ok, true)
-  assertEquals(wire.paths.filter((p) => p == 'me').length > 8, true)
+  assertEquals(wire.paths.filter((p) => p == 'who').length > 8, true)
   assertEquals(wire.heard, [true, false])
 })
 

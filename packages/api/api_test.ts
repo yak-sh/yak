@@ -8,7 +8,7 @@ import { assert, assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import type { Bundle } from '@yaks/graph'
 import { token } from '@yaks/graph'
-import type { Authenticate } from './actor.ts'
+import { asking, type Authenticate } from './actor.ts'
 import { api } from './route.ts'
 import { Unauthorized } from './refuse.ts'
 import { comp, post, req, shopGraph } from './testing.ts'
@@ -341,6 +341,42 @@ test('the route table refuses what it does not serve', async () => {
   let missing = await handler(req('/books'))
   assertEquals(missing.status, 404)
   assertEquals((await body(missing)).error, 'NotFound')
+})
+
+test('/who answers the actor, and beside it what the host says of the caller', async () => {
+  let graph = shopGraph()
+  let standing = (_: Request, actor: { by?: string } | null) => ({
+    writes: actor?.by == ada.eid,
+  })
+  let who = async (authenticate: Authenticate) =>
+    await body(await api({ graph, authenticate, standing })(req('/who')))
+  assertEquals(await who(() => hers), { ...hers, writes: true })
+  assertEquals(await who(() => null), { writes: false })
+  assertEquals(await body(await shop()(req('/who'))), hers)
+  assertEquals(await body(await shop(() => null)(req('/who'))), null)
+  assertEquals((await shop()(req('/who', { method: 'POST' }))).status, 405)
+})
+
+test('a graph asking another door who is calling is told only who it is', async () => {
+  let graph = shopGraph()
+  let box = api({
+    graph,
+    authenticate: () => ({ by: ada.eid, via: 'run' }),
+    standing: () => ({ by: 'someone else', writes: true }),
+  })
+  let named = asking(
+    'http://box.test',
+    async (url, init) => await box(new Request(url, init)),
+  )
+  let asked = new Request('http://tracker.test/apply', {
+    headers: { 'x-via': 'run' },
+  })
+  assertEquals(await (await box(req('/who'))).json(), {
+    by: ada.eid,
+    via: 'run',
+    writes: true,
+  })
+  assertEquals(await named(asked), { by: ada.eid, via: 'run' })
 })
 
 test('a door that refuses to name a writer answers 401', async () => {

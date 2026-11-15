@@ -209,7 +209,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     // (T-32679): who they are, what this app lets them do, and where signing
     // in happens if it lets them do nothing. It answers everyone.
     let asMe = (cookie?: string) =>
-      k.at(`${jeff69}.yaks.app`, '/recipes/api/me', {
+      k.at(`${jeff69}.yaks.app`, '/recipes/api/who', {
         headers: cookie ? { cookie } : {},
       }).then((r) => r.json())
     let me = await asMe(cookie)
@@ -461,14 +461,23 @@ test('an app says who may read it and who may write it', async () => {
     // open: the vote page. Anyone with the link writes, without signing in.
     await anyone('vote').applied(line('my vote'))
     assertEquals((await anyone('vote').get('.doc')).length, 2)
-    // Which the page can know on load (T-32679): `/api/me` says a stranger
+    // Which the page can know on load (T-32679): `/api/who` says a stranger
     // writes here, and that their write will carry no `created.by` — so a
     // page wanting a byline asks them their name itself (C-32675 item 5).
-    let voter = await (await k.at(`${club70}.yaks.app`, '/vote/api/me')).json()
+    let voter = await (await k.at(`${club70}.yaks.app`, '/vote/api/who')).json()
     assertEquals([voter.person, voter.writes], [null, true])
     // Signing in is still offered — an open app may want named guests — it is
     // simply not the way through here.
     assertMatch(voter.signIn, /^https:\/\/yaks\.app\/login\?return=/)
+    // `/api/me` is the name pages shipped before `who` ask it by, and it
+    // answers them the same, but for the address they sign in back to and
+    // the browser each stranger's request came in as.
+    let shipped = await (await k.at(`${club70}.yaks.app`, '/vote/api/me'))
+      .json()
+    let standing = (
+      { signIn: _, via: __, ...rest }: Record<string, unknown>,
+    ) => rest
+    assertEquals(standing(shipped), standing(voter))
 
     // private: members only, and the page is part of what only they see
     // (C-32607 item 5). A stranger is sent to sign in, holding the page as

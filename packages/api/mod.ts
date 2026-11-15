@@ -64,7 +64,9 @@ export {
   type Options,
   type Route,
   routed,
+  type Standing,
   type Told,
+  whoDoor,
 } from './route.ts'
 export { asking, type Authenticate, signed, VIA } from './actor.ts'
 export type { PeerWriter } from './save.ts'

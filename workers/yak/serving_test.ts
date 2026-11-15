@@ -135,7 +135,7 @@ let client = (env: Env, cookie?: string) => {
       door(
         `query?${encodeURIComponent(text)}${filter ? `&${filter}` : ''}`,
       ) as Promise<Record<string, unknown>[]>,
-    me: () => door('me') as Promise<Record<string, unknown>>,
+    me: () => door('who') as Promise<Record<string, unknown>>,
   }
 }
 

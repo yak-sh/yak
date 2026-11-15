@@ -26,7 +26,7 @@ test('public client apply and query return Uint8Array, leaving legacy JSON tags 
   using _fetch = stub(globalThis, 'fetch', (url, init) => {
     let path = new URL(String(url)).pathname.split('/').at(-1)!
     requests.push(path)
-    if (path == 'me') return json({ person: 'binary-owner' })
+    if (path == 'who') return json({ person: 'binary-owner' })
     if (path == 'vocab.json') return json(docs)
     if (path == 'apply') {
       equal(JSON.parse(String(init?.body)).entities[0].payload, {

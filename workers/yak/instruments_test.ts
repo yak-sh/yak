@@ -108,7 +108,7 @@ test('MCP sessions have vouched instruments, while old and forged ids keep their
     let oauth = await bearerFor(k, owner.cookie)
     let grant = /yak login (\S+)/.exec(await agent.tool('grant'))![1]
     for (let token of [oauth, grant]) {
-      let who = await k.at(host, '/notes/api/me', {
+      let who = await k.at(host, '/notes/api/who', {
         headers: { authorization: `Bearer ${token}` },
       })
       assertEquals(who.status, 200)

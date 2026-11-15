@@ -18,7 +18,7 @@ let wire = (
   identity = () => json({ person: 'jo' }),
 ) =>
   stub(globalThis, 'fetch', (url, init) => {
-    if (String(url).endsWith('/me')) return Promise.resolve(identity())
+    if (String(url).endsWith('/who')) return Promise.resolve(identity())
     assert(String(url).endsWith('/apply'))
     return Promise.resolve(
       send(
@@ -200,7 +200,7 @@ test('public outbox closed during identity recheck never starts the write', asyn
   let checking = Promise.withResolvers<void>()
   let client = store(base), checks = 0, sends = 0
   using _fetch = stub(globalThis, 'fetch', (url) => {
-    if (String(url).endsWith('/me')) {
+    if (String(url).endsWith('/who')) {
       if (++checks == 1) return Promise.resolve(json({ person: 'jo' }))
       checking.resolve()
       return identity.promise

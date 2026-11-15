@@ -107,7 +107,7 @@ let waits = (e, r) => {
 }
 
 // A read already on its way answers everyone who asks it meanwhile, as one
-// request: the outbox's `me` and the page's own on load, a subscription's
+// request: the outbox's `who` and the page's `me()` on load, a subscription's
 // fill and the page's query of the same line. Each caller parses its own copy,
 // so no two share an object to change. A write that lands ends the sharing:
 // a read asked after it is its own, so it sees the write.
@@ -500,7 +500,7 @@ export let store = (base, { clock = system } = {}) => {
   // write is held until it is known; anything else is asked again by the
   // next call, never remembered as the outbox's answer.
   let boot = () =>
-    starting ??= ask('me', undefined, { when: unanswered, tries: Infinity })
+    starting ??= ask('who', undefined, { when: unanswered, tries: Infinity })
       .catch((error) => {
         starting = undefined
         throw error
@@ -511,7 +511,7 @@ export let store = (base, { clock = system } = {}) => {
           timer: (fn, ms) => clock.after(ms, fn),
           cancelTimer: (cancel) => cancel(),
           send: async (key, payload) => {
-            let current = await ask('me')
+            let current = await ask('who')
             // Closing while identity is in flight must not start another write
             // after the page (or its transport) has gone away.
             if (closed) throw new Error('Write outbox is closed')
@@ -589,18 +589,18 @@ export let store = (base, { clock = system } = {}) => {
   let search = (text, filter = '') =>
     query(`${encodeURIComponent(text)}${filter ? `&${filter}` : ''}`)
 
-  // Who is looking, before anything is asked of them: `{person, name, role,
-  // reads, writes, signIn, invited, join, visit}` — `person` null when they
-  // are signed out, `name` what to call them, `writes` whether this app takes
-  // a write from them, `signIn` where a signed-out visitor signs in, `invited`
-  // whether an invitation waits in their email to accept, `join` the role a
-  // POST to `api/join` gives them where the app's own rows list them (its
-  // vocab.json `join`), else null, and `visit`
-  // `{kept}` for a stranger trying a published app in a store of their own.
-  // Call it on load and
-  // the page knows whether to show a sign-in link, the invitation or a name
-  // field, instead of finding out from a refusal after someone has typed.
-  let me = () => ask('me')
+  // Who is looking, before anything is asked of them, as the store's `who`
+  // door answers: `{person, name, role, reads, writes, signIn, invited, join,
+  // visit}` — `person` null when they are signed out, `name` what to call
+  // them, `writes` whether this app takes a write from them, `signIn` where a
+  // signed-out visitor signs in, `invited` whether an invitation waits in
+  // their email to accept, `join` the role a POST to `api/join` gives them
+  // where the app's own rows list them (its vocab.json `join`), else null, and
+  // `visit` `{kept}` for a stranger trying a published app in a store of their
+  // own. Call it on load and the page knows whether to show a sign-in link,
+  // the invitation or a name field, instead of finding out from a refusal
+  // after someone has typed.
+  let me = () => ask('who')
 
   // Bytes, in: a File off an `<input type=file>`, a Blob a canvas made. The
   // door answers `{eid, url, mime, bytes}` — the eid to point a row at
