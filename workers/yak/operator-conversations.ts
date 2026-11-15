@@ -22,7 +22,10 @@ type Asker = Parameters<Operator['chats']>[0]
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
-/** A conversation tool run as `held` in `space`'s Operator store, answering
+// The conversation tools that talk, and so make the Operator.
+let TALKS = new Set(['conversation_start', 'conversation_send'])
+
+/** A conversation tool that talks, run as `held` in `space`'s Operator store, answering
  * its value. */
 export let converse = async (
   operator: Pick<Operator, 'store' | 'chats'>,
@@ -31,8 +34,10 @@ export let converse = async (
   tool: string,
   args: Args,
 ): Promise<Record<string, unknown>> => {
-  let run = conversations(await operator.chats(held, space))[tool]
-  if (!run) throw refuse('arguments', `There is no conversation tool ${tool}.`)
+  if (!TALKS.has(tool)) {
+    throw refuse('arguments', `There is no conversation tool ${tool}.`)
+  }
+  let run = conversations(await operator.chats(held, space))[tool]!
   let [said] = await run({
     entity: { eid: crypto.randomUUID() },
     call: { to: tool, args: { ...args, project: space.eid } },

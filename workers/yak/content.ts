@@ -871,6 +871,31 @@ export let WORDS: Record<string, Words> = {
     'description':
       "Give this space's operator a request or a design to implement. It reads and writes this space's apps with the same tools your agent uses, including rows and deployments, and charges model use to the space's budget. The operator on your own space is your personal assistant: it also reaches your other spaces, with your role in each. Any space's owner may let another space's operator work there too, from its People page. Returns the private task and session ids, its answer and model cost in dollars. After 25 seconds of work it returns progress while the task continues; use operator_read with task for its eventual answer. Cost is recorded use so far. Pass task to continue an earlier request; operator_read reads its work. Ships changes live; app_rollback can undo a deployment. Only members who write may ask. Each chat is a fork of the person's own conversation with their operator, and once it settles it leaves a notice there that they see, so a test or a timing check of the operator runs in a space kept for testing, never through a person's conversation.",
   },
+  'conversation_projects': {
+    'title': 'List the spaces you can talk in',
+    'description':
+      'The spaces whose operator you may talk with: each where your seat writes, by its id and title, with your own id. Each is a project the other conversation tools take.',
+  },
+  'conversation_start': {
+    'title': 'Start talking with your operator',
+    'description':
+      "Start a conversation with this space's operator and answer at once, without waiting for its reply: the session it is, its status and the input your words are. It is a fork of your own conversation with the operator, under a private task, with the files you name and the model you choose; once it settles it leaves a notice in your conversation. Read the reply with conversation_read, and carry it on with conversation_send. Pass request so a retry never starts it twice. Only members who write may talk.",
+  },
+  'conversation_send': {
+    'title': 'Say more to your operator',
+    'description':
+      "Give more words to a conversation of yours with this space's operator, with the files you name and the model you choose, and answer at once without waiting for its reply. Pass request so a retry never says them twice. conversation_read reads the reply.",
+  },
+  'conversation_read': {
+    'title': 'Read a conversation',
+    'description':
+      "Read a conversation with this space's operator: a page of the messages said in it, newest last, polled again for a reply still being written. With lines true it answers every line instead, tool calls and results included, the newest limit of them, and while lines come before those its earlier says how many and the beforeLine to pass for the page preceding. session may be a conversation, a helper or fork working under one, a task (read whole, with its comments and conversations), or any line of one. You read your own; the platform's admin anyone's.",
+  },
+  'conversation_recent': {
+    'title': 'List your operator conversations',
+    'description':
+      "Your conversations with this space's operator, newest first: each session with its status, title and when it last changed.",
+  },
   'operator_run': {
     'title': "Ask your space's operator (alias)",
     'description':

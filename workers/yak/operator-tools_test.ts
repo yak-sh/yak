@@ -64,3 +64,24 @@ for (let name of ['operator_chat', 'operator_run']) {
     assertEquals(requests.length, before)
   })
 }
+
+test('a conversation tool forwards its words to the space it names as the project', async () => {
+  let args = { session: 'session', text: 'More.', request: 'r1' }
+  await call(ctx, 'conversation_send', { project: 'operator-tools', ...args })
+  let request = requests.at(-1)!
+  assertEquals(new URL(request.url).pathname, '/operator/talk')
+  assertEquals(await request.json(), {
+    space: 'operator-tools',
+    tool: 'conversation_send',
+    args,
+  })
+  assertEquals(request.headers.get('x-space-eid'), space)
+})
+
+test('the spaces a person may talk in are those where their seat writes', async () => {
+  let out = await call(ctx, 'conversation_projects', {})
+  assertEquals(out.value, {
+    owner: ctx.person,
+    projects: [{ id: space, title: 'operator-tools' }],
+  })
+})

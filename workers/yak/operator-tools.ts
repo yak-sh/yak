@@ -81,9 +81,127 @@ let chat: Omit<Tool, 'title' | 'description'> = {
   run: (ctx, args) => ask(ctx, args, '/operator/run'),
 }
 
+// What words given to a conversation name of themselves (@yaks/harness
+// `conversation_start`, `conversation_send`).
+let PROJECT = str('The space to talk with, by its slug or id.')
+let SESSION = str(
+  'The conversation, as conversation_start or conversation_recent names it.',
+)
+let given = {
+  request: str(
+    'Your own id for these words. Sending them again under it does nothing, so a retry never says them twice.',
+  ),
+  provider: str(
+    "The provider whose model answers these words. Omit for the Operator's own.",
+  ),
+  model: str(
+    "The model that answers these words. Omit for the Operator's own.",
+  ),
+  effort: {
+    type: 'string',
+    enum: ['low', 'medium', 'high', 'xhigh', 'max'],
+    description:
+      "How much that model reasons before it answers. Omit for the model's default.",
+  },
+  attachments: {
+    type: 'array',
+    items: { type: 'string' },
+    description:
+      'SHA-256 addresses of files already sent to your Operator, as attachment.artifact names them.',
+  },
+}
+// A conversation tool of @yaks/harness's, run in the space's Operator store
+// as the person (operator-conversations.ts `converse`).
+let conversing = (
+  name: string,
+  properties: Record<string, unknown>,
+  required: string[],
+  readOnly = false,
+): Omit<Tool, 'title' | 'description'> => ({
+  name,
+  ...readOnly ? { readOnly } : { destructive: true },
+  input: {
+    type: 'object',
+    properties: { project: PROJECT, ...properties },
+    required: ['project', ...required],
+  },
+  run: (ctx, { project, ...args }) =>
+    ask(
+      ctx,
+      { space: project, tool: name, args },
+      '/operator/talk',
+      !readOnly,
+    ),
+})
+
 export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
   chat,
   { ...chat, name: 'operator_run' },
+  {
+    name: 'conversation_projects',
+    readOnly: true,
+    input: { type: 'object', properties: {} },
+    // The spaces the person may talk in: each where their seat writes.
+    run: async (ctx) => ({
+      text: '',
+      value: {
+        owner: ctx.person,
+        projects: (await ctx.dir.seats(ctx.person))
+          .filter((s) => writes(s.role) && !s.space.trashed)
+          .map((s) => ({
+            id: s.space.eid,
+            title: s.space.title ?? s.space.slug,
+          })),
+      },
+    }),
+  },
+  conversing('conversation_start', {
+    prompt: str('Your first words.'),
+    ...given,
+  }, ['prompt']),
+  conversing('conversation_send', {
+    session: SESSION,
+    text: str('Your words.'),
+    ...given,
+  }, ['session', 'text']),
+  conversing(
+    'conversation_read',
+    {
+      session: str(
+        'The conversation, a helper or fork working under it, a task, or any line of one.',
+      ),
+      limit: { type: 'integer', minimum: 1, maximum: 256 },
+      before: {
+        type: 'integer',
+        minimum: 1,
+        description:
+          'Read older messages strictly before this entry sequence. Omit to read the newest.',
+      },
+      lines: {
+        type: 'boolean',
+        description:
+          'Answer every line, tool calls and results included, rather than only the messages.',
+      },
+      context: {
+        type: 'boolean',
+        description:
+          'With lines, include the model instruction snapshots beside them (omitted by default).',
+      },
+      beforeLine: str(
+        "With lines, a line as an answer's earlier.before names it, to read the lines before it.",
+      ),
+    },
+    ['session'],
+    true,
+  ),
+  conversing(
+    'conversation_recent',
+    {
+      limit: { type: 'integer', minimum: 1, maximum: 256 },
+    },
+    [],
+    true,
+  ),
   {
     name: 'helper_spawn',
     destructive: true,

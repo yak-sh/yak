@@ -17,7 +17,7 @@ import { background, caught, refusing } from './defects.ts'
 import type { Held } from './build-door.ts'
 import type { Env } from './env.ts'
 import { operating, type Operator, type Options } from './operator.ts'
-import { chat, ended } from './operator-conversations.ts'
+import { chat, converse, ended } from './operator-conversations.ts'
 import type { Space } from './directory.ts'
 import {
   type Listener,
@@ -189,7 +189,7 @@ export let operatorService = (
       if (response) return response
       if (
         path == '/operator/run' || path == '/operator/helper' ||
-        path == '/operator/settings'
+        path == '/operator/settings' || path == '/operator/talk'
       ) {
         let { directoryOf } = await import('./directory.ts')
         let space = await directoryOf(env.STORE).at(held.space)
@@ -209,6 +209,11 @@ export let operatorService = (
         if (path == '/operator/helper') {
           let { spawnHelper } = await import('./operator-helpers.ts')
           return Response.json(await spawnHelper(operator, held, space, args))
+        }
+        if (path == '/operator/talk') {
+          return Response.json(
+            await converse(operator, held, space, args.tool, args.args),
+          )
         }
         return Response.json(
           await chatted(operator, held, space, args, env.CLOCK),

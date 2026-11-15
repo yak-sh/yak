@@ -1853,6 +1853,24 @@ export let operatorRequest = async (
     if (!access.administrative && mine.some((m) => !m)) return missing()
     return Response.json({ removed: await remove(store, ids) })
   }
+  // A conversation tool that only reads runs here, as the person; one that
+  // talks makes the Operator (build.ts).
+  if (
+    path == '/operator/talk' &&
+    ['conversation_read', 'conversation_recent'].includes(String(args.tool))
+  ) {
+    let { conversations } = await import('@yaks/harness/conversations')
+    let tool = String(args.tool)
+    let [said] = await conversations(conversant(store, held))[tool]!({
+      entity: { eid: crypto.randomUUID() },
+      call: {
+        to: tool,
+        args: { ...args.args as object, project: held.space },
+      },
+      $actor: { by: person },
+    }, store.g) as Bundle[]
+    return Response.json(JSON.parse(String(comp(said, 'content')?.body)))
+  }
   if (path == '/operator/read') {
     let read = await operatorRead(store, held, args)
     return read ? Response.json(read) : Response.json({
