@@ -501,8 +501,9 @@ let crosses = (request: Request) => {
     type.split(';')[0].trim() != BINARY
 }
 
-// An answer's body read as JSON, or its refusal thrown as the store said it.
-let whole = async (r: Response) => {
+// An answer's body read as JSON, as the `T` its door answers, or its refusal
+// thrown as the store said it.
+let whole = async <T>(r: Response): Promise<T> => {
   if (!r.ok) throw await answered(r)
   return await r.json()
 }
@@ -4966,11 +4967,11 @@ export class Store extends Durable {
         // and the borrowed ones, from their homes' declarations.
         let own = reach[0].door!
         let docs = [
-          ...await own.consume('/vocab.json', whole),
+          ...await own.consume<VocabDoc[]>('/vocab.json', whole),
           ...await borrowedDocs(env, reach, uses),
         ]
         if (url.pathname == '/vocab.json') return Response.json(docs)
-        let { keywords } = await own.consume(
+        let { keywords } = await own.consume<Pick<Vocab, 'keywords'>>(
           '/api/vocab',
           whole,
         )
@@ -5049,7 +5050,7 @@ export class Store extends Durable {
         })
         let at = await homes()
         if (!at) {
-          let rows = await door.consume(
+          let rows = await door.consume<Row[] | Reduced>(
             `/query?q=${encodeURIComponent(line)}&listing=1`,
             whole,
           )
