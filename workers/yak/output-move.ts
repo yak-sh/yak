@@ -9,7 +9,7 @@
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Meta } from '@yaks/sqlite'
 import { attachmentOf, attachmentRows } from '@yaks/blob/attachment'
-import { attachedOf, type File } from './operator-channels.ts'
+import { attachedOf, type File } from './operator-files.ts'
 import { OUTPUTS } from './operator-store.ts'
 
 /** How many results one batch reads. */

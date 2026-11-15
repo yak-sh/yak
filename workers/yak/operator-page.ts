@@ -42,11 +42,8 @@ import {
 } from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
 import { PLATFORM_BACKGROUND } from '@yaks/platform/woven'
-import {
-  type File,
-  keepFile,
-  type Request as Intake,
-} from './operator-channels.ts'
+import { keepFile, type Request as Intake } from './operator-channels.ts'
+import { attachmentKey } from './attachments.ts'
 import { mailFrom } from '@yaks/platform/host'
 import { subdomainMail } from './space-mail.ts'
 import { parts } from './form.ts'
@@ -513,10 +510,8 @@ export let conversation = (rows: Bundle[]) =>
       entity: { eid: id },
       content: { body: doc.body ?? '' },
       created: asked.created,
-      ...files.length
-        ? { operator_files: { request: asked.entity.eid, files } }
-        : {},
     }
+    let sent = files.length ? { message: asked.entity.eid, files } : undefined
     let kept =
       'Your request is kept, but the Operator could not finish it. Send it again to try once more.'
     let unsent = 'The answer could not be sent to you. It is kept here.'
@@ -535,7 +530,12 @@ export let conversation = (rows: Bundle[]) =>
       ? [trouble(kept, failed), kept]
       : [h(Notice, {}, saved), saved]
     let lines: Line[] = [
-      { id, uses: [id], node: input(words, doc.body ?? ''), is: 'theirs' },
+      {
+        id,
+        uses: [id],
+        node: input(words, doc.body ?? '', sent),
+        is: 'theirs',
+      },
       { id: outcomeOf(asked.entity.eid), uses: [id], node, text },
     ]
     return h(
@@ -577,12 +577,12 @@ export let operatorAnswer = async (
       id: q.get('attachment'),
       file: Number(q.get('file')),
     }).catch((e) => e?.status == 404 ? null : Promise.reject(e)) as
-      | File
+      | { name: string; mime: string; address: string }
       | null
     if (!file) {
       return new Response('That attachment is missing.', { status: 404 })
     }
-    let kept = await env.BLOBS.get(file.key)
+    let kept = await env.BLOBS.get(attachmentKey(space, file.address))
     if (!kept) throw new Error('Operator attachment is missing: ' + file.name)
     // A picture opens in place, as the conversation draws it; anything else
     // is saved. Neither is ever read as a page of yaks.app.

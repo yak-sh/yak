@@ -16,6 +16,8 @@ import type { Operator } from './operator.ts'
 import type { Request } from './operator-channels.ts'
 import { askedAt, rootAt, rootOf, titleAt } from './operator-root.ts'
 import { inputOf } from '@yaks/session/intake'
+import { attachmentId, drawnFiles, type File, moved } from './operator-files.ts'
+import { attachmentOf } from '@yaks/blob/attachment'
 import { phoneTexts } from './phone-move.ts'
 import { channeled } from './channel-move.ts'
 import type { OperatorStore } from './operator-store.ts'
@@ -371,6 +373,7 @@ let seenOf = async (
       ...entries,
       ...helpers.flatMap((h) => h.entries),
     ]),
+    files: await drawnFiles(store, entries),
   }
 }
 
@@ -1151,6 +1154,7 @@ export let frameOf = async (
         helpers: await lined(store, helpers, names, opens),
         threads: await threadsOf(store, changed, named, called, opens),
         offers: await offersOf(store, withHelpers(entries, helpers)),
+        files: await drawnFiles(store, changed),
         called,
         opens,
         ...naming,
@@ -1657,14 +1661,26 @@ export let operatorRequest = async (
       ),
     )
   }
+  // A file a line's link names: the one at its place among those attached
+  // beside the message (operator-files.ts `filesOf`), or on a line its
+  // store's pass has yet to move, among those the line names itself.
   if (path == '/operator/attachment') {
-    let [row] = await store.g.get([String(args.id ?? '')])
-    let sent = (row?.operator_request ?? row?.operator_files) as
-      | { files?: unknown[] }
-      | undefined
-    let file = sent?.files?.[Number(args.file)]
+    let id = String(args.id ?? ''), at = Number(args.file)
+    let [row] = await store.g.get([id])
+    let [use] = await store.g.get([attachmentOf(id, at)], ['attachment'])
+    let named = comp(use, 'attachment')
+    let sent = moved(store) ? undefined : (row?.operator_files ??
+      row?.operator_request) as { files?: File[] } | undefined
+    let old = sent?.files?.[at]
+    let file = named
+      ? {
+        name: String(named.name),
+        mime: String(named.media_type),
+        address: String(named.artifact),
+      }
+      : old && { name: old.name, mime: old.mime, address: attachmentId(old) }
     let session = comp(row, 'entry')?.session
-    return file && await own(session ? String(session) : row!.entity.eid)
+    return file && row && await own(session ? String(session) : row.entity.eid)
       ? Response.json(file)
       : Response.json({ message: 'That attachment is missing.' }, {
         status: 404,

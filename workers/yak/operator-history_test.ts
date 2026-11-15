@@ -4,6 +4,8 @@ import { parseHTML } from 'linkedom'
 import { operatorMemory } from './operator-testing.ts'
 import { conversationOf } from './operator-host.ts'
 import { TAKE } from '@yaks/ux/conversation'
+import { attachmentRows } from '@yaks/blob/attachment'
+import { attachedOf } from './operator-files.ts'
 
 let store = operatorMemory()
 let session = crypto.randomUUID()
@@ -25,9 +27,10 @@ await store.g.apply([
   {
     entity: { eid: input },
     entry: { session, seq: 1 },
+    taken: { item: request },
     content: { body: 'Read these people' },
-    operator_files: { request, files: [file] },
   },
+  ...attachmentRows(request, [attachedOf(file)]),
   ...Array.from({ length: 300 }, (_, i) => ({
     entity: { eid: crypto.randomUUID() },
     entry: { session, seq: i + 2 },

@@ -11,7 +11,7 @@ import { parseHTML } from 'linkedom'
 import { directoryOf, stamp } from './directory.ts'
 import { FILES } from '@yaks/platform/plans'
 import { monthOf } from '@yaks/platform/meter'
-import type { File } from './operator-channels.ts'
+import { filesOf, keptOf } from './operator-files.ts'
 import { imageNew } from './operator-images.ts'
 import { theirFiles } from './operator-access.ts'
 import { operatorMemory } from './operator-testing.ts'
@@ -81,8 +81,12 @@ let made = await tool.run({
   prompt: 'A yak in gouache',
   size: '1024x1024',
   quality: 'low',
-}, ctx) as { text: string; with: { operator_files: { files: File[] } } }
-let [file] = made.with.operator_files.files
+}, ctx) as string
+let [file] = ((await filesOf(store, [{
+  entity: { eid: mint() },
+  entry: { session },
+  result: { call },
+}])).values().next().value?.files ?? []).map((f) => keptOf(space, f))
 
 test('an image is asked of the default model and kept in the space’s files', async () => {
   assertEquals(sent.map((s) => [s.url, s.body.model, s.body.quality]), [
@@ -99,7 +103,7 @@ test('an image is asked of the default model and kept in the space’s files', a
     new Uint8Array(await kept!.arrayBuffer()),
     Uint8Array.from(atob(PNG), (c) => c.charCodeAt(0)),
   )
-  assertEquals(made.text.includes(file.key.split('/').at(-1)!), true)
+  assertEquals(made.includes(file.key.split('/').at(-1)!), true)
 })
 
 test('the image is among the person’s files, made by its call', async () => {
@@ -153,22 +157,27 @@ test('a space whose files are full is told so, and nothing is asked or charged',
 
 test('the picture a step made is drawn under it, opening the original', () => {
   let session = mint(), call = mint(), result = mint()
-  let html = rows([
+  let html = rows(
+    [
+      {
+        entity: { eid: call },
+        entry: { session },
+        call: { to: 'image_new', args: { prompt: 'A yak' } },
+      },
+      {
+        entity: { eid: result },
+        entry: { session },
+        result: { call },
+        content: { body: made },
+      },
+    ],
+    (name) => ({ doing: name, done: name }),
     {
-      entity: { eid: call },
-      entry: { session },
-      call: { to: 'image_new', args: { prompt: 'A yak' } },
+      files: { [result]: { message: call, files: [file] } },
     },
-    {
-      entity: { eid: result },
-      entry: { session },
-      result: { call },
-      content: { body: made.text },
-      operator_files: { files: [file] },
-    },
-  ], (name) => ({ doing: name, done: name })).map((r) => r.html).join('')
+  ).map((r) => r.html).join('')
   let img = parseHTML(`<div>${html}</div>`).document.querySelector(
     '.Attachments_Picture img',
   )
-  assertEquals(img?.getAttribute('src'), `?attachment=${result}&file=0`)
+  assertEquals(img?.getAttribute('src'), `?attachment=${call}&file=0`)
 })

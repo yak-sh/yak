@@ -15,12 +15,8 @@ import { images, providing } from './config.ts'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { accounted } from './meter.ts'
-import {
-  attachmentId,
-  type File,
-  keepFile,
-  madeFiles,
-} from './operator-channels.ts'
+import { keepFile, madeFiles } from './operator-channels.ts'
+import { attachmentId, type File } from './operator-files.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { platform, served } from './providers.ts'
 import { refuse } from './tool.ts'

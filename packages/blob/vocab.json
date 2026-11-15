@@ -85,6 +85,11 @@
         },
         "revised_prompt": {
           "type": "string"
+        },
+        "text": {
+          "type": "string",
+          "store": "blob",
+          "description": "The words read from the file for a model that cannot read it as it is: a document's text, a picture's contents described. Absent until something reads them."
         }
       }
     }

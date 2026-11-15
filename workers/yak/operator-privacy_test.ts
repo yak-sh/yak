@@ -2,6 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
+import { attachmentRows } from '@yaks/blob/attachment'
 import type { Held } from './build-door.ts'
 import type { Operator } from './operator.ts'
 import { operatorMemory } from './operator-testing.ts'
@@ -61,14 +62,14 @@ await store.g.apply([
     entry: { session },
     content: { body: secret },
   })),
-  // A file a step brought back, owned by its session's person.
-  {
-    entity: { eid: made },
-    entry: { session: root },
-    operator_files: {
-      files: [{ name: 'image.png', mime: 'image/png', key: 'k' }],
-    },
-  },
+  // A file a step brought back, attached beside its call, owned by its
+  // session's person.
+  { entity: { eid: made }, entry: { session: root }, call: {} },
+  ...attachmentRows(made, [{
+    name: 'image.png',
+    media_type: 'image/png',
+    address: 'c0ffee',
+  }]),
   // Knowing the derived id does not confer ownership when the record differs.
   {
     entity: { eid: rootOf(space, bea) },
@@ -138,7 +139,7 @@ test('a file a step brought back opens only for its session’s owner', async ()
   assertEquals((await read(ada, 'attachment', { id: made, file: 0 })).body, {
     name: 'image.png',
     mime: 'image/png',
-    key: 'k',
+    address: 'c0ffee',
   })
   for (
     let [person, args] of [[bea, { id: made, file: 0 }], [ada, {

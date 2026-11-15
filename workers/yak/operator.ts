@@ -104,13 +104,12 @@ import {
 } from './lib/hops.ts'
 import { drain, type OperatorStore } from './operator-store.ts'
 import {
-  attachedOf,
-  type File,
   mailSend,
   messageReference,
   OWN,
   UNASKED,
 } from './operator-channels.ts'
+import { attachedOf, type File } from './operator-files.ts'
 import { escalate, escalationAnswer, REPLIES } from './operator-escalate.ts'
 import { rootAt, spaceOf } from './operator-root.ts'
 import { textSend } from './operator-texts.ts'
@@ -1781,10 +1780,11 @@ export let operating = (
     o: Asking,
     conversation = false,
   ) => {
+    // The words read from a file stay on its attachment.
     let files = [
       ...new Map(
         [...(await workingOf(store, session))?.files ?? [], ...o.files ?? []]
-          .map((f) => [f.key, f]),
+          .map(({ text: _, ...f }) => [f.key, f]),
       ).values(),
     ]
     return {
@@ -1802,8 +1802,9 @@ export let operating = (
   }
   // The words given, as the session bus takes them in (@yaks/session
   // `take`): named by their request, or by `id` where none brought them, and
-  // with the files they came with and the original message's text beside
-  // them (`kept`).
+  // with the files they came with, each with the words read from it where
+  // the model cannot read it as it is, and the original message's text
+  // beside them (`kept`).
   let words = (
     session: string,
     id: string,
@@ -1825,14 +1826,7 @@ export let operating = (
     // its conversations raised, is its own words, not the person's it is
     // said for (unseen.ts).
     system: OWN.has(o.channel ?? ''),
-    with: {
-      ...o.files?.length
-        ? {
-          operator_files: { request: o.request ?? inputOf(id), files: o.files },
-        }
-        : {},
-      ...o.call ? { operator_call: { call: o.call, asked: true } } : {},
-    },
+    ...o.call ? { with: { operator_call: { call: o.call, asked: true } } } : {},
   })
   // What the person said before on the subject of the words they now give
   // their conversation, as a note beside those words: what its model no

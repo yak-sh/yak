@@ -32,6 +32,9 @@ import { ram } from '@yaks/ram'
 import {
   and,
   type Clause,
+  eq,
+  fields,
+  list,
   or,
   parse,
   type Pred,
@@ -41,12 +44,14 @@ import {
 import { mediaTypeOf } from './image.ts'
 
 /** A file as a message carries it: its name, media type and the address its
- * bytes are kept by, with their size where it is known. */
+ * bytes are kept by, with their size where it is known, and the words read
+ * from it for a model that cannot read it as it is, once something has. */
 export type Attached = {
   name: string
   media_type: string
   address: string
   size?: number
+  text?: string
 }
 
 /** The attachment's stable identity within the message that carried it. The
@@ -70,8 +75,62 @@ export let attachmentRows = (message: string, files: Attached[]): Bundle[] =>
       media_type: file.media_type,
       artifact: file.address,
       message,
+      ...file.text == null ? {} : { text: file.text },
     },
   }])
+
+/** The files each of these messages came with, in the order they came: each
+ * attachment beside it (`attachmentRows`) and the size its bytes are kept at.
+ * A message with none is left out. */
+export let attachedTo = async (
+  g: Pick<Graph, 'read' | 'get'>,
+  messages: string[],
+): Promise<Map<string, Attached[]>> => {
+  let asked = [...new Set(messages)].filter(Boolean)
+  let uses = asked.length
+    ? await g.read(and(
+      eq('attachment.message', list(...asked)),
+      fields(
+        'attachment.name',
+        'attachment.media_type',
+        'attachment.artifact',
+        'attachment.text',
+      ),
+    ))
+    : []
+  let by = new Map(uses.map((b) => [b.entity.eid, b]))
+  let sizes = new Map(
+    (await g.get(
+      [...new Set(uses.map((b) => String(use(b).artifact)))],
+      ['artifact'],
+    )).map((b) => [b.entity.eid, (b.artifact as { size?: number }).size]),
+  )
+  let out = new Map<string, Attached[]>()
+  for (let message of asked) {
+    let files: Attached[] = []
+    for (let i = 0, b; (b = by.get(attachmentOf(message, i))); i++) {
+      let { name, media_type, artifact, text } = use(b)
+      let size = sizes.get(String(artifact))
+      files.push({
+        name: String(name ?? artifact),
+        media_type: String(media_type ?? 'application/octet-stream'),
+        address: String(artifact),
+        ...size == null ? {} : { size: Number(size) },
+        ...text == null ? {} : { text: String(text) },
+      })
+    }
+    if (files.length) out.set(message, files)
+  }
+  return out
+}
+
+let use = (b: Bundle) =>
+  (b.attachment ?? {}) as {
+    name?: string
+    media_type?: string
+    artifact?: string
+    text?: string
+  }
 
 /** The artifact row of each address `head` finds kept, its media type read
  * from the first bytes `head` gives back. An address with nothing kept is

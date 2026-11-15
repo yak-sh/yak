@@ -159,16 +159,20 @@ export let attached = (row: string, sent: Sent[], mod?: 'end') =>
     mod,
   )
 
+/** The files a line came with, or a step brought back, and the message
+ * they are attached beside, which their links name (operator-files.ts
+ * `filesOf`). */
+export type Kept = { message: string; files: Sent[] }
+
 /** A person's input: their words, and the files that came with them. */
-export let input = (b: Bundle, body: string) => {
-  let sent = comp(b, 'operator_files')
-  let held = (sent?.files ?? []) as Sent[]
+export let input = (b: Bundle, body: string, kept?: Kept) => {
+  let held = kept?.files ?? []
   let said = spoken(b, body)
   return h(
     Fragment,
     null,
     said && said != unsaid(held) ? yours(said, via(b)) : null,
-    sent ? attached(String(sent.request), held, 'end') : null,
+    kept ? attached(kept.message, held, 'end') : null,
   )
 }
 
@@ -472,6 +476,8 @@ export type Seen = {
   /** where an id in the words opens for their reader, `{id}` where it goes
    * (`opening`) */
   mentions?: string
+  /** each line's files, by its eid */
+  files?: Record<string, Kept>
 } & Naming
 
 // What a helper was told, all its asks', in one place.
@@ -585,6 +591,7 @@ export let lines = (
     offers,
     called = 'the Operator',
     opens,
+    files,
   }: Seen = {},
   view: View = person,
 ): Line[] => {
@@ -593,7 +600,7 @@ export let lines = (
   let told = new Map(
     briefed(entries, called, offers, page, sources).map((r) => [r.id, r]),
   )
-  let beside: Heard = { names, who: 'the Operator', opens }
+  let beside: Heard = { names, who: 'the Operator', opens, files }
   let frame = (line: Line, rows: Bundle[]) => framed(line, rows, view, beside)
   // A helper is told mostly what the ask before it was, which the page drew
   // above it: a line drawing what a helper was told reads that ask too, so
@@ -764,7 +771,11 @@ let Called = ({ said, nodes }: Fold) => {
 /** What the Operator's kinds of line are drawn with: where a helper's own
  * conversation opens, by its id after `opens/`, and what each model was
  * told, by the entry it is drawn at (`briefed`). */
-type Heard = Beside & { opens?: string; told?: Map<string, Told> }
+type Heard = Beside & {
+  opens?: string
+  told?: Map<string, Told>
+  files?: Record<string, Kept>
+}
 
 /** A view of a conversation: the renderers it loads, defined from a list
  * (`PERSON`, and what a view loads beside it). */
@@ -791,13 +802,13 @@ let contact = (b: Bundle): Said => ({
 // A line of a call its talking model hears and speaks: theirs, or its own
 // (old rows, before its own were outputs). Where the call began is the
 // model's to read; what it asked of the Operator is the person's words.
-let onCall = (b: Bundle): Said | null | undefined => {
+let onCall = (b: Bundle, heard: Heard): Said | null | undefined => {
   let called = comp(b, 'operator_call')!
   if (called.began) return null
   if (!b.notice || !said(b)) return undefined
   return called.said
     ? { node: reply(spoken(b, said(b))) }
-    : { node: input(b, said(b)), is: 'theirs' }
+    : { node: input(b, said(b), heard.files?.[b.entity.eid]), is: 'theirs' }
 }
 
 // A helper the person stopped (@yaks/session `stopAll`, the only stop here),
@@ -830,15 +841,15 @@ let own: Kind<Heard>[] = [
   // The files a step brought back (an image it made), open under it.
   kind('.call', (b, heard) => {
     let step = draw(conversation, b, heard)!
-    let files = (comp(heard.result, 'operator_files')?.files ?? []) as Sent[]
-    return files.length
+    let kept = heard.result && heard.files?.[heard.result.entity.eid]
+    return kept
       ? {
         ...step,
         node: h(
           Fragment,
           null,
           step.node,
-          attached(heard.result!.entity.eid, files),
+          attached(kept.message, kept.files),
         ),
       }
       : step
@@ -856,11 +867,12 @@ let own: Kind<Heard>[] = [
   ),
   kind(
     '',
-    (b) =>
-      told(b, said(b))
-        ? helper(b, said(b))
-        : theirs(b)
-        ? { node: input(b, said(b)), is: 'theirs' }
+    (b, heard) =>
+      told(b, said(b)) ? helper(b, said(b)) : theirs(b)
+        ? {
+          node: input(b, said(b), heard.files?.[b.entity.eid]),
+          is: 'theirs',
+        }
         : null,
   ),
 ]
@@ -950,6 +962,8 @@ export type Lines = {
   /** what the entities their prose names are called, by eid
    * (@yaks/session `Naming`) */
   ids?: Record<string, string>
+  /** the files of the lines they read, by eid */
+  files?: Record<string, Kept>
 }
 
 // The tool offer an ask names.
@@ -978,6 +992,7 @@ export let wire = (
   let tools = new Set(read.map((b) => String(comp(b, 'call')?.to ?? '')))
   let said = JSON.stringify([read, helpers])
   let ids = Object.entries(seen.ids ?? {}).filter(([eid]) => said.includes(eid))
+  let files = Object.entries(seen.files ?? {}).filter(([eid]) => used.has(eid))
   return {
     lines: drawn.map(({ id, uses }) => ({ id, uses })),
     entries: read,
@@ -995,6 +1010,7 @@ export let wire = (
     ...seen.called ? { called: seen.called } : {},
     ...seen.opens ? { opens: seen.opens } : {},
     ...ids.length ? { ids: Object.fromEntries(ids) } : {},
+    ...files.length ? { files: Object.fromEntries(files) } : {},
   }
 }
 

@@ -44,7 +44,6 @@ export const ON = [
   'spawned.parent.',
   'entry.session.',
   'entry.session.spawned.parent.',
-  'operator_files.request.',
 ]
 /** What is also its conversation's: a call, its result, a model's output. */
 export const MADE = ['call', 'result', 'output']
@@ -61,7 +60,6 @@ let BEARING = [
   ...NAMING,
   'spawned',
   'entry',
-  'operator_files',
   ...MADE,
   'created',
 ]
@@ -97,7 +95,6 @@ export let owners = (
     ...named(at(ref(e, 'spawned', 'parent'))),
     ...named(session),
     ...named(at(ref(session, 'spawned', 'parent'))),
-    ...named(at(ref(e, 'operator_files', 'request'))),
     ...via?.operator_session
       ? [ref(via, 'operator_session', 'person') ?? null]
       : [],
@@ -139,7 +136,6 @@ export let reckon = (get: Get, eids: string[]): Maybe<Bundle[]> => {
     let up = live.flatMap((e) => [
       ref(e, 'spawned', 'parent'),
       ref(e, 'entry', 'session'),
-      ref(e, 'operator_files', 'request'),
       MADE.some((c) => e[c]) ? ref(e, 'created', 'via') : undefined,
     ])
     return after(read(up, PART), () =>
@@ -194,7 +190,6 @@ let hanging = (tx: Pick<Tx, 'read'>, eids: string[]): Maybe<string[]> => {
         ids(
           fifties(eids).flatMap((list) => [
             `.entry.session=${list}`,
-            `.operator_files.request=${list}`,
             `.created.via=${list}&(${MADE_BY})`,
           ]).concat(
             fifties(helpers).map((list) => `.entry.session=${list}`),

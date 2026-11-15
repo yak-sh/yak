@@ -11,7 +11,8 @@ import { mailFrom } from '@yaks/platform/host'
 import { digest } from '@yaks/graph/sha256'
 import { attachmentKey, attachments } from './attachments.ts'
 import { keep } from '@yaks/blob'
-import { type Attached, attachmentRows } from '@yaks/blob/attachment'
+import { attachmentRows } from '@yaks/blob/attachment'
+import { attachedOf, attachmentId, type File } from './operator-files.ts'
 import { sourceReference } from './operator-source.ts'
 import { type Ctx, inApp, refuse } from './tool.ts'
 import type { Told, Tool, ToolContext } from '@yaks/session'
@@ -42,7 +43,6 @@ export let TROUBLE =
   'Something went wrong, and the Operator could not start on this. Your request is kept; send it again to try once more.'
 
 type Store = OperatorStore
-export type File = { name: string; mime: string; key: string; size?: number }
 
 /** The most bytes of files shown to the model as they are in one request:
  * with their base64 and the request around them, an ask stays well inside
@@ -112,22 +112,10 @@ export type Channel = (
 ) => Promise<{ id?: string }>
 let part = <T>(b: Bundle | undefined, name: string) => b?.[name] as T
 
-/** The id a file attached to the Operator goes by: the digest its key ends
- * in (attachments.ts). */
-export let attachmentId = (file: File) => file.key.split('/').at(-1)!
-
-/** A file as an attachment row names it (@yaks/blob/attachment). */
-export let attachedOf = (file: File): Attached => ({
-  name: file.name,
-  media_type: file.mime,
-  address: attachmentId(file),
-  ...file.size == null ? {} : { size: file.size },
-})
-
-/** What a tool says of the files it made: its words, with the files on its
- * result, which shows them, and each one's attachment row beside the call
- * that made it, so a person's reads of their files list what the Operator
- * made as they list what they sent. */
+/** What a tool says of the files it made: its words, with each file's
+ * attachment row beside the call that made it, which the conversation shows
+ * under its step (operator-files.ts `filesOf`), so a person's reads of their
+ * files list what the Operator made as they list what they sent. */
 export let madeFiles = async (
   store: Pick<Store, 'g'>,
   ctx: Pick<ToolContext, 'call'> | undefined,
@@ -139,7 +127,7 @@ export let madeFiles = async (
     attachmentRows(ctx.call.entity.eid, files.map(attachedOf)),
     { trusted: true },
   )
-  return { text, with: { operator_files: { files } } }
+  return text
 }
 
 let fileOf = async (
@@ -839,36 +827,22 @@ export let handleChannels = (
             'Only a member can ask the operator.',
           )
         }
-        let extracted = part<Comp>(row, 'content')?.body
-        let attachments: {
-          name: string
-          mime?: string
-          attachment?: string
-          text: string
-        }[] = extracted ? JSON.parse(String(extracted)) : []
         // What the model reads as it is goes to it as it is (operator.ts
-        // `shown`); the rest is read as its text.
-        if (!extracted) {
-          let reads = await operator.reads(
-            request.model,
-            request.provider,
-            { person: request.person, administrative: access.administrative },
-            space,
-          )
-          for (let file of request.files ?? []) {
-            if (asIs(reads, file)) continue
-            attachments.push({
-              name: file.name,
-              mime: file.mime,
-              attachment: attachmentId(file),
-              text: await fileText(env, space, file),
-            })
-          }
-          await g.apply([{
-            entity: row.entity,
-            content: { body: JSON.stringify(attachments) },
-          }], { trusted: true })
-        }
+        // `shown`); the rest goes with the words read from it, kept on its
+        // attachment beside the words (@yaks/session `take`).
+        let reads = await operator.reads(
+          request.model,
+          request.provider,
+          { person: request.person, administrative: access.administrative },
+          space,
+        )
+        let files = await Promise.all(
+          (request.files ?? []).map(async (file) =>
+            asIs(reads, file)
+              ? file
+              : { ...file, text: await fileText(env, space, file) }
+          ),
+        )
         let [subject] = request.about ? await g.get([request.about]) : []
         let framing = BY[request.channel]?.(request, row.entity.eid, subject) ??
           ''
@@ -885,7 +859,7 @@ export let handleChannels = (
             source: body,
             task,
             session: derivedEid('operator-session|' + row.entity.eid),
-            files: request.files ?? [],
+            files,
             channel: request.channel,
             ...request.channel == 'signup' ? { signup: request.address } : {},
             framing,

@@ -7,13 +7,14 @@ import type { Space } from './directory.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { owns } from './operator-access.ts'
 import { attachmentKey } from './attachments.ts'
+import { asIs, fileText, SHOWN } from './operator-channels.ts'
 import {
-  asIs,
   attachmentId,
   type File,
-  fileText,
-  SHOWN,
-} from './operator-channels.ts'
+  filesOf,
+  keptOf,
+  moved,
+} from './operator-files.ts'
 import { refuse } from './tool.ts'
 
 type Store = OperatorStore
@@ -108,11 +109,12 @@ export let fileContext = (
     held.catch(() => texts.delete(key))
     return held
   }
-  let cached = async (entry: Bundle) => {
-    let request = comp(entry, 'operator_files')?.request
-    let [row] = request
-      ? await store.g.get([String(request)], ['content', 'operator_request'])
-      : []
+  // The words read from a request's files, as a store its pass has yet to
+  // move keeps them, on the request (files-move.ts).
+  let cached = async (request: string) => {
+    let [row] = moved(store)
+      ? []
+      : await store.g.get([request], ['content', 'operator_request'])
     return row?.operator_request && comp(row, 'content')?.body
       ? JSON.parse(String(comp(row, 'content')!.body)) as {
         attachment: string
@@ -133,11 +135,14 @@ export let fileContext = (
     let wanted = new Set<string>()
     let converted = new Set<string>()
     let space: Promise<Space> | undefined
+    let sent = await filesOf(store, window)
     for (let entry of [...window].reverse()) {
-      let files = (comp(entry, 'operator_files')?.files ?? []) as File[]
-      if (!files.length) continue
-      let extracted = files.some((file) => !asIs(reads, file))
-        ? await cached(entry)
+      let { message, files: attached = [] } = sent.get(entry.entity.eid) ?? {}
+      if (!attached.length) continue
+      let at = await (space ??= spaceOf(current.session))
+      let files = attached.map((file) => keptOf(at, file))
+      let extracted = files.some((file) => !asIs(reads, file) && !file.text)
+        ? await cached(message!)
         : []
       let items = await Promise.all(files.map(async (file): Promise<Item> => {
         if (!asIs(reads, file)) {
@@ -148,8 +153,7 @@ export let fileContext = (
           )
           return prose(
             file,
-            held?.text ??
-              await textOf(file, await (space ??= spaceOf(current.session))),
+            file.text ?? held?.text ?? await textOf(file, at),
           )
         }
         if (file.size! > room) {

@@ -169,8 +169,8 @@ import {
 } from './parts.ts'
 
 /** What a tool answers: its words, or its words `with` components its result
- * entry carries beside them (`operator_files`, an image the host shows the
- * model beside the result). */
+ * entry carries beside them (an image the host shows the model beside the
+ * result). */
 export type Told = string | { text: string; with: Record<string, Comp> }
 
 // What a tool said, as words and the components beside them.

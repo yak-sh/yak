@@ -13,7 +13,6 @@ let BEARING = [
   ...OWNED.map(([name]) => name),
   'spawned',
   'entry',
-  'operator_files',
   ...MADE,
 ].map((c) => `.${c}`).join('|')
 

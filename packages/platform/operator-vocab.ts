@@ -159,7 +159,7 @@ export let operatorDoc: VocabDoc = {
     operator_files: {
       component: true,
       description:
-        'The files that came with an input, from the request they were sent in: the model is shown the ones it reads as they are, beside the words.',
+        "The files an input came with, or a result brought back, as lines kept before they were found among the attachments (@yaks/blob `attachment{message}`) say them, until their store's pass moves them there (files-move.ts).",
       properties: {
         request: { type: 'string', ref: 'entity', death: 'keep' },
         files: { type: 'array', items: { type: 'object' } },

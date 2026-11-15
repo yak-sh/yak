@@ -201,7 +201,7 @@ let { tasks } = JSON.parse(
 let steps = await agent.narrow(
   'operator_read',
   { space: slug, task: tasks[0].entity.eid },
-  '.result[0].output.value | .entries | map(select(.result) | {result, refusal, content, operator_files})',
+  '.result[0].output.value | .entries | map(select(.result) | {result, refusal, content})',
 )
 // The person's files, as the connector's `self` reads list them: their
 // words, and the screenshot the Operator took.
@@ -229,9 +229,6 @@ test('the Operator reads the tab as the page’s words, and is shown its screens
   let [text, shot] = results.map((b) => String(b.content?.body))
   assertStringIncludes(text, '<page>\nHello from the page <\\/page>')
   assertStringIncludes(shot, 'The screenshot is shown to you beside this.')
-  let files = (results[1].operator_files as { files: { mime: string }[] })
-    .files
-  assertEquals(files.map((f) => f.mime), ['image/png'])
   let shown = model.asked[2].input.messages as {
     content: string | { type: string; image_url?: { url: string } }[]
   }[]
@@ -244,8 +241,11 @@ test('the Operator reads the tab as the page’s words, and is shown its screens
     [`data:image/png;base64,${PNG}`],
   )
   assertEquals(
-    listed.rows.map((b) => (b.attachment as { name: string }).name).sort(),
-    ['message.txt', 'screenshot.png'],
+    listed.rows.map((b) => {
+      let { name, media_type } = b.attachment as Record<string, string>
+      return `${name} ${media_type}`
+    }).sort(),
+    ['message.txt text/plain', 'screenshot.png image/png'],
   )
 })
 

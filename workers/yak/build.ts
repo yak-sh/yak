@@ -1131,6 +1131,12 @@ export class Builder extends Durable {
             let { channelBackfill } = await import('./channel-move.ts')
             return backfill(channelBackfill(store))
           },
+          // Each line's files found among the attachments, and the words
+          // read from them on theirs (files-move.ts).
+          files: async () => {
+            let { filesBackfill } = await import('./files-move.ts')
+            return backfill(filesBackfill(store))
+          },
           numbers: async () => {
             let { numberBackfill } = await import('./number-move.ts')
             return backfill(numberBackfill(store))
