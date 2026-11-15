@@ -1,7 +1,14 @@
 // The graph one app page can use: its own store and the homes of components
 // it declares as uses. A filter naming one of those components reads through
 // the same composition as the agent door; other filters stay app-local.
+import { attach, type Frame, type Socket } from '@yaks/api'
+import { reached } from '@yaks/api/reached'
+import type { Bundle, Reduced } from '@yaks/graph'
 import { listed, type Row } from '@yaks/platform/listing'
+import { stringify } from '@yaks/vocab/wire'
+import { workerUpgrade } from '@yaks/workerd'
+import { mistaken } from './mistake.ts'
+import { noted, serving } from './unseen.ts'
 import { type App, appStore, directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { copyOf } from './directory-copy.ts'
@@ -226,4 +233,123 @@ export let vocabulary = async (
     ...docs,
     ...borrowed.filter((doc) => Object.keys(doc.$defs!).length),
   ])
+}
+
+// A store's side of a page's socket: what its `/ws` answers when a page asks
+// as `who`, opened and accepted, or null when the store answers no socket.
+type Link = Socket & { accept(): void; close(): void }
+
+let linked = async (
+  req: Request,
+  env: Env,
+  { space, app, who }: Reach,
+  headers: Record<string, string>,
+): Promise<Link | null> => {
+  let res = await appStore(env.STORE, space, app, env)(
+    '/ws',
+    req,
+    { ...vouched(who), ...headers },
+  ) as Response & { webSocket?: Link | null }
+  if (res.status != 101 || !res.webSocket) {
+    await res.body?.cancel()
+    return null
+  }
+  let link = res.webSocket
+  await new Promise<void>((resolve, reject) => {
+    link.addEventListener('open', () => resolve())
+    link.addEventListener(
+      'error',
+      () => reject(new Error('store socket failed')),
+    )
+    link.addEventListener(
+      'close',
+      () => reject(new Error('store socket closed')),
+    )
+    link.accept()
+    if (link.readyState == 1) resolve()
+  })
+  return link
+}
+
+// A page's socket over every store its graph reads (@yaks/api/reached): one
+// link to each store's raw feed, and each frame on any of them asks the page's
+// queries again through `reading`, where ownership and composition live. The
+// app store's own frames are the raw feed, its release notices go to the page
+// as they came, outside any ack, and a relayed value goes to it to hold. A
+// lost link closes the page's socket, so its client reconnects and refills.
+export let listened = async (
+  req: Request,
+  env: Env,
+  space: Space,
+  app: App,
+  graph: Awaited<ReturnType<typeof sources>>,
+  headers: Record<string, string> = {},
+) => {
+  let links: (Link | null)[] = []
+  try {
+    for (let [i, r] of graph.reach.entries()) {
+      links.push(await linked(req, env, r, i == 0 ? headers : {}))
+    }
+    if (!links[0]) throw new Error('app socket unavailable')
+  } catch (error) {
+    for (let link of links) link?.close()
+    throw error
+  }
+  let { socket, response } = workerUpgrade(req)
+  let page = socket as Link
+  let tags = { space: space.slug, app: app.slug }
+  // A watch the page's code got wrong is the app's break, as its store files
+  // one (graph.ts `#mistook`): once for this socket, though every change
+  // asks it again.
+  let filed = new Set<string>()
+  let subs = reached({
+    read: (line) =>
+      reading(env, graph, line, false, headers) as Promise<Bundle[] | Reduced>,
+    relay: (bundles) => links[0]?.send(stringify({ relay: bundles })),
+    refused: (error, line) => {
+      if (filed.has(line)) return
+      filed.add(line)
+      mistaken(req, error, 'query', {
+        version: () => serving(env, space, app),
+        note: (report) =>
+          noted({ ...report, request: `subscribe ${line}` }, {
+            env,
+            space,
+            app,
+            request: req,
+            entrypoint: 'subscribe',
+          }),
+      }).catch((why) =>
+        caught(why, { request: 'report subscribe failure', ...tags })
+      )
+    },
+    tags,
+  })
+  let closed = false
+  let close = () => {
+    if (closed) return
+    closed = true
+    for (let link of links) link?.close()
+    page.close()
+  }
+  for (let [i, link] of links.entries()) {
+    if (!link) continue
+    link.addEventListener('message', (e) => {
+      let frame: Frame & { release?: unknown }
+      try {
+        frame = JSON.parse(String(e.data))
+      } catch (error) {
+        return caught(error, { request: 'page source', ...tags })
+      }
+      // A home changing must not offer to reload the page borrowing its words.
+      if (frame.release) return void (i == 0 && page.send(String(e.data)))
+      if (frame.refused) return close()
+      subs.hear(frame, i == 0)
+    })
+    link.addEventListener('close', close)
+    link.send(JSON.stringify({ subscribe: true, id: 'page' }))
+  }
+  attach(subs, page)
+  page.addEventListener('close', close)
+  return response
 }

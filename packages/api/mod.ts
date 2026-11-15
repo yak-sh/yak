@@ -102,6 +102,7 @@ export {
 export {
   type Ask,
   type Frame,
+  type Listening,
   type Opening,
   type Sink,
   type Subs,

@@ -155,12 +155,12 @@ import { asking } from './asking.ts'
 import {
   borrowed,
   homed,
+  listened,
   local,
   queried,
   sources,
   vocabulary,
 } from './page-graph.ts'
-import { pageSocket } from './page-socket.ts'
 import { dataAsset, webAsset, webPage } from './web.ts'
 import {
   appApi,
@@ -1989,7 +1989,7 @@ export let api = async (
   }
   // A page with only its own words listens straight to its store. A page that
   // uses another app's word listens to every component home through one
-  // socket (page-socket.ts); each frame answers its filters with the same
+  // socket (page-graph.ts `listened`); each frame answers its filters with the same
   // ownership rule as /query. The handshake is a read, and writes use /apply.
   if (path == '/ws') {
     if (req.headers.get('upgrade') != 'websocket') {
@@ -2010,7 +2010,7 @@ export let api = async (
       () => homed(env, space, app, who, JSON.parse(uses)),
     )
     if (graph.reach.length > 1) {
-      return pageSocket(req, env, space, app, graph, headers)
+      return listened(req, env, space, app, graph, headers)
     }
     return store('/ws', req, headers)
   }

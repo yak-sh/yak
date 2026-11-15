@@ -18,7 +18,7 @@ import type { Bundle, ReadOpts } from '@yaks/graph'
 import { asker, asking } from '@yaks/graph/asker'
 import { coalescer } from '@yaks/graph/bundle'
 import { admission } from './admission.ts'
-import type { Frame, Sink, Subs } from './subs.ts'
+import type { Frame, Listening, Sink } from './subs.ts'
 import type { PeerWriter } from './save.ts'
 
 /** The part of a WebSocket this package uses: the standard `WebSocket`
@@ -55,7 +55,10 @@ let BUFFER = 8 * 1024
 let TICK = 16
 let BATCH = 32
 let MAX_MESSAGE = 64 * 1024
-let gates = new WeakMap<Subs, WeakMap<Sink, ReturnType<typeof admission>>>()
+let gates = new WeakMap<
+  Listening,
+  WeakMap<Sink, ReturnType<typeof admission>>
+>()
 
 /** Decode one incoming frame before anyone dispatches it. A hibernating socket
  * can use the decoded shape to route its own work without parsing it again. */
@@ -144,7 +147,7 @@ export let clockReply = (
   return true
 }
 
-let gate = (subs: Subs, to: Sink, now?: () => number) => {
+let gate = (subs: Listening, to: Sink, now?: () => number) => {
   let bySink = gates.get(subs)
   if (!bySink) gates.set(subs, bySink = new WeakMap())
   let one = bySink.get(to)
@@ -299,7 +302,7 @@ export let sink = (
  * with no connection to name.
  */
 export let receive = (
-  subs: Subs,
+  subs: Listening,
   to: Sink,
   data: unknown,
   now?: () => number,
@@ -333,7 +336,7 @@ export let receive = (
 }
 
 let dispatch = (
-  subs: Subs,
+  subs: Listening,
   to: Sink,
   now: (() => number) | undefined,
   input: Incoming,
@@ -405,10 +408,10 @@ export let refusing = (socket: Socket, error: unknown): void => {
  * Connect a socket to a subscription registry: its messages become
  * subscriptions, and closing it drops them all. Returns the sink its frames
  * go to, which is also the key its subscriptions are held under. Without a
- * `now`, relay pace reads the registry's ({@link Subs}).
+ * `now`, relay pace reads the registry's ({@link Listening}).
  */
 export let attach = (
-  subs: Subs,
+  subs: Listening,
   socket: Socket,
   timer?: (fn: () => void, ms: number) => void,
   now?: () => number,

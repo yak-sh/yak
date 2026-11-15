@@ -5444,7 +5444,8 @@ export class Store extends Durable {
     //
     // A page's socket asks with `uses=1`, as its query does (`#paged`): an app
     // that uses words from other homes is answered 204 with those words, not a
-    // socket, and the kernel opens one across every home (page-socket.ts).
+    // socket, and the kernel opens one across every home (page-graph.ts
+    // `listened`).
     if (path == '/ws') {
       let said = new URL(request.url).searchParams.get('uses') == '1'
         ? this.#held(request, 'uses')

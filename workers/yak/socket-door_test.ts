@@ -1,6 +1,6 @@
 // A page's socket through the app door (apps.ts `/ws`): one round trip to its
 // store, which answers the socket, or says the words the app uses from other
-// homes, so the door opens one across them (page-socket.ts) instead.
+// homes, so the door opens one across them (page-graph.ts `listened`) instead.
 import { equal, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { installPair, made } from '../../packages/workerd/testing.ts'

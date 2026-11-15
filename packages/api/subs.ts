@@ -203,6 +203,13 @@ export type Subs = {
   relayed: (sink: Sink, keys: string[]) => void | Promise<void>
 }
 
+/** What a socket asks of a registry (./socket.ts `attach`): to open, close
+ * and drop subscriptions and take relayed values. A {@link Subs} is one, and
+ * so is a registry over graphs it can only ask (./reached.ts). */
+export type Listening =
+  & Pick<Subs, 'open' | 'close' | 'drop' | 'relay'>
+  & Partial<Pick<Subs, 'activity' | 'vocab' | 'enqueue' | 'pace' | 'now'>>
+
 type Joint<T> = {
   value: T | Promise<T>
   /** Aborted once every owner let go: an owner arriving after must start the

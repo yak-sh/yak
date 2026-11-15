@@ -5,7 +5,7 @@ import { durable } from './testing.ts'
 import { installPair, made, Pair } from '../../packages/workerd/testing.ts'
 import { Store } from './graph.ts'
 import type { Wire } from '@yaks/durable-object'
-import { pageSocket } from './page-socket.ts'
+import { listened } from './page-graph.ts'
 import type { Env } from './env.ts'
 import type { App, Space } from './directory.ts'
 
@@ -52,7 +52,7 @@ test('only kernel POST /released tells every held socket, without subscriptions'
   assertEquals(one.sent.at(-1), { release: { version: 3 } })
 })
 
-test('page socket forwards only its own release raw, outside the ack queue', async () => {
+test('a page socket over two stores forwards only its own release raw, outside the ack queue', async () => {
   let undo = installPair()
   let own = new Pair()[1]
   let home = new Pair()[1]
@@ -75,14 +75,17 @@ test('page socket forwards only its own release raw, outside the ack queue', asy
               }),
             )
           }
+          // Each read finds one more row, so every one is a change to send.
           reads++
-          return Promise.resolve(Response.json([]))
+          return Promise.resolve(
+            Response.json([{ entity: { eid: `r${reads}` }, doc: {} }]),
+          )
         },
       }),
     },
   } as unknown as Env
   try {
-    await pageSocket(
+    await listened(
       new Request('https://releases.yaks.app/page/api/ws'),
       env,
       space,

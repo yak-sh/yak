@@ -1,0 +1,128 @@
+/// <reference lib="deno.ns" />
+// Subscriptions over a reach: asked again whole when any member speaks, sent
+// when the answer moved, and served by the same socket layer as a graph's.
+import { equal, test, tick } from '@yaks/testing'
+import type { Bundle, Reduced } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
+import { fake } from './testing.ts'
+import { attach } from './socket.ts'
+import { reached } from './reached.ts'
+import type { Frame } from './subs.ts'
+
+let book = (eid: string) => ({ entity: { eid }, book: {} })
+
+// A reach whose answer is whatever `answer` holds now, counting its reads,
+// with one listener's frames; `answer` may also be a promise to hold a read.
+let reach = (start: Bundle[] | Reduced | Error = []) => {
+  let state = { answer: start as unknown, reads: 0, relayed: [] as Bundle[][] }
+  let refused: string[] = []
+  let subs = reached({
+    read: async (line) => {
+      state.reads++
+      let now = await state.answer
+      if (now instanceof Error) throw now
+      return line == '.book.count'
+        ? { count: (now as Bundle[]).length }
+        : now as Bundle[]
+    },
+    relay: (bundles) => void state.relayed.push(bundles),
+    refused: (_, line) => void refused.push(line),
+  })
+  let frames: Frame[] = []
+  let sink = (f: Frame) => void frames.push(f)
+  return { subs, state, sink, refused, taken: () => frames.splice(0) }
+}
+
+test('a line is answered whole, again when a member speaks and the answer moved', async () => {
+  let r = reach([book('dune')])
+  r.subs.open(r.sink, 'all', '.book')
+  r.subs.open(r.sink, 'n', '.book.count')
+  await tick()
+  equal(r.taken(), [
+    { id: 'all', bundles: [book('dune')], reset: true },
+    { id: 'n', count: 1 },
+  ])
+  r.subs.hear({ id: 'feed', bundles: [] })
+  await tick()
+  equal([r.taken(), r.state.reads], [[], 4])
+  r.state.answer = [book('dune'), book('emma')]
+  r.subs.hear({ id: 'feed', bundles: [] })
+  await tick()
+  equal(r.taken(), [
+    { id: 'all', bundles: [book('dune'), book('emma')], reset: true },
+    { id: 'n', count: 2 },
+  ])
+})
+
+test('the raw feed hears the first member own frames as they came', async () => {
+  let r = reach()
+  r.subs.open(r.sink, 'feed', true)
+  r.subs.hear({ id: 'page', bundles: [book('home')] })
+  r.subs.hear({ id: 'page', bundles: [book('dune')] }, true)
+  await tick()
+  equal([r.taken(), r.state.reads], [
+    [{ id: 'feed', bundles: [book('dune')] }],
+    0,
+  ])
+})
+
+test('a refusal is said under its id, told once, and the next change asks again', async () => {
+  let r = reach(new Refused('unknown prop: .loan'))
+  r.subs.open(r.sink, 'all', '.book')
+  await tick()
+  equal(r.taken(), [{
+    id: 'all',
+    refused: { error: 'Refused', message: 'unknown prop: .loan' },
+  }])
+  equal(r.refused, ['.book'])
+  r.state.answer = [book('dune')]
+  r.subs.hear({ id: 'feed', bundles: [] })
+  await tick()
+  equal(r.taken(), [{ id: 'all', bundles: [book('dune')], reset: true }])
+})
+
+test('an answer a newer ask, a close or a drop overtook is never sent', async () => {
+  let r = reach()
+  let slow = Promise.withResolvers<Bundle[]>()
+  r.state.answer = slow.promise
+  r.subs.open(r.sink, 'all', '.book')
+  r.state.answer = [book('emma')]
+  r.subs.hear({ id: 'feed', bundles: [] })
+  slow.resolve([book('dune')])
+  await tick()
+  equal(r.taken(), [{ id: 'all', bundles: [book('emma')], reset: true }])
+  r.subs.open(r.sink, 'one', '.book')
+  r.subs.close(r.sink, 'one')
+  r.subs.drop(r.sink)
+  r.state.answer = [book('zed')]
+  r.subs.hear({ id: 'feed', bundles: [] })
+  await tick()
+  equal(r.taken(), [])
+})
+
+test('through a socket: clock replies ask nothing, acks hold the raw feed, relays go on', async () => {
+  let r = reach()
+  let socket = fake()
+  attach(r.subs, socket, undefined, () => 5)
+  socket.emit('message', JSON.stringify({ clock: 1 }))
+  equal<unknown>(socket.taken(), [{ clock: 1, received: 5, sent: 5 }])
+  socket.emit(
+    'message',
+    JSON.stringify({ subscribe: true, id: 'feed', acks: true }),
+  )
+  r.subs.hear({ id: 'page', bundles: [] }, true)
+  r.subs.hear({ id: 'page', bundles: [book('dune')] }, true)
+  let [first] = socket.taken()
+  equal(socket.sent, [])
+  socket.emit('message', JSON.stringify({ ack: first.ack }))
+  equal(socket.taken().map((f) => f.bundles), [[book('dune')]])
+  socket.emit(
+    'message',
+    JSON.stringify({ relay: [{ entity: { eid: 'c' }, cursor: { x: 1 } }] }),
+  )
+  await tick()
+  equal([r.state.relayed, r.state.reads], [[[{
+    entity: { eid: 'c' },
+    cursor: { x: 1 },
+  }]], 0])
+})

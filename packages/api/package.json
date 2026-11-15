@@ -14,7 +14,8 @@
     "./asset": "./asset.ts",
     "./routed": "./routed.ts",
     "./log": "./log.ts",
-    "./receipts": "./receipts.ts"
+    "./receipts": "./receipts.ts",
+    "./reached": "./reached.ts"
   },
   "license": "Apache-2.0",
   "description": "Serves graph writes, queries, and live query subscriptions through an HTTP and WebSocket request handler.",
