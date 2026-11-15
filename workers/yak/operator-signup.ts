@@ -1,5 +1,5 @@
 import type { Tool } from '@yaks/session'
-import type { Arrival } from '@yaks/phone'
+import type { Arrival, Keyword } from '@yaks/phone'
 import { Blocked, keyword } from '@yaks/phone'
 import { formKeyword } from '@yaks/forms/text'
 import { type Bundle, derivedEid, type Graph } from '@yaks/graph'
@@ -248,6 +248,16 @@ export let spaceArrived = async (
     }
     return
   }
+  await controlReply(env, space, arrival, word as Keyword)
+}
+
+/** The carrier's required keyword answer, outside the model's conversation. */
+export let controlReply = async (
+  env: Env,
+  space: Space,
+  arrival: Arrival & { via: string },
+  word: Keyword,
+) => {
   let { answers } = await import('./app-texts.ts')
   let { answerText } = await import('./operator-line.ts')
   try {
@@ -256,7 +266,7 @@ export let spaceArrived = async (
       reply_to: arrival.to,
       via: arrival.via,
       channel: 'control',
-    }, answers(space.title || space.slug)[word!])
+    }, answers(space.title || space.slug)[word])
   } catch (error) {
     if (!(error instanceof Blocked)) throw error
   }

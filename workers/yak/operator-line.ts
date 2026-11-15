@@ -378,6 +378,10 @@ export let phoneSend = (
         'They have not chosen which of their numbers to text from. Ask them, then set it with phone_numbers.',
       )
     }
+    let { textStopped } = await import('./operator-signup.ts')
+    if (await textStopped(store.g, { from: to, to: from })) {
+      throw refuse('blocked', 'This person replied STOP.')
+    }
     // A number the space holds is the platform's phone, paid from the space's
     // budget (text-spend.ts); one the person connected is theirs to pay.
     let account = space.sender
@@ -761,6 +765,15 @@ export let lineArrived = async (
     await found.body?.cancel()
     if (found.status == 404) continue
     if (!found.ok) throw new Error(`Operator text lookup: ${found.status}`)
+    let { controlText, controlReply } = await import('./operator-signup.ts')
+    let { keyword } = await import('@yaks/phone')
+    let { stopped } = await controlText(env, space, arrival, person)
+    let word = keyword(arrival.text, false)
+    if (word) {
+      await controlReply(env, space, arrival, word)
+      return { space, fresh: false }
+    }
+    if (stopped) return { space, fresh: false }
     let response = await asked(space, '/operator/replied', {
       say: arrival.text,
       request: {

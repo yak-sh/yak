@@ -960,7 +960,7 @@ export let handleChannels = (
       let [about] = request.about ? await g.get([request.about]) : []
       let receipt
       try {
-        if (request.channel == 'signup') {
+        if (request.channel == 'signup' || request.channel == 'texted') {
           let { textStopped } = await import('./operator-signup.ts')
           if (
             await textStopped(g, {

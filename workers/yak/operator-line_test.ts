@@ -15,7 +15,7 @@ import { credential } from '@yaks/connections'
 import { reveal } from '@yaks/secrets'
 import { callable, operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
-import { signupTools } from './operator-signup.ts'
+import { signupTools, textControl } from './operator-signup.ts'
 import { rootOf } from './operator-root.ts'
 import { conversationOf, workOf } from './operator-host.ts'
 import { listed as listing } from './operator-view.ts'
@@ -267,6 +267,48 @@ await dir.apply({
   }],
 }, owner)
 let answered = await texted('77', '2695550142', 'Tuesday at 3 works for us.')
+await service.drain()
+let send = () =>
+  phoneSend(env, ctx, space, store).run({
+    to: '2695550142',
+    name: 'Dr Alvarez',
+    text: 'Checking our appointment.',
+  })
+await store.g.apply(textControl({
+  id: 'other-line-stop',
+  at: new Date().toISOString(),
+  from: '+12695550142',
+  to: '+12695550100',
+  text: 'STOP',
+  rcs: false,
+  media: [],
+}))
+let otherLine = await send()
+let beforeStop = (await store.g.read('.operator_request')).length
+await texted('reply-stop', '2695550142', 'STOP')
+let beforeBlocked = of('sendSMS').length + of('sendMMS').length
+let stoppedSend: unknown
+try {
+  await send()
+} catch (error) {
+  stoppedSend = error
+}
+let afterBlocked = of('sendSMS').length + of('sendMMS').length
+let [request] = await store.g.read(
+  '.operator_request.channel=texted&.operator_request.address="+12695550142"&*',
+)
+let pending = crypto.randomUUID()
+await store.g.apply([{
+  entity: { eid: pending },
+  operator_answer: { request: request.entity.eid, text: 'Queued before STOP' },
+}])
+await service.drain()
+let [suppressed] = await store.g.get([pending])
+await texted('reply-quiet', '2695550142', 'Is anyone there?')
+await service.drain()
+let afterStop = (await store.g.read('.operator_request')).length
+await texted('reply-start', '2695550142', 'START')
+let resumed = await send()
 let stranger = await texted('78', '2695550199', 'Are we still on for golf?')
 await service.drain()
 await setting({ number: 'Church line', inbound: true })
@@ -401,6 +443,23 @@ test('a voip.ms connection is checked and lists every number on the account, cha
       ['+12695550122', 'Fax', false, undefined],
     ],
   )
+})
+
+test('phone_send refuses a recipient who replied STOP before calling the provider', () => {
+  assertEquals((stoppedSend as { code?: string })?.code, 'blocked')
+  assertEquals(afterBlocked, beforeBlocked)
+})
+
+test('a reply-only line keeps STOP without asking the model and suppresses queued replies', () => {
+  assertEquals(afterStop, beforeStop)
+  ok(suppressed.bounced)
+  assertEquals(suppressed.delivered, undefined)
+})
+
+test('phone_send honours START and scopes STOP to the sending number', () => {
+  for (let sent of [otherLine, resumed]) {
+    assertEquals(JSON.parse(sent as string).to, '+12695550142')
+  }
 })
 
 test('the Operator texts from no number until one is chosen, and an outbound one keeps its callback', () => {
