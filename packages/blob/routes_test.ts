@@ -12,7 +12,7 @@ import { mem, memoryBucket } from './testing.ts'
 import { bucketObjects, objectBlobs } from './object.ts'
 import { memoryMultipart } from './parts.ts'
 import { fold, START } from './sha256.ts'
-import { type Backend, type Options, PREFIX, routes } from './routes.ts'
+import { type Options, PREFIX, routes } from './routes.ts'
 import { useOf } from './upload.ts'
 import { blobSchema, sqliteBlobs } from './sqlite.ts'
 import { representations } from './representation_rules.ts'
@@ -299,7 +299,7 @@ test('a text store that cannot keep the bytes says so at the write', async () =>
 test('the store a host names is where the bytes land', async () => {
   let { bucket, held: cells } = memoryBucket()
   let h = host()
-  let ask = door(h, { store: { via: 'object', bucket, prefix: 'art/' } })
+  let ask = door({ ...h, artifacts: objectBlobs(bucket, 'art/') })
   let sha = pngAddress
   let made = await ask(put(sha, png, 'image/png'))
   assertEquals(made.status, 200)
@@ -327,28 +327,19 @@ test('the bound is on the bytes, not on what a header claimed', async () => {
   assertEquals((await ask(streamed)).status, 413)
 })
 
-test('a store nobody can build mounts no door, and says why', () => {
-  let h = host()
+test('a host that keeps no bytes mounts no door, and says why', () => {
+  let { graph } = host()
   let warned: unknown[] = []
   let warn = console.warn
   console.warn = (...said: unknown[]) => warned.push(said[0])
   try {
-    // Missing config never stops the host: there is simply no door, so an
-    // upload is refused where it is attempted rather than answered into
-    // nothing.
-    assertEquals(routes(h, { store: { via: 'file' } as Backend }), [])
-    assertEquals(
-      routes(h, { store: { via: 'bucket' } as unknown as Backend }),
-      [],
-    )
+    // There is simply no door, so an upload is refused where it is attempted
+    // rather than answered into nothing.
+    assertEquals(routes({ graph }), [])
   } finally {
     console.warn = warn
   }
-  assert(String(warned[0]).includes('needs `dir`'), String(warned[0]))
-  assert(
-    String(warned[1]).includes('no store called "bucket"'),
-    String(warned[1]),
-  )
+  assert(String(warned[0]).includes('keeps no bytes'), String(warned[0]))
 })
 
 test('an upload is by whoever the door says is calling', async () => {

@@ -1,6 +1,5 @@
 // The kernel's modules load in the Worker: no chunk imports a node module
-// the runtime lacks (bundle.ts `lacking`). The bundle refuses such a chunk at
-// deploy; this says so before a landing.
+// the runtime lacks (bundle.ts `lacking`).
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { build, stop } from 'esbuild'

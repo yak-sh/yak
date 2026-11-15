@@ -103,7 +103,7 @@ host records that, and refuses the store to a config without @yaks/blob
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `@yaks/blob/vocab`      | `docs`, `keywords`, `derived` and declaration/read helpers                                                                                                                     |
 | `@yaks/blob/graph`      | `plugins(host)`: the graph plugin over the host's blob store, and `required`: a store it wrote requires it                                                                     |
-| `@yaks/blob/routes`     | `routes(host, options)`, backend helpers and route settings                                                                                                                    |
+| `@yaks/blob/routes`     | `routes(host, options)` and route settings                                                                                                                                     |
 | `@yaks/blob/identify`   | `contentType`, `artifactStore`: host byte detection and artifact storage                                                                                                       |
 | `@yaks/blob/file`       | `fileBlobs(dir)`, `artifactsAt`: the filesystem store, which only a runtime with files loads                                                                                   |
 | `@yaks/blob/backend`    | `Backend`, `backend`: a configured artifact backend, its directory store given by the host                                                                                     |
@@ -721,23 +721,24 @@ Repeating a successful upload uses the same address and entity IDs.
 the harness the same artifact store. By default, a file-backed graph keeps
 binary artifacts in `images/` beside its database; an in-memory graph keeps them
 in memory. The plugin's `store` option changes that store for both. Graph text
-properties remain in the SQLite text table. Standalone routes without a host
-artifact store use their `store` option or the host's blob store. Routes require
-`host.blobs`; they never open a database connection.
-
-The routes use these backends:
+properties remain in the SQLite text table. The routes keep bytes in the host's
+artifact store (`host.artifacts`), else its blob store (`host.blobs`), and mount
+no door when it has neither; they never open a database connection, and they
+never build a store from configuration, so a host without files, a Worker, never
+loads `@yaks/blob/file`. A host builds the configured store with
+`@yaks/blob/backend`:
 
 - `{ "via": "sqlite" }`: the host's blob store (`host.blobs`). A host using
   `sqliteBlobs(statements)` lends the text table, which rejects invalid UTF-8
   uploads.
-- `{ "via": "file", "dir": "..." }`: a directory for binary or text uploads.
+- `{ "via": "file", "dir": "..." }`: a directory for binary or text uploads,
+  made by the host's `files` (a box gives `@yaks/blob/file` `fileBlobs`).
 - `{ via: 'object', bucket, prefix? }`: an object-store binding supplied in
   code, not serializable JSON configuration.
 
 The `graph` sub-module keeps marked graph text properties in the host's blob
 store (`host.blobs`, supplied by the host). A composed host refuses an invalid
-artifact backend at startup; standalone routes log the reason and mount no
-routes.
+artifact backend at startup.
 
 The representation plugin refuses changes and deletions to representations.
 `representation()` derives their identities; `represents()` verifies them. The

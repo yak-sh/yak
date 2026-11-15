@@ -109,14 +109,6 @@ export let bundle = async (root: string, output: string, meta: string) => {
     let names = planned(join(root, 'public')).names
     let built = await build({ ...options(root, names), outdir: scratch })
     let source = built.metafile!
-    let failing = lacking(source)
-    if (Object.keys(failing).length) {
-      throw new Error(
-        `a Worker chunk imports a node module workerd lacks: ${
-          JSON.stringify(failing, null, 2)
-        }`,
-      )
-    }
     let entry = Object.keys(source.outputs).find((file) =>
       source.outputs[file].entryPoint == 'index.ts'
     )!

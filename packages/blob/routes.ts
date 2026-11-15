@@ -47,7 +47,6 @@ import { Pending } from '@yaks/api/log'
 import type { Bundle } from '@yaks/graph'
 import { Stale, status } from '@yaks/graph/errors'
 import { addressOf } from './artifact.ts'
-import { type Backend, backend } from './backend.ts'
 import { mediaType } from './content_type.ts'
 import { contentType } from './identify.ts'
 import { mimeOf } from './mime.ts'
@@ -74,8 +73,6 @@ import {
   type Upload,
   useOf,
 } from './upload.ts'
-
-export { type Backend, backend } from './backend.ts'
 
 /** The path the doors answer under where a configuration names none. */
 export let PREFIX = '/blob/'
@@ -111,9 +108,6 @@ export type InParts = {
 
 /** The options a configuration passes to this plugin. */
 export type Options = Omit<Upload, 'store'> & {
-  /** where a standalone door keeps objects; a composed host supplies its
-   * configured artifact store for both writers and readers */
-  store?: Backend
   /** the path the doors answer under (default {@link PREFIX}) */
   at?: string
   /** uploads in parts, where the store's bucket takes them */
@@ -190,16 +184,17 @@ let typeOf = (declared: unknown, name: string): string => {
   return mime == UNKNOWN ? mediaType(mimeOf(name)) : mime
 }
 
-/** The doors, answering under `options.at` (default {@link PREFIX}). */
+/** The doors, answering under `options.at` (default {@link PREFIX}), over
+ * the host's artifact store, else its blob store. Building a store a
+ * configuration names is the host's (./backend.ts), so a host without files,
+ * a Worker, never loads the filesystem (./file.ts). */
 export let routes = (
   host: { blobs?: Blobs; graph: Rows; who?: Authenticate; artifacts?: Blobs },
   options: Options = {},
 ): Route[] => {
-  let { store, waiting } = host.artifacts
-    ? { store: host.artifacts }
-    : backend(options.store ?? { via: 'sqlite' }, host)
+  let store = host.artifacts ?? host.blobs
   if (!store) {
-    console.warn(`@yaks/blob: no door — ${waiting}`)
+    console.warn('@yaks/blob: no door — the host keeps no bytes')
     return []
   }
   let at = options.at ?? PREFIX
