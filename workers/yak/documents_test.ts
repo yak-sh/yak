@@ -12,7 +12,7 @@ import {
   pageBundle,
   transcribe,
 } from './documents.ts'
-import { documentPages } from './document-graph.ts'
+import { documentPages } from '@yaks/platform/document-graph'
 import { cited, type Hit, hits, type PageHit } from './document-search.ts'
 
 let vocab = storeWords('app').vocab

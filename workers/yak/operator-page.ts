@@ -105,7 +105,7 @@ import { drafting, draftsOf, theirs } from './written.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { linkOf } from './preview.ts'
 import { VOCABS } from './vocab.ts'
-import { DOCUMENTS } from './documents.ts'
+import { DOCUMENTS } from '@yaks/platform/documents'
 import { phoneAt } from './phones.ts'
 import { icons } from './icons.ts'
 import {

@@ -227,7 +227,7 @@ let facets: Record<string, () => Promise<unknown>> = {
   '@yaks/voipms/graph': () => import('@yaks/voipms/graph'),
   '@yaks/wake/graph': () => import('@yaks/wake/graph'),
   'yak/admit/graph': () => import('@yaks/platform/admit-graph'),
-  'yak/app/graph': () => import('./facets/app-graph.ts'),
+  'yak/app/graph': () => import('@yaks/platform/app-graph'),
   'yak/app/effects': () => import('./facets/app-effects.ts'),
   'yak/attribution/effects': () => import('./facets/attribution-effects.ts'),
   'yak/describe/graph': () => import('@yaks/platform/describe-graph'),

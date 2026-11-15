@@ -10,6 +10,7 @@ import type { Stored } from './graph.ts'
 import { directoryOf } from './directory.ts'
 import { blobPrefix } from './blob-key.ts'
 import { metered } from './metered.ts'
+import { isPdf, plain, supported } from '@yaks/platform/documents'
 
 export let VISION = '@cf/google/gemma-4-26b-a4b-it'
 export let ANSWER = '@cf/google/gemma-4-26b-a4b-it'
@@ -19,34 +20,6 @@ export type Conversion = { format: string; data?: string; error?: string }
 export type Markdown = (
   file: { name: string; blob: Blob },
 ) => Promise<Conversion>
-/** The documents read as their text, by extension. A web page is one too: an
- * article a worker fetched and kept is read the way a Word file is. Plain text
- * and Markdown are their own text. */
-export let DOCUMENTS = [
-  'pdf',
-  'docx',
-  'xlsx',
-  'xlsm',
-  'xlsb',
-  'xls',
-  'ods',
-  'odt',
-  'csv',
-  'numbers',
-  'html',
-  'htm',
-  'txt',
-  'md',
-]
-let documentName = new RegExp(`\\.(${DOCUMENTS.join('|')})$`, 'i')
-export let supported = (name: string, mime: string) =>
-  mime == 'application/pdf' || mime.startsWith('text/html') ||
-  plain(mime) || documentName.test(name)
-// What is read as it is, with no conversion.
-let plain = (mime = '') => /^text\/(plain|markdown)\b/.test(mime)
-export let isPdf = (name: string, mime: string) =>
-  mime == 'application/pdf' || /\.pdf$/i.test(name)
-
 type Said = {
   response?: string
   choices?: { message?: { content?: string }; finish_reason?: string }[]

@@ -553,7 +553,7 @@ export let domains = {
   'yak/kernel': { worker: './facets/kernel-worker.ts' },
   'yak/app': {
     vocab: '@yaks/platform/app-vocab',
-    graph: './facets/app-graph.ts',
+    graph: '@yaks/platform/app-graph',
     effects: './facets/app-effects.ts',
   },
   'yak/directory': {
