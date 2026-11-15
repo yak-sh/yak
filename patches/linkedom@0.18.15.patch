@@ -1,0 +1,39 @@
+diff --git a/cjs/interface/event-target.js b/cjs/interface/event-target.js
+index 450b3d6331e1fe138defa8168a28458908e69d39..a1658893452358d7450497cfefa017af388d8fa3 100644
+--- a/cjs/interface/event-target.js
++++ b/cjs/interface/event-target.js
+@@ -5,7 +5,7 @@ const wm = new WeakMap();
+ 
+ function dispatch(event, listener) {
+   if (typeof listener === 'function')
+-    listener.call(event.target, event);
++    listener.call(event.currentTarget, event);
+   else
+     listener.handleEvent(event);
+   return event._stopImmediatePropagationFlag;
+diff --git a/esm/interface/event-target.js b/esm/interface/event-target.js
+index edffded19e2af9c11d91795e1a6c2625665330d5..0b90cdaf23200c750779a93bef0432aac7e93d35 100644
+--- a/esm/interface/event-target.js
++++ b/esm/interface/event-target.js
+@@ -4,7 +4,7 @@ const wm = new WeakMap();
+ 
+ function dispatch(event, listener) {
+   if (typeof listener === 'function')
+-    listener.call(event.target, event);
++    listener.call(event.currentTarget, event);
+   else
+     listener.handleEvent(event);
+   return event._stopImmediatePropagationFlag;
+diff --git a/worker.js b/worker.js
+index fa7dc792b82e558ed5265cbe5b175e7a859264cf..6d4cd62298492338c241b7123fef031c75360e5c 100644
+--- a/worker.js
++++ b/worker.js
+@@ -2701,7 +2701,7 @@ const wm = new WeakMap();
+ 
+ function dispatch(event, listener) {
+   if (typeof listener === 'function')
+-    listener.call(event.target, event);
++    listener.call(event.currentTarget, event);
+   else
+     listener.handleEvent(event);
+   return event._stopImmediatePropagationFlag;

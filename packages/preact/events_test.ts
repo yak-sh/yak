@@ -131,6 +131,20 @@ test('ordinary handlers keep the host event', () => {
   }
 })
 
+test('a handler on a parent hears a click dispatched at its child', () => {
+  let heard: string[] = []
+  let onClick = (e: Event) => heard.push((e.currentTarget as Element).tagName)
+  let mounted = mount(h('div', { onClick }, h('b', null)))
+  try {
+    let child = mounted.root.querySelector('b')!
+    let { Event } = child.ownerDocument.defaultView!
+    child.dispatchEvent(new Event('click', { bubbles: true }))
+    assertEquals(heard, ['DIV'])
+  } finally {
+    mounted.free()
+  }
+})
+
 test('malformed browser input cannot clear a value and custom errors can recover', () => {
   let patches: unknown[] = []
   let errors: unknown[] = []

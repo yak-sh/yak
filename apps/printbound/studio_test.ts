@@ -122,12 +122,9 @@ let desk = async (hash = '#new/' + NEW, answers: Answers = {}) => {
     sent: (name: string) =>
       posts.filter((p) => p.name == name).map((p) => p.value),
     said: () => root.querySelector('[role=status]')!.textContent,
-    // A browser bubbles a field's input to its form. LinkeDOM calls a
-    // listener there with the field as `this`, where preact looks for the
-    // handler, so the form is given what would have reached it.
     type: (name: string, text: string) => {
       field(name).value = text
-      field(name).closest('form')!.dispatchEvent(new Dom('input'))
+      field(name).dispatchEvent(new Dom('input', { bubbles: true }))
     },
     // A press, and the form it sends where the button is its form's send.
     press: (words: string) => {

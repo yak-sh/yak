@@ -410,19 +410,12 @@ test('a box sending waits, and Stop says so on its conversation', () => {
   equal(stopped('s1'), b.stops[0])
 })
 
-// An event on the box as a browser sends it, and whether the box took it as
-// its own.
-// TODO: send it to the field, as a person's paste or drop is. linkedom calls
-// a listener an event bubbles to with the event's target as `this`
-// (interface/event-target.js `dispatch`), where preact looks for the
-// handler, so a handler on the box never hears it from the field; fixed by
-// a patch to linkedom calling it with `currentTarget`.
+// An event on the field as a browser sends a person's paste or drop, and
+// whether the box took it as its own.
 let on = (b: ReturnType<typeof boxed>, type: string, extra: object) => {
   let { Event } = b.root.ownerDocument.defaultView!
   let e = new Event(type, { bubbles: true, cancelable: true })
-  act(() => {
-    b.root.querySelector('.Composer')!.dispatchEvent(Object.assign(e, extra))
-  })
+  act(() => void b.field().dispatchEvent(Object.assign(e, extra)))
   return e.defaultPrevented
 }
 let carrying = (...names: string[]) => ({

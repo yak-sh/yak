@@ -211,10 +211,7 @@ let box = () => {
     drafts: { text: () => text, type: (_, t) => void (text = t), spend() {} },
   })
 
-  // TODO: paste and drop on the field, as a person does. linkedom calls a
-  // listener an event bubbles to with the event's target as `this`, where
-  // preact looks for the handler (packages/ux/Conversation_test.ts `on`).
-  let field = document.querySelector('#ask .Composer')!
+  let field = document.querySelector('#ask textarea')!
   let event = (type: string, extra: Record<string, unknown>) => {
     let e = new window.Event(type, { bubbles: true, cancelable: true })
     Object.assign(e, extra)

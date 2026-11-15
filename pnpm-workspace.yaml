@@ -10,8 +10,13 @@ ignoreWorkspaceCycles: true
 # Scripts, benches, apps and the other Workers import every member from the
 # repository root.
 publicHoistPattern:
-  - '@yaks/*'
+  - "@yaks/*"
 allowBuilds:
   esbuild: true
   sharp: true
   workerd: true
+# linkedom calls a listener an event bubbles to with the event's target as
+# `this`, where Preact looks for its handler; the patch calls it with the
+# element listening (`currentTarget`), as a browser does.
+patchedDependencies:
+  linkedom@0.18.15: patches/linkedom@0.18.15.patch
