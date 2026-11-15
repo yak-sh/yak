@@ -3,12 +3,13 @@ import * as io from '@yaks/file/io'
 import { command as spawnCommand } from '@yaks/process/command'
 import { remember } from '@yaks/cli/memo'
 import { createHash } from 'node:crypto'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Buffer } from 'node:buffer'
-import { join } from 'node:path'
-import { from, plan, ui } from './sheet-assets.ts'
-import { parts } from './client-assets.ts'
-import { PAGES } from './site/mod.ts'
+import { join, relative } from 'node:path'
+import { type Read, sources } from '@yaks/esbuild'
+import { strip } from '@yaks/esbuild/strip'
+import { made } from '@yaks/web/assets'
+import { ASSETS, drawn, planned } from './assets.ts'
 
 let hash = (bytes: Uint8Array) =>
   createHash('sha256').update(bytes).digest('hex')
@@ -59,15 +60,38 @@ export let materialized = async (
   return prepared.map(([path]) => path)
 }
 
-/** Inputs to the browser bundles, compiler catalog and sandbox workspace. */
-export let assetInputs = (paths: string[]) =>
+/** The files bundles read from `entries`, by path: each entry's module graph
+ * as esbuild resolves it (@yaks/esbuild `sources`), packages named on the way
+ * left unread. */
+export let reached = async (read: Read, entries: string[]) =>
+  (await Promise.all(entries.map((entry) => sources(strip)(read, entry))))
+    .flatMap(({ files }) => [...files.keys()])
+
+/** What the site's bundles read (assets.ts `ASSETS`), by path in `repo`. */
+let bundled = (repo: string) =>
+  reached(
+    (path) =>
+      io.readFile(join(repo, path)).then((bytes) => new Uint8Array(bytes))
+        .catch((error) => {
+          if (error instanceof io.errors.NotFound) return null
+          throw error
+        }),
+    ASSETS.flatMap(({ bundle }) =>
+      bundle instanceof URL ? [relative(repo, fileURLToPath(bundle))] : []
+    ),
+  )
+
+/** Inputs to the browser bundles, compiler catalog and sandbox workspace,
+ * among `paths`: those the bundles read (`read`), and what the rest are made
+ * of. */
+export let assetInputs = (paths: string[], read: string[] = []) =>
   paths.filter((path) =>
+    read.includes(path) ||
     /^(?:packages\/|workers\/yak\/(?:public|site)\/|apps\/home\/copy\.json$)/
       .test(path) ||
     /^(?:deno\.(?:jsonc?|lock)|bin\/compiler-packages\.ts)$/.test(path) ||
-    // `_talk.js` is built from operator-rows.ts and what it imports here, and
-    // `_words.js` from the Operator store's words (operator-words.ts).
-    /^workers\/yak\/(?:wrangler\.ts|asset-ready\.ts|client-assets\.ts|sheet-assets\.ts|(?:chart|data-editor)\.js|dates(?:-browser)?\.ts|settings(?:-draft(?:-browser)?)?\.ts|operator-(?:rows|draw|aside|source|metadata|contact-card|consent|api-page|talk|box|words|vocab|store|load)\.ts|(?:config|vocabs)\.ts|icons\.ts|mascot\.ts|sandbox\/(?:cli-assets|launch)\.ts|package(?:-lock)?\.json|deno\.json)$/
+    // `_words.js` is drawn from the Operator store's words (operator-words.ts).
+    /^workers\/yak\/(?:wrangler\.ts|asset-ready\.ts|assets\.ts|sheet-assets\.ts|operator-(?:metadata|words|vocab|store|load)\.ts|(?:config|vocabs)\.ts|icons\.ts|mascot\.ts|sandbox\/(?:cli-assets|launch)\.ts|package(?:-lock)?\.json|deno\.json)$/
       .test(path)
   ).filter((path) =>
     !/(^|\/)(?:node_modules|\.wrangler|fixtures?|tests?)(\/|$)/.test(path) &&
@@ -97,12 +121,8 @@ let outputs = async (root: string) => {
     ...[
       '_compiler/packages.json',
       '_compiler/toolkit.json',
-      ...Object.keys(parts),
-      '_client.js',
-      '_words.js',
-      ...(await ui()).keys(),
-      ...Object.keys(PAGES),
-      ...Object.values(plan(await from(publicDir)).names),
+      ...[...ASSETS, ...await drawn()].filter(made).map(({ name }) => name),
+      ...Object.values(planned(publicDir).names),
     ]
       .map((name) => join(publicDir, name)),
   ]
@@ -126,6 +146,7 @@ export let assets = async (
   }
   let paths = assetInputs(
     new TextDecoder().decode(listed.stdout).split('\0').filter(Boolean),
+    await bundled(repo),
   )
   return await materialized(
     paths.map((path) => join(repo, path)),

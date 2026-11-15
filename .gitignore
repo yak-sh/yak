@@ -56,7 +56,8 @@ node_modules
 /workers/yak/front/public/
 /workers/yak/public/_compiler/
 
-# The browser client as one module, generated from public/client.js.
+# The browser client as one module, bundled from @yaks/platform/client
+# (workers/yak/assets.ts).
 /workers/yak/public/_client.js
 
 # The kit's share of yaks.app's stylesheets, composed from @yaks/ui, and

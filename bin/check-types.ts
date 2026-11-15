@@ -46,7 +46,7 @@ export const DIRS = ['apps', 'bench', 'bin', 'packages', 'plugins', 'workers']
 export const MADE: Record<string, string[]> = {
   'bin/compiler-packages.ts': ['packages.json', 'toolkit.json']
     .map((name) => `workers/yak/public/_compiler/${name}`),
-  'workers/yak/client-assets.ts': [
+  'workers/yak/assets.ts': [
     '_draft.js',
     '_outbox.js',
     '_wire.js',

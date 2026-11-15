@@ -8,7 +8,7 @@
 //
 // The client is bundled once, as the host warms, so the first page load
 // finds it made. yaks.app serves the same module from its built assets
-// (workers/yak client-assets.ts) and answers the doors itself, with a space's
+// (workers/yak assets.ts) and answers the doors itself, with a space's
 // members, an app's access and its meter (workers/yak apps.ts `api`), in the
 // same wire, so its Worker lists no `yak/client`.
 import type { Handler, Route } from '@yaks/api/routed'

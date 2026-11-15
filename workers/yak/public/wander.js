@@ -33,7 +33,7 @@
   let still = slot?.querySelector('img')
   let calm = matchMedia('(prefers-reduced-motion: reduce)')
   // The site's root, wherever this script is served from (a name of its
-  // bytes under /_yak, sheet-assets.ts).
+  // bytes under /_yak, assets.ts).
   let base = new URL('/', document.currentScript.src)
   const STRIPS = ['down', 'up', 'plop'] // mascot/wander-<strip>-128.webp, six frames across
   const FRAMES = 6

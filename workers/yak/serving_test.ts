@@ -40,7 +40,7 @@ import {
   PLATFORM_BACKGROUND,
   PLATFORM_THEME,
 } from '@yaks/platform/woven'
-import { from, plan } from './sheet-assets.ts'
+import { planned } from './assets.ts'
 import { client as clientNamed } from './sheets.ts'
 import * as dirPart from './directory.ts'
 import { granting, scriptName } from './dispatch.ts'
@@ -154,7 +154,7 @@ await pageScript(ASSETS, '/', 0, { badge: 'https://yaks.app/' })
 
 // The platform's client as a page receives it: the module exporting `store`,
 // importing nothing more, so one request brings the whole of it
-// (client-assets.ts). `import.meta` is not an import.
+// (assets.ts). `import.meta` is not an import.
 let served = (js: string) => {
   let [imports, exports] = parse(js)
   return {
@@ -191,7 +191,7 @@ test('the client by its bytes is kept for good, and an old name finds the client
   await using scenario = platform()
   let { env } = scenario
   await seeded(env, 'public', scenario.dir)
-  let name = clientNamed(plan(await from(PUBLIC.pathname)).names)!
+  let name = clientNamed(planned(PUBLIC.pathname).names)!
   let kept = await apps.fetch(visit(`/cookbook/api/${name}`), env)
   assertEquals(kept.status, 200)
   assertEquals(

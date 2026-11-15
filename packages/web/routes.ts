@@ -1,4 +1,4 @@
-import { type Application, application } from './app.ts'
+import { application } from './app.ts'
 // The routes facet, exported as `@yaks/web/routes`: the addresses a person
 // opens in a browser. `/` is the root canvas, and each entity is at its own id — `/T-9`, or `/%23abc123` for one the
 // store has not numbered. Every one of them answers the same page, and the app
@@ -32,17 +32,17 @@ import type { Graph, ReadOpts } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { addressId } from '@yaks/id'
 import type { Vocab } from '@yaks/vocab'
-import { type Body, type Kept, kept } from '@yaks/cli/page'
+import { type Kept, kept } from '@yaks/cli/page'
 import { OUTDATED, RUNS } from './outlived.ts'
 import { made } from './canvas.ts'
-import { page as html } from './page.ts'
+import { dressing, page as html } from './page.ts'
+import { served } from './assets.ts'
 import { preload } from './preload.ts'
 import { person } from '@yaks/cli/host'
 import type { Config } from '@yaks/cli/config'
 import { type Context, door, flood, thrown } from '@yaks/tracker/report'
 import type { Vault } from '@yaks/secrets'
 import { authorization } from './authorize.ts'
-import { bytes, text } from '@yaks/api/asset'
 
 /** What this facet reads off the host it is composing into: the vocabulary
  * its plugins loaded, and the graph a name is resolved in. */
@@ -69,38 +69,6 @@ export type Hosting = {
  * after its entity's components change. */
 export let letters: string[] = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ']
   .flatMap((l) => [l, l.toLowerCase()])
-
-let here = (path: string) => new URL(path, import.meta.url)
-
-// @yaks/ui's stylesheet carries every component's CSS, so it loads when the
-// stylesheet is first asked for, not before the server listens.
-let styles = async (app: Application) =>
-  (await Promise.all([
-    import('@yaks/ui').then((ui) => ui.stylesheet(ui.composition)),
-    app.styles ? text(app.styles) : '',
-  ]))
-    .join('\n')
-
-let files: [string, string, () => Promise<Body>][] = [
-  [
-    'manifest.webmanifest',
-    'application/manifest+json',
-    () => text(here('./manifest.webmanifest')),
-  ],
-  ...[
-    'icon-192.png',
-    'icon-512.png',
-    'icon-maskable-512.png',
-    'apple-touch-icon.png',
-  ]
-    .map((
-      name,
-    ): [string, string, () => Promise<Uint8Array<ArrayBuffer>>] => [
-      name,
-      'image/png',
-      () => bytes(here(`./${name}`)),
-    ]),
-]
 
 // Whether a path names an entity to whoever asks: one segment, resolved to an
 // eid the graph holds, alive or deleted (a deleted entity's page reads its
@@ -291,19 +259,6 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
       { method: 'GET', path: `/${l}`, handle: page },
     ]),
     { method: 'GET', path: '/web/app.js', handle: bundle(host, options) },
-    {
-      method: 'GET',
-      path: '/web/styles.css',
-      handle: kept(
-        '/web/styles.css',
-        'text/css; charset=utf-8',
-        async () => styles(await app()),
-      ),
-    },
-    ...files.map(([name, type, make]): Route => ({
-      method: 'GET',
-      path: `/web/${name}`,
-      handle: kept(`/web/${name}`, type, make),
-    })),
+    ...served(dressing(app), '/web/'),
   ]
 }

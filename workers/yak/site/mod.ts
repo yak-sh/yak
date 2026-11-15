@@ -6,17 +6,15 @@
 // which answers them at the apex: `deno task content` writes them there
 // (`drawn`, gen.ts), they are committed with the change that drew them, and
 // the box's deploy catch-up releases them once main's head is live
-// (packages/admin service.ts `RELEASED`). The deploy's
-// build (client-assets.ts) writes them into public/ too, with the style
-// guide, which is no page of the app's (`deployed`): the Worker's own file
-// answers a page until the app does, whenever it can't, and while the
-// app's is another drawing (site.ts `sitePage`, drawing.ts). Those are made, not kept, as `_ui.css` is: public/*.html is
-// gitignored.
-import * as io from '@yaks/file/io'
+// (packages/admin service.ts `RELEASED`). The deploy's build (../assets.ts)
+// writes every page into public/ too, with the style guide, which is no page
+// of the app's: the Worker's own file answers a page until the app does,
+// whenever it can't, and while the app's is another drawing (site.ts
+// `sitePage`, drawing.ts). Those are made, not kept, as `_ui.css` is:
+// public/*.html is gitignored.
 import { type FunctionComponent, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { createHash } from 'node:crypto'
-import { join } from 'node:path'
 import { DRAWING } from '../drawing.ts'
 import { AcceptableUse } from './acceptable-use.tsx'
 import { Churches } from './churches.tsx'
@@ -82,11 +80,3 @@ let based = (html: string) =>
  * source of their words, and never drawn here. */
 export let drawn = () =>
   Object.fromEntries(APP.map((name) => [name, based(page(name))]))
-
-/** Write every page into public/, the Worker's own. */
-export let deployed = (to = new URL('../public/', import.meta.url).pathname) =>
-  Promise.all(
-    Object.keys(PAGES).map((name) =>
-      io.writeTextFile(join(to, name), page(name))
-    ),
-  )

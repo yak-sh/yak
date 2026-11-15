@@ -1,6 +1,6 @@
 // Edit mode on an app's page: the words a member may type over where they
 // stand. public/edit.js draws the pencil and loads this, served at the app's
-// `./api/_edit.js` (client-assets.ts), once it is pressed; a stranger, a guest
+// `./api/_edit.js` (assets.ts), once it is pressed; a stranger, a guest
 // and a sandboxed page are never sent either (apps.ts `editOf`).
 //
 // Each element naming a snippet (`data-copy`, @yaks/copy) is outlined, and a

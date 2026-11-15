@@ -1,5 +1,5 @@
 // What the chat page's script draws with, in the browser as `_talk.js`
-// (client-assets.ts): its conversation, mounted over what the server drew
+// (assets.ts): its conversation, mounted over what the server drew
 // (operator-talk-browser.ts), and the aside beside it, drawn as HTML for the parts of
 // the page the script puts in place.
 import { h } from 'preact'

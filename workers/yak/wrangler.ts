@@ -21,7 +21,7 @@ import { parse, stringify } from 'smol-toml'
 import { imaged } from './sandbox/base.ts'
 import { installed } from '@yaks/cli/dependencies'
 import { assets } from './asset-ready.ts'
-import { from as sources, plan } from './sheet-assets.ts'
+import { planned } from './assets.ts'
 import { once, sleep } from '@yaks/fp'
 import {
   command,
@@ -109,15 +109,14 @@ let preparing = (
     web: () =>
       timed('Web assets', () =>
         generated('Web asset', [
-          join(repo, 'packages/web/assets.ts'),
+          join(repo, 'packages/web/static.ts'),
           join(root, 'public/_web'),
           '@yaks/browse/web',
         ], quiet), quiet),
     client: () =>
       timed(
-        'Client assets',
-        () =>
-          generated('Client asset', [join(root, 'client-assets.ts')], quiet),
+        'Site assets',
+        () => generated('Site asset', [join(root, 'assets.ts')], quiet),
         quiet,
       ),
     cli: () =>
@@ -851,7 +850,7 @@ let unbundled = async (
   from: string,
   { entry, output }: Bundle,
   root: string,
-  fit: (config: Record<string, unknown>) => Promise<unknown> = async () => {},
+  fit: (config: Record<string, unknown>) => unknown = () => {},
 ) => {
   let path = join(root, from)
   let parsed = parse(io.readTextFileSync(path))
@@ -929,8 +928,7 @@ export let bundled = async (
       'wrangler.toml',
       { entry: join(output, 'index.js'), output },
       root,
-      async (parsed) =>
-        direct(parsed, plan(await sources(join(root, 'public'))).names),
+      (parsed) => direct(parsed, planned(join(root, 'public')).names),
     )
     return { args: [...upload, '-c', config], output, remove }
   } catch (error) {
@@ -1534,7 +1532,7 @@ if (import.meta.main) {
     }),
   )
   // The kernel's modules read tracked source and the client, whose byte name
-  // they carry (sheet-assets.ts); the catalog and the other generated assets
+  // they carry (assets.ts `planned`); the catalog and the other generated assets
   // are what its upload carries, which waits for them.
   let kernel = preflight(
     () => Promise.all([readied, made.client]),

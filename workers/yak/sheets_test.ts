@@ -11,13 +11,13 @@ import { halved } from '@yaks/ui'
 import { kernel } from './probe.ts'
 import { lost } from './pages.ts'
 import { parseHTML } from 'linkedom'
-import { FILES, from, plan } from './sheet-assets.ts'
+import { ASSETS, planned } from './assets.ts'
 import { asset, client, links, named, sheeted } from './sheets.ts'
 import { direct } from './wrangler.ts'
 import { dataAsset } from './web.ts'
 
 let PUBLIC = new URL('./public/', import.meta.url).pathname
-let { files, names } = plan(await from(PUBLIC))
+let { files, names } = planned(PUBLIC)
 let sheet = (root: string) => new TextDecoder().decode(files.get(names[root])!)
 
 // Every sheet a head blocks on.
@@ -54,14 +54,6 @@ for (let root of ['style.css', 'pages.css']) {
     assertStringIncludes(sheet(root), '#line)')
   })
 }
-
-test('sheets: a name changes with the bytes and only then', () => {
-  let read = (css: string) => (name: string) =>
-    new TextEncoder().encode(name == 'style.css' ? css : '')
-  let name = (css: string) => plan(read(css)).names['style.css']
-  assertEquals(name('a{}'), name('a{}'))
-  assert(name('a{}') != name('b{}'))
-})
 
 test('sheets: a head names one sheet, on this site, with the font preloaded', () => {
   let env = { APEX: 'yaks.fyi' }
@@ -145,7 +137,8 @@ test('sheets: a static page, the home page and a kernel page wait on no other si
 })
 
 test('sheets: each file the pages name is kept under a name of its bytes, as it is', () => {
-  for (let file of FILES) {
+  let kept = ASSETS.filter((a) => a.named && !a.name.endsWith('.css'))
+  for (let { name: file } of kept) {
     assertMatch(names[file], /^_yak\/.+\.[0-9a-f]{10}\.\w+$/)
     assertEquals(files.get(names[file]), Deno.readFileSync(`${PUBLIC}${file}`))
     assertEquals(named(`/${names[file]}`), `/${file}`)

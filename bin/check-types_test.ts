@@ -16,7 +16,7 @@ test('source imports reuse complete readiness receipts and make the remaining ou
     return Promise.resolve(true)
   }
   let catalog = 'bin/compiler-packages.ts',
-    client = 'workers/yak/client-assets.ts'
+    client = 'workers/yak/assets.ts'
   equal(await generate([catalog, client], run, MADE[catalog]), true)
   equal(called, [['run', '--no-lock', '-A', client]])
   called.length = 0

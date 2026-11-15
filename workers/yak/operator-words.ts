@@ -3,7 +3,7 @@
 // only a store reads (its rules, effects and tools) or what only a person
 // reads (descriptions), so a page holds the store's rows as the store keeps
 // them. Written beside the page's scripts at deploy as `_words.js`
-// (client-assets.ts), the same for every page and kept by the browser.
+// (assets.ts), the same for every page and kept by the browser.
 import type { VocabDoc } from '@yaks/vocab'
 
 type Schema = Record<string, unknown>

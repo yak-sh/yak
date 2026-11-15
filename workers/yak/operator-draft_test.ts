@@ -9,7 +9,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import type { Stash } from '@yaks/draft'
 import { imported } from '@yaks/fp/imports'
-import { parts } from './client-assets.ts'
+import { ASSETS } from './assets.ts'
 import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import {
@@ -301,7 +301,7 @@ let load = async (
   let source = document.querySelector('script[type=module]')!.textContent!
   // Generated bundles still depend on the source graph that builds them.
   imported(
-    Object.values(parts).map((from) => new URL(from, import.meta.url).href),
+    ASSETS.flatMap(({ bundle }) => bundle instanceof URL ? [bundle.href] : []),
   )
   let place = {
     reload: () => void loads.page++,

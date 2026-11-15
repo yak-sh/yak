@@ -118,6 +118,7 @@
     "@yaks/vocab": "0.2.32",
     "@yaks/voipms": "0.2.30",
     "@yaks/wake": "0.2.24",
+    "@yaks/web": "0.2.29",
     "@yaks/workerd": "0.2.24",
     "@yaks/workers-ai": "0.2.25",
     "@yaks/yaml": "0.2.24",

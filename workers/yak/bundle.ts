@@ -10,7 +10,7 @@ import { rollup } from 'rollup'
 import { dirname, join, resolve } from 'node:path'
 import { isBuiltin } from 'node:module'
 import { fileURLToPath } from 'node:url'
-import { from, plan } from './sheet-assets.ts'
+import { planned } from './assets.ts'
 
 /** The entry's static imports, leaving every dynamic door unopened. */
 export let closure = (meta: Metafile, entry: string): Set<string> => {
@@ -30,7 +30,7 @@ let native = (name: string) =>
   name.startsWith('node:') || name.startsWith('cloudflare:')
 
 /** How esbuild reads the kernel's source: `named` is the byte name of each
- * asset its modules point at (sheet-assets.ts). */
+ * asset its modules point at (assets.ts `planned`). */
 export let options = (
   root: string,
   named: Record<string, string> = {},
@@ -79,7 +79,7 @@ export let bundle = async (root: string, output: string, meta: string) => {
     prefix: '.modules-',
   })
   try {
-    let names = plan(await from(join(root, 'public'))).names
+    let names = planned(join(root, 'public')).names
     let built = await build({ ...options(root, names), outdir: scratch })
     let source = built.metafile!
     let entry = Object.keys(source.outputs).find((file) =>

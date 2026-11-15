@@ -6217,6 +6217,9 @@ importers:
       '@yaks/wake':
         specifier: 0.2.24
         version: link:../../packages/wake
+      '@yaks/web':
+        specifier: 0.2.29
+        version: link:../../packages/web
       '@yaks/workerd':
         specifier: 0.2.24
         version: link:../../packages/workerd

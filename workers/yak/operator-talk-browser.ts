@@ -62,7 +62,7 @@ export type Talking = ReturnType<typeof mountTalk>
 
 /**
  * The conversation mounted over what the server drew in `box`, its page
- * graph over the store's `words` (`_words.js`, client-assets.ts): a step's frame (`heard`), a reply as it is
+ * graph over the store's `words` (`_words.js`, assets.ts): a step's frame (`heard`), a reply as it is
  * written (`typed`), a whole read (`read`, the `?talk=` answer's HTML) and
  * Stop pressed (`stopped`). Where its reader is goes to `onAway`, and
  * `newest` takes them back; `older` is asked for a read of `take` lines when

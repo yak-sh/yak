@@ -5364,6 +5364,7 @@
             "npm:@yaks/vocab@0.2.32",
             "npm:@yaks/voipms@0.2.30",
             "npm:@yaks/wake@0.2.24",
+            "npm:@yaks/web@0.2.29",
             "npm:@yaks/workerd@0.2.24",
             "npm:@yaks/workers-ai@0.2.25",
             "npm:@yaks/yaml@0.2.24",

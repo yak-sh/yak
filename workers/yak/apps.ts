@@ -504,7 +504,7 @@ let platformFile = (req: Request, env: Env, path: string) =>
     }),
   )
 
-// The store client under a name of its bytes (sheet-assets.ts), which never
+// The store client under a name of its bytes (assets.ts), which never
 // changes under it, so the browser keeps it. A page held from before a deploy
 // names one this deploy no longer holds, and is sent to the client it has.
 let namedClient = async (req: Request, env: Env, path: string) => {
@@ -1688,7 +1688,7 @@ export let api = async (
   // The store client an app's pages import (@yaks/platform/client), served beside
   // the doors it wraps so a page needs no address but its own. One file for
   // every app, so it comes from the platform's assets, not the app's blobs.
-  // It is served as one module, its parts bundled in (client-assets.ts).
+  // It is served as one module, its parts bundled in (assets.ts).
   if (path == '/client.js') return platformFile(req, env, '/_client.js')
   if (NAMED_CLIENT.test(path)) return namedClient(req, env, path)
   if (CLIENT.includes(path)) return platformFile(req, env, path)

@@ -2,7 +2,7 @@
 // `/apply`, and the rows each query answers held on one socket, @yaks/sync's
 // wire, which opens its subscriptions again whenever it reconnects. It is what
 // a draft desk asks of a store (@yaks/draft `Store`), and runs in the browser
-// as part of `_talk.js` (client-assets.ts).
+// as part of `_talk.js` (assets.ts).
 import type { Bundle } from '@yaks/graph'
 import { wire } from '@yaks/sync/socket'
 

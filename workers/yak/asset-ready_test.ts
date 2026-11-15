@@ -1,5 +1,5 @@
 import { cleanup, equal, test, throws } from '@yaks/testing'
-import { materialized } from './asset-ready.ts'
+import { assetInputs, materialized, reached } from './asset-ready.ts'
 
 let fixture = (variable = false) => {
   let root = Deno.makeTempDirSync({ prefix: 'yak-assets-' })
@@ -89,4 +89,29 @@ test('regeneration remembers the new output bytes even when identical inputs pro
   await refreshed.run()
   equal(refreshed.calls(), 2)
   equal([...await Deno.readFile(refreshed.output)], [2])
+})
+
+test('a bundle is made of every file its entry reaches, and no test', async () => {
+  let files: Record<string, string> = {
+    'w/talk.ts': "import { aside } from './aside'\nimport { h } from 'preact'",
+    'w/aside.ts': "import type { T } from './types.ts'\nexport let aside = 1",
+    'w/types.ts': 'export type T = 1',
+    'w/sort.js': 'export let sort = 1',
+  }
+  let read = (path: string) =>
+    Promise.resolve(
+      path in files ? new TextEncoder().encode(files[path]) : null,
+    )
+  equal((await reached(read, ['w/talk.ts', 'w/sort.js'])).toSorted(), [
+    'w/aside.ts',
+    'w/sort.js',
+    'w/talk.ts',
+  ])
+  equal(
+    assetInputs(['w/aside.ts', 'w/aside_test.ts', 'w/other.ts'], [
+      'w/aside.ts',
+      'w/aside_test.ts',
+    ]),
+    ['w/aside.ts'],
+  )
 })

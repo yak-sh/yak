@@ -61,19 +61,40 @@ more-specific routes.
 
 ## Exports
 
-| export       | provides                                               |
-| ------------ | ------------------------------------------------------ |
-| `.`          | `routes`, `letters` and the host's `Hosting` interface |
-| `./routes`   | routes facet composed by the browser host              |
-| `./canvas`   | the canvas a composition serves, and `prepare`         |
-| `./page`     | the page every address answers                         |
-| `./outlived` | whether a page outlived the bundle it runs             |
+| export       | provides                                                  |
+| ------------ | --------------------------------------------------------- |
+| `.`          | `routes`, `letters` and the host's `Hosting` interface    |
+| `./routes`   | routes facet composed by the browser host                 |
+| `./canvas`   | the canvas a composition serves, and `prepare`            |
+| `./page`     | the page every address answers, and what it wears         |
+| `./outlived` | whether a page outlived the bundle it runs                |
+| `./assets`   | an asset build said as data, to serve or to write to disk |
 
-`assets.ts` builds the same module, page, stylesheet and icons into a static
+An **asset** (`Asset`) is one file a browser loads: its `name`, how it is made
+(a browser module bundled with all it imports, a body made in the process, a
+file a package ships, or none for a source already in the directory), and
+whether it is `named`, written again under `_yak/` at a name of its bytes so a
+browser keeps it for good. A named stylesheet has its `@import`s written in
+place and what it points at named too. `served(assets, at)` answers each at `at`
+and its name; `write(dir, assets)` writes them into a static host's directory,
+with no earlier build's names left behind; `plan` is the naming alone, pure over
+the files' bytes.
+
+```ts
+import { assertEquals } from '@std/assert'
+import { plan } from '@yaks/web/assets'
+
+let read = (name: string) => new TextEncoder().encode(`/* ${name} */`)
+let { names } = plan([{ name: 'menu.js', named: true }, { name: 'a.js' }], read)
+assertEquals(Object.keys(names), ['menu.js'])
+assertEquals(/^_yak\/menu\.[0-9a-f]{10}\.js$/.test(names['menu.js']), true)
+```
+
+`static.ts` writes the same module, page, stylesheet and icons into a static
 host's asset directory:
 
 ```sh
-deno run -A packages/web/assets.ts /tmp/yak-web-assets @yaks/browse/web
+deno run -A packages/web/static.ts /tmp/yak-web-assets @yaks/browse/web
 ```
 
 A yaks.app host mounts those assets under its app's `/_web` address and supplies

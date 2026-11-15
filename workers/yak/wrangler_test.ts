@@ -36,7 +36,7 @@ import {
   uploadSibling,
 } from './wrangler.ts'
 import type { Reads, Version } from './deployed.ts'
-import { FILES } from './sheet-assets.ts'
+import { ASSETS } from './assets.ts'
 
 let apiFailure =
   'A request to the Cloudflare API (/accounts/a/workers/scripts/yak) failed.'
@@ -1739,7 +1739,9 @@ let checkSiblingPreparation = async () => {
 // Prepare the disposable kernel artifact once, then check what its upload sees.
 let kernelRoot = Deno.makeTempDirSync()
 Deno.mkdirSync(join(kernelRoot, 'public'))
-for (let file of ['style.css', 'pages.css', ...FILES]) {
+// Every file named by its bytes, in the order they are named.
+let NAMED = ASSETS.filter((a) => a.named).map((a) => a.name)
+for (let file of NAMED) {
   Deno.writeTextFileSync(join(kernelRoot, 'public', file), 'a{}')
 }
 Deno.writeTextFileSync(
@@ -1785,9 +1787,7 @@ test('a kernel upload uses its prepared bundle and retains source maps and modul
       directory: 'public',
       run_worker_first: [
         '/*',
-        '!/_yak/style.5f546eb460.css',
-        '!/_yak/pages.5f546eb460.css',
-        ...FILES.map((file) =>
+        ...NAMED.map((file) =>
           `!/_yak/${file.replace(/(\.\w+)$/, '.5f546eb460$1')}`
         ),
       ],
