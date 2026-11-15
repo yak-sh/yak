@@ -27,12 +27,22 @@ type Sdk = {
     'extractWWWAuthenticateParams'
   ]
 }
+// `client` has its own entry in the SDK's export map. The rest load from their
+// `.js` path, which the map types from its JS source, so each is typed by its
+// subpath's declarations instead.
+let typed = <M>(code: Promise<unknown>) => code as Promise<M>
 let loaded = (): Promise<Sdk> =>
   sdkModules ??= Promise.all([
-    import('@modelcontextprotocol/sdk/client/index.js'),
-    import('@modelcontextprotocol/sdk/client/streamableHttp.js'),
-    import('@modelcontextprotocol/sdk/types.js'),
-    import('@modelcontextprotocol/sdk/client/auth.js'),
+    import('@modelcontextprotocol/sdk/client'),
+    typed<typeof import('@modelcontextprotocol/sdk/client/streamableHttp')>(
+      import('@modelcontextprotocol/sdk/client/streamableHttp.js'),
+    ),
+    typed<typeof import('@modelcontextprotocol/sdk/types')>(
+      import('@modelcontextprotocol/sdk/types.js'),
+    ),
+    typed<typeof import('@modelcontextprotocol/sdk/client/auth')>(
+      import('@modelcontextprotocol/sdk/client/auth.js'),
+    ),
   ]).then(([client, http, types, auth]) => ({
     Client: client.Client,
     Transport: http.StreamableHTTPClientTransport,
