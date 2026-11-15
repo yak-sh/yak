@@ -371,9 +371,9 @@ let threadOf = (m: Incoming) =>
   ].map((id) => id.replace(/[<>]/g, '').trim()).filter(Boolean)
 
 // A reply to a letter the Operator wrote for a person (operator-channels.ts
-// `mailSend`), from whoever it went to: the kernel brings it to the writer's
-// own conversation, as the platform's person at their address, with only
-// their permissions, and the person it was written for is told
+// `mailSend`), authenticated as the address it went to: the kernel brings it
+// to the writer's own conversation, as the platform's person at their
+// address, with only their permissions, and the person it was written for is told
 // (operator-host.ts `operatorReply`). A machine's reply (an auto-responder, a
 // bounce) is only told: answering it could answer forever.
 let replied = async (
@@ -400,7 +400,12 @@ let replied = async (
   if (!found.ok) {
     throw new Error('Operator letter lookup failed: ' + await found.text())
   }
-  let { letter } = await found.json() as { letter: string }
+  let { letter, to } = await found.json() as { letter: string; to?: string }
+  if (!m.vouched || !to || from != to.trim().toLowerCase()) {
+    throw new Refused(
+      'The operator needs an authenticated reply from the address its letter was sent to.',
+    )
+  }
   let bot = machine(m, from)
   let { personOf } = await import('./signin.ts')
   return await asked(

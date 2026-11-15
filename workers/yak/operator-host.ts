@@ -1424,13 +1424,26 @@ export let operatorReply = async (
     )
   }
   if (path == '/operator/letter') {
-    return Response.json({ letter: letter.entity.eid })
+    return Response.json({
+      letter: letter.entity.eid,
+      to: comp(letter, 'mail')?.to,
+    })
   }
   let request = {
     ...args.request as Request,
     channel: texted ? 'texted' : 'letter',
     space,
     about: letter.entity.eid,
+  }
+  if (
+    !texted && request.address?.trim().toLowerCase() !=
+      String(comp(letter, 'mail')!.to).trim().toLowerCase()
+  ) {
+    return Response.json({
+      message: 'That letter was sent to another address.',
+    }, {
+      status: 403,
+    })
   }
   let member = String(
     comp(letter, texted ? 'operator_text' : 'operator_letter')!.person,

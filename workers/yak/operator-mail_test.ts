@@ -1,7 +1,12 @@
 import { short } from '@yaks/id'
 import { test } from '@yaks/testing'
 import type { Binding } from '@yaks/cloudflare-mail'
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import type { Item, Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
@@ -9,9 +14,9 @@ import { operatorModel, operatorService } from './operator-testing.ts'
 import { operatorContext } from './operator.ts'
 import { mailSend, receive, signedFor } from './operator-channels.ts'
 import { rootOf } from './operator-root.ts'
-import { conversationOf } from './operator-host.ts'
+import { conversationOf, operatorReply } from './operator-host.ts'
 import { mailFrom } from '@yaks/platform/host'
-import { arrived, reading } from './inbox.ts'
+import { arrived, reading, Refused } from './inbox.ts'
 import type { Inbound } from './env.ts'
 
 // A person asks their Operator to write to someone for them: a fork sends the
@@ -110,13 +115,15 @@ let ofFork = await conversationOf(store, '/at', fork.entity.eid)
 let from = mailFrom('jeff', null, env)
 let answer = (id: string, answers: string): Inbound => {
   let headers = new Headers({
-    From: 'Dr Alvarez <alvarez@clinic.example>',
+    From: 'Dr Alvarez <Alvarez@Clinic.example>',
     To: from,
     Subject: 'Re: Checkup on Tuesday',
     'Message-ID': `<${id}>`,
     'In-Reply-To': `<${answers}>`,
     References: `<${answers}>`,
     'Content-Type': 'text/plain',
+    'Authentication-Results':
+      'mx.cloudflare.net; dmarc=pass header.from=clinic.example; dkim=pass',
   })
   return {
     from: 'alvarez@clinic.example',
@@ -212,4 +219,124 @@ test('a letter answering the reply threads on it and keeps its subject', () => {
   assertEquals(followed.subject, 'Re: Checkup on Tuesday')
   assertEquals(followed.headers?.['In-Reply-To'], '<alvarez-1>')
   assertEquals(followed.cc, 'jeff@example.com')
+})
+
+await store.g.apply([{
+  entity: { eid: crypto.randomUUID() },
+  operator_letter: { person },
+  mail: { to: 'outsider@example.com', message_id: 'sent-outsider' },
+}], { trusted: true })
+
+for (
+  let [name, vouched, from, bot, thread] of [
+    [
+      'no authentication verdict',
+      undefined,
+      'alvarez@clinic.example',
+      false,
+      'sent-1',
+    ],
+    ['DKIM without DMARC', false, 'alvarez@clinic.example', false, 'sent-1'],
+    [
+      'another authenticated address',
+      true,
+      'outsider@example.com',
+      false,
+      'sent-1',
+    ],
+    [
+      'an unauthenticated machine',
+      false,
+      'alvarez@clinic.example',
+      true,
+      'sent-1',
+    ],
+    [
+      'a machine at another address',
+      true,
+      'outsider@example.com',
+      true,
+      'sent-1',
+    ],
+    [
+      'a newer letter to another recipient',
+      true,
+      'alvarez@clinic.example',
+      false,
+      'sent-outsider',
+    ],
+  ] as const
+) {
+  let mail = {
+    ...await reading(answer(crypto.randomUUID(), 'sent-1'), env),
+    vouched,
+  }
+  let headers = new Headers({
+    From: from,
+    'In-Reply-To': `<${thread}>`,
+    References: '<sent-1>',
+    ...(bot ? { 'Auto-Submitted': 'auto-replied' } : {}),
+  })
+  mail.headers = headers
+  test(`a reply with ${name} has no Operator side effects`, async () => {
+    let before = {
+      graph: await store.g.read('*'),
+      turns: asked.length,
+      letters: letters.length,
+      person: await dir.personAt(from),
+    }
+    await assertRejects(
+      () => arrived(mail, env),
+      Refused,
+      'authenticated reply',
+    )
+    assertEquals({
+      graph: await store.g.read('*'),
+      turns: asked.length,
+      letters: letters.length,
+      person: await dir.personAt(from),
+    }, before)
+  })
+}
+
+test('the Operator intake refuses a reply from another letter recipient before recording it', async () => {
+  let before = await store.g.read('*')
+  let armed = 0
+  let response = await operatorReply(
+    { store },
+    eid,
+    '/operator/replied',
+    {
+      thread: ['sent-1'],
+      request: { address: 'outsider@example.com' },
+      say: 'Forged words',
+    },
+    () => {
+      armed++
+      return undefined
+    },
+    writer,
+  )
+  assertEquals(response.status, 403)
+  assertEquals(await store.g.read('*'), before)
+  assertEquals(armed, 0)
+})
+
+let autoReply = {
+  ...await reading(answer('alvarez-auto', 'sent-1'), env),
+  text: 'The clinic is closed this afternoon.',
+  headers: new Headers({
+    From: 'alvarez@clinic.example',
+    'In-Reply-To': '<sent-1>',
+    'Auto-Submitted': 'auto-replied',
+  }),
+}
+test('an authenticated machine at the recipient address tells the member without being answered', async () => {
+  let turns = asked.length, mailed = letters.length
+  await arrived(autoReply, env)
+  await service.drain()
+  assertEquals(asked.length, turns)
+  assertEquals(letters.slice(mailed).map((l) => l.to), ['jeff@example.com'])
+  let note = await conversationOf(store, '/at', rootOf(eid, person))
+  assertStringIncludes(note.html, autoReply.text)
 })
