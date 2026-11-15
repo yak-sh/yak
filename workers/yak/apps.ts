@@ -62,7 +62,6 @@ import { appCopy, type Copy, filled } from './page-copy.ts'
 import { door as publicDoor, served as publicFile } from './public-files.ts'
 import { blobPrefix, servable, uploadPrefix } from './blob-key.ts'
 import {
-  type Access,
   type App,
   appStore,
   daysLeft,
@@ -162,15 +161,16 @@ import {
   vocabulary,
 } from './page-graph.ts'
 import { pageSocket } from './page-socket.ts'
+import { dataAsset, webAsset, webPage } from './web.ts'
 import {
-  DATA_ASSETS,
-  DATA_SCRIPT,
-  dataAsset,
-  dataPath,
-  webAsset,
-  webPage,
-} from './web.ts'
-import { appApi, kernels, rung, webPath } from '@yaks/platform/ladder'
+  appApi,
+  behind,
+  door,
+  indexes,
+  kernels,
+  rung,
+  webPath,
+} from '@yaks/platform/ladder'
 import { pageScript, type Scripts } from './page-script.ts'
 import {
   admitted,
@@ -754,24 +754,6 @@ export let unwritten = async (
     },
   })
 }
-
-/**
- * Who may open an app's page. Its members, and anyone at all where the app is
- * public; the app's own worker coming back through its grant (`itself`) on any
- * app. A stranger to a private app is sent to sign in and handed back to the
- * page; someone signed in who is nobody there gets the same nothing-here a
- * wrong address gets, whether the app exists being its owner's to tell.
- */
-export let pageDoor = (
-  access: Access,
-  who: Pick<Who, 'person' | 'role'>,
-  itself: boolean,
-): 'page' | 'sign-in' | 'nothing' =>
-  itself || reads(mode(access), who.role)
-    ? 'page'
-    : who.person
-    ? 'nothing'
-    : 'sign-in'
 
 // A folder asked for without its slash, sent to it: the location is relative,
 // so it holds at any mount, and the query goes with it.
@@ -2915,7 +2897,7 @@ let served = async (
     )
   if (path.startsWith('/api/') && !itsApp(who, app)) {
     // The route read the cookie's person's claims; any other caller asks.
-    let { browsers } = await routing
+    let { browsers } = routing
     who = who.person && who.person == person && browsers
       ? { ...who, browsers }
       : await browsersOf(env, who)
@@ -2982,7 +2964,7 @@ let served = async (
   // another app's worker wearing a level. Asked only of a signed-in caller
   // with no seat, so a member pays nothing for it and a stranger nothing.
   if (who.person && !who.role) {
-    let { grants } = await routing
+    let { grants } = routing
     let held = who.person == person && grants
       ? grants.has(app.eid) ? { access: grants.get(app.eid)! } : null
       : await c.time('guest', () => dir.grant(app!, who.person!))
@@ -3027,63 +3009,50 @@ let served = async (
       )
     }
   }
-  if (webPath(path)) {
-    if (req.method != 'GET' && req.method != 'HEAD') {
-      return json(405, 'method_not_allowed')
-    }
-    // The data editor is a person's page, not a machine door: anyone who holds
-    // a level on this app opens it, a guest included, and it writes only what
-    // the store lets them. Everyone else meets what a page would tell them.
-    if (dataPath(path)) {
-      if (edge) return passed()
-      if (!who.person) return redirect(signInAt(req.url, env), 303)
-      if (!who.role || !reads(mode(app.access), who.role)) {
-        return nothingHere(env)
-      }
-      if (path == DATA_SCRIPT) return platformFile(req, env, '/data.js')
-      if (path.startsWith(DATA_ASSETS)) return dataAsset(req, env, path)
-      let at = bare.replace(/\/$/, '')
-      return await reported(
-        env,
-        at || '/',
-        editor(env, {
-          app: app.title || app.slug,
-          at,
-          words: (await declarationOf(env, space, app)).vocab,
-          version: env.CF_VERSION_METADATA?.id ?? '',
-        }),
-        app.version ?? 0,
-        { badge: null },
-      )
-    }
-    if (!who.person) {
-      return json(
-        401,
-        'not_a_reader',
-        SAYS.not_a_reader,
-        signInAt(req.url, env),
-      )
-    }
-    if (!who.role || who.guest) {
-      return json(403, 'not_a_reader', MEMBER.not_a_reader)
-    }
-    if (!reads(mode(app.access), who.role)) {
-      return json(403, 'not_a_reader', MEMBER.not_a_reader)
-    }
-    if (path.startsWith('/_web/web/')) {
-      return webAsset(req, env, path.slice('/_web/web/'.length))
-    }
-    if (path == '/_web/inspect/app.js' || path == '/_web/inspect/styles.css') {
-      return webAsset(req, env, path.slice('/_web/'.length))
-    }
-    return webPage(req, env, url.pathname.slice(0, -path.length), who.person)
+  let to = door({
+    path,
+    method: req.method,
+    who,
+    access: app.access,
+    itself: !!itself,
+  })
+  if (to.to == 'refused') {
+    return json(
+      to.status,
+      to.code,
+      to.says ?? SAYS[to.code],
+      to.signIn ? signInAt(req.url, env) : undefined,
+    )
   }
-  // The `/api/` doors stay the kernel's, always, and keep their own refusals,
-  // which speak.
-  //
+  if (to.to == 'data') {
+    if (edge) return passed()
+    if (to.part == 'sign-in') return redirect(signInAt(req.url, env), 303)
+    if (to.part == 'nothing') return nothingHere(env)
+    if (to.part == 'script') return platformFile(req, env, '/data.js')
+    if (to.part == 'asset') return dataAsset(req, env, to.name)
+    let at = bare.replace(/\/$/, '')
+    return await reported(
+      env,
+      at || '/',
+      editor(env, {
+        app: app.title || app.slug,
+        at,
+        words: (await declarationOf(env, space, app)).vocab,
+        version: env.CF_VERSION_METADATA?.id ?? '',
+      }),
+      app.version ?? 0,
+      { badge: null },
+    )
+  }
+  if (to.to == 'web') {
+    return to.asset
+      ? webAsset(req, env, to.asset)
+      : webPage(req, env, url.pathname.slice(0, -path.length), who.person!)
+  }
   // A sandboxed app's answers, every one, are walled (installed.ts).
   let wall = (res: Response) => walls ? walled(res) : res
-  if (path.startsWith('/api/')) {
+  if (to.to == 'api') {
+    let apiPath = to.door
     // Site keeps an app's `fixed` bytes as it keeps its pages, the hop a
     // release's module takes back out to the API included; every other door
     // is the gateway's.
@@ -3092,7 +3061,7 @@ let served = async (
       return marked(
         keep(
           reporting(
-            await api(req, env, dir, space, app, path.slice(4), who, c, at),
+            await api(req, env, dir, space, app, apiPath, who, c, at),
             req,
             at,
             app,
@@ -3146,13 +3115,12 @@ let served = async (
     }
     let answer = await c.time(
       'api',
-      () => api(req, env, dir, space!, app!, path.slice(4), who, c, at),
+      () => api(req, env, dir, space!, app!, apiPath, who, c, at),
     )
     if (moved) {
       answer = new Response(answer.body, answer)
       answer.headers.set(MOVED, '1')
     }
-    let apiPath = path.slice(4)
     if (
       (answer.ok || answer.status == 101) && !who.administrative &&
       ([
@@ -3169,33 +3137,13 @@ let served = async (
     ) scheduleBy(env, who, app.eid)
     return wall(reporting(answer, req, at, app))
   }
-  // A private app hides its page too, not only its data (C-32607 item 5):
-  // `access: private` says only its members can see it, and its files are
-  // part of what they see. A stranger is sent to sign in and handed back to
-  // the page (T-32593); someone signed in who is nobody here gets the same
-  // nothing-here a wrong address gets — whether the app exists at all is its
-  // owner's to tell.
-  //
-  // Its own worker is the exception, both ways round (T-34303). The worker
-  // runs ahead of this gate, and a request coming back from it passes the gate
-  // — `itself` is a grant the kernel minted for this store and this request,
-  // which nothing but this app's own worker can hold, so `env.FILES` reads the
-  // app's pages where a stranger asking directly is refused. On a private app
-  // the worker is the gatekeeper: `access` is one word about the whole store,
-  // and a rule finer than that — the invitation code that opens one
-  // household's row and no other — can only live in the app's own code. What
-  // that code may do as the app is `env.APP` and nothing else; its `env.STORE`
-  // is still the visitor, so a worker that only passes a store read on refuses
-  // exactly what the page would have.
-  if (/^\/form\/[^/]+$/.test(path)) {
+  if (to.form != null) {
     if (edge) return passed()
-    let name = decodedPath(path.slice('/form/'.length))
-    if (!name) return json(404, 'not_found')
     // The store shows a form it holds, and only that it holds one matters
     // here. The form is the app's own, whatever store a stranger's visit
     // serves the page from.
     let found = await appStore(env.STORE, space, stranger.app, env).consume(
-      `${FORM}${encodeURIComponent(name)}`,
+      `${FORM}${encodeURIComponent(to.form)}`,
       async (r) => {
         await r.body?.cancel()
         return r.ok ? null : r.status
@@ -3205,8 +3153,7 @@ let served = async (
     )
     if (found) return json(found, 'not_found')
   }
-  let door = pageDoor(app.access, who, !!itself)
-  let mayRead = door == 'page'
+  let mayRead = to.seen == 'page'
   // Both at once, because they are two halves of one answer and neither
   // needs the other's result (T-33176). The app's own worker answers first
   // where it has one and the file is what it falls back to, so asking the
@@ -3238,6 +3185,10 @@ let served = async (
     )
     : null
   file?.catch(() => {})
+  // The worker runs ahead of the page's gate (@yaks/platform/ladder `behind`).
+  // What it may do as the app is `env.APP` and nothing else; its `env.STORE`
+  // is still the visitor, so a worker that only passes a store read on
+  // refuses exactly what the page would have.
   let own = itself
     ? null
     : await c.time('worker', () => ran(env, space!, app!, req, who))
@@ -3252,15 +3203,15 @@ let served = async (
       own.headers.set(MOVED, '1')
     }
   }
-  // The worker's 404 is its pass. The files answer behind it, and where they
-  // hold nothing either, that 404 is the app's answer: a stranger is sent to
-  // sign in for a page the app has, never for one it does not.
-  let pass = own?.status == 404 ? own : null
-  if (pass) own = null
-  // The worker passed, and the files are not this visitor's to see.
-  if (!own && !file && (!pass || await held(env, space, app, path))) {
-    await pass?.body?.cancel()
-    if (door == 'sign-in') return redirect(signInAt(req.url, env), 303)
+  // The worker's 404 is its pass, and the files answer behind it.
+  let answering = await behind({
+    worker: !own ? 'none' : own.status == 404 ? 'pass' : 'answer',
+    seen: to.seen,
+    held: () => held(env, space, app, path),
+  })
+  if (answering == 'sign-in' || answering == 'shut') {
+    await own?.body?.cancel()
+    if (answering == 'sign-in') return redirect(signInAt(req.url, env), 303)
     return await shut(
       env,
       dir,
@@ -3270,13 +3221,12 @@ let served = async (
       bare,
     )
   }
-  // The worker's page, else the files', else the worker's 404.
-  let page = own ?? (file && await file) ?? pass ?? nothingHere(env)
-  if (page != pass) await pass?.body?.cancel()
+  let page = answering == 'files' ? await file ?? own ?? nothingHere(env) : own!
+  if (page != own) await own?.body?.cancel()
   // File pages already pass through woven(). Worker pages use the same
   // reporter, without buffering or changing their navigation and asset URLs.
   if (
-    (page == own || page == pass) && page.body &&
+    page == own && page.body &&
     page.headers.get('content-type')?.startsWith('text/html')
   ) {
     page = await reported(
@@ -3290,17 +3240,12 @@ let served = async (
     )
   }
   // Rung 4, and it is last rather than fourth in the code because rungs 3 and
-  // 5 are the one call above: the space's index answers `/` when the home app
-  // has nothing there — its worker passed and its files have no front page.
-  // Only the home app can be at `/` (@yaks/platform/routes `route` names no app for it, so
-  // this is the fall-through), which is why the home app is the whole of the
-  // test. A path that is not `/` keeps the 404: an address inside a space that
-  // nothing answers is nothing, not a listing.
-  if (page.status == 404 && url.pathname == '/') {
+  // 5 are the one call above.
+  if (indexes(url.pathname, page.status)) {
     await page.body?.cancel()
     return edge
       ? passed()
-      : (await index(req, env, space, (await routing).roster!, seatOf)).page
+      : (await index(req, env, space, routing.roster!, seatOf)).page
   }
   // Site's page is counted by the gateway that sends it (page-cache.ts). A
   // member's is never kept: it is woven for them (`wearing`).

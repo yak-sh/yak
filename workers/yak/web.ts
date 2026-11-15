@@ -5,20 +5,13 @@ import type { Hosting } from '../../packages/browse/hosting.ts'
 import { named } from './sheets.ts'
 import { ADDRESS } from '@yaks/platform/routes'
 
-// The app's data editor (pages.ts `editor`, public/data.js), and its script.
-export let DATA = '/_web/data'
-export let DATA_SCRIPT = '/_web/data.js'
-export let DATA_ASSETS = '/_web/assets/'
-export let dataPath = (path: string) =>
-  path == DATA || path == DATA_SCRIPT || path.startsWith(DATA_ASSETS)
-
-/** The shared page skin beside the page: SVG filters must share its origin. */
+/** The data editor's skin beside its page, by `name` (@yaks/platform/ladder
+ * `door`): SVG filters must share its origin. */
 export let dataAsset = async (
   req: Request,
   env: Pick<Env, 'ASSETS'>,
-  path: string,
+  name: string,
 ) => {
-  let name = path.slice(DATA_ASSETS.length)
   let response = await env.ASSETS.fetch(
     new Request(new URL('/' + name, req.url), req),
   )

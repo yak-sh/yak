@@ -1,7 +1,18 @@
-// Where an address stops, by what the directory says of it.
+// Where an address stops, by what the directory says of it, and which of an
+// app's doors a request inside it goes to, for whom.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { type Asked, type Reading, rung } from './ladder.ts'
+import {
+  type Asked,
+  type Asking,
+  behind,
+  type Door,
+  door,
+  type Reading,
+  rung,
+  seen,
+} from './ladder.ts'
+import { MEMBER } from './refused.ts'
 
 let ada = { slug: 'ada', trashed: null }
 let menu = { slug: 'menu', home: false, trashed: null }
@@ -195,4 +206,109 @@ test('rung: an app is its first segment, from its slash', async () => {
     'app',
     { app: 'menu', path: '/soup', front: false, bare: '/' },
   ])
+})
+
+let nobody: Asking = { person: null, role: null }
+let viewer: Asking = { person: 'p', role: 'viewer' }
+let outsider: Asking = { person: 'p', role: null }
+let guest: Asking = { person: 'p', role: 'editor', guest: true }
+
+test('seen: a private app opens its page to its members alone', () => {
+  assertEquals(seen('private', viewer), 'page')
+  assertEquals(seen('private', nobody), 'sign-in')
+  assertEquals(seen('private', outsider), 'nothing')
+  assertEquals(seen('public', nobody), 'page')
+  // The app's own worker, coming back through its grant, is let in.
+  assertEquals(seen('private', nobody, true), 'page')
+})
+
+// The door `path` goes to for `who` on a private app.
+let at = (path: string, who: Asking, method = 'GET') =>
+  door({ path, method, who, access: 'private' })
+
+test('door: the data editor is a page for whoever holds a level', () => {
+  assertEquals(at('/_web/data', nobody), { to: 'data', part: 'sign-in' })
+  assertEquals(at('/_web/data', outsider), { to: 'data', part: 'nothing' })
+  assertEquals(at('/_web/data', guest), { to: 'data', part: 'editor' })
+  assertEquals(at('/_web/data.js', viewer), { to: 'data', part: 'script' })
+  assertEquals(at('/_web/assets/skin.css', viewer), {
+    to: 'data',
+    part: 'asset',
+    name: 'skin.css',
+  })
+  assertEquals(at('/_web/data', viewer, 'POST'), {
+    to: 'refused',
+    status: 405,
+    code: 'method_not_allowed',
+  })
+})
+
+test('door: the web page is a member’s, refused in JSON', () => {
+  assertEquals(at('/_web', nobody), {
+    to: 'refused',
+    status: 401,
+    code: 'not_a_reader',
+    signIn: true,
+  })
+  let member: Door = {
+    to: 'refused',
+    status: 403,
+    code: 'not_a_reader',
+    says: MEMBER.not_a_reader,
+  }
+  assertEquals(at('/_web', outsider), member)
+  assertEquals(at('/_web', guest), member)
+  assertEquals(at('/_web', viewer), { to: 'web' })
+  assertEquals(at('/_web/web/page.js', viewer), {
+    to: 'web',
+    asset: 'page.js',
+  })
+  assertEquals(at('/_web/inspect/app.js', viewer), {
+    to: 'web',
+    asset: 'inspect/app.js',
+  })
+})
+
+test('door: the store doors are the kernel’s, whoever asks', () => {
+  assertEquals(at('/api/query', nobody), { to: 'api', door: '/query' })
+  assertEquals(at('/api/apply', viewer, 'POST'), { to: 'api', door: '/apply' })
+})
+
+test('door: a page, and a form the store must hold', () => {
+  assertEquals(at('/soup', nobody), { to: 'page', seen: 'sign-in' })
+  assertEquals(at('/form/rsvp%20card', viewer), {
+    to: 'page',
+    seen: 'page',
+    form: 'rsvp card',
+  })
+  assertEquals(at('/form/%E0', viewer), {
+    to: 'refused',
+    status: 404,
+    code: 'not_found',
+  })
+  assertEquals(at('/form/a/b', viewer), { to: 'page', seen: 'page' })
+})
+
+test('behind: the worker first, its files behind it, then the gate', async () => {
+  let held = (files: boolean) => () => Promise.resolve(files)
+  let unasked = () => Promise.reject(new Error('asked held'))
+  let cases = [
+    ['answer', 'nothing', unasked, 'worker'],
+    ['none', 'page', unasked, 'files'],
+    ['pass', 'page', unasked, 'files'],
+    // A stranger is sent to sign in for a page the app has, never for one
+    // it does not.
+    ['pass', 'sign-in', held(false), 'pass'],
+    ['pass', 'sign-in', held(true), 'sign-in'],
+    ['pass', 'nothing', held(true), 'shut'],
+    ['none', 'sign-in', unasked, 'sign-in'],
+    ['none', 'nothing', unasked, 'shut'],
+  ] as const
+  for (let [worker, page, files, want] of cases) {
+    assertEquals(
+      await behind({ worker, seen: page, held: files }),
+      want,
+      `${worker} ${page}`,
+    )
+  }
 })

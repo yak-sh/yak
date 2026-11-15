@@ -104,7 +104,7 @@ test('sheets: a mounted skin keeps content-named filters on a space or custom or
       dataAsset(
         new Request(at),
         env,
-        at.pathname.slice(mount.indexOf('/_web/')),
+        at.pathname.slice(mount.length),
       )
     let res = await get(sheet)
     assertEquals(res.status, 200)

@@ -28,6 +28,11 @@
  * router: a worker that sees every path no other app claims, and answers 404
  * to pass, leaving the rest to its files.
  *
+ * `rung` is where an address stops. Inside an app, `door` is which of its
+ * doors a request goes to for whoever is asking, `behind` what answers its
+ * page once its own worker was asked, and `indexes` whether that answer gives
+ * way to rung 4.
+ *
  * ```ts
  * import { rung } from '@yaks/platform/ladder'
  * import { assertEquals } from '@std/assert'
@@ -47,8 +52,11 @@
  *
  * @module
  */
+import { type Level, type Mode, mode, reads } from '@yaks/member'
+import { decoded } from './files.ts'
 import { type Host, spaceHost, url } from './host.ts'
 import { PLATFORM_STORE } from './names.ts'
+import { MEMBER } from './refused.ts'
 import { MANAGE, movedFor, OURS, route } from './routes.ts'
 
 /** A space as the ladder reads it. */
@@ -288,3 +296,162 @@ export let rung = async <R extends Reading>(
     ...at,
   }
 }
+
+/** Who is asking, as an app's doors read them: a person or nobody, the level
+ * they hold here, and whether that level is a guest's grant on this one app
+ * rather than a seat in its space. */
+export type Asking = {
+  person: string | null
+  role: Level | null
+  guest?: boolean
+}
+
+/** Whether a visitor may see an app's page: `page`, else `sign-in` for
+ * nobody, else `nothing` for a person who is nobody here. */
+export type Seen = 'page' | 'sign-in' | 'nothing'
+
+// The app's data editor, a person's page, and its script and assets.
+let DATA = '/_web/data'
+let DATA_SCRIPT = '/_web/data.js'
+let DATA_ASSETS = '/_web/assets/'
+let INSPECT = ['/_web/inspect/app.js', '/_web/inspect/styles.css']
+
+/** Which of an app's doors a request inside it goes to. */
+export type Door =
+  /** refused in the JSON every refusal speaks; `signIn` where signing in
+   * would open it, and `says` where it is not the code's own sentence
+   * (./refused.ts `SAYS`) */
+  | {
+    to: 'refused'
+    status: number
+    code: string
+    says?: string
+    signIn?: true
+  }
+  /** the data editor, or its script or an asset of its skin by `name`, else
+   * the sign-in or the nothing a page would meet */
+  | { to: 'data'; part: 'sign-in' | 'nothing' | 'script' | 'editor' }
+  | { to: 'data'; part: 'asset'; name: string }
+  /** the app's @yaks/web page, or its `asset` */
+  | { to: 'web'; asset?: string }
+  /** one of the app's store doors, `door` from its `/api` */
+  | { to: 'api'; door: string }
+  /** the page, as the visitor may see it, once the store says it holds the
+   * `form` the page shows */
+  | { to: 'page'; seen: Seen; form?: string }
+
+/**
+ * Who may open an app's page. Its members, and anyone at all where the app is
+ * public; the app's own worker coming back through its grant (`itself`) on any
+ * app. A stranger to a private app is sent to sign in and handed back to the
+ * page; someone signed in who is nobody there gets the same nothing-here a
+ * wrong address gets, whether the app exists being its owner's to tell.
+ */
+export let seen = (access: Mode, who: Asking, itself = false): Seen =>
+  itself || reads(mode(access), who.role)
+    ? 'page'
+    : who.person
+    ? 'nothing'
+    : 'sign-in'
+
+/** Which door `path`, from an app's root, goes to for `who`, on an app of
+ * `access`; `itself` where the app's own worker is asking. */
+export let door = (
+  { path, method, who, access, itself = false }: {
+    path: string
+    method: string
+    who: Asking
+    access: Mode
+    itself?: boolean
+  },
+): Door => {
+  if (webPath(path)) {
+    if (!reading(method)) {
+      return { to: 'refused', status: 405, code: 'method_not_allowed' }
+    }
+    // The data editor is a person's page, not a machine door: anyone who
+    // holds a level on this app opens it, a guest included, and it writes
+    // only what the store lets them. Everyone else meets what a page would
+    // tell them.
+    if (path == DATA || path == DATA_SCRIPT || path.startsWith(DATA_ASSETS)) {
+      if (!who.person) return { to: 'data', part: 'sign-in' }
+      if (!who.role || !reads(mode(access), who.role)) {
+        return { to: 'data', part: 'nothing' }
+      }
+      if (path == DATA_SCRIPT) return { to: 'data', part: 'script' }
+      return path == DATA
+        ? { to: 'data', part: 'editor' }
+        : { to: 'data', part: 'asset', name: path.slice(DATA_ASSETS.length) }
+    }
+    // The @yaks/web page is a member's: a guest of one app holds no seat in
+    // the space its page reads.
+    if (!who.person) {
+      return { to: 'refused', status: 401, code: 'not_a_reader', signIn: true }
+    }
+    if (!who.role || who.guest || !reads(mode(access), who.role)) {
+      return {
+        to: 'refused',
+        status: 403,
+        code: 'not_a_reader',
+        says: MEMBER.not_a_reader,
+      }
+    }
+    if (path.startsWith('/_web/web/')) {
+      return { to: 'web', asset: path.slice('/_web/web/'.length) }
+    }
+    if (INSPECT.includes(path)) {
+      return { to: 'web', asset: path.slice('/_web/'.length) }
+    }
+    return { to: 'web' }
+  }
+  // The `/api/` doors stay the kernel's, always, and keep their own refusals,
+  // which speak.
+  if (path.startsWith('/api/')) return { to: 'api', door: path.slice(4) }
+  let page = seen(access, who, itself)
+  let form = /^\/form\/([^/]+)$/.exec(path)
+  if (!form) return { to: 'page', seen: page }
+  let name = decoded(form[1])
+  return name
+    ? { to: 'page', seen: page, form: name }
+    : { to: 'refused', status: 404, code: 'not_found' }
+}
+
+/** What answers an app's page once its own worker was asked: the worker's
+ * answer; else the `files`, which the visitor may see, and where they hold
+ * nothing the worker's 404, else nothing; else the worker's 404 where the
+ * files the visitor may not see hold nothing either (`pass`); else the
+ * sign-in or the shut door the visitor meets. `worker` is what the worker
+ * said: an `answer`, a 404 (its `pass`), or `none` where it was not asked.
+ * `held` says whether the files hold the path, asked only where the worker
+ * passed and the files are shut to this visitor.
+ *
+ * A private app hides its page too, not only its data: its files are part of
+ * what its members see. Its own worker is the exception, both ways round. It
+ * runs ahead of this gate, so on a private app the worker is the gatekeeper:
+ * `access` is one word about the whole store, and a rule finer than that can
+ * only live in the app's own code. And a request coming back from it passes
+ * the gate (`seen`'s `itself`), so it reads the app's pages where a stranger
+ * asking directly is refused. A stranger is sent to sign in for a page the
+ * app has, never for one it does not. */
+export let behind = async (
+  { worker, seen, held }: {
+    worker: 'answer' | 'pass' | 'none'
+    seen: Seen
+    held: () => Promise<boolean>
+  },
+): Promise<'worker' | 'files' | 'pass' | 'sign-in' | 'shut'> => {
+  if (worker == 'answer') return 'worker'
+  if (seen == 'page') return 'files'
+  if (worker == 'pass' && !await held()) return 'pass'
+  return seen == 'sign-in' ? 'sign-in' : 'shut'
+}
+
+/** Whether a page's answer gives way to its space's index (rung 4): a 404 at
+ * `/`, the one address only the home app can be at, so its worker passed and
+ * its files have no front page. Any other path keeps the 404: an address
+ * inside a space that nothing answers is nothing, not a listing. */
+/// indexes('/', 404) -> true
+/// indexes('/about', 404) -> false
+/// indexes('/', 200) -> false
+export let indexes = (pathname: string, status: number): boolean =>
+  status == 404 && pathname == '/'
