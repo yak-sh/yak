@@ -75,11 +75,14 @@ holds the rest:
   is written, and left alone after. Nothing needs approving.
 - `feedback{by}` — a separate component marking a correction and, when known,
   the entity identifying the person who supplied it.
-- `miss{entry, needed, across, told}` — worn beside `feedback` on the entity
-  recording a correction: the agent's `entry` that erred, the entity that held
-  the fact it lacked (`needed`, absent when nothing did), the compaction, clear,
-  fork or spawn between them (`across`), and whether the person `restated` it or
-  `pointed` at the graph (`told`, absent when an agent found it). A miss is a
+- `miss{entry, needed, across, told, kind}` — worn beside `feedback` on the
+  entity recording a correction: the agent's `entry` that erred, the entity that
+  held the fact it lacked (`needed`, absent when nothing did), the compaction,
+  clear, fork or spawn between them (`across`), and whether the person
+  `restated` it or `pointed` at the graph (`told`, absent when an agent found
+  it), and which known error it was (`kind`: `reserve`, keeping back budget the
+  person said to spend; `offer`, ending on "Want me to…?"; `directive`, posting
+  their remark as a directive; absent when it was none of them). A miss is a
   case [@yaks/trial](../trial) scores context on.
 - `about` — the app it was about, by slug, when it was about one.
 - `context` — the line or two needed to understand the words. Never a

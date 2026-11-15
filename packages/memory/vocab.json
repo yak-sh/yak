@@ -44,6 +44,11 @@
           "type": "string",
           "enum": ["restated", "pointed"],
           "description": "restated when the person said the fact again, pointed when they said it is in the graph; absent when an agent found the miss"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["reserve", "offer", "directive"],
+          "description": "which known error it was: reserve when the agent kept back budget the person said to spend, offer when it ended on \"Want me to…?\" instead of doing it, directive when it posted the person's remark as a directive; absent when it was none of them"
         }
       }
     },

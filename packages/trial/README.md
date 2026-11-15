@@ -10,11 +10,12 @@ are written by models and judged afterwards, many to a case and variant.
 ## Context trials
 
 Scores a way of assembling an agent's context on the corrections it missed. A
-case is an entity wearing @yaks/memory's `miss{entry, needed, across, told}`
-beside `feedback{by}`: the entry that erred, and the entity that held the fact
-it lacked. A variant is a persona. A trial scores one variant on one case and
-writes `trial{case, variant, asked, unasked, tokens}`, its eid derived from the
-two, so a rerun replaces the score.
+case is an entity wearing @yaks/memory's
+`miss{entry, needed, across, told, kind}` beside `feedback{by}`: the entry that
+erred, and the entity that held the fact it lacked. A variant is a persona. A
+trial scores one variant on one case and writes
+`trial{case, variant, asked, unasked, tokens}`, its eid derived from the two, so
+a rerun replaces the score.
 
 - `unasked`: the needed entity was among what the variant put in front of the
   agent before its entry.

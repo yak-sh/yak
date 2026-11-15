@@ -518,9 +518,9 @@ grouped approximately by function, **not** by dependency order.
   context, the query that recalls them, and the text handed to an agent at the
   start of its next conversation.
 - **[@yaks/trial](./trial)** — scores a persona on the corrections agents missed
-  (`miss{entry, needed, across, told}`): whether the fact was in front of the
-  agent unasked before it erred, whether a search with its words finds it, and
-  how many tokens were put in front:
+  (`miss{entry, needed, across, told, kind}`): whether the fact was in front of
+  the agent unasked before it erred, whether a search with its words finds it,
+  and how many tokens were put in front:
   `trial{case, variant, asked,
   unasked, tokens}`.
 
