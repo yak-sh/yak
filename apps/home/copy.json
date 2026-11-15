@@ -32,7 +32,7 @@
     "hello": {
       "kicker": "Build, host and share web apps",
       "title": "Build your ideas by asking.",
-      "hint": "What should it do, and who is it for?",
+      "hint": "Type what you need, like “a potluck sign-up sheet”",
       "go": "Build it",
       "note": "Free to start, with no card. An AI assistant builds what you ask for while you watch. Your first 5 are free, and %{price} covers as many as you like. %{examples}",
       "price": "$9 a month",
