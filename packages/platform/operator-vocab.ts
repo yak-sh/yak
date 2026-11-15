@@ -165,6 +165,12 @@ export let operatorDoc: VocabDoc = {
         files: { type: 'array', items: { type: 'object' } },
       },
     },
+    taken: {
+      component: true,
+      description:
+        "The item an input's words came in, as 1ad52d4f7 wrote it for a few minutes before @yaks/session named it `intake{item}`; moved there by its store's pass (files-move.ts `intakeBackfill`).",
+      properties: { item: { type: 'string' } },
+    },
     operator_channel: {
       component: true,
       description:

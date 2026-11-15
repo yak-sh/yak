@@ -21,7 +21,7 @@ import { type Blobs, blobSchema, memoryBlobs, sqliteBlobs } from '@yaks/blob'
 import { prefixes } from '@yaks/id'
 import { phoneTexts } from './phone-move.ts'
 import { channeled, CHANNELS } from './channel-move.ts'
-import { FILES } from './operator-files.ts'
+import { FILES, INTAKE } from './operator-files.ts'
 import { operatorDoc } from '@yaks/platform/operator-vocab'
 import { OWNERS } from '@yaks/platform/operator-owner'
 import { due, soonest, tick } from '@yaks/wake'
@@ -152,9 +152,10 @@ export let operatorStore = async (
       // Nor a file a tool made before its call attached it.
       if (born) marks.set(OUTPUTS, 'done')
       // Nor a line saying how its words came in the Operator's old word,
-      // nor one naming its own files.
+      // nor one naming its own files, nor an item in a word since renamed.
       if (born) marks.set(CHANNELS, 'done')
       if (born) marks.set(FILES, 'done')
+      if (born) marks.set(INTAKE, 'done')
     },
     // How a run ended is written while the object is stopped too, so a run
     // that finished never runs again (@yaks/durable-object `bounded`).

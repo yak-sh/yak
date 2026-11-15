@@ -1137,6 +1137,12 @@ export class Builder extends Durable {
             let { filesBackfill } = await import('./files-move.ts')
             return backfill(filesBackfill(store))
           },
+          // An input's item where 1ad52d4f7 wrote it, in @yaks/session's
+          // word (files-move.ts).
+          intake: async () => {
+            let { intakeBackfill } = await import('./files-move.ts')
+            return backfill(intakeBackfill(store))
+          },
           numbers: async () => {
             let { numberBackfill } = await import('./number-move.ts')
             return backfill(numberBackfill(store))

@@ -3,8 +3,14 @@ import { mint } from '@yaks/graph'
 import { attachmentRows } from '@yaks/blob/attachment'
 import { inputOf } from '@yaks/session/intake'
 import { operatorMemory } from './operator-testing.ts'
-import { attachedOf, type File, FILES, filesOf } from './operator-files.ts'
-import { BATCH, filesBackfill } from './files-move.ts'
+import {
+  attachedOf,
+  type File,
+  FILES,
+  filesOf,
+  INTAKE,
+} from './operator-files.ts'
+import { BATCH, filesBackfill, intakeBackfill } from './files-move.ts'
 import { ATTACHMENTS } from './attachment-move.ts'
 import { OUTPUTS } from './operator-store.ts'
 
@@ -102,4 +108,42 @@ test("a line's files are found among the attachments once its store's pass is do
   )
   equal(after.length, BATCH + 2)
   equal(after.filter((f) => f[0][1]?.startsWith('words of')).length, BATCH + 1)
+})
+
+test("an input's item written as `taken{item}` moves to `intake{item}`, a batch at a time", async () => {
+  let { g } = operatorMemory()
+  let inputs = Array.from({ length: BATCH + 1 }, () => mint())
+  await g.apply([
+    {
+      entity: { eid: session },
+      session: {},
+      operator_session: { space, person },
+    },
+    ...inputs.map((eid, i) => ({
+      entity: { eid },
+      entry: { session },
+      content: { body: `words ${i}` },
+      taken: { item: `request ${i}` },
+    })),
+  ], { trusted: true })
+  let marks = new Map<string, string>()
+  let store = {
+    g,
+    marks: {
+      get: (k: string) => marks.get(k),
+      set: (k: string, v: string) => void marks.set(k, v),
+    },
+  }
+  let runs = [
+    await intakeBackfill(store),
+    await intakeBackfill(store),
+    await intakeBackfill(store),
+  ]
+  let moved = await g.get(inputs)
+  equal(runs, [true, false, false])
+  equal(marks.get(INTAKE), 'done')
+  equal(
+    moved.map((b) => [b.taken, (b.intake as { item: string }).item]),
+    inputs.map((_, i) => [undefined, `request ${i}`]),
+  )
 })

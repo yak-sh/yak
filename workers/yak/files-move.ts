@@ -16,7 +16,7 @@ import type { Meta } from '@yaks/sqlite'
 import { attachedTo, attachmentOf } from '@yaks/blob/attachment'
 import { ATTACHMENTS } from './attachment-move.ts'
 import { OUTPUTS } from './operator-store.ts'
-import { FILES } from './operator-files.ts'
+import { FILES, INTAKE } from './operator-files.ts'
 
 /** How many lines one batch moves. */
 export let BATCH = 50
@@ -88,5 +88,28 @@ export let filesBackfill = async (store: {
     await g.apply([...texts, ...lines], { trusted: true, stamp: false })
   }
   if (rows.length < BATCH) marks.set(FILES, 'done')
+  return rows.length == BATCH
+}
+
+/** One batch of the pass that moves an input's item from `taken{item}`,
+ * the name 1ad52d4f7 gave it for a few minutes, to @yaks/session's
+ * `intake{item}`: at most fifty inputs. Answers whether another alarm has
+ * work. */
+export let intakeBackfill = async (store: {
+  g: Graph
+  marks?: Pick<Meta, 'get' | 'set'>
+  waiting?: () => number
+}): Promise<boolean> => {
+  let { g, marks } = store
+  if (!marks || marks.get(INTAKE) == 'done') return false
+  if (store.waiting?.()) return true
+  let rows = await g.read(`.taken&.limit=${BATCH}&.fields=taken.item`)
+  let moved = rows.map((b) => ({
+    entity: b.entity,
+    intake: { item: String(comp(b, 'taken')?.item ?? '') },
+    taken: null,
+  }))
+  if (moved.length) await g.apply(moved, { trusted: true, stamp: false })
+  if (rows.length < BATCH) marks.set(INTAKE, 'done')
   return rows.length == BATCH
 }
