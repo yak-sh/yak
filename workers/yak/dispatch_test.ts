@@ -303,8 +303,7 @@ test('a command worker failure calls its reporter once', async () => {
     '503',
   )
   assertEquals(notes, [
-    'POST /recipes/inspect: app worker answered 503 ' +
-    '(command CPU limit 5000 ms): from the worker',
+    'POST /recipes/inspect: app worker answered 503: from the worker',
   ])
   notes = []
   await assertRejects(

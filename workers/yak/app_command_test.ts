@@ -182,7 +182,7 @@ test('a page invokes declared commands as its owner; the command door refuses an
   )
   assertEquals(
     (failure.exception as Comp).value,
-    'app worker answered 503 (command CPU limit 5000 ms): ',
+    'app worker answered 503: ',
   )
   let editor = await post(await as(ELI), 'owner_word')
   assertEquals(editor.status, 403)

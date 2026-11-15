@@ -681,9 +681,7 @@ export let commandWorker = async (
     let body = await res.text()
     let error = rejected(
       res.status,
-      `app worker answered ${res.status}${
-        failed(res.status) ? ' (command CPU limit 5000 ms)' : ''
-      }: ${body}`,
+      `app worker answered ${res.status}: ${body}`,
     )
     if (failed(res.status)) await opts.report?.(req, error)
     throw error
