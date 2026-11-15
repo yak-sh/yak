@@ -39,6 +39,7 @@ import { sessions } from './plugin.ts'
 import { transcript } from './react.ts'
 import { kindOf, sessionDerived, statusOf, textOf } from './status.ts'
 import { answers } from './providers.ts'
+import { replyOf } from './answer.ts'
 import { sessionTools } from './children.ts'
 import { RUN, type Runner, running, settle } from './run.ts'
 import { match, test, until } from '@yaks/testing'
@@ -667,7 +668,7 @@ test('a withdrawn streamed request is aborted', async () => {
   await run
   let entries = await transcript(p.g, 's1')
   let last = entries.findLast((b) => !b.notice)!
-  assertEquals((last.interrupted as Comp | undefined)?.code, 'transport')
+  assertEquals((last.interrupted as Comp | undefined)?.code, 'withdrawn')
 })
 
 // A stop written while a step is in flight ends it there: the model request
@@ -692,7 +693,10 @@ let stopped = async (model: Model, tools: Runner['tools'] = []) => {
     stop: {},
   }])
   await run
-  return statusOf(await transcript(p.g, 's1'))
+  let entries = await transcript(p.g, 's1')
+  // The stop is the turn's last word: no fault for the host's tracker.
+  assertEquals(replyOf(entries).fault, undefined)
+  return statusOf(entries)
 }
 let hanging = (signal?: AbortSignal) =>
   new Promise<never>((_, no) =>

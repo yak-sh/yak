@@ -2090,6 +2090,34 @@ export let react = async (
     let e = error
     let phase = 'model'
     await ending()
+    // Text streamed before the failure stays, unless recovery took the
+    // attempt from this worker.
+    let kept = async (failed: Step | undefined) => {
+      for (const active of stream.values()) {
+        if (!failed) active.writer.discard()
+        else {
+          try {
+            await active.writer.commit()
+          } catch (failure) {
+            active.writer.discard()
+            deps.report?.(failure, session, 'stream-checkpoint')
+          }
+        }
+      }
+    }
+    // A step withdrawn (a Stop, a cancel) aborts its request: the withdrawal
+    // is the line that says so, so its ask ends interrupted with no failure
+    // line of its own after it.
+    if (deps.signal?.aborted) {
+      let failed = await finish(ask, {
+        entity: ask.entity,
+        attempt: { by: null },
+        failed: { reason: String(e) },
+        interrupted: { code: 'withdrawn' },
+      }, [])
+      await kept(failed)
+      return failed ?? await current()
+    }
     let text = e instanceof ModelError
       ? e.message + '\n' + (e.response?.body ?? '')
       : ''
@@ -2233,19 +2261,7 @@ export let react = async (
         ? { error: e, phase }
         : undefined,
     )
-    // Text streamed before the failure stays, unless recovery took the
-    // attempt from this worker.
-    for (const active of stream.values()) {
-      if (!failed) active.writer.discard()
-      else {
-        try {
-          await active.writer.commit()
-        } catch (failure) {
-          active.writer.discard()
-          deps.report?.(failure, session, 'stream-checkpoint')
-        }
-      }
-    }
+    await kept(failed)
     if (failed && retried) throw again(e as ModelError)
     return failed ?? await current()
   }
