@@ -18,7 +18,8 @@
 // is told to the link's pages (`watching`); public/release.js takes it there.
 import { writes } from '@yaks/member'
 import { derivedEid } from '@yaks/graph/identity'
-import { stated, VOCABS } from './vocab.ts'
+import { stated } from './vocab.ts'
+import { VOCABS } from '@yaks/platform/manifest'
 import { ACCEPTED } from './door.ts'
 import { declarationOf } from './declaration.ts'
 import { api, copyFor, storing, unwritten, woven } from './apps.ts'

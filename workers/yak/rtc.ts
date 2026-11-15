@@ -6,7 +6,7 @@
 //
 // Who may: whoever may write the app's rows (@yaks/member `edits`) and is one
 // of its members, or anyone who may write it where its manifest says
-// `"rtc": "open"` (vocab.ts `OPENS`), the way `"models": "open"` opens its
+// `"rtc": "open"` (@yaks/platform/manifest `OPENS`), the way `"models": "open"` opens its
 // models. A visitor is held per app to RTC_RATE (@yaks/workerd/rate).
 //
 // What it costs: Realtime charges $0.05 a GB leaving Cloudflare, after the

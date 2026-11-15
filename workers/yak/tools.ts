@@ -62,7 +62,6 @@ import {
   appWords,
   componentsOf,
   coreDocs,
-  EXAMPLE,
   grew,
   homed,
   type Homes,
@@ -73,9 +72,9 @@ import {
   teach,
   unsaid,
   unwritten,
-  VOCABS,
   wordsOf,
 } from './vocab.ts'
+import { EXAMPLE, VOCABS } from '@yaks/platform/manifest'
 import { withKinds } from './kinds.ts'
 import { mode } from '@yaks/member'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'

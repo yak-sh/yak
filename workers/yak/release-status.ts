@@ -6,7 +6,8 @@ import type { Env } from './env.ts'
 import { r2Objects } from './lib/objects.ts'
 import { sharing } from './lib/shared.ts'
 import { pins, type Version } from './versions.ts'
-import { appDoc, VOCABS } from './vocab.ts'
+import { appDoc } from './vocab.ts'
+import { VOCABS } from '@yaks/platform/manifest'
 
 let held = new WeakMap<Env, Map<string, Promise<Reload | undefined>>>()
 let filesOf = (v: Version) =>

@@ -52,13 +52,15 @@
     "./documents": "./documents.ts",
     "./document-graph": "./document-graph.ts",
     "./app-graph": "./app-graph.ts",
-    "./facets": "./facets.ts"
+    "./facets": "./facets.ts",
+    "./manifest": "./manifest.ts"
   },
   "license": "Apache-2.0",
   "description": "What a hosting platform keeps about the apps it serves \u2014 spaces, apps, deploys, hostnames, plans and meters.",
   "dependencies": {
     "@yaks/api": "0.2.29",
     "@yaks/archetype": "0.2.24",
+    "@yaks/blob": "0.2.30",
     "@yaks/code": "0.2.23",
     "@yaks/edge": "0.2.24",
     "@yaks/fp": "0.2.23",
@@ -72,7 +74,8 @@
     "@yaks/query": "0.2.32",
     "@yaks/session": "0.2.33",
     "@yaks/tools": "0.2.30",
-    "@yaks/vocab": "0.2.32"
+    "@yaks/vocab": "0.2.32",
+    "@yaks/yaml": "0.2.24"
   },
   "devDependencies": {
     "@std/assert": "npm:@jsr/std__assert@^1.0.0",

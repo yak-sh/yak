@@ -15,11 +15,11 @@ import { schema } from '@yaks/sqlite'
 import type { Stmt } from '@yaks/sql'
 import { fields } from '@yaks/fts'
 import { PAGES } from './guide.ts'
+import { EXAMPLE } from '@yaks/platform/manifest'
 import {
   appDoc,
   appVocab,
   appWords,
-  EXAMPLE,
   gitVocab,
   grew,
   homed,
