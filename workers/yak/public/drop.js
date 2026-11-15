@@ -6,21 +6,20 @@
 // The input is the form's own: pressing the zone, or Enter or Space on it,
 // opens the chooser (a phone's picker on a phone), a drop sets its files, and
 // each change says `change`, so a page's own listener hears a drop the same
-// as a choice. Nothing here is needed for the form to send.
+// as a choice. Nothing here is needed for the form to send. The input says
+// what it takes: `data-size` the most bytes of one file and `data-count` the
+// most files, past which a file is left out and the zone says so
+// (`.Drop_Said`).
 //
-// A gathering part (`.Drop-gather`, a chat app's message box) takes a drop or
-// a paste anywhere on it, and adds each choice, drop or paste to what it
-// holds; what it holds its page draws, hearing `change`, each with a button
-// that takes it back (`data-drop-remove`). The input says what it takes:
-// `data-size` the most bytes of one file and `data-count` the most files,
-// past which a file is left out and the part says so (`.Drop_Said`).
+// A file let go anywhere else on a page is kept from opening in place of
+// it, which would take what was typed there along. A part that takes files
+// of its own (a chat app's message box, @yaks/ux `Conversation.Box`) takes
+// its drop first, and this leaves that drop be.
 {
-  let zoneOf = (e) =>
-    e.target.closest?.('.Drop_Zone') ?? e.target.closest?.('.Drop-gather')
-  let carriesFiles = (e) => e.dataTransfer?.types.includes('Files')
-  let gathers = (input) => !!input.closest('.Drop-gather')
+  let zoneOf = (e) => e.target.closest?.('.Drop_Zone')
+  let ours = (e) =>
+    e.dataTransfer?.types.includes('Files') && !e.defaultPrevented
   let fileOf = (zone) => zone?.querySelector('.Drop_File')
-  let lit = (zone) => zone.matches('.Drop') ? 'Drop-over' : 'Drop_Zone-over'
 
   let size = (n) =>
     n < 1000
@@ -28,9 +27,6 @@
       : n < 1e6
       ? `${Math.round(n / 1e3)} KB`
       : `${(n / 1e6).toFixed(n < 1e7 ? 1 : 0)} MB`
-
-  // What each input was last given, so a gathering part adds a choice to it.
-  let holding = new WeakMap()
 
   // Sets the input's files and says so, as a choice would: within its
   // ceilings, and saying what was left out.
@@ -52,11 +48,8 @@
     let held = new DataTransfer()
     for (let f of kept.slice(0, count)) held.items.add(f)
     input.files = held.files
-    holding.set(input, [...input.files])
     input.dispatchEvent(new Event('change', { bubbles: true }))
   }
-  let add = (input, files) =>
-    put(input, [...holding.get(input) ?? [], ...files])
 
   let span = (className, text) => {
     let s = document.createElement('span')
@@ -90,62 +83,27 @@
     return li
   }
 
-  // A zone lists what is chosen under it; a gathering part's page draws it.
+  // A zone lists what is chosen under it.
   let show = (input) => {
     let list = input.closest('.Drop')?.querySelector('.Drop_Chosen')
-    if (list && !gathers(input)) {
-      list.replaceChildren(...[...input.files].map((f, i) => row(input, f, i)))
-    }
+    list?.replaceChildren(...[...input.files].map((f, i) => row(input, f, i)))
   }
 
   addEventListener('change', (e) => {
     let input = e.target
     if (!input.matches?.('.Drop_File')) return
-    let had = holding.get(input) ?? []
-    let now = [...input.files]
-    // A choice in a gathering part joins what it holds; emptied, it lets go.
-    if (gathers(input) && now.some((f) => !had.includes(f))) {
-      return add(input, now.filter((f) => !had.includes(f)))
-    }
-    holding.set(input, now)
     show(input)
-    if (input.hasAttribute('data-sends') && now.length) {
+    if (input.hasAttribute('data-sends') && input.files.length) {
       input.form?.requestSubmit()
     }
   })
-  // A file a gathering part's page drew taken back by its button
-  // (`data-drop-remove`, the file's place among them).
-  addEventListener('click', (e) => {
-    let button = e.target.closest?.('[data-drop-remove]')
-    let input = fileOf(button?.closest('.Drop-gather'))
-    if (!input) return
-    let at = Number(button.dataset.dropRemove)
-    put(input, [...input.files].filter((_, j) => j != at))
-    input.focus()
-  })
   // A form's reset empties its inputs without a change.
   addEventListener('reset', (e) => {
-    setTimeout(() =>
-      e.target.querySelectorAll('.Drop_File').forEach((input) => {
-        holding.set(input, [])
-        show(input)
-      })
-    )
-  })
-  // Files pasted into a gathering part, a picture copied or a screenshot,
-  // join what it holds; pasted words stay words.
-  addEventListener('paste', (e) => {
-    let input = fileOf(e.target.closest?.('.Drop-gather'))
-    let files = [...e.clipboardData?.files ?? []]
-    if (!input || input.disabled || !files.length) return
-    e.preventDefault()
-    add(input, files)
+    setTimeout(() => e.target.querySelectorAll('.Drop_File').forEach(show))
   })
 
   let over = (e) => {
-    if (!carriesFiles(e)) return
-    // A file let go beside a zone would open in place of the page, and take
-    // what was typed in it along.
+    if (!ours(e)) return
     e.preventDefault()
     let zone = zoneOf(e)
     let input = fileOf(zone)
@@ -154,26 +112,24 @@
       return
     }
     e.dataTransfer.dropEffect = 'copy'
-    zone.classList.add(lit(zone))
+    zone.classList.add('Drop_Zone-over')
   }
   addEventListener('dragenter', over)
   addEventListener('dragover', over)
   addEventListener('dragleave', (e) => {
     let zone = zoneOf(e)
     if (zone && !zone.contains(e.relatedTarget)) {
-      zone.classList.remove(lit(zone))
+      zone.classList.remove('Drop_Zone-over')
     }
   })
   addEventListener('drop', (e) => {
-    if (!carriesFiles(e)) return
+    if (!ours(e)) return
     e.preventDefault()
     let zone = zoneOf(e)
-    zone?.classList.remove(lit(zone))
+    zone?.classList.remove('Drop_Zone-over')
     let input = fileOf(zone)
     if (input && !input.disabled && e.dataTransfer.files.length) {
-      let files = [...e.dataTransfer.files]
-      if (gathers(input)) add(input, files)
-      else put(input, files)
+      put(input, [...e.dataTransfer.files])
     }
   })
 }

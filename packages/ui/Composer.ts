@@ -1,5 +1,11 @@
+/**
+ * A message field, attachments and controls for sending it. It is a
+ * gathering `Drop` (`Drop-gather`), lit as one while files are held `over`
+ * it (`Drop-over`).
+ *
+ * @module
+ */
 import { Form } from './Form.ts'
-/** A message field, attachments and controls for sending it. @module */
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
 import { block, type Part } from './el.ts'
@@ -9,7 +15,8 @@ import { Drop } from './Drop.ts'
 import { Field } from './Field.ts'
 import { Notice } from './Notice.ts'
 
-let Gather: Part = (p) => h(Drop, { ...p, mod: 'gather' })
+let Gather: Part = ({ over, ...p }) =>
+  h(Drop, { ...p, mod: ['gather', over ? 'over' : ''] })
 let Send: Part = (p) => h(Button, { ...p, mod: 'go' })
 
 /** A message field, attachments and controls for sending it. */

@@ -2575,7 +2575,7 @@ let send = async (b) => {
     submission.set('say', b.content.body)
     let saved = await drafts.spend(place, [{ entity: { eid: request } }])
     if (!saved) throw new Error('Your message could not be confirmed. Your words are kept; try sending again.')
-    form.elements.file.value = ''; form.elements.file.dispatchEvent(new Event('change', { bubbles: true }))
+    boxed.hold([])
     boxed.set({ request: crypto.randomUUID(), said: '' })
     talk.newest()
     // Words go to the person's conversation, which opens to show them when

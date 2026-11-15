@@ -183,40 +183,21 @@ test('a sent picture opens in place, and a document is saved', async () => {
 })
 
 // The box on a new conversation, mounted over what the server drew as the
-// page's script mounts it (with what the page tells it, `given`), with the
-// shell's drop script running in it.
-let code = await Deno.readTextFile(
-  new URL('./public/drop.js', import.meta.url),
-)
+// page's script mounts it (with what the page tells it, `given`), with no
+// other script on the page: what it holds is its own.
 let fresh = await (await chatPage(p.env, space, who, 'new')).text()
 let given = JSON.parse(/^let given = (.+)$/m.exec(fresh)![1])
+// What a browser's DataTransfer holds of it: files in, a list out.
+class Held {
+  list: File[] = []
+  items = { add: (f: File) => this.list.push(f) }
+  get files() {
+    return this.list
+  }
+}
 let box = () => {
   let { document, window } = parseHTML(fresh)
-  Object.defineProperty(globalThis, 'document', {
-    value: document,
-    configurable: true,
-  })
-  class Held {
-    list: File[] = []
-    items = { add: (f: File) => this.list.push(f) }
-    get files() {
-      return this.list
-    }
-  }
-  new Function(
-    'document',
-    'addEventListener',
-    'DataTransfer',
-    'Event',
-    'URL',
-    code,
-  )(
-    document,
-    document.addEventListener.bind(document),
-    Held,
-    window.Event,
-    { createObjectURL: () => 'blob:x', revokeObjectURL() {} },
-  )
+  Object.assign(globalThis, { document, DataTransfer: Held })
   let input = document.querySelector('#ask .Drop_File') as HTMLInputElement
   let files: File[] = []
   Object.defineProperties(input, {
@@ -224,13 +205,16 @@ let box = () => {
     multiple: { get: () => input.hasAttribute('multiple') },
   })
   let text = ''
-  mountAsk({
+  let asked = mountAsk({
     root: document.querySelector('[data-ask]')!,
     ...given,
     drafts: { text: () => text, type: (_, t) => void (text = t), spend() {} },
   })
 
-  let field = document.querySelector('[name=say]')!
+  // TODO: paste and drop on the field, as a person does. linkedom calls a
+  // listener an event bubbles to with the event's target as `this`, where
+  // preact looks for the handler (packages/ux/Conversation_test.ts `on`).
+  let field = document.querySelector('#ask .Composer')!
   let event = (type: string, extra: Record<string, unknown>) => {
     let e = new window.Event(type, { bubbles: true, cancelable: true })
     Object.assign(e, extra)
@@ -247,6 +231,7 @@ let box = () => {
       field.dispatchEvent(
         event('drop', { dataTransfer: { types: ['Files'], files: list } }),
       ),
+    sent: () => asked.hold([]),
     remove: (i: number) =>
       (document.querySelectorAll('#ask .Attachments_Remove')[i] as HTMLElement)
         .click(),
@@ -262,7 +247,10 @@ let box = () => {
         ].filter(Boolean).join(' ')
       ),
     said: () => document.querySelector('#ask .Drop_Said')?.textContent,
-    [Symbol.dispose]: () => Reflect.deleteProperty(globalThis, 'document'),
+    [Symbol.dispose]: () => {
+      Reflect.deleteProperty(globalThis, 'document')
+      Reflect.deleteProperty(globalThis, 'DataTransfer')
+    },
   }
 }
 let file = (name: string, type: string, size = 3) =>
@@ -297,9 +285,11 @@ test('files picked, pasted and dropped join the box, each drawn as a sent one is
     'PDF agenda.pdf',
     'ZIP site.zip unread',
   ])
-  // Sent, the box lets go of them.
+  // A choice cancelled keeps what is held; sent, the box lets go of them.
   b.pick()
-  assertEquals(b.shown(), [])
+  assertEquals(b.sending(), ['flyer.png', 'agenda.pdf', 'site.zip'])
+  b.sent()
+  assertEquals([b.shown(), b.sending()], [[], []])
 })
 
 test('the box posts its words and files as a form where no script runs', () => {
@@ -323,6 +313,22 @@ test('a file over the size the box takes is left out, and the box says so', () =
   )
   assertEquals(b.sending(), ['note.txt'])
   assertEquals(b.said(), 'scan.tiff is larger than 16 MB, so it was left out.')
+  b.pick(file('next.txt', 'text/plain'))
+  assertEquals([b.sending(), b.said()], [['note.txt', 'next.txt'], ''])
+})
+
+test('past the most files the box takes, the rest are left out, and it says so', () => {
+  using b = box()
+  let many = Array.from(
+    { length: given.asking.count + 2 },
+    (_, i) => file(`page-${i}.txt`, 'text/plain'),
+  )
+  b.drop(...many)
+  assertEquals(b.sending().length, given.asking.count)
+  assertEquals(
+    b.said(),
+    `Up to ${given.asking.count} files go at a time, so the rest were left out.`,
+  )
 })
 
 // A model choice applies to file admission as well as the generated answer.

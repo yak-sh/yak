@@ -6,6 +6,7 @@ import { client } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { h, hydrate, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
 import {
@@ -407,4 +408,46 @@ test('a box sending waits, and Stop says so on its conversation', () => {
   ;(b.root.querySelector('.Composer_Stop') as HTMLElement).click()
   equal(b.stops, [{ entity: { eid: 's1' }, Stop: {} }])
   equal(stopped('s1'), b.stops[0])
+})
+
+// An event on the box as a browser sends it, and whether the box took it as
+// its own.
+// TODO: send it to the field, as a person's paste or drop is. linkedom calls
+// a listener an event bubbles to with the event's target as `this`
+// (interface/event-target.js `dispatch`), where preact looks for the
+// handler, so a handler on the box never hears it from the field; fixed by
+// a patch to linkedom calling it with `currentTarget`.
+let on = (b: ReturnType<typeof boxed>, type: string, extra: object) => {
+  let { Event } = b.root.ownerDocument.defaultView!
+  let e = new Event(type, { bubbles: true, cancelable: true })
+  act(() => {
+    b.root.querySelector('.Composer')!.dispatchEvent(Object.assign(e, extra))
+  })
+  return e.defaultPrevented
+}
+let carrying = (...names: string[]) => ({
+  dataTransfer: {
+    types: ['Files'],
+    files: names.map((n) => new File(['x'], n)),
+    dropEffect: '',
+  },
+})
+
+test('given onFiles, a box takes files pasted or dropped on it, lit while they are held over it', () => {
+  using b = boxed()
+  let taken: string[][] = []
+  b.draw({ onFiles: (fs: File[]) => void taken.push(fs.map((f) => f.name)) })
+  let lit = () =>
+    b.root.querySelector('.Composer')!.classList.contains('Drop-over')
+  let pasted = (...files: File[]) => ({ clipboardData: { files } })
+  equal(on(b, 'paste', pasted()), false)
+  equal(on(b, 'paste', pasted(new File(['x'], 'shot.png'))), true)
+  equal([on(b, 'dragover', carrying()), lit()], [true, true])
+  equal([on(b, 'drop', carrying('a.pdf', 'b.txt')), lit()], [true, false])
+  equal(taken, [['shot.png'], ['a.pdf', 'b.txt']])
+})
+
+test('without onFiles, a box leaves files to the page', () => {
+  using b = boxed()
+  equal(on(b, 'drop', carrying('a.pdf')), false)
 })

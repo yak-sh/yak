@@ -6,11 +6,16 @@
 // The box holds the person's words as their draft and says when they are
 // sent or Stop is pressed; the page says where each goes (operator-page.ts
 // `chatScript`). The page's own along it: who the words go to on a helper's
-// page, the yak beside it (mascot.ts `Idle`), the files held to send (picked,
-// pasted or dropped anywhere on it, public/drop.js), each drawn as a sent one
-// is (@yaks/session/conversation `Filed`), the microphone (public/voice.js), and over
-// it Newest, while the reader has scrolled up from the newest line.
-// operator-box-browser.ts mounts it (`mountAsk`).
+// page, the yak beside it (mascot.ts `Idle`), its file slot, the microphone
+// (public/voice.js), and over it Newest, while the reader has scrolled up
+// from the newest line. operator-box-browser.ts mounts it (`mountAsk`).
+//
+// The file slot is the files held to send: picked by Add files, or pasted
+// or dropped anywhere on the box (the box's `onFiles`), each joining those
+// held, within the most the box takes (`within`), and each drawn as a sent
+// one is (@yaks/session/conversation `Filed`) with a button that takes it
+// back. The page holds them in the form's file input, so they go with the
+// words however the form is sent.
 import { h } from 'preact'
 import type { Bundle } from '@yaks/graph'
 import type { Drafts } from '@yaks/ux'
@@ -18,7 +23,7 @@ import { Conversation } from '@yaks/ux/conversation'
 import { Attachments, Button, Composer, Drop, Icon } from '@yaks/ui/parts'
 import { Idle } from './mascot.ts'
 import { icons } from './icons.ts'
-import { Filed } from '@yaks/session/conversation'
+import { Filed, fileSize } from '@yaks/session/conversation'
 
 /** What the page's box is, as the server says it, the same on the page. */
 export type Asking = {
@@ -55,6 +60,8 @@ export type Held = {
   away?: boolean
   /** the files held to send */
   files?: Filed[]
+  /** what was left out of them, past the most the box takes */
+  left?: string
   /** the id the next words are sent under, once the last were taken */
   request?: string
 }
@@ -66,6 +73,10 @@ export type AskProps = Held & {
   onSend?: (b: Bundle) => void
   onStop?: (b: Bundle) => void
   onNewest?: () => void
+  /** files picked, pasted or dropped, to join those held */
+  onFiles?: (files: File[]) => void
+  /** the held file at its place, taken back */
+  onRemove?: (at: number) => void
 }
 
 /** What a file the Operator cannot read says, held to send. */
@@ -84,6 +95,24 @@ export let reads = (kinds: string[], file: { name: string; type: string }) => {
   )
 }
 
+/** What a box holds of `files`, within the most it takes (`count` files,
+ * `size` bytes each), and what it says of those it left out. */
+export let within = <F extends { name: string; size: number }>(
+  files: F[],
+  { count, size }: { count: number; size: number },
+): { kept: F[]; left: string } => {
+  let fit = files.filter((f) => f.size <= size)
+  let left = [
+    ...files.filter((f) => f.size > size).map((f) =>
+      `${f.name} is larger than ${fileSize(size)}, so it was left out.`
+    ),
+    ...fit.length > count
+      ? [`Up to ${count} files go at a time, so the rest were left out.`]
+      : [],
+  ]
+  return { kept: fit.slice(0, count), left: left.join(' ') }
+}
+
 // What a draft is on the server, which draws the box before the page knows
 // what the person has typed.
 let unwritten: Drafts = { text: () => '', type: () => {}, spend: () => {} }
@@ -100,10 +129,13 @@ export let Ask = (
     said = '',
     away,
     files = [],
+    left = '',
     request = asking.request,
     onSend = () => {},
     onStop = () => {},
     onNewest = () => {},
+    onFiles,
+    onRemove = () => {},
   }: Partial<AskProps> & { asking: Asking; place: string },
 ) => {
   let { at, here, operator, app, to, inline, base } = asking
@@ -126,6 +158,7 @@ export let Ask = (
       words: (body) => ({ entity: { eid: request }, content: { body } }),
       onSend,
       onStop,
+      onFiles,
       name: 'say',
       placeholder: asked,
       mod: inline && 'inline',
@@ -149,7 +182,7 @@ export let Ask = (
           Attachments,
           { mod: 'held', 'aria-label': 'Files to send', 'aria-live': 'polite' },
           files.map((f, i) =>
-            h(Filed, { ...f, remove: { 'data-drop-remove': i } })
+            h(Filed, { ...f, remove: { onClick: () => onRemove(i) } })
           ),
         ),
       ],
@@ -163,11 +196,13 @@ export let Ask = (
             type: 'file',
             name: 'file',
             multiple: true,
-            'data-count': asking.count,
-            'data-size': asking.size,
+            onChange: (ev: Event) =>
+              onFiles?.([
+                ...(ev.currentTarget as HTMLInputElement).files ?? [],
+              ]),
           }),
         ),
-        h(Drop.Said, { role: 'status' }),
+        h(Drop.Said, { role: 'status' }, left),
       ],
       // shown where the browser or the platform can hear (public/voice.js)
       beside: h(

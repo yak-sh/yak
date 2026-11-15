@@ -11,7 +11,9 @@
  * (the host's `drafts`), Enter sends them and Shift+Enter starts a line, and
  * Send emits them as the bundle its owner says they become, Stop a `Stop`
  * event; the owner says where each goes, and spends the draft once the words
- * are taken.
+ * are taken. Given `onFiles`, it takes files pasted or dropped anywhere on it
+ * and emits them, lit while they are held over it; the owner holds them and
+ * draws them in its slots.
  *
  * Whether each fold in a line is open is `Disclosure{open}` in the same page
  * graph, on the page entity of the line and the fold's place in it (`Folds`,
@@ -24,7 +26,7 @@
  */
 
 import { type ComponentChildren, createContext, h, type JSX } from 'preact'
-import { useContext, useLayoutEffect, useRef } from 'preact/hooks'
+import { useContext, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Button, Composer, Transcript } from '@yaks/ui/parts'
@@ -204,6 +206,9 @@ export type BoxProps = {
   beside?: ComponentChildren
   /** its owner's, in the form before the box */
   children?: ComponentChildren
+  /** files pasted or dropped on it, which its owner holds; without it, it
+   * takes none */
+  onFiles?: (files: File[]) => void
   [attribute: string]: unknown
 }
 
@@ -212,6 +217,48 @@ export let stopped = (session = ''): Bundle => ({
   entity: { eid: session },
   Stop: {},
 })
+
+// Whether an event carries files a person holds over the box.
+let carries = (ev: DragEvent) => !!ev.dataTransfer?.types.includes('Files')
+
+// What the box hears of files, given `onFiles`: a paste of them (pasted
+// words stay words) and a drop, anywhere on it, lit while they are held
+// over it. A drop it takes is its own, so a page's listener for one let go
+// beside it (`defaultPrevented`) leaves it be.
+let useTaking = (onFiles?: (files: File[]) => void) => {
+  let [over, setOver] = useState(false)
+  if (!onFiles) return {}
+  let hover = (ev: DragEvent) => {
+    if (!carries(ev)) return
+    ev.preventDefault()
+    ev.dataTransfer!.dropEffect = 'copy'
+    setOver(true)
+  }
+  return {
+    over,
+    // Lower case, so Preact listens for `paste` in a document whose
+    // elements have no `onpaste` (linkedom's), as a browser's do.
+    onpaste: (ev: ClipboardEvent) => {
+      let files = [...ev.clipboardData?.files ?? []]
+      if (!files.length) return
+      ev.preventDefault()
+      onFiles(files)
+    },
+    onDragEnter: hover,
+    onDragOver: hover,
+    onDragLeave: (ev: DragEvent) => {
+      let to = ev.relatedTarget as Node | null
+      if (!(ev.currentTarget as Element).contains(to)) setOver(false)
+    },
+    onDrop: (ev: DragEvent) => {
+      if (!carries(ev)) return
+      ev.preventDefault()
+      setOver(false)
+      let files = [...ev.dataTransfer!.files]
+      if (files.length) onFiles(files)
+    },
+  }
+}
 
 // The box: a form wearing the kit's Composer. Enter submits the form, as
 // Send does, so every listener on it hears a send however it was asked for.
@@ -232,9 +279,11 @@ let Box = (
     tools,
     beside,
     children,
+    onFiles,
     ...rest
   }: BoxProps,
 ): JSX.Element => {
+  let taking = useTaking(onFiles)
   let drafts = useDrafts(supplied)
   let text = drafts.text(place)
   let send = () => void (!sending && onSend(words(drafts.text(place))))
@@ -251,7 +300,7 @@ let Box = (
     children,
     h(
       Composer,
-      { 'data-busy': busy ? '' : undefined },
+      { 'data-busy': busy ? '' : undefined, ...taking },
       top,
       h(Composer.Field, {
         lines: true,

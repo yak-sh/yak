@@ -49,13 +49,26 @@ let page = (multiple = true) => {
     multiple: { get: () => input.hasAttribute('multiple') },
   })
   input.addEventListener('change', (e) => on.change(e))
-  let carrying = (list: File[]) => ({
-    target: zone,
-    preventDefault() {},
+  let carrying = (list: File[], target: Element = zone) => ({
+    target,
+    defaultPrevented: false,
+    preventDefault() {
+      this.defaultPrevented = true
+    },
     dataTransfer: { types: ['Files'], files: list, dropEffect: '' },
   })
+  // What becomes of files held over `target`: whether the page keeps them
+  // from opening in its place, and the effect it shows.
+  let held = (target: Element, taken = false) => {
+    let e = carrying([], target)
+    e.defaultPrevented = taken
+    on.dragover(e)
+    return [e.defaultPrevented, e.dataTransfer.dropEffect]
+  }
   return {
     files: () => files.map((f) => f.name),
+    held,
+    away: document.getElementById('away')!,
     over: () => on.dragover(carrying([])),
     lit: () => zone.classList.contains('Drop_Zone-over'),
     drop: (...names: string[]) =>
@@ -105,4 +118,11 @@ test('removing a file takes it out of what the form sends', () => {
   p.remove(1)
   assertEquals(p.files(), ['a.txt', 'c.txt'])
   assertEquals(p.shown(), ['a.txt 3 B', 'c.txt 3 B'])
+})
+
+test('a file held beside a zone is kept from opening in place of the page, and one a part took is left to it', () => {
+  let p = page()
+  assertEquals(p.held(p.away), [true, 'none'])
+  assertEquals(p.held(p.away, true), [true, ''])
+  assertEquals(p.lit(), false)
 })

@@ -368,7 +368,10 @@ bundle its owner's `words` makes of them through `onSend`, and Stop emits a
 each goes and spends the draft once the words are taken, so a send that fails
 keeps them. What is the owner's own (files, a microphone, who the words go to)
 it hands the box as `top`, `tools` and `beside`; any other prop lands on its
-form, which posts as it is where no script runs.
+form, which posts as it is where no script runs. Given `onFiles`, the box takes
+files pasted or dropped anywhere on it and emits them, lit (`Drop-over`) while
+they are held over it; its owner holds them, within what it takes, and draws
+them in its slots.
 
 ```ts
 import { h } from 'preact'
