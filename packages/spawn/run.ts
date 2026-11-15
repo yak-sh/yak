@@ -966,11 +966,11 @@ let ended = async (
   let row = await ran(g, session)
   let code = comp(row, EXIT)?.code as number | null | undefined
   let said = code === 0 ? undefined : await refused(g, session, seq(request))
-  let limit = said?.code == 'rate_limit'
+  let no = declined(said?.code)
   let why = code === 0
     ? ''
-    : limit
-    ? `the provider's plan limit ended the run: ${said!.body}`
+    : no
+    ? `${no.why}: ${said!.body}`
     : `${row?.stop ? 'asked to stop, ' : ''}${await cause(
       session,
       row,
@@ -987,8 +987,8 @@ let ended = async (
     stop: {},
     ...(code === 0 ? {} : {
       failed: {
-        reason: limit
-          ? 'Plan limit reached'
+        reason: no
+          ? no.reason
           : row?.stop
           ? 'Asked to stop'
           : code == null
@@ -1000,18 +1000,35 @@ let ended = async (
     }),
   }], { trusted: true })
   // A run nobody asked to stop that ended any way but cleanly is a failure,
-  // told where it is seen. One its plan's limit ended is the plan working, and
-  // one that played a recording ended as it was chosen to.
+  // told where it is seen. One its provider declined ended as the provider
+  // chose, and its starter hears why (./completion.ts); one that played a
+  // recording ended as it was chosen to.
   if (
-    code !== 0 && !row?.stop && !limit &&
+    code !== 0 && !row?.stop && !no &&
     !(await asked(g, session).catch(() => null))?.recorded
   ) {
     failure(o, session, 'run ended', `a spawned run ended: ${why}`)
   }
 }
 
+// The refusals that are the provider declining a run, not a fault of it: its
+// plan's limit, and its content filter refusing what the run was asked. Each
+// is the reason the run's ending records, and what its account begins with.
+let DECLINED: Record<string, { reason: string; why: string }> = {
+  rate_limit: {
+    reason: 'Plan limit reached',
+    why: "the provider's plan limit ended the run",
+  },
+  content_policy: {
+    reason: 'Provider refused the content',
+    why: "the provider's content filter refused the run",
+  },
+}
+let declined = (code?: string) =>
+  code && Object.hasOwn(DECLINED, code) ? DECLINED[code] : undefined
+
 // What the provider said refused this turn, if it did: a `refusal` after the
-// request, a plan limit's (`rate_limit`) first, else the newest.
+// request, one that declined the run (DECLINED) first, else the newest.
 let refused = async (
   g: Graph,
   session: string,
@@ -1021,7 +1038,7 @@ let refused = async (
     `.entry.session=${session}&.refusal&.entry.seq>${after}` +
       `&.order=-entry.seq&.limit=8&*`,
   )
-  let hit = rows.find((r) => comp(r, 'refusal')?.code == 'rate_limit') ??
+  let hit = rows.find((r) => declined(String(comp(r, 'refusal')?.code))) ??
     rows[0]
   return hit && {
     code: String(comp(hit, 'refusal')?.code),

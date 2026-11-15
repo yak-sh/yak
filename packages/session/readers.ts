@@ -463,6 +463,13 @@ let spoken = (it: Event): Comps[] | undefined =>
     ? said(str(it.text), { reasoning: {}, output: {} })
     : undefined
 
+// Why a Codex turn failed. Its event carries only a message, and the one its
+// content filter writes ("This content was flagged for possible cybersecurity
+// risk", "your prompt was flagged as potentially violating our usage policy")
+// is the provider declining the request, `content_policy`.
+let turnFailed = (message: string): string =>
+  /\bflagged\b/i.test(message) ? 'content_policy' : 'turn.failed'
+
 /**
  * Codex: the stream `codex exec --json` prints.
  *
@@ -488,7 +495,7 @@ export let codex: Reader = (e) => {
     ? [{ stop: {}, ...codexUsage(e.usage) }]
     : e.type == 'turn.failed'
     ? [{
-      refusal: { code: 'turn.failed' },
+      refusal: { code: turnFailed(str(obj(e.error).message)) },
       content: { body: str(obj(e.error).message) || 'the turn failed' },
       output: {},
       stop: {},

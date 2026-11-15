@@ -252,6 +252,22 @@ test('codex: what it said, what it ran, and the turn it closed', () => {
         stop: {},
       }],
     ],
+    [
+      {
+        type: 'turn.failed',
+        error: {
+          message: 'This content was flagged for possible cybersecurity risk.',
+        },
+      },
+      [{
+        refusal: { code: 'content_policy' },
+        content: {
+          body: 'This content was flagged for possible cybersecurity risk.',
+        },
+        output: {},
+        stop: {},
+      }],
+    ],
   ]
   for (let [e, want] of cases) assertEquals(entries(codex, e), want)
   assertEquals(

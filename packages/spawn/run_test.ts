@@ -10,7 +10,7 @@ import { storage } from '@yaks/sqlite'
 import { stepping } from '../sqlite/testing.ts'
 import { claude } from './adapters.ts'
 import { asked, detached, down, finish, follow, resume, start } from './run.ts'
-import { LIMIT } from './standin.ts'
+import { FILTERED, LIMIT } from './standin.ts'
 import {
   asking,
   FAKE,
@@ -274,6 +274,15 @@ test("a run its plan's limit ends says so, is no failure, and its reading is its
     `the provider's plan limit ended the run: ${LIMIT}`,
     [],
     [STANDIN.provider],
+  ])
+})
+
+test('a run its content filter refused says so, and is no failure', async () => {
+  assertEquals(await standin('filtered'), [
+    'Provider refused the content',
+    `the provider's content filter refused the run: ${FILTERED}`,
+    [],
+    [],
   ])
 })
 

@@ -88,8 +88,12 @@ export let complete = async (g: Graph, session: string): Promise<void> => {
       cut.map(line).join('\n')
     }`
     : ''
-  let body = [title, stopped, await reportOf(g, row)].filter(Boolean)
-    .join('\n\n')
+  // A run that failed says why first, as its ending recorded it (./run.ts
+  // `ended`): its last words are what it was doing, not what stopped it.
+  let [ending] = await g.get([end.entity.eid], ['failed', 'content'])
+  let why = ending?.failed ? str(comp(ending, 'content')?.body) : ''
+  let body = [title, why && `Ended: ${why}`, stopped, await reportOf(g, row)]
+    .filter(Boolean).join('\n\n')
   let reports = tasks.length ? tasks : ['']
   let actor = await speaking(g, row)
   for (let target of reports) {

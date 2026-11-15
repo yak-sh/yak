@@ -42,6 +42,10 @@ let result = (refused?: string) => ({
 /** What the plan said when it ended the runs of 2026-11-10. */
 export let LIMIT = "You've reached your Fable limit."
 
+/** What Codex's content filter said when it ended a run of 2026-11-15. */
+export let FILTERED =
+  'This content was flagged for possible cybersecurity risk.'
+
 // What claude printed last on stderr in those runs, which the ending once
 // took for its cause.
 let POLICY = 'Warning: claude.ai MCP servers blocked by policy'
@@ -66,6 +70,13 @@ export let endings: Record<string, Recording> = {
       result(LIMIT),
     ],
     err: POLICY,
+    code: 1,
+  },
+  // The provider's content filter refused the turn: the refusal code a
+  // reader gives it (@yaks/session `codex` reads it from the filter's words),
+  // here on the answer the stand-in writes itself.
+  filtered: {
+    lines: [say(FILTERED, { error: 'content_policy' }), result(FILTERED)],
     code: 1,
   },
   // The API refused the turn for another reason.

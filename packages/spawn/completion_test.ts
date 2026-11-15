@@ -174,6 +174,31 @@ test('a failed run reports its exit and preserves the last account of its work',
   )
 })
 
+test('a failed run says why it ended before its last account', async () => {
+  let why = 'the provider exited 1: API Error: 500 overloaded'
+  let ended = bare([
+    ...rows.map((b) =>
+      b.entity.eid == 'child'
+        ? { ...b, exit: { code: 1 } }
+        : b.entity.eid == 'end'
+        ? {
+          ...b,
+          failed: { reason: 'Provider exited 1' },
+          content: { body: why },
+        }
+        : b
+    ),
+  ])
+  await complete(ended, 'child')
+  let [report] = await ended.read('.comment.target=work&*')
+  equal(
+    (report.doc as { body: string }).body,
+    `${await name(
+      ended,
+    )} — exited 1\n\nEnded: ${why}\n\nFixed it; checks pass.`,
+  )
+})
+
 test('a run somebody asked to stop says so before its exit', async () => {
   await complete(asked, 'child')
   let [report] = await asked.read('.comment.target=work&*')
