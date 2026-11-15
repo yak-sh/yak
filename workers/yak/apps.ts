@@ -179,7 +179,7 @@ import { admitted, pageScript, type Scripts } from './page-script.ts'
 import type { Bundle } from '@yaks/graph'
 import { Refused, Stale } from '@yaks/graph/errors'
 import { mistaken } from './mistake.ts'
-import { token } from '@yaks/graph/sha256'
+import { digest, token } from '@yaks/graph/sha256'
 import { edits, mode, reads, writes } from '@yaks/member'
 import { USES } from './door.ts'
 import { type Door } from '@yaks/durable-object/door'
@@ -230,7 +230,6 @@ import {
 import { full, fullFiles } from './usage.ts'
 import { free } from '@yaks/platform/meter'
 import { scheduleBy } from './used.ts'
-import { sha256 } from './versions.ts'
 import { seen } from './views.ts'
 import { refuse } from './tool.ts'
 import { routes as commandRoutes } from '@yaks/tools/routes'
@@ -873,8 +872,7 @@ let etagOf = (version: string) => `"${version}"`
 // platform's own tags), and any of those can move while the bytes stay put.
 // Hashing what is sent is what keeps a refresh from being told it already
 // holds a page it does not.
-let pageTag = async (page: string) =>
-  `W/"${(await sha256(new TextEncoder().encode(page))).slice(0, 32)}"`
+let pageTag = async (page: string) => `W/"${(await digest(page)).slice(0, 32)}"`
 
 let unchanged = (req: Request, etag: string) =>
   (req.headers.get('if-none-match') ?? '').split(',')
@@ -2054,17 +2052,10 @@ export let api = async (
     let value = new URL(req.url).searchParams.get('version')
     let version = value == null || !/^[0-9]+$/.test(value) ? NaN : Number(value)
     if (!Number.isSafeInteger(version)) return json(400, 'invalid_version')
-    try {
-      let { releaseStatus } = await import('./release-status.ts')
-      return Response.json(await releaseStatus(env, dir, app, version), {
-        headers: { 'cache-control': 'no-store' },
-      })
-    } catch (e) {
-      if (e instanceof Error && e.message == 'no_such_release') {
-        return json(404, 'no_such_release')
-      }
-      throw e
-    }
+    let { releaseStatus } = await import('./release-status.ts')
+    let said = await releaseStatus(env, dir, app, version)
+    if (!said) return json(404, 'no_such_release')
+    return Response.json(said, { headers: { 'cache-control': 'no-store' } })
   }
   if (path == '/service' || path.startsWith('/service/')) {
     let { serviceRoute } = await import('./service-api.ts')

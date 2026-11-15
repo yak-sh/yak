@@ -12,7 +12,7 @@ import type { directory, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { drawn } from './raster.ts'
-import { sha256 } from './versions.ts'
+import { digest } from '@yaks/graph/sha256'
 
 /** The most bytes a space's logo may be, and the kinds it may be: pictures a
  * browser draws as an image and nothing else, so no SVG with its scripts. */
@@ -48,7 +48,7 @@ export let logoed = async (
     }
     let why = await broken(bytes, type)
     if (why) return `that picture does not open: ${why}`
-    logo = { sha: await sha256(bytes), type }
+    logo = { sha: await digest(bytes), type }
     await blobs.put(keyOf(space, logo.sha), bytes)
   }
   let had = space.logo?.sha

@@ -325,28 +325,32 @@ import { holding } from './held.ts'
 import { an, invitedWords, room, send } from './invite.ts'
 import { aloud, peopleOwned, shown } from './people.ts'
 import {
+  fenced,
+  record,
+  releaseOf,
+  unfenced,
+  versions,
+  waiting,
+} from './versions.ts'
+import {
   addressed,
+  backTo,
   BUILT,
   crossed,
   deployedOver,
-  fenced,
   type Files,
   indented,
   KEEP,
+  nextVersion,
   noted,
   own,
   pins,
   recent,
-  record,
-  releaseOf,
   releases,
-  sha256,
-  unfenced,
   type Version,
-  versions,
-  waiting,
   whatChanged,
-} from './versions.ts'
+} from '@yaks/platform/versions'
+import { digest } from '@yaks/graph/sha256'
 import {
   anew,
   type AppDraft,
@@ -1385,7 +1389,7 @@ let published = async (
   snapshot.catch(() => {})
   let [[all, { file: vocabFile, source, pkg }], [, serving]] = await Promise
     .all([early, readServing()])
-  let version = target?.version ?? (all[0]?.version ?? 0) + 1
+  let version = target?.version ?? nextVersion(all)
   // And what its declaration is called. A rollback selects a version again,
   // so it declares under a name of its own: a declaration once written is
   // never written again, which is what lets discovery keep one
@@ -2662,7 +2666,7 @@ export let hashed = (files: { path: string; bytes: Uint8Array }[]) =>
   Promise.all(files.map(async (f) => ({
     path: f.path.replace(/^\/+/, ''),
     bytes: f.bytes,
-    sha: await sha256(new Uint8Array(f.bytes)),
+    sha: await digest(new Uint8Array(f.bytes)),
     size: f.bytes.byteLength,
   })))
 
@@ -4419,7 +4423,7 @@ let OURS: Row[] = [
         let each = await Promise.all(
           sent.map(async (f, i) =>
             `${wrote[i]} → ${where(wrote[i])} — ${
-              stored(wrote[i], f.bytes, await sha256(f.bytes))
+              stored(wrote[i], f.bytes, await digest(f.bytes))
             }`
           ),
         )
@@ -4456,7 +4460,7 @@ let OURS: Row[] = [
           c,
           asked,
         )
-        let sha = await sha256(got.bytes)
+        let sha = await digest(got.bytes)
         let where = placing(ctx, space, app, config)
         return {
           // The integrity hash so a page that goes on loading this from a
@@ -4497,7 +4501,7 @@ let OURS: Row[] = [
       let there = new Set(already)
       let each = await Promise.all(
         sent.map(async (f, i) =>
-          stored(paths[i], f.bytes, await sha256(f.bytes)) +
+          stored(paths[i], f.bytes, await digest(f.bytes)) +
           (there.has(paths[i]) ? ', already there' : '')
         ),
       )
@@ -5035,35 +5039,27 @@ let OURS: Row[] = [
       let { space, app, who, store } = await inApp(ctx, args, true, true)
       let all = await versions(ctx.dir, app)
       let live = all.find((v) => v.version == app.version)
-      let want: Version | undefined
-      if (args.version == null) {
-        // "Put it back" means what was live before this went out. That is
-        // the pointer's history, not the next number down: after a rollback
-        // the next deploy goes out over an older version, and the number
-        // under it is the version the person already left. An app with no
-        // recorded move falls back to the number.
-        want = (live && deployedOver(all, await ctx.dir.switches(app), live)) ??
-          all.find((v) => v.version < (app.version ?? 0))
-        if (!want) {
-          throw refuse(
-            'missing',
-            `${space.slug}/${app.slug} has ${
-              all.length ? 'only one deploy' : 'no deploys'
-            } — there is nothing earlier to go back to`,
-          )
-        }
-      } else {
-        let n = Number(args.version)
-        want = all.find((v) => v.version == n)
-        if (!want) {
-          throw refuse(
-            'missing',
-            `no v${args.version} of ${space.slug}/${app.slug} — it keeps ${
-              all.slice(0, KEEP).map((v) => `v${v.version}`).join(', ') ||
-              'none'
-            }${all.length > KEEP ? ` and ${all.length - KEEP} older` : ''}`,
-          )
-        }
+      let asked = args.version == null ? undefined : Number(args.version)
+      // "Put it back" reads the pointer's history, which a named version
+      // needs none of.
+      let moves = asked == null && live ? await ctx.dir.switches(app) : []
+      let want = backTo(all, moves, app.version ?? 0, asked)
+      if (!want && asked == null) {
+        throw refuse(
+          'missing',
+          `${space.slug}/${app.slug} has ${
+            all.length ? 'only one deploy' : 'no deploys'
+          } — there is nothing earlier to go back to`,
+        )
+      }
+      if (!want) {
+        throw refuse(
+          'missing',
+          `no v${args.version} of ${space.slug}/${app.slug} — it keeps ${
+            all.slice(0, KEEP).map((v) => `v${v.version}`).join(', ') ||
+            'none'
+          }${all.length > KEEP ? ` and ${all.length - KEEP} older` : ''}`,
+        )
       }
       // What serves now is the live version's manifest, already in hand; only
       // an app whose live version is not on record reads its release's index.

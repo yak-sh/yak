@@ -95,7 +95,7 @@ import { sharing } from './lib/shared.ts'
 // held keeps working. `yak` is the platform's own space (`META`), and
 // `origin` and `saas` its custom-hostname origin (@yaks/platform/routes `ORIGIN`).
 // `sha` and `git` are the platform's own key prefixes in the files bucket
-// (versions.ts `SHA`, gitobj.ts `BODY`): a space's files are kept under its
+// (@yaks/platform/versions `SHA`, gitobj.ts `BODY`): a space's files are kept under its
 // slug, so a space by either name would share storage with the platform's.
 // The payment provider's name is its doors' prefix (config.ts `payments`,
 // payment-doors.ts), so a space by that name would read as the provider.

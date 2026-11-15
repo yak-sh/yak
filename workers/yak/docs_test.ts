@@ -13,7 +13,7 @@ import { claudeAdd } from './signin-pages.ts'
 import type { Env } from './env.ts'
 import { PAGES } from './guide.ts'
 import { esc } from './html.ts'
-import { KEEP } from './versions.ts'
+import { KEEP } from '@yaks/platform/versions'
 
 // The assets binding, answering out of public/ the way it does in the Worker.
 let site = () =>

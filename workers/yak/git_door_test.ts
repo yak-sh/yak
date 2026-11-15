@@ -11,7 +11,9 @@ import { answer } from './git_door.ts'
 import { ledger, mint } from './grants.ts'
 import { platform } from './testing.ts'
 import type { Who } from './session.ts'
-import { pins, record, sha256 } from './versions.ts'
+import { record } from './versions.ts'
+import { pins } from '@yaks/platform/versions'
+import { digest } from '@yaks/graph/sha256'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let BEN = 'b0000000-0000-4000-8000-0000000000be'
@@ -71,7 +73,7 @@ let deploy = async (
   let manifest: Record<string, string> = {}
   for (let [path, body] of Object.entries(files)) {
     let bytes = utf8.encode(body)
-    manifest[path] = await sha256(bytes)
+    manifest[path] = await digest(bytes)
     await pins(r2Objects(env.BLOBS)).put(manifest[path], bytes)
   }
   await record(dir, WHO, app, version, manifest, '')

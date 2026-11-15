@@ -1,10 +1,11 @@
 // A release names immutable bytes already stored: its index maps each path to
-// the bytes' content address (versions.ts `addressed`), and a deploy writes
+// the bytes' content address (@yaks/platform/versions `addressed`), and a deploy writes
 // that index, beside what its compile made, before the app row selects it.
 import type { Objects } from '@yaks/blob'
 import { elapsed } from './lib/hops.ts'
 import { background } from './defects.ts'
-import { addressed, type Files, own, sha256 } from './versions.ts'
+import { addressed, type Files, own } from '@yaks/platform/versions'
+import { digest } from '@yaks/graph/sha256'
 import { decode, encode, type File, type Index, META } from './release_index.ts'
 
 type Named = Pick<File, 'key'> & Partial<File>
@@ -280,7 +281,7 @@ export let staged = (raw: Objects, from: Files, prefix: string) => {
   // A put at the content address is the whole write: bytes already there are
   // these bytes, so one call, never a look first.
   let view = viewOf(raw, prefix, files, async (path, bytes) => {
-    let sha = await sha256(new Uint8Array(bytes))
+    let sha = await digest(new Uint8Array(bytes))
     await raw.put(addressed(sha), bytes)
     files[path] = sha
   }, (path) => void delete files[path])

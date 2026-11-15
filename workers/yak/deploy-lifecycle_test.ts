@@ -13,7 +13,9 @@ import { platform } from './deploy-probe.ts'
 import { call, type Ctx, recompileRelease, releaseNotice } from './tools.ts'
 import * as apps from './apps.ts'
 import { r2Objects } from './lib/objects.ts'
-import { pins, record, releaseOf, sha256 } from './versions.ts'
+import { record, releaseOf } from './versions.ts'
+import { pins } from '@yaks/platform/versions'
+import { digest } from '@yaks/graph/sha256'
 import type { Reload } from '@yaks/platform'
 import { staged } from './release.ts'
 
@@ -298,7 +300,7 @@ let restored = await (async () => {
     })
   ) {
     let bytes = new TextEncoder().encode(text)
-    files[path] = await sha256(bytes)
+    files[path] = await digest(bytes)
     await pins(blobs).put(files[path], bytes)
     await blobs.put(`ada/recipes/${path}`, bytes)
   }

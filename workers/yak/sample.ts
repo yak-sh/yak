@@ -31,7 +31,7 @@ import { KERNEL } from './meta.ts'
 import { filesAt } from './release.ts'
 import { applying } from './release-seed.ts'
 import { seedy } from '@yaks/platform/files'
-import { addressed, type Files } from './versions.ts'
+import { addressed, type Files } from '@yaks/platform/versions'
 
 /** Whether an app keeps a sample: a private app on offer. An open or public
  * app is one store everyone already shares. */

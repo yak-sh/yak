@@ -9,7 +9,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import './binding-probe.ts'
 import { embeds } from './model-probe.ts'
 import { connector, fresh, meta, seed, signIn } from './probe.ts'
-import { sha256 } from './versions.ts'
+import { digest } from '@yaks/graph/sha256'
 import type { Env } from './env.ts'
 import { libraryTools } from './library-tools.ts'
 
@@ -115,7 +115,7 @@ test('the library tools add, list, read and remove an app’s documents', async 
 
     // A file the person attached in chat, and bytes sent along.
     let held = new TextEncoder().encode('The Lord is my shepherd.')
-    let sha = await sha256(held)
+    let sha = await digest(held)
     let space = await k.dir.space('church')
     await env!.BLOBS.put(`${space!.store}/.operator/${sha}`, held)
     await agent.answer('library_add', {

@@ -13,7 +13,7 @@ import { encodeBase64 } from '@std/encoding/base64'
 import { parseHTML } from 'linkedom'
 import { connector, kernel, signIn } from './probe.ts'
 import { managePath } from '@yaks/platform/routes'
-import { sha256 } from './versions.ts'
+import { digest } from '@yaks/graph/sha256'
 
 let PNG = Uint8Array.from(
   atob(
@@ -57,7 +57,7 @@ test('a space wears the logo its owner chooses, and its letter without one', asy
 
     let sent = await send(picture(PNG))
     assertEquals(sent.status, 303)
-    let at = `/manage/${slug}/logo/${await sha256(PNG)}`
+    let at = `/manage/${slug}/logo/${await digest(PNG)}`
     assertEquals((await tile()).getAttribute('src'), at)
     assertStringIncludes(await (await get(settings)).text(), 'name="unlogo"')
 
@@ -112,7 +112,7 @@ test('space_set sets the logo its Operator is given, and an app with no icon wea
     let yak = await icon()
 
     assertStringIncludes(await set({ logo_base64: encodeBase64(PNG) }), 'logo')
-    let at = `/manage/${slug}/logo/${await sha256(PNG)}`
+    let at = `/manage/${slug}/logo/${await digest(PNG)}`
     assertEquals((await tile()).getAttribute('src'), at)
     // No RASTER in a test run, so the logo as it is rather than its drawing.
     assertEquals(await icon(), PNG)

@@ -26,7 +26,7 @@ import {
 } from './probe.ts'
 import { PAGES, uriOf } from './guide.ts'
 import { PROMPTS } from './prompts.ts'
-import { sha256 } from './versions.ts'
+import { digest } from '@yaks/graph/sha256'
 import { facing, GUIDE, minted } from './mcp-probe.ts'
 
 // The paths an app_files listing names: each file's line, before its sha,
@@ -618,7 +618,7 @@ test(
       assertEquals(
         one.words,
         `wrote index.html → https://${jeff54}.yaks.app/recipes/index.html — ` +
-          `${page.length} bytes, sha256 ${await sha256(
+          `${page.length} bytes, sha256 ${await digest(
             new TextEncoder().encode(page),
           )}; staged for app_deploy`,
       )
@@ -652,9 +652,9 @@ test(
       assertEquals(
         both.words,
         `wrote 2 files → https://${jeff54}.yaks.app/recipes/:\n` +
-          `app.js — 24 bytes, sha256 ${await sha256(
+          `app.js — 24 bytes, sha256 ${await digest(
             new TextEncoder().encode('export let go = () => {}'),
-          )}\nimg/logo.svg — 6 bytes, sha256 ${await sha256(
+          )}\nimg/logo.svg — 6 bytes, sha256 ${await digest(
             new TextEncoder().encode('<svg/>'),
           )}\nStaged for app_deploy.`,
       )

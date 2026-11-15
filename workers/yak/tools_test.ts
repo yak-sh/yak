@@ -27,7 +27,7 @@ import {
   TOOLS,
   uiMeta,
 } from './tools.ts'
-import { sha256 } from './versions.ts'
+import { digest } from '@yaks/graph/sha256'
 import { owned } from './directory-fixture.ts'
 import { platform as rows } from './directory-rows-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
@@ -290,7 +290,7 @@ let [pageSha, jsSha, jsonSha, brokenSha, yamlSha] = await Promise.all([
   '{"serves": 4}',
   '{"a": [1, 2, 3}',
   'recipe:\n  serves: number\n',
-].map((text) => sha256(bytes(text))))
+].map((text) => digest(bytes(text))))
 let page = bytes('<!doctype html><h1>hi</h1>')
 
 test('a write answers what it stored, and json answers whether it parses', () => {
@@ -404,7 +404,7 @@ test('a patch takes a list of edits across files, in order, all or none', () => 
   assertStringIncludes(refused({ edits: [] }), 'edits: a list of')
 })
 
-let emptyDigest = await sha256(new Uint8Array())
+let emptyDigest = await digest(new Uint8Array())
 
 test('an integrity hash is base64 of the same digest, not the hex', () => {
   // The empty string's sha256, in the encoding an <script integrity> wants.
@@ -581,11 +581,11 @@ let deployRoundTrips = await (async () => {
   assertEquals(listed.value?.files, [
     {
       path: 'index.html',
-      sha: await sha256(new TextEncoder().encode('<h1>hi</h1>')),
+      sha: await digest('<h1>hi</h1>'),
     },
     {
       path: 'style.css',
-      sha: await sha256(new TextEncoder().encode('h1{color:teal}')),
+      sha: await digest('h1{color:teal}'),
     },
   ])
   assertEquals(listed.value?.unreleased, false)

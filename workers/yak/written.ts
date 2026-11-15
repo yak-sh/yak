@@ -1,8 +1,9 @@
 // What an app's files hold between deploys, and what each path has held
 // (T-124791, D-124238). Bytes are stored once, under their SHA-256 (`sha/`,
-// versions.ts `addressed`), and a path names a sha: every write puts the bytes
-// it brings at their address and writes one `written` row per file in the
-// directory, naming the path, the sha (none for a delete), who and when.
+// @yaks/platform/versions `addressed`), and a path names a sha: every write
+// puts the bytes it brings at their address and writes one `written` row per
+// file in the directory, naming the path, the sha (none for a delete), who and
+// when.
 //
 // The rows are both things a person asks about files. An app holds a draft
 // for each writer (D-414): a row of its own (`app_draft`, {@link AppDraft}),
@@ -34,21 +35,11 @@ import { derivedEid, mint } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import type { App, Directory, Space } from './directory.ts'
 import { filesAt, filesIn, viewOf } from './release.ts'
-import { same } from './versions.ts'
 import { vouched, type Who } from './session.ts'
 import { refuse } from './tool.ts'
 import { META } from './release_index.ts'
-import {
-  addressed,
-  type Files,
-  GRACE,
-  KEEP,
-  LANES,
-  type Pinner,
-  SHA,
-  versions,
-  waiting,
-} from './versions.ts'
+import { GRACE, LANES, type Pinner, versions, waiting } from './versions.ts'
+import { addressed, type Files, KEEP, same, SHA } from '@yaks/platform/versions'
 
 /** One file written into an app (the directory's `written` row): the sha it
  * left at the path, null where it deleted the file, and the sha it replaced,

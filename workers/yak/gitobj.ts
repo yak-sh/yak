@@ -47,7 +47,7 @@ import { GIT_STORE, storeOf } from './door.ts'
 import { type Namespace } from '@yaks/durable-object/door'
 import { spaceHost } from '@yaks/platform/host'
 import { KERNEL, type Meta, metaOf } from './meta.ts'
-import { pins } from './versions.ts'
+import { pins } from '@yaks/platform/versions'
 import { caught } from './defects.ts'
 
 export { MAIN, refEid }
@@ -120,7 +120,7 @@ export let graphOf = (ns: Namespace): Writes =>
  *
  * Two key spaces, because there are two kinds of body and only one of them is
  * ours. A BLOB's bytes are the app's own file, already pinned by the deploy
- * that named it, so they are read through versions.ts's `pins` and never
+ * that named it, so they are read through @yaks/platform/versions' `pins` and never
  * written here. A tree's or a commit's bytes are ours, so they are written to
  * {@link BODY} and read from there first. Serving a pack reads through this
  * same door (@yaks/git `objects`), which is why it is exported.

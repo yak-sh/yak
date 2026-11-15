@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { peruse } from './files_read.ts'
-import { sha256 } from './versions.ts'
+import { digest } from '@yaks/graph/sha256'
 import { connector, kernel, seed, unique } from './probe.ts'
 
 let encode = (s: string) => new TextEncoder().encode(s)
@@ -86,7 +86,7 @@ let listed = (named: Record<string, string>) =>
   Promise.all(
     Object.keys(named).sort().map(async (path) => ({
       path,
-      sha: await sha256(encode(named[path])),
+      sha: await digest(encode(named[path])),
       size: encode(named[path]).byteLength,
     })),
   )
@@ -101,7 +101,7 @@ test('op read with no path answers every text file of the app', async () => {
   for (let [path, content] of Object.entries(files)) {
     assertStringIncludes(all.text, path)
     assertStringIncludes(all.text, content)
-    assertStringIncludes(all.text, await sha256(encode(content)))
+    assertStringIncludes(all.text, await digest(encode(content)))
   }
 })
 

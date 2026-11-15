@@ -8,7 +8,7 @@ import { extractor, legible } from './documents.ts'
 import { isPdf, supported } from '@yaks/platform/documents'
 import { outgoing } from './post.ts'
 import { mailFrom } from '@yaks/platform/host'
-import { sha256 } from './versions.ts'
+import { digest } from '@yaks/graph/sha256'
 import { attachmentKey } from './attachments.ts'
 import { attachmentRows } from './operator-attachments.ts'
 import { sourceReference } from './operator-source.ts'
@@ -123,7 +123,7 @@ let fileOf = async (
 ): Promise<File> => ({
   name,
   mime: isPdf(name, mime) ? 'application/pdf' : mime,
-  key: attachmentKey(space, await sha256(bytes)),
+  key: attachmentKey(space, await digest(bytes)),
   size: bytes.byteLength,
 })
 

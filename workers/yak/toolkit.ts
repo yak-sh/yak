@@ -17,7 +17,7 @@ import type { Env } from './env.ts'
 import { url } from '@yaks/platform/host'
 import { filesIn } from './release.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
-import { BUILT } from './versions.ts'
+import { BUILT } from '@yaks/platform/versions'
 import { sharing } from './lib/shared.ts'
 
 /** Where a release keeps the digests of the toolkit it was compiled with. */

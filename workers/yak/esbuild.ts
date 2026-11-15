@@ -36,7 +36,8 @@ import { countedSpend } from './meter.ts'
 import { refusedSpend } from '@yaks/platform/standing'
 import { caught } from './defects.ts'
 import { type Ctx, refuse } from './tool.ts'
-import { BUILT, type Files, own, sha256 } from './versions.ts'
+import { BUILT, type Files, own } from '@yaks/platform/versions'
+import { digest } from '@yaks/graph/sha256'
 import { type Config, sourceOf } from './wrangler_app.ts'
 import { url } from '@yaks/platform/host'
 import { fillable, noted, valid as sharedPath } from './shared.ts'
@@ -139,7 +140,7 @@ let fingerprint = (
   compiler: string,
   flags: string[],
 ) =>
-  sha256(encode(JSON.stringify({
+  digest(encode(JSON.stringify({
     compiler,
     flags,
     files: Object.fromEntries(

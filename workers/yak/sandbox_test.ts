@@ -55,7 +55,7 @@ import { PUBLISHED } from './published.ts'
 import type { Who } from './session.ts'
 import { SECONDS } from '@yaks/platform/plans'
 import { attachmentKey } from './attachments.ts'
-import { sha256 } from './versions.ts'
+import { digest } from '@yaks/graph/sha256'
 import { CallError } from '@yaks/tools/errors'
 
 let SECRET = 'a probe secret'
@@ -327,7 +327,7 @@ test('a path that is not one is refused before the shell sees it', async () => {
 
 test('an Operator attachment is written into the sandbox as its bytes', async () => {
   let { ctx, box, env, space } = await bench()
-  let id = await sha256(new TextEncoder().encode(WASM))
+  let id = await digest(WASM)
   await env.BLOBS.put(attachmentKey(space, id), WASM)
   let wrote = await tool('sandbox_write').run(ctx, {
     path: 'in/people.csv',

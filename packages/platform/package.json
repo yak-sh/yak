@@ -55,6 +55,7 @@
     "./facets": "./facets.ts",
     "./manifest": "./manifest.ts",
     "./released": "./released.ts",
+    "./versions": "./versions.ts",
     "./cli": "./cli.ts",
     "./plans": "./plans.ts",
     "./meter": "./meter.ts",
@@ -76,7 +77,7 @@
     "./operator-graph": "./operator-graph.ts"
   },
   "license": "Apache-2.0",
-  "description": "What a hosting platform keeps about the apps it serves — spaces, apps, deploys, hostnames, plans and meters.",
+  "description": "What a hosting platform keeps about the apps it serves \u2014 spaces, apps, deploys, hostnames, plans and meters.",
   "dependencies": {
     "@yaks/api": "0.2.29",
     "@yaks/archetype": "0.2.24",

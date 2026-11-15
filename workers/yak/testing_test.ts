@@ -5,7 +5,7 @@ import { assertEquals, assertThrows } from '@std/assert'
 import { clock, test, until } from '@yaks/testing'
 import { DIM } from './embedding.ts'
 import { bucket, platform } from './testing.ts'
-import { sha256 } from './versions.ts'
+import { digest } from '@yaks/graph/sha256'
 
 test('platform disposal waits for store work before releasing storage', async () => {
   let release!: () => void
@@ -64,8 +64,8 @@ test('platform disposal waits for store work before releasing storage', async ()
 })
 
 let receipt = '{"call":"original"}'
-let receiptTag = await sha256(new TextEncoder().encode(receipt))
-let viewTag = await sha256(new Uint8Array([1, 2]))
+let receiptTag = await digest(receipt)
+let viewTag = await digest(new Uint8Array([1, 2]))
 test('the runtime bucket stores strings and the bytes selected by a view', async () => {
   let { r2 } = bucket()
   await r2.put('receipt', receipt)

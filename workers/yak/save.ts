@@ -16,7 +16,8 @@ import { COPY } from './page-copy.ts'
 import type { Who } from './session.ts'
 import { type Ctx, refuse } from './tool.ts'
 import { fullAt, hashed, released } from './tools.ts'
-import { addressed, deployedOver, type Files, versions } from './versions.ts'
+import { versions } from './versions.ts'
+import { addressed, deployedOver, type Files } from '@yaks/platform/versions'
 import { served } from './written.ts'
 
 /** What a save answers: the version it released, or the live one where

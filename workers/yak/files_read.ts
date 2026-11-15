@@ -8,7 +8,7 @@
 // later its git objects (D-124238). So a file past the budget costs its size
 // and never its bytes, and the budget bounds what one call holds in memory.
 import { type Opened, utf8 } from '@yaks/blob'
-import { sha256 } from './versions.ts'
+import { digest } from '@yaks/graph/sha256'
 import { size } from '@yaks/platform/standing'
 
 /** The most bytes of file text one read of several files answers: well
@@ -34,7 +34,7 @@ let take = async (path: string, o: Opened): Promise<Read | Unread> => {
   if (!utf8(bytes)) return { path, why: 'binary', size: bytes.byteLength }
   return {
     path,
-    sha: await sha256(bytes),
+    sha: await digest(bytes),
     size: bytes.byteLength,
     text: new TextDecoder().decode(bytes),
   }

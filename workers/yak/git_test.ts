@@ -27,7 +27,9 @@ import { backfilled, BODY, held, MAIN, refAt, refEid } from './gitobj.ts'
 import { platform } from './testing.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import type { Who } from './session.ts'
-import { pins, record, sha256 } from './versions.ts'
+import { record } from './versions.ts'
+import { pins } from '@yaks/platform/versions'
+import { digest } from '@yaks/graph/sha256'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let by = { 'x-yak-person': ADA, 'x-yak-role': 'owner' }
@@ -88,7 +90,7 @@ let deploy = async (
   let manifest: Record<string, string> = {}
   for (let [path, body] of Object.entries(files)) {
     let bytes = utf8.encode(body)
-    let sha = await sha256(bytes)
+    let sha = await digest(bytes)
     manifest[path] = sha
     await pins(blobs).put(sha, bytes)
   }

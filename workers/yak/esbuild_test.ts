@@ -24,7 +24,9 @@ import { call, type Ctx } from './tools.ts'
 import { handler } from './kernel.ts'
 import { KERNEL, meta } from './meta.ts'
 import { ask, remade, type Remake } from './remake.ts'
-import { addressed, drawn, fenced, SHA, sha256 } from './versions.ts'
+import { drawn, fenced } from './versions.ts'
+import { addressed, SHA } from '@yaks/platform/versions'
+import { digest } from '@yaks/graph/sha256'
 
 let OWNER = { person: null, role: 'owner', administrative: true } as const
 
@@ -683,7 +685,7 @@ test('a released app stages changed files over its source', async () => {
   await s.write({ 'index.html': '<h1>new</h1>' })
   assertEquals(
     (await keys()).filter((key) => !before.has(key)),
-    [addressed(await sha256(new TextEncoder().encode('<h1>new</h1>')))],
+    [addressed(await digest('<h1>new</h1>'))],
   )
   assertEquals(
     await s.tool('app_files', { op: 'read', path: 'main.ts' }),
@@ -718,7 +720,7 @@ test('an edit crossing deployment is replayed into the next draft', async () => 
   let entered = Promise.withResolvers<void>()
   let resume = Promise.withResolvers<void>()
   let held = false
-  let late = addressed(await sha256(new TextEncoder().encode('<h1>late</h1>')))
+  let late = addressed(await digest('<h1>late</h1>'))
   s.env.BLOBS.put = async (key, value) => {
     if (!held && key == late) {
       held = true
@@ -869,7 +871,7 @@ test('package assets serve with their MIME and survive reuse and rollback', asyn
     'package.json': new Uint8Array(2),
     'a.wasm': wasm,
   })
-  let home = await sha256(tarball)
+  let home = await digest(tarball)
   let registry = 'https://registry.npmjs.org/viewer/-/viewer-1.0.0.tgz'
   // A home its tarball is not.
   let other = 'e'.repeat(64)

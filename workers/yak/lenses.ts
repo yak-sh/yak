@@ -14,7 +14,7 @@ import {
 import type { App, Directory, Space } from './directory.ts'
 import { storeName } from './directory.ts'
 import type { Objects } from '@yaks/blob'
-import { pins } from './versions.ts'
+import { pins } from '@yaks/platform/versions'
 import type { Rule } from './mover.ts'
 import type { Mark } from '@yaks/platform/mover'
 

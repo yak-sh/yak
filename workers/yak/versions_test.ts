@@ -20,18 +20,15 @@ import { carried, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
 import { lasting } from './testing.ts'
+import { GRACE, type Pinner, record } from './versions.ts'
 import {
   addressed,
   type Files,
-  GRACE,
   KEEP,
-  type Pinner,
-  record,
   SHA,
-  sha256,
   type Version,
-  whatChanged,
-} from './versions.ts'
+} from '@yaks/platform/versions'
+import { digest } from '@yaks/graph/sha256'
 import { newest, pruned, type Written } from './written.ts'
 
 let PREFIX = 'jeff/recipes/'
@@ -72,7 +69,7 @@ let memory = () => {
         return bytes
           ? {
             bytes: bytes as Uint8Array<ArrayBuffer>,
-            version: await sha256(new Uint8Array(bytes)),
+            version: await digest(new Uint8Array(bytes)),
           }
           : null
       },
@@ -81,7 +78,7 @@ let memory = () => {
         return bytes
           ? {
             size: bytes.byteLength,
-            version: await sha256(new Uint8Array(bytes)),
+            version: await digest(new Uint8Array(bytes)),
             read: (range?: { from: number; to: number }) =>
               Promise.resolve(
                 new ReadableStream<Uint8Array>({
@@ -136,7 +133,7 @@ let stored = async (blobs: Objects, files: Record<string, string>) =>
   Object.fromEntries(
     await Promise.all(
       Object.entries(files).map(async ([path, text]) => {
-        let sha = await sha256(bytes(text))
+        let sha = await digest(bytes(text))
         await blobs.put(addressed(sha), bytes(text))
         return [path, sha]
       }),
@@ -361,7 +358,7 @@ test('published releases keep versioned bytes after newer deploys', async () => 
   assertEquals(await blobs.has(old + '.json'), true)
   assertEquals(await blobs.has(failed + '.json'), false)
   assertEquals(
-    await blobs.has(addressed(await sha256(bytes('failed code')))),
+    await blobs.has(addressed(await digest(bytes('failed code')))),
     false,
   )
 })
@@ -549,16 +546,6 @@ test('the sweep keeps a sha another app still names', async () => {
   assertEquals(
     await pruned(dir, blobs, [{ prefix: theirs, app: THEIRS }], Date.now()),
     1,
-  )
-})
-
-test('what one version did to the one before it', () => {
-  assertEquals(
-    whatChanged(
-      { 'index.html': 'a', 'worker.js': 'b' },
-      { 'index.html': 'c', 'worker.js': 'b', 'broken.js': 'd' },
-    ),
-    'added broken.js, changed index.html',
   )
 })
 

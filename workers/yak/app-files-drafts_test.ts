@@ -6,7 +6,7 @@ import { ADA, SECRET, seeded } from './serving-data-probe.ts'
 import { platform } from './directory-rows-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
 import { type Ctx, TOOLS } from './tools.ts'
-import { sha256 } from './versions.ts'
+import { digest } from '@yaks/graph/sha256'
 
 let runtime = platform(SECRET)
 let { env } = { ...runtime, ...lifecycleStores(runtime.env) }
@@ -31,7 +31,7 @@ let shas = async (files: Record<string, string>) =>
   Object.fromEntries(
     await Promise.all(
       Object.entries(files).map(async ([path, content]) =>
-        [path, await sha256(new TextEncoder().encode(content))] as const
+        [path, await digest(content)] as const
       ),
     ),
   )

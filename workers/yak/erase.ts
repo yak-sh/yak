@@ -112,7 +112,8 @@ import { storeOf } from './door.ts'
 import { cleared } from './sample.ts'
 import { answered } from './meta.ts'
 import { plans } from './payments.ts'
-import { own, type Pinner, versions } from './versions.ts'
+import { type Pinner, versions } from './versions.ts'
+import { own } from '@yaks/platform/versions'
 import { holding, pruned } from './written.ts'
 import { refuse } from './tool.ts'
 import { dollars, released } from './numbers.ts'
@@ -783,7 +784,7 @@ export let kept = (d: Doomed, env: HostEnv = {}) =>
 // One app gone for good: its storage (`emptied` above, the same call a
 // space's death makes), then the row that says the app exists — that order,
 // because the row is the app. Answers how many of the keys were files a
-// person wrote rather than bytes a version pinned (versions.ts `own`), which
+// person wrote rather than bytes a version pinned (@yaks/platform/versions `own`), which
 // is what a delete says back.
 export let erased = async (
   env: Env,

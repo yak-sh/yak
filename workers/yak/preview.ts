@@ -61,7 +61,8 @@ import { vouched, type Who } from './session.ts'
 import { clock, headed } from './timing.ts'
 import { type Args, type Ctx, inApp, refuse, rejected } from './tool.ts'
 import { CallError } from '@yaks/tools/errors'
-import { addressed, BUILT, type Files, sha256 } from './versions.ts'
+import { addressed, BUILT, type Files } from '@yaks/platform/versions'
+import { digest } from '@yaks/graph/sha256'
 import {
   type AppDraft,
   type Draft,
@@ -278,13 +279,13 @@ let recorded = async (raw: Objects, source: string) => {
   return bytes ? JSON.parse(decode(bytes)!) as Built : null
 }
 
-let digest = async (modules: Module[], config: unknown) =>
-  await sha256(encode(JSON.stringify([
+let fingerprint = async (modules: Module[], config: unknown) =>
+  await digest(JSON.stringify([
     config,
     ...await Promise.all(
-      modules.map(async (m) => [m.name, await sha256(m.bytes)]),
+      modules.map(async (m) => [m.name, await digest(m.bytes)]),
     ),
-  ])))
+  ]))
 
 // The files whose change sets the store up again.
 let VOCAB = [...VOCABS, 'package.json']
@@ -360,7 +361,7 @@ let built = async (
   let modules = made.worker?.modules ??
     (keys.includes(main) ? await carried(read, main) : null)
   let config = { ...parsed.config, main: made.worker?.main ?? main }
-  let worker = modules && await digest(modules, config)
+  let worker = modules && await fingerprint(modules, config)
   let candidate = previewing(app, link, source, mount, branch, !!worker)
   let store = appStore(ctx.env.STORE, space, candidate, ctx.env)
   if (modules && worker != was?.worker) {

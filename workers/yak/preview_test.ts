@@ -10,7 +10,7 @@ import { operators } from './operator-service-probe.ts'
 import { lifecycleStores } from './app-lifecycle-probe.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { homed } from './page-graph.ts'
-import { sha256 } from './versions.ts'
+import { digest } from '@yaks/graph/sha256'
 import { h } from 'preact'
 import { client } from '@yaks/client'
 import { host } from '@yaks/preact/host'
@@ -274,7 +274,7 @@ test('the link follows the draft: each write is told to its pages and served on 
   ])
   equal(sent[0].draft.files, [{
     path: 'style.css',
-    sha: await sha256(new TextEncoder().encode('body { color: tomato }')),
+    sha: await digest('body { color: tomato }'),
   }])
   let live = await kernel(new Request('https://ada.yaks.app/draft/'), env)
   let released = await live.text()
@@ -330,7 +330,7 @@ test('a page drawn by @yaks/preact/host takes a write of its views module from t
     }
     equal(news.files, [{
       path: 'views.js',
-      sha: await sha256(new TextEncoder().encode(views('Stew'))),
+      sha: await digest(views('Stew')),
     }])
     let reloads = 0
     let event = Object.assign(

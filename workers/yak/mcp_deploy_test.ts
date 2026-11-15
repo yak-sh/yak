@@ -17,7 +17,8 @@ import {
   unique,
   vocabFile,
 } from './probe.ts'
-import { deployedOver, sha256, type Version } from './versions.ts'
+import { deployedOver, type Version } from '@yaks/platform/versions'
+import { digest } from '@yaks/graph/sha256'
 
 test('a trashed app releases its component to another app in the space', async () => {
   let k = await kernel()
@@ -266,7 +267,6 @@ test('a deploy is a version, and one word puts it back', async () => {
       `no v9 of ${space}/recipes — it keeps v2, v1`,
     )
     let listing = await agent.answer('app_files', { ...app, op: 'list' })
-    let digest = (s: string) => sha256(new TextEncoder().encode(s))
     let files = [
       { path: 'broken.js', sha: await digest('throw new Error("no")') },
       { path: 'index.html', sha: await digest('<h1>OOPS</h1>') },

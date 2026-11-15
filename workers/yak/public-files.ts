@@ -35,7 +35,7 @@ import type { Env } from './env.ts'
 import { blobBytes } from './files.ts'
 import { r2Objects } from './lib/objects.ts'
 import { fullFiles } from './usage.ts'
-import { sha256 } from './versions.ts'
+import { digest } from '@yaks/graph/sha256'
 
 // The largest file one request publishes: Cloudflare's own limit on a static
 // asset, which is what a published file is.
@@ -174,7 +174,7 @@ let published = async (ask: Ask, path: string) => {
   if (bytes.byteLength > MOST) {
     return no(413, 'too_large', 'a published file is 25 MiB at most')
   }
-  let sha = await sha256(bytes)
+  let sha = await digest(bytes)
   let key = publicPrefix(space, app) + sha
   let stopped = await fullFiles(env, space, [{ key, bytes: bytes.byteLength }])
   if (stopped) return no(413, 'space_full', stopped)

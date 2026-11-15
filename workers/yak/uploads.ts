@@ -26,18 +26,17 @@ import { size } from '@yaks/platform/standing'
 import { KERNEL, type Meta } from './meta.ts'
 import type { Who } from './session.ts'
 import { fullFiles } from './usage.ts'
-import { sha256 } from './versions.ts'
+import { digest } from '@yaks/graph/sha256'
 import { Pending } from '@yaks/api/log'
 
-// The bytes' own name (versions.ts `sha256`, the content address a version's
-// manifest is made of) is the object's key and the entity's eid here, so the
-// same photo sent twice is one object and one row.
+// The bytes' own name (@yaks/graph/sha256 `digest`, the content address a
+// version's manifest is made of) is the object's key and the entity's eid
+// here, so the same photo sent twice is one object and one row.
 //
 // The app's one use of those bytes, addressed off them: derived, so an upload
 // finds its own attachment row without reading for it, and the same file sent
 // again is that row renamed.
-export let useOf = (sha: string) =>
-  sha256(new TextEncoder().encode(`attachment:${sha}`))
+export let useOf = (sha: string) => digest(`attachment:${sha}`)
 
 // Where an app's uploaded bytes live: the prefix its row was born with
 // (blob-key.ts `blobPrefix`), which no rename moves and erasing the app
@@ -105,7 +104,7 @@ export let filed = async (
   accepts?: Accepts,
 ): Promise<File> => {
   admit(accepts, bytes.byteLength)
-  let sha = await sha256(bytes)
+  let sha = await digest(bytes)
   let file = await described(graph, app, sha, bytes, mime, name)
   admit(accepts, bytes.byteLength, file.mime)
   // Put without asking first: the key is the bytes' own name, so the same
@@ -238,7 +237,7 @@ export let uploaded = async (
 ): Promise<File> => {
   let accepts = o.accepts ?? await acceptsOf(env, space, app)
   let stopped = await fullFiles(env, space, [{
-    key: blobKey(space, app, await sha256(bytes)),
+    key: blobKey(space, app, await digest(bytes)),
     bytes: bytes.byteLength,
   }])
   if (stopped) throw new Untaken(413, 'space_full', stopped)

@@ -39,7 +39,7 @@ import { operating } from './operator.ts'
 import { receive } from './operator-channels.ts'
 import { sandboxes } from './workspace-probe.ts'
 import { attachmentKey } from './attachments.ts'
-import { sha256 } from './versions.ts'
+import { digest } from '@yaks/graph/sha256'
 
 let fixture = (tools: Tool[]) => {
   let vocab = loadVocab([spineDoc, provenanceDoc, toolsDoc])
@@ -445,7 +445,7 @@ test('pasted message text reaches code mode and the sandbox by its advertised re
 
 test('source text reads refuse absent, foreign, malformed and non-text attachments', async () => {
   let invalid = new Uint8Array([255, 254])
-  let binary = await sha256(invalid)
+  let binary = await digest(invalid)
   await env!.BLOBS.put(attachmentKey(sourceSpace, binary), invalid)
   for (
     let [client, args, reason] of [

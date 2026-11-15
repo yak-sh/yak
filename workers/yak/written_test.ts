@@ -6,13 +6,13 @@ import { clock, test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Objects } from '@yaks/blob'
 import { guard } from '@yaks/graph/guard'
-import { token } from '@yaks/graph/sha256'
+import { digest, token } from '@yaks/graph/sha256'
 import { Stale } from '@yaks/graph/errors'
 import type { Bundle } from '@yaks/graph/bundle'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import type { App, Directory, Space } from './directory.ts'
-import { addressed, sha256 } from './versions.ts'
+import { addressed } from '@yaks/platform/versions'
 import type { Who } from './session.ts'
 import {
   anew,
@@ -52,7 +52,7 @@ let contents = Object.fromEntries(
       text,
       {
         bytes: encode(text),
-        sha: await sha256(encode(text)),
+        sha: await digest(encode(text)),
         size: text.length,
       },
     ]),

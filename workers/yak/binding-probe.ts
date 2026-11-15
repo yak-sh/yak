@@ -18,7 +18,7 @@ import type { Env, Inbound, Vars } from './env.ts'
 import { Wire as Wired } from './stream.ts'
 import { durable as raw } from '../../packages/durable-object/testing.ts'
 import type { Limiter } from '@yaks/workerd/rate'
-import { sha256 } from './versions.ts'
+import { digest } from '@yaks/graph/sha256'
 import { workspaces } from './workspace-probe.ts'
 
 // The HTMLRewriter binding: the runtime's own lol-html, compiled to
@@ -282,7 +282,7 @@ export let assets = (root: URL) => {
     bytes: Uint8Array<ArrayBuffer>,
     asked?: string | null,
   ) => {
-    let etag = `"${(await sha256(bytes)).slice(0, 32)}"`
+    let etag = `"${(await digest(bytes)).slice(0, 32)}"`
     let headers = {
       'content-type': contentType(path.slice(path.lastIndexOf('.'))) ||
         'application/octet-stream',

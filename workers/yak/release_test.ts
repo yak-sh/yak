@@ -10,7 +10,8 @@ import type { Env } from './env.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { holding } from './written.ts'
 import type { App, Directory } from './directory.ts'
-import { addressed, sha256 } from './versions.ts'
+import { addressed } from '@yaks/platform/versions'
+import { digest } from '@yaks/graph/sha256'
 
 let memory = () => {
   let held = new Map<string, Uint8Array<ArrayBuffer>>()
@@ -25,14 +26,14 @@ let memory = () => {
     read: (key) => Promise.resolve(held.get(key) ?? null),
     load: async (key) => {
       let bytes = held.get(key)
-      return bytes ? { bytes, version: await sha256(bytes) } : null
+      return bytes ? { bytes, version: await digest(bytes) } : null
     },
     open: async (key) => {
       let bytes = held.get(key)
       return bytes
         ? {
           size: bytes.byteLength,
-          version: await sha256(bytes),
+          version: await digest(bytes),
           read: (range?: { from: number; to: number }) =>
             Promise.resolve(
               new ReadableStream<Uint8Array>({
@@ -71,7 +72,7 @@ let text = (bytes: Uint8Array<ArrayBuffer> | null) =>
 
 // Two files already stored, by their content address.
 let page = bytes('new page'), kept = bytes('kept code')
-let [PAGE, KEPT] = await Promise.all([page, kept].map(sha256))
+let [PAGE, KEPT] = await Promise.all([page, kept].map(digest))
 
 test('a release names the shas it is made of, and copies none', async () => {
   let { files, held } = memory()

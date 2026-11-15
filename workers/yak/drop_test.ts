@@ -12,7 +12,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { received } from './drop.ts'
 import { kernel, type Packed, seed, signIn, unique, zipped } from './probe.ts'
 import { managePath } from '@yaks/platform/routes'
-import { addressed } from './versions.ts'
+import { addressed } from '@yaks/platform/versions'
 
 // The form a browser sends: the file under `file`, the name beside it.
 let drops = (

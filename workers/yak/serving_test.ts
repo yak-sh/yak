@@ -67,7 +67,8 @@ import { lifecycleStores } from './app-lifecycle-probe.ts'
 import { stores } from './app-store-probe.ts'
 import { sqliteApp } from './sqlite-app-probe.ts'
 import { appDoc, appVocab } from './vocab.ts'
-import { addressed, sha256 } from './versions.ts'
+import { addressed } from '@yaks/platform/versions'
+import { digest } from '@yaks/graph/sha256'
 import { staged } from './release.ts'
 import { r2RawObjects } from './lib/objects.ts'
 
@@ -2210,7 +2211,7 @@ test('photo and file uploads enforce space R2 limits from actual bytes', async (
       'photos and files',
     )
     assertEquals(
-      files.held.has(addressed(await sha256(new Uint8Array([1, 1])))),
+      files.held.has(addressed(await digest(new Uint8Array([1, 1])))),
       false,
     )
     await sweep(env)
