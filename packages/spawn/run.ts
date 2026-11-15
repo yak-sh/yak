@@ -51,6 +51,7 @@ import * as system from '@yaks/process/system'
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
+import { sleep } from '@yaks/effects'
 import { derivedEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import { edgeEid } from '@yaks/edge'
@@ -148,6 +149,10 @@ export type Opts = {
    * until the run is over or this aborts, so a tail never polls a graph that
    * has closed (default never) */
   signal?: AbortSignal
+  /** where work a run leaves going past the call that began it is handed (its
+   * log's reader, a kill, a spare checkout being cut), so a host that closes
+   * waits it out while its graph is open ({@link detached}); default let go */
+  detach?: (work: Promise<unknown>) => void
 }
 
 /** Where a failure is told, with what it happened to (@yaks/tracker
@@ -160,9 +165,44 @@ export type Report = (
   },
 ) => unknown
 
-let sleep = (ms: number) => new Promise((go) => setTimeout(go, ms))
 let told = (o: Opts): Report =>
   o.report ?? ((err, context) => console.error(err, context ?? ''))
+
+// Work left going past the call that began it: told where it fails, and handed
+// to whatever waits it out.
+let loose = (o: Opts, work: Promise<unknown>): void => {
+  let caught = work.catch(told(o))
+  o.detach?.(caught)
+}
+
+/**
+ * An {@link Opts.detach} whose release, handed to `defer` (@yaks/host
+ * `Host.defer`), waits out all the work given to it, including work that
+ * work starts as it finishes. A host defers it, so no reader of a run is
+ * still reading when the host's graph closes.
+ *
+ * ```ts
+ * import { detached } from '@yaks/spawn'
+ *
+ * let releases: (() => Promise<void>)[] = []
+ * let detach = detached((release) => void releases.push(release))
+ * detach(Promise.resolve())
+ * await releases[0]()
+ * ```
+ */
+export let detached = (
+  defer: (release: () => Promise<void>) => void,
+): (work: Promise<unknown>) => void => {
+  let going = new Set<Promise<unknown>>()
+  defer(async () => {
+    while (going.size) await Promise.allSettled(going)
+  })
+  return (work) => {
+    going.add(work)
+    let gone = () => void going.delete(work)
+    work.then(gone, gone)
+  }
+}
 
 // A failure that happened to a session's run, told where it is seen (M-37965).
 let failure = (o: Opts, session: string, step: string, message: string) =>
@@ -438,7 +478,7 @@ export let follow = async (
       t = undefined
       wait = poll * 20
     }
-    await sleep(wait)
+    await sleep(wait, o.signal)
   }
 }
 
@@ -625,20 +665,24 @@ export let start = async (
   }
   // A stop can land while the wrapper starts, before its process row exists.
   // The stop effect had no pid then; now that launch has stamped one, answer it.
-  if ((await ran(g, session))?.stop) down(g, session, o).catch(told(o))
+  if ((await ran(g, session))?.stop) loose(o, down(g, session, o))
   // The next run's checkout is made from a spare in about a second, where one
   // cut whole takes several: one is cut once this run has launched.
   if (o.worktrees && !job.bare) {
-    keepSpare(
-      o.cwd ?? system.cwd(),
-      checkoutOf(session, o.worktrees),
-      'refs/heads/main',
+    loose(
+      o,
+      keepSpare(
+        o.cwd ?? system.cwd(),
+        checkoutOf(session, o.worktrees),
+        'refs/heads/main',
+      ),
     )
-      .catch(told(o))
   }
   let through = String(job.ask.through)
-  follow(g, session, reading(adapter, job, o), o, { through, tail: t })
-    .catch(told(o))
+  loose(
+    o,
+    follow(g, session, reading(adapter, job, o), o, { through, tail: t }),
+  )
   return run
 }
 
@@ -753,9 +797,12 @@ let readOn = async (g: Graph, session: string, o: Opts): Promise<void> => {
   let request = await latestRequest(g, session)
   if (job && adapter) {
     let ask = { ...job.ask, through: request?.entity.eid ?? job.ask.through }
-    follow(g, session, reading(adapter, job, o, ask), o, {
-      through: String(ask.through),
-    }).catch(told(o))
+    loose(
+      o,
+      follow(g, session, reading(adapter, job, o, ask), o, {
+        through: String(ask.through),
+      }),
+    )
   }
 }
 
@@ -787,7 +834,7 @@ export let takeUp = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
     if (!looked.has(w)) looked.set(w, watcherOf(g, row))
     let watcher = await looked.get(w)!
     if (unlaunched(row)) {
-      if (watcher == 'over') again(g, row, o).catch(told(o))
+      if (watcher == 'over') loose(o, again(g, row, o))
       continue
     }
     if (watcher == 'self' || watcher == 'reading') continue

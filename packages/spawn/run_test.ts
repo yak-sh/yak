@@ -9,7 +9,7 @@ import { sessionDerived, sessions } from '@yaks/session'
 import { storage } from '@yaks/sqlite'
 import { stepping } from '../sqlite/testing.ts'
 import { claude } from './adapters.ts'
-import { asked, down, finish, follow, resume, start } from './run.ts'
+import { asked, detached, down, finish, follow, resume, start } from './run.ts'
 import { LIMIT } from './standin.ts'
 import {
   asking,
@@ -438,6 +438,37 @@ test('a run that ended while nobody read its log is read to its end on start-up'
       return comp(e.at(-1), 'stop') && e
     }, 'the ending')
     assertEquals(comp(got[1], 'content').body, 'hi')
+  } finally {
+    close()
+  }
+})
+
+test('a host that closes waits out the reader a run left going', async () => {
+  let { g, dir, close } = await logged(said)
+  let releases: (() => Promise<void>)[] = []
+  let detach = detached((release) => void releases.push(release))
+  try {
+    await resume(g, { dir, adapters: { fake: claude }, detach })
+    for (let release of releases) await release()
+    assertEquals(comp((await entries(g)).at(-1), 'stop'), {})
+  } finally {
+    close()
+  }
+})
+
+test('the reader of a run still going ends as its host stops, mid-pause', async () => {
+  let { g, dir, close } = await logged(said)
+  await g.apply([{ entity: { eid: 'S1' }, exit: null }])
+  let stop = new AbortController()
+  try {
+    let reading = follow(g, 'S1', claude.read, {
+      dir,
+      poll: 3_600_000,
+      signal: stop.signal,
+    })
+    await until(async () => (await entries(g)).length > 1, 'the lines')
+    stop.abort()
+    await reading
   } finally {
     close()
   }

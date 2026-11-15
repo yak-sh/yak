@@ -20,21 +20,12 @@
 // logs beside them. The lines wait in the log, and the process that stays up
 // reads them on from where the transcript stands.
 
-import type { Graph } from '@yaks/graph'
-import { type Options, reporting } from './effects.ts'
-import { type Opts, type Report, resume, takeUp } from './run.ts'
+import { sleep } from '@yaks/effects'
+import { detaching, type Host, type Options, reporting } from './effects.ts'
+import { type Opts, resume, takeUp } from './run.ts'
 
 /** How often the duty looks again for runs nobody reads (ms). */
 export let SWEEP = 30_000
-
-// A pause that ends early when the duty does.
-let pause = (ms: number, signal: AbortSignal) =>
-  new Promise<void>((go) => {
-    let timer = setTimeout(go, ms)
-    signal.addEventListener('abort', () => (clearTimeout(timer), go()), {
-      once: true,
-    })
-  })
 
 /**
  * The duty, with providers of your own added — the same `adapters` a server
@@ -49,16 +40,22 @@ let pause = (ms: number, signal: AbortSignal) =>
  */
 export let adopting = (o: Opts & { sweep?: number } = {}) =>
 async (
-  host: { graph: Graph; report?: Report },
+  host: Pick<Host, 'graph' | 'report' | 'defer'>,
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
 ): Promise<void> => {
   if (signal.aborted) return
   let report = reporting(o, host)
-  let opts: Opts = { ...options, ...o, signal, report }
+  let opts: Opts = {
+    ...options,
+    ...o,
+    signal,
+    report,
+    detach: detaching(o, host),
+  }
   await resume(host.graph, opts).catch(report)
   while (!signal.aborted) {
-    await pause(o.sweep ?? SWEEP, signal)
+    await sleep(o.sweep ?? SWEEP, signal)
     if (!signal.aborted) await takeUp(host.graph, opts).catch(report)
   }
 }

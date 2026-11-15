@@ -16,7 +16,8 @@
 //
 // The start effect waits until the process is recorded, so the durable pool
 // owns launch failures and retries. Following the log outlives that effect;
-// no handler stays open while the agent works.
+// no handler stays open while the agent works, and the host's release waits
+// out a reader still under way as it closes, before its graph does.
 //
 // Config sets the checkout agents work from, the directory each run's own
 // checkout is cut under, how often its log is read, the MCP servers a run is
@@ -35,12 +36,32 @@
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Handlers } from '@yaks/effects'
 import { EXIT, PROCESS } from '@yaks/process'
-import { down, type Opts, type Report, requestOf, start } from './run.ts'
+import {
+  detached,
+  down,
+  type Opts,
+  type Report,
+  requestOf,
+  start,
+} from './run.ts'
 import { complete } from './completion.ts'
 
-/** What these handlers are given: the open graph, and where a failure is told
- * (@yaks/cli `Host.report`). */
-export type Host = { graph: Graph; stopping?: AbortSignal; report?: Report }
+/** What these handlers are given: the open graph, where a failure is told
+ * (@yaks/cli `Host.report`), and where a release the host awaits before its
+ * graph closes is handed (@yaks/host `Host.defer`). */
+export type Host = {
+  graph: Graph
+  stopping?: AbortSignal
+  report?: Report
+  defer?: (release: () => Promise<void>) => void
+}
+
+/** Where a run's work that outlives its call goes: the caller's own, else
+ * a release the host awaits as it closes ({@link detached}). */
+export let detaching = (
+  o: Opts,
+  host: Pick<Host, 'defer'>,
+): Opts['detach'] => o.detach ?? (host.defer && detached(host.defer))
 
 /** Where a run's failures go: the caller's own, else the host's tracker, else
  * the console. */
@@ -92,7 +113,13 @@ let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
 export let spawning =
   (o: Opts = {}) => (host: Host, options: Options = {}): Handlers => {
     let report = reporting(o, host)
-    let opts: Opts = { ...options, ...o, signal: host.stopping, report }
+    let opts: Opts = {
+      ...options,
+      ...o,
+      signal: host.stopping,
+      report,
+      detach: detaching(o, host),
+    }
     return {
       spawn_complete: async (e) => {
         let entry = await one(host.graph, e.entity.eid)
@@ -116,7 +143,8 @@ export let spawning =
       spawn_stop: async (e) => {
         let row = await one(host.graph, e.entity.eid)
         if (!row?.[PROCESS] || row[EXIT] != null) return
-        down(host.graph, e.entity.eid, opts).catch(report)
+        let killing = down(host.graph, e.entity.eid, opts).catch(report)
+        opts.detach?.(killing)
       },
     }
   }
