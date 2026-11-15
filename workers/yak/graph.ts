@@ -439,6 +439,7 @@ import { instrumentActor, instrumentEid } from '@yaks/platform/instrument'
 import { commandAt } from './app-command.ts'
 import { commandReply } from '@yaks/platform/app-command'
 import { vaultOf } from './vault.ts'
+import { connectionAccess } from './connection-access.ts'
 import {
   decoded,
   interrupted,
@@ -1928,7 +1929,12 @@ export class Store extends Durable {
             // The Store lends the caller's standing.
             this.#vouching,
             ...(meta
-              ? [using(() => !this.#useScope.getStore()?.administrative)]
+              ? [
+                using(() => !this.#useScope.getStore()?.administrative),
+                connectionAccess((actor) =>
+                  this.#authority(actor)?.person ?? actor.by ?? null
+                ),
+              ]
               : []),
             ...(app
               ? [this.#guarding(app, vocab, meant(this.#get('vocab')))]

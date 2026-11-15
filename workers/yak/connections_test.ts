@@ -282,6 +282,77 @@ let liveApp = async (s: Awaited<ReturnType<typeof setup>>) => {
   return (await s.dir.app(s.space, 'notes'))!
 }
 
+let modeFixture = async () => {
+  let s = await setup()
+  let app = await liveApp(s)
+  let editor = crypto.randomUUID()
+  await s.at.apply([
+    { entity: { eid: editor }, person: {} },
+    {
+      entity: { eid: '$editor' },
+      member: { space: s.space.eid, person: editor, role: 'editor' },
+    },
+  ], KERNEL)
+  let run = (person: string, name: string, args: Record<string, unknown>) =>
+    PUBLISHED.find((t) => t.name == name)!.run(
+      { env: s.p.env, dir: s.dir, person },
+      { space: s.space.slug, app: app.slug, ...args },
+    )
+  await run(s.person, 'connection_need', { integration: 'TEST_KEY' })
+  let [connection] = await s.at.query('.connection.integration=TEST_KEY')
+  await s.post({
+    do: 'key',
+    connection: connection.entity.eid,
+    key: 'fixture-key',
+  })
+  return { ...s, app, editor, run }
+}
+
+for (let name of ['connection_need', 'app_secret_set']) {
+  let s = await modeFixture()
+  test(`${name} cannot make an owner's sentinel connection direct for an editor`, async () => {
+    await assertRejects(
+      () =>
+        s.run(
+          s.editor,
+          name,
+          name == 'connection_need'
+            ? { integration: 'TEST_KEY', direct: true }
+            : { name: 'TEST_KEY', value: 'replacement-key' },
+        ),
+      Error,
+      'connection’s owner',
+    )
+    let env = await envOf(ctxOf(s.p.env), s.app.eid)
+    assert(env.TEST_KEY && env.TEST_KEY != 'fixture-key')
+  })
+}
+
+let modeOwner = await modeFixture()
+test('the owner can change connection_need direct mode in both directions while an editor can rename it', async () => {
+  let s = modeOwner
+  await s.run(s.person, 'connection_need', {
+    integration: 'TEST_KEY',
+    direct: true,
+  })
+  assertEquals(await envOf(ctxOf(s.p.env), s.app.eid), {
+    TEST_KEY: 'fixture-key',
+  })
+  await s.run(s.editor, 'connection_need', {
+    integration: 'TEST_KEY',
+    binding: 'RENAMED',
+  })
+  assertEquals(await envOf(ctxOf(s.p.env), s.app.eid), {
+    RENAMED: 'fixture-key',
+  })
+  await s.run(s.person, 'connection_need', {
+    integration: 'TEST_KEY',
+    direct: false,
+  })
+  let env = await envOf(ctxOf(s.p.env), s.app.eid)
+  assert(env.RENAMED && env.RENAMED != 'fixture-key')
+})
+
 test('the owner can attach a connected space key to a live app from the page', async () => {
   let s = await setup()
   let key = 'private-weather-key'

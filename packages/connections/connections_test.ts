@@ -267,6 +267,30 @@ let kept = (vault: ReturnType<typeof ramVault>) =>
   vault.all().map(([, s]) => s.name)
 let CLIENTS = ['oauth_client example']
 
+let directKey = async () => {
+  let s = await setup()
+  await connect(s.c, await s.needs({ integration: 'texts', direct: true }), {
+    key: 'signing-key',
+  })
+  return s
+}
+
+let renameDirect = await directKey()
+test('need preserves direct mode when only the binding changes', async () => {
+  await renameDirect.needs({ integration: 'texts', binding: 'RENAMED' })
+  assertEquals(await envOf(renameDirect.c, 'app'), { RENAMED: 'signing-key' })
+})
+
+let clearDirect = await directKey()
+test('need can explicitly return a direct connection to sentinel mode', async () => {
+  await clearDirect.needs({ integration: 'texts', direct: false })
+  let sent = await envOf(clearDirect.c, 'app')
+  assert(sent.TEXTS && sent.TEXTS != 'signing-key')
+  assertEquals(of((await clearDirect.g.read('.uses'))[0], 'uses'), {
+    binding: 'TEXTS',
+  })
+})
+
 // The first graph a process writes through these plugins, its first HMAC and
 // digest, and the first URL it parses cost their start-up once (about 10ms);
 // paid here, so no test is charged for it.

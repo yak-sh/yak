@@ -406,10 +406,19 @@ export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
       }
     }
     let said = a.binding != null || a.direct != null
+    let patch = {
+      ...a.binding != null ? { binding: a.binding } : {},
+      ...a.direct != null ? { direct: a.direct || null } : {},
+    }
     return [
       // Answered with the integration it goes through, as it already does.
       { entity: { eid: used.entity.eid }, [CONNECTION]: { integration: name } },
-      ...said ? [linked(a.app!, used.entity.eid, u)] : [],
+      ...said
+        ? [{
+          ...link(a.app!, USES, used.entity.eid),
+          [USES]: patch,
+        }]
+        : [],
       ...retold,
     ]
   }
