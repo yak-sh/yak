@@ -28,3 +28,33 @@ export type Lent = {
 
 /** The options each of these facets is bound with. */
 export type Options = { store: Lent }
+
+/** What a host lends a store it keeps no ledger beside: the store's name and
+ * its app's manifest, and nothing owed once a write commits. No meter weighs
+ * it, no alarm rouses its wakes, nothing embeds its texts, and the write log
+ * is the host's own (@yaks/api's graph facet keeps a keyed write's answer). */
+/// bare('recipes', {}).name -> 'recipes'
+/// bare('recipes', { $defs: {} }).manifest() -> { $defs: {} }
+/// bare('recipes', {}).weigh([]) -> []
+export let bare = (name: string, manifest: VocabDoc): Lent => ({
+  name,
+  weigh: (bundles) => bundles,
+  rouse: (bundles) => Promise.resolve(bundles),
+  embed: (bundles) => bundles,
+  log: { name: 'yak/log', hooks: {} },
+  manifest: () => manifest,
+})
+
+/** What each plugin is bound with beside its configured options: a store's
+ * own plugins (`yak/*`) are given the store. */
+/// lends(bare('a', {}))('yak/log', {}).store.name -> 'a'
+/// lends(bare('a', {}))('@yaks/doc', { x: 1 }) -> { x: 1 }
+export let lends = (store: Lent): Lend => (plugin, options) =>
+  plugin.startsWith('yak/') ? { ...options, store } : options
+
+/** A host's plugin options, with what it lends beside them (@yaks/host
+ * `Binding.options`). */
+export type Lend = <O extends Record<string, unknown>>(
+  plugin: string,
+  options: O,
+) => O

@@ -1,0 +1,13 @@
+{
+  "$defs": {
+    "recipe": {
+      "description": "a dish someone cooks",
+      "properties": { "heading": { "type": "string" } }
+    },
+    "title_step": {
+      "lens": true,
+      "step": 20261003140000,
+      "ops": [{ "rename": { "from": "recipe.title", "to": "recipe.heading" } }]
+    }
+  }
+}

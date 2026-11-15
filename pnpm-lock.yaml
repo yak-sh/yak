@@ -3770,12 +3770,18 @@ importers:
       '@yaks/blob':
         specifier: 0.2.30
         version: link:../blob
+      '@yaks/cli':
+        specifier: 0.2.33
+        version: link:../cli
       '@yaks/code':
         specifier: 0.2.23
         version: link:../code
       '@yaks/edge':
         specifier: 0.2.24
         version: link:../edge
+      '@yaks/file':
+        specifier: 0.2.28
+        version: link:../file
       '@yaks/fp':
         specifier: 0.2.23
         version: link:../fp

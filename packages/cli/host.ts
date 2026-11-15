@@ -69,7 +69,7 @@ import type {
 } from '@yaks/graph'
 import { Refused, Stale } from '@yaks/graph/errors'
 import { hit } from '@yaks/graph/hit'
-import type { Vocab } from '@yaks/vocab'
+import type { Vocab, VocabDoc } from '@yaks/vocab'
 import { EXIT, PROCESS } from '@yaks/process/vocab'
 import { ended, selfEid, started } from '@yaks/process/self'
 import type { History, Store } from '@yaks/sqlite'
@@ -114,6 +114,7 @@ import {
 import { facet } from './words.ts'
 import {
   assembly,
+  type Binding,
   type Facets,
   type Load,
   type Meaning,
@@ -325,6 +326,13 @@ export type ComposeOpts = {
    * `Binding.clock`), and its own waits, a process write storage refused and
    * a drain step's warning (default the runtime's). */
   clock?: Clock
+  /** The graph's own words, loaded after its plugins', each component
+   * shadowing a plugin's of the same name (@yaks/host `AssemblyOpts.docs`):
+   * an app's vocab.json. A config's graph has none. */
+  docs?: VocabDoc[]
+  /** What each plugin is given beside its configured options (@yaks/host
+   * `Binding.options`): what only the caller can lend it. */
+  options?: Binding['options']
 }
 
 // The mode a process opens its graph in, as its environment says.
@@ -581,6 +589,7 @@ let composed = async (
       observed,
       part,
       readOnly: opts.readOnly,
+      docs: opts.docs,
     })
     let { storage } = opts.readOnly
       ? await import('@yaks/sqlite/read-store')
@@ -699,6 +708,8 @@ let composed = async (
       made = composed(config, ['graph'], load, {
         mode: { branch: id },
         process: false,
+        docs: opts.docs,
+        options: opts.options,
         ...opts.clock ? { clock: opts.clock } : {},
       })
       forks.set(id, made)
@@ -712,6 +723,7 @@ let composed = async (
     }
     let unforked = () => Promise.all([...forks.keys()].map(unfork))
     let built = plan.bind({
+      options: opts.options,
       // A database in memory is its connection's alone, so no branch's host
       // could open it.
       branches: (h) => {

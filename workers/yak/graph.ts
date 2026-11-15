@@ -32,7 +32,7 @@ import {
 import { queryCache } from './query-cache.ts'
 import { answers, recalling } from './answered.ts'
 import { appRead } from '@yaks/platform/app-read'
-import type { Lent } from '@yaks/platform/lent'
+import { type Lend, lends, type Lent } from '@yaks/platform/lent'
 import { eraseStore, weighing } from '@yaks/platform/app-storage'
 import { reviveStore, suspendStore } from './app-dormancy.ts'
 import {
@@ -1631,10 +1631,9 @@ export class Store extends Durable {
     }
     // What each plugin is given beside its configured options, the store's
     // own given `stored`.
-    let optionsOf =
-      (stored: Stored) =>
-      <O extends Record<string, unknown>>(plugin: string, options: O): O => {
-        if (plugin.startsWith('yak/')) return { ...options, store: stored }
+    let optionsOf = (stored: Stored): Lend => {
+      let lend = lends(stored)
+      return (plugin, options) => {
         if (plugin == '@yaks/mail') {
           return { ...options, domain: apex(this.#bind) }
         }
@@ -1642,8 +1641,9 @@ export class Store extends Durable {
         if (plugin == '@yaks/rtc') {
           return { ...options, realtime: realtimeOf(this.#bind) }
         }
-        return options
+        return lend(plugin, options)
       }
+    }
     // What the store's storage is opened with, main's and each branch's.
     let opened = {
       // A number is @yaks/id's, and only the platform's own stores loaded it

@@ -3,14 +3,14 @@
 // package each of its facets is. A host resolves those names through this one
 // table and adds the facets only it can give (yaks.app's Cloudflare effects,
 // workers/yak config.ts `domains`); a facet neither names is skipped.
-import type { FacetName } from '@yaks/host'
+import type { FacetName, Facets as HostFacets, Load } from '@yaks/host'
 
 /** A `yak/*` plugin's facets, each the specifier of the module it is. */
-export type Facets = Partial<Record<FacetName, string>>
+export type Specifiers = Partial<Record<FacetName, string>>
 
 let at = (name: string): string => `@yaks/platform/${name}`
 
-export let facets: Record<string, Facets> = {
+export let facets: Record<string, Specifiers> = {
   'yak/app': { vocab: at('app-vocab'), graph: at('app-graph') },
   'yak/directory': { vocab: at('directory-vocab') },
   'yak/trash': { vocab: at('trash-vocab'), graph: at('trash-graph') },
@@ -45,3 +45,33 @@ export let beside = <O extends Record<string, Record<string, string>>>(
       name,
     ) => [name, { ...facets[name], ...own[name] } as Record<string, string>]),
   )
+
+/** A host's `load`, each `yak/*` facet resolved through {@link facets} to the
+ * export of this package it is, and one the table does not name absent;
+ * every other plugin's resolved by `load` itself. A table entry is a package
+ * subpath, so `load` is asked for it as it is asked for any plugin's. */
+export let resolved = (load: Load): Load => {
+  let homed = (plugin: string, name: FacetName): [string, FacetName] | null => {
+    if (!plugin.startsWith('yak/')) return [plugin, name]
+    let spec = facets[plugin]?.[name]
+    if (!spec) return null
+    let cut = spec.indexOf('/', spec.indexOf('/') + 1)
+    return [spec.slice(0, cut), spec.slice(cut + 1) as FacetName]
+  }
+  return Object.assign(
+    <F extends FacetName>(plugin: string, name: F) => {
+      let to = homed(plugin, name)
+      return to
+        ? load(...to) as Promise<HostFacets[F] | null>
+        : Promise.resolve(null)
+    },
+    {
+      together: load.together &&
+        ((requests: readonly (readonly [string, FacetName])[]) =>
+          load.together!(requests.flatMap(([p, n]) => {
+            let to = homed(p, n)
+            return to ? [to] : []
+          }))),
+    },
+  )
+}
