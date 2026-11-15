@@ -25,7 +25,7 @@ import { pageModule } from './page-module-probe.ts'
 import { released } from './operator-testing.ts'
 import { openedOf, operatorFrames } from './operator-host.ts'
 import { operatorStore } from './operator-store.ts'
-import { inputOf } from './operator-root.ts'
+import { inputOf } from '@yaks/session'
 import { TOOLS } from './tools.ts'
 
 let p = platform('operator-draft')

@@ -165,7 +165,7 @@ export let escalationAnswer = (
       // starting no turn.
       notice: {},
       system: {},
-      operator_channel: { channel: 'escalation' },
+      channel: { name: 'escalation' },
       $actor: { by: space.eid, via: context?.session ?? request.from },
     }], { trusted: true })
     return JSON.stringify({ told: request.from })

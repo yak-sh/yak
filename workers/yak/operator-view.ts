@@ -21,6 +21,7 @@ import { chatPath } from '@yaks/platform/routes'
 import type { Doing } from './mascot.ts'
 import {
   asked,
+  cameBy,
   helped,
   type Helper,
   type Line,
@@ -66,10 +67,10 @@ export let HEARD = 'By phone: '
  * it, which the conversation leaves out. */
 export let CALLED = 'They called you, and your voice on the call answered.'
 
-/** How words came (`operator_channel`): their channel, and the framing the
- * model reads before them, which the conversation leaves out. */
-export let channelOf = (channel: string, framing = '') => ({
-  channel,
+/** How words came (@yaks/session `channel`): their channel, and the framing
+ * the model reads before them, which the conversation leaves out. */
+export let channelOf = (name: string, framing = '') => ({
+  name,
   ...framing ? { framing } : {},
 })
 
@@ -108,12 +109,12 @@ export let rows = (entries: Bundle[], names: Names, seen: Seen = {}): Row[] =>
  * equal(wordsOf([
  *   line(1, {
  *     content: { body: 'Build me a recipe box' },
- *     operator_channel: { channel: 'text' },
+ *     channel: { name: 'text' },
  *   }),
  *   line(2, { output: {}, content: { body: 'On it.' } }),
  *   line(3, {
  *     notice: {}, operator_call: { call: 'c' },
- *     operator_channel: { channel: 'voice', framing: HEARD },
+ *     channel: { name: 'voice', framing: HEARD },
  *     content: { body: HEARD + 'Is it done?' },
  *   }),
  *   line(4, {
@@ -144,7 +145,7 @@ export let wordsOf = (entries: Bundle[]): string[] => {
     if (!body || inside.has(b.entity.eid) || called?.began) return []
     // A helper's report and the platform's own words are no one's speech.
     if (told(b, body) || b.system) return []
-    let how = VIA[String(comp(b, 'operator_channel')?.channel)]?.[1]
+    let how = VIA[String(cameBy(b).name)]?.[1]
     let who = called?.said
       ? 'you, by phone'
       : b.output && !b.notice

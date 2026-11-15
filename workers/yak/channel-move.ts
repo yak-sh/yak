@@ -1,12 +1,18 @@
-// A person's words stored before `operator_channel` (T-141017) carry the
+// A person's words stored before their channel was kept (T-141017) carry the
 // framing the model read before them at the start of their body, and nothing
 // saying which channel they came by: each such row is given its channel and
-// framing, read off the framing itself. A line a call's talking model said,
+// framing (@yaks/session `channel`), read off the framing itself. A line a call's talking model said,
 // stored before the Operator read those as its own (T-144809), was framed as
 // a person's words ("On the phone, you said: "), which the Operator took for
 // the caller quoting it: each is made the Operator's own words. The private
 // Operator graph is moved in bounded writes during its work, never in Durable
 // Object boot, once a store.
+//
+// A line kept while the Operator said how words came in a word of its own,
+// `operator_channel{channel, framing}`, says it in @yaks/session's
+// `channel{name, framing}` once its store's pass reaches it
+// ({@link channelBackfill}), in bounded alarm batches beside the store's
+// other passes. Until then a reader takes either (operator-draw.ts `cameBy`).
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Meta } from '@yaks/sqlite'
 import { channelOf } from './operator-view.ts'
@@ -34,7 +40,7 @@ let FRAMED: [string, RegExp][] = [
   ['chat', /^About the app [^,]+, open beside the chat as they wrote: /],
 ]
 
-let FIND = `.entry&!operator_channel&!output&!result&(${
+let FIND = `.entry&!channel&!operator_channel&!output&!result&(${
   [
     'By phone',
     'On the phone, you said',
@@ -45,7 +51,7 @@ let FIND = `.entry&!operator_channel&!output&!result&(${
   ].map((s) => `.content.body~=${JSON.stringify(s)}`).join('|')
 })`
 
-let OLD = '.operator_call.said=true&.operator_channel&?content'
+let OLD = '.operator_call.said=true&(.channel|.operator_channel)&?content'
 
 // A task's first words are its row as JSON (operator.ts `ask`).
 let wordsOf = (body: string) => {
@@ -66,7 +72,7 @@ export let channelMove = (row: Bundle): Bundle[] => {
     if (framing) {
       return [{
         entity: row.entity,
-        operator_channel: channelOf(channel, framing),
+        channel: channelOf(channel, framing),
       }]
     }
   }
@@ -83,6 +89,7 @@ export let saidMove = (row: Bundle): Bundle[] => {
       entity: row.entity,
       content: { body: body.slice(SAID.length) },
       notice: { own: true },
+      channel: null,
       operator_channel: null,
     }]
     : []
@@ -111,4 +118,36 @@ export let channeled = async (
     }
   }
   marks?.set(CHANNELED, '1')
+}
+
+/** Where a store says its lines are all in @yaks/session's `channel`. */
+export let CHANNELS = 'operator:channels'
+
+/** One batch of the pass that says, in @yaks/session's `channel{name,
+ * framing}`, how the words of a line kept as `operator_channel` came: at most
+ * fifty lines, each moved whole, so a line is never in both. Answers whether
+ * another alarm has work. A store kept nowhere was made in memory with the
+ * new word, and owes no pass. */
+export let channelBackfill = async (store: {
+  g: Graph
+  marks?: Pick<Meta, 'get' | 'set'>
+  waiting?: () => number
+}): Promise<boolean> => {
+  let { g, marks } = store
+  if (!marks || marks.get(CHANNELS) == 'done') return false
+  if (store.waiting?.()) return true
+  let rows = await g.read(
+    '.operator_channel&.limit=50&.fields=operator_channel.channel,operator_channel.framing',
+  )
+  let moved = rows.map((row) => {
+    let { channel, framing } = row.operator_channel as Comp
+    return {
+      entity: row.entity,
+      channel: channelOf(String(channel ?? ''), String(framing ?? '')),
+      operator_channel: null,
+    }
+  })
+  if (moved.length) await g.apply(moved, { trusted: true, stamp: false })
+  if (rows.length < 50) marks.set(CHANNELS, 'done')
+  return rows.length == 50
 }

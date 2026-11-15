@@ -390,6 +390,25 @@
         "from": {
           "type": "string",
           "description": "Who wrote these words, rendered as From <from> by generic prompt assembly for every provider: the system, checkpoint summarizer, parent session, helper, TaskMaster or named person. Set for injected messages; never impersonate the person through created.by. Older rows infer their source from transcript components and writer stamps."
+        },
+        "item": {
+          "type": "string",
+          "description": "On an input, the eid of the item its words came in: the request, letter, comment or knock they say. A session takes an item's words once (@yaks/session bus `take`), and the files they came with are attached to the item. Not a reference, so an entry's one reference stays its session and `.entries` stays its transcript's reverse name."
+        }
+      }
+    },
+    "channel": {
+      "component": true,
+      "type": "object",
+      "description": "on an input, how its words came: the channel they came by, and the framing said before them to the model, which the body starts with and a conversation draws as the channel's icon instead",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The channel: chat, email, text, voice, or another the host names."
+        },
+        "framing": {
+          "type": "string",
+          "description": "What the model reads before the words, saying how they came; the body starts with it."
         }
       }
     },

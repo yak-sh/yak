@@ -1,11 +1,12 @@
 // Sources of persisted Operator channel messages, before entry.from was kept.
 import type { Bundle, Comp } from '@yaks/graph'
+import { cameBy } from './operator-draw.ts'
 
 /** Channel provenance is separate from the member whose permissions apply.
  * Older wakes and voice requests carry the member's actor stamp, although
  * their words were written by the platform or its voice model. */
 export let inputSource = (entry: Bundle): string | undefined => {
-  let channel = (entry.operator_channel as Comp | undefined)?.channel
+  let channel = cameBy(entry).name
   let call = entry.operator_call as Comp | undefined
   if (channel == 'wake' || channel == 'subscription') {
     return `the system (your ${channel == 'wake' ? 'wake-up' : channel})`

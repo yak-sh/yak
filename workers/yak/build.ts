@@ -1125,6 +1125,12 @@ export class Builder extends Durable {
             let { outputBackfill } = await import('./output-move.ts')
             return backfill(outputBackfill(store))
           },
+          // How each line's words came, in @yaks/session's `channel`
+          // (channel-move.ts).
+          channels: async () => {
+            let { channelBackfill } = await import('./channel-move.ts')
+            return backfill(channelBackfill(store))
+          },
           numbers: async () => {
             let { numberBackfill } = await import('./number-move.ts')
             return backfill(numberBackfill(store))

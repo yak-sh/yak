@@ -61,7 +61,7 @@ test('entry actions copy the person’s displayed words and preserve reply Markd
   let entries = [
     entry('input', 1, {
       content: { body: HEARD + input + sourceReference('a'.repeat(64)) },
-      operator_channel: { channel: 'voice', framing: HEARD },
+      channel: { name: 'voice', framing: HEARD },
     }),
     entry('output', 2, { output: {}, content: { body: output } }),
   ]
@@ -88,7 +88,7 @@ let conversation = [
     content: { body: `${HEARD}Is it done?` },
     notice: {},
     operator_call: { call: 'v' },
-    operator_channel: { channel: 'voice', framing: HEARD },
+    channel: { name: 'voice', framing: HEARD },
   }),
   entry('q', 8, {
     content: { body: 'Is the notes app done?' },

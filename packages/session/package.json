@@ -10,6 +10,7 @@
     "./tools": "./tools.ts",
     "./views": "./views.ts",
     "./conversation": "./conversation.ts",
+    "./intake": "./intake.ts",
     "./service": "./service.ts",
     "./routes": "./routes.ts",
     "./parts": "./parts.ts",

@@ -8,9 +8,10 @@ import type { Host } from '@yaks/host'
 import { owed } from '@yaks/persona'
 import { lineage } from '@yaks/project'
 import { snapshot } from '@yaks/context'
-import { humanCaller, textOf } from '@yaks/session'
+import { humanCaller, type Intake, take, textOf } from '@yaks/session'
+import { derivedEid } from '@yaks/graph/identity'
 import { readInbox } from '@yaks/inbox/read'
-import { begin, through } from './agent.ts'
+import { begin } from './agent.ts'
 import { defaultUsing } from './default.ts'
 
 let part = (b: Bundle | undefined, c: string): Comp => (b?.[c] ?? {}) as Comp
@@ -117,6 +118,74 @@ let summary = (s: Bundle, project: string) => ({
   project,
   status: part(s, 'session').status,
 })
+// What the words given name of themselves: the caller's id for them, the
+// model chosen to answer them, and the files sent with them, by the address
+// each artifact is kept by and the name a message last gave it.
+let named = (args: Record<string, unknown>) => {
+  let id = args.request
+  if (id != null && (typeof id != 'string' || !id.trim())) {
+    throw new Refused('request must be nonempty text')
+  }
+  return typeof id == 'string' ? id : undefined
+}
+let chosen = (args: Record<string, unknown>): Comp | undefined => {
+  let { provider, model, effort } = args
+  if (provider == null && model == null) return undefined
+  if (typeof model != 'string' || !model) {
+    throw new Refused('Name the model that answers these words')
+  }
+  return {
+    ...typeof provider == 'string' ? { provider } : {},
+    model,
+    ...typeof effort == 'string' ? { effort } : {},
+  }
+}
+let filesAt = async (g: Graph, args: Record<string, unknown>) => {
+  let said = args.attachments ?? []
+  if (!Array.isArray(said) || said.some((a) => typeof a != 'string')) {
+    throw new Refused('attachments must be a list of artifact addresses')
+  }
+  let kept = new Map(
+    (await g.get(said as string[], ['artifact'])).map((b) => [b.entity.eid, b]),
+  )
+  return await Promise.all((said as string[]).map(async (address) => {
+    let artifact = part(kept.get(address), 'artifact')
+    if (!artifact.address) {
+      throw new Refused(`No artifact is kept at ${address}`)
+    }
+    let [use] = await g.read(
+      `.attachment.artifact=${
+        quote(address)
+      } .order=-created.at .limit=1 .fields=attachment.name`,
+    )
+    return {
+      name: String(part(use, 'attachment').name ?? address),
+      media_type: String(artifact.media_type ?? 'application/octet-stream'),
+      address,
+      ...typeof artifact.size == 'number' ? { size: artifact.size } : {},
+    }
+  }))
+}
+let words = async (
+  g: Graph,
+  args: Record<string, unknown>,
+  session: string,
+  body: string,
+  by: string,
+  using?: Comp,
+): Promise<Intake> => {
+  let id = named(args)
+  let files = await filesAt(g, args)
+  using = chosen(args) ?? using
+  return {
+    session,
+    body,
+    by,
+    ...id ? { id: `${session} ${id}` } : {},
+    ...files.length ? { files } : {},
+    ...using ? { using } : {},
+  }
+}
 let answer = (call: Bundle, value: unknown): Bundle[] => [{
   entity: { eid: crypto.randomUUID() },
   content: { body: JSON.stringify(value) },
@@ -209,16 +278,26 @@ export let conversations = (host?: Pick<Host, 'me' | 'config'>): Runs => ({
     let owner = await conversationOwner(call, g, host)
     let project = await projectAt(g, args)
     let prompt = required(args, 'prompt')
-    let files = await contextAt(g, owner, project)
-    let using = await defaultUsing(g)
-    let id = await begin(g, prompt, {
-      by: owner,
-      files,
-      using,
-      project: project.entity.eid,
-      title: headline(prompt),
-    })
-    let [s] = await g.get([id], ['session'])
+    // Started again under the same request, it is the conversation started.
+    let request = named(args)
+    let eid = request
+      ? derivedEid(`conversation ${owner} ${request}`)
+      : crypto.randomUUID()
+    let [held] = request ? await g.get([eid], ['session']) : []
+    if (!held?.session) {
+      let using = await defaultUsing(g)
+      let first = await words(g, args, eid, prompt, owner, using)
+      await begin(g, undefined, {
+        eid,
+        by: owner,
+        files: await contextAt(g, owner, project),
+        using: first.using ?? using,
+        project: project.entity.eid,
+        title: headline(prompt),
+      })
+      await take(g, first)
+    }
+    let [s] = await g.get([eid], ['session'])
     return answer(call, summary(s, project.entity.eid))
   },
   conversation_send: async (call, g) => {
@@ -226,12 +305,8 @@ export let conversations = (host?: Pick<Host, 'me' | 'config'>): Runs => ({
     let owner = await conversationOwner(call, g, host)
     let p = (await projectAt(g, args)).entity.eid
     let s = await sessionAt(g, args, owner, p)
-    await g.apply([{
-      entity: { eid: crypto.randomUUID() },
-      entry: { session: s.entity.eid },
-      content: { body: required(args, 'text') },
-      $actor: through(s.entity.eid, owner),
-    }])
+    let text = required(args, 'text')
+    await take(g, await words(g, args, s.entity.eid, text, owner))
     let [now] = await g.get([s.entity.eid], ['session'])
     return answer(call, summary(now, p))
   },

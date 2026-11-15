@@ -14,7 +14,8 @@ import type { Held } from './build-door.ts'
 import type { Copy } from './operator-skills.ts'
 import type { Operator } from './operator.ts'
 import type { Request } from './operator-channels.ts'
-import { askedAt, inputOf, rootAt, rootOf, titleAt } from './operator-root.ts'
+import { askedAt, rootAt, rootOf, titleAt } from './operator-root.ts'
+import { inputOf } from '@yaks/session/intake'
 import { phoneTexts } from './phone-move.ts'
 import { channeled } from './channel-move.ts'
 import type { OperatorStore } from './operator-store.ts'
@@ -961,7 +962,7 @@ let arriving = async (store: Store, row: Bundle, entries: Bundle[]) => {
       entity: { eid: line },
       content: { body },
       created: { at },
-      operator_channel: { channel: String(asked.channel) },
+      channel: { name: String(asked.channel) },
     }]
   }).reverse()
 }
@@ -1469,7 +1470,7 @@ let told = async (
         // came (operator-draw.ts `system`), starting no turn.
         notice: {},
         system: {},
-        operator_channel: { channel: request.channel },
+        channel: { name: request.channel },
         $actor: { by: request.space, via: root },
       }]
       : [],

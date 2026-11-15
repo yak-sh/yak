@@ -352,3 +352,51 @@ test('conversation sends and reopens a real native transcript driven by a fake m
   )
   assertEquals(native.inbox.isError, undefined)
 })
+
+let intake = await (async () => {
+  let { h, call, project } = await fixture()
+  try {
+    await h.g.apply([
+      { entity: { eid: 'c0ffee' }, artifact: { address: 'c0ffee', size: 3 } },
+      {
+        entity: { eid: crypto.randomUUID() },
+        attachment: { artifact: 'c0ffee', name: 'notes.txt' },
+      },
+    ], { trusted: true })
+    let start = { project, prompt: 'hello', request: 'r1' }
+    let first = await call('conversation_start', start)
+    let again = await call('conversation_start', start)
+    let { session } = first
+    let send = {
+      project,
+      session,
+      text: 'read this',
+      request: 'r2',
+      model: 'fake',
+      attachments: ['c0ffee'],
+    }
+    await call('conversation_send', send)
+    await call('conversation_send', send)
+    let lines = await h.g.read(
+      `.entry.session=${JSON.stringify(session)} .content !prompt ?using`,
+    )
+    let last = JSON.stringify(lines.at(-1)!.entity.eid)
+    let [use] = await h.g.read(
+      `.attachment.message=${last} .fields=attachment.name,attachment.artifact`,
+    )
+    return frozen({
+      same: again.session == session,
+      said: lines.map((b) => (b.content as Comp).body),
+      chosen: !!lines.at(-1)!.using,
+      file: use?.attachment,
+    })
+  } finally {
+    await h.close()
+  }
+})()
+test('words given again under their request say nothing twice, with the model and files chosen for them', () => {
+  assertEquals(intake.same, true)
+  assertEquals(intake.said, ['hello', 'read this'])
+  assertEquals(intake.chosen, true)
+  assertEquals(intake.file, { name: 'notes.txt', artifact: 'c0ffee' })
+})

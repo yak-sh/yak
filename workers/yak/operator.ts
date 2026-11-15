@@ -15,11 +15,15 @@ import { begin, lend } from '@yaks/harness'
 import { skillItems, skillRead } from '@yaks/harness/skills'
 import {
   answerOf,
+  inputOf,
+  type Intake,
   recall,
   replyOf,
   running,
   sessionTools,
   statusOf,
+  take,
+  taskSession,
   type Tool,
   topOf,
   transcript,
@@ -27,6 +31,7 @@ import {
 } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
 import { CALLED, channelOf, HEARD } from './operator-view.ts'
+import { cameBy } from './operator-draw.ts'
 import { fetchable } from './newcomer.ts'
 import { listing } from '@yaks/mcp'
 import {
@@ -42,7 +47,7 @@ import { forwarding, PATH } from '@yaks/model/step'
 import { AWAY, falling, MACHINE, namesFor } from './operator-machine.ts'
 import type { Calling } from '@yaks/tunnel/hosted'
 import { platform, ready, served } from './providers.ts'
-import { artifactsOf, attachmentRows } from '@yaks/blob/attachment'
+import { artifactsOf } from '@yaks/blob/attachment'
 import { attached, fileContext } from './operator-inputs.ts'
 import { agents, operatorProviders } from './config.ts'
 import { inputSchemaOf } from '@yaks/tools/schema'
@@ -107,7 +112,7 @@ import {
   UNASKED,
 } from './operator-channels.ts'
 import { escalate, escalationAnswer, REPLIES } from './operator-escalate.ts'
-import { inputOf, rootAt, spaceOf } from './operator-root.ts'
+import { rootAt, spaceOf } from './operator-root.ts'
 import { textSend } from './operator-texts.ts'
 import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { SIGNUP, signupTools } from './operator-signup.ts'
@@ -1018,10 +1023,10 @@ export let operating = (
     let [[work], [said]] = await Promise.all([
       g.get([top], ['occurrence']),
       g.read(
-        `.entry.session=${top}&.content&.using&!ask&.order=-entry.seq&.limit=1&.fields=operator_channel.channel`,
+        `.entry.session=${top}&.content&.using&!ask&.order=-entry.seq&.limit=1&.fields=channel.name,operator_channel.channel`,
       ),
     ])
-    let channel = comp(said, 'operator_channel')?.channel
+    let channel = said && cameBy(said).name
     return !!work?.occurrence || UNASKED.has(String(channel ?? ''))
   }
   let machine: Model = async (req) => {
@@ -1636,15 +1641,16 @@ export let operating = (
         }
         let selected = await readying(ask, space)
         await started(session, ask.space, space)
-        await g.apply([
-          given(
-            session,
-            input,
-            `You are a scheduled helper. Do this work here and give a short report. Your report stays with this run and reaches nobody: when the person should hear something, tell them yourself with notification_send.\n\n${brief}`,
-            ask.space,
-            { from: 'the system', ...selected },
-          ),
-        ], { trusted: true })
+        await g.apply([{
+          entity: { eid: input },
+          entry: { session, from: 'the system' },
+          content: {
+            body:
+              `You are a scheduled helper. Do this work here and give a short report. Your report stays with this run and reaches nobody: when the person should hear something, tell them yourself with notification_send.\n\n${brief}`,
+          },
+          using: usingOf(selected.model, selected.provider),
+          $actor: { by: ask.space, via: session },
+        }], { trusted: true })
         options.tell?.(session)
       },
     })
@@ -1794,27 +1800,39 @@ export let operating = (
       },
     }
   }
-  let given = (
+  // The words given, as the session bus takes them in (@yaks/session
+  // `take`): named by their request, or by `id` where none brought them, and
+  // with the files they came with and the original message's text beside
+  // them (`kept`).
+  let words = (
     session: string,
-    input: string,
+    id: string,
     body: string,
     by: string,
     o: Asking,
-  ) => ({
-    entity: { eid: input },
-    entry: { session, ...o.from ? { from: o.from } : {} },
-    content: { body },
-    ...o.files?.length
-      ? { operator_files: { request: o.request ?? input, files: o.files } }
-      : {},
-    ...o.channel ? { operator_channel: channelOf(o.channel, o.framing) } : {},
-    ...o.call ? { operator_call: { call: o.call, asked: true } } : {},
+    kept?: File,
+  ): Intake => ({
+    session,
+    body,
+    by,
+    id,
+    ...o.request ? { item: o.request } : {},
+    ...o.from ? { from: o.from } : {},
+    ...o.channel ? { channel: channelOf(o.channel, o.framing) } : {},
+    files: [...o.files ?? [], ...kept ? [kept] : []].map(attachedOf),
+    using: usingOf(o.model, o.provider, o.effort),
     // An error the platform asks the Operator to fix, or what another of
     // its conversations raised, is its own words, not the person's it is
     // said for (unseen.ts).
-    ...OWN.has(o.channel ?? '') ? { system: {} } : {},
-    using: usingOf(o.model, o.provider, o.effort),
-    $actor: { by, via: session },
+    system: OWN.has(o.channel ?? ''),
+    with: {
+      ...o.files?.length
+        ? {
+          operator_files: { request: o.request ?? inputOf(id), files: o.files },
+        }
+        : {},
+      ...o.call ? { operator_call: { call: o.call, asked: true } } : {},
+    },
   })
   // What the person said before on the subject of the words they now give
   // their conversation, as a note beside those words: what its model no
@@ -1876,7 +1894,8 @@ export let operating = (
     let named = typeof args.task == 'string' ? args.task : o.task
     if (!text.trim()) throw refuse('arguments', 'say what you want done')
     let by = o.by ?? held.person
-    let input = o.request ? inputOf(o.request) : crypto.randomUUID()
+    let id = o.request ?? crypto.randomUUID()
+    let input = inputOf(id)
     o = { ...o, ...await readying(held, space, o.model, o.provider) }
     let { reference, file: sourceFile } = await messageReference(
       env,
@@ -1895,17 +1914,15 @@ export let operating = (
       }
       let theirs = by == held.person && !o.signup &&
         !OWN.has(o.channel ?? '')
-      await g.apply([
-        await carrying(session, held, space, o, !o.signup),
-        ...theirs ? await before(session, text, held, space) : [],
-        given(session, input, text + reference, by, o),
-        ...attachmentRows(
-          o.request ?? input,
-          [...o.files ?? [], ...sourceFile ? [sourceFile] : []].map(
-            attachedOf,
-          ),
-        ),
-      ], { trusted: true })
+      await take(
+        g,
+        words(session, id, text + reference, by, o, sourceFile),
+        [
+          await carrying(session, held, space, o, !o.signup),
+          ...theirs ? await before(session, text, held, space) : [],
+        ],
+        { trusted: true },
+      )
       options.tell?.(session)
       return { task: '', session, input }
     }
@@ -1914,15 +1931,8 @@ export let operating = (
     if (args.task && !old?.task) {
       throw refuse('missing', `no operator task ${task}`)
     }
-    let links = old ? await g.read(`.contains .edge.from=${task}`) : []
-    let newest = (await g.get(links.map((b) => String(comp(b, 'edge')!.to))))
-      .filter((b) => b.session)
-      .sort((a, b) =>
-        String(comp(a, 'created')?.at).localeCompare(
-          String(comp(b, 'created')?.at),
-        )
-      ).at(-1)
-    let session = newest?.entity.eid ?? o.session ?? crypto.randomUUID()
+    let newest = old ? await taskSession(g, task) : undefined
+    let session = newest ?? o.session ?? crypto.randomUUID()
     if ((await g.get([input]))[0]) return { task, session, input }
     await g.apply([
       old ? { entity: { eid: task }, completed: null, cancelled: null } : {
@@ -1953,29 +1963,30 @@ export let operating = (
       }])
     }
     let [row] = await g.get([task])
-    await g.apply([
-      ...forks,
-      await carrying(session, held, space, o),
-      ...old
-        ? [{
-          entity: { eid: derivedEid('operator-comment|' + input) },
-          comment: { target: task },
-          doc: { body: text },
-          $actor: { by },
-        }]
-        : [],
-      ...attachmentRows(
-        o.request ?? input,
-        [...o.files ?? [], ...sourceFile ? [sourceFile] : []].map(attachedOf),
-      ),
-      given(
+    await take(
+      g,
+      words(
         session,
-        input,
+        id,
         (newest || o.chat ? text : JSON.stringify({ task: row })) + reference,
         by,
         o,
+        sourceFile,
       ),
-    ], { trusted: true })
+      [
+        ...forks,
+        await carrying(session, held, space, o),
+        ...old
+          ? [{
+            entity: { eid: derivedEid('operator-comment|' + input) },
+            comment: { target: task },
+            doc: { body: text },
+            $actor: { by },
+          }]
+          : [],
+      ],
+      { trusted: true },
+    )
     options.tell?.(session)
     return { task, session, input }
   }
@@ -1990,7 +2001,7 @@ export let operating = (
     let line = o.said ? { content: { body: text }, notice: { own: true } } : {
       content: { body: o.began ? CALLED : HEARD + text },
       notice: {},
-      operator_channel: channelOf('voice', o.began ? '' : HEARD),
+      channel: channelOf('voice', o.began ? '' : HEARD),
     }
     await g.apply([
       ...fresh ? [fresh] : [],

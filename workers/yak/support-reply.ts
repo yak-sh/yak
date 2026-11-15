@@ -166,7 +166,7 @@ export let heard = async (
       // from (operator-draw.ts `VIA`), starting no turn.
       notice: {},
       system: {},
-      operator_channel: { channel: 'support' },
+      channel: { name: 'support' },
       ...c.note.by
         ? {
           $actor: { by: c.note.by, ...c.note.via ? { via: c.note.via } : {} },

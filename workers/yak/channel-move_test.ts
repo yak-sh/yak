@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
-import { channeled } from './channel-move.ts'
+import { channelBackfill, channeled, CHANNELS } from './channel-move.ts'
 import { operatorMemory } from './operator-testing.ts'
 
 let session = crypto.randomUUID()
@@ -35,8 +35,8 @@ test('words stored with their framing are given the channel it names, once', asy
   await channeled(g)
   let rows = await g.get(ids)
   assertEquals(
-    rows.map((b) => b.operator_channel as Comp | undefined).map((c) =>
-      c && [c.channel, c.framing]
+    rows.map((b) => b.channel as Comp | undefined).map((c) =>
+      c && [c.name, c.framing]
     ),
     [
       [
@@ -74,7 +74,7 @@ test("a talking model's old line, framed as the person's words, is made the Oper
     (await g.get(ids.slice(0, 2))).map((b) => [
       (b.content as Comp).body,
       b.notice,
-      b.operator_channel,
+      b.channel ?? b.operator_channel,
     ]),
     [
       ['Hi Jeffrey, Elihu here. How can I help?', { own: true }, undefined],
@@ -96,5 +96,32 @@ test('a store moved once is not searched again by its next incarnation', async (
   await g.apply([said(0, 'By email: Hello')], { trusted: true })
   let { g: woken } = operatorMemory(storage)
   await channeled(woken, marks)
-  assertEquals((await woken.get([ids[0]]))[0].operator_channel, undefined)
+  assertEquals((await woken.get([ids[0]]))[0].channel, undefined)
+})
+
+// A line kept in the Operator's old word says it in @yaks/session's, a batch
+// an alarm, and a store whose pass is done reads nothing again.
+test("a line's channel moves to @yaks/session's word, in batches, once", async () => {
+  let kept = new Map<string, string>()
+  let marks = { get: (k: string) => kept.get(k), set: kept.set.bind(kept) }
+  let { g } = operatorMemory()
+  await g.apply([{ entity: { eid: session }, session: {} }], {
+    trusted: true,
+  })
+  let old = Array.from({ length: 51 }, (_, i) => ({
+    entity: { eid: crypto.randomUUID() },
+    entry: { session },
+    content: { body: `By text: ${i}` },
+    operator_channel: { channel: 'text', framing: 'By text: ' },
+  }))
+  await g.apply(old, { trusted: true })
+  let store = { g, marks }
+  let passes = [await channelBackfill(store), await channelBackfill(store)]
+  assertEquals([...passes, await channelBackfill(store)], [true, false, false])
+  assertEquals(kept.get(CHANNELS), 'done')
+  assertEquals((await g.read('.operator_channel')).length, 0)
+  assertEquals(
+    (await g.read('.channel.name=text&.fields=channel.framing')).length,
+    51,
+  )
 })

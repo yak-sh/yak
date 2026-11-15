@@ -163,7 +163,7 @@ test('a conversation says which apps it worked on, files read and written includ
 })
 
 // Words as each channel framed them for the model, as stored before
-// `operator_channel` and as stored with it.
+// their channel was kept and as stored with it.
 let FRAMED = [
   [
     'voice',
@@ -230,7 +230,7 @@ test("a call's turn draws the caller's words, whose phone mark opens the Operato
     content: { body: `${HEARD}Any errors?` },
     notice: {},
     operator_call: { call: 'c' },
-    operator_channel: { channel: 'voice', framing: HEARD },
+    channel: { name: 'voice', framing: HEARD },
   })
   let request = entry('r', 2, {
     content: { body: 'User asks: any errors?' },
@@ -312,7 +312,7 @@ test('every line is a row under its id with its time and menu, inside a fold as 
             content: { body: `${HEARD}Any errors?` },
             notice: {},
             operator_call: { call: 'c' },
-            operator_channel: { channel: 'voice', framing: HEARD },
+            channel: { name: 'voice', framing: HEARD },
           }),
           entry('r', 2, {
             content: { body: 'User asks: any errors?' },
@@ -365,7 +365,7 @@ test("words the platform wrote read as the system's in one closed line, never as
             body: 'Fix this error in recipes: x is undefined\n\nIt happened.',
           },
           system: {},
-          operator_channel: { channel: 'error' },
+          channel: { name: 'error' },
         }),
       ], () => ({ doing: '', done: '' })).map((r) => r.html).join('')
     }</main>`,

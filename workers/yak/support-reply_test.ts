@@ -76,7 +76,7 @@ await carry(env, kept, message)
 await carry(env, kept, message)
 await service.drain()
 let notes = await store.g.read(
-  `.entry.session=${root}&.operator_channel.channel=support&*`,
+  `.entry.session=${root}&.channel.name=support&*`,
 )
 await chat('Did they answer?')
 let next = JSON.stringify(asked.at(-1)!.items)

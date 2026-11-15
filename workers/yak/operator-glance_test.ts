@@ -31,7 +31,7 @@ await store.g.apply([
   },
   line(root, {
     content: { body: 'Build me a recipe box' },
-    operator_channel: { channel: 'text' },
+    channel: { name: 'text' },
   }),
   line(root, {
     entry: { session: root, from: 'the Operator' },
@@ -98,7 +98,7 @@ await sources.g.apply([
       content: { body: 'My words.' },
     },
     {
-      operator_channel: { channel: 'wake' },
+      channel: { name: 'wake' },
       content: { body: 'Check it now.' },
     },
     { notice: { own: true }, content: { body: 'One moment.' } },

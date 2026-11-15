@@ -24,7 +24,7 @@ for (
       entry: { session: 's' },
       content: { body: 'words' },
       created: { by: 'person', via: 's' },
-      operator_channel: { channel },
+      channel: { name: channel },
       ...more,
     }
     equal(

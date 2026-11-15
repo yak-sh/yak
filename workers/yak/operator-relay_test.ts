@@ -60,7 +60,7 @@ let lines = [
     entry: { session: talk, seq: 4, from: 'an outside agent' },
   }),
   line(5, ada, 'By text: Friday is fine.', {
-    operator_channel: { channel: 'text', framing: 'By text: ' },
+    channel: { name: 'text', framing: 'By text: ' },
   }),
 ]
 await store.g.apply([{ entity: { eid: talk }, session: {} }, ...lines], {

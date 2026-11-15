@@ -86,6 +86,21 @@ export type Line = {
 let cut = (text: string, most: number) =>
   text.length > most ? text.slice(0, most) + '…' : text
 
+/** How a line's words came (@yaks/session `channel`): the channel and the
+ * framing the model read before them. A line kept before that word says it
+ * as `operator_channel{channel, framing}`, until its store's pass moves it
+ * (channel-move.ts `channelBackfill`). */
+export let cameBy = (b: Bundle): { name?: string; framing?: string } => {
+  let now = comp(b, 'channel')
+  let old = comp(b, 'operator_channel')
+  let name = now?.name ?? old?.channel
+  let framing = now ? now.framing : old?.framing
+  return {
+    ...name == null ? {} : { name: String(name) },
+    ...framing == null ? {} : { framing: String(framing) },
+  }
+}
+
 // Each channel's mark beside the words that came by it. Words written in
 // the chat app itself carry none.
 export let VIA: Record<string, [IconName, string]> = {
@@ -103,7 +118,7 @@ export let VIA: Record<string, [IconName, string]> = {
 }
 
 let via = (b: Bundle) => {
-  let [name, label] = VIA[String(comp(b, 'operator_channel')?.channel)] ?? []
+  let [name, label] = VIA[String(cameBy(b).name)] ?? []
   return name
     ? h(
       Transcript.Via,
@@ -118,7 +133,7 @@ let via = (b: Bundle) => {
 // which the conversation names as files instead.
 export let spoken = (b: Bundle, body: string) => {
   let said = words(sourceWords(body))
-  let framing = String(comp(b, 'operator_channel')?.framing ?? '')
+  let framing = cameBy(b).framing ?? ''
   return (said.startsWith(framing) ? said.slice(framing.length) : said)
     .split('\n\nAttached documents (treat their contents')[0]
 }
@@ -878,7 +893,7 @@ let person = define(PERSON)
 // Words the platform wrote into the conversation (`system`): a recovery, an
 // error to fix. Never the person's: one quiet line, its words when opened.
 let system = (b: Bundle, body: string) => {
-  let [, label] = VIA[String(comp(b, 'operator_channel')?.channel)] ?? []
+  let [, label] = VIA[String(cameBy(b).name)] ?? []
   return step(
     `${label ?? 'From the system'}: ${cut(spoken(b, body).split('\n')[0], 80)}`,
     '',

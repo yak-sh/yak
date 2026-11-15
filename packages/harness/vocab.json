@@ -196,7 +196,7 @@
       "surfaces": [
         "mcp"
       ],
-      "description": "Start a native project conversation without waiting for a reply.",
+      "description": "Start a native project conversation without waiting for a reply: with the files sent with its first words and the model chosen to answer them, if any.",
       "applied": true,
       "input": {
         "project": {
@@ -207,6 +207,39 @@
         "prompt": {
           "type": "string",
           "minLength": 1
+        },
+        "request": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Your own id for these words. Sending them again under it does nothing, so a retry never says them twice."
+        },
+        "provider": {
+          "type": "string",
+          "ref": "provider",
+          "description": "The provider whose model answers these words. Omit for the conversation's own."
+        },
+        "model": {
+          "type": "string",
+          "ref": "model",
+          "description": "The model that answers these words, and the conversation's words after them. Omit to keep the conversation's own."
+        },
+        "effort": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "description": "How much that model reasons before it answers. Omit for its default."
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Files sent with these words, by the addresses their artifacts are kept by (attachment.artifact)."
         }
       },
       "required": [
@@ -219,7 +252,7 @@
       "surfaces": [
         "mcp"
       ],
-      "description": "Send exact human words to an owned project conversation without waiting.",
+      "description": "Send exact human words to an owned project conversation without waiting: with the files sent with them and the model chosen to answer them, if any.",
       "applied": true,
       "input": {
         "project": {
@@ -234,6 +267,39 @@
         "text": {
           "type": "string",
           "minLength": 1
+        },
+        "request": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Your own id for these words. Sending them again under it does nothing, so a retry never says them twice."
+        },
+        "provider": {
+          "type": "string",
+          "ref": "provider",
+          "description": "The provider whose model answers these words. Omit for the conversation's own."
+        },
+        "model": {
+          "type": "string",
+          "ref": "model",
+          "description": "The model that answers these words, and the conversation's words after them. Omit to keep the conversation's own."
+        },
+        "effort": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "description": "How much that model reasons before it answers. Omit for its default."
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Files sent with these words, by the addresses their artifacts are kept by (attachment.artifact)."
         }
       },
       "required": [
@@ -281,7 +347,7 @@
       "surfaces": [
         "mcp"
       ],
-      "description": "List this caller\u2019s recent project conversations.",
+      "description": "List this caller’s recent project conversations.",
       "applied": true,
       "readOnly": true,
       "input": {
@@ -305,7 +371,7 @@
       "surfaces": [
         "mcp"
       ],
-      "description": "Read the trusted human caller\u2019s inbox, using shared inbox policy.",
+      "description": "Read the trusted human caller’s inbox, using shared inbox policy.",
       "applied": true,
       "readOnly": true,
       "input": {

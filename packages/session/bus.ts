@@ -1,4 +1,7 @@
-// Delivery of the session bus. A native transcript gets an input in the same
+// Delivery of the session bus. Words given a session from outside it, a
+// person's by a page, a channel or a conversation tool, are taken in once
+// each (./intake.ts); what is addressed to a session in the graph is
+// delivered to it as below. A native transcript gets an input in the same
 // batch that marks the item said; a caller using a tool sees owed lines in
 // that tool's reply, or, when its harness reports to the hook door, the
 // context that harness adds after a call of its own (./routes.ts). The
@@ -293,7 +296,7 @@ export let due = async (g: Graph, at: Scope = scope(true)): Promise<Due[]> => {
  * session and item, so saying it again writes nothing new. */
 export let input = (session: Eid, item: Eid, body: string): Bundle => ({
   entity: { eid: derivedEid(`session bus ${session} ${item}`) },
-  entry: { session },
+  entry: { session, item },
   content: { body },
 })
 

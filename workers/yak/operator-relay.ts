@@ -46,7 +46,7 @@ type Store = OperatorStore
  * equal(ownWords(line({}), 'ada'), 'Ship it.')
  * equal(ownWords(line({
  *   content: { body: 'By text: Ship it.' },
- *   operator_channel: { channel: 'text', framing: 'By text: ' },
+ *   channel: { name: 'text', framing: 'By text: ' },
  * }), 'ada'), 'Ship it.')
  * equal(ownWords(line({}), 'bob'), undefined)
  * equal(ownWords(line({ system: {} }), 'ada'), undefined)

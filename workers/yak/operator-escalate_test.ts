@@ -164,7 +164,7 @@ let entries = (session: string) =>
   store.g.read(`.entry.session=${session}&.order=entry.seq&*`)
 let noteOf = async () =>
   (await entries(theirs)).find((b) =>
-    (b.operator_channel as { channel?: string })?.channel == 'escalation'
+    (b.channel as { name?: string })?.name == 'escalation'
   )
 let note = await noteOf()
 // The asks each conversation's model was given, by the words that started

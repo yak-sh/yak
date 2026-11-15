@@ -1122,6 +1122,20 @@ yak session listen --session <outside-session>
 
 A native transcript is recognized by a `using` entry and no `process`.
 
+## Words given from outside
+
+A person's words that reach a session by a page, a channel or a conversation
+tool are its next input, taken in by `take` (`@yaks/session/intake`). The input
+says the item they came in (`entry.item`, a request or letter), the channel they
+came by and the framing said before them (`channel{name,
+framing}`), and the
+model chosen to answer them (`using`). The files sent with them are attached to
+that item (`attachment{message}`, @yaks/blob). Words named by an item, or by an
+id the caller gives them, are taken in once: given again, even at the same
+moment, they write nothing, and neither does what the host writes beside them.
+`conversation_start` and `conversation_send` (@yaks/harness) give theirs this
+way, as yaks.app's Operator gives a person's requests.
+
 ## When the bus looks
 
 The `@yaks/session/service` duty follows the graph's commits, its own and,

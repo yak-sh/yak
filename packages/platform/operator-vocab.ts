@@ -168,7 +168,7 @@ export let operatorDoc: VocabDoc = {
     operator_channel: {
       component: true,
       description:
-        "How a person's words came into their conversation: the channel, and the framing said before them to the model, which the conversation draws as the channel's icon instead.",
+        "How a person's words came into their conversation, as lines kept before @yaks/session's `channel{name, framing}` say it, until their store's pass moves them there (channel-move.ts `channelBackfill`).",
       properties: {
         channel: {
           type: 'string',
