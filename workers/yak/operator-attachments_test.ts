@@ -1,5 +1,4 @@
 import { equal, test } from '@yaks/testing'
-import { attachmentOf, attachmentRows } from './operator-attachments.ts'
 import { operatorMemory } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 
@@ -35,18 +34,4 @@ test('intake attachment rows expose their name, message and immutable bytes', ()
     message: request,
   })
   equal(artifact.artifact, { address: sha, media_type: file.mime, size: 24 })
-})
-
-test('one file sent with two messages keeps both occurrences and shared bytes', () => {
-  let first = attachmentRows('first', [file])
-  let later = attachmentRows('later', [{ ...file, name: 'renamed.docx' }])
-  equal(first[0].entity.eid, later[0].entity.eid)
-  equal(first[1].entity.eid == later[1].entity.eid, false)
-  equal(first[1].entity.eid, attachmentOf('first', 0))
-  equal(later[1].attachment, {
-    name: 'renamed.docx',
-    media_type: file.mime,
-    artifact: sha,
-    message: 'later',
-  })
 })

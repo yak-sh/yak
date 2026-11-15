@@ -10,7 +10,7 @@ import { outgoing } from './post.ts'
 import { mailFrom } from '@yaks/platform/host'
 import { digest } from '@yaks/graph/sha256'
 import { attachmentKey } from './attachments.ts'
-import { attachmentRows } from './operator-attachments.ts'
+import { type Attached, attachmentRows } from '@yaks/blob/attachment'
 import { sourceReference } from './operator-source.ts'
 import { type Ctx, inApp, refuse } from './tool.ts'
 import type { Tool } from '@yaks/session'
@@ -114,6 +114,14 @@ let part = <T>(b: Bundle | undefined, name: string) => b?.[name] as T
 /** The id a file attached to the Operator goes by: the digest its key ends
  * in (attachments.ts). */
 export let attachmentId = (file: File) => file.key.split('/').at(-1)!
+
+/** A file as an attachment row names it (@yaks/blob/attachment). */
+export let attachedOf = (file: File): Attached => ({
+  name: file.name,
+  media_type: file.mime,
+  address: attachmentId(file),
+  ...file.size == null ? {} : { size: file.size },
+})
 
 let fileOf = async (
   space: Space,
@@ -237,7 +245,7 @@ export let receive = async (
       },
       ...(options.mail ? { mail: options.mail } : {}),
     },
-    ...attachmentRows(id, request.files ?? []),
+    ...attachmentRows(id, (request.files ?? []).map(attachedOf)),
     ...options.also ?? [],
   ], { trusted: true })
   return id

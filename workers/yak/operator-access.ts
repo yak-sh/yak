@@ -130,6 +130,24 @@ export let owned = (store: { g: Graph; marks?: Pick<Meta, 'get'> }) => {
   return true
 }
 
+/** The attachments a person sees of their own in a space: each that came
+ * with a request of theirs, an entry of their conversation, or the
+ * conversation itself (@yaks/blob/attachment `attachmentsSeen`). */
+export let theirFiles = (held: Pick<Held, 'person' | 'space'>) =>
+  or(
+    ...[
+      'operator_request',
+      'entry.session.operator_session',
+      'operator_session',
+    ]
+      .map((path) =>
+        and(
+          eq(`attachment.message.${path}.person`, held.person),
+          eq(`attachment.message.${path}.space`, held.space),
+        )
+      ),
+  )
+
 /** What `person` reads the Operator's store with: what is another person's
  * there is out of sight, wherever a read reaches it from, and the memories,
  * tasks and persona nobody owns stay in view. A store whose owners are not

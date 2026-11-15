@@ -2951,6 +2951,7 @@
             "npm:@yaks/fp@0.2.23",
             "npm:@yaks/fts@0.2.30",
             "npm:@yaks/graph@0.2.33",
+            "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/sql@0.2.30",
             "npm:@yaks/sqlite@0.2.30",

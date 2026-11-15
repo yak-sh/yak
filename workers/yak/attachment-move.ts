@@ -6,8 +6,8 @@ import type { Meta } from '@yaks/sqlite'
 import { link } from '@yaks/edge'
 import { directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
-import type { File } from './operator-channels.ts'
-import { attachmentOf, attachmentRows } from './operator-attachments.ts'
+import { attachedOf, type File } from './operator-channels.ts'
+import { attachmentOf, attachmentRows } from '@yaks/blob/attachment'
 import { sourceId } from './operator-source.ts'
 import type { OperatorStore } from './operator-store.ts'
 
@@ -90,7 +90,7 @@ export let attachmentBackfill = async (
       }
       files = await Promise.all(files.map((file) => sized(env, file)))
       let message = String(source.request ?? row.entity.eid)
-      let bundles = attachmentRows(message, files)
+      let bundles = attachmentRows(message, files.map(attachedOf))
       if (bundles.length) await store.g.apply(bundles, { trusted: true })
     }
     if (rows.length == 50) pass.source = rows.at(-1)!.entity.eid
@@ -111,7 +111,9 @@ export let attachmentBackfill = async (
         if (
           (await store.g.read(`.attachment.artifact=${sha}&.limit=1`)).length
         ) continue
-        let bundles = attachmentRows(row.entity.eid, [await sized(env, file)])
+        let bundles = attachmentRows(row.entity.eid, [
+          attachedOf(await sized(env, file)),
+        ])
         let eid = attachmentOf(row.entity.eid, i)
         let { message: _, ...attachment } = bundles[1].attachment as Comp
         bundles[1] = { entity: { eid }, attachment }

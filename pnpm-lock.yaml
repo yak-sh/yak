@@ -652,6 +652,12 @@ importers:
       '@yaks/graph':
         specifier: 0.2.33
         version: link:../graph
+      '@yaks/query':
+        specifier: 0.2.32
+        version: link:../query
+      '@yaks/ram':
+        specifier: 0.2.24
+        version: link:../ram
       '@yaks/sql':
         specifier: 0.2.30
         version: link:../sql
@@ -671,9 +677,6 @@ importers:
       '@yaks/fts':
         specifier: 0.2.30
         version: link:../fts
-      '@yaks/ram':
-        specifier: 0.2.24
-        version: link:../ram
       '@yaks/sqlite':
         specifier: 0.2.30
         version: link:../sqlite

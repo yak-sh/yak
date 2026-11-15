@@ -51,7 +51,7 @@ import { forwarding, PATH } from '@yaks/model/step'
 import { AWAY, falling, MACHINE, namesFor } from './operator-machine.ts'
 import type { Calling } from '@yaks/tunnel/hosted'
 import { platform, ready, served } from './providers.ts'
-import { attachmentRows, shownFiles } from './operator-attachments.ts'
+import { artifactsOf, attachmentRows } from '@yaks/blob/attachment'
 import { attached, fileContext } from './operator-inputs.ts'
 import { agents, operatorProviders } from './config.ts'
 import { inputSchemaOf } from '@yaks/tools/schema'
@@ -109,6 +109,7 @@ import {
 } from './lib/hops.ts'
 import { drain, type OperatorStore } from './operator-store.ts'
 import {
+  attachedOf,
   type File,
   mailSend,
   messageReference,
@@ -150,6 +151,7 @@ import {
   TOPIC,
   topicOf,
 } from './operator-oracles.ts'
+import { attachmentKey } from './attachments.ts'
 
 type Store = OperatorStore
 export type Options = {
@@ -194,6 +196,27 @@ let recorded = (g: Graph, session: string, space: string): Graph => {
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
+
+/** The artifact row of each file kept in the space that a decision's choices
+ * show by its attachment id (@yaks/task `shows`), its media type read from
+ * its first bytes. */
+let shownFiles = (
+  env: Pick<Env, 'BLOBS'>,
+  space: Pick<Space, 'store'> | null,
+  choices: unknown,
+): Promise<Bundle[]> =>
+  !space || !Array.isArray(choices) ? Promise.resolve([]) : artifactsOf(
+    choices.map((c) => (c as { shows?: unknown })?.shows)
+      .filter((id): id is string =>
+        typeof id == 'string' && /^[0-9a-f]{64}$/.test(id)
+      ),
+    async (sha) => {
+      let kept = await env.BLOBS.get(attachmentKey(space, sha), {
+        range: { offset: 0, length: 64 },
+      })
+      return kept && new Uint8Array(await kept.arrayBuffer())
+    },
+  )
 
 // The directory an Operator reads through: the Worker's binding onto it.
 let opening = (env: Env) => () =>
@@ -2100,10 +2123,12 @@ export let operating = (
         await carrying(session, held, space, o, !o.signup),
         ...theirs ? await before(session, text, held, space) : [],
         given(session, input, text + reference, by, o),
-        ...attachmentRows(o.request ?? input, [
-          ...o.files ?? [],
-          ...sourceFile ? [sourceFile] : [],
-        ]),
+        ...attachmentRows(
+          o.request ?? input,
+          [...o.files ?? [], ...sourceFile ? [sourceFile] : []].map(
+            attachedOf,
+          ),
+        ),
       ], { trusted: true })
       options.tell?.(session)
       return { task: '', session, input }
@@ -2163,10 +2188,10 @@ export let operating = (
           $actor: { by },
         }]
         : [],
-      ...attachmentRows(o.request ?? input, [
-        ...o.files ?? [],
-        ...sourceFile ? [sourceFile] : [],
-      ]),
+      ...attachmentRows(
+        o.request ?? input,
+        [...o.files ?? [], ...sourceFile ? [sourceFile] : []].map(attachedOf),
+      ),
       given(
         session,
         input,

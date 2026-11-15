@@ -4,7 +4,8 @@ import { operatorMemory } from './operator-testing.ts'
 import { operatorVocab } from './operator-store.ts'
 import { ram } from '@yaks/ram'
 import { attachmentBackfill, ATTACHMENTS } from './attachment-move.ts'
-import { attachmentQuery } from './attachment-query.ts'
+import { attachmentsSeen } from '@yaks/blob/attachment'
+import { theirFiles } from './operator-access.ts'
 import { sourceReference } from './operator-source.ts'
 
 let p = platform('attachment-move')
@@ -81,11 +82,11 @@ p.env.BLOBS.list = async (opts) => {
 let before = transcriptReads
 let batches = 0
 while (await attachmentBackfill(marked, p.env)) batches++
-let uses = await attachmentQuery(store, {
-  space: space.eid,
-  person,
-  role: 'owner',
-}, '.attachment&*')
+let uses = await attachmentsSeen(
+  store.g,
+  theirFiles({ space: space.eid, person }),
+  '.attachment&*',
+)
 let artifacts = await store.g.read('.artifact&*')
 let reads = pages.length
 let repeated = await attachmentBackfill(marked, p.env)

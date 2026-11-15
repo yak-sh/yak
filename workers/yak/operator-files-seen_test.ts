@@ -1,7 +1,10 @@
+// What a person sees of the attachments in their Operator's store
+// (operator-access.ts `theirFiles`): their own, by the request or
+// conversation each came with, and never the messages themselves.
 import { equal, test } from '@yaks/testing'
+import { attachmentRows, attachmentsSeen } from '@yaks/blob/attachment'
 import { operatorMemory } from './operator-testing.ts'
-import { attachmentRows } from './operator-attachments.ts'
-import { attachmentQuery } from './attachment-query.ts'
+import { theirFiles } from './operator-access.ts'
 
 let store = operatorMemory()
 let space = crypto.randomUUID(),
@@ -9,11 +12,11 @@ let space = crypto.randomUUID(),
   other = crypto.randomUUID()
 let held = { space, person, role: 'owner' as const }
 let mine = crypto.randomUUID(), theirs = crypto.randomUUID()
-let file = (sha: string) => ({
+let file = (address: string) => ({
   name: 'private.docx',
-  mime: 'application/msword',
+  media_type: 'application/msword',
   size: 7,
-  key: 'checks/.operator/' + sha,
+  address,
 })
 let sha = 'a'.repeat(64), hidden = 'b'.repeat(64)
 await store.g.apply([
@@ -30,16 +33,18 @@ await store.g.apply([
   ...attachmentRows(mine, [file(sha)]),
   ...attachmentRows(theirs, [file(hidden)]),
 ], { trusted: true })
-let visible = await attachmentQuery(store, held, '.attachment&*')
-let artifacts = await attachmentQuery(store, held, '.artifact&*')
-let secret = await attachmentQuery(store, held, '.doc&*')
+let seen = (q: string, by = held, call?: string) =>
+  attachmentsSeen(store.g, theirFiles(by), q, call)
+let visible = await seen('.attachment&*')
+let artifacts = await seen('.artifact&*')
+let secret = await seen('.doc&*')
 let call = crypto.randomUUID()
-let counted = await attachmentQuery(store, held, '.attachment&.count', call)
-let focused = await attachmentQuery(store, held, `.entity.eid=${sha}&*`)
-let crossed = await attachmentQuery(store, {
+let counted = await seen('.attachment&.count', held, call)
+let focused = await seen(`.entity.eid=${sha}&*`)
+let crossed = await seen('.attachment&*', {
   ...held,
   space: crypto.randomUUID(),
-}, '.attachment&*')
+})
 
 test('connector attachment reads include own files and their artifact metadata', () => {
   equal(visible.length, 1)

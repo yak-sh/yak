@@ -99,16 +99,17 @@ host records that, and refuses the store to a config without @yaks/blob
 | `Representation`, `representation`, `represents`, `addressed`, `representations`              | Immutable representations and their graph plugin         |
 | `valueTools`, `valueRange`, `valueSearch`, `VALUE_LIMIT`, `ValueTool`                         | Bounded text-inspection tools                            |
 
-| Sub-module export     | Purpose                                                                                                    |
-| --------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `@yaks/blob/vocab`    | `docs`, `keywords`, `derived` and declaration/read helpers                                                 |
-| `@yaks/blob/graph`    | `plugins(host)`: the graph plugin over the host's blob store, and `required`: a store it wrote requires it |
-| `@yaks/blob/routes`   | `routes(host, options)`, backend helpers and route settings                                                |
-| `@yaks/blob/identify` | `contentType`, `artifactStore`: host byte detection and artifact storage                                   |
-| `@yaks/blob/file`     | `fileBlobs(dir)`: the filesystem store, which only a runtime with files loads                              |
-| `@yaks/blob/backend`  | `Backend`, `backend`, `artifactsAt`: configured and default artifact backends                              |
-| `@yaks/blob/store`    | `Blobs`, `memoryBlobs()`, `address`: the store shape and the memory store, without the rest of the package |
-| `@yaks/blob/serve`    | the HTTP responses above, `matches` among them, without the rest of the package                            |
+| Sub-module export       | Purpose                                                                                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@yaks/blob/vocab`      | `docs`, `keywords`, `derived` and declaration/read helpers                                                                                                                     |
+| `@yaks/blob/graph`      | `plugins(host)`: the graph plugin over the host's blob store, and `required`: a store it wrote requires it                                                                     |
+| `@yaks/blob/routes`     | `routes(host, options)`, backend helpers and route settings                                                                                                                    |
+| `@yaks/blob/identify`   | `contentType`, `artifactStore`: host byte detection and artifact storage                                                                                                       |
+| `@yaks/blob/file`       | `fileBlobs(dir)`: the filesystem store, which only a runtime with files loads                                                                                                  |
+| `@yaks/blob/backend`    | `Backend`, `backend`, `artifactsAt`: configured and default artifact backends                                                                                                  |
+| `@yaks/blob/store`      | `Blobs`, `memoryBlobs()`, `address`: the store shape and the memory store, without the rest of the package                                                                     |
+| `@yaks/blob/serve`      | the HTTP responses above, `matches` among them, without the rest of the package                                                                                                |
+| `@yaks/blob/attachment` | `attachmentRows`, `attachmentOf`, `artifactsOf`, `attachmentsSeen`: a file's artifact and its use beside each message, and a reader shown only the attachments a clause admits |
 
 ## Addresses
 

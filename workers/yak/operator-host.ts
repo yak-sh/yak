@@ -9,7 +9,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { sha256 } from '@yaks/graph/sha256'
 import { short } from '@yaks/id'
 import { eids } from '@yaks/markdown/structural'
-import { ownerOf, owns, placed } from './operator-access.ts'
+import { ownerOf, owns, placed, theirFiles } from './operator-access.ts'
 import type { Held } from './build-door.ts'
 import type { Copy } from './operator-skills.ts'
 import type { Operator } from './operator.ts'
@@ -1628,7 +1628,7 @@ export let operatorRequest = async (
   // A file sent with a request, or brought back by a step of a session the
   // asker owns (an image the Operator made), to open from the conversation.
   if (path == '/operator/attachments') {
-    let { attachmentQuery } = await import('./attachment-query.ts')
+    let { attachmentsSeen } = await import('@yaks/blob/attachment')
     let { conjoin } = await import('@yaks/query/core')
     let q = conjoin(
       String(args.q ?? '.attachment&*'),
@@ -1636,9 +1636,9 @@ export let operatorRequest = async (
       ...(typeof args.limit == 'number' ? [`.limit=${args.limit}`] : []),
     )
     return Response.json(
-      await attachmentQuery(
-        store,
-        held,
+      await attachmentsSeen(
+        store.g,
+        theirFiles(held),
         q,
         args.queryCall ? String(args.queryCall) : undefined,
       ),
