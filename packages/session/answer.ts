@@ -109,19 +109,23 @@ export let turnOf = (entries: Bundle[]): Bundle[] =>
 // `ModelError`); any other is a refused request. A ceiling (`LIMIT`) is said
 // in its own sentence. The host's own credit with the provider spent
 // (@yaks/anthropic `credit`) is no ceiling of the person's.
-let REFUSED: Record<string, string> = {
-  refusal: 'the model declined to do this',
-  busy: 'the model is too busy to answer right now',
-  credit: 'the assistant is unavailable for now',
+let REFUSED: Record<string, (name: string) => string> = {
+  refusal: () => 'the model declined to do this',
+  busy: () => 'the model is too busy to answer right now',
+  credit: (name) => `${name} is unavailable for now`,
 }
 let couldnt = (why: string) => `I couldn't finish this: ${why}.`
 
 /** What a turn ended with in plain words, and what went wrong where it did. */
 export type Reply = { text: string; fault?: string }
 
+/** Who a reply's words name: the `host` at fault where something failed,
+ * and the assistant answering (`name`). */
+export type Naming = { host?: string; name?: string }
+
 /**
  * What ended a session's work: its newest reply, else what kept it from one,
- * in plain words, naming `host` where it is at fault. `fault` is what went
+ * in plain words, naming the host where it is at fault ({@link Naming}). `fault` is what went
  * wrong, for the host's tracker: a refusal, a failure, or an end with no
  * reply. A person's stop is no fault, nor a ceiling met (a spent budget says
  * so in its own words), and a step that threw was reported where it threw
@@ -138,7 +142,7 @@ export type Reply = { text: string; fault?: string }
  * equal(replyOf([said, line(3, {
  *   output: { source: 'a' }, refusal: { code: 'request' },
  *   content: { body: '400 tools.26: input_schema does not support oneOf' },
- * })], 'yaks.app'), {
+ * })], { host: 'yaks.app' }), {
  *   text: "I couldn't finish this: the model refused the request." +
  *     ' The people who run yaks.app have been told.',
  *   fault: 'request: 400 tools.26: input_schema does not support oneOf',
@@ -156,7 +160,10 @@ export type Reply = { text: string; fault?: string }
  *   'ended without an answer')
  * ```
  */
-export let replyOf = (entries: Bundle[], host = 'this service'): Reply => {
+export let replyOf = (
+  entries: Bundle[],
+  { host = 'this service', name = 'the assistant' }: Naming = {},
+): Reply => {
   // A model asked after its calls were answered, a refusal among them, is
   // where the work stands: what it answered, or that it answered nothing.
   let end = ordered(entries).findLast((b) =>
@@ -178,7 +185,7 @@ export let replyOf = (entries: Bundle[], host = 'this service'): Reply => {
     : String(comp(end, 'failed')?.reason ?? '') || text ||
       'ended without an answer'
   let why = kind == 'refusal'
-    ? couldnt(REFUSED[code] ?? 'the model refused the request')
+    ? couldnt(REFUSED[code]?.(name) ?? 'the model refused the request')
     : end
     ? broke
     : 'This ended without an answer.'
@@ -196,13 +203,13 @@ export type Answer = Reply & { mark?: Bundle; given: Bundle[] }
  * line only as far as it needs, never every line a conversation has held for
  * weeks: a helper's own turn, and a conversation's back to the reply before
  * the words it answers and before each call that started a helper whose
- * report stands for words. `host` names who is at fault in a failure's words
+ * report stands for words. `naming` says who a failure's words name
  * ({@link replyOf}).
  */
 export let answerOf = async (
   g: Graph,
   session: Eid,
-  host?: string,
+  naming?: Naming,
 ): Promise<Answer> => {
   let [row] = await g.get([session], ['spawned'])
   let link = comp(row, 'spawned')
@@ -228,7 +235,7 @@ export let answerOf = async (
     await starts(read)
     return !!turnAt(read, calls, false)
   })
-  let reply = replyOf(turnOf(entries), host)
+  let reply = replyOf(turnOf(entries), naming)
   if (helper) return { ...reply, given: [] }
   await starts(entries)
   let turn = turnAt(entries, calls, whole)

@@ -913,6 +913,9 @@ let routeOf = (request?: Comp) =>
     ['channel', 'address', 'reply_to', 'via'].map((k) => request?.[k] ?? ''),
   )
 
+// Who the Operator's replies name: yaks.app, where it failed, and itself.
+let NAMING = { host: 'yaks.app', name: 'the Operator' }
+
 // What a conversation is told when its person's own machine could not answer
 // a step and a hosted model answers instead (`operating`'s `fell`).
 let HOSTED =
@@ -1337,7 +1340,7 @@ export let operating = (
   }
   let answered = async (session: string) => {
     let [row] = await g.get([session], ['spawned', 'occurrence'])
-    let reply = await answerOf(g, session, 'yaks.app')
+    let reply = await answerOf(g, session, NAMING)
     if (row?.occurrence) {
       await workFinished(store, row, reply.text, reply.fault)
       return
@@ -2121,7 +2124,7 @@ export let operating = (
       task,
       session,
       text: ENDED.includes(status)
-        ? replyOf(mine, 'yaks.app').text
+        ? replyOf(mine, NAMING).text
         : `The Operator is still working. Use operator_read with task ${task} to read its progress and answer.`,
       status,
       cost: mine.reduce(
