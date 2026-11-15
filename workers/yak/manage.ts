@@ -84,7 +84,8 @@ import { DAYS, NOT_ON, statsFor } from './views.ts'
 import { refuse } from './tool.ts'
 import { letIn, letOut, reachOf } from './operator-reach.ts'
 import { json } from '@yaks/platform/refused'
-import { kernels, moved, redirect, shelf } from './apps.ts'
+import { moved, redirect, shelf } from './apps.ts'
+import { kernels } from '@yaks/platform/ladder'
 
 // The identity part, asked for at request time rather than imported at the
 // top: it carries the OAuth provider, whose `cloudflare:` modules exist only
@@ -463,7 +464,7 @@ export let shared = async (
   return [...each.values()]
     .filter(({ space, app }) =>
       !owned.has(space.eid) && !space.trashed && !app.trashed &&
-      !kernels(space, app.slug)
+      !kernels(space.slug, app.slug)
     )
     .map(({ space, app }) => ({
       eid: app.eid,

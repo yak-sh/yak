@@ -39,10 +39,10 @@ import { previewed } from './preview-html.ts'
 // per app: a page in a loop is a bug to see once, not a write flood. What the
 // door refused on purpose never becomes one (unseen.ts `refusal`): a
 // signed-out visitor sent to sign in is the platform working.
-import { apex, type Host, url as hostUrl } from '@yaks/platform/host'
+import { type Host, url as hostUrl } from '@yaks/platform/host'
 import { r2Objects } from './lib/objects.ts'
 import { logoBytes, logoIcon } from './logo.ts'
-import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build-door.ts'
+import { joining, NOBODY, NOT_A_WRITER, posting } from './build-door.ts'
 import { browserImmutable, immutable } from './cache.ts'
 import { client } from './sheets.ts'
 import {
@@ -68,7 +68,6 @@ import {
   daysLeft,
   type Directory,
   directory,
-  META,
   offered,
   type Role,
   type Space,
@@ -137,14 +136,10 @@ import {
   API_AT,
   chatPath,
   hostOf,
-  MANAGE,
   manageAt,
   MANIFEST,
   MOUNT,
-  movedFor,
-  OURS,
   paged as pagePath,
-  route,
   signInAt,
 } from '@yaks/platform/routes'
 import { covers, platformPath } from './router.ts'
@@ -174,8 +169,8 @@ import {
   dataPath,
   webAsset,
   webPage,
-  webPath,
 } from './web.ts'
+import { appApi, kernels, rung, webPath } from '@yaks/platform/ladder'
 import { pageScript, type Scripts } from './page-script.ts'
 import {
   admitted,
@@ -469,14 +464,6 @@ let mistake = async (
     })
   }
 }
-
-// An app's API is a machine door even when the address names no app. Keep
-// its missing answer in the same JSON envelope as every refusal below; the
-// human-facing HTML 404 belongs only to pages. The raw pathname is used
-// because `/api/query` is parsed as an app called `api`, while
-// `/<app>/api/query` carries `/api/query` as that app's path.
-let appApi = (pathname: string) =>
-  /^(?:\/[^/]+)?\/(?:api\/|_web(?:\/|$))/.test(pathname)
 
 let nothingAt = (pathname: string, env: Env) =>
   appApi(pathname)
@@ -2318,15 +2305,6 @@ export let api = async (
   return json(404, 'not_found')
 }
 
-// The directory store is the platform's own — people, addresses, sign-in
-// codes, memberships — and it is kernel data, not an app (T-32585). Nothing
-// is served at its address to anyone, owner included: the kernel's parts read
-// it directly through `storeOf` (directory.ts), and the owner's door to it is
-// the MCP graph tier. `yak/platform` is an entity in the directory so the
-// directory can describe its own store; it is not an app this handler serves.
-export let kernels = (space: Space, app: string | null) =>
-  space.slug == META.space && app == META.app
-
 // The space's own address, listed: every app this person may open, and how
 // many they may not. What a stranger must never learn is the name of a
 // private app, so the filter is per app and it is `reads` — the same question
@@ -2341,7 +2319,7 @@ export let kernels = (space: Space, app: string | null) =>
 // release answers nothing at its address (facets/pages-graph.ts), so only
 // those who may write it are shown it.
 export let shelf = (apps: App[], space: Space, who: Who) => {
-  let here = apps.filter((a) => !kernels(space, a.slug))
+  let here = apps.filter((a) => !kernels(space.slug, a.slug))
   let all = here.filter((a) =>
     !a.trashed && (writes(who.role) || !!a.version || !!a.publishing?.length)
   )
@@ -2560,40 +2538,13 @@ let unborn = (req: Request, env: Env) =>
 // went — the directory, the app's own worker, the bytes — instead of leaving
 // a second to guess at (T-33176).
 //
-// The order, and it is a rule rather than an accident (D-34197). For a
-// request to `<space>.yaks.app<path>` — which is also every request a custom
-// domain carries, whether it names the space or one app mounted at its root
-// (index.ts `aimed`, T-34596) — five rungs, the first that answers winning:
-//
-//  1. Platform paths are the kernel's and no app routes them: `/.well-known/`
-//     on a hostname of ours, where a site grants authority over a name that
-//     is not the space's (@yaks/platform/routes `platform`, decided before this part), an
-//     app's `/<app>/api/…` store doors, and the directory's own space, which
-//     nothing is served at to anyone (T-32585).
-//  2. An app's slug owns the first path segment: `/<app>/…` is that app — its
-//     own worker first where it has one, its files behind it — whatever the
-//     home app has at the same address, so a home page that wants `/garden`
-//     has to be in a space where no app is called garden. A former slug
-//     redirects here.
-//  3. The home app answers every path no app claims, at the bare hostname,
-//     asked exactly the way rung 2 asks an app: its worker first, its files
-//     behind it. `/photo.png` is its file, `/about` its page.
-//  4. The space's index is `/`'s last word — a space with no home app, or a
-//     home app whose worker passed and which has no index.html — so a space
-//     that exists is a door and not a 404 (pages.ts `spaceIndex`).
-//  5. Every other path is a missing page: a 404 where the space has no home
-//     app, and where it has one, the home app's own answer for an address with
-//     no file (files.ts `resolve`, which follows its `not_found_handling`).
-//
-// Rungs 3 and 5 are one call. That is what makes the home app the space's
-// router — a worker that sees every path no other app claims, and answers 404
-// to pass (dispatch.ts `ran`), leaving the rest to its files.
-//
-// And one rung is opted into, between 1 and 2: the paths the home app named
-// in `home.first` are its worker's before they are the owning app's
-// (`firstly` below). Empty for almost every space, and it can only ever move
-// a path from the app that owns it to the home app — never off the platform's
-// own (rung 1), and never onto a space that asked for nothing.
+// The order is a rule rather than an accident (@yaks/platform/ladder, which
+// decides where an address stops from what this reads for it). One rung is
+// opted into, between 1 and 2: the paths the home app named in `home.first`
+// are its worker's before they are the owning app's (`firstly` above). Empty
+// for almost every space, and it can only ever move a path from the app that
+// owns it to the home app — never off the platform's own (rung 1), and never
+// onto a space that asked for nothing.
 //
 // `edge` is the same order served for Site's cache (page-cache.ts): an
 // anonymous visitor, the directory read fresh, nothing counted, and every
@@ -2609,15 +2560,6 @@ let served = async (
   view?: Directory,
 ): Promise<Response> => {
   let url = new URL(req.url)
-  let r = route(hostOf(req, env), url.pathname, env)
-  if (r.space == null) {
-    return url.pathname == MANAGE || url.pathname.startsWith(`${MANAGE}/`)
-      ? (await import('./manage.ts')).manage(req, env)
-      : nothingAt(url.pathname, env)
-  }
-  // A page any visitor could be sent is answered from Site's cache, with no
-  // wait on the directory. Only a pass needs a directory read here: Site
-  // already resolved the address of every page it answers, including a 404.
   let direct = bound(env.DIRECTORY, dirPart.fetch, env)
   let dir = view ?? directory(direct, {
     copy: copyOf(env),
@@ -2631,98 +2573,89 @@ let served = async (
     if (dir.stale) answer.headers.set('x-yak-directory-copy', '1')
     return answer
   }
-  // The space, the app at the address, the front page and the seat of the
-  // person the cookie names, in one read of the directory: every rung below
-  // asks one of them, and asking each in turn was a round trip apiece.
-  // Site's request carries a cookie only at a session's own key (kept-page.ts
-  // `visitor`), where it serves the person their own copy of a stranger's page.
-  let [cookied, authenticated] = await Promise.all([
-    sessionPerson(req, env.SESSION_SECRET),
-    !edge && req.headers.has('authorization') && !bearing(req) &&
-      url.pathname.includes('/api/')
-      ? asking(env, req)
-      : null,
-  ])
-  let person = authenticated?.who?.person ?? cookied
-  if (!edge) {
-    let session = cookied && cookieValue(req.headers.get('cookie'))
-    let page = await asked(visitor, env, c, session || null)
-    if (page) return page
-  }
-  let routing = c.time('route', () => dir.page(r.space!, r.app, person))
-  // The name `/who` tells a person beside their standing (api `/who`, and
-  // `/me`, its shipped name), asked with the route so a page's first question
-  // waits on that one trip.
-  if (person && !edge && /\/api\/(?:who|me)$/.test(url.pathname)) {
-    dir.nameAt(person).catch(() => {})
-  }
-  let reading = routing.then((route) => route.space)
-  // A seat, from that read for the person it asked about, else the directory.
-  let seatOf = async (p: string) => {
-    let { role } = await routing
-    return p == person && role !== undefined ? role : dir.role(space!, p)
-  }
-  let space = await reading
-  // Not a space here — but it may be where one used to be (T-34658): a rename
-  // moves `space.slug` and keeps the old subdomain pointing at it, whole path
-  // and query, the way a renamed app's old path does one level down. A
-  // permanent move, because a space's address is on more links than an app's
-  // and every one of them should heal itself.
-  if (!space) {
-    let was = await c.time('moved', () => dir.formerly(r.space!))
-    if (was) {
-      return moved(
-        req,
-        `https://${was.slug}.${apex(env)}${url.pathname}${url.search}`,
-      )
-    }
-    let none = nothingAt(url.pathname, env)
-    return edge ? keep(none, null, null) : none
-  }
-  if (kernels(space, r.app)) return nothingAt(url.pathname, env)
+  // The person the cookie names, and a machine's bearer at an `/api/` door,
+  // read once, when a hostname names a space. Site's request carries a cookie
+  // only at a session's own key (kept-page.ts `visitor`), where it serves the
+  // person their own copy of a stranger's page.
+  let ids: ReturnType<typeof identify> | undefined
+  let identify = () =>
+    Promise.all([
+      sessionPerson(req, env.SESSION_SECRET),
+      !edge && req.headers.has('authorization') && !bearing(req) &&
+        url.pathname.includes('/api/')
+        ? asking(env, req)
+        : null,
+    ]).then(([cookied, authenticated]) => ({
+      cookied,
+      authenticated,
+      person: authenticated?.who?.person ?? cookied,
+    }))
+  let identity = () => ids ??= identify()
+  let step = await rung({
+    host: hostOf(req, env),
+    method: req.method,
+    pathname: url.pathname,
+    search: url.search,
+    mount: req.headers.get(MOUNT),
+  }, {
+    kept: async () => {
+      let { cookied } = await identity()
+      if (edge) return null
+      let session = cookied && cookieValue(req.headers.get('cookie'))
+      return await asked(visitor, env, c, session || null)
+    },
+    // The space, the app at the address, the front page and the seat of the
+    // person the cookie names, in one read of the directory: every rung asks
+    // one of them, and asking each in turn was a round trip apiece.
+    page: async (space, app) => {
+      let { person } = await identity()
+      let read = c.time('route', () => dir.page(space, app, person))
+      // The name `/who` tells a person beside their standing (api `/who`, and
+      // `/me`, its shipped name), asked with the route so a page's first
+      // question waits on that one trip.
+      if (person && !edge && /\/api\/(?:who|me)$/.test(url.pathname)) {
+        dir.nameAt(person).catch(() => {})
+      }
+      return await read
+    },
+    formerly: (space) => c.time('moved', () => dir.formerly(space)),
+    former: (space, app) => dir.former(space, app),
+  }, env)
+  if (step.to == 'manage') return (await import('./manage.ts')).manage(req, env)
+  if (step.to == 'kept') return step.page
   // Its pages tell the browser whose this hostname's storage is now
   // (site-data.ts), on their way out of `fetch` below.
-  if (!edge) serves(visitor, space.store)
-  // The whole space in the trash, before any rung of the order below: every
-  // hostname of it answers nothing, and its owner is answered the page that
-  // brings it back (`closed` above, T-34431).
-  if (space.trashed) {
-    return appApi(url.pathname)
-      ? nothingAt(url.pathname, env)
-      : closed(req, env, dir, space)
+  if (step.space && !edge) serves(visitor, step.space.store)
+  if (step.to == 'nothing') {
+    let none = nothingAt(url.pathname, env)
+    return edge && step.kept ? keep(none, step.space ?? null, null) : none
   }
-  // Where the dashboard was before it moved to the apex (T-39354): letters
-  // and answers still carry these addresses, so each view is sent on to its
-  // new one, query and all. A form posted from a page left open since has
-  // nothing to land on and is sent to the page instead.
-  if (url.pathname == OURS || url.pathname.startsWith(`${OURS}/`)) {
-    let path = movedFor(MANAGE + url.pathname.slice(OURS.length), space.slug)
-    if (!path) return nothingHere(env)
-    let to = new URL(path, hostUrl(env))
-    for (let [k, v] of url.searchParams) to.searchParams.append(k, v)
-    return req.method == 'GET' || req.method == 'HEAD'
-      ? moved(req, to.href)
-      : redirect(to.href, 303)
-  }
-  // The builder's socket (build.ts, T-34240). A space's door, not an app's:
-  // the person it is for has no app yet, so it is answered here — before the
-  // home app is looked for, since a space with none would be a 404 at every
-  // path but `/`. It is a platform path (router.ts), so no app routes it.
-  // The live half of that chat (public/build.js, T-34242), served here so a
-  // space's page needs no asset of the apex — the same rule as the client an
-  // app's pages import, one file for every space. Nobody's secret: it is the
-  // page's own script, and the door it opens still asks who is asking.
-  if (url.pathname == `${BUILD}.js`) {
-    return platformFile(req, env, '/build.js')
-  }
-  if (url.pathname == BUILD) {
+  if (step.to == 'sent') return redirect(step.href, step.status)
+  let { space, read: routing } = step
+  let { person, authenticated } = await identity()
+  // A seat, from that read for the person it asked about, else the directory.
+  let seatOf = (p: string) =>
+    p == person && routing.role !== undefined
+      ? Promise.resolve(routing.role)
+      : dir.role(space, p)
+  // Site keeps what is the same for everyone (page-cache.ts `keepable`): the
+  // own files of an app anyone may read (public or open), and the release
+  // files of one anyone may install. From a directory copy a moment old it
+  // keeps only a public app's.
+  let keeps = (app: App, path: string) =>
+    keepable(app, path) && !(dir.stale && app.access != 'public')
+  if (step.to == 'closed') return closed(req, env, dir, space)
+  if (step.to == 'build') {
+    // Nobody's secret: the chat's script is the page's own, and the door it
+    // opens still asks who is asking.
+    if (step.script) return platformFile(req, env, '/build.js')
     let posts = req.method == 'POST'
     if (!posts && req.headers.get('upgrade') != 'websocket') {
       return json(426, 'expected_websocket')
     }
     let who = await c.time(
       'who',
-      () => whoIs(req, env.SESSION_SECRET, seatOf, space!.eid),
+      () => whoIs(req, env.SESSION_SECRET, seatOf, space.eid),
     )
     if (!who.person) {
       return json(401, 'not_a_writer', NOBODY, signInAt(url.href, env))
@@ -2734,120 +2667,51 @@ let served = async (
       ? posting(env, space, req, who)
       : joining(env, space.eid, req, who)
   }
-  // The app at the address and the space's front page, in one read: every
-  // rung below that needs the front page (rung 1½, rung 3) has it already.
-  let { app, home } = await routing
-  // In the trash (erase.ts, T-34430): the address is held for it and answers
-  // nothing while it waits. Not a 410 and not a redirect — to the web this is
-  // an address with nothing at it, which is what a delete has always meant —
-  // and only the space's own people are told where the app went, since a
+  // Only the space's own people are told where a trashed app went, since a
   // stranger learning that an app was deleted here learns something that is
   // not theirs.
-  if (app?.trashed) {
-    if (appApi(url.pathname)) {
-      return nothingAt(url.pathname, env)
-    }
+  if (step.to == 'binned') {
     let who = await c.time(
       'who',
-      () => whoIs(req, env.SESSION_SECRET, seatOf, space!.eid),
+      () => whoIs(req, env.SESSION_SECRET, seatOf, space.eid),
     )
     return who.role == 'owner'
       ? binned({
         space: space.slug,
-        title: app.title || app.slug,
-        days: daysLeft(app.trashed),
+        title: step.app.title || step.app.slug,
+        days: daysLeft(step.app.trashed!),
       }, env)
       : nothingHere(env)
   }
-  if (r.app && !app) {
-    // Not an app here — but it may be where one used to be (directory.ts
-    // former): a rename moves the address and keeps the old one pointing at
-    // it, files and `/api/…` alike.
-    let was = await dir.former(space, r.app)
-    if (was) return moved(req, `/${was.slug}${r.path || '/'}${url.search}`)
+  if (step.to == 'index') {
+    // A stranger's view is the same for every stranger, so Site keeps it for
+    // them, and a person is never answered it (kept-page.ts `asked`): one
+    // with no seat here is answered their own, kept at their session's key,
+    // and a member's is never kept.
+    let { page, alone } = await index(req, env, space, routing.roster!, seatOf)
+    if (!edge) return page
+    return alone ? marked(keep(page, space, null, [200], alone)) : passed()
   }
-  // The space's front page is served at its bare hostname (T-33040): rung 3
-  // above. Before this the root answered a 302 into `/<app>/`, so the
-  // sub-path was in the address bar and in every link anyone copied. On a
-  // customer's own domain that is the whole point: her site has to be at
-  // herbusiness.com (T-33035, index.ts `aimed`), and one rule serves both
-  // hostnames.
-  //
-  // A custom domain arrives already mounted at its own root (index.ts
-  // `aimed` sets the header): the app is the domain's `/` however the
-  // platform's own address writes it, so it is not forwarded anywhere — the
-  // forward would land back on the address that arrived — and its pages
-  // resolve from that root.
-  let mount = req.headers.get(MOUNT)
-  let path = r.path
-  let front = !!app && app.home
-  // Site keeps what is the same for everyone (page-cache.ts `keepable`): the
-  // own files of an app anyone may read (public or open), and the release
-  // files of one anyone may install. From a directory copy a moment old it
-  // keeps only a public app's.
-  let keeps = (app: App, path: string) =>
-    keepable(app, path) && !(dir.stale && app.access != 'public')
-  if (!app) {
-    // Which app is home is a directory read, so it was read above, where env
-    // is, and not in @yaks/platform/routes, which is pure (index.ts `aimed`, same reason).
-    // No front page at all — the ordinary state of a space, since being the
-    // first app claims nothing (tools.ts `app_new`). Rung 4 at the bare
-    // address, rung 5's 404 anywhere else: there is no home worker to be the
-    // fall-through, so a path under such a space names nothing and says so.
-    if (!home || kernels(space, home.slug)) {
-      if (url.pathname != '/') {
-        // The same 404 for everyone, kept until the space routes anew.
-        let none = nothingAt(url.pathname, env)
-        return edge ? keep(none, space, null) : none
-      }
-      // A stranger's view is the same for every stranger, so Site keeps it
-      // for them, and a person is never answered it (kept-page.ts `asked`):
-      // one with no seat here is answered their own, kept at their session's
-      // key, and a member's is never kept.
-      let { page, alone } = await index(
-        req,
-        env,
-        space,
-        (await routing).roster!,
-        seatOf,
-      )
-      if (!edge) return page
-      return alone ? marked(keep(page, space, null, [200], alone)) : passed()
-    }
-    // `/<x>/api/…` named an app that is not here. That is a wrong address,
-    // not one of the front page's own paths: a page asking a store there has
-    // to hear a 404, never a page of HTML it cannot parse (C-32574 item 4).
-    if (r.app && (r.path.startsWith('/api/') || webPath(r.path))) {
-      return nothingAt(url.pathname, env)
-    }
-    app = home
-    front = true
-    path = url.pathname
-  } else if (!mount && front && (path == '' || path == '/')) {
-    // The home app's own `/<app>/` forwards to the bare hostname, so its
-    // address is that and nothing else, and links anybody already holds still
-    // arrive. Temporary, not permanent — which app is home is a word the owner
-    // moves from one app to another (tools.ts `app_set`), and a 301 a browser
-    // cached would outlive the move.
-    return redirect(`/${url.search}`)
-  } else if (path == '') {
-    // `/<app>` itself, sent to its slash, which is how a link is often
-    // shared, its query with it. Site keeps the forward as it keeps the page
-    // behind it, so a visitor following one waits on no directory read and is
-    // given no cookie, and the visitor's query is put back on as it is served
-    // (kept-page.ts `asked`).
-    let slash = redirect(`${url.pathname}/${url.search}`)
+  if (step.to == 'slash') {
+    // Site keeps the forward as it keeps the page behind it, so a visitor
+    // following one waits on no directory read and is given no cookie, and
+    // the visitor's query is put back on as it is served (kept-page.ts
+    // `asked`).
+    let slash = redirect(step.href)
     if (!edge) return slash
-    return keeps(app, path) ? marked(keep(slash, space, app, [302])) : passed()
+    return keeps(step.app, '')
+      ? marked(keep(slash, space, step.app, [302]))
+      : passed()
   }
+  let { front, bare } = step
+  let { home } = routing
+  let app = step.app
+  let path = step.path
   // The app's own worker, coming back through its service binding for its
   // store or its files (dispatch.ts): the grant says who it is acting as, so
   // there is no cookie to read — and a request holding one is never sent back
   // to the worker, which is what keeps `env.FILES.fetch('/index.html')` from
   // being a loop.
-  // Where this app is mounted for the browser that asked: the prefix its
-  // pages resolve relative URLs against, and where its reporter lives.
-  let bare = mount ?? (front ? '/' : `/${app.slug}/`)
   // A sandboxed app (installed.ts): its page's own requests arrive with its
   // page token leading the path, `/<app>/~<token>/…`. The segment is taken
   // off here, so everything below — the app's worker included — sees the

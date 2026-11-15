@@ -5,8 +5,6 @@ import type { Hosting } from '../../packages/browse/hosting.ts'
 import { named } from './sheets.ts'
 import { ADDRESS } from '@yaks/platform/routes'
 
-export let webPath = (path: string) =>
-  path == '/_web' || path.startsWith('/_web/')
 // The app's data editor (pages.ts `editor`, public/data.js), and its script.
 export let DATA = '/_web/data'
 export let DATA_SCRIPT = '/_web/data.js'

@@ -68,11 +68,6 @@ export let carried = (url: string, req: Request): Request => {
   return out
 }
 
-/** Where the page finds it: a space's own address, ahead of every app in it
- * (router.ts PLATFORM_PATHS `/api/*`), because a person with no app yet is
- * exactly who the builder is for. */
-export let BUILD = '/api/build'
-
 /** A line said while a build is running (build.ts `#hold`): kept, and
  * taken up once the build ends, said as the builder says everything: a
  * sentence. */
