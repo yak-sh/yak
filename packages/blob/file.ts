@@ -10,7 +10,7 @@
 // which this package computes, so no path can escape the directory.
 
 import { mkdir, readFile, writeFile } from '@yaks/file/io'
-import type { Blobs } from './store.ts'
+import { type Blobs, memoryBlobs } from './store.ts'
 
 /**
  * A {@link Blobs} over a directory: `<dir>/<sha>` holds the bytes stored under
@@ -43,3 +43,9 @@ export let fileBlobs = (dir: string): Blobs => {
     },
   }
 }
+
+/** The default binary store: beside a file-backed graph, or in memory. */
+export let artifactsAt = (path: string): Blobs =>
+  path == ':memory:'
+    ? memoryBlobs()
+    : fileBlobs(path.slice(0, path.lastIndexOf('/') + 1) + 'images')

@@ -99,7 +99,8 @@ import { EFFECT, effects, expiration, released } from '@yaks/effects'
 import { type Local, peek } from '@yaks/secrets'
 import { command, reporter, revision } from './report.ts'
 import { faults } from '@yaks/api/refuse'
-import { artifactsAt, type Backend, backend } from '@yaks/blob/backend'
+import { type Backend, backend } from '@yaks/blob/backend'
+import { artifactsAt, fileBlobs } from '@yaks/blob/file'
 import { blobSchema, sqliteBlobs } from '@yaks/blob/sqlite'
 import type { Blobs } from '@yaks/blob'
 import { type Config, dbOf, given, used } from './config.ts'
@@ -637,7 +638,7 @@ let composed = async (
       | Backend
       | undefined
     let selected: { store?: Blobs; waiting?: string } = chosen
-      ? backend(chosen, { blobs })
+      ? backend(chosen, { blobs, files: fileBlobs })
       : { store: artifactsAt(path) }
     let artifacts = selected.store
     if (!artifacts) throw new Error(`@yaks/blob: ${selected.waiting}`)

@@ -27,6 +27,13 @@ test('every door the kernel opens imports only node modules the Worker has', asy
       minify: false,
       sourcemap: false,
     })
+    // esbuild reads the sources itself, where the runner cannot see, so a
+    // pass would be kept while a door's imports change under it (bug
+    // 520c372f). Each input is read here, through Deno, so it is one this
+    // test depends on (@yaks/testing's observed reads).
+    for (let input of Object.keys(metafile!.inputs)) {
+      if (!input.includes(':')) await Deno.stat(join(root, input))
+    }
     let failing: Record<string, string[]> = {}
     for (let [file, chunk] of Object.entries(metafile!.outputs)) {
       if (chunk.entryPoint && HOST.has(chunk.entryPoint)) continue
