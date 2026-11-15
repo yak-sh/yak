@@ -171,7 +171,7 @@ export let kept = (
   if (
     (req.method != 'GET' && req.method != 'HEAD') ||
     platform(host, path, env) || handedOff(host, path, env) ||
-    guarded(req.method, path) &&
+    guarded(req) &&
       !sameOrigin(host, req.headers.get('origin'), env) ||
     !settled(req)
   ) return null

@@ -233,9 +233,10 @@ test("platform: a grant on our name is not an app's to make", () => {
 })
 
 // What the origin check guards (routes.ts `guarded`): every write but the
-// OAuth provider's two CORS doors, and every method where the graph answers.
+// OAuth provider's two CORS doors, every method where the graph answers, and
+// every socket.
 test('guarded: every write, and the graph doors, not the pages', () => {
-  let doors: [string, string, boolean][] = [
+  let doors: [string, string, boolean, boolean?][] = [
     ['GET', '/recipes/api/apply', true],
     ['GET', '/recipes/api/ws', true],
     ['GET', '/recipes/api/blob', true],
@@ -267,9 +268,18 @@ test('guarded: every write, and the graph doors, not the pages', () => {
     ['GET', '/recipes/apiary/x', false],
     ['GET', '/recipes/photo.png', false],
     ['GET', '/mcpx', false],
+    // Every socket, wherever it is aimed (T-704): the Operator's, under
+    // `/manage`, among them.
+    ['GET', '/manage/jeff/operator/ws', true, true],
+    ['GET', '/manage/jeff', true, true],
+    ['GET', '/manage/jeff', false],
   ]
-  for (let [method, path, want] of doors) {
-    assertEquals(guarded(method, path), want, `${method} ${path}`)
+  for (let [method, path, want, socket] of doors) {
+    let req = new Request(`https://jeff.yaks.app${path}`, {
+      method,
+      headers: socket ? { upgrade: 'websocket' } : {},
+    })
+    assertEquals(guarded(req), want, `${method} ${path}`)
   }
 })
 

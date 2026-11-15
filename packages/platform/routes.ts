@@ -668,10 +668,22 @@ export let platform = (
 // over-reaches a little: a static asset at `/x/api/y` on the apex matches too,
 // which costs nothing, since nothing a browser fetches cross-origin without
 // CORS can read the answer either way.
-export let guarded = (method: string, pathname: string): boolean =>
-  (method != 'GET' && method != 'HEAD' && method != 'OPTIONS' &&
-    pathname != OAUTH.token && pathname != OAUTH.register) ||
-  pathname == '/mcp' || /^(?:\/[^/]+)?\/api\//.test(pathname)
+//
+// And every WebSocket handshake, wherever it is aimed: a handshake is a GET
+// that carries the cookie and is outside the same-origin policy, and the page
+// that opens a socket reads and writes it. The upgrade header, like the
+// method, is one no new socket can forget to send, so no list of socket paths
+// has to keep up.
+export let guarded = (req: Request): boolean => {
+  let { method } = req, path = new URL(req.url).pathname
+  return (method != 'GET' && method != 'HEAD' && method != 'OPTIONS' &&
+    path != OAUTH.token && path != OAUTH.register) ||
+    path == '/mcp' || /^(?:\/[^/]+)?\/api\//.test(path) || upgrading(req)
+}
+
+/** Whether a request asks to become a WebSocket. */
+let upgrading = (req: Request): boolean =>
+  (req.headers.get('upgrade') ?? '').toLowerCase() == 'websocket'
 
 // The browser's own word for the page that asked, against the hostname it
 // asked at. Every space is a subdomain of one registrable domain, so sibling
@@ -894,7 +906,7 @@ export let admitted = (
       ? { answer: preflight(req) }
       : { req: without(req, ['cookie']), anyone: true }
   }
-  if (!guarded(req.method, asked) || sameOrigin(host, origin, env)) {
+  if (!guarded(req) || sameOrigin(host, origin, env)) {
     return { req, anyone: false }
   }
   if (!shared(req.method, asked) && !askable(req.method, asked, origin)) {

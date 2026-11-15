@@ -249,3 +249,31 @@ test('a page in another space forges no signed-in form (T-37874)', async () => {
     await k.stop()
   }
 })
+
+test("a page in another space opens none of the Operator's sockets (T-704)", async () => {
+  let k = await kernel()
+  try {
+    let me = await signIn(k)
+    let socket = (path: string, origin: string) =>
+      k.at('yaks.app', path, {
+        headers: { cookie: me.cookie, origin, upgrade: 'websocket' },
+      })
+    for (
+      let path of [
+        `/manage/${me.name}/operator/ws`,
+        `/manage/${me.name}?live=1`,
+      ]
+    ) {
+      let r = await socket(path, 'https://eve.yaks.app')
+      assertEquals(r.status, 403, path)
+      assertEquals((await r.json()).error.code, 'foreign_origin', path)
+      // The platform's own page, which is where these sockets are opened
+      // from, passes the check.
+      let mine = await socket(path, 'https://yaks.app')
+      assertEquals(mine.status != 403, true, path)
+      await mine.body?.cancel()
+    }
+  } finally {
+    await k.stop()
+  }
+})
