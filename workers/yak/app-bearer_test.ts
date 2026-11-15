@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertMatch } from '@std/assert'
 import {
   accepted,
   bearerFor,
@@ -96,6 +96,44 @@ test('app store reads honor login bearers and live membership, and reject invali
     assertEquals(load.status, 200)
     let rows = (await load.text()).trim().split('\n').map((l) => JSON.parse(l))
     assertEquals(rows.map((r) => r.doc.title), ['Row one', 'Row two'])
+  } finally {
+    await k.stop()
+  }
+})
+
+test('a login bearer mints no session or connector at the sign-in doors', async () => {
+  let k = await kernel()
+  try {
+    let owner = await signIn(k)
+    let agent = connector(k, owner.cookie)
+    let space = owner.email.split('@')[0]
+    let grant = await agent.tool('grant', { space, hours: 1 })
+    let headers = {
+      authorization: `Bearer ${/yak login (\S+)/.exec(grant)![1]}`,
+    }
+    let reg = await k.at(k.host, '/oauth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        client_name: 'A probing connector',
+        redirect_uris: ['https://probe.invalid/cb'],
+        token_endpoint_auth_method: 'none',
+        response_types: ['code'],
+      }),
+    })
+    let q = new URLSearchParams({
+      response_type: 'code',
+      client_id: (await reg.json()).client_id,
+      redirect_uri: 'https://probe.invalid/cb',
+      code_challenge: 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
+      code_challenge_method: 'S256',
+    })
+    // Both answer the sign-in card, as they would a stranger.
+    for (let path of ['/login', `/oauth/authorize?${q}`]) {
+      let r = await k.at(k.host, path, { redirect: 'manual', headers })
+      assertEquals([r.status, r.headers.get('set-cookie')], [200, null])
+      assertMatch(await r.text(), /type="email"|name="email"/)
+    }
   } finally {
     await k.stop()
   }

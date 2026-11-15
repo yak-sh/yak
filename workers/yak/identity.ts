@@ -368,9 +368,11 @@ export let services = (env: Env, person: string, dir?: Directory) =>
 
 // Who is asking, out of the platform session cookie and nothing else. It is
 // deliberately not `withAuth` above, which also answers an agent's bearer:
-// the door below belongs to the signed-in web surface, and an agent that
-// cannot reach it cannot be talked into it (billing.ts `buyer` takes the same
-// line for a purchase, C-33033).
+// the doors that read it belong to the signed-in web surface, and an agent
+// that cannot reach them cannot be talked into them (billing.ts `buyer` takes
+// the same line for a purchase, C-33033). Every door that mints a credential
+// from its caller (`/login`, OAuth consent) reads this, so a bearer narrowed
+// to one space, or revoked tomorrow, never becomes a whole account's session.
 let browser = async (env: Env, req: Request) => {
   return (await sessionAt(req, env.SESSION_SECRET))?.person ?? null
 }
@@ -1330,9 +1332,11 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let back = url.searchParams.get('return')
     // Signed in already: skip the email box. `landed` asks for consent on
     // a customer's own hostname, follows our zone and refuses a stranger's
-    // return, just as it does after a fresh sign-in.
-    let who = await withAuth(env, req)
-    if (who) return landed(req, env, { person: who.person }, '', back ?? '')
+    // return, just as it does after a fresh sign-in. Only the browser's own
+    // session counts: `landed` mints a cookie for the whole account, which a
+    // bearer narrowed to one space, or revocable, must never become (T-705).
+    let person = await browser(env, req)
+    if (person) return landed(req, env, { person }, '', back ?? '')
     return signCard(env, { back })
   }
 
@@ -1541,15 +1545,17 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let q = url.search.slice(1)
     let ask = await asked(req, env, q)
     if (ask instanceof Response) return ask
-    let who = await withAuth(env, req)
-    let [row] = who
-      ? await meta(env).query(`.entity.eid=${who.person}`) as {
+    // Consent mints a connector token for the whole account, so it is the
+    // browser's to give, never a bearer's (`browser`, T-705).
+    let person = await browser(env, req)
+    let [row] = person
+      ? await meta(env).query(`.entity.eid=${person}`) as {
         email?: { address: string }
         phone?: { number: string }
       }[]
       : []
     step(env, 'connector_start', req, { who: addressIn(row) })
-    if (!who) {
+    if (!person) {
       return signCard(env, { q, who: await clientName(env, ask) })
     }
     return askAllow(
@@ -1557,21 +1563,21 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         (row?.phone ? shown(row.phone.number) : 'yourself'),
       q,
       await clientName(env, ask),
-      await consenting(secret(env), who.person, q),
+      await consenting(secret(env), person, q),
       env,
     )
   }
 
   if (path == '/oauth/allow' && req.method == 'POST') {
-    let who = await withAuth(env, req)
+    let person = await browser(env, req)
     let q = field('q')
-    if (!who) return signCard(env, { q })
-    if (!await consented(secret(env), who.person, q, field('consent'))) {
+    if (!person) return signCard(env, { q })
+    if (!await consented(secret(env), person, q, field('consent'))) {
       return new Response('That consent page has expired. Connect again.', {
         status: 403,
       })
     }
-    return allow(req, env, q, who.person)
+    return allow(req, env, q, person)
   }
 
   return lost(env)
