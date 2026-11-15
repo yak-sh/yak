@@ -430,6 +430,7 @@ import {
   scheduleMark,
   scheduleRetired,
   scheduleUse,
+  stale,
   useUntil,
   using,
 } from './used.ts'
@@ -5226,32 +5227,21 @@ export class Store extends Durable {
       if (!row) {
         return json({ error: 'NotFound', message: 'no such entity' }, 404)
       }
-      let at = useUntil()
-      // The hour's first report says when it happened; the answer still names
-      // the hour's end, which is how long a caller holds its receipt.
-      if (mark) {
-        let last = (row[mark] as Comp | undefined)?.at
-        if (
-          typeof last != 'string' ||
-          Date.parse(last) < Date.parse(at) - 3_600_000
-        ) {
-          await this.#asIs(
-            [{ entity: { eid }, [mark]: { at: new Date().toISOString() } }],
-            { stamp: false },
-          )
-        }
-        return json({ at })
-      }
-      let previous = (row.used as Comp | undefined)?.at
-      if (typeof previous == 'string' && previous >= at) at = previous
-      else {
-        await this.#asIs([{ entity: { eid }, used: { at } }], { stamp: false })
-        if (row.person && returned(previous, at)) {
+      // The hour's first use says when it happened; the answer names the
+      // hour's end, which is how long a caller holds its receipt.
+      let kept = mark ?? 'used'
+      let previous = (row[kept] as Comp | undefined)?.at
+      if (stale(previous)) {
+        let at = new Date().toISOString()
+        await this.#asIs([{ entity: { eid }, [kept]: { at } }], {
+          stamp: false,
+        })
+        if (!mark && row.person && returned(previous, at)) {
           let who = (row.email as { address?: string } | undefined)?.address
           funnel.step(this.#bind, 'returned', undefined, { who: who ?? null })
         }
       }
-      return json({ at })
+      return json({ at: useUntil() })
     }
     // An app's code sent a query in a retired spelling (T-123000): the hour it
     // last did, one row per app and spelling, for whoever means to drop the

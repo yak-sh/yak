@@ -1,9 +1,9 @@
-// Use belongs to the directory, independently of platform bookkeeping. App
-// receipts round up to the hour so repeated visits need no durable writes and
-// the idle sweep errs towards keeping an app a little longer. The same receipt
+// Use belongs to the directory, independently of platform bookkeeping. An app's
+// receipt records the moment of the hour's first use and is held until the
+// hour's end, so repeated visits need no durable writes. The same receipt
 // records each retired query spelling an app's code still sends, so a
 // translation in the grammar goes only once nothing sends it (T-123000).
-import type { Comp, Plugin } from '@yaks/graph'
+import type { Plugin } from '@yaks/graph'
 import { parse, retired } from '@yaks/query'
 import { ahead, storeOf, WAKE, WARM } from './door.ts'
 import { type Namespace } from '@yaks/durable-object/door'
@@ -15,6 +15,18 @@ import { tallying } from './lib/hops.ts'
 
 export let useUntil = (now = Date.now()) =>
   new Date((Math.floor(now / 3_600_000) + 1) * 3_600_000).toISOString()
+
+/// stale(undefined, 1794238920000) -> true
+/// stale('2026-11-09T14:05:00.000Z', 1794238920000) -> true
+/// stale('2026-11-09T15:05:00.000Z', 1794238920000) -> false
+/// stale('2026-11-09T16:00:00.000Z', 1794238920000) -> true
+/** Whether a receipt at `now` writes its moment: nothing kept since the hour
+ * began, or a moment kept ahead of now, which no use can be. A receipt keeps
+ * the moment it happened and answers the hour's end (`useUntil`). */
+export let stale = (kept: unknown, now = Date.now()): boolean =>
+  typeof kept != 'string' ||
+  !(Date.parse(kept) >= Math.floor(now / 3_600_000) * 3_600_000 &&
+    Date.parse(kept) <= now)
 
 /// returned('2026-11-01T10:00:00.000Z', '2026-11-02T11:00:00.000Z') -> true
 /// returned('2026-11-01T23:00:00.000Z', '2026-11-02T01:00:00.000Z') -> false
@@ -220,17 +232,12 @@ export let using = (allowed: () => boolean): Plugin => ({
   rules: [{
     name: 'used',
     phase: 'stamp',
-    match: '.entity, ?used, #Actor, #Now',
+    match: '.entity, #Actor, #Now',
     run: (row) => {
       let actor = row.$actor ?? row.Actor
-      let at = row.Now.at
-      let previous = (row.used as Comp | undefined)?.at
-      if (
-        typeof previous == 'string' && Date.parse(previous) > Date.parse(at)
-      ) {
-        at = previous
-      }
-      return allowed() && (actor.by || actor.via) ? { used: { at } } : undefined
+      return allowed() && (actor.by || actor.via)
+        ? { used: { at: row.Now.at } }
+        : undefined
     },
   }],
 })

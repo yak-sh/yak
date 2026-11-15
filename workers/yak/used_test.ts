@@ -4,7 +4,7 @@ import { derivedEid, graph, signed } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { useDoc } from '@yaks/platform/directory-vocab'
-import { recordUse, scheduleBy, scheduleUse, using } from './used.ts'
+import { recordUse, scheduleBy, scheduleUse, useUntil, using } from './used.ts'
 import { directory, fetch as directoryFetch } from './directory.ts'
 import { PLATFORM_OBJECT, storeOf } from './door.ts'
 import { IDEMPOTENCY, type Namespace } from '@yaks/durable-object/door'
@@ -58,14 +58,6 @@ let observed = (() => {
     now: '2026-10-13T12:00:00Z',
   })
   remember()
-  g.apply([{ entity: { eid: 'app' }, used: { at: '2026-10-13T13:00:00Z' } }], {
-    trusted: true,
-    stamp: false,
-  })
-  g.apply(signed(patch('same-hour directory edit'), { by: PERSON }), {
-    now: '2026-10-13T12:02:00Z',
-  })
-  remember()
   return found
 })()
 
@@ -76,7 +68,6 @@ test('directory use survives platform writes and excludes administrative work', 
     { at: '2026-10-01T12:00:00Z' },
     { at: '2026-10-01T12:00:00Z' },
     { at: '2026-10-13T12:00:00Z' },
-    { at: '2026-10-13T13:00:00Z' },
   ])
 })
 
@@ -252,7 +243,7 @@ test('an app visit records use in the directory while platform diagnostics do no
   equal(visits.moved, 1)
   equal(visits.served, 200)
   equal(visits.changed, 1)
-  equal(visits.coalesced, visits.at)
+  equal(visits.coalesced, useUntil(Date.parse(visits.at)))
 })
 
 let delivery = await (async () => {

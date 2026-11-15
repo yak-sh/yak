@@ -20,7 +20,7 @@ import { ram } from '@yaks/ram'
 import { refusal } from '@yaks/api'
 import { status } from '@yaks/graph/errors'
 import { assertEquals } from '@std/assert'
-import { useUntil } from './used.ts'
+import { stale, useUntil } from './used.ts'
 import { doorOf, PLATFORM_OBJECT } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { EPOCH, fenced, READS, type ServingCopyDoor } from './directory-copy.ts'
@@ -108,20 +108,13 @@ export let rows = (
         let mark = word == 'changed' || word == 'errored' ? word : 'used'
         let [row] = await g.read(`.entity.eid=${eid} ?${mark}`)
         if (!row) return Response.json({}, { status: 404 })
-        let at = useUntil()
-        let previous = (row[mark] as { at?: string } | undefined)?.at
-        if (
-          !previous || Date.parse(previous) <
-            Date.parse(at) - (mark == 'used' ? 0 : 3_600_000)
-        ) {
+        if (stale((row[mark] as { at?: string } | undefined)?.at)) {
           await g.apply([{
             entity: { eid },
-            [mark]: { at: mark == 'used' ? at : new Date().toISOString() },
+            [mark]: { at: new Date().toISOString() },
           }], { trusted: true, stamp: false })
         }
-        return Response.json({
-          at: mark == 'used' && previous && previous > at ? previous : at,
-        })
+        return Response.json({ at: useUntil() })
       }
       if (url.pathname == READS) {
         return Response.json(
