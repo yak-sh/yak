@@ -257,10 +257,48 @@ export let visitable = (app: App, who: Who) =>
 
 /** The edge a browser's visits to an app are kept on (attribution.ts
  * `contributed` writes the same one). */
-let edgeOf = (via: string, app: string) =>
+export let visitEdge = (via: string, app: string) =>
   edgeEid(instrumentEid(via), 'worked', app)
 
-let visitOfRow = (comp: Comp | undefined): Visit | null =>
+/**
+ * What a signed-out browser holds in the store it stands in, by the app and
+ * its visit as the directory says now: the viewer of the sample, the editor
+ * of the store its visit gave it, and nothing anywhere else. This is the
+ * standing {@link visiting} serves, read again for a socket that outlives the
+ * request that opened it (app-serving-authority.ts `recheck`).
+ *
+ * ```ts
+ * import { visitorRole } from './visit.ts'
+ * import { assertEquals } from '@std/assert'
+ * let app = {
+ *   access: 'private',
+ *   published: { name: 'notes', version: 2, at: '', about: '' },
+ *   demo: { store: 'ada/notes.1f/demo/d', seed: '', version: 2, release: '2' },
+ * } as Parameters<typeof visitorRole>[0]
+ * let own = { store: 'ada/notes.1f/visit/o', blobs: '', seen: null, adopted: null }
+ * assertEquals(visitorRole(app, 'ada/notes.1f/demo/d', null), 'viewer')
+ * assertEquals(visitorRole(app, own.store, own), 'editor')
+ * assertEquals(visitorRole(app, own.store, null), null)
+ * assertEquals(visitorRole(app, 'ada/notes.1f/visit/x', own), null)
+ * assertEquals(visitorRole(app, own.store, { ...own, adopted: 'b' }), null)
+ * assertEquals(visitorRole({ ...app, published: null }, own.store, own), null)
+ * ```
+ */
+export let visitorRole = (
+  app: Pick<App, 'access' | 'published' | 'demo'>,
+  store: string | null,
+  visit: Visit | null,
+): 'viewer' | 'editor' | null =>
+  !sampling(app) || !app.demo || !store
+    ? null
+    : store == app.demo.store
+    ? 'viewer'
+    : store == visit?.store && !visit.adopted
+    ? 'editor'
+    : null
+
+/** A browser's visit as its edge's `visit` component holds it. */
+export let visitOfRow = (comp: Comp | undefined): Visit | null =>
   typeof comp?.store == 'string'
     ? {
       store: comp.store,
@@ -278,7 +316,7 @@ export let visitOf = async (
   app: string,
 ): Promise<Visit | null> => {
   let [row] = await meta(env).query(
-    `.entity.eid=${edgeOf(via, app)} .visit`,
+    `.entity.eid=${visitEdge(via, app)} .visit`,
   )
   return visitOfRow(row?.visit as Comp | undefined)
 }
@@ -523,7 +561,7 @@ export let adopt = async (
   eid: string,
 ) => {
   await meta(env).apply([{
-    entity: { eid: edgeOf(via, app) },
+    entity: { eid: visitEdge(via, app) },
     visit: { adopted: eid },
     $was: { visit: { adopted: null } },
   }], KERNEL)
@@ -538,7 +576,7 @@ export let unadopt = async (
   eid: string,
 ) => {
   await meta(env).apply([{
-    entity: { eid: edgeOf(via, app) },
+    entity: { eid: visitEdge(via, app) },
     visit: { adopted: null },
     $was: { visit: { adopted: eid } },
   }], KERNEL)
@@ -567,7 +605,7 @@ export let used = async (
   now = new Date(),
 ) => {
   await meta(env).apply([{
-    entity: { eid: edgeOf(via, app) },
+    entity: { eid: visitEdge(via, app) },
     visit: { seen: now.toISOString() },
   }], KERNEL)
 }

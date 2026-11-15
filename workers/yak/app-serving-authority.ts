@@ -5,7 +5,9 @@ import { Refused } from '@yaks/graph/errors'
 import { type Mode, mode } from '@yaks/member'
 import { EPOCH, FENCE_WAIT } from './directory-copy.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
-import { type Vouch, vouchOf } from '@yaks/platform/app-authority'
+import { VISIT, type Vouch, vouchOf } from '@yaks/platform/app-authority'
+import { appAbout, type Row } from './directory.ts'
+import { visitEdge, visitOfRow, visitorRole } from './visit.ts'
 
 type Word = 'name' | 'app' | 'access' | 'mail' | 'phone' | 'policy'
 type Host = {
@@ -60,15 +62,19 @@ export let servingAuthority = (host: Host) => {
   }
 
   // Reread metadata and standing in one directory snapshot; never carry an
-  // old role into a newly accepted revision.
+  // old role into a newly accepted revision. A stranger with no seat stands
+  // by their browser's visit to the app (visit.ts `visitorRole`).
   let recheck = async (req: Request): Promise<number> => {
     let app = req.headers.get('x-yak-app') ?? host.read('app')
     let person = req.headers.get('x-yak-person')
+    let via = req.headers.get('x-yak-via')
+    let edge = via ? visitEdge(via, app!) : null
     let q = `.entity.eid=${app}&?app`
     if (person) {
       q +=
         `|.member.person=${person}&?member|.grant.app=${app}&.grant.person=${person}&?grant`
     }
+    if (edge) q += `|.entity.eid=${edge}&?visit`
     let answer = await host.transport().fetch(
       new Request(`http://directory/query?q=${encodeURIComponent(q)}`),
     )
@@ -79,9 +85,8 @@ export let servingAuthority = (host: Host) => {
       })
     }
     let rows: Bundle[] = await answer.json()
-    let definition = rows.find((r) => r.entity.eid == app)?.app as
-      | Comp
-      | undefined
+    let row = rows.find((r) => r.entity.eid == app && r.app)
+    let definition = row?.app as Comp | undefined
     if (!definition || definition.trashed) throw new Refused('app unavailable')
     let space = typeof definition.space == 'string'
       ? definition.space
@@ -94,15 +99,27 @@ export let servingAuthority = (host: Host) => {
       return held == space && !!m
     })?.member as Comp | undefined
     let grant = rows.find((r) => r.grant)?.grant as Comp | undefined
-    let role = member?.role ?? grant?.access
+    let visitor = edge
+      ? visitorRole(
+        appAbout(row as Row),
+        req.headers.get('x-store') ?? host.read('name'),
+        visitOfRow(rows.find((r) => r.entity.eid == edge)?.visit as Comp),
+      )
+      : null
+    let role = member?.role ?? grant?.access ?? visitor
     req.headers.set('x-yak-app', app!)
     req.headers.set('x-yak-access', mode(definition.access))
     req.headers.set('x-yak-policy', raw)
     req.headers.delete('x-yak-role')
-    if (person) host.vouch({ ...vouchOf(req), level: null })
-    if (person && (role == 'owner' || role == 'editor' || role == 'viewer')) {
+    req.headers.delete(VISIT)
+    if (person || via) host.vouch({ ...vouchOf(req), level: null })
+    if (
+      (person || via) &&
+      (role == 'owner' || role == 'editor' || role == 'viewer')
+    ) {
       req.headers.set('x-yak-role', String(role))
     }
+    if (visitor) req.headers.set(VISIT, '1')
     return Number(raw)
   }
 

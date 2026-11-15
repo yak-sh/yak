@@ -1410,6 +1410,43 @@ test('socket delivery fails closed when current authority throws', async () => {
   assertEquals(f.ws.sent.length, 1)
 })
 
+// The handshake asked who the caller is; a check refusing what it admitted,
+// or failing, is a failure for the tracker. A standing lost later is not.
+test('a socket its handshake admitted and its first check refused is reported', async () => {
+  let ctx = hibernation(), heard: string[] = []
+  let g = graph({ storage: ram(shop), vocab: shop })
+  let allowed = [false, true, false]
+  let live = sockets(subscriptions(g), ctx, (e) => heard.push(e.message), {
+    authorize: () => allowed.shift()!,
+  })
+  let open = () => {
+    let made = pair()
+    ;(globalThis as Record<string, unknown>).WebSocketPair = function () {
+      return made
+    }
+    try {
+      live.accept(
+        new Request('https://shop.example/ws', {
+          headers: { upgrade: 'websocket' },
+        }),
+        undefined,
+        { actor: { by: PERSON } },
+      )
+    } finally {
+      delete (globalThis as Record<string, unknown>).WebSocketPair
+    }
+    return made[1]
+  }
+  let refused = open()
+  await live.message(refused, ask('p', '.product'))
+  let kept = open()
+  await live.message(kept, ask('p', '.product'))
+  await live.message(kept, ask('q', '.product'))
+  assertEquals(refused.closed, [[1012, 'authorization handshake required']])
+  assertEquals(kept.closed, [[1012, 'authorization handshake required']])
+  assertEquals(heard, ['a socket its handshake admitted was refused'])
+})
+
 let pendingAuthorization = (() => {
   let ctx = hibernation(), ws = wire()
   let g = graph({ storage: ram(shop), vocab: shop })

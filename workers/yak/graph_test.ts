@@ -29,6 +29,7 @@ import { within } from './defects.ts'
 import { doorOf } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { grantEid, Store, type Time } from './graph.ts'
+import { visitEdge } from './visit.ts'
 import { metaOf } from './meta.ts'
 import type { Load } from '@yaks/host'
 import { appConfig } from '@yaks/platform/config'
@@ -2297,7 +2298,7 @@ let authority = async (policy: number, directory?: () => Promise<Response>) => {
     fixtureLoad,
   )
   await store.door
-  return { store, checks: () => checks, reads: () => reads }
+  return { store, ctx, checks: () => checks, reads: () => reads }
 }
 let current = await authority(10)
 let currentOwner = { ...owner, access: 'private', policy: 10 }
@@ -2351,5 +2352,52 @@ for (
   test(`Store rereads an older request${moving ? ' past a directory moving for a moment' : ''}${revoked ? ' without restoring a revoked role' : ''}`, () => {
     equal(answer, status)
     ok(f.reads() >= (moving ? 2 : 1))
+  })
+}
+
+// A stranger at a private published app stands by their browser's visit: the
+// sample's viewer, the editor of the store their visit gave them, and nobody
+// in anyone else's. A socket outlives the request that opened it, so each of
+// its frames asks the directory again (T-492).
+let VIA = 'c0000000-0000-4000-8000-000000000003'
+let BO = 'd0000000-0000-4000-8000-000000000004'
+for (
+  let [stranger, demo, visit, answered] of [
+    ['signed out, on the sample', 'ada/cookbook', null, true],
+    ['signed out, in their own store', 'ada/demo', 'ada/cookbook', true],
+    ['signed in, in their own store', 'ada/demo', 'ada/cookbook', true],
+    ['signed out, in another’s store', 'ada/demo', 'ada/other', false],
+  ] as const
+) {
+  let person = stranger.startsWith('signed in') ? BO : null
+  let rows: Bundle[] = [
+    {
+      entity: { eid: APP },
+      app: { space: 'space', access: 'private' },
+      published: { name: 'cookbook', version: 1 },
+      demo: { store: demo },
+    },
+    ...visit
+      ? [{ entity: { eid: visitEdge(VIA, APP) }, visit: { store: visit } }]
+      : [],
+  ]
+  let f = await authority(12, () =>
+    Promise.resolve(
+      new Response(JSON.stringify(rows), {
+        headers: { 'x-yak-directory-revision': '12' },
+      }),
+    ))
+  let ws = wire()
+  ws.serializeAttachment({
+    read: { person, level: visit ? 'editor' : 'viewer' },
+    writer: { actor: { ...person ? { by: person } : {}, via: VIA } },
+  })
+  f.ctx.live.push(ws)
+  await f.store.webSocketMessage(
+    ws,
+    JSON.stringify({ subscribe: '.recipe', id: 'r' }),
+  )
+  test(`a stranger’s socket at a private published app, ${stranger}, is ${answered ? 'answered' : 'closed'}`, () => {
+    equal([ws.sent.length, ws.readyState], answered ? [1, 1] : [0, 2])
   })
 }

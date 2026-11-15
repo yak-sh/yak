@@ -2414,10 +2414,14 @@ export class Store extends Durable {
       let ns = this.#bind.STORE, app = this.#get('app')
       if (!ns || !app) return false
       if (this.#bind.SERVING_COPY) {
+        // The browser is asked about too: a stranger with no seat stands by
+        // its visit to the app (visit.ts `visitorRole`).
+        let via = instrumentActor(actor)?.via
         let req = new Request('http://store', {
           headers: {
             'x-yak-app': app,
             ...(person ? { 'x-yak-person': person } : {}),
+            ...(via ? { 'x-yak-via': via } : {}),
           },
         })
         await this.#recheck(req)
@@ -2426,13 +2430,12 @@ export class Store extends Durable {
         if (!reads(mode(req.headers.get('x-yak-access')), v.level)) {
           return false
         }
-        if (person) {
-          this.#vouch({
-            ...v,
-            ...(actor?.by && actor.by != person ? { actor: actor.by } : {}),
-            via: instrumentActor(actor)?.via ?? null,
-          })
-        }
+        this.#vouch({
+          ...v,
+          ...(person && actor?.by && actor.by != person
+            ? { actor: actor.by }
+            : {}),
+        })
         return true
       }
       let via = this.#directoryTransport()
@@ -2500,7 +2503,8 @@ export class Store extends Durable {
         let ok = await run()
         if (!ok && person) this.#forget(actor, person)
         return ok
-      } catch {
+      } catch (error) {
+        caught(error, { request: 'socket authorize', store: this.#name() })
         if (person) this.#forget(actor, person)
         return false
       }

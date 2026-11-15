@@ -325,6 +325,12 @@ export let sockets = (
     ReturnType<typeof queue> & { forget: (id: string) => void }
   >()
   let closed = new WeakSet<Wire>()
+  // Sockets this incarnation accepted, and those any check has let through:
+  // the handshake already asked who the caller is, so a check refusing one
+  // it admitted before letting anything through is two answers to one
+  // question, which is ours to hear about.
+  let accepted = new WeakSet<Wire>()
+  let admitted = new WeakSet<Wire>()
   let recovered = new Map<Wire, Promise<void>>()
   let waking: Promise<void> | undefined
   let queries = new Map<Wire, Record<string, Ask>>()
@@ -489,7 +495,10 @@ export let sockets = (
   // resync.
   let authorize = (ws: Wire): boolean | Promise<boolean> => {
     if (!opts.authorize) return true
-    let refused = () => {
+    let refused = (why?: unknown) => {
+      if (why !== undefined) {
+        report?.(why instanceof Error ? why : new Error(String(why)))
+      }
       finish(ws)
       try {
         ws.close?.(1012, 'authorization handshake required')
@@ -499,11 +508,21 @@ export let sockets = (
     try {
       let held = ws.deserializeAttachment() as Held | null
       let out = opts.authorize(reading(held), held?.writer)
-      return isPromise(out)
-        ? out.then((ok) => ok && !closed.has(ws) || refused(), refused)
-        : out && !closed.has(ws) || refused()
-    } catch {
-      return refused()
+      let admit = (ok: boolean) => {
+        if (closed.has(ws)) return refused()
+        if (!ok) {
+          return refused(
+            accepted.has(ws) && !admitted.has(ws)
+              ? new Error('a socket its handshake admitted was refused')
+              : undefined,
+          )
+        }
+        admitted.add(ws)
+        return true
+      }
+      return isPromise(out) ? out.then(admit, refused) : admit(out)
+    } catch (error) {
+      return refused(error)
     }
   }
 
@@ -631,6 +650,7 @@ export let sockets = (
         pair[1].serializeAttachment({ read: opts, writer })
       }
       ctx.acceptWebSocket(pair[1])
+      accepted.add(pair[1])
       // The 101 carries the other end; `webSocket` is the runtime's own
       // ResponseInit field, which no standard declares.
       return new Response(

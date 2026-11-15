@@ -35,7 +35,8 @@ import { addressed, type Files } from './versions.ts'
 
 /** Whether an app keeps a sample: a private app on offer. An open or public
  * app is one store everyone already shares. */
-export let sampling = (app: App) => app.access == 'private' && !!app.published
+export let sampling = (app: Pick<App, 'access' | 'published'>) =>
+  app.access == 'private' && !!app.published
 
 /** Whether a stranger can open the app: one everyone shares, or a private
  * one that keeps a sample for them. */
