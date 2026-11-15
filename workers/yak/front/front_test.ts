@@ -457,13 +457,19 @@ test("a listing an ad's click opened keeps its arrival and hands the kernel the 
     'https://yaks.app/',
   ]])
   assertEquals(f.retained.length, 1)
-  // A visit no ad sent keeps nothing and tells nobody.
+  // A visit no ad sent keeps only the home page it opened, and tells nobody;
+  // the steps that follow count under that page (arrival.ts).
   let plain = front(home)
-  let none = await plain.go('https://yaks.app/', {
-    headers: ua,
-  })
-  assertEquals(none.headers.get('set-cookie'), null)
+  let church = await plain.go('https://yaks.app/churches', { headers: ua })
+  let cookie = church.headers.get('set-cookie')!
+  assertStringIncludes(cookie, 'yak_came=at=')
+  assertStringIncludes(cookie, '&page=church;')
   assertEquals(plain.told, [])
+  // Coming back to the page it keeps keeps nothing new.
+  let again = await plain.go('https://yaks.app/churches', {
+    headers: { ...ua, cookie: cookie.split(';')[0] },
+  })
+  assertEquals(again.headers.get('set-cookie'), null)
 })
 
 // A person signed in may be one who writes the home app, whose pages wear

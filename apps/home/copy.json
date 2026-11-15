@@ -1023,8 +1023,8 @@
         "cookies": "cookies page"
       },
       "campaign": {
-        "lead": "Which campaign brought you.",
-        "item": "%{lead} If the link you followed to yaks.app carries campaign tags or an ad's click id, we keep them, and when you arrived, in a second cookie for ninety days, so a sign-up can be counted against the campaign that brought it. Our own counts of each step from the home page to signing up keep the campaign's name, never who took the step. The %{cookies} has the details.",
+        "lead": "Which campaign and home page brought you.",
+        "item": "%{lead} If the link you followed to yaks.app carries campaign tags or an ad's click id, we keep them, and when you arrived, in a second cookie for ninety days, with the name of the home page you last opened (such as the one for churches), so a sign-up can be counted against the campaign and the page that brought it. Our own counts of each step from the home page to signing up keep the campaign's and the page's names, never who took the step. The %{cookies} has the details.",
         "cookies": "cookies page"
       },
       "codes": {
@@ -1135,11 +1135,11 @@
   "cookies": {
     "name": "Cookies",
     "title": "Cookies · yaks.app",
-    "description": "yaks.app sets a cookie so you stay signed in, and one more when a campaign link brought you.",
+    "description": "yaks.app sets a cookie so you stay signed in, and one more saying which campaign link and home page brought you.",
     "head": {
       "title": "Cookies",
       "updated": "Last updated %{date}",
-      "intro": "yaks.app sets one cookie, and a second one when an ad or a campaign link brought you. This page explains what they do."
+      "intro": "yaks.app sets one cookie, and a second one when an ad, a campaign link or one of our home pages brought you. This page explains what they do."
     },
     "privacy": "privacy policy",
     "session": {
@@ -1149,7 +1149,7 @@
     },
     "campaign": {
       "title": "The campaign cookie",
-      "text": "We set %{cookie} on yaks.app only when the link you followed carries campaign tags (%{tags} and the like) or an ad's click id (such as Meta's %{click}). It holds those tags, that id and when you arrived, and nothing else: no name, address or session. It lets us count which campaigns bring people who sign up, and tell the ad network whose ad you clicked that its click led to a visit or a sign-up (the %{privacy} says exactly what). It expires after ninety days, and a later campaign link replaces it. Clearing or refusing it changes nothing you can see."
+      "text": "We set %{cookie} on yaks.app when the link you followed carries campaign tags (%{tags} and the like) or an ad's click id (such as Meta's %{click}), and when you open one of our home pages, such as the front page or the one for churches. It holds those tags, that id, when you arrived and the name of the home page you opened last, and nothing else: no name, address or session. It lets us count which campaigns and which home pages bring people who sign up, and tell the ad network whose ad you clicked that its click led to a visit or a sign-up (the %{privacy} says exactly what). It expires after ninety days, a later campaign link replaces it, and another home page replaces the page it names. Clearing or refusing it changes nothing you can see."
     },
     "other": {
       "title": "Other cookies",

@@ -1,9 +1,9 @@
-// Which home page a visitor to yaks.app is shown, and which one a step of the
-// funnel (funnel.ts) counts under. A home page is data: a name in the funnel
-// and the page Site keeps it at. `/` is the "ask" page for everyone; every
-// other page shows only at its own address, which is where an ad for one
-// audience points. Nothing here imports anything, so yak-front (front/) holds
-// it.
+// Which home page a visitor to yaks.app is shown. A home page is data: a name
+// in the funnel (funnel.ts) and the page Site keeps it at. `/` is the "ask"
+// page for everyone; every other page shows only at its own address, which is
+// where an ad for one audience points. The one a visitor opened last is kept
+// with their arrival (arrival.ts), and the steps they take after count under
+// it. Nothing here imports anything, so yak-front (front/) holds it.
 
 /** One home page: its name in the funnel and where Site keeps it. */
 export type Variant = { name: string; path: string }
@@ -29,8 +29,3 @@ export let shown = (req: Request, all = VARIANTS): Variant | undefined => {
   let path = new URL(req.url).pathname
   return all.find((v) => v.path == path)
 }
-
-/** The home page a step of this request counts under (funnel.ts): the one it
- * is shown, else '' for a request that shows none. */
-export let variant = (req: Request, all = VARIANTS): string =>
-  shown(req, all)?.name ?? ''

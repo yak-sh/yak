@@ -4,7 +4,7 @@
 // import at most @yaks/platform/cookie, so the front Worker can hold it.
 import { arrival, campaign } from './arrival.ts'
 import { classed, isPerson, type Visited } from './crawlers.ts'
-import { PATHS, variant } from './variant.ts'
+import { PATHS } from './variant.ts'
 
 export type { Visited }
 
@@ -89,7 +89,7 @@ export let FUNNEL = 'yaks.app'
  * platform itself, whose slug is the step. The request, where there is one,
  * says what a view says of it, and after it the campaign its arrival names
  * (arrival.ts), the call to action clicked, for a click (funnel.ts
- * `clicked`), and the home page the request was shown (variant.ts); a
+ * `clicked`), and the home page its visitor opened last (arrival.ts); a
  * step taken away from any request (a person coming back, a newcomer's first
  * app) says only the step and the campaign `came`, the one its taker arrived
  * by (directory.ts `stepper`). A step a test account took
@@ -119,7 +119,7 @@ export let stepOf = (
   p.blobs.push(
     clipped(req ? campaign(arrival(req)) : came),
     clipped(button),
-    clipped(req ? variant(req) : ''),
+    clipped(req ? arrival(req)?.page ?? '' : ''),
   )
   return p
 }

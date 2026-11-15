@@ -62,12 +62,16 @@ test('a visit an ad brought is told as a page seen, and its sign-up as a registr
   assertEquals(signup.user_data.fbc, event.user_data.fbc)
   assertEquals(JSON.stringify(signup).includes(email), false)
 
-  // A visit no ad sent tells nobody, and keeps nothing.
+  // A visit no ad sent tells nobody, and keeps only the home page it opened.
   let plain = await k.at(k.host, '/', {
     headers: { 'user-agent': BROWSER },
   })
   await plain.body?.cancel()
-  assertEquals(plain.headers.get('set-cookie'), null)
+  assertEquals(
+    plain.headers.get('set-cookie')?.match(/^yak_came=at=\d+&page=ask;/) !=
+      null,
+    true,
+  )
   assertEquals((await told()).length, 2)
 })
 

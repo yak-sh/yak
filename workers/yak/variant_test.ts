@@ -1,8 +1,7 @@
-// Which home page a request is shown (variant.ts): the one at its path, and
-// the name a step of it counts under.
+// Which home page a request is shown (variant.ts): the one at its path.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { shown, variant } from './variant.ts'
+import { shown } from './variant.ts'
 
 let visit = (path: string, cookie = '') =>
   new Request(`https://yaks.app${path}`, { headers: { cookie } })
@@ -13,16 +12,14 @@ test('every visitor to / is shown "ask", whatever cookie they hold', () => {
   }
 })
 
-test('a home page shows at its own address, and its step counts under it', () => {
+test('a home page shows at its own address', () => {
   for (
     let [path, name] of [['/build', 'describe'], ['/churches', 'church']]
   ) {
     assertEquals(shown(visit(path))?.name, name)
-    assertEquals(variant(visit(path)), name)
   }
 })
 
-test('a request that shows no home page counts under none', () => {
+test('a request for any other page shows none', () => {
   assertEquals(shown(visit('/login', 'yak_home=church')), undefined)
-  assertEquals(variant(visit('/login', 'yak_home=church')), '')
 })

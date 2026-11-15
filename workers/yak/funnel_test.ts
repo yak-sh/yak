@@ -267,18 +267,28 @@ let beacon = (body: string, headers: Record<string, string> = {}) =>
     headers: {
       'user-agent': BROWSER,
       'sec-fetch-site': 'same-origin',
-      cookie: 'yak_came=utm_source=meta&utm_campaign=pilot&at=5',
+      cookie: 'yak_came=utm_source=meta&utm_campaign=pilot&at=5&page=church',
       ...headers,
     },
   })
 
-test('a click on a call to action is counted by its button and campaign', async () => {
+test('a click on a call to action is counted by its button, campaign and the home page its visitor opened', async () => {
   let views = dataset()
   let env = { VIEWS: views } as never
   let said = await clicked(beacon('start'), env)
   assertEquals(said.status, 204)
   assertEquals(views.points.map((p) => p.blobs), [
-    ['', 'click', '/api/click', '', '', 'browser', 'meta//pilot', 'start', ''],
+    [
+      '',
+      'click',
+      '/api/click',
+      '',
+      '',
+      'browser',
+      'meta//pilot',
+      'start',
+      'church',
+    ],
   ])
   // No such button, another site's page, a crawler: answered alike, counted
   // as nothing.
@@ -385,7 +395,7 @@ let read = (points: { indexes?: string[]; blobs?: string[] }[]) => {
   )
 }
 
-test('a landing page visited at its own address is a home page visit counted under it, and keeps no cookie', async () => {
+test('a landing page visited at its own address is a home page visit counted under it, and so are the steps after it', async () => {
   let k = await kernel()
   for (
     let [path, kicker, name] of [
@@ -399,12 +409,26 @@ test('a landing page visited at its own address is a home page visit counted und
       headers: { 'user-agent': BROWSER },
     })
     assertStringIncludes(await seen.text(), kicker)
-    assertEquals(seen.headers.get('set-cookie'), null)
+    let cookie = seen.headers.get('set-cookie')!.split(';')[0]
+    // A sign-in code asked for afterwards counts under the page too.
+    let address = `${unique('in')}@example.com`
+    let asked = await k.at(k.host, '/login', {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'user-agent': BROWSER,
+        cookie,
+      },
+      body: new URLSearchParams({ address }).toString(),
+    })
+    await asked.body?.cancel()
+    await mailed(k, address)
     assertEquals(
       k.views.points.slice(before)
         .filter((p) => p.indexes?.[0] == FUNNEL)
         .map((p) => [p.blobs![1], p.blobs![8]]),
-      [['home', name]],
+      [['home', name], ['code_sent', name]],
     )
   }
 })
