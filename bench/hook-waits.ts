@@ -209,12 +209,12 @@ export async function measure(
       let f = await fixture()
       return async () => {
         let answer = await send(f.runner)
-        if (!JSON.stringify(answer).includes(`Hook delivery ${f.notice}`)) {
+        let [knock] = await graph.get([f.notice], ['notified'])
+        // The reply draws the eid its words name as everything displays it: K-24.
+        if (!JSON.stringify(answer).includes(`Hook delivery ${id(knock)}`)) {
           throw new Error(`missing bus context: ${JSON.stringify(answer)}`)
         }
-        if (!(await graph.get([f.notice], ['notified']))[0]?.notified) {
-          throw new Error('delivery was not marked')
-        }
+        if (!knock?.notified) throw new Error('delivery was not marked')
       }
     })
     await timed('hook/PostToolUse-subagent', async () => {
