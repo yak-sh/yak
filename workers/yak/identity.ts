@@ -146,7 +146,6 @@ import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { door, taken } from './invite.ts'
 import { mail, mailable } from './mail.ts'
-import { fault } from './unseen.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { apart, elapsed, recall, writing } from './lib/hops.ts'
 
@@ -223,7 +222,7 @@ import { RETRY, source, within } from '@yaks/workerd/rate'
 import { type Caller, minted, sessionAt, signedOut } from './session.ts'
 import { WHO } from './signed.ts'
 import { versionOf } from './running.ts'
-import { background, caught, failing, refusing } from './defects.ts'
+import { background, caught, defect, failing, refusing } from './defects.ts'
 import { step } from './funnel.ts'
 import { arrival, campaign } from './arrival.ts'
 import * as ads from './ads.ts'
@@ -723,7 +722,7 @@ let send = async (
   let text = texted(address)
   // Whom the letter greets and its link, made beside the write it waits on.
   let greeted = text ? null : met(env, address).catch((e) => {
-    fault(env, 'POST /login (met)', e)
+    defect(e, { request: 'POST /login (met)' })
     return false
   })
   let link = onceLink(secret(env), {
@@ -758,7 +757,7 @@ let send = async (
   } catch (e) {
     let yours = e instanceof Undeliverable
     let told = !yours && !(e instanceof Blocked)
-    if (told) fault(env, 'POST /login', e)
+    if (told) defect(e, { request: 'POST /login' })
     if (!kept) return null
     return {
       why: yours ? NO_MAILBOX : e instanceof Error ? e.message : `${e}`,
@@ -854,7 +853,7 @@ let landed = async (
   background(
     apart(() =>
       (own ? settle(env, person, own) : founding(env, person))
-        .then(() => {}, (e) => fault(env, 'settle', e))
+        .then(() => {}, (e) => defect(e, { request: 'settle' }))
     ),
   )
   // A person who has never signed in before is the funnel's sign-up
@@ -1019,7 +1018,7 @@ let vouched = async (env: Env, person: string): Promise<Landing> => {
     store.apply([{
       entity: { eid: person },
       signed_in: stamped(before, new Date().toISOString(), 'link'),
-    }], KERNEL).then(() => {}, (e) => fault(env, 'signed_in', e)),
+    }], KERNEL).then(() => {}, (e) => defect(e, { request: 'signed_in' })),
   )
   return { person, proved: { first: !before, who: addressIn(row) } }
 }

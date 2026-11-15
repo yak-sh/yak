@@ -15,7 +15,7 @@ import type { Heard } from '@yaks/host/payments'
 import { apply as subscribed, credited } from './billing.ts'
 import { apply as shopped } from './sell.ts'
 import { payments, via } from './payments.ts'
-import { fault } from './unseen.ts'
+import { defect } from './defects.ts'
 import type { Env } from './env.ts'
 
 /** Where the provider's doors are: every path under it is theirs to answer
@@ -74,19 +74,18 @@ export let paymentDoor = async (
   let said = await doors[name](req)
   if (!said) {
     if (!hushed(`${name} unset`)) {
-      await fault(
-        env,
-        where,
+      defect(
         new Error(
           `${path} has no secret to verify with — an event went unread`,
         ),
+        { request: where },
       )
     }
     return json(503, 'not_switched_on', 'this door is not switched on here')
   }
   if ('refused' in said) {
     if (said.ours && !hushed(`${name} ${said.refused}`)) {
-      await fault(env, where, new Error(said.refused))
+      defect(new Error(said.refused), { request: where })
     }
     return json(400, 'bad_signature', said.refused)
   }

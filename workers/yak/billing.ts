@@ -28,7 +28,7 @@
 //
 // Nothing here may fail quietly. A signature we cannot verify, a checkout we
 // cannot create, a subscription of ours we cannot attribute to a space — each
-// is reported to the tracker (unseen.ts `fault`), not a line on a log nobody
+// is reported to the tracker (defects.ts `defect`), not a line on a log nobody
 // opens.
 //
 // An organization that pays by check or bank transfer asks for its yearly plan
@@ -85,7 +85,7 @@ import {
 
 import { step } from './funnel.ts'
 import { sessionAt } from './session.ts'
-import { fault } from './unseen.ts'
+import { defect } from './defects.ts'
 import { plans } from './payments.ts'
 import { sendable } from '@yaks/mail'
 
@@ -399,7 +399,7 @@ export let checkout = async (
     step(env, 'checkout', req, { who: email })
     return Response.json({ url })
   } catch (e) {
-    await fault(env, 'POST /api/billing/checkout', e)
+    defect(e, { request: 'POST /api/billing/checkout' })
     return json(
       502,
       'checkout_failed',
@@ -477,7 +477,7 @@ export let invoice = async (env: Env, req: Request, space: Space, to: To) => {
     )
     return null
   } catch (e) {
-    await fault(env, 'POST billing invoice', e)
+    defect(e, { request: 'POST billing invoice' })
     return "We couldn't send that invoice. It's been logged; try again in a minute"
   }
 }
@@ -573,7 +573,7 @@ export let buy = async (env: Env, req: Request, at?: Space) => {
     })
     return Response.json({ url })
   } catch (e) {
-    await fault(env, 'POST /api/billing/credit', e)
+    defect(e, { request: 'POST /api/billing/credit' })
     return json(
       502,
       'checkout_failed',
@@ -615,11 +615,9 @@ export let credited = async (env: Env, heard: Bought) => {
   let space = await whose(dir, { space: heard.tags.space || heard.reference })
   if (!space) {
     if (!heard.live && heard.tags.apex != here) return 'elsewhere'
-    await fault(
-      env,
-      'a purchase heard',
-      new Error(`no space owns the credit bought at ${heard.checkout}`),
-    )
+    defect(new Error(`no space owns the credit bought at ${heard.checkout}`), {
+      request: 'a purchase heard',
+    })
     return 'unattributed'
   }
   let eid = derivedEid('credit-block|' + heard.checkout)
@@ -668,7 +666,7 @@ export let portal = async (env: Env, req: Request, at?: Space) => {
     )
     return Response.json({ url })
   } catch (e) {
-    await fault(env, 'POST /api/billing/portal', e)
+    defect(e, { request: 'POST /api/billing/portal' })
     return json(
       502,
       'portal_failed',
@@ -711,13 +709,12 @@ export let apply = async (env: Env, heard: Changed) => {
     // a second delivery finds the same nothing — so it is filed where the
     // owner reads it and the door answers 200 rather than making the provider
     // repeat an unanswerable question for three days.
-    await fault(
-      env,
-      'a subscription heard',
+    defect(
       new Error(
         `no space owns subscription ${next.subscription} ` +
           `(customer ${next.customer})`,
       ),
+      { request: 'a subscription heard' },
     )
     return 'unattributed'
   }

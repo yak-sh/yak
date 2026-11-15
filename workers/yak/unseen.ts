@@ -27,7 +27,7 @@ import { KERNEL, meta, metaOf } from './meta.ts'
 import { told } from './stream.ts'
 import { divided, gauged, level } from './meter.ts'
 import { holding } from './held.ts'
-import { caught, defect } from './defects.ts'
+import { caught } from './defects.ts'
 import { scheduleMark } from './used.ts'
 import {
   type Break,
@@ -336,19 +336,6 @@ export let noted = async (
   } catch (why) {
     caught(why, { request: 'push a break' })
   }
-}
-
-/** A defect in the platform's own code, tagged at its catch. Builds keeps its
- * retry receipt separately; ordinary failures are records only in the tracker. */
-export let fault = (
-  _env: Env,
-  request: string,
-  e: unknown,
-  tags: Record<string, string | null | undefined> = {},
-  requestId?: string,
-): Promise<void> => {
-  defect(e, { request, ...tags, request_id: requestId })
-  return Promise.resolve()
 }
 
 type Broke = {

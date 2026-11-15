@@ -18,8 +18,7 @@ import { type Ctx, refuse } from './tool.ts'
 import type { Tool } from '@yaks/session'
 import type { Env } from './env.ts'
 import { directoryOf, type Space } from './directory.ts'
-import { caught } from './defects.ts'
-import { fault } from './unseen.ts'
+import { caught, defect } from './defects.ts'
 import { mint } from './signin.ts'
 import { KERNEL, meta } from './meta.ts'
 import { derivedEid } from '@yaks/graph/identity'
@@ -364,7 +363,9 @@ export let textDoor = async (
   }
   if ('refused' in said) {
     let message = said.refused
-    if (said.ours) await fault(env, `POST /${via}/webhook`, new Error(message))
+    if (said.ours) {
+      defect(new Error(message), { request: `POST /${via}/webhook` })
+    }
     return Response.json({ error: { code: 'bad_signature', message } }, {
       status: 400,
     })

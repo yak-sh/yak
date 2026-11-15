@@ -43,6 +43,7 @@ import { Stale } from '@yaks/graph/errors'
 import { next, span } from '@yaks/wake'
 import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
+import { defect } from './defects.ts'
 import { BucketUnavailable } from '@yaks/blob'
 import { Unavailable } from '@yaks/cloudflare/api'
 import type { Wake as Schedule } from '@yaks/wake'
@@ -97,10 +98,8 @@ export let seeded = async (
 }
 
 // Job failures and refused wake writes share the platform's exception log.
-let reported = async (env: Env, job: string, error: unknown): Promise<void> => {
-  let { fault } = await import('./unseen.ts')
-  await fault(env, `wake ${job}`, error)
-}
+let reported = (job: string, error: unknown): void =>
+  defect(error, { request: `wake ${job}` })
 
 /** The wake row a job fired from, as its rule is handed it. */
 export type Fired = {
@@ -140,7 +139,7 @@ export let reporting = async (
   row: Fired,
   run: (spent: () => boolean) => Promise<unknown>,
   now = () => Date.now(),
-  report: Report = (job, error) => reported(env, job, error),
+  report: Report = (job, error) => Promise.resolve(reported(job, error)),
 ): Promise<undefined> => {
   let job = jobOf(row)
   let began = new Date(now()).toISOString()

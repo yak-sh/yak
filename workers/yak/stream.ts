@@ -48,7 +48,7 @@ import { rosterLine } from '@yaks/mcp/roster'
 import { owed as restart, type Restartable, VERSION } from './running.ts'
 import type { Env } from './env.ts'
 import { fetchOf } from './door.ts'
-import { caught } from './defects.ts'
+import { caught, defect } from './defects.ts'
 import { evicted, jittered } from '@yaks/durable-object/resets'
 import {
   Durable,
@@ -491,10 +491,7 @@ export let listen = async (env: Env, person: string, req: Request) => {
       }),
   )
   if (!held.body) return held
-  let lost = async (e: unknown) => {
-    let { fault } = await import('./unseen.ts')
-    await fault(env, 'mcp stream', e)
-  }
+  let lost = (e: unknown) => defect(e, { request: 'mcp stream' })
   return new Response(resumable(held.body, lost), held)
 }
 

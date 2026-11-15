@@ -5,7 +5,7 @@
 // Worker later is a service binding in env.ts and no change here. Every route
 // runs inside one catch: a throw reaches the platform tracker — our code
 // fell over, whatever app the URL named
-// (T-33234, unseen.ts `fault`) — and a soft page, so no failure goes unseen
+// (T-33234, defects.ts `defect`) — and a soft page, so no failure goes unseen
 // (D-32318 §Errors, V-32361). A door's deliberate no is not a failure and
 // files nothing; it is logged and returned with its 4xx, in JSON at the
 // connector and API doors and as a page elsewhere (unseen.ts `refusal`).
@@ -83,7 +83,7 @@
 //                             segment, the front page answers what is left
 import { origin } from '@yaks/tracker/report'
 import { compose, type WorkerFacet } from '@yaks/workerd/compose'
-import { caught, within } from './defects.ts'
+import { caught, defect, within } from './defects.ts'
 import { CallError, refused as toolRefusal } from '@yaks/tools/errors'
 import { Stale } from '@yaks/graph/errors'
 import * as apps from './apps.ts'
@@ -110,7 +110,7 @@ import {
   unmounted,
 } from '@yaks/platform/routes'
 import { slid } from './session.ts'
-import { fault, refusal } from './unseen.ts'
+import { refusal } from './unseen.ts'
 
 // Where a request is, once `hosting` below has carried it to its address on
 // our own zone.
@@ -267,7 +267,7 @@ let forwarded = async (req: Request, env: Env, host: string) => {
 // So the line carries the host, which is what names the space and the app the
 // request was on its way to, and no app version: the code that broke is ours.
 // The platform tracker receives it, tagged with the space and app the route
-// named (unseen.ts `fault`), and no member stream is told about our failure.
+// named (defects.ts `defect`), and no member stream is told about our failure.
 
 // The slice of a handler's context the letter door needs (`email` below).
 export type Lent = { waitUntil: (work: Promise<unknown>) => void }
@@ -398,10 +398,12 @@ let hosting = async (
         JSON.stringify(said)
       }`,
     )
-    await fault(env, `${req.method} ${where}`, e, {
+    defect(e, {
+      request: `${req.method} ${where}`,
       space: r.space,
       app: r.app,
-    }, requestId)
+      request_id: requestId,
+    })
     return oops(env, requestId)
   }
 }
@@ -432,7 +434,7 @@ export let email = async (
     await arrived(await reading(message, env), env)
   } catch (e) {
     if (!(e instanceof Refused)) {
-      await fault(env, `EMAIL ${message.to.split('@').pop()}`, e)
+      defect(e, { request: `EMAIL ${message.to.split('@').pop()}` })
       throw e
     }
     console.log(`yak: mail refused for ${message.to.split('@').pop()}`)

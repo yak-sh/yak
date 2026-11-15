@@ -73,9 +73,9 @@ import { asking, bearerIn } from './asking.ts'
 import { upgrading } from './protocol.ts'
 import { nameOf } from './names.ts'
 import { writes } from '@yaks/member'
-import { brokenIn, fault, trackedIn } from './unseen.ts'
+import { brokenIn, trackedIn } from './unseen.ts'
 import { TOOLS } from './tools.ts'
-import { caught } from './defects.ts'
+import { caught, defect } from './defects.ts'
 import { woken } from './build-door.ts'
 import { invitation } from './referral.ts'
 import { budget, gauges, spent } from './meter.ts'
@@ -1049,7 +1049,7 @@ let saved = async (
       let made = await connect(env, space, await dir.emailAt(who.person) ?? '')
       return redirect(made.url, 303)
     } catch (e) {
-      await fault(env, 'POST /manage/selling', e)
+      defect(e, { request: 'POST /manage/selling' })
       let { name } = await payments(env)
       return desk(req, env, dir, space, who, 'selling', {
         say: `we couldn't reach ${name} just now — try again in a minute`,

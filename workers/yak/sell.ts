@@ -43,7 +43,6 @@ import type {
   Settled,
   Shopped,
 } from '@yaks/host/payments'
-import { fault } from './unseen.ts'
 import * as dirPart from './directory.ts'
 import {
   type App,
@@ -61,7 +60,7 @@ import { manageAt } from '@yaks/platform/routes'
 import { type Host, url as hostUrl } from '@yaks/platform/host'
 import { adminWho } from './asking.ts'
 import { refuse } from './tool.ts'
-import { caught, refusing } from './defects.ts'
+import { caught, defect, refusing } from './defects.ts'
 import {
   checkedQuote,
   checkoutQuote,
@@ -570,7 +569,7 @@ export let buying = async (
         : {}),
     })
   } catch (e) {
-    await fault(env, `POST /${at.app}/api/pay/checkout`, e)
+    defect(e, { request: `POST /${at.app}/api/pay/checkout` })
     return no(
       502,
       'checkout_failed',
