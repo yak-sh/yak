@@ -10,7 +10,7 @@ ignoreWorkspaceCycles: true
 # Scripts, benches, apps and the other Workers import every member from the
 # repository root.
 publicHoistPattern:
-  - "@yaks/*"
+  - '@yaks/*'
 allowBuilds:
   esbuild: true
   sharp: true
