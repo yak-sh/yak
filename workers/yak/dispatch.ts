@@ -64,17 +64,11 @@ import { browsersOf } from './attribution.ts'
 import type { Dispatch } from './door.ts'
 import { failed, noted, refusal } from './unseen.ts'
 import { FILED } from '@yaks/api/refuse'
-import {
-  type Bound,
-  type Config,
-  metadata,
-  WORKER,
-  WRAPPER,
-} from './wrangler_app.ts'
+import { type Bound, type Config, metadata, WRAPPER } from './wrangler_app.ts'
+import { WORKER } from '@yaks/platform/files'
 import { refuse, rejected } from './tool.ts'
 import { caught, refused, reported } from './defects.ts'
 import { modules } from '@yaks/esbuild'
-export { WORKER } from './wrangler_app.ts'
 
 // The namespace the account holds (`wrangler dispatch-namespace create
 // yak-apps`), named here as well as in wrangler.toml because the upload

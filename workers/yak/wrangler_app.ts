@@ -2,9 +2,15 @@
 // come from the directory: accepting an account id from an app would let one
 // tenant ask for another tenant's data.
 import { migrationMetadata } from './app_migrations.ts'
+import {
+  folder,
+  jsonc,
+  NOT_FOUND,
+  type NotFound,
+  WORKER,
+} from '@yaks/platform/files'
 // The upload wrapper is platform-owned, never the app's `main`.
 export let WRAPPER = '__yak_entry.js'
-export let WORKER = 'worker.js'
 // The server source an app wrote in TypeScript, which app_deploy compiles
 // (esbuild.ts). worker.js is read first when an app has both.
 export let TYPED = 'worker.ts'
@@ -59,8 +65,6 @@ export type Config = {
   // (files.ts `resolve`). Absent, a missing page infers it.
   assets?: { directory?: string; not_found_handling?: NotFound }
 }
-export let NOT_FOUND = ['single-page-application', '404-page', 'none'] as const
-export type NotFound = typeof NOT_FOUND[number]
 export type Parsed = { config: Config; report: string[]; refused: string[] }
 export type Request = {
   name: string
@@ -104,36 +108,8 @@ let object = (v: unknown): v is Record<string, unknown> =>
 let strings = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every((s) => typeof s == 'string')
 
-// A folder of the app as a config names it, without its `./` or its last
-// slash, and '' for the app's root; null for anything that is not one.
-///
-/// folder('./dist/') -> 'dist'
-/// folder('site/public') -> 'site/public'
-/// folder('.') -> ''
-/// folder('../elsewhere') -> null
-/// folder('/dist') -> null
-export let folder = (v: unknown) => {
-  if (typeof v != 'string') return null
-  let path = v.replace(/^(?:\.\/)+/, '').replace(/\/+$/, '')
-  if (path == '' || path == '.') return ''
-  let parts = path.split('/')
-  return parts.every((p) =>
-      /^[A-Za-z0-9_.-]+$/.test(p) && p != '.' && p != '..'
-    )
-    ? path
-    : null
-}
-
 let line = (value: string) =>
   value.replaceAll('\r', '\\r').replaceAll('\n', '\\n')
-
-// Match strings before comments so URLs and quoted comment markers survive.
-// Whitespace preserves token boundaries: `1/* comment */2` must stay invalid.
-let jsonc = (source: string) =>
-  source.replace(
-    /"(?:\\.|[^"\\])*"|\/\/[^\r\n]*|\/\*[\s\S]*?\*\//g,
-    (s) => s.startsWith('"') ? s : s.replace(/[^\r\n]/g, ' '),
-  ).replace(/"(?:\\.|[^"\\])*"|,(?=\s*[}\]])/g, (s) => s == ',' ? '' : s)
 
 export let parse = (source: string): Parsed => {
   let value: unknown

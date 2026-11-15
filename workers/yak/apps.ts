@@ -49,8 +49,9 @@ import {
   releaseId,
 } from './asset_url.ts'
 import * as files from './files.ts'
+import * as fence from '@yaks/platform/files'
 import { parse as parseRedirects, sentOn } from './redirects.ts'
-import { inside, prefixOf, VERSION } from './files.ts'
+import { prefixOf, VERSION } from './files.ts'
 import { appCopy, type Copy, filled } from './page-copy.ts'
 import { door as publicDoor, served as publicFile } from './public-files.ts'
 import { blobPrefix, servable, uploadPrefix } from './blob-key.ts'
@@ -1161,7 +1162,7 @@ export let refresh = (
 // not a page at the address asked.
 let held = async (env: Env, space: Space, app: App, path: string) => {
   let decoded = decodedPath(path)
-  if (decoded == null || inside(decoded)) return false
+  if (decoded == null || fence.inside(decoded)) return false
   let got = await files.fileBytes(
     env,
     app.eid,
@@ -1199,9 +1200,9 @@ let asset = async (
 ) => {
   let prefix = prefixOf(space, app)
   let decoded = decodedPath(path)
-  if (decoded == null || inside(decoded)) return nothingHere(env)
+  if (decoded == null || fence.inside(decoded)) return nothingHere(env)
   // Asked beside the page's bytes, not before them: no page waits on it.
-  let gone = files.page(path)
+  let gone = fence.page(path)
     ? redirected(req, env, app, prefix, decoded, at)
     : null
   gone?.catch(() => {})
@@ -1369,7 +1370,7 @@ let versionedAsset = async (
   c: Clock,
 ) => {
   let decoded = decodedPath(path)
-  if (decoded == null || inside(decoded)) {
+  if (decoded == null || fence.inside(decoded)) {
     return json(404, 'no_such_file')
   }
   let range = req.method == 'GET' ? req.headers.get('range') : null
@@ -3589,7 +3590,7 @@ let served = async (
   // The page's copy, read once for whichever answers it: the files' page, or
   // the worker's, while it runs. A page the worker asked for is filled with
   // the worker's answer, so it is read none.
-  let copy = !itself && files.page(path) ? copyFor(env, space, app) : null
+  let copy = !itself && fence.page(path) ? copyFor(env, space, app) : null
   let file = mayRead
     ? asset(
       req,

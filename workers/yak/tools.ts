@@ -82,12 +82,12 @@ import type { Props, Sheet } from './csv.ts'
 import {
   mimeOf,
   prefixOf,
-  seedy,
   servesSaid,
   sourceOnly,
   warm,
   whereIn,
 } from './files.ts'
+import { seedy } from '@yaks/platform/files'
 import { perusal, peruse } from './files_read.ts'
 import { drawn, ICON_SVG } from './raster.ts'
 import { type Unfound, unfound } from './asset_url.ts'

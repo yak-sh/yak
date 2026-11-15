@@ -26,6 +26,14 @@ import {
   type Representation,
 } from '@yaks/blob'
 import { servable } from './blob-key.ts'
+import {
+  inside,
+  pretty,
+  resolve,
+  rootOf,
+  servedAt,
+  WORKER,
+} from '@yaks/platform/files'
 import { at, blobAt, immutable, keptAt, servableAt } from './cache.ts'
 import { elapsed, hop } from './lib/hops.ts'
 import { type Served, storeOf } from './door.ts'
@@ -35,7 +43,7 @@ import { evicted, jittered, retried } from '@yaks/durable-object/resets'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from './versions.ts'
 import { drawn, ICON_SVG } from './raster.ts'
-import { type Config, type NotFound, parse, WORKER } from './wrangler_app.ts'
+import { type Config, parse } from './wrangler_app.ts'
 import * as shared from './shared.ts'
 import { sharing } from './lib/shared.ts'
 
@@ -96,14 +104,6 @@ let encoded = (path: string) =>
 export let baseOf = (at: string, file: string, rooted: boolean) =>
   at + (rooted ? '' : file.slice(0, file.lastIndexOf('/') + 1))
 
-// A path whose last segment names no file type is a page's address, not a
-// file's: `/about` may be about.html, and a path behind no page at all is a
-// route (T-32769), `/recipes/42` asking the app's index.html to open at a
-// place. Anything with an extension is a file, and a missing stylesheet must
-// never answer HTML.
-let pretty = (path: string) => !path.split('/').pop()!.includes('.')
-export let page = (path: string) => pretty(path) || /\.html?$/i.test(path)
-
 // A release never gains a file after its source is selected. A later release
 // gets a different key, so its file can answer after this 404 was cached.
 let missing = () =>
@@ -143,27 +143,6 @@ export let configOf = (
       return bytes ? parse(new TextDecoder().decode(bytes)).config : {}
     }))
 
-/** Where an app's served files live: its folder `assets.directory` names,
- * else its root. Nothing outside it answers a request. */
-export let rootOf = (prefix: string, config: Config) =>
-  config.assets?.directory ? `${prefix}/${config.assets.directory}` : prefix
-
-/**
- * The address under the app a file answers at, or null when it is source only
- * (outside the served folder). A folder's index.html answers at the folder.
- */
-///
-/// servedAt({ assets: { directory: 'dist' } }, 'dist/about/index.html') -> 'about/'
-/// servedAt({ assets: { directory: 'dist' } }, 'dist/app.js') -> 'app.js'
-/// servedAt({ assets: { directory: 'dist' } }, 'src/main.ts') -> null
-/// servedAt({}, 'index.html') -> ''
-export let servedAt = (config: Config, path: string) => {
-  let root = rootOf('', config)
-  let inside = `/${path}`
-  if (!inside.startsWith(`${root}/`)) return null
-  return inside.slice(root.length + 1).replace(/(^|\/)index\.html$/, '$1')
-}
-
 /** Where a file of an app answers, in a sentence: its address under `at`, or
  * that it is source only, when the app's wrangler config serves a folder
  * (T-124473). `dir` is that folder. */
@@ -195,63 +174,6 @@ export let servesSaid = (dir?: string) =>
     ? `\nserves ${dir}/ — its front page is ${dir}/index.html; ` +
       'files outside it are source only, not on the web'
     : ''
-
-type Found = { path: string; file: Loaded; status: 200 | 404 }
-
-/**
- * Which file answers a path of the served folder, as a static host answers a
- * build's pages: the file itself, a folder's index.html, and a page's address
- * without its extension (`/about` is about.html). A folder asked for without
- * its slash is sent to it (`{to}`), so about/index.html's relative URLs
- * resolve inside about/. A page that is not there follows the app's
- * `assets.not_found_handling` (Cloudflare's own key): `single-page-application`
- * answers a route its index.html, `404-page` the nearest 404.html answered
- * 404, `none` a plain 404. Unset, the root's 404.html answers 404, and
- * without one a route answers index.html. `load` reads a path of the folder.
- */
-export let resolve = async (
-  path: string,
-  load: (path: string) => Promise<Loaded | null>,
-  notFound?: NotFound,
-): Promise<Found | { to: string } | null> => {
-  let first = async (paths: string[], status: 200 | 404 = 200) => {
-    for (let p of paths) {
-      let file = await load(p)
-      if (file) return { path: p.slice(1), file, status }
-    }
-    return null
-  }
-  let own = path.endsWith('/')
-    ? [`${path}index.html`]
-    : pretty(path)
-    ? [path, `${path}.html`]
-    : [path]
-  let found = await first(own)
-  if (found) return found
-  if (pretty(path) && !path.endsWith('/') && await load(`${path}/index.html`)) {
-    return { to: `${encodeURIComponent(path.split('/').pop()!)}/` }
-  }
-  if (notFound == 'none' || !page(path)) return null
-  if (notFound == 'single-page-application') {
-    return pretty(path) ? await first(['/index.html']) : null
-  }
-  if (notFound == '404-page') return await first(nearest(path), 404)
-  return await first(['/404.html'], 404) ??
-    (pretty(path) ? await first(['/index.html']) : null)
-}
-
-// Cloudflare's `404-page`: the 404.html nearest the path, walking up from
-// its folder to the root.
-///
-/// nearest('/a/b/c') -> ['/a/b/404.html', '/a/404.html', '/404.html']
-/// nearest('/a/') -> ['/a/404.html', '/404.html']
-/// nearest('/x') -> ['/404.html']
-export let nearest = (path: string) => {
-  let dirs = path.split('/').slice(0, -1)
-  return dirs.map((_, i) =>
-    `${dirs.slice(0, dirs.length - i).join('/')}/404.html`
-  )
-}
 
 // The gateway's way in: the `FILES` binding, so Cloudflare's cache answers
 // what it holds, or this module in-process where there is no binding. Not
@@ -307,51 +229,6 @@ let through = async (env: Env, req: Request) => {
   }
   return relayed(await fetch(req, env))
 }
-
-// The files that are the app's platform manifest rather than its page: the
-// server code the dispatch namespace runs (dispatch.ts), the manifest a
-// deploy reads, the data it seeds the store with (tools.ts, seed.ts), and
-// the notes its person left beside it under either name (standing.ts).
-// Those are the app's inside — the platform reads them out of the blob store,
-// and a member reads them back through `app_files` — so the door that serves
-// the app's pages does not serve them to the web. Before this, `GET
-// /weather/worker.js` answered the whole server source to anyone with the link
-// (C-32869 item 3).
-//
-// The test is on the decoded key, not the path, because `/%77orker.js` names
-// the same file.
-let MANIFEST = new Set([
-  '/worker.js',
-  '/worker.ts',
-  '/wrangler.jsonc',
-  '/wrangler.json',
-  // What app_deploy installs from and pins (esbuild.ts).
-  '/package.json',
-  '/package-lock.json',
-  // Either format of a declaration (tools.ts `spelled`, M-34605): a `.yml`
-  // is the app's inside exactly as much as the `.json` is.
-  '/vocab.json',
-  '/vocab.yml',
-  // The notes file (standing.ts `NOTES`). Written out rather than imported:
-  // standing.ts reaches this module through declared.ts, and a set built at
-  // module top time cannot wait on a cycle.
-  '/NOTES.md',
-  // The app's redirects (redirects.ts): rules for the gateway to follow.
-  '/_redirects',
-])
-
-/** The bundle formats, for the file beside index.html. A `.csv` is not one:
- * a spreadsheet needs to be told which component a row is, which only a load
- * that names it can say. */
-let BUNDLES = ['.yml', '.json']
-
-/** A file the app is seeded from: `seed.yml` or `seed.json` beside
- * index.html, or either of those in a `seed/` folder beside it. */
-export let seedy = (path: string) =>
-  BUNDLES.some((e) => path == `seed${e}`) ||
-  (path.startsWith('seed/') && BUNDLES.some((e) => path.endsWith(e)))
-
-export let inside = (path: string) => MANIFEST.has(path) || seedy(path.slice(1))
 
 // An app file's bytes, through the cache (cache.ts): `Files` is a second
 // entrypoint with Cloudflare's cache in front of it, addressed by the app's

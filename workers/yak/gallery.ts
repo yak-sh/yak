@@ -75,7 +75,8 @@ import {
   reputed,
   type Standing,
 } from './gallery-row.ts'
-import { configOf, keyed, prefixOf, rootOf } from './files.ts'
+import { configOf, keyed, prefixOf } from './files.ts'
+import { rootOf } from '@yaks/platform/files'
 import type { Letter } from './mail.ts'
 import { INTERNAL } from './mail-config.ts'
 import type { Actor, Bundle } from '@yaks/graph'

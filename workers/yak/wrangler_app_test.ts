@@ -384,3 +384,17 @@ test('app metadata: an ai door binds no Workers AI to the script', () => {
     'KERNEL belongs to yaks.app',
   )
 })
+
+test('assets.not_found_handling is read from wrangler.jsonc and refuses other values', () => {
+  let ok = parse(
+    '{"assets":{"directory":"dist","not_found_handling":"404-page"}}',
+  )
+  assertEquals(ok.config.assets, {
+    directory: 'dist',
+    not_found_handling: '404-page',
+  })
+  assertEquals(
+    parse('{"assets":{"not_found_handling":"nope"}}').refused.length > 0,
+    true,
+  )
+})

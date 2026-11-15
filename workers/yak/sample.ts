@@ -30,7 +30,7 @@ import { r2RawObjects } from './lib/objects.ts'
 import { KERNEL } from './meta.ts'
 import { filesAt } from './release.ts'
 import { applying } from './release-seed.ts'
-import { seedy } from './files.ts'
+import { seedy } from '@yaks/platform/files'
 import { addressed, type Files } from './versions.ts'
 
 /** Whether an app keeps a sample: a private app on offer. An open or public

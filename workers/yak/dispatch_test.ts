@@ -40,9 +40,9 @@ import {
   SHIM,
   shim,
   upload,
-  WORKER,
   workerBreak,
 } from './dispatch.ts'
+import { WORKER } from '@yaks/platform/files'
 import { CallError } from '@yaks/tools/errors'
 import { commandAt } from './app-command.ts'
 import { caught, within } from './defects.ts'

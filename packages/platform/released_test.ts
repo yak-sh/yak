@@ -34,3 +34,28 @@ test('a write in the release’s first words reads in its declared rename', asyn
   }])
   equal(await headed('Pie'), ['Pie'])
 })
+
+let got = async (path: string) => {
+  let res = await door(path)
+  return [res.status, res.status == 200 ? await res.text() : null]
+}
+
+test('the release’s pages answer at their addresses', async () => {
+  equal(await got('/'), [200, '<h1>Recipes</h1>\n'])
+  equal(await got('/about'), [200, '<h1>About</h1>\n'])
+  equal(await got('/docs/'), [200, '<h1>Docs</h1>\n'])
+  equal((await door('/docs')).headers.get('location'), 'docs/')
+})
+
+test('the release’s inside answers at no address', async () => {
+  for (
+    let path of [
+      '/vocab.json',
+      '/seed.json',
+      '/%76ocab.json',
+      '/x/../vocab.json',
+    ]
+  ) {
+    equal((await door(path)).status, 404, path)
+  }
+})

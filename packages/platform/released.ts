@@ -6,13 +6,15 @@
 // run through @yaks/tools and its effects through @yaks/effects, as on any
 // host @yaks/cli composes, and @yaks/api's doors answer for it.
 //
+// The release's own files answer at its addresses through the `yak/files`
+// routes facet (./files-routes.ts), read from the directory as it stands.
 // The Worker's own effects facets (yak/app, yak/trash, yak/models,
-// yak/attribution) are yaks.app's Cloudflare work, so nothing here runs them;
-// nor does anything serve the release's other files yet.
+// yak/attribution) are yaks.app's Cloudflare work, so nothing here runs them.
 import { compose, facet, type Role, type Served } from '@yaks/cli/host'
 import type { Config } from '@yaks/host/config'
 import type { Load } from '@yaks/host'
 import type { VocabDoc } from '@yaks/vocab'
+import type { Loaded } from '@yaks/blob'
 import * as disk from '@yaks/file/io'
 import { mint } from '@yaks/graph/identity'
 import { faulted, toolEid } from '@yaks/tools/result'
@@ -35,6 +37,9 @@ export type Placing = {
   hostname?: string
 }
 
+// The folder in a release directory its store is kept in.
+let KEPT = '.yak'
+
 /** The release at `dir`: a directory without a manifest declares no words. */
 export let release = async (dir: string): Promise<Released> => {
   let name = disk.basename(disk.resolve(dir))
@@ -52,8 +57,28 @@ export let release = async (dir: string): Promise<Released> => {
  * to answer for it. */
 export let releaseConfig = (at: Placing & { db: string }): Config => ({
   ...at,
-  plugins: [...appConfig.plugins!, '@yaks/api'],
+  plugins: [...appConfig.plugins!, 'yak/files', '@yaks/api'],
 })
+
+/** A file of the release at `dir`, by its path from the directory
+ * (`/index.html`), versioned by when it last changed; null where there is
+ * none, the path names a folder, or it is in `.yak/`, where this machine
+ * keeps the release's store. */
+export let reader =
+  (dir: string) => async (path: string): Promise<Loaded | null> => {
+    if (path.split('/')[1] == KEPT) return null
+    let file = disk.join(dir, path)
+    let info = await disk.stat(file).catch((e) => {
+      if (disk.isNotFound(e) || disk.isNotADirectory(e)) return null
+      throw e
+    })
+    if (!info || info.isDirectory) return null
+    let bytes = new Uint8Array(await disk.readFile(file))
+    return {
+      bytes,
+      version: `${info.mtime?.getTime().toString(36)}-${info.size}`,
+    }
+  }
 
 /** The release at `dir` opened for `roles`. `load` is how a plugin's subpath
  * becomes a module (default @yaks/cli's), so a test can hand it modules. */
@@ -64,10 +89,10 @@ export let opened = async (
   load: Load = facet,
 ): Promise<Served> => {
   let { name, vocab } = await release(dir)
-  let db = at.db ?? disk.join(dir, '.yak', 'store.db')
+  let db = at.db ?? disk.join(dir, KEPT, 'store.db')
   return compose(releaseConfig({ ...at, db }), roles, resolved(load), {
     docs: appDocs(vocab),
-    options: lends(bare(name, vocab)),
+    options: lends({ ...bare(name, vocab), file: reader(dir) }),
   })
 }
 

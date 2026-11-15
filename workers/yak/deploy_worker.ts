@@ -2,7 +2,8 @@
 // capabilities are checked before any upload, so a refused resource never
 // publishes a worker with only half of its requested bindings.
 import { type App, scriptOf, type Space, storeName } from './directory.ts'
-import { carried, drop, NEEDS_TOKEN, upload, WORKER } from './dispatch.ts'
+import { carried, drop, NEEDS_TOKEN, upload } from './dispatch.ts'
+import { WORKER } from '@yaks/platform/files'
 import type { Env } from './env.ts'
 import {
   bindingLines,

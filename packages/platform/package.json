@@ -59,7 +59,9 @@
     "./plans": "./plans.ts",
     "./meter": "./meter.ts",
     "./standing": "./standing.ts",
-    "./meter-graph": "./meter-graph.ts"
+    "./meter-graph": "./meter-graph.ts",
+    "./files": "./files.ts",
+    "./files-routes": "./files-routes.ts"
   },
   "license": "Apache-2.0",
   "description": "What a hosting platform keeps about the apps it serves \u2014 spaces, apps, deploys, hostnames, plans and meters.",

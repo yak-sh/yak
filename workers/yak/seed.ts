@@ -39,7 +39,7 @@ import { CallError } from '@yaks/tools/errors'
 import { read } from '@yaks/yaml'
 import { type Sheet, sheet } from './csv.ts'
 import { refuse } from './tool.ts'
-import { seedy } from './files.ts'
+import { seedy } from '@yaks/platform/files'
 import { Pending, ROOM } from '@yaks/api/log'
 
 /** What a seed is written in: YAML first — the warm path (M-34605) — then
