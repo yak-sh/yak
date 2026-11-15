@@ -15,6 +15,9 @@ import type { Who } from './session.ts'
 import { record } from './versions.ts'
 import { pins } from '@yaks/platform/versions'
 import { digest } from '@yaks/graph/sha256'
+import { concat, DELIM, FLUSH, mark, pkt } from '@yaks/git'
+import { held, refAt } from './gitobj.ts'
+import { meta } from './meta.ts'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let BEN = 'b0000000-0000-4000-8000-0000000000be'
@@ -77,7 +80,9 @@ let deploy = async (
     manifest[path] = await digest(bytes)
     await pins(r2Objects(env.BLOBS)).put(manifest[path], bytes)
   }
-  await record(dir, WHO, app, version, manifest, '')
+  let space = (await dir.space('ada'))!
+  let current = (await dir.app(space, app.slug))!
+  await record(dir, WHO, current, version, manifest, '')
   await settled()
 }
 
@@ -139,6 +144,69 @@ test('a private app asks for a credential, and judges the one it gets', async ()
     'application/x-git-upload-pack-advertisement',
   )
 })
+
+for (let access of ['public', 'open', 'private']) {
+  let p = platform(SECRET)
+  let { env } = p
+  let { dir, space, app } = await standing(env, access)
+  let hers = await tokenFor(env, ADA)
+  let his = await tokenFor(env, BEN)
+  await deploy(p, app, 1, {
+    'index.html': '<h1>hi</h1>\n',
+    'seed/people.yml': '- name: a private fixture\n',
+  })
+  await deploy(p, app, 2, { 'index.html': '<h1>hi</h1>\n' })
+  let head = (await refAt(held(meta(env)), app.eid))!
+  let body = concat([
+    pkt('command=fetch\n'),
+    mark(DELIM),
+    pkt(`want ${head}\n`),
+    pkt('done\n'),
+    mark(FLUSH),
+  ])
+  let fetch = (headers: HeadersInit) => {
+    let req = new Request('https://ada.yaks.app/recipes.git/git-upload-pack', {
+      method: 'POST',
+      headers: { 'git-protocol': 'version=2', ...headers },
+      body,
+    })
+    return answer({ env, req, path: new URL(req.url).pathname, space: 'ada' })
+  }
+
+  test(`${access} repositories require a writer seat for advertisement and history`, async () => {
+    for (let [headers, status] of [[{}, 401], [basic(his), 403]] as const) {
+      let refs = await asked(
+        env,
+        '/recipes.git/info/refs?service=git-upload-pack',
+        {
+          'git-protocol': 'version=2',
+          ...headers,
+        },
+      )
+      assertEquals(refs!.status, status)
+      assertEquals((await fetch(headers))!.status, status)
+    }
+    for (let role of ['viewer', 'editor'] as const) {
+      await dir.apply({
+        entities: [{
+          entity: { eid: '$ben' },
+          member: { space: space.eid, person: BEN, role },
+        }],
+      }, by)
+      let res = await fetch(basic(his))
+      assertEquals(res!.status, role == 'viewer' ? 403 : 200)
+      await res!.arrayBuffer()
+      let seat = (await dir.member(space, BEN))!
+      await dir.apply({
+        entities: [{ entity: { eid: seat.eid }, member: null }],
+      }, by)
+    }
+    let res = await fetch(basic(hers))
+    assertEquals(res!.status, 200)
+    let pack = new Uint8Array(await res!.arrayBuffer())
+    assertEquals(new TextDecoder().decode(pack).includes('\x01PACK'), true)
+  })
+}
 
 test('a trashed app is gone to a credential as much as to nobody', async () => {
   let p = platform(SECRET)

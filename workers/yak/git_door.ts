@@ -12,9 +12,10 @@
 // app's worker — which answers every address no app claims — from being
 // handed a clone it cannot parse.
 //
-// The repository is the app's access, exactly — asked of the same two words a
-// page is (`mode`/`reads`, @yaks/member), with a `yak login` grant as the
-// password git is asked for. A trashed app is not found by anyone, credential
+// A repository includes the app's private files and every past release, so
+// cloning requires a seat that writes in the space, regardless of the app's
+// access. A `yak login` grant is the password git is asked for.
+// A trashed app is not found by anyone, credential
 // or not, because it is not there to be refused (erase.ts). This is the one
 // door that tells a proven caller an app exists — the pages answer 404 — and
 // it is the price of a clone being able to end.
@@ -27,7 +28,7 @@
 // reader over the other store.
 import { objects } from '@yaks/git'
 import { door, type Found } from '@yaks/git/door'
-import { mode, reads } from '@yaks/member'
+import { writes } from '@yaks/member'
 import { r2Objects } from './lib/objects.ts'
 import { type Directory, directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -93,7 +94,7 @@ async (
   if (!app || app.trashed) return null
   let who = await cloner(env, req, said, dir, space)
   return {
-    reads: reads(mode(app.access), who.role),
+    reads: writes(who.role),
     proven: !!who.person,
     // One branch, and none before the first deploy — an app that has never
     // been released clones as an empty repository rather than a refusal.

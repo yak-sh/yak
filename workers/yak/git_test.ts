@@ -140,6 +140,10 @@ test('a deploy mints one commit whose tree is the manifest', async () => {
   let manifest = await deploy(p, app, 1, {
     'index.html': '<h1>hi</h1>\n',
     'lib/app.js': 'export let go = () => 1\n',
+    'worker.js': 'export default {}\n',
+    'wrangler.jsonc': '{ "vars": { "fixture": "private" } }\n',
+    'NOTES.md': 'Private deployment notes\n',
+    'seed.yml': '[]\n',
   })
 
   let head = await headOf(env, app)
@@ -183,7 +187,14 @@ test('a deploy mints one commit whose tree is the manifest', async () => {
   let entries = treeEntries((await bodyOf(env, git, tree)).bytes)
   assertEquals(
     entries.map((e) => e.name).sort(),
-    ['index.html', 'lib'],
+    [
+      'NOTES.md',
+      'index.html',
+      'lib',
+      'seed.yml',
+      'worker.js',
+      'wrangler.jsonc',
+    ],
   )
   let page = entries.find((e) => e.name == 'index.html')!
   let [blob] = await git.query(
