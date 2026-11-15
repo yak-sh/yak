@@ -17,7 +17,7 @@ import { Store } from './graph.ts'
 import { Wire } from './stream.ts'
 import { Builder } from './build.ts'
 import { PublicDirectoryStore } from './public-directory.ts'
-import { Purger } from './purge.ts'
+import { Purger } from '@yaks/workerd/purge'
 import { Outlast } from './outlast-object.ts'
 import { LexiconStore } from './lexicon.ts'
 

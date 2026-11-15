@@ -43,17 +43,9 @@ import { type Host, url as hostUrl } from '@yaks/platform/host'
 import { r2Objects } from './lib/objects.ts'
 import { logoBytes, logoIcon } from './logo.ts'
 import { joining, NOBODY, NOT_A_WRITER, posting } from './build-door.ts'
-import { browserImmutable, immutable } from './cache.ts'
 import { client } from './sheets.ts'
-import {
-  apiOut,
-  assetMaps,
-  assetPath,
-  assetUrl,
-  linked,
-  LOADS,
-  releaseId,
-} from './asset_url.ts'
+import { apiOut, assetMaps, assetUrl, linked, LOADS } from './asset_url.ts'
+import { assetPath, releaseId } from '@yaks/platform/versions'
 import * as files from './files.ts'
 import * as fence from '@yaks/platform/files'
 import { parse as parseRedirects, sentOn } from './redirects.ts'
@@ -67,7 +59,6 @@ import {
   daysLeft,
   type Directory,
   directory,
-  offered,
   type Role,
   type Space,
   storeAt,
@@ -191,16 +182,17 @@ import { edits, mode, reads, writes } from '@yaks/member'
 import { USES } from './door.ts'
 import { type Door } from '@yaks/durable-object/door'
 import { type Clock, clock, timed } from './timing.ts'
+import { asked, keep, shown, told, unkept } from './page-cache.ts'
 import {
-  asked,
-  keep,
+  type Alone,
+  browserImmutable,
+  CLIENT,
+  fixed,
+  immutable,
   keepable,
+  NAMED_CLIENT,
   passed,
-  shown,
-  told,
-  unkept,
-} from './page-cache.ts'
-import { type Alone, CLIENT, fixed, NAMED_CLIENT } from './kept-page.ts'
+} from '@yaks/platform/kept'
 import { cookieValue } from '@yaks/platform/cookie'
 import { noted, refusal, serving } from './unseen.ts'
 import { door as reportDoor, flood } from '@yaks/tracker/report'
@@ -249,6 +241,7 @@ import { commandIn, commandsIn } from './app-command.ts'
 import { type Limiter, source, tooMany, within } from '@yaks/workerd/rate'
 import {
   bearerOf,
+  offered,
   sandboxed,
   stored,
   tokenOf,
@@ -1413,7 +1406,7 @@ export let servedTo = async (
 /** Whether a request reads one of the app's files by its address: an upload
  * (`/api/blob/<sha>` or `/api/blob/<sha>/<representation>`), a release's
  * asset (`/api/assets/<release>/<path>`) or a platform module its pages
- * import (kept-page.ts `fixed`). Bytes, not the app's data. */
+ * import (@yaks/platform/kept `fixed`). Bytes, not the app's data. */
 let fileRead = (req: Request, path: string) =>
   (req.method == 'GET' || req.method == 'HEAD') &&
   (path.startsWith('/api/blob/')
@@ -1776,7 +1769,8 @@ export let api = async (
     // and its files are the worker's to give or refuse at their own path, as
     // that page would have asked before its addresses were the release's.
     // A published app's release files are anyone's, as installing it hands
-    // them out (`offered`), so Site can keep them (page-cache.ts `keepable`).
+    // them out (`offered`), so Site can keep them (@yaks/platform/kept
+    // `keepable`).
     if (!mayRead && !offered(app)) {
       let url = new URL(req.url)
       url.pathname = url.pathname.slice(0, -`/api${path}`.length) +
@@ -2458,7 +2452,7 @@ export let edged = async (req: Request, env: Env, view?: Directory) => {
 // A release check (public/release.js, `/api/release`) reads which release is
 // out and uses no instrument, so it hands none out: the home app's is asked
 // at the apex (apex.ts), where a cookie would make every visitor one Site no
-// longer treats as a stranger (kept-page.ts `stranger`).
+// longer treats as a stranger (@yaks/platform/kept `stranger`).
 let checking = (path: string) => /^(?:\/[^/]+)?\/api\/release$/.test(path)
 
 export let fetch = (req: Request, env: Env): Promise<Response> => {
@@ -2471,9 +2465,9 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
     // runs. Page tokens and machine credentials have their own instrument
     // and may arrive with the ambient cookie stripped: never replace that
     // unseen cookie with a signed-out one, even on a failed token or redirect.
-    // Bytes the same for everyone (kept-page.ts `fixed`) set none either: a
-    // cookie would keep them out of every cache, and no door of theirs uses
-    // the instrument.
+    // Bytes the same for everyone (@yaks/platform/kept `fixed`) set none
+    // either: a cookie would keep them out of every cache, and no door of
+    // theirs uses the instrument.
     // Nor does a release check (`checking`).
     // The browser's own cookies are kept, and told which stores it holds
     // (visit.ts `ownOf`), only where it is the browser asking.
@@ -2551,8 +2545,8 @@ let served = async (
   }
   // The person the cookie names, and a machine's bearer at an `/api/` door,
   // read once, when a hostname names a space. Site's request carries a cookie
-  // only at a session's own key (kept-page.ts `visitor`), where it serves the
-  // person their own copy of a stranger's page.
+  // only at a session's own key (@yaks/platform/kept `visitor`), where it
+  // serves the person their own copy of a stranger's page.
   let ids: ReturnType<typeof identify> | undefined
   let identify = () =>
     Promise.all([
@@ -2614,8 +2608,9 @@ let served = async (
     p == person && routing.role !== undefined
       ? Promise.resolve(routing.role)
       : dir.role(space, p)
-  // Site keeps what is the same for everyone (page-cache.ts `keepable`): the
-  // own files of an app anyone may read (public or open), and the release
+  // Site keeps what is the same for everyone (@yaks/platform/kept
+  // `keepable`): the own files of an app anyone may read (public or open),
+  // and the release
   // files of one anyone may install. From a directory copy a moment old it
   // keeps only a public app's.
   let keeps = (app: App, path: string) =>

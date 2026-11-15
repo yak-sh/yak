@@ -32,7 +32,7 @@ import type { H } from '@yaks/render'
 import type { Env } from './env.ts'
 import { type Page, PAGES } from './guide.ts'
 import { type Host, hosted, url } from '@yaks/platform/host'
-import { publicPage } from './public-cache.ts'
+import { publicPage } from '@yaks/platform/kept'
 import { drawn, head } from './shell.ts'
 
 export let PATH = '/docs'

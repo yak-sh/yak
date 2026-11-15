@@ -38,12 +38,27 @@ let span = (said: string | null, size: number) => {
   return from >= size || to < from ? false : { from, to }
 }
 
-let unchanged = (request: Request, etag: string | null) =>
-  etag && ['GET', 'HEAD'].includes(request.method) &&
-  (request.headers.get('if-none-match') ?? '').split(',').some((value) =>
-    value.trim() == '*' ||
-    value.trim().replace(/^W\//, '') == etag.replace(/^W\//, '')
+let bare = (tag: string) => tag.trim().replace(/^W\//, '')
+
+/** Whether an `If-None-Match` header names `etag`, weakly compared. An
+ * answer with no etag matches nothing, not even `*`.
+ *
+ * ```ts
+ * import { matches } from '@yaks/blob/serve'
+ * import { assert } from '@std/assert'
+ * assert(matches('"a", W/"b"', '"b"') && matches('*', '"c"'))
+ * assert(!matches(null, '"a"') && !matches('*', ''))
+ * ```
+ */
+export let matches = (asked: string | null, etag: string | null): boolean =>
+  !!etag &&
+  (asked ?? '').split(',').some((value) =>
+    value.trim() == '*' || bare(value) == bare(etag)
   )
+
+let unchanged = (request: Request, etag: string | null) =>
+  ['GET', 'HEAD'].includes(request.method) &&
+  matches(request.headers.get('if-none-match'), etag)
 
 let plan = (size: number, request: Request, headers: HeadersInit) => {
   let head = new Headers(headers)

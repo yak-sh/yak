@@ -3,7 +3,7 @@
 import { clock, test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { FRONT_VERSION, type FrontEnv, serve, settled } from './front.ts'
-import { pageAt, personal, SEEN } from '../kept-page.ts'
+import { pageAt, personal, SEEN } from '@yaks/platform/kept'
 import type { Conversion } from '../arrival.ts'
 import { routes, VERSION } from '@yaks/workerd/worker'
 

@@ -643,7 +643,9 @@ grouped approximately by function, **not** by dependency order.
   Durable Object and entrypoint classes loaded on first call), and that handler
   as a Worker: the `WebSocketPair` upgrade that `/ws` needs, the `fetch`
   entrypoint a Worker exports, authentication from a cookie or a bearer token,
-  and the forwarding to a Durable Object when the graph lives in one.
+  and the forwarding to a Durable Object when the graph lives in one. It also
+  asks an inner entrypoint behind Cloudflare's cache and purges it by tag
+  (`./cache`, `./purge`); what may be kept there is the host's to say.
 - **[@yaks/durable-object](./durable-object)** — the storage adapter inside that
   Durable Object: its embedded SQLite driven through `@yaks/sqlite`, plus the
   adapter that passes a hibernatable WebSocket's frames to `@yaks/api`'s

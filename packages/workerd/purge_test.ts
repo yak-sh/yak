@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { Purger, purger, SPREAD, Unpurged } from './purge.ts'
-import { durable } from '../../packages/durable-object/testing.ts'
+import { durable } from '../durable-object/testing.ts'
 
 // A Site that refuses the purges `refuses` names (by count) for rate, on a
 // clock that moves only when the purger waits and as each purge is
@@ -85,7 +85,7 @@ test('a purge asked to spread resolves SPREAD past the send it shares, its ackno
   assertEquals([sent.length, plain, spread], [1, 300, SPREAD])
 })
 
-test('the Purger object purges through Site, and throws a refusal on to its caller', async () => {
+test('the Purger object purges through its site, and throws a refusal on to its caller', async () => {
   let sent: string[][] = [], ok = true
   let ctx = {
     storage: durable(),
@@ -93,15 +93,13 @@ test('the Purger object purges through Site, and throws a refusal on to its call
     getWebSockets: () => [],
   }
   let made = new Purger(ctx, {
-    SITE: {
-      purge: (tags) => {
-        sent.push(tags)
-        return Promise.resolve(
-          ok
-            ? { success: true, errors: [] }
-            : { success: false, errors: [{ code: 7, message: 'no' }] },
-        )
-      },
+    purge: (tags) => {
+      sent.push(tags)
+      return Promise.resolve(
+        ok
+          ? { success: true, errors: [] }
+          : { success: false, errors: [{ code: 7, message: 'no' }] },
+      )
     },
   })
   await made.purge(['app:a'])

@@ -7,7 +7,7 @@ import {
   assertNotEquals,
   assertStringIncludes,
 } from '@std/assert'
-import { blobAt } from './cache.ts'
+import { blobAt } from '@yaks/platform/kept'
 import { blobBytes, fetch } from './files.ts'
 import { platform } from './serving-probe.ts'
 import { within } from './defects.ts'

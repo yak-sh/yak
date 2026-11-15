@@ -3,7 +3,7 @@
 // isolate finds it in the cache instead of the bucket.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { keptAt } from './cache.ts'
+import { keptAt } from '@yaks/platform/kept'
 import { fetch, keptBytes, PREFIX } from './files.ts'
 import { declarationOf, keepDeclaration } from './declaration.ts'
 import { platform } from './serving-probe.ts'

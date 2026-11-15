@@ -1,4 +1,4 @@
-// The cache's two load-bearing promises (cache.ts, T-33197), each asserted on
+// The cache's two load-bearing promises (./kept.ts, T-33197), each asserted on
 // the pure seam so it costs nothing to keep asserting:
 //
 //   1. Two apps never share a cache entry. The cache key is the path, and the
@@ -14,7 +14,7 @@ import {
   assertNotEquals,
   assertStringIncludes,
 } from '@std/assert'
-import { at, sealed } from './cache.ts'
+import { fileAt, publicPage, sealed } from './kept.ts'
 
 let A = '11111111-1111-4111-8111-111111111111'
 let B = '22222222-2222-4222-8222-222222222222'
@@ -23,14 +23,14 @@ test('two apps at the same path are two cache entries', () => {
   // The same path in two spaces — `alice.yaks.app/recipes/app.js` and
   // `bob.yaks.app/recipes/app.js` — is one cache key to Cloudflare, because a
   // Worker's cache is keyed without the host. These must not collide.
-  assertNotEquals(at(A, '/app.js'), at(B, '/app.js'))
-  assertStringIncludes(at(A, '/app.js'), A)
-  // The path the app knows itself by survives whole, so files.ts can read it
+  assertNotEquals(fileAt(A, '/app.js'), fileAt(B, '/app.js'))
+  assertStringIncludes(fileAt(A, '/app.js'), A)
+  // The path the app knows itself by survives whole, so Files can read it
   // back off the front.
   let path = (address: string) => new URL(address).pathname
-  assertEquals(path(at(A, '/app.js')), `/${A}/app.js`)
-  assertEquals(path(at(A, 'app.js')), `/${A}/app.js`)
-  assertEquals(path(at(A, '/', 'a/.releases/1/x')), `/${A}/`)
+  assertEquals(path(fileAt(A, '/app.js')), `/${A}/app.js`)
+  assertEquals(path(fileAt(A, 'app.js')), `/${A}/app.js`)
+  assertEquals(path(fileAt(A, '/', 'a/.releases/1/x')), `/${A}/`)
 })
 
 test('a door that says nothing is told not to be shared', async () => {
@@ -99,4 +99,75 @@ test('the frame policy stacks with a response CSP, never clobbers it', () => {
   ).headers.get('content-security-policy')!
   assertStringIncludes(csp, "sandbox; script-src 'none'")
   assertStringIncludes(csp, "frame-ancestors 'self' https://yaks.app")
+})
+
+test('a deployed public page revalidates before drawing again', async () => {
+  let env = { APEX: 'yaks.app', CF_VERSION_METADATA: { id: 'deploy-one' } }
+  let drawn = 0
+  let draw = () => {
+    drawn++
+    return new Response('this deployment')
+  }
+  let url = 'https://yaks.app/docs/querying'
+  let first = await publicPage(new Request(url), env, '/docs/querying', draw)
+  let etag = first?.headers.get('etag') ?? ''
+  assertEquals(first?.status, 200)
+  assertEquals(
+    first?.headers.get('cache-control'),
+    'public, max-age=300, must-revalidate',
+  )
+  assertEquals(await first?.text(), 'this deployment')
+  let again = await publicPage(
+    new Request(url, { headers: { 'if-none-match': etag.slice(2) } }),
+    env,
+    '/docs/querying',
+    draw,
+  )
+  assertEquals(again?.status, 304)
+  assertEquals(await again?.text(), '')
+  assertEquals(drawn, 1)
+  let changed = await publicPage(
+    new Request(url, { headers: { 'if-none-match': etag } }),
+    { ...env, CF_VERSION_METADATA: { id: 'deploy-two' } },
+    '/docs/querying',
+    draw,
+  )
+  assertEquals(changed?.status, 200)
+  assertEquals(drawn, 2)
+})
+
+test('a changing representation rotates its validator within a deploy', async () => {
+  let env = { CF_VERSION_METADATA: { id: 'deploy-one' } }
+  let url = 'https://yaks.app/.well-known/security.txt'
+  let first = await publicPage(
+    new Request(url),
+    env,
+    '/.well-known/security.txt',
+    () => new Response('day one'),
+    60,
+    '2026-09-28',
+  )
+  let changed = await publicPage(
+    new Request(url, {
+      headers: { 'if-none-match': first?.headers.get('etag') ?? '' },
+    }),
+    env,
+    '/.well-known/security.txt',
+    () => new Response('day two'),
+    60,
+    '2026-09-29',
+  )
+  assertEquals(changed?.status, 200)
+  assertEquals(await changed?.text(), 'day two')
+})
+
+test('a page without deploy metadata is not stored', async () => {
+  let res = await publicPage(
+    new Request('https://yaks.app/docs'),
+    {},
+    '/docs',
+    () => new Response('development'),
+  )
+  assertEquals(res?.headers.get('cache-control'), 'private, no-store')
+  assertEquals(res?.headers.get('etag'), null)
 })

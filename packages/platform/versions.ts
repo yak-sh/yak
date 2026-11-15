@@ -88,6 +88,27 @@ export let SHA = 'sha/'
 /// addressed('ab12') -> 'sha/ab12'
 export let addressed = (sha: string) => SHA + sha
 
+// A release is named by a UUID: its files live under `.releases/<…>/<id>`,
+// and a page of it loads each asset at `/assets/<id>/<path>` under the app's
+// `/api/`, an address no later release answers differently.
+let UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+let RELEASE = new RegExp(`(?:^|/)\\.releases/[^/]+/(${UUID})$`)
+let ASSET = new RegExp(`^/assets/(${UUID})/(.+)$`)
+
+/** The immutable release id, only where the app serves a release. */
+/// releaseId('apps/ada/.releases/7/0b6b4f8c-fdcc-4a38-bcbd-15bad97cee69') -> '0b6b4f8c-fdcc-4a38-bcbd-15bad97cee69'
+/// releaseId('apps/ada') -> null
+export let releaseId = (source: string | null | undefined): string | null =>
+  RELEASE.exec(source ?? '')?.[1] ?? null
+
+/** An app API path naming one asset in one release. */
+export let assetPath = (
+  path: string,
+): { release: string; path: string } | null => {
+  let found = ASSET.exec(path)
+  return found ? { release: found[1], path: `/${found[2]}` } : null
+}
+
 /**
  * The pin store: @yaks/blob's three addressed verbs over the bucket the app's
  * own files live in, so a caller pinning bytes names them and never a key.

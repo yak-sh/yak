@@ -5791,6 +5791,12 @@ importers:
       '@yaks/api':
         specifier: 0.2.29
         version: link:../api
+      '@yaks/durable-object':
+        specifier: 0.2.28
+        version: link:../durable-object
+      '@yaks/fp':
+        specifier: 0.2.23
+        version: link:../fp
       '@yaks/graph':
         specifier: 0.2.33
         version: link:../graph

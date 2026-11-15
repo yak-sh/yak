@@ -1,19 +1,6 @@
 // A release's browser address: local static references in its page and the
-// versioned path that resolves them belong to the same mount.
-
-let UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
-let RELEASE = new RegExp(`(?:^|/)\\.releases/[^/]+/(${UUID})$`)
-let ASSET = new RegExp(`^/assets/(${UUID})/(.+)$`)
-
-/** The immutable release id, only where the app serves a release. */
-export let releaseId = (source: string | null | undefined) =>
-  RELEASE.exec(source ?? '')?.[1] ?? null
-
-/** An app API path naming one asset in one release. */
-export let assetPath = (path: string) => {
-  let found = ASSET.exec(path)
-  return found ? { release: found[1], path: `/${found[2]}` } : null
-}
+// versioned path that resolves them belong to the same mount. Which release
+// an address names is @yaks/platform/versions' (`releaseId`, `assetPath`).
 
 /** Where a release asset's reference to the app's API belongs. A release
  * holds the app's files and never its API, but a module's `./api/client.js`

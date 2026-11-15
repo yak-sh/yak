@@ -9,15 +9,8 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import type { Env } from './env.ts'
 import { owed } from './facets/pages-graph.ts'
-import {
-  asked,
-  keep,
-  keepable,
-  kept,
-  passed,
-  unkept,
-  visitor,
-} from './page-cache.ts'
+import { asked, keep, unkept } from './page-cache.ts'
+import { keepable, kept, passed, visitor } from '@yaks/platform/kept'
 import { clock } from './timing.ts'
 import { within } from './defects.ts'
 import { WAKE } from './door.ts'

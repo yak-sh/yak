@@ -5,26 +5,35 @@ import { copyOf } from './directory-copy.ts'
 // answered stale while they render again), the app pictures those listings
 // show (gallery.ts `image`), each app's visitor counts (views.ts `counted`),
 // and every public page an
-// app serves (page-cache.ts), keyed by the address it answers. The uncached gateway sends only canonical,
+// app serves (page-cache.ts, @yaks/platform/kept), keyed by the address it
+// answers. The uncached gateway sends only canonical,
 // uncredentialed requests here.
 import { edged, editing } from './apps.ts'
 import {
   homed,
   isListing,
   isStatic,
+  listing,
+  LOGIN,
+  STATICS,
+} from './kept-page.ts'
+import {
+  cardTag,
+  hostTag,
   KEEP,
   KEPT,
-  listing,
+  kept,
   listingAt,
-  LOGIN,
   NOW,
+  passed,
   personal,
   SEEN,
   shareable,
-  STATICS,
+  SITE_TAG,
+  TAGS,
   visitor,
-} from './kept-page.ts'
-import { kept, passed } from './page-cache.ts'
+} from '@yaks/platform/kept'
+import { matches } from '@yaks/blob/serve'
 import { caught } from './defects.ts'
 import { drawing } from './drawing.ts'
 import {
@@ -46,8 +55,6 @@ import { INTEGRATIONS, page as integrations, rating } from './integrations.ts'
 import { apex, type Host, hosted, url } from '@yaks/platform/host'
 import { lost } from './pages.ts'
 import { askEmail } from './signin-pages.ts'
-import { matches } from './public-cache.ts'
-import { cardTag, hostTag, SITE_TAG } from './purge.ts'
 import { named, sheeted } from './sheets.ts'
 import { priceAt } from './sell.ts'
 import { type Clock, clock, timed } from './timing.ts'
@@ -153,8 +160,8 @@ let theirs = (req: Request, env: Env, path: string) =>
 // a box or staging with no such app), a release of it is under way (a pass
 // for now, `NOW`), or anything else, which is a failure. A `visitor` who may
 // write it is served it as themselves, by their session alone (as Site
-// serves a session's own key, kept-page.ts `visitor`), and it is theirs:
-// never kept.
+// serves a session's own key, @yaks/platform/kept `visitor`), and it is
+// theirs: never kept.
 let fromHome = async (
   env: Env,
   path: string,
@@ -390,7 +397,7 @@ let pictured = (req: Request, page: Response, path: string) => {
   let [eid, sha] = path.slice(gallery.IMAGE.length).split('/')
   headers.set('cache-control', KEPT)
   headers.set(
-    'cache-tag',
+    TAGS,
     [SITE_TAG, ...sha == gallery.CARD ? [cardTag(eid)] : []].join(','),
   )
   return matches(req.headers.get('if-none-match'), headers.get('etag') ?? '')
@@ -429,7 +436,7 @@ export let validated = async (
   headers.set('cache-control', KEPT)
   // A page the home app served is purged by its releases too (`fromHome`).
   headers.set(
-    'cache-tag',
+    TAGS,
     [SITE_TAG, ...headers.get(KEEP)?.split(',') ?? []].join(','),
   )
   headers.delete(KEEP)

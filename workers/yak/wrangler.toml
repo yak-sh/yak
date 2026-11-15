@@ -246,7 +246,8 @@ class_name = "Workbench"
 script_name = "yak-sandbox"
 
 # The one object every purge of Site's cache goes through (index.ts `Purger`),
-# since Cloudflare keeps one purge budget for the whole account (purge.ts).
+# since Cloudflare keeps one purge budget for the whole account
+# (@yaks/workerd/purge).
 [[durable_objects.bindings]]
 name = "PURGER"
 class_name = "Purger"
@@ -449,10 +450,11 @@ bucket_name = "yak-model-receipts"
 # and a cache keyed by version was emptied for every app by each of them, so
 # the next view of every file paid a full miss (two tiers, the Worker, the
 # bucket: about 600 ms). What Files answers under one address never changes
-# (a release's bytes are immutable), and cache.ts `GENERATION` is how a change
-# to the answer itself moves to new addresses. Site keeps a page 30 seconds
-# and then answers it once more while asking again; a directory write that
-# changes an app's pages purges them before it answers (page-cache.ts).
+# (a release's bytes are immutable), and @yaks/platform/kept's generation
+# of Files' keys is how a change to the answer itself moves to new addresses.
+# Site keeps a page 30 seconds and then answers it once more while asking
+# again; a directory write that changes an app's pages purges them before it
+# answers (page-cache.ts).
 [cache]
 enabled = true
 cross_version_cache = true
@@ -472,13 +474,16 @@ cross_version_cache = true
 # So the default entrypoint is the gateway and never cached: it runs on every
 # request yak-front hands it, resolves the space and app, and decides who is
 # asking. `Files` is
-# behind it, addressed by the app's EID (cache.ts `at`), and holds only bytes.
+# behind it, addressed by the app's EID (@yaks/platform/kept `fileAt`), and
+# holds only bytes.
 # `Site` is behind it too, and receives only the apex's public pages and the
 # pages an app serves to anyone, each under a path naming the hostname that
-# answers it (site.ts `at`, page-cache.ts `pageAt`), and never a credential.
+# answers it (site.ts `at`, @yaks/platform/kept `pageAt`), and never a
+# credential.
 #
 # Turning `enabled` on for `default` is the one edit in this file that would
-# leak one tenant's pages to another. cache.ts `sealed` is the second line of
+# leak one tenant's pages to another. @yaks/platform/kept `sealed` is the
+# second line of
 # defence if it ever happens.
 [exports.default]
 type = "worker"

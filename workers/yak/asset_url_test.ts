@@ -3,14 +3,8 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import {
-  apiOut,
-  assetMaps,
-  assetPath,
-  assetUrl,
-  releaseId,
-  unfound,
-} from './asset_url.ts'
+import { apiOut, assetMaps, assetUrl, unfound } from './asset_url.ts'
+import { assetPath, releaseId } from '@yaks/platform/versions'
 import { platformPath } from './router.ts'
 
 test('release URLs keep local assets under their mount', () => {

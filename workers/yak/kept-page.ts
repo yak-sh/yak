@@ -1,38 +1,29 @@
 // The hit path of an app's kept pages and the apex's listings, which both the
 // gateway and yak-front (front/) walk: asking Site, and turning what its cache
-// holds into a visitor's answer. page-cache.ts says what a kept page is and how
-// Site keeps one. Nothing here reaches the graph stack or a secret, so the
-// front Worker's upload stays small.
-import { decodedPath } from './request-path.ts'
-import { assetPath } from './asset_url.ts'
-import { matches } from './public-cache.ts'
+// holds into a visitor's answer. What a kept page is, where Site keeps it and
+// for how long are @yaks/platform/kept's; asking the cache is
+// @yaks/workerd/cache's. Nothing here reaches the graph stack or a secret, so
+// the front Worker's upload stays small.
+import { matches } from '@yaks/blob/serve'
+import { hit } from '@yaks/workerd/cache'
+import {
+  BROWSER,
+  FRESH,
+  KEPT,
+  listingAt,
+  pageAt,
+  type Said,
+  scope,
+  SEEN,
+  type Seen,
+  shareable,
+  TAGS,
+  UNKEPT,
+} from '@yaks/platform/kept'
 import type { Fetcher } from './env.ts'
-import { bearing, MOUNT } from '@yaks/platform/routes'
 import { PATHS } from './variant.ts'
-import { COOKIE, cookieValue } from '@yaks/platform/cookie'
-import { sha256 } from '@yaks/graph/sha256'
+import { COOKIE } from '@yaks/platform/cookie'
 import { claimed } from './site-data.ts'
-
-// How long Site holds an answer before asking again, and how long past that a
-// visitor may still be answered from it while it is asked (stale while it
-// revalidates). Purges keep it right; this keeps a missed purge brief.
-export let KEPT = 'public, max-age=30, stale-while-revalidate=86400'
-
-// Bumped when how a page is woven changes and kept pages must not wait out
-// their freshness: every key moves, and the old pages are never read again.
-let GENERATION = 4
-
-// What Site says of a pass for now only (`passed`), which no cache holds.
-export let UNKEPT = 'private, no-store'
-
-// Between served() and Site, and Site and the gateway; never a browser's.
-export let KEEP = 'x-yak-keep'
-export let NOW = 'x-yak-now'
-export let SEEN = 'x-yak-seen'
-export let BROWSER = 'x-yak-browser-cache'
-// Between the gateway and yak-front: the mount of an app whose pages are never
-// kept, which it need not ask Site about for a while (page-cache.ts `unkept`).
-export let UNKEPT_AT = 'x-yak-unkept'
 
 // A deploy probe picks a version at the gateway; a miss is served by Site at
 // the same one (kernel.ts says the same of the apex's pages).
@@ -56,114 +47,6 @@ let passes = (site: object, keys: string[]) => {
   let held = passing.get(site), now = Date.now()
   return !!held && keys.some((key) => (held.get(key) ?? 0) > now)
 }
-// The addresses one app answers on a hostname: those under its mount, which
-// for a space's front page is every one.
-export let scope = (host: string, mount: string | null, at: string) =>
-  `${host} ${mount ?? ''} ${at}`
-
-/** Where Site keeps one address's page. The hostname is a placeholder for
- * the binding; what names the page is the path, which carries the hostname
- * the gateway routed, because the cache key holds no hostname of its own.
- * `session` keys a signed-in person's own copy of a page kept for strangers
- * (`asked`): the digest of their session token, which only they hold, so
- * nobody else's request ever reads it, and a forged cookie names a key Site
- * never filled. */
-export let pageAt = (
-  host: string,
-  path: string,
-  mount: string | null,
-  session?: string,
-) =>
-  `https://site.invalid/@${encodeURIComponent(host)}${path}?g=${GENERATION}${
-    mount ? `&mount=${encodeURIComponent(mount)}` : ''
-  }${session ? `&who=${heldBy(session)}` : ''}`
-
-// What a key says of the session it is for.
-let heldBy = (session: string) => sha256(session).slice(0, 32)
-
-/** The address a key names, as the request a visitor would have sent: with
- * the session cookie `asking` carries, where the key is that session's own
- * and the cookie is the session it names, else with no cookie at all. */
-export let visitor = (url: string, asking?: Request): Request | null => {
-  let { pathname, searchParams } = new URL(url)
-  let at = pathname.indexOf('/', 2)
-  if (!pathname.startsWith('/@') || at < 0) return null
-  let host = decodedPath(pathname.slice(2, at))
-  if (host == null) return null
-  let mount = searchParams.get('mount')
-  let headers = new Headers(mount ? { [MOUNT]: mount } : {})
-  let session = asking && cookieValue(asking.headers.get('cookie'))
-  if (session && searchParams.get('who') == heldBy(session)) {
-    headers.set('cookie', `${COOKIE}=${session}`)
-  }
-  return new Request(`https://${host}${pathname.slice(at)}`, { headers })
-}
-
-/** Whether a key is a session's own (`pageAt`). */
-export let personal = (url: string) => new URL(url).searchParams.has('who')
-
-/** The platform's modules an app's pages import from its `/api/` (apps.ts
- * `api`): one file for every app, from the platform's assets. */
-export let CLIENT = [
-  '/client.js',
-  '/storage.js',
-  '/_draft.js',
-  '/_outbox.js',
-  '/_wire.js',
-  '/_edit.js',
-]
-
-/** The store client under a name of its bytes (sheets.ts `client`), the
- * address a page of modules imports it by. */
-export let NAMED_CLIENT = /^\/client\.[0-9a-f]{10}\.js$/
-
-/** Whether a path names bytes at an app's `/api/` that are the same for
- * everyone who may read the app: a release's asset (asset_url.ts) or one of
- * the platform's modules. A page's first paint loads them, so Site keeps them
- * as it keeps the page. */
-export let fixed = (path: string) => {
-  let api = /^(?:\/[^/]+)?\/api(\/.+)$/.exec(path)?.[1]
-  return !!api &&
-    (CLIENT.includes(api) || NAMED_CLIENT.test(api) || !!assetPath(api))
-}
-
-/** Whether a request could be answered by a kept page: a read with nothing
- * that requires the gateway (a grant, a bearer, a byte range), and not an
- * app's `/api/` (but for its `fixed` bytes) or a sandboxed page's token
- * path, which never are. */
-export let shareable = (req: Request, path = new URL(req.url).pathname) => {
-  return (req.method == 'GET' || req.method == 'HEAD') &&
-    !req.headers.has('authorization') && !req.headers.has('x-yak-caller') &&
-    !req.headers.has('range') &&
-    !req.headers.has('upgrade') && !bearing(req) &&
-    (fixed(path) || !/^(?:\/[^/]+)?\/(?:api\/|_web(?:\/|$))/.test(path)) &&
-    !path.includes('/~')
-}
-
-/** What a page may say of itself as it answers from the edge, and the store
- * its app keeps (a handle, directory.ts `storeName`), which a page that
- * `opens` starts (used.ts `wake`), and its space's handle, which the browser
- * is told the hostname's storage is now (site-data.ts). A page kept before it
- * said either says none, and starts or tells nothing. */
-export type Seen = {
-  app: string
-  space: string
-  slug: string
-  store?: string
-  handle?: string
-}
-
-/** Whether a browser goes on to run this answer, so that its scripts ask the
- * app's store next: an HTML page, sent whole or revalidated. */
-export let opens = (res: Response) =>
-  (res.status == 200 || res.status == 304) &&
-  (res.headers.get('content-type') ?? '').startsWith('text/html')
-/** Whom a kept page alone is for, where it isn't everyone: strangers, or a
- * person signed in who holds no seat in its space (a space's index, as each
- * is shown it). */
-export type Alone = 'stranger' | 'outsider'
-// What Site says of a kept page: that, and whom it is for alone.
-type Said = Partial<Seen> & { [who in Alone]?: true }
 
 /** The part of a request clock this path uses; the front Worker keeps none. */
 export type Timer = {
@@ -174,8 +57,6 @@ export type Timer = {
   ) => Promise<T>
   include: (timing: string | null) => void
 }
-
-let HITS = ['HIT', 'UPDATING', 'STALE']
 
 /** The kept page for this request, or null when Site passed and the caller
  * serves it itself. A stranger's page is never a person's: a `session` that
@@ -220,9 +101,7 @@ export let asked = async (
       (r) => r.headers.get('cf-cache-status'),
     )
     // A hit carries the old render's timing, not work done for this view.
-    if (!HITS.includes(got.headers.get('cf-cache-status') ?? '')) {
-      c.include(got.headers.get('server-timing'))
-    }
+    if (!hit(got)) c.include(got.headers.get('server-timing'))
     let said = got.headers.get(SEEN)
     if (!said) {
       await got.body?.cancel()
@@ -252,7 +131,7 @@ export let asked = async (
       BROWSER,
       'age',
       'cf-cache-status',
-      'cache-tag',
+      TAGS,
       'server-timing',
     ]
   ) {
@@ -315,31 +194,15 @@ export let PICTURES = '/gallery/image/'
 
 /** The sign-in card (identity.ts `GET /login`). A stranger's is the same for
  * everyone, so Site keeps it; a request that could be somebody's, or carries
- * an address to go back to, is identity.ts's to answer (`stranger`). */
+ * an address to go back to, is identity.ts's to answer (@yaks/platform/kept
+ * `stranger`). */
 export let LOGIN = '/login'
-
-/** Whether a visit to the sign-in card is a stranger's with nowhere to return
- * to: no session cookie and no credentials, so nobody is signed in to be sent
- * on, and no `return` the card would carry forward. */
-export let stranger = (req: Request) =>
-  !cookieValue(req.headers.get('cookie')) &&
-  !req.headers.has('authorization') &&
-  !new URL(req.url).searchParams.has('return')
 
 /** Whether Site keeps this apex path: a listing, a picture one shows, a
  * static page, or the stranger's sign-in card. */
 export let isListing = (path: string) =>
   LISTINGS.includes(path) || path.startsWith(PICTURES) || isStatic(path) ||
   path == LOGIN
-
-/** Where Site keeps one of them. The hostname is a placeholder for a service
- * binding; the apex is in the path because Workers Caching keys by path and
- * entrypoint, not the request hostname. */
-export let listingAt = (apex: string, path: string) =>
-  `https://site.invalid/${encodeURIComponent(apex)}${path}`
-
-// What a browser is told of the home page's lifetime: the edge's is its own.
-let FRESH = 'public, max-age=30, must-revalidate'
 
 /** A listing for a visitor. The subrequest carries validators and deploy
  * selection, never browser credentials; HEAD uses that same GET and drops only
@@ -366,10 +229,10 @@ export let listing = async (
   )
   // A hit carries the old render's timing, not work done for this view, and
   // the home page's lifetime is its edge's: a browser still revalidates it.
-  let hit = HITS.includes(shown.headers.get('cf-cache-status') ?? '')
-  if (hit || shown.headers.get('cache-control') == KEPT) {
+  let cached = hit(shown)
+  if (cached || shown.headers.get('cache-control') == KEPT) {
     shown = new Response(shown.body, shown)
-    if (hit) shown.headers.delete('server-timing')
+    if (cached) shown.headers.delete('server-timing')
     if (shown.headers.get('cache-control') == KEPT) {
       shown.headers.set('cache-control', FRESH)
     }

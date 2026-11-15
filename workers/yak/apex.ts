@@ -4,7 +4,7 @@
 // apex, so an isolate woken for a space's page never compiles them (T-148886).
 import * as admin from './admin.ts'
 import * as apps from './apps.ts'
-import { packageAt } from './cache.ts'
+import { packageAt } from '@yaks/platform/kept'
 import * as billing from './billing.ts'
 import * as budget from './budget.ts'
 import * as comp from './comp.ts'

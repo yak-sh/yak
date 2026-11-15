@@ -400,6 +400,7 @@ invitation handler.
 | -------------------- | ------------------------------------------------------------------------------------------ |
 | `@yaks/member`       | Component definitions, access helpers, policy, write guard, plugin and error listed below. |
 | `@yaks/member/vocab` | `memberDoc` and `docs`, the array of vocabulary documents.                                 |
+| `@yaks/member/words` | `role`, `level`, `mode` and the access rules over them, without the rest of the package.   |
 
 The main export includes:
 

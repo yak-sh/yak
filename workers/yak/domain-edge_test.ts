@@ -6,7 +6,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Env } from './env.ts'
-import { pageAt } from './page-cache.ts'
+import { pageAt } from '@yaks/platform/kept'
 import { recording } from './probe.ts'
 import { fetch as siteFetch } from './site.ts'
 import { ADA_OWNS, platform, seeded } from './serving-probe.ts'

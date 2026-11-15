@@ -13,7 +13,8 @@
 // reloads the page, keeping the window's scroll and the values typed into its
 // fields. A framed page tells its frame each write first (`{"yak-draft":…}`),
 // so a TV showing it (screen.ts) can say what just changed; to any origin,
-// since only the app's space and yaks.app may frame it (cache.ts `sealed`).
+// since only the app's space and yaks.app may frame it (@yaks/platform/kept
+// `sealed`).
 ;(() => {
   let script = document.currentScript
   if (!script) return

@@ -4,7 +4,7 @@
 // compiles it (T-148886).
 import { copyOf } from './directory-copy.ts'
 import { spaceHost, url as hostUrl } from '@yaks/platform/host'
-import { browserImmutable } from './cache.ts'
+import { browserImmutable } from '@yaks/platform/kept'
 import {
   type App,
   daysLeft,

@@ -2,7 +2,7 @@ import { equal, test } from '@yaks/testing'
 import { decodedPath } from './request-path.ts'
 import { fetch, PREFIX } from './files.ts'
 import { platform } from './serving-probe.ts'
-import { visitor } from './page-cache.ts'
+import { visitor } from '@yaks/platform/kept'
 
 let { env } = platform()
 for (let path of ['/%', '/%GG', '/%c0', '/%E0%A4%A', '/%ED%A0%80']) {

@@ -20,7 +20,7 @@ import type { Caller } from '@yaks/egress'
 import type { Inference, InferenceReceipt, Mark } from '@yaks/model'
 import type { Env, Inbound } from '../env.ts'
 import type { Lent } from '../kernel.ts'
-import type { Purged } from '../purge.ts'
+import type { EntryCache } from '@yaks/workerd/cache'
 import type { Conversion } from '../arrival.ts'
 import type { builds } from '../builds.ts'
 
@@ -147,9 +147,6 @@ let entered = (
   load: () => Promise.resolve(make as never),
 })
 
-// What the runtime lends an entrypoint whose cache is on (wrangler.toml).
-type Purging = { purge(o: { tags: string[] }): Promise<Purged> }
-
 let hosting = async (env: Env) => (await import('../inference.ts')).hosting(env)
 
 export let classes: Record<string, Deferred> = {
@@ -195,16 +192,21 @@ export let classes: Record<string, Deferred> = {
         ),
       ),
   },
-  // The one object every purge goes through (purge.ts `purge`): Cloudflare
-  // keeps one purge budget for the whole account, so it is spent in one
-  // place, and the tags owed while a purge waits for its token ride with it.
+  // The one object every purge goes through (@yaks/workerd/purge `purge`):
+  // Cloudflare keeps one purge budget for the whole account, so it is spent
+  // in one place, and the tags owed while a purge waits for its token ride
+  // with it.
   // Site's `purge` is called as a method of the binding, never through `call`
   // or `apply`: an RPC stub answers every property as a method of the far
   // side.
   Purger: {
     base: DurableObject,
     methods: PURGER,
-    load: async () => made((await import('../purge.ts')).Purger),
+    load: async () => {
+      let { Purger } = await import('@yaks/workerd/purge')
+      return (ctx: ConstructorParameters<typeof Purger>[0], env: Env) =>
+        new Purger(ctx, env.SITE)
+    },
   },
   // A call that outlasts its caller (outlast.ts, outlast-object.ts): one
   // object per caller, tool and target, which finishes the call after the
@@ -223,11 +225,11 @@ export let classes: Record<string, Deferred> = {
     async (ctx: never, env) =>
       new (await import('../lexicon.ts')).LexiconStore(ctx, env),
   ),
-  // The kernel's cached file entrypoint (cache.ts, wrangler.toml
-  // `[exports.Files]`). The default entrypoint is the gateway: it runs on
-  // every request, because the cache key does not include the hostname and
-  // every space is a hostname. This one is addressed by the app's eid and
-  // answers bytes, so it is safe to share and worth caching. It is reached
+  // The kernel's cached file entrypoint (wrangler.toml `[exports.Files]`).
+  // The default entrypoint is the gateway: it runs on every request, because
+  // the cache key does not include the hostname and every space is a
+  // hostname. This one is addressed by the app's eid and answers bytes, so it
+  // is safe to share and worth caching (@yaks/platform/kept). It is reached
   // only through the `FILES` service binding (env.ts).
   Files: entered(WorkerEntrypoint, ['fetch'], (_ctx, env) => ({
     fetch: async (req: Request) =>
@@ -235,30 +237,18 @@ export let classes: Record<string, Deferred> = {
   })),
   // Only the gateway reaches this entrypoint, and only with canonical apex
   // paths and no caller credentials. Its cache holds the public listing
-  // pages. `purge` is how a page leaves that cache (purge.ts): an RPC, which
-  // the cache never answers, and the only place a purge of Site's own cache
-  // can be made, since a purge reaches just the entrypoint that calls it.
+  // pages. `purge` is how a page leaves that cache (@yaks/workerd/purge): an
+  // RPC, which the cache never answers, and the only place a purge of Site's
+  // own cache can be made, since a purge reaches just the entrypoint that
+  // calls it. Site is only ever bound where its cache is on (wrangler.toml),
+  // so a purge with no cache to reach is a refusal to hear about.
   Site: entered(
     WorkerEntrypoint,
     ['fetch', 'purge'],
-    (ctx: { cache?: Purging }, env) => ({
+    async (ctx: { cache?: EntryCache }, env) => ({
       fetch: async (req: Request) =>
         (await import('../site.ts')).fetch(req, env),
-      purge: async (tags: string[]): Promise<Purged> => {
-        // Site is only ever bound where its cache is on (wrangler.toml), so
-        // a purge with no cache to reach is a failure to hear about.
-        if (!ctx.cache) {
-          return {
-            success: false,
-            errors: [{ code: 0, message: 'Site has no cache to purge' }],
-          }
-        }
-        let { success, errors } = await ctx.cache.purge({ tags })
-        return {
-          success,
-          errors: errors.map(({ code, message }) => ({ code, message })),
-        }
-      },
+      purge: (await import('@yaks/workerd/cache')).purging(ctx.cache),
     }),
   ),
   // What yak-front (front/) owes for a page it answered from the edge: the

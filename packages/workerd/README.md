@@ -4,8 +4,10 @@ Cloudflare Workers integration. It makes a Worker from a plugin config: its
 routes, letters and queue batches, and the Durable Object and entrypoint classes
 it defines, each loaded on its first call. For [@yaks/api](../api/README.md) it
 provides a Worker fetch entrypoint, WebSocket upgrades through `WebSocketPair`,
-request authentication helpers, and request forwarding to Durable Objects.
-Applications provide the graph, storage adapter, and authorization policy.
+request authentication helpers, and request forwarding to Durable Objects. For
+an entrypoint behind Cloudflare's cache it asks it through its binding and
+purges it by tag. Applications provide the graph, storage adapter, and
+authorization policy, and what their caches may keep.
 
 This package creates no database, component tables, or persistent records.
 `worker()` caches API handlers in memory; each graph's storage adapter
@@ -35,14 +37,16 @@ All exports are available from `@yaks/workerd`:
 | `workerUpgrade`, `Accepting`                    | Accept a Workers WebSocket and return the upgrade response  |
 | `forward`, `Namespace`, `Stub`                  | Forward a request to a named Durable Object                 |
 
-Four subpaths serve a Worker made from a config:
+Six subpaths serve a Worker made from a config:
 
-| Subpath                 | Purpose                                                                                                                         |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/workerd/compose` | `compose` alone, importing nothing of `@yaks/api` but its route matching                                                        |
-| `@yaks/workerd/worker`  | this package's own `./worker` facet: the deploy's version route                                                                 |
-| `@yaks/workerd/gen`     | `written`, the module of a config and its plugins' facets; `loader` and `imports`, the module its stores load their facets from |
-| `@yaks/workerd/rate`    | `within`, `source`, `tooMany`: a door's per-source ceiling, a Rate Limiting binding                                             |
+| Subpath                 | Purpose                                                                                                                                                                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/workerd/compose` | `compose` alone, importing nothing of `@yaks/api` but its route matching                                                                                                                                                                    |
+| `@yaks/workerd/worker`  | this package's own `./worker` facet: the deploy's version route                                                                                                                                                                             |
+| `@yaks/workerd/gen`     | `written`, the module of a config and its plugins' facets; `loader` and `imports`, the module its stores load their facets from                                                                                                             |
+| `@yaks/workerd/rate`    | `within`, `source`, `tooMany`: a door's per-source ceiling, a Rate Limiting binding                                                                                                                                                         |
+| `@yaks/workerd/cache`   | `through`, `hit`, `purging`: an inner entrypoint behind Cloudflare's cache, asked through its service binding or in-process where the runtime can't take the hop, whether the cache answered, and the `purge(tags)` that entrypoint answers |
+| `@yaks/workerd/purge`   | `purge`, `Purger`, `purger`, `SPREAD`: purges by tag through one Durable Object that keeps the account's purge bucket, and how long one takes to reach every colo                                                                           |
 
 ## A Worker from a config
 

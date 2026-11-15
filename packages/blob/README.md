@@ -80,24 +80,24 @@ host records that, and refuses the store to a config without @yaks/blob
 
 ## Exports
 
-| Root export                                                                                  | Purpose                                                  |
-| -------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `blobKeywords`, `BLOB_URI`                                                                   | Register the `store` and `address` keywords              |
-| `Body`, `bodies`, `isBody`, `holders`                                                        | Select marked properties                                 |
-| `blobs`, `BlobOpts`, `Reference`                                                             | Graph write plugin and optional stored-reference mapping |
-| `Blobs`, `memoryBlobs`, `address`, `encode`, `decode`                                        | Store interface and text addressing                      |
-| `sqliteBlobs`, `blobSchema`, `dropSql`, `Layout`                                             | SQLite text storage                                      |
-| `objectBlobs`, `Bucket`, `patient`                                                           | Object storage                                           |
-| `Objects`, `Opened`, `Loaded`, `bucketObjects`                                               | A bucket keyed by name: read, delete, list               |
-| `parts`, `Multipart`, `Assembly`, `memoryMultipart`, `sized`, `Gone`, `Wrong`, `MOST`, `MiB` | Resumable uploads in parts, checked against their hash   |
-| `hasher`, `fold`, `START`                                                                    | SHA-256 carried from one piece of bytes to the next      |
-| `Accepts`, `acceptsErrors`, `fits`, `takes`, `taken`                                         | Which blobs an application takes, by size and media type |
-| `blobRead`, `hydrate`                                                                        | SQL and post-read text resolution                        |
-| `Artifact`, `ArtifactStore`, `addressOf`, `keep`, `artifactBytes`, `artifactDoc`             | Artifact storage, verified reads and declarations        |
-| `Size`, `sizeOf`, `mediaTypeOf`, `mediaType`, `matchesMediaType`, `mimeOf`                   | Image dimensions, signatures and media types             |
-| `Served`, `served`, `servedOpen`, `servedVia`, `ranged`, `rangedOpen`, `validator`           | HTTP responses, streaming and validators                 |
-| `Representation`, `representation`, `represents`, `addressed`, `representations`             | Immutable representations and their graph plugin         |
-| `valueTools`, `valueRange`, `valueSearch`, `VALUE_LIMIT`, `ValueTool`                        | Bounded text-inspection tools                            |
+| Root export                                                                                   | Purpose                                                  |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `blobKeywords`, `BLOB_URI`                                                                    | Register the `store` and `address` keywords              |
+| `Body`, `bodies`, `isBody`, `holders`                                                         | Select marked properties                                 |
+| `blobs`, `BlobOpts`, `Reference`                                                              | Graph write plugin and optional stored-reference mapping |
+| `Blobs`, `memoryBlobs`, `address`, `encode`, `decode`                                         | Store interface and text addressing                      |
+| `sqliteBlobs`, `blobSchema`, `dropSql`, `Layout`                                              | SQLite text storage                                      |
+| `objectBlobs`, `Bucket`, `patient`                                                            | Object storage                                           |
+| `Objects`, `Opened`, `Loaded`, `bucketObjects`                                                | A bucket keyed by name: read, delete, list               |
+| `parts`, `Multipart`, `Assembly`, `memoryMultipart`, `sized`, `Gone`, `Wrong`, `MOST`, `MiB`  | Resumable uploads in parts, checked against their hash   |
+| `hasher`, `fold`, `START`                                                                     | SHA-256 carried from one piece of bytes to the next      |
+| `Accepts`, `acceptsErrors`, `fits`, `takes`, `taken`                                          | Which blobs an application takes, by size and media type |
+| `blobRead`, `hydrate`                                                                         | SQL and post-read text resolution                        |
+| `Artifact`, `ArtifactStore`, `addressOf`, `keep`, `artifactBytes`, `artifactDoc`              | Artifact storage, verified reads and declarations        |
+| `Size`, `sizeOf`, `mediaTypeOf`, `mediaType`, `matchesMediaType`, `mimeOf`                    | Image dimensions, signatures and media types             |
+| `Served`, `served`, `servedOpen`, `servedVia`, `ranged`, `rangedOpen`, `validator`, `matches` | HTTP responses, streaming and validators                 |
+| `Representation`, `representation`, `represents`, `addressed`, `representations`              | Immutable representations and their graph plugin         |
+| `valueTools`, `valueRange`, `valueSearch`, `VALUE_LIMIT`, `ValueTool`                         | Bounded text-inspection tools                            |
 
 | Sub-module export     | Purpose                                                                                                    |
 | --------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -108,6 +108,7 @@ host records that, and refuses the store to a config without @yaks/blob
 | `@yaks/blob/file`     | `fileBlobs(dir)`: the filesystem store, which only a runtime with files loads                              |
 | `@yaks/blob/backend`  | `Backend`, `backend`, `artifactsAt`: configured and default artifact backends                              |
 | `@yaks/blob/store`    | `Blobs`, `memoryBlobs()`, `address`: the store shape and the memory store, without the rest of the package |
+| `@yaks/blob/serve`    | the HTTP responses above, `matches` among them, without the rest of the package                            |
 
 ## Addresses
 

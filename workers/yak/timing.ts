@@ -61,10 +61,11 @@ export let clock = (now: () => number = Date.now) => {
     // recorded either way — a stage that threw is the one worth seeing.
     //
     // `said` is for a stage whose duration is only half the story: serving a
-    // file is fast or slow because Cloudflare's cache hit or missed (cache.ts),
-    // and `Cf-Cache-Status` is the word for which. It rides the same
-    // Server-Timing entry as `desc`, which is where the standard puts it, so
-    // reading a request still means reading one header.
+    // file is fast or slow because Cloudflare's cache hit or missed
+    // (@yaks/workerd/cache `hit`), and `Cf-Cache-Status` is the word for
+    // which. It rides the same Server-Timing entry as `desc`, which is where
+    // the standard puts it, so reading a request still means reading one
+    // header.
     time: async <T>(
       name: string,
       work: () => Promise<T>,

@@ -4,8 +4,8 @@ import { type Clock, clock, timed } from './timing.ts'
 // whether the app's rows still name an upload's bytes. This part knows an
 // app's eid, the R2 prefix its bytes live under, its store, and their address.
 // It does not know who is asking, and that is the whole point — Cloudflare's
-// cache sits in front of this entrypoint (cache.ts), so anything this part
-// could learn about a person would end up shared with strangers.
+// cache sits in front of this entrypoint (@yaks/platform/kept), so anything
+// this part could learn about a person would end up shared with strangers.
 //
 // The access decision stays in apps.ts `served()`, in front, on the uncached
 // gateway, run on every single request. What is cached here is the same for
@@ -34,12 +34,18 @@ import {
   servedAt,
   WORKER,
 } from '@yaks/platform/files'
-import { at, blobAt, immutable, keptAt, servableAt } from './cache.ts'
+import {
+  blobAt,
+  fileAt,
+  immutable,
+  keptAt,
+  servableAt,
+} from '@yaks/platform/kept'
+import { through } from '@yaks/workerd/cache'
 import { elapsed, hop } from './lib/hops.ts'
 import { type Served, storeOf } from './door.ts'
 import { answered, metaOf } from './meta.ts'
 import { caught, relayed, responding } from './defects.ts'
-import { evicted, jittered, retried } from '@yaks/durable-object/resets'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from '@yaks/platform/versions'
 import { drawn, ICON_SVG } from './raster.ts'
@@ -164,62 +170,42 @@ export let servesSaid = (dir?: string) =>
     : ''
 
 // The gateway's way in: the `FILES` binding, so Cloudflare's cache answers
-// what it holds, or this module in-process where there is no binding. Not
-// every invocation may take that hop. Inside an app worker's own call to the
-// kernel (its KERNEL binding, dispatch.ts) Cloudflare refuses it with
-// `DataCloneError: This ServiceStub cannot be serialized` (T-44804), and no
-// header the gateway reads is sure to say it is in one: app code holds the
-// binding itself. So the refusal is the answer: the same bytes, read
-// in-process, uncached.
-//
-// The cache can also fail on its own: a status from 520 to 530 is Cloudflare
-// saying it got no answer from the entrypoint behind it, which this module
-// never answers with itself. That failure is reported, and the bytes are read
+// what it holds, or this module in-process where there is no binding or the
+// runtime refuses or fails the hop (@yaks/workerd/cache `through`). Inside an
+// app worker's own call to the kernel (its KERNEL binding, dispatch.ts) that
+// refusal is the answer: the same bytes, read in-process, uncached. A cache
+// that answered for want of an answer is reported, and the bytes are read
 // in-process the same way, so a person's image still loads.
-//
-// The hop itself can be cut off: the runtime fails it with its `retryable`
-// flag (`Network connection lost.`) when the entrypoint behind the binding is
-// reset or its connection drops. A read carries no body, so each try sends a
-// copy of it, with the backoff a store's call takes (@yaks/durable-object
-// `retried`); an upload is its caller's to send again.
 //
 // Each trip is one `files` hop on the request's tally (hops.ts), and its wait
 // `files_wait`: a hit never reaches the bucket, so no `r2` counts it.
 export let door = (env: Env): Fetcher => ({
   fetch: (req) => {
     hop('files')
-    return elapsed('files_wait', () => through(env, req))
+    return elapsed('files_wait', async () =>
+      relayed(
+        await through(env.FILES, req, (asked) => fetch(asked, env), {
+          clock: env.CLOCK,
+          failed: unanswered,
+        }),
+      ))
   },
 })
 
-let through = async (env: Env, req: Request) => {
-  if (!env.FILES) return relayed(await fetch(req, env))
-  try {
-    let files = env.FILES, read = req.method == 'GET' || req.method == 'HEAD'
-    let cached = await retried(
-      () => files.fetch(read ? new Request(req) : req),
-      read,
-      evicted,
-      jittered(env.CLOCK),
-    )
-    if (cached.status < 520 || cached.status > 530) return relayed(cached)
-    await cached.body?.cancel()
-    caught(new Error(`the files cache answered ${cached.status}`), {
-      request: `${req.method} files`,
-      cache_url: req.url,
-      cache_status: cached.headers.get('cf-cache-status'),
-      cache_error: cached.headers.get('cf-error-type'),
-      cache_origin: cached.headers.get('cf-error-origin'),
-      cache_ray: cached.headers.get('cf-ray'),
-    })
-  } catch (e) {
-    if ((e as Error | null)?.name != 'DataCloneError') throw e
-  }
-  return relayed(await fetch(req, env))
-}
+// A files cache that answered for want of an answer from Files.
+let unanswered = (cached: Response, req: Request) =>
+  caught(new Error(`the files cache answered ${cached.status}`), {
+    request: `${req.method} files`,
+    cache_url: req.url,
+    cache_status: cached.headers.get('cf-cache-status'),
+    cache_error: cached.headers.get('cf-error-type'),
+    cache_origin: cached.headers.get('cf-error-origin'),
+    cache_ray: cached.headers.get('cf-ray'),
+  })
 
-// An app file's bytes, through the cache (cache.ts): `Files` is a second
-// entrypoint with Cloudflare's cache in front of it, addressed by the app's
+// An app file's bytes, through the cache (@yaks/platform/kept `fileAt`):
+// `Files` is a second entrypoint with Cloudflare's cache in front of it,
+// addressed by the app's
 // eid, this path and its release, so a warm edge answers without the bucket
 // being touched. It is the same call for a private app as for a public one —
 // what is cached is the file, and whether this person may have it was decided
@@ -258,7 +244,7 @@ let fileRequest = (
     signal?: AbortSignal
   } = {},
 ) =>
-  new Request(at(eid, path, source), {
+  new Request(fileAt(eid, path, source), {
     method,
     headers: { [PREFIX]: prefix, ...(range ? { range } : {}) },
     redirect: 'manual',
@@ -352,7 +338,8 @@ export let blobBytes = (
   )
 
 /** What the platform keeps about an app at `prefix` + `name`, a name written
- * once (cache.ts `keptAt`), through the cache, or null where nothing is. */
+ * once (@yaks/platform/kept `keptAt`), through the cache, or null where
+ * nothing is. */
 export let keptBytes = async (
   env: Env,
   app: { eid: string },
@@ -473,8 +460,9 @@ let fileFetch = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   if (url.pathname.startsWith('/servable/')) {
     return serves(req, env, url.pathname)
   }
-  // `/<app eid>/<the app's own path>` (cache.ts `at`): the eid is the cache
-  // key's tenant discriminator and is not part of the file's name.
+  // `/<app eid>/<the app's own path>` (@yaks/platform/kept `fileAt`): the
+  // eid is the cache key's tenant discriminator and is not part of the
+  // file's name.
   let eid = url.pathname.slice(1).split('/')[0] ?? ''
   let path = url.pathname.replace(/^\/[^/]+/, '') || '/'
   let prefix = req.headers.get(PREFIX)
@@ -591,8 +579,8 @@ let blob = async (req: Request, env: Env, path: string) => {
   })
 }
 
-// `/kept/<app eid>/<name>` (cache.ts `keptAt`): the object at the told prefix
-// and the name, kept whole. Nothing kept is not kept either, so the object
+// `/kept/<app eid>/<name>` (@yaks/platform/kept `keptAt`): the object at the
+// told prefix and the name, kept whole. Nothing kept is not kept either, so the object
 // written moments later is found.
 let kept = async (req: Request, env: Env, path: string) => {
   let match = /^\/kept\/[^/]+\/(.+)$/.exec(path)

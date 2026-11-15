@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { assertEquals } from '@std/assert'
-import { at } from './cache.ts'
+import { fileAt } from '@yaks/platform/kept'
 import { warm } from './files.ts'
 import { platform } from './serving-probe.ts'
 
@@ -32,7 +32,7 @@ let warmed = async (answer: (req: Request) => Promise<Response>) => {
   }
 }
 
-let all = ['/', '/a.png', '/b.png', '/c.png'].map((p) => at(eid, p, source))
+let all = ['/', '/a.png', '/b.png', '/c.png'].map((p) => fileAt(eid, p, source))
   .sort()
 let bytes = () => Promise.resolve(new Response('bytes'))
 let hung = <T>(req: Request) =>

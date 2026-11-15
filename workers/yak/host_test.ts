@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { sealed } from './cache.ts'
+import { sealed } from '@yaks/platform/kept'
 import { records } from './domains.ts'
 import { apex, hosted, spaceHost, url } from '@yaks/platform/host'
 import { addressed } from './post.ts'

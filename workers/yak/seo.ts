@@ -22,7 +22,7 @@ import { PAGES, uriOf, whole } from './guide.ts'
 import { type Host, hosted, replyTo, spaceHost, url } from '@yaks/platform/host'
 import { PLATFORM } from '@yaks/platform/names'
 import { VERSION } from './running.ts'
-import { publicPage } from './public-cache.ts'
+import { publicPage } from '@yaks/platform/kept'
 
 export let SITE_URL = url({})
 

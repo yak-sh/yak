@@ -14,7 +14,7 @@
 // again. Only a home a compile named is ever filled.
 import { mimeOf, type Objects, rangedOpen } from '@yaks/blob'
 import { REGISTRY } from '@yaks/esbuild'
-import { immutable } from './cache.ts'
+import { immutable } from '@yaks/platform/kept'
 import type { Env } from './env.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { openShared } from './shared-files.ts'

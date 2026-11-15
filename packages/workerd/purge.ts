@@ -1,32 +1,32 @@
-// Taking pages out of the edge cache when what they show has changed
-// (T-124418). The Site entrypoint keeps each public page an app serves
-// (site.ts), tagged with its app and its space, and only Site can take them
-// out again: a purge reaches the entrypoint that called it and no other
-// (developers.cloudflare.com/workers/cache/purge/), so Site answers a
-// `purge(tags)` RPC, which never goes through its cache.
-//
-// Cloudflare holds a whole account to its free tier's purge rate whatever the
-// plan: a bucket of 25, a token back every twelve seconds, shared by every
-// Worker on the account (developers.cloudflare.com/workers/cache/purge/; a
-// refusal is error 1134). So every purge goes through one Durable Object, the
-// Purger (index.ts), which keeps the account's bucket: a purge waits for a
-// token rather than spend a refusal, and every tag owed while it waits rides
-// with it, up to 100 a purge. The directory, whose writes they follow
-// (facets/pages-graph.ts), and a release, which purges its app as it raises
-// its fence (tools.ts `released`), send theirs there.
-//
-// An acknowledged purge has not reached every cache yet. Cloudflare
-// acknowledges one in about 60 ms, and it is gone from most colos within
-// 200 ms of that, but in about one purge in twenty a colo answers the page a
-// second or two longer: four times in about ninety deploys measured from the
-// box (T-124483), and once in 21 purges watched from a colo in each of nine
-// regions, where two colos sharing an upper tier answered it 2.4 s after it
-// was sent (T-150618). Cloudflare says nothing of when a purge has spread, so
-// a purge that must be gone everywhere before its caller answers (a
-// release's, tools.ts `released`) waits until `SPREAD` past when it was sent
-// (T-124694). Any other purge's page keeps its short lifetime (page-cache.ts
-// `KEPT`) as the bound.
-
+/**
+ * `@yaks/workerd/purge` — taking answers out of Cloudflare's cache by their
+ * tags (the `cache-tag` they were kept with).
+ *
+ * A purge reaches the entrypoint that called it and no other
+ * (developers.cloudflare.com/workers/cache/purge/), so the entrypoint behind
+ * the cache answers a `purge(tags)` RPC itself, which never goes through its
+ * cache (`@yaks/workerd/cache` `purging`), and every purge is sent there.
+ *
+ * Cloudflare holds a whole account to its free tier's purge rate whatever the
+ * plan: a bucket of 25, a token back every twelve seconds, shared by every
+ * Worker on the account (a refusal is error 1134). So every purge goes
+ * through one Durable Object, the {@link Purger}, which keeps the account's
+ * bucket: a purge waits for a token rather than spend a refusal, and every tag
+ * owed while it waits rides with it, up to 100 a purge.
+ *
+ * An acknowledged purge has not reached every cache yet. Cloudflare
+ * acknowledges one in about 60 ms, and it is gone from most colos within
+ * 200 ms of that, but in about one purge in twenty a colo answers the page a
+ * second or two longer: four times in about ninety deploys measured from one
+ * machine (T-124483), and once in 21 purges watched from a colo in each of
+ * nine regions, where two colos sharing an upper tier answered it 2.4 s after
+ * it was sent (T-150618). Cloudflare says nothing of when a purge has spread,
+ * so a purge that must be gone everywhere before its caller answers waits
+ * until {@link SPREAD} past when it was sent (T-124694). Any other purge's
+ * answer keeps its own short lifetime as the bound.
+ *
+ * @module
+ */
 import { Durable, type State } from '@yaks/durable-object/object'
 
 /** What Cloudflare answers a purge with. */
@@ -39,19 +39,8 @@ export type Purged = {
  * where its caller asks it to: past the longest seen (T-150618). */
 export let SPREAD = 2_500
 
-/** The Site entrypoint, as far as purging asks of it. */
+/** An entrypoint behind Cloudflare's cache, as far as purging asks of it. */
 export type Purges = { purge(tags: string[]): Promise<Purged> }
-
-/** The tag on every answer an app gave, and on every answer in a space. */
-export let SITE_TAG = 'site'
-export let appTag = (eid: string) => `app:${eid}`
-export let spaceTag = (eid: string) => `space:${eid}`
-/** The tag on every answer at a custom domain's own address, by its hostname
- * row: attaching, detaching or moving it takes them out. */
-export let hostTag = (eid: string) => `host:${eid}`
-/** The tag on a listed app's picture when its files choose it (gallery.ts
- * `CARD`), which a release can change and the listings beside it cannot. */
-export let cardTag = (eid: string) => `card:${eid}`
 
 // One purge's tags at most (Cloudflare's operations per request).
 let BATCH = 100
@@ -62,9 +51,8 @@ let REFILL = 12_000
 let LIMITED = 1134
 // How many refusals a tag takes before it is given up on. A refusal means
 // the bucket is emptier than the Purger knew (a new Purger starts it full),
-// and it waits a token out before trying again; past the last, the pages
-// keep their short lifetime (page-cache.ts `KEPT`) and the failure is
-// reported.
+// and it waits a token out before trying again; past the last, the answers
+// keep their own short lifetime and the failure is reported.
 let TRIES = 3
 
 let sleep = (ms: number) => new Promise<void>((done) => setTimeout(done, ms))
@@ -98,15 +86,15 @@ let merge = (r: Round, later: Round | null) => {
 }
 
 /**
- * Purges for one Site: `purge(tags)` resolves once those tags are gone from
- * the cache, sharing a purge with every tag owed beside them, or with
- * `spread`, once they are gone from every colo's: `SPREAD` past when that
- * purge was sent, its acknowledgement inside the wait. One purge is in flight at
- * a time, each spends a token of the bucket, and with none left the next
- * waits for one.
+ * Purges for one cached entrypoint: `purge(tags)` resolves once those tags
+ * are gone from the cache, sharing a purge with every tag owed beside them,
+ * or with `spread`, once they are gone from every colo's: `SPREAD` past when
+ * that purge was sent, its acknowledgement inside the wait. One purge is in
+ * flight at a time, each spends a token of the bucket, and with none left the
+ * next waits for one.
  *
  * ```ts
- * import { purger } from './purge.ts'
+ * import { purger } from '@yaks/workerd/purge'
  * import { assertEquals } from '@std/assert'
  * let sent: string[][] = []
  * let started = Promise.withResolvers<void>()
@@ -128,7 +116,11 @@ let merge = (r: Round, later: Round | null) => {
  * assertEquals(sent, [['app:a'], ['app:b', 'app:c']])
  * ```
  */
-export let purger = (site: Purges, wait = sleep, now = Date.now) => {
+export let purger = (
+  site: Purges,
+  wait: (ms: number) => Promise<void> = sleep,
+  now: () => number = Date.now,
+): (tags: string[], spread?: boolean) => Promise<void> => {
   let owed: Round | null = null
   let flying = false
   let tokens = BUCKET, at = now()
@@ -188,38 +180,39 @@ export let purger = (site: Purges, wait = sleep, now = Date.now) => {
 }
 
 /**
- * The one Durable Object every purge goes through (index.ts `Purger`): it
- * holds no graph and no storage, only the account's bucket in memory, which
- * a new instance starts full. `purge` is its entry, held open while it waits
- * for a token. A purge refused is its caller's to hear and report; the object
- * says it on the console.
+ * The one Durable Object every purge goes through: it holds no graph and no
+ * storage, only the account's bucket in memory, which a new instance starts
+ * full. It purges through `site`, the binding of the entrypoint whose cache
+ * it empties. `purge` is its entry, held open while it waits for a token. A
+ * purge refused is its caller's to hear and report; the object says it on
+ * the console.
  */
 export class Purger extends Durable {
-  #purge: ReturnType<typeof purger>
-  constructor(ctx: State, env: { SITE?: Partial<Purges> }) {
+  #purge: (tags: string[], spread?: boolean) => Promise<void>
+  constructor(ctx: State, site?: Partial<Purges>) {
     super(ctx, { report: (e, entry) => console.error('Purger', entry, e) })
-    this.#purge = purger({ purge: (tags) => env.SITE!.purge!(tags) })
+    this.#purge = purger({ purge: (tags) => site!.purge!(tags) })
   }
   purge(tags: string[], spread = false): Promise<void> {
     return this.enter('purge', () => this.#purge(tags, spread))
   }
 }
 
-/** The Purger binding: the one Durable Object every purge goes through. */
+/** The {@link Purger}'s binding. */
 export type Purgers = {
   idFromName(name: string): unknown
   get(id: unknown): { purge(tags: string[], spread?: boolean): Promise<void> }
 }
 
-/** Purge `tags` from Site's cache, through the Purger, and with `spread`, wait
- * until they are gone from every colo's. Where Site has no cache (a test run,
- * `wrangler dev`) none is bound, so there is nothing to do. */
+/** Purge `tags` from the cache through the {@link Purger} bound as
+ * `purgers`, and with `spread`, wait until they are gone from every colo's.
+ * Where there is no cache (a test run, `wrangler dev`) none is bound, so
+ * there is nothing to do. */
 export let purge = (
-  env: { PURGER?: Purgers },
+  purgers: Purgers | undefined,
   tags: string[],
   spread = false,
-) => {
-  let { PURGER } = env
-  if (!PURGER || !tags.length) return Promise.resolve()
-  return PURGER.get(PURGER.idFromName('purger')).purge(tags, spread)
+): Promise<void> => {
+  if (!purgers || !tags.length) return Promise.resolve()
+  return purgers.get(purgers.idFromName('purger')).purge(tags, spread)
 }

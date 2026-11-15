@@ -11,7 +11,8 @@
     "./sqlite": "./sqlite.ts",
     "./vocab": "./vocab.ts",
     "./graph": "./graph.ts",
-    "./routes": "./routes.ts"
+    "./routes": "./routes.ts",
+    "./serve": "./serve.ts"
   },
   "license": "Apache-2.0",
   "description": "Stores text and binary content under SHA-256 addresses, with transparent graph text reads and writes, verified artifacts and HTTP responses.",

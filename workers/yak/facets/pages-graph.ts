@@ -10,7 +10,7 @@
 // the address must be what it wrote: app_deploy, app_set and the rest answer
 // only once their purge has. Every door writes the directory through here, so
 // none has to remember to. A purge lost to a crash between the two leaves a
-// page no longer than its short lifetime (page-cache.ts `KEPT`).
+// page no longer than its short lifetime (@yaks/platform/kept `KEPT`).
 //
 // A release is the exception (T-124483). It purges its app's pages as it
 // raises its fence (tools.ts `released`), beside its own work rather than
@@ -52,14 +52,14 @@ import { dead, TOMBSTONE } from '@yaks/graph/bundle'
 import { after } from '@yaks/fp'
 import type { Options } from './store.ts'
 import { APP_PARTS, idOf, publishingOf, SPACE_PARTS } from '../directory.ts'
+import { purge } from '@yaks/workerd/purge'
 import {
   appTag,
   cardTag,
   hostTag,
-  purge,
   SITE_TAG,
   spaceTag,
-} from '../purge.ts'
+} from '@yaks/platform/kept'
 
 // What a row is made of (directory.ts) is what its pages can show, except
 // these: an app's draft, its counters and its gallery listing (but for the
@@ -306,7 +306,7 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => {
       if (!meta || !env.PURGER) return applied
       let still = context?.transaction && quiet.get(context.transaction)
       await purge(
-        env,
+        env.PURGER,
         await owed(applied, async (eids) => await tx.get(eids), still),
       )
       return applied

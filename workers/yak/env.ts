@@ -16,7 +16,7 @@ import type { D1Like } from '@yaks/d1'
 import type { Dispatch, Fetcher } from './door.ts'
 import type { Namespace } from '@yaks/durable-object/door'
 import type { Meta } from './meta.ts'
-import type { Purgers, Purges } from './purge.ts'
+import type { Purgers, Purges } from '@yaks/workerd/purge'
 import type { Outlasts } from './outlast.ts'
 import type { Lexicons } from './lexicon.ts'
 import type { Limiter } from '@yaks/workerd/rate'
@@ -334,16 +334,16 @@ export type Env = {
   DIRECTORY?: Fetcher
   APPS?: Fetcher
   // The one binding that is not a part waiting to be split out: `Files` is a
-  // second entrypoint of this same Worker (facets/kernel-worker.ts), bound here so that
-  // Cloudflare's cache sits between the gateway and the bucket (cache.ts,
-  // T-33197). Absent in a test run; there, and wherever Cloudflare
-  // refuses the hop, files.ts `door` reads the module in-process and nothing
-  // is cached.
+  // second entrypoint of this same Worker (facets/kernel-worker.ts), bound
+  // here so that Cloudflare's cache sits between the gateway and the bucket
+  // (@yaks/platform/kept, T-33197). Absent in a test run; there, and wherever
+  // Cloudflare refuses the hop, files.ts `door` reads the module in-process
+  // and nothing is cached.
   FILES?: Fetcher
   // The cached public pages behind the uncached gateway (site.ts): the apex's
   // home and gallery, and every public page an app serves. Its `purge` takes
-  // pages out of its cache (purge.ts); the in-process stand-in has none, and
-  // no cache either.
+  // pages out of its cache (@yaks/workerd/purge); the in-process stand-in has
+  // none, and no cache either.
   SITE?: Fetcher & Partial<Purges>
   // The one object every purge of Site's cache goes through (facets/kernel-worker.ts
   // `Purger`), keeping the account's purge budget. Bound where Site's cache

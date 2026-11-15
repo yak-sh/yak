@@ -22,8 +22,9 @@
 //
 // A run has its own limit besides: the runtime ends an alarm at fifteen
 // minutes of wall time (exceededWallTime), and a day's sweep can hold more
-// work than that, every erasure waiting on its purge (purge.ts). So a run is
-// handed `spent`, true once it has gone `STEP`, and a job with more to do
+// work than that, every erasure waiting on its purge (@yaks/workerd/purge).
+// So a run is handed `spent`, true once it has gone `STEP`, and a job with
+// more to do
 // checks it between one piece of work and the next, stops, and answers
 // `MORE`: its row fires again at once, and the next run goes on from what
 // this one left (T-440).

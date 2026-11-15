@@ -14,7 +14,6 @@
 // directory for it on a miss.
 import { caught, origin, queue, type Sink } from '@yaks/tracker/report'
 import type { Fetcher } from '../env.ts'
-import { sealed } from '../cache.ts'
 import { apex, type Host } from '@yaks/platform/host'
 import {
   asked,
@@ -22,13 +21,10 @@ import {
   isListing,
   listing,
   LOGIN,
-  opens,
   remember,
-  scope,
-  stranger,
   type Timer,
-  UNKEPT_AT,
 } from '../kept-page.ts'
+import { opens, scope, sealed, stranger, UNKEPT_AT } from '@yaks/platform/kept'
 import { cookieValue } from '@yaks/platform/cookie'
 import {
   isHome,

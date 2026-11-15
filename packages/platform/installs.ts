@@ -122,6 +122,12 @@ export let reloads = (
     ? 'required'
     : undefined
 
+/** Whether anyone may have the app's release files: a published app's,
+ * which installing hands to whoever asks, private or not. Any release's, not
+ * only the one on offer: each is named by an id only its own pages carry
+ * (./versions.ts `assetPath`). The app's data stays its own people's. */
+export let offered = (app: { published?: unknown }): boolean => !!app.published
+
 // ── The sandbox ──────────────────────────────────────────────────────────
 
 /** Whether this app runs walled off from its space: a copy its space's owner

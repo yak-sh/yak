@@ -1527,9 +1527,9 @@ let screens = (app: Making, operator: string) => {
 // keeps, what it can do, and its screens, the newest stage open. Its screens
 // are the app itself, live, which the page reloads when the Operator changes
 // it, or before it is released its draft, which follows each write
-// (`chatScript`). The app's host lets the platform frame it (cache.ts
-// `sealed`). On a phone it takes the screen in the chat's place while chosen
-// (`#app`), and Chat goes back. Each part the page puts in place again as
+// (`chatScript`). The app's host lets the platform frame it
+// (@yaks/platform/kept `sealed`). On a phone it takes the screen in the
+// chat's place while chosen (`#app`), and Chat goes back. Each part the page puts in place again as
 // the Operator works is named by `data-part`.
 let canvas = (env: Env, space: Space, app: Making, operator: string) => {
   let host = `${spaceHost(env, space.slug)}/${app.slug}`
