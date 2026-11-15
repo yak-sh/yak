@@ -456,3 +456,17 @@ test('a connection detail fetch returns the service modal at the existing page d
   assert(dialog.querySelector('.Modal_Body'))
   assertStringIncludes(dialog.textContent!, 'OpenRouter')
 })
+
+// The platform's own space is a seat like any other to its owner: the side's
+// selector offers it, as the admin's directory lists it, and its pages open.
+test('the yak space’s owner finds it in the selector, and its pages open', async () => {
+  let page = parseHTML(await (await get(profile, k.owner.cookie)).text())
+  let offered = [...page.document.querySelectorAll('.Sidebar_Whose a')]
+    .map((a) => a.getAttribute('href'))
+  assert(offered.includes(`${profile}?space=yak`), String(offered))
+  for (let path of [chatPath('yak'), managePath('settings', 'yak')]) {
+    let res = await get(path, k.owner.cookie)
+    assertEquals(res.status, 200, path)
+    await res.body?.cancel()
+  }
+})

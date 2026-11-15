@@ -9,7 +9,6 @@ import {
   type App,
   daysLeft,
   directory,
-  META,
   type Role,
   type Seat,
   type Space,
@@ -240,7 +239,6 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     if (!was) return nothingHere(env)
     return moved(req, hostUrl(env, managePath(view, was.slug)) + url.search)
   }
-  if (space.slug == META.space) return nothingHere(env)
   let who: Owner = {
     person,
     role: administrative ? 'owner' : role ?? null,
@@ -364,7 +362,7 @@ let foresee = (
   here?: Ahead,
   chat = false,
 ) => {
-  let seats = dir.seats(person)
+  let seats = dir.seated(person)
   void Promise.allSettled([
     feeOf(dir),
     dir.nameAt(person),
@@ -480,11 +478,14 @@ let sentFrom = (req: Request, env: Env) => {
 }
 
 // The spaces the side's selector offers (pages.ts `Picked`): every one this
-// person may work in, the one they open first at the top, then those they
-// own, then those they are a member of, each named by whose it is: every
-// owner's name in one read.
-let pickable = async (dir: ReturnType<typeof directory>, seats: Seat[]) => {
-  let kept = seats.filter((s) => !s.space.trashed && writes(s.role))
+// person may work in, the platform's own `yak` among them for its owners, as
+// the admin's directory lists their seats, the one they open first at the
+// top, then those they own, then those they are a member of, each named by
+// whose it is: every owner's name in one read.
+let pickable = async (dir: ReturnType<typeof directory>, person: string) => {
+  let kept = (await dir.seated(person)).filter((s) =>
+    !s.space.trashed && writes(s.role)
+  )
     .sort((a, b) =>
       Number(b.own) - Number(a.own) ||
       Number(b.role == 'owner') - Number(a.role == 'owner')
@@ -515,7 +516,7 @@ let beside = async (
   who: Owner,
 ): Promise<Beside> => {
   let [spaces, { mine }, name, collapsed] = await Promise.all([
-    dir.seats(who.person).then((seats) => pickable(dir, seats)),
+    pickable(dir, who.person),
     dir.apps(space).then((apps) => shelf(apps, space, who)),
     dir.nameAt(who.person),
     dir.collapsed(who.person),
@@ -624,7 +625,7 @@ let desk = async (
       })
       : undefined,
     // Every space this person may work in, which the side's selector offers.
-    dir.seats(owner).then((seats) => pickable(dir, seats)),
+    pickable(dir, owner),
     view == 'operator'
       ? import('./operator-page.ts').then((part) =>
         part.operatorBody(env, space, who)
@@ -749,7 +750,7 @@ let mine = async (
   if (req.method != 'POST') foresee(dir, person, view)
   let [picks, name, email, agents, theirs, referral, own, collapsed] =
     await Promise.all([
-      dir.seats(person).then((seats) => pickable(dir, seats)),
+      pickable(dir, person),
       dir.nameAt(person),
       view == 'profile' ? dir.emailAt(person) : undefined,
       view == 'agents' ? agentsOf(env, person, dir) : [],
