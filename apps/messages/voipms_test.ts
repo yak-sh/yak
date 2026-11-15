@@ -276,6 +276,7 @@ test('Messages texts a list from the church’s voip.ms line, hears the replies,
     // A reply comes in by voip.ms's callback, to the person and the thread.
     let ticket = await seal('line', {
       connection: await connectionOf(env),
+      number: LINE,
     }, env.SESSION_SECRET!)
     let textIn = async (id: string, from: string, text: string) => {
       let r = await k.at(

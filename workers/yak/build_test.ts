@@ -553,22 +553,29 @@ test('the inline contact form reaches the Builder’s contact confirmation comma
     TELNYX_API: phone.url,
     TELNYX_API_KEY: 'key',
   })
-  let body = new FormData()
-  body.set('contact', contact)
-  body.set('number', number)
-  body.set('agreed', 'yes')
-  let response = await manage(
-    new Request('https://yaks.app/manage/ada/operator?texts=1', {
-      method: 'POST',
-      headers: { cookie: await as(ADA), origin: 'https://yaks.app' },
-      body,
-    }),
-    o.env,
-  )
-  assertEquals(response.status, 200)
-  assertEquals(await response.json(), { confirmed: number })
+  let post = async (code = '') => {
+    let body = new FormData()
+    body.set('contact', contact)
+    body.set('number', number)
+    body.set('agreed', 'yes')
+    if (code) body.set('code', code)
+    let response = await manage(
+      new Request('https://yaks.app/manage/ada/operator?texts=1', {
+        method: 'POST',
+        headers: { cookie: await as(ADA), origin: 'https://yaks.app' },
+        body,
+      }),
+      o.env,
+    )
+    return [response.status, await response.json()]
+  }
+  let [status, proof] = await post()
+  assertEquals([status, proof.pending], [200, true])
+  assertEquals((await dirOf(o.env).texting(ADA))?.number, undefined)
+  let [code] = String((sent[0] as { text: string }).text).match(/\d{6}/)!
+  assertEquals(await post(code), [200, { confirmed: number }])
   assertEquals((await dirOf(o.env).texting(ADA))?.number, number)
-  assertEquals(sent.length, 1)
+  assertEquals(sent.length, 2)
 })
 
 test('the door refuses a stranger before it reaches the object', async () => {

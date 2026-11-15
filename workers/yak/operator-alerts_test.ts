@@ -143,7 +143,10 @@ test('what everyone in a space is told, or a person wrote, is sent to nobody', (
 })
 
 // Once they agree to texts, an alert is a text, paid from the space's budget.
+// They prove the number with the code texted to it.
 await page('texts', { number: ANA, agreed: 'yes' })
+let code = take(texted).at(-1)!.text.match(/\d{6}/)![0]
+await page('texts', { number: ANA, agreed: 'yes', code })
 take(texted)
 let before = (await dir.at(eid))!.meter?.texts ?? 0
 let byText = await told('Your report is ready.')

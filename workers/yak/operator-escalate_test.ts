@@ -138,6 +138,8 @@ let answer = (id: string, answers: string): Inbound => {
     'In-Reply-To': `<${answers}>`,
     References: `<${answers}>`,
     'Content-Type': 'text/plain',
+    'Authentication-Results':
+      'mx.cloudflare.net; dmarc=pass header.from=clinic.example; dkim=pass',
   })
   return {
     from: 'alvarez@clinic.example',
