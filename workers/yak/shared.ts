@@ -77,12 +77,23 @@ let filled = async (raw: Objects, path: string) => {
   return got.bytes && raw.open(path)
 }
 
+// A package may hold documents as well as runtime resources. Only resources
+// retain their type, and a document opened directly never gains this origin.
+let typeOf = (path: string) => {
+  let type = mimeOf(path)
+  return /^(?:text\/(?:javascript|css)(?:;|$)|font\/|image\/|application\/wasm$)/
+      .test(type)
+    ? type
+    : 'application/octet-stream'
+}
+
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let headers = {
     'access-control-allow-origin': '*',
     'access-control-allow-methods': 'GET, HEAD, OPTIONS',
     'timing-allow-origin': '*',
     'x-content-type-options': 'nosniff',
+    'content-security-policy': 'sandbox',
   }
   if (req.method == 'OPTIONS') return new Response(null, { headers })
   if (req.method != 'GET' && req.method != 'HEAD') {
@@ -102,7 +113,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   return rangedOpen(object, req, {
     ...headers,
     ...immutable,
-    'content-type': mimeOf(path),
+    'content-type': typeOf(path),
     etag: `"${object.version}"`,
   })
 }

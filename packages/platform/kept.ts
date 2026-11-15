@@ -93,7 +93,7 @@ export let browserImmutable: string = `private, max-age=${YEAR}, immutable`
 // The same namespace replacement repairs provider state a path purge cannot
 // clear: T-152885's old key kept answering 520 while an equivalent key
 // reached Files and returned 404.
-let FILES = 3
+let FILES = 4
 let generation = (address: string) =>
   `${address}${address.includes('?') ? '&' : '?'}g=${FILES}`
 
@@ -110,8 +110,8 @@ let generation = (address: string) =>
  * make one app read another's. The release source keeps old and new bytes
  * apart when the serving pointer moves.
  */
-/// fileAt('a', '/x.css', 'ada/.releases/1/r') -> 'https://files.invalid/a/x.css?source=ada%2F.releases%2F1%2Fr&g=3'
-/// fileAt('a', 'x.css') -> 'https://files.invalid/a/x.css?g=3'
+/// fileAt('a', '/x.css', 'ada/.releases/1/r') -> 'https://files.invalid/a/x.css?source=ada%2F.releases%2F1%2Fr&g=4'
+/// fileAt('a', 'x.css') -> 'https://files.invalid/a/x.css?g=4'
 export let fileAt = (eid: string, path: string, source = ''): string =>
   generation(
     `https://files.invalid/${eid}${path.startsWith('/') ? '' : '/'}${path}${
@@ -122,26 +122,26 @@ export let fileAt = (eid: string, path: string, source = ''): string =>
 /** Where Files keeps a blob's bytes. A blob has no mutable file path, so its
  * entry is apart from the app's files, and names both the app and the
  * content, so neither tenant nor upload can reuse another's. */
-/// blobAt('a', 'ab') -> 'https://files.invalid/blob/a/ab?g=3'
+/// blobAt('a', 'ab') -> 'https://files.invalid/blob/a/ab?g=4'
 export let blobAt = (eid: string, sha: string): string =>
   generation(`https://files.invalid/blob/${eid}/${sha}`)
 
 /** Where Files keeps an object the platform keeps about an app under a name
  * written once, such as a release's declaration. Where in the bucket it lives
  * is told beside the key, as a blob's is. */
-/// keptAt('a', 'declared/r.json') -> 'https://files.invalid/kept/a/declared/r.json?g=3'
+/// keptAt('a', 'declared/r.json') -> 'https://files.invalid/kept/a/declared/r.json?g=4'
 export let keptAt = (eid: string, name: string): string =>
   generation(`https://files.invalid/kept/${eid}/${name}`)
 
 /** Where Files keeps whether an app's rows still name the bytes at `sha` as
  * representation `rep`. Both are in the key: one upload may be framed under
  * more than one representation, and each is its own answer. */
-/// servableAt('a', 'ab', 'r') -> 'https://files.invalid/servable/a/ab/r?g=3'
+/// servableAt('a', 'ab', 'r') -> 'https://files.invalid/servable/a/ab/r?g=4'
 export let servableAt = (eid: string, sha: string, rep: string): string =>
   generation(`https://files.invalid/servable/${eid}/${sha}/${rep}`)
 
 /** Where Files keeps a compiler-owned package file, the same for every app. */
-/// packageAt('/__packages/d/mod.js') -> 'https://files.invalid/__packages/d/mod.js?g=3'
+/// packageAt('/__packages/d/mod.js') -> 'https://files.invalid/__packages/d/mod.js?g=4'
 export let packageAt = (path: string): string =>
   generation(`https://files.invalid${path}`)
 

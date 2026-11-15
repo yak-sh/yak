@@ -870,6 +870,10 @@ test('package assets serve with their MIME and survive reuse and rollback', asyn
   let tarball = await tgz({
     'package.json': new Uint8Array(2),
     'a.wasm': wasm,
+    'x.html': new TextEncoder().encode('<script>document.cookie</script>'),
+    'x.svg': new TextEncoder().encode(
+      '<svg><script>document.cookie</script></svg>',
+    ),
   })
   let home = await digest(tarball)
   let registry = 'https://registry.npmjs.org/viewer/-/viewer-1.0.0.tgz'
@@ -942,9 +946,25 @@ test('package assets serve with their MIME and survive reuse and rollback', asyn
   assertEquals((await publicAsset('sha/' + 'a'.repeat(64))).status, 404)
   assertEquals(await bytes(`__packages/${home}/a.wasm`), wasm)
   assertEquals(await bytes(`__packages/${home}/a.wasm`), wasm)
+  for (
+    let [path, type] of [
+      ['x.html', 'application/octet-stream'],
+      ['x.svg', 'image/svg+xml'],
+    ]
+  ) {
+    let document = await publicAsset(`__packages/${home}/${path}`)
+    assertEquals(document.status, 200)
+    assertEquals(document.headers.get('content-type'), type)
+    assertStringIncludes(
+      document.headers.get('content-security-policy')!,
+      'sandbox',
+    )
+    assertEquals(document.headers.get('x-content-type-options'), 'nosniff')
+    await document.body?.cancel()
+  }
   assertEquals((await publicAsset(`__packages/${home}/b.wasm`)).status, 404)
   assertEquals((await publicAsset(`__packages/${home}.json`)).status, 404)
-  assertEquals(fetched, [registry])
+  assertEquals(fetched, [registry, registry, registry])
   assertEquals((await publicAsset(`__packages/${other}/a.wasm`)).status, 500)
   let path = '__packages/@yaks/kit/Button.css'
   assertEquals(await s.served(path), {
