@@ -5,7 +5,7 @@ import { Drop } from '@yaks/ui/parts'
 import { type ComponentChildren, Fragment, h, type VNode } from 'preact'
 import { jsxTemplate } from 'preact/jsx-runtime'
 import { renderToString } from 'preact-render-to-string'
-export { esc } from './escape.ts'
+export { esc } from '@yaks/platform/escape'
 
 /** A page's tree, or a run of them, as the HTML it sends, rendered once at
  * the page's edge: every string in it is text, escaped by Preact. */

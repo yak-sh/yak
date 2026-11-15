@@ -1,9 +1,9 @@
-import { decode, stringify, unpack } from './_wire.js'
-import { browserDrafts, draftEid } from './_draft.js'
-import { durableOutbox } from './_outbox.js'
+import { decode, stringify, unpack } from '@yaks/vocab/wire'
+import { browserDrafts, draftEid } from '@yaks/draft/browser'
+import { durableOutbox } from '@yaks/sync/outbox'
 import { system } from '@yaks/fp'
 export { draftEid }
-export { qr } from '../qr.ts'
+export { qr } from './qr.ts'
 
 // The store an app's own pages talk to: one ES module, no build, served by
 // the kernel at `<space>.yaks.app/<app>/api/client.js` beside the doors it

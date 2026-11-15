@@ -20,6 +20,7 @@ import {
   DOORS,
   type Filter,
   type Handler,
+  pathOf,
   type Route,
   routed,
 } from './route.ts'
@@ -42,8 +43,8 @@ let pageOf = (request: Request): string | undefined => {
   }
 }
 
-let socketing = (request: Request) =>
-  new URL(request.url).pathname == '/ws' &&
+let socketing = (request: Request, under?: string) =>
+  pathOf(request, under) == '/ws' &&
   (request.headers.get('upgrade') ?? '').toLowerCase() == 'websocket'
 
 /** What this facet reads off the host it is composing into: the graph its
@@ -96,7 +97,11 @@ export let handler = (host: Hosting, options: {
   timer?: Timer
   /** How a `/ws` request becomes a socket (default: Deno's). */
   upgrade?: Upgrade
+  /** A path the doors answer under as well as at the root (`/api`, where a
+   * page's `./api/` client finds its store). */
+  under?: string
 } = {}): Handler => {
+  let under = options.under
   let upgrade = options.upgrade ?? denoUpgrade
   let routes = host.routes
   let graph = host.graph
@@ -152,6 +157,7 @@ export let handler = (host: Hosting, options: {
     subs,
     report,
     upgrade,
+    under,
   })
   let claimed = (request: Request): Route | undefined => {
     let path = new URL(request.url).pathname
@@ -160,11 +166,13 @@ export let handler = (host: Hosting, options: {
         (best, r) => best && reach(best) >= reach(r) ? best : r,
         undefined,
       )
-    return route && (exact(route) || !DOORS.includes(path)) ? route : undefined
+    return route && (exact(route) || !DOORS.includes(pathOf(request, under)))
+      ? route
+      : undefined
   }
   let filters = host.filters ?? []
   let routeOf = (request: Request) => {
-    let path = new URL(request.url).pathname
+    let path = pathOf(request, under)
     return claimed(request)?.path ?? (DOORS.includes(path) ? path : undefined)
   }
   // Whatever a request starts, a read on another thread too, answers the
@@ -179,7 +187,7 @@ export let handler = (host: Hosting, options: {
       for (let f of filters) await f(request)
     } catch (error) {
       // A socket hears its refusal on the socket, where its client reads it.
-      if (!(error instanceof Refused) || !socketing(request)) throw error
+      if (!(error instanceof Refused) || !socketing(request, under)) throw error
       let { socket, response } = upgrade(request)
       refusing(socket, error)
       return response

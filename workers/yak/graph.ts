@@ -5671,7 +5671,7 @@ export class Store extends Durable {
   // beside them, since a page's @yaks/client lands a row only in the words the
   // store speaks, where `created.by` is an eid; the served client paints them,
   // so a page that swaps `query()` for `subscribe()` gets the same rows
-  // (public/client.js). Its question is asked the way the app's door asks a
+  // (@yaks/platform/client.js). Its question is asked the way the app's door asks a
   // page's query (listing.ts `asking`): the platform's own rows `words` names
   // are left out unless the line names one. The sink a socket hands in is
   // wrapped once per sink, since `close` and `drop` find a subscription by the

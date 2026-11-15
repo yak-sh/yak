@@ -5,7 +5,7 @@ import { assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { parseHTML } from 'linkedom'
 import { test, until } from '@yaks/testing'
-import { store } from './public/client.js'
+import { store } from '@yaks/platform/client'
 
 // The page as the guide shows it: the indented block that opens with a
 // doctype, up to the first line of prose after it.

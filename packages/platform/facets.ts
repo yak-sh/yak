@@ -32,6 +32,7 @@ export let facets: Record<string, Specifiers> = {
   'yak/remake': { graph: at('remake-graph') },
   'yak/kills': { graph: at('kills-graph') },
   'yak/files': { routes: at('files-routes') },
+  'yak/client': { routes: at('client-routes') },
 }
 
 /** `facets` with a host's own beside them, plugin by plugin. */

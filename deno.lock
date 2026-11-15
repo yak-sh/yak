@@ -4329,6 +4329,7 @@
             "npm:@yaks/cli@0.2.33",
             "npm:@yaks/code@0.2.23",
             "npm:@yaks/doc@0.2.24",
+            "npm:@yaks/draft@0.2.24",
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/file@0.2.28",
             "npm:@yaks/fp@0.2.23",
@@ -4343,11 +4344,13 @@
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/session@0.2.33",
             "npm:@yaks/sqlite@0.2.30",
+            "npm:@yaks/sync@0.2.24",
             "npm:@yaks/testing@0.2.30",
             "npm:@yaks/tools@0.2.30",
             "npm:@yaks/ui@0.2.30",
             "npm:@yaks/vocab@0.2.32",
-            "npm:@yaks/yaml@0.2.24"
+            "npm:@yaks/yaml@0.2.24",
+            "npm:uqr@0.1.3"
           ]
         }
       },
@@ -5372,8 +5375,7 @@
             "npm:preact-render-to-string@6.7.0",
             "npm:preact@10.29.7",
             "npm:rollup@4.65.1",
-            "npm:smol-toml@^1.9.1",
-            "npm:uqr@0.1.3"
+            "npm:smol-toml@^1.9.1"
           ]
         }
       }

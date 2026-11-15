@@ -1,7 +1,7 @@
-// The public client a page imports, built with the parts it imports from
-// their owning packages, never a copy. A page gets the client as one module
-// (`_client.js`, served at `./api/client.js`): fetched as parts, the parts
-// were a round trip after the client's own on every load. The parts are
+// The public client a page imports (@yaks/platform/client), built with the
+// parts it imports from their owning packages, never a copy. A page gets the
+// client as one module (`_client.js`, served at `./api/client.js`): fetched as
+// parts, the parts were a round trip after the client's own on every load. The parts are
 // written beside it, for the bundle to read and for a page that loaded the
 // client before it was one. The site's own pages (site/mod.ts) and its files
 // under names of their bytes (sheet-assets.ts) are written beside it, those
@@ -41,7 +41,7 @@ export let assets = async (to = new URL('./public/', import.meta.url)) => {
   )
   await io.writeTextFile(
     new URL('_client.js', to),
-    await bundle(new URL('client.js', to)),
+    await bundle(new URL(import.meta.resolve('@yaks/platform/client'))),
   )
   await io.writeTextFile(new URL('_words.js', to), words())
 }

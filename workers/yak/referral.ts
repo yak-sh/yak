@@ -12,7 +12,7 @@ import type { Directory } from './directory.ts'
 import type { Env } from './env.ts'
 import { signupAddress } from '@yaks/platform/host'
 import { phoneOf, textable } from './phones.ts'
-export { qr } from './qr.ts'
+export { qr } from '@yaks/platform/qr'
 
 // Letters and digits a person can read off a screen without mistaking one
 // for another: no 0 or o, no 1, i or l.

@@ -2,7 +2,7 @@
 // interprets receipts/query answers only through the app's vocabulary.
 import { equal, test } from '@yaks/testing'
 import { stub } from '@std/testing/mock'
-import { store } from './public/client.js'
+import { store } from '@yaks/platform/client'
 import { stringify } from '@yaks/vocab/wire'
 
 let data = new Uint8Array([0, 255, 128])

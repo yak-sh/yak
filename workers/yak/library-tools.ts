@@ -36,7 +36,7 @@ import { acceptsOf, belowFloor, Untaken, uploaded } from './uploads.ts'
 export let AGENT = 'yaks.app-library/1.0 (+https://yaks.app/docs/library)'
 let TOKEN = 'yaks.app'
 // The most one document may be: what a page sends in one request
-// (public/client.js sends larger files in parts), or less where the app says.
+// (@yaks/platform/client.js sends larger files in parts), or less where the app says.
 let WHOLE = 32 * 1024 * 1024
 // How many documents one call adds, and how many it fetches at once.
 let MANY = 20

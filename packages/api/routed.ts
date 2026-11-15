@@ -29,3 +29,23 @@ export let routed = (route: Route, method: string, path: string): boolean =>
   (route.path.endsWith('*')
     ? path.startsWith(route.path.slice(0, -1))
     : route.path == path)
+
+/** The path a request names to doors that answer under `under` as well as at
+ * the root: its own path with `under` taken off its front where it starts
+ * there, so `/api/query` is `/query` to doors under `/api`, as a page's
+ * `./api/` finds them.
+ *
+ * ```ts
+ * import { pathOf } from '@yaks/api/routed'
+ * import { equal } from '@yaks/testing'
+ * let at = (path: string) => new Request(`http://box${path}`)
+ * equal(pathOf(at('/api/query'), '/api'), '/query')
+ * equal(pathOf(at('/query'), '/api'), '/query')
+ * equal(pathOf(at('/apiary'), '/api'), '/apiary')
+ * equal(pathOf(at('/api/query')), '/api/query')
+ * ```
+ */
+export let pathOf = (request: Request, under?: string): string => {
+  let path = new URL(request.url).pathname
+  return under && path.startsWith(`${under}/`) ? path.slice(under.length) : path
+}

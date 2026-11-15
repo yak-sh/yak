@@ -795,6 +795,12 @@ feed carries every commit as patches, all those heard since its last call in one
 pass (`subs.hear`), and when it missed some, query answers are reset as after a
 store change. The checks and commit feed stop with `host.stopping`.
 
+`handler(host, { under: '/api' })` answers the endpoints under that path as well
+as at the root: `/api/query` is `/query`, and `/api/ws` upgrades as `/ws` does,
+since the request is read, never rewritten. That is where a page's
+`./api/client.js` finds its store's doors (@yaks/platform's `yak/client`).
+`pathOf(request, under)` (`@yaks/api/routed`) is the path the endpoints read.
+
 ```ts
 import { routed } from '@yaks/api'
 import { handler } from '@yaks/api/routes'

@@ -104,7 +104,7 @@ let released = async (
   await release.finish()
 }
 
-// The app's own graph, driven the way `public/client.js` drives it.
+// The app's own graph, driven the way `@yaks/platform/client.js` drives it.
 let client = (env: Env, cookie?: string) => {
   let door = async (path: string, init: RequestInit = {}) => {
     let res = await apps.fetch(
@@ -226,7 +226,7 @@ test('a free space wears the badge, and the Plus plan sheds it', async () => {
 // module imports the client the way the guide writes it. The browser resolves
 // that import against the module's own address, so it has to arrive at the
 // client, and at the client's own address, which is where the client reads its
-// door from (public/client.js `import.meta.url`).
+// door from (@yaks/platform/client.js `import.meta.url`).
 test("a release's module imports the client by the page's own path", async () => {
   await using scenario = platform()
   let { env } = scenario

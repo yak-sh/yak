@@ -2,7 +2,7 @@
 // upload in parts, which must be the platform's own or every such upload is
 // refused. Lengths either side of a block and of the padding's two shapes.
 import { equal, test } from '@yaks/testing'
-import { digest } from './public/client.js'
+import { digest } from '@yaks/platform/client'
 
 let vectors = ([
   [0, 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'],

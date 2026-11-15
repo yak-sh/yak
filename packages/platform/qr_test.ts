@@ -3,7 +3,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { encode } from 'uqr'
-import { qr } from './public/client.js'
+import { qr } from './client.js'
 
 let label = 'Scan "Join" <today> & bring a friend'
 let drawn = (text: string) => {

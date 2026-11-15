@@ -17,9 +17,9 @@ import { type Report, served } from './request.ts'
 import { attach, type Upgrade } from './socket.ts'
 import { type Subs, subscriptions } from './subs.ts'
 
-import type { Handler } from './routed.ts'
+import { type Handler, pathOf } from './routed.ts'
 
-export { type Handler, type Route, routed } from './routed.ts'
+export { type Handler, pathOf, type Route, routed } from './routed.ts'
 
 /** A check every request passes before any route or door answers it: a
  * plugin's own word on which requests it lets in. It refuses one by throwing
@@ -66,6 +66,9 @@ export type Options = Applying & {
   /** where a request that broke goes, as its `request` bundle (default: the
    * console) */
   report?: Report
+  /** a path the doors answer under as well as at the root (`/api`, where a
+   * page's `./api/` client finds its store) */
+  under?: string
 }
 
 let nobody: Authenticate = () => null
@@ -96,7 +99,7 @@ export let api = (opts: Options): Handler => {
     json({ error: code == 404 ? 'NotFound' : 'NotAllowed', message }, code)
 
   let door: Handler = async (request) => {
-    let path = new URL(request.url).pathname
+    let path = pathOf(request, opts.under)
     // The apply door names its own writer: a request its host trusts names
     // none here.
     if (path == '/apply' && request.method == 'POST') {
@@ -156,7 +159,7 @@ export let api = (opts: Options): Handler => {
     report: opts.report,
     tags: opts.tags,
     route: (request) => {
-      let path = new URL(request.url).pathname
+      let path = pathOf(request, opts.under)
       return DOORS.includes(path) ? path : undefined
     },
   })

@@ -59,3 +59,23 @@ test('the release’s inside answers at no address', async () => {
     equal((await door(path)).status, 404, path)
   }
 })
+
+// A page's client finds its store beside itself, at `./api/`: the store's
+// doors answer there as well as at the root, and the client is served there.
+test('the store’s doors answer under /api, where a page’s client finds them', async () => {
+  await door('/api/apply', [{
+    entity: { eid: 'stew' },
+    recipe: { heading: 'Stew' },
+  }])
+  let rows = await (await door('/api/query?q=.recipe.heading=Stew')).json()
+  equal(rows.map((r: { entity: { eid: string } }) => r.entity.eid), ['stew'])
+})
+
+test('a page imports its client from ./api/client.js', async () => {
+  let res = await door('/api/client.js')
+  let code = await res.text()
+  equal(
+    [res.status, res.headers.get('content-type'), /export\s*\{/.test(code)],
+    [200, 'text/javascript; charset=utf-8', true],
+  )
+})

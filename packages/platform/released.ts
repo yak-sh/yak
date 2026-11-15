@@ -7,7 +7,9 @@
 // host @yaks/cli composes, and @yaks/api's doors answer for it.
 //
 // The release's own files answer at its addresses through the `yak/files`
-// routes facet (./files-routes.ts), read from the directory as it stands.
+// routes facet (./files-routes.ts), read from the directory as it stands, and
+// the client its pages import at `./api/client.js` through `yak/client`
+// (./client-routes.ts), with the store's doors beside it under `/api`.
 // The Worker's own effects facets (yak/app, yak/trash, yak/models,
 // yak/attribution) are yaks.app's Cloudflare work, so nothing here runs them.
 import { compose, facet, type Role, type Served } from '@yaks/cli/host'
@@ -53,11 +55,17 @@ export let release = async (dir: string): Promise<Released> => {
   return { name, vocab: {} }
 }
 
-/** What a release's store composes: an app's store, and @yaks/api's doors
- * to answer for it. */
+/** What a release's store composes: an app's store, its files and its
+ * pages' client, and @yaks/api's doors to answer for it. */
 export let releaseConfig = (at: Placing & { db: string }): Config => ({
   ...at,
-  plugins: [...appConfig.plugins!, 'yak/files', '@yaks/api'],
+  plugins: [
+    ...appConfig.plugins!,
+    'yak/files',
+    'yak/client',
+    // A page's client finds its store's doors beside itself, at `./api/`.
+    { use: '@yaks/api', with: { under: '/api' } },
+  ],
 })
 
 /** A file of the release at `dir`, by its path from the directory

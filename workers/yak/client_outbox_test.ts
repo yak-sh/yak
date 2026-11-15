@@ -3,7 +3,7 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { clock, test } from '@yaks/testing'
-import { store } from './public/client.js'
+import { store } from '@yaks/platform/client'
 
 let receipt = {
   ok: true,
