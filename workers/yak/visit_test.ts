@@ -158,12 +158,17 @@ env.DISPATCH = {
       }
       let rows = await back('api/query?.note', r.headers.get(SELF)!)
       let page = await back('', r.headers.get(GRANT)!)
-      return Response.json({ rows, page })
+      let wrote = (await k.at(host, '/notes/api/apply', {
+        method: 'POST',
+        headers: { [GRANT]: r.headers.get(SELF)! },
+        body: JSON.stringify([{ entity: { eid: '$w' }, note: { title: 'W' } }]),
+      })).status
+      return Response.json({ rows, page, wrote })
     },
   }),
 } as unknown as Env['DISPATCH']
 let worked = async (c: ReturnType<typeof client>) => {
-  let { rows, page } = await (await k.at(host, '/notes/held', {
+  let { rows, page, wrote } = await (await k.at(host, '/notes/held', {
     headers: c.headers,
   })).json()
   return {
@@ -173,6 +178,7 @@ let worked = async (c: ReturnType<typeof client>) => {
       ).sort()
       : rows,
     page: page.slice(0, 3),
+    wrote,
   }
 }
 let workedSample = await worked(nobody)
@@ -369,8 +375,12 @@ test('a signed-in stranger’s store is theirs from its first write', () => {
 })
 
 test('the app’s worker reads the store its stranger is served from', () => {
-  assertEquals(workedSample, { rows: ['Sample'], page: '200' })
-  assertEquals(workedOwn, { rows: ['Out', 'Sample, mine'], page: '200' })
+  assertEquals(workedSample, { rows: ['Sample'], page: '200', wrote: 403 })
+  assertEquals(workedOwn, {
+    rows: ['Out', 'Sample, mine'],
+    page: '200',
+    wrote: 200,
+  })
 })
 
 test('the sample is not the app’s store', () => {

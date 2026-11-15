@@ -3173,6 +3173,9 @@ let served = async (
       'This worker grant does not open this app',
     )
   }
+  // The sample is every stranger's at once, so the worker reads it and
+  // writes nothing there, as the app no more than as its visitor.
+  if (itself && named == store && onSample(app)) itself.role = 'viewer'
   if (itself?.service) {
     let { verifyService } = await import('./service-call.ts')
     if (
