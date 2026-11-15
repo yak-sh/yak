@@ -460,7 +460,7 @@ test(
 
 // The meter, on the receiving side (T-33688). A letter that arrives is one
 // letter on the space's month, the same property a letter that leaves is
-// counted on (meter.ts `metering`, mail_test.ts) — and it is counted past the
+// counted on (metered.ts `metering`, mail_test.ts) — and it is counted past the
 // allowance rather than refused there, because a letter turned away at the door
 // is somebody else's words lost.
 test(
@@ -492,7 +492,7 @@ test(
 
       // The other direction, in the same runtime: the store object itself
       // reads the space's month off the directory before it hands a letter
-      // over (meter.ts `metering`) — one Durable Object asking another. The
+      // over (metered.ts `metering`) — one Durable Object asking another. The
       // letter comes to rest either way, and the answer is why it bounced or
       // `''` where it left.
       let page = client(k, `${jeff28}.yaks.app`, 'recipes', them.cookie)

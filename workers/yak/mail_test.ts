@@ -339,7 +339,7 @@ let post = (store: Store, path: string, body: unknown, v?: Vouch) =>
 
 // The directory, as a namespace with one object in it: the Store class again,
 // woken on the platform's vocabulary because `storeOf` names it `yak/platform`.
-// This is what a letter's meter is written through (meter.ts `metering`), so
+// This is what a letter's meter is written through (metered.ts `metering`), so
 // nothing about the count is stubbed either.
 let SPACE = 'e0000000-0000-4000-8000-000000000005'
 

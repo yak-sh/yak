@@ -1285,7 +1285,7 @@ export let over = (store: Meta) => {
 
 /** The part, over the directory's own store. The env it asks for is the one
  * binding it reads, so a caller holding the namespace and nothing else — a
- * Store object metering a letter (meter.ts `metering`) — can call it too. */
+ * Store object metering a letter (metered.ts `metering`) — can call it too. */
 export let fetch = (
   req: Request,
   env: { STORE: Namespace },

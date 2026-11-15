@@ -9,7 +9,7 @@ import { mediaTypeOf } from '@yaks/blob'
 import type { Stored } from './graph.ts'
 import { directoryOf } from './directory.ts'
 import { blobPrefix } from './blob-key.ts'
-import { metered } from './meter.ts'
+import { metered } from './metered.ts'
 
 export let VISION = '@cf/google/gemma-4-26b-a4b-it'
 export let ANSWER = '@cf/google/gemma-4-26b-a4b-it'

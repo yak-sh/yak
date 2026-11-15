@@ -13,7 +13,8 @@ import {
 } from '@yaks/model'
 import { test } from '@yaks/testing'
 import { directoryOf, stamp } from './directory.ts'
-import { accounted, metered, monthOf } from './meter.ts'
+import { accounted, monthOf } from './meter.ts'
+import { metered } from './metered.ts'
 import { platform } from './testing.ts'
 import { reservation, settled } from './model-spend.ts'
 

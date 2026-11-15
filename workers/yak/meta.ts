@@ -174,7 +174,7 @@ let doors = new WeakMap<object, Meta>()
 
 /** The directory's store. The env is the one binding it reads, so a Store
  * object — which holds the namespace and no service binding — reaches the
- * directory the way the kernel does (meter.ts `metering`).
+ * directory the way the kernel does (metered.ts `metering`).
  *
  * The directory object itself hands its jobs an env carrying `META`: a Durable
  * Object shares one I/O context across every request in flight on it, so a

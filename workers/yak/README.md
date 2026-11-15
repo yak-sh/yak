@@ -65,7 +65,7 @@ exchange only on the way to the hosts the provider says it calls. The executor
 runs only the providers its own config composes; any other runs in the store.
 `./api/ai/run`, documents and embeddings reach the own door of the first
 `serving` provider that has one (@yaks/model `Native`, Workers AI's binding),
-each call held to the space's budget (meter.ts `metered`).
+each call held to the space's budget (metered.ts `metered`).
 
 The kernel deploys once; `yak-sandbox` names a stable sandbox toolchain image by
 registry reference. The live Worker's assets carry the CLI workspace, compressed

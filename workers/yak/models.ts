@@ -36,7 +36,8 @@ import { KERNEL, meta, metaOf } from './meta.ts'
 import { storeOf } from './door.ts'
 import { blobPrefix, receiptPrefix } from './blob-key.ts'
 import { filled, schemaOf } from '@yaks/tools/declared'
-import { accounted, countedMedia, metered } from './meter.ts'
+import { accounted, countedMedia } from './meter.ts'
+import { metered } from './metered.ts'
 import { mediaRoom } from './usage.ts'
 import type { Env } from './env.ts'
 import { outbound } from './outbound.ts'
@@ -114,7 +115,7 @@ export let tooled = (at: Stored): Tool[] =>
     }))
 
 // The space an app's calls are counted against, read fresh each time it is
-// asked (meter.ts `metered`).
+// asked (metered.ts `metered`).
 let payer = (app: string) => async (dir: Directory) =>
   (await dir.appAt(app))?.space ?? null
 
@@ -474,7 +475,7 @@ export let refusal = (e: unknown): [number, string, string] | null =>
 
 /**
  * `./api/ai/run`: one call to a model through its provider's own door
- * (meter.ts `metered`, Workers AI's binding as config.ts `serving` names it),
+ * (metered.ts `metered`, Workers AI's binding as config.ts `serving` names it),
  * answered with what the model said — what a page or the app's own worker asks
  * when it wants an answer back rather than a transcript (the worker's `ai`
  * binding posts here, dispatch.ts `shim`). Asked by whoever may ask the app's models for a
