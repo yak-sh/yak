@@ -338,6 +338,21 @@ export let itsApp = (who: Who | null, app: App) =>
 // caller is — and only its own app can ask that one.
 export { bearing }
 
+// The grant an app's worker came back holding, while it lasts: null for none,
+// a forged one or an expired one.
+let held = async (req: Request, secret: string | undefined) => {
+  let sealed = req.headers.get(GRANT)
+  if (!sealed || !secret) return null
+  let g = await opened<Grant>('visit', sealed, secret)
+  return g && g.exp * 1000 > Date.now() ? g : null
+}
+
+/** The store a worker's grant was minted for, whoever it names: the door asks
+ * it before `granted`, since a stranger's visit is served from a store that is
+ * not the app's own (visit.ts `revisited`). */
+export let grantedStore = async (req: Request, secret: string | undefined) =>
+  (await held(req, secret))?.store ?? null
+
 // Who this request is, when it is an app's own worker coming back through
 // its service binding — and null for anything else: no header, a forged or
 // expired one, or one minted for a store that is not this app's. The app door
@@ -356,10 +371,9 @@ export let granted = async (
   policy?: number,
   seat?: (person: string) => Promise<Role | null>,
 ): Promise<Who | null> => {
-  let sealed = req.headers.get(GRANT)
-  if (!sealed || !secret) return null
-  let g = await opened<Grant>('visit', sealed, secret)
-  if (!g || g.store != store || !(g.exp * 1000 > Date.now())) return null
+  let g = await held(req, secret)
+  if (!g || g.store != store) return null
+  let sealed = req.headers.get(GRANT)!
   let role = g.role ?? null
   // An anonymous instrument carries no standing to revoke. Its current app
   // mode still decides access; every person/app grant must match authority.

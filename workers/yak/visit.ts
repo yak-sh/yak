@@ -134,16 +134,7 @@ export let visiting = (
   release: Release | null = null,
 ): { app: App; who: Who; visit: Visiting | null } => {
   if (!visitable(app, who)) return { app, who, visit: null }
-  // A release from before each had a script of its own runs the one named by
-  // the app's handle.
-  let served: App = {
-    ...app,
-    ...release,
-    script: release
-      ? release.script || storeName(space, app)
-      : scriptOf(space, app),
-    declaration: app.demo!.release ?? app.declaration,
-  }
+  let served = servedOf(space, app, release)
   let kept = { kept: !!visit?.adopted }
   // A sample they no longer write to: their first write would give them
   // a second store.
@@ -166,6 +157,60 @@ export let visiting = (
       visit: 'sample',
     }
 }
+
+// The app as a stranger is served it, whichever store: the published
+// release, pinned to the app's own worker script. A release from before each
+// had a script of its own runs the one named by the app's handle.
+let servedOf = (space: Space, app: App, release: Release | null): App => ({
+  ...app,
+  ...release,
+  script: release
+    ? release.script || storeName(space, app)
+    : scriptOf(space, app),
+  declaration: app.demo!.release ?? app.declaration,
+})
+
+/**
+ * The app a stranger's visit was served as, for its worker coming back: the
+ * grants it was handed name the store that visit read (dispatch.ts
+ * `handed`), the sample or a browser's own store, and each is named beneath
+ * the app's own. Null for any other store, or once the app keeps no sample.
+ *
+ * ```ts
+ * import { revisited } from './visit.ts'
+ * import { assertEquals } from '@std/assert'
+ * let space = { slug: 'ada' } as Parameters<typeof revisited>[0]
+ * let app = {
+ *   eid: 'a', slug: 'notes', store: 'ada/notes.1f7c3e', access: 'private',
+ *   published: { name: 'notes', version: 2, at: '', about: '' }, version: 2,
+ *   demo: { store: 'ada/notes.1f7c3e/demo/d', seed: '', version: 2, release: '2' },
+ * } as Parameters<typeof revisited>[1]
+ * assertEquals(revisited(space, app, app.demo!.store)?.store, app.demo!.store)
+ * let own = revisited(space, app, 'ada/notes.1f7c3e/visit/o')
+ * assertEquals([own?.store, own?.blobs], ['ada/notes.1f7c3e/visit/o', '.visits/o/blobs/'])
+ * assertEquals(revisited(space, app, 'ada/other.2a/visit/o'), null)
+ * assertEquals(revisited(space, app, 'ada/notes.1f7c3e/visit/o/x'), null)
+ * assertEquals(revisited(space, { ...app, demo: null }, app.demo!.store), null)
+ * ```
+ */
+export let revisited = (
+  space: Space,
+  app: App,
+  store: string,
+  release: Release | null = null,
+): App | null => {
+  if (!sampling(app) || !app.demo) return null
+  if (store == app.demo.store) {
+    return { ...servedOf(space, app, release), store }
+  }
+  let under = `${storeName(space, app)}/visit/`
+  let id = store.startsWith(under) ? store.slice(under.length) : ''
+  if (!id || id.includes('/')) return null
+  return { ...servedOf(space, app, release), store, blobs: blobsOf(id) }
+}
+
+// Where the uploads of the browser store with this id are kept.
+let blobsOf = (id: string) => `${VISITS}${id}/blobs/`
 
 /** What the bar on a visitor's page offers (public/visit.js): the page that
  * keeps what they made, and what its button says. */
@@ -368,7 +413,7 @@ let bear = async (
   await copy.body?.cancel()
   let visit: Visit = {
     store,
-    blobs: `${VISITS}${id}/blobs/`,
+    blobs: blobsOf(id),
     seen: now.toISOString(),
     adopted: null,
   }

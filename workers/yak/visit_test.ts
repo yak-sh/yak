@@ -9,6 +9,7 @@ import { directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
 import { client, connector, fresh, signIn, txt, vocabFile } from './probe.ts'
 import { meta } from './meta.ts'
+import { GRANT, SELF } from './dispatch.ts'
 import {
   crowded,
   KEPT,
@@ -38,6 +39,11 @@ await agent.tool('app_files', {
   files: [
     { path: 'index.html', content: '<h1>Notes</h1>' },
     { path: 'vocab.json', content: vocabFile({ note: { title: txt } }) },
+    {
+      path: 'worker.js',
+      content:
+        "export default { fetch: () => new Response('', { status: 404 }) }",
+    },
     {
       path: 'seed.json',
       content: JSON.stringify([{
@@ -137,6 +143,41 @@ let letter = await out.post([{
 let refused = [letter.status, (await letter.json()).error.message]
 let ownerAfter = await titles(owner)
 let nobodyRows = await titles(nobody)
+
+// The app's worker, as the shim runs it: it reads the store as the app and
+// its page as the visitor, each through the kernel with the grant it was
+// handed, which names the store the visit is served from.
+let back = (path: string, grant: string) =>
+  k.at(host, `/notes/${path}`, { headers: { [GRANT]: grant } })
+    .then(async (res) => `${res.status} ${await res.text()}`)
+env.DISPATCH = {
+  get: () => ({
+    fetch: async (r: Request) => {
+      if (!new URL(r.url).pathname.endsWith('/held')) {
+        return new Response('not found', { status: 404 })
+      }
+      let rows = await back('api/query?.note', r.headers.get(SELF)!)
+      let page = await back('', r.headers.get(GRANT)!)
+      return Response.json({ rows, page })
+    },
+  }),
+} as unknown as Env['DISPATCH']
+let worked = async (c: ReturnType<typeof client>) => {
+  let { rows, page } = await (await k.at(host, '/notes/held', {
+    headers: c.headers,
+  })).json()
+  return {
+    rows: rows.startsWith('200 ')
+      ? JSON.parse(rows.slice(4)).map((r: { note: { title: string } }) =>
+        r.note.title
+      ).sort()
+      : rows,
+    page: page.slice(0, 3),
+  }
+}
+let workedSample = await worked(nobody)
+let workedOwn = await worked(out)
+delete (env as Partial<Env>).DISPATCH
 let app = (await dir.app((await dir.space('owner'))!, 'notes'))!
 let vias = (await meta(env).query('.visit')).length
 
@@ -325,6 +366,11 @@ test('two writes at once make one store', () => {
 
 test('a signed-in stranger’s store is theirs from its first write', () => {
   assertEquals(boClaimed, 1)
+})
+
+test('the app’s worker reads the store its stranger is served from', () => {
+  assertEquals(workedSample, { rows: ['Sample'], page: '200' })
+  assertEquals(workedOwn, { rows: ['Out', 'Sample, mine'], page: '200' })
 })
 
 test('the sample is not the app’s store', () => {

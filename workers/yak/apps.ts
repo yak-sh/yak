@@ -70,7 +70,14 @@ import {
   url as urlOf,
 } from './directory.ts'
 import * as dirPart from './directory.ts'
-import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
+import {
+  ahead,
+  bearing,
+  granted,
+  grantedStore,
+  itsApp,
+  ran,
+} from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { pageAt, pilled, standing } from './gallery-row.ts'
 import { buying, type Product } from './sell.ts'
@@ -196,6 +203,7 @@ import {
   ownOf,
   type Release,
   releaseFor,
+  revisited,
   tellBorn,
   toldStores,
   used,
@@ -3139,6 +3147,17 @@ let served = async (
     paper && (!env.SESSION_SECRET ||
       !await paged(paper.token, env.SESSION_SECRET, store))
   ) return json(401, 'not_a_reader', 'This page token does not open this app')
+  // A stranger's visit is served from the sample or from a store of their
+  // own, so the worker it ran comes back holding grants for that store and
+  // not the app's: it is served as the visit was (visit.ts `revisited`).
+  let theirs = app
+  let named = bearing(req) && !walls
+    ? await grantedStore(req, env.SESSION_SECRET)
+    : null
+  if (named && named != store && revisited(space, app, named)) {
+    app = revisited(space, app, named, await releaseFor(dir, app))!
+    store = named
+  }
   // The app acting as itself (`owning`) has no seat: its standing is its own.
   let itself = await granted(
     req,
@@ -3287,7 +3306,7 @@ let served = async (
   // door: a form is the app's own, shown and filled by anyone (forms.ts), and
   // a sample or a copy holds none of the app's forms.
   let visit: Visiting | null = null
-  let stranger = { app, who, release: null as Release | null }
+  let stranger = { app: theirs, who, release: null as Release | null }
   if (!itself && !walls && !formPath(path, req) && visitable(app, who)) {
     let [own, release, invited] = await c.time('visit', () =>
       Promise.all([
