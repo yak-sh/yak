@@ -1122,6 +1122,12 @@ export class Builder extends Durable {
             let { ownerBackfill } = await import('./owner-move.ts')
             return backfill(ownerBackfill(store))
           },
+          // The files a tool made since the attachment pass, attached
+          // beside the call that made them (output-move.ts).
+          outputs: async () => {
+            let { outputBackfill } = await import('./output-move.ts')
+            return backfill(outputBackfill(store))
+          },
           numbers: async () => {
             let { numberBackfill } = await import('./number-move.ts')
             return backfill(numberBackfill(store))

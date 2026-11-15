@@ -1,8 +1,10 @@
 // The Operator makes an image itself (operator-images.ts): asked of the
 // Image API on the platform's key, charged to the space's budget, kept as an
-// Operator file in the space's files and drawn under the step that made it.
+// Operator file in the space's files, listed among the person's files and
+// drawn under the step that made it.
 import { assertAlmostEquals, assertEquals, assertRejects } from '@std/assert'
 import { mint } from '@yaks/graph'
+import { attachmentsSeen } from '@yaks/blob/attachment'
 import { test } from '@yaks/testing'
 import { CallError } from '@yaks/tools/errors'
 import { parseHTML } from 'linkedom'
@@ -11,6 +13,8 @@ import { FILES } from '@yaks/platform/plans'
 import { monthOf } from '@yaks/platform/meter'
 import type { File } from './operator-channels.ts'
 import { imageNew } from './operator-images.ts'
+import { theirFiles } from './operator-access.ts'
+import { operatorMemory } from './operator-testing.ts'
 import { rows } from './operator-view.ts'
 import { platform } from './testing.ts'
 
@@ -60,12 +64,24 @@ let spaceWith = async (files = 0) => {
 }
 let space = await spaceWith()
 let eid = space.eid
-let tool = imageNew(env, space)
+// The person's conversation, and the call in it the image is made for.
+let store = operatorMemory()
+let person = mint(), session = mint(), call = mint()
+await store.g.apply([
+  {
+    entity: { eid: session },
+    session: {},
+    operator_session: { space: eid, person },
+  },
+  { entity: { eid: call }, entry: { session } },
+], { trusted: true })
+let tool = imageNew(env, space, store)
+let ctx = { session, call: { entity: { eid: call } }, entries: [] }
 let made = await tool.run({
   prompt: 'A yak in gouache',
   size: '1024x1024',
   quality: 'low',
-}) as { text: string; with: { operator_files: { files: File[] } } }
+}, ctx) as { text: string; with: { operator_files: { files: File[] } } }
 let [file] = made.with.operator_files.files
 
 test('an image is asked of the default model and kept in the space’s files', async () => {
@@ -86,6 +102,20 @@ test('an image is asked of the default model and kept in the space’s files', a
   assertEquals(made.text.includes(file.key.split('/').at(-1)!), true)
 })
 
+test('the image is among the person’s files, made by its call', async () => {
+  let seen = await attachmentsSeen(
+    store.g,
+    theirFiles({ space: eid, person }),
+    '.attachment&*',
+  )
+  assertEquals(seen.map((b) => b.attachment), [{
+    name: 'image.png',
+    media_type: 'image/png',
+    artifact: file.key.split('/').at(-1),
+    message: call,
+  }])
+})
+
 test('the image is charged to the space’s budget at its usage', async () => {
   let used = (await directoryOf(env.STORE).at(eid))!.meter!.models
   assertAlmostEquals(used, (12 * 5 + 1000 * 30) / 1e6, 1e-9)
@@ -97,7 +127,7 @@ test('a prompt or setting the model can correct is refused, not a fault', async 
       prompt: 'x',
       size: 'huge',
     }]
-  ) await assertRejects(async () => await tool.run(args), CallError)
+  ) await assertRejects(async () => await tool.run(args, ctx), CallError)
 })
 
 test('a space whose files are full is told so, and nothing is asked or charged', async () => {
@@ -108,7 +138,10 @@ test('a space whose files are full is told so, and nothing is asked or charged',
     let before = sent.length
     let e = await assertRejects(
       async () =>
-        await imageNew(env, full).run({ prompt: 'A yak', quality: 'low' }),
+        await imageNew(env, full, store).run(
+          { prompt: 'A yak', quality: 'low' },
+          ctx,
+        ),
       CallError,
     )
     assertEquals([e.code, e.message.includes('files')], ['space_full', true])

@@ -3,9 +3,10 @@
 // for generated media (@yaks/openai generations.ts, lent here as providers.ts
 // lends the platform's), charged to the space's budget like any model call
 // (meter.ts `accounted`). The image is kept as an Operator file in the
-// space's files (operator-channels.ts `keepFile`), so it is shown to the
-// person and to the model beside the step that made it, and library_add puts
-// it in an app. No app is made to hold it.
+// space's files (operator-channels.ts `keepFile`) and attached beside the
+// call that made it (`madeFiles`), so it is shown to the person and to the
+// model beside the step that made it, listed among the person's files, and
+// library_add puts it in an app. No app is made to hold it.
 import { ModelError } from '@yaks/model'
 import { imageMade, imageTool } from '@yaks/model/image'
 import type { Tool } from '@yaks/session'
@@ -14,7 +15,13 @@ import { images, providing } from './config.ts'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { accounted } from './meter.ts'
-import { attachmentId, type File, keepFile } from './operator-channels.ts'
+import {
+  attachmentId,
+  type File,
+  keepFile,
+  madeFiles,
+} from './operator-channels.ts'
+import type { OperatorStore } from './operator-store.ts'
 import { platform, served } from './providers.ts'
 import { refuse } from './tool.ts'
 import { mediaRoom } from './usage.ts'
@@ -26,7 +33,11 @@ let THEIRS = ['bad_request', 'input', 'limit', 'space_full']
 let EXT: Record<string, string> = { jpeg: 'jpg' }
 
 /** The tool a space's Operator makes an image with. */
-export let imageNew = (env: Env, space: Space): Tool => ({
+export let imageNew = (
+  env: Env,
+  space: Space,
+  store: Pick<OperatorStore, 'g'>,
+): Tool => ({
   ...imageTool(images.models, {
     about:
       "It is kept in the space's files, shown to the person in the conversation and to you beside the result, and paid from the space's budget. Use this when someone asks for a picture; make an app only when they want one. library_add with the attachment id it gives puts the image in an app.",
@@ -35,7 +46,7 @@ export let imageNew = (env: Env, space: Space): Tool => ({
   }),
   title: 'Make an image',
   step: { doing: 'Making an image…', done: 'Made an image' },
-  run: async (args) => {
+  run: async (args, ctx) => {
     let kept = new Map<string, File>()
     let make = accounted(
       env,
@@ -75,11 +86,13 @@ export let imageNew = (env: Env, space: Space): Tool => ({
     })
     let files = (reply.artifacts ?? []).map((a) => kept.get(a.address)!)
     let cost = reply.cost == null ? '' : ` for $${reply.cost.toFixed(4)}`
-    return {
-      text: `Made the image${cost} with ${reply.model}, attachment ${
+    return madeFiles(
+      store,
+      ctx,
+      `Made the image${cost} with ${reply.model}, attachment ${
         files.map(attachmentId).join(', ')
       }. It is shown to the person in the conversation, and to you beside this.`,
-      with: { operator_files: { files } },
-    }
+      files,
+    )
   },
 })

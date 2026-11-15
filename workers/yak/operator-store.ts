@@ -51,6 +51,10 @@ export let NUMBERS = prefixes(operatorVocab)
  * its number (number-move.ts). */
 export let NUMBERED = 'operator:numbered'
 
+/** Where the file says every file its tools made has its attachment rows
+ * (output-move.ts): the pass's cursor while it goes on, `done` once it has. */
+export let OUTPUTS = 'operator:outputs'
+
 /** Where the file keeps the print of the schema it was last fitted to. */
 export let FITTED = 'operator:fitted'
 
@@ -144,6 +148,8 @@ export let operatorStore = async (
       if (born) marks.set(WAKES, 'done')
       // Nor anything kept before it numbered what it keeps.
       if (born) marks.set(NUMBERED, 'done')
+      // Nor a file a tool made before its call attached it.
+      if (born) marks.set(OUTPUTS, 'done')
     },
     // How a run ended is written while the object is stopped too, so a run
     // that finished never runs again (@yaks/durable-object `bounded`).

@@ -77,6 +77,8 @@ export let attachmentBackfill = async (
       ) {
         continue
       }
+      // A tool's files are attached beside its call (output-move.ts).
+      if (row.result) continue
       let files = (source.files ?? []) as File[]
       let original = sourceId(
         String((row.content as Comp | undefined)?.body ?? ''),

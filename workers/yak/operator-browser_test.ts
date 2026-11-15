@@ -203,6 +203,13 @@ let steps = await agent.narrow(
   { space: slug, task: tasks[0].entity.eid },
   '.result[0].output.value | .entries | map(select(.result) | {result, refusal, content, operator_files})',
 )
+// The person's files, as the connector's `self` reads list them: their
+// words, and the screenshot the Operator took.
+let listed = await agent.answer('graph_query', {
+  space: slug,
+  self: true,
+  q: '.attachment&*',
+})
 await k.stop()
 
 test('a member’s browser connects to their Operator by the token it bears', () => {
@@ -235,6 +242,10 @@ test('the Operator reads the tab as the page’s words, and is shown its screens
         : []
     ),
     [`data:image/png;base64,${PNG}`],
+  )
+  assertEquals(
+    listed.rows.map((b) => (b.attachment as { name: string }).name).sort(),
+    ['message.txt', 'screenshot.png'],
   )
 })
 

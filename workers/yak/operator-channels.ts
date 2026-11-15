@@ -14,7 +14,7 @@ import { keep } from '@yaks/blob'
 import { type Attached, attachmentRows } from '@yaks/blob/attachment'
 import { sourceReference } from './operator-source.ts'
 import { type Ctx, inApp, refuse } from './tool.ts'
-import type { Tool } from '@yaks/session'
+import type { Told, Tool, ToolContext } from '@yaks/session'
 import { sendable, Unsent } from '@yaks/mail'
 import { Blocked, Denied } from '@yaks/phone'
 import { appStore } from './directory.ts'
@@ -123,6 +123,24 @@ export let attachedOf = (file: File): Attached => ({
   address: attachmentId(file),
   ...file.size == null ? {} : { size: file.size },
 })
+
+/** What a tool says of the files it made: its words, with the files on its
+ * result, which shows them, and each one's attachment row beside the call
+ * that made it, so a person's reads of their files list what the Operator
+ * made as they list what they sent. */
+export let madeFiles = async (
+  store: Pick<Store, 'g'>,
+  ctx: Pick<ToolContext, 'call'> | undefined,
+  text: string,
+  files: File[],
+): Promise<Told> => {
+  if (!ctx) throw new Error('A tool that makes files is run beside its call')
+  await store.g.apply(
+    attachmentRows(ctx.call.entity.eid, files.map(attachedOf)),
+    { trusted: true },
+  )
+  return { text, with: { operator_files: { files } } }
+}
 
 let fileOf = async (
   space: Space,

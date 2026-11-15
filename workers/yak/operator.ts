@@ -1768,7 +1768,7 @@ export let operating = (
           mailSend(env, ctx, space, store),
           phoneSend(env, ctx, space, store),
           phoneNumbers(env, ctx, space, store),
-          imageNew(env, space),
+          imageNew(env, space, store),
           ...pickTools(store, ctx.person!),
           ...wakeTools(store),
           ...subscriptionTools(store, watching),
@@ -1782,7 +1782,7 @@ export let operating = (
         member || t.readOnly
       ),
       ...member && options.browsers
-        ? browserTools(env, space, ctx.person, options.browsers)
+        ? browserTools(env, space, ctx.person, options.browsers, store)
         : [],
     ])
   }

@@ -10,10 +10,11 @@
 import { type Answer, answerOf, call } from '@yaks/extension/wire'
 import { PERSON, toolOf, TOOLS } from '@yaks/extension/tools'
 import { type Clock, system } from '@yaks/fp'
-import type { Told, Tool } from '@yaks/session'
+import type { Told, Tool, ToolContext } from '@yaks/session'
 import { unbase64 } from './bytes.ts'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
+import type { OperatorStore } from './operator-store.ts'
 import { refuse } from './tool.ts'
 
 /** Who a lent browser's socket is: the attachment the Builder keeps on it. */
@@ -111,17 +112,24 @@ export let fenced = (text: string) =>
 let PICTURE = /^image\/(png|jpeg|webp|gif)$/
 
 // What the model reads of a browser's answer: its words fenced, and a
-// screenshot kept as an Operator file the result carries, so it is shown.
+// screenshot kept as an Operator file the result carries, so it is shown,
+// and attached beside the call that took it.
 // A browser that could not (the site not allowed, no tab) is a refusal the
 // model reads, and nobody's fault.
-let told = async (env: Env, space: Space, a: Said): Promise<Told> => {
+let told = async (
+  env: Env,
+  space: Space,
+  store: Pick<OperatorStore, 'g'>,
+  ctx: Pick<ToolContext, 'call'> | undefined,
+  a: Said,
+): Promise<Told> => {
   if (a.error) throw refuse('browser', a.error)
   let text = fenced(a.text ?? '')
   if (!a.image) return text
   if (!PICTURE.test(a.image.mime)) {
     throw new Error(`A browser sent a screenshot as ${a.image.mime}`)
   }
-  let { keepFile } = await import('./operator-channels.ts')
+  let { keepFile, madeFiles } = await import('./operator-channels.ts')
   let file = await keepFile(
     env,
     space,
@@ -129,10 +137,12 @@ let told = async (env: Env, space: Space, a: Said): Promise<Told> => {
     a.image.mime,
     unbase64(a.image.base64),
   )
-  return {
-    text: `${text}\nThe screenshot is shown to you beside this.`,
-    with: { operator_files: { files: [file] } },
-  }
+  return madeFiles(
+    store,
+    ctx,
+    `${text}\nThe screenshot is shown to you beside this.`,
+    [file],
+  )
 }
 
 /** The browser tools a person's Operator is offered, each run by asking
@@ -142,6 +152,7 @@ export let browserTools = (
   space: Space,
   person: string,
   lent: Browsers,
+  store: Pick<OperatorStore, 'g'>,
 ): Tool[] =>
   lent.connected(person)
     ? TOOLS.map((t) => ({
@@ -151,7 +162,7 @@ export let browserTools = (
       description: t.description,
       parameters: t.parameters,
       waits: t.waits,
-      run: async (args) =>
-        told(env, space, await lent.ask(person, t.name, args)),
+      run: async (args, ctx) =>
+        told(env, space, store, ctx, await lent.ask(person, t.name, args)),
     }))
     : []
