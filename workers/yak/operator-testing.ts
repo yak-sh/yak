@@ -174,11 +174,11 @@ export let operatorService = (
             ),
           )
         }
-        return Response.json(
-          await (path == '/operator/helper'
-            ? operator.helper(held, space, args)
-            : operator.run(held, space, args)),
-        )
+        if (path == '/operator/helper') {
+          let { spawnHelper } = await import('./operator-helpers.ts')
+          return Response.json(await spawnHelper(operator, held, space, args))
+        }
+        return Response.json(await operator.run(held, space, args))
       }
       throw new Error(`Unhandled Operator route: ${req.url}`)
     } catch (e) {

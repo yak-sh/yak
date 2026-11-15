@@ -940,11 +940,11 @@ export class Builder extends Durable {
         ),
       )
     }
-    return Response.json(
-      await (new URL(request.url).pathname == '/operator/helper'
-        ? operator.helper(held, space, args)
-        : operator.run(held, space, args)),
-    )
+    if (new URL(request.url).pathname == '/operator/helper') {
+      let { spawnHelper } = await import('./operator-helpers.ts')
+      return Response.json(await spawnHelper(operator, held, space, args))
+    }
+    return Response.json(await operator.run(held, space, args))
   }
 
   // The Operator's store, what to call a person, and what the pages watching

@@ -1,7 +1,7 @@
 import { inputSource } from './operator-provenance.ts'
 import { system } from '@yaks/fp'
 import { chatFork } from './operator-chat.ts'
-import { helperParent, questionNotice } from './operator-helpers.ts'
+import { questionNotice } from './operator-helpers.ts'
 import {
   type Bundle,
   type Comp,
@@ -18,7 +18,6 @@ import {
   replyOf,
   running,
   sessionTools,
-  spawnChild,
   statusOf,
   type Tool,
   topOf,
@@ -2141,47 +2140,15 @@ export let operating = (
     }
   }
 
-  let helper: Operator['helper'] = async (held, space, args) => {
-    let parent = await helperParent(
-      store,
-      { ...held, space: space.eid },
-      String(args.task ?? ''),
-    )
-    let brief = typeof args.brief == 'string' ? args.brief : ''
-    if (!brief.trim()) throw refuse('arguments', 'Give the helper a brief.')
-    let [scope] = await g.get([parent], ['operator_session'])
-    // The same person may have used the admin door earlier; a connector
-    // helper must not borrow that authority from an older chat.
-    if (
-      comp(scope, 'operator_session')?.administrative && !held.administrative
-    ) {
-      throw refuse(
-        'access',
-        'Start a chat with your current permissions first.',
-      )
+  // The model that answers words given naming `model` (and `from`, its
+  // provider), else the Operator's own, with what any words given need
+  // first: one its provider does not list is refused.
+  let choose: Operator['choose'] = async (held, space, model, from) => {
+    let selected = await readying(held, space, model, from)
+    if (model && selected.model != model) {
+      throw await unknown(model, selected.provider)
     }
-    let selected = await readying(
-      held,
-      space,
-      typeof args.model == 'string' ? args.model : undefined,
-    )
-    if (typeof args.model == 'string' && selected.model != args.model) {
-      throw await unknown(args.model, selected.provider)
-    }
-    let session = await spawnChild(g, parent, {
-      prompt: brief,
-      model: selected.model,
-      ...typeof args.title == 'string' ? { title: args.title } : {},
-    })
-    await g.apply([{ entity: { eid: parent }, completed: null }], {
-      trusted: true,
-    })
-    options.tell?.(parent)
-    return {
-      session,
-      parent,
-      text: `Helper ${session} started. Its report goes to chat ${parent}.`,
-    }
+    return selected
   }
 
   // What to call a person in what the Operator shows of its work.
@@ -2199,7 +2166,7 @@ export let operating = (
     note,
     tools,
     run,
-    helper,
+    choose,
     named,
     watching,
     scheduled,
@@ -2293,12 +2260,15 @@ export type Operator = {
     cost: number
     model: string
   }>
-  /** Queue a helper under the caller's private chat and answer immediately. */
-  helper: (held: Asker, space: Space, args: Args) => Promise<{
-    session: string
-    parent: string
-    text: string
-  }>
+  /** The model that answers words given naming `model` (and `provider`),
+   * else the Operator's own, with the rows any words given need written: one
+   * its provider does not list is refused. */
+  choose: (
+    held: Asker,
+    space: Space,
+    model?: string,
+    provider?: string,
+  ) => Promise<{ provider: string; model: string }>
   /** What to call a person, as the page names them (directory `nameAt`). */
   named: (person: string) => Promise<string | null>
   /** A subscription's query, read as the person who set it. */
