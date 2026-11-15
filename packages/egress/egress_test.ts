@@ -169,6 +169,18 @@ let ANN = (await resolve(c, 'app', 'notes', 'ann'))!.sentinels.key
 let viewer: Caller = { app: 'app', level: 'viewer', person: null }
 let ann: Caller = { app: 'app', level: null, person: 'ann' }
 
+// Workerd keeps userinfo in Request.url; Deno's constructor refuses it.
+// Keep a native request's body, headers and signal with the address Workerd
+// supplies at the same boundary.
+let addressed = (url: string, init?: RequestInit) =>
+  Object.defineProperty(
+    new Request('https://api.texts.example/', init),
+    'url',
+    {
+      value: url,
+    },
+  )
+
 let bytes = (...parts: (string | number[])[]) =>
   new Uint8Array(
     parts.flatMap((p) =>
@@ -242,6 +254,47 @@ for (let [why, caller, url] of refused) {
     let req = new Request(new URL(url, 'https://api.texts.example/'))
     await assertRejects(() => forward(c, caller, req), Refused)
     assertEquals(seen, [])
+  })
+}
+
+for (
+  let [name, sentinel, host] of [
+    ['key', KEY, 'api.texts.example'],
+    ['OAuth token', GRANT, 'api.example'],
+  ]
+) {
+  for (let userinfo of ['aaaaaaa', ':password', 'user:password', '%61:%62']) {
+    for (let direct of [false, true]) {
+      test(`${direct ? 'granted' : 'forward'} refuses userinfo ${userinfo} before sending ${name}`, async () => {
+        answering()
+        let req = addressed(`https://${userinfo}@${host}/v1/x`, {
+          headers: { authorization: `Bearer ${sentinel}` },
+        })
+        await assertRejects(
+          () =>
+            direct
+              ? granted(
+                [{ sentinel, value: 'credential', hosts: [host] }],
+                req,
+                net,
+              )
+              : forward(c, viewer, req),
+          Refused,
+        )
+        assertEquals(seen, [])
+      })
+    }
+  }
+}
+
+for (let direct of [false, true]) {
+  test(`${direct ? 'granted' : 'forward'} rebuilds an address from its parsed path and query`, async () => {
+    answering([200])
+    let req = addressed(
+      'https://aaaaaaa@api.texts.example:443/v1/%2Fx?next=%2Fy#fragment',
+    )
+    await (direct ? granted([], req, net) : forward(c, viewer, req))
+    assertEquals(seen[0].url, 'https://api.texts.example/v1/%2Fx?next=%2Fy')
   })
 }
 

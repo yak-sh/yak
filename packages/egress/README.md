@@ -3,10 +3,10 @@
 Calls going out with a credential the caller never holds. An app is handed a
 sentinel for each connection it uses ([@yaks/connections](../connections)), and
 puts it wherever the service wants its key or token: a header, either half of a
-Basic credential (`curl -u`, a URL's `user:password@`), the query, the body. The
-egress sends the request on with the credential in the sentinel's place,
-verbatim. A credential kept as several fields (an access key ID and a secret
-key) has a sentinel for each, and each is swapped for its own field alone.
+Basic credential (`curl -u`), the query, the body. The egress sends the request
+on with the credential in the sentinel's place, verbatim. A credential kept as
+several fields (an access key ID and a secret key) has a sentinel for each, and
+each is swapped for its own field alone.
 
 It serves no route. A host authenticates the caller and hands each call to
 `forward`, in-process or from an outbound Worker.
@@ -35,7 +35,8 @@ Before a sentinel is swapped:
   spend whatever they hold on the app. A sentinel points at a credential and is
   not one, so one that leaks into a page is useless to a stranger.
 - The request must go over https to a host the connection's integration names,
-  and to another port only where the integration names it with one.
+  and to another port only where the integration names it with one. Its URL must
+  have no username or password; Basic credentials go in the header.
 - The app's `uses` link must not have made the calls its `cap` allows this month
   (below).
 

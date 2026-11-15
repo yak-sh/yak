@@ -112,8 +112,8 @@ let utf8 = (s: string) => latin(new TextEncoder().encode(s))
 let SIZED = ['content-length', 'transfer-encoding']
 
 // A Basic credential is its `user:password` in base64, which is how curl's
-// `-u` and a URL's userinfo (git's `https://x:<token>@host/`) send one. A
-// sentinel in either half is found, and swapped, in the pair it encodes.
+// `-u` sends one. A sentinel in either half is found, and swapped, in the
+// pair it encodes.
 let BASIC = /^(basic\s+)([A-Za-z0-9+/]+=*)$/i
 let basic = (v: string) => {
   let said = BASIC.exec(v)
@@ -145,6 +145,9 @@ export let sentinelsIn = (
 type Hit = Grant & { eid: Eid; oauth: boolean; link: Eid }
 
 let destination = (hosts: readonly string[], url: URL, name: string) => {
+  if (url.username || url.password) {
+    throw new Refused('a credential cannot be sent to an address with userinfo')
+  }
   if (url.protocol != 'https:' || !hosts.includes(url.host)) {
     throw new Refused(
       `${name} is sent only to ${hosts.join(', ') || 'no host'}, over https`,
@@ -227,7 +230,7 @@ let prepare = async (
   send: typeof fetch,
 ) => {
   let url = new URL(req.url)
-  let tail = req.url.slice(url.origin.length)
+  let tail = url.pathname + url.search
   let headers = [...req.headers].filter(([k]) => !SIZED.includes(k))
   let body = req.body ? latin(new Uint8Array(await req.arrayBuffer())) : null
   let found = sentinelsIn(tail, headers, body ?? '')
