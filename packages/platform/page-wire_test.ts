@@ -1,11 +1,13 @@
 /// <reference lib="deno.ns" />
-// The translation between the page's wire and the Store's (wire.ts). The
-// end-to-end proof is serving_test.ts; this is the grammar's own edges, where
-// a value carries the character the other wire writes structure with.
+// The translation between the page's wire and the store's (page-wire.ts).
+// The end-to-end proofs are released_test.ts here and yaks.app's
+// serving_test.ts; this is the grammar's own edges, where a value carries the
+// character the other wire writes structure with.
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
-import { batched, lined, receipt } from './wire.ts'
+import { IDEMPOTENCY } from '@yaks/api/log'
+import { batched, lined, receipt, resend } from './page-wire.ts'
 
 let cases: [string, string][] = [
   // The riders the page writes bare
@@ -104,4 +106,18 @@ test('the answer: the bundles as applied, in the wire they were sent in', () => 
     bundles,
   })
   assertEquals(receipt([], applied), bundles)
+})
+
+// The door forwards a page's resend identity; the store owns receipt
+// persistence and guarded duplicate writes (@yaks/api/log).
+test('a resend carries its key on, and an unnamed one carries none', () => {
+  let sent = (key?: string) =>
+    resend(
+      new Request('https://ada.yaks.app/ledger/api/apply', {
+        method: 'POST',
+        headers: key ? { [IDEMPOTENCY]: key } : {},
+      }),
+    )
+  assertEquals(sent('once'), { [IDEMPOTENCY]: 'once' })
+  assertEquals([sent(), sent('')], [{}, {}])
 })

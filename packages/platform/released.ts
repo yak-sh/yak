@@ -9,7 +9,8 @@
 // The release's own files answer at its addresses through the `yak/files`
 // routes facet (./files-routes.ts), read from the directory as it stands, and
 // the client its pages import at `./api/client.js` through `yak/client`
-// (./client-routes.ts), with the store's doors beside it under `/api`, and
+// (./client-routes.ts), which answers its doors in the page's wire, with the
+// store's own beside them under `/api`, and
 // its commands (./app-commands.ts `commandsOf`) are the store's own tools,
 // called through its runner as any host's are.
 // The Worker's own effects facets (yak/app, yak/trash, yak/models,

@@ -892,7 +892,7 @@ let named = (row, { refs = [], names = {} }) => {
 }
 
 // A page's filter as the store writes it. A fetch goes through the app's door,
-// which does this on the way (workers/yak/wire.ts `lined`); a socket goes
+// which does this on the way (./page-wire.ts `lined`); a socket goes
 // straight to the store, so a subscription is translated here, and
 // `query(f)` and `subscribe(f)` ask one question. Three riders the page
 // writes bare are dotted words there (`id=` is an address, so it is `.entity.eid=`).

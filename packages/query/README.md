@@ -104,7 +104,7 @@ All exports are available from `@yaks/query`.
 
 | Part                      | Exports                                                                                                        |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Parsing                   | `parse`, `stringify`, `parseDot`, `tokens`, `conjoin`, `valued`, `cursor`, `ParseOpts`                         |
+| Parsing                   | `parse`, `stringify`, `parseDot`, `tokens`, `untokens`, `conjoin`, `valued`, `cursor`, `ParseOpts`             |
 | Predicates                | `eq`, `ne`, `contains`, `lt`, `le`, `gt`, `ge`, `present`, `absent`, `want`, `pred`, `bare`, `compares`        |
 | Values and text           | `coerce`, `scalar`, `list`, `range`, `time`, `text`, `never`                                                   |
 | Composition               | `and`, `or`, `map`                                                                                             |
@@ -201,7 +201,8 @@ parse alike. Without an operator, `task` is a text term and `.task` tests
 presence.
 
 `conjoin()` combines query strings so each narrows the whole of the others,
-grouping a string with a top-level `|` before joining it.
+grouping a string with a top-level `|` before joining it. `untokens()` writes a
+line's tokens back as one line.
 
 ```ts
 import { and, conjoin, eq, or, parse, tokens } from '@yaks/query'

@@ -504,7 +504,7 @@ export let buying = async (
       items = cart(body)
       // One read, whatever the cart's length: the products it names, whole.
       // `.entity.eid=` and not `id=` — the bare form is the page's grammar and this
-      // is a line built for the store (wire.ts `RIDERS` is the translation, and
+      // is a line built for the store (@yaks/platform/page-wire `RIDERS` is the translation, and
       // this side of it never sees one).
       priceless = priced(
         await rows(`.entity.eid=${items.map((i) => i.product).join(',')}`),

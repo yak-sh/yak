@@ -1,6 +1,6 @@
 // The `/api/*` wire an app's pages speak, and the translation between it and
-// the Store's own (T-33815). Two wires meet at the app door, and they are not
-// the same shape:
+// the store's own (@yaks/api's doors). Two wires meet at the app door, and
+// they are not the same shape:
 //
 //   the page      GET  ./api/query?.doc.title~=cake&limit=10
 //                 POST ./api/apply  {"entities": [ …bundles… ]}
@@ -10,10 +10,11 @@
 //                                → [ …the batch as applied… ]
 //
 // The page's half is fixed, and that is the whole reason this file exists: it
-// is documented (public/docs/store.md), it is what `@yaks/platform/client.js` wraps,
-// and every app already deployed imports that client and reads `aliases` off
-// an answer. So the store moved and the door translates, rather than every
-// page in the world being asked to move with it.
+// is documented (yaks.app's docs/store.md), it is what ./client.js wraps, and
+// every app already deployed imports that client and reads `aliases` off an
+// answer. So the store moved and the door translates, rather than every page
+// in the world being asked to move with it. yaks.app's kernel and the box's
+// `yak/client` routes (./client-routes.ts) both translate with it.
 //
 // A page that keeps its own copy of the store (@yaks/client) speaks the
 // Store's wire through the same door: a bare array in, and the batch as
@@ -25,11 +26,9 @@
 // line as the query string itself and the Store takes it as one parameter, and
 // three of the page's riders lost their leading dot on the way over.
 import type { Bundle } from '@yaks/graph'
-import { bareLine, tokens } from '@yaks/query'
-import { joined } from './query-line.ts'
-import { minted } from './meta.ts'
-import { refuse } from './tool.ts'
-import { IDEMPOTENCY } from '@yaks/durable-object/door'
+import { bareLine, tokens, untokens } from '@yaks/query'
+import { IDEMPOTENCY } from '@yaks/api/log'
+import { Refused } from '@yaks/graph/errors'
 
 /** Forward a page's resend identity; an unnamed write lets the store door
  * mint its own identity for that attempt. */
@@ -84,7 +83,7 @@ let members = (value: string) =>
 /**
  * A page's filter line, off the search string it arrived as: the riders
  * rewritten and every value decoded, so the whole line can be escaped once
- * into the Store's `?q=` (meta.ts `metaOf`).
+ * into the store's `?q=`.
  *
  * A bare token is a full-text term and carries no operator, so it is decoded
  * whole. `*` — the page's word for "every component" — is a term the store has
@@ -92,7 +91,7 @@ let members = (value: string) =>
  * would.
  */
 export let lined = (search: string): string =>
-  joined(
+  untokens(
     tokens(bareLine(search)).map((seg) => {
       if (seg == '|') return seg
       if (seg.startsWith('(')) return `(${lined(seg.slice(1, -1))})`
@@ -104,6 +103,31 @@ export let lined = (search: string): string =>
         m[2] == '~=' ? glued(value) : members(value)
       }`
     }),
+  )
+
+/**
+ * The line a page's `query` door was asked, in the store's grammar: the query
+ * string itself, or escaped once as `?q=`, which a live read names it by. A
+ * live read that names none has none (null).
+ */
+/// lineOf(new URL('http://h/api/query?.doc&limit=2')) -> '.doc&.limit=2'
+/// lineOf(new URL('http://h/api/query?q=id%3Dx')) -> '.entity.eid=x'
+/// lineOf(new URL('http://h/api/query?live=1')) -> null
+export let lineOf = (url: URL): string | null => {
+  let { searchParams: params } = url
+  let line = params.get('live') == '1' || params.has('q')
+    ? params.get('q')
+    : url.search.slice(1)
+  return line == null ? null : lined(line)
+}
+
+/** What a batch minted, by the alias it was written under. */
+/// minted([{ entity: { eid: 'e1' }, $alias: 'cake' }]) -> { cake: 'e1' }
+export let minted = (applied: Bundle[]): Record<string, string> =>
+  Object.fromEntries(
+    applied.flatMap((b) =>
+      typeof b.$alias == 'string' ? [[b.$alias, b.entity.eid]] : []
+    ),
   )
 
 // The alias this door gives a bundle that names no entity: its own
@@ -131,8 +155,7 @@ export let batched = (body: unknown): Bundle[] => {
     ? body
     : sent?.bundles ?? sent?.entities ?? sent?.change
   if (!Array.isArray(held)) {
-    throw refuse(
-      'arguments',
+    throw new Refused(
       '/apply takes {"bundles": [ … ]} — a list of bundles',
     )
   }

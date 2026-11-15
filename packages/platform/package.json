@@ -66,6 +66,7 @@
     "./qr": "./qr.ts",
     "./escape": "./escape.ts",
     "./client-routes": "./client-routes.ts",
+    "./page-wire": "./page-wire.ts",
     "./app-commands": "./app-commands.ts",
     "./app-command": "./app-command.ts"
   },

@@ -69,7 +69,7 @@ import {
 } from './tools.ts'
 import { ceiling, serve, unseenBlock } from './unseen.ts'
 import { appVocab, packagesOf } from './vocab.ts'
-import { lined } from './wire.ts'
+import { lined } from '@yaks/platform/page-wire'
 import { scope, unasked } from './query-line.ts'
 import { apex, type Host, hosted } from '@yaks/platform/host'
 import { refuse, unavailable } from './tool.ts'
@@ -365,7 +365,7 @@ export let named = async (
 }
 
 // The identity operand list, wherever it appears on a line: `.entity.eid=a,b` — which
-// is what the page's `id=` becomes (wire.ts `lined`) — names a set rather than
+// is what the page's `id=` becomes (@yaks/platform/page-wire `lined`) — names a set rather than
 // comparing a property, so its operands are ids and a word among them may be a
 // name (T-34390, @yaks/alias). `.entity.eid!=` and the rest are untouched: this is the
 // one operator whose right-hand side is an identity.
@@ -441,7 +441,7 @@ let held = (
     // An agent's grammar is the page's (guide.md): `id=`, `limit=` and `after=`
     // where the store writes `.entity.eid=`, `.limit=` and `.after=`, and a value
     // written as it reads rather than as a store would parse it. One
-    // translation for every door a person's own line arrives at (wire.ts).
+    // translation for every door a person's own line arrives at (@yaks/platform/page-wire).
     let one = await byName(self, typeof q == 'string' ? lined(line) : line)
     let at = where.length == 1 ? where[0] : undefined
     let answer = at

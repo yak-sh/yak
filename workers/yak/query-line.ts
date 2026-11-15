@@ -1,14 +1,4 @@
-import { bareLine, tokens } from '@yaks/query'
-
-/** A line's tokens written back as one line: `&` between clauses, nothing
- * around the `|` that separates two arms. */
-/// joined(['.doc', '.task', '|', '.recipe']) -> '.doc&.task|.recipe'
-export let joined = (segs: string[]) =>
-  segs.reduce(
-    (line, seg, i, all) =>
-      line + (i && seg != '|' && all[i - 1] != '|' ? '&' : '') + seg,
-    '',
-  )
+import { bareLine, tokens, untokens } from '@yaks/query'
 
 // The `.in=` rider: which app a read is scoped to. It is the platform's word,
 // not the query grammar's, so it comes off the line before any store sees it —
@@ -20,7 +10,7 @@ export let joined = (segs: string[]) =>
 export let scope = (line: string) => {
   let segs = tokens(bareLine(line))
   let said = segs.find((s) => /^\.in=/.test(s))?.slice(4)
-  return { said, line: joined(segs.filter((s) => !/^\.in=/.test(s))) }
+  return { said, line: untokens(segs.filter((s) => !/^\.in=/.test(s))) }
 }
 
 // `.in=` alone says which app to read and nothing about what: a line with no

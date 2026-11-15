@@ -159,14 +159,6 @@ export let metaOf = (
   },
 })
 
-/** What a batch minted, by the alias it was written under. */
-export let minted = (applied: Bundle[]): Record<string, string> =>
-  Object.fromEntries(
-    applied.flatMap((b) =>
-      typeof b.$alias == 'string' ? [[b.$alias, b.entity.eid]] : []
-    ),
-  )
-
 // One door per binding, so the answer is the same object every time: what is
 // memoized on a door (the seed the directory part runs once, directory.ts) is
 // memoized per isolate, and a test that builds its own gets its own.

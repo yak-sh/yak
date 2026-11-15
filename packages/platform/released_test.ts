@@ -6,6 +6,7 @@ import { packageEid } from '@yaks/lens'
 import { mint } from '@yaks/graph/identity'
 import { faulted, toolEid } from '@yaks/tools/result'
 import { opened } from './released.ts'
+import { store } from './client.js'
 
 let dir = new URL('./fixtures/recipes', import.meta.url).pathname
 let host = await opened(dir, ['graph', 'web'], { db: ':memory:' })
@@ -71,6 +72,43 @@ test('the store’s doors answer under /api, where a page’s client finds them'
   }])
   let rows = await (await door('/api/query?q=.recipe.heading=Stew')).json()
   equal(rows.map((r: { entity: { eid: string } }) => r.entity.eid), ['stew'])
+})
+
+type Row = { recipe: { heading: string } }
+
+// The client a page imports, over a socket and fetches of its own: a write
+// it applies is read back by `query` and heard by `subscribe`.
+test('a page uses its store through its client at ./api/', async () => {
+  await using box = Deno.serve(
+    { port: 0, hostname: '127.0.0.1', onListen() {} },
+    host.handler!,
+  )
+  let page = store(`http://127.0.0.1:${box.addr.port}/api/`)
+  let heard = Promise.withResolvers<void>()
+  let stop = page.subscribe('.recipe', (rows: Row[]) => {
+    if (rows.some((r) => r.recipe.heading == 'Tart')) heard.resolve()
+  })
+  await stop.ready
+  let written = await page.apply({
+    entity: { eid: '$tart' },
+    recipe: { heading: 'Tart' },
+  })
+  equal(written.ok, true)
+  equal(
+    (await page.query('.recipe.heading=Tart')).map((r: Row) => r.recipe),
+    [{ heading: 'Tart' }],
+  )
+  equal(
+    (await page.query(`id=${written.aliases.$tart}`)).length,
+    1,
+  )
+  await heard.promise
+  stop()
+  page.outbox.close()
+})
+
+test('a page’s vocab.json is its store’s documents', async () => {
+  equal(Array.isArray(await (await door('/api/vocab.json')).json()), true)
 })
 
 test('a page imports its client from ./api/client.js', async () => {

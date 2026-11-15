@@ -15,7 +15,7 @@ import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
 import { mailDoc } from '@yaks/mail/vocab'
 import { CallError } from '@yaks/tools'
-import { lined } from '../../workers/yak/wire.ts'
+import { lined } from '@yaks/platform/page-wire'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import {
   acceptInvite,

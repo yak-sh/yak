@@ -102,7 +102,7 @@ import {
 } from '@yaks/blob'
 import { contentType } from '@yaks/blob/identify'
 import { declarationOf } from './declaration.ts'
-import { KERNEL, type Meta, metaOf, minted } from './meta.ts'
+import { KERNEL, type Meta, metaOf } from './meta.ts'
 import { Pending } from '@yaks/api/log'
 import {
   acceptsOf,
@@ -115,7 +115,14 @@ import {
   uploaded,
   useOf,
 } from './uploads.ts'
-import { batched, lined, receipt, resend } from './wire.ts'
+import {
+  batched,
+  lined,
+  lineOf,
+  minted,
+  receipt,
+  resend,
+} from '@yaks/platform/page-wire'
 import {
   binned,
   editor,
@@ -2217,18 +2224,16 @@ export let api = async (
     if (!mayRead) return refused('not_a_reader')
     // The page writes its filter as the query string itself, or escaped once
     // as `?q=`, and either way in the page's grammar (`id=`, `limit=`), which
-    // wire.ts `lined` turns into the Store's line. The ask then carries the
-    // listing's own screen (listing.ts `asking`), so what a count counts is
-    // what a list lists.
+    // @yaks/platform/page-wire `lineOf` turns into the Store's line. The ask
+    // then carries the listing's own screen (listing.ts `asking`), so what a
+    // count counts is what a list lists.
     try {
       let url = new URL(req.url)
-      let live = url.searchParams.get('live') == '1'
-      let line = live || url.searchParams.has('q')
-        ? url.searchParams.get('q')
-        : url.search.slice(1)
+      let line = lineOf(url)
       if (line == null) throw new Refused('/query needs a query: ?q=…')
+      let live = url.searchParams.get('live') == '1'
       return Response.json(
-        await queried(env, space, app, who, lined(line), live, headers),
+        await queried(env, space, app, who, line, live, headers),
       )
     } catch (e) {
       // A page's query is app code, even when the store answers its invalid
@@ -2338,9 +2343,10 @@ export let api = async (
     // A page that sends the write again after a 202 names it, and the store
     // answers the resend as it answered the first (@yaks/api/log `first`) rather
     // than keeping a second copy that its guards refuse once the first lands.
-    // Each wire in, the same wire out (wire.ts): the page's envelope is
-    // answered `{ok, aliases, bundles}`, and the Store's bare array, which a
-    // page keeping its own copy sends, is answered with the batch as applied.
+    // Each wire in, the same wire out (@yaks/platform/page-wire): the page's
+    // envelope is answered `{ok, aliases, bundles}`, and the Store's bare
+    // array, which a page keeping its own copy sends, is answered with the
+    // batch as applied.
     let sent: unknown
     try {
       sent = JSON.parse(body)

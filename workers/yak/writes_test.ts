@@ -10,7 +10,8 @@ import { IDEMPOTENCY, type Namespace } from '@yaks/durable-object/door'
 import { Store, type Time } from './graph.ts'
 import { by, lit, scan, tally } from '@yaks/sql'
 import { db, keep, named, state, titling } from './testing.ts'
-import { KERNEL, metaOf, minted } from './meta.ts'
+import { KERNEL, metaOf } from './meta.ts'
+import { minted } from '@yaks/platform/page-wire'
 import { BINARY, binary } from '@yaks/vocab/wire'
 import {
   fingerprinted,

@@ -646,6 +646,17 @@ export let conjoin = (...lines: string[]): string => {
     .join('&')
 }
 
+/** A line's tokens ({@link tokens}) written back as one line: `&` between
+ * clauses, nothing around the `|` that separates two arms. */
+/// untokens(['.doc', '.task', '|', '.recipe']) -> '.doc&.task|.recipe'
+/// untokens(tokens('.a .b|.c')) -> '.a&.b|.c'
+export let untokens = (segs: string[]): string =>
+  segs.reduce(
+    (line, seg, i, all) =>
+      line + (i && seg != '|' && all[i - 1] != '|' ? '&' : '') + seg,
+    '',
+  )
+
 /** How `parse` should read the query it is given. */
 export type ParseOpts = {
   /** whether a bare word is a full-text term (default true). A rule, or a saved
