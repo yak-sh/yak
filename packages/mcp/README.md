@@ -8,7 +8,11 @@ library beyond the JSON Schema checks @yaks/vocab already makes.
 
 A **bundle** is one entity's components as a JSON object, identified by
 `entity.eid`. A **batch** is a list of bundles applied in one transaction. MCP
-arguments are JSON objects; graph data and tool results use bundles.
+arguments are JSON objects; graph data and tool results use bundles. The HTTP
+server never expands `@path` arguments or reads a caller-named file. Local file
+input belongs to the client: the `yak` CLI reads `@path` before sending a call,
+and `yak mcp --host <host>` supplies the same local file support to stdio MCP
+clients.
 
 ## Install
 

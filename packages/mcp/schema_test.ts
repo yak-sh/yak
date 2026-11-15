@@ -24,7 +24,6 @@ import type { Options } from './server.ts'
 import { answerWith, core, inputSchemaOf } from './tools.ts'
 import { connect, pinned, shop, shopGraph } from './testing.ts'
 import { inputSchema } from './schema.ts'
-import { fileSchema } from './files.ts'
 import { toolsSaid } from '@yaks/vocab/tools'
 
 let schemaMeta = new Ajv2020({ strict: false, allErrors: true })
@@ -44,7 +43,7 @@ for await (let entry of Deno.readDir(new URL('../', import.meta.url))) {
     throw err
   }
   for (let tool of toolsSaid(doc)) {
-    let schema = fileSchema(inputSchemaOf({ ...tool, run: () => [] }), () => '')
+    let schema = inputSchemaOf({ ...tool, run: () => [] })
     declarations.push({ name: `${entry.name}/${tool.name}`, schema })
   }
 }

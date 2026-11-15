@@ -23,6 +23,7 @@ import {
   globals,
   helpTool,
   type Opts,
+  parentVia,
   unique,
   usage,
   via,
@@ -655,3 +656,40 @@ for (
     assertEquals(via(env, cwd), run)
   })
 }
+
+test('a local MCP client names the session of its Claude Code parent', () => {
+  let paths: string[] = []
+  let read = (path: string) => {
+    paths.push(path)
+    return '{"sessionId":"claude-parent"}'
+  }
+  assertEquals(
+    parentVia(harness({ HOME: '/home/person' }), 42, read),
+    'claude-parent',
+  )
+  assertEquals(
+    parentVia(harness({ CLAUDE_CONFIG_DIR: '/custom' }), 7, read),
+    'claude-parent',
+  )
+  assertEquals(paths, [
+    '/home/person/.claude/sessions/42.json',
+    '/custom/sessions/7.json',
+  ])
+  assertEquals(via(harness({}), '/r', () => 'claude-parent'), 'claude-parent')
+  assertEquals(
+    via(harness({ CODEX_THREAD_ID: 'codex' }), '/r', () => 'claude-parent'),
+    'codex',
+  )
+})
+
+test('a parent without a Claude Code session record names nobody', () => {
+  let env = harness({ HOME: '/home/person' })
+  assertEquals(
+    parentVia(env, 42, () => {
+      throw new Error('missing')
+    }),
+    undefined,
+  )
+  assertEquals(parentVia(env, 42, () => '{'), undefined)
+  assertEquals(parentVia(env, 42, () => '{"sessionId":12}'), undefined)
+})

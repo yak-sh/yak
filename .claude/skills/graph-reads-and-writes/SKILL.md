@@ -47,12 +47,13 @@ keeps its own copy casts it in or keeps ghosts.
 The tasks MCP tools accept the work directly. Their `yak` commands take the same
 arguments; arrays and objects are JSON arguments, and `@path` reads a whole
 argument from a file. `--clear blocked --clear priority` supplies JSON `null`
-for nullable fields; `--body null` keeps the literal text `null`. On the box's
-MCP door, `"$files": true` expands `@/absolute/path` in declared string
-arguments, including nested task bodies and text edits. For example,
-`task_update` with `{"task":"T-12","body":"@/tmp/body.md","$files":true}` reads
-the body on the server. Omit `$files` to keep `@` text literal. The package
-READMEs hold the full examples: packages/task/README.md ("Create a task plan",
+for nullable fields; `--body null` keeps the literal text `null`. File input
+belongs to the client that owns the file. `yak mcp --host <host>` connects a
+local MCP client over stdio; `"_files": true` expands `@/absolute/path` in its
+declared string arguments, including nested task bodies and text edits,
+before sending the values. Omit `_files` for literal `@` text. The HTTP door
+never reads a path a caller names. The package READMEs hold the full examples:
+packages/cli/README.md (local MCP file input), packages/task/README.md ("Create a task plan",
 "Edit tasks") and packages/graph/README.md ("Field and relationship edits").
 
 - `task_new` takes `tasks` to file a plan in one transaction, with shared filing

@@ -1,5 +1,5 @@
-// File references are transport input: opted into by the caller, expanded by
-// a host-supplied reader, and handed to the runner as ordinary arguments.
+// File references belong to the client that owns the files. HTTP tools receive
+// only ordinary arguments; they never interpret paths on their own host.
 import { CallError } from '@yaks/tools/errors'
 
 type Schema = Record<string, unknown>
@@ -8,16 +8,13 @@ export type ReadFile = (path: string) => string | Promise<string>
 export let FILES =
   'Set "_files":true to read @/absolute/path in string arguments, including nested strings. Omit it for literal @ text.'
 
-export let fileSchema = <S extends Schema>(schema: S, read?: ReadFile): S =>
-  read
-    ? {
-      ...schema,
-      properties: {
-        ...schema.properties as Schema,
-        _files: { type: 'boolean' },
-      },
-    }
-    : schema
+export let fileSchema = <S extends Schema>(schema: S): S => ({
+  ...schema,
+  properties: {
+    ...schema.properties as Schema,
+    _files: { type: 'boolean' },
+  },
+})
 
 let parts = (schema: Schema, root: Schema): Schema[] => {
   let ref = typeof schema.$ref == 'string' && schema.$ref.startsWith('#/')
@@ -85,9 +82,9 @@ let expanded = async (
 export let fileArgs = async (
   args: Record<string, unknown>,
   schema: Schema,
-  read?: ReadFile,
+  read: ReadFile,
 ): Promise<Record<string, unknown>> => {
-  if (!read || !('_files' in args || '$files' in args)) return args
+  if (!('_files' in args || '$files' in args)) return args
   // Keep calls made from the previously published schema working.
   let { _files, $files, ...input } = args
   let files = _files ?? $files

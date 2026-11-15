@@ -458,6 +458,7 @@ export let runs = (
     let config = str(args.config) || configPath()
     let name = connect(config, {
       server,
+      yak: str(args.yak) || undefined,
       name: str(args.name) || undefined,
       remove,
     })

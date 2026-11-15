@@ -81,6 +81,26 @@ export type Adapter = {
 
 let servers = (j: Job) => Object.entries(j.mcp ?? {})
 
+// Files belong to the local agent's MCP client. A remote server remains
+// direct; the graph on this machine is reached through the local client.
+let local = (url: string, session: string) => {
+  if (!URL.canParse(url)) return
+  let at = new URL(url)
+  if (
+    !/^(localhost|127(?:\.\d+){3}|\[::1\])$/.test(at.hostname) ||
+    !/\/mcp\/?$/.test(at.pathname) || at.search || at.hash
+  ) return
+  return {
+    command: 'yak',
+    args: ['mcp', '--host', url.replace(/\/mcp\/?$/, '')],
+    env: {
+      CLAUDE_CODE_SESSION_ID: session,
+      TASKS_SESSION: session,
+      AI_AGENT: '',
+    },
+  }
+}
+
 // Claude's `--mcp-config` takes JSON, and a server it names replaces the one
 // of that name in the person's own config.
 let connected = (j: Job): string[] =>
@@ -89,11 +109,14 @@ let connected = (j: Job): string[] =>
       '--mcp-config',
       JSON.stringify({
         mcpServers: Object.fromEntries(
-          servers(j).map(([name, url]) => [name, {
-            type: 'http',
-            url,
-            headers: { [VIA]: j.session },
-          }]),
+          servers(j).map(([name, url]) => [
+            name,
+            local(url, j.session) ?? {
+              type: 'http',
+              url,
+              headers: { [VIA]: j.session },
+            },
+          ]),
         ),
       }),
     ]
@@ -172,12 +195,18 @@ let toml = (s: string): string =>
 let WHOLE = 1 << 20
 
 // A TOML inline table, of strings, booleans and tables, its keys quoted.
-type Table = { [key: string]: string | boolean | Table }
+type Table = { [key: string]: string | boolean | string[] | Table }
 let inline = (t: Table): string =>
   `{${
     Object.entries(t).map(([k, v]) =>
       `${toml(k)}=${
-        typeof v == 'string' ? toml(v) : typeof v == 'boolean' ? v : inline(v)
+        typeof v == 'string'
+          ? toml(v)
+          : typeof v == 'boolean'
+          ? v
+          : Array.isArray(v)
+          ? `[${v.map(toml).join(',')}]`
+          : inline(v)
       }`
     ).join(',')
   }}`
@@ -192,10 +221,13 @@ let inline = (t: Table): string =>
 let configured = (j: Job): string[] => {
   let table: Table = Object.fromEntries([
     ...(j.without ?? []).map((name) => [name, { enabled: false }]),
-    ...servers(j).map(([name, url]) => [name, {
-      url,
-      http_headers: { [VIA]: j.session },
-    }]),
+    ...servers(j).map(([name, url]) => [
+      name,
+      local(url, j.session) ?? {
+        url,
+        http_headers: { [VIA]: j.session },
+      },
+    ]),
   ])
   return Object.keys(table).length ? ['-c', `mcp_servers=${inline(table)}`] : []
 }

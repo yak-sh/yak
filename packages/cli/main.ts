@@ -286,6 +286,27 @@ let rename = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
  * from either list. */
 export let own: Command[] = [
   unitFailureCommand,
+  {
+    name: 'mcp',
+    description:
+      'Connect a local MCP client over stdio, expanding its own @files',
+    inputSchema: { type: 'object', additionalProperties: false },
+    readOnly: true,
+    run: async (_, c) => {
+      let [{ bridge, stdio }, { createInterface }, { Readable }] = await Promise
+        .all([
+          import('./mcp.ts'),
+          import('node:readline'),
+          import('node:stream'),
+        ])
+      await stdio(
+        createInterface({ input: Readable.from(system.stdin.readable) }),
+        c.out,
+        bridge(c.ask, c.reads.file),
+      )
+      return 0
+    },
+  },
   helpTool(YAK),
   {
     name: 'version',

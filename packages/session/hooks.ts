@@ -20,25 +20,15 @@ export let configPath = (
   home = systemProcess.env.get('HOME') ?? '.',
 ): string => `${home}/.claude.json`
 
-/** What Claude Code is told about this graph's MCP door. */
-export type Connection = { type: 'http'; url: string; headersHelper: string }
+/** What Claude Code starts beside itself to speak to this graph's MCP door.
+ * The client owns local file input; the HTTP server receives only values. */
+export type Connection = { type: 'stdio'; command: string; args: string[] }
 
-// Claude Code runs a server's `headersHelper` in a shell whose parent is its
-// own process each time it connects, and keeps `sessions/<pid>.json` naming
-// the session that process is. The helper reads it and names the session in
-// `x-via`, the header the door takes a caller from (./graph.ts); where it
-// finds none, the call says nothing and the hook is all there is.
-let HELPER = 'id=$(sed -n \'s/.*"sessionId":"\\([0-9A-Za-z-]*\\)".*/\\1/p\' ' +
-  '"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sessions/$PPID.json" 2>/dev/null); ' +
-  'if [ -n "$id" ]; then printf \'{"x-via":"%s"}\\n\' "$id"; ' +
-  "else echo '{}'; fi"
-
-/** The entry Claude Code connects to the MCP door of the `yak serve` at
- * `server` with, naming the session behind each call. */
-export let connection = (server: string): Connection => ({
-  type: 'http',
-  url: `${server.replace(/\/+$/, '')}/mcp`,
-  headersHelper: HELPER,
+/** The local client for the MCP door of the `yak serve` at `server`. */
+export let connection = (server: string, yak = 'yak'): Connection => ({
+  type: 'stdio',
+  command: yak,
+  args: ['mcp', '--host', server.replace(/\/+$/, '')],
 })
 
 // One door, however its host is spelled: `localhost` and `127.0.0.1` are the
@@ -51,6 +41,17 @@ let door = (url: unknown): string | undefined => {
   return `${u.protocol}//${host}:${u.port}${u.pathname.replace(/\/+$/, '')}`
 }
 
+type Connected = { url?: string; command?: string; args?: string[] }
+
+let connectedDoor = (entry: Connected): string | undefined => {
+  if (entry.url) return door(entry.url)
+  let args = entry.args ?? []
+  let host = args.indexOf('--host')
+  return entry.command && args[0] == 'mcp' && host >= 0
+    ? door(`${args[host + 1]?.replace(/\/+$/, '')}/mcp`)
+    : undefined
+}
+
 /**
  * Write the connection into Claude Code's config, keeping everything else in
  * it: the first entry already on this door is replaced under its own name and
@@ -59,7 +60,7 @@ let door = (url: unknown): string | undefined => {
  */
 export let connect = (
   path: string,
-  opts: { server: string; name?: string; remove?: boolean },
+  opts: { server: string; name?: string; yak?: string; remove?: boolean },
 ): string => {
   let config: Record<string, unknown> = {}
   try {
@@ -67,10 +68,10 @@ export let connect = (
   } catch (e) {
     if (!fs.isNotFound(e)) throw e
   }
-  let entry = connection(opts.server)
-  let servers = { ...config.mcpServers as Record<string, { url?: string }> }
+  let entry = connection(opts.server, opts.yak)
+  let servers = { ...config.mcpServers as Record<string, Connected> }
   let ours = Object.keys(servers)
-    .filter((n) => door(servers[n]?.url) == door(entry.url))
+    .filter((n) => connectedDoor(servers[n]) == connectedDoor(entry))
   let name = ours[0] ?? opts.name ?? 'yak'
   for (let n of ours) delete servers[n]
   if (!opts.remove) servers[name] = entry

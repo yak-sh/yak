@@ -11,7 +11,7 @@ import { ids } from '@yaks/id/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { sessionDoc } from './comp.ts'
 import { authenticate, VIA } from './graph.ts'
-import { connection } from './hooks.ts'
+import { parentVia } from '../cli/run.ts'
 
 let spine: VocabDoc = {
   $defs: {
@@ -56,23 +56,15 @@ test('a request naming nobody, or a run this graph never saw, is left to the hos
   assertEquals(await asking('nothing-here'), null)
 })
 
-// What Claude Code sends on every call over the connection `hooks install`
-// writes: its `headersHelper`, run in a shell whose parent is the harness,
-// which keeps `sessions/<pid>.json`. This process stands in as the harness.
-let helped = async (session?: string) => {
-  let dir = Deno.makeTempDirSync()
-  Deno.mkdirSync(`${dir}/sessions`)
-  if (session) {
-    Deno.writeTextFileSync(
-      `${dir}/sessions/${Deno.pid}.json`,
-      JSON.stringify({ pid: Deno.pid, sessionId: session, cwd: dir }),
-    )
-  }
-  let { stdout } = await new Deno.Command('sh', {
-    args: ['-c', connection('http://h').headersHelper],
-    env: { CLAUDE_CONFIG_DIR: dir },
-  }).output()
-  return JSON.parse(new TextDecoder().decode(stdout))
+// The local MCP client reads the session of the harness that started it,
+// and names that session on every request, even if a tool hook never arrives.
+let helped = (session?: string): Record<string, string> => {
+  let id = parentVia(
+    (name) => name == 'CLAUDE_CONFIG_DIR' ? '/claude' : undefined,
+    42,
+    () => JSON.stringify(session ? { sessionId: session } : {}),
+  )
+  return id ? { [VIA]: id } : {}
 }
 
 // A tool call whose `PreToolUse` hook never reached the hook door.
@@ -86,10 +78,10 @@ let unheard = async (headers: Record<string, string>) =>
   )
 
 test("a call whose hook never arrives is still its connection's session", async () => {
-  assertEquals(await unheard(await helped('abc')), { by: 'p1', via: 's1' })
+  assertEquals(await unheard(helped('abc')), { by: 'p1', via: 's1' })
 })
 
 test('a harness the helper cannot read says nothing, and is left to the host', async () => {
-  assertEquals(await helped(), {})
-  assertEquals(await unheard(await helped()), null)
+  assertEquals(helped(), {})
+  assertEquals(await unheard(helped()), null)
 })

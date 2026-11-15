@@ -49,7 +49,6 @@ import {
   translated,
 } from './tools.ts'
 import type { Guide } from '@yaks/graph'
-import { fileArgs, FILES, fileSchema, type ReadFile } from './files.ts'
 import { inputSchema } from './schema.ts'
 import { protocol, ProtocolError, type Server } from './protocol.ts'
 
@@ -132,9 +131,6 @@ export type Options = {
   /** aborted when a stopping server's grace is up (@yaks/api `cutOf`): a
    * write still reading its reply is answered without it */
   cut?: AbortSignal
-  /** Optional local file input: callers opt in with `_files: true`. Hosted
-   * servers without a reader keep literal inputs and their exact schemas. */
-  readFile?: ReadFile
   /** who is calling — every write this server makes is signed with this actor:
    * `by` the identity it acts for, `via` the run it came through (default:
    * nobody, and writes are stored unattributed) */
@@ -263,13 +259,12 @@ export let prepared = async (
  * exchange never sends them, so a function making them is not called.
  */
 export let instructed = async (
-  opts: Pick<Options, 'instructions' | 'readFile'>,
+  opts: Pick<Options, 'instructions'>,
   exchange?: Exchange,
 ): Promise<string | undefined> => {
   let said = opts.instructions
   if (exchange && exchange.method != 'initialize') return undefined
-  let text = typeof said == 'function' ? await said() : said
-  return opts.readFile ? [text, FILES].filter(Boolean).join('\n\n') : text
+  return typeof said == 'function' ? await said() : said
 }
 
 export { answerSchema, answerWith } from '@yaks/tools/schema'
@@ -629,10 +624,6 @@ export let server = (
       notice = await opts.roster?.(names)
     })().catch((err) => report(err, asked, t.name))
     try {
-      asked.call = {
-        to: toolEid(name),
-        args: await fileArgs(input, inputSchemaOf(t), opts.readFile),
-      }
       if (t.readOnly) opts.reading?.()
       else await admitted.ensure()
       let landed =
@@ -676,7 +667,7 @@ export let server = (
       description: t.description,
       inputSchema: inputSchema(
         t.name,
-        fileSchema(inputSchemaOf(t), opts.readFile),
+        inputSchemaOf(t),
       ),
       outputSchema: schemaOf(t),
       annotations: annotated(t),

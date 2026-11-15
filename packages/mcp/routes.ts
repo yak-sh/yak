@@ -1,4 +1,3 @@
-import * as io from '@yaks/file/io'
 import * as system from '@yaks/process/system'
 // The routes facet, exported as `@yaks/mcp/routes`: `/mcp` as one route on a
 // host's own listener.
@@ -75,7 +74,6 @@ let mounted = async (host: Hosting): Promise<Handler> => {
     reply: host.reply,
     text: host.text,
     readable: host.readable,
-    readFile: (path) => io.readTextFile(path),
     name: host.config.name ?? 'yak',
     skills: (built, exchange) =>
       attachSkills(built, { graph: host.graph, cwd: system.cwd() }, exchange),

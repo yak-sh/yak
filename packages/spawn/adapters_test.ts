@@ -101,7 +101,15 @@ test('a run names its session to each server it is connected to', () => {
   let said = claude.argv({ ...job, mcp })
   assertEquals(JSON.parse(said[said.indexOf('--mcp-config') + 1]), {
     mcpServers: {
-      tasks: { type: 'http', url: mcp.tasks, headers: { 'x-via': 'S1' } },
+      tasks: {
+        command: 'yak',
+        args: ['mcp', '--host', 'http://localhost'],
+        env: {
+          CLAUDE_CODE_SESSION_ID: 'S1',
+          TASKS_SESSION: 'S1',
+          AI_AGENT: '',
+        },
+      },
       'yaks.app': {
         type: 'http',
         url: mcp['yaks.app'],
@@ -114,7 +122,15 @@ test('a run names its session to each server it is connected to', () => {
   let told = codex.argv({ ...job, mcp, without: ['railway'] })
   assertEquals(setting(told, 'mcp_servers'), {
     railway: { enabled: false },
-    tasks: { url: mcp.tasks, http_headers: { 'x-via': 'S1' } },
+    tasks: {
+      command: 'yak',
+      args: ['mcp', '--host', 'http://localhost'],
+      env: {
+        CLAUDE_CODE_SESSION_ID: 'S1',
+        TASKS_SESSION: 'S1',
+        AI_AGENT: '',
+      },
+    },
     'yaks.app': { url: mcp['yaks.app'], http_headers: { 'x-via': 'S1' } },
   })
   assert(!told.some((a) => a.startsWith('mcp_servers.')))

@@ -428,6 +428,24 @@ export let aimed = (
     : { host: dflt, unplaced: true }
 }
 
+/** Claude Code keeps its session beside the process that starts an MCP
+ * client. Reading that parent's record preserves identity over stdio. */
+export let parentVia = (
+  env: Env = own,
+  parent = system.ppid,
+  read: (path: string) => string = files.readTextFileSync,
+): string | undefined => {
+  let directory = env('CLAUDE_CONFIG_DIR') ||
+    (env('HOME') ? `${env('HOME')}/.claude` : undefined)
+  if (!directory) return
+  try {
+    let session = JSON.parse(read(`${directory}/sessions/${parent}.json`))
+    return typeof session.sessionId == 'string' ? session.sessionId : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * The run this command line is part of, as the environment names it: a harness
  * sets it, every shell and hook under that harness inherits it, and a write
@@ -446,12 +464,17 @@ export let aimed = (
  * directory is told apart by nothing in its environment, and speaks for the
  * parent.
  */
-export let via = (env: Env = own, cwd = here()): string | undefined => {
+export let via = (
+  env: Env = own,
+  cwd = here(),
+  parent: () => string | undefined = () => parentVia(env),
+): string | undefined => {
   let claude = env('CLAUDE_CODE_SESSION_ID')
   let agent = claude && env('AI_AGENT')?.endsWith('_agent')
     ? cwd.match(WORKTREE)?.[1]
     : undefined
-  return agent ?? claude ?? env('TASKS_SESSION') ?? env('CODEX_THREAD_ID')
+  return agent ?? claude ?? env('TASKS_SESSION') ?? env('CODEX_THREAD_ID') ??
+    parent()
 }
 
 // The worktree Claude Code makes for a subagent, named by the subagent's id.

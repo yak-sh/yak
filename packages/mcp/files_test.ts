@@ -1,32 +1,20 @@
-/// <reference lib="deno.ns" />
-import { equal, test } from '@yaks/testing'
-import { assertThrows } from '@std/assert'
-import { argsOf, type Tool } from '@yaks/graph'
-import { argsFor } from '@yaks/cli/grammar'
-import { registry } from '@yaks/tools'
-import { connect, text } from './testing.ts'
-import { FILES } from './files.ts'
-import { inputSchema } from './schema.ts'
+import { cleanup, equal, test } from '@yaks/testing'
+import { argsOf, type NamedTool } from '@yaks/graph'
+import { routes } from './routes.ts'
+import { shopGraph } from './testing.ts'
 
-let schema = {
-  type: 'object',
-  properties: {
-    body: { type: 'string' },
-    nested: { type: 'array', items: { $ref: '#/$defs/item' } },
-  },
-  additionalProperties: false,
-  required: ['body'],
-  $defs: {
-    item: {
-      type: 'object',
-      properties: { body: { type: ['string', 'null'] } },
-    },
-  },
-}
-let echo: Tool = {
+let dir = Deno.makeTempDirSync()
+let path = `${dir}/body.md`
+Deno.writeTextFileSync(path, 'private canary')
+cleanup(() => Deno.removeSync(dir, { recursive: true }))
+let echo: NamedTool = {
   name: 'echo_body',
   description: 'Read a body',
-  inputSchema: schema,
+  inputSchema: {
+    type: 'object',
+    properties: { body: { type: 'string' } },
+    required: ['body'],
+  },
   readOnly: true,
   run: (call) => [{
     entity: { eid: '$out' },
@@ -34,127 +22,49 @@ let echo: Tool = {
     output: { source: call.entity.eid },
   }],
 }
-let body = 'A long body\n'.repeat(200)
-let reads: string[] = []
-let readFile = (path: string) => {
-  reads.push(path)
-  if (path == '/body.md') return body
-  throw new Error('File does not exist')
+let route = routes({
+  graph: shopGraph(),
+  config: {},
+  tools: [echo],
+  who: () => null,
+})[0]
+let id = 0
+let ask = async (method: string, params?: unknown, tunnel = false) => {
+  let response = await route.handle(
+    new Request('http://local/mcp', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'mcp-protocol-version': '2025-06-18',
+        ...(tunnel ? { 'x-yak-tunnel': '1', 'x-yak-caller': 'operator' } : {}),
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method, params }),
+    }),
+  )
+  return (await response.json()).result
 }
-let local = await connect({ tools: [echo], readFile })
-let remote = await connect({ tools: [echo] })
-let catalog = registry([{ name: 'bodies', tools: [echo] }])
-let opened = Promise.withResolvers<void>()
-let loaded = Promise.withResolvers<string>()
-let swapping = await connect({
-  registry: catalog,
-  core: false,
-  readFile: () => {
-    opened.resolve()
-    return loaded.promise
-  },
-})
-let call = (args: Record<string, unknown>, client = local) =>
-  client.callTool({ name: 'echo_body', arguments: args })
 
-test('MCP file input preserves existing literal @ arguments', async () => {
-  equal(JSON.parse(text(await call({ body: '@yaks/fp' }))), {
-    body: '@yaks/fp',
-  })
-  equal(JSON.parse(text(await call({ body: '@/body.md', _files: false }))), {
-    body: '@/body.md',
-  })
-  equal(reads.length, 0)
-})
+await ask('tools/list')
+await ask('tools/call', { name: echo.name, arguments: { body: 'warm' } })
 
-test('MCP file input still accepts the previously published opt-in', async () => {
-  equal(JSON.parse(text(await call({ body: '@/body.md', $files: true }))), {
-    body,
-  })
-})
-
-test('MCP file input expands long and nested declared strings once', async () => {
-  let out = await call({
-    _files: true,
-    body: '@/body.md',
-    nested: [{ body: '@/body.md' }, { body: null }],
-  })
-  equal(out.isError, undefined)
-  equal(JSON.parse(text(out)), {
-    body,
-    nested: [{ body }, { body: null }],
-  })
-  let cli = await argsFor(echo, ['--body', '@/body.md'], {
-    file: readFile,
-    stdin: () => '',
-  })
-  equal(cli.body, body)
-})
-
-test('an unreadable MCP file answers the caller without running the tool', async () => {
-  let out = await call({ body: '@/missing.md', _files: true })
-  equal(out.isError, true)
-  equal(text(out).includes('Cannot read @/missing.md'), true)
-})
-
-test('MCP file reads retain the admitted schema and implementation during provider replacement', async () => {
-  let pending = call({ body: '@/body.md', _files: true }, swapping)
-  await opened.promise
-  catalog.replace('bodies', [{
-    ...echo,
-    inputSchema: {
-      type: 'object',
-      properties: { body: { type: 'number' } },
-      required: ['body'],
-      additionalProperties: false,
-    },
-    run: (call) => [{
-      entity: { eid: '$out' },
-      content: { body: `replacement ${argsOf(call).body}` },
-      output: { source: call.entity.eid },
-    }],
-  }])
-  loaded.resolve(body)
-  try {
-    equal(JSON.parse(text(await pending)), { body })
-    let current = (await swapping.listTools()).tools[0]
-    equal(current.inputSchema.properties?.body, { type: 'number' })
-    equal(current.inputSchema.properties?._files, { type: 'boolean' })
-    equal(text(await call({ body: 7 }, swapping)), 'replacement 7')
-  } finally {
-    await swapping.close()
+test('the HTTP door never expands caller paths, including the former opt-ins', async () => {
+  for (let tunnel of [false, true]) {
+    for (let flags of [{}, { _files: true }, { $files: true }]) {
+      let input = { body: `@${path}`, ...flags }
+      let out = await ask('tools/call', {
+        name: echo.name,
+        arguments: input,
+      }, tunnel)
+      equal(out.isError, undefined)
+      equal(JSON.parse(out.content[0].text), input)
+    }
   }
 })
 
-test('only a file-capable MCP door advertises file input', async () => {
-  let tools = (await local.listTools()).tools
-  let tool = tools.find((t: { name: string }) => t.name == 'echo_body')!
-  for (let tool of tools) inputSchema(tool.name, tool.inputSchema)
-  assertThrows(
-    () =>
-      inputSchema('echo_body', {
-        ...tool.inputSchema,
-        properties: {
-          ...tool.inputSchema.properties,
-          $files: { type: 'boolean' },
-        },
-      }),
-    Error,
-    'property "$files"',
+test('the HTTP door lists the supplied schema without local file controls', async () => {
+  let out = await ask('tools/list')
+  equal(
+    out.tools.find((tool: NamedTool) => tool.name == echo.name).inputSchema,
+    echo.inputSchema,
   )
-  equal((tool.inputSchema.properties as Record<string, unknown>)._files, {
-    type: 'boolean',
-  })
-  equal(local.getInstructions()?.includes(FILES), true)
-  equal<unknown>(
-    (await remote.listTools()).tools.find((t: { name: string }) =>
-      t.name == 'echo_body'
-    )!
-      .inputSchema,
-    schema,
-  )
-  equal(JSON.parse(text(await call({ body: '@/body.md' }, remote))), {
-    body: '@/body.md',
-  })
-  await Promise.all([local.close(), remote.close()])
 })

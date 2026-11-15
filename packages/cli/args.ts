@@ -17,6 +17,7 @@
 
 import { toolCheck, validateToolInput } from '@yaks/vocab/tools'
 import { CallError } from '@yaks/tools/errors'
+import { fileArgs, fileSchema } from './files.ts'
 import { commandOf, type Prop, type Schema, typeOf } from './tool.ts'
 
 /** As much of a tool as a command line reads: what it is called, the schema
@@ -203,12 +204,17 @@ export let argsFor = async (
   let props = ((tool.inputSchema ?? {}) as Schema).properties ?? {}
   let rest = restOf(tool)
   let forward = tool.forward
-  let { pairs, spare } = scanned(tool, argv)
+  let grammar = reads && tool.inputSchema
+    ? { ...tool, inputSchema: fileSchema(tool.inputSchema) }
+    : tool
+  let { pairs, spare } = scanned(grammar, argv)
   let out: Record<string, unknown> = {}
   for (let [name, raw] of pairs) {
-    let value = raw === true || raw === null
-      ? raw
-      : valueOf(name, await inflate(raw, reads), props[name])
+    let value = raw === true || raw === null ? raw : valueOf(
+      name,
+      await inflate(raw, reads),
+      name == '_files' ? { type: 'boolean' } : props[name],
+    )
     let had = out[name]
     out[name] = Array.isArray(had) && Array.isArray(value)
       ? [...had, ...value]
@@ -231,6 +237,23 @@ export let argsFor = async (
         ...values.flatMap((v) => valueOf(rest, v, props[rest])),
       ]
       : [had, ...values].filter((w) => w != undefined).join(' ')
+  }
+
+  if (reads && '_files' in out) {
+    // Top-level values already expanded before parsing. Only strings inside
+    // parsed objects and arrays still name files.
+    let { _files, ...input } = out
+    let nested = Object.fromEntries(
+      Object.entries(input).filter(([, value]) => typeof value != 'string'),
+    )
+    out = {
+      ...input,
+      ...await fileArgs(
+        { ...nested, _files },
+        tool.inputSchema ?? {},
+        reads.file,
+      ),
+    }
   }
 
   if (!tool.inputSchema) {

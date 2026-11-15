@@ -42,6 +42,7 @@ import { writes } from '@yaks/api/log'
 import { open } from '@yaks/sqlite/db'
 import { meta, REQUIRED } from '@yaks/sqlite/meta'
 import { signer } from './local.ts'
+import { via } from './run.ts'
 import { clock, test, until } from '@yaks/testing'
 import { claude, codex } from '@yaks/spawn'
 import { sessionEid } from '@yaks/session/who'
@@ -2130,21 +2131,36 @@ test('a store refuses a config without a plugin its data requires, naming it, un
 })
 
 // The MCP connection a provider's launch configures for its run, as the CLI
-// reads it: claude's `--mcp-config` JSON, codex's `-c` TOML keys.
+// reads it: claude's `--mcp-config` JSON, codex's `-c` TOML keys. A local
+// stdio client's environment supplies the identity its HTTP requests send.
 let connection = (argv: string[], name: string) => {
   let json = argv[argv.indexOf('--mcp-config') + 1]
-  if (argv.includes('--mcp-config')) {
-    let s = JSON.parse(json).mcpServers[name]
+  let keys = argv.filter((a, i) => argv[i - 1] == '-c' && a.startsWith('mcp_'))
+  let s = argv.includes('--mcp-config')
+    ? JSON.parse(json).mcpServers[name]
+    : (parseToml(keys.join('\n')).mcp_servers as Record<string, Comp>)[name]
+  if (s.command) {
+    assertEquals(s.command, 'yak')
+    assertEquals(s.args[0], 'mcp')
+    let env: Record<string, string> = {
+      CLAUDE_CODE_SESSION_ID: 'parent',
+      CODEX_THREAD_ID: 'parent',
+      AI_AGENT: 'claude-code_agent',
+      ...s.env,
+    }
     return {
-      url: s.url as string,
-      headers: s.headers as Record<string, string>,
+      url: `${s.args[s.args.indexOf('--host') + 1]}/mcp`,
+      headers: {
+        'x-via': via(
+          (name) => env[name],
+          '/work/.claude/worktrees/agent-a1b2',
+        )!,
+      },
     }
   }
-  let keys = argv.filter((a, i) => argv[i - 1] == '-c' && a.startsWith('mcp_'))
-  let s = (parseToml(keys.join('\n')).mcp_servers as Record<string, Comp>)[name]
   return {
     url: s.url as string,
-    headers: s.http_headers as Record<string, string>,
+    headers: (s.headers ?? s.http_headers) as Record<string, string>,
   }
 }
 
@@ -2165,7 +2181,7 @@ test('a spawned run is stamped with its actor from its first MCP call, on either
     let job = {
       session: run,
       instruction: 'go',
-      mcp: { tasks: 'http://h/mcp' },
+      mcp: { tasks: 'http://localhost/mcp' },
     }
     for (let adapter of [claude, codex]) {
       let { url, headers } = connection(adapter.argv(job), 'tasks')

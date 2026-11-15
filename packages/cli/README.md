@@ -39,6 +39,15 @@ A composed CLI host also offers `help` and `restart` through MCP. `help` with
 names. `restart` with `{}` uses the same ready-first systemd handover as
 `yak restart`, with the host's configured processes.
 
+`yak mcp --host http://localhost:5173` connects a local MCP client over stdio
+and forwards requests to that host. Configure an agent with `command: "yak"` and
+`args: ["mcp", "--host", "http://localhost:5173"]`. This client adds
+`_files: true` to opt into reading `@/absolute/path` in declared string
+arguments, including nested strings. It reads on the client's machine and sends
+the contents; the HTTP server receives ordinary values. Omit `_files` for
+literal `@` text. CLI arguments such as `--body @note.md` always expand locally;
+`--_files` also expands strings inside JSON arguments.
+
 The package has two main responsibilities:
 
 - [`host.ts`](./host.ts) opens the graph a config names for the roles a process

@@ -118,3 +118,19 @@ test('an entry already on this door keeps its name, however its host is spelled'
     elsewhere: { type: 'http', url: 'http://localhost:9999/mcp' },
   })
 })
+
+test('an existing local MCP client is replaced and removed on the same door', () => {
+  let path = config({
+    mcpServers: {
+      tasks: connection('http://localhost:8787', '/old/yak'),
+      docs: { command: 'docs', args: [] },
+    },
+  })
+  assertEquals(connect(path, { server: at, yak: '/new/yak' }), 'tasks')
+  assertEquals(read(path).mcpServers, {
+    tasks: { type: 'stdio', command: '/new/yak', args: ['mcp', '--host', at] },
+    docs: { command: 'docs', args: [] },
+  })
+  connect(path, { server: at, remove: true })
+  assertEquals(read(path).mcpServers, { docs: { command: 'docs', args: [] } })
+})

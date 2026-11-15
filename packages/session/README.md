@@ -621,9 +621,10 @@ file (default `~/.claude/settings.json`), replacing an earlier install and
 leaving every other entry alone. A harness runs each hook with the event as JSON
 on stdin. The hooks post to the `yak serve` of the graph's config (`server`,
 default the config's `port` and `hostname`, else `http://127.0.0.1:8787`), and
-the answer says what to do next: start `yak serve`, and add its `/mcp` to Claude
-Code (`claude mcp add --scope user --transport http yak <server>/mcp`) to hand
-sessions the graph's tools.
+the install also connects Claude Code to the graph through
+`yak mcp --host <server>`. This local client expands opted-in `@path` arguments
+before sending their values to `/mcp`; the HTTP server reads no caller-named
+path. Start `yak serve` for the graph to answer the hooks and tool calls.
 
 | Event                       | Command                        | Effect                                                                           |
 | --------------------------- | ------------------------------ | -------------------------------------------------------------------------------- |

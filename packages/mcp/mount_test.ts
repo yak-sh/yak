@@ -16,7 +16,6 @@ import { PATH as HOOK, routes as sessionRoutes } from '@yaks/session/routes'
 import { kindsIndex, loadVocab } from '@yaks/vocab'
 import { mcp } from './mount.ts'
 import { routes } from './routes.ts'
-import { FILES } from './files.ts'
 import { comp, pinned, shop, shopGraph } from './testing.ts'
 
 let MEMBER = derivedEid('fixture:m1')
@@ -747,7 +746,7 @@ test('initialize carries instructions from the loaded vocabularies, then their k
   assertEquals(
     hello.result.instructions,
     `${graphDoc.instructions}\n\nRead the shelf.\n\nKeep each sale.\n\n` +
-      `${kindsIndex(vocab)}\n\n${FILES}`,
+      kindsIndex(vocab),
   )
 })
 

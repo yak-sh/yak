@@ -23,9 +23,6 @@ let mcp = server({
   graph: shopGraph(),
   tools: [echo],
   core: false,
-  readFile: () => {
-    throw new Error('File does not exist')
-  },
   refused: (r: Refusal, call, tool) => {
     heard.push([r.code, tool, call.entity.eid])
   },
@@ -48,10 +45,6 @@ test('each refusal of a tool call is heard once, with its code and tool', async 
       [{ name: 'nope', arguments: {} }, ['tool', 'nope']],
       [{ name: 'echo', arguments: 'body' }, ['arguments', 'echo']],
       [{ name: 'echo', arguments: {} }, ['arguments', 'echo']],
-      [
-        { name: 'echo', arguments: { body: '@/missing.md', _files: true } },
-        ['file', 'echo'],
-      ],
     ] as const
   ) {
     equal(await asked(params), [[...said]], JSON.stringify(params))
