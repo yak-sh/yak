@@ -26,7 +26,7 @@ for (
     ['https://github.com/withastro/astro', false, PLACEHOLDER, 200],
     [`https://bob.${apex}/`, false, PLACEHOLDER, 200],
     [`https://example.com/?next=${HOST}`, false, PLACEHOLDER, 200],
-    [HOST.replace('https:', 'http:'), false, undefined, 403],
+    [`${HOST.replace('https:', 'http:')}/mcp`, false, undefined, 403],
   ] as [string, boolean, string | undefined, number][]
 ) {
   let request = new Request(to, {
@@ -47,6 +47,61 @@ for (
     if (status == 403) return equal(out, undefined)
     let said = out!.headers.get('authorization')!.split(' ')[1]
     equal(git ? atob(said).slice(2) : said, expected)
+  })
+}
+
+// An app can echo arbitrary content, including its incoming authentication.
+for (
+  let path of ['/echo', '/chess/echo', '/chess/info/refs', '/chess.git/echo']
+) {
+  test(`a sandbox never lends its token to an app at ${path}`, async () => {
+    let request = new Request(
+      `https://ada.${apex}${path}?token=${PLACEHOLDER}`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${PLACEHOLDER}`,
+          'x-echo': PLACEHOLDER,
+        },
+        body: PLACEHOLDER,
+      },
+    )
+    let response = await routed(apex, lend, request, async (r) => {
+      let req = new Request(r)
+      return Response.json({
+        url: req.url,
+        headers: [...req.headers],
+        body: await req.text(),
+      })
+    })
+    let echoed = await response.json()
+    equal(echoed.url, request.url)
+    equal(echoed.headers, [...request.headers])
+    equal(echoed.body, PLACEHOLDER)
+  })
+}
+
+for (
+  let path of [`${HOST}/mcp`, `https://ada.${apex}/chess.git/git-upload-pack`]
+) {
+  test(`sandbox authentication leaves URL, body and other headers unchanged at ${path}`, async () => {
+    let request = new Request(`${path}?echo=${PLACEHOLDER}`, {
+      method: 'POST',
+      headers: {
+        authorization: `Basic ${btoa(`x:${PLACEHOLDER}`)}`,
+        'x-echo': PLACEHOLDER,
+      },
+      body: PLACEHOLDER,
+    })
+    await routed(apex, lend, request, async (r) => {
+      let req = new Request(r)
+      equal(req.url, request.url)
+      equal(req.headers.get('authorization'), `Basic ${btoa('x:token')}`)
+      equal(req.headers.get('x-echo'), PLACEHOLDER)
+      equal(await req.text(), PLACEHOLDER)
+      equal(req.redirect, 'manual')
+      return new Response('ok')
+    })
   })
 }
 

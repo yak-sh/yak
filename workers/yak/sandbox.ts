@@ -57,8 +57,8 @@
 // Every command runs with `YAKS_HOST` and `YAKS_TOKEN` in its environment, and
 // `YAKS_TOKEN` is a placeholder: a sentinel (@yaks/secrets) made for this one
 // container ({@link placeholder}). On its way to this platform, or to its
-// space's own address, the kernel puts the token of the grant the container
-// wears (grants.ts) in its place ({@link swapped}), as an app's calls out get
+// space's Git door, the kernel puts the token of the grant the container
+// wears (grants.ts) in its Authorization header ({@link swapped}), as an app's calls out get
 // a connection's key (outbound.ts, @yaks/egress); sent anywhere else it stays
 // a placeholder. So the `yak` CLI
 // the live platform supplies, and plain `curl`, reach the platform's own door
@@ -78,6 +78,7 @@ import {
   TIMEOUT,
 } from '@yaks/sandbox/cloudflare'
 import { granted, Refused } from '@yaks/egress'
+import { DOORS } from '@yaks/git/door'
 import { sentinel } from '@yaks/secrets'
 import { type Space, stamp } from './directory.ts'
 import type { Tier } from '@yaks/platform/plans'
@@ -319,14 +320,10 @@ export let lent = async (env: Keys, container: string) => {
   }]
 }
 
-/**
- * A request a container sends, on its way out (index.ts `SandboxOutbound`): to this
- * platform or its space's address, with the container's placeholder swapped
- * for its grant's token; anywhere else, another space's address included, as
- * it came, placeholder and all. Toward this platform, a placeholder the
- * container does not hold, one it holds no live grant for, or one sent over
- * plain http is refused with a 403, as an app's call out is (outbound.ts).
- */
+/** A container's platform sign-in: only the connector and its space's Git
+ * door receive credentials, in Authorization alone. App Workers may echo
+ * every byte they receive, so neither their requests nor arbitrary request
+ * content can stand for the grant. */
 export let swapped = async (
   env: Keys,
   container: string,
@@ -334,21 +331,36 @@ export let swapped = async (
   send: typeof fetch = fetch,
 ): Promise<Response> => routed(apex(env), await lent(env, container), req, send)
 
-/** {@link swapped} for what a container is lent: the hosts the platform and
- * a space answer at are where its placeholder is swapped, and every other
- * host is sent the request as it came. */
+/** Authenticate a platform request without lending the token to app code or
+ * replacing placeholders in caller-controlled content. Redirects return to
+ * the container, whose next request is authorized independently. */
 export let routed = async (
   platform: string,
   lend: Awaited<ReturnType<typeof lent>>,
   req: Request,
   send: typeof fetch = fetch,
 ): Promise<Response> => {
-  let to = new URL(req.url).hostname
-  if (to != platform && !lend.some((g) => g.hosts.includes(to))) {
-    return send(req)
-  }
+  let url = new URL(req.url)
+  let trusted = url.hostname == platform
+    ? url.pathname == '/mcp'
+    : DOORS.test(url.pathname) &&
+      lend.some((g) => g.hosts.includes(url.hostname))
+  if (!trusted) return send(req)
+  let auth = req.headers.get('authorization')
+  if (!auth) return send(req)
   try {
-    return await granted(lend, req, send)
+    return await granted(
+      lend,
+      new Request(url.origin, { headers: { authorization: auth } }),
+      (signed) => {
+        let headers = new Headers(req.headers)
+        headers.set(
+          'authorization',
+          new Request(signed).headers.get('authorization')!,
+        )
+        return send(new Request(req, { headers, redirect: 'manual' }))
+      },
+    )
   } catch (e) {
     if (!(e instanceof Refused)) throw e
     return new Response(`yaks.app refused this call: ${e.message}`, {
