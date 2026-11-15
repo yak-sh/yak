@@ -66,7 +66,7 @@ export let ahead: Plug[] = [
 ]
 // What every store does once a write commits: rouse the wakes it made hold,
 // embed the texts it changed, and keep a keyed write's answer, last of the
-// commit hooks (facets/log-graph.ts).
+// commit hooks (log-graph.ts).
 export let behind: Plug[] = [
   { use: 'yak/rouse', facets: ['graph'] },
   { use: 'yak/embed', facets: ['graph'] },
@@ -205,7 +205,7 @@ export let appConfig: Config = {
     { use: 'yak/meter', words: [] },
     { use: 'yak/models', with: {} },
     { use: 'yak/attribution', words: ['register_writes'] },
-    // What the app holds, told to the directory (facets/weigh-graph.ts), and
+    // What the app holds, told to the directory (weigh-graph.ts), and
     // the words a write brought, told to the Lexicon.
     { use: 'yak/weigh', facets: ['graph'] },
     { use: 'yak/lexicon', facets: ['graph'] },

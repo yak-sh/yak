@@ -3741,6 +3741,9 @@ importers:
       '@yaks/archetype':
         specifier: 0.2.24
         version: link:../archetype
+      '@yaks/code':
+        specifier: 0.2.23
+        version: link:../code
       '@yaks/edge':
         specifier: 0.2.24
         version: link:../edge

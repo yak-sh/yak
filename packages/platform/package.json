@@ -33,13 +33,22 @@
     "./attribution-vocab": "./attribution-vocab.ts",
     "./refusals-vocab": "./refusals-vocab.ts",
     "./lower-graph": "./lower-graph.ts",
-    "./config": "./config.ts"
+    "./config": "./config.ts",
+    "./lent": "./lent.ts",
+    "./admit-graph": "./admit-graph.ts",
+    "./describe-graph": "./describe-graph.ts",
+    "./embed-graph": "./embed-graph.ts",
+    "./weigh-graph": "./weigh-graph.ts",
+    "./log-graph": "./log-graph.ts",
+    "./lexicon-graph": "./lexicon-graph.ts",
+    "./rouse-graph": "./rouse-graph.ts"
   },
   "license": "Apache-2.0",
   "description": "What a hosting platform keeps about the apps it serves — spaces, apps, deploys, hostnames, plans and meters.",
   "dependencies": {
     "@yaks/api": "0.2.29",
     "@yaks/archetype": "0.2.24",
+    "@yaks/code": "0.2.23",
     "@yaks/edge": "0.2.24",
     "@yaks/fp": "0.2.23",
     "@yaks/fts": "0.2.30",

@@ -4325,6 +4325,7 @@
             "npm:@jsr/std__assert@1",
             "npm:@yaks/api@0.2.29",
             "npm:@yaks/archetype@0.2.24",
+            "npm:@yaks/code@0.2.23",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",
             "npm:@yaks/fp@0.2.23",

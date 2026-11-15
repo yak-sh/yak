@@ -32,6 +32,7 @@ import {
 import { queryCache } from './query-cache.ts'
 import { answers, recalling } from './answered.ts'
 import { appRead } from '@yaks/platform/app-read'
+import type { Lent } from '@yaks/platform/lent'
 import { eraseStore, weighing } from '@yaks/platform/app-storage'
 import { reviveStore, suspendStore } from './app-dormancy.ts'
 import {
@@ -559,9 +560,11 @@ let branchOfSocket = (ctx: State, ws: Wire): number | null => {
   return tag ? Number(tag.slice('branch:'.length)) : null
 }
 
-/** The Worker's store capabilities lent to its own facets. The address and
- * commands arrive on later requests, so a facet reads them when it runs. */
-export type Stored = {
+/** The Worker's store capabilities lent to its own facets: what any host
+ * lends an app store's (@yaks/platform/lent), and the Worker's own. The
+ * address and commands arrive on later requests, so a facet reads them when
+ * it runs. */
+export type Stored = Lent & {
   /** The app view this temporary store runs, separate from live routing. */
   context?: AppContext
   env: Bindings
@@ -592,19 +595,6 @@ export type Stored = {
   broke: (what: string, error: unknown) => void
   /** the store's clock (`Time`), which its own decisions read the hour by */
   now: () => number
-  /** the store's name: an app's address, or the platform's own store */
-  name: string
-  /** what an app holds, told to the directory once a write has committed */
-  weigh: (bundles: Bundle[]) => Bundle[]
-  /** the sleeping wakes a committed write makes hold, roused */
-  rouse: (bundles: Bundle[]) => Promise<Bundle[]>
-  /** the texts a committed write changed, embedded */
-  embed: (bundles: Bundle[]) => Bundle[]
-  /** the words a committed write brought, told to the Lexicon, in a store
-   * that keeps one */
-  tell?: (bundles: Bundle[]) => Bundle[]
-  /** the write log's hook, which keeps a keyed write's answer as it commits */
-  log: Plugin
 }
 
 /** The Worker's bindings: outgoing mail for every store, and `#Env` for the
