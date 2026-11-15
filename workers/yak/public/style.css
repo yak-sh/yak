@@ -814,16 +814,19 @@
   .Sky_Star {
     fill: #f1e6d8;
   }
-  .Sky_Shoot {
-    fill: none;
-    stroke: #f1e6d8;
-    stroke-width: 1.3;
-    stroke-linecap: round;
+  .Sky_Fly {
     opacity: 0;
   }
-  .Sky_Fly {
-    fill: #ece79b;
-    opacity: 0;
+  .Sky_Fly0 {
+    stop-color: #e2f25a;
+  }
+  .Sky_Fly1 {
+    stop-color: #b9e02e;
+    stop-opacity: 0.85;
+  }
+  .Sky_Fly2 {
+    stop-color: #9fd41f;
+    stop-opacity: 0;
   }
   .Sky_Farthest {
     fill: light-dark(#d9c9df, #272e4f);
@@ -889,57 +892,48 @@
     scale: 1.8;
   }
 
-  /* Birds (sky.js): a flock is placed on the page and flown across the
-     window, each bird flapping a few beats and gliding. For less motion a
-     few are drawn at rest in the dusk instead. */
-  .Birds {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 1;
-    pointer-events: none;
+  /* A shooting star (sky.js `shoot`), drawn along its way with its head at
+     the origin: what runs is hidden until it does, and the tail is drawn out
+     from the head. */
+  .Sky_Run {
+    opacity: 0;
   }
-  .Bird {
-    position: absolute;
-    display: block;
-    animation: Bird-bob 3.2s ease-in-out infinite alternate;
+  .Sky_Tail {
+    transform-box: fill-box;
+    transform-origin: 100% 50%;
   }
-  .Bird svg,
-  .Sky_Still {
-    fill: none;
+  .Sky_Tail0 {
+    stop-color: #f1e6d8;
+    stop-opacity: 0;
+  }
+  .Sky_Tail1 {
+    stop-color: #fff6e6;
+    stop-opacity: 0.95;
+  }
+  .Sky_Head {
+    fill: #fffaf0;
+  }
+
+  /* Birds (sky.js): each a filled shape drawn in the dusk, with a hair of
+     outline so a wing seen edge on is still a line. */
+  .Sky_Bird {
+    fill: #8a705c;
     stroke: #8a705c;
-    stroke-width: 1.5;
-    stroke-linecap: round;
-  }
-  .Bird svg {
-    display: block;
-    overflow: visible;
-    transform-origin: 50% 60%;
-    animation: Bird-flap 2.6s ease-in-out infinite;
-  }
-  @keyframes Bird-flap {
-    0%,
-    30%,
-    100% {
-      transform: scaleY(1);
-    }
-    7.5%,
-    22.5% {
-      transform: scaleY(-0.5);
-    }
-    15% {
-      transform: scaleY(1);
-    }
-  }
-  @keyframes Bird-bob {
-    to {
-      translate: 0 6px;
-    }
+    stroke-width: 0.6;
+    stroke-linejoin: round;
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .Sky_Still {
-      display: none;
+    /* the farther a range of hills, the more of it sinks behind the line as
+       the page scrolls (sky.js --scroll, in his units) */
+    .Sky_Farthest {
+      translate: 0 calc(var(--scroll, 0px) * 0.12);
+    }
+    .Sky_Farther {
+      translate: 0 calc(var(--scroll, 0px) * 0.08);
+    }
+    .Sky_Near {
+      translate: 0 calc(var(--scroll, 0px) * 0.04);
     }
     .Sky_Drift {
       animation: Sky-drift 200s ease-in-out infinite alternate;
@@ -949,9 +943,6 @@
     }
     .Sky_Fly {
       animation: Sky-fly 9s ease-in-out infinite;
-    }
-    .Sky_Shoot-often {
-      animation: Sky-shoot 26s linear infinite;
     }
     .Sky_Glow,
     .Sky_Halo {
@@ -990,21 +981,6 @@
     75% {
       opacity: 0.9;
       transform: translate(26px, 2px);
-    }
-  }
-  @keyframes Sky-shoot {
-    0%,
-    93% {
-      opacity: 0;
-      transform: translate(0, 0);
-    }
-    94% {
-      opacity: 0.9;
-    }
-    98%,
-    100% {
-      opacity: 0;
-      transform: translate(170px, 62px);
     }
   }
 
@@ -1089,8 +1065,6 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .Bird,
-    .Bird svg,
     .Wander > .Sign[data-out] {
       animation: none;
     }

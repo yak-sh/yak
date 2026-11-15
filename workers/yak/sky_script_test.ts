@@ -1,7 +1,9 @@
 // The home page's sky (site/sky.tsx, public/sky.js) run over index.html, and
-// over every other home page `/` draws (variant.ts). Its
-// far scene is laid out one pixel to his unit from the window's corner, so a
-// point in his units (x, y) is at (x + 3000, y + 800) in the window.
+// over every other home page `/` draws (variant.ts). Its far scene is laid
+// out one pixel to his unit from the corner of a window 1440 by 860, so a
+// point in his units (x, y) is at (x + 3000, y + 800) in the window. Its
+// timers and frames wait to be run: `wait` lets every "now and then" come
+// round once, and `watch` plays frames until none is asked for.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
@@ -18,6 +20,8 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
   let { document, window } = parseHTML(home(file(path)))
   let on: Record<string, (e: unknown) => void> = {}
   let moved: string[] = []
+  let timers: (() => void)[] = [], frames: ((now: number) => void)[] = []
+  let now = 0
   let rect = (r: Partial<DOMRect>) => () => r as DOMRect
   window.HTMLElement.prototype.getBoundingClientRect = rect({ top: 0, left: 0 })
   document.querySelector('.Hello_Yak')!.getBoundingClientRect = rect({
@@ -49,17 +53,25 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
       observe() {}
     },
     addEventListener: (type: string, f: (e: unknown) => void) => on[type] = f,
-    setTimeout: () => 0,
+    setTimeout: (f: () => void) => timers.push(f),
     clearTimeout: () => {},
-    requestAnimationFrame: (f: () => void) => (f(), 0),
+    requestAnimationFrame: (f: (now: number) => void) => frames.push(f),
     performance,
     getSelection: () => ({ toString: () => '' }),
+    innerWidth: 1440,
+    innerHeight: 860,
     scrollX: 0,
     scrollY: 0,
-    innerWidth: 1440,
   }
   new Function('scope', `with (scope) {${code}}`)(scope)
   let el = (s: string) => document.querySelector(s)!
+  let all = (s: string) => [...document.querySelectorAll(s)]
+  let wait = () => timers.splice(0).forEach((f) => f())
+  let watch = (most = 1e5) => {
+    for (let n = 0; frames.length && n < most; n++) {
+      frames.splice(0).forEach((f) => f(now += 50))
+    }
+  }
   // a touch at a point in his units, landing on `on` (the hero, by default)
   let touch = (x: number, y: number, target = el('.Hello')) =>
     on.click({ target, clientX: x + 3000, clientY: y + 800 })
@@ -70,7 +82,7 @@ let sky = ({ dark = false, calm = false, path = '/' } = {}) => {
     on.sat({ target: yak })
     return yak.querySelector('.Sign') as HTMLElement
   }
-  return { el, touch, moved, document, sat, on }
+  return { el, all, touch, moved, wait, watch, sat, on, scope }
 }
 
 test('the line he sits on is set where his tail touches it', () => {
@@ -108,25 +120,74 @@ test('a touch on words or a control is the page’s, not the sky’s', () => {
   assertEquals(el('.Sky_Moon').getAttribute('d'), moon(PHASES[0]))
 })
 
-test('a touch on the sun sets it, and on the night sky shoots a star', () => {
+test('a touch on the sun sets it', () => {
+  let { touch, moved } = sky()
+  touch(SUN.x, SUN.y)
+  assertEquals(moved, ['Sky_Sun', 'Sky_Glow'])
+})
+
+test('a touch on the night sky sends a shooting star through it from beyond the window', () => {
+  let { touch, all } = sky({ dark: true })
+  for (let i = 0; i < 20; i++) touch(-2800 + 40 * i, -400)
+  let stars = all('.Sky_Shoot')
+  assertEquals(stars.length, 20)
+  stars.forEach((star, i) => {
+    let [x, y, turn] = star.getAttribute('transform')!.match(/-?[\d.]+/g)!
+      .map(Number)
+    assert(x < -3000 || x > -1560 || y < -800, `${x} ${y} is in the window`)
+    // the touch is on its way: straight ahead of where it starts
+    let ahead = Math.atan2(-400 - y, -2800 + 40 * i - x) * 180 / Math.PI
+    assert(Math.abs(ahead - turn) < .2, `${ahead} is not ${turn}`)
+  })
+})
+
+test('birds cross the dusk now and then, and a shooting star the night', () => {
   let day = sky()
-  day.touch(SUN.x, SUN.y)
-  assertEquals(day.moved, ['Sky_Sun', 'Sky_Glow'])
+  day.wait()
+  day.watch(1)
+  let birds = day.all('.Sky_Bird')
+  assert(birds.length >= 1 && birds.length <= 7, `${birds.length} birds`)
+  assertEquals(day.all('.Sky_Shoot').length, 0)
+  let was = birds[0].getAttribute('d')
+  day.watch(10)
+  assert(birds[0].getAttribute('d') != was, 'its wings are where they were')
+  day.watch()
+  assertEquals(day.all('.Sky_Bird').length, 0)
+
   let night = sky({ dark: true })
-  night.touch(-200, -400)
-  assertEquals(night.document.querySelectorAll('.Sky_Shoot').length, 2)
-  assertEquals(night.moved, ['Sky_Shoot'])
+  night.wait()
+  night.watch()
+  assertEquals(night.all('.Sky_Bird').length, 0)
+  assertEquals(night.all('.Sky_Shoot').length, 1)
+})
+
+test('the hills are told how far the page has scrolled, in his units', () => {
+  let { el, on, scope } = sky()
+  let hills = el('.Sky_Hills') as HTMLElement
+  assertEquals(hills.style.getPropertyValue('--scroll'), '0.0px')
+  scope.scrollY = 300
+  on.scroll({})
+  assertEquals(hills.style.getPropertyValue('--scroll'), '300.0px')
 })
 
 test('for less motion nothing in the sky moves, and the moon still turns', () => {
   let day = sky({ calm: true })
   day.touch(SUN.x, SUN.y)
+  day.wait()
+  day.watch()
   let night = sky({ dark: true, calm: true })
   night.touch(-200, -400)
   night.touch(MOON.x, MOON.y)
+  night.wait()
+  night.watch()
   assertEquals([...day.moved, ...night.moved], [])
   assertEquals(night.el('.Sky_Moon').getAttribute('d'), moon(PHASES[1]))
-  assert(night.document.querySelectorAll('.Sky_Shoot').length == 1)
+  assertEquals(night.all('.Sky_Shoot').length, 0)
+  // a few birds hang in the dusk, and stay as they are
+  let birds = day.all('.Sky_Bird').map((b) => b.outerHTML)
+  assertEquals(birds.length, 4)
+  day.watch()
+  assertEquals(day.all('.Sky_Bird').map((b) => b.outerHTML), birds)
 })
 
 test('the button he holds up is slid along its post to stay in the window', () => {

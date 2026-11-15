@@ -7,8 +7,9 @@
 // his middle at x 0, the ground under his hooves at y 0, up negative. The
 // far scene is drawn in viewBox -3000 -800 6000 860 and the turf in
 // -3000 -60 6000 300; public/sky.js measures where he sits and lays both out
-// around him (style.css `.Sky`), flies the birds and answers a touch on the
-// sun, the moon and the stars.
+// around him (style.css `.Sky`), draws and flies the birds, sends the
+// shooting stars, sinks the hills as the page scrolls and answers a touch on
+// the sun, the moon and the stars.
 import type { JSX } from 'preact'
 
 /** How far the line he sits on is above the bottom of his hooves, in his
@@ -16,8 +17,11 @@ import type { JSX } from 'preact'
 export const SINK = 8
 
 /** The birds that cross the dusk now and then: how many in a flock at most,
- * the seconds between flocks, and how high they fly above his hooves. */
+ * the seconds between flocks, and how high they fly above the line. */
 export const BIRDS = '7 35 70 170 260'
+
+/** The seconds between the night's shooting stars. */
+export const SHOOT = '20 45'
 
 const FROM = -3000, TO = 3000
 
@@ -148,7 +152,8 @@ let night = () => {
         class='Sky_Fly'
         cx={n1(x)}
         cy={n1(y)}
-        r='1.7'
+        r='4.5'
+        fill='url(#Sky-fly)'
         style={`animation-delay:-${n1(r() * 9)}s;animation-duration:${
           n1(7 + r() * 6)
         }s`}
@@ -157,15 +162,6 @@ let night = () => {
   }
   return { stars, flies }
 }
-
-// birds at rest in the dusk, for anyone who asks for less motion
-let STILL = [[90, -228, 1], [118, -238, .85], [146, -246, .8], [120, -216, .8]]
-let still = ([x, y, s]: number[]) =>
-  `M${n1(x - 9 * s)} ${n1(y + 3 * s)}Q${n1(x - 4.5 * s)} ${n1(y - 3 * s)} ${
-    n1(x)
-  } ${n1(y + 2 * s)}Q${n1(x + 4.5 * s)} ${n1(y - 3 * s)} ${n1(x + 9 * s)} ${
-    n1(y + 3 * s)
-  }`
 
 /** What a page whose hero has the wandering yak carries in its head: his
  * walk (public/wander.js) and the sky he walks under (public/sky.js). Every
@@ -189,6 +185,7 @@ export let Sky = () => {
       aria-hidden='true'
       data-sink={SINK}
       data-birds={BIRDS}
+      data-shoot={SHOOT}
       data-phases={PHASES.map(moon).join('|')}
     >
       <div class='Sky_Air' />
@@ -202,6 +199,15 @@ export let Sky = () => {
           <radialGradient id='Sky-halo'>
             <stop offset='0' class='Sky_Halo0' />
             <stop offset='1' class='Sky_Halo1' />
+          </radialGradient>
+          <linearGradient id='Sky-tail'>
+            <stop offset='0' class='Sky_Tail0' />
+            <stop offset='1' class='Sky_Tail1' />
+          </linearGradient>
+          <radialGradient id='Sky-fly'>
+            <stop offset='0' class='Sky_Fly0' />
+            <stop offset='.3' class='Sky_Fly1' />
+            <stop offset='1' class='Sky_Fly2' />
           </radialGradient>
         </defs>
         <g class='Sky_Day'>
@@ -233,21 +239,14 @@ export let Sky = () => {
           <g transform={`translate(${MOON.x} ${MOON.y}) rotate(-28)`}>
             <path class='Sky_Moon' d={moon(PHASES[0])} />
           </g>
-          <line
-            class='Sky_Shoot Sky_Shoot-often'
-            x1='760'
-            y1='-290'
-            x2='800'
-            y2='-275'
-          />
         </g>
-        {HILLS.map(([name, f]) => (
-          <path class={`Sky_${name}`} d={under(f, 60)} />
-        ))}
+        <g class='Sky_Hills'>
+          {HILLS.map(([name, f]) => (
+            <path class={`Sky_${name}`} d={under(f, 60)} />
+          ))}
+        </g>
         <g class='Sky_Night'>{flies}</g>
-        <g class='Sky_Day Sky_Still'>
-          <path d={STILL.map(still).join('')} />
-        </g>
+        <g class='Sky_Day Sky_Birds' />
       </svg>
       <div class='Sky_Grass'>
         <svg class='Sky_Turf' viewBox='-3000 -60 6000 300' focusable='false'>
