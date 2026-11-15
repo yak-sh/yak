@@ -2,6 +2,7 @@ import { base64, unbase64 } from './bytes.ts'
 import { groupBy, size } from '@yaks/fp'
 import { tell } from './operator-updates.ts'
 import { operatorTools } from './operator-tools.ts'
+import { leftWith } from './operator-reach.ts'
 import { mcpConnect } from './connected-mcp.ts'
 import { libraryTools } from './library-tools.ts'
 import { numberTools } from './numbers.ts'
@@ -76,7 +77,7 @@ import {
 } from './vocab.ts'
 import { EXAMPLE, VOCABS } from '@yaks/platform/manifest'
 import { commandsOf } from '@yaks/platform/app-commands'
-import { mode } from '@yaks/member'
+import { mode, reaches } from '@yaks/member'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { Props, Sheet } from './csv.ts'
 import {
@@ -729,6 +730,15 @@ let address = (v: unknown) => {
   }
   return at
 }
+
+// What a member tool adds about the Operators a seat's change took out of
+// the space (operator-reach.ts `leftWith`).
+let operatorsOut = (spaces: Space[]) =>
+  spaces.length
+    ? `; ${
+      spaces.map((s) => `${s.slug}'s Operator`).join(', ')
+    } no longer works there`
+    : ''
 
 // A domain, as forgivingly as the rest of this file reads an argument: a
 // model that pastes `https://herbusiness.com/` means the hostname in it, and
@@ -7229,14 +7239,18 @@ let OURS: Row[] = [
           them.write.length && stamp(ctx.env, { entities: them.write }),
         ])
         let was = held ? held.access : had!.role
+        // A lowered seat keeps no Operator beyond it (operator-reach.ts).
+        let unreached = !app && !reaches(want, had!.role)
+          ? await leftWith(ctx.dir, space, person, want, vouched(who))
+          : []
         return {
           text: `${email} is now ${an(want)} ${want} of ` +
             (app
               ? `${space.slug}/${app.slug} and nothing else in ${space.slug}`
               : space.slug) +
-            ` (was ${was})`,
+            ` (was ${was})` + operatorsOut(unreached),
           space,
-          value: { invited: false },
+          value: { invited: false, unreached: unreached.map((s) => s.slug) },
         }
       }
       // Anyone else is invited, and nothing is theirs until they accept
@@ -7353,6 +7367,14 @@ let OURS: Row[] = [
       await ctx.dir.apply({
         entities: [{ entity: { eid: had.eid }, tombstone: {} }],
       }, vouched(who))
+      // Nor do the Operators their seat let in (operator-reach.ts, T-708).
+      let unreached = await leftWith(
+        ctx.dir,
+        space,
+        person!,
+        null,
+        vouched(who),
+      )
       // The removed person's lists moved the other way: every view the
       // space's apps declared is out of their reach, and the member walk no
       // longer finds them (declared.ts, T-33004).
@@ -7360,8 +7382,10 @@ let OURS: Row[] = [
         await reachChanged(ctx.env, person)
       }
       return {
-        text: `${email} is no longer a member of ${space.slug}`,
+        text: `${email} is no longer a member of ${space.slug}` +
+          operatorsOut(unreached),
         space,
+        value: { unreached: unreached.map((s) => s.slug) },
       }
     },
   },

@@ -8,6 +8,7 @@ import { platform } from './deploy-probe.ts'
 import { as, SECRET } from './serving-data-probe.ts'
 import { directory, fetch as directoryFetch } from './directory.ts'
 import { operatorContext } from './operator.ts'
+import { letIn as admit } from './operator-reach.ts'
 import { call, TOOLS } from './tools.ts'
 import { tallying } from './lib/hops.ts'
 
@@ -142,6 +143,71 @@ let stranger = await page(people, { operator: 'nobody-here', role: 'editor' })
 let { eid } = shopSpace
 let out = await page(people, { unreach: eid })
 let after = await reach()
+
+// Mal co-owns the books and writes alone in `mine` and `solo`, and with Carl
+// in `ours`. Mal lets `mine` in; Ada lets `solo` and `ours` in. Mal's seat is
+// then lowered to editor, and then removed from the People page (T-708).
+let mal = { person: crypto.randomUUID(), email: 'mal@example.com' }
+let homes = ['mine', 'solo', 'ours']
+let by = (person: string) => ({ 'x-yak-person': person, 'x-yak-role': 'owner' })
+let seated = (space: string, person: string, role = 'owner') => ({
+  entity: { eid: crypto.randomUUID() },
+  member: { space, person, role },
+})
+await dir.apply({
+  entities: [
+    { entity: { eid: mal.person }, person: {}, email: { address: mal.email } },
+    seated(booksSpace.eid, mal.person),
+    ...homes.flatMap((slug) => [
+      {
+        entity: { eid: `$${slug}` },
+        doc: { title: slug },
+        space: { slug, store: slug },
+      },
+      seated(`$${slug}`, mal.person),
+    ]),
+    seated('$ours', carl.person, 'editor'),
+  ],
+}, by(mal.person))
+let home = Object.fromEntries(
+  await Promise.all(homes.map(async (h) => [h, (await dir.space(h))!])),
+)
+await admit(dir, booksSpace, home.mine, 'editor', mal.person, by(mal.person))
+for (let h of ['solo', 'ours']) {
+  await admit(dir, booksSpace, home[h], 'editor', ada.person, by(ada.person))
+}
+let reached = async () =>
+  Object.fromEntries(
+    await Promise.all(homes.map(async (h) => {
+      let ctx = await operatorContext(env, { person: mal.person }, home[h])
+      let there = await ctx.dir.space(books)
+      return [h, there && await ctx.dir.role(there, mal.person)]
+    })),
+  )
+let owning = await reached()
+let lowered = await call({ env, dir, person: ada.person }, 'member_add', {
+  space: books,
+  email: mal.email,
+  role: 'editor',
+})
+let editing = await reached()
+let removed = await page(people, { remove: mal.email })
+let gone = await reached()
+
+test("a lowered or removed owner's Operators keep no reach beyond their seat", async () => {
+  assertEquals(owning, { mine: 'editor', solo: 'editor', ours: 'editor' })
+  assertStringIncludes(
+    lowered.text,
+    "(was owner); mine's Operator no longer works there",
+  )
+  assertEquals(editing, { mine: null, solo: 'editor', ours: 'editor' })
+  assertEquals(removed.status, 200)
+  assertStringIncludes(
+    await removed.text(),
+    "solo's Operator no longer works there",
+  )
+  assertEquals(gone, { mine: null, solo: null, ours: 'editor' })
+})
 
 test("a space's Operator reaches no other space until that space lets it in", () => {
   assertEquals(before.there, null)

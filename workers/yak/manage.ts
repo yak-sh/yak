@@ -893,6 +893,13 @@ let pressed = async (
   }
 }
 
+// A seat lowered or removed takes out the Operators it let in
+// (operator-reach.ts `leftWith`), which the owner never named: the page says
+// which, in the tool's own words, rather than a bare "saved".
+let unreached = (out?: { value?: unknown }) =>
+  !!(out?.value as { unreached?: string[] } | undefined)?.unreached?.length
+let told = (out: { text: string }) => ({ say: sentence(out.text), no: false })
+
 // A space's forms return to the page that submitted them. Every space's page
 // shares the cookie's site, so ownership alone is
 // insufficient: a page at another address never gets here (@yaks/platform/routes
@@ -943,6 +950,9 @@ let saved = async (
     if (said) {
       return desk(req, env, dir, space, who, 'people', said, { invite: asked })
     }
+    if (unreached(out)) {
+      return desk(req, env, dir, space, who, 'people', told(out!))
+    }
     let to = sentFrom(req, env)
     to.searchParams.set(out?.value?.invited ? 'invited' : 'saved', '1')
     return redirect(to.href, 303)
@@ -978,12 +988,15 @@ let saved = async (
   // the assistant asks it.
   if (form.has('remove')) {
     let app = String(form.get('app') ?? '').trim()
-    let { said } = await pressed(env, dir, who, 'member_remove', {
+    let { said, out } = await pressed(env, dir, who, 'member_remove', {
       space: space.slug,
       email: String(form.get('remove')).trim(),
       ...app ? { app } : {},
     })
     if (said) return desk(req, env, dir, space, who, 'people', said)
+    if (unreached(out)) {
+      return desk(req, env, dir, space, who, 'people', told(out!))
+    }
     let to = sentFrom(req, env)
     to.searchParams.set('removed', '1')
     return redirect(to.href, 303)

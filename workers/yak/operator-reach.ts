@@ -100,3 +100,38 @@ export let letOut = async (
     entities: [{ entity: { eid: had.eid }, tombstone: {} }],
   }, headers)
 }
+
+/** Takes out what let `person`'s Operators into `space` beyond the seat they
+ * hold there `now` (null once it is gone), when that seat is lowered or
+ * removed: every `operator_reach` row into it they gave as its owner, once
+ * they own it no longer, and every one above `now` whose Operator lives in a
+ * space only they write in, since that Operator works for them alone. Answers
+ * the spaces whose Operators were taken out. */
+export let leftWith = async (
+  dir: Directory,
+  space: Space,
+  person: string,
+  now: Role | null,
+  headers: Record<string, string>,
+): Promise<Space[]> => {
+  let admitted = await dir.admits(space.eid)
+  if (!admitted.length) return []
+  let { held } = await dir.people(admitted.map((r) => r.space.eid))
+  let alone = (home: string) => {
+    let at = held.filter((h) =>
+      h.held == 'seat' && h.on == home && writes(h.role)
+    )
+    return at.length == 1 && at[0].person == person
+  }
+  let above = (r: Reach) =>
+    now == null || RANK.indexOf(r.role) > RANK.indexOf(now)
+  let gone = admitted.filter((r) =>
+    (r.by == person && now != 'owner') || (above(r) && alone(r.space.eid))
+  )
+  if (gone.length) {
+    await dir.apply({
+      entities: gone.map((r) => ({ entity: { eid: r.eid }, tombstone: {} })),
+    }, headers)
+  }
+  return gone.map((r) => r.space)
+}
