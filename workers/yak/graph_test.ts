@@ -30,6 +30,9 @@ import { doorOf } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { grantEid, Store, type Time } from './graph.ts'
 import { visitEdge } from './visit.ts'
+import { platformVocab } from './vocab.ts'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
 import { metaOf } from './meta.ts'
 import type { Load } from '@yaks/host'
 import { appConfig } from '@yaks/platform/config'
@@ -2262,7 +2265,10 @@ test('Store policy retains its durable floor across wake', async () => {
 // The kernel read what it vouches from the directory at a revision, and the
 // store takes it at that word: a current request asks the serving copy
 // nothing, however often it comes.
-let authority = async (policy: number, directory?: () => Promise<Response>) => {
+let authority = async (
+  policy: number,
+  directory?: (req: Request) => Promise<Response>,
+) => {
   let ctx = state()
   await cookbook(ctx, SCHEMA, { ...owner, access: 'private', policy })
   let checks = 0, reads = 0
@@ -2285,9 +2291,9 @@ let authority = async (policy: number, directory?: () => Promise<Response>) => {
         STORE: {
           idFromName: (name: string) => name,
           get: () => ({
-            fetch: () => {
+            fetch: (req: Request) => {
               reads++
-              return directory()
+              return directory(req)
             },
           }),
         },
@@ -2361,6 +2367,7 @@ for (
 // its frames asks the directory again (T-492).
 let VIA = 'c0000000-0000-4000-8000-000000000003'
 let BO = 'd0000000-0000-4000-8000-000000000004'
+let SPACE = 'e0000000-0000-4000-8000-000000000005'
 for (
   let [stranger, demo, visit, answered] of [
     ['signed out, on the sample', 'ada/cookbook', null, true],
@@ -2371,9 +2378,10 @@ for (
 ) {
   let person = stranger.startsWith('signed in') ? BO : null
   let rows: Bundle[] = [
+    { entity: { eid: SPACE }, space: { slug: 'ada', store: 'ada' } },
     {
       entity: { eid: APP },
-      app: { space: 'space', access: 'private' },
+      app: { space: SPACE, access: 'private' },
       published: { name: 'cookbook', version: 1 },
       demo: { store: demo },
     },
@@ -2381,11 +2389,14 @@ for (
       ? [{ entity: { eid: visitEdge(VIA, APP) }, visit: { store: visit } }]
       : [],
   ]
-  let f = await authority(12, () =>
-    Promise.resolve(
-      new Response(JSON.stringify(rows), {
-        headers: { 'x-yak-directory-revision': '12' },
-      }),
+  // The directory answers what the query asks, and nothing it did not name.
+  let vocab = platformVocab()
+  let dir = graph({ storage: ram(vocab), vocab })
+  await dir.apply(rows, { trusted: true })
+  let f = await authority(12, async (req) =>
+    Response.json(
+      await dir.read(new URL(req.url).searchParams.get('q')!),
+      { headers: { 'x-yak-directory-revision': '12' } },
     ))
   let ws = wire()
   ws.serializeAttachment({

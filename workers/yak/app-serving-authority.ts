@@ -69,7 +69,9 @@ export let servingAuthority = (host: Host) => {
     let person = req.headers.get('x-yak-person')
     let via = req.headers.get('x-yak-via')
     let edge = via ? visitEdge(via, app!) : null
-    let q = `.entity.eid=${app}&?app`
+    // A query returns only what it names, and a visitor's standing is read
+    // from the app's offer and its sample (visit.ts `visitorRole`).
+    let q = `.entity.eid=${app}&?app&?published&?demo`
     if (person) {
       q +=
         `|.member.person=${person}&?member|.grant.app=${app}&.grant.person=${person}&?grant`
