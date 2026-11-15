@@ -735,9 +735,9 @@ let address = (v: unknown) => {
 // the space (operator-reach.ts `leftWith`).
 let operatorsOut = (spaces: Space[]) =>
   spaces.length
-    ? `; ${
-      spaces.map((s) => `${s.slug}'s Operator`).join(', ')
-    } no longer works there`
+    ? `; ${spaces.map((s) => `${s.slug}'s Operator`).join(' and ')} no longer ${
+      spaces.length > 1 ? 'work' : 'works'
+    } there`
     : ''
 
 // A domain, as forgivingly as the rest of this file reads an argument: a
