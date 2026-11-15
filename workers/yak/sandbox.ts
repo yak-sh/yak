@@ -34,11 +34,11 @@
 // call in a build to the moment the build lets it go ({@link Spend}) — the
 // figure Cloudflare bills on, not a sum of command durations. Past
 // {@link BUDGET} the tools refuse in a sentence, the way every other ceiling
-// on this platform refuses (meter.ts): the person reading it asked for an app,
-// not for a stack trace. The month's seconds land on `meter.seconds`
-// (meter.ts `countedSpend`) — its own property beside `models`, because a
-// model call and a container-second are billed separately and one number made
-// of both is a number nobody can add up.
+// on this platform refuses (@yaks/platform/standing): the person reading it
+// asked for an app, not for a stack trace. The month's seconds land on
+// `meter.seconds` (meter.ts `countedSpend`) — its own property beside `models`,
+// because a model call and a container-second are billed separately and one
+// number made of both is a number nobody can add up.
 //
 // What keeps it from running forever: the build destroys it when it ends, and
 // {@link SLEEP} is the backstop for a build that never says so — the container
@@ -75,13 +75,14 @@ import {
 export { CWD, NAP, SLEEP, TIMEOUT } from '@yaks/sandbox/cloudflare'
 import { granted, Refused } from '@yaks/egress'
 import { sentinel } from '@yaks/secrets'
-import type { Space, Tier } from './directory.ts'
+import type { Space } from './directory.ts'
+import type { Tier } from '@yaks/platform/plans'
 import { evicted, jittered, retried } from '@yaks/durable-object/resets'
 import type { Clock } from '@yaks/fp'
 import { type Grant, type Kv, ledger, mint, tokenOf } from './grants.ts'
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 import { refuse } from './tool.ts'
-import { plans } from './meter.ts'
+import { plans } from '@yaks/platform/standing'
 import { caught } from './defects.ts'
 import type { Workspaces } from './workspaces.ts'
 

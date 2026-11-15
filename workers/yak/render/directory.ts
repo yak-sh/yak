@@ -11,7 +11,7 @@
 import { parse } from '@yaks/query'
 import { type Days, sparkline } from '@yaks/ui/chart'
 import type { Child, Context, H, Renderer } from '@yaks/render'
-import { COMPED } from '../directory.ts'
+import { COMPED } from '@yaks/platform/plans'
 import { time } from '@yaks/ui/parts'
 import {
   personName,
@@ -20,7 +20,7 @@ import {
   stampOf,
   type Writers,
 } from '../stamps.ts'
-import { count, dollars, size } from '../meter.ts'
+import { count, dollars, size } from '@yaks/platform/standing'
 
 /** What one row uses, as the page counted it. */
 export type Uses = {
@@ -312,8 +312,8 @@ let referral: Renderer = {
   },
 }
 
-// Somebody given the starter (meter.ts `STARTER`), drawn on the admin's
-// Invites page: when, to which space, what of it is left and what their
+// Somebody given the starter (@yaks/platform/plans `STARTER`), drawn on the
+// admin's Invites page: when, to which space, what of it is left and what their
 // spaces spent this month.
 let starter: Renderer = {
   view: 'Directory.Starter.Tile',

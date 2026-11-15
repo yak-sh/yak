@@ -2,7 +2,8 @@
 // graph door cannot write its stamped properties; this door vouches for it.
 import * as dirPart from './directory.ts'
 import type { Comp } from '@yaks/platform/comp'
-import { directory, type Space, stamp, tierOf } from './directory.ts'
+import { directory, type Space, stamp } from './directory.ts'
+import { tierOf } from '@yaks/platform/plans'
 import { bound, type Env } from './env.ts'
 import { adminWho } from './asking.ts'
 

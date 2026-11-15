@@ -29,7 +29,7 @@ import { fill } from '@yaks/yaml'
 import { PERSONA } from './content.ts'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { FREE, LETTERS, PRICE } from './meter.ts'
+import { FREE, LETTERS, PRICE } from '@yaks/platform/plans'
 import { KERNEL, meta } from './meta.ts'
 import { url } from '@yaks/platform/host'
 import { chatPath } from '@yaks/platform/routes'
@@ -55,8 +55,8 @@ export let bases = (env: Pick<Env, 'STORE' | 'META' | 'CLOCK'>): Reads => ({
 })
 
 // What the base's files leave to the platform to say: what a free space
-// holds, and what Plus costs and adds (meter.ts), which starting.md tells
-// someone signing up.
+// holds, and what Plus costs and adds (@yaks/platform/plans), which starting.md
+// tells someone signing up.
 let slots = () => ({
   free_apps: String(FREE.apps),
   free_emails: String(LETTERS.free),

@@ -17,16 +17,9 @@ import { ownedPrefix } from './file-root.ts'
 // (`app.blobs`), and they count for it and its space too (`prefixes`). A key
 // under no app's prefix still counts for the space, so the apps' files can sum
 // to less than the space's.
+// The shapes, `Held` and `Holding`, are @yaks/platform/standing's.
 import type { App, Space } from './directory.ts'
-
-/** What a space, or one of its apps, holds: app data and photos and files. */
-export type Held = { bytes: number; files: number }
-
-/** What a space holds, and each app's share of it by identity. */
-export type Holding = Held & {
-  apps: Map<string, Held>
-  names?: Map<string, string>
-}
+import type { Held, Holding } from '@yaks/platform/standing'
 
 let sum = (ns: Iterable<number>) => [...ns].reduce((a, b) => a + b, 0)
 

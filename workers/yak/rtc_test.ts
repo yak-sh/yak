@@ -5,7 +5,8 @@
 // call at Realtime.
 import { assert, assertEquals } from '@std/assert'
 import { test, until } from '@yaks/testing'
-import { BUDGET, monthOf, STARTER } from './meter.ts'
+import { BUDGET, STARTER } from '@yaks/platform/plans'
+import { monthOf } from '@yaks/platform/meter'
 import {
   cloudflare,
   connector,

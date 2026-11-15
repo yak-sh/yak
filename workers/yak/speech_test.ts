@@ -8,7 +8,7 @@ import { assertThrows } from '@std/assert'
 import { platform } from './directory-rows-probe.ts'
 import { stamp } from './directory.ts'
 import { endpoints } from './endpoints.ts'
-import { budget } from './meter.ts'
+import { budget } from '@yaks/platform/meter'
 import {
   modelOf,
   offered,

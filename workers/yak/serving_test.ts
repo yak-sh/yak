@@ -50,7 +50,9 @@ import { archive, openIn, serve } from './unseen.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { sweep } from './usage.ts'
-import { FREE, monthOf, PLUS, size } from './meter.ts'
+import { FREE, PLUS } from '@yaks/platform/plans'
+import { monthOf } from '@yaks/platform/meter'
+import { size } from '@yaks/platform/standing'
 import {
   ADA,
   ADA_OWNS,
@@ -2215,9 +2217,9 @@ test('photo and file uploads enforce space R2 limits from actual bytes', async (
     let listing = await call({ env, dir, person: ADA }, 'app_list', {
       space: 'ada',
     })
-    // The space's line says where it stands (meter.ts `gauged`), and its
-    // value carries the reading whole. The app's own files are stored by
-    // their content, once for the whole bucket, as its releases always were
+    // The space's line says where it stands (@yaks/platform/standing `gauged`),
+    // and its value carries the reading whole. The app's own files are stored
+    // by their content, once for the whole bucket, as its releases always were
     // (written.ts), so what the reading holds is the photos.
     assertStringIncludes(
       listing.text,

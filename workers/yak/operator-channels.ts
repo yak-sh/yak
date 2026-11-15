@@ -403,7 +403,7 @@ let said = (sent?: Bundle) => {
 // plugins/yaks.app/persona/starting.md.
 
 // The Operator's own address, and the sender its letters leave on, counted
-// against the space's mail allowance (meter.ts).
+// against the space's mail allowance (@yaks/platform/plans).
 export let postOf = (env: Env, space: Space, kind = 'mail') => {
   let from = mailFrom(space.slug, null, env)
   return {

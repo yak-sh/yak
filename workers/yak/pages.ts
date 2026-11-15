@@ -68,18 +68,15 @@ import { asset, links } from './sheets.ts'
 import { type Preview, tags as previewTags } from './link-preview.ts'
 import { decodeHTML } from 'entities'
 
+import { BLOCK, type Budget } from '@yaks/platform/meter'
 import {
-  BLOCK,
-  type Budget,
   type Ceiling,
-  ceilings,
   count,
   dollars,
   type Gauge,
-  PRICE,
   size,
-  YEARLY,
-} from './meter.ts'
+} from '@yaks/platform/standing'
+import { ceilings, PRICE, YEARLY } from '@yaks/platform/plans'
 
 import type { Card as Billed, Payer, Want } from './billing.ts'
 

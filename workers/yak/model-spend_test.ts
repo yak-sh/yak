@@ -9,7 +9,7 @@ import { mint } from '@yaks/graph'
 import { test } from '@yaks/testing'
 import { platform } from './testing.ts'
 import { directoryOf, stamp } from './directory.ts'
-import { monthOf } from './meter.ts'
+import { monthOf } from '@yaks/platform/meter'
 import { reserved, settled } from './model-spend.ts'
 import { type Tally, tallying } from './lib/hops.ts'
 

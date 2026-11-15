@@ -879,11 +879,12 @@ let unheld = (rows: Bundle[]): boolean =>
 
 // A hold on a space's budget raises no fence either (T-141144): its receipt,
 // and a `held` spend the directory's own transaction refuses past the budget
-// (meter-graph.ts `spend`), so no refusal to spend reads a copied balance. It
-// commits the `meter` and `trend` that rule writes, and the receipt's own
-// `created` and `updated`; a copy that has not heard of them shows a slightly
-// older balance, never a spend past the budget. A visitor's hold counts their
-// call of the day too (`visitor_calls`), guarded on its own reading.
+// (@yaks/platform/meter-graph `spend`), so no refusal to spend reads a copied
+// balance. It commits the `meter` and `trend` that rule writes, and the
+// receipt's own `created` and `updated`; a copy that has not heard of them
+// shows a slightly older balance, never a spend past the budget. A visitor's
+// hold counts their call of the day too (`visitor_calls`), guarded on its own
+// reading.
 let HOLD = -3
 let HOLDING = new Set([
   ...UNFENCED,

@@ -17,7 +17,7 @@ import type { ComponentChildren } from 'preact'
 import { Button, Card, Field, Form } from '@yaks/ui'
 import { GET_PLAN } from '@yaks/platform/routes'
 import { START } from '../newcomer.ts'
-import { PRICE } from '../meter.ts'
+import { PRICE } from '@yaks/platform/plans'
 import { Page } from './frame.tsx'
 import { attr, type Slots, text } from './copy.ts'
 

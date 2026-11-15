@@ -21,7 +21,8 @@ import {
   wanted,
 } from './billing.ts'
 import { plans } from './payments.ts'
-import { type Plan, tierOf } from './directory.ts'
+import type { Plan } from './directory.ts'
+import { tierOf } from '@yaks/platform/plans'
 
 // --- the plan, derived --------------------------------------------------
 

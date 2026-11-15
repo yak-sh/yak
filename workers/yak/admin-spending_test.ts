@@ -15,7 +15,7 @@ import { operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { rootOf } from './operator-root.ts'
 import { COOKIE, sign } from './lib/token.ts'
-import { monthOf } from './meter.ts'
+import { monthOf } from '@yaks/platform/meter'
 import { receiptEid } from './model-spend.ts'
 
 let p = platform('admin-spending', { SESSION_SECRET: 'secret' })

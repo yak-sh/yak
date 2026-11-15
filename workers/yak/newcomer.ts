@@ -8,13 +8,12 @@
 // The spending is a pilot with caps said in dollars, all of them here:
 //
 //   per build     a newcomer's space may spend PER_BUILD dollars on models
-//                 (its `budget`, with no starter), which meter.ts `limitOf`
-//                 and model-spend.ts `reserved` hold it to like any space
-//   per day       DAILY newcomers' spaces open a UTC day, across everybody,
-//                 and PER_SOURCE from one address, counted as each opens
-//   per space     once: a budget is a month's, so a space nobody kept goes
-//                 to the trash KEEPING after it opened (`unkept`), before a
-//                 new month could give it PER_BUILD again
+// (its `budget`, with no starter), which @yaks/platform/meter `limitOf` and
+// model-spend.ts `reserved` hold it to like any space per day       DAILY
+// newcomers' spaces open a UTC day, across everybody, and PER_SOURCE from one
+// address, counted as each opens per space     once: a budget is a month's, so
+// a space nobody kept goes to the trash KEEPING after it opened (`unkept`),
+// before a new month could give it PER_BUILD again
 //
 // So a day spends at most DAILY × PER_BUILD dollars, on the Operator's own
 // models (operator.ts `operatorChoice`). Until they give an address a

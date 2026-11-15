@@ -212,7 +212,7 @@ for its own sake.
 something, open the code or the guide page that says it does (M-37958). Leave
 out what's planned and what's half true. A number on the page is read from the
 code, and a test holds the page to it (yaks.app: `workers/yak/site_test.ts`
-against `meter.ts`). A number that nothing pins, such as a fee that is a
+against `@yaks/platform/plans`). A number that nothing pins, such as a fee that is a
 setting, either comes from the code at serve time or stays off the page.
 
 **Read it cold before it ships.** Give the page's text, first screen alone

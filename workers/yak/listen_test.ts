@@ -10,7 +10,7 @@ import type { Asked } from './apps.ts'
 import { platform } from './directory-rows-probe.ts'
 import { stamp } from './directory.ts'
 import { listens } from './listen.ts'
-import { budget } from './meter.ts'
+import { budget } from '@yaks/platform/meter'
 
 type Heard = { data?: unknown; code?: number }
 

@@ -10,8 +10,8 @@
 // already reads, with the space's `sender{via}` beside it.
 //
 // Each later month a number is held is charged by a wake on its row, on the
-// day of the month it was bought (facets/meter-graph.ts `lines`), and a space
-// that is erased releases every number it holds (erase.ts).
+// day of the month it was bought (@yaks/platform/meter-graph `lines`), and a
+// space that is erased releases every number it holds (erase.ts).
 import { type Numbers, shown, type TollFree } from '@yaks/phone'
 import { ModelError } from '@yaks/model'
 import { next } from '@yaks/wake'

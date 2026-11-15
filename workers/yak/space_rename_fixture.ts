@@ -224,9 +224,9 @@ export let renamed = async (k: Kernel) => {
   )
 
   // Somebody else takes the name Ada left, which still redirected to her,
-  // moving their one free space there (meter.ts `SPACES`): it is theirs now,
-  // whole. Their space roots at a handle of its own, and their cookbook is a
-  // store of its own.
+  // moving their one free space there (@yaks/platform/plans `SPACES`): it is
+  // theirs now, whole. Their space roots at a handle of its own, and their
+  // cookbook is a store of its own.
   let rex = await signIn(k)
   let theirs = connector(k, rex.cookie)
   await theirs.tool('space_set', {

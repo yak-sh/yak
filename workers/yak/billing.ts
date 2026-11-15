@@ -59,14 +59,8 @@ import type {
 } from '@yaks/host/payments'
 import { planSettings } from '@yaks/platform/routes'
 import * as dirPart from './directory.ts'
-import {
-  directory,
-  paid,
-  type Plan,
-  type Space,
-  stamp,
-  type Tier,
-} from './directory.ts'
+import { directory, type Plan, type Space, stamp } from './directory.ts'
+import { CURRENCY, paid, type Tier } from '@yaks/platform/plans'
 import { bound, type Env } from './env.ts'
 import { apex, type Host } from '@yaks/platform/host'
 import { derivedEid } from '@yaks/graph/identity'
@@ -76,12 +70,11 @@ import {
   buyable,
   CREDITED,
   creditLeft,
-  CURRENCY,
-  dollars,
   drawnOf,
   heldOf,
   monthOf,
-} from './meter.ts'
+} from '@yaks/platform/meter'
+import { dollars } from '@yaks/platform/standing'
 
 import { step } from './funnel.ts'
 import { sessionAt } from './session.ts'
@@ -596,7 +589,7 @@ export let block = (
   credit_block: { space, dollars: bought, checkout },
 }, {
   // `credit` is named so the space holds one for the spend to add to
-  // (meter-graph.ts `spend-credit`), whatever it held before.
+  // (@yaks/platform/meter-graph `spend-credit`), whatever it held before.
   entity: { eid: space },
   credit: {},
   spend: { month: monthOf(at), bought },

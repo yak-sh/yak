@@ -34,8 +34,8 @@ export let space = (over: Partial<Space> = {}): Space => ({
 
 /** A free space this person owns, written the way directory.ts `mint` writes
  * one: what a space made before one person was held to one free space
- * (meter.ts `SPACES`) is. Answers its eid. probe.ts `owned` is the same for
- * a kernel. */
+ * (@yaks/platform/plans `SPACES`) is. Answers its eid. probe.ts `owned` is the
+ * same for a kernel. */
 export let owned = (
   ctx: { dir: Directory; person: string },
   slug: string,

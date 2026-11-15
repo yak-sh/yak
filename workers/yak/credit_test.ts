@@ -14,7 +14,7 @@ import {
   creditOf,
   limitOf,
   monthOf,
-} from './meter.ts'
+} from '@yaks/platform/meter'
 import { badCap, planCard } from './billing.ts'
 import { capNotice } from './usage.ts'
 import { plans } from './payments.ts'

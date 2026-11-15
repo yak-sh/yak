@@ -1614,8 +1614,8 @@ test(
         JSON.parse(await stranger.tool('graph_query', { q: '.doc' })),
         [],
       )
-      // That one is his one free space (meter.ts `SPACES`); on Plus, it leaves
-      // room for another.
+      // That one is his one free space (@yaks/platform/plans `SPACES`); on
+      // Plus, it leaves room for another.
       let [mine] = await meta(k).query(
         `.space.slug=${/^app ([^/]+)\//.exec(made)![1]}`,
       )

@@ -4,7 +4,8 @@ import { type Bundle, type Comp, mint, token } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
 import { ModelError } from '@yaks/model'
-import { left, monthOf, tooManyCalls, unaffordable } from './meter.ts'
+import { left, monthOf } from '@yaks/platform/meter'
+import { tooManyCalls, unaffordable } from '@yaks/platform/standing'
 import { type Row, type Space, spaceOf, stamp } from './directory.ts'
 import type { Namespace } from '@yaks/durable-object/door'
 import { meta } from './meta.ts'
@@ -16,15 +17,15 @@ export type Hold = {
   month: string
   dollars: number
   what: Kind
-  /** what the dollars buy (meter.ts `SOURCES`) */
+  /** what the dollars buy (@yaks/platform/meter `SOURCES`) */
   source?: string
   /** a visitor's call, held against their share of the budget as well */
   visitor?: boolean
 }
 /** Who a hold is spent for: what it buys, the source that sells it (a model
- * provider, voice, texts; meter.ts `SOURCES`), and the visitor who asked,
- * named by who they are (their person, else their address or transcript);
- * none is a member's. */
+ * provider, voice, texts; @yaks/platform/meter `SOURCES`), and the visitor who
+ * asked, named by who they are (their person, else their address or
+ * transcript); none is a member's. */
 export type Paying = {
   what?: Kind
   source?: string
@@ -131,13 +132,13 @@ export let settled = async (
 /** Hold a call's most against its space's month budget before it starts, in
  * one write: the quote is made on the caller's reading of the space, and the
  * directory refuses the hold in the write's own transaction when it does not
- * fit what is left (meter-graph.ts `spend`), so holds made at once neither
- * spend past the budget nor wait on one another. Every model consumer and
- * voice lease shares the same remaining dollars; a visitor's is held to
- * what is left of their share too (meter.ts `left`), and a visitor's model
- * call is counted against the calls one visitor may ask for in a day
- * (meter.ts `visitorCalls`). Only a refusal reads the space again, to quote
- * on what is left and ask once more. */
+ * fit what is left (@yaks/platform/meter-graph `spend`), so holds made at once
+ * neither spend past the budget nor wait on one another. Every model consumer
+ * and voice lease shares the same remaining dollars; a visitor's is held to
+ * what is left of their share too (@yaks/platform/meter `left`), and a
+ * visitor's model call is counted against the calls one visitor may ask for in
+ * a day (@yaks/platform/meter `visitorCalls`). Only a refusal reads the space
+ * again, to quote on what is left and ask once more. */
 export let reserved = async <T extends { dollars: number }>(
   env: Env,
   space: Space,
@@ -278,7 +279,8 @@ let again = async (env: Env, eid: string) => {
   return spaceOf(row as unknown as Row)
 }
 
-// A hold the directory refused for the budget (meter-graph.ts `spend`).
+// A hold the directory refused for the budget (@yaks/platform/meter-graph
+// `spend`).
 let overBudget = (e: unknown) => {
   let r = e as { name?: string; comp?: string } | null
   return r?.name == 'Refused' && r.comp == 'spend'

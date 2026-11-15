@@ -14,7 +14,7 @@ import { spaced } from './operator-persona.ts'
 import { link } from '@yaks/edge'
 import { KERNEL, meta } from './meta.ts'
 import { derivedEid } from '@yaks/graph/identity'
-import { PRICE } from './meter.ts'
+import { PRICE } from '@yaks/platform/plans'
 
 let owner = crypto.randomUUID()
 // The platform holds Anthropic's key, so the Operator is on Claude.

@@ -241,7 +241,7 @@ let facets: Record<string, () => Promise<unknown>> = {
   'yak/lexicon/graph': () => import('@yaks/platform/lexicon-graph'),
   'yak/log/graph': () => import('@yaks/platform/log-graph'),
   'yak/lower/graph': () => import('@yaks/platform/lower-graph'),
-  'yak/meter/graph': () => import('./facets/meter-graph.ts'),
+  'yak/meter/graph': () => import('@yaks/platform/meter-graph'),
   'yak/models/effects': () => import('./facets/models-effects.ts'),
   'yak/pages/graph': () => import('./facets/pages-graph.ts'),
   'yak/publishing/graph': () => import('./facets/publishing-graph.ts'),

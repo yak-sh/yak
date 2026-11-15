@@ -435,16 +435,6 @@ for (
   })
 }
 
-// Platform-owned spaces retain their fixed exemption. Operational comps
-// are granted through the platform-only door (comp_test.ts).
-test('a comped space reads as plus, everyone else as what they pay', () => {
-  assertEquals(dirPart.tierOf('yourname', null), 'plus')
-  assertEquals(dirPart.tierOf('yourname', 'free'), 'plus')
-  assertEquals(dirPart.tierOf('jeff', null), null)
-  assertEquals(dirPart.tierOf('jeff', 'free'), 'free')
-  assertEquals(dirPart.tierOf('jeff', 'plus'), 'plus')
-})
-
 // The app's handle (T-34657): the string the platform names everything it
 // keeps for this app by, and the thing a rename — of the app, or of its space —
 // must never move.

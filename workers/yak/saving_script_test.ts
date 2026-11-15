@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { PRICE } from './meter.ts'
+import { PRICE } from '@yaks/platform/plans'
 import { page } from './site/mod.ts'
 
 let code = await Deno.readTextFile(

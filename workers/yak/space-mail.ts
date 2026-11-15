@@ -20,13 +20,8 @@
 import { spaceHost } from '@yaks/platform/host'
 import type { DomainRecord } from '@yaks/host/senders'
 import { caught } from './defects.ts'
-import {
-  type App,
-  type Directory,
-  paid,
-  type Space,
-  stamp,
-} from './directory.ts'
+import { type App, type Directory, type Space, stamp } from './directory.ts'
+import { paid } from '@yaks/platform/plans'
 import type { Env } from './env.ts'
 import { MAIL_VIA, mailDomains } from './mail-domains.ts'
 import {

@@ -8,7 +8,7 @@ import type { Env } from './env.ts'
 import { reporting } from './wake.ts'
 import { KERNEL, meta } from './meta.ts'
 import { idOf, stamp } from './directory.ts'
-import { monthOf } from './meter.ts'
+import { monthOf } from '@yaks/platform/meter'
 import type { Remake } from './remake.ts'
 
 /** A platform job: the row whose rule asked for it, run with the directory's

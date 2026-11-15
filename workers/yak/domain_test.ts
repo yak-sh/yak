@@ -338,11 +338,11 @@ test('attaching a domain: what it refuses, and what it says', async () => {
     let agent = connector(k, cookie)
     let said = (p: Promise<string>) => p.then((t) => t, (e: Error) => e.message)
 
-    // A custom domain is Plus's (meter.ts `ceilings`). Free, the tool answers
-    // the upsell and nothing about a domain — which is an answer, so the
-    // fields it has none of are not fields its reply is refused for missing
-    // (tool_outputs.ts). The rest of the refusals are the ones a space that
-    // may have a domain still meets.
+    // A custom domain is Plus's (@yaks/platform/plans `ceilings`). Free, the
+    // tool answers the upsell and nothing about a domain — which is an answer,
+    // so the fields it has none of are not fields its reply is refused for
+    // missing (tool_outputs.ts). The rest of the refusals are the ones a space
+    // that may have a domain still meets.
     assertStringIncludes(
       await said(agent.tool('domain_attach', {
         app: 'recipes',

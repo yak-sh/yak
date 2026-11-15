@@ -18,7 +18,6 @@ import { REPLY_TO } from './mail.ts'
 import {
   BUDGET,
   BUILDS,
-  count,
   CURRENCY,
   FILES,
   FREE,
@@ -27,9 +26,10 @@ import {
   PRICE,
   PRO,
   SECONDS,
-  size,
+  type Tier,
   YEARLY,
-} from './meter.ts'
+} from '@yaks/platform/plans'
+import { count, size } from '@yaks/platform/standing'
 import { GET_PLAN, installAt } from '@yaks/platform/routes'
 import { DEEPGRAM } from '@yaks/speech'
 import * as townships from './site/townships.tsx'
@@ -40,7 +40,6 @@ import { kit, pencil } from '@yaks/ui'
 import { CAP } from './invite.ts'
 import { CODE_NOTE } from './signin.ts'
 import { START } from './newcomer.ts'
-import type { Tier } from './directory.ts'
 import { quoted, rate } from './sell.ts'
 import { DRAWN, MARKDOWN } from './docs.ts'
 import { page as galleryPage } from './gallery.ts'
@@ -333,10 +332,10 @@ test('the frame is asked for on the body, above what it frames', () => {
 })
 
 // What the pages sell is what the code holds a space to (T-33688). The two
-// allowances live in one place — meter.ts `LETTERS`, which the send door and
-// the standing line both read — so a page quoting a number nothing enforces is
-// exactly the copy this test exists to prevent: it was pulled once for saying
-// "100 emails a month" of a platform that could not send one at all.
+// allowances live in one place — @yaks/platform/plans `LETTERS`, which the send
+// door and the standing line both read — so a page quoting a number nothing
+// enforces is exactly the copy this test exists to prevent: it was pulled once
+// for saying "100 emails a month" of a platform that could not send one at all.
 let flat = (html: string) => html.replace(/\s{2,}|[^\S ]/g, ' ')
 
 // The plans in the order every page shows them, and what each holds a space to.

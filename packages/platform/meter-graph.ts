@@ -1,22 +1,32 @@
-// The platform domain’s rules, composed through its graph facet.
+// The yak/meter graph facet: a space's spends added to its month in the
+// write's own transaction, and the platform's hourly meter and each held
+// number's month asked of the host (./lent.ts `job`).
 import type { Bound, Plugin } from '@yaks/graph'
-import type { Options } from './store.ts'
-import { added, credited, trended, unaffordable } from '../meter.ts'
-import { paid, type Row, spaceOf } from '../directory.ts'
 import { Refused } from '@yaks/graph/errors'
+import type { Options } from './lent.ts'
+import {
+  added,
+  credited,
+  meteredOf,
+  type MeteredRow,
+  trended,
+} from './meter.ts'
+import { paid } from './plans.ts'
+import { unaffordable } from './standing.ts'
 
 let props = (c: unknown): Record<string, unknown> =>
   c && typeof c == 'object' ? Object.fromEntries(Object.entries(c)) : {}
 
 // A spend added to its month, refused first where it is held and does not
-// fit what is left (meter.ts `unaffordable`). A block bought is credit, not a
-// month's spend (billing.ts `credited`), and a space holding credit draws on
-// it for what the month spends past its budget.
+// fit what is left (./standing.ts `unaffordable`). A block bought is credit,
+// not a month's spend (./meter.ts `credited`), and a space holding credit
+// draws on it for what the month spends past its budget.
 let spending = (row: Bound) => {
   let { meter, trend, spend, Now } = row
   let said = props(spend)
   let now = new Date(Now.at)
-  let space = row.space ? spaceOf(row as unknown as Row) : null
+  let r = row as unknown as MeteredRow
+  let space = r.space ? meteredOf(r) : null
   if (said.held) {
     if (!space) throw new Refused('The paying space is missing')
     let what: 'models' | 'realtime' | 'texts' =
@@ -48,7 +58,7 @@ let spending = (row: Bound) => {
       props(trend),
       spent,
       Date.parse(Now.at),
-      paid(space?.plan?.tier),
+      paid(space && r.plan?.tier),
     ),
     ...drew ? { credit: drew.credit } : {},
     spend: null,
@@ -74,11 +84,12 @@ export let plugins = (_host: unknown, { store }: Options): Plugin[] => [{
     run: (row) => store.job?.('lines', row),
   }, {
     // A spend, added to the month's meter inside the write's own transaction
-    // and taken off again (vocab.ts `spend`): the sum is the directory's, never
-    // a caller's, so two spends at once both count. A held one is checked
-    // against what is left of the month in that same transaction, so holds
-    // made at once never spend past the budget together, and none waits on
-    // another (model-spend.ts `reserved`).
+    // and taken off again (./directory-vocab.ts `spend`): the sum is the
+    // directory's, never a caller's, so two spends at once both count. A held
+    // one is checked against what is left of the month in that same
+    // transaction, so holds made at once never spend past the budget
+    // together, and none waits on another (workers/yak model-spend.ts
+    // `reserved`).
     name: 'spend',
     phase: 'rules',
     // The space's plan and budget are read from its view, never named in the
@@ -89,7 +100,7 @@ export let plugins = (_host: unknown, { store }: Options): Plugin[] => [{
   }, {
     // The same spend on a space holding credit (D-134567): what the month now
     // spends past its budget is drawn from its credit in this same
-    // transaction, and a block bought added to it (meter.ts `credited`).
+    // transaction, and a block bought added to it (./meter.ts `credited`).
     name: 'spend-credit',
     phase: 'rules',
     match: '+meter, +trend, *credit, *spend, #Now',

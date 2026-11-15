@@ -32,7 +32,8 @@ import { Head } from '@yaks/ui/parts'
 // newest first, each opening on that same page.
 
 import { bound, type Env } from './env.ts'
-import { type Held, holding } from './held.ts'
+import { holding } from './held.ts'
+import { dollars, type Held } from '@yaks/platform/standing'
 import {
   appAbout,
   type Directory,
@@ -42,12 +43,12 @@ import {
   idOf,
   META,
   newcomerIs,
-  paid,
   type Row,
   type Space,
   spaceOf,
 } from './directory.ts'
-import { budget, dollars, monthOf, starterOf } from './meter.ts'
+import { paid } from '@yaks/platform/plans'
+import { budget, monthOf, starterOf } from '@yaks/platform/meter'
 import { DAILY, opened, PER_BUILD, PER_SOURCE } from './newcomer.ts'
 import { isTestAddress } from '@yaks/platform/bots'
 import { sessionAt } from './session.ts'
@@ -348,8 +349,9 @@ let referrals = (d: Reading, all: Row[]) =>
     })
   ))
 
-// Everybody given the starter (meter.ts `STARTER`), newest first: when their
-// first space was made, what of it is left and what their spaces spent.
+// Everybody given the starter (@yaks/platform/plans `STARTER`), newest first:
+// when their first space was made, what of it is left and what their spaces
+// spent.
 let starters = (d: Reading) => {
   let made = new Map(
     d.census.spaces.map((r) => [r.entity.eid, r.created?.at ?? '']),

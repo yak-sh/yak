@@ -49,11 +49,11 @@ import {
   appStore,
   type Directory,
   directory,
-  paid,
   type Seller,
   type Space,
   stamp,
 } from './directory.ts'
+import { paid } from '@yaks/platform/plans'
 import { bound, type Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { manageAt } from '@yaks/platform/routes'

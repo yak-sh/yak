@@ -10,10 +10,10 @@ import {
   directory,
   fetch as directoryFetch,
   META,
-  type Meter,
   type Row,
   type Space,
 } from './directory.ts'
+import type { Meter } from '@yaks/platform/meter'
 import { analytics, platform } from './testing.ts'
 import type { Env } from './env.ts'
 import { COOKIE, sign } from './lib/token.ts'

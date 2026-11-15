@@ -19,7 +19,7 @@
 // socket, and socket_workerd_test.ts's.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { test, until } from '@yaks/testing'
-import { monthOf } from './meter.ts'
+import { monthOf } from '@yaks/platform/meter'
 import {
   arrives,
   client,
@@ -436,8 +436,8 @@ test(
       )
       assertStringIncludes(await no(`${jeff27}.recipes@yaks.app`), 'no mailbox')
       assertStringIncludes(await no(`${jeff27}@yaks.app`), 'no mailbox')
-      // One person holds one free space (meter.ts `SPACES`): their others go
-      // to the trash first, to make room for this one to come back.
+      // One person holds one free space (@yaks/platform/plans `SPACES`): their
+      // others go to the trash first, to make room for this one to come back.
       for (let other of [them.email.split('@')[0], bare27Space]) {
         let gone = await door(`/space/${other}/delete`, { confirm: other })
         assertEquals(gone.status, 200)

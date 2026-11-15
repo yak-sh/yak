@@ -55,7 +55,11 @@
     "./facets": "./facets.ts",
     "./manifest": "./manifest.ts",
     "./released": "./released.ts",
-    "./cli": "./cli.ts"
+    "./cli": "./cli.ts",
+    "./plans": "./plans.ts",
+    "./meter": "./meter.ts",
+    "./standing": "./standing.ts",
+    "./meter-graph": "./meter-graph.ts"
   },
   "license": "Apache-2.0",
   "description": "What a hosting platform keeps about the apps it serves \u2014 spaces, apps, deploys, hostnames, plans and meters.",
@@ -78,6 +82,7 @@
     "@yaks/query": "0.2.32",
     "@yaks/session": "0.2.33",
     "@yaks/tools": "0.2.30",
+    "@yaks/ui": "0.2.30",
     "@yaks/vocab": "0.2.32",
     "@yaks/yaml": "0.2.24"
   },

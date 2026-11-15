@@ -431,7 +431,7 @@ export let directoryDoc: VocabDoc = {
       properties: { dollars: owned(num), newcomer: owned(bool) },
     },
     // The dollars a space holds once, before its monthly budget, where it
-    // holds other than meter.ts `STARTER`: none on a person's later spaces
+    // holds other than plans.ts `STARTER`: none on a person's later spaces
     // (directory.ts `mint`). Stamped, for the reason the budget is.
     starter: {
       component: true,
@@ -697,7 +697,7 @@ export let referralDoc: VocabDoc = {
       },
     },
     // The Plus plan given to a space free, through `until`, where the payment
-    // provider bills it nothing (directory.ts `tierOf`): each reward adds a month
+    // provider bills it nothing (plans.ts `tierOf`): each reward adds a month
     // after the later of now and the free time it already had.
     comped: {
       description:

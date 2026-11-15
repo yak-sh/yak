@@ -1,7 +1,7 @@
 ---
 name: yaks-app-business
 description: >
-  Use for yaks.app pricing, plans, meter.ts allowances/limits, upgrade/refusal
+  Use for yaks.app pricing, plans, allowances/limits, upgrade/refusal
   text, marketing pages, sign-up/onboarding, billing, gallery, homepage examples
   or audience decisions. Covers its customers, spaces and plans. Business
   principles are business-model; how any marketing page's copy is written is
@@ -110,7 +110,7 @@ and at most one subscription (billing.ts `payerFor`), it's paid for, changed and
 cancelled from that space's plan settings, and only its owner may pay. A
 person's first space is free, and every other space they own is on a paid plan:
 Jeff decided one free space on T-131887 ("and yes, one included space."), and
-meter.ts `SPACES` holds it. Spaces that were free before the cap stay free. So
+@yaks/platform/plans `SPACES` holds it. Spaces that were free before the cap stay free. So
 the plan is one sentence: each space is free or on a paid plan. Copy never says
 a plan, budget or allowance is a person's or an account's.
 
@@ -121,7 +121,7 @@ a plan, budget or allowance is a person's or an account's.
 - **The space's owner hears about a limit**, in a sentence that names the space,
   the limit and the one thing to do. A guest who finds an app paused is a
   recommendation we won't get.
-- **Every allowance is the space's own.** meter.ts reads each one, and the model
+- **Every allowance is the space's own.** @yaks/platform/meter reads each one, and the model
   and voice budget, from the space's meter against the space's plan; nothing
   sums across an owner's spaces. Sandboxes awake are counted per space.
 
@@ -161,8 +161,8 @@ missing, is in D-398.
 ## Price and copy
 
 A flat price per space, with every member free, says _for a person, their team
-and the things they run_. yaks.app sells three plans, and meter.ts and the
-pricing page hold what each one carries:
+and the things they run_. yaks.app sells three plans, and @yaks/platform/plans and
+the pricing page hold what each one carries:
 
 - **The Free plan** is a person's first space: 5 apps, 1 GB of app data, 1 GB of
   photos and files and 100 emails a month, with a small badge, no custom domain
@@ -177,7 +177,7 @@ pricing page hold what each one carries:
   the change, a larger model budget and support. Past that budget it spends AI
   credit its owner buys in $10 blocks, paid before it is spent, up to a monthly
   cap they set on the plan card: $0 until they choose one, and nothing is ever
-  charged past it (meter.ts `creditOf`, billing.ts `buy`).
+  charged past it (@yaks/platform/meter `creditOf`, billing.ts `buy`).
 
 Jeff expects the organizations to have "plenty of work for us aside from the
 platform at $490/yr". That work has no price yet and nothing bills it: a space
@@ -219,9 +219,10 @@ the assistants' connector directories for those who already use one.
 
 ## Where it lives
 
-- **The numbers.** workers/yak/meter.ts (`FREE`, `PLUS`, `PRO`, `LETTERS`,
-  `BUDGET`, `PRICE`, `YEARLY`, `SPACES`), and site_test.ts holds the pages to
-  them. The plan is
+- **The numbers.** packages/platform/plans.ts (`FREE`, `PLUS`, `PRO`,
+  `LETTERS`, `BUDGET`, `PRICE`, `YEARLY`, `SPACES`), and site_test.ts holds the
+  pages to them; packages/platform/meter.ts spends a space's month against them
+  and standing.ts says its refusals. The plan is
   `plan{tier, customer, subscription, status, until, ending, at}` on the space
   (packages/platform/vocab.json), and its AI credit is
   `credit{cap, bought,

@@ -120,15 +120,15 @@ let payer = (app: string) => async (dir: Directory) =>
   (await dir.appAt(app))?.space ?? null
 
 // The visitor whose turn a model call is, if it is one, who spends the
-// visitors' share of the space's budget (meter.ts `visiting`) and their own
-// calls of the day (meter.ts `visitorCalls`). Only an app whose manifest opens
-// its models has visitor turns: elsewhere `using` is an editor's to write
-// (app-authority.ts `FLOORS`). There, the turn is the transcript's starter's,
-// since a visitor writes lines only in transcripts they started (`WITHIN`): a
-// visitor unless it is the app itself or someone whose vouched level here
-// writes (app-writes.ts `vouching` keeps it). One signed in is named by their
-// person; nobody signed in is a visitor too, named by the transcript, since
-// the store never learns their address.
+// visitors' share of the space's budget (@yaks/platform/meter `visiting`) and
+// their own calls of the day (@yaks/platform/meter `visitorCalls`). Only an app
+// whose manifest opens its models has visitor turns: elsewhere `using` is an
+// editor's to write (app-authority.ts `FLOORS`). There, the turn is the
+// transcript's starter's, since a visitor writes lines only in transcripts they
+// started (`WITHIN`): a visitor unless it is the app itself or someone whose
+// vouched level here writes (app-writes.ts `vouching` keeps it). One signed in
+// is named by their person; nobody signed in is a visitor too, named by the
+// transcript, since the store never learns their address.
 let visitorOf = (at: Stored) => async (req: { conversation?: string }) => {
   if (at.manifest().models != 'open' || !req.conversation) return undefined
   let [session] = await at.graph.get([req.conversation])

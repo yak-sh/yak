@@ -1,5 +1,5 @@
 // The doors a space's letters and an app's own model API go through, counted
-// against its allowances (meter.ts) where they happen.
+// against its allowances (@yaks/platform/meter) where they happen.
 import type { Host } from '@yaks/platform/host'
 import type { Sender } from '@yaks/mail'
 import { type Listed, ModelError, type Native, type Price } from '@yaks/model'
@@ -11,7 +11,8 @@ import { usedMail } from './space-mail.ts'
 import { refuse } from './tool.ts'
 import { defect } from './defects.ts'
 import { reserved } from './model-spend.ts'
-import { counted, refusedSpend } from './meter.ts'
+import { counted } from './meter.ts'
+import { refusedSpend } from '@yaks/platform/standing'
 
 /**
  * A letter counted against the space it left from: the month's allowance read

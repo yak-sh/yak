@@ -25,7 +25,7 @@ import { bound, type Env } from './env.ts'
 import { sessionAt, vouched, type Who } from './session.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import { told } from './stream.ts'
-import { divided, gauged, level } from './meter.ts'
+import { divided, gauged, level } from '@yaks/platform/standing'
 import { holding } from './held.ts'
 import { caught } from './defects.ts'
 import { scheduleMark } from './used.ts'
@@ -904,17 +904,17 @@ export let unseenBlock = (seen: Seen[]) =>
     : ''
 
 // Where the space stands against its ceilings, said once (T-32758), in the
-// line app_list says for the space (meter.ts `gauged`). It rides this channel
-// because it is the same kind of news as a break — something the agent has to
-// know and nobody said — and it wears the same mark: `notified`, here on the
-// space itself, cleared by the hourly sweep when the standing moves
-// (usage.ts). So the agent hears a line when it is news, and not on every
-// reply after. Nothing is said while a space is under 80% of every ceiling.
-// Near a stored one, it also says what each app holds of it (held.ts), since
-// what to delete is the agent's next question. An app in the trash counts
-// against no app ceiling (tools.ts `app_new`), but its data and files count
-// until it is erased. The space's apps are read unless the caller has them
-// (agent.ts `answered`), and not at all once it has been told.
+// line app_list says for the space (@yaks/platform/standing `gauged`). It rides
+// this channel because it is the same kind of news as a break — something the
+// agent has to know and nobody said — and it wears the same mark: `notified`,
+// here on the space itself, cleared by the hourly sweep when the standing moves
+// (usage.ts). So the agent hears a line when it is news, and not on every reply
+// after. Nothing is said while a space is under 80% of every ceiling. Near a
+// stored one, it also says what each app holds of it (held.ts), since what to
+// delete is the agent's next question. An app in the trash counts against no
+// app ceiling (tools.ts `app_new`), but its data and files count until it is
+// erased. The space's apps are read unless the caller has them (agent.ts
+// `answered`), and not at all once it has been told.
 export let ceiling = async (
   env: Env,
   space: Space,

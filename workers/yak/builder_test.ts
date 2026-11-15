@@ -28,7 +28,8 @@ import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { embeds, platform } from './testing.ts'
 import { invokePackage } from './package-tools.ts'
-import { BUILDS, monthOf } from './meter.ts'
+import { BUILDS } from '@yaks/platform/plans'
+import { monthOf } from '@yaks/platform/meter'
 import type { Who } from './session.ts'
 
 // The fixture space's month, set by the platform, and no starter: each case

@@ -22,7 +22,7 @@ import { blobPrefix } from './blob-key.ts'
 import { appStore, directoryOf } from './directory.ts'
 import type { Stored } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { size, unaffordable } from './meter.ts'
+import { size, unaffordable } from '@yaks/platform/standing'
 import { hearing, paused, speechOf } from './speech.ts'
 import { blobKey, useOf } from './uploads.ts'
 

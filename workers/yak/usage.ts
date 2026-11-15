@@ -5,13 +5,13 @@
 // name into an object id. Analytics groups by that id, so two deployments
 // may hold the same app handle without mixing their bills.
 //
-// The sweep is the meter plugin's effect rule (meter.ts), matching `fired`
-// on its hourly directory wake: one GraphQL call for the month so far and one
-// write into the meta store — `meter` on each app, `meter` on each space (its
-// apps summed, what it spent left where meter.ts `spend` adds it up), and
-// `plan{free}` on a space that has none yet — after a spend of nothing on
-// each space whose meter is on another month. The write carries the kernel
-// flag, because a person never states their own bill. It asks no store
+// The sweep is the meter plugin's effect rule (@yaks/platform/meter-graph),
+// matching `fired` on its hourly directory wake: one GraphQL call for the month
+// so far and one write into the meta store — `meter` on each app, `meter` on
+// each space (its apps summed, what it spent left where meter.ts `spend` adds
+// it up), and `plan{free}` on a space that has none yet — after a spend of
+// nothing on each space whose meter is on another month. The write carries the
+// kernel flag, because a person never states their own bill. It asks no store
 // anything: a request to one would be a request the next reading counts.
 //
 // Two datasets, because one does not carry both numbers:
@@ -42,28 +42,24 @@ import * as dirPart from './directory.ts'
 import {
   type App,
   directory,
-  type Meter,
   type Space,
   stamp,
   storeName,
 } from './directory.ts'
-import { bound, type Env } from './env.ts'
-import { holding, outside } from './held.ts'
 import {
-  atStored,
-  capLine,
   capped,
-  ceilings,
   type Counts,
-  FILES,
-  level,
+  type Meter,
   monthOf,
   none,
   requestUnits,
   spent,
   thisMonth,
-  WARN,
-} from './meter.ts'
+} from '@yaks/platform/meter'
+import { bound, type Env } from './env.ts'
+import { holding, outside } from './held.ts'
+import { atStored, capLine, level } from '@yaks/platform/standing'
+import { ceilings, FILES, WARN } from '@yaks/platform/plans'
 import { INTERNAL, mail } from './mail.ts'
 import type { Host } from '@yaks/platform/host'
 import { KERNEL, meta } from './meta.ts'
@@ -416,10 +412,10 @@ type Dir = ReturnType<typeof directory>
 
 /** The words a space's owners hear about its cap on AI credit now, and the
  * name of the one notification they make for each owner: one line at four
- * fifths of the cap and one when no more may be drawn (meter.ts `capped`),
- * each named by the space, the month and the standing, so the hourly reading
- * that finds it again tells nobody twice. Null for a space with nothing to
- * hear. */
+ * fifths of the cap and one when no more may be drawn (@yaks/platform/meter
+ * `capped`), each named by the space, the month and the standing, so the hourly
+ * reading that finds it again tells nobody twice. Null for a space with nothing
+ * to hear. */
 export let capNotice = (space: Space, now: Date, env: Host = {}) => {
   let standing = capped(space, now)
   return standing && {

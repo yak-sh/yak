@@ -302,25 +302,27 @@ import {
 import { said as sentence } from '@yaks/api/log'
 import { archive, breaks, folds, line, serve, trackedIn } from './unseen.ts'
 import { scheduleUse, start } from './used.ts'
+import { countedSpend } from './meter.ts'
 import {
   atCeiling,
-  ceilings,
   count,
-  countedSpend,
-  free,
   gauged,
+  type Held,
   heldAloud,
-  monthOf,
   refusedSpend,
-  requestUnits,
   size,
-  SPACES,
   standingOf,
   tooManySpaces,
+} from '@yaks/platform/standing'
+import { ceilings, paid as paying, SPACES } from '@yaks/platform/plans'
+import {
+  free,
+  monthOf,
+  requestUnits,
   VISITOR_CALLS,
   VISITORS,
-} from './meter.ts'
-import { type Held, holding } from './held.ts'
+} from '@yaks/platform/meter'
+import { holding } from './held.ts'
 import { an, invitedWords, room, send } from './invite.ts'
 import { aloud, peopleOwned, shown } from './people.ts'
 import {
@@ -3178,9 +3180,9 @@ export let uiMeta = (domain: string, csp: Csp = {}) => ({
 })
 
 /** Refused where the caller already owns as many free spaces as one person
- * gets (meter.ts `SPACES`, T-131887). A space in the trash is on its way out,
- * so it does not count; one somebody else made and invited them into is not
- * theirs, and one on the Plus plan is paid for on its own. */
+ * gets (@yaks/platform/plans `SPACES`, T-131887). A space in the trash is on
+ * its way out, so it does not count; one somebody else made and invited them
+ * into is not theirs, and one on the Plus plan is paid for on its own. */
 let roomFor = async (ctx: Ctx) => {
   let held = (await ctx.dir.spaces(ctx.person, 'owner'))
     .filter((s) => free(s) && !s.trashed)
@@ -6187,7 +6189,7 @@ let OURS: Row[] = [
             `at https://${spaceHost(ctx.env, space.slug)}/`,
         )
       }
-      if (!dirPart.paid(space.tier) && ceilings(space.tier, space.slug)) {
+      if (!paying(space.tier) && ceilings(space.tier, space.slug)) {
         const settings = planSettings(space.slug, ctx.env)
         return {
           text:

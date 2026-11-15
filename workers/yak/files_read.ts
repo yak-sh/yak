@@ -9,7 +9,7 @@
 // and never its bytes, and the budget bounds what one call holds in memory.
 import { type Opened, utf8 } from '@yaks/blob'
 import { sha256 } from './versions.ts'
-import { size } from './meter.ts'
+import { size } from '@yaks/platform/standing'
 
 /** The most bytes of file text one read of several files answers: well
  * inside what a client shows a model of one tool result. One path alone is

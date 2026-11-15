@@ -559,7 +559,6 @@ export let domains = beside({
     effects: './facets/directory-effects.ts',
   },
   'yak/trash': { effects: './facets/trash-effects.ts' },
-  'yak/meter': { graph: './facets/meter-graph.ts' },
   'yak/refusals': { effects: './facets/refusals-effects.ts' },
   'yak/pages': { graph: './facets/pages-graph.ts' },
   'yak/publishing': { graph: './facets/publishing-graph.ts' },

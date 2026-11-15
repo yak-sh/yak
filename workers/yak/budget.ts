@@ -1,22 +1,22 @@
 // A space's monthly model and voice budget, set by the platform's owner
 // (T-137556): a support credit, a demo, a test that needs more than its plan's.
 // GET `?space=` reads it; POST `space` and `dollars` sets it, and an empty
-// `dollars` hands the space back to its plan's (meter.ts `BUDGET`).
+// `dollars` hands the space back to its plan's (@yaks/platform/plans `BUDGET`).
 //
 // POST `space`, `refund` and `why` refunds dollars the space spent this month
 // (T-145906): a spend of its own, `refunded`, which the meter takes off what
-// the month spent and off `drawn` (meter.ts `added`), so its budget, plan and
-// starter read as if those dollars had not been spent. Who refunded, how much
-// and why are in the journal, where the spend is written. Both writes are
-// stamped for the reason the fee is (sell.ts `fees`): a budget a space could
-// write for itself lifts its own ceiling, and a write around this door would
-// leave the read cache answering the old one for a TTL.
+// the month spent and off `drawn` (@yaks/platform/meter `added`), so its
+// budget, plan and starter read as if those dollars had not been spent. Who
+// refunded, how much and why are in the journal, where the spend is written.
+// Both writes are stamped for the reason the fee is (sell.ts `fees`): a budget
+// a space could write for itself lifts its own ceiling, and a write around this
+// door would leave the read cache answering the old one for a TTL.
 
 import * as dirPart from './directory.ts'
 import { directory, type Space, stamp } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { adminWho } from './asking.ts'
-import { added, budget, monthOf, starterOf } from './meter.ts'
+import { added, budget, monthOf, starterOf } from '@yaks/platform/meter'
 import type { SpaceBudget } from '@yaks/platform/budget'
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))

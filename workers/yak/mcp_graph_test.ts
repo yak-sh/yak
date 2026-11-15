@@ -23,7 +23,8 @@ import {
   unique,
   vocabFile,
 } from './probe.ts'
-import { FREE, monthOf } from './meter.ts'
+import { FREE } from '@yaks/platform/plans'
+import { monthOf } from '@yaks/platform/meter'
 import type { Listed } from './tools.ts'
 import { minted } from './mcp-probe.ts'
 import { token } from '@yaks/graph'

@@ -37,6 +37,14 @@ import {
 import { knownOptions } from '@yaks/graph/errors'
 import type { Reload } from '@yaks/platform'
 import type { Comp } from '@yaks/platform/comp'
+import {
+  type Meter,
+  type Metered,
+  meteredOf,
+  type MeteredRow,
+  meterOf,
+} from '@yaks/platform/meter'
+import type { Tier } from '@yaks/platform/plans'
 import { type Host as HostEnv, spaceHost } from '@yaks/platform/host'
 import { type Upstream, upstreamOf } from '@yaks/platform/upstream'
 import type { Actor, Bundle, Tx } from '@yaks/graph'
@@ -158,95 +166,6 @@ export let META = { space: 'yak', app: 'platform' }
 // builds it, beside the rest of what addresses a store.
 export let META_STORE = PLATFORM_STORE
 
-// What a space or an app spent this calendar month (platform.rs `Meter`,
-// usage.ts writes it): on an app its own store's, on a space every app of it
-// summed plus the letters it sent and received. Null where nothing has been
-// metered yet.
-export type Meter = {
-  month: string
-  // GraphQL invocation requests include hibernated WebSocket messages.
-  requests: number
-  // All inbound messages, and the subset included in `requests`. Older rows
-  // without them remain conservative until the next hourly reading.
-  ws_messages?: number
-  ws_hibernated?: number
-  rows_read: number
-  rows_written: number
-  bytes: number
-  // An app's page views over the last 30 days, no month's figure.
-  visits?: number
-  // Stored R2 bytes, independent of the calendar month; absent before rollout.
-  files?: number
-  emails: number
-  // Monthly builder usage. `built` keeps a lifetime total for usage reporting;
-  // both plans enforce their build allowance against the monthly `builds`.
-  builds: number
-  // Dollars spent on models this month: the builder's and the apps' calls,
-  // each weighed by its model's price (models.ts).
-  models: number
-  // Dollars an app's voices received this month (rtc.ts): Cloudflare
-  // Realtime's egress, weighed at each renewal of a session's lease. It spends
-  // the same space budget as `models` (meter.ts `budgets`).
-  realtime: number
-  // Dollars an app's texts cost this month (app-texts.ts), the same budget.
-  texts?: number
-  // The seconds the builder's workbench spent awake (sandbox.ts, T-34264).
-  // Its own property beside `models` because a model call and a
-  // container-second are billed separately, and one number made of both is a
-  // number nobody can add up.
-  seconds: number
-  built: number
-  // Every dollar models, voice and texts have spent here, all months
-  // together: what the starter is drawn against (meter.ts `starterOf`).
-  drawn?: number
-  // The dollars of models, voice and texts this month that were spent for
-  // the space's apps' visitors, already counted in each source's own.
-  visitors?: number
-  // The dollars of models, voice and texts this month that the platform's
-  // owner refunded (budget.ts): off what the month spent and off `drawn`,
-  // while each source's own still says what it cost.
-  refunded?: number
-  // The dollars of models, voice and texts this month past the space's
-  // budget, drawn from its credit (meter.ts `credited`).
-  credit?: number
-  at: string
-}
-export type Tier = 'free' | 'plus' | 'pro'
-
-/** Whether a tier is paid for: the Plus plan or the Pro plan
- * (D-134567). Every paid feature asks this, never one plan's name. */
-export let paid = (tier: Tier | null | undefined) =>
-  tier == 'plus' || tier == 'pro'
-
-// Spaces the platform comps. `yak` holds its own directory, whose requests
-// serve every space. `yourname` is its shopfront, with the example apps every
-// home page links to. Neither has app/data or visitor ceilings (meter.ts
-// `ceilings`); platform traffic must not shut the directory's public doors.
-//
-// These two platform spaces keep their unlimited app/data/visit exemption.
-// Operational comps are stamped comp{tier, reason, by} rows, managed through
-// the platform-only comp.ts door independently of Stripe's subscription.
-export let COMPED = ['yourname', 'yak']
-
-// Paid features and mail/build allowances: `plus` also applies to comps.
-// Their separate app/data exemption is resolved by meter.ts from COMPED.
-// A space given the Plus plan free until a day (`comped`, a month for each
-// person its owner invited who built an app, referral.ts) is on it until then.
-export let tierOf = (
-  slug: string,
-  tier: Tier | null,
-  comped: string | null = null,
-  now = Date.now(),
-  comp?: Comp | null,
-): Tier | null => {
-  let base = COMPED.includes(slug)
-    ? 'plus'
-    : !paid(tier) && comped && Date.parse(comped) > now
-    ? 'plus'
-    : tier
-  return comp?.tier == 'pro' || base == 'pro' ? 'pro' : comp?.tier ?? base
-}
-
 // What a space pays and what the payment provider knows about it (platform.rs
 // `Plan`, billing.ts derives and writes it). The whole row, because the webhook
 // reads every property of it to decide whether an event is news: `at` is the
@@ -262,11 +181,6 @@ export type Plan = {
   ending: string | null
   at: string
 }
-
-/** A space's AI credit (D-134567, meter.ts `creditOf`): the cap its owner
- * set on a month past its budget, and every dollar of it bought and spent,
- * so what was not spent carries to the next month. */
-export type Credit = { cap: number; bought: number; spent: number }
 
 /** A space's connected account, as the directory holds it (sell.ts). Four
  * properties and no more: the merchant's own books are their provider's, and
@@ -286,9 +200,10 @@ export type Seller = {
  * whether the platform made the pair or only records one made elsewhere. */
 export type Tunnel = { id: string; service: string; adopted: boolean }
 
-export type Space = {
+/** A space as the directory reads it: what its plan and meter read
+ * (@yaks/platform/meter `Metered`), and everything else it is. */
+export type Space = Metered & {
   eid: string
-  slug: string
   // The space's handle: the root of every key it keeps in the bucket — its
   // apps' files, uploads, releases and declarations. Written once at birth
   // ({@link spaceHandle}) and never derived from the slug again, so a rename
@@ -319,15 +234,9 @@ export type Space = {
   // T-160642): everything it shares shows the mark.
   featured?: boolean
   sender?: import('@yaks/phone').Transport
-  // What this space pays (D-32751). Null for a space the sweep has not
-  // reached yet, which means free — the terms every space is on today.
-  tier: Tier | null
-  // The same row whole, for the one caller that needs every property of it
-  // (billing.ts). Null where no `plan` row has ever been written.
+  // The `plan` row its `tier` is read from, whole, for the one caller that
+  // needs every property of it (billing.ts). Null where none was ever written.
   plan: Plan | null
-  // Its AI credit, where its owner ever set a cap or bought any; null on
-  // every other space, which spends nothing past its budget.
-  credit?: Credit | null
   // The day the Plus plan given free runs through (`comped`, reward.ts),
   // past or to come; absent or null where none was ever given.
   comped?: string | null
@@ -344,30 +253,10 @@ export type Space = {
   // `feeOf`). It is asked of one space — `yak`, the platform's own row — and
   // 0 on every other, where nobody has ever written one.
   fee: number
-  // The space's monthly dollar budget for models and voice where the
-  // platform's owner set one (budget.ts), in place of its plan's (meter.ts
-  // `BUDGET`). Null on every space nobody has given one, which is almost all.
-  budget: number | null
   // The site the box was given when it opened a build here, and when
   // (newcomer.ts `previewing`); null for every space no box was given an
   // address for, which is almost all of them.
   preview?: Preview | null
-  // Whether that budget is a newcomer's one build (newcomer.ts `oneBuild`):
-  // what lifts it is keeping the app, so its refusals ask for their email
-  // rather than offering a plan (meter.ts `unkept`).
-  newcomer?: boolean
-  // The dollars this space holds once, before its monthly budget, where it
-  // holds other than meter.ts `STARTER`: none for a person's later spaces
-  // (`mint`). Absent on almost every space.
-  starter?: number | null
-  // The percent of that budget its apps' visitors may spend together, where
-  // its owner set one (meter.ts `visiting`); none is meter.ts `VISITORS`.
-  visitors?: number | null
-  // The model calls one visitor may ask its apps for in a day, where its
-  // owner set a number (meter.ts `visitorCalls`); none is meter.ts
-  // `VISITOR_CALLS`.
-  visitorCalls?: number | null
-  meter: Meter | null
   // Whether the agent has already been told where this space stands against
   // its ceilings (unseen.ts `ceiling`). The mark is `notified`, the same one
   // an error wears once it has been served; the sweep clears it when the
@@ -765,8 +654,9 @@ export let walkTo = (slug: string, eid: string | Promise<string>): Walk => ({
 })
 
 /** A directory row as a read hands it back: the components the kernel reads,
- * each optional, since a row is whichever of them it wears. */
-export type Row = {
+ * each optional, since a row is whichever of them it wears, a space's plan
+ * and meter among them (@yaks/platform/meter `MeteredRow`). */
+export type Row = MeteredRow & {
   policy?: { revision: number }
   switched?: {
     app: string
@@ -808,7 +698,6 @@ export type Row = {
   entity: { eid: string }
   // A browser and the person who claimed its guest work (attribution.ts).
   browser?: { by?: Id | null }
-  space?: { slug: string; store?: string | null }
   app?: {
     slug: string | null
     space: Id
@@ -908,7 +797,6 @@ export type Row = {
     from_bookmark?: string | null
   }
   fee?: { bps?: number | null }
-  budget?: { dollars?: number | null; newcomer?: boolean | null }
   space_logo?: { sha?: string | null; type?: string | null }
   operator?: {
     name?: string | null
@@ -918,8 +806,6 @@ export type Row = {
     voice_backend?: string | null
     cache_retention?: number | null
   }
-  starter?: { dollars?: number | null }
-  visitor_share?: { percent?: number | null; calls?: number | null }
   started?: { space?: Id | null }
   newcomer?: { at?: string; campaign?: string | null }
   visitor_build?: { at?: string }
@@ -946,8 +832,6 @@ export type Row = {
     until: string
     subscription?: string | null
   }
-  comped?: { until: string }
-  comp?: { tier: 'plus' | 'pro'; reason: string; by: Id }
   person?: Record<string, unknown>
   email?: { address: string }
   sender?: { via: string }
@@ -979,27 +863,12 @@ export type Row = {
   former?: { slug: string; slugs?: string | null }
   home?: { first?: string | null }
   doc?: { title?: string; body?: string }
-  plan?: {
-    tier?: Tier | null
-    customer?: string | null
-    subscription?: string | null
-    status?: string | null
-    until?: string | null
-    ending?: string | null
-    at?: string | null
-  }
-  credit?: {
-    cap?: number | null
-    bought?: number | null
-    spent?: number | null
-  }
   seller?: {
     via?: string | null
     account?: string | null
     ready?: boolean | null
     submitted?: boolean | null
   }
-  meter?: Partial<Meter>
   trend?: {
     requests?: ByDay
     spend?: ByDay
@@ -1013,34 +882,6 @@ export type Row = {
     adopted?: boolean | null
   }
 }
-
-// The meter as a whole number, however little of the row is written: a property
-// nobody has filled reads zero, so nothing downstream tests for null twice.
-let meterOf = (r: Row): Meter | null =>
-  r.meter
-    ? {
-      month: r.meter.month ?? '',
-      requests: r.meter.requests ?? 0,
-      ws_messages: r.meter.ws_messages ?? 0,
-      ws_hibernated: r.meter.ws_hibernated ?? 0,
-      rows_read: r.meter.rows_read ?? 0,
-      rows_written: r.meter.rows_written ?? 0,
-      bytes: r.meter.bytes ?? 0,
-      files: r.meter.files ?? 0,
-      emails: r.meter.emails ?? 0,
-      builds: r.meter.builds ?? 0,
-      models: r.meter.models ?? 0,
-      realtime: r.meter.realtime ?? 0,
-      texts: r.meter.texts ?? 0,
-      seconds: r.meter.seconds ?? 0,
-      built: r.meter.built ?? 0,
-      drawn: r.meter.drawn ?? 0,
-      visitors: r.meter.visitors ?? 0,
-      refunded: r.meter.refunded ?? 0,
-      credit: r.meter.credit ?? 0,
-      at: r.meter.at ?? '',
-    }
-    : null
 
 /** Whether a person's row is a newcomer's (newcomer.ts): the home page's box
  * signed their browser in, and they have no address and no number yet. */
@@ -1477,8 +1318,8 @@ let tunnelOf = (r: Row): Tunnel | null =>
     : null
 
 export let spaceOf = (r: Row): Space => ({
+  ...meteredOf(r),
   eid: r.entity.eid,
-  slug: r.space!.slug,
   store: r.space!.store ?? unrooted(r.entity.eid, r.space!.slug),
   title: r.doc?.title || r.space!.slug,
   operator: calledOf(r),
@@ -1496,33 +1337,13 @@ export let spaceOf = (r: Row): Space => ({
       sender: { ...r.sender, ...(r.phone ? { number: r.phone.number } : {}) },
     }
     : {}),
-  tier: tierOf(
-    r.space!.slug,
-    r.plan?.tier ?? null,
-    r.comped?.until,
-    Date.now(),
-    r.comp ? { ...r.comp, by: idOf(r.comp.by) } : null,
-  ),
   plan: planOf(r),
-  credit: r.credit
-    ? {
-      cap: r.credit.cap ?? 0,
-      bought: r.credit.bought ?? 0,
-      spent: r.credit.spent ?? 0,
-    }
-    : null,
   comped: r.comped?.until ?? null,
   ...(r.comp ? { comp: { ...r.comp, by: idOf(r.comp.by) } } : {}),
   seller: sellerOf(r),
   mail: mailOf(r),
   fee: r.fee?.bps ?? 0,
-  budget: r.budget?.dollars ?? null,
-  newcomer: !!r.budget?.newcomer,
   preview: previewOf(r),
-  starter: r.starter?.dollars ?? null,
-  visitors: r.visitor_share?.percent ?? null,
-  visitorCalls: r.visitor_share?.calls ?? null,
-  meter: meterOf(r),
   told: r.notified != null,
   trashed: trashedOf(r),
   slugs: slugsOf(r.former),
@@ -2833,9 +2654,9 @@ export let directoryRows = (rows: {
     // minted here rather than by a `$alias` the store resolves, because the
     // handle is made out of it and there is no second moment to write it in
     // (`spaceHandle`); a bundle mints at an eid its author chose (T-32455).
-    // A person's first space draws the starter (meter.ts `STARTER`) and the
-    // person wears `started` from then on; a space minted for someone who
-    // owns one already, or who has had theirs, holds none. Both are the
+    // A person's first space draws the starter (@yaks/platform/plans `STARTER`)
+    // and the person wears `started` from then on; a space minted for someone
+    // who owns one already, or who has had theirs, holds none. Both are the
     // platform's to say, and so is taking a name from another space, so the
     // batch is the kernel's. Answers the eid.
     mint: async (
@@ -2889,8 +2710,9 @@ export let directoryRows = (rows: {
       return (await self.at(space.eid))!
     },
     // The space whose apps' visitors may spend `percent` of its month budget
-    // together (meter.ts `visiting`) and one of them `calls` model calls a
-    // day (meter.ts `visitorCalls`); what is not given stays as it was.
+    // together (@yaks/platform/meter `visiting`) and one of them `calls` model
+    // calls a day (@yaks/platform/meter `visitorCalls`); what is not given
+    // stays as it was.
     welcome: async (
       space: Space,
       share: { percent?: number | null; calls?: number | null },
@@ -3938,7 +3760,7 @@ export let directoryRows = (rows: {
 // the namespace and no service binding. Memoized per namespace so the meta
 // space is seeded once per isolate rather than once per ask, and read fresh:
 // what a store asks — what a space has spent this month (meter.ts
-// `metering`), whether its app is in the trash (graph.ts `tick`) — must not be
+// `accounted`), whether its app is in the trash (graph.ts `tick`) — must not be
 // a moment old.
 let reached = new WeakMap<Namespace, Directory>()
 export let directoryOf = (ns: Namespace): Directory => {

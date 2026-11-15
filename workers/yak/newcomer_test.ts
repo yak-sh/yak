@@ -10,7 +10,13 @@ import { cleanup, test } from '@yaks/testing'
 import type { Tool } from '@yaks/graph'
 import { fresh, mailed } from './probe.ts'
 import type { Env } from './env.ts'
-import { atCeiling, dollars, limitOf, unaffordable, UNKEPT } from './meter.ts'
+import {
+  atCeiling,
+  dollars,
+  unaffordable,
+  UNKEPT,
+} from '@yaks/platform/standing'
+import { limitOf } from '@yaks/platform/meter'
 import {
   BUILDING,
   confined,

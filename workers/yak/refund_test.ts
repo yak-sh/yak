@@ -4,7 +4,7 @@
 import { equal, test } from '@yaks/testing'
 import { fresh, seed } from './probe.ts'
 import { stamp } from './directory.ts'
-import { monthOf, starterOf } from './meter.ts'
+import { monthOf, starterOf } from '@yaks/platform/meter'
 import type { Env } from './env.ts'
 
 test('a refund corrects the meter, and the budget and starter stay as they were', async () => {

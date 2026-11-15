@@ -10,12 +10,12 @@ import {
   daysLeft,
   directory,
   META,
-  paid,
   type Role,
   type Seat,
   type Space,
   walkTo,
 } from './directory.ts'
+import { paid } from '@yaks/platform/plans'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import type { Beside } from './operator-page.ts'
@@ -78,7 +78,8 @@ import { TOOLS } from './tools.ts'
 import { caught, defect } from './defects.ts'
 import { woken } from './build-door.ts'
 import { invitation } from './referral.ts'
-import { budget, gauges, spent } from './meter.ts'
+import { budget, spent } from '@yaks/platform/meter'
+import { gauges } from '@yaks/platform/standing'
 import { DAYS, NOT_ON, statsFor } from './views.ts'
 import { refuse } from './tool.ts'
 import { letIn, letOut, reachOf } from './operator-reach.ts'
@@ -682,7 +683,7 @@ let desk = async (
     paying: paid(space.tier),
     plan: planCard(provider.plans, space),
     paid: q.get('paid') == '1',
-    // The space's month against its allowances (meter.ts), as the
+    // The space's month against its allowances (@yaks/platform/meter), as the
     // directory's row holds it.
     bill: view == 'billing'
       ? {

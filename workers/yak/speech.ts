@@ -35,7 +35,7 @@ import type { Space } from './directory.ts'
 import type { Namespace } from '@yaks/durable-object/door'
 import type { Env } from './env.ts'
 import { onHold } from './model-spend.ts'
-import { size } from './meter.ts'
+import { size } from '@yaks/platform/standing'
 import { modelAccess } from './models.ts'
 
 /** The providers yaks.app hears and speaks through, and the secret each

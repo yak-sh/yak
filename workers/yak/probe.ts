@@ -735,7 +735,8 @@ export let when = { type: 'string', format: 'date-time' }
 
 // A free space this person owns, written into the directory by the platform
 // the way directory.ts `mint` writes one: what a space made before one person
-// was held to one free space (meter.ts `SPACES`) is. Answers its eid.
+// was held to one free space (@yaks/platform/plans `SPACES`) is. Answers its
+// eid.
 export let owned = async (
   k: Kernel,
   person: string,

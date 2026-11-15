@@ -10,14 +10,15 @@
 // next charge moved a month later (payments.ts, `postpone`), so the webhook
 // writes its plan as it writes every change (billing.ts). Any other space is
 // given the Plus plan free through a day (`comped{until}`), which
-// directory.ts `tierOf` reads as the Plus plan and checkout carries into a
-// subscription as its trial. A subscription is made only through the
+// @yaks/platform/plans `tierOf` reads as the Plus plan and checkout carries
+// into a subscription as its trial. A subscription is made only through the
 // provider's checkout, so a free space cannot be handed one of its own.
 //
 // Inviting yourself is against the terms, and is watched (the admin's
 // Invites page), never refused here.
 import type { Plans } from '@yaks/host/payments'
-import { type Directory, paid, type Referral, type Space } from './directory.ts'
+import type { Directory, Referral, Space } from './directory.ts'
+import { paid } from '@yaks/platform/plans'
 
 /// monthOn('2026-11-05T15:00:00.000Z') -> '2026-12-05T15:00:00.000Z'
 /// monthOn('2026-01-31T10:00:00.000Z') -> '2026-02-28T10:00:00.000Z'

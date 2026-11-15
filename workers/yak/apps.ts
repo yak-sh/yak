@@ -215,7 +215,7 @@ import {
   visitOf,
 } from './visit.ts'
 import { full, fullFiles } from './usage.ts'
-import { free } from './meter.ts'
+import { free } from '@yaks/platform/meter'
 import { scheduleBy } from './used.ts'
 import { sha256 } from './versions.ts'
 import { seen } from './views.ts'

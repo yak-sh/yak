@@ -2,8 +2,8 @@
 # What the Operator does with the message that signed someone up
 # (workers/yak/operator-channels.ts `BY`), and how it carries on their first
 # conversation: the sign-in letter (signin.ts `GREETING`) offers the same
-# three ways of working. The slots are the platform's numbers (meter.ts),
-# which operator-persona.ts fills.
+# three ways of working. The slots are the platform's numbers
+# (@yaks/platform/plans), which operator-persona.ts fills.
 doc:
   title: 'Someone signing up'
 ---

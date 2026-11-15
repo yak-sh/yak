@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import type { App, Meter, Space } from './directory.ts'
+import type { App, Space } from './directory.ts'
+import type { Meter } from '@yaks/platform/meter'
 import { measured } from './usage.ts'
 
 let NOW = new Date('2026-09-15T12:00:00Z')

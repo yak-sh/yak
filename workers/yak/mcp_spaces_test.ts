@@ -609,8 +609,8 @@ test(
   async () => {
     let k = await kernel()
     try {
-      // Their one free space (meter.ts `SPACES`), the one signing in made, so
-      // there is room to bring it back.
+      // Their one free space (@yaks/platform/plans `SPACES`), the one signing
+      // in made, so there is room to bring it back.
       let them = await signIn(k)
       let binspace50 = them.email.split('@')[0]
       let agent = connector(k, them.cookie)
@@ -941,7 +941,8 @@ test('trashing a bot-owned space with an app commits and returns without queryin
   try {
     let suffix = crypto.randomUUID().slice(0, 8)
     let slug = `botbin-${suffix}`
-    // Their one free space (meter.ts `SPACES`), the one signing in made.
+    // Their one free space (@yaks/platform/plans `SPACES`), the one signing in
+    // made.
     let them = await signIn(k, `${slug}@bot.yak.sh`)
     let agent = connector(k, them.cookie)
     await agent.tool('app_new', { space: slug, slug: 'notes', title: 'Notes' })
