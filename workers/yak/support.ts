@@ -28,7 +28,7 @@
 // tool and the thread's page (support-page.ts) both go through them, and
 // each platform answer is carried to whoever the thread is for
 // (support-reply.ts).
-import { type Bundle, mint } from '@yaks/graph'
+import { type Bundle, mint, minted } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { link as linked } from '@yaks/edge'
 import { KERNEL, type Meta } from './meta.ts'
@@ -362,6 +362,7 @@ export let read = async (
   store: Pick<Meta, 'query'>,
   eid: string,
 ): Promise<Thread | null> => {
+  if (!minted(eid)) return null
   let [row] = await store.query(`.entity.eid=${eid}&${THREAD}`)
   if (!row) return null
   let messages = await store.query(

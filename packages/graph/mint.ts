@@ -37,4 +37,4 @@ let MINTED =
  * minted('lemon-cake') // false
  * ```
  */
-export let minted = (id: string): boolean => MINTED.test(id)
+export let minted = (id: string): boolean => MINTED.exec(id)?.[0] === id

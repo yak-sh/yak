@@ -25,3 +25,11 @@ test('generated identities are UUIDs or full SHA addresses, never namespaced ids
   assert(!minted('child:3b21904a-b0fa-479b-8934-4286ae9c0cb1'))
   assert(!minted('3b21904a-b0fa-479b-8934-4286ae9c0cb1:progress'))
 })
+
+test('an eid consumes the whole string, including final line terminators', () => {
+  for (let id of [mint(), 'a'.repeat(40), 'a'.repeat(64)]) {
+    for (let end of ['\n', '\r', '\r\n', '\u2028', '\u2029']) {
+      assert(!minted(id + end))
+    }
+  }
+})

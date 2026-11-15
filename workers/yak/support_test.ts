@@ -8,6 +8,7 @@ import {
   type Asking,
   opening,
   opens,
+  read,
   saying,
   type Thread,
 } from './support.ts'
@@ -263,6 +264,26 @@ let letterOf = async (about: string, at: Kernel = k) => {
   ))[0] as Record<string, Record<string, unknown>> | undefined
 }
 
+test('a thread lookup accepts only an eid before querying the store', async () => {
+  let eid = crypto.randomUUID()
+  let store = {
+    query: () => {
+      throw Error('an invalid thread reached the store')
+    },
+  }
+  for (
+    let id of [
+      '',
+      'support',
+      `${eid}|.comment`,
+      `${eid},${crypto.randomUUID()}`,
+      `${eid}&.limit=1`,
+      ` ${eid}`,
+      `${eid}\n`,
+    ]
+  ) equal(await read(store, id), null, id)
+})
+
 test('a thread is opened, answered and read in the same place', async () => {
   let opened = await feedback(agent, {
     app: 'board',
@@ -486,6 +507,63 @@ test("two spaces never read each other's threads, and a signed-out one opens to 
   let away = await opened(`/support/${mine}`)
   equal(away.status, 303)
   assertStringIncludes(away.location ?? '', '/login?return=')
+})
+
+let injection = await helped(), victim = await helped()
+let ownThread = (await feedback(injection.agent, { text: 'My thread.' })).value
+  .thread
+let victimThread = (await feedback(victim.agent, { text: 'Private thread.' }))
+  .value.thread
+await support({ thread: victimThread, text: 'Private reply.' })
+let splicedThread = `${ownThread}|.comment.target=${victimThread}`
+
+test('a query in a thread id cannot read or write another thread through any support door', async () => {
+  equal((await opened(`/support/${ownThread}`, injection.cookie)).status, 200)
+  equal(
+    (await opened(`/support/${splicedThread}`, injection.cookie)).status,
+    404,
+  )
+  equal(
+    (await k.at(k.host, `/support/${splicedThread}`, {
+      method: 'POST',
+      headers: {
+        cookie: injection.cookie,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ text: 'Injected.' }).toString(),
+    })).status,
+    404,
+  )
+  for (let text of [undefined, 'Injected.']) {
+    let no = await assertRejects(
+      () => injection.agent.answer('feedback', { thread: splicedThread, text }),
+      Error,
+    )
+    assertStringIncludes(no.message, 'no thread')
+  }
+  equal(
+    (await k.at(
+      k.host,
+      `/api/support?thread=${encodeURIComponent(splicedThread)}`,
+      {
+        headers: { cookie: k.owner.cookie },
+      },
+    )).status,
+    404,
+  )
+  equal(
+    (await support({ thread: splicedThread, text: 'Injected.' })).status,
+    404,
+  )
+  equal(
+    (await feedback(victim.agent, { thread: victimThread })).value.messages
+      .map((m) => m.words),
+    ['Private reply.'],
+  )
+  equal(
+    (await feedback(injection.agent, { thread: ownThread })).value.messages,
+    [],
+  )
 })
 
 // The kernel's mail fetch, which this test turns off to stand for an outage:
