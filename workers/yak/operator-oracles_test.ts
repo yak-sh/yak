@@ -11,13 +11,21 @@ import { directoryOf, stamp } from './directory.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { operating, operatorContext } from './operator.ts'
 import { drain } from './operator-store.ts'
-import { oracleContext, oracleMap } from './operator-oracles.ts'
+import {
+  oracleContext,
+  oracleMap,
+  oracleOf,
+  oracleTopic,
+} from './operator-oracles.ts'
 import { NOTES } from './standing.ts'
 import { staged } from './release.ts'
 import { r2RawObjects } from './lib/objects.ts'
 import { conversationOf } from './operator-host.ts'
 import { rootOf } from './operator-root.ts'
 import { KERNEL, meta } from './meta.ts'
+import { owned } from './operator-access.ts'
+import { operatorApi } from './operator-api.ts'
+import { state } from './testing.ts'
 import { link } from '@yaks/edge'
 
 let owner = crypto.randomUUID()
@@ -119,7 +127,7 @@ let script = (req: Request): Item[] => {
       ? call('graph_apply', {
         self: true,
         bundles: [{
-          entity: { eid: short(app.eid) },
+          entity: { eid: short(oracleOf(owner, app.eid)) },
           content: {
             body:
               'Recipes use grams; repeat ingredient amounts in instructions.',
@@ -130,7 +138,7 @@ let script = (req: Request): Item[] => {
   }
   if (fork && outcome.includes('Find how amounts')) {
     return call('spawn', {
-      topic: short(app.eid),
+      topic: short(oracleOf(owner, app.eid)),
       prompt: 'How should recipe amounts be written?',
     })
   }
@@ -165,14 +173,14 @@ let forkAsk = asked.find((r) =>
   JSON.stringify(r.items).includes('fork of the')
 )!
 let oracleAsk = asked.find((r) => ORACLED.test(String(r.instructions)))!
-let [learned] = await store.g.get([app.eid])
+let [learned] = await store.g.get([oracleOf(owner, app.eid)])
 let drawn = await conversationOf(store, '/at', started.session)
 
 test('a conversation stays small while its fork obtains an answer from the app oracle', () => {
   assertStringIncludes(
     String(rootAsk.instructions),
     `${
-      short(app.eid)
+      short(oracleOf(owner, app.eid))
     } app home/recipes: Recipe box, holds recipes; does recipes; its notes say how
     - kind recipe: recipe{serves}`,
   )
@@ -183,7 +191,7 @@ test('a conversation stays small while its fork obtains an answer from the app o
     forkAsk.tools.map((t) => t.name),
   )
   assertEquals((oracle.session as Comp).persona, ORACLE)
-  assertEquals((oracle.session as Comp).topic, app.eid)
+  assertEquals((oracle.session as Comp).topic, oracleOf(owner, app.eid))
   assertStringIncludes(String(oracleAsk.instructions), 'Use grams.')
   assertStringIncludes(
     String(oracleAsk.instructions),
@@ -220,7 +228,7 @@ await store.g.apply([
     topic: { name: 'hidden app' },
     doc: { title: 'Secret app' },
   },
-  link(space.eid, 'contains', hidden),
+  link(oracleOf(owner, space.eid), 'contains', hidden),
 ])
 let spaceContext = await oracleContext(ctx, store.g, space.eid)
 
@@ -254,7 +262,7 @@ test('the system prompt saved beside the conversation is the one the model recei
   let sending = kept.find((b) => b.ask)?.sending as Comp
   assertStringIncludes(
     String(sending.instructions),
-    `${short(app.eid)} app home/recipes`,
+    `${short(oracleOf(owner, app.eid))} app home/recipes`,
   )
   assertEquals(String(sending.instructions).includes('connector guide'), false)
 })
@@ -268,4 +276,83 @@ test('the context names entities by short id, never a full uuid', () => {
     ...r.items.map((i) => JSON.stringify(i)),
   ])
   assertEquals(said.filter((l) => UUID.test(l)), [])
+})
+
+let resolved = await oracleTopic(ctx, store.g, app.eid)
+await store.g.apply([{
+  entity: { eid: app.eid },
+  topic: { name: 'legacy recipes' },
+  content: { body: 'Learned with an unknown reader.' },
+}], { trusted: true })
+let current = await oracleContext(ctx, store.g, app.eid)
+
+test('an existing session topic resolves to its reader’s fresh projection', () => {
+  assertEquals(resolved, oracleOf(owner, app.eid))
+  assertEquals(current.includes('Learned with an unknown reader.'), false)
+  assertStringIncludes(current, 'Use millilitres for liquids.')
+})
+
+let old = operatorMemory()
+let durable = { ...old, marks: { get: () => undefined } }
+let before = owned(durable)
+await oracleContext(ctx, old.g, app.eid)
+let after = owned(durable)
+test('compiling an oracle leaves a durable store’s unfinished ownership pass in effect', () => {
+  assertEquals([before, after], [false, false])
+})
+
+let second = crypto.randomUUID()
+await dir.apply({
+  entities: [{
+    entity: { eid: crypto.randomUUID() },
+    member: { space: space.eid, person: second, role: 'editor' },
+  }],
+}, { 'x-yak-person': owner, 'x-yak-role': 'owner' })
+let secondContext = await operatorContext(env, { person: second }, space)
+let secondMap = await oracleMap(secondContext, store.g)
+let secondOracle = await oracleContext(secondContext, store.g, app.eid)
+let projectionDoor = operatorApi(store, state())
+let projectionRead = async (person: string, q: string) => {
+  let response = await projectionDoor.answer(
+    new Request('https://builder/api/query?q=' + encodeURIComponent(q)),
+    { person, space: space.eid },
+  )
+  assertEquals(response.status, 200)
+  return await response.json() as { entity: { eid: string }; owner?: Comp }[]
+}
+
+let rows = await store.g.read(`.operator_oracle.person=${owner}&*`)
+let ids = rows.map((b) => b.entity.eid).join(',')
+let mine = await projectionRead(owner, `.entity.eid=${ids}&*`)
+let theirs = await projectionRead(second, `.entity.eid=${ids}&*`)
+let secondRows = await store.g.read(`.operator_oracle.person=${second}&*`)
+let otherRows = await projectionRead(
+  owner,
+  `.entity.eid=${secondRows.map((b) => b.entity.eid).join(',')}&*`,
+)
+
+test('generated topics, sources and contains links belong only to the reader whose reach read them', () => {
+  assertEquals(rows.filter((b) => b.topic).length, 2)
+  assertEquals(rows.filter((b) => b.doc && !b.topic).length, 2)
+  assertEquals(rows.filter((b) => b.contains).length, 4)
+  assertEquals(rows.every((b) => (b.owner as Comp).person == owner), true)
+  assertEquals(
+    mine.length,
+    rows.length,
+  )
+  assertEquals(theirs, [])
+  assertStringIncludes(secondMap, short(oracleOf(second, app.eid)))
+  assertStringIncludes(secondOracle, 'Use millilitres for liquids.')
+  assertEquals(
+    secondOracle.includes('Recipes use grams; repeat ingredient amounts'),
+    false,
+  )
+  assertEquals(otherRows, [])
+  let names = rows.filter((b) => b.topic).map((b) => (b.topic as Comp).name)
+  assertEquals(
+    secondRows.filter((b) => b.topic).some((b) =>
+      names.includes((b.topic as Comp).name)
+    ),
+    false,
+  )
 })

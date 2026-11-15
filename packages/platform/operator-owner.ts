@@ -28,6 +28,7 @@ import { after, each } from '@yaks/fp'
  * the contacts they gave, what they were told, and their drafts. */
 export const OWNED: [string, string][] = [
   ['operator_session', 'person'],
+  ['operator_oracle', 'person'],
   ['operator_request', 'person'],
   ['wake', 'for'],
   // Retired, kept on a wake until contraction (./operator-vocab.ts).

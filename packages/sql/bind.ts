@@ -947,7 +947,11 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   // A stored property's presence is a set of component owners, read first
   // (`owned`); it also leaves the outer row's order and tombstone check where
   // every query keeps them.
-  if (!worn(ctx, hop.comp)) return unworn(op, p.value, hop.prop)
+  if (
+    !worn(ctx, hop.comp) ||
+    ctx.absent?.includes(hop.comp) &&
+      ctx.derived[`${hop.comp}.${hop.prop}`]?.worn !== false
+  ) return unworn(op, p.value, hop.prop)
   let stored = ctx.v.prop(hop.comp, hop.prop)
   if (
     op == EXISTS && hop.comp != 'entity' && stored && !stored.computed &&
@@ -1120,6 +1124,12 @@ let wears = (v: Vocab, at: string | undefined, comp: string): boolean =>
 // path that crosses reads nothing, and is answered as such.
 let reachable = (ctx: Ctx, hops: Hop[]): boolean => {
   if (!worn(ctx, hops[0].comp)) return false
+  if (
+    hops.some((h) =>
+      ctx.absent?.includes(h.comp) &&
+      ctx.derived[`${h.comp}.${h.prop}`]?.worn !== false
+    )
+  ) return false
   let at = lands(ctx.v, hops[0].comp, hops[0].prop)
   for (let h of hops.slice(1)) {
     if (h.comp && !wears(ctx.v, at, h.comp)) return false

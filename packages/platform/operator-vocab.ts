@@ -119,6 +119,15 @@ export let operatorDoc: VocabDoc = {
         },
       },
     },
+    operator_oracle: {
+      component: true,
+      description:
+        "A topic, source or link projected with one person's reach into the Operator's store. A missing person quarantines a legacy projection whose reader is unknown.",
+      properties: {
+        person: { type: 'string', ref: 'person', death: 'keep' },
+        subject: { type: 'string', ref: 'entity', death: 'keep' },
+      },
+    },
     operator_session: {
       component: true,
       description:

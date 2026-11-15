@@ -1,12 +1,13 @@
 import type { Bundle, Graph, ReadOpts } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
 import type { Meta } from '@yaks/sqlite'
-import { absent, and, eq, or } from '@yaks/query/core'
+import { absent, and, eq, or, pred, present } from '@yaks/query/core'
 import { MADE, ON, OWNED, OWNERS } from '@yaks/platform/operator-owner'
 import type { Held } from './build-door.ts'
 import type { Conversing } from '@yaks/harness/conversations'
 import type { OperatorStore } from './operator-store.ts'
 import { spaceOf } from './operator-root.ts'
+import { ORACLES } from './oracle-move.ts'
 
 type Store = OperatorStore
 type Owner = Pick<Held, 'person' | 'space'>
@@ -149,6 +150,25 @@ export let theirFiles = (held: Pick<Held, 'person' | 'space'>) =>
       ),
   )
 
+// Until the alarm quarantines old projections, hide their topics, links and
+// sources through their existing links. Policy relations inspect the underlying
+// graph, so hiding a topic cannot make its source appear unlinked and public.
+let oracles = (person: string) =>
+  or(
+    eq('operator_oracle.person', person),
+    and(
+      absent('operator_oracle'),
+      absent('topic'),
+      absent('edge.from.topic'),
+      absent('edge.to.topic'),
+      {
+        ...pred('edges_to', '!', null),
+        not: true,
+        where: and(present('contains'), present('edge.from.topic')),
+      },
+    ),
+  )
+
 /** What `person` reads the Operator's store with: what is another person's
  * there is out of sight, wherever a read reaches it from, and the memories,
  * tasks and persona nobody owns stay in view. A store whose owners are not
@@ -157,7 +177,12 @@ export let sight = (
   store: { g: Graph; marks?: Pick<Meta, 'get'> },
   person: string,
 ): ReadOpts => ({
-  visibility: { entity: owned(store) ? theirs(person) : claimed(person) },
+  visibility: {
+    entity: and(
+      owned(store) ? theirs(person) : claimed(person),
+      ...store.marks?.get(ORACLES) == 'done' ? [] : [oracles(person)],
+    ),
+  },
 })
 
 /** The Operator's store as `person` reads it (`sight`). Only its reads are

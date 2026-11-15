@@ -1139,6 +1139,10 @@ export class Builder extends Durable {
             let { attachmentBackfill } = await import('./attachment-move.ts')
             return backfill(attachmentBackfill(store, this.#env))
           },
+          oracles: async () => {
+            let { oracleBackfill } = await import('./oracle-move.ts')
+            return backfill(oracleBackfill(store))
+          },
           owners: async () => {
             let { ownerBackfill } = await import('./owner-move.ts')
             return backfill(ownerBackfill(store))

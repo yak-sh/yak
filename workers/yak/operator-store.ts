@@ -23,6 +23,7 @@ import { phoneTexts } from './phone-move.ts'
 import { channeled, CHANNELS } from './channel-move.ts'
 import { FILES, INTAKE } from './operator-files.ts'
 import { operatorDoc } from '@yaks/platform/operator-vocab'
+import { ORACLES } from './oracle-move.ts'
 import { OWNERS } from '@yaks/platform/operator-owner'
 import { due, soonest, tick } from '@yaks/wake'
 import type { Watching } from './operator-schedules.ts'
@@ -147,6 +148,7 @@ export let operatorStore = async (
       // A new file holds nothing written before the rule that keeps owners,
       // nor any wake in the Operator's old words.
       if (born) marks.set(OWNERS, 'done')
+      if (born) marks.set(ORACLES, 'done')
       if (born) marks.set(WAKES, 'done')
       // Nor anything kept before it numbered what it keeps.
       if (born) marks.set(NUMBERED, 'done')

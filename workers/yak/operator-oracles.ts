@@ -1,5 +1,5 @@
-// Topics live beside the Operator's work, on the eids of the spaces and apps
-// they describe. Source documents are refreshed when consulted; the contents
+// Topics live beside the Operator's work, projected for the person whose
+// reach reads the spaces and apps they describe. Source documents are refreshed when consulted; the contents
 // an oracle keeps are never replaced by discovery.
 import {
   addressed,
@@ -19,6 +19,7 @@ import { instructions } from './guide.ts'
 import { told } from './memory.ts'
 import { appEntry, holds, listed } from './standing.ts'
 import { type Ctx, refuse } from './tool.ts'
+import { absent, and, eq, or } from '@yaks/query/core'
 
 // What yaks.app is to the Operator, and how it reaches the oracles, is the
 // base persona's plugins/yaks.app/persona/platform.md.
@@ -31,11 +32,26 @@ let keep = async (g: Graph, wanted: Bundle[]) => {
   if (writes.length) await g.apply(writes, { trusted: true })
 }
 
-let topic = (eid: string, title: string, body: string): Bundle => ({
-  entity: { eid },
-  topic: { name: named(title) },
-  doc: { title, body },
+/** One reader's topic for a directory space or app. */
+export let oracleOf = (person: string, subject: string): string =>
+  derivedEid(`operator-oracle|${person}|${subject}`)
+
+let projected = (person: string, subject: string, b: Bundle): Bundle => ({
+  ...b,
+  operator_oracle: { person, subject },
 })
+
+let topic = (
+  person: string,
+  subject: string,
+  title: string,
+  body: string,
+): Bundle =>
+  projected(person, subject, {
+    entity: { eid: oracleOf(person, subject) },
+    topic: { name: named(`${title} ${person}`) },
+    doc: { title, body },
+  })
 
 let source = (from: string, key: string, title: string, body: string) => {
   let eid = derivedEid(`operator-oracle|${key}|${from}`)
@@ -44,6 +60,16 @@ let source = (from: string, key: string, title: string, body: string) => {
     link(from, 'contains', eid),
   ]
 }
+
+let sources = (
+  person: string,
+  subject: string,
+  key: string,
+  title: string,
+  body: string,
+) =>
+  source(oracleOf(person, subject), key, title, body)
+    .map((b) => projected(person, subject, b))
 
 type Subjects = { spaces: Space[]; apps: { space: Space; app: App }[] }
 let subjects = async (ctx: Ctx): Promise<Subjects> => {
@@ -59,17 +85,22 @@ let subjects = async (ctx: Ctx): Promise<Subjects> => {
   }
 }
 
-let topics = ({ spaces, apps }: Subjects): Bundle[] => [
+let topics = (person: string, { spaces, apps }: Subjects): Bundle[] => [
   ...spaces.map((s) =>
-    topic(s.eid, s.slug, `The space ${s.slug}: ${s.title}.`)
+    topic(person, s.eid, s.slug, `The space ${s.slug}: ${s.title}.`)
   ),
   ...apps.flatMap(({ space, app }) => [
     topic(
+      person,
       app.eid,
       `${space.slug}/${app.slug}`,
       `${app.title || app.slug}. ${url(space, app)}`,
     ),
-    link(space.eid, 'contains', app.eid),
+    projected(
+      person,
+      app.eid,
+      link(oracleOf(person, space.eid), 'contains', oracleOf(person, app.eid)),
+    ),
   ]),
 ]
 
@@ -82,17 +113,19 @@ let topics = ({ spaces, apps }: Subjects): Bundle[] => [
 export let oracleMap = async (ctx: Ctx, g: Graph): Promise<string> => {
   let all = await subjects(ctx)
   let [, lines] = await Promise.all([
-    keep(g, topics(all)),
+    keep(g, topics(ctx.person, all)),
     listed(ctx, all.apps),
   ])
   return [
     '## Oracles',
     ...all.spaces.flatMap((s) => [
-      `- ${short(s.eid)} space ${safe(s.slug)}: ${safe(s.title)}`,
+      `- ${short(oracleOf(ctx.person, s.eid))} space ${safe(s.slug)}: ${
+        safe(s.title)
+      }`,
       ...lines.filter((l) => l.space.eid == s.eid).map((l) =>
-        `  - ${short(l.app.eid)} app ${safe(s.slug + '/' + l.app.slug)}: ${
-          safe(l.app.title)
-        }, ${safe(holds(l.kinds))}${
+        `  - ${short(oracleOf(ctx.person, l.app.eid))} app ${
+          safe(s.slug + '/' + l.app.slug)
+        }: ${safe(l.app.title)}, ${safe(holds(l.kinds))}${
           l.does.length ? `; does ${safe(l.does.join(', '))}` : ''
         }${l.noted ? '; its notes say how' : ''}${
           l.shapes.map((k) => `\n    - kind ${safe(k)}`).join('')
@@ -105,21 +138,33 @@ export let oracleMap = async (ctx: Ctx, g: Graph): Promise<string> => {
 /** The topic an oracle is asked about, by the `#id` the map names it with
  * (or its eid), resolved as the Operator's own graph resolves any id. */
 export let oracleTopic = async (ctx: Ctx, g: Graph, said: string) => {
-  await keep(g, topics(await subjects(ctx)))
+  let all = await subjects(ctx)
+  await keep(g, topics(ctx.person, all))
   let [eid] = await addressed(g, [said])
-  return eid
+  return resolve(ctx.person, all, eid)
+}
+
+let resolve = (person: string, all: Subjects, eid: string) => {
+  let subject = [...all.spaces, ...all.apps.map((a) => a.app)]
+    .find((s) => s.eid == eid || oracleOf(person, s.eid) == eid)
+  if (!subject) throw refuse('access', 'That topic is outside your reach.')
+  return oracleOf(person, subject.eid)
 }
 
 /** Refresh only this oracle's sources, then use the topic package's context
  * compiler. Discovery never overwrites the oracle's learned contents. */
 export let oracleContext = async (ctx: Ctx, g: Graph, eid: string) => {
   let all = await subjects(ctx)
-  let app = all.apps.find((a) => a.app.eid == eid)
-  let space = all.spaces.find((s) => s.eid == (app?.space.eid ?? eid))
-  if (!space || (!app && space.eid != eid)) {
+  eid = resolve(ctx.person, all, eid)
+  let app = all.apps.find((a) => oracleOf(ctx.person, a.app.eid) == eid)
+  let space = all.spaces.find((
+    s,
+  ) => (app ? s.eid == app.space.eid : oracleOf(ctx.person, s.eid) == eid))
+  if (!space || (!app && oracleOf(ctx.person, space.eid) != eid)) {
     throw refuse('access', 'That topic is outside your reach.')
   }
-  let memories = source(
+  let memories = sources(
+    ctx.person,
     space.eid,
     'memories',
     `${space.slug}: memories`,
@@ -133,7 +178,7 @@ export let oracleContext = async (ctx: Ctx, g: Graph, eid: string) => {
   )
   let [persona] = await g.get([ORACLE])
   await keep(g, [
-    ...topics(all),
+    ...topics(ctx.person, all),
     ...persona ? [] : [{
       entity: { eid: ORACLE },
       persona: {},
@@ -143,26 +188,37 @@ export let oracleContext = async (ctx: Ctx, g: Graph, eid: string) => {
     ...memories,
     ...app
       ? [
-        ...source(
-          eid,
+        ...sources(
+          ctx.person,
+          app.app.eid,
           'app',
           `${space.slug}/${app.app.slug}: notes and commands`,
           await appEntry(ctx, space, app.app),
         ),
-        link(eid, 'contains', memories[0].entity.eid),
+        projected(
+          ctx.person,
+          app.app.eid,
+          link(eid, 'contains', memories[0].entity.eid),
+        ),
       ]
       : [],
   ])
   // A private work store may have topics discovered for a different person.
   // Their app and space subjects must not enter this person's topic outline.
   let allowed = new Set(
-    topics(all).filter((b) => b.topic).map((b) => b.entity.eid),
+    topics(ctx.person, all).filter((b) => b.topic).map((b) => b.entity.eid),
   )
   let visible = (b: Bundle) => !b.topic || allowed.has(b.entity.eid)
-  let view = {
+  let visibility = {
+    entity: and(
+      or(absent('operator_oracle'), eq('operator_oracle.person', ctx.person)),
+    ),
+  }
+  let view: Graph = {
     ...g,
-    get: async (...args: Parameters<Graph['get']>) =>
-      (await g.get(...args)).filter(visible),
+    read: (q, opts) => g.read(q, { ...opts, visibility }),
+    get: async (ids, comps, opts) =>
+      (await g.get(ids, comps, { ...opts, visibility })).filter(visible),
   }
   let got = await gather(view)(eid)
   if (!got) throw refuse('missing', 'That topic is gone.')
