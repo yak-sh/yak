@@ -43,7 +43,8 @@ import { argsOf } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
 import type { Runner } from '@yaks/tools'
 import { CallError } from '@yaks/tools/errors'
-import { denoListen, denoReady } from './deno.ts'
+import { denoListen, denoReady, type Listen } from './deno.ts'
+import { secured } from './access.ts'
 import { DB, HOSTNAME, PORT, served } from './address.ts'
 import type { Handler, Route } from './route.ts'
 
@@ -152,7 +153,11 @@ export let listening = (
 }
 
 /** The implementation of the tool ./vocab.json declares. */
-export let runs = (host: Serving): Runs => ({
+export let runs = (
+  host: Serving,
+  options: { token?: string } = {},
+  listen: Listen = denoListen,
+): Runs => ({
   serve: async (call): Promise<Bundle[]> => {
     let handler = host.handler
     // A host that composed this package has a handler; one that does not has
@@ -179,7 +184,7 @@ export let runs = (host: Serving): Runs => ({
     let active = requests(addressed(handler, host.config.db))
     let server
     try {
-      server = denoListen({
+      server = listen({
         port,
         hostname,
         reusePort: args.share === true,
@@ -190,7 +195,7 @@ export let runs = (host: Serving): Runs => ({
           // result is a long way off.
           console.error(listening(at, served(addr), host))
         },
-      }, active.handle)
+      }, secured(active.handle, () => options.token))
     } catch (error) {
       if (error instanceof Error && error.name == 'AddrInUse') {
         throw new CallError('address', `${hostname}:${port} is already in use`)

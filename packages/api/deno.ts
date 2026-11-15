@@ -51,6 +51,15 @@ export type Listener = {
 /** Where a server ended up listening. */
 export type Addr = { hostname: string; port: number }
 
+/** The transport's peer address, supplied by the listener rather than HTTP headers. */
+export type Peer = { remoteAddr: Addr }
+
+/** A request together with the connection it arrived on. */
+export type Incoming = (
+  request: Request,
+  peer: Peer,
+) => Response | Promise<Response>
+
 /** How this package asks a runtime to listen on a port. `reusePort` lets
  * another server that asks the same way listen on it too (SO_REUSEPORT, Linux
  * only; Deno needs `--unstable-net`), so a replacement can start answering
@@ -62,7 +71,7 @@ export type Listen = (
     reusePort?: boolean
     onListen?: (addr: Addr) => void
   },
-  handler: (request: Request) => Response | Promise<Response>,
+  handler: Incoming,
 ) => Listener
 
 // This runtime's `Deno.serve`, or null when there is none — found the same way
