@@ -13,12 +13,8 @@
 // feedback is kept and never mailed, and a space nobody else is in is deleted
 // without a confirmation letter (workers/yak tools.ts).
 //
-// A visitor is nobody when Cloudflare verified it as a company's bot: a
-// search engine's or an AI company's crawler, a link previewer, a monitor.
-// Cloudflare checks the network it came from, so the list is Cloudflare's to
-// keep, never a list of user agents here to rot. Nobody looks at a page one
-// renders, so nothing it says broke is a person's break (workers/yak apps.ts
-// `/report`).
+// A visitor Cloudflare verified as a company's bot is nobody's too, and every
+// page's report door drops what one says broke (@yaks/tracker/report `door`).
 
 export let BOT = '@bot.yak.sh'
 export let ADMIN = `admin${BOT}`
@@ -29,14 +25,6 @@ export let DEMO = `yourname${BOT}`
 export let isTestAddress = (address: string): boolean =>
   (address.endsWith(BOT) && address != ADMIN && address != DEMO) ||
   address.endsWith('.invalid')
-
-/** A request as the runtime hands it over, with Cloudflare's own facts on it. */
-type Arrived = Request & { cf?: { verifiedBotCategory?: string } }
-
-// Unverified reads as a person, the same safe direction: a request with no
-// `cf` came from inside, and a bot Cloudflare could not verify is let through.
-export let isVerifiedBot = (req: Request): boolean =>
-  !!(req as Arrived).cf?.verifiedBotCategory
 
 // A visit is nobody's when its link names the fleet's own checks as its
 // source (`utm_source=agent-check`): an agent checking a live page, through a

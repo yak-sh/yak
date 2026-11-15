@@ -18,8 +18,8 @@ import { type Application, application } from './app.ts'
 // The page (./page.ts) carries the tracker's page reporter (@yaks/tracker/page)
 // inline, ahead of its own code, as yaks.app weaves it into every app's page
 // (workers/yak/page-script.ts). What it catches it posts to `/api/report`,
-// which reads the body as yaks.app's door does (@yaks/tracker/report
-// `received`) and hands each break to the host's own telemetry.
+// which is yaks.app's report door (@yaks/tracker/report `door`) handing each
+// break to the host's own telemetry.
 
 import { queryRedirect } from '@yaks/query'
 import {
@@ -39,7 +39,7 @@ import { page as html } from './page.ts'
 import { preload } from './preload.ts'
 import { person } from '@yaks/cli/host'
 import type { Config } from '@yaks/cli/config'
-import { type Context, received } from '@yaks/tracker/report'
+import { type Context, door, flood } from '@yaks/tracker/report'
 import type { Vault } from '@yaks/secrets'
 import { authorization } from './authorize.ts'
 import { bytes, text } from '@yaks/api/asset'
@@ -188,6 +188,9 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
   let cached = kept('/', 'text/html; charset=utf-8', html, {
     early: host.early,
   })
+  // Breaks a minute this app's pages may report, all together: a page in a
+  // render loop that throws every frame must not file one a frame.
+  let over = flood(30)
   let owner = () =>
     person({
       graph: host.graph,
@@ -270,14 +273,14 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
     {
       method: 'POST',
       path: '/api/report',
-      // Whoever is looking at the page is the configured person, and the
-      // reporter caps what one page load sends. A page telling of its own
-      // outdated code (./outlived.ts `OUTDATED`) is no break.
-      handle: async (request) => {
-        let breaks = (await received(request))
-          .filter((b) => !b.message.includes(OUTDATED.message))
-        let by = breaks.length ? await owner() : undefined
-        for (let b of breaks) {
+      // Whoever is looking at the page is the configured person. A page
+      // telling of its own outdated code (./outlived.ts `OUTDATED`) is no
+      // break.
+      handle: door({
+        flooding: () => over('page'),
+        file: async (b) => {
+          if (b.message.includes(OUTDATED.message)) return
+          let by = await owner()
           await host.report?.(
             Object.assign(
               new Error(b.message, b.cause ? { cause: b.cause } : undefined),
@@ -286,6 +289,7 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
             {
               mechanism: b.mechanism,
               breadcrumbs: b.breadcrumbs,
+              ...b.version != null ? { version: b.version } : {},
               tags: {
                 entrypoint: 'browser report',
                 request: b.request,
@@ -294,9 +298,8 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
               },
             },
           )
-        }
-        return new Response(null, { status: 204 })
-      },
+        },
+      }),
     },
     { method: 'GET', path: '/%23*', handle: page },
     ...letters.flatMap((l): Route[] => [

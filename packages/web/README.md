@@ -36,10 +36,12 @@ machine. `/web/styles.css` serves @yaks/ui's stylesheet followed by browse's
 styles. The manifest and icons live beside the page.
 
 The page carries @yaks/tracker's page reporter inline, ahead of the app. It
-posts what it catches to `POST /api/report`, which reads the body with
-@yaks/tracker's `broken` and hands each break to the host's `report` as the
-configured person's, tagged `entrypoint: browser report` and the page's path. A
-box whose config names a tracker spool files them as bugs.
+posts what it catches to `POST /api/report`, @yaks/tracker's report `door` as
+yaks.app's pages have it: a verified bot's render is dropped, the app's pages
+together may report 30 breaks a minute, and each break goes to the host's
+`report` as the configured person's, with the release its page named, tagged
+`entrypoint: browser report` and the page's path. A box whose config names a
+tracker spool files them as bugs.
 
 `POST /web/apply` attributes writes to the configured person using the API's
 admission and write handler. `/web/owner` resolves that person through the

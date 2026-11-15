@@ -58,6 +58,28 @@ test('a page telling of its own outdated code is no break; any other is', async 
   equal(told, ['live client — Refused: something else'])
 })
 
+test("a page's break carries the release it ran, and a page in a loop is told to stop", async () => {
+  let vocab = loadVocab([])
+  let versions: (number | undefined)[] = []
+  let report = routes({
+    vocab,
+    graph: graph({ storage: ram(vocab), vocab }),
+    report: (_, context) => void versions.push(context?.version),
+  }).find((r) => r.path == '/api/report')!
+  let post = async (body: object) =>
+    (await report.handle(
+      new Request('http://x/api/report', {
+        method: 'POST',
+        body: JSON.stringify({ message: 'x is undefined', ...body }),
+      }),
+    )).status
+  equal([await post({ version: 4 }), await post({})], [204, 204])
+  equal(versions, [4, undefined])
+  let said: number[] = []
+  while (said.length < 62 && !said.includes(429)) said.push(await post({}))
+  equal(said.at(-1), 429)
+})
+
 test('the page and every file it loads but its canvas answer without the network', async () => {
   let vocab = loadVocab([])
   let door = routes({

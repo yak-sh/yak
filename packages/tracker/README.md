@@ -303,9 +303,13 @@ door's body, the reporter's, the browser's Reporting API's, or a native shell's
 (the reporter's, naming itself as `type` and adding `tags` its door may keep),
 into breaks, leaving out an answer `refusal` calls a no somebody meant (default:
 a 4xx) and a fetch of the page's own origin that had no answer, which the
-reporter woven into a tab opened before T-124729 still sends. The platform
-admits captured failures into the tracker; the box hands them to the host's
-reporter, which spools them like any other.
+reporter woven into a tab opened before T-124729 still sends. `door(filing)` is
+the report door both serve: it drops what a page a verified bot renders sends
+(Cloudflare's `cf.verifiedBotCategory`), answers 429 while `flooding`
+(`flood(rate)` counts a key's passes a minute), and files each break with the
+release its page named, else the one `serving` says. The platform admits
+captured failures into the tracker; the box hands them to the host's reporter,
+which spools them like any other.
 
 [@yaks/tools](../tools/README.md) declares `exception{type, value}` for what was
 thrown in an answer or transcript entry. Tracker extends it with `stack`,

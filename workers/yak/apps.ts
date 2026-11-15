@@ -29,7 +29,8 @@ import { previewed } from './preview-html.ts'
 // script (public/report.js), every app response carries `Reporting-Endpoints`
 // and `NEL` so the browser itself reports CSP violations, crashes,
 // deprecations and network errors, and both land on `POST /api/report`, which
-// writes the same `exception` entity a route that threw does. Rate-limited
+// writes the same `exception` entity a route that threw does, by the rules
+// every page's report door keeps (@yaks/tracker/report `door`). Rate-limited
 // per app: a page in a loop is a bug to see once, not a write flood. What the
 // door refused on purpose never becomes one (unseen.ts `refusal`): a
 // signed-out visitor sent to sign in is the platform working.
@@ -183,9 +184,7 @@ import {
 import { type Alone, CLIENT, fixed, NAMED_CLIENT } from './kept-page.ts'
 import { cookieValue } from '@yaks/platform/cookie'
 import { noted, refusal, serving } from './unseen.ts'
-import { broken } from '@yaks/tracker/report'
-import { flood } from './lib/flood.ts'
-import { isVerifiedBot } from '@yaks/platform/bots'
+import { door as reportDoor, flood } from '@yaks/tracker/report'
 import { ADDRESS } from '@yaks/platform/routes'
 import {
   background,
@@ -319,7 +318,6 @@ let formPath = (path: string, req: Request) =>
 // address that does it and comes back (T-32593).
 let SAYS: Record<string, string> = {
   method_not_allowed: 'that door does not answer this method',
-  too_many_reports: 'this app has reported too many breaks this minute',
   expected_websocket: 'the live door takes a websocket upgrade',
   // Names no doors: `api` below is their one list.
   not_found: "no such door under this app's api",
@@ -1431,8 +1429,9 @@ let reporting = (
   })
 }
 
-// Reports per app per minute (lib/flood.ts): a page in a render loop that
-// throws every frame must not write a thousand entities a second.
+// Reports per app per minute (@yaks/tracker/report `flood`): a page in a
+// render loop that throws every frame must not write a thousand entities a
+// second.
 let over = flood(30)
 let flooding = (space: Space, app: App) => over(`${space.eid}/${app.eid}`)
 
@@ -1934,39 +1933,19 @@ export let api = async (
   if (NAMED_CLIENT.test(path)) return namedClient(req, env, path)
   if (CLIENT.includes(path)) return platformFile(req, env, path)
   let store = appStore(env.STORE, space, app, env)
-  // What the page (or the browser itself) says broke. Anyone may report —
-  // a break belongs to whoever was looking at the page, and asking a
-  // stranger to sign in first would lose exactly the breaks nobody sees.
+  // What the page (or the browser itself) says broke, filed as the app's
+  // (@yaks/tracker/report `door`). A no somebody answered on purpose is not a
+  // break, whoever answered it: the platform's own doors, or the app's worker
+  // relaying an outside service's refusal (unseen.ts `refusal` is the one
+  // rule). A break whose page named no version ran the one serving, read past
+  // the directory's cache.
   if (path == '/report') {
-    if (req.method != 'POST') return json(405, 'method_not_allowed')
-    // A page a verified bot renders, nobody is looking at (@yaks/platform/bots). It
-    // loads on budgets and through proxies of its own, which drop loads our
-    // doors answered, so a miss it reports is the bot's: filed, it reads as
-    // the app's break and sends its Operator to fix what is not broken. Taken
-    // before the flood ceiling, so a bot's render never spends the reports a
-    // person's page may need.
-    if (isVerifiedBot(req)) {
-      await req.body?.cancel()
-      return new Response(null, { status: 204 })
-    }
-    if (flooding(space, app)) return json(429, 'too_many_reports')
-    // A no somebody answered on purpose is not a break, whoever answered it:
-    // the platform's own doors, or the app's worker relaying an outside
-    // service's refusal (unseen.ts `refusal` is the one rule).
-    let reports = broken(await req.text(), refusal)
-    // The injected reporter names the page that ran, not the newest release.
-    // Older reporters and the browser's Reporting API have no page version;
-    // keep their serving-version fallback, read past the directory's cache.
-    let version = reports.some((broke) => broke.version == null)
-      ? await serving(env, space, app)
-      : null
-    for (let broke of reports) {
-      await noted(
-        { ...broke, version: broke.version ?? version },
-        { env, space, app, request: req },
-      )
-    }
-    return new Response(null, { status: 204 })
+    return reportDoor({
+      refusal,
+      flooding: () => flooding(space, app),
+      serving: () => serving(env, space, app),
+      file: (broke) => noted(broke, { env, space, app, request: req }),
+    })(req)
   }
   let headers = vouched(who)
   if (

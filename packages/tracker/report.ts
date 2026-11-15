@@ -552,6 +552,108 @@ export let received = async (
   return agent ? breaks.map((b) => ({ ...b, agent })) : breaks
 }
 
+/** Whether `key` has passed more than `rate` times this minute. A flood
+ * guard, not a quota: counted in this process and no further, so something
+ * looping cannot write a thousand entities a second, and a key spread over
+ * many isolates passing a few extra times is the harmless direction to err.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { flood } from '@yaks/tracker/report'
+ *
+ * let over = flood(2)
+ * equal([over('a'), over('a'), over('a'), over('b')], [false, false, true, false])
+ * ```
+ */
+export let flood = (rate: number): (key: string) => boolean => {
+  let counted = new Map<string, { minute: number; n: number }>()
+  return (key) => {
+    let minute = Math.floor(Date.now() / 60_000)
+    let hit = counted.get(key)
+    if (!hit || hit.minute != minute) {
+      counted.set(key, { minute, n: 1 })
+      return false
+    }
+    return ++hit.n > rate
+  }
+}
+
+// A page a verified bot renders, nobody is looking at: a search engine's or an
+// AI company's crawler, a link previewer, a monitor. It loads on budgets and
+// through proxies of its own, which drop loads the doors answered, so a miss
+// it reports is the bot's, and filed it would read as the page's break.
+// Cloudflare verifies the network it came from and says so on the request it
+// hands a Worker, so the list is Cloudflare's to keep, never a list of user
+// agents here to rot. A request that says nothing (any other runtime, or a
+// bot Cloudflare could not verify) reads as a person: the safe direction.
+let unwatched = (request: Request): boolean =>
+  !!(request as { cf?: { verifiedBotCategory?: string } }).cf
+    ?.verifiedBotCategory
+
+/** What a report door ({@link door}) does with the breaks it was sent. */
+export type Filing = {
+  /** files one break, which carries the release its page ran */
+  file: (broke: Break) => unknown
+  /** a no somebody answered on purpose (default {@link meant}) */
+  refusal?: (answer: string, status: number) => boolean
+  /** whether whoever this door files for has sent too many this minute
+   * ({@link flood}) */
+  flooding?: () => boolean
+  /** the release being served, for a break whose page named none: an older
+   * reporter's, or the browser's own Reporting API's */
+  serving?: () => number | null | undefined | Promise<number | null | undefined>
+}
+
+let no = (status: number, error: string, message: string) =>
+  Response.json({ error, message }, { status })
+
+/**
+ * A page's report door: anyone may post to it, since a break belongs to
+ * whoever was looking at the page, and asking a stranger to sign in first
+ * would lose exactly the breaks nobody sees. What a verified bot's render
+ * sends is dropped before the flood ceiling, so a bot never spends the
+ * reports a person's page may need; past the ceiling the door says stop; a
+ * no somebody meant is no break ({@link broken}); and each break is filed
+ * with the release its page ran, else the one serving.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { door } from '@yaks/tracker/report'
+ *
+ * let filed: (number | null)[] = []
+ * let report = door({ file: (b) => filed.push(b.version), serving: () => 7 })
+ * let post = (body: unknown) =>
+ *   report(new Request('https://box.test/api/report', {
+ *     method: 'POST',
+ *     body: JSON.stringify(body),
+ *   }))
+ * equal((await post([{ message: 'a', version: 3 }, { message: 'b' }])).status, 204)
+ * await post({ message: '403 /apply', status: 403 })
+ * equal(filed, [3, 7])
+ * ```
+ */
+export let door =
+  (filing: Filing) => async (request: Request): Promise<Response> => {
+    if (request.method != 'POST') {
+      return no(405, 'method_not_allowed', 'a report is posted')
+    }
+    if (unwatched(request)) {
+      await request.body?.cancel()
+      return new Response(null, { status: 204 })
+    }
+    if (filing.flooding?.()) {
+      return no(429, 'too_many_reports', 'too many breaks reported this minute')
+    }
+    let breaks = await received(request, filing.refusal)
+    let version = breaks.some((b) => b.version == null)
+      ? await filing.serving?.() ?? null
+      : null
+    for (let b of breaks) {
+      await filing.file({ ...b, version: b.version ?? version })
+    }
+    return new Response(null, { status: 204 })
+  }
+
 export let queue =
   (binding: { send: (body: Bundle[]) => Promise<void> }): Sink => (rows) =>
     binding.send(rows)

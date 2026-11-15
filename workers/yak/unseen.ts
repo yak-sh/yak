@@ -33,13 +33,13 @@ import {
   type Break,
   capture,
   faultOf,
+  flood,
   origin,
   queue,
 } from '@yaks/tracker/report'
 import { errorsAt, errorsIn, type Send } from './app-errors.ts'
 import { refuse } from './tool.ts'
 import { isTestAddress } from '@yaks/platform/bots'
-import { flood } from './lib/flood.ts'
 
 // A refusal is NOT a break (C-32652 item 3, T-32655; C-32869 item 5) — one
 // rule, read off whichever half of the answer the platform is holding.
@@ -106,7 +106,7 @@ export let serving = async (env: Env, space: Space, app: App) => {
 // The ceiling on what one app may push down its members' streams in a
 // minute (T-33006): a crash-looping page writes a break per frame, and every
 // break past the first few says the same thing. Per-isolate memory, like the
-// report door's own write ceiling (lib/flood.ts).
+// report door's own write ceiling (@yaks/tracker/report `flood`).
 let pushes = flood(10)
 let hushed = (space: Space, app: App) => pushes(`${space.slug}/${app.slug}`)
 

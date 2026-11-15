@@ -5,6 +5,7 @@ import {
   broken,
   capture,
   caught,
+  door,
   origin,
   post,
   queue,
@@ -233,4 +234,29 @@ test('runtime reports retain script, release, entrypoint and a scrubbed request'
       agent: undefined,
     })
   }
+})
+
+test("a report door files a person's breaks under the release their page ran, and nothing a bot's render or a flood sends", async () => {
+  let filed: [string, number | null][] = [], asked = 0, over = false
+  let report = door({
+    file: (b) => void filed.push([b.message, b.version]),
+    flooding: () => over,
+    serving: () => (asked++, 9),
+  })
+  let post = (body: unknown, bot = false, method = 'POST') =>
+    report(Object.assign(
+      new Request('https://box.test/api/report', {
+        method,
+        ...method == 'POST' ? { body: JSON.stringify(body) } : {},
+      }),
+      bot ? { cf: { verifiedBotCategory: 'Search Engine Crawler' } } : {},
+    )).then((r) => r.status)
+  equal(await post({ message: 'ran', version: 0 }), 204)
+  equal(asked, 0)
+  equal(await post({ message: 'old tab' }), 204)
+  equal(await post({}, false, 'GET'), 405)
+  over = true
+  equal(await post({ message: 'crawled' }, true), 204)
+  equal(await post({ message: 'looped' }), 429)
+  equal(filed, [['ran', 0], ['old tab', 9]])
 })

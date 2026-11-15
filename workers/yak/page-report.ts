@@ -16,16 +16,14 @@
 // reports here from no page: its report names it (`type` shell, `tags` its
 // variant), is tagged as it says, and names the commit it was published from. A repeat of a break is one more occurrence of its bug
 // in the tracker, which groups it (@yaks/tracker `faultKey`) and notifies once.
-import { type Break, received } from '@yaks/tracker/report'
+import { type Break, door, flood } from '@yaks/tracker/report'
 import { defect } from './defects.ts'
 import { apex, type Host } from '@yaks/platform/host'
-import { isVerifiedBot } from '@yaks/platform/bots'
-import { flood } from './lib/flood.ts'
 import { refusal } from './unseen.ts'
 
 export let PATH = '/api/report'
 
-// Breaks a minute, all platform pages together (lib/flood.ts).
+// Breaks a minute, all platform pages together.
 let over = flood(60)
 
 let ADDRESS = /\bhttps?:\/\/[^\s()<>"']+/g
@@ -60,31 +58,26 @@ export let fromOurs = (req: Request, env: Host) => {
 let shell = ({ request, tags }: Break) =>
   request.startsWith('shell ') && tags?.variant ? tags : null
 
-/** File what a platform page, or the iOS shell, says broke. A no one of our
- * doors meant is no break (unseen.ts `refusal`), a page a verified bot renders
- * has nobody looking at it, and what no page of ours sent, or our scripts did
- * not throw, is not ours (`ours`). */
-export let answer = async (req: Request, env: Host): Promise<Response> => {
-  if (req.method != 'POST') {
-    return Response.json({ error: 'method_not_allowed' }, { status: 405 })
-  }
-  if (isVerifiedBot(req)) {
-    await req.body?.cancel()
-    return new Response(null, { status: 204 })
-  }
+/** File what a platform page, or the iOS shell, says broke, by the rules
+ * every page's report door keeps (@yaks/tracker/report `door`), a no one of
+ * our doors meant being no break (unseen.ts `refusal`). What no page of ours
+ * sent, or our scripts did not throw, is not ours (`ours`). */
+export let answer = (req: Request, env: Host): Promise<Response> => {
   let page = fromOurs(req, env)
-  for (let broke of await received(req, refusal)) {
-    let said = shell(broke)
-    if (!(said || page && ours(broke, env)) || over('platform')) continue
-    let { request, message, stack, cause, mechanism, breadcrumbs, agent } =
-      broke
-    let { commit, ...tags } = said ?? {}
-    defect(Object.assign(Error(message), { stack, cause }), {
-      ...tags,
-      request,
-      page: request.slice(request.indexOf(' ') + 1),
-      agent,
-    }, { commit, page: { mechanism, breadcrumbs } })
-  }
-  return new Response(null, { status: 204 })
+  return door({
+    refusal,
+    file: (broke) => {
+      let said = shell(broke)
+      if (!(said || page && ours(broke, env)) || over('platform')) return
+      let { request, message, stack, cause, mechanism, breadcrumbs, agent } =
+        broke
+      let { commit, ...tags } = said ?? {}
+      defect(Object.assign(Error(message), { stack, cause }), {
+        ...tags,
+        request,
+        page: request.slice(request.indexOf(' ') + 1),
+        agent,
+      }, { commit, page: { mechanism, breadcrumbs } })
+    },
+  })(req)
 }
