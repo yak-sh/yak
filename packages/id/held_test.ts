@@ -5,7 +5,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { idKeywords } from './keywords.ts'
 import { idDoc } from './vocab.ts'
-import { held } from './held.ts'
+import { called, held } from './held.ts'
 
 let doc: VocabDoc = {
   $defs: {
@@ -66,4 +66,30 @@ test('a held entity is drawn by the first series it is numbered in, and nothing 
   // an app declares no letter, so the project it also is numbers it
   assertEquals(['a', 'pt', 't'].map(ids), ['P-1', 'P-2', 'T-1'])
   assertEquals(asked.every((q) => q.includes('.fields=entity.')), true)
+})
+
+// A task a comment names is outside every small series; the door asks for it,
+// and it is read by its number and letter alone.
+test('an eid outside the small series is read when a door names it', async () => {
+  let g = graph({ storage: ram(vocab, { number: true }), vocab })
+  await g.apply([
+    { entity: { eid: 'p1' }, project: {} },
+    ...['t1', 't2', 't3'].map((eid) => ({ entity: { eid }, task: {} })),
+  ] as Bundle[])
+  let asked: string[] = []
+  let ids = held(vocab, {
+    read: ((q: string) => (asked.push(q), g.read(q))) as typeof g.read,
+  }, { small: 3 })
+  let known = await ids(['t2', 'p1', 'gone'])
+  assertEquals(['t2', 'p1', 'gone', 't1'].map(known), [
+    'T-2',
+    'P-1',
+    undefined,
+    undefined,
+  ])
+  assertEquals(
+    asked.at(-1),
+    '.entity.eid=t2,gone&.fields=entity.num,entity.prefix',
+  )
+  assertEquals(await called(g, []), new Map())
 })

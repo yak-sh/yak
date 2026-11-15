@@ -1023,18 +1023,24 @@ let composed = async (
       return worded(answer, tool, on)
     }
     // A numbered graph draws each eid in an answer's prose as the entity's
-    // id, from the small series it holds in memory. A read of them that
-    // failed is reported, and the answer drawn with what the answer holds.
+    // id, from the small series it holds in memory and a read of the rest. A
+    // read that failed is reported, and the answer drawn with what it holds.
     if (config.numbers) {
-      let small: import('@yaks/id/graph').Held | undefined
+      let draw: ((answer: Bundle[]) => Promise<Bundle[]>) | undefined
       host.readable = async (answer) => {
-        let [{ held }, { readable }] = await Promise.all([
-          import('@yaks/id/graph'),
-          import('@yaks/tools/readable'),
-        ])
-        small ??= held(vocab, host.graph)
-        let ids = await small().catch((error) => void report(error))
-        return readable(vocab, ids ?? undefined)(answer)
+        if (!draw) {
+          let [{ held }, { drawing }] = await Promise.all([
+            import('@yaks/id/graph'),
+            import('@yaks/tools/readable'),
+          ])
+          let small = held(vocab, host.graph)
+          draw = drawing(vocab, (eids) =>
+            small(eids).catch((error) => {
+              report(error)
+              return () => undefined
+            }))
+        }
+        return draw(answer)
       }
     }
     let fx = host.fx

@@ -94,6 +94,31 @@ test('what the session wrote itself is never said, and what is said is marked', 
   assertEquals(marked, ['c1'])
 })
 
+// The store keeps the id a person wrote as the eid it names; it is said as
+// that id again, read by number and letter, or as its handle when unnumbered.
+test("an eid an item's words hold is said as the id it names", async () => {
+  let t = '711bade7-5f16-468f-a176-0db6c616ff65'
+  let u = '0e513227-de00-4000-8000-000000000001'
+  let rows: Bundle[] = [{
+    entity: { eid: 'c1' },
+    comment: { target: 't' },
+    created: { via: 'other' },
+    doc: { title: '', body: `${t} is done, ${u} is not` },
+  }]
+  let { graph } = stub(() => rows)
+  let read = graph.read
+  graph.read =
+    ((q: unknown) =>
+      typeof q == 'string' && q.endsWith('.fields=entity.num,entity.prefix')
+        ? [{ entity: { eid: t, num: 453, prefix: 'T' } }]
+        : read(q as never)) as typeof graph.read
+  let lines: string[] = []
+  await hear(graph, null, 'me', (line) => lines.push(line))
+  assertEquals(lines, [
+    'comment #c1 on t from other: T-453 is done, #0e513227de is not',
+  ])
+})
+
 let words = loadVocab([
   kernelDoc,
   provenanceDoc,

@@ -122,7 +122,7 @@ let idsOf = async (store: Store, entries: Bundle[]) => {
     entries.flatMap((b) => eids(String(comp(b, 'content')?.body ?? ''))),
   )
   if (!named.size) return {}
-  let known = await store.known()
+  let known = await store.known(named)
   return Object.fromEntries(
     [...named].flatMap((eid) => {
       let id = known(eid)

@@ -2,10 +2,10 @@
 // Its store is composed from its config (config.ts `operatorConfig`) through
 // @yaks/host's assembly, as the Store object composes each kind it serves.
 import { statements } from '@yaks/sqlite'
-import type { Bundle, Graph, Storage } from '@yaks/graph'
+import type { Graph, Storage } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { held } from '@yaks/id/graph'
-import { type Ids, readable } from '@yaks/tools/readable'
+import { type Held, held } from '@yaks/id/graph'
+import { drawing } from '@yaks/tools/readable'
 import type { Extension } from '@yaks/sql'
 import { driver, type DurableStorage } from '@yaks/durable-object/sql'
 import { bounded } from '@yaks/durable-object/ceiling'
@@ -215,34 +215,25 @@ export let operatorGraph = (plan: Assembly, bound: Bound) => {
     fx: host.fx,
     vocab: host.vocab,
     known,
+    // A tool's answer as its reader reads it (@yaks/tools `drawing`).
     readable: drawing(host.vocab, known),
   }
 }
 
 /**
  * What the store calls each entity of the small series it holds in memory
- * (@yaks/id/graph `held`), by eid: its id (`T-2`). A read of the series that
- * failed is reported, and calls nothing, so prose draws its handles.
+ * (@yaks/id/graph `held`) and each of the eids asked about, by eid: its id
+ * (`T-2`). A read that failed is reported, and calls nothing, so prose draws
+ * its handles.
  */
-let naming = (vocab: Vocab, g: Graph) => {
+let naming = (vocab: Vocab, g: Graph): Held => {
   let small = held(vocab, g)
-  return (): Promise<Ids> =>
-    small().catch((error) => {
+  return (eids) =>
+    small(eids).catch((error) => {
       caught(error, { request: 'operator ids' })
       return () => undefined
     })
 }
-
-/**
- * A tool's answer from the store as its reader reads it (@yaks/tools
- * `readable`): each eid its prose holds drawn as the entity's id, from the
- * answer itself or what the store calls it (`known`), else as its short
- * handle.
- */
-let drawing =
-  (vocab: Vocab, known: () => Promise<Ids>) =>
-  async (answer: Bundle[]): Promise<Bundle[]> =>
-    readable(vocab, await known())(answer)
 
 /**
  * The Operator's own effects (@yaks/platform/operator-vocab), and a trial round's run,

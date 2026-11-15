@@ -8,7 +8,8 @@
 //
 // and `starting`, the read that finds the eids a handle's hex starts, which
 // @yaks/graph uses for a handle copied without its `#`, and `held`, the small
-// series a host keeps in memory so its doors draw an eid in prose as an id.
+// series a host keeps in memory so its doors draw an eid in prose as an id,
+// and `called`, the read of any entities' ids by number and letter alone.
 //
 // `numbers` takes the allocator its storage offers, so it is constructed by the
 // program that opened the storage rather than by a config file; `ids` is the
@@ -18,9 +19,9 @@ import type { Plugin } from './types.ts'
 import type { Vocab } from '@yaks/vocab'
 import { ids, starting } from './ids.ts'
 import { numbers } from './number.ts'
-import { type Held, held, type Known, SMALL } from './held.ts'
+import { called, type Held, held, type Known, SMALL } from './held.ts'
 
-export { type Held, held, ids, type Known, numbers, SMALL, starting }
+export { called, type Held, held, ids, type Known, numbers, SMALL, starting }
 
 /** Human ids accepted wherever this graph takes an id. */
 export let plugins = (host: { vocab: Vocab }): Plugin[] => [ids(host.vocab)]

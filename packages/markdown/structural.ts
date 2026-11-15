@@ -17,10 +17,11 @@ export { type Token } from 'marked'
  * carries a whole uuid. */
 export type Refs = (id: string) => string | undefined
 
-/** What an entity is called where prose holds its eid: its id (`P-1`) when
- * the host has it at hand, from an entity it has already read or a series it
- * keeps in memory, or nothing, and then the eid is drawn as its short handle
- * (`#a3f19c024b`). The host never reads an entity only to answer this. */
+/** What an entity is called where prose holds its eid: its id (`P-1`), from
+ * an entity the host has already read, a series it keeps in memory, or the
+ * number and letter it read for the eids the prose holds ({@link eids}), or
+ * nothing, and then the eid is drawn as its short handle (`#a3f19c024b`). It
+ * is asked as the prose is drawn, so the host reads before, never during. */
 export type Ids = (eid: string) => string | undefined
 
 // An id is a word of its own: a T-123 at a boundary, whatever its letter (the

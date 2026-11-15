@@ -91,6 +91,8 @@ import { signed } from '@yaks/graph/provenance'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { human } from '@yaks/id'
+import { called } from '@yaks/id/graph'
+import { drawn, eids as mentioned, type Ids } from '@yaks/markdown/structural'
 import { statusOf } from '@yaks/task'
 import {
   absent,
@@ -512,13 +514,15 @@ export let writer = (b: Bundle, sessions: Set<Eid>): string => {
 
 /** One item as the line a monitor shows. `named` gives the readable id of an
  * entity the item points at, where it could be read, `state` where a task
- * it is about stands, and `by` who it is from ({@link writer}). */
+ * it is about stands, `by` who it is from ({@link writer}), and `ids` what
+ * each eid its words hold is called, else it is drawn as its short handle. */
 export let said = (
   vocab: Vocab,
   b: Bundle,
   named: (eid: string) => string,
   state: (eid: string) => string = () => '',
   by = author(b),
+  ids?: Ids,
 ): string => {
   let id = human(vocab)(b)
   let from = by ? ` from ${named(by)}` : ''
@@ -531,7 +535,7 @@ export let said = (
     : b.knock
     ? `knock ${id} at ${named(str(comp(b, 'knock').target))}${from}`
     : `mail ${id} from ${str(comp(b, 'mail').from) || named(by)}`
-  let text = words(b)
+  let text = drawn(words(b), ids)
   return safe(text ? `${line}: ${text}` : line)
 }
 
@@ -767,7 +771,7 @@ export let pending = async (
 /** These items as what is owed: each with its line, and a knock that says
  * the same as an earlier one from the same writer folded into that one. */
 export let owing = async (
-  graph: Pick<Graph, 'vocab' | 'get'>,
+  graph: Pick<Graph, 'vocab' | 'get' | 'read'>,
   items: Bundle[],
 ): Promise<Owed[]> => {
   if (!items.length) return []
@@ -793,6 +797,9 @@ export let owing = async (
   }
   let named = (eid: string) => names.get(eid) ?? eid
   let state = (eid: string) => states.get(eid) ?? ''
+  // The words say the id a person wrote, which the store keeps as its eid.
+  let ids = await called(graph, items.flatMap((b) => mentioned(words(b))))
+  let calls: Ids = (eid) => ids.get(eid)
   let out: Owed[] = [], knocks = new Map<string, Owed>()
   for (let item of items) {
     let key = item.knock && !item.comment && words(item)
@@ -803,7 +810,7 @@ export let owing = async (
       first.same.push(item)
       continue
     }
-    let line = said(vocab, item, named, state, writer(item, sessions))
+    let line = said(vocab, item, named, state, writer(item, sessions), calls)
     let starter = starters.get(str(comp(item, 'created').via))
     let owed: Owed = { item, line, same: [], ...starter ? { starter } : {} }
     if (key) knocks.set(key, owed)

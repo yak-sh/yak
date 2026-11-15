@@ -66,7 +66,7 @@ deno add jsr:@yaks/id
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@yaks/id`       | `idKeywords`, `ID_URI`, `short`, `SHORT`, `BARE`, `HUMAN`, `LETTERED`, `WRITTEN`, `prefixes`, `prefixOf`, `seriesOf`, `format`, `parse`, `idOf`, `human`, `idsIn`, `replaceIds`, `mentions`, `key`, `names`; `Named`, `Parsed`, `Wearing`; `idDoc` |
 | `@yaks/id/vocab` | `idDoc`, `docs`, `idKeywords`, `keywords`, `description`                                                                                                                                                                                           |
-| `@yaks/id/graph` | `numbers`, `ids`, `starting`, `plugins`; `held`, `Held`, `Known`, `SMALL`                                                                                                                                                                          |
+| `@yaks/id/graph` | `numbers`, `ids`, `starting`, `plugins`; `held`, `called`, `Held`, `Known`, `SMALL`                                                                                                                                                                |
 
 ## Prefixes and short handles
 
@@ -257,14 +257,19 @@ that factory when its config names `@yaks/id`.
 ## Small series held in memory
 
 `held(vocab, tx)` returns `Held`, a function a door awaits before it draws
-prose. It answers `Known`, `(eid) => id | undefined`: the id of each entity in a
-small series. A series is small when fewer than `SMALL` (1,000) entities wear
-its component, among the components that declare a `prefix`: projects, personas,
-goals, boards, topics and people on the box. Nothing is read until the first
-call. What is held is read again on the first call once it is older than `fresh`
-(a minute by default), so an entity another process made shows its short handle
-until then. A host passes `Known` to [@yaks/markdown](../markdown/README.md) as
-its `Ids`, so an eid in prose is drawn as `P-1` without reading the project.
+prose, given the eids the prose names. It answers `Known`,
+`(eid) => id | undefined`: the id of each entity in a small series, and of each
+eid it was given, read as that entity's number and letter alone, so a task a
+comment names reads back as `T-12`. `called(tx, eids)` is that read alone, for a
+door that holds no series. A series is small when fewer than `SMALL` (1,000)
+entities wear its component, among the components that declare a `prefix`:
+projects, personas, goals, boards, topics and people on the box. Nothing is read
+until the first call. What is held is read again on the first call once it is
+older than `fresh` (a minute by default), so an entity another process made
+shows its short handle until then. A host passes `Known` to
+[@yaks/markdown](../markdown/README.md) as its `Ids`, so an eid in prose is
+drawn as `P-1` without reading the project ([@yaks/tools](../tools/README.md)
+`drawing` does both for a tool's answer).
 
 ## Limits
 

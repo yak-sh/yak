@@ -1,7 +1,9 @@
 // The small series a store keeps in memory. An eid in prose is drawn as the
-// entity's id (@yaks/markdown `drawn`), and no door reads an entity only to
-// draw its id: so the series small enough to hold (projects, personas, goals,
-// boards, topics, people) are held whole, and every door draws from them.
+// entity's id (@yaks/markdown `drawn`): the series small enough to hold
+// (projects, personas, goals, boards, topics, people) are held whole, and every
+// door draws from them. An eid outside them, a task a comment names, is read
+// when the door asks for it, its number and letter alone, so the id a person
+// wrote is the id they read back.
 //
 // What is held is read again once it is older than `fresh`, on the next
 // door that asks: an entity made since then by another process draws as its
@@ -23,9 +25,10 @@ export let SMALL = 1000
 /** What a store calls each entity of its small series, by eid. */
 export type Known = (eid: Eid) => string | undefined
 
-/** The held series, read again where older than `fresh`: what a door awaits
- * before it draws. */
-export type Held = () => Promise<Known>
+/** The held series, read again where older than `fresh`, and each of `eids`
+ * they do not hold, read now: what a door awaits before it draws the prose
+ * that names them. */
+export type Held = (eids?: Iterable<Eid>) => Promise<Known>
 
 /**
  * The small series over a store, held: each component that declares a
@@ -71,10 +74,33 @@ export let held = (
     known = new Map([...first].map(([eid, { id }]) => [eid, id]))
     at = now()
   }
-  return async () => {
+  return async (eids = []) => {
     if (now() - at >= fresh) {
       await (loading ??= load().finally(() => loading = undefined))
     }
-    return (eid) => known.get(eid)
+    let held = known
+    let rest = [...new Set(eids)].filter((eid) => !held.has(eid))
+    let more = rest.length ? await called(tx, rest) : new Map<Eid, string>()
+    return (eid) => held.get(eid) ?? more.get(eid)
   }
+}
+
+/** What these entities are called, by eid: the id each prints with, read
+ * from the number and letter it stored and never the rest of it. One
+ * numbered before series had letters stores none, and is left out, to be
+ * drawn as its short handle. */
+export let called = async (
+  tx: Pick<Tx, 'read'>,
+  eids: Iterable<Eid>,
+): Promise<Map<Eid, string>> => {
+  let asked = [...new Set(eids)]
+  if (!asked.length) return new Map()
+  let rows = await tx.read(
+    `.entity.eid=${asked.join(',')}&.fields=entity.num,entity.prefix`,
+  )
+  let out = new Map<Eid, string>()
+  for (let { entity: { eid, num, prefix } } of rows) {
+    if (num && prefix) out.set(eid, format(prefix, num))
+  }
+  return out
 }
