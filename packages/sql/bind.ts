@@ -219,19 +219,31 @@ export type Census = {
  * `false` only where none does. */
 export type Numbered = (comp: string) => boolean | undefined
 
-/** Whether a page of `comp`'s owners in EID order is shorter walking the
- * entity's EID index than driving through the owners, as `census` sizes the
- * two roads. The walk reads about page × entities / owners rows to fill its
- * page, and the whole index for one that never fills; the drive reads each
- * owner and its entity. Without a count, the drive: its owners bound it.
+/** Whether a page of `comp`'s owners in EID order, or in an indexed order
+ * with no test beside it, is shorter walking the order's index than driving
+ * through the owners, as `census` sizes the two roads. The walk reads about
+ * page × entities / owners rows to fill its page, and the whole index for one
+ * that never fills; the drive reads each owner and its entity, and sorts
+ * them. The walk is shorter where the owners outnumber √(page × entities /
+ * 2). A store that keeps no count answers that with its bounded look, which
+ * reads at most so many owners: driven without one, the platform tracker's
+ * newest request read and sorted all 750,705 of them. With neither, or for
+ * no page, the drive: its owners bound it.
  *
  * ```ts
  * import { walks } from '@yaks/sql'
  * import { equal } from '@yaks/testing'
- * let census = (held?: number) => ({ held: () => held, largest: () => 3.2e6 })
+ * let census = (held?: number, stored = 0) => ({
+ *   held: () => held,
+ *   largest: () => 3.2e6,
+ *   exceeds: (_: string, n: number) => stored > n,
+ * })
  * equal(walks(census(19_000), 'session', 1), true)
  * equal(walks(census(2_000), 'bug', 100), false)
- * equal(walks(census(), 'session', 1), false)
+ * equal(walks(census(undefined, 750_705), 'request', 1), true)
+ * equal(walks(census(undefined, 2_000), 'bug', 100), false)
+ * equal(walks(census(undefined, 750_705), 'request'), false)
+ * equal(walks({ held: () => undefined, largest: () => 3.2e6 }, 'session', 1), false)
  * ```
  */
 export type Walks = (comp: string, page?: number) => boolean
@@ -241,7 +253,12 @@ export let walks = (
   page?: number,
 ): boolean => {
   let held = census?.held(comp)
-  return !!held && census!.largest() * (page ?? held) < 2 * held * held
+  if (held != null) {
+    return !!held && census!.largest() * (page ?? held) < 2 * held * held
+  }
+  if (page == null) return false
+  let fewest = Math.floor(Math.sqrt(census!.largest() * page / 2))
+  return census!.exceeds?.(comp, fewest) ?? false
 }
 
 /** Whether a page of `comp`'s owners in an indexed order, beside a test no
@@ -4285,9 +4302,49 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
     op: '=',
     value: { kind: 'scalar', raw: '' },
   }
-  let [first, rest]: [Ctx['walk'], Pred[]][] = desc || order.last
-    ? [[{ comp, index }, [holding]], [null, [lacking]]]
-    : [[null, [lacking]], [{ comp, index }, [holding]]]
+  // The rows lacking the value are those whose component is missing, which
+  // the archetypes answer, and those holding it blank, each point of which
+  // (null, and empty text) the property's index seeks. Read as one test
+  // beside the component that drives the read, they were found by reading
+  // every owner: 750,705 of the platform tracker's requests for none, to
+  // learn that its oldest (`.request .order=created.at .limit=1`) was the
+  // first the index walked. Whether they are read at all is asked once, of
+  // all three.
+  let column = ctx.d.col(comp, prop, ctx.v)
+  let points = p.affinity == 'text' ? ['is null', "= ''"] : ['is null']
+  let pinned = (point: string): Partial<Ctx> => ({
+    walk: { comp, index },
+    d: {
+      ...ctx.d,
+      eq: (c, v, tag, affinity) =>
+        c == column && blank(v)
+          ? { sql: `${c} ${point}`, params: [] }
+          : ctx.d.eq(c, v, tag, affinity),
+    },
+  })
+  let blanks = (n: Cond | number): Query =>
+    column
+      ? select({
+        from: from(select({
+          from: from({
+            t: 'compound',
+            op: 'union all',
+            parts: [
+              page({ walk: null }, [{ ...lacking, path: [comp] }], limit.n),
+              ...points.map((point) => page(pinned(point), [lacking], limit.n)),
+            ],
+          }),
+          limit: typeof n == 'number'
+            ? val(n)
+            : { t: 'case', arms: [[n, val(0)]], else: val(limit.n) },
+        })),
+      })
+      : page({ walk: null }, [lacking], n)
+  let halves = [
+    (n: Cond | number) => page({ walk: { comp, index } }, [holding], n),
+    blanks,
+  ]
+  let [first, rest] = desc || order.last ? halves : halves.reverse()
   // A backlink page walks the index only for an entity with many referrers
   // (`MANY`, as `lower`'s backlink page chooses). For one with few, the walk
   // passes every entity holding the property, and then every one lacking it,
@@ -4303,16 +4360,13 @@ let inOrder = (ast: And, ctx: Ctx): Frag | undefined => {
     `not exists (${held.sql} limit 1 offset ${MANY})`,
     held.params,
   )
-  let lead = page({ walk: first[0] }, first[1], few ?? limit.n)
+  let lead = first(few ?? limit.n)
   let led = render(lead)
   let full = raw(
     `exists (${led.sql} limit 1 offset ${limit.n - 1})`,
     led.params,
   )
-  let parts = [
-    lead,
-    page({ walk: rest[0] }, rest[1], few ? or(few, full) : full),
-  ]
+  let parts = [lead, rest(few ? or(few, full) : full)]
   if (few) parts.push(page({ walk: null }, [], not(few)))
   return render(select({
     from: from({ t: 'compound', op: 'union', parts }),
