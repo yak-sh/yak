@@ -8,9 +8,13 @@ import type { Namespace } from '@yaks/durable-object/door'
 /** The trash's calendar cadence; Cron Triggers only supply its heartbeat. */
 export let DAILY = '20 4 * * *'
 
+/** Where the present is read from: the effect's transaction, or the
+ * directory over its door (erase.ts `untrash`). */
+export type Rows = Pick<ReadTx, 'get'>
+
 // Read the present on every attempt, including a restore that overtook a
 // failed trash delivery. Space trash never changes an app's own trash mark.
-let stateOf = async (tx: ReadTx, eid: string) => {
+let stateOf = async (tx: Rows, eid: string) => {
   let [row] = await tx.get([eid])
   if (!row?.app || row.tombstone) return null
   let app = appAbout(row as Parameters<typeof appAbout>[0])
@@ -23,7 +27,7 @@ let stateOf = async (tx: ReadTx, eid: string) => {
   }
 }
 
-export let delivered = async (ns: Namespace, tx: ReadTx, eid: string) => {
+export let delivered = async (ns: Namespace, tx: Rows, eid: string) => {
   // A concurrent restore/trash can commit while the external call is in
   // flight. Before settling, deliver any newer state too. If this process
   // dies between delivery and settlement, the durable run reads it afresh.

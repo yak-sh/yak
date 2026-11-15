@@ -119,6 +119,8 @@ import { dollars, released } from './numbers.ts'
 import { shown } from '@yaks/phone'
 import { caught } from './defects.ts'
 import { unkept } from './newcomer.ts'
+import { delivered, type Rows } from './trash.ts'
+import { and, eq, every, list, stringify } from '@yaks/query'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
 // sign-in code's ten minutes, because nobody is standing at the form waiting
@@ -701,9 +703,32 @@ export let untrash = async (
         ),
     ),
   }, ...await dir.claimApp(space, to, app.eid)])
+  await woken(env, [app])
   let restored = { ...app, slug: to, trashed: null }
   await rostered(env, dir, space, restored)
   return restored
+}
+
+// A restore answers once its stores are awake. The mark alone leaves each one
+// asleep until the directory's effect delivers it (trash.ts `delivered`), and
+// meanwhile the directory names the app while its store answers a page or a
+// letter that it is in the trash. The effect still runs, and stays the
+// delivery that cannot be lost: one that fails here is reported and left to
+// it.
+let woken = async (env: Env, apps: App[]) => {
+  let rows: Rows = {
+    get: (eids) =>
+      meta(env).query(
+        stringify(and(eq('entity.eid', list(...eids)), every())),
+        {
+          trusted: true,
+        },
+      ),
+  }
+  for (let app of apps) {
+    await delivered(env.STORE, rows, app.eid)
+      .catch((why) => caught(why, { request: 'wake a restored store' }))
+  }
 }
 
 // Everyone in the space, told their reach moved (declared.ts, T-33004) — the
@@ -737,6 +762,7 @@ export let untrashSpace = async (
   who: Who,
 ) => {
   await mark(dir, space.eid, who, null)
+  await woken(env, await dir.apps(space))
   await reachMoved(env, dir, space)
 }
 
