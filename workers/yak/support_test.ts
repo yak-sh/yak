@@ -599,3 +599,35 @@ test('the words stand through a mail outage, and the letter goes once after it',
   equal(sent.entity.eid, held.entity.eid)
   equal(letters(at, 'hello@yaks.app').length, 1)
 })
+
+test('signed-out feedback never looks up a supplied space or app', async () => {
+  let { TOOLS } = await import('./tools.ts')
+  let { directoryOf } = await import('./directory.ts')
+  let env!: Env
+  let isolated = await fresh({}, (e) => env = e)
+  cleanup(() => isolated.stop())
+  let tool = TOOLS.find((t) => t.name == 'feedback')!
+  let queried: string[] = []
+  let dir = directoryOf(env.STORE)
+  let ctx = {
+    env,
+    person: '',
+    source: 'anonymous-feedback',
+    dir: {
+      ...dir,
+      space: (slug: string) => {
+        queried.push(slug)
+        return dir.space(slug)
+      },
+    },
+  }
+  for (let space of [them.slug, 'unknown-private-space']) {
+    let out = await tool.run({ ...ctx, source: space }, {
+      space,
+      app: 'board',
+      text: 'The page is blank.',
+    })
+    ok(!out.text.includes(space))
+  }
+  equal(queried, [])
+})

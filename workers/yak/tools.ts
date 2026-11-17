@@ -7637,16 +7637,14 @@ let OURS: Row[] = [
       // loss than a refusal on plumbing at the moment someone is already
       // annoyed. No membership check either: this is attribution, not
       // authorization, and being signed in is the whole of it.
-      let space = args.space != null
+      let space = !ctx.person
+        ? null
+        : args.space != null
         ? await ctx.dir.space(text(args.space, 'space'))
-        : ctx.person
-        ? await ownSpace(ctx, args.app).catch((e) => {
+        : await ownSpace(ctx, args.app).catch((e) => {
           caught(e, { tool: 'feedback' })
           return null
         })
-        // Signed out there is no space of theirs to work out, and asking the
-        // directory whose it might be would be reading about somebody.
-        : null
       let app = space && args.app != null
         ? await ctx.dir.app(space, text(args.app, 'app'))
         : null
