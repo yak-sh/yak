@@ -8,7 +8,6 @@ import { directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { extractor, legible } from './documents.ts'
 import { isPdf, supported } from '@yaks/platform/documents'
-import { outgoing } from './post.ts'
 import { mailFrom } from '@yaks/platform/host'
 import { digest } from '@yaks/graph/sha256'
 import { attachmentKey, attachments } from './attachments.ts'
@@ -24,10 +23,8 @@ import { appStore } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { vouched } from './session.ts'
 import { countedTexts } from './meter.ts'
-import { metering } from './metered.ts'
 import { caught } from './defects.ts'
 import { CallError } from '@yaks/tools/errors'
-import { esc } from './html.ts'
 import { fullFiles } from './usage.ts'
 import type { Operator } from './operator.ts'
 import { phoneTexts } from './phone-move.ts'
@@ -36,7 +33,7 @@ import { onPage } from './operator-view.ts'
 import { REBUILDING } from './newcomer.ts'
 import { unsaid } from '@yaks/session/conversation'
 import { inputOf, type Intake, take } from '@yaks/session/intake'
-import { owed, sending, Undeliverable } from '@yaks/mail'
+import { refusedSpend } from '@yaks/platform/standing'
 import { channelOf } from './operator-view.ts'
 import { handover, naming } from './handover.ts'
 import { rootOf, spaceOf } from './operator-root.ts'
@@ -393,43 +390,79 @@ export let heardAt = async (
   return Response.json({ request: id }, { status: fresh ? 202 : 200 })
 }
 
+/** A letter the space's Operator writes, as @yaks/mail keeps one to send:
+ * the address it is for, a `recipient` row of its own, and the letter naming
+ * it in `deliver{to}`, from the space's own address and written by its
+ * Operator. @yaks/mail's `mail_post` sends it through the sender the store
+ * lends (metered.ts `operatorPost`) and writes what became of it on it. One
+ * that carries something of the Operator's (an answer, a notification) names
+ * it as its `target`. */
+export let letterRows = (
+  env: Env,
+  space: Space,
+  letter: {
+    eid: string
+    to: string
+    title: string
+    body: string
+    name?: string
+    cc?: string
+    reply_to?: string
+    target?: string
+  },
+): Bundle[] => {
+  let { eid, to, title, body, ...envelope } = letter
+  let address = to.trim().toLowerCase()
+  let recipient = derivedEid('operator-address|' + address)
+  return [
+    { entity: { eid: recipient }, email: { address }, recipient: {} },
+    {
+      entity: { eid },
+      mail: {
+        from: mailFrom(space.slug, null, env),
+        name: space.operator,
+        ...Object.fromEntries(Object.entries(envelope).filter(([, v]) => v)),
+        at: new Date().toISOString(),
+      },
+      doc: { title, body },
+      deliver: { to: recipient },
+      $actor: { by: space.eid },
+    },
+  ]
+}
+
+/** The letter that carries `eid` (an answer, a notification) by email: one
+ * each, so writing it again writes the same letter. */
+export let letterFor = (eid: string) => derivedEid('operator-letter|' + eid)
+
+/** The channels answered by a letter in the thread of the one the words came
+ * as: a member's letter to the space, and a reply to the Operator's letter. */
+export let LETTERED = new Set(['email', 'letter'])
+
 /**
  * What answers words that came by a channel, in the package of the item
  * they arrived as, for its own effect to send: a letter answering a letter
- * in its thread (@yaks/mail `deliver`), from the space's Operator and signed
- * by it, sent by `mail_post` (`handleChannels`). Words answered where they
- * were said need nothing written.
+ * in its thread ({@link letterRows}), signed by the space's Operator, naming
+ * the answer it carries where it is one of its own (`target`). Words
+ * answered where they were said need nothing written.
  */
 export let replyRows = (
   env: Env,
   space: Space,
   channel: string,
   item: Bundle,
-  reply: { eid: string; text: string },
-): Bundle[] => {
-  if (channel != 'email') return []
-  let to = String(part<Comp>(item, 'mail')?.from ?? '').trim().toLowerCase()
-  let address = derivedEid('operator-address|' + to)
-  return [
-    { entity: { eid: address }, email: { address: to }, recipient: {} },
-    {
-      entity: { eid: reply.eid },
-      mail: {
-        from: mailFrom(space.slug, null, env),
-        name: space.operator,
-        reply_to: item.entity.eid,
-        at: new Date().toISOString(),
-      },
-      doc: {
-        title: re(String(part<Comp>(item, 'doc')?.title || 'Your request')),
-        body: `${reply.text}\n\n${signed(space)}`,
-      },
-      deliver: { to: address },
-      // The space's Operator writes it, which `mail_post` sends it as.
-      $actor: { by: space.eid },
-    },
-  ]
-}
+  reply: { eid: string; text: string; target?: string },
+): Bundle[] =>
+  LETTERED.has(channel)
+    ? letterRows(env, space, {
+      eid: reply.eid,
+      to: String(part<Comp>(item, 'mail')?.from ?? ''),
+      title: re(String(part<Comp>(item, 'doc')?.title || 'Your request')),
+      body: `${reply.text}\n\n${signed(space)}`,
+      reply_to: item.entity.eid,
+      target: reply.target,
+    })
+    : []
 
 /** Whom a scheduled run is for: the space, and the person it runs as. */
 export type Ask = {
@@ -588,22 +621,6 @@ let said = (sent?: Bundle) => {
 // how it carries on their first conversation, is the base persona's
 // plugins/yaks.app/persona/starting.md.
 
-// The Operator's own address, and the sender its letters leave on, counted
-// against the space's mail allowance (@yaks/platform/plans).
-export let postOf = (env: Env, space: Space) => {
-  let from = mailFrom(space.slug, null, env)
-  return {
-    from,
-    sender: metering(
-      env,
-      () => from,
-      outgoing(env, { yak_operator: space.eid }),
-    ),
-  }
-}
-
-export let htmlOf = (text: string) =>
-  `<p>${esc(text).replaceAll('\n', '<br>')}</p>`
 let re = (subject: string) => /^re:/i.test(subject) ? subject : 'Re: ' + subject
 
 export let channels = (env: Env): Record<string, Channel> => {
@@ -653,22 +670,8 @@ export let channels = (env: Env): Record<string, Channel> => {
       throw error
     }
   }
-  let email: Channel = async (request, answer, subject) => {
-    let space = await directoryOf(env.STORE).at(request.space)
-    if (!space) throw new Error('Operator reply has no space')
-    let { from, sender } = postOf(env, space)
-    let text = `${answer.text}\n\n${signed(space)}`
-    return sender.send({
-      id: answer.id,
-      from,
-      name: space.operator,
-      to: request.address!,
-      subject: re(subject),
-      text,
-      html: htmlOf(text),
-      ...(request.reply_to ? { replyTo: request.reply_to } : {}),
-    })
-  }
+  // An answer by email is no channel's to send: it is a letter of its own
+  // (`LETTERED`, `handleChannels`).
   return {
     chat: () => Promise.resolve({}),
     // Words sent from their Updates are answered in the chat they open.
@@ -686,11 +689,8 @@ export let channels = (env: Env): Record<string, Channel> => {
     machine: () => Promise.resolve({}),
     // What an app told is told in their Updates, as a wake-up's is.
     app: () => Promise.resolve({}),
-    email,
-    // Someone replying to the Operator's letter is answered in its thread,
-    // and someone replying to its text from the number they texted, signed
-    // as it was (operator-line.ts `phoneSend`).
-    letter: email,
+    // Someone replying to the Operator's text is answered from the number
+    // they texted, signed as it was (operator-line.ts `phoneSend`).
     texted: async (request, answer, _, sent) => {
       let space = await directoryOf(env.STORE).at(request.space)
       if (!space) throw new Error('Operator reply has no space')
@@ -792,43 +792,28 @@ export let mailSend = (
         'The person you work for has no address to copy.',
       )
     }
+    // Said before it is written, so the Operator can tell the person; past
+    // here, a letter the allowance refuses bounces (metered.ts `charging`).
+    let spent = refusedSpend(space, 'emails', env)
+    if (spent) throw refuse('limit', spent)
     // A letter to the person themselves needs no copy, nor a word about one.
     let cc = me.email.toLowerCase() == to ? undefined : me.email
-    let body = `${text}\n\n${cc ? signedFor(space, me.name) : signed(space)}`
-    let replyTo = String(envelope?.message_id ?? '')
-    let { from, sender } = postOf(env, space)
     let letter = crypto.randomUUID()
-    let at = new Date().toISOString()
-    await store.g.apply([{
-      entity: { eid: letter },
-      doc: { title: subject, body },
-      mail: {
-        from,
-        to,
-        ...(cc ? { cc } : {}),
-        at,
-        ...(answered ? { reply_to: answered.entity.eid } : {}),
-      },
+    let [recipient, written] = letterRows(env, space, {
+      eid: letter,
+      to,
+      title: subject,
+      body: `${text}\n\n${cc ? signedFor(space, me.name) : signed(space)}`,
+      name: cc ? `${space.operator} for ${me.name}` : space.operator,
+      cc,
+      reply_to: answered?.entity.eid,
+    })
+    await store.g.apply([recipient, {
+      ...written,
       operator_letter: {
         person: ctx.person,
         ...(context?.session ? { session: context.session } : {}),
       },
-    }], { trusted: true })
-    let receipt = await sender.send({
-      id: letter,
-      from,
-      name: cc ? `${space.operator} for ${me.name}` : space.operator,
-      to,
-      ...(cc ? { cc } : {}),
-      subject,
-      text: body,
-      html: htmlOf(body),
-      ...(replyTo ? { replyTo } : {}),
-    })
-    await store.g.apply([{
-      entity: { eid: letter },
-      delivered: { at },
-      ...(receipt.id ? { mail: { message_id: receipt.id } } : {}),
     }], { trusted: true })
     return JSON.stringify({ letter, to, cc: cc ?? null })
   },
@@ -1094,28 +1079,6 @@ export let handleChannels = (
         }], { trusted: true })
       }
     },
-    // A letter the Operator writes goes out through the platform's sender
-    // from the space's address, counted against its mail allowance
-    // (`postOf`). A letter the allowance refuses never leaves, and only
-    // bounces, saying why.
-    mail_post: async (event, _g, _mark, attempt) => {
-      let [letter] = await g.get([event.entity.eid])
-      if (!owed(letter)) return
-      let by = part<Comp | undefined>(letter, 'created')?.by
-      let space = by ? await directoryOf(env.STORE).at(String(by)) : null
-      if (!space) throw new Error('An Operator letter names no space')
-      let { sender } = postOf(env, space)
-      return sending({
-        sender: {
-          send: (m) =>
-            sender.send(m).catch((error) => {
-              throw error instanceof CallError
-                ? new Undeliverable(error.message)
-                : error
-            }),
-        },
-      })(event, g, (bundles) => g.apply(bundles, { trusted: true }), attempt)
-    },
     // The Operator's name, set on its persona by its people or itself, is
     // copied to its space's directory row, which the platform reads it off.
     operator_named: async (event) => {
@@ -1145,6 +1108,22 @@ export let handleChannels = (
       if (answer.with) return
       let [asked] = answer.request ? await g.get([answer.request]) : [row]
       let request = part<Request>(asked, 'operator_request')
+      // By email it is a letter in the thread it answers, carrying the
+      // answer, which @yaks/mail sends; what became of the letter is what
+      // became of the answer (operator-host.ts `answering`).
+      if (LETTERED.has(request.channel)) {
+        let space = await directoryOf(env.STORE).at(request.space)
+        if (!space) throw new Error('Operator reply has no space')
+        await g.apply(
+          replyRows(env, space, request.channel, asked, {
+            eid: letterFor(row.entity.eid),
+            text: answer.text,
+            target: row.entity.eid,
+          }),
+          { trusted: true },
+        )
+        return
+      }
       let adapter = adapters[request.channel]
       if (!adapter) {
         throw new Error('No operator channel configured: ' + request.channel)

@@ -16,6 +16,7 @@ import { assertEquals } from '@std/assert'
 import { background, caught, refusing } from './defects.ts'
 import type { Held } from './build-door.ts'
 import type { Env } from './env.ts'
+import { operatorPost } from './metered.ts'
 import { operating, type Operator, type Options } from './operator.ts'
 import { chat, converse, ended } from './operator-conversations.ts'
 import type { Space } from './directory.ts'
@@ -124,9 +125,11 @@ export let operatorMemory = (
     computed: { ...statusComputed, ...attemptComputed, ...executionComputed },
   }),
   options: Bound['effects'] = {},
+  senders: Bound['senders'] = {},
 ) => ({
   ...operatorGraph(plan, {
     storage: () => storage,
+    senders,
     effects: { clock, ...options },
   }),
   storage,
@@ -138,7 +141,9 @@ export let operatorService = (
   env: Env,
   held: Held,
   options: Options,
-  store: ReturnType<typeof operatorGraph> = operatorMemory(),
+  store: ReturnType<typeof operatorGraph> = operatorMemory(undefined, {}, {
+    operator: operatorPost(env),
+  }),
 ) => {
   let sockets: Listener[] = []
   let frames = operatorFrames(

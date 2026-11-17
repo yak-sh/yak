@@ -7,13 +7,12 @@ import { platform } from './directory-rows-probe.ts'
 import { directoryOf, stamp } from './directory.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { operatorContext } from './operator.ts'
-import { receive, textSigned } from './operator-channels.ts'
+import { letterFor, receive, textSigned } from './operator-channels.ts'
 import { notification } from './operator-updates.ts'
 import { notificationSend, routeFor } from './operator-alerts.ts'
 import { chatPage, operatorAnswer, operatorBody } from './operator-page.ts'
 import { endpoints } from './endpoints.ts'
 import { PER_SEGMENT } from './text-spend.ts'
-import { owed as owedSend } from '@yaks/mail'
 import { vapidKey } from '@yaks/push'
 import { browser } from '@yaks/push/testing'
 
@@ -38,15 +37,10 @@ let space = (await dir.at(eid))!
 let held = { person, role: 'owner' as const, space: eid }
 
 let letters: Parameters<Binding['send']>[0][] = []
-// Whether a letter's row was still owed a send (@yaks/mail `mail_post`) while
-// the sender held it.
-let owing: boolean[] = []
 env.MAIL = {
-  send: async (letter) => {
+  send: (letter) => {
     letters.push(letter)
-    let rows = await store.g.read('.notification&.mail&!delivered&!bounced')
-    owing.push(rows.some(owedSend))
-    return { messageId: `sent-${letters.length}` }
+    return Promise.resolve({ messageId: `sent-${letters.length}` })
   },
 } satisfies Binding
 // Telnyx at its HTTP boundary, every text posted to it kept.
@@ -96,8 +90,11 @@ let told = async (text: string, about?: string) => {
     reaches: string
   }
   await service.drain()
-  let [row] = await store.g.get([said.notification])
-  return { ...said, row }
+  let [row, letter] = await store.g.get([
+    said.notification,
+    letterFor(said.notification),
+  ])
+  return { ...said, row, letter }
 }
 let page = async (view: string, fields: Record<string, string> | object) => {
   let body: BodyInit = JSON.stringify(fields)
@@ -138,15 +135,15 @@ test('an alert to a person who chose nothing and has an address is an email from
   assertEquals(letter.subject, 'The build finished.')
   assertStringIncludes(String(letter.text), 'Open it from your Updates.')
   assertStringIncludes(String(letter.text), '/manage/ana/updates')
-  let envelope = byMail.row.mail as Comp
+  // The letter is a row of its own, carrying the notification, and keeps
+  // what became of it; the notification is no letter.
+  let envelope = byMail.letter!.mail as Comp
   assertEquals(envelope.from, 'ana@yaks.app')
   assertEquals(envelope.to, ADDRESS)
-  assertEquals(typeof envelope.at, 'string')
-  assertEquals(typeof (byMail.row.delivered as { at: string }).at, 'string')
-  assertEquals(byMail.row.bounced, undefined)
-})
-test('an emailed alert is never owed a second send while it is on its way', () => {
-  assertEquals([owing.length > 0, owing.includes(true)], [true, false])
+  assertEquals(envelope.target, byMail.notification)
+  assertEquals(envelope.message_id, 'sent-1')
+  assertEquals(typeof (byMail.letter!.delivered as { at: string }).at, 'string')
+  assertEquals([byMail.row.mail, byMail.row.delivered], [undefined, undefined])
 })
 test('what everyone in a space is told, or a person wrote, is sent to nobody', () => {
   assertEquals(unsent, [[], []])

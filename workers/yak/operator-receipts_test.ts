@@ -1,4 +1,5 @@
-// Provider receipts preserve both Operator letter and answer threading.
+// A provider's receipt threads each Operator letter once: one it wrote, and
+// one carrying an answer.
 import { equal, test } from '@yaks/testing'
 import type { ApplyOpts, Bundle, Comp } from '@yaks/graph'
 import { operatorReceipt } from './operator-host.ts'
@@ -10,7 +11,8 @@ let letters: Bundle[] = [
   },
   {
     entity: { eid: '3e8382d2-6b7e-4a5a-aa5a-2c201bf8d96a' },
-    operator_answer: { text: 'Done.' },
+    mail: { from: 'operator@yaks.app', target: 'the answer it carries' },
+    deliver: { to: 'ana@example.com' },
   },
   {
     entity: { eid: '0d7c1f2e-5b8a-4c3d-9e6f-1a2b3c4d5e6f' },
@@ -44,10 +46,10 @@ let operator = {
   },
 }
 for (
-  let [index, name, kind] of [
-    [0, 'mail', 'letter'],
-    [1, 'operator_answer', 'answer'],
-    [2, 'mail', 'emailed reply'],
+  let [index, kind] of [
+    [0, 'letter'],
+    [1, 'answer'],
+    [2, 'emailed reply'],
   ] as const
 ) {
   test(`an Operator ${kind} receipt threads the same stored words once`, async () => {
@@ -56,7 +58,7 @@ for (
     let request = { letter: row.entity.eid, id: 'thread@example.com' }
     equal((await operatorReceipt(operator, request)).status, 200)
     equal((await operatorReceipt(operator, request)).status, 200)
-    equal((row[name] as Comp).message_id, 'thread@example.com')
+    equal((row.mail as Comp).message_id, 'thread@example.com')
     equal(writes - before, 1)
   })
 }

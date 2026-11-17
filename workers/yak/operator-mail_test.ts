@@ -161,6 +161,7 @@ await mailSend(env, ctx, space, store).run({
   // As its framing names it: `(letter #abc123)`.
   answering: short(request),
 })
+await service.drain()
 let followed = letters.at(-1)!
 
 test("a fork's letter goes from the Operator's own address to its recipient, with the person copied and signed as their assistant", () => {
@@ -175,6 +176,7 @@ test("a fork's letter goes from the Operator's own address to its recipient, wit
   assertStringIncludes(sent.text!, signedFor(space, 'Jeff Peterson'))
   assertEquals(kept.mail, {
     from,
+    name: `${space.operator} for Jeff Peterson`,
     to: 'alvarez@clinic.example',
     cc: 'jeff@example.com',
     at: (kept.mail as { at: string }).at,

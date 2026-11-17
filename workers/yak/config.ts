@@ -213,7 +213,14 @@ export let operatorConfig: Config = {
     { use: '@yaks/context', facets: ['vocab'] },
     { use: '@yaks/effects', facets: ['vocab'] },
     { use: '@yaks/edge', facets: ['vocab'] },
-    { use: '@yaks/mail', facets: ['vocab'] },
+    // The letters its Operator writes, sent by @yaks/mail's `mail_post`
+    // through the sender the store lends as `operator` (metered.ts
+    // `operatorPost`).
+    {
+      use: '@yaks/mail',
+      facets: ['vocab', 'effects'],
+      with: { sender: { via: 'operator' } },
+    },
     // Its own words, and the `owner{person}` a person's reads are screened
     // by (@yaks/platform/operator-vocab, operator-graph).
     { use: 'yak/operator', facets: ['vocab', 'graph'] },

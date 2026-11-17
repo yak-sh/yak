@@ -9,6 +9,8 @@ import { directoryOf } from './directory.ts'
 import { operatorMemory } from './operator-testing.ts'
 import { notification } from './operator-updates.ts'
 import { alert, pushRow } from './operator-alerts.ts'
+import { letterFor } from './operator-channels.ts'
+import { operatorPost } from './metered.ts'
 import { endpoints } from './endpoints.ts'
 import { caught, within } from './defects.ts'
 
@@ -54,7 +56,7 @@ let setup = async (email = false) => {
   let store = operatorMemory(undefined, {
     clock: time,
     report: (error) => caught(error, { request: 'operator alert test' }),
-  })
+  }, { operator: operatorPost(env) })
   cleanup(() => {
     store.fx.stop()
     return service.stop()
@@ -74,6 +76,7 @@ let setup = async (email = false) => {
       await store.fx.idle()
     })
   let read = async () => (await store.g.get([note.entity.eid]))[0]
+  let letter = async () => (await store.g.get([letterFor(note.entity.eid)]))[0]
   let runs = () => store.g.read('.effect.handler=operator_alert')
   return {
     env,
@@ -85,6 +88,7 @@ let setup = async (email = false) => {
     letters,
     work,
     read,
+    letter,
     runs,
     calls: () => calls,
     answer: (code: number) => status = code,
@@ -97,11 +101,14 @@ let exhausted = await setup()
 let permanent = await setup()
 
 test('a refused push falls back to email, retains its subscription and completes once', async () => {
+  // The alert writes its letter, and the next pass sends it.
+  await fallback.work()
   await fallback.work()
   equal(fallback.letters.length, 1)
-  equal(!!(await fallback.read()).delivered, true)
+  equal(!!(await fallback.letter()).delivered, true)
   equal((await fallback.dir.pushes(fallback.person)).length, 1)
   equal(await fallback.runs(), [])
+  equal(await fallback.store.g.read('.effect.state=pending'), [])
   await fallback.work()
   equal([fallback.letters.length, fallback.calls(), fallback.reports.length], [
     1,

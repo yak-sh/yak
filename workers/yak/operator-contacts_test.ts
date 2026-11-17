@@ -17,7 +17,8 @@ import { alert, notificationSend } from './operator-alerts.ts'
 import { notification } from './operator-updates.ts'
 import { endpoints } from './endpoints.ts'
 import { CONSENT } from './operator-texts.ts'
-import { handleChannels } from './operator-channels.ts'
+import { handleChannels, letterFor } from './operator-channels.ts'
+import { operatorPost } from './metered.ts'
 import { consentEid } from '@yaks/phone'
 import { Unsent } from '@yaks/mail'
 import { meta } from './meta.ts'
@@ -49,7 +50,9 @@ let setup = async (name: string, email?: string, time?: Clock) => {
     ],
   }, { 'x-yak-person': person })
   let space = (await dir.at(spaceId))!
-  let store = operatorMemory(undefined, time ? { clock: time } : {})
+  let store = operatorMemory(undefined, time ? { clock: time } : {}, {
+    operator: operatorPost(env),
+  })
   await store.g.apply([{
     entity: { eid: session },
     session: {},
@@ -123,6 +126,13 @@ let setup = async (name: string, email?: string, time?: Clock) => {
     await alert(env, store, out.notification)
     return out
   }
+  // Whether a notification reached them by email: the letter carrying it
+  // went.
+  let mailed = async (eid: string) => {
+    await drain(store)
+    let [letter] = await store.g.get([letterFor(eid)])
+    return !!letter?.delivered
+  }
   return {
     env,
     dir,
@@ -138,6 +148,7 @@ let setup = async (name: string, email?: string, time?: Clock) => {
     invoke,
     confirm,
     notify,
+    mailed,
   }
 }
 
@@ -309,6 +320,7 @@ let replayed = await Promise.all(
     ),
 )
 let afterProofs = await meta(guest.env).query('.signin')
+let guestMailed = await guest.mailed(guestQueued.notification)
 let guestLetters = [...guest.letters]
 test('an anonymous person verifies email in the same conversation before completion reaches it', () => {
   assertEquals(emailBefore, null)
@@ -316,7 +328,7 @@ test('an anonymous person verifies email in the same conversation before complet
   assertStringIncludes((injected as Error).message, 'type the six-digit code')
   assertEquals(emailAfter, 'new@example.net')
   assertEquals(contactPerson, guest.person)
-  assertEquals(guestLetters.length, 2)
+  assertEquals([guestMailed, guestLetters.length], [true, 2])
   assertStringIncludes(String(guestLetters[1].text), 'Your work is ready.')
 })
 
@@ -337,13 +349,11 @@ await expiry.invoke({
   code: expiryCode,
   source: expiryInput,
 })
-let [expiredNow, delivered] = await expiry.store.g.get([
-  expired.entity.eid,
-  expiryNote.notification,
-])
+let [expiredNow] = await expiry.store.g.get([expired.entity.eid])
+let expiryMailed = await expiry.mailed(expiryNote.notification)
 test('resending an expired email code keeps the request and delivers a completion held before the resend', () => {
   assertEquals(!!expiredNow.verified, true)
-  assertEquals(!!delivered.delivered, true)
+  assertEquals(expiryMailed, true)
 })
 
 let hidden = await seenBy(sms.store, foreign.person).read('.operator_contact')
@@ -382,11 +392,11 @@ await retry.invoke({
   code: retryCode,
   source: retryInput,
 })
-let [retryDelivered] = await retry.store.g.get([retryNote.notification])
+let retryMailed = await retry.mailed(retryNote.notification)
 test('a definitely unsent verification email can be retried immediately without losing held completion', () => {
   assertEquals((unsent.operator_contact as Comp).code, undefined)
   assertEquals((unsent.operator_contact as Comp).expires, undefined)
-  assertEquals(!!retryDelivered.delivered, true)
+  assertEquals(retryMailed, true)
 })
 
 let two = await setup('two-chats', 'prior@example.com')
@@ -421,10 +431,10 @@ await two.invoke({
   code: secondCode,
   source: secondAnswer,
 })
-let [secondDelivered] = await two.store.g.get([secondNote.entity.eid])
+let secondMailed = await two.mailed(secondNote.entity.eid)
 test('the same pending email in another conversation has its own confirmation and held completion', () => {
   assertEquals(heldTwo, 2)
-  assertEquals(!!secondDelivered.delivered, true)
+  assertEquals(secondMailed, true)
   assertEquals(two.letters.length, 3)
 })
 
@@ -578,11 +588,10 @@ await chatted(failureOperator, failedParallel.held, failedParallel.space, {
 })
 await failureTime.advance(10)
 await drain(failedParallel.store)
-let [failureNote] = await failedParallel.store.g.read(
-  '.notification ?delivered',
-)
+let [failureNote] = await failedParallel.store.g.read('.notification')
+let failureMailed = await failedParallel.mailed(failureNote.entity.eid)
 test('a refused parallel contact creation releases the existing notification effect to the unchanged contact', () => {
-  assertEquals(!!failureNote.delivered, true)
+  assertEquals(failureMailed, true)
   assertEquals(failedParallel.letters.length, 1)
   assertStringIncludes(
     String(failedParallel.letters[0].text),

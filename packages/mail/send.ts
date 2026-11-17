@@ -75,9 +75,9 @@ let str = (c: Comp | undefined, k: string): string =>
  * may have left, so it is not owed — sending is at most once. */
 export let owed = (letter: Bundle | undefined): boolean =>
   !!comp(letter, MAIL) && !!comp(letter, DELIVER) &&
-  // Texts and notifications share `deliver` but own their transport. An
-  // alert's email envelope records that send; it never requests another.
-  !comp(letter, 'text') && !comp(letter, 'notification') &&
+  // A text asks to go by the same `deliver` and is sent by @yaks/phone; the
+  // `mail` an app's rows may wear does not make it a letter.
+  !comp(letter, 'text') &&
   comp(letter, DELIVER)?.tried == null &&
   !comp(letter, DELIVERED) && !comp(letter, BOUNCED)
 

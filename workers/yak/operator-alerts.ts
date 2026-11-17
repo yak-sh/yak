@@ -178,11 +178,12 @@ let part = (row: Bundle, name: string) => row[name] as Comp | undefined
 /**
  * The `operator_alert` effect: notification `eid`, told to the person it is
  * for the way they chose, when the space's Operator wrote it (its `by` is
- * the space) to someone other than the whole space. It is stamped
- * `delivered`, or `bounced` with why: a carrier's block, a spent budget or
- * mail allowance. A push refusal falls back to the next channel; an outage
- * with no fallback stays owed for the pool to retry. Anything unexpected is
- * reported too.
+ * the space) to someone other than the whole space. Told by a browser or a
+ * text, it is stamped `delivered`, or `bounced` with why: a carrier's block
+ * or a spent budget. Told by email, it is carried by a letter of its own
+ * (operator-channels.ts `letterFor`), whose outcome is the letter's to keep.
+ * A push refusal falls back to the next channel; an outage with no fallback
+ * stays owed for the pool to retry. Anything unexpected is reported too.
  */
 export let alert = async (
   env: Env,
@@ -190,8 +191,9 @@ export let alert = async (
   eid: string,
   defer?: (ms: number) => Promise<void>,
 ) => {
-  let [row] = await store.g.get([eid])
-  if (!row || row.delivered || row.bounced) return
+  let { letterFor } = await import('./operator-channels.ts')
+  let [row, letter] = await store.g.get([eid, letterFor(eid)])
+  if (!row || row.delivered || row.bounced || letter?.mail) return
   let { waitingContact } = await import('./operator-contacts.ts')
   let waiting = await waitingContact(store, row)
   if (waiting) {
@@ -209,13 +211,13 @@ export let alert = async (
   if (!route) return
   let about = String(part(row, 'notification')?.about ?? '') || undefined
   let note = { words, id: eid, about, at: written }
-  let outcome: Bundle
+  let outcome: Bundle[]
   try {
-    await sent(env, store, dir, space, to, route, note)
-    outcome = {
+    let letter = await sent(env, store, dir, space, to, route, note)
+    outcome = letter ?? [{
       entity: row.entity,
       delivered: { at: new Date().toISOString() },
-    }
+    }]
   } catch (error) {
     if (error instanceof Unsent) throw error
     if (error instanceof Unpushed && error.retry) {
@@ -228,9 +230,9 @@ export let alert = async (
       caught(error, { request: 'operator alert', channel: route.by })
     }
     let reason = error instanceof Error ? error.message : String(error)
-    outcome = { entity: row.entity, bounced: { reason } }
+    outcome = [{ entity: row.entity, bounced: { reason } }]
   }
-  await store.g.apply([outcome], { trusted: true })
+  await store.g.apply(outcome, { trusted: true })
 }
 
 // One alert: its words, its notification's eid, what it is about and when
@@ -238,8 +240,9 @@ export let alert = async (
 type Note = { words: string; id: string; about?: string; at?: string }
 
 // An alert on its way: a notification on each browser allowed, a text, or a
-// letter with a link to their Updates. When every browser allowed is gone,
-// it goes the way they are reached next.
+// letter with a link to their Updates, given back as the rows that write it
+// for @yaks/mail to send. When every browser allowed is gone, it goes the way
+// they are reached next.
 let sent = async (
   env: Env,
   store: Store,
@@ -248,7 +251,7 @@ let sent = async (
   person: string,
   route: Route,
   note: Note,
-): Promise<unknown> => {
+): Promise<Bundle[] | undefined> => {
   let { words, id } = note
   let updates = url(env, managePath('updates', space.slug))
   if (route.by == 'push') {
@@ -257,7 +260,7 @@ let sent = async (
     let told = { words, open, id, count }
     let refused: Unpushed | undefined
     try {
-      if (await pushed(env, dir, route.to, space, told)) return
+      if (await pushed(env, dir, route.to, space, told)) return undefined
     } catch (error) {
       if (!(error instanceof Unpushed)) throw error
       refused = error
@@ -269,28 +272,18 @@ let sent = async (
   }
   if (route.by == 'text') {
     let { textPerson } = await import('./operator-texts.ts')
-    return textPerson(env, space, route.to, words)
+    await textPerson(env, space, route.to, words)
+    return undefined
   }
-  let { htmlOf, postOf, signed } = await import('./operator-channels.ts')
-  let { from, sender } = postOf(env, space)
-  let text = `${words}\n\nYour Updates: ${updates}\n\n${signed(space)}`
-  // The notification keeps the letter it went as, handed to the sender here:
-  // `tried` says so, so @yaks/mail's `mail_post` never takes the notification
-  // for a letter still owed a send.
-  let at = new Date().toISOString()
-  await store.g.apply([{
-    entity: { eid: id },
-    mail: { from, to: route.to, at },
-    deliver: { tried: at },
-  }], { trusted: true })
-  return sender.send({
-    id,
-    from,
-    name: space.operator,
+  let { letterFor, letterRows, signed } = await import(
+    './operator-channels.ts'
+  )
+  return letterRows(env, space, {
+    eid: letterFor(id),
     to: route.to,
-    subject: subjectOf(words),
-    text,
-    html: htmlOf(text),
+    title: subjectOf(words),
+    body: `${words}\n\nYour Updates: ${updates}\n\n${signed(space)}`,
+    target: id,
   })
 }
 

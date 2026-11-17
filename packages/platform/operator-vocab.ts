@@ -339,7 +339,11 @@ export let operatorDoc: VocabDoc = {
         },
         task: { type: 'string', ref: 'task', death: 'keep' },
         text: { type: 'string' },
-        message_id: { type: 'string' },
+        message_id: {
+          type: 'string',
+          description:
+            'The id its channel gave it as it went: a text’s. An answer by email is carried by a letter of its own (`mail.target`), whose `mail.message_id` it threads by.',
+        },
         with: {
           type: 'string',
           ref: 'entity',

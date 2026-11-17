@@ -1008,12 +1008,13 @@ export class Builder extends Durable {
               .catch((e) => caught(e, { request: 'operator effects' })),
           )
         }
+        let { operatorPost } = await import('./metered.ts')
         let store = await operatorStore(this.#ctx.storage, {
           version: this.#env.CF_VERSION_METADATA?.id,
           report: (e, where) =>
             caught(e, { request: 'operator effects', handler: where.handler }),
           nudge,
-        })
+        }, { operator: operatorPost(this.#env) })
         this.#fx = store.fx
         owing(store.fx, () => this.#work())
         // What a person is called, as the Operator asks it (operator.ts

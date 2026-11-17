@@ -437,7 +437,9 @@ let REQUESTS =
 /** Requests with the newest answer each was given, and whether that answer
  * reached them, as one row each: an answer is its own row
  * (`operator_answer{request}`), or, from before, kept on its request. One
- * carried by another (`with`) reached them as that one did. */
+ * carried by another (`with`) reached them as that one did, and one carried
+ * by a letter (`mail.target`, operator-channels.ts `LETTERED`) as its letter
+ * did. */
 export let answering = async (store: Store, requests: Bundle[]) => {
   if (!requests.length) return requests
   let read = await store.g.read(
@@ -445,17 +447,34 @@ export let answering = async (store: Store, requests: Bundle[]) => {
       requests.map((r) => r.entity.eid)
     } ?delivered ?bounced .order=created.at`,
   )
-  let carriers = new Map(
-    (await store.g.get([
-      ...new Set(read.flatMap((a) => {
-        let w = comp(a, 'operator_answer')!.with
-        return w ? [String(w)] : []
-      })),
-    ])).filter(Boolean).map((b) => [b.entity.eid, b]),
+  let withs = [
+    ...new Set(read.flatMap((a) => {
+      let w = comp(a, 'operator_answer')!.with
+      return w ? [String(w)] : []
+    })),
+  ]
+  let [held, letters] = await Promise.all([
+    store.g.get(withs),
+    read.length
+      ? store.g.read(
+        q`.mail.target=${[
+          ...new Set([...read.map((a) => a.entity.eid), ...withs]),
+        ]} ?delivered ?bounced`,
+      )
+      : [],
+  ])
+  let rows = new Map(
+    [...read, ...held.filter(Boolean)].map((b) => [b.entity.eid, b]),
   )
+  let lettered = new Map(
+    letters.map((l) => [String(comp(l, 'mail')!.target), l]),
+  )
+  // What carried an answer to them: its letter, else the answer itself.
+  let carrier = (eid: string) => lettered.get(eid) ?? rows.get(eid)
   let answers = read.map((a) => {
-    let c = carriers.get(String(comp(a, 'operator_answer')!.with))
-    return c
+    let w = comp(a, 'operator_answer')!.with
+    let c = carrier(w ? String(w) : a.entity.eid)
+    return c && c != a
       ? {
         ...a,
         ...c.delivered ? { delivered: c.delivered } : {},
@@ -1975,28 +1994,14 @@ export let operatorRead = async (
     : { sessions: [row], entries, ...earlier ? { earlier } : {} }
 }
 
-/** A kernel-vouched delivery receipt for this space's private mail. The
- * letter's own row says where its Message-ID goes: an answer kept the old way
- * on its `operator_answer`, any other letter on its `mail`. An alert's
- * recorded words are a notification, whose envelope joins that same row. */
+/** A kernel-vouched delivery receipt for this space's private mail: every
+ * letter the Operator sends is a @yaks/mail letter of its own, whose
+ * Message-ID goes on its `mail` (@yaks/mail `receipted`). */
 export let operatorReceipt = async (
   operator: { store: { g: Pick<Graph, 'get' | 'apply'> } },
   args: { letter: string; id: string },
 ): Promise<Response> => {
-  let [row] = await operator.store.g.get([args.letter])
-  let name = row?.operator_answer ? 'operator_answer' : 'mail'
-  if (!row?.[name] && !(row?.notification && row?.deliver)) {
-    throw new Error('Operator receipt awaits its recorded letter')
-  }
-  let before = comp(row, name)?.message_id
-  if (before && before != args.id) {
-    throw new Error('Operator receipt disagrees with the recorded Message-ID')
-  }
-  if (!before) {
-    await operator.store.g.apply([{
-      entity: row.entity,
-      [name]: { message_id: args.id },
-    }], { trusted: true })
-  }
+  let { receipted } = await import('@yaks/mail')
+  await receipted(operator.store.g, args)
   return Response.json({ ok: true })
 }

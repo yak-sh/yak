@@ -13,6 +13,7 @@ import { bounded } from '@yaks/durable-object/ceiling'
 import { storage } from '@yaks/durable-object/store'
 import { type Config, used } from '@yaks/host/config'
 import type { Assembly } from '@yaks/host/assembly'
+import type { Host } from '@yaks/host'
 import { lent, planned } from '@yaks/durable-object/compose'
 import { wordsOf } from '@yaks/host/words'
 import { trialDoc } from '@yaks/trial/vocab'
@@ -85,9 +86,10 @@ let print: string | undefined
  * table a later write made, so this code fits it again and makes them. */
 let FITTING = 2
 
-// What it serves: its graph, whose effects the Operator's own code handles
-// (operator-channels.ts `handleChannels`), so no package's are loaded.
-let ROLES = ['graph'] as const
+// What it serves: its graph, and the effects of the one package whose config
+// names that facet, @yaks/mail's sending of its letters. The rest are the
+// Operator's own code's to handle (operator-channels.ts `handleChannels`).
+let ROLES = ['graph', 'effects'] as const
 let plan = (config: Config) => async (): Promise<Assembly> =>
   (await planned(config, load, ROLES)())(words)
 
@@ -115,6 +117,7 @@ export let memoryPlan = plan({
 export let operatorStore = async (
   durable: DurableStorage,
   options: Parameters<typeof effects>[1] = {},
+  senders: Bound['senders'] = {},
 ): Promise<OperatorStore> => {
   let plan = await operatorPlan()
   let sql = driver(durable)
@@ -134,6 +137,7 @@ export let operatorStore = async (
         schemaReady: () => stood,
       }),
     extend: [search(text, sql)],
+    senders,
     fit: () => {
       print ??= printOf(`operator:${FITTING}:${store.print()}`, [
         ...beside(),
@@ -193,11 +197,14 @@ export type OperatorStore = ReturnType<typeof operatorGraph> & {
 
 /** What a composition of the Operator's store is bound to: its storage, given
  * the clause compilers its plugins and `extend` add; where its bodies are
- * kept; how the file is brought to its schema; and its effects' options. */
+ * kept; the senders its letters leave through, by the name its config gives
+ * (metered.ts `operatorPost`); how the file is brought to its schema; and its
+ * effects' options. */
 export type Bound = {
   storage: (extend: Extension[]) => Storage
   blobs?: Blobs
   extend?: Extension[]
+  senders?: Host['senders']
   fit?: () => void
   effects?: Parameters<typeof effects>[1]
 }
@@ -208,7 +215,10 @@ export let operatorGraph = (plan: Assembly, bound: Bound) => {
   // The store is no process host: nothing it composes runs a duty, holds a
   // secret or ends a process.
   let { host } = plan.bind({
-    host: lent('operator', bound.blobs ?? memoryBlobs()),
+    host: {
+      ...lent('operator', bound.blobs ?? memoryBlobs()),
+      senders: bound.senders ?? {},
+    },
     storage: (_host, extend) => bound.storage(extend),
     extend: () => bound.extend ?? [],
     schema: () => bound.fit?.(),
@@ -216,6 +226,8 @@ export let operatorGraph = (plan: Assembly, bound: Bound) => {
     // are taken while a session waits on its model. Each incarnation owes its
     // start-up runs as it first works the pool, so it takes up what the one
     // before it left held (@yaks/session `session_recover`).
+    // What a package's effect writes back (a letter's outcome) is the
+    // store's own write.
     effects: (host, disabled) =>
       effects(host.vocab, {
         singleOwner: true,
@@ -223,6 +235,7 @@ export let operatorGraph = (plan: Assembly, bound: Bound) => {
         defer: true,
         max: 8,
         disabled,
+        write: (bundles) => host.graph.apply(bundles, { trusted: true }),
         ...bound.effects,
       }),
   })

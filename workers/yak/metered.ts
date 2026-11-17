@@ -1,28 +1,47 @@
 // The doors a space's letters and an app's own model API go through, counted
 // against its allowances (@yaks/platform/meter) where they happen.
 import type { Host } from '@yaks/platform/host'
-import type { Sender } from '@yaks/mail'
+import { type Sender, Undeliverable } from '@yaks/mail'
 import { type Listed, ModelError, type Native, type Price } from '@yaks/model'
 import type { Namespace } from '@yaks/durable-object/door'
 import { type Directory, directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { mailedTo } from './post.ts'
+import { mailedTo, outgoing } from './post.ts'
 import { usedMail } from './space-mail.ts'
-import { refuse } from './tool.ts'
 import { defect } from './defects.ts'
 import { reserved } from './model-spend.ts'
 import { counted } from './meter.ts'
 import { refusedSpend } from '@yaks/platform/standing'
 
 /**
- * A letter counted against the space it left from: the month's allowance read
- * before it goes, the count written after it went.
+ * A letter counted against `space`: the month's allowance read before it
+ * goes, the count written after it went.
  *
  * It wraps the transport rather than sitting in the effect, so the two rules
- * ride the one seam @yaks/mail already has: over the allowance this throws,
- * which the sending effect comes to rest on as `bounced{reason}` naming the
- * ceiling, and a transport that refused for its own reasons never reaches the
- * count.
+ * ride the one seam @yaks/mail already has: over the allowance the letter is
+ * `Undeliverable`, which the sending effect comes to rest on as
+ * `bounced{reason}` naming the ceiling, with nothing failed; and a transport
+ * that refused for its own reasons never reaches the count.
+ */
+export let charging = (
+  bind: Partial<Env> & { STORE: Namespace },
+  space: Space,
+  sender: Sender,
+): Sender => ({
+  send: async (m) => {
+    let no = refusedSpend(space, 'emails', bind)
+    if (no) throw new Undeliverable(no)
+    let receipt = await sender.send(m)
+    await counted({ STORE: bind.STORE }, space)
+    // A Plus plan space's first letter sets its subdomain up for mail.
+    await usedMail(bind, space)
+    return receipt
+  },
+})
+
+/**
+ * A letter counted against the space whose mailbox an app store sends from
+ * ({@link charging}).
  *
  * A store with no namespace bound and one that cannot name its own mailbox
  * both send uncounted — the stand-in in a test, an object that has not learned
@@ -37,14 +56,28 @@ export let metering = (
     let ns = bind.STORE
     let box = ns ? await mailedTo(from() ?? '', directoryOf(ns), bind) : null
     if (!ns || !box) return await sender.send(m)
+    return await charging({ ...bind, STORE: ns }, box.space, sender).send(m)
+  },
+})
+
+/**
+ * The sender a space's Operator store lends @yaks/mail as `operator`
+ * (operator-store.ts): a letter leaves from its space's own address, counted
+ * against that space ({@link charging}), and its provider's notices about it
+ * come back to that space's Operator (mail-receipts.ts). A letter from any
+ * other address is not the Operator's to send, and bounces.
+ */
+export let operatorPost = (
+  env: Partial<Env> & { STORE: Namespace },
+): Sender => ({
+  send: async (m) => {
+    let box = await mailedTo(m.from, directoryOf(env.STORE), env)
+    if (!box || box.app) {
+      throw new Undeliverable(`${m.from} is not a space’s own address`)
+    }
     let { space } = box
-    let no = refusedSpend(space, 'emails', bind)
-    if (no) throw refuse('limit', no)
-    let receipt = await sender.send(m)
-    await counted({ STORE: ns }, space)
-    // A Plus plan space's first letter sets its subdomain up for mail.
-    await usedMail(bind, space)
-    return receipt
+    let sender = outgoing(env, { yak_operator: space.eid })
+    return await charging(env, space, sender).send(m)
   },
 })
 
