@@ -57,7 +57,7 @@ export let asking = async (
         ? await held(token, env.SESSION_SECRET, ledger(env.OAUTH_KV))
         : null
       return {
-        who: g
+        who: g && await dirOf(env).hasPerson(g.person)
           ? {
             person: g.person,
             via: 'grant',
@@ -78,7 +78,7 @@ export let asking = async (
       token,
     )
     return {
-      who: person
+      who: person && await dirOf(env).hasPerson(person)
         ? {
           person,
           via: 'oauth',

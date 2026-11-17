@@ -44,6 +44,16 @@ import { browsers, endAll } from './browser-sessions.ts'
 let SECRET = 'a-probe-secret'
 let vocab = platformVocab()
 let g = graph({ storage: ram(vocab), vocab })
+await g.apply(
+  [
+    '00000000-0000-4000-8000-000000000011',
+    '00000000-0000-4000-8000-000000000012',
+  ].map((eid) => ({
+    entity: { eid },
+    person: {},
+  })),
+  { trusted: true },
+)
 let door = over({
   query: async (q) => await g.read(whole(q)),
   apply: async (rows) => await g.apply(rows, { trusted: true }),
@@ -83,8 +93,9 @@ test('session cookie domains follow the configured hostname trust', () => {
 let aged = async (
   days: number,
   person = '00000000-0000-4000-8000-000000000011',
-) =>
-  `${COOKIE}=${await sign(
+) => {
+  await g.apply([{ entity: { eid: person }, person: {} }], { trusted: true })
+  return `${COOKIE}=${await sign(
     {
       person,
       space: null,
@@ -92,6 +103,7 @@ let aged = async (
     },
     SECRET,
   )}`
+}
 
 let asked = (cookie: string) =>
   new Request('https://jeff.yaks.app/recipes/api/query', {
@@ -473,6 +485,7 @@ test('explicit logout starts a fresh guest instrument while sign-in preserves th
 })
 
 let credential = async (person = crypto.randomUUID()) => {
+  await g.apply([{ entity: { eid: person }, person: {} }], { trusted: true })
   let set = await minted(asked(''), ENV, SECRET, person)
   let req = asked(`${COOKIE}=${value(set)}`)
   return { person, req, claims: (await sessionAt(req, ENV))! }

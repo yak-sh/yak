@@ -1588,9 +1588,10 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     if (pass?.once) return askLink(t, pass.once.back ?? null, env)
     let person = pass?.standing &&
       await whose(pass.standing, links(env.OAUTH_KV))
-    let known = person && await dirOf(env).known(person)
-    return known
-      ? askLink(t, null, env, known.email || known.phone || known.name)
+    let row = await addressed(env, person || null)
+    let account = row?.email?.address ?? row?.phone?.number
+    return account
+      ? askLink(t, null, env, account)
       : await followed(req, env, null)
   }
   if (path == LINK && req.method == 'POST' && field('t')) {

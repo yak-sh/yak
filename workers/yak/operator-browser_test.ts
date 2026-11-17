@@ -26,6 +26,7 @@ import {
 import { bearerFor, connector, fresh, seed, unique } from './probe.ts'
 import { managePath } from '@yaks/platform/routes'
 import { ai, modelPage, platform } from './testing.ts'
+import { directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
 
 let b64url = (s: string) =>
@@ -53,6 +54,9 @@ let wire = (answering?: (frame: string) => void) => {
 let SECRET = 'operator-browser'
 let door = platform(SECRET)
 let ADA = crypto.randomUUID()
+await directoryOf(door.env.STORE).stamp({
+  entities: [{ entity: { eid: ADA }, person: {} }],
+})
 let { token: grant } = await mint(SECRET, ledger(door.env.OAUTH_KV)!, {
   person: ADA,
 })

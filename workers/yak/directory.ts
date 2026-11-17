@@ -2449,6 +2449,7 @@ export let directoryRows = (rows: {
       let owner = rows.find((r) => r.entity.eid == person)
       return {
         ended: !!owner?.sessions_ended,
+        present: !!owner?.person,
         cancelled: !!row?.cancelled,
         session: row?.browser_session
           ? {
@@ -2470,6 +2471,8 @@ export let directoryRows = (rows: {
           person,
           via: idOf(row.browser_session!.via),
         })),
+    hasPerson: async (eid: string) =>
+      !!await one(line`.entity.eid=${eid}&.person`),
     stamp: (mutation: { entities: Bundle[] }, headers = {}) =>
       write(mutation, { ...headers, 'x-yak-kernel': '1' }),
     space: async (slug: string) => await decided.space(slug),

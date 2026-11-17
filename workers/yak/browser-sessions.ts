@@ -41,11 +41,12 @@ export let held = async (
   via: string,
   session?: string,
 ) => {
-  let { cancelled, ended, session: kept } = await sessions(env).browserSession(
-    session ?? prior(person, via),
-    person,
-  )
-  if (cancelled || !session && ended) return false
+  let { cancelled, ended, present, session: kept } = await sessions(env)
+    .browserSession(
+      session ?? prior(person, via),
+      person,
+    )
+  if (!present || cancelled || !session && ended) return false
   return kept
     ? kept.person == person && Date.parse(String(kept.until)) > Date.now()
     : !session
