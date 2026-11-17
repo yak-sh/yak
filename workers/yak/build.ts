@@ -1142,6 +1142,10 @@ export class Builder extends Durable {
             this.#take()
             return null
           },
+          contacts: async () => {
+            let { contactBackfill } = await import('./contact-move.ts')
+            return backfill(contactBackfill(store, this.#env))
+          },
           attachments: async () => {
             let { attachmentBackfill } = await import('./attachment-move.ts')
             return backfill(attachmentBackfill(store, this.#env))

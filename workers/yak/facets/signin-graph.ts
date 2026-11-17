@@ -192,6 +192,13 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
                 'That contact belongs to another account. Sign in with it to use that account.',
               )
             }
+            if (g.email) {
+              return [{
+                entity: { eid: g.person! },
+                email: { address },
+                $alias: b.$alias,
+              }]
+            }
             return after(
               tx.read(line`.entity.eid=${consentEid(g.person!)}`),
               ([before]) => {
@@ -241,7 +248,7 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
               ) => [...wrote, { ...who, $alias: b.$alias }, ...home],
             )
           })
-        return g.person
+        return g.person && g.phone
           ? after(
             tx.read(personLine(address)),
             (held) =>

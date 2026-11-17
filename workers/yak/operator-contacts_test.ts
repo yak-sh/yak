@@ -21,6 +21,8 @@ import { handleChannels } from './operator-channels.ts'
 import { consentEid } from '@yaks/phone'
 import { Unsent } from '@yaks/mail'
 import { meta } from './meta.ts'
+import { mac, mint, spend } from './signin.ts'
+import { contactBackfill } from './contact-move.ts'
 import { seenBy } from './operator-access.ts'
 
 let setup = async (name: string, email?: string, time?: Clock) => {
@@ -261,6 +263,21 @@ await guestTools.run('contact_add', {
 let guestQueued = await guest.notify('Your work is ready.')
 let emailBefore = await guest.dir.emailAt(guest.person)
 let code = String(guest.letters[0].subject).match(/\d{6}/)![0]
+let pendingProofs = await meta(guest.env).query('.signin')
+let [pendingContact] = await guest.store.g.read('.operator_contact')
+let isolated = await Promise.all([
+  {},
+  { person: crypto.randomUUID(), space: guest.space.eid },
+  { person: guest.person, space: crypto.randomUUID() },
+].map((scope) =>
+  spend(
+    meta(guest.env),
+    guest.env.SESSION_SECRET!,
+    'new@example.net',
+    code,
+    scope,
+  )
+))
 let wrongSource = await guest.entry('000000')
 await assertRejects(() =>
   guest.invoke({
@@ -279,6 +296,19 @@ await guestTools.run('contact_add', {
 })
 let emailAfter = await guest.dir.emailAt(guest.person)
 let contactPerson = await guest.dir.personAt('new@example.net')
+let replayed = await Promise.all(
+  [{}, { person: guest.person, space: guest.space.eid }]
+    .map((scope) =>
+      spend(
+        meta(guest.env),
+        guest.env.SESSION_SECRET!,
+        'new@example.net',
+        code,
+        scope,
+      )
+    ),
+)
+let afterProofs = await meta(guest.env).query('.signin')
 let guestLetters = [...guest.letters]
 test('an anonymous person verifies email in the same conversation before completion reaches it', () => {
   assertEquals(emailBefore, null)
@@ -558,4 +588,69 @@ test('a refused parallel contact creation releases the existing notification eff
     String(failedParallel.letters[0].text),
     'The job with a refused contact is done.',
   )
+})
+
+test('an email contact proof opens only its person and space, is consumed, and never signs in', () => {
+  assertEquals(pendingProofs.length, 1)
+  assertEquals((pendingProofs[0].signin as Comp).person, guest.person)
+  assertEquals((pendingProofs[0].signin as Comp).space, guest.space.eid)
+  assertEquals((pendingContact.operator_contact as Comp).code, undefined)
+  assertEquals((pendingContact.operator_contact as Comp).tries, undefined)
+  assertEquals(isolated, [null, null, null])
+  assertEquals(replayed, [null, null])
+  assertEquals(afterProofs, [])
+})
+
+let legacy = await setup('legacy-code')
+let legacyAddress = 'legacy-contact@example.org'
+let legacySource = await legacy.entry(`Email me at ${legacyAddress}.`)
+let legacyCode = await mint(
+  meta(legacy.env),
+  legacy.env.SESSION_SECRET!,
+  legacyAddress,
+)
+let legacyContact = crypto.randomUUID()
+await legacy.store.g.apply([{
+  entity: { eid: legacyContact },
+  operator_contact: {
+    person: legacy.person,
+    address: legacyAddress,
+    session: legacy.session,
+    source: legacySource,
+    request: legacySource,
+    code: await mac(legacyAddress, legacyCode!, legacy.env.SESSION_SECRET!),
+    expires: new Date(Date.now() + 600000).toISOString(),
+    tries: 2,
+  },
+}], { trusted: true })
+let [firstMove] = await Promise.all([
+  contactBackfill(legacy.store, legacy.env),
+  contactBackfill(legacy.store, legacy.env),
+])
+let secondMove = await contactBackfill(legacy.store, legacy.env)
+let [movedProof] = await meta(legacy.env).query('.signin')
+let [movedContact] = await legacy.store.g.get([legacyContact])
+let legacyLogin = await spend(
+  meta(legacy.env),
+  legacy.env.SESSION_SECRET!,
+  legacyAddress,
+  legacyCode!,
+)
+let legacyInput = await legacy.entry(legacyCode!)
+await legacy.invoke({
+  address: legacyAddress,
+  code: legacyCode,
+  source: legacyInput,
+})
+
+test('older pending contact codes move to one scoped proof without losing the request or digits', async () => {
+  assertEquals([firstMove, secondMove], [false, false])
+  let moved = movedContact.operator_contact as Comp
+  assertEquals(moved.code, undefined)
+  assertEquals(moved.tries, undefined)
+  assertEquals(moved.request, legacySource)
+  assertEquals((movedProof.signin as Comp).tries, 2)
+  assertEquals(legacyLogin, null)
+  assertEquals(await legacy.dir.emailAt(legacy.person), legacyAddress)
+  assertEquals(await meta(legacy.env).query('.signin'), [])
 })

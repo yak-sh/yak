@@ -1,9 +1,8 @@
 // Contact changes start in the conversation. Email ownership codes and the
 // person's optional SMS consent put contacts on the directory person.
 import { line } from '@yaks/query'
+import { moveContact } from './contact-move.ts'
 import type { Bundle, Comp } from '@yaks/graph'
-import { Stale } from '@yaks/graph/errors'
-import { token } from '@yaks/graph/sha256'
 import { kindOf, type Tool } from '@yaks/session'
 import { mobile } from '@yaks/phone/mobile'
 import { sendable, Unsent } from '@yaks/mail'
@@ -13,7 +12,7 @@ import { type Ctx, refuse } from './tool.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { owns } from './operator-access.ts'
 import { inputSource } from './operator-provenance.ts'
-import { canon, LIFE, mac, mint, TRIES } from './signin.ts'
+import { canon, LIFE, mint, spend } from './signin.ts'
 import { KERNEL, meta } from './meta.ts'
 import { type Mail, mail } from './mail.ts'
 import { managePath } from '@yaks/platform/routes'
@@ -26,9 +25,7 @@ type Contact = {
   address: string
   source: string
   request: string
-  code?: string
   expires?: string
-  tries?: number
   consent?: string
   consent_source?: string
   session: string
@@ -100,12 +97,13 @@ let sendCode = async (send: Mail, address: string, code: string) => {
   })
 }
 
-// Only the source entry's code opens the request. A model's guessed code or
-// another person's words cannot verify a contact. CAS counts concurrent tries.
+// Only a code typed in this person's conversation is sent to the shared
+// ownership-code transaction. It counts guesses and consumes the proof.
 let checked = async (
-  store: OperatorStore,
+  env: Env,
+  ctx: Ctx,
+  space: Space,
   row: Bundle,
-  secret: string,
   code: string,
   words: string,
 ) => {
@@ -116,24 +114,14 @@ let checked = async (
       'Ask them to type the six-digit code they received in this conversation.',
     )
   }
-  if (
-    !c.code || Date.parse(c.expires ?? '') <= Date.now() ||
-    (c.tries ?? 0) >= TRIES
-  ) {
-    throw refuse(
-      'expired',
-      'That code expired or has no guesses left. Ask for a new code.',
-    )
-  }
-  await store.g.apply([{
-    entity: row.entity,
-    operator_contact: { tries: (c.tries ?? 0) + 1 },
-    $was: { operator_contact: { tries: token(c.tries) } },
-  }], { trusted: true })
-  if (await mac(c.address, code, secret) != c.code) {
+  let arrived = await spend(meta(env), env.SESSION_SECRET!, c.address, code, {
+    person: ctx.person,
+    space: space.eid,
+  })
+  if (!arrived) {
     throw refuse(
       'arguments',
-      'That code does not match. Check it and try again.',
+      'That code does not match, expired, or has no guesses left. Check it or request a new code.',
     )
   }
 }
@@ -149,18 +137,14 @@ let confirmed = async (
   let c = row.operator_contact as Contact
   await available(ctx, c.address)
   let sms = !!mobile(c.address)
-  let entities = sms
-    ? []
-    : [{ entity: { eid: ctx.person }, email: { address: c.address } }]
   await meta(env).apply([
-    ...entities,
     alertsRow(ctx.person, sms ? 'text' : 'email'),
   ], KERNEL)
   await store.g.apply([{
     entity: row.entity,
     verified: {},
     operator_contact: {
-      code: null,
+      expires: null,
       ...(sms ? { consent: CONSENT, consent_source: source } : {}),
     },
   }], { trusted: true })
@@ -198,7 +182,7 @@ export let contactAdd = (
   name: 'contact_add',
   title: 'Add your contact',
   description:
-    'Add the email address or US mobile number the person asked you to reach them at, including in an anonymous conversation. source is their own entry id: find it with graph_query(self:true). A mobile number shows an inline optional consent form and texts an ownership code for them to enter; you cannot agree for them. An email receives an ownership verification code. Ask them to type it here, then call with code and source naming their code entry. Until confirmed it is not a contact and receives no work or alerts. On confirmation it becomes their directory email{address} or phone{number} + sms_consent{person,consent,at,space,source}, and chosen notification channel. Use notification_send for their requested completion, even while verification is pending; it waits for confirmation. Read confirmed contacts by calling without address. Never use mail_send to bypass verification of their own new address. Pending requests are operator_contact{person,address,source,session,code,expires,tries} in your graph; only this confirmation path changes directory contacts.',
+    'Add the email address or US mobile number the person asked you to reach them at, including in an anonymous conversation. source is their own entry id: find it with graph_query(self:true). A mobile number shows an inline optional consent form and texts an ownership code for them to enter; you cannot agree for them. An email receives an ownership verification code. Ask them to type it here, then call with code and source naming their code entry. Until confirmed it is not a contact and receives no work or alerts. On confirmation it becomes their directory email{address} or phone{number} + sms_consent{person,consent,at,space,source}, and chosen notification channel. Use notification_send for their requested completion, even while verification is pending; it waits for confirmation. Read confirmed contacts by calling without address. Never use mail_send to bypass verification of their own new address. Pending requests are operator_contact{person,address,source,session,expires} in your graph; only this confirmation path changes directory contacts.',
   parameters: {
     type: 'object',
     properties: {
@@ -251,27 +235,19 @@ export let contactAdd = (
     let address = addressOf(given)
     await available(ctx, address)
     let row = await pending(store, ctx.person, session, address)
+    if (row) await moveContact(store, env, row)
     if (args.code) {
       if (!row || row.verified || row.cancelled) {
         throw refuse('missing', 'Ask for a contact verification code first.')
       }
-      try {
-        await checked(
-          store,
-          row,
-          env.SESSION_SECRET!,
-          String(args.code).trim(),
-          source.words,
-        )
-      } catch (e) {
-        if (e instanceof Stale) {
-          throw refuse(
-            'conflict',
-            'Another code was checked at the same time. Try again.',
-          )
-        }
-        throw e
-      }
+      await checked(
+        env,
+        ctx,
+        space,
+        row,
+        String(args.code).trim(),
+        source.words,
+      )
       return confirmed(env, ctx, space, store, row, source.eid)
     }
     let id = open?.entity.eid ?? crypto.randomUUID()
@@ -310,9 +286,7 @@ export let contactAdd = (
           source: source.eid,
           request,
           session,
-          code: null,
           expires: null,
-          tries: null,
         },
       }], { trusted: true })
       return JSON.stringify(offered)
@@ -328,7 +302,10 @@ export let contactAdd = (
         next: 'A code is already on its way. Ask them to type it here.',
       })
     }
-    let code = await mint(meta(env), secret, address)
+    let code = await mint(meta(env), secret, address, '', {
+      person: ctx.person,
+      space: space.eid,
+    })
     if (!code) {
       throw refuse(
         'limit',
@@ -344,9 +321,7 @@ export let contactAdd = (
         source: source.eid,
         request,
         session,
-        code: await mac(address, code, secret),
         expires: new Date(Date.now() + LIFE).toISOString(),
-        tries: 0,
       },
     }], { trusted: true })
     try {
@@ -355,7 +330,7 @@ export let contactAdd = (
       if (error instanceof Unsent) {
         await store.g.apply([{
           entity: { eid: id },
-          operator_contact: { code: null, expires: null },
+          operator_contact: { expires: null },
         }], { trusted: true })
       }
       throw error

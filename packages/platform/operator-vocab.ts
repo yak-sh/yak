@@ -40,10 +40,14 @@ export let operatorDoc: VocabDoc = {
         code: {
           type: 'string',
           description:
-            'Address-bound HMAC of an email ownership code, never the digits.',
+            'Retired duplicate digest; contact-move scopes its directory proof and clears it.',
         },
         expires: { type: 'string', format: 'date-time' },
-        tries: { type: 'number' },
+        tries: {
+          type: 'number',
+          description:
+            'Retired duplicate guess count, cleared by contact-move.',
+        },
         consent: { type: 'string' },
         consent_source: { type: 'string', ref: 'entity', death: 'keep' },
       },
