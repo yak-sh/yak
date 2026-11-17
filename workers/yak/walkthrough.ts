@@ -20,6 +20,10 @@ import { builderOf, SPACE } from './build-door.ts'
 /** Where the kernel asks a space's object for a walkthrough (build.ts). */
 export let WALKTHROUGH = '/operator/walkthrough'
 
+/** Where it asks for a walkthrough's lines through a step, for a visitor
+ * stepping in (operator-host.ts `walkedOf`). */
+export let WALKED = '/operator/walked'
+
 /** One step of a walkthrough: its lines, the person's request first, and the
  * version it left the app at, if any step so far released one. */
 export type Step = { lines: Bundle[]; version: number | null }
@@ -96,6 +100,47 @@ export let stepsOf = (entries: Bundle[], app: string): Step[] => {
   return steps
 }
 
+/** A walkthrough through one of its steps: its transcript's lines up to
+ * that step's last, and the version of the app as that step left it. */
+export type Walked = { lines: Bundle[]; version: number | null }
+
+/** A kernel request to the demo space's object. */
+export let asked = async <T>(
+  env: Env,
+  space: string,
+  path: string,
+  body: object,
+) => {
+  let answer = await builderOf(env, space)(() =>
+    new Request(`https://builder${path}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-yak-kernel': '1',
+        [SPACE]: space,
+      },
+      body: JSON.stringify(body),
+    })
+  )
+  if (!answer.ok) {
+    throw new Error(`${path} was not answered (${answer.status})`)
+  }
+  return await answer.json() as T
+}
+
+/** What the Operator is told before a visitor's first words in a
+ * conversation begun from a home-page demo (operator-channels.ts `BY`). */
+export let STEPPING = (
+  stepped: { demo: string; app: string; outside?: string[] },
+) =>
+  `The conversation so far is yaks.app's demo of ${stepped.demo}, recorded in yaks.app's demo space and shown on its home page. A visitor stepped into it at this point, and these are their first words: they want the app as their own, changed as they ask. This space has its own copy of the app as the demo had it here, at ${stepped.app}; change that copy, not the demo's.` +
+  (stepped.outside?.length
+    ? ` What the demo's Operator set up outside the app is not here (it called ${
+      stepped.outside.join(', ')
+    }): offer to set each up for them when it fits what they ask, and a space nobody has kept yet asks for their email first.`
+    : '') +
+  '\n\n'
+
 /** The demo space's walkthrough of `app`, drawn, or none while nobody has
  * marked one. */
 export let walkthroughAt = async (
@@ -103,23 +148,12 @@ export let walkthroughAt = async (
   space: string,
   app: string,
 ): Promise<Walkthrough | null> => {
-  let answer = await builderOf(env, space)(() =>
-    new Request(`https://builder${WALKTHROUGH}`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-yak-kernel': '1',
-        [SPACE]: space,
-      },
-      body: JSON.stringify({ app }),
-    })
+  let { walkthrough } = await asked<{ walkthrough?: Walkthrough | null }>(
+    env,
+    space,
+    WALKTHROUGH,
+    { app },
   )
-  if (!answer.ok) {
-    throw new Error(`the walkthrough of ${app} was not read (${answer.status})`)
-  }
-  let { walkthrough } = await answer.json() as {
-    walkthrough?: Walkthrough | null
-  }
   return walkthrough ?? null
 }
 

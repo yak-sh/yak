@@ -30,7 +30,13 @@ import { attachmentOf } from '@yaks/blob/attachment'
 import { phoneTexts } from './phone-move.ts'
 import { channeled } from './channel-move.ts'
 import type { OperatorStore } from './operator-store.ts'
-import { stepsOf, WALKTHROUGH, type Walkthrough } from './walkthrough.ts'
+import {
+  stepsOf,
+  WALKED,
+  type Walked,
+  WALKTHROUGH,
+  type Walkthrough,
+} from './walkthrough.ts'
 import { transcript } from '@yaks/session/transcript'
 import { dispatchStatus } from '@yaks/session/admission'
 import type { Tool } from '@yaks/model'
@@ -999,6 +1005,30 @@ let arriving = async (store: Store, row: Bundle, entries: Bundle[]) => {
   }).reverse()
 }
 
+/** The lines of the walkthrough of `app` marked in this store through its
+ * step numbered `step` (from 0), as the transcript holds them, and the
+ * version of the app as that step left it (`stepsOf`). None for a step it
+ * does not have. */
+export let walkedOf = async (
+  store: Store,
+  app: string,
+  step: number,
+): Promise<Walked | null> => {
+  let [row] = await store.g.read(
+    q`.walkthrough.app=${app}&?session&.order=-created.at&.limit=1&.fields=entity.eid`,
+  )
+  if (!row) return null
+  let entries = await transcript(store.g, row.entity.eid)
+  let steps = stepsOf(entries, app).slice(0, step + 1)
+  let end = steps.at(step)?.lines.at(-1)
+  if (!end) return null
+  let last = Number((end.entry as Comp).seq)
+  return {
+    lines: entries.filter((b) => Number((b.entry as Comp)?.seq) <= last),
+    version: steps[step].version,
+  }
+}
+
 /** The walkthrough of `app` marked in this store (walkthrough.ts), each
  * step's lines drawn as the chat page draws a conversation's; none while no
  * conversation is marked one. The newest marked wins. */
@@ -1435,6 +1465,11 @@ export let operatorReply = async (
   if (path == WALKTHROUGH) {
     return Response.json({
       walkthrough: await walkthroughOf(store, String(args.app ?? '')),
+    })
+  }
+  if (path == WALKED) {
+    return Response.json({
+      walked: await walkedOf(store, String(args.app ?? ''), Number(args.step)),
     })
   }
   if (path == '/operator/inbound') {

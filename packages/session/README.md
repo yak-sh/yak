@@ -176,6 +176,15 @@ the parent transcript through the referenced entry, followed by its own entries.
 Provider continuation data is stored as a provider-specific component on an ask
 entry; for example, `@yaks/openai` stores `openai{response_id}`.
 
+A fork reads its parent's lines where they are, so both live in one store. To
+begin a session in another store with a transcript's lines,
+`grafted(lines,
+session)` gives the rows that write them as that session's first
+entries: what was said, asked and answered, each reference between them naming
+the copy, and nothing the provider or the original session kept for itself
+(provider data, costs, prompts, archive marks). yaks.app begins a visitor's
+conversation with a home-page demo's this way.
+
 `spawned{parent, notice, quiet}` selects passive completion delivery. With
 `notice: true`, `deliverChild(g, child, now)` writes one `notice{child}` entry
 in the parent instead of waking it. A settled chat waits `quiet` milliseconds

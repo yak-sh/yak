@@ -65,6 +65,7 @@
 // T-34242); what that page draws is `POST /say` below — the round waited for,
 // then the whole conversation as this same list. One wire, two ways to read
 // it.
+import type { Bundle } from '@yaks/graph'
 import { line as ql } from '@yaks/query'
 import type { Hibernation, Wire } from '@yaks/durable-object'
 import { driver, type DurableStorage, freely } from '@yaks/durable-object/sql'
@@ -949,6 +950,16 @@ export class Builder extends Durable {
     if (new URL(request.url).pathname == '/operator/receive') {
       let { heardAt } = await import('./operator-channels.ts')
       return await heardAt(operator, this.#env, held, space, args)
+    }
+    // A conversation begun from a home-page demo (identity.ts `begun`).
+    if (new URL(request.url).pathname == '/operator/stepped') {
+      await operator.begunWith(
+        held,
+        space,
+        String(args.session ?? ''),
+        (args.lines ?? []) as Bundle[],
+      )
+      return Response.json({})
     }
     if (new URL(request.url).pathname == '/operator/helper') {
       let { spawnHelper } = await import('./operator-helpers.ts')

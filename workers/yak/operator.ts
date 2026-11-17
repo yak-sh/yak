@@ -16,6 +16,7 @@ import type { Conversing } from '@yaks/harness/conversations'
 import { skillItems, skillRead } from '@yaks/harness/skills'
 import {
   answerOf,
+  grafted,
   inputOf,
   type Intake,
   recall,
@@ -1944,6 +1945,24 @@ export let operating = (
     }
   }
 
+  // A conversation of the person's begun under `session` with another
+  // transcript's lines, which is their one from now on (`rootAt`).
+  let begunWith: Operator['begunWith'] = async (
+    held,
+    space,
+    session,
+    lines,
+  ) => {
+    await readying(held, space)
+    if (!await conversed(store, session)) {
+      await started(session, held.person, space)
+    }
+    await g.apply([
+      await carrying(session, held, space, { channel: 'chat' }, true),
+      ...grafted(lines, session),
+    ], { trusted: true })
+  }
+
   let ask: Operator['ask'] = async (held, space, args, o = {}) => {
     let text = typeof args.say == 'string' ? args.say : ''
     let named = typeof args.task == 'string' ? args.task : o.task
@@ -2248,6 +2267,7 @@ export let operating = (
     },
     reads,
     listening,
+    begunWith,
     ask,
     note,
     tools,
@@ -2335,6 +2355,18 @@ export type Operator = {
     space: Space,
     o?: { model?: string; provider?: string; effort?: string; signup?: string },
   ) => Promise<Listening>
+  /** A conversation of `held`'s in `space` begun under `session` with
+   * another transcript's lines (@yaks/session `grafted`): a home-page demo's
+   * through the step they stepped in at (walkthrough.ts `walkedTo`). It is
+   * their one conversation from now on (operator-root.ts `rootAt`), so the
+   * words they give next are its next input. Given again, it writes the
+   * same rows. */
+  begunWith: (
+    held: Asker,
+    space: Space,
+    session: string,
+    lines: Bundle[],
+  ) => Promise<void>
   /** Words given: the next input of the person's conversation, or on a task
    * a new task and session or the next input of the task's newest session.
    * Answers at once with where they went (`task` is '' in a conversation). */

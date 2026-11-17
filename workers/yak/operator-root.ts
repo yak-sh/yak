@@ -50,19 +50,18 @@ export let spaceOf = (store: Pick<Store, 'g'>): Promise<string | undefined> => {
   return held
 }
 
-/** The person's one conversation in `store`: the one said to be theirs
- * (`operator_session.conversation`), as a conversation handed to them is
- * (operator-channels.ts `handOver`), else the one `rootOf` begins for them. */
+/** The person's one conversation in `store`: the newest said to be theirs
+ * (`operator_session.conversation`), as their own is once they have talked
+ * in it, a conversation handed to them is (operator-channels.ts `handOver`)
+ * and one begun from a home-page demo is (operator.ts `begunWith`), else the
+ * one `rootOf` begins for them. */
 export let rootAt = async (store: Store, space: string, person: string) => {
-  let mine = rootOf(space, person)
-  let held = person
+  let [newest] = person
     ? await store.g.read(
-      line`.operator_session.person=${person}&.operator_session.conversation=true&!spawned&.fields=entity.eid`,
+      line`.operator_session.person=${person}&.operator_session.conversation=true&!spawned&.order=-created.at&.limit=1&.fields=entity.eid`,
     )
     : []
-  return held.length && !held.some((b) => b.entity.eid == mine)
-    ? held[0].entity.eid
-    : mine
+  return newest?.entity.eid ?? rootOf(space, person)
 }
 
 /** What the helper `session` was asked, in a line: the first sentence it

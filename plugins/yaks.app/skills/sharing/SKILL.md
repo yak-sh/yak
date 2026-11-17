@@ -288,9 +288,13 @@ available again. Refused if the app was not published.
 
 Read it before you build something somebody may already have made.
 
-**`app_install(name, as?, space?)`** — install a copy of a published app.
+**`app_install(name, as?, space?, version?)`** — install a copy of a published
+app.
 
 - `name` is the published name from `app_published`.
+- The copy is of the published release. An app of yaks.app's demo space, whose
+  releases are the steps of a demo on the home page, can be copied as an earlier
+  release with `version`; stepping into a demo's step there does this.
 - The copy's address is the first of these that applies: `as` if you passed it;
   else the source app's own slug, if nothing in the space holds that address;
   else the published name, adding `-2`, `-3`, and so on until free. The source's

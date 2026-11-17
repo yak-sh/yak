@@ -122,6 +122,27 @@ export let operatorDoc: VocabDoc = {
           description:
             'Begun from a box given the web address of a site, on the chat channel: its words carry what to do with it.',
         },
+        stepped: {
+          type: 'object',
+          description:
+            "Begun from a step of a walkthrough on yaks.app's home page, on the chat channel: the conversation holds the demo's transcript through that step, and the words are the visitor's first.",
+          properties: {
+            demo: {
+              type: 'string',
+              description: "the demo app's slug in the demo space",
+            },
+            app: {
+              type: 'string',
+              description: "the slug of this space's copy of it",
+            },
+            outside: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                "the tools the demo's Operator called that set up something outside the app, which this space does not have",
+            },
+          },
+        },
         signup: {
           type: 'boolean',
           description:

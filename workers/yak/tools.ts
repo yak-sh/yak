@@ -138,7 +138,7 @@ import {
 } from '@yaks/platform/installs'
 import { unbranched, watching } from './preview.ts'
 import { tools as previewTools } from './preview-tools.ts'
-import { demonstrate, ours } from './gallery-demo.ts'
+import { DEMO, demonstrate, ours } from './gallery-demo.ts'
 import * as shared from './shared-skill.ts'
 import { appFolder, landed, listing, sandboxPath } from './ship.ts'
 import {
@@ -2239,6 +2239,32 @@ export let recompileRelease = async (
 
 // Select the publication, rather than whatever its publisher currently serves.
 // Older versions without a release source still have their pinned file bytes.
+// The release an install copies: the published one, or, for an app of the
+// demo space, an earlier one asked for. Elsewhere a release before
+// publishing was never offered, so only the published one is.
+let installing = (
+  offer: { space: Space; app: App },
+  asked: unknown,
+) => {
+  let published = offer.app.published!.version
+  if (asked == null) return published
+  let version = Number(asked)
+  if (offer.space.slug != DEMO) {
+    throw refuse(
+      'arguments',
+      'version is only for the apps of the demo space; an install takes ' +
+        'the published release',
+    )
+  }
+  if (!Number.isInteger(version) || version < 1 || version > published) {
+    throw refuse(
+      'arguments',
+      `version is a release from v1 to the published v${published}`,
+    )
+  }
+  return version
+}
+
 let offered = async (
   ctx: Ctx,
   from: { space: Space; app: App },
@@ -6760,6 +6786,13 @@ let OURS: Row[] = [
             'before signing up: the copy takes over that store, rows and ' +
             'uploads, instead of starting from the seed',
         },
+        version: {
+          type: 'number',
+          description:
+            'for an app of yaks.app’s demo space, whose every release is a ' +
+            'step of a demo on the home page: an earlier release to copy, ' +
+            'from the steps of its demo; left out, the published one',
+        },
       },
       required: ['name'],
     },
@@ -6846,8 +6879,8 @@ let OURS: Row[] = [
         args.as == null ? null : fresh(args.as, 'as'),
       )
       let claims = await taking(ctx, space, s, who)
-      let version = offer.app.published.version
-      let source = await offered(ctx, offer)
+      let version = installing(offer, args.version)
+      let source = await offered(ctx, offer, version)
       // The words the copy will declare, read off the app it is copied from,
       // before anything is written. A release refuses a manifest it cannot
       // read (vocab.ts `appDoc`) — and that refusal used to arrive after the

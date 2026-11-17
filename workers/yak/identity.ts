@@ -78,6 +78,7 @@ import { linked } from './preview-route.ts'
 // only way that row is ever written: nothing serves the meta store at an
 // address (apps.ts), so no request can write the directory from outside.
 import { line } from '@yaks/query'
+import { derivedEid } from '@yaks/graph/identity'
 import { claimed } from './attribution.ts'
 import { apex, type Host, url as hostUrl } from '@yaks/platform/host'
 import {
@@ -1001,9 +1002,29 @@ let landed = async (
  * what is built from it is a private preview until they show the site is
  * theirs (newcomer.ts `previewing`).
  */
-let begun = async (req: Request, env: Env, said: string, org = '') => {
-  let words = worded(said.trim().slice(0, SAID), org)
-  if (!words) return redirect(hostUrl(env, '/'), undefined, 303)
+let begun = async (
+  req: Request,
+  env: Env,
+  said: string,
+  org = '',
+  at: { demo?: string; step?: string } = {},
+) => {
+  let typed = said.trim().slice(0, SAID)
+  if (!typed) return redirect(hostUrl(env, '/'), undefined, 303)
+  // A step of a home-page demo stepped into (D-462): the demo's app as that
+  // step left it, and its conversation through it, which their words go on.
+  // A demo that can't be read or copied is reported, and their words are
+  // still built, as an idea of their own.
+  let failed = (e: unknown) => {
+    caught(e, { request: 'POST /start', demo: at.demo, step: at.step })
+    return null
+  }
+  let walk = at.demo && at.step
+    ? await import('./stepping.ts')
+      .then((m) => m.walkedTo(env, dirOf(env), at.demo!, at.step!))
+      .catch(failed)
+    : null
+  let words = walk ? typed : worded(typed, org)
   let person = await browser(env, req)
   // A cookie outlives a newcomer whose space nobody kept and was erased
   // (erase.ts `vacated`): their browser is a stranger again.
@@ -1029,24 +1050,65 @@ let begun = async (req: Request, env: Env, said: string, org = '') => {
   }
   let space = await settle(env, person)
   if (set) await oneBuild(env, space)
-  let site = siteOf(said.trim().slice(0, SAID))
+  let site = walk ? '' : siteOf(typed)
   if (site) await previewed(env, space, site)
   let request = crypto.randomUUID()
   let chat = hostUrl(env, chatPath(space.slug, request))
   let { operatorDoor } = await import('./build-door.ts')
-  await operatorDoor(env, space, { person, role: 'owner' }, 'receive', {
+  let held = { person, role: 'owner' as const }
+  let stepped = walk
+    ? await steppedIn(env, space, held, walk, request).catch(failed)
+    : null
+  await operatorDoor(env, space, held, 'receive', {
     say: words,
     request: {
       channel: 'chat',
       files: [],
       page: hostUrl(env, chatPath(space.slug)),
       ...site ? { rebuild: true } : {},
+      ...stepped ? { stepped } : {},
     },
     options: { id: request },
   })
   step(env, 'started', req, { who: addressIn(known) })
   return redirect(chat, set, 303)
 }
+
+// A home-page demo stepped into, given `space`: a copy of its app at the
+// step's release, and a conversation of the person's begun with the demo's
+// lines through it (operator.ts `begunWith`), named by the request their
+// words come in. What the words' framing says of it (walkthrough.ts
+// `STEPPING`).
+let steppedIn = async (
+  env: Env,
+  space: Space,
+  held: { person: string; role: 'owner' },
+  walk: Stepping,
+  request: string,
+) => {
+  let [{ call }, { operatorDoor }] = await Promise.all([
+    import('./tools.ts'),
+    import('./build-door.ts'),
+  ])
+  let installed = await call(
+    { env, dir: dirOf(env), person: held.person },
+    'app_install',
+    { space: space.slug, name: walk.name, version: walk.version },
+  )
+  await operatorDoor(env, space, held, 'stepped', {
+    session: derivedEid('operator-stepped|' + request),
+    lines: walk.lines,
+  })
+  return {
+    demo: walk.name,
+    app: `${space.slug}/${installed.value?.app}`,
+    outside: walk.outside,
+  }
+}
+
+type Stepping = NonNullable<
+  Awaited<ReturnType<typeof import('./stepping.ts').walkedTo>>
+>
 
 // The longest idea the box takes, in characters: a few paragraphs.
 let SAID = 4000
@@ -1437,7 +1499,10 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   // space they build in, and the browser follows them into its chat. A
   // landing page whose box asks for a site says whose (`org`).
   if (path == START && req.method == 'POST' && env.SESSION_SECRET) {
-    return await begun(req, env, field('say'), field('org'))
+    return await begun(req, env, field('say'), field('org'), {
+      demo: field('demo'),
+      step: field('step'),
+    })
   }
 
   // Whether this browser is signed in, for the site's island (signed.ts), and
