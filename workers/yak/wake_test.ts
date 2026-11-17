@@ -363,7 +363,10 @@ test('the meter wake runs its job at the supplied hour', async () => {
     )
   }
   try {
-    let p = platform('meter wake', { CF_ANALYTICS_TOKEN: 'test' })
+    let p = platform('meter wake', {
+      CF_ANALYTICS_TOKEN: 'test',
+      CLOCK: { ...system, now: () => at('04:55') },
+    })
     let store = await directory(p)
     // The hour this test means, said outright: the seed plants the next real
     // one, and what is being proved is the firing, not the calendar.
@@ -396,7 +399,10 @@ test('a directory job reads and writes the directory in-process, never through i
   globalThis.fetch = () =>
     Promise.resolve(Response.json({ data: { viewer: { accounts: [] } } }))
   try {
-    let p = platform('tick depth', { CF_ANALYTICS_TOKEN: 'test' })
+    let p = platform('tick depth', {
+      CF_ANALYTICS_TOKEN: 'test',
+      CLOCK: { ...system, now: () => at('04:55') },
+    })
     let store = await directory(p)
     await meta(p.env).apply([
       {
