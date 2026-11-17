@@ -436,7 +436,10 @@ test('a directory job reads and writes the directory in-process, never through i
 
 test('a refused wake stays due, says why in the break log, and is tried again', async () => {
   let rows: Bundle[] = []
+  // The runtime rings what is due by the platform's clock, so it stands at the
+  // tick: by the wall clock the retry is long due, and rung before it is read.
   let p = platform('wake refusal', {
+    CLOCK: { ...system, now: () => at('05:00') },
     ERRORS: {
       send: (sample: Bundle[]) => {
         rows.push(...sample)
