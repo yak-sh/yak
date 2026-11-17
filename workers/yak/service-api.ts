@@ -4,12 +4,8 @@ import type { App, Directory, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { itsApp } from './dispatch.ts'
 import type { Who } from './session.ts'
-import {
-  callService,
-  connectService,
-  serviceFrom,
-  verifyService,
-} from './service-call.ts'
+import { callService, serviceFrom, verifyService } from './service-call.ts'
+import { askService } from './service-consent.ts'
 
 export let serviceRoute = async (
   req: Request,
@@ -61,7 +57,7 @@ export let serviceRoute = async (
         )
       }
       return Response.json(
-        await connectService(
+        await askService(
           env,
           dir,
           source,

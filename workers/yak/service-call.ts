@@ -47,11 +47,10 @@ export let serviceToken = (env: Env, a: ServiceAuthority) =>
 export let serviceFrom = (env: Env, token: string) =>
   opened<ServiceAuthority>('service', token, env.SESSION_SECRET!)
 
-/** Connect only this person's selected operations to the source app. */
-export let connectService = async (
+/** Resolve the service and validate the operations offered to this person. */
+export let offeredService = async (
   env: Env,
   dir: Directory,
-  source: { space: Space; app: App },
   who: Who,
   service: string,
   operations: string[],
@@ -80,11 +79,24 @@ export let connectService = async (
   if (i?.service?.app != service) {
     throw refuse('missing', 'The app has not published a service')
   }
+  return { target, tools, integration }
+}
+
+/** Record the source app's request without granting any operations. */
+export let requestService = async (
+  env: Env,
+  dir: Directory,
+  source: { space: Space; app: App },
+  who: Who,
+  service: string,
+  operations: string[],
+) => {
+  let { integration } = await offeredService(env, dir, who, service, operations)
   let g = meta(env)
   await g.apply(
     await need(read(env), {
       app: source.app.eid,
-      owner: who.person,
+      owner: who.person!,
       integration,
       each: true,
       scopes: [],
@@ -93,23 +105,43 @@ export let connectService = async (
   )
   let connection = await using(read(env), {
     app: source.app.eid,
-    owner: who.person,
+    owner: who.person!,
     integration,
     each: true,
   })
   if (!connection) throw new Error('Service connection was not retained')
-  await g.apply(
-    await grantService(read(env), {
-      person: who.person,
-      connection: connection.entity.eid,
-      operations,
-    }),
-    vouched(who),
-  )
   return {
     connection: connection.entity.eid,
     at: serviceAt(service, source.app.eid),
   }
+}
+
+/** Connect only this person's selected operations to the source app. */
+export let connectService = async (
+  env: Env,
+  dir: Directory,
+  source: { space: Space; app: App },
+  who: Who,
+  service: string,
+  operations: string[],
+) => {
+  let connection = await requestService(
+    env,
+    dir,
+    source,
+    who,
+    service,
+    operations,
+  )
+  await meta(env).apply(
+    await grantService(read(env), {
+      person: who.person!,
+      connection: connection.connection,
+      operations,
+    }),
+    vouched(who),
+  )
+  return connection
 }
 
 /** One app API or connector call, as the current customer. */

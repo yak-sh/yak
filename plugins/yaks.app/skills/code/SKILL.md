@@ -715,6 +715,22 @@ stays as it was. See
 copies](./sharing.md#lending-a-connection-to-installed-copies) for the install
 and revoke calls.
 
+## App services
+
+An app can call another app's published service operations as the signed-in
+person, after that person approves the connection. Request access with
+`POST ./api/service/connect` and a JSON body containing the service app's eid as
+`service` and the selected operation names as `operations`.
+
+The response contains `connection`, `at` and `url`. Send the person to `url`,
+the platform's consent page. It shows which app is requesting access, which
+service it wants and the operations requested. Choosing Allow returns them to
+the app. Opening the consent page alone grants nothing.
+
+After approval, call `POST ./api/service` with `{service, name, args}`. An
+operation without approval answers 403. The `service_connect` connector tool
+grants the operations directly when the person's assistant chooses them.
+
 ## CPU and subrequest limits
 
 Each ordinary request is limited to **50ms of CPU time and 50 subrequests**. A

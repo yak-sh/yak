@@ -73,6 +73,9 @@ let atApex = async (req: Request, env: Env, path: string) => {
     })
   }
   // The dashboard (apps.ts `manage`): the part that draws a space's pages.
+  if (path == '/connect/service') {
+    return (await import('./service-consent.ts')).serviceConsent(req, env)
+  }
   if (path == MANAGE || path.startsWith(`${MANAGE}/`)) {
     return bound(env.APPS, apps.fetch, env).fetch(req)
   }

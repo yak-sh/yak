@@ -1,11 +1,13 @@
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseTools } from '@yaks/tools/declared'
 import { keepDeclaration } from './declaration.ts'
 import { releaseOf } from './directory.ts'
 import { serviceOffer } from './app-services.ts'
 import { as, platform, seeded, visit } from './serving-probe.ts'
 import * as apps from './apps.ts'
+import { answer as apex } from './apex.ts'
+import { parseHTML } from 'linkedom'
 
 test('app service catalog follows the declaration without copying a command schema', async () => {
   await using p = platform()
@@ -121,27 +123,6 @@ test('service customers retain their identity and lose authority after revocatio
     app.eid,
     ['order'],
   )).connection
-  let connect = await apps.fetch(
-    visit('/cookbook/api/service/connect', {
-      method: 'POST',
-      headers: { cookie: await as(eli), 'content-type': 'application/json' },
-      body: JSON.stringify({ service: app.eid, operations: ['order'] }),
-    }),
-    env,
-  )
-  assertEquals(connect.status, 200, await connect.text())
-  let graph = await apps.fetch(
-    visit('/cookbook/api/query?.doc', {
-      headers: { cookie: await as(eli) },
-    }),
-    env,
-  )
-  assertEquals(graph.status, 403)
-  await assertRejects(() =>
-    connectService(env, dir, source, { person: ADA, role: 'owner' }, app.eid, [
-      'admin',
-    ])
-  )
   let requests: Request[] = []
   env.DISPATCH = {
     get: () => ({
@@ -155,6 +136,119 @@ test('service customers retain their identity and lose authority after revocatio
       },
     }),
   } as Dispatch
+  let connect = await apps.fetch(
+    visit('/cookbook/api/service/connect', {
+      method: 'POST',
+      headers: { cookie: await as(eli), 'content-type': 'application/json' },
+      body: JSON.stringify({ service: app.eid, operations: ['order'] }),
+    }),
+    env,
+  )
+  assertEquals(connect.status, 200)
+  let pending = await connect.json() as { connection: string; url: string }
+  let before = await apps.fetch(
+    visit('/cookbook/api/service', {
+      method: 'POST',
+      headers: { cookie: await as(eli), 'content-type': 'application/json' },
+      body: JSON.stringify({ service: app.eid, name: 'order', args: {} }),
+    }),
+    env,
+  )
+  assertEquals(before.status, 403)
+  let consentPage = await apex(
+    new Request(pending.url, {
+      headers: { cookie: await as(eli) },
+    }),
+    env,
+    '/connect/service',
+  )
+  assertEquals(consentPage.status, 200)
+  assertStringIncludes(
+    consentPage.headers.get('content-security-policy')!,
+    "frame-ancestors 'none'",
+  )
+  let document = parseHTML(await consentPage.text()).document
+  assertEquals(document.querySelector('li strong')?.textContent, 'order')
+  assertStringIncludes(
+    document.body.textContent!,
+    'https://ada.yaks.app/cookbook/',
+  )
+  assertStringIncludes(
+    document.body.textContent!,
+    'https://printbound.yaks.app/prints/',
+  )
+  let fields = Object.fromEntries(
+    [...document.querySelectorAll('input')].map((
+      input,
+    ) => [input.name, input.value]),
+  )
+  let approve = (sent: Record<string, string>, cookie: string) =>
+    apex(
+      new Request('https://yaks.app/connect/service', {
+        method: 'POST',
+        headers: {
+          cookie,
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(sent),
+      }),
+      env,
+      '/connect/service',
+    )
+  assertEquals(
+    (await approve({ request: fields.request }, await as(eli))).status,
+    403,
+  )
+  assertEquals(
+    (await approve(
+      { request: fields.request, consent: fields.request },
+      await as(eli),
+    )).status,
+    403,
+  )
+  assertEquals((await approve(fields, await as(ADA))).status, 403)
+  let bearerOnly = await apex(
+    new Request(pending.url, {
+      headers: { authorization: 'Bearer not-a-browser-session' },
+    }),
+    env,
+    '/connect/service',
+  )
+  assertEquals(bearerOnly.status, 303)
+  let changed = await apps.fetch(
+    visit('/cookbook/api/service/connect', {
+      method: 'POST',
+      headers: { cookie: await as(eli), 'content-type': 'application/json' },
+      body: JSON.stringify({ service: app.eid, operations: [] }),
+    }),
+    env,
+  )
+  let changedUrl = (await changed.json()).url
+  assertEquals(
+    (await approve({
+      ...fields,
+      request: new URL(changedUrl).searchParams.get('request')!,
+    }, await as(eli))).status,
+    403,
+  )
+  let approved = await approve(fields, await as(eli))
+  assertEquals(approved.status, 303)
+  assertEquals(
+    approved.headers.get('location'),
+    'https://ada.yaks.app/cookbook/',
+  )
+  let graph = await apps.fetch(
+    visit('/cookbook/api/query?.doc', {
+      headers: { cookie: await as(eli) },
+    }),
+    env,
+  )
+  assertEquals(graph.status, 403)
+  await assertRejects(() =>
+    connectService(env, dir, source, { person: ADA, role: 'owner' }, app.eid, [
+      'admin',
+    ])
+  )
   let ada = await callService(
     env,
     dir,

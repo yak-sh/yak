@@ -69,6 +69,8 @@ export type Use =
   | 'invite' // an invitation's accept link (workers/yak/invite.ts)
   | 'page' // a sandboxed app's page speaking to its own API (page-token.ts)
   | 'service' // retained cross-app customer authority, rechecked against its connection
+  | 'service-request' // an app's request for a person's service operations
+  | 'service-consent' // approval from the platform's service consent page
   | 'connect' // a connection's sign-in, on its way back (connections.ts)
   | 'line' // a person's own number's SMS callback (operator-line.ts)
   | 'call' // a call's audio stream, from its ring to its space (operator-calls.ts)
