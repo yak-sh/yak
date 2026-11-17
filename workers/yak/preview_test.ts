@@ -48,15 +48,24 @@ await run('app_files', {
     {
       path: 'vocab.json',
       content: JSON.stringify({
-        $defs: { draft_note: { properties: { text: { type: 'string' } } } },
+        $defs: {
+          draft_note: { properties: { text: { type: 'string' } } },
+          draft_image: { properties: { text: { type: 'string' } } },
+        },
       }),
     },
     {
       path: 'seed.json',
-      content: JSON.stringify([{
-        entity: { eid: '$note' },
-        draft_note: { text: 'seeded privately' },
-      }]),
+      content: JSON.stringify([
+        {
+          entity: { eid: '$note' },
+          draft_note: { text: 'seeded privately' },
+        },
+        {
+          entity: { eid: '$image' },
+          draft_image: { text: 'private image' },
+        },
+      ]),
     },
   ],
 })
@@ -67,6 +76,20 @@ let token = url.slice(mount.length).split('/')[0]
 let app = (await dir.app(space, 'draft'))!
 let request = (path = '', init: RequestInit = {}) =>
   kernel(new Request(new URL(path, url), init), env)
+
+for (let q of ['.draft_note%7C.draft_image', '(.draft_note%7C.draft_image)']) {
+  test(`a preview answers an escaped OR query: ${q}`, async () => {
+    let res = await request('api/query?' + q)
+    equal(res.status, 200)
+    let rows = await res.json()
+    equal(
+      rows.map((
+        r: { draft_note?: { text: string }; draft_image?: { text: string } },
+      ) => (r.draft_note ?? r.draft_image)!.text).sort(),
+      ['private image', 'seeded privately'],
+    )
+  })
+}
 
 test('preview forwards immutable WebSocket upgrades with their socket and private headers', async () => {
   let socket = {}

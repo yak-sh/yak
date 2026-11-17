@@ -80,6 +80,40 @@ let SEGMENT =
 let members = (value: string) =>
   value.replace(SEGMENT, (_, member, sep) => glued(member) + sep)
 
+// A pipe between clauses is URL-escaped grammar; inside a value it is data.
+// Restore the grammar before tokenizing, keeping each value escaped until its
+// own clause decodes it. A closed group can also precede an OR.
+let piped = (search: string): string => {
+  let out = '', head = '', quote = ''
+  let groups: string[] = []
+  for (let i = 0; i < search.length; i++) {
+    let c = search[i]
+    if (quote) {
+      if (c == '\\' && i + 1 < search.length) c += search[++i]
+      else if (c == quote) quote = ''
+      head += c
+    } else if ((c == '"' || c == "'") && /^$|[=<>,]$|\.\.$/.test(head)) {
+      quote = c
+      head += c
+    } else if (
+      search.slice(i, i + 3).toLowerCase() == '%7c' &&
+      /^[.!?+*#$)]/.test(plain(head)) && !OPERATOR.test(head)
+    ) {
+      c = '|'
+      head = ''
+      i += 2
+    } else if (c == '(' && (groups.length || !head)) {
+      groups.push(head)
+      if (head) head += c
+    } else if (c == ')' && groups.length) {
+      head = groups.pop() ? head + c : c
+    } else if (/[&|\s]/.test(c)) head = ''
+    else head += c
+    out += c
+  }
+  return out
+}
+
 /**
  * A page's filter line, off the search string it arrived as: the riders
  * rewritten and every value decoded, so the whole line can be escaped once
@@ -92,7 +126,7 @@ let members = (value: string) =>
  */
 export let lined = (search: string): string =>
   untokens(
-    tokens(bareLine(search)).map((seg) => {
+    tokens(piped(bareLine(search))).map((seg) => {
       if (seg == '|') return seg
       if (seg.startsWith('(')) return `(${lined(seg.slice(1, -1))})`
       let m = OPERATOR.exec(seg)

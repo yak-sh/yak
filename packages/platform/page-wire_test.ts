@@ -7,7 +7,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
 import { IDEMPOTENCY } from '@yaks/api/log'
-import { batched, lined, receipt, resend } from './page-wire.ts'
+import { batched, lined, lineOf, receipt, resend } from './page-wire.ts'
 
 let cases: [string, string][] = [
   // The riders the page writes bare
@@ -68,6 +68,45 @@ test('wire translation preserves query clauses and quoted values', () => {
     parse(lined('.doc.title~=a%7Cb .count')),
     parse('.doc.title~="a|b" .count'),
   )
+})
+
+test('an escaped OR between components stays grammar at the page door', () => {
+  for (
+    let q of [
+      '.guest_message|.image',
+      '(.guest_message|.image)',
+      '(.guest_message|.image)|.doc',
+      '.guest_message|.image|.doc.title~="a|b"',
+      '.guest_message|.doc.title~="a .image|b"',
+    ]
+  ) {
+    for (let search of [encodeURI(q), 'q=' + encodeURIComponent(q)]) {
+      let url = new URL('https://page.test/api/query?' + search)
+      assertEquals(parse(lineOf(url)!), parse(q), search)
+    }
+  }
+})
+
+test('escaped pipes in values stay literal at the page door', () => {
+  for (
+    let [q, expected] of [
+      ['.doc.title~=a%7Cb', '.doc.title~="a|b"'],
+      ['.doc.title~=a)%7Cb', '.doc.title~="a)|b"'],
+      ['(.doc.title~=a(b)%7Cc)', '(.doc.title~="a(b)|c")'],
+      ['(.doc.title~=a(b)c%7Cd)', '(.doc.title~="a(b)c|d")'],
+      ['.doc.title="a .image%7Cb"', '.doc.title="a .image|b"'],
+      ['"a .image%7Cb"', '"a .image|b"'],
+      [
+        '.guest_message%7C.image.title=a%7Cb,c%26d',
+        '.guest_message|.image.title="a|b","c&d"',
+      ],
+    ]
+  ) {
+    assertEquals(
+      parse(lineOf(new URL('https://page.test/api/query?' + q))!),
+      parse(expected),
+    )
+  }
 })
 
 test(
