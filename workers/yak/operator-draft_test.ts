@@ -200,11 +200,17 @@ let load = async (
   }
   // The frames of drafts the page has heard on its store's socket, each taken
   // in before the next, and the reads of its drafts it asked by any other way.
-  let reads = 0, asked = 0
+  let reads = 0, asked = 0, probes = 0
+  let down = network == 'down'
   let failed = new Set<string>()
   // Each read of the conversation.
   let talks = 0
-  let fetch = async (url: string, init?: RequestInit) => {
+  let fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    let url = input instanceof Request ? input.url : String(input)
+    if (input instanceof Request) init ??= input
+    let door = /\/operator\/(ws|query|apply)$/.exec(new URL(url, base).pathname)
+    if (door?.[1] == 'ws') probes++
+    if (door && down) throw new TypeError('Network unreachable')
     if (url.includes('?talk=') && slow) {
       let answer = await serve(url, init, as)
       talks++
@@ -250,7 +256,7 @@ let load = async (
   let handshakes = 0
   let reach = async (page: Page) => {
     handshakes++
-    let refused = network == 'down' ||
+    let refused = down ||
       network == 'deploying' && !failed.has(page.url) && !!failed.add(page.url)
     if (network == 'held' && handshakes == 1) return
     if (refused) return page.emit('close')
@@ -361,6 +367,12 @@ let load = async (
     asked: () => asked,
     // The handshakes its store's sockets made.
     handshakes: () => handshakes,
+    probes: () => probes,
+    recover: () => void (down = false),
+    disconnect: () => {
+      down = true
+      for (let socket of stores) socket.close()
+    },
     pass,
     talks: () => talks,
     // The Operator's socket opening, as after a deploy restarted it.
@@ -1250,7 +1262,28 @@ test('a page whose store cannot be reached says its draft is kept, and asks for 
     'Your draft is kept on this device until syncing returns.',
   )
   assertEquals(page.asked(), 0)
+  assert(page.probes() > 0, 'HTTP could not reach its store either')
   assert(page.handshakes() > 2, 'its socket was tried again')
+})
+
+test('a connected page reassures while offline, then clears its reassurance when its store reconnects', async () => {
+  let page = await load(storage(), false, 'new', {}, undefined, 'down')
+  try {
+    page.open()
+    page.recover()
+    assert(await page.pass(60_000, () => page.read() && page.status() == ''))
+    page.disconnect()
+    assert(await page.pass(60_000, () => page.status() != ''))
+    assertEquals(
+      page.status(),
+      'Your draft is kept on this device until syncing returns.',
+    )
+    page.recover()
+    assert(await page.pass(60_000, () => page.status() == ''))
+    assertEquals(page.asked(), 0)
+  } finally {
+    page.leave()
+  }
 })
 
 // Last, since it sends a message to the road conversation.

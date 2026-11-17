@@ -65,8 +65,12 @@ export let storeAt = (
         link.unsubscribe(id)
       }
     },
-    /** Be told each time its socket opens (true) or closes under it. */
-    connected: (fn: (open: boolean) => void) => link.onConnection(fn),
+    /** Its socket's state now, and each time it opens or closes under it. */
+    connected: (fn: (open: boolean) => void) => {
+      let off = link.onConnection(fn)
+      fn(link.connected())
+      return off
+    },
     close: () => link.close(),
   }
 }

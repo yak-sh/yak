@@ -2150,7 +2150,14 @@ let said = (e) => boxed?.set({ said: e.message })
 // While its socket cannot reach the store, the page says the draft is kept.
 let KEPT = 'Your draft is kept on this device until syncing returns.'
 let store = storeAt(location.origin + '${at}', '${who.person}', (e) => boxed?.set({ said: e?.name == 'Dropped' ? KEPT : e.message }))
-store.connected((open) => { if (open && boxed?.said() == KEPT) boxed.set({ said: '' }) })
+let disconnected
+store.connected((open) => {
+  clearTimeout(disconnected)
+  if (!open) disconnected = setTimeout(() => {
+    if (!boxed?.said()) boxed?.set({ said: KEPT })
+  }, WAIT)
+  else if (boxed?.said() == KEPT) boxed.set({ said: '' })
+})
 // A draft sent with the words it holds is spent by the same request that
 // takes the words in.
 let submission
