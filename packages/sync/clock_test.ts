@@ -85,3 +85,38 @@ test('socket clock calibrates, refines, holds through reconnect, and stops on cl
   for (let fn of due) fn()
   equal(sockets[1].client.asked.length, asked)
 })
+
+test('a server that accepts and hangs up waits out a growing backoff; one that held is retried at once', () => {
+  let time = 0
+  let sockets: ReturnType<typeof pair>[] = []
+  let due: { fn: () => void; ms: number }[] = []
+  let w = wire({
+    url: 'http://drop.test',
+    connect: () => (sockets.push(pair()), sockets.at(-1)!.client),
+    time: () => time,
+    timer: (fn, ms) => due.push({ fn, ms }),
+    land: () => {},
+    report: () => {},
+  })
+  w.open()
+  // Open the newest socket, close it `after` ms later, and say the timer the
+  // reconnect was scheduled on, if one was.
+  let hangUp = (after: number) => {
+    let s = sockets.at(-1)!.client
+    s.emit('open')
+    time += after
+    let from = due.length
+    s.close()
+    return due[from]
+  }
+  let waits = [1, 1, 1, 1].map((after) => {
+    let reconnect = hangUp(after)!
+    reconnect.fn() // after its wait
+    return reconnect.ms
+  })
+  equal(waits, [250, 500, 1000, 2000])
+  let made = sockets.length
+  hangUp(60_000) // held a minute, so the next opens at once
+  equal(sockets.length, made + 1)
+  w.close()
+})

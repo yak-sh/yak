@@ -1,8 +1,9 @@
+/// <reference lib="deno.ns" />
 import { equal, test } from '@yaks/testing'
 import { assertRejects } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
-import { runs, type Serving } from './tools.ts'
-import type { Incoming, Listen } from './deno.ts'
+import { entering, runs, type Serving } from './tools.ts'
+import { denoUpgrade, type Incoming, type Listen } from './deno.ts'
 
 test('a host that composed no handler has nothing to serve', async () => {
   await assertRejects(
@@ -140,4 +141,31 @@ test('a dedicated listener sets ingress authority even when callers omit or repl
     await work
   }
   equal(closed.sort(), [5173, 5174])
+})
+
+test("a listener's marked request still upgrades to a socket that answers", async () => {
+  let server = Deno.serve(
+    { port: 0, hostname: '127.0.0.1', onListen: () => {} },
+    entering((request) => {
+      let mark = request.headers.get('x-yak-tunnel')
+      let { socket, response } = denoUpgrade(request)
+      socket.addEventListener(
+        'message',
+        (e) => socket.send(`${e.data} ${mark}`),
+      )
+      return response
+    }, { 'x-yak-tunnel': '1' }),
+  )
+  let ws = new WebSocket(`ws://127.0.0.1:${server.addr.port}/ws`)
+  try {
+    let heard = await new Promise((resolve, reject) => {
+      ws.onopen = () => ws.send('clock')
+      ws.onmessage = (e) => resolve(e.data)
+      ws.onerror = (e) => reject(new Error((e as ErrorEvent).message))
+    })
+    equal(heard, 'clock 1')
+  } finally {
+    ws.close()
+    await server.shutdown()
+  }
 })

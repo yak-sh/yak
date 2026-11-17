@@ -25,6 +25,20 @@ let found = (): Upgrader | null => {
   return typeof up == 'function' ? (request) => up(request) : null
 }
 
+// Deno ties an upgrade to the Request it served. One rebuilt from it with
+// `new Request(served, init)` upgrades too, but the socket it gives sends
+// frames every client refuses ("Reserved bits are not zero"). So each request
+// `rebuild` makes remembers the one Deno served, and the upgrade takes that.
+let served = new WeakMap<Request, Request>()
+
+/** `new Request(request, init)`, which still upgrades to a WebSocket through
+ * {@link denoUpgrade} as the request Deno served. */
+export let rebuild = (request: Request, init: RequestInit): Request => {
+  let copy = new Request(request, init)
+  served.set(copy, served.get(request) ?? request)
+  return copy
+}
+
 /**
  * Deno's WebSocket upgrade, as an {@link Upgrade}. The default for `/ws`; on
  * any other runtime it throws, and the application passes its own.
@@ -38,7 +52,7 @@ export let denoUpgrade: Upgrade = (request) => {
   if (!up) {
     throw new Error('@yaks/api: no Deno.upgradeWebSocket here — pass `upgrade`')
   }
-  return up(request)
+  return up(served.get(request) ?? request)
 }
 
 /** What a runtime gives back for a port it is now listening on: the promise

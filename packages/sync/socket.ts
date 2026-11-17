@@ -515,7 +515,6 @@ export let wire = (opts: WireOpts): Wire => {
       opened = agreed.read()
       if (down) down.opened = opened
       waiting = []
-      wait = first // the server is reachable: retry promptly after the next drop
       spoke = opened
       hangUp = () => {
         if (socket != s) return
@@ -632,8 +631,12 @@ export let wire = (opts: WireOpts): Wire => {
       stopClock()
       waiting = []
       inbox = []
-      // The next connection is on its way before the page hears of the loss.
-      retry(opened !== undefined && agreed.read() - opened >= first)
+      // A connection that held for a while restarts the backoff, and the
+      // next one is on its way before the page hears of the loss; one that
+      // failed, or dropped as soon as it opened, keeps backing off.
+      let held = opened !== undefined && agreed.read() - opened >= first
+      if (held) wait = first
+      retry(held)
       if (begun) overdue(outage)
       for (let id of asks.keys()) {
         if (!refused.has(id)) opts.pending?.(id)

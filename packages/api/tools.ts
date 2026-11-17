@@ -43,7 +43,13 @@ import { argsOf } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
 import type { Runner } from '@yaks/tools'
 import { CallError } from '@yaks/tools/errors'
-import { denoListen, denoReady, type Listen, type Listener } from './deno.ts'
+import {
+  denoListen,
+  denoReady,
+  type Listen,
+  type Listener,
+  rebuild,
+} from './deno.ts'
 import { secured } from './access.ts'
 import { DB, HOSTNAME, PORT, served } from './address.ts'
 import type { Handler, Route } from './route.ts'
@@ -164,9 +170,11 @@ export type Endpoint = {
 export let entering =
   (handler: Handler, headers: Record<string, string> = {}): Handler =>
   (request) => {
+    let marks = Object.entries(headers)
+    if (!marks.length) return handler(request)
     let set = new Headers(request.headers)
-    for (let [name, value] of Object.entries(headers)) set.set(name, value)
-    return handler(new Request(request, { headers: set }))
+    for (let [name, value] of marks) set.set(name, value)
+    return handler(rebuild(request, { headers: set }))
   }
 
 /** The implementation of the tool ./vocab.json declares. */
