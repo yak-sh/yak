@@ -9,9 +9,11 @@ import { argsOf, type Tool as GraphTool } from '@yaks/graph'
 import { nameOf } from '@yaks/mcp-client'
 
 // The tunnel's code is loaded by the first server on a machine, which almost
-// nobody has.
+// nobody has. The servers are the account's, so a channel that may not reach
+// them, and a credential narrowed to one space (tool.ts `accounted`), see
+// nobody's.
 let commands = (ctx: Ctx, asking?: Calling) =>
-  remoteCommands(ctx.remote === false ? '' : ctx.person, {
+  remoteCommands(ctx.remote === false || ctx.who?.space ? '' : ctx.person, {
     ...ctxOf(ctx.env, asCaller(ctx, null)),
     report: (e) => caught(e, { request: 'connected MCP' }),
     signIn: url(ctx.env, '/manage/connections'),
@@ -117,6 +119,8 @@ export let mcpConnect: Row = {
   destructive: false,
   idempotent: true,
   openWorld: true,
+  // A server is the person's own, offered to every connector and Operator.
+  account: true,
   input: {
     type: 'object',
     properties: {

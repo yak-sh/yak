@@ -383,6 +383,7 @@ import { purge } from '@yaks/workerd/purge'
 import { appTag, keepable, spaceTag } from '@yaks/platform/kept'
 import { within } from '@yaks/workerd/rate'
 import {
+  accounted,
   admin,
   APP,
   type Args,
@@ -3316,19 +3317,11 @@ let OURS: Row[] = [
       properties: { slug: str('the hostname label'), title: str('its name') },
       required: ['slug', 'title'],
     },
+    // A space it made would be a space outside the one a narrowed grant
+    // reaches (grants.ts `narrowed`).
+    account: true,
     run: async (ctx, args) => {
       let s = fresh(args.slug, 'slug')
-      // A grant narrowed to one space reaches that space and no other
-      // (grants.ts `narrowed`), and a space it made would be a space outside
-      // it. Said here because minting one is the single act that does not go
-      // through the directory's membership at all.
-      if (ctx.who?.space) {
-        throw refuse(
-          'access',
-          `this grant reaches ${ctx.who.space} and no other space, so it ` +
-            'cannot make one',
-        )
-      }
       let taken = await ctx.dir.space(s)
       if (taken) {
         // The slug is held for a trashed space for its whole thirty days
@@ -7499,6 +7492,8 @@ let OURS: Row[] = [
     name: 'screen_pair',
     destructive: false,
     idempotent: true,
+    // The screen follows the person's drafts in every space they write in.
+    account: true,
     input: {
       type: 'object',
       properties: {
@@ -8080,4 +8075,4 @@ export let TOOLS: Tool[] = [
   worded(mcpConnect),
   ...numberTools.map(worded),
   ...searchConsoleTools.map(worded),
-]
+].map(accounted)

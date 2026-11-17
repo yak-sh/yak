@@ -237,13 +237,28 @@ test(
           .message,
         `no space ${one}`,
       )
-      assertStringIncludes(
-        (await assertRejects(
-          () => only.tool('space_new', { slug: 'three38', title: 'three38' }),
-          Error,
-        )).message,
-        'and no other space',
-      )
+      // Nor reach the rest of the account by a tool that never enters a space
+      // (T-787): the space it would make, a screen following every draft, a
+      // server offered to every connector, and the account's event stream.
+      let account = {
+        space_new: { slug: 'three38', title: 'three38' },
+        screen_pair: { code: 'ABCDEFGH' },
+        mcp_connect: { name: 'mine', url: 'https://remote.invalid/mcp' },
+      }
+      for (let [name, args] of Object.entries(account)) {
+        assertStringIncludes(
+          (await assertRejects(() => only.tool(name, args), Error)).message,
+          `${name} acts on the whole account`,
+        )
+      }
+      let stream = await k.at(k.host, '/mcp', {
+        headers: {
+          authorization: `Bearer ${/^yak login (\S+)$/m.exec(narrow)![1]}`,
+          accept: 'text/event-stream',
+        },
+      })
+      await stream.body?.cancel()
+      assertEquals(stream.status, 403)
 
       // Revoked, that bearer is refused — and the narrowed one still works,
       // since only the grant named went.

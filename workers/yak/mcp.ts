@@ -681,7 +681,7 @@ let answered = async (
   // Everything else is still one POST in, one JSON out. A stream is a
   // person's own, so there is no public one.
   if (req.method == 'GET') {
-    if (auth?.space && auth.via == 'session') {
+    if (auth?.space) {
       return json(403, {
         error: {
           code: 'access',

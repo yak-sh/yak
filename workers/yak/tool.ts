@@ -166,6 +166,11 @@ export type Tool = {
   // not what the door declares for everything it lists: a tool anybody may
   // call says `noauth` (preauth.ts NOAUTH, mcp.ts signin).
   security?: Security[]
+  // It acts on the person's whole account rather than in one space: what it
+  // reads or writes is found by the person alone, so the narrowing every
+  // space-scoped tool meets in the directory never reaches it. A credential
+  // narrowed to one space is refused it (`accounted`).
+  account?: boolean
   input: Shape
   // A tool that may take longer than a client waits for a call names what a
   // call is about (`space/app` for a release): a door that lets calls outlast
@@ -185,6 +190,31 @@ export type Tool = {
  * ceiling or rate says no), `unavailable` (switched off where this runs).
  */
 export let refuse = (code: string, text: string) => new CallError(code, text)
+
+/**
+ * The tool, run only for a credential that reaches the whole account when it
+ * says it acts on the account (`Tool.account`). A session on a custom domain,
+ * a CLI grant naming a space, and the grant a build's sandbox is lent each
+ * reach one space and nothing else of the person's (T-787).
+ */
+export let accounted = (tool: Tool): Tool =>
+  tool.account
+    ? {
+      ...tool,
+      run: (ctx, args) => {
+        let narrowed = ctx.who?.space
+        if (narrowed) {
+          throw refuse(
+            'access',
+            `This credential reaches ${narrowed} and no other space, and ` +
+              `${tool.name} acts on the whole account. Call it where you ` +
+              'signed in to yaks.app itself: the connector, or the browser.',
+          )
+        }
+        return tool.run(ctx, args)
+      },
+    }
+    : tool
 
 // A list a refusal names the caller's next choice from.
 let listed = (names: string[]) => [...names].sort().join(', ')
