@@ -62,6 +62,7 @@ let spaces = async (vars: Partial<Env> = TOKENS) => {
   await dir.apply({
     entities: [
       { entity: { eid: ADA }, person: {} },
+      { entity: { eid: JEFF }, person: {} },
       {
         entity: { eid: '$space' },
         doc: { title: 'ada' },
@@ -313,7 +314,7 @@ let wears = (tunnel: object | null) =>
   stamp(env, { entities: [{ entity: { eid: ada.eid }, tunnel }] })
 await wears({ id: T, service: S, adopted: true })
 await stamp(env, {
-  entities: [{
+  entities: [{ entity: { eid: BOB }, person: {} }, {
     entity: { eid: '$seat' },
     member: { space: ada.eid, person: BOB, role: 'editor' },
   }],

@@ -786,6 +786,7 @@ test('a visitor asks an app for a turn only where it opens its models', async ()
     usage: { prompt_tokens: 1_000, completion_tokens: 100 },
   })
   let shut = await vale(answer, { access: 'open' })
+  await shut.dir.stamp({ entities: [{ entity: { eid: BOB }, person: {} }] })
   let refused = await shut.send(
     '/apply',
     asking(crypto.randomUUID(), FLASH),
@@ -1176,6 +1177,7 @@ test('./api/ai/run answers a visitor only where the app opens its models', async
   let body = { model: JEV, input: { prompt: 'hi' } }
   let answer = () => ({ response: 'hello' })
   let shut = await vale(answer, { access: 'open' })
+  await shut.dir.stamp({ entities: [{ entity: { eid: BOB }, person: {} }] })
   assertEquals((await shut.run(body, null)).status, 401)
   assertEquals((await shut.run(body, BOB)).status, 403)
   assertEquals(shut.asked.length, 0)
@@ -1183,6 +1185,7 @@ test('./api/ai/run answers a visitor only where the app opens its models', async
     access: 'open',
     manifest: { models: 'open' },
   })
+  await open.dir.stamp({ entities: [{ entity: { eid: BOB }, person: {} }] })
   assertEquals((await open.run(body, null)).status, 200)
   assertEquals((await open.run(body, BOB)).status, 200)
   // Opening the models opens them to whoever may write, and no further.
@@ -1190,6 +1193,7 @@ test('./api/ai/run answers a visitor only where the app opens its models', async
     access: 'public',
     manifest: { models: 'open' },
   })
+  await read.dir.stamp({ entities: [{ entity: { eid: BOB }, person: {} }] })
   assertEquals((await read.run(body, BOB)).status, 403)
 })
 

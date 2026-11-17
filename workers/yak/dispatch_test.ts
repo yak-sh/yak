@@ -386,6 +386,12 @@ let token = await sign({
 }, SECRET)
 
 let failureEnv = envOf(mirror(503).get)
+failureEnv.DIRECTORY = {
+  fetch: () =>
+    Promise.resolve(Response.json([
+      { entity: { eid: 'p1' }, person: {} },
+    ], { headers: { 'x-yak-directory-revision': '0' } })),
+}
 let failureError = new Error('worker fell over')
 let signedFailureVisit = visit('/hello', { cookie: `${COOKIE}=${token}` })
 let anonymousFailureVisit = visit()

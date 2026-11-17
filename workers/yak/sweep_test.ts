@@ -28,6 +28,7 @@ let spaces = async () => {
   await dir.apply({
     entities: [
       { entity: { eid: ADA }, person: {} },
+      { entity: { eid: JEFF }, person: {} },
       {
         entity: { eid: '$space' },
         doc: { title: 'ada' },

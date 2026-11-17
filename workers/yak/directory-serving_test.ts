@@ -91,19 +91,30 @@ let fixture = (
     fetch: (req: Request): Promise<Response> => {
       reads++
       // The real door only publishes a revision when the caller requests it.
-      let q = new URL(req.url).searchParams.get('q')!
-      let answer = Response.json(
-        q.startsWith('(.space.slug=')
+      let url = new URL(req.url)
+      let read = (q: string) =>
+        q.startsWith('.entity.eid=')
+          ? rows.filter((r) =>
+            q.slice('.entity.eid='.length).split(',').includes(r.entity.eid)
+          )
+          : q.startsWith('(.space.slug=')
           ? rows
           : q.startsWith('.space.slug=')
           ? [rows[0]]
-          : [rows[1]],
-        {
+          : [rows[1]]
+      let answer = url.pathname == '/reads'
+        ? Response.json(
+          url.searchParams.getAll('q').map((q) => ({
+            status: 200,
+            epoch: String(f.copy.revision),
+            body: JSON.stringify(read(q)),
+          })),
+        )
+        : Response.json(read(url.searchParams.get('q')!), {
           headers: req.headers.has(EPOCH)
             ? { [EPOCH]: String(f.copy.revision) }
             : {},
-        },
-      )
+        })
       if (!stalled) return Promise.resolve(answer)
       return new Promise(() => {})
     },
@@ -351,7 +362,10 @@ let seated = []
 for (let [key, cookie] of [[outsider], [owner], [outsider, owner]]) {
   let f = fixture('private')
   f.env.SESSION_SECRET = SECRET
-  f.rows.push({
+  f.rows.push({ entity: { eid: 'p' }, person: {} }, {
+    entity: { eid: 'o' },
+    person: {},
+  }, {
     entity: { eid: 'm' },
     member: { space: 's', person: 'o', role: 'owner' },
   })
@@ -383,7 +397,10 @@ let appSeated = []
 for (let key of [undefined, outsider, owner]) {
   let f = fixture('public')
   f.env.SESSION_SECRET = SECRET
-  f.rows.push({
+  f.rows.push({ entity: { eid: 'p' }, person: {} }, {
+    entity: { eid: 'o' },
+    person: {},
+  }, {
     entity: { eid: 'm' },
     member: { space: 's', person: 'o', role: 'owner' },
   })
