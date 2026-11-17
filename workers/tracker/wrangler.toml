@@ -9,6 +9,9 @@ preview_urls = false
 [version_metadata]
 binding = "CF_VERSION_METADATA"
 
+[observability]
+redact_query_string = true
+
 [observability.logs]
 enabled = true
 invocation_logs = true

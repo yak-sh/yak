@@ -2,6 +2,7 @@
 // incoming records and retain a scrubbed request for HTTP entrypoints.
 import type { Bundle, Comp } from '@yaks/graph'
 import { equal, test, throws } from '@yaks/testing'
+import { canaryHeaders } from './auth.ts'
 import { type Stub, worker } from './worker.ts'
 import { backoff } from '@yaks/durable-object'
 import { type Clock, system } from '@yaks/fp'
@@ -39,6 +40,7 @@ let fixture = (doors: Partial<Stub> = {}) => {
   let w = worker(
     {
       BUNDLE_HASH: hash,
+      CANARY_SECRET: 'canary-secret',
       TRACKER_SECRET: 'scratch',
       CF_VERSION_METADATA: { id: '00000000-0000-4000-8000-000000000012' },
       TRACKERS: { getByName: () => stub },
@@ -153,6 +155,7 @@ test('a mark lost, reset or refused on its way to the object is sent again', asy
 // the Worker answers, and how many failures it reported.
 let read = new Request(
   `https://tracker.test/canary?scope=platform&hash=${hash}&eid=${crypto.randomUUID()}`,
+  { headers: await canaryHeaders('canary-secret', hash) },
 )
 let stood = async (failures: Error[]) => {
   let { w, sent } = fixture({

@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { equal, ok, until } from '@yaks/testing'
 import { capture } from '@yaks/tracker/report'
-import { sign } from './auth.ts'
+import { canaryHeaders, sign } from './auth.ts'
 import { platform } from './core.ts'
 import { ready, root } from './wrangler.ts'
 
@@ -28,7 +28,11 @@ let server = createTestHarness({
         bindings: [{ name: 'TRACKERS', class_name: 'Tracker' }],
       },
       migrations: [{ tag: 'v1', new_sqlite_classes: ['Tracker'] }],
-      vars: { TRACKER_SECRET: secret, BUNDLE_HASH: 'a'.repeat(64) },
+      vars: {
+        CANARY_SECRET: secret,
+        TRACKER_SECRET: secret,
+        BUNDLE_HASH: 'a'.repeat(64),
+      },
       queues: {
         producers: [
           { binding: 'ERRORS', queue: 'tracker-scratch-errors' },
@@ -129,6 +133,7 @@ try {
     }&nonce=${crypto.randomUUID()}&at=${new Date().toISOString()}`,
     {
       method: 'POST',
+      headers: await canaryHeaders(secret, 'a'.repeat(64)),
     },
   )
   equal(canary.status, 200)
@@ -136,6 +141,7 @@ try {
   await until(async () => {
     let response = await server.fetch(
       `/canary?scope=platform&hash=${'a'.repeat(64)}&eid=${published.eid}`,
+      { headers: await canaryHeaders(secret, 'a'.repeat(64)) },
     )
     return response.ok && (await response.json()).arrived === true
   }, { timeout: 10_000 })

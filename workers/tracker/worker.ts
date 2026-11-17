@@ -5,7 +5,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { minted } from '@yaks/graph/identity'
 import { sha256 } from '@yaks/graph/sha256'
 import { Unsigned } from '@yaks/host/senders'
-import { sign } from './auth.ts'
+import { authorize, sign } from './auth.ts'
 import { capture, caught, origin, queue, type Sink } from '@yaks/tracker/report'
 import {
   evicted,
@@ -38,6 +38,7 @@ export type Stub = {
 }
 export type Env = Omit<Settings, 'TRACKERS'> & {
   BUNDLE_HASH?: string
+  CANARY_SECRET?: string
   REJECTED?: { send: (body: unknown) => Promise<void> }
   TRACKERS: { getByName: (scope: string) => Stub }
 }
@@ -364,6 +365,16 @@ export let worker = (
           let hash = url.searchParams.get('hash')
           if (!hash || !/^[0-9a-f]{64}$/.test(hash)) {
             return json({ error: 'bundle hash required' }, 400)
+          }
+          if (
+            !await authorize(
+              request,
+              env.CANARY_SECRET,
+              `canary:${hash}`,
+              now(),
+            )
+          ) {
+            return json({ error: 'canary authorization required' }, 403)
           }
           if (!env.BUNDLE_HASH) {
             return json({ error: 'bundle unavailable' }, 503)

@@ -9,7 +9,7 @@ import { matcher } from '@yaks/match'
 import type { Bundle, Comp } from '@yaks/graph'
 import { platform, vocab } from './core.ts'
 import { Tracker } from './object.ts'
-import { sign } from './auth.ts'
+import { canaryHeaders, sign } from './auth.ts'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { system } from '@yaks/fp'
 
@@ -97,6 +97,24 @@ test('a build deploys unless a newer commit is already live', async () => {
   }
 })
 let hash = 'a'.repeat(64)
+let authenticated = (
+  w: ReturnType<typeof worker>,
+  now: () => number = Date.now,
+): ReturnType<typeof worker> => ({
+  ...w,
+  fetch: async (request) => {
+    for (
+      let [key, value] of Object.entries(
+        await canaryHeaders(
+          'canary-secret',
+          new URL(request.url).searchParams.get('hash') ?? '',
+          now(),
+        ),
+      )
+    ) request.headers.set(key, value)
+    return w.fetch(request)
+  },
+})
 let setup = (now: () => number = Date.now) => {
   let sent: Bundle[][] = []
   let secret = 'scratch'
@@ -136,6 +154,7 @@ let setup = (now: () => number = Date.now) => {
   }
   let w = worker({
     BUNDLE_HASH: hash,
+    CANARY_SECRET: 'canary-secret',
     CF_VERSION_METADATA: { id: '00000000-0000-4000-8000-000000000010' },
     TRACKER_SECRET: secret,
     ERRORS: {
@@ -153,7 +172,7 @@ let setup = (now: () => number = Date.now) => {
     return Promise.resolve('scratch-ticket')
   }, { ...system, now })
   let url = `https://tracker.test/canary?scope=platform&hash=${hash}`
-  return { sent, object, w, url }
+  return { sent, object, untrusted: w, w: authenticated(w, now), url }
 }
 let publication = (url: string) =>
   new Request(
@@ -179,7 +198,7 @@ let unsigned = setup()
 let unsignedPublication = publication(unsigned.url)
 await publish(unsigned.w, unsigned.url, unsignedPublication)
 
-test('unsigned canary is one probe occurrence and ignores caller data', () => {
+test('signed canary is one probe occurrence and ignores caller data', () => {
   let { sent } = unsigned
   equal(sent.length, 1)
   let [probe, ...rest] = sent[0]
@@ -290,7 +309,7 @@ test('unsigned caller cannot read tracker errors', async () => {
     403,
   )
 })
-test('public canary rejects tenant scopes, other bundles and malformed receipts', async () => {
+test('signed canary rejects tenant scopes, other bundles and malformed receipts', async () => {
   let { sent, w, url } = setup()
   for (
     let [target, method, status] of [
@@ -314,22 +333,29 @@ test('build republishes its canary and reports it missing if it never arrives', 
   let methods: string[] = []
   let eid = '00000000-0000-4000-8000-000000000001'
   let time = clock()
-  let probe = canary('https://tracker.test', hash, (input, init) => {
-    let request = new Request(input, init)
-    let url = new URL(request.url)
-    equal(request.headers.has('authorization'), false)
-    equal(url.searchParams.get('hash'), hash)
-    equal(url.searchParams.get('scope'), 'platform')
-    methods.push(`${request.method} ${url.pathname}`)
-    if (url.pathname == '/canary/missing') return Promise.resolve(json({}))
-    if (request.method == 'POST') return Promise.resolve(json({ eid }))
-    equal(url.searchParams.get('eid'), eid)
-    return Promise.resolve(json({ arrived: false }))
-  }, (ms) => {
-    let controller = new AbortController()
-    time.after(ms, () => controller.abort())
-    return controller.signal
-  }, time.now)
+  let probe = canary(
+    'https://tracker.test',
+    hash,
+    'canary-secret',
+    (input, init) => {
+      let request = new Request(input, init)
+      let url = new URL(request.url)
+      equal(request.headers.has('authorization'), true)
+      equal(url.searchParams.get('hash'), hash)
+      equal(url.searchParams.get('scope'), 'platform')
+      methods.push(`${request.method} ${url.pathname}`)
+      if (url.pathname == '/canary/missing') return Promise.resolve(json({}))
+      if (request.method == 'POST') return Promise.resolve(json({ eid }))
+      equal(url.searchParams.get('eid'), eid)
+      return Promise.resolve(json({ arrived: false }))
+    },
+    (ms) => {
+      let controller = new AbortController()
+      time.after(ms, () => controller.abort())
+      return controller.signal
+    },
+    time.now,
+  )
   let { hooks, calls } = fixture(300_000)
   hooks.now = time.now
   hooks.wait = () => time.advance(300_000)
@@ -344,6 +370,7 @@ test('a canary the tracker says failed stops the wait', async () => {
   let probe = canary(
     'https://tracker.test',
     hash,
+    'canary-secret',
     (input, init) =>
       Promise.resolve(
         new Request(input, init).method == 'POST'
@@ -359,6 +386,7 @@ let recovery = setup(recoveryTime.now)
 let recoveryProbe = canary(
   'https://tracker.test',
   hash,
+  'canary-secret',
   (input, init) => recovery.w.fetch(new Request(input, init)),
   () => new AbortController().signal,
   recoveryTime.now,
@@ -424,15 +452,19 @@ let stalled = new Tracker({
 }, { TRACKER_SECRET: 'scratch', BUNDLE_HASH: hash })
 let later = Date.now()
 let reports: Bundle[][] = []
-let stalledWorker = worker(
-  {
-    BUNDLE_HASH: hash,
-    TRACKER_SECRET: 'scratch',
-    ERRORS: { send: (rows) => Promise.resolve(void reports.push(rows)) },
-    TRACKERS: { getByName: () => stalled },
-  },
-  sign,
-  { ...system, now: () => later },
+let stalledWorker = authenticated(
+  worker(
+    {
+      BUNDLE_HASH: hash,
+      CANARY_SECRET: 'canary-secret',
+      TRACKER_SECRET: 'scratch',
+      ERRORS: { send: (rows) => Promise.resolve(void reports.push(rows)) },
+      TRACKERS: { getByName: () => stalled },
+    },
+    sign,
+    { ...system, now: () => later },
+  ),
+  () => later,
 )
 let nonce = crypto.randomUUID()
 let canaryUrl = `https://tracker.test/canary?scope=platform&hash=${hash}`
@@ -516,4 +548,12 @@ test('a deployment is its bundle and its configuration together', async () => {
   ok(base != await fingerprint(code, bytes('MAIL_VIA = "resend"')))
   ok(base != await fingerprint(bytes('bundleMAIL_VIA'), bytes(' = "binding"')))
   equal(base, await fingerprint(code, bytes('MAIL_VIA = "binding"')))
+})
+
+test('knowing a bundle hash grants no canary access', async () => {
+  let { untrusted, url, sent } = setup()
+  for (let path of [url, url.replace('/canary?', '/canary/missing?')]) {
+    equal((await untrusted.fetch(publication(path))).status, 403)
+  }
+  equal(sent, [])
 })

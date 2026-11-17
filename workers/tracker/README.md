@@ -63,28 +63,29 @@ Authenticated endpoints: `/bugs`, `/unseen`, `/traces`, `/trace`, `/query`,
 `/vocab`, `/ws`, `/scopes`, `POST /resolve`, `/archive` and `/reopen` with
 `{bug}`, `POST /retry` with `{of}`, and `POST /settle` with `{eids, reason}`.
 `/ws?scope=…&ticket=…` accepts subscriptions, unsubscribe and ACK only, never
-relay writes. `/query` returns graph bundles. General `/apply` is absent.
-`POST /resolve`, `/archive` and `/reopen` require a separately signed
-`mark: true` capability and `{bug: <global-bug-eid>}`, a resolution with its
-explanation beside it. Reader and intake tickets cannot mark bugs. `POST /retry`
-takes the same `mark: true` capability and `{of: <handler or run eid>}`, and
-puts the failed effect runs it names back to pending with a fresh allowance
-(@yaks/effects `settling`, the write `effect_retry` applies), answering
-`{retried: n}`; the object arms its alarm after every write a door accepts, so
-the pool works them within seconds. The box's `tracker_retry` tool sends it.
-`POST /settle` takes the same capability and `{eids, reason}`, up to 100 of a
-space's occurrences, and archives them for the reason as the platform's
-`bug_settle` does (`Fixed by yaks.app: <cause>`), answering `{settled: n}`: for
-reports of a fixed break that its occurrence's tags cannot name. Missing bugs
-are refused with 404; malformed marks with 400. Platform-only `POST /errors`
-accepts immutable error captures with a separately signed `ingest: true`
-capability; ordinary read tickets cannot submit captures. Box reporters retain
-their outbox until this intake admits their records. Retrying a capture
-preserves its global eid and counts it once. `POST /app-errors` requires both
-admin and intake capabilities. It accepts `{app, eids, mark}` to add `notified`
-or `archived` to the app's occurrences; `remove: true` removes that mark,
-allowing an incorrectly archived occurrence to reopen without changing its
-report or delivery history.
+relay writes. URL tickets are accepted only on WebSocket upgrades; other doors
+require an Authorization header. Invocation telemetry redacts query strings.
+`/query` returns graph bundles. General `/apply` is absent. `POST /resolve`,
+`/archive` and `/reopen` require a separately signed `mark: true` capability and
+`{bug: <global-bug-eid>}`, a resolution with its explanation beside it. Reader
+and intake tickets cannot mark bugs. `POST /retry` takes the same `mark: true`
+capability and `{of: <handler or run eid>}`, and puts the failed effect runs it
+names back to pending with a fresh allowance (@yaks/effects `settling`, the
+write `effect_retry` applies), answering `{retried: n}`; the object arms its
+alarm after every write a door accepts, so the pool works them within seconds.
+The box's `tracker_retry` tool sends it. `POST /settle` takes the same
+capability and `{eids, reason}`, up to 100 of a space's occurrences, and
+archives them for the reason as the platform's `bug_settle` does
+(`Fixed by yaks.app: <cause>`), answering `{settled: n}`: for reports of a fixed
+break that its occurrence's tags cannot name. Missing bugs are refused with 404;
+malformed marks with 400. Platform-only `POST /errors` accepts immutable error
+captures with a separately signed `ingest: true` capability; ordinary read
+tickets cannot submit captures. Box reporters retain their outbox until this
+intake admits their records. Retrying a capture preserves its global eid and
+counts it once. `POST /app-errors` requires both admin and intake capabilities.
+It accepts `{app, eids, mark}` to add `notified` or `archived` to the app's
+occurrences; `remove: true` removes that mark, allowing an incorrectly archived
+occurrence to reopen without changing its report or delivery history.
 
 `GET /scopes?scope=platform` answers an admin `{scopes: [space eid, …]}`: every
 space tracker the Worker has routed to, which the platform tracker keeps. A
@@ -272,10 +273,12 @@ caller marks notification in the platform integration.
 
 Account setup supplies `yak-errors`, `yak-errors-dead`, a Workers Builds
 connection for this Worker, its own Email Sending binding, and the dedicated
-`TRACKER_SECRET`, `MAIL_FROM`, `MAIL_TO` Worker secrets. The build needs no
-tracker secret; configure its nonsecret `TRACKER_URL` with the Worker URL. The
-build may deploy only this Worker. Source is ready; production queue and build
-activation are separate account operations.
+`TRACKER_SECRET`, `MAIL_FROM`, `MAIL_TO` Worker secrets. The build generates a
+fresh `CANARY_SECRET` for each deployment and uploads it with that version
+through `--secrets-file`; it never holds `TRACKER_SECRET`. Configure its
+nonsecret `TRACKER_URL` with the Worker URL. The build may deploy only this
+Worker. Source is ready; production queue and build activation are separate
+account operations.
 
 The first ordinary wake with all mail settings persists the activation time and
 refreshes the recipient in an already installed platform tracker. Earlier bug
@@ -311,18 +314,19 @@ legacy error store is deleted, and yak reporting/read-path changes are outside
 this Worker.
 
 `POST /canary?scope=platform&hash=<bundle-hash>&nonce=<uuid>&at=<iso-time>`
-needs no ticket and returns `{eid}` for a probe: one synthetic occurrence that
-travels the queue, intake and the grouping run as a failure does, where grouping
-writes its receipt (`probe.grouped`) and files it under no bug. Only the
-deployed `BUNDLE_HASH` is accepted. The timestamp must be canonical ISO UTC, at
-most fifteen minutes old or one minute ahead. The server derives the
-content-hash eid from the bundle hash and nonce; retrying them with the same
-timestamp preserves the entire capture. The request body is ignored. A Durable
-Object moves to a new version seconds to minutes after the Worker, and one on
-the release before would prove nothing of this bundle, so the probe is sent only
-once the platform Tracker object reports the same `BUNDLE_HASH` (its admin-only
-`GET /bundle`); until then a publication answers its `{eid}` and sends nothing.
-`GET` on the same URL with `&eid=<receipt>` returns only
+requires a short-lived bearer ticket signed with that version’s `CANARY_SECRET`,
+scoped to `canary:<bundle-hash>`, and returns `{eid}` for a probe: one synthetic
+occurrence that travels the queue, intake and the grouping run as a failure
+does, where grouping writes its receipt (`probe.grouped`) and files it under no
+bug. Only the deployed `BUNDLE_HASH` is accepted. The timestamp must be
+canonical ISO UTC, at most fifteen minutes old or one minute ahead. The server
+derives the content-hash eid from the bundle hash and nonce; retrying them with
+the same timestamp preserves the entire capture. The request body is ignored. A
+Durable Object moves to a new version seconds to minutes after the Worker, and
+one on the release before would prove nothing of this bundle, so the probe is
+sent only once the platform Tracker object reports the same `BUNDLE_HASH` (its
+admin-only `GET /bundle`); until then a publication answers its `{eid}` and
+sends nothing. `GET` on the same URL with `&eid=<receipt>` returns only
 `{arrived: boolean, failed?: true}`. It is true once that exact probe has its
 receipt in an object running this bundle. Grouping is the object's alarm-driven
 effect queue, so the answer reads the probe and its grouping run from the graph

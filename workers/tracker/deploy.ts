@@ -10,6 +10,7 @@
 // Workers Builds runs one build per push and they finish in any order, so a
 // build deploys unless a newer commit is already live, as the yak
 // Worker's deploy door decides it (workers/yak/wrangler.ts `superseded`).
+import { canaryHeaders } from './auth.ts'
 import { root, run } from './wrangler.ts'
 import { type Seen, seen, superseded } from '../yak/wrangler.ts'
 
@@ -74,6 +75,7 @@ export let deploy = async (hash: string, hooks: Hooks): Promise<boolean> => {
 export let canary = (
   url: string,
   hash: string,
+  secret: string,
   send: typeof fetch = fetch,
   timeout: (ms: number) => AbortSignal = AbortSignal.timeout,
   now: () => number = Date.now,
@@ -98,6 +100,7 @@ export let canary = (
         publication.searchParams.set('at', at)
         let response = await send(publication, {
           method: 'POST',
+          headers: await canaryHeaders(secret, hash, now()),
           signal: timeout(5000),
         })
         if (response.ok) eid = (await response.json()).eid
@@ -105,7 +108,10 @@ export let canary = (
       if (!eid) return false
       let probe = door('/canary')
       probe.searchParams.set('eid', eid)
-      let response = await send(probe, { signal: timeout(5000) })
+      let response = await send(probe, {
+        headers: await canaryHeaders(secret, hash, now()),
+        signal: timeout(5000),
+      })
       if (!response.ok) return false
       let answer = await response.json()
       if (answer.failed) throw new Failed('tracker canary failed')
@@ -117,6 +123,7 @@ export let canary = (
       missing.searchParams.set('nonce', nonce)
       let response = await send(missing, {
         method: 'POST',
+        headers: await canaryHeaders(secret, hash, now()),
         signal: timeout(30_000),
       })
       if (!response.ok) {
@@ -147,7 +154,17 @@ if (import.meta.main) {
       await Deno.readFile(`${scratch}/index.js`),
       await Deno.readFile(`${root}/wrangler.toml`),
     )
-    let probe = canary(url, hash)
+    let secret = Array.from(
+      crypto.getRandomValues(new Uint8Array(32)),
+      (b) => b.toString(16).padStart(2, '0'),
+    ).join('')
+    let secrets = `${scratch}/canary.json`
+    await Deno.writeTextFile(
+      secrets,
+      JSON.stringify({ CANARY_SECRET: secret }),
+      { mode: 0o600 },
+    )
+    let probe = canary(url, hash, secret)
     let head = new TextDecoder().decode(
       (await new Deno.Command('git', {
         args: ['rev-parse', 'HEAD'],
@@ -196,6 +213,8 @@ if (import.meta.main) {
             'deploy',
             '--var',
             `BUNDLE_HASH:${hash}`,
+            '--secrets-file',
+            secrets,
             '--message',
             `${head} tracker-bundle:${hash}`,
           ])

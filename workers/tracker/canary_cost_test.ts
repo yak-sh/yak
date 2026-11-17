@@ -30,6 +30,7 @@ let confirming = async (reports: number) => {
   } as Stub
   let w = worker({
     BUNDLE_HASH: hash,
+    CANARY_SECRET: 'canary-secret',
     TRACKER_SECRET: 'scratch',
     ERRORS: { send: (rows) => Promise.resolve(void queued.push(rows)) },
     TRACKERS: { getByName: () => stub },
@@ -37,6 +38,7 @@ let confirming = async (reports: number) => {
   let probe = canary(
     'https://tracker.test',
     hash,
+    'canary-secret',
     (input, init) => w.fetch(new Request(input, init)),
     () => new AbortController().signal,
   )
