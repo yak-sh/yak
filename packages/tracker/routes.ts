@@ -113,7 +113,9 @@ export let read = async (
   // old directory still serves discovery; its answer carries no versions,
   // so followers keep polling bugs until the feed becomes available.
   if (path == 'changes' && status == 404) {
-    let said = await response.json().catch(() => null)
+    let said = await response.json().catch(() => null) as
+      | { error?: unknown }
+      | null
     if (said?.error == 'tracker route not found') {
       return read(options, 'scopes', new URLSearchParams({ scope }), signal, go)
     }
