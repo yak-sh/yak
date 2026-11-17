@@ -66,7 +66,7 @@ let isolated = async () => {
   let oauth = kv(), book = ledger(oauth)!
   let { grant: owned } = await mint(secret, book, {
     person: 'owner',
-    space: space.slug,
+    space,
   })
   let box = containers()
   let env = {

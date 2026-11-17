@@ -618,6 +618,7 @@ test('every command is signed in as the caller, with one grant', async () => {
   let grant = await held(bearer!, SECRET, book)
   assertEquals(grant?.person, ADA)
   assertEquals(grant?.space, 'ada')
+  assertEquals(grant?.spaceEid, space.eid)
   let hours = (grant!.exp - Math.floor(Date.now() / 1000)) / 3600
   assert(Math.abs(hours - LIFE) < 0.01, `${hours} hours is about ${LIFE}`)
 })

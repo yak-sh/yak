@@ -52,6 +52,8 @@ export type Grant = {
   person: string
   // The one space this grant reaches, or null for the caller's whole reach.
   space: string | null
+  /** The space's stable identity; absent on grants minted before this field. */
+  spaceEid?: string
   // The unix second it dies at.
   exp: number
 }
@@ -161,7 +163,11 @@ export let tokenOf = async (g: Grant, secret: string) =>
 export let mint = async (
   secret: string,
   book: Ledger,
-  want: { person: string; space?: string | null; hours?: number },
+  want: {
+    person: string
+    space?: Pick<Space, 'eid' | 'slug'> | null
+    hours?: number
+  },
   now = Date.now(),
 ): Promise<{ grant: Grant; token: string }> => {
   let hours = want.hours ?? DEFAULT
@@ -173,7 +179,8 @@ export let mint = async (
   let grant: Grant = {
     id: crypto.randomUUID().replaceAll('-', '').slice(0, 12),
     person: want.person,
-    space: want.space ?? null,
+    space: want.space?.slug ?? null,
+    ...want.space ? { spaceEid: want.space.eid } : {},
     exp: Math.floor(now / 1000) + Math.round(hours * 3600),
   }
   await book.keep(grant, now)

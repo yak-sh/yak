@@ -293,7 +293,7 @@ export let signed = async (
   if (!alive(has, now)) {
     let { grant } = await mint(secret, book, {
       person,
-      space: space.slug,
+      space,
       hours: LIFE,
     }, now)
     await book.wear(container, grant, now)

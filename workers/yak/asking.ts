@@ -62,6 +62,7 @@ export let asking = async (
             until: g.exp,
             grant: g.id,
             space: g.space,
+            ...g.spaceEid ? { spaceEid: g.spaceEid } : {},
             instrument: instrumentEid(`${CLI_GRANT}:${g.person}:${g.id}`),
           }
           : null,

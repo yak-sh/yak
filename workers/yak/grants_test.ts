@@ -55,8 +55,12 @@ test('a grant is minted, and the token names it back', async () => {
 
 test('a grant carries the space it was narrowed to', async () => {
   let b = book()
-  let { token } = await mint(SECRET, b, { person: 'p-1', space: 'dana' })
+  let { token } = await mint(SECRET, b, {
+    person: 'p-1',
+    space: { eid: 'e-dana', slug: 'dana' },
+  })
   assertEquals((await held(token, SECRET, b))?.space, 'dana')
+  assertEquals((await held(token, SECRET, b))?.spaceEid, 'e-dana')
 })
 
 test('hours: asked for, and refused past the ceiling', async () => {
@@ -71,6 +75,18 @@ test('hours: asked for, and refused past the ceiling', async () => {
       'hours:',
     )
   }
+})
+
+test('a held grant minted before stable space identities keeps working', async () => {
+  let b = book()
+  let grant: Grant = {
+    id: 'older',
+    person: 'p-1',
+    space: 'dana',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  }
+  await b.keep(grant)
+  assertEquals(await held(await tokenOf(grant, SECRET), SECRET, b), grant)
 })
 
 test('a grant is refused when it expires', async () => {

@@ -7473,7 +7473,7 @@ let OURS: Row[] = [
       let hours = args.hours == null ? DEFAULT : Number(args.hours)
       let { grant, token } = await mint(secret, book, {
         person: ctx.person,
-        space: space?.slug ?? null,
+        space,
         hours,
       })
       return {

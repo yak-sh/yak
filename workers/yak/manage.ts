@@ -184,7 +184,10 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     return settingsDraft(req, dir, { person, role: null, until })
   }
   // A token narrowed to one space reaches that space alone.
-  if (caller?.space && 'space' in at && caller.space != at.space) {
+  if (
+    caller?.space && !caller.spaceEid && 'space' in at &&
+    caller.space != at.space
+  ) {
     return json(403, 'not_a_member', 'That token is for another space.')
   }
   let asked = url.searchParams.get('space')
@@ -237,6 +240,9 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     )
   }
   let { space, role, administrative } = await paged
+  if (caller?.spaceEid && space && caller.spaceEid != space.eid) {
+    return json(403, 'not_a_member', 'That token is for another space.')
+  }
   if (!space) {
     // A link written before the space moved to another name (T-34658).
     let was = await dir.formerly(at.space)
