@@ -64,10 +64,23 @@ test('bot OAuth walks code and consent pages without a browser or private input'
     let form = new URLSearchParams(String(init?.body))
     if (url.pathname == '/login') {
       equal(form.get('email'), 'probe@bot.yak.sh')
-      return Promise.resolve(new Response('code sent'))
+      return Promise.resolve(
+        new Response('code sent', {
+          headers: { 'set-cookie': 'yak_session=asking; HttpOnly' },
+        }),
+      )
     }
     if (url.pathname == '/login/code') {
       equal(form.get('code'), '123456')
+      // A typed code signs in only the browser that asked for it.
+      if (headers.get('cookie') != 'yak_session=asking') {
+        return Promise.resolve(
+          new Response('wrong browser', {
+            status: 400,
+            headers: { 'set-cookie': 'yak_session=stranger; HttpOnly' },
+          }),
+        )
+      }
       return Promise.resolve(
         new Response(null, {
           status: 303,

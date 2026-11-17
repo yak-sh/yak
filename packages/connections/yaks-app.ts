@@ -13,6 +13,10 @@ import { codeFor } from './signin-mail.ts'
 
 let cookie = (headers: Headers) =>
   /(?:^|,\s*)yak_session=([^;,\s]+)/.exec(headers.get('set-cookie') ?? '')?.[1]
+// The cookies a page set, as the next request's cookie header: a typed code
+// signs in only the browser that asked for it (signin.ts `spend`).
+let jar = (headers: Headers) =>
+  headers.getSetCookie().map((c) => c.split(';')[0]).join('; ')
 let unescape = (text: string) =>
   text.replaceAll('&amp;', '&').replaceAll('&quot;', '"')
     .replaceAll('&#39;', "'").replaceAll('&lt;', '<').replaceAll('&gt;', '>')
@@ -37,7 +41,7 @@ export let botCallback = async (
 ): Promise<Callback> => {
   let authorize = new URL(url), origin = authorize.origin
   let go = opts.fetch ?? fetch
-  let post = (path: string, fields: Record<string, string>, session?: string) =>
+  let post = (path: string, fields: Record<string, string>, cookies = '') =>
     go(`${origin}${path}`, {
       method: 'POST',
       redirect: 'manual',
@@ -45,7 +49,7 @@ export let botCallback = async (
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
         origin,
-        ...session ? { cookie: `yak_session=${session}` } : {},
+        ...cookies ? { cookie: cookies } : {},
       },
       body: new URLSearchParams(fields),
     })
@@ -58,8 +62,12 @@ export let botCallback = async (
       throw new Error(`the sign-in page refused: ${asked.status}`)
     }
     let code = await (opts.code ?? codeFor)(graph.read, address, since)
-    let spent = await post('/login/code', { email: address, code })
-    session = cookie(spent.headers)
+    let spent = await post(
+      '/login/code',
+      { email: address, code },
+      jar(asked.headers),
+    )
+    session = spent.status == 303 ? cookie(spent.headers) : undefined
     await spent.body?.cancel()
     if (!session) {
       throw new Error(
@@ -80,7 +88,7 @@ export let botCallback = async (
   let allowed = await post('/oauth/allow', {
     q: field(html, 'q'),
     consent: field(html, 'consent'),
-  }, session)
+  }, `yak_session=${session}`)
   let callback = allowed.headers.get('location')
   await allowed.body?.cancel()
   if (allowed.status != 302 && allowed.status != 303 || !callback) {
