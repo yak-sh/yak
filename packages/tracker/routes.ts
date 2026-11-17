@@ -33,7 +33,7 @@ let refused = (error: string, status: number): Read => ({
 /** One bounded remote read, shared by the HTTP door and graph tools. */
 export let read = async (
   options: Options,
-  path: 'bugs' | 'trace' | 'traces' | 'changes',
+  path: 'bugs' | 'trace' | 'traces' | 'changes' | 'scopes',
   query: URLSearchParams,
   signal?: AbortSignal,
   go: typeof fetch = fetch,
@@ -108,6 +108,15 @@ export let read = async (
       `Remote tracker refused the read (400)${why ? `: ${why}` : ''}`,
       400,
     )
+  }
+  // Box code can reach the new feed before the remote object upgrades. The
+  // old directory still serves discovery; its answer carries no versions,
+  // so followers keep polling bugs until the feed becomes available.
+  if (path == 'changes' && status == 404) {
+    let said = await response.json().catch(() => null)
+    if (said?.error == 'tracker route not found') {
+      return read(options, 'scopes', new URLSearchParams({ scope }), signal, go)
+    }
   }
   if (!response.ok) {
     return refused(

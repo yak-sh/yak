@@ -16,7 +16,7 @@ export let changes = (
   { every = 30_000, clock = system }: { every?: number; clock?: Clock } = {},
 ): Changes => {
   let tag: string | undefined, next = -Infinity
-  let scopes = new Map<string, string>()
+  let scopes = new Map<string, string | undefined>()
   let pending: Promise<void>
   let running = false
   let stop = new AbortController()
@@ -24,13 +24,20 @@ export let changes = (
     if (!doors.changes) throw Error('Tracker has no change feed')
     let got = await doors.changes(tag, stop.signal)
     if (!got.ok) {
-      // A new Worker door can reach an object still on the previous deploy.
-      // The ordinary outage window reports one that never catches up.
-      throw got.status == 404 || got.status >= 500
-        ? new Unavailable(got.error)
-        : Error(got.error)
+      throw got.status >= 500 ? new Unavailable(got.error) : Error(got.error)
     }
     if (got.unchanged) return
+    let legacy = got.value as { scopes?: unknown }
+    if (
+      !got.tag && Array.isArray(legacy?.scopes) &&
+      legacy.scopes.every((scope) => typeof scope == 'string')
+    ) {
+      scopes = new Map(
+        [platform, ...legacy.scopes].map((scope) => [scope, undefined]),
+      )
+      tag = undefined
+      return
+    }
     let value = got.value as { scopes?: { scope: string; tag: string }[] }
     if (
       !got.tag || !Array.isArray(value?.scopes) ||

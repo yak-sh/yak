@@ -1,6 +1,6 @@
-import { clock, equal, test } from '@yaks/testing'
-import { changes, type Doors, poll, type Polled } from './poll.ts'
-import { platform, Unavailable } from './remote.ts'
+import { clock, equal, test, throws } from '@yaks/testing'
+import { changes, type Doors, poll, type Polled, signed } from './poll.ts'
+import { platform } from './remote.ts'
 
 let heard = (open: Polled) =>
   new Promise<void>((done) => {
@@ -10,32 +10,83 @@ let heard = (open: Polled) =>
     })
   })
 
-test('a feed whose object still runs the previous deploy retries as an outage', async () => {
-  let time = clock(), ready = false
-  let feed = changes({
-    changes: () =>
-      Promise.resolve(
-        ready
-          ? {
-            ok: true,
-            tag: 'one',
-            value: { scopes: [{ scope: platform, tag: 'one' }] },
-          }
-          : { ok: false, status: 404, error: 'tracker route not found' },
-      ),
-    bugs: () => Promise.resolve({ ok: true, value: [] }),
-    mark: () => Promise.resolve(),
-  }, { clock: time })
-  try {
-    equal(
-      await feed.version().catch((error) => error instanceof Unavailable),
-      true,
-    )
-    ready = true
+test('an older tracker keeps discovery and bug polling until its change feed arrives', async () => {
+  let time = clock(), upgraded = false, reads = 0, asks: string[] = []
+  let scope = '00000000-0000-4000-8000-000000000001'
+  let doors = signed(
+    { url: 'https://tracker.invalid', secret: 'test-only' },
+    ((url) => {
+      let path = new URL(String(url)).pathname
+      asks.push(path)
+      return Promise.resolve(
+        path == '/changes'
+          ? upgraded
+            ? Response.json({ scopes: [{ scope, tag: 'one' }] }, {
+              headers: { etag: 'feed' },
+            })
+            : Response.json({ error: 'tracker route not found' }, {
+              status: 404,
+            })
+          : path == '/scopes'
+          ? Response.json({ scopes: [scope] })
+          : (++reads, Response.json([])),
+      )
+    }) as typeof fetch,
+  )
+  let feed = changes(doors, { clock: time })
+  let open = poll({}, '.bug', {
+    scope,
+    doors,
+    version: feed.version,
+    clock: time,
+  })
+  let pass = async () => {
+    let done = heard(open)
     await time.advance(30_000)
-    equal(await feed.version(), 'one')
+    await done
+  }
+  try {
+    await heard(open)
+    equal(await feed.scopes(), [scope])
+    equal([reads, open.ready], [1, true])
+    await pass()
+    equal(reads, 2)
+    upgraded = true
+    await pass()
+    let held = reads
+    equal(await feed.version(scope), 'one')
+    await pass()
+    equal(reads, held)
+    equal(asks.filter((path) => path == '/scopes').length, 2)
   } finally {
+    open.close()
     feed.close()
+  }
+})
+
+test('a change feed keeps unrelated 404s and refused legacy discovery as failures', async () => {
+  for (let error of ['bug not found', 'tracker route not found']) {
+    let asks: string[] = []
+    let doors = signed(
+      { url: 'https://tracker.invalid', secret: 'test-only' },
+      ((url) => {
+        let path = new URL(String(url)).pathname
+        asks.push(path)
+        return Promise.resolve(Response.json({ error }, { status: 404 }))
+      }) as typeof fetch,
+    )
+    let feed = changes(doors)
+    try {
+      let refused = await throws(() => feed.scopes())
+      equal((refused as Error).message, 'Remote tracker refused the read (404)')
+      equal((refused as Error).constructor, Error)
+      equal(
+        asks,
+        error == 'bug not found' ? ['/changes'] : ['/changes', '/scopes'],
+      )
+    } finally {
+      feed.close()
+    }
   }
 })
 
