@@ -953,13 +953,12 @@ export class Builder extends Durable {
     }
     // A conversation begun from a home-page demo (identity.ts `begun`).
     if (new URL(request.url).pathname == '/operator/stepped') {
-      await operator.begunWith(
+      let begun = await operator.begunWith(
         held,
         space,
-        String(args.session ?? ''),
         (args.lines ?? []) as Bundle[],
       )
-      return Response.json({})
+      return Response.json({ begun })
     }
     if (new URL(request.url).pathname == '/operator/helper') {
       let { spawnHelper } = await import('./operator-helpers.ts')

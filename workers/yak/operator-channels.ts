@@ -31,7 +31,7 @@ import { phoneTexts } from './phone-move.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { onPage } from './operator-view.ts'
 import { REBUILDING } from './newcomer.ts'
-import { STEPPING } from './walkthrough.ts'
+import { type Stepped, STEPPING } from './walkthrough.ts'
 import { unsaid } from '@yaks/session/conversation'
 import { inputOf, type Intake, take } from '@yaks/session/intake'
 import { refusedSpend } from '@yaks/platform/standing'
@@ -79,10 +79,10 @@ export type Request = {
   // Begun from a box given the web address of a site, on the `chat`
   // channel: its words carry what to do with it (newcomer.ts `REBUILDING`).
   rebuild?: boolean
-  // Begun from a step of a home-page demo, on the `chat` channel: the
-  // conversation holds the demo's lines through it (walkthrough.ts
-  // `STEPPING`).
-  stepped?: { demo: string; app: string; outside?: string[] }
+  // From a step of a home-page demo, on the `chat` channel: the conversation
+  // holds the demo's lines through it where it began with them (`begun`),
+  // and either way the space a copy of its app (walkthrough.ts `STEPPING`).
+  stepped?: Stepped
   // Sent to sign up (inbox.ts `signingUp`, operator-texts.ts `arrived`): their
   // first words to yaks.app, unless they had signed up before.
   signup?: boolean

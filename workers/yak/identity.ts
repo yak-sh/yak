@@ -78,7 +78,6 @@ import { linked } from './preview-route.ts'
 // only way that row is ever written: nothing serves the meta store at an
 // address (apps.ts), so no request can write the directory from outside.
 import { line } from '@yaks/query'
-import { derivedEid } from '@yaks/graph/identity'
 import { claimed } from './attribution.ts'
 import { apex, type Host, url as hostUrl } from '@yaks/platform/host'
 import {
@@ -1057,7 +1056,7 @@ let begun = async (
   let { operatorDoor } = await import('./build-door.ts')
   let held = { person, role: 'owner' as const }
   let stepped = walk
-    ? await steppedIn(env, space, held, walk, request).catch(failed)
+    ? await steppedIn(env, space, held, walk).catch(failed)
     : null
   await operatorDoor(env, space, held, 'receive', {
     say: words,
@@ -1075,16 +1074,14 @@ let begun = async (
 }
 
 // A home-page demo stepped into, given `space`: a copy of its app at the
-// step's release, and a conversation of the person's begun with the demo's
-// lines through it (operator.ts `begunWith`), named by the request their
-// words come in. What the words' framing says of it (walkthrough.ts
-// `STEPPING`).
+// step's release, and the person's conversation begun with the demo's lines
+// through it, where they have none yet (operator.ts `begunWith`). What the
+// words' framing says of it (walkthrough.ts `STEPPING`).
 let steppedIn = async (
   env: Env,
   space: Space,
   held: { person: string; role: 'owner' },
   walk: Stepping,
-  request: string,
 ) => {
   let [{ call }, { operatorDoor }] = await Promise.all([
     import('./tools.ts'),
@@ -1095,12 +1092,13 @@ let steppedIn = async (
     'app_install',
     { space: space.slug, name: walk.name, version: walk.version },
   )
-  await operatorDoor(env, space, held, 'stepped', {
-    session: derivedEid('operator-stepped|' + request),
+  let { begun } = await operatorDoor(env, space, held, 'stepped', {
     lines: walk.lines,
-  })
+  }) as { begun: boolean }
   return {
     demo: walk.name,
+    step: walk.step,
+    begun,
     app: `${space.slug}/${installed.value?.app}`,
     outside: walk.outside,
   }

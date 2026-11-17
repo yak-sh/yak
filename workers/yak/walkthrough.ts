@@ -130,12 +130,28 @@ export let asked = async <T>(
   return await answer.json() as T
 }
 
-/** What the Operator is told before a visitor's first words in a
- * conversation begun from a home-page demo (operator-channels.ts `BY`). */
-export let STEPPING = (
-  stepped: { demo: string; app: string; outside?: string[] },
-) =>
-  `The conversation so far is yaks.app's demo of ${stepped.demo}, recorded in yaks.app's demo space and shown on its home page. A visitor stepped into it at this point, and these are their first words: they want the app as their own, changed as they ask. This space has its own copy of the app as the demo had it here, at ${stepped.app}; change that copy, not the demo's.` +
+/** A step of a home-page demo somebody stepped into (identity.ts
+ * `steppedIn`): the demo app's published name, the step's title, the copy
+ * of the app in their space, the tools the demo called that reach outside
+ * the app, and whether their conversation began with the demo's lines
+ * (operator.ts `begunWith`) or is one they already had. */
+export type Stepped = {
+  demo: string
+  step: string
+  app: string
+  outside?: string[]
+  begun: boolean
+}
+
+/** What the Operator is told before a person's words given from a step of a
+ * home-page demo (operator-channels.ts `BY`). */
+export let STEPPING = (stepped: Stepped) =>
+  (stepped.begun
+    ? `The conversation so far is yaks.app's demo of ${stepped.demo}, recorded in yaks.app's demo space and shown on its home page. A visitor stepped into it at this point, and these are their first words: they want the app as their own, changed as they ask.`
+    : `These words come from yaks.app's home page, where this person stepped into its demo of ${stepped.demo} at the step "${stepped.step}": they want the app as their own, changed as they ask. The demo's conversation is not in this one.`) +
+  ` This space has its own copy of the app as the demo had it ${
+    stepped.begun ? 'here' : 'at that step'
+  }, at ${stepped.app}; change that copy, not the demo's.` +
   (stepped.outside?.length
     ? ` What the demo's Operator set up outside the app is not here (it called ${
       stepped.outside.join(', ')

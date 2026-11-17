@@ -4,12 +4,13 @@
 // asks for their own change at step 2. Their space gets the app as step 2
 // released it, a conversation that begins with the demo's lines through
 // step 2, and a first turn that answers their words, told what the demo set
-// up outside the app.
+// up outside the app. Somebody who has talked with their Operator before
+// keeps that conversation, and is told where they came from instead.
 import { cleanup, test, until } from '@yaks/testing'
 import { line as q } from '@yaks/query'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { toolEid } from '@yaks/tools/result'
-import { connector, fresh, owned, signedIn } from './probe.ts'
+import { connector, fresh, owned, signIn } from './probe.ts'
 import { ai } from './testing.ts'
 import type { Env } from './env.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
@@ -25,7 +26,7 @@ let REQUESTS = [
   'After the party, email everyone who signed a thank-you.',
 ]
 let ANSWER = 'Made the photos round, as you asked.'
-let model = ai([{ text: ANSWER }, { text: ANSWER }])
+let model = ai(Array.from({ length: 8 }, () => ({ text: ANSWER })))
 
 let env!: Env
 let k = await fresh({ AI: model as Env['AI'] }, (e) => (env = e))
@@ -113,7 +114,8 @@ await service.store.g.apply([
   { entity: { eid: session }, walkthrough: { app: 'guestbook' } },
 ], { trusted: true })
 
-// The box under a step, as the home page draws it (site/home.tsx `Step`).
+// The box under a step, as the home page draws it (site/home.tsx `Step`),
+// or with no step the home page's own box.
 let stepIn = (say: string, step: string, cookie = '') =>
   k.at('yaks.app', START, {
     method: 'POST',
@@ -123,7 +125,9 @@ let stepIn = (say: string, step: string, cookie = '') =>
       'cf-connecting-ip': '203.0.113.9',
       ...cookie ? { cookie } : {},
     },
-    body: new URLSearchParams({ say, demo: 'guestbook', step }).toString(),
+    body: new URLSearchParams(
+      step ? { say, demo: 'guestbook', step } : { say },
+    ).toString(),
   })
 let cookieOf = (r: Response) =>
   r.headers.getSetCookie().map((set) => set.split(';')[0]).join('; ')
@@ -132,8 +136,8 @@ let spaceOf = (r: Response) =>
 
 // What the model was last asked, as text.
 let lastAsked = () => JSON.stringify(model.asked.at(-1)?.input ?? {})
-// The chat they land in, once its first turn has answered.
-let answered = (r: Response, cookie: string) =>
+// The chat they land in, once its `turns`th turn has answered.
+let answered = (r: Response, cookie: string, turns = 1) =>
   until(async () => {
     await k.settled()
     let page = await (await k.at(
@@ -141,7 +145,7 @@ let answered = (r: Response, cookie: string) =>
       new URL(r.headers.get('location')!).pathname,
       { headers: { cookie } },
     )).text()
-    return page.includes(ANSWER) ? page : null
+    return page.split(ANSWER).length > turns ? page : null
   }, { timeout: 10_000 })
 
 test('a stranger stepping in at step 2 gets that app, that history and a first turn answering them', async () => {
@@ -182,17 +186,43 @@ test('a stranger stepping in at step 2 gets that app, that history and a first t
   assert(!asked.includes(REQUESTS[2]))
 })
 
-test('a signed-in person stepping in gets it in their own space, as their conversation from then on', async () => {
-  let cookie = await signedIn(k, k.owner.person)
+// An app of `space`'s copied from the demo's guestbook.
+let copyIn = async (space: string) =>
+  (await k.dir.apps((await k.dir.space(space))!)).find((a) =>
+    a.installed?.of == source.eid
+  )!
+
+test('a signed-in person who has never talked with their Operator gets the demo as their conversation', async () => {
+  let { person, cookie } = await signIn(k)
   let r = await stepIn('Add a guest count', stepsOf('guestbook')[0], cookie)
   assertEquals(r.status, 303)
   let theirs = (await k.dir.space(spaceOf(r)))!
-  assert((await k.dir.owners(theirs)).includes(k.owner.person))
-  let app = (await k.dir.apps(theirs)).find((a) =>
-    a.installed?.of == source.eid
-  )!
-  assertEquals(app.installed?.version, 1)
+  assert((await k.dir.owners(theirs)).includes(person))
+  assertEquals((await copyIn(theirs.slug)).installed?.version, 1)
   let page = await answered(r, cookie)
   assert(page.indexOf(REQUESTS[0]) < page.indexOf('Add a guest count'))
   assert(!page.includes(REQUESTS[1]))
+})
+
+test('a signed-in person who has talked before keeps their conversation, told where they came from', async () => {
+  let { cookie } = await signIn(k)
+  let BEFORE = 'A recipe box for my family'
+  let first = await stepIn(BEFORE, '', cookie)
+  await answered(first, cookie)
+  let step = stepsOf('guestbook')[1]
+  let r = await stepIn('Add a guest count', step, cookie)
+  assertEquals(r.status, 303)
+  assertEquals(spaceOf(r), spaceOf(first))
+  assertEquals((await copyIn(spaceOf(r))).installed?.version, 2)
+  let page = await answered(r, cookie, 2)
+  assert(page.indexOf(BEFORE) < page.indexOf('Add a guest count'))
+  for (let said of [REQUESTS[0], 'Released step 1.']) {
+    assert(!page.includes(said), said)
+  }
+  let asked = lastAsked()
+  assertStringIncludes(asked, BEFORE)
+  assertStringIncludes(asked, 'stepped into its demo of birthday-guestbook')
+  assertStringIncludes(asked, `${spaceOf(r)}/guestbook`)
+  assertStringIncludes(asked, 'it called number_buy')
+  assert(!asked.includes(REQUESTS[0]))
 })

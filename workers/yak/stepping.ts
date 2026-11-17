@@ -9,13 +9,15 @@ import { DEMO } from './gallery-demo.ts'
 import { BUILDING } from './newcomer.ts'
 import { TOOLS } from './tools.ts'
 import { stepsOf as named } from './site/home.tsx'
+import { said } from './site/copy.ts'
 import { asked, WALKED, type Walked } from './walkthrough.ts'
 
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 
 /** What a visitor stepping into a home-page demo (D-462) is given: the
- * name the demo app is published under, the release a copy of it takes, the
- * demo's lines through the step, and the tools the demo's Operator called
+ * name the demo app is published under, the step's title on the home page,
+ * the release a copy of it takes, the demo's lines through the step, and the
+ * tools the demo's Operator called
  * there that reach outside the app (`outside`). `step` is the step's name
  * in the home page's words (site/home.tsx `stepsOf`). None for a demo or a
  * step the page does not have, or one not recorded. */
@@ -37,6 +39,7 @@ export let walkedTo = async (
   if (!walked?.version) return null
   return {
     name: app.published.name,
+    step: said(`home.walk.apps.${demo}.steps.${step}.title`),
     version: walked.version,
     lines: walked.lines,
     outside: outside(walked.lines),

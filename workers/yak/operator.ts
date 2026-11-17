@@ -1945,22 +1945,18 @@ export let operating = (
     }
   }
 
-  // A conversation of the person's begun under `session` with another
-  // transcript's lines, which is their one from now on (`rootAt`).
-  let begunWith: Operator['begunWith'] = async (
-    held,
-    space,
-    session,
-    lines,
-  ) => {
+  // The person's one conversation begun with another transcript's lines,
+  // where it has not begun: one that has is theirs, and keeps what it holds.
+  let begunWith: Operator['begunWith'] = async (held, space, lines) => {
     await readying(held, space)
-    if (!await conversed(store, session)) {
-      await started(session, held.person, space)
-    }
+    let session = await rootAt(store, space.eid, held.person)
+    if (await conversed(store, session)) return false
+    await started(session, held.person, space)
     await g.apply([
       await carrying(session, held, space, { channel: 'chat' }, true),
       ...grafted(lines, session),
     ], { trusted: true })
+    return true
   }
 
   let ask: Operator['ask'] = async (held, space, args, o = {}) => {
@@ -2355,18 +2351,17 @@ export type Operator = {
     space: Space,
     o?: { model?: string; provider?: string; effort?: string; signup?: string },
   ) => Promise<Listening>
-  /** A conversation of `held`'s in `space` begun under `session` with
-   * another transcript's lines (@yaks/session `grafted`): a home-page demo's
-   * through the step they stepped in at (walkthrough.ts `walkedTo`). It is
-   * their one conversation from now on (operator-root.ts `rootAt`), so the
-   * words they give next are its next input. Given again, it writes the
-   * same rows. */
+  /** `held`'s one conversation in `space` (operator-root.ts `rootAt`)
+   * begun with another transcript's lines (@yaks/session `grafted`): a
+   * home-page demo's through the step they stepped in at (stepping.ts
+   * `walkedTo`), so the words they give next follow them. A conversation
+   * that has begun is left as it is, nothing grafted into it. Answers
+   * whether the lines began it. */
   begunWith: (
     held: Asker,
     space: Space,
-    session: string,
     lines: Bundle[],
-  ) => Promise<void>
+  ) => Promise<boolean>
   /** Words given: the next input of the person's conversation, or on a task
    * a new task and session or the next input of the task's newest session.
    * Answers at once with where they went (`task` is '' in a conversation). */
