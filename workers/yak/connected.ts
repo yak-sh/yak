@@ -28,8 +28,7 @@ export type Agent = {
 export type Service = { name: string; connectedAt: number }
 
 export type Clients = Pick<OAuthHelpers, 'listUserGrants'> & {
-  // Missing registrations are null; unavailable metadata is undefined. The
-  // latter still has a grant and must not disappear during a client outage.
+  // A missing registration or unavailable metadata cannot hide a held grant.
   lookupClient: (id: string) => Promise<ClientInfo | null | undefined>
 }
 
@@ -107,8 +106,8 @@ let callback = (uri: string | undefined) => {
 export type Kept = { client?: string }
 
 // Which listed agent a grant stands for, or nothing: a service's grant
-// (`servicesOf`) and one whose registration is gone are no agent. A grant
-// that kept its client's name is named by it; any other looks its client up,
+// (`servicesOf`) is no agent. A grant that kept its client's name is named
+// by it; any other looks its client up,
 // once however many grants it holds.
 let identifier = (oauth: Pick<Clients, 'lookupClient'>) => {
   let clients = new Map<string, Promise<ClientInfo | null | undefined>>()
@@ -119,11 +118,11 @@ let identifier = (oauth: Pick<Clients, 'lookupClient'>) => {
   }
   let nameOf = async (
     grant: Pick<GrantSummary, 'clientId' | 'metadata'>,
-  ): Promise<string | undefined | null> => {
+  ): Promise<string | undefined> => {
     let kept = (grant.metadata as Kept | undefined)?.client
     if (typeof kept == 'string') return kept
     let client = await lookup(grant.clientId)
-    return client === null ? null : client?.clientName
+    return client?.clientName
   }
   return async (
     grant: Pick<GrantSummary, 'clientId' | 'redirectUri' | 'metadata'>,
@@ -131,10 +130,9 @@ let identifier = (oauth: Pick<Clients, 'lookupClient'>) => {
     if (serviceOf(grant.redirectUri)) return
     let host = callback(grant.redirectUri)
     let brand = host.brand
-    let name: string | undefined | null
+    let name: string | undefined
     if (!brand) {
       name = await nameOf(grant)
-      if (name === null) return
       if (host.local) brand = named(name)
     }
     return {

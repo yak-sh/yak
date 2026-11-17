@@ -123,7 +123,7 @@ test('agents: callback identity requires an exact HTTPS hostname', async () => {
   assertEquals(found.every((c) => c.brand === undefined), true)
 })
 
-test('agents: unknown registered clients stay visible; missing clients do not', async () => {
+test('agents: unnamed and missing registrations keep their grants visible', async () => {
   let p = provider([[
     grant('unnamed'),
     grant('custom', { redirectUri: 'https://other.test/callback' }),
@@ -132,6 +132,7 @@ test('agents: unknown registered clients stay visible; missing clients do not', 
   ]], { unnamed: '', custom: 'Unlisted agent' })
   assertEquals(await agentsOf(p.oauth, 'person'), [
     { id: 'claude', brand: 'claude', name: 'Claude', connectedAt: 10 },
+    { id: 'deleted', name: 'Other agent', connectedAt: 10 },
     { id: 'unnamed', name: 'Other agent', connectedAt: 10 },
     { id: 'custom', name: 'Unlisted agent', connectedAt: 10 },
   ])
@@ -237,7 +238,7 @@ test('disconnect revokes the grants of the one entry chosen, and no other', asyn
   ])
   assertEquals(await gone('custom'), ['person:mine'])
   assertEquals(await gone('zap'), [])
-  assertEquals(await gone('gone'), [])
+  assertEquals(await gone('gone'), ['person:gone'])
   assertEquals(await gone(''), [])
 })
 
