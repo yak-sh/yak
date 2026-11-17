@@ -410,6 +410,15 @@ the call's own, and hands the request to `send`, which has the last word on its
 headers. An init that is a `Request` carries its method, body and headers
 across, which is how a socket upgrade reaches the object.
 
+`coalesced(door, reads, {hold?, turn?})` shares GETs that `reads(request)`
+accepts and that arrive before `turn` sends them, keyed by address and headers.
+Each caller gets its own response bytes. A read already sent answers no later
+caller, since its snapshot may predate that caller; a write or an excluded
+request separates batches. Select only finite read responses. `turn` defaults to
+a microtask; `hold` keeps the first caller's I/O alive until the body is read,
+as a Worker's `waitUntil` does. Wrap a resending door so reading the shared body
+participates in its retries.
+
 `resending(door, { report?, wait? })` sends a call again, as `retried` paces it,
 when the runtime reset the object or lost the call: thrown, or answered as a
 500's refusal body (`reset(response)`, `thrown(response)`). A call is sent again

@@ -11,6 +11,7 @@
 // the object is for.
 
 import { IDEMPOTENCY } from '@yaks/api/log'
+import type { Hold } from '@yaks/fp'
 import { evicted, killed, opaque, retried, starved } from './resets.ts'
 
 /** A Durable Object stub: one object, reachable by fetch. */
@@ -107,6 +108,86 @@ export let doorOf = (send: Send, scrub: string[] = []): Door => {
       init: RequestInit | Request = {},
       headers: Record<string, string> = {},
     ) => ask(path, init, headers).then(read),
+  })
+}
+
+let copied = async (response: Response): Promise<() => Response> => {
+  let body = response.body ? await response.arrayBuffer() : null
+  let init = {
+    status: response.status,
+    statusText: response.statusText,
+    headers: [...response.headers],
+  }
+  return () => new Response(body?.slice(0), init)
+}
+
+/** Share finite reads accepted by `reads` and queued before `turn` sends them,
+ * each caller receiving its own bytes. A read already sent answers no later
+ * caller: its snapshot may predate that caller. A write or an excluded read
+ * separates batches. `hold` keeps the first caller's I/O alive. */
+export let coalesced = (
+  door: Door,
+  reads: (request: Request) => boolean,
+  { hold, turn = queueMicrotask }: {
+    hold?: Hold
+    turn?: (send: () => void) => void
+  } = {},
+): Door => {
+  let pending = new Map<string, Promise<() => Response>>()
+  let apart = async (send: () => Promise<Response>) => {
+    pending.clear()
+    try {
+      return await send()
+    } finally {
+      pending.clear()
+    }
+  }
+  let ask = async (
+    path: string,
+    init: RequestInit | Request = {},
+    headers: Record<string, string> = {},
+    options: Call = {},
+  ) => {
+    let method = init instanceof Request ? init.method : init.method ?? 'GET'
+    if (method != 'GET' || options.replayable === false) {
+      return await apart(() => door(path, init, headers, options))
+    }
+    return await doorOf(async (request) => {
+      if (request.headers.has('upgrade') || !reads(request)) {
+        return await apart(() => door(path, init, headers, options))
+      }
+      let key = JSON.stringify([
+        request.url,
+        [...request.headers].filter(([name]) => name != IDEMPOTENCY),
+      ])
+      let work = pending.get(key)
+      if (!work) {
+        let send!: () => void
+        work = new Promise<() => Response>((resolve, reject) => {
+          send = async () => {
+            if (pending.get(key) == work) pending.delete(key)
+            try {
+              resolve(await door.consume(path, copied, request, {}, options))
+            } catch (error) {
+              reject(error)
+            }
+          }
+        })
+        pending.set(key, work)
+        hold?.(work.then(() => {}, () => {}))
+        turn(send)
+      }
+      return (await work)()
+    })(path, init, headers)
+  }
+  return Object.assign(ask, {
+    consume: <T>(
+      path: string,
+      read: (response: Response) => T | Promise<T>,
+      init?: RequestInit | Request,
+      headers?: Record<string, string>,
+      options?: Call,
+    ) => ask(path, init, headers, options).then(read),
   })
 }
 

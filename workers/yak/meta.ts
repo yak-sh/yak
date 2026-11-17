@@ -22,13 +22,14 @@ import { stringify } from '@yaks/vocab/wire'
 import type { Bundle } from '@yaks/graph'
 import { knownOptions, Stale } from '@yaks/graph/errors'
 import { storeOf } from './door.ts'
-import { type Door, type Namespace } from '@yaks/durable-object/door'
+import { coalesced, type Door, type Namespace } from '@yaks/durable-object/door'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { jittered } from '@yaks/durable-object/resets'
 import type { Clock } from '@yaks/fp'
 import { Pending, said } from '@yaks/api/log'
-import { reported } from './defects.ts'
+import { background, reported } from './defects.ts'
 import { FILED } from '@yaks/api/refuse'
+import { setImmediate } from 'node:timers'
 
 /** The meta store, in the graph's own wire. */
 export type Meta = {
@@ -188,11 +189,14 @@ export let meta = (
   let ns = env.STORE as unknown as object
   let held = doors.get(ns)
   if (!held) {
-    let door = storeOf(
-      env.STORE,
-      PLATFORM_STORE,
-      undefined,
-      jittered(env.CLOCK),
+    let door = coalesced(
+      storeOf(env.STORE, PLATFORM_STORE, undefined, jittered(env.CLOCK)),
+      (request) => {
+        let url = new URL(request.url)
+        return (url.pathname == '/query' || url.pathname == '/reads') &&
+          !url.searchParams.has('mend')
+      },
+      { hold: background, turn: setImmediate },
     )
     doors.set(ns, held = metaOf(door))
   }
