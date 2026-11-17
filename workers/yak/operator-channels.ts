@@ -1,5 +1,6 @@
 import { addressed, type Bundle, type Comp } from '@yaks/graph'
 import { short } from '@yaks/id'
+import { cancel } from '@yaks/wake'
 import { base64 } from './bytes.ts'
 import { derivedEid } from '@yaks/graph/identity'
 import { directoryOf, type Space } from './directory.ts'
@@ -37,7 +38,7 @@ import { inputOf, type Intake, take } from '@yaks/session/intake'
 import { owed, sending, Undeliverable } from '@yaks/mail'
 import { channelOf } from './operator-view.ts'
 import { handover, naming } from './handover.ts'
-import { rootOf } from './operator-root.ts'
+import { rootOf, spaceOf } from './operator-root.ts'
 import { kindOf } from './operator-escalate.ts'
 
 /** What a person reads when the Operator could not start on their request
@@ -963,7 +964,19 @@ export let handleChannels = (
     wake_run: async (event) => {
       let [row] = await g.get([event.entity.eid])
       let at = part<{ at?: string } | undefined>(row, 'fired')?.at
-      if (row && at) await operator.scheduled(row, at)
+      if (!row || !at) return
+      let wake = part<{ for?: string }>(row, 'wake')
+      if (!wake?.for) return
+      let dir = directoryOf(env.STORE)
+      let space = await dir.at(await spaceOf(operator.store) ?? '')
+      let access = space && !space.trashed
+        ? await dir.page(space.slug, null, wake.for, false)
+        : undefined
+      if (!access?.role) {
+        await cancel(g, wake.for, row.entity.eid, { trusted: true })
+        return
+      }
+      await operator.scheduled(row, at)
     },
     operator_receive: async (event) => {
       let [row] = await g.get([event.entity.eid])

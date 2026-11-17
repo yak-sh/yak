@@ -156,3 +156,54 @@ test('wake_list shows a cadence and its next time, and wake_cancel ends it', () 
   )
   assertEquals(gone.filter((b) => b && !b.tombstone).length, 0)
 })
+
+let revoked = crypto.randomUUID(), seat = crypto.randomUUID()
+await dir.apply({
+  entities: [
+    { entity: { eid: revoked }, person: {} },
+    {
+      entity: { eid: seat },
+      member: { person: revoked, space: eid, role: 'editor' },
+    },
+  ],
+}, owner)
+let turns = 0
+let removed = operatorService(
+  env,
+  { person: revoked, space: eid, role: 'editor' },
+  operatorModel((req) => {
+    turns++
+    return Promise.resolve({
+      id: crypto.randomUUID(),
+      model: req.model,
+      items: reply('Done.'),
+    })
+  }),
+)
+let alarm = crypto.randomUUID()
+await removed.store.g.apply([
+  {
+    entity: { eid: crypto.randomUUID() },
+    operator_session: { person: revoked, space: eid },
+    session: {},
+  },
+  {
+    entity: { eid: alarm },
+    wake: {
+      for: revoked,
+      at: new Date(0).toISOString(),
+      every: '1h',
+      brief: 'Read the apps',
+      note: 'Check again',
+    },
+  },
+], { trusted: true })
+await dir.apply({ entities: [{ entity: { eid: seat }, $delete: true }] }, owner)
+await removed.drain()
+let [cancelled] = await removed.store.g.get([alarm])
+test('removing a member cancels their helper wake before any model turn or occurrence', async () => {
+  assertEquals(turns, 0)
+  assertEquals(!!cancelled?.wake, false)
+  assertEquals(await removed.store.g.read('.occurrence'), [])
+  assertEquals(await removed.store.g.read('.operator_request'), [])
+})
