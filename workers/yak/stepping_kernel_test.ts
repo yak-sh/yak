@@ -18,6 +18,7 @@ import { receive } from './operator-channels.ts'
 import { rootOf } from './operator-root.ts'
 import { stepsOf } from './site/home.tsx'
 import { START } from './newcomer.ts'
+import { sourceReference } from './operator-source.ts'
 
 let REQUESTS = [
   'A guestbook for Mum’s 70th that anyone with the link can sign.',
@@ -96,6 +97,22 @@ let line = (rest: Record<string, unknown>) => ({
   entry: { session, seq: ++seq },
   ...rest,
 })
+// What step 2 did besides, none of which was said: a memory recalled, a reply
+// written mid-work, the contact list read with its owner's address and
+// number, and a Pending line; its request came by a channel that adds a note
+// to the words.
+let NOTE = sourceReference('b'.repeat(64))
+// The visitor's own words carry a note of their own, so the demo's is told
+// apart by its attachment.
+let NOT_SAID = [
+  'Mum is turning 70',
+  'Looking at your contacts first.',
+  'ada@example.com',
+  '+1 555 0100',
+  'Pending; its result will follow.',
+  `attachment ${'b'.repeat(64)}`,
+]
+
 // Each step's release and the Operator's answer, each later step's request
 // before them, and at step 2 a number bought for the alerts to come.
 let call = (name: string, args: Record<string, unknown>, value: unknown) => {
@@ -104,9 +121,23 @@ let call = (name: string, args: Record<string, unknown>, value: unknown) => {
 }
 await service.store.g.apply([
   ...REQUESTS.flatMap((said, i) => [
-    ...i ? [line({ content: { body: said } })] : [],
+    ...i ? [line({ content: { body: said + (i == 1 ? NOTE : '') } })] : [],
     ...i == 1
-      ? call('number_buy', { space: 'yourname' }, { number: '+1555' })
+      ? [
+        line({
+          prompt: { scope: 'local', source: 'operator:earlier' },
+          content: { body: NOT_SAID[0] },
+        }),
+        line({ output: {}, content: { body: NOT_SAID[1] } }),
+        ...((read) => [
+          ...read,
+          line({
+            tool_progress: { call: read[0].entity.eid },
+            content: { body: NOT_SAID[4] },
+          }),
+        ])(call('contact_list', {}, { contacts: NOT_SAID.slice(2, 4) })),
+        ...call('number_buy', { space: 'yourname' }, { number: '+1555' }),
+      ]
       : [],
     ...call('app_deploy', demo, { deployed: true, version: i + 1 }),
     line({ output: {}, content: { body: `Released step ${i + 1}.` } }),
@@ -184,6 +215,19 @@ test('a stranger stepping in at step 2 gets that app, that history and a first t
     assertStringIncludes(asked, said)
   }
   assert(!asked.includes(REQUESTS[2]))
+  // Only what was said came with them, and of the tools it called, names.
+  for (let unsaid of NOT_SAID) {
+    assert(!page.includes(unsaid), unsaid)
+    assert(
+      !asked.includes(unsaid),
+      unsaid + ' in ' +
+        asked.slice(
+          Math.max(0, asked.indexOf(unsaid) - 300),
+          asked.indexOf(unsaid) + 200,
+        ),
+    )
+  }
+  assert(!asked.includes('+1555'))
 })
 
 // An app of `space`'s copied from the demo's guestbook.

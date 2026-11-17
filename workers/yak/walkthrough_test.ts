@@ -123,10 +123,17 @@ test('a step that released nothing leaves the app at the release before it, and 
     ask('Add photos'),
     ...deploy(2),
   ], 'guestbook')
-  assertEquals(steps.map((s) => [s.lines.length, s.version]), [
-    [2, null],
-    [4, 1],
-    [2, 1],
-    [3, 2],
-  ])
+  assertEquals(
+    steps.map((s) => [
+      s.lines.map((b) => (b.content as { body: string }).body),
+      s.called,
+      s.version,
+    ]),
+    [
+      [['Text me when someone signs'], ['subscription_set'], null],
+      [['A guestbook'], [], 1],
+      [['Text me when someone signs'], ['subscription_set'], 1],
+      [['Add photos'], [], 2],
+    ],
+  )
 })

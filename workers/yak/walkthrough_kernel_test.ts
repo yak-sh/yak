@@ -24,6 +24,7 @@ import { rootOf } from './operator-root.ts'
 import { page } from './site/mod.ts'
 import { stepsOf, WALKS } from './site/home.tsx'
 import { base64 } from './bytes.ts'
+import { sourceReference } from './operator-source.ts'
 
 // A picture of each render, told apart by the byte after its PNG signature.
 let renders = 0
@@ -125,8 +126,45 @@ let line = (rest: Record<string, unknown>) => ({
   entry: { session, seq: ++seq },
   ...rest,
 })
+// What the second step did besides, none of which was said: a memory
+// recalled, a reply written mid-work, the contact list read with its owner's
+// address and number, and a Pending line; the third request came by a channel
+// that adds a note to the words.
+// A background call's interim line (@yaks/session `PENDING`).
+let PENDING = 'Pending; its result will follow.'
+let NOT_SAID = [
+  'Mum is turning 70',
+  'Looking at your contacts first.',
+  'ada@example.com',
+  '+1 555 0100',
+  PENDING,
+  'Original message text',
+]
+let unsaid = () => {
+  let read = line({ call: { name: 'contact_list', args: {} } })
+  return [
+    line({
+      prompt: { scope: 'local', source: 'operator:earlier' },
+      content: { body: NOT_SAID[0] },
+    }),
+    line({ output: {}, content: { body: NOT_SAID[1] } }),
+    read,
+    line({
+      tool_progress: { call: read.entity.eid },
+      content: { body: PENDING },
+    }),
+    line({
+      result: {
+        call: read.entity.eid,
+        value: { contacts: NOT_SAID.slice(2, 4) },
+      },
+      content: { body: `Ada <${NOT_SAID[2]}> ${NOT_SAID[3]}` },
+    }),
+  ]
+}
 let rows = REQUESTS.flatMap((said, i) => {
-  let asked = i ? [line({ content: { body: said } })] : []
+  let body = i == 2 ? said + sourceReference('a'.repeat(64)) : said
+  let asked = i ? [line({ content: { body } }), ...i == 1 ? unsaid() : []] : []
   let call = line({
     call: {
       to: toolEid('app_deploy'),
@@ -186,18 +224,16 @@ test("each step of a marked conversation is served beside its release's picture"
     let li = walk.querySelector(`[data-walk-step="${step}"]`)!
     let talk = li.querySelector('.Walk_Talk')!
     assertStringIncludes(talk.textContent!, REQUESTS[i])
-    assertStringIncludes(
-      talk.textContent!,
-      i ? `Released step ${i + 1}.` : 'Made the guestbook.',
-    )
-    // Its release is its one step: what the Operator sent its model is not
-    // shown.
-    assertEquals(
-      [...talk.querySelectorAll('.More_Summary')]
-        .filter((e) => !e.closest('.More_Body'))
-        .map((e) => e.textContent),
-      ['Released guestbook'],
-    )
+    // The Operator's reply is its last words in the step, not those it wrote
+    // before them.
+    assertStringIncludes(talk.textContent!, `Released step ${i + 1}.`)
+    assert(!talk.textContent!.includes('Made the guestbook.'))
+    // Only what was said: no call, result, memory, progress or mid-work
+    // reply, and the words without their channel's note.
+    assertEquals(talk.querySelectorAll('.More_Summary').length, 0)
+    for (let unsaid of NOT_SAID) {
+      assert(!talk.innerHTML.includes(unsaid), unsaid)
+    }
     // Only this step's exchange: the next step's request is not in it.
     if (REQUESTS[i + 1]) assert(!talk.textContent!.includes(REQUESTS[i + 1]))
     let release = versions.find((v) => v.version == i + 1)!

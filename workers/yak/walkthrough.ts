@@ -7,16 +7,21 @@
 // conversation and nothing else: the transcript says where each step ends and
 // which version it left the app at.
 //
+// Only what was said leaves the demo space (`said`): each step's request and
+// the Operator's reply. A transcript also holds the space's own data (its
+// contacts, its apps, the pages its Operator read), which stays there.
+//
 // The Builder object draws each step's lines as the chat page draws them
 // (operator-host.ts `walkthroughOf`); the page is filled with them as it is
 // served (gallery.ts `made`), each step beside the picture of its release
 // (gallery.ts `shotAt`).
 import type { Bundle, Comp } from '@yaks/graph'
-import { theirs } from '@yaks/session/conversation'
+import { theirs, words } from '@yaks/session/conversation'
 import { toolEid } from '@yaks/tools/result'
 import type { Env } from './env.ts'
 import { builderOf, SPACE } from './build-door.ts'
 import { keptValue } from './results.ts'
+import { sourceWords } from './operator-source.ts'
 
 /** Where the kernel asks a space's object for a walkthrough (build.ts). */
 export let WALKTHROUGH = '/operator/walkthrough'
@@ -25,9 +30,10 @@ export let WALKTHROUGH = '/operator/walkthrough'
  * stepping in (operator-host.ts `walkedOf`). */
 export let WALKED = '/operator/walked'
 
-/** One step of a walkthrough: its lines, the person's request first, and the
- * version it left the app at, if any step so far released one. */
-export type Step = { lines: Bundle[]; version: number | null }
+/** One step of a walkthrough as it leaves the demo space (`said`): what was
+ * said in it, the person's request first, the names of the tools it called,
+ * and the version it left the app at, if any step so far released one. */
+export type Step = { lines: Bundle[]; called: string[]; version: number | null }
 
 /** A walkthrough as its object answers it: each step's lines drawn as HTML. */
 export type Walkthrough = {
@@ -48,12 +54,73 @@ let deploys = (b: Bundle, app: string) => {
   return named == app || named.endsWith(`/${app}`)
 }
 
+// A request of the person's: their own words, not the system's.
+let request = (b: Bundle) => theirs(b) && !b.system
+
+// What leaves the demo space of a line that was said: its words and where it
+// sits, nothing else it carries.
+let bare = (b: Bundle, body: string, rest: Bundle = {} as Bundle): Bundle => ({
+  ...rest,
+  entity: { eid: b.entity.eid },
+  entry: {
+    session: String(comp(b, 'entry')?.session ?? ''),
+    seq: Number(comp(b, 'entry')?.seq ?? 0),
+  },
+  content: { body },
+})
+
 /**
- * The steps of a conversation's entries, in order: each begins at a request
- * of the person's and holds every line before the next but what the Operator
- * sent its model (`ask`). Lines before the first request are no step's. A
- * step's version is its last release of the app, or the step before's when
- * it released nothing, and none until a step has.
+ * What was said in a step's lines, the only lines of a marked conversation
+ * that leave the demo space: the request in the person's exact words, without
+ * the note a channel adds to them (operator-source.ts `sourceWords`), and the
+ * Operator's reply to it, its last words in the step. Not a call, a result,
+ * a prompt, a progress line, recalled memories, reasoning or words it wrote
+ * mid-work: a kind of line nobody thought of stays behind too.
+ *
+ * ```ts
+ * import { said } from './walkthrough.ts'
+ * import { assertEquals } from '@std/assert'
+ * let at = (seq: number, rest: object) => ({
+ *   entity: { eid: `e${seq}` }, entry: { session: 's', seq }, ...rest,
+ * })
+ * let lines = said([
+ *   at(1, { content: { body: 'A guestbook' }, created: { by: 'ada' } }),
+ *   at(2, { prompt: { scope: 'local' }, content: { body: 'Ada said before' } }),
+ *   at(3, { output: { source: 'a' }, content: { body: 'Looking.' } }),
+ *   at(4, { call: { name: 'contact_list' } }),
+ *   at(5, { result: { call: 'e4' }, content: { body: 'ada@example.com' } }),
+ *   at(6, { output: { source: 'b' }, content: { body: 'Done.' } }),
+ * ])
+ * assertEquals(lines.map((b) => b.content), [
+ *   { body: 'A guestbook' },
+ *   { body: 'Done.' },
+ * ])
+ * assertEquals(Object.keys(lines[0]), ['entity', 'entry', 'content'])
+ * ```
+ */
+export let said = (lines: Bundle[]): Bundle[] => {
+  let asked = lines.find(request)
+  let reply = lines.findLast((b) =>
+    b.output && String(comp(b, 'content')?.body ?? '').trim()
+  )
+  return [
+    ...asked
+      ? [bare(asked, sourceWords(words(String(comp(asked, 'content')!.body))))]
+      : [],
+    ...reply
+      ? [bare(reply, String(comp(reply, 'content')!.body), {
+        output: {},
+      } as unknown as Bundle)]
+      : [],
+  ]
+}
+
+/**
+ * The steps of a conversation's entries, in order, each as it leaves the
+ * demo space (`said`): each begins at a request of the person's and ends
+ * before the next. Lines before the first request are no step's. A step's
+ * version is its last release of the app, or the step before's when it
+ * released nothing, and none until a step has.
  *
  * ```ts
  * import { stepsOf } from './walkthrough.ts'
@@ -64,13 +131,16 @@ let deploys = (b: Bundle, app: string) => {
  * })
  * let steps = stepsOf([
  *   at(1, { content: { body: 'A guestbook' } }),
- *   at(2, { call: { to: toolEid('app_deploy'), args: { app: 'guestbook' } } }),
+ *   at(2, { call: { to: toolEid('app_deploy'), name: 'app_deploy', args: { app: 'guestbook' } } }),
  *   at(3, { result: { call: 'e2', value: { deployed: true, version: 1 } } }),
  *   at(4, { output: {}, content: { body: 'Done.' } }),
  *   at(5, { content: { body: 'Text me when someone signs' } }),
  *   at(6, { call: { name: 'subscription_set', args: {} } }),
  * ], 'guestbook')
- * assertEquals(steps.map((s) => [s.lines.length, s.version]), [[4, 1], [2, 1]])
+ * assertEquals(
+ *   steps.map((s) => [s.lines.length, s.called, s.version]),
+ *   [[2, ['app_deploy'], 1], [1, ['subscription_set'], 1]],
+ * )
  * ```
  */
 export let stepsOf = (entries: Bundle[], app: string): Step[] => {
@@ -86,11 +156,9 @@ export let stepsOf = (entries: Bundle[], app: string): Step[] => {
       released.set(String(r.call), value.version)
     }
   }
-  let steps: Step[] = []
+  let steps: { lines: Bundle[]; version: number | null }[] = []
   for (let b of ordered) {
-    // What the Operator sent its model is its own, not the exchange.
-    if (b.ask) continue
-    if (theirs(b)) {
+    if (request(b)) {
       steps.push({ lines: [], version: steps.at(-1)?.version ?? null })
     }
     let step = steps.at(-1)
@@ -99,12 +167,26 @@ export let stepsOf = (entries: Bundle[], app: string): Step[] => {
     let version = deploys(b, app) ? released.get(b.entity.eid) : undefined
     if (version != null) step.version = version
   }
-  return steps
+  return steps.map(({ lines, version }) => ({
+    lines: said(lines),
+    called: [
+      ...new Set(lines.flatMap((b) => {
+        let name = comp(b, 'call')?.name
+        return name ? [String(name)] : []
+      })),
+    ],
+    version,
+  }))
 }
 
-/** A walkthrough through one of its steps: its transcript's lines up to
- * that step's last, and the version of the app as that step left it. */
-export type Walked = { lines: Bundle[]; version: number | null }
+/** A walkthrough through one of its steps: what was said up to that step's
+ * end (`said`), the tools called up to it by name, and the version of the
+ * app as that step left it. */
+export type Walked = {
+  lines: Bundle[]
+  called: string[]
+  version: number | null
+}
 
 /** A kernel request to the demo space's object. */
 export let asked = async <T>(

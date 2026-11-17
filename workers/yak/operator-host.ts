@@ -1005,64 +1005,59 @@ let arriving = async (store: Store, row: Bundle, entries: Bundle[]) => {
   }).reverse()
 }
 
-/** The lines of the walkthrough of `app` marked in this store through its
- * step numbered `step` (from 0), as the transcript holds them, and the
- * version of the app as that step left it (`stepsOf`). None for a step it
- * does not have. */
+/** What was said in the walkthrough of `app` marked in this store through
+ * its step numbered `step` (from 0), the tools it called by name, and the
+ * version of the app as that step left it (walkthrough.ts `stepsOf`). None
+ * for a step it does not have. */
 export let walkedOf = async (
   store: Store,
   app: string,
   step: number,
 ): Promise<Walked | null> => {
-  let [row] = await store.g.read(
-    q`.walkthrough.app=${app}&?session&.order=-created.at&.limit=1&.fields=entity.eid`,
-  )
-  if (!row) return null
-  let entries = await transcript(store.g, row.entity.eid)
-  let steps = stepsOf(entries, app).slice(0, step + 1)
-  let end = steps.at(step)?.lines.at(-1)
-  if (!end) return null
-  let last = Number((end.entry as Comp).seq)
+  let steps = (await markedOf(store, app))?.steps.slice(0, step + 1) ?? []
+  if (steps.length <= step) return null
   return {
-    lines: entries.filter((b) => Number((b.entry as Comp)?.seq) <= last),
+    lines: steps.flatMap((s) => s.lines),
+    called: [...new Set(steps.flatMap((s) => s.called))],
     version: steps[step].version,
   }
 }
 
-/** The walkthrough of `app` marked in this store (walkthrough.ts), each
- * step's lines drawn as the chat page draws a conversation's; none while no
- * conversation is marked one. The newest marked wins. */
+// The newest conversation marked the walkthrough of `app` in this store, and
+// its steps as they leave it (walkthrough.ts `stepsOf`).
+let markedOf = async (store: Store, app: string) => {
+  let [row] = await store.g.read(
+    q`.walkthrough.app=${app}&?session&.order=-created.at&.limit=1&.fields=entity.eid`,
+  )
+  if (!row) return null
+  let session = row.entity.eid
+  return { session, steps: stepsOf(await transcript(store.g, session), app) }
+}
+
+/** The walkthrough of `app` marked in this store (walkthrough.ts), what was
+ * said in each step drawn as the chat page draws a conversation's; none
+ * while no conversation is marked one. The newest marked wins. */
 export let walkthroughOf = async (
   store: Store,
   app: string,
 ): Promise<Walkthrough | null> => {
-  let [row] = await store.g.read(
-    q`.walkthrough.app=${app}&?session&.order=-created.at&.limit=1&*`,
-  )
-  if (!row) return null
-  let eid = row.entity.eid
-  let entries = await transcript(store.g, eid)
-  let calls = new Set(entries.flatMap((b) => b.call ? [b.entity.eid] : []))
-  let helped = await seenOf(store, [row], entries, calls)
-  let seen = {
-    ...helped,
-    ...await namingOf(store, withHelpers(entries, helped.helpers), nameless),
-  }
+  let marked = await markedOf(store, app)
+  if (!marked) return null
+  let { session, steps } = marked
+  let lines = steps.flatMap((s) => s.lines)
+  let seen = await namingOf(store, lines, nameless)
   let names = namer(seen)
-  let view = await viewOf(store, entries, false)
-  seen.helpers = await lined(store, seen.helpers, names)
+  let view = await viewOf(store, lines, false)
   return {
-    session: eid,
-    steps: stepsOf(entries, app).map(({ lines, version }, i) => ({
+    session,
+    steps: steps.map(({ lines, version }, i) => ({
       version,
       html: talk(
-        { entity: { eid: `${eid}-${i + 1}` } } as Bundle,
+        { entity: { eid: `${session}-${i + 1}` } } as Bundle,
         lines,
         names,
         seen,
-        {
-          drawn: drawnLines(lines, names, seen, view),
-        },
+        { drawn: drawnLines(lines, names, seen, view) },
       ),
     })),
   }
