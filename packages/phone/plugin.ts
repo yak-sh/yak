@@ -206,6 +206,7 @@ export let routes =
     return [{
       method: 'GET',
       path: `${base}/*`,
+      sensitive: true,
       handle: async (request) => {
         let url = new URL(request.url)
         let key = decodeURIComponent(url.pathname.slice(base.length + 1))

@@ -201,5 +201,6 @@ export let handler = (host: Hosting, options: {
     graph: host.graph,
     report,
     route: routeOf,
+    redact: (request) => claimed(request)?.sensitive === true,
   })
 }

@@ -142,8 +142,9 @@ voip.ms does) is answered at `GET /<via>/<door.key>?<own.callback>`: the key in
 the path is what says the call is the provider's, and the host points the
 number's callback there. Telnyx uses a base64 public key and Ed25519. Pinnacle
 authenticates its `PINNACLE-SIGNING-SECRET` header against the configured
-webhook secret; it does not sign the body. voip.ms callbacks use a
-host-authenticated URL.
+webhook secret; it does not sign the body. The callback route marks its path
+sensitive, so failure reports keep the route pattern rather than its key.
+voip.ms callbacks use a host-authenticated URL.
 
 On yaks.app, the kernel's config names each provider plugin with its credentials
 (workers/yak/config.ts `phoneConfig`), and `PHONE_SENDER` selects the platform's

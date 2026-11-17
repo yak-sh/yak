@@ -42,6 +42,8 @@ export type Answered = {
   ms: number
   /** the route that matched, in the server's own words (`/blob/*`) */
   route?: string
+  /** use the route pattern instead of a credential-bearing pathname */
+  redact?: boolean
 }
 
 // The browsers first, since each also says `Safari` and `Mozilla`; Edge and
@@ -133,7 +135,7 @@ export let requested = (
     entity: { eid: id },
     request: {
       method: request.method,
-      url: url.origin + url.pathname,
+      url: url.origin + (a.redact ? a.route ?? '/' : url.pathname),
       ...a.route ? { route: a.route } : {},
       status: a.status,
       ms: a.ms,
@@ -158,6 +160,8 @@ export type Watch = {
   graph?: object
   report?: Report
   route?: (request: Request) => string | undefined
+  /** whether the pathname carries a credential and must be redacted */
+  redact?: (request: Request) => boolean
   /** What the host adds to each failure reported without a `report`
    * (./refuse.ts `Tags`), read as one is. */
   tags?: () => Tags
@@ -217,6 +221,7 @@ export let served =
       status: answer.status,
       ms: Date.now() - began,
       route: o.route?.(request),
+      redact: o.redact?.(request),
     })
     try {
       ;(o.report ?? saying(o.tags?.()))(b, err ?? cause(request))

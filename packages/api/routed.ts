@@ -14,6 +14,8 @@ export type Handler = (request: Request) => Response | Promise<Response>
 export type Route = {
   method: string
   path: string
+  /** record the route pattern instead of a path carrying credentials */
+  sensitive?: boolean
   handle: Handler
   /** What a person reaching this path finds, said beside its address when a
    * server starts listening: the few doors somebody starting one opens. */

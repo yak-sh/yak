@@ -264,3 +264,36 @@ test('a callback door keeps a text called with its key in the path, and refuses 
   assertEquals(await one(g, arrivalEid('m1', 'acme')), undefined)
   assertEquals((await one(g, arrivalEid('m2', 'acme')))?.doc?.body, 'Tuesday')
 })
+
+test('a failed callback reports its route without recording the door key', async () => {
+  let { handler } = await import('@yaks/api/routes')
+  let g = rig(stash()), reports: Bundle[] = []
+  let secret = 'private-callback-key'
+  let h = handler({
+    graph: g,
+    who: () => null,
+    routes: routes('acme', called)({
+      graph: {
+        ...g,
+        apply: () => Promise.reject(new Error('disk failed')),
+      },
+    }, { door: { key: secret } }),
+    report: (_error, context) => {
+      reports.push(context.request)
+    },
+  })
+  let reply = await h(
+    new Request(
+      `https://box.example/acme/${secret}?id=failed&from=${
+        encodeURIComponent(ANA)
+      }&message=Tuesday`,
+    ),
+  )
+  assertEquals(reply.status, 500)
+  assertEquals(reports.length, 1)
+  assertEquals(
+    (reports[0].request as { url: string }).url,
+    'https://box.example/acme/*',
+  )
+  assertEquals(JSON.stringify(reports).includes(secret), false)
+})
