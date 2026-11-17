@@ -1,3 +1,4 @@
+import { platform as directoryPlatform } from './directory-rows-probe.ts'
 // The platform admin's directory (admin.ts): what each row uses, counted over
 // the whole directory, and the door that draws it for the admin alone.
 import { ownedBy } from './directory-fixture.ts'
@@ -235,7 +236,15 @@ test("an app's row says whether it is published and in the gallery", () => {
   assertEquals(marks({ gallery: listed }), ['not published'])
 })
 
-let env = { SESSION_SECRET: SECRET } as Env
+let auth = directoryPlatform(SECRET)
+await auth.dir.stamp({
+  entities: ['ann', 'root'].map((eid) => ({
+    entity: { eid },
+    person: {},
+  })),
+})
+let env = auth.env
+
 let dir = {
   space: (slug: string) => Promise.resolve(slug == META.space ? ROOT : null),
   role: (_: Space, person: string) =>

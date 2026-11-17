@@ -114,6 +114,7 @@ import {
   browsing,
   nobody,
   sessionPerson,
+  sessionReading,
   titling,
   vouched,
   type Who,
@@ -799,14 +800,17 @@ export let editing = async (
 ) => {
   let person = await sessionPerson(req, env.SESSION_SECRET)
   if (!person) return false
-  let { space, app, role } = await directory(
-    bound(env.DIRECTORY, dirPart.fetch, env),
-    { copy: copyOf(env), time: env.CLOCK },
-  ).page(at.space.slug, at.app.slug, person)
+  let [{ space, app, role }] = await Promise.all([
+    directory(
+      bound(env.DIRECTORY, dirPart.fetch, env),
+      { copy: copyOf(env), time: env.CLOCK },
+    ).page(at.space.slug, at.app.slug, person),
+    sessionReading(req, env),
+  ])
   if (!space || !app) return false
   let who = await whoIs(
     req,
-    env.SESSION_SECRET,
+    env,
     () => Promise.resolve(role ?? null),
     space.eid,
   )
@@ -1838,7 +1842,7 @@ export let index = async (
   apps: App[],
   seatOf: (person: string) => Promise<Role | null>,
 ): Promise<{ page: Response; alone: Alone | null }> => {
-  let who = await whoIs(req, env.SESSION_SECRET, seatOf, space.eid)
+  let who = await whoIs(req, env, seatOf, space.eid)
   let { all, mine } = shelf(apps, space, who)
   let owner = who.role == 'owner'
   let alone = aloneOf(who)
@@ -1890,7 +1894,7 @@ export let closed = async (
 ): Promise<Response> => {
   let who = await whoIs(
     req,
-    env.SESSION_SECRET,
+    env,
     (p) => dir.role(space, p),
     space.eid,
   )
@@ -2104,13 +2108,14 @@ let served = async (
     page: async (space, app) => {
       let { person } = await identity()
       let read = c.time('route', () => dir.page(space, app, person))
+      let credential = sessionReading(req, env)
       // The name `/who` tells a person beside their standing (api `/who`, and
       // `/me`, its shipped name), asked with the route so a page's first
       // question waits on that one trip.
       if (person && !edge && /\/api\/(?:who|me)$/.test(url.pathname)) {
         dir.nameAt(person).catch(() => {})
       }
-      return await read
+      return (await Promise.all([read, credential]))[0]
     },
     formerly: (space) => c.time('moved', () => dir.formerly(space)),
     former: (space, app) => dir.former(space, app),
@@ -2150,7 +2155,7 @@ let served = async (
     }
     let who = await c.time(
       'who',
-      () => whoIs(req, env.SESSION_SECRET, seatOf, space.eid),
+      () => whoIs(req, env, seatOf, space.eid),
     )
     if (!who.person) {
       return json(401, 'not_a_writer', NOBODY, signInAt(url.href, env))
@@ -2168,7 +2173,7 @@ let served = async (
   if (step.to == 'binned') {
     let who = await c.time(
       'who',
-      () => whoIs(req, env.SESSION_SECRET, seatOf, space.eid),
+      () => whoIs(req, env, seatOf, space.eid),
     )
     return who.role == 'owner'
       ? binned({
@@ -2278,7 +2283,7 @@ let served = async (
         req,
         walls
           ? { person: null, role: null }
-          : await whoIs(req, env.SESSION_SECRET, seatOf, space!.eid),
+          : await whoIs(req, env, seatOf, space!.eid),
       ))
     if (own && own.status != 404) return own
     await own?.body?.cancel()
@@ -2301,7 +2306,7 @@ let served = async (
   let store = storeName(space, app)
   if (
     paper && (!env.SESSION_SECRET ||
-      !await paged(paper.token, env.SESSION_SECRET, store))
+      !await paged(paper.token, env, store))
   ) return json(401, 'not_a_reader', 'This page token does not open this app')
   // A stranger's visit is served from the sample or from a store of their
   // own, so the worker it ran comes back holding grants for that store and
@@ -2383,7 +2388,7 @@ let served = async (
   // A sandboxed app already accepts its one-app page bearer. Keep that
   // credential on its existing path rather than treating it as a CLI login.
   let pageBearer = walls && env.SESSION_SECRET && bearerOf(req)
-    ? await paged(bearerOf(req)!, env.SESSION_SECRET, store)
+    ? await paged(bearerOf(req)!, env, store)
     : null
   if (
     !itself && !pageBearer && path.startsWith('/api/') &&
@@ -2411,7 +2416,7 @@ let served = async (
       () =>
         walls
           ? presented(req, env, seatOf, space!, store, paper?.token, path)
-          : whoIs(req, env.SESSION_SECRET, seatOf, space!.eid),
+          : whoIs(req, env, seatOf, space!.eid),
     )
   if (path.startsWith('/api/') && !itsApp(who, app)) {
     // The route read the cookie's person's claims; any other caller asks.
@@ -2431,6 +2436,7 @@ let served = async (
       who.person,
       lasting(who.until),
       who.via,
+      who.session,
     )}/`
     : bare
   // Rung 1½: the home app's router, where it named this path. Ahead of the app
@@ -2812,12 +2818,10 @@ let presented = async (
   if (!sent) {
     return path.startsWith('/api/')
       ? nobody
-      : whoIs(req, env.SESSION_SECRET, roleOf, space.eid)
+      : whoIs(req, env, roleOf, space.eid)
   }
-  let p = env.SESSION_SECRET
-    ? await paged(sent, env.SESSION_SECRET, store)
-    : null
-  if (!p) return whoIs(req, env.SESSION_SECRET, roleOf, space.eid)
+  let p = env.SESSION_SECRET ? await paged(sent, env, store) : null
+  if (!p) return whoIs(req, env, roleOf, space.eid)
   if (!p.person) {
     return {
       ...nobody,
@@ -2829,6 +2833,7 @@ let presented = async (
     person: p.person,
     role: await roleOf(p.person),
     until: p.exp,
+    ...(p.session ? { session: p.session } : {}),
     ...(p.via ? { via: p.via } : {}),
   }
 }

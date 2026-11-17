@@ -134,7 +134,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     dropped({ space: space!.slug, why, status }, env)
   let who = await whoIs(
     req,
-    env.SESSION_SECRET,
+    env,
     (p) => dir.role(space!, p),
     space!.eid,
   )

@@ -68,7 +68,7 @@ export let serviceConsent = async (req: Request, env: Env) => {
   if (req.method != 'GET' && req.method != 'POST') {
     return new Response(null, { status: 405, headers: { allow: 'GET, POST' } })
   }
-  let who = await whoIs(req, env.SESSION_SECRET, () => Promise.resolve(null))
+  let who = await whoIs(req, env, () => Promise.resolve(null))
   if (!who.person) return Response.redirect(signInAt(req.url, env), 303)
   try {
     let form = req.method == 'POST' ? await req.formData() : null

@@ -31,6 +31,7 @@ export let directoryConfig: Config = {
         ...marks,
         'comment',
         'completed',
+        'cancelled',
         'unchecked',
       ],
     },

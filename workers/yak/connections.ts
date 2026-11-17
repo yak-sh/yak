@@ -1395,7 +1395,7 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
   let dir = dirOf(env)
   let at = held ? await dir.space(held.space) : null
   let who = at &&
-    await whoIs(req, env.SESSION_SECRET, (p) => dir.role(at, p), at.eid)
+    await whoIs(req, env, (p) => dir.role(at, p), at.eid)
   let [b] = held && who?.person == held.person
     ? await readOf(env)(line`.entity.eid=${held.connection}&.${CONNECTION}`)
     : []

@@ -841,18 +841,18 @@ The complete list of reserved names:
     _change _pace _privacy _tx about access account_alert account_usage
     acts_for admin_action alias answer app app_draft archetype archived
     artifact ask attachment attempt attribute_writes belief binding blob
-    bounced browser budget build build_of builder builder_answer builder_dep
-    builder_edit builder_model_answer builder_open builder_ring built call
-    call_ready call_woken called calls cancel cancelled checkout chosen
-    cites code_review comment commit comp compat completed connection
-    contains content conversation cost counted created credit credit_block
-    delegates delete_upload deliver delivered demo deploy desk_sidebar
-    dispatch doc document_extract document_page document_text draft
-    draft_rows edge effect email entity entry error event exception
-    execution failed favorite featured fee feed feedback file filed finding
-    fired form form_guest form_mail form_phone form_post former gallery
-    gitobj grant grants_listed heard heard_turn hearing held home hook
-    hostname image inference install installed integration
+    bounced browser browser_session budget build build_of builder
+    builder_answer builder_dep builder_edit builder_model_answer
+    builder_open builder_ring built call call_ready call_woken called calls
+    cancel cancelled checkout chosen cites code_review comment commit comp
+    compat completed connection contains content conversation cost counted
+    created credit credit_block delegates delete_upload deliver delivered
+    demo deploy desk_sidebar dispatch doc document_extract document_page
+    document_text draft draft_rows edge effect email entity entry error
+    event exception execution failed favorite featured fee feed feedback
+    file filed finding fired form form_guest form_mail form_phone form_post
+    former gallery gitobj grant grants_listed heard heard_turn hearing held
+    home hook hostname image inference install installed integration
     integration_install interrupted invite inviting key last_deploy lease
     lent lines mail mail_answered mail_dismissed mail_domain mail_post
     mail_task mcp_list mcp_server member memory mentions meter miss model
@@ -870,13 +870,14 @@ The complete list of reserved names:
     retired revision rtc rtc_lapse sale_access sale_artifact satisfies
     screen screenshot secret seeded seller sender sending serves
     service_checkout service_quote session session_input session_result
-    session_run sfu shared signed_in signin skill sms_consent space
-    space_logo speech_hear spend staged started starter stop stream_item
-    submitted subscription supersedes supervises support sweep switched task
-    text text_post theme tool tool_refusal topic trashed tree_entry trend
-    tunnel tunnel_tell typed unchecked updated upstream usage uses using
-    verified visit visitor_build visitor_calls visitor_share volume
-    waitlisted wake wake_run wants watch web worked worktree written
+    session_run sessions_ended sfu shared signed_in signin skill sms_consent
+    space space_logo speech_hear spend staged started starter stop
+    stream_item submitted subscription supersedes supervises support sweep
+    switched task text text_post theme tool tool_refusal topic trashed
+    tree_entry trend tunnel tunnel_tell typed unchecked updated upstream
+    usage uses using verified visit visitor_build visitor_calls
+    visitor_share volume waitlisted wake wake_run wants watch web worked
+    worktree written
 
 A reserved name listed under Platform components above is in your store already,
 and the refusal names its properties: when it means what you meant, such as

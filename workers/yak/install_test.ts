@@ -1,16 +1,13 @@
+import { platform } from './directory-rows-probe.ts'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Directory, Seat } from './directory.ts'
-import type { Env } from './env.ts'
 import { answer, at } from './install.ts'
 import { sign } from './lib/token.ts'
 
-// A directory where this browser visited nothing (@yaks/platform/visits
-// `visitOf`).
-let env = {
-  SESSION_SECRET: 'install-test',
-  META: { query: () => Promise.resolve([]) },
-} as unknown as Env
+let auth = platform('install-test')
+await auth.dir.stamp({ entities: [{ entity: { eid: 'person' }, person: {} }] })
+let env = auth.env
 // A session as the sign-in mints it, naming the browser it was signed in
 // from (session.ts `minted`).
 let cookie = `yak_session=${await sign({

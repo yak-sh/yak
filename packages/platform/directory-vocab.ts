@@ -6,6 +6,27 @@ export let directoryDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
   title: 'directory',
   $defs: {
+    sessions_ended: {
+      description:
+        'All browser credentials issued before session rows were ended.',
+      component: true,
+      type: 'object',
+      journal: false,
+      properties: { at: owned(time) },
+    },
+    browser_session: {
+      description: 'One signed-in browser, ended by cancelling its row.',
+      component: true,
+      type: 'object',
+      journal: false,
+      expire: '.browser_session.until<=now',
+      properties: {
+        person: owned(ref('cascade')),
+        via: owned(ref('keep')),
+        until: owned(time),
+        agent: owned(text),
+      },
+    },
     // Storage survives config edits and renames. Only the kernel may record
     // account resource ids, so an app cannot claim another tenant's data.
     binding: {

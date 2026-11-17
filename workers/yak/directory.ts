@@ -96,6 +96,7 @@ import { principals, type Stamp, stampOf, writers } from './stamps.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
 import { type Id, idOf } from '@yaks/platform/listing'
 import { sharing } from './lib/shared.ts'
+import type { BrowserSession } from './browser-sessions.ts'
 
 // The slugs no space or app may take, because at `<slug>.yaks.app` and at
 // `<slug>@yaks.app` (post.ts `mailFrom`) they would read as the platform
@@ -851,6 +852,9 @@ export type Row = MeteredRow & {
   }
   oauth_grant?: Omit<GrantRow, 'person'> & { person: Id }
   grants_listed?: { at: string }
+  browser_session?: { person: Id; via: Id; until: string; agent: string }
+  sessions_ended?: { at: string }
+  cancelled?: Record<string, unknown>
   signed_in?: { at?: string | null; via?: string | null }
   used?: { at?: string | null }
   changed?: { at?: string | null }
@@ -2439,6 +2443,33 @@ export let directoryRows = (rows: {
       (await query(asked as Line)).map(({ policy: _, ...row }) =>
         row as Bundle
       ),
+    browserSession: async (eid: string, person: string) => {
+      let rows = await query(line`.entity.eid=${[eid, person]}`)
+      let row = rows.find((r) => r.entity.eid == eid)
+      let owner = rows.find((r) => r.entity.eid == person)
+      return {
+        ended: !!owner?.sessions_ended,
+        cancelled: !!row?.cancelled,
+        session: row?.browser_session
+          ? {
+            ...row.browser_session,
+            eid,
+            person: idOf(row.browser_session.person),
+            via: idOf(row.browser_session.via),
+          }
+          : null,
+      }
+    },
+    browserSessions: async (person: string): Promise<BrowserSession[]> =>
+      (await query(
+        line`.browser_session.person=${person}&!cancelled&.browser_session.until>now`,
+      ))
+        .map((row) => ({
+          ...row.browser_session!,
+          eid: row.entity.eid,
+          person,
+          via: idOf(row.browser_session!.via),
+        })),
     stamp: (mutation: { entities: Bundle[] }, headers = {}) =>
       write(mutation, { ...headers, 'x-yak-kernel': '1' }),
     space: async (slug: string) => await decided.space(slug),

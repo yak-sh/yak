@@ -141,7 +141,7 @@ let ownedBy = async (env: Env, space: Space): Promise<string | undefined> => {
 let viewing = async (env: Env, space: Space, request?: Request) => {
   if (!request) return undefined
   try {
-    return (await sessionAt(request, env.SESSION_SECRET, space.eid))?.person
+    return (await sessionAt(request, env, space.eid))?.person
   } catch (why) {
     caught(why, { request: 'read who saw a break' })
     return undefined

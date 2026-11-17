@@ -5,16 +5,22 @@
 // such request (index.ts), since the credential is in the URL and never one
 // the browser attaches.
 //
-// The token names no session, because there is no session store: it lives
-// as long as the cookie that loaded the page, and sign-out cannot end it
-// early. The role it carries is never a claim — it is read live, on every
-// call, like the cookie's.
+// It shares the browser session's revocation and expiry. The role is read
+// live on every call, like the cookie's.
 import { opened, seal } from './lib/token.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
 import { sha256 } from '@yaks/graph/sha256'
 import { SESSION } from './session.ts'
+import type { Env } from './env.ts'
+import { held } from './browser-sessions.ts'
 
-type Page = { person: string | null; store: string; exp: number; via?: string }
+type Page = {
+  person: string | null
+  store: string
+  exp: number
+  via?: string
+  session?: string
+}
 
 let DAY = 24 * 60 * 60
 
@@ -31,6 +37,7 @@ export let paging = (
   person: string | null,
   exp: number,
   via?: string,
+  session?: string,
 ) =>
   seal(
     'page',
@@ -39,6 +46,7 @@ export let paging = (
       store,
       exp,
       ...(via ? { via } : {}),
+      ...(session ? { session } : {}),
     } satisfies Page,
     secret,
   )
@@ -47,16 +55,26 @@ export let paging = (
  * sealed for this store. Another app's token fails here, whoever holds it. */
 export let paged = async (
   sealed: string,
-  secret: string,
+  env: Env,
   store: string,
   now = Date.now(),
 ) => {
-  let p = await opened<Page>('page', sealed, secret)
+  if (!env.SESSION_SECRET) return null
+  let p = await opened<Page>('page', sealed, env.SESSION_SECRET)
   if (!p || p.store != store || typeof p.exp != 'number') return null
   if (p.exp * 1000 <= now) return null
+  if (
+    p.person && !await held(
+      env,
+      p.person,
+      p.via ?? `page:${sha256(sealed)}`,
+      p.session,
+    )
+  ) return null
   return {
     person: typeof p.person == 'string' ? p.person : null,
     exp: p.exp,
+    ...(p.session ? { session: p.session } : {}),
     via: instrumentEid(
       typeof p.via == 'string' && p.via ? p.via : `page:${sha256(sealed)}`,
     ),

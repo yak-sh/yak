@@ -1,3 +1,4 @@
+import { platform as directoryPlatform } from './directory-rows-probe.ts'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import {
@@ -11,14 +12,21 @@ import {
   staff,
 } from './admin.ts'
 import { type Directory, META, type Space } from './directory.ts'
-import type { Env } from './env.ts'
 import { COOKIE, sign, verify } from './lib/token.ts'
 import { drawn } from './render/mod.ts'
 import { lost } from './pages.ts'
 import { markup } from './html.ts'
 
 let root = { eid: 'meta', slug: META.space } as Space
-let env = { SESSION_SECRET: 'secret' } as Env
+let auth = directoryPlatform('secret')
+await auth.dir.stamp({
+  entities: ['ann', 'root'].map((eid) => ({
+    entity: { eid },
+    person: {},
+  })),
+})
+let env = auth.env
+
 let cookies = Object.fromEntries(
   await Promise.all(
     ['ann', 'root'].map(async (person) =>

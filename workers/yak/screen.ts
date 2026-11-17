@@ -334,7 +334,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     return page
   }
 
-  let person = (await sessionAt(req, secret))?.person ?? null
+  let person = (await sessionAt(req, env))?.person ?? null
   let url = new URL(req.url)
   if (path == `${PATH}/pair` && req.method == 'GET') {
     if (!person) {

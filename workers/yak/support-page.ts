@@ -170,7 +170,7 @@ export let answer = async (
   if (!eid || eid.includes('/') || !['GET', 'POST'].includes(req.method)) {
     return lost(env)
   }
-  let person = (await sessionAt(req, env.SESSION_SECRET))?.person
+  let person = (await sessionAt(req, env))?.person
   if (!person) {
     return new Response(null, {
       status: 303,

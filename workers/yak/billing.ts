@@ -211,7 +211,7 @@ let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 // D-32751). It also keeps the oauth provider off this module's import graph,
 // which is what lets its seams be tested without a runtime.
 let buyer = async (env: Env, req: Request) => {
-  return (await sessionAt(req, env.SESSION_SECRET))?.person ?? null
+  return (await sessionAt(req, env))?.person ?? null
 }
 
 // The payer this space pays as, minted the first time it needs one and kept

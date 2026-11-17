@@ -35,6 +35,8 @@ import { hostOf } from '@yaks/platform/routes'
 import { agentEid, agentRow, instrumentEid } from '@yaks/platform/instrument'
 import type { Bundle } from '@yaks/graph'
 import { sha256 } from '@yaks/graph/sha256'
+import type { Claims } from './lib/token.ts'
+import * as browsers from './browser-sessions.ts'
 
 import type { ServiceAuthority } from '@yaks/connections'
 
@@ -69,6 +71,8 @@ export type Who = {
    * cookie's `exp`, or a page token's. A sandboxed app's page token is minted
    * to die with it (page-token.ts). */
   until?: number
+  /** The revocable browser credential behind a page token. */
+  session?: string
 }
 
 /**
@@ -102,16 +106,30 @@ export type Caller = {
 
 export let nobody: Who = { person: null, role: null }
 
+/** The cookie's person and live credential, before its space is checked. */
+export let sessionReading = async (
+  req: Request,
+  env: Env,
+) => {
+  let secret = env.SESSION_SECRET
+  let token = cookieValue(req.headers.get('cookie'))
+  if (!token || !secret) return null
+  let claims = await verify(token, secret)
+  if (!claims) return null
+  let via = claims.via ?? `session:${sha256(token)}`
+  return await browsers.held(env, claims.person, via, claims.session)
+    ? { ...claims, via }
+    : null
+}
+
 /** A browser session within its reach. Account doors omit the space; app
  * doors name its eid. Full-account sessions keep every existing seat. */
 export let sessionAt = async (
   req: Request,
-  secret: string | undefined,
+  env: Env,
   space: string | null = null,
 ) => {
-  let token = cookieValue(req.headers.get('cookie'))
-  if (!token || !secret) return null
-  let claims = await verify(token, secret)
+  let claims = await sessionReading(req, env)
   return claims && (!claims.space || claims.space == space) ? claims : null
 }
 
@@ -129,13 +147,20 @@ export let sessionPerson = async (
 
 export let whoIs = async (
   req: Request,
-  secret: string | undefined,
+  env: Env,
   roleOf: (person: string) => Promise<Role | null>,
   space: string | null = null,
 ): Promise<Who> => {
+  let secret = env.SESSION_SECRET
   let token = cookieValue(req.headers.get('cookie'))
   if (!token || !secret) return nobody
-  let claims = await sessionAt(req, secret, space)
+  let offered = await verify(token, secret)
+  let [claims, role] = await Promise.all([
+    sessionAt(req, env, space),
+    offered && (!offered.space || offered.space == space)
+      ? roleOf(offered.person)
+      : null,
+  ])
   if (!claims) {
     let browser = await browserOf(req, secret)
     return browser
@@ -144,9 +169,10 @@ export let whoIs = async (
   }
   return {
     person: claims.person,
-    role: await roleOf(claims.person),
+    role,
     until: claims.exp,
     via: instrumentEid(claims.via ?? `session:${sha256(token)}`),
+    session: browsers.sessionId(claims),
   }
 }
 
@@ -266,7 +292,7 @@ export let browserOf = async (
 
 // What this platform needs to keep a session: the secret it signs with, and
 // the apex the cookie is shared across.
-type Keeper = Host & Pick<Env, 'SESSION_SECRET'>
+type Keeper = Env
 
 // The cookie's Domain: the platform's own apex, so one sign-in serves every
 // space's hostname. On a dev host there is no domain to share — an IP takes
@@ -280,28 +306,55 @@ export let domainOf = (req: Request, env: Host) => {
 // that carries it — on the apex, or host-only on a customer's own domain.
 // Signing in, the custom-domain handoff and the renewal below all mint the
 // same thing, so a session's life is said in one place.
-export let minted = (
+let renewed = async (
   req: Request,
-  env: Host,
+  env: Env,
+  secret: string,
+  claims: Claims & { via: string; session: string },
+) => {
+  await browsers.keep(env, req, claims)
+  return sign(claims, secret)
+}
+
+export let minted = async (
+  req: Request,
+  env: Env,
   secret: string,
   person: string,
   space: string | null = null,
-) =>
-  browserOf(req, secret).then((browser) =>
-    sign(
-      {
-        person,
-        space,
-        exp: Math.floor(Date.now() / 1000) + SESSION,
-        via: browser?.source ?? browser?.via ?? crypto.randomUUID(),
-      },
-      secret,
-    )
-  ).then((token) => cookie(token, domainOf(req, env), SESSION))
+) => {
+  let [browser, current] = await Promise.all([
+    browserOf(req, secret),
+    sessionAt(req, env, space),
+  ])
+  let token = await renewed(req, env, secret, {
+    person,
+    space,
+    exp: Math.floor(Date.now() / 1000) + SESSION,
+    via: browser?.source ?? browser?.via ?? crypto.randomUUID(),
+    session: current?.person == person
+      ? browsers.sessionId(current)
+      : crypto.randomUUID(),
+  })
+  return cookie(token, domainOf(req, env), SESSION)
+}
 
 /** Explicit sign-out starts fresh guest work. The preceding instrument keeps
  * its directory claim and unfinished attribution receipts for that person. */
-export let signedOut = async (req: Request, env: Host, secret: string) => {
+export let signedOut = async (req: Request, env: Env, secret: string) => {
+  let token = cookieValue(req.headers.get('cookie'))
+  let claims = token && await verify(token, secret)
+  if (claims) {
+    let via = claims.via ?? `session:${sha256(token!)}`
+    await browsers.end(env, {
+      eid: browsers.sessionId({ ...claims, via }),
+      person: claims.person,
+      via: instrumentEid(via),
+      until: new Date((Math.floor(Date.now() / 1000) + SESSION) * 1000)
+        .toISOString(),
+      agent: req.headers.get('user-agent') ?? 'Browser',
+    })
+  }
   let via = crypto.randomUUID()
   let exp = Math.floor(Date.now() / 1000) + SESSION
   return cookie(
@@ -339,23 +392,28 @@ export let browsing = async (
 ): Promise<Response> => {
   let secret = env.SESSION_SECRET
   if (!secret) return serve(req)
-  let claims = await verify(
+  let offered = await verify(
     cookieValue(req.headers.get('cookie')) ?? '',
     secret,
   )
   let browser = await browserOf(req, secret)
   if (
-    browser && (!claims || claims.via && !claims.legacy) &&
+    browser && (!offered || offered.via && !offered.legacy) &&
     browser.exp - Date.now() / 1000 > SESSION / 2
   ) return serve(req)
+  let claims = offered ? await sessionAt(req, env, offered.space) : null
+  if (offered && !claims) browser = null
   let via = browser?.source ?? browser?.via ?? crypto.randomUUID()
   if (!browser) born.set(req, instrumentEid(via))
   let exp = Math.floor(Date.now() / 1000) + SESSION
   let token = claims
-    ? await sign(
-      { person: claims.person, space: claims.space, via, exp },
-      secret,
-    )
+    ? await renewed(req, env, secret, {
+      person: claims.person,
+      space: claims.space,
+      session: browsers.sessionId(claims),
+      via,
+      exp,
+    })
     : await seal('browser', { via, exp } satisfies Browser, secret)
   let headers = new Headers(req.headers)
   let kept = (headers.get('cookie') ?? '').split(';').map((c) => c.trim())
@@ -379,9 +437,7 @@ export let browsing = async (
 // ninety days. Activity keeps a session for as long as it goes on; only
 // ninety days of silence ends one.
 //
-// The old value stays good until its own expiry. There is no session store to
-// revoke it in, and a browser that has taken the new cookie will not send the
-// old one again.
+// Copies share a directory row, so ending the session ends every copy.
 //
 // It happens on the way out of the router (index.ts), where every request
 // passes whatever door answered it, because every door has to slide and no
@@ -395,17 +451,29 @@ export let slid = async (
   if (res.status == 101 || !env.SESSION_SECRET || sets(res)) return res
   let token = cookieValue(req.headers.get('cookie'))
   if (!token) return res
-  let claims = await verify(token, env.SESSION_SECRET)
+  let offered = await verify(token, env.SESSION_SECRET)
   // A cookie sealed before 2c05d0f6 is re-minted on sight, whatever its age,
   // so the old ones leave as their people come back (lib/token_legacy.ts).
   if (
-    !claims ||
-    !claims.legacy && claims.exp - Date.now() / 1000 > SESSION / 2
+    !offered ||
+    !offered.legacy && offered.exp - Date.now() / 1000 > SESSION / 2
   ) return res
+  let claims = await sessionAt(req, env, offered.space)
+  if (!claims) return res
   let headers = new Headers(res.headers)
   headers.append(
     'set-cookie',
-    await minted(req, env, env.SESSION_SECRET, claims.person, claims.space),
+    cookie(
+      await renewed(req, env, env.SESSION_SECRET, {
+        person: claims.person,
+        space: claims.space,
+        via: claims.via,
+        session: browsers.sessionId(claims),
+        exp: Math.floor(Date.now() / 1000) + SESSION,
+      }),
+      domainOf(req, env),
+      SESSION,
+    ),
   )
   return new Response(res.body, {
     status: res.status,

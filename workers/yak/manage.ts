@@ -68,6 +68,7 @@ import {
 } from '@yaks/platform/routes'
 import { SLUG } from '@yaks/platform/names'
 import { vouched, type Who, whoIs } from './session.ts'
+import { browsers, end as endSession, endAll } from './browser-sessions.ts'
 import { asking, bearerIn } from './asking.ts'
 import { upgrading } from './protocol.ts'
 import { nameOf } from './names.ts'
@@ -176,7 +177,7 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     ? { person: caller.person, until: caller.until }
     : socket
     ? { person: null, until: undefined }
-    : await whoIs(req, env.SESSION_SECRET, () => Promise.resolve(null))
+    : await whoIs(req, env, () => Promise.resolve(null))
   if (!person && socket) return json(401, 'signed_out', 'Sign in again.')
   if (!person) return redirect(signInAt(sentFrom(req, env).href, env), 303)
   if (url.searchParams.has('settings-draft')) {
@@ -758,7 +759,7 @@ let mine = async (
     return nothingHere(env)
   }
   if (req.method != 'POST') foresee(dir, person, view)
-  let [picks, name, email, agents, theirs, referral, own, collapsed] =
+  let [picks, name, email, agents, theirs, referral, own, collapsed, sessions] =
     await Promise.all([
       pickable(dir, person),
       dir.nameAt(person),
@@ -768,6 +769,7 @@ let mine = async (
       view == 'invite' ? invitation(env, dir, person) : undefined,
       dir.own(person),
       dir.collapsed(person),
+      view == 'profile' ? browsers(env, person) : [],
     ])
   let chosen = q.get('space') ?? inOf(req)
   let space = picks.find((s) => s.slug == chosen)?.slug ?? own.slug
@@ -779,6 +781,7 @@ let mine = async (
     name: name ?? '',
     email: email ?? '',
     agents,
+    sessions,
     shared: theirs,
     referral,
     spaces: picks.some((s) => s.slug == own.slug) ? picks : [
@@ -826,6 +829,18 @@ let account = async (
     )
   }
   if (view != 'profile') return nothingHere(env)
+  if (form.has('session')) {
+    let id = String(form.get('session'))
+    if (id == 'all') {
+      await endAll(env, who.person)
+      return redirect(hostUrl(env, '/login'), 303)
+    }
+    let all = await browsers(env, who.person)
+    for (let session of all.filter((s) => s.eid == id)) {
+      await endSession(env, session)
+    }
+    return redirect(hostUrl(env, `${managePath('profile')}?saved=1`), 303)
+  }
   // The side's fold (desk-pages.ts `fold`), pressed on any page: kept on the
   // person's row, then that page again, or for the script that sent it,
   // nothing more.

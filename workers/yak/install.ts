@@ -104,7 +104,7 @@ export let answer = async (req: Request, env: Env, dir: Directory) => {
       404,
     )
   }
-  let who = await whoIs(req, env.SESSION_SECRET, () => Promise.resolve(null))
+  let who = await whoIs(req, env, () => Promise.resolve(null))
   let address = who.person ? await dir.emailAt(who.person) : null
   if (req.method == 'GET') step(env, 'install', req, { who: address })
   if (!who.person) {

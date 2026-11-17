@@ -24,15 +24,41 @@ import {
   domainOf,
   minted,
   SESSION,
+  sessionAt,
+  signedOut,
   slid,
   vouched,
   whoIs,
 } from './session.ts'
 import { paged, paging } from './page-token.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { platformVocab } from './vocab.ts'
+import { over } from './directory.ts'
+import { EPOCH } from './directory-copy.ts'
+import { bindings } from './binding-probe.ts'
+import { whole } from '@yaks/query'
+import { browsers, endAll } from './browser-sessions.ts'
 
 let SECRET = 'a-probe-secret'
-let ENV = { SESSION_SECRET: SECRET, APEX: 'yaks.app' }
+let vocab = platformVocab()
+let g = graph({ storage: ram(vocab), vocab })
+let door = over({
+  query: async (q) => await g.read(whole(q)),
+  apply: async (rows) => await g.apply(rows, { trusted: true }),
+})
+let ENV = {
+  ...bindings(SECRET).env,
+  APEX: 'yaks.app',
+  DIRECTORY: {
+    fetch: async (req: Request) => {
+      let res = await door(req)
+      res.headers.set(EPOCH, '0')
+      return res
+    },
+  },
+}
 let DAY = 24 * 60 * 60
 
 test('session cookie domains follow the configured hostname trust', () => {
@@ -54,7 +80,10 @@ test('session cookie domains follow the configured hostname trust', () => {
 })
 
 // The cookie a browser sends `days` into a ninety-day session.
-let aged = async (days: number, person = 'p-1') =>
+let aged = async (
+  days: number,
+  person = '00000000-0000-4000-8000-000000000011',
+) =>
   `${COOKIE}=${await sign(
     {
       person,
@@ -81,7 +110,7 @@ test('a session past half its life is renewed; one still young is not', async ()
   assertStringIncludes(set, 'Domain=yaks.app')
   assert(value(set) != value(day46))
   let claims = await verify(value(set), SECRET)
-  assertEquals(claims?.person, 'p-1')
+  assertEquals(claims?.person, '00000000-0000-4000-8000-000000000011')
   assert((claims?.exp ?? 0) - Date.now() / 1000 > SESSION - DAY)
   assertEquals(await renewed.text(), 'ok')
 
@@ -98,12 +127,16 @@ test(
   'a cookie sealed before 2c05d0f6 is re-minted on sight, however young',
   async () => {
     let old = await sealedOld(
-      { person: 'p-1', space: null, exp: last },
+      {
+        person: '00000000-0000-4000-8000-000000000011',
+        space: null,
+        exp: last,
+      },
       SECRET,
     )
     let r = await slid(asked(`${COOKIE}=${old}`), ENV, new Response('ok'))
     let fresh = await verify(value(r.headers.get('set-cookie') ?? ''), SECRET)
-    assertEquals(fresh?.person, 'p-1')
+    assertEquals(fresh?.person, '00000000-0000-4000-8000-000000000011')
     assertEquals(fresh?.legacy, undefined)
   },
   { skip: Date.now() >= last * 1000 },
@@ -137,17 +170,22 @@ test('a token minted for anything else is no session, and renews into none', asy
   // Each names a person and an expiry, and neither is a cookie.
   let exp = Math.floor(Date.now() / 1000) + DAY
   let visit = await granting(SECRET, 'eve/trap', {
-    person: 'p-1',
+    person: '00000000-0000-4000-8000-000000000011',
     role: 'owner',
   })
   let cli = (await tokenOf(
-    { id: 'a1', person: 'p-1', space: null, exp },
+    {
+      id: 'a1',
+      person: '00000000-0000-4000-8000-000000000011',
+      space: null,
+      exp,
+    },
     SECRET,
   )).slice(GRANT.length)
   for (let t of [visit, cli]) {
     let req = asked(`${COOKIE}=${t}`)
     assertEquals(
-      await whoIs(req, SECRET, () => Promise.resolve('owner')),
+      await whoIs(req, ENV, () => Promise.resolve('owner')),
       { person: null, role: null },
     )
     let r = await slid(req, ENV, new Response('ok'))
@@ -157,7 +195,11 @@ test('a token minted for anything else is no session, and renews into none', asy
 
 test('a cookie a stranger wrote, and no cookie at all, renew nothing', async () => {
   let forged = await sign(
-    { person: 'p-1', space: null, exp: Math.floor(Date.now() / 1000) + DAY },
+    {
+      person: '00000000-0000-4000-8000-000000000011',
+      space: null,
+      exp: Math.floor(Date.now() / 1000) + DAY,
+    },
     'another-secret',
   )
   let r = await slid(asked(`${COOKIE}=${forged}`), ENV, new Response('ok'))
@@ -174,7 +216,7 @@ let firstBrowser = await browsing(
   asked('theme=dark'),
   ENV,
   async (req) =>
-    Response.json(await whoIs(req, SECRET, () => Promise.resolve('owner'))),
+    Response.json(await whoIs(req, ENV, () => Promise.resolve('owner'))),
 )
 let browserWho = await firstBrowser.json()
 let browserToken = value(firstBrowser.headers.get('set-cookie')!)
@@ -185,13 +227,21 @@ test('a browser keeps its instrument when it signs in, without claiming a person
   assert(who.via)
   assertEquals(vouched(who), { 'x-yak-via': who.via })
   let browser = asked(`${COOKIE}=${token}`)
-  let set = await minted(browser, ENV, SECRET, 'p-1')
+  let set = await minted(
+    browser,
+    ENV,
+    SECRET,
+    '00000000-0000-4000-8000-000000000011',
+  )
   let claims = await verify(value(set), SECRET)
-  assertEquals([claims?.person, claims?.via], ['p-1', who.via])
+  assertEquals([claims?.person, claims?.via], [
+    '00000000-0000-4000-8000-000000000011',
+    who.via,
+  ])
   assertEquals(
     (await whoIs(
       asked(`${COOKIE}=${value(set)}`),
-      SECRET,
+      ENV,
       () => Promise.resolve('owner'),
     )).role,
     'owner',
@@ -217,7 +267,7 @@ test('a returning anonymous browser keeps its cookie without renewal', async () 
 })
 
 let oldSession = await sign({
-  person: 'p-1',
+  person: '00000000-0000-4000-8000-000000000011',
   space: 'garden',
   exp: Math.floor(Date.now() / 1000) + SESSION,
 }, SECRET)
@@ -226,7 +276,7 @@ let sessionBrowser = await browsing(
   ENV,
   async (req) =>
     Response.json(
-      await whoIs(req, SECRET, () => Promise.resolve('editor'), 'garden'),
+      await whoIs(req, ENV, () => Promise.resolve('editor'), 'garden'),
     ),
 )
 let sessionWho = await sessionBrowser.json()
@@ -236,27 +286,33 @@ let sessionClaims = await verify(
 )
 test('an existing session gains a browser instrument and keeps its person and standing', async () => {
   let old = oldSession, who = sessionWho, claims = sessionClaims
-  assertEquals([who.person, who.role], ['p-1', 'editor'])
+  assertEquals([who.person, who.role], [
+    '00000000-0000-4000-8000-000000000011',
+    'editor',
+  ])
   assert(who.via)
   assertEquals([claims?.person, claims?.space, instrumentEid(claims!.via!)], [
-    'p-1',
+    '00000000-0000-4000-8000-000000000011',
     'garden',
     who.via,
   ])
   let scoped = asked(`${COOKIE}=${old}`)
   for (let space of [null, 'another-space']) {
     assertEquals(
-      (await whoIs(scoped, SECRET, () => {
+      (await whoIs(scoped, ENV, () => {
         throw new Error('a session outside its space must not ask for a seat')
       }, space)).person,
       null,
     )
   }
-  assertEquals((await verify(old, SECRET))?.person, 'p-1')
+  assertEquals(
+    (await verify(old, SECRET))?.person,
+    '00000000-0000-4000-8000-000000000011',
+  )
   let req = asked(`${COOKIE}=${old}`)
   assertEquals((await browserOf(req, SECRET))?.via, who.via)
   assertEquals(
-    (await whoIs(req, SECRET, () => Promise.resolve('editor'), 'garden')).via,
+    (await whoIs(req, ENV, () => Promise.resolve('editor'), 'garden')).via,
     who.via,
   )
 })
@@ -267,12 +323,12 @@ for (let [index, remember] of [true, true, false].entries()) {
     let again = await browsing(req, ENV, async (req) => {
       let caller = await whoIs(
         req,
-        SECRET,
+        ENV,
         () => Promise.resolve('editor'),
         'garden',
       )
       assertEquals([caller.person, caller.role, caller.via], [
-        'p-1',
+        '00000000-0000-4000-8000-000000000011',
         'editor',
         who.via,
       ])
@@ -292,7 +348,13 @@ for (let [index, remember] of [true, true, false].entries()) {
 
 test('signing in keeps an existing session instrument and a different session has its own', async () => {
   let req = asked(`${COOKIE}=${oldSession}`), who = sessionWho
-  let replacement = await minted(req, ENV, SECRET, 'p-1', 'garden')
+  let replacement = await minted(
+    req,
+    ENV,
+    SECRET,
+    '00000000-0000-4000-8000-000000000011',
+    'garden',
+  )
   assertEquals(
     instrumentEid((await verify(value(replacement), SECRET))!.via!),
     who.via,
@@ -300,7 +362,7 @@ test('signing in keeps an existing session instrument and a different session ha
   // A minute apart from the fixture's expiry: one second could equal it when
   // the test starts a second after the fixture, minting the same token.
   let other = await sign({
-    person: 'p-1',
+    person: '00000000-0000-4000-8000-000000000011',
     space: 'garden',
     exp: Math.floor(Date.now() / 1000) + SESSION - 60,
   }, SECRET)
@@ -346,24 +408,35 @@ test('a page and worker visit preserve a browser instrument without turning it i
   assertEquals(await granted(req, SECRET, 'eve/other'), null)
   let exp = Math.floor(Date.now() / 1000) + SESSION
   let page = await paging(SECRET, 'eve/game', null, exp, who.via)
-  assertEquals(await paged(page, SECRET, 'eve/game'), {
+  assertEquals(await paged(page, ENV, 'eve/game'), {
     person: null,
     exp,
     via: who.via,
   })
-  assertEquals(await paged(page, SECRET, 'eve/other'), null)
-  let old = await paging(SECRET, 'eve/game', 'p-1', exp)
-  let oldPage = await paged(old, SECRET, 'eve/game')
-  assertEquals([oldPage?.person, oldPage?.exp], ['p-1', exp])
+  assertEquals(await paged(page, ENV, 'eve/other'), null)
+  let old = await paging(
+    SECRET,
+    'eve/game',
+    '00000000-0000-4000-8000-000000000011',
+    exp,
+  )
+  let oldPage = await paged(old, ENV, 'eve/game')
+  assertEquals([oldPage?.person, oldPage?.exp], [
+    '00000000-0000-4000-8000-000000000011',
+    exp,
+  ])
   assert(oldPage?.via)
-  assertEquals((await paged(old, SECRET, 'eve/game'))?.via, oldPage.via)
+  assertEquals((await paged(old, ENV, 'eve/game'))?.via, oldPage.via)
   let visit = await granting(SECRET, 'eve/game', {
-    person: 'p-1',
+    person: '00000000-0000-4000-8000-000000000011',
     role: 'owner',
   })
   let back = new Request(req, { headers: { [VISIT]: visit } })
   let oldVisit = await granted(back, SECRET, 'eve/game')
-  assertEquals([oldVisit?.person, oldVisit?.role], ['p-1', 'owner'])
+  assertEquals([oldVisit?.person, oldVisit?.role], [
+    '00000000-0000-4000-8000-000000000011',
+    'owner',
+  ])
   assert(oldVisit?.via)
   assertEquals((await granted(back, SECRET, 'eve/game'))?.via, oldVisit.via)
 })
@@ -374,17 +447,98 @@ test('explicit logout starts a fresh guest instrument while sign-in preserves th
     asked(`${COOKIE}=${browserToken}`),
     ENV,
     SECRET,
-    'p-1',
+    '00000000-0000-4000-8000-000000000011',
   )
   let before = await browserOf(asked(`${COOKIE}=${value(signed)}`), SECRET)
   let out = await signedOut(asked(`${COOKIE}=${value(signed)}`), ENV, SECRET)
   let guest = await browserOf(asked(`${COOKIE}=${value(out)}`), SECRET)
   assert(before?.via !== guest?.via)
-  let next = await minted(asked(`${COOKIE}=${value(out)}`), ENV, SECRET, 'p-2')
+  let next = await minted(
+    asked(`${COOKIE}=${value(out)}`),
+    ENV,
+    SECRET,
+    '00000000-0000-4000-8000-000000000012',
+  )
   let claims = await verify(value(next), SECRET)
   assertEquals(claims?.via, guest?.via)
-  assertEquals(claims?.person, 'p-2')
-  // Existing credentials keep working; explicit logout only replaces the
-  // cookie it sends, never a server-wide token or session revocation.
-  assertEquals((await verify(value(signed), SECRET))?.person, 'p-1')
+  assertEquals(claims?.person, '00000000-0000-4000-8000-000000000012')
+  assertEquals(
+    (await whoIs(
+      asked(`${COOKIE}=${value(signed)}`),
+      ENV,
+      () => Promise.resolve('owner'),
+    )).person,
+    null,
+  )
+})
+
+let credential = async (person = crypto.randomUUID()) => {
+  let set = await minted(asked(''), ENV, SECRET, person)
+  let req = asked(`${COOKIE}=${value(set)}`)
+  return { person, req, claims: (await sessionAt(req, ENV))! }
+}
+let copies = await credential()
+let independent = await credential(copies.person)
+let pageCopy = await paging(
+  SECRET,
+  'copies/app',
+  copies.person,
+  copies.claims.exp,
+  copies.claims.via,
+  copies.claims.session,
+)
+test('sign-out ends copied cookies and page tokens while another browser keeps working', async () => {
+  assertEquals(
+    (await paged(pageCopy, ENV, 'copies/app'))?.person,
+    copies.person,
+  )
+  await signedOut(copies.req, ENV, SECRET)
+  assertEquals(await sessionAt(copies.req, ENV), null)
+  assertEquals(await paged(pageCopy, ENV, 'copies/app'), null)
+  assertEquals((await sessionAt(independent.req, ENV))?.person, copies.person)
+  assertEquals((await browsers(ENV, copies.person)).length, 1)
+  let r = await browsing(
+    copies.req,
+    ENV,
+    async (req) =>
+      Response.json(await whoIs(req, ENV, () => Promise.resolve('owner'))),
+  )
+  assertEquals((await r.json()).person, null)
+})
+
+let oldCopy = asked(await aged(46, crypto.randomUUID()))
+let oldFresh = await slid(oldCopy, ENV, new Response('ok'))
+let renewedCopy = asked(
+  `${COOKIE}=${value(oldFresh.headers.get('set-cookie')!)}`,
+)
+test('renewing a rowless cookie preserves it and ending it also ends the old copy', async () => {
+  assert(await sessionAt(oldCopy, ENV))
+  assert(await sessionAt(renewedCopy, ENV))
+  await signedOut(renewedCopy, ENV, SECRET)
+  assertEquals(await sessionAt(oldCopy, ENV), null)
+  assertEquals(await sessionAt(renewedCopy, ENV), null)
+  let res = await slid(oldCopy, ENV, new Response('ok'))
+  assertEquals(res.headers.get('set-cookie'), null)
+})
+
+let allOne = await credential(), allTwo = await credential(allOne.person)
+let rowless = asked(await aged(1, allOne.person))
+test('ending every browser ends each copy, and a missing row never authenticates a new cookie', async () => {
+  assert(await sessionAt(rowless, ENV))
+  await endAll(ENV, allOne.person)
+  assertEquals(await sessionAt(allOne.req, ENV), null)
+  assertEquals(await sessionAt(allTwo.req, ENV), null)
+  assertEquals(await sessionAt(rowless, ENV), null)
+  let missing = await sign(
+    { ...allOne.claims, session: crypto.randomUUID() },
+    SECRET,
+  )
+  assertEquals(await sessionAt(asked(`${COOKIE}=${missing}`), ENV), null)
+})
+
+let erasing = await credential()
+test('account erasure withdraws browser sessions with the other credentials', async () => {
+  let { unheld } = await import('./identity.ts')
+  await unheld(ENV, erasing.person)
+  assertEquals(await sessionAt(erasing.req, ENV), null)
 })

@@ -92,7 +92,7 @@ export let PATH = ADMIN
 // and nothing else, never a bearer token, which is what an agent holds. Null
 // for nobody signed in, '' for somebody who is not the admin.
 export let staff = async (req: Request, env: Env, dir: Directory) => {
-  let person = (await sessionAt(req, env.SESSION_SECRET))?.person
+  let person = (await sessionAt(req, env))?.person
   if (!person) return null
   return await admin({ dir, person }) ? person : ''
 }

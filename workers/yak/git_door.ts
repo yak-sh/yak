@@ -62,7 +62,7 @@ let cloner = async (
   if (!said) {
     return await whoIs(
       req,
-      env.SESSION_SECRET,
+      env,
       (p) => dir.role(space, p),
       space.eid,
     )

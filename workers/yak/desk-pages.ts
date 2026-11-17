@@ -363,44 +363,76 @@ let option = (value: string, label: string, chosen: boolean) =>
 let profile = (at: DeskPage, env: Host) => {
   let mine = (at.spaces ?? []).filter((s) => s.owner)
   let first = mine.find((s) => s.own)?.slug ?? ''
-  return saving(
-    managePath('profile'),
+  return h(
+    Group,
+    null,
+    saving(
+      managePath('profile'),
+      h(
+        Card,
+        null,
+        heading('Profile'),
+        fieldsOf(
+          labeled(
+            'your-name',
+            'Your name',
+            h(Field, {
+              id: 'your-name',
+              name: 'name',
+              maxlength: 60,
+              autocomplete: 'name',
+              placeholder: 'Dana',
+              value: at.name ?? '',
+            }),
+            'Shown to people in every space you’re in.',
+          ),
+          h(
+            Form.Field,
+            null,
+            h(Form.Label, { as: 'p' }, 'Email'),
+            h('p', null, at.email ?? ''),
+          ),
+          mine.length > 1
+            ? labeled(
+              'your-first',
+              'Open first',
+              h(
+                Field,
+                { choose: true, id: 'your-first', name: 'first' },
+                mine.map((s) => option(s.slug, named(s), s.slug == first)),
+              ),
+              `The space ${apex(env)}${MANAGE} opens.`,
+            )
+            : null,
+        ),
+      ),
+    ),
     h(
       Card,
       null,
-      heading('Profile'),
-      fieldsOf(
-        labeled(
-          'your-name',
-          'Your name',
-          h(Field, {
-            id: 'your-name',
-            name: 'name',
-            maxlength: 60,
-            autocomplete: 'name',
-            placeholder: 'Dana',
-            value: at.name ?? '',
-          }),
-          'Shown to people in every space you’re in.',
-        ),
-        h(
-          Form.Field,
-          null,
-          h(Form.Label, { as: 'p' }, 'Email'),
-          h('p', null, at.email ?? ''),
-        ),
-        mine.length > 1
-          ? labeled(
-            'your-first',
-            'Open first',
+      heading('Signed-in browsers'),
+      h(
+        Rows,
+        null,
+        (at.sessions ?? []).map((s) =>
+          h(
+            Rows.Item,
+            { key: s.eid },
+            h(Rows.Main, null, h(Rows.Name, null, s.agent)),
             h(
-              Field,
-              { choose: true, id: 'your-first', name: 'first' },
-              mine.map((s) => option(s.slug, named(s), s.slug == first)),
+              Rows.Form,
+              { method: 'post', action: managePath('profile') },
+              h('input', { type: 'hidden', name: 'session', value: s.eid }),
+              send('Sign out'),
             ),
-            `The space ${apex(env)}${MANAGE} opens.`,
           )
-          : null,
+        ),
+      ),
+      h(
+        Form,
+        { method: 'post', action: managePath('profile') },
+        h('input', { type: 'hidden', name: 'session', value: 'all' }),
+        send('Sign out everywhere'),
       ),
     ),
   )

@@ -13,6 +13,7 @@ import { instrumentEid } from '@yaks/platform/instrument'
 import { bound, type Env } from './env.ts'
 import { says } from '@yaks/platform/routes'
 import type { Caller, Who } from './session.ts'
+import { sessionAt } from './session.ts'
 import { sha256 } from '@yaks/graph/sha256'
 import { carried } from './protocol.ts'
 
@@ -88,8 +89,11 @@ export let asking = async (
     }
   }
   if (!cookied || !env.SESSION_SECRET) return { who: null, tried }
-  let claims = await verify(cookied, env.SESSION_SECRET)
-  let space = claims?.space ? await dirOf(env).at(claims.space) : null
+  let offered = await verify(cookied, env.SESSION_SECRET)
+  let [claims, space] = await Promise.all([
+    offered ? sessionAt(req, env, offered.space) : null,
+    offered?.space ? dirOf(env).at(offered.space) : null,
+  ])
   if (claims?.space && !space) return { who: null, tried }
   return {
     who: claims

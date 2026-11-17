@@ -296,6 +296,7 @@ export let unwrapped = async (env: Env, token: string) => {
 // links. An erased account's token otherwise outlives it (T-144541): a grant
 // never expires, and the next call as it wrote the dead row back.
 export let unheld = async (env: Env, person: string) => {
+  await (await import('./browser-sessions.ts')).endAll(env, person)
   await disconnectAll(grants(env), person)
   let granted = ledger(env.OAUTH_KV)
   if (granted) await revokeGrants(granted, person, '')
@@ -409,7 +410,7 @@ export let services = (env: Env, person: string, dir?: Directory) =>
 // from its caller (`/login`, OAuth consent) reads this, so a bearer narrowed
 // to one space, or revoked tomorrow, never becomes a whole account's session.
 let browser = async (env: Env, req: Request) => {
-  return (await sessionAt(req, env.SESSION_SECRET))?.person ?? null
+  return (await sessionAt(req, env))?.person ?? null
 }
 
 // Closing a space (erase.ts, T-33166): `/space/<slug>/delete`, the one door a

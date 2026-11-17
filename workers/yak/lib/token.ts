@@ -1,6 +1,7 @@
 // The platform session token (D-32318 §Auth): what the kernel worker trusts
 // about who is asking, minted once at sign-in and verified on every request
-// with no session store and no round trip. A token is `<claims>.<mac>`: the
+// before session.ts checks its revocable directory row. A token is
+// `<claims>.<mac>`: the
 // claims are base64url JSON `{person, space, exp}` — the person's eid, the
 // space the sign-in happened at (null for the platform-wide door), and a unix
 // second the token dies at — and the mac is HMAC-SHA256 over the claims text
@@ -42,6 +43,8 @@ export type Claims = {
   exp: number
   /** The browser this session was signed in from, when it names one. */
   via?: string
+  /** The directory row that can end this session. Absent on old cookies. */
+  session?: string
 }
 
 // The cookie's name. Set on `Domain=yaks.app`, so every space's hostname
@@ -136,6 +139,9 @@ export let verify = async (
     space: (c.space as string | null) ?? null,
     exp: c.exp,
     ...(typeof c.via == 'string' && c.via ? { via: c.via } : {}),
+    ...(typeof c.session == 'string' && c.session
+      ? { session: c.session }
+      : {}),
     ...(o.legacy ? { legacy: true as const } : {}),
   }
 }
