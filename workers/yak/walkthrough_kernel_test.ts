@@ -11,6 +11,8 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { toolEid } from '@yaks/tools/result'
 import type { Bundle } from '@yaks/graph'
+import { valued } from '@yaks/tools/value'
+import { resultValue } from './results.ts'
 import { connector, fresh, owned } from './probe.ts'
 import { directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
@@ -115,7 +117,8 @@ let { seq: last } = (await service.store.g.read(
 ))[0].entry as { seq: number }
 
 // The rest of the conversation: each step's release and the Operator's answer,
-// and each later step's request before them.
+// and each later step's request before them, each result kept as the
+// Operator keeps a call's (results.ts `resultValue`).
 let seq = last
 let line = (rest: Record<string, unknown>) => ({
   entity: { eid: crypto.randomUUID() },
@@ -137,7 +140,10 @@ let rows = REQUESTS.flatMap((said, i) => {
     line({
       result: {
         call: call.entity.eid,
-        value: { deployed: true, version: i + 1 },
+        value: resultValue(
+          [valued(call, { deployed: true, version: i + 1 })],
+          { name: 'app_deploy' } as never,
+        ),
       },
       content: { body: `deployed yourname/guestbook v${i + 1}` },
     }),

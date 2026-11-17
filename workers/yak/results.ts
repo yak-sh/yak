@@ -2,7 +2,7 @@ import { snapshot } from '@yaks/context'
 import type { Bundle, Graph, Tool } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { structured, texts } from '@yaks/tools/result'
-import { imagesIn } from '@yaks/tools/value'
+import { imagesIn, valueIn } from '@yaks/tools/value'
 import { refuse } from './tool.ts'
 import {
   RESULT_MAX,
@@ -71,4 +71,27 @@ export let resultValue = (
     content: texts(answer, Infinity).map((text) => ({ type: 'text', text })),
     ...images.length ? { images } : {},
   }
+}
+
+/**
+ * A kept result's answer as data again, as `resultValue` kept it: the value a
+ * tool declares its answer by, or the one among the bundles it answered
+ * (`output{value}`), or the value itself where the result was kept bare.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { keptValue, resultValue } from './results.ts'
+ * let said = { entity: { eid: '$said' }, output: { value: { version: 2 } } }
+ * let schema = { outputSchema: { type: 'object' } }
+ * for (let tool of [{}, schema]) {
+ *   assertEquals(keptValue(resultValue([said], tool as never)), { version: 2 })
+ * }
+ * assertEquals(keptValue({ version: 2 }), { version: 2 })
+ * ```
+ */
+export let keptValue = (kept: unknown): Record<string, unknown> | undefined => {
+  let v = kept as Record<string, unknown> | null | undefined
+  let held = (v?.structuredContent ?? v) as Record<string, unknown> | null
+  if (Array.isArray(held?.result)) return valueIn(held.result as Bundle[])
+  return held && typeof held == 'object' ? held : undefined
 }

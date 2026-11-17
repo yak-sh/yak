@@ -16,6 +16,7 @@ import { theirs } from '@yaks/session/conversation'
 import { toolEid } from '@yaks/tools/result'
 import type { Env } from './env.ts'
 import { builderOf, SPACE } from './build-door.ts'
+import { keptValue } from './results.ts'
 
 /** Where the kernel asks a space's object for a walkthrough (build.ts). */
 export let WALKTHROUGH = '/operator/walkthrough'
@@ -79,7 +80,8 @@ export let stepsOf = (entries: Bundle[], app: string): Step[] => {
   let released = new Map<string, number>()
   for (let b of ordered) {
     let r = comp(b, 'result')
-    let value = r?.value as { deployed?: boolean; version?: number } | null
+    // Kept as the Operator keeps every result (results.ts `resultValue`).
+    let value = keptValue(r?.value)
     if (r?.call && value?.deployed && typeof value.version == 'number') {
       released.set(String(r.call), value.version)
     }
