@@ -57,6 +57,13 @@
 # 6 minutes. With two bulk jobs at 30 under a slice at 80, that fsync takes
 # 10 ms.
 #
+# Small random IO needs a separate bound. At load 62 the sessions issued
+# 1,900 reads/s and 1,800 writes/s while the servers needed about 700; the
+# disk queued 307 requests at 68 ms each (T-722). That traffic was only
+# 35 MB/s, below the bandwidth caps. Bound the sessions together to 1,500
+# reads and 1,000 writes/s, with each job at half that, so small test writes
+# cannot consume the disk's ~4,500 mixed operations/s.
+#
 # Measured on this box, an LXC volume on LVM thin over a SATA SSD: a cold page read
 # from the servers' slice averages 2 ms through a whole copy beside another bulk
 # job, worst page 175 ms, against 0.25 ms idle. Uncapped writes took it to
@@ -105,9 +112,13 @@
 # set vm.dirty_ratio=20 and vm.dirty_background_ratio=10.
 set -eu
 all="IOWriteBandwidthMax=/ 80M
-IOReadBandwidthMax=/ 150M"
+IOReadBandwidthMax=/ 150M
+IOReadIOPSMax=/ 1500
+IOWriteIOPSMax=/ 1000"
 job="IOWriteBandwidthMax=/ 30M
-IOReadBandwidthMax=/ 100M"
+IOReadBandwidthMax=/ 100M
+IOReadIOPSMax=/ 750
+IOWriteIOPSMax=/ 500"
 sessions="MemoryMax=16G"
 floor=8G
 servers="MemoryMin=$floor"

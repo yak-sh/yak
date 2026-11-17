@@ -965,13 +965,17 @@ let ended = async (
   if (stop && seq(stop) > seq(request)) return
   let row = await ran(g, session)
   let code = comp(row, EXIT)?.code as number | null | undefined
+  // A shell or service manager can ask the provider to stop without writing
+  // through session_stop. These signals request termination; SIGKILL and
+  // crash signals still report a failure.
+  let stopped = !!row?.stop || [129, 130, 143].includes(code ?? 0)
   let said = code === 0 ? undefined : await refused(g, session, seq(request))
   let no = declined(said?.code)
   let why = code === 0
     ? ''
     : no
     ? `${no.why}: ${said!.body}`
-    : `${row?.stop ? 'asked to stop, ' : ''}${await cause(
+    : `${stopped ? 'asked to stop, ' : ''}${await cause(
       session,
       row,
       o,
@@ -989,7 +993,7 @@ let ended = async (
       failed: {
         reason: no
           ? no.reason
-          : row?.stop
+          : stopped
           ? 'Asked to stop'
           : code == null
           ? 'Provider exit was not observed'
@@ -1004,7 +1008,7 @@ let ended = async (
   // chose, and its starter hears why (./completion.ts); one that played a
   // recording ended as it was chosen to.
   if (
-    code !== 0 && !row?.stop && !no &&
+    code !== 0 && !stopped && !no &&
     !(await asked(g, session).catch(() => null))?.recorded
   ) {
     failure(o, session, 'run ended', `a spawned run ended: ${why}`)

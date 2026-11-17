@@ -68,6 +68,21 @@ let asked = bare(
     b.entity.eid == 'child' ? { ...b, exit: { code: 143 }, stop: {} } : b
   ),
 )
+let signalled = bare(
+  rows.map((b) =>
+    b.entity.eid == 'child'
+      ? { ...b, exit: { code: 143 } }
+      : b.entity.eid == 'end'
+      ? {
+        ...b,
+        failed: { reason: 'Asked to stop' },
+        content: {
+          body: 'asked to stop, the provider was ended by SIGTERM (exit 143)',
+        },
+      }
+      : b
+  ),
+)
 let quiet = bare(
   rows.filter((b) => !['report', 'thinking', 'result'].includes(b.entity.eid)),
 )
@@ -207,6 +222,17 @@ test('a run somebody asked to stop says so before its exit', async () => {
     `${await name(
       asked,
     )} — asked to stop, exited 143\n\nFixed it; checks pass.`,
+  )
+})
+
+test('a run stopped outside the graph reports the stop before its exit', async () => {
+  await complete(signalled, 'child')
+  let [report] = await signalled.read('.comment.target=work&*')
+  equal(
+    (report.doc as { body: string }).body,
+    `${await name(signalled)} — asked to stop, exited 143\n\n` +
+      'Ended: asked to stop, the provider was ended by SIGTERM (exit 143)\n\n' +
+      'Fixed it; checks pass.',
   )
 })
 

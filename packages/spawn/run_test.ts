@@ -216,6 +216,17 @@ test('a run somebody stopped says how it ended, and is not told', async () => {
   ])
 })
 
+for (
+  let [code, signal] of [[129, 'SIGHUP'], [130, 'SIGINT'], [143, 'SIGTERM']]
+) {
+  test(`a provider stopped by ${signal} outside the graph is not a bug`, async () => {
+    assertEquals(await ending(Number(code), ''), [
+      `asked to stop, the provider was ended by ${signal} (exit ${code})`,
+      [],
+    ])
+  })
+}
+
 // How a run of the stand-in provider ends, through the door a live run
 // takes: the request names the provider row, whose command the launch plays.
 // Its last entry's failure and text, the failures told of it, and the

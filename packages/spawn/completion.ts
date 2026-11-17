@@ -75,11 +75,14 @@ export let complete = async (g: Graph, session: string): Promise<void> => {
   if (!tasks.length && !notify) return
   let name = human(g.vocab)
   let cut = await unfinished(g, session)
+  let [ending] = await g.get([end.entity.eid], ['failed', 'content'])
+  let interrupted = row.stop ||
+    comp(ending, 'failed')?.reason == 'Asked to stop'
   // A run somebody stopped ended as they asked: the title says so first, so
   // its reader does not take the signal's exit code for a crash.
   let exited = `exited ${str(comp(row, 'exit')?.code)}`
   let title =
-    `${name(row)} — ${row.stop ? `asked to stop, ${exited}` : exited}` +
+    `${name(row)} — ${interrupted ? `asked to stop, ${exited}` : exited}` +
     (cut.length ? `, ${cut.length} unfinished subagent${s(cut.length)}` : '')
   let line = ({ row, status }: { row: Bundle; status: string }) =>
     `- ${name(row)} ${str(comp(row, 'doc')?.title)} (${status})`
@@ -90,7 +93,6 @@ export let complete = async (g: Graph, session: string): Promise<void> => {
     : ''
   // A run that failed says why first, as its ending recorded it (./run.ts
   // `ended`): its last words are what it was doing, not what stopped it.
-  let [ending] = await g.get([end.entity.eid], ['failed', 'content'])
   let why = ending?.failed ? str(comp(ending, 'content')?.body) : ''
   let body = [title, why && `Ended: ${why}`, stopped, await reportOf(g, row)]
     .filter(Boolean).join('\n\n')
