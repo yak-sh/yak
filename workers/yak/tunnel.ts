@@ -82,11 +82,11 @@ let front = (env: Env) =>
 // through the kernel's door, where every property of `tunnel` is stamped.
 let keeping = (env: Env, req: Request): Keeping => {
   let dir = dirOf(env)
+  let caller = adminWho(env, req, () => Promise.resolve(null))
   return {
     account: account(env),
     gateways: front(env),
-    who: async () =>
-      (await adminWho(env, req, () => Promise.resolve(null))).person,
+    who: async () => (await caller).person,
     find: async (slug, person) => {
       let [space, meta] = await Promise.all([
         dir.space(slug),
@@ -107,8 +107,12 @@ let keeping = (env: Env, req: Request): Keeping => {
         platform: chief == 'owner',
       }
     },
-    write: (eid, tunnel) =>
-      stamp(env, { entities: [{ entity: { eid }, tunnel }] }),
+    write: async (eid, tunnel) => {
+      let who = await caller
+      return stamp(env, { entities: [{ entity: { eid }, tunnel }] }, {
+        actor: { by: who.actor ?? who.person!, via: who.via },
+      })
+    },
     tell: (person, told) => tell(env, person, told),
   }
 }

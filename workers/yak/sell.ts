@@ -1056,7 +1056,7 @@ export let fees = async (req: Request, env: Env) => {
     }
     await stamp(env, {
       entities: [{ entity: { eid: meta.eid }, fee: { bps } }],
-    })
+    }, { actor: { by: who.actor ?? who.person!, via: who.via } })
     return Response.json({ bps, rate: rate(bps) })
   }
   if (req.method != 'GET') {

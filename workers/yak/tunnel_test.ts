@@ -1,3 +1,4 @@
+import { meta } from './meta.ts'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { mint } from '@yaks/graph'
@@ -128,6 +129,9 @@ test('only the platform adopts a pair, since its ids name the platform’s resou
     tunnel: { id: T, service: S, adopted: true },
   })
   assertEquals(cf.made, [`PUT ${gateway}`])
+  let [written] = await meta(scenario.env).query('.space.slug=ada&*')
+  assertEquals((written.updated as { by: string }).by, JEFF)
+  assertEquals(typeof (written.updated as { via: string }).via, 'string')
 })
 
 test('no gateway can be uploaded without the workers token, so no tunnel is made', async () => {
