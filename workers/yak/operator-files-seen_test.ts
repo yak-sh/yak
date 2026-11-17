@@ -20,6 +20,11 @@ let file = (address: string) => ({
 })
 let sha = 'a'.repeat(64), hidden = 'b'.repeat(64)
 await store.g.apply([
+  // The store is the space's: its sessions name it (operator-root `spaceOf`).
+  {
+    entity: { eid: crypto.randomUUID() },
+    operator_session: { space, person },
+  },
   {
     entity: { eid: mine },
     operator_request: { space, person, channel: 'chat' },
@@ -33,8 +38,8 @@ await store.g.apply([
   ...attachmentRows(mine, [file(sha)]),
   ...attachmentRows(theirs, [file(hidden)]),
 ], { trusted: true })
-let seen = (q: string, by = held, call?: string) =>
-  attachmentsSeen(store.g, theirFiles(by), q, call)
+let seen = async (q: string, by = held, call?: string) =>
+  attachmentsSeen(store.g, await theirFiles(store, by), q, call)
 let visible = await seen('.attachment&*')
 let artifacts = await seen('.artifact&*')
 let secret = await seen('.doc&*')

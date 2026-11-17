@@ -1681,7 +1681,7 @@ export let operatorRequest = async (
     return Response.json(
       await attachmentsSeen(
         store.g,
-        theirFiles(held),
+        await theirFiles(store, held),
         q,
         args.queryCall ? String(args.queryCall) : undefined,
       ),

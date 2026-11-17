@@ -109,7 +109,7 @@ test('an image is asked of the default model and kept in the space’s files', a
 test('the image is among the person’s files, made by its call', async () => {
   let seen = await attachmentsSeen(
     store.g,
-    theirFiles({ space: eid, person }),
+    await theirFiles(store, { space: eid, person }),
     '.attachment&*',
   )
   assertEquals(seen.map((b) => b.attachment), [{

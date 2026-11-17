@@ -49,8 +49,12 @@ let marked = {
     set: (key: string, value: string) => void receipts.set(key, value),
   },
 }
-let seen = () =>
-  attachmentsSeen(store.g, theirFiles({ space, person }), '.attachment&*')
+let seen = async () =>
+  attachmentsSeen(
+    store.g,
+    await theirFiles(store, { space, person }),
+    '.attachment&*',
+  )
 let batches = 1
 while (await outputBackfill(marked)) batches++
 let after = await seen()

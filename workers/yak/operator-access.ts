@@ -144,10 +144,16 @@ export let owned = (store: { g: Graph; marks?: Pick<Meta, 'get'> }) => {
 /** The attachments a person sees of their own in a space: each that came
  * with a request of theirs, an entry of their conversation, the conversation
  * itself, or an item of theirs whose words it took (a letter, a text), kept
- * theirs by its owner (@yaks/blob/attachment `attachmentsSeen`). */
-export let theirFiles = (held: Pick<Held, 'person' | 'space'>) =>
+ * theirs by its owner (@yaks/blob/attachment `attachmentsSeen`). An owner
+ * names only a person, so it is theirs only in the space `store` is. */
+export let theirFiles = async (
+  store: Pick<Store, 'g'>,
+  held: Pick<Held, 'person' | 'space'>,
+) =>
   or(
-    eq('attachment.message.owner.person', held.person),
+    ...(await spaceOf(store)) == held.space
+      ? [eq('attachment.message.owner.person', held.person)]
+      : [],
     ...[
       'operator_request',
       'entry.session.operator_session',

@@ -84,7 +84,7 @@ let batches = 0
 while (await attachmentBackfill(marked, p.env)) batches++
 let uses = await attachmentsSeen(
   store.g,
-  theirFiles({ space: space.eid, person }),
+  await theirFiles(store, { space: space.eid, person }),
   '.attachment&*',
 )
 let artifacts = await store.g.read('.artifact&*')
