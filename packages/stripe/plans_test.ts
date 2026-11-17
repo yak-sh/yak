@@ -9,6 +9,7 @@ import {
   periodEnd,
   plans,
   read,
+  statusOf,
   type Sub,
   trialFor,
 } from './plans.ts'
@@ -47,7 +48,8 @@ let stripe = (answer: (path: string) => Response) => {
     globalThis,
     'fetch',
     (url: string | URL | Request, init?: RequestInit) => {
-      let path = new URL(String(url)).pathname
+      let { pathname, search } = new URL(String(url))
+      let path = pathname + decodeURIComponent(search)
       asked.push({
         path,
         method: init?.method ?? 'GET',
@@ -73,14 +75,57 @@ test('the period end is read off the item, and off the subscription', () => {
 test('a paying status keeps the plan, and the rest do not', () => {
   let { standing } = lent
   equal(
-    ['active', 'trialing', 'past_due'].map(standing),
-    ['paying', 'paying', 'owing'],
+    ['active', 'trialing', 'past_due', 'incomplete'].map(standing),
+    ['paying', 'paying', 'owing', 'awaiting'],
   )
   equal(
-    ['unpaid', 'incomplete', 'paused', 'canceled', 'incomplete_expired']
-      .map(standing),
-    ['lapsed', 'lapsed', 'lapsed', 'ended', 'ended'],
+    ['unpaid', 'paused', 'canceled', 'incomplete_expired'].map(standing),
+    ['lapsed', 'lapsed', 'ended', 'ended'],
   )
+})
+
+// An invoiced subscription made at START, its first billed period starting
+// then (or when its trial ends), read with its latest invoice.
+let START = 1_780_000_000
+let YEAR = 365 * 86400
+let invoiced = (over: Partial<Sub> = {}): Sub =>
+  sub({
+    collection_method: 'send_invoice',
+    start_date: START,
+    current_period_start: START,
+    latest_invoice: { status: 'open', total: 49000 },
+    ...over,
+  })
+
+test('an invoiced plan holds once its first period is paid, and stops once an invoice is past due', () => {
+  let paid = { status: 'paid', total: 49000 }
+  let cases: [string, Partial<Sub>, string][] = [
+    ['asked, its invoice open', {}, 'incomplete'],
+    ['asked, its invoice not read', { latest_invoice: 'in_1' }, 'incomplete'],
+    ['paid', { latest_invoice: paid }, 'active'],
+    ['a renewal not yet due', { current_period_start: START + YEAR }, 'active'],
+    ['past due', { status: 'past_due', latest_invoice: paid }, 'unpaid'],
+    ['cancelled', { status: 'canceled' }, 'canceled'],
+    [
+      'in a trial, its opening invoice paid with nothing',
+      {
+        status: 'trialing',
+        trial_end: START + 30 * 86400,
+        latest_invoice: { status: 'paid', total: 0 },
+      },
+      'incomplete',
+    ],
+    [
+      'its trial over, its first invoice open',
+      { trial_end: START, current_period_start: START },
+      'incomplete',
+    ],
+  ]
+  for (let [what, over, status] of cases) {
+    equal(statusOf(invoiced(over)), status, what)
+  }
+  // One charged at checkout is read as Stripe says.
+  equal(statusOf(sub({ latest_invoice: { status: 'open' } })), 'active')
 })
 
 test('the tier is read off the price, the first tier where none is listed', () => {
@@ -164,12 +209,15 @@ test('checkout is a Managed Payments subscription carrying the tags and the tria
 })
 
 test('an invoiced plan is a subscription sent its invoices, to the address asked, under the key asked', async () => {
+  let answer = priced(PRO[1], {
+    created: START,
+    collection_method: 'send_invoice',
+    start_date: START,
+    current_period_start: START,
+    latest_invoice: { status: 'draft', total: 49000 },
+  })
   using s = stripe((path) =>
-    Response.json(
-      path == '/v1/subscriptions'
-        ? priced(PRO[1], { created: 1_780_000_000 })
-        : { id: 'cus_1' },
-    )
+    Response.json(path == '/v1/subscriptions' ? answer : { id: 'cus_1' })
   )
   let made = await lent.invoice({
     payer: 'cus_1',
@@ -180,11 +228,11 @@ test('an invoiced plan is a subscription sent its invoices, to the address asked
     key: 'invoice|space-eid||',
     tags: { space: 'space-eid', apex: 'yaks.fyi' },
   })
-  equal(made, {
-    subscription: read(priced(PRO[1]), PRICES),
-    at: at(1_780_000_000),
-  })
-  equal(made.subscription.tier, 'pro')
+  equal(made, { subscription: read(answer, PRICES), at: at(START) })
+  equal([made.subscription.tier, made.subscription.status], [
+    'pro',
+    'incomplete',
+  ])
   equal(s.asked.map((a) => a.path), [
     '/v1/customers/cus_1',
     '/v1/subscriptions',
@@ -203,6 +251,7 @@ test('an invoiced plan is a subscription sent its invoices, to the address asked
     days_until_due: '60',
     'metadata[space]': 'space-eid',
     'metadata[apex]': 'yaks.fyi',
+    'expand[0]': 'latest_invoice',
   })
   equal(s.asked[1].key, 'invoice|space-eid||')
 })
@@ -339,7 +388,10 @@ test('an event reads its tags, its subscription and whether it moved money', asy
   ])
   equal((await updated.subscription())?.id, 'sub_1')
   // An invoice carries its subscription's tags under `parent`, and names it.
-  using s = stripe(() => Response.json(sub({ id: 'sub_2' })))
+  // Stripe answers the subscription each GET names.
+  using s = stripe((path) =>
+    Response.json(sub({ id: path.split('/')[3].split('?')[0] }))
+  )
   let invoice = heard({
     type: 'invoice.paid',
     livemode: false,
@@ -357,7 +409,17 @@ test('an event reads its tags, its subscription and whether it moved money', asy
   })
   equal([invoice.live, invoice.tags.apex], [false, 'yaks.fyi'])
   equal((await invoice.subscription())?.id, 'sub_2')
-  equal(s.asked.map((a) => a.path), ['/v1/subscriptions/sub_2'])
+  // An invoiced subscription's own event lacks its latest invoice, so it is
+  // asked for with it, as an invoice's subscription is.
+  let own = heard({
+    type: 'customer.subscription.updated',
+    data: { object: invoiced({ id: 'sub_3', latest_invoice: 'in_1' }) },
+  })
+  equal((await own.subscription())?.id, 'sub_3')
+  equal(s.asked.map((a) => a.path), [
+    '/v1/subscriptions/sub_2?expand[]=latest_invoice',
+    '/v1/subscriptions/sub_3?expand[]=latest_invoice',
+  ])
   let none = heard({ type: 'checkout.session.completed', data: {} })
   ok((await none.subscription()) === undefined)
 })

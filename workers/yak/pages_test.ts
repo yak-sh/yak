@@ -781,6 +781,13 @@ test('the Billing page offers a free space the yearly Pro plan by invoice, where
     false,
     'not to a space already paying',
   )
+  let waiting = await card({ known: true, invoice: 60, awaiting: true })
+  assertStringIncludes(waiting, 'The Pro plan starts when its invoice is paid')
+  assertEquals(
+    ['Pay by invoice', 'Get the Pro plan'].some((s) => waiting.includes(s)),
+    false,
+    'nothing more to buy while its invoice waits',
+  )
 })
 
 // The Billing page (T-131895): the space's allowances and its use of each,

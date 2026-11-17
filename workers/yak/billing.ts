@@ -34,9 +34,10 @@
 // An organization that pays by check or bank transfer asks for its yearly plan
 // by invoice instead (`invoice`, T-163754): the provider sends the invoices,
 // and the plan follows the subscription that makes them as it does one paid
-// at checkout. Its first row is written from the subscription made, since a
-// subscription made outside checkout says nothing at the webhook until money
-// or a status moves.
+// at checkout. Asking starts nothing: the subscription awaits its first
+// invoice's payment, and the event saying it was paid starts the plan. Its
+// first row is written from the subscription made, awaiting, so the space
+// knows its payer and no second ask makes a second subscription.
 //
 // A block of AI credit (D-134567) is the one thing sold here once rather than
 // by subscription: a checkout in payment mode, paid before it is spent, and
@@ -237,6 +238,16 @@ let payerFor = async (
   return customer
 }
 
+// A space whose subscription is made and awaits its first payment, such as
+// an invoice sent and not yet paid: a second subscription would bill it
+// twice, so no door makes one while it waits.
+let awaiting = (lent: Plans, space: Space) =>
+  !!space.plan?.subscription && lent.standing(space.plan.status) == 'awaiting'
+
+let waitingOn = (space: Space) =>
+  `${space.slug}'s plan is waiting on its first invoice, and starts when it ` +
+  `is paid; Manage billing shows it`
+
 // ---- what is for sale -----------------------------------------------------
 
 /** A plan a person can buy, and how often it is paid for. */
@@ -266,6 +277,8 @@ export type Card = {
   /** the days an invoice gives to pay, where the yearly plan may be paid by
    * invoice */
   invoice?: number
+  /** whether its subscription is made and waits on its first payment */
+  awaiting?: boolean
   /** its AI credit, where its plan buys credit or it holds some: the cap,
    * what is left to spend this month, what this month drew, and whether a
    * block may be bought now */
@@ -293,6 +306,7 @@ export let planCard = (lent: Plans, space: Space, now = new Date()): Card => {
     ...(free ? { free } : {}),
     pro: (['month', 'year'] as const).filter((per) => lent.offers('pro', per)),
     ...lent.offers(INVOICED.tier, INVOICED.per) ? { invoice: DUE } : {},
+    ...awaiting(lent, space) ? { awaiting: true } : {},
     ...credits
       ? {
         credit: {
@@ -368,6 +382,7 @@ export let checkout = async (
   // plan free subscribes for after it, its trial lasting as long as the free
   // time.
   let free = freeThrough(space)
+  if (awaiting(lent, space)) return json(409, 'awaiting', waitingOn(space))
   if (paid(space.tier) && !free) {
     return json(
       409,
@@ -408,8 +423,9 @@ export let checkout = async (
 export let INVOICED: Want = { tier: 'pro', per: 'year' }
 
 /** Days an invoice gives its organization to pay: two meetings of a board
- * that meets monthly, the renewal's as much as the first's. The plan holds
- * meanwhile, and past the day it is owed rather than gone. */
+ * that meets monthly, the renewal's as much as the first's. The plan starts
+ * when the first is paid; a renewal's plan holds while its invoice is not
+ * yet due, and stops once it is past due. */
 export let DUE = 60
 
 /** Whom an invoice is made out to, as its owner typed it on the plan card. */
@@ -424,11 +440,11 @@ export let badTo = (to: To) =>
     : 'The invoice needs an email address to go to'
 
 /** An invoiced plan asked for: the provider sends `to` a yearly invoice for
- * the Pro plan, payable by bank transfer or check, and the plan starts now,
- * written from the subscription made rather than waiting on an event. An
- * error a person reads where it is refused, as `setCap`. The key names the
- * plan row the ask saw, so a form sent twice makes one subscription, and an
- * ask after that subscription ends makes another. */
+ * the Pro plan, payable by bank transfer or check, and the plan starts when
+ * it is paid. The subscription made is written at once, awaiting, so a space
+ * holds one and a second ask is refused until it ends. An error a person
+ * reads where it is refused, as `setCap`. The key names the plan row the ask
+ * saw, so a form sent twice at once makes one subscription. */
 export let invoice = async (env: Env, req: Request, space: Space, to: To) => {
   let person = await buyer(env, req)
   if (!person) return 'Sign in first'
@@ -446,6 +462,7 @@ export let invoice = async (env: Env, req: Request, space: Space, to: To) => {
       planName(space.tier!)
     }; Manage billing changes it`
   }
+  if (awaiting(lent, space)) return waitingOn(space)
   let bad = badTo(to)
   if (bad) return bad
   let email = await dir.emailAt(person) ?? ''

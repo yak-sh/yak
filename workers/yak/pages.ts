@@ -1716,8 +1716,11 @@ export let plan = (
   // Someone the provider has met can always reach their own billing, whatever plan
   // they are on today: an invoice from a month they paid for is theirs to
   // read after they cancel.
+  // A space waiting on its first invoice is offered nothing more to buy: a
+  // second subscription would bill it twice (billing.ts `awaiting`).
+  let open = (tier == 'free' || y.plan.free) && !y.plan.awaiting
   let doors = [
-    ...(tier == 'free' || y.plan.free
+    ...(open
       ? [
         buy({ tier: 'plus', per: 'month' }),
         ...(y.plan.pro ?? []).map((per) => buy({ tier: 'pro', per })),
@@ -1727,7 +1730,13 @@ export let plan = (
   ].filter(Boolean)
   // An organization that pays by check or bank transfer asks for an invoice
   // instead, where the plan card posts to a settings page.
-  let invoiced = target && y.plan.invoice && (tier == 'free' || y.plan.free)
+  let invoiced = y.plan.awaiting
+    ? h(
+      Form.Hint,
+      null,
+      'The Pro plan starts when its invoice is paid. Manage billing shows the invoice.',
+    )
+    : target && y.plan.invoice && open
     ? byInvoice(target, y.plan.invoice)
     : null
   // Where the Pro plan has no price yet, a free space still hears
@@ -1769,7 +1778,7 @@ export let plan = (
 // The plan card's invoice (T-163754): the Pro plan for a year, invoiced to
 // the address typed here and paid by bank transfer or check. A plain form to
 // the settings page, like the cap, since nothing leaves for the provider's
-// page: the plan starts when it is sent, and the invoice follows by email.
+// page: the invoice follows by email, and the plan starts when it is paid.
 let byInvoice = (target: string, due: number) =>
   h(
     More,
@@ -1794,7 +1803,7 @@ let byInvoice = (target: string, due: number) =>
           }),
           `For an organization that pays by check or bank transfer: ${NAMES.pro} for a year, ${
             priced({ tier: 'pro', per: 'year' })
-          }, due ${due} days after each invoice is sent. The plan starts now, and each year's invoice comes as the year turns.`,
+          }, due ${due} days after each invoice is sent. The plan starts when the first invoice is paid, and each year's invoice comes as the year turns.`,
         ),
         labeled(
           'invoice-name',

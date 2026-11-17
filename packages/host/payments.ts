@@ -16,9 +16,10 @@ export type Per = 'month' | 'year'
 
 /** Where a subscription stands, as its provider reads its status: `paying`
  * and billed as it should be, `owing` still held while a failed charge is
- * retried, `lapsed` no longer paid for though it may be again, `ended` over
- * for good, which no later word of the provider undoes. */
-export type Standing = 'paying' | 'owing' | 'lapsed' | 'ended'
+ * retried, `awaiting` made but not yet paid for the first time, `lapsed` no
+ * longer paid for though it may be again, `ended` over for good, which no
+ * later word of the provider undoes. Only `paying` and `owing` hold a plan. */
+export type Standing = 'paying' | 'owing' | 'awaiting' | 'lapsed' | 'ended'
 
 /** A subscription as its provider reads it. */
 export type Subscription = {
@@ -148,8 +149,9 @@ export type Plans = {
   billed: (payer: string) => Promise<{ email: string; name: string } | null>
   /** the address of a hosted checkout */
   checkout: (asked: Checkout) => Promise<string>
-  /** a subscription billed by invoice, made now: it holds its plan from
-   * the start, and its first invoice is sent within the hour */
+  /** a subscription billed by invoice, made now: its first invoice is sent
+   * within the hour, and it awaits that invoice's payment before it holds
+   * its plan */
   invoice: (asked: Invoice) => Promise<Subscribed>
   /** the address of a hosted checkout for something paid for once */
   once: (asked: Once) => Promise<string>

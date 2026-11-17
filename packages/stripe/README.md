@@ -51,12 +51,17 @@ methods the account's invoice settings allow. The portal is a billing portal
 session. A subscription reads its tier off its item's price (the first tier
 listing it, else the first tier), its period end off the item or the
 subscription, whichever the API version sends, and its standing off its status:
-`active` and `trialing` pay, `past_due` owes, `canceled` and
-`incomplete_expired` have ended, and the rest have lapsed. Postponing sets the
-trial to end later, prorating nothing. `changed(options)(event)` reads a
-verified event as a subscription changed: a `customer.subscription.*` event
-carries its subscription, and a checkout session or an invoice names one, read
-on asking; one Stripe does not hold reads as `null`.
+`active` and `trialing` pay, `past_due` owes, `incomplete` awaits its first
+payment, `canceled` and `incomplete_expired` have ended, and the rest have
+lapsed. An invoiced subscription's status is read with its latest invoice
+(`statusOf`), since Stripe calls it `active` before anything is paid: its first
+billed period is `incomplete` until that period's invoice is paid, and
+`past_due` is `unpaid`, since nothing retries a check. Postponing sets the trial
+to end later, prorating nothing. `changed(options)(event)` reads a verified
+event as a subscription changed: a `customer.subscription.*` event carries its
+subscription, save an invoiced one, which is asked for with its latest invoice,
+and a checkout session or an invoice names one, read on asking; one Stripe does
+not hold reads as `null`.
 
 ## Shops
 

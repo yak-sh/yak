@@ -133,8 +133,8 @@ let visits = async (env: Env, apps: App[]): Promise<Visits[] | null> => {
 let returned = (q: URLSearchParams) =>
   q.has('saved') ? { say: 'Saved.', no: false } : q.has('invoiced')
     ? {
-      say: 'The Pro plan has started. Its invoice reaches the address you ' +
-        'gave within the hour.',
+      say: 'The invoice reaches the address you gave within the hour. ' +
+        'The Pro plan starts when it is paid.',
       no: false,
     }
     : q.has('sent')

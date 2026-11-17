@@ -15,8 +15,11 @@
 // delivery with that secret.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertMatch } from '@std/assert'
+import { stub } from '@std/testing/mock'
+import { managePath } from '@yaks/platform/routes'
 import {
   apexPost,
+  fresh,
   kernel,
   meta,
   seed,
@@ -252,6 +255,128 @@ test('the billing doors say no before they say anything else', async () => {
       !/api\/billing|checkout\.stripe\.com/.test(html),
       'and no way to start a purchase is',
     )
+  } finally {
+    await k.stop()
+  }
+})
+
+// The pay-by-invoice form (T-773): asking sends an invoice and starts nothing.
+// The plan starts when the invoice is paid, and stops once a later one is
+// past due. api.stripe.com is stood in for, answering the subscription as it
+// stands at each moment: `active` from the start, as Stripe calls one sent
+// its invoices, with its latest invoice.
+test('an invoiced plan starts when its invoice is paid, and stops past due', async () => {
+  let now = Math.floor(Date.now() / 1000)
+  let space = ''
+  let sub = (bill: string, over: Record<string, unknown> = {}) => ({
+    id: 'sub_invoiced',
+    customer: 'cus_invoiced',
+    status: 'active',
+    collection_method: 'send_invoice',
+    created: now,
+    start_date: now,
+    current_period_start: now,
+    latest_invoice: { status: bill, total: 49000 },
+    metadata: tagged(space),
+    items: {
+      data: [{
+        price: { id: 'price_pro_year' },
+        current_period_end: now + 365 * 86400,
+      }],
+    },
+    ...over,
+  })
+  let stands = sub('draft')
+  let real = globalThis.fetch
+  using _ = stub(globalThis, 'fetch', (input, init) => {
+    let url = String(input instanceof Request ? input.url : input)
+    if (!url.startsWith('https://api.stripe.com')) return real(input, init)
+    let path = new URL(url).pathname
+    return Promise.resolve(Response.json(
+      path.startsWith('/v1/subscriptions') ? stands : { id: 'cus_invoiced' },
+    ))
+  })
+  let k = await fresh({
+    STRIPE_KEY: 'sk_test_probe',
+    STRIPE_PRICE: 'price_plus',
+    STRIPE_PRICE_PRO: 'price_pro_month',
+    STRIPE_PRICE_PRO_YEAR: 'price_pro_year',
+  })
+  try {
+    let slug = unique('inv')
+    let them = await seed(k, [{ slug, apps: [] }])
+    space = them.eids[slug]
+    stands = sub('draft')
+    let plan = async () =>
+      ((await meta(k).query(`id=${space}`))[0] as {
+        plan?: Record<string, string>
+      }).plan
+    let ask = () =>
+      k.at('yaks.app', managePath('billing', slug), {
+        method: 'POST',
+        redirect: 'manual',
+        headers: {
+          cookie: them.cookie,
+          origin: 'https://yaks.app',
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          billing: 'invoice',
+          email: 'clerk@township.test',
+          name: 'Hollow Township',
+        }),
+      })
+    let post = async (type: string, object: unknown, at: number) =>
+      (JSON.parse(
+        await delivered(
+          apexPost(k),
+          '/stripe/webhook',
+          WEBHOOK_SECRET,
+          type,
+          object,
+          '',
+          at,
+        ),
+      ) as { did: string }).did
+
+    let asked = await ask()
+    assertEquals(asked.status, 303)
+    await asked.body?.cancel()
+    let waiting = await plan()
+    // A row with no tier is the free plan: nothing about it moved.
+    assertEquals([waiting?.tier ?? 'free', waiting?.status], [
+      'free',
+      'incomplete',
+    ])
+    assertEquals(waiting?.subscription, 'sub_invoiced')
+
+    // Asked again while the first waits: refused, so nothing bills twice.
+    let again = await ask()
+    assertEquals(again.status, 400)
+    assertMatch(await again.text(), /waiting on its first invoice/)
+
+    // The invoice is paid: Stripe says so, and the plan starts.
+    stands = sub('paid')
+    let paid = {
+      object: 'invoice',
+      parent: {
+        subscription_details: {
+          subscription: 'sub_invoiced',
+          metadata: tagged(space),
+        },
+      },
+    }
+    assertEquals(await post('invoice.paid', paid, now + 10), `${slug} is pro`)
+    assertEquals((await plan())?.tier, 'pro')
+
+    // A year on, the renewal's invoice is past due: the plan stops.
+    stands = sub('open', { status: 'past_due' })
+    assertEquals(
+      await post('customer.subscription.updated', stands, now + 20),
+      `${slug} is free`,
+    )
+    let late = await plan()
+    assertEquals([late?.tier, late?.status], ['free', 'unpaid'])
   } finally {
     await k.stop()
   }

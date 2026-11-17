@@ -11,7 +11,10 @@
 // A plan paid by invoice (`invoice`) cannot be: Managed Payments covers no
 // subscription made outside Checkout, so on those the account itself is the
 // seller. Its invoices take whatever the account's invoice settings allow
-// (card, bank transfer), and a check is marked paid in the Dashboard.
+// (card, bank transfer), and a check is marked paid in the Dashboard. Stripe
+// calls such a subscription `active` before anything is paid, so its status is
+// read with its latest invoice (`statusOf`), and it holds no plan until its
+// first period is paid for.
 //
 // Which tier a subscription buys is read off its price, never off metadata a
 // checkout wrote: a plan changed in the portal moves the price and nothing
@@ -35,6 +38,10 @@ export type Options = Keyed & {
   prices?: Record<string, Partial<Record<Per, string>>>
 }
 
+// The slice of a Stripe invoice read here: whether it is paid, and whether
+// it was for anything, which a trial's opening invoice is not.
+export type Bill = { status?: string; total?: number }
+
 // The slice of a Stripe subscription read here. Everything is optional: the
 // shape is Stripe's to move, and a field that went missing must leave a
 // readable row rather than a throw in the middle of somebody's billing.
@@ -42,16 +49,22 @@ export type Sub = {
   id?: string
   customer?: string | { id?: string }
   status?: string
+  collection_method?: string
   created?: number
+  start_date?: number
   metadata?: Record<string, string>
   cancel_at?: number | null
   cancel_at_period_end?: boolean
   canceled_at?: number | null
   ended_at?: number | null
   trial_end?: number | null
+  current_period_start?: number | null
   current_period_end?: number | null
+  /** expanded where it is asked for; an id otherwise */
+  latest_invoice?: string | Bill | null
   items?: {
     data?: {
+      current_period_start?: number | null
       current_period_end?: number | null
       price?: string | { id?: string } | null
     }[]
@@ -61,17 +74,20 @@ export type Sub = {
 // `past_due` keeps the plan on purpose: Stripe retries a failed card for days
 // before it gives up, and taking somebody's apps away on the first decline is
 // the wall T-32756 says not to build. When Stripe does give up the status
-// becomes `canceled` or `unpaid`. Stripe never moves a subscription out of
-// `canceled` or `incomplete_expired`, which is what makes `ended` final.
+// becomes `canceled` or `unpaid`. `incomplete` is a subscription whose first
+// payment has not come. Stripe never moves a subscription out of `canceled`
+// or `incomplete_expired`, which is what makes `ended` final.
 let STANDING: Record<string, Standing> = {
   active: 'paying',
   trialing: 'paying',
   past_due: 'owing',
+  incomplete: 'awaiting',
   canceled: 'ended',
   incomplete_expired: 'ended',
 }
 
 /// standing('trialing') -> 'paying'
+/// standing('incomplete') -> 'awaiting'
 /// standing('unpaid') -> 'lapsed'
 /** Where a subscription with this status stands. */
 export let standing = (status: string): Standing =>
@@ -93,6 +109,38 @@ export let periodEnd = (sub: Sub): number | null => {
   return ends.length ? Math.max(...ends) : null
 }
 
+/** When the current period began, read off either shape as `periodEnd`
+ * reads its end. */
+export let periodStart = (sub: Sub): number | null => {
+  if (sub.current_period_start != null) return sub.current_period_start
+  let starts = (sub.items?.data ?? [])
+    .map((i) => i.current_period_start)
+    .filter((n): n is number => typeof n == 'number')
+  return starts.length ? Math.max(...starts) : null
+}
+
+/** Stripe's status for a subscription, with an invoiced one's invoice read
+ * into it. Stripe calls a subscription sent its invoices `active` the moment
+ * it is made and `past_due` once an invoice is late, and neither is a plan
+ * paid for. Its first billed period, the one starting when it was made or
+ * when its trial ends, holds once that period's invoice is paid: until then
+ * it is `incomplete`, as Stripe says of a charged subscription whose first
+ * payment has not come, and a trial given free (`trialFor`) is no payment.
+ * A later period holds while its invoice is not yet due, and one past due is
+ * `unpaid`: nothing retries a check. The latest invoice is read only where it
+ * was expanded, and one that was not is taken as unpaid. */
+export let statusOf = (sub: Sub): string => {
+  let status = sub.status ?? ''
+  if (sub.collection_method != 'send_invoice') return status
+  if (status == 'past_due') return 'unpaid'
+  if (status != 'active' && status != 'trialing') return status
+  let bill = typeof sub.latest_invoice == 'object' ? sub.latest_invoice : null
+  let paid = bill?.status == 'paid' && (bill.total ?? 0) > 0
+  let first = (periodStart(sub) ?? 0) <=
+    (sub.trial_end ?? sub.start_date ?? sub.created ?? 0)
+  return first && !paid ? 'incomplete' : status
+}
+
 let idOf = (v: string | { id?: string } | null | undefined) =>
   typeof v == 'string' ? v : v?.id ?? ''
 
@@ -109,7 +157,7 @@ export let tierFor = (sub: Sub, prices: Options['prices'] = {}): string => {
 
 /** A Stripe subscription in the host's words. */
 export let read = (sub: Sub, prices?: Options['prices']): Subscription => {
-  let status = sub.status ?? ''
+  let status = statusOf(sub)
   let end = periodEnd(sub)
   // Set only when the subscription will not renew, so "cancelled, but paid
   // through the 14th" is one row to read: an explicit `cancel_at`, else the
@@ -173,13 +221,18 @@ export let ONCE_TAX = 'txcd_10105002'
 let path = (subscription: string) =>
   `/v1/subscriptions/${encodeURIComponent(subscription)}`
 
+// A subscription with its latest invoice, which an invoiced one is read by.
+let EXPAND = { expand: ['latest_invoice'] }
+let expanded = (subscription: string) =>
+  `${path(subscription)}?expand[]=latest_invoice`
+
 /** Stripe's plans, every call made with `options` as they read at the
  * time. */
 export let plans = (options: Options): Plans => {
   let now = () => options.clock?.now() ?? Date.now()
   let price = (tier: string, per: Per) => options.prices?.[tier]?.[per]
   let fetched = (id: string) =>
-    ask(options, path(id)).then(
+    ask(options, expanded(id)).then(
       (sub) => sub as Sub,
       (e) => {
         if (e instanceof StripeError && e.code == 'resource_missing') {
@@ -256,7 +309,8 @@ export let plans = (options: Options): Plans => {
     // where one is given. No payment method is named, so the invoice offers
     // what the account's invoice settings do. Stripe finalizes the first
     // invoice within the hour and emails it; each renewal's is sent the day
-    // the period turns, due `due` days on.
+    // the period turns, due `due` days on. It is answered with its first
+    // invoice, unpaid, so it reads as awaiting it (`statusOf`).
     invoice: async (asked) => {
       let bought = price(asked.tier, asked.per)
       if (!bought) {
@@ -278,6 +332,7 @@ export let plans = (options: Options): Plans => {
           days_until_due: asked.due,
           metadata: asked.tags,
           ...trialFor(asked.trial, now()),
+          ...EXPAND,
         },
         undefined,
         'POST',
@@ -345,7 +400,8 @@ export let plans = (options: Options): Plans => {
 }
 
 /** A verified event Stripe posted to the platform's own endpoint, read: a
- * `customer.subscription.*` event carries its subscription whole, and a
+ * `customer.subscription.*` event carries its subscription whole, save an
+ * invoiced one's latest invoice, so that one is asked for with it, and a
  * checkout session or an invoice names it, which one GET answers. An
  * invoice's name for it moved under `parent` in API 2025-03-31.basil, and the
  * old field is read too, for the reason `periodEnd` reads both. A checkout
@@ -378,9 +434,13 @@ export let changed =
     let parent = (o.parent ?? {}) as {
       subscription_details?: { subscription?: string | { id?: string } }
     }
+    let itself = (e.type ?? '').startsWith('customer.subscription.')
+    let whole = itself && o.collection_method != 'send_invoice'
     let named = idOf(
-      (o.subscription as string | { id?: string } | undefined) ??
-        parent.subscription_details?.subscription,
+      itself
+        ? o.id as string | undefined
+        : (o.subscription as string | { id?: string } | undefined) ??
+          parent.subscription_details?.subscription,
     )
     return {
       about: 'subscription',
@@ -389,7 +449,7 @@ export let changed =
       tags: tagsOf(o),
       ...referred,
       subscription: () =>
-        (e.type ?? '').startsWith('customer.subscription.')
+        whole
           ? Promise.resolve(read(o as Sub, options.prices))
           : named
           ? plans(options).subscription(named)
