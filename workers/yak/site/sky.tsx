@@ -8,7 +8,8 @@
 // far scene is drawn in viewBox -3000 -800 6000 860 and the turf in
 // -3000 -60 6000 300; public/sky.js measures where he sits and lays both out
 // around him (style.css `.Sky`), draws and flies the birds, sends the
-// shooting stars, sinks the hills as the page scrolls and answers a touch on
+// shooting stars, sinks the hills as the page scrolls, holds the night sky
+// nearly still in the window behind them, and answers a touch on
 // the sun, the moon and the stars.
 import type { JSX } from 'preact'
 
@@ -227,7 +228,7 @@ export let Sky = () => {
           </g>
           <circle class='Sky_Sun' cx={SUN.x} cy={SUN.y} r={SUN.r} />
         </g>
-        <g class='Sky_Night'>
+        <g class='Sky_Night Sky_Deep'>
           <g class='Sky_Stars'>{stars}</g>
           <circle
             class='Sky_Halo'

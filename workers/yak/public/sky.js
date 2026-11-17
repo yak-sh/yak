@@ -7,7 +7,10 @@
 // his hooves); --rule and --rule2, the pencil lines above and below the
 // section after the hero. A sixth, --scroll, is how far the page has
 // scrolled, in his units, set on the hills: the farther a range, the more of
-// it sinks behind the line as the page goes up.
+// it sinks behind the line as the page goes up. The night sky behind them,
+// its stars, moon and shooting stars, is farther still, and hardly moves at
+// all: --held, set on it, sinks it by all but a twentieth of the scroll, so
+// in the window it stays nearly where it is while the hills go up past it.
 //
 // At dusk, birds fly by now and then (<.Sky data-birds="most lo hi low
 // high">: how many in a flock at most, the seconds between flocks, and how
@@ -39,9 +42,16 @@
   let often = (f, lo, hi, wait = between(lo, hi)) =>
     setTimeout(() => (f(), often(f, lo, hi)), wait * 1000)
 
+  // how much of the scroll the night sky sinks by, to stay in the window
+  const HOLD = .95
   let hills = sky?.querySelector('.Sky_Hills')
-  let u = 1
-  let scroll = () => hills.style.setProperty('--scroll', n1(scrollY / u) + 'px')
+  let deep = sky?.querySelector('.Sky_Deep')
+  let u = 1, held = 0
+  let scroll = () => {
+    held = calm.matches ? 0 : HOLD * scrollY / u
+    hills.style.setProperty('--scroll', n1(scrollY / u) + 'px')
+    deep?.style.setProperty('--held', n1(held) + 'px')
+  }
   let place = () => {
     let r = slot.getBoundingClientRect(), n = after.getBoundingClientRect()
     let set = (name, px) => sky.style.setProperty(name, px.toFixed(2) + 'px')
@@ -250,8 +260,13 @@
     if (sign) delete sign.dataset.out, delete sign.dataset.away
   }, true)
 
+  // where a circle of the sky's is in the window, the night sky's as far
+  // down as it is held
   let circle = (el) =>
-    at(Number(el.getAttribute('cx')), Number(el.getAttribute('cy')))
+    at(
+      Number(el.getAttribute('cx')),
+      Number(el.getAttribute('cy')) + (el.closest('.Sky_Deep') ? held : 0),
+    )
 
   // what a touch at (px, py) lands on: the sun, the moon, or the sky; a
   // touch within a finger's width of either counts
@@ -320,8 +335,9 @@
 
   // A shooting star from one point to another, in his units: its head runs
   // the way, its tail growing behind it and drawn back in as it burns out.
-  let night = sky?.querySelector('.Sky_Night')
+  // It is drawn into the night sky, so as far up as the sky is held down.
   let shoot = ([x, y], [x2, y2], size = 1) => {
+    y -= held, y2 -= held
     let way = Math.hypot(x2 - x, y2 - y) / size
     let turn = Math.atan2(y2 - y, x2 - x) * 180 / Math.PI
     let star = draw('g', {
@@ -329,7 +345,7 @@
       transform: `translate(${n1(x)} ${n1(y)}) rotate(${n1(turn)}) scale(${
         n1(size)
       })`,
-    }, night)
+    }, deep)
     let run = draw('g', { class: 'Sky_Run' }, star)
     let tail = draw('path', {
       class: 'Sky_Tail',
@@ -382,7 +398,7 @@
     )
   }
   let [rare, rarer] = (sky?.dataset.shoot ?? '').split(' ').map(Number)
-  if (night && far && rare && !calm.matches) {
+  if (deep && far && rare && !calm.matches) {
     often(wish, rare, rarer, between(5, 12))
   }
 

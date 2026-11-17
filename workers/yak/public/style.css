@@ -814,6 +814,11 @@
   .Sky_Star {
     fill: #f1e6d8;
   }
+  /* The night sky stays nearly still in the window as the page scrolls
+     (sky.js --held, in his units), and the hills go up past it. */
+  .Sky_Deep {
+    translate: 0 var(--held, 0px);
+  }
   .Sky_Fly {
     opacity: 0;
   }

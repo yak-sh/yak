@@ -173,6 +173,24 @@ test('the hills are told how far the page has scrolled, in his units', () => {
   assertEquals(hills.style.getPropertyValue('--scroll'), '300.0px')
 })
 
+test('the night sky hardly moves in the window as the page scrolls', () => {
+  let { el, on, scope, touch } = sky({ dark: true })
+  scope.scrollY = 300
+  on.scroll({})
+  let deep = el('.Sky_Deep') as HTMLElement
+  assertEquals(deep.style.getPropertyValue('--held'), '285.0px')
+  // the moon answers a touch where it now shows, held down with the stars
+  touch(MOON.x, MOON.y + 285)
+  assertEquals(el('.Sky_Moon').getAttribute('d'), moon(PHASES[1]))
+  let calm = sky({ dark: true, calm: true })
+  calm.scope.scrollY = 300
+  calm.on.scroll({})
+  assertEquals(
+    (calm.el('.Sky_Deep') as HTMLElement).style.getPropertyValue('--held'),
+    '0.0px',
+  )
+})
+
 test('for less motion nothing in the sky moves, and the moon still turns', () => {
   let day = sky({ calm: true })
   day.touch(SUN.x, SUN.y)
