@@ -167,7 +167,11 @@ export let coalesced = (
           send = async () => {
             if (pending.get(key) == work) pending.delete(key)
             try {
-              resolve(await door.consume(path, copied, request, {}, options))
+              // The call's own headers are set again past the inner door's
+              // scrub, as an uncoalesced call sets them.
+              resolve(
+                await door.consume(path, copied, request, headers, options),
+              )
             } catch (error) {
               reject(error)
             }

@@ -162,3 +162,16 @@ test('coalescing preserves a resending write and its idempotency key', async () 
     calls[0].headers.get(IDEMPOTENCY),
   ])
 })
+
+test('a shared read keeps call headers the inner door scrubs from its init', async () => {
+  let seen: (string | null)[] = []
+  let door = coalesced(
+    doorOf((r) => {
+      seen.push(r.headers.get('x-static'))
+      return Promise.resolve(new Response('ok'))
+    }, ['x-static']),
+    () => true,
+  )
+  await door.consume('/query?q=x', (r) => r.text(), {}, { 'x-static': '1' })
+  equal(seen, ['1'])
+})
