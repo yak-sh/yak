@@ -102,19 +102,47 @@ test('a failed body fails its readers and the next read starts anew', async () =
   equal(await (await next).text(), 'recovered')
 })
 
-test('a later caller cannot join a snapshot whose read already started', async () => {
+test('callers during a read share the next one, sent once it lands', async () => {
+  let f = fixture()
+  let first = f.door('/query')
+  f.flush()
+  let later = Array.from({ length: 50 }, () => f.door('/query'))
+  let other = f.door('/query?q=other')
+  f.flush()
+  equal(f.calls.length, 2)
+  f.answer(0, 'before')
+  equal(await (await first).text(), 'before')
+  f.flush()
+  equal(f.calls.length, 3)
+  let after = f.door('/query')
+  f.flush()
+  f.answer(2, 'next')
+  equal(
+    await Promise.all(later.map(async (r) => (await r).text())),
+    Array(50).fill('next'),
+  )
+  f.flush()
+  equal(f.calls.length, 4)
+  f.answer(1, 'other')
+  f.answer(3, 'last')
+  equal(await Promise.all([other, after].map(async (r) => (await r).text())), [
+    'other',
+    'last',
+  ])
+})
+
+test('a read that fails still sends the one waiting behind it', async () => {
   let f = fixture()
   let first = f.door('/query')
   f.flush()
   let later = f.door('/query')
+  f.answers[0](
+    new Response(new ReadableStream({ start: (c) => c.error(Error('cut')) })),
+  )
+  equal((await Promise.allSettled([first])).map((r) => r.status), ['rejected'])
   f.flush()
-  let sent = f.calls.length
-  f.answers.forEach((_, n) => f.answer(n, String(n)))
-  equal(await Promise.all([first, later].map(async (r) => (await r).text())), [
-    '0',
-    '1',
-  ])
-  equal(sent, 2)
+  f.answer(1, 'again')
+  equal(await (await later).text(), 'again')
 })
 
 test('a completed write separates reads begun while it was running', async () => {

@@ -413,11 +413,13 @@ across, which is how a socket upgrade reaches the object.
 `coalesced(door, reads, {hold?, turn?})` shares GETs that `reads(request)`
 accepts and that arrive before `turn` sends them, keyed by address and headers.
 Each caller gets its own response bytes. A read already sent answers no later
-caller, since its snapshot may predate that caller; a write or an excluded
-request separates batches. Select only finite read responses. `turn` defaults to
-a microtask; `hold` keeps the first caller's I/O alive until the body is read,
-as a Worker's `waitUntil` does. Wrap a resending door so reading the shared body
-participates in its retries.
+caller, since its snapshot may predate that caller, so one read of a request
+travels at a time: callers who ask it meanwhile share the next, sent the turn
+after it lands, and the object answers a burst of one read once a round trip. A
+write or an excluded request separates batches. Select only finite read
+responses. `turn` defaults to a microtask; `hold` keeps the first caller's I/O
+alive until the body is read, as a Worker's `waitUntil` does. Wrap a resending
+door so reading the shared body participates in its retries.
 
 `resending(door, { report?, wait? })` sends a call again, as `retried` paces it,
 when the runtime reset the object or lost the call: thrown, or answered as a

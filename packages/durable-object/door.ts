@@ -123,8 +123,12 @@ let copied = async (response: Response): Promise<() => Response> => {
 
 /** Share finite reads accepted by `reads` and queued before `turn` sends them,
  * each caller receiving its own bytes. A read already sent answers no later
- * caller: its snapshot may predate that caller. A write or an excluded read
- * separates batches. `hold` keeps the first caller's I/O alive. */
+ * caller: its snapshot may predate that caller. So one read of a request
+ * travels at a time: whoever asks it meanwhile shares the next, sent the turn
+ * after it lands, as passengers board the next lift rather than the one
+ * already moving. However many callers ask one read together, the object
+ * answers it once a round trip. A write or an excluded read separates
+ * batches. `hold` keeps the first caller's I/O alive. */
 export let coalesced = (
   door: Door,
   reads: (request: Request) => boolean,
@@ -133,13 +137,17 @@ export let coalesced = (
     turn?: (send: () => void) => void
   } = {},
 ): Door => {
+  // The batch still boarding for each read, and the one travelling.
   let pending = new Map<string, Promise<() => Response>>()
+  let moving = new Map<string, Promise<unknown>>()
   let apart = async (send: () => Promise<Response>) => {
     pending.clear()
+    moving.clear()
     try {
       return await send()
     } finally {
       pending.clear()
+      moving.clear()
     }
   }
   let ask = async (
@@ -163,9 +171,10 @@ export let coalesced = (
       let work = pending.get(key)
       if (!work) {
         let send!: () => void
-        work = new Promise<() => Response>((resolve, reject) => {
+        let batch = new Promise<() => Response>((resolve, reject) => {
           send = async () => {
-            if (pending.get(key) == work) pending.delete(key)
+            if (pending.get(key) == batch) pending.delete(key)
+            moving.set(key, landed)
             try {
               // The call's own headers are set again past the inner door's
               // scrub, as an uncoalesced call sets them.
@@ -177,9 +186,15 @@ export let coalesced = (
             }
           }
         })
-        pending.set(key, work)
-        hold?.(work.then(() => {}, () => {}))
-        turn(send)
+        let landed: Promise<void> = batch.then(() => {}, () => {})
+        void landed.then(() => {
+          if (moving.get(key) == landed) moving.delete(key)
+        })
+        pending.set(key, work = batch)
+        hold?.(landed)
+        let ahead = moving.get(key)
+        if (ahead) void ahead.then(() => turn(send))
+        else turn(send)
       }
       return (await work)()
     })(path, init, headers)
