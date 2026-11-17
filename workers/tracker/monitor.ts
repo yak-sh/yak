@@ -53,6 +53,14 @@ let probe = async (send: typeof fetch, { name, url, status }: Probe) => {
   }
 }
 
+/** Why a door is down: it failed twice in a row, or '' when either ask
+ * answered as it serves. One request lost on the platform's own hop, with
+ * the door answering every other ask that minute, is not a door down; a door
+ * that is down fails the second ask too, and a failure our code throws is
+ * reported where it is caught. */
+let down = async (send: typeof fetch, door: Probe) =>
+  await probe(send, door) && await probe(send, door)
+
 /** Each door's failures group as a bug of its own: the connector's door asks
  * no store, and an app's asks the directory, so they fail for different
  * reasons. */
@@ -76,7 +84,7 @@ export let monitor = async (
       fault,
       at: new Date(now).toISOString(),
     }))
-  let reasons = await Promise.all(PROBES.map((door) => probe(send, door)))
+  let reasons = await Promise.all(PROBES.map((door) => down(send, door)))
   for (let [i, reason] of reasons.entries()) {
     if (reason) await failed(uptime(PROBES[i]), reason)
   }

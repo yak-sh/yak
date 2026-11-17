@@ -18,6 +18,14 @@ let hangs =
     url.includes('/api/me')
       ? Promise.reject(late)
       : healthy(url)) as typeof fetch
+// The app's door losing its first ask and answering the next.
+let lost = () => {
+  let asked = 0
+  return ((url: string) =>
+    url.includes('/api/me') && asked++ == 0
+      ? Promise.reject(late)
+      : healthy(url)) as typeof fetch
+}
 // What one pass files, as [fault, message] pairs.
 let filed = async (send: typeof fetch, last?: number) => {
   let rows: Bundle[] = []
@@ -76,6 +84,10 @@ test('a door that hangs past the deadline files the bug naming it', async () => 
     'app probe: no answer within 10 s from ' +
     'https://yourname.yaks.app/recipes/api/me',
   ]])
+})
+
+test('a door that answers when asked again files nothing', async () => {
+  equal(await filed(lost(), now), [])
 })
 
 test('an overdue heartbeat files the heartbeat bug', async () => {
