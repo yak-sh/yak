@@ -1,3 +1,4 @@
+import { audit } from './admin-action.ts'
 // The mover's sweep door (mover.ts, D-45640): every store the platform has,
 // and one store at a time asked to rehearse its rules or to move what it owes.
 // `yak admin move` walks the list and paces the asking; this door never loops
@@ -191,6 +192,7 @@ let copying = async (
   req: Request,
   env: Env,
   dir: ReturnType<typeof dirOf>,
+  who: Who,
 ): Promise<Response> => {
   let listed = async () =>
     (await dir.all()).map(({ eid, slug }) => ({ eid, slug }))
@@ -207,6 +209,7 @@ let copying = async (
   if (planned(body) && !(await listed()).some((s) => s.eid == space)) {
     return json(404, 'no_space', `no space is ${space || '(nothing)'}`)
   }
+  await audit(env, who, { operation: 'operator_copy', space })
   return await builderOf(env, space)(() =>
     new Request(`https://builder${COPY}`, {
       method: 'POST',
@@ -289,7 +292,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     return relocating(req, env, dir, who)
   }
   if (new URL(req.url).pathname == OPERATOR_PATH) {
-    return copying(req, env, dir)
+    return copying(req, env, dir, who)
   }
   if (new URL(req.url).pathname == STORE_COPY_PATH) {
     return storeCopying(req, env)
@@ -305,6 +308,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     return json(404, 'no_store', `no store is named ${name || '(nothing)'}`)
   }
   let rehearse = url.searchParams.get('rehearse') == '1'
+  await audit(env, who, { operation: 'move', store: name, rehearse })
   return await storeOf(env.STORE, name)(
     `/move${rehearse ? '?rehearse=1' : ''}`,
     { method: 'POST' },

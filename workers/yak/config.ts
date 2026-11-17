@@ -35,6 +35,7 @@ export let directoryConfig: Config = {
       ],
     },
     provenance,
+    { use: '@yaks/admin', facets: ['vocab'], words: ['admin_action'] },
     // Who changed a space's or an app's address or title, its seats and
     // invitations, when and from what (T-135993): read as `_change` and `_tx`
     // rows. Only these words: the rest of the directory is written on every

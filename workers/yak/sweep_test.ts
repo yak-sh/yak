@@ -1,3 +1,4 @@
+import { meta } from './meta.ts'
 // The mover's sweep door (sweep.ts) over the platform in memory: the owner of
 // the platform's space lists every store and reaches one at a time; nobody
 // else does, and a name the directory does not hold wakes nothing.
@@ -91,6 +92,17 @@ test('the platform’s owner sweeps every store, one at a time', async () => {
   )
   let rehearsed = await door(JEFF, '?store=ada/notes.abc123&rehearse=1', 'POST')
   assertEquals(rehearsed.body.store, 'ada/notes.abc123')
+  let [action] = await meta(scenario.env).query(
+    '.admin_action.operation=move&*',
+  )
+  assertEquals(action.admin_action, {
+    person: JEFF,
+    operation: 'move',
+    store: 'ada/notes.abc123',
+    rehearse: true,
+  })
+  assertEquals((action.created as { by: string }).by, JEFF)
+  assertEquals(typeof (action.created as { via: string }).via, 'string')
   assertEquals(
     (await door(JEFF, '?store=ada/nothing', 'POST')).body.error.code,
     'no_store',
@@ -146,6 +158,10 @@ test('the platform’s owner reads a space’s Operator store out, a table at a 
     true,
   )
   assertEquals((await ask('?space=nobody', {})).body.error.code, 'no_space')
+  let copied = await meta(env).query('.admin_action.operation=operator_copy&*')
+  assertEquals(copied.length, 2)
+  assertEquals((copied[0].admin_action as { space: string }).space, ada.eid)
+  assertEquals((copied[0].created as { by: string }).by, JEFF)
 })
 
 test('the platform’s owner reads an app’s store out, a table at a time, and nobody else does', async () => {

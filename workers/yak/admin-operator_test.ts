@@ -1,3 +1,5 @@
+import { meta } from './meta.ts'
+import { TOOLS } from './tools.ts'
 // The admin's view of a space's Operator (admin.ts `operatorPage`): every
 // person's conversation with it, each opening on the page its chat app
 // draws, what its model was told and offered included, and for nobody else.
@@ -397,5 +399,37 @@ test('an entry says when it was sent once, by the kit time on its line', () => {
       t.getAttribute('datetime')
     ),
     [atTime],
+  )
+})
+
+test('admin page and tool reads record the administrator and their requested conversation', async () => {
+  let target = rootOf(eid, jeff), via = crypto.randomUUID()
+  await get(`${at}/${target}`)
+  await TOOLS.find((t) => t.name == 'operator_read')!.run({
+    env: p.env,
+    dir,
+    person: root,
+    who: { person: root, via: 'oauth', instrument: via },
+  }, { space: 'clerk', task: target })
+  let rows = await meta(p.env).query(
+    `.admin_action.space=${eid} .admin_action.target=${target} &*`,
+  )
+  for (let operation of ['operator_conversation', 'operator_read']) {
+    let action = rows.find((row) =>
+      (row.admin_action as { operation: string }).operation == operation
+    )!
+    assertEquals((action.admin_action as { person: string }).person, root)
+    assertEquals((action.created as { by: string }).by, root)
+    if (operation == 'operator_read') {
+      assertEquals((action.created as { via: string }).via, via)
+    }
+  }
+  let before = rows.length
+  await get(`${at}/${target}`, jeff)
+  assertEquals(
+    (await meta(p.env).query(
+      `.admin_action.space=${eid} .admin_action.target=${target} &*`,
+    )).length,
+    before,
   )
 })

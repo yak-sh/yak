@@ -3,6 +3,14 @@
 Platform operations on yaks.app, exposed as `yak admin` tools by this box's
 unpublished plugin. Sign-ins belong to @yaks/connections, not to admin.
 
+Privileged Operator reads, Operator store copies and move requests are recorded
+in the directory as
+`admin_action{person, operation, space, target, store,
+rehearse}`, with the
+actor, instrument and time in `created{by, via, at}`. They record the authorized
+request before dispatch. Read them with
+`yak admin query yak/platform '.admin_action ?created' --as admin@bot.yak.sh`.
+
 ## The account an operation uses
 
 `yak auth yaks.app` signs in. Without `--as`, an operation uses the connection

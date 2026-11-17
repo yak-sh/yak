@@ -829,6 +829,44 @@
         "thread",
         "text"
       ]
+    },
+    "admin_action": {
+      "component": true,
+      "journal": false,
+      "wire": false,
+      "type": "object",
+      "description": "An authorized request to inspect Operator conversations or run a store move. Kept in the platform directory; created records the actor, instrument and time, while person identifies the administrator whose authority was used. The record names the requested operation and targets, never conversation content.",
+      "properties": {
+        "person": {
+          "type": "string",
+          "ref": "person",
+          "death": "keep",
+          "stamped": true
+        },
+        "operation": {
+          "type": "string",
+          "stamped": true
+        },
+        "space": {
+          "type": "string",
+          "ref": "space",
+          "death": "keep",
+          "stamped": true
+        },
+        "target": {
+          "type": "string",
+          "stamped": true,
+          "description": "the task or conversation id requested, including a short handle"
+        },
+        "store": {
+          "type": "string",
+          "stamped": true
+        },
+        "rehearse": {
+          "type": "boolean",
+          "stamped": true
+        }
+      }
     }
   }
 }

@@ -1,5 +1,6 @@
 // The kernel's door to a space's Builder: its request protocol and socket
 // frames, independent of the Durable Object that keeps the conversation.
+import { audit } from './admin-action.ts'
 import { jittered } from '@yaks/durable-object/resets'
 import { type Level, level } from '@yaks/member'
 import { ahead, fetchOf, WAKE } from './door.ts'
@@ -270,6 +271,15 @@ export let operatorDoor = async (
   path: string,
   args: unknown,
 ) => {
+  if (who.administrative && ['read', 'work', 'conversation'].includes(path)) {
+    let asked = (args ?? {}) as { task?: string; open?: string }
+    let target = asked.task || asked.open
+    await audit(env, who, {
+      operation: `operator_${path}`,
+      space: space.eid,
+      ...target ? { target } : {},
+    })
+  }
   let response = await builderOf(env, space.eid)(() =>
     new Request(`https://builder/operator/${path}`, {
       method: 'POST',

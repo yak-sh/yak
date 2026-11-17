@@ -1,9 +1,8 @@
 import type { Bundle } from '@yaks/graph'
 import type { Args, Ctx, Tool } from './tool.ts'
-import { inSpace, refuse, rejected, SPACE, str } from './tool.ts'
-import { builderOf, SPACE as HEADER } from './build-door.ts'
+import { inSpace, refuse, SPACE, str } from './tool.ts'
+import { operatorDoor } from './build-door.ts'
 import { writes } from '@yaks/member'
-import { vouched } from './session.ts'
 
 let ask = async (
   ctx: Ctx,
@@ -21,21 +20,13 @@ let ask = async (
   if (!writes(who.role)) {
     throw refuse('access', 'only a member who writes can read operator work')
   }
-  let response = await builderOf(ctx.env, space.eid)(() =>
-    new Request(`https://builder${path}`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        [HEADER]: space.eid,
-        ...vouched(who),
-      },
-      body: JSON.stringify(args),
-    })
-  )
-  let value = await response.json() as Record<string, unknown>
-  if (!response.ok) {
-    throw rejected(response.status, String(value.message ?? value.error))
-  }
+  let value = await operatorDoor(
+    ctx.env,
+    space,
+    who,
+    path.slice('/operator/'.length),
+    args,
+  ) as Record<string, unknown>
   // A request's answer is words, said once beside the rest of its value; a
   // conversation's read is its value alone.
   let { text, ...rest } = value

@@ -1,12 +1,12 @@
 // The declarations, and nothing else: the module a host imports at
 // `@yaks/admin/vocab`. Its words are the `admin` verbs, the deploy catch-up's
-// `rebuilt` mark and the `deployed` times it keeps (catchup.ts).
+// `rebuilt` and `deployed` marks, and the platform's `admin_action` records.
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 import manifest from './package.json' with { type: 'json' }
 
-/** The `admin` tools, the `rebuilt` mark and `deployed`. */
+/** The admin tools and their records. */
 export let adminDoc: VocabDoc = doc
 
 /** What this package is: its manifest's description, the one place it is
