@@ -51,21 +51,35 @@ let emailCard = async (r: Response) => {
   )
 }
 
-let form = (
+let browsers = new WeakMap<Kernel, Map<string, string>>()
+let form = async (
   k: Kernel,
   path: string,
   fields: Record<string, string>,
   cookie?: string,
-) =>
-  k.at('yaks.app', path, {
+) => {
+  let jar = browsers.get(k) ?? new Map<string, string>()
+  browsers.set(k, jar)
+  let address = fields.address || fields.email
+  let signing = path == '/login' || path == '/login/code'
+  let on = cookie ?? (signing ? jar.get(address) : undefined)
+  let res = await k.at('yaks.app', path, {
     method: 'POST',
     redirect: 'manual',
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
-      ...(cookie ? { cookie } : {}),
+      ...on ? { cookie: on } : {},
     },
     body: new URLSearchParams(fields).toString(),
   })
+  if (path == '/login' && cookie === undefined) {
+    let kept = res.headers.getSetCookie().find((c) =>
+      c.startsWith(`${COOKIE}=`)
+    )
+    if (kept) jar.set(address, kept.split(';')[0])
+  }
+  return res
+}
 
 // The agent case owns real OAuth grants seeded before timing reads and revocation.
 let agentGrants = await (async () => {

@@ -39,6 +39,7 @@ test('a visit an ad brought is told as a page seen, and its sign-up as a registr
 
   // The same browser signs up with its arrival in hand.
   let email = `${unique('ad')}@${k.host}`
+  let browser = ''
   let form = (path: string, fields: Record<string, string>) =>
     k.at(k.host, path, {
       method: 'POST',
@@ -46,11 +47,15 @@ test('a visit an ad brought is told as a page seen, and its sign-up as a registr
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
         'user-agent': BROWSER,
-        cookie: came.split(';')[0],
+        cookie: [came.split(';')[0], browser].filter(Boolean).join('; '),
       },
       body: new URLSearchParams(fields).toString(),
     })
-  await (await form('/login', { address: email })).body?.cancel()
+  let asked = await form('/login', { address: email })
+  browser =
+    asked.headers.getSetCookie().find((c) => c.startsWith('yak_session='))!
+      .split(';')[0]
+  await asked.body?.cancel()
   let inn = await form('/login/code', {
     address: email,
     code: await mailed(k, email),

@@ -37,11 +37,8 @@
 // sent here from. Sealed, a leaked link cannot be re-aimed at a stranger's
 // page, and identity.ts still judges both the way it judges the code form's.
 //
-// There is no guessing ceiling of this door's own, deliberately: a forged `t`
-// fails the mac before anything is read at all, and a wrong `once` burns a try
-// on every code standing for that address, since it goes through the same
-// `spend`. A counter per request would cost every honest sign-in a write to
-// defend a 256-bit mac.
+// A forged pass fails its mac before any read. A letter's signed pass selects
+// only its own code, so an old link spends none of another browser's tries.
 import { opened, seal } from './lib/token.ts'
 import { type Row, shelf } from './grants.ts'
 import { onZone } from '@yaks/platform/routes'

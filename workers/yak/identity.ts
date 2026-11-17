@@ -222,6 +222,8 @@ import { system } from '@yaks/fp'
 import { textable } from './phones.ts'
 import { RETRY, source, within } from '@yaks/workerd/rate'
 import {
+  browserOf,
+  browsing,
   type Caller,
   minted,
   sessionAt,
@@ -239,6 +241,7 @@ import { Blocked, consentEid, shown } from '@yaks/phone'
 import { sendable, Undeliverable } from '@yaks/mail'
 import { credit } from './referral.ts'
 import { unauthorized, withAuth } from './asking.ts'
+import { instrumentEid } from '@yaks/platform/instrument'
 
 // What a grant carries and a token gives back: the person, nothing else.
 // Membership is read from the directory at request time, never a claim.
@@ -786,7 +789,9 @@ let send = async (
   }, apex(env))
   let kept = false
   try {
-    kept = !!await lodge(meta(env), secret(env), address, ask, o.from)
+    kept = !!await lodge(meta(env), secret(env), address, ask, o.from, {
+      browser: (await browserOf(req, env.SESSION_SECRET, env))?.via,
+    })
     if (!kept) return null
     step(env, 'code_sent', req, { who: address })
     if (text) {
@@ -876,6 +881,7 @@ export let textedIn = async (
 // and whether it was their first. An already-signed-in browser lands here too
 // and names none, because nothing was proved.
 type Landing = {
+  claim?: boolean
   person: string
   own?: Arrived['own']
   proved?: Proved
@@ -888,7 +894,7 @@ type Landing = {
 let landed = async (
   req: Request,
   env: Env,
-  { person, own: home, proved, session, newcomer }: Landing,
+  { person, own: home, proved, session, newcomer, claim }: Landing,
   q: string,
   back: string,
   c: Clock = clock(),
@@ -927,7 +933,9 @@ let landed = async (
       ads.after(env, 'signup', req)
     }
   }
-  await c.time('claimed', () => claimed(req, env, person))
+  if (!session || claim) {
+    await c.time('claimed', () => claimed(req, env, person))
+  }
   let set = await minted(req, env, secret(env), person, null, session)
   // Signing in grants nothing more. An authorize request it carried came
   // from whoever asked for the code or the letter, maybe somebody else
@@ -1047,15 +1055,17 @@ export let codeCheck = async (
   env: Host = {},
   newcomer?: string,
   session?: SessionSeed,
+  browser?: string,
 ): Promise<Arrived | Response> =>
-  await guess(store, address, digest, { newcomer, session }) ?? askCode({
-    address,
-    q,
-    back,
-    why:
-      'That code has expired or was mistyped. Type it again, or send a new one.',
-    status: 400,
-  }, env)
+  await guess(store, address, digest, { newcomer, session, browser }) ??
+    askCode({
+      address,
+      q,
+      back,
+      why:
+        'That code has expired or was mistyped. Type it again, or send a new one.',
+      status: 400,
+    }, env)
 
 // What a sign-in proved, for the funnel (`landed`): whether it was their
 // first, and the address it is for (funnel.ts `step`).
@@ -1069,6 +1079,7 @@ let proving = (
   person: arrived.person,
   newcomer,
   own: arrived.own,
+  claim: arrived.claim,
   session: arrived.session,
   proved: { first: arrived.first, who: canon(address), address: true },
 })
@@ -1301,6 +1312,13 @@ let clientName = async (env: Env, ask: AuthRequest) =>
 let ours = async (req: Request, env: Env): Promise<Response> => {
   let url = new URL(req.url)
   let path = url.pathname
+  if (
+    env.SESSION_SECRET && req.method == 'POST' &&
+    (path == '/login' || path == '/login/code') &&
+    !await browserOf(req, env.SESSION_SECRET, env)
+  ) {
+    return browsing(req, env, (browser) => ours(browser, env))
+  }
   // A POST that carries no form at all is a form with nothing in it: the
   // page below simply asks again, rather than throwing at a stray body.
   let form = req.method == 'POST'
@@ -1558,6 +1576,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       // one trip for the code, who they are and whether it is their first
       // sign-in.
       let newcomer = await c.time('credentials', () => arrivingOn(env, req))
+      let session = await sessionStart(req, env)
       let arrived = await c.time('check', async () =>
         codeCheck(
           meta(env),
@@ -1567,7 +1586,8 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
           back,
           env,
           newcomer,
-          await sessionStart(req, env),
+          session,
+          instrumentEid(session.via),
         ))
       if (arrived instanceof Response) return timed(arrived, c)
       return timed(

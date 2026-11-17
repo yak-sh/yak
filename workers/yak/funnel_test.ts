@@ -348,6 +348,7 @@ test("each of the home page's calls to action sends its name when clicked", asyn
 test("signing in through the doors in a browser counts a person's steps, and a test account's apart", async () => {
   let k = await kernel()
   let signs = async (address: string) => {
+    let browser = ''
     let form = (path: string, fields: Record<string, string>) =>
       k.at(k.host, path, {
         method: 'POST',
@@ -355,11 +356,16 @@ test("signing in through the doors in a browser counts a person's steps, and a t
         headers: {
           'content-type': 'application/x-www-form-urlencoded',
           'user-agent': BROWSER,
+          ...browser ? { cookie: browser } : {},
         },
         body: new URLSearchParams(fields).toString(),
       })
     let before = k.views.points.length
-    await (await form('/login', { address })).body?.cancel()
+    let asked = await form('/login', { address })
+    browser =
+      asked.headers.getSetCookie().find((c) => c.startsWith('yak_session='))!
+        .split(';')[0]
+    await asked.body?.cancel()
     let inn = await form('/login/code', {
       address,
       code: await mailed(k, address),
@@ -448,6 +454,7 @@ test("a stranger's way is read stage by stage, a crawler's and Meta's reviewer's
   await opens('Googlebot/2.1')
   await opens('facebookexternalhit/1.1')
   let address = `${unique('ada')}@example.com`
+  let browser = ''
   let form = (path: string, fields: Record<string, string>) =>
     k.at(k.host, path, {
       method: 'POST',
@@ -455,10 +462,15 @@ test("a stranger's way is read stage by stage, a crawler's and Meta's reviewer's
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
         'user-agent': BROWSER,
+        ...browser ? { cookie: browser } : {},
       },
       body: new URLSearchParams(fields).toString(),
     })
-  await (await form('/login', { address })).body?.cancel()
+  let asked = await form('/login', { address })
+  browser =
+    asked.headers.getSetCookie().find((c) => c.startsWith('yak_session='))!
+      .split(';')[0]
+  await asked.body?.cancel()
   let inn = await form('/login/code', {
     address,
     code: await mailed(k, address),

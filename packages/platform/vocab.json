@@ -829,6 +829,13 @@
       "journal": false,
       "type": "object",
       "properties": {
+        "browser": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the verified browser that asked for this code; typed guesses and the letter allowance belong to it"
+        },
         "email": {
           "type": "string",
           "stamped": true,

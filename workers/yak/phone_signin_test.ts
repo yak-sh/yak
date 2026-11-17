@@ -35,16 +35,25 @@ let k = await fresh({
 })
 cleanup(() => k.stop())
 
-let form = (path: string, fields: Record<string, string>, ip = '') =>
-  k.at('yaks.app', path, {
+let browser = ''
+let form = async (path: string, fields: Record<string, string>, ip = '') => {
+  let res = await k.at('yaks.app', path, {
     method: 'POST',
     redirect: 'manual',
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
+      ...browser ? { cookie: browser } : {},
       ...(ip ? { 'cf-connecting-ip': ip } : {}),
     },
     body: new URLSearchParams(fields).toString(),
   })
+
+  let kept = res.headers.getSetCookie().find((c) =>
+    c.startsWith('yak_session=')
+  )
+  if (kept) browser = kept.split(';')[0]
+  return res
+}
 
 let page = async (r: Response) => parseHTML(await r.text()).document
 

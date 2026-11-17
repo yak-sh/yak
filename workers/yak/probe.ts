@@ -638,16 +638,24 @@ export let signIn = async (
   k: Pick<Kernel, 'at' | 'host' | 'secret'> & Mailbox,
   email = `${unique('probe')}@${k.host}`,
 ): Promise<Person> => {
+  let browser = ''
   let form = (path: string, fields: Record<string, string>) =>
     k.at(k.host, path, {
       method: 'POST',
       redirect: 'manual',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        ...browser ? { cookie: browser } : {},
+      },
       body: new URLSearchParams(fields).toString(),
     })
   let received = letters(k, email).length
   let asked = await form('/login', { address: email })
   if (asked.status != 200) throw new Error(`login: ${await asked.text()}`)
+  browser =
+    asked.headers.getSetCookie().find((c) => c.startsWith(`${COOKIE}=`))?.split(
+      ';',
+    )[0] ?? ''
   await asked.body?.cancel()
   let code = await mailed(k, email, received)
   let inn = await form('/login/code', { address: email, code })

@@ -49,15 +49,11 @@ let counted = (tries: number | null | undefined) =>
     ? counts[tries]
     : token(tries)
 
-// Three letters an hour to any one address. Signing in clears every row for
-// the address, so the count only ever reaches three for someone who asked and
-// never arrived — whose mail is broken, which a fourth code does not fix —
-// while a loop pointed at a stranger gets three letters an hour instead of as
-// many as it can ask for. The per-source ceiling is the door's, not this
-// file's (identity.ts, @yaks/workerd/rate `SIGNIN_RATE`): the address is what an email
-// bomb is aimed at, and where the asking comes from is a fact about the
-// request, which `mint` never sees.
+// Three letters per browser and address per hour, with a larger inbox-wide
+// ceiling so another browser can still sign in. Texts keep the three-per-number
+// ceiling because each delivery costs. The per-source limit is at the door.
 export let SENDS = 3
+export let ADDRESS_SENDS = 30
 export let WINDOW = 60 * 60_000
 
 // Five texted codes an hour from any one visitor. A text costs us and lands on
@@ -76,6 +72,7 @@ export type Signin = {
     from?: string
     person?: string
     space?: string
+    browser?: string
     code: string
     expires: string
     tries: number
@@ -237,7 +234,14 @@ export let asked = (ask: Bundle, rows: Signin[], now: number): Bundle[] => {
   let stale = rows.filter((r) => !standing(now)(r)).map((r) =>
     bury(r.entity.eid)
   )
-  return rows.filter(standing(now)).length >= SENDS ? stale : [...stale, ask]
+  let live = rows.filter(standing(now))
+  let scope = ask.signin as Signin['signin']
+  let own = live.filter(({ signin: r }) =>
+    r.browser == scope.browser && r.person == scope.person &&
+    r.space == scope.space
+  )
+  let limit = scope.email ? ADDRESS_SENDS : SENDS
+  return own.length >= SENDS || live.length >= limit ? stale : [...stale, ask]
 }
 
 /**
@@ -331,17 +335,17 @@ let open = (r: Signin, now: number) =>
 // One trip: the store reads the address's rows and decides in the write's
 // own transaction (`asked`), so asks sent at once cannot all pass the
 // ceiling, and the answer says whether the row was written.
+export type SigninScope = { person?: string; space?: string; browser?: string }
+
 export let mint = async (
   store: Meta,
   secret: string,
   address: string,
   from = '',
-  contact?: { person: string; space: string },
+  scope?: SigninScope,
 ) => {
   let ask = drawn()
-  return await lodge(store, secret, address, ask, from, contact)
-    ? ask.code
-    : null
+  return await lodge(store, secret, address, ask, from, scope) ? ask.code : null
 }
 
 /** A code about to be asked for: its digits and when it dies, drawn before
@@ -362,14 +366,14 @@ export let lodge = async (
   address: string,
   ask: Ask,
   from = '',
-  contact?: { person: string; space: string },
+  scope?: SigninScope,
 ): Promise<string | null> => {
   let applied = await apply(store, [{
     entity: { eid: '$code' },
     signin: {
       [key(address)]: canon(address),
       ...(from && texted(canon(address)) ? { from } : {}),
-      ...contact,
+      ...scope,
       code: await mac(address, ask.code, secret),
       expires: ask.expires,
       tries: 0,
@@ -378,11 +382,8 @@ export let lodge = async (
   return minted(applied).$code ?? null
 }
 
-// Spend a code: the person it signs in for any code still open on this
-// address — several can stand at once — else null. Signing in ends the
-// address's whole story: the codes and the records that counted them go
-// together, in the write that took the guess, so a person who gets in starts
-// over with a full three.
+// A typed code spends this browser's codes for the address. An emailed link
+// spends its own code from any browser. Scoped contact codes sign nobody in.
 //
 // The try is taken before the guess is compared, in the store's own
 // transaction, and each count on the precondition that it is still the count
@@ -402,6 +403,7 @@ export let spend = async (
  * build the person signing in is handed when they are a newcomer (newcomer.ts
  * `keep`), and `via` is how the code came, a code typed or a letter's link followed (link.ts). */
 export type Arrival = {
+  browser?: string
   session?: SessionSeed
   newcomer?: string
   via?: Via
@@ -416,6 +418,8 @@ export type Via = 'code' | 'link'
  * which is the funnel's sign-up (funnel.ts), and the space marked their own,
  * where they land, when they have one (directory.ts `own`). */
 export type Arrived = {
+  /** This browser has guest attribution for the landing to claim. */
+  claim?: boolean
   session?: SessionSeed
   person: string
   first: boolean
@@ -432,7 +436,8 @@ export let guess = async (
   store: Meta,
   address: string,
   want: string,
-  { newcomer, via = 'code', person, space, source, session }: Arrival = {},
+  { newcomer, via = 'code', person, space, source, session, browser }: Arrival =
+    {},
 ): Promise<Arrived | null> => {
   for (;;) {
     try {
@@ -445,6 +450,7 @@ export let guess = async (
           ...(newcomer ? { newcomer } : {}),
           ...(person ? { person, space, source } : {}),
           ...(session ? { session } : {}),
+          ...(browser ? { browser } : {}),
         },
       }])
       let who = applied.find((b) => b.$alias == '$who')
@@ -454,6 +460,7 @@ export let guess = async (
       return {
         person: who.entity.eid,
         first: !!signed?.first,
+        ...session ? { claim: applied.some((b) => b.browser) } : {},
         ...(session &&
             applied.some((b) =>
               b.entity.eid == session.eid && b.browser_session

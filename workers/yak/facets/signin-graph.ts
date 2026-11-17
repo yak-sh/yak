@@ -21,6 +21,7 @@
 // pages-graph.ts `quietened`), and its counts are checked by the core's
 // `$was` like any caller's.
 import { line } from '@yaks/query'
+import { instrumentEid } from '@yaks/platform/instrument'
 import type { Bundle, Plugin, Tx } from '@yaks/graph'
 import { hook } from '@yaks/graph/plugin'
 import { Refused } from '@yaks/graph/errors'
@@ -51,6 +52,7 @@ import {
 import { ended, sessionRow, type SessionSeed } from '../browser-sessions.ts'
 
 type Guess = {
+  browser?: string
   session?: SessionSeed
   email?: string
   phone?: string
@@ -110,12 +112,21 @@ let arrival = (
                 person.entity.eid,
                 handed ? undefined : { ...who, ...person } as unknown as Row,
               ),
-              (home) => [
-                person,
-                ...session ? [sessionRow(session, person.entity.eid)] : [],
-                ...home,
-                ...cancelled,
-              ],
+              (home) =>
+                after(
+                  session
+                    ? tx.read(
+                      line`.entity.eid=${instrumentEid(session.via)}&.browser`,
+                    )
+                    : [],
+                  (browser) => [
+                    person,
+                    ...session ? [sessionRow(session, person.entity.eid)] : [],
+                    ...home,
+                    ...cancelled,
+                    ...browser,
+                  ],
+                ),
             ),
         )
       },
@@ -207,7 +218,10 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
         let decide = () =>
           after(rows(tx, address), (all) => {
             let scoped = all.filter((r) =>
-              r.signin.person == g.person && r.signin.space == g.space
+              r.signin.person == g.person && r.signin.space == g.space &&
+              (g.via == 'link'
+                ? r.signin.code == g.code
+                : !r.signin.browser || r.signin.browser == g.browser)
             )
             let wrote = guessed(scoped, g.code, now)
             if (!wrote.some((w) => w.tombstone)) return wrote
