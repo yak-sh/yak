@@ -319,6 +319,22 @@ let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 let addressIn = (row?: Record<string, unknown>) =>
   (row?.email as { address?: string } | undefined)?.address ?? null
 
+// The row of a person somebody can sign in as: one wearing an address or a
+// number, else null. A newcomer wears neither, and whoever started their
+// build may still hold their browser (identity.ts `begun`), so a door that
+// mints a credential reaching past this browser (a standing link, OAuth
+// consent) mints none for them: the account is the person their address
+// makes them (newcomer.ts `keep`, T-770).
+type Addressed = { email?: { address: string }; phone?: { number: string } }
+
+let addressed = async (env: Env, person: string | null) => {
+  if (!person) return null
+  let [row] = await meta(env).query(
+    `.entity.eid=${person}&.person ?email ?phone`,
+  ) as Addressed[]
+  return row?.email || row?.phone ? row : null
+}
+
 // The provider as connected.ts reads it, each wait on it an `oauth_wait`
 // (timing.ts). A person's grants are their directory rows (grant-rows.ts
 // `listing`), read through `dir`; theirs and each client are read once a
@@ -1017,10 +1033,14 @@ let stood = async (env: Env, standing: Standing) => {
 
 // A person a link proved without a code (a standing link, an invitation's),
 // read and stamped as signed in by link, the stamp after the answer, which
-// says nothing that depends on it (T-34158).
-let vouched = async (env: Env, person: string): Promise<Landing> => {
+// says nothing that depends on it (T-34158); or null for a person who is
+// gone, whom no link signs in, whatever its ledger says.
+let vouched = async (env: Env, person: string): Promise<Landing | null> => {
   let store = meta(env)
-  let [row] = await store.query(`.entity.eid=${person} ?signed_in ?email`)
+  let [row] = await store.query(
+    `.entity.eid=${person}&.person ?signed_in ?email`,
+  )
+  if (!row) return null
   let before = (row as Person | undefined)?.signed_in
   background(
     store.apply([{
@@ -1053,8 +1073,8 @@ let signCard = async (env: Env, at: Parameters<typeof askEmail>[0] = {}) => {
 // costs a try on every code standing for the address exactly as a mistyped one
 // does. The person is found or minted in the write that spends it and nowhere
 // earlier, which is what keeps asking for a code from writing a person for
-// every address anyone types; an address new here that a newcomer proves
-// becomes theirs (signin.ts `arriving`).
+// every address anyone types; a newcomer's browser proving one is handed
+// what the newcomer built (newcomer.ts `keep`).
 let spent = async (env: Env, req: Request, once: Once) => {
   let arrived = await spend(meta(env), secret(env), once.email, once.code, {
     newcomer: await browser(env, req) ?? undefined,
@@ -1257,10 +1277,11 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   if (path == INVITE && req.method == 'POST') {
     let t = field('t'), dir = dirOf(env)
     let took = await taken(t, env, dir, secret(env))
-    if (!took) return door(t, env, dir, await browser(env, req), secret(env))
-    return quiet(
-      await landed(req, env, await vouched(env, took.person), '', took.link),
-    )
+    let arrived = took ? await vouched(env, took.person) : null
+    if (!took || !arrived) {
+      return door(t, env, dir, await browser(env, req), secret(env))
+    }
+    return quiet(await landed(req, env, arrived, '', took.link))
   }
 
   // The custom-domain end of cross-domain sign-in (`handoff`). index.ts sends
@@ -1506,6 +1527,15 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   if (path == LINK && req.method == 'POST') {
     let person = await browser(env, req)
     if (!person) return unauthorized(req, env)
+    if (!await addressed(env, person)) {
+      return Response.json({
+        error: {
+          code: 'no_address',
+          message:
+            'Give your email first: a standing link signs in an account, and this browser has none yet.',
+        },
+      }, { status: 403 })
+    }
     let book = links(env.OAUTH_KV)
     if (!book) {
       return Response.json({
@@ -1549,20 +1579,15 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     if (ask instanceof Response) return ask
     // Consent mints a connector token for the whole account, so it is the
     // browser's to give, never a bearer's (`browser`, T-705).
+    // A newcomer is asked to sign in, as a stranger is (`addressed`).
     let person = await browser(env, req)
-    let [row] = person
-      ? await meta(env).query(`.entity.eid=${person}`) as {
-        email?: { address: string }
-        phone?: { number: string }
-      }[]
-      : []
-    step(env, 'connector_start', req, { who: addressIn(row) })
-    if (!person) {
+    let row = await addressed(env, person)
+    step(env, 'connector_start', req, { who: addressIn(row ?? undefined) })
+    if (!person || !row) {
       return signCard(env, { q, who: await clientName(env, ask) })
     }
     return askAllow(
-      row?.email?.address ??
-        (row?.phone ? shown(row.phone.number) : 'yourself'),
+      row.email?.address ?? shown(row.phone!.number),
       q,
       await clientName(env, ask),
       await consenting(secret(env), person, q),
@@ -1573,7 +1598,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   if (path == '/oauth/allow' && req.method == 'POST') {
     let person = await browser(env, req)
     let q = field('q')
-    if (!person) return signCard(env, { q })
+    if (!person || !await addressed(env, person)) return signCard(env, { q })
     if (!await consented(secret(env), person, q, field('consent'))) {
       return new Response('That consent page has expired. Connect again.', {
         status: 403,

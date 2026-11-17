@@ -8,7 +8,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { cleanup, test } from '@yaks/testing'
 import type { Tool } from '@yaks/graph'
-import { fresh, mailed } from './probe.ts'
+import { authorizing, fresh, mailed } from './probe.ts'
 import type { Env } from './env.ts'
 import {
   atCeiling,
@@ -126,6 +126,19 @@ let signIn = (path: string, fields: Record<string, string>, on = cookie) =>
     },
     body: new URLSearchParams(fields).toString(),
   })
+// Before Dana keeps it, the browser is the newcomer's, and whoever holds it
+// may not be Dana (T-770): it mints no standing link and gives no
+// connector consent.
+let authorize = await authorizing(k)
+let linkAsked = await signIn('/login/link', { days: '365' })
+let consentCard =
+  await (await k.at('yaks.app', `/oauth/authorize?${authorize.q}`, {
+    headers: { cookie },
+  })).text()
+let consentPosted = await signIn('/oauth/allow', {
+  q: authorize.q,
+  consent: 'x',
+})
 let back = new URL(first.headers.get('location')!).pathname
 await (await signIn('/login', { address: 'dana@example.com', return: back }))
   .body?.cancel()
@@ -135,6 +148,7 @@ let signedIn = await signIn('/login/code', {
   return: back,
 })
 let dana = (await k.dir.owners(space))[0]
+let linkAfter = await signIn('/login/link', { days: '365' })
 let danaRow = (await row(dana))[0]
 let chatAfter = await k.at('yaks.app', back, {
   headers: { cookie: cookieOf(signedIn) },
@@ -330,18 +344,32 @@ test("a newcomer's chat asks for their email, to come back to it", () => {
   )
 })
 
-test("an address new here becomes the newcomer's own, and their chat stays theirs", () => {
+test("an address new here is a new person handed the newcomer's chat, and the newcomer goes", async () => {
   assertEquals(signedIn.status, 303)
   assertEquals(
     new URL(signedIn.headers.get('location')!, 'https://yaks.app').pathname,
     back,
   )
-  assertEquals(dana, owner)
+  assert(dana != owner, 'whoever held the newcomer holds nothing of Dana')
+  assertEquals(await row(owner), [])
   assertEquals(danaRow.email, { address: 'dana@example.com' })
   assertEquals(danaRow.newcomer, undefined)
   assertEquals(chatAfter.status, 200)
   assert(!chatAfterSaid.includes('This chat is not here'), chatAfterSaid)
   assert(!chatAfterSaid.includes('Keep this app'), 'nothing left to keep')
+})
+
+test('a newcomer mints no standing link and gives no consent', async () => {
+  assertEquals(linkAsked.status, 403)
+  assertEquals((await linkAsked.json()).error.code, 'no_address')
+  assert(!consentCard.includes('name="consent"'), 'the sign-in card instead')
+  assertEquals(consentPosted.headers.get('location'), null)
+  await consentPosted.body?.cancel()
+})
+
+test("the newcomer's browser, once kept on, mints nothing for its old cookie", async () => {
+  assertEquals(linkAfter.status, 403)
+  await linkAfter.body?.cancel()
 })
 
 test("an address with an account takes the newcomer's chat, signed in", () => {

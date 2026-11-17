@@ -396,9 +396,9 @@ export let spend = async (
   opts: Arrival = {},
 ) => guess(store, address, await mac(address, code, secret), opts)
 
-/** How a guess arrives: `newcomer` is who this browser is signed in as, taken
- * when they are a newcomer and nobody holds the address yet, and `via` is how
- * the code came, a code typed or a letter's link followed (link.ts). */
+/** How a guess arrives: `newcomer` is who this browser is signed in as, whose
+ * build the person signing in is handed when they are a newcomer (newcomer.ts
+ * `keep`), and `via` is how the code came, a code typed or a letter's link followed (link.ts). */
 export type Arrival = {
   newcomer?: string
   via?: Via
@@ -533,10 +533,9 @@ export let nameAt = async (store: Meta, email: string) =>
  * Who arrives at an address, as the one bundle that has them: the person
  * `found` wearing it, named `name` if nobody has; else the person at `eid`
  * minted wearing it. A bundle naming nothing but its eid writes nothing.
- * A sign-in decides it inside the guess that opens (facets/signin-graph.ts),
- * with `eid` the newcomer whose browser asked (newcomer.ts), so they stay who
- * they were, and their space, its chat and everything else said to be theirs
- * stays so.
+ * A sign-in decides it inside the guess that opens (facets/signin-graph.ts
+ * `arrival`), and a newcomer's browser asking is handed what the newcomer
+ * built after it (newcomer.ts `keep`).
  *
  * ```ts
  * import { arriving } from './signin.ts'

@@ -1260,11 +1260,41 @@ export let allowed = async (
   })
 }
 
+/** An authorize request from a client registered as `name`, sent back to
+ * `back`, and the verifier its code is exchanged with. */
+export let authorizing = async (
+  k: Pick<Kernel, 'at' | 'host'>,
+  { name = 'a roster probe', back = 'https://probe.invalid/cb' } = {},
+) => {
+  let reg = await k.at(k.host, '/oauth/register', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      client_name: name,
+      redirect_uris: [back],
+      token_endpoint_auth_method: 'none',
+      grant_types: ['authorization_code', 'refresh_token'],
+      response_types: ['code'],
+    }),
+  })
+  if (reg.status != 201) throw new Error(`register: ${await reg.text()}`)
+  let { client_id } = await reg.json() as { client_id: string }
+  let verifier = crypto.randomUUID() + crypto.randomUUID()
+  let q = new URLSearchParams({
+    response_type: 'code',
+    client_id,
+    redirect_uri: back,
+    scope: 'graph',
+    code_challenge: await challenge(verifier),
+    code_challenge_method: 'S256',
+  }).toString()
+  return { q, client_id, back, verifier }
+}
+
 export let bearerFor = async (
   k: Pick<Kernel, 'at' | 'host'>,
   cookie: string,
 ) => {
-  let back = 'https://probe.invalid/cb'
   let form = (
     path: string,
     fields: Record<string, string>,
@@ -1279,29 +1309,7 @@ export let bearerFor = async (
       },
       body: new URLSearchParams(fields).toString(),
     })
-  let reg = await k.at(k.host, '/oauth/register', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      client_name: 'a roster probe',
-      redirect_uris: [back],
-      token_endpoint_auth_method: 'none',
-      grant_types: ['authorization_code', 'refresh_token'],
-      response_types: ['code'],
-    }),
-  })
-  if (reg.status != 201) throw new Error(`register: ${await reg.text()}`)
-  let { client_id } = await reg.json() as { client_id: string }
-  let verifier = crypto.randomUUID() + crypto.randomUUID()
-  let q = new URLSearchParams({
-    response_type: 'code',
-    client_id,
-    redirect_uri: back,
-    state: 'roster',
-    scope: 'graph',
-    code_challenge: await challenge(verifier),
-    code_challenge_method: 'S256',
-  }).toString()
+  let { q, client_id, back, verifier } = await authorizing(k)
   let allow = await allowed(k, q, cookie)
   if (allow.status != 302) throw new Error(`allow: ${await allow.text()}`)
   await allow.body?.cancel()

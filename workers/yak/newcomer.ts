@@ -409,20 +409,25 @@ export let oneBuild = (env: Env, space: Space, now = new Date()) =>
 
 /**
  * A newcomer keeping what they built (D-146737), once they signed in on the
- * browser a newcomer `was`, as `person`. An address new here became the
- * newcomer's own (signin.ts `addressee`), so `person` is `was`: they stay
- * who they were, and their space, its apps, its chat and their Updates stay
- * theirs; they only stop being a newcomer. An address somebody already held
- * hands them everything that named the newcomer (handover.ts): in the
- * directory their owner seats, so the spaces and their apps are theirs, and
- * the browsers the newcomer held, so the guest work and the visits made on
- * them are theirs (attribution.ts, visit.ts); and in each space's Operator
- * store their chat, its requests and asks (operator-channels.ts
- * `handOver`). Each space is lifted to its plan's budget, and to the starter
- * too when this is the first space `person` has started. A space is their
- * own only when they own none yet. The newcomer then holds nothing and goes
- * (erase.ts `vacated`), and the browser is signed in as `person`. Nothing
- * happens for anyone who was not a newcomer.
+ * browser a newcomer `was`, as `person`. The address they proved is never
+ * the newcomer's own (facets/signin-graph.ts `arrival`, T-770): whoever
+ * started the build may still hold the newcomer's session, so the account is
+ * a person nobody else has been. Whether the address is new here or held
+ * already, they are handed everything that named the newcomer (handover.ts):
+ * in the directory their owner seats, so the spaces and their apps are
+ * theirs, and the browsers the newcomer held, so the guest work and the
+ * visits made on them are theirs (attribution.ts, visit.ts); and in each
+ * space's Operator store their chat, its requests and asks
+ * (operator-channels.ts `handOver`). Each space is lifted to its plan's
+ * budget, and to the starter too when this is the first space `person` has
+ * started. A space is their own only when they own none yet. The newcomer
+ * then holds nothing and goes, with every credential minted for them
+ * (erase.ts `vacated`), and the browser is signed in as `person`.
+ *
+ * A newcomer who proved a number of their own on the way (phone-contact.ts)
+ * is no newcomer to hand over: signing in with it, they are `person`, and
+ * they only stop being a newcomer. Nothing happens for anyone who was not a
+ * newcomer.
  */
 export let keep = async (
   env: Platform,

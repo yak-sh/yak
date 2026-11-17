@@ -11,12 +11,11 @@ import { guess, mac, TRIES } from './signin.ts'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { COOKIE, sealedOld, verify } from './lib/token.ts'
 import { CUT } from './lib/token_legacy.ts'
-import { allowed, type Kernel, kernel, signIn } from './probe.ts'
+import { allowed, authorizing, type Kernel, kernel, signIn } from './probe.ts'
 import { granting } from './dispatch.ts'
 import { SESSION } from './session.ts'
 
 let DAY = 86_400
-import { challenge } from '@yaks/oauth'
 
 // A form a page posts, with the cookie the browser carries and the address
 // that browser has in its bar (`from`), or no `Origin` at all.
@@ -39,29 +38,11 @@ let posted = (
   })
 
 // An authorize request from a client the attacker registered, aimed home.
-let authorizing = async (k: Kernel) => {
-  let back = 'https://attacker.invalid/cb'
-  let reg = await k.at('yaks.app', '/oauth/register', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      client_name: 'Claude',
-      redirect_uris: [back],
-      token_endpoint_auth_method: 'none',
-      grant_types: ['authorization_code', 'refresh_token'],
-      response_types: ['code'],
-    }),
-  })
-  let { client_id } = await reg.json()
-  return new URLSearchParams({
-    response_type: 'code',
-    client_id,
-    redirect_uri: back,
-    scope: 'graph',
-    code_challenge: await challenge('v'),
-    code_challenge_method: 'S256',
-  }).toString()
-}
+let attacking = async (k: Kernel) =>
+  (await authorizing(k, {
+    name: 'Claude',
+    back: 'https://attacker.invalid/cb',
+  })).q
 
 test(
   'a token minted for anything but a session is no cookie (T-37873)',
@@ -196,7 +177,7 @@ test(
     let k = await kernel()
     try {
       let me = await signIn(k)
-      let q = await authorizing(k)
+      let q = await attacking(k)
       // Registered as "Claude", sent to the attacker: both are on the card,
       // signed in or not.
       for (let cookie of [me.cookie, '']) {
@@ -216,7 +197,7 @@ test('a page in another space forges no signed-in form (T-37874)', async () => {
   try {
     let me = await signIn(k)
     let evil = 'https://eve.yaks.app'
-    let q = await authorizing(k)
+    let q = await attacking(k)
     // Each form the audit forged from a free space, posted by eve's page with
     // the visitor's cookie riding along: refused before any of them is read.
     let forged: [string, Record<string, string>][] = [

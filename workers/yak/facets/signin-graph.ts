@@ -62,19 +62,20 @@ let rows = (tx: Tx, address: string) =>
 let addressOf = (s: { email?: string; phone?: string }) =>
   s.email ?? s.phone ?? ''
 
-// Who signs in at an address, as the write finds them: the newcomer is
-// theirs only while nobody wears the address and they are still a newcomer.
-// Nothing asks what to call them (T-34236), so the front of their address
-// does (`called`), written, not merely derived, because a member row names a
-// person by their title and a titleless one reads back as a bare eid
+// Who signs in at an address, as the write finds them: the person wearing
+// it, else a person minted wearing it at `eid`. A newcomer never takes the
+// address themselves (T-770): whoever started their build may still hold
+// their browser's session, so the address is a new person's, and what the
+// newcomer built is handed to them after this write (newcomer.ts `keep`),
+// as it is to somebody who wore the address already. Nothing is minted them
+// here. Nothing asks what to call them (T-34236), so the front of their
+// address does (`called`), written, not merely derived, because a member row
+// names a person by their title and a titleless one reads back as a bare eid
 // (T-32733). It is theirs to change on their own space page. A number is no
 // name, and a person found by one is the one wearing it. They are stamped as
 // signed in at `at`, and the stamp says whether it is their first time, so
 // the write that signs them in answers the funnel's question too (T-149011).
 // The person comes first, under the request's `$alias`, then where they land.
-// Somebody wearing the address already, signing in on a newcomer's browser,
-// is handed what the newcomer built after this write (newcomer.ts `keep`),
-// so nothing is minted them here.
 let arrival = (
   tx: Tx,
   address: string,
@@ -86,19 +87,12 @@ let arrival = (
     after(
       newcomer ? tx.read(`.entity.eid=${newcomer}`) : [],
       ([row]) => {
-        let fresh = newcomerIs(row as Row | undefined)
-        let taken = !found && fresh
-        let who = (found ?? (taken ? row : undefined)) as Person | undefined
+        let who = found as Person | undefined
         let person = {
-          ...arriving(
-            address,
-            called(address),
-            found as Person | undefined,
-            taken ? newcomer : eid,
-          ),
+          ...arriving(address, called(address), who, eid),
           signed_in: stamped(who?.signed_in, at, via),
         }
-        let handed = !!found && fresh
+        let handed = newcomerIs(row as Row | undefined)
         return after(
           landing(
             tx,
