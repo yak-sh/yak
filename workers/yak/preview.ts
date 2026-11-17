@@ -95,6 +95,7 @@ import { unbase64 } from './bytes.ts'
 import { blobPrefix } from './blob-key.ts'
 import {
   type AppDraft,
+  type Branches,
   type Draft,
   type Drafted,
   drafting,
@@ -219,11 +220,24 @@ let previewing = (
   }
 }
 
-/** A branch of the app's store for a draft's preview (graph.ts
- * `#branching`), made on its first preview. The store's first branch turns
- * its versions on, and one still taking its live rows as their first versions
- * makes none yet, which is said for the caller to try again. */
-export let branching = (env: Env, space: Space, app: App) => () =>
+/** The branches of the app's store a draft's preview is given (written.ts
+ * `previewed`). One is made on a draft's first preview (graph.ts
+ * `#branching`): the store's first branch turns its versions on, and one
+ * still taking its live rows as their first versions makes none yet, which
+ * is said for the caller to try again. One another preview of the draft
+ * stamped first is dropped, and a drop that fails is reported, since the
+ * preview already has its branch. */
+export let branches = (env: Env, space: Space, app: App): Branches => ({
+  make: () => branching(env, space, app),
+  drop: async (branch) => {
+    let { dropBranch } = await import('./draft-merge.ts')
+    await dropBranch(appStore(env.STORE, space, app, env), branch).catch((e) =>
+      caught(e, { request: 'drop branch', space: space.slug, app: app.slug })
+    )
+  },
+})
+
+let branching = (env: Env, space: Space, app: App) =>
   appStore(env.STORE, space, app, env).consume(
     '/branches',
     async (res) => {
@@ -488,7 +502,7 @@ export let linkOf = async (
     app,
     of,
     who,
-    branching(ctx.env, space, app),
+    branches(ctx.env, space, app),
   )
   return {
     draft,
@@ -804,7 +818,7 @@ let target = async (req: Request, env: Env) => {
       held,
       of,
       { person: ticket.person, role: role!, via: ticket.app },
-      branching(env, space, held),
+      branches(env, space, held),
     ).catch((e) => {
       if (e instanceof CallError) return of
       throw e

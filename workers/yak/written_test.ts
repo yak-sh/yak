@@ -104,6 +104,18 @@ let vocab = loadVocab({
 // Match asynchronous storage answers, including rejected synchronous faults.
 let answer = <T>(read: () => T): Promise<T> => Promise.resolve().then(read)
 
+// A store's branches as a preview is given them: each made is the next
+// number from `first`, and each dropped is said.
+let branching = (first = 7) => {
+  let next = first
+  let dropped: number[] = []
+  return {
+    make: () => answer(() => next++),
+    drop: (branch: number) => answer(() => void dropped.push(branch)),
+    dropped,
+  }
+}
+
 let made = () => {
   let time = clock(Date.parse('2026-10-15T12:00:00Z'))
   let store = ram(vocab)
@@ -306,14 +318,14 @@ let made = () => {
     // The draft a read naming none takes.
     guess: async (who = WHO) => guessed(dir, app(), await drafts(), who),
     // The caller's own draft, previewed: its writes are told from then on.
-    preview: async (who = WHO, asked?: string) =>
+    preview: async (who = WHO, asked?: string, branches = branching()) =>
       previewed(
         dir,
         SPACE,
         app(),
         chosen(app(), await drafts(), who, asked)!,
         who,
-        () => Promise.resolve(7),
+        branches,
       ),
     // The app as it stood before drafts were rows: one draft, `app.draft`,
     // whose writes name it.
@@ -392,6 +404,18 @@ test('a write to a draft once previewed tells its files and shas once they land 
     ],
     at,
   }])
+})
+test('two first previews of a draft at once keep one branch, and drop the other', async () => {
+  let { write, drafts, preview } = made()
+  await write({ 'a.txt': 'one' })
+  let branches = branching()
+  let both = await Promise.all([
+    preview(WHO, undefined, branches),
+    preview(WHO, undefined, branches),
+  ])
+  let [kept] = await drafts()
+  assertEquals(both.map((d) => d.branch), [kept.branch, kept.branch])
+  assertEquals(branches.dropped, [kept.branch == 7 ? 8 : 7])
 })
 test('a write sent again sends only what did not land, and says so', async () => {
   let { write, puts } = repeatedWrite

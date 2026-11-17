@@ -358,7 +358,14 @@ export let opening = (
     : {
       entity: { eid: d.eid },
       ...Object.keys(marks).length ? { app_draft: marks } : {},
-      $was: { app_draft: { app: token(app.eid) } },
+      // A branch is given once: a second one stamped over it would leave the
+      // pages on a branch the first preview never set up.
+      $was: {
+        app_draft: {
+          app: token(app.eid),
+          ...extra.branch != null ? { branch: token(d.branch ?? null) } : {},
+        },
+      },
     }
 }
 
@@ -476,10 +483,20 @@ export type Drafted = {
  * page entries it reaches. Never refuses: the write has already landed. */
 export type Tell = (news: Drafted, before?: Draft) => Promise<void>
 
+/** The branches of an app's store a draft's preview is given (preview.ts
+ * `branches`): one made, and one let go of. */
+export type Branches = {
+  make: () => Promise<number>
+  drop: (branch: number) => Promise<void>
+}
+
 /** A draft marked as previewed the first time its link is asked for
  * (preview.ts), so its writes are told to the link's pages from then on, and
  * given the branch of the app's store its preview reads and writes on, which
- * `branching` makes; a draft nobody previewed costs a write nothing more.
+ * `branches` makes; a draft nobody previewed costs a write nothing more.
+ * Previews opened at once each make a branch, and only the first to stamp the
+ * draft keeps its own: the others find that one stamped, take it, and drop
+ * theirs, so every page of the draft reads the branch its words went to.
  * Answers the draft as it stands after. */
 export let previewed = async (
   dir: Directory,
@@ -487,17 +504,21 @@ export let previewed = async (
   app: App,
   d: AppDraft,
   who: Who,
-  branching: () => Promise<number>,
+  branches: Branches,
 ): Promise<AppDraft> => {
   let row = app
   let now = d
   let made: number | null = null
+  let kept = async (d: AppDraft) => {
+    if (made != null && made != d.branch) await branches.drop(made)
+    return d
+  }
   for (let n = 0; n < 5; n++) {
     let told = !!now.previewed || (!now.by && !!row.followed)
-    if (told && now.branch != null) return now
+    if (told && now.branch != null) return await kept(now)
     row = await waiting(dir, space, row, who)
     let at = new Date().toISOString()
-    let branch = now.branch ?? (made ??= await branching())
+    let branch = now.branch ?? (made ??= await branches.make())
     try {
       let { app: pointer, was } = unpointed(now)
       await dir.stamp({
@@ -511,12 +532,12 @@ export let previewed = async (
           }),
         ],
       }, vouched(who))
-      return {
+      return await kept({
         ...now,
         previewed: told ? now.previewed : at,
         branch,
         legacy: undefined,
-      }
+      })
     } catch (e) {
       if (!(e instanceof Stale)) throw e
       let found = (await draftsOf(dir, row)).find((o) => o.eid == d.eid)
