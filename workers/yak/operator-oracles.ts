@@ -49,7 +49,8 @@ let topic = (
 ): Bundle =>
   projected(person, subject, {
     entity: { eid: oracleOf(person, subject) },
-    topic: { name: named(`${title} ${person}`) },
+    // Slugs can be reused while an older oracle still keeps its knowledge.
+    topic: { name: named(`${title} ${oracleOf(person, subject)}`) },
     doc: { title, body },
   })
 
