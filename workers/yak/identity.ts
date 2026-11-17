@@ -44,9 +44,10 @@ import { linked } from './preview-route.ts'
 // registration, kept for clients that only speak RFC 7591. CIMD needs the
 // `global_fetch_strictly_public` compatibility flag beside the option
 // (wrangler.toml), and the provider advertises
-// `client_id_metadata_document_supported` only when it has both. The consent
-// page is the sign-in page: signing in is granting, and an already-signed-in
-// browser gets one Allow button. The grant carries `{person}` as its props,
+// `client_id_metadata_document_supported` only when it has both. A browser
+// signed out signs in first, on a card that names the client; signed in, it
+// gets the consent card and its one Allow button, the only press that grants.
+// The grant carries `{person}` as its props,
 // so a token resolves to the same eid a cookie does.
 //
 // A third way in is minted from the second: a GRANT (grants.ts, T-34385), the
@@ -870,10 +871,15 @@ let landed = async (
   }
   await c.time('claimed', () => claimed(req, env, person))
   let set = await minted(req, env, secret(env), person)
+  // Signing in grants nothing more. An authorize request it carried came
+  // from whoever asked for the code or the letter, maybe somebody else
+  // entirely (T-777), so the browser, signed in now, is sent to the consent
+  // card, which names the client and the host it reports to and is the one
+  // place a grant is made (/oauth/allow).
+  if (q) return redirect(`${OAUTH.authorize}?${q}`, set, 303)
   // A customer's own hostname asks for a click before receiving a session:
   // proving the account on our site does not authorize signing into theirs.
   // Other returns are our own zone or the fallback, decided by `backTo`.
-  if (q) return allow(req, env, q, person, set)
   let at = back
     ? await c.time('destination', () => destination(dir, back, env))
     : null
@@ -1141,13 +1147,7 @@ export let consent = (
 
 // Consent granted: the grant is written and the browser is sent home to the
 // client with its code.
-let allow = async (
-  req: Request,
-  env: Env,
-  q: string,
-  person: string,
-  set?: string,
-) => {
+let allow = async (req: Request, env: Env, q: string, person: string) => {
   let ask = await asked(req, env, q)
   if (ask instanceof Response) return ask
   let client = await grants(env).lookupClient(ask.clientId)
@@ -1155,7 +1155,7 @@ let allow = async (
   step(env, 'connector_granted', req, {
     who: await dirOf(env).emailAt(person),
   })
-  return redirect(redirectTo, set)
+  return redirect(redirectTo)
 }
 
 // The consent form's own token: this person, this authorize request, the next
@@ -1486,7 +1486,9 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   if (path == LINK && req.method == 'GET') {
     let t = url.searchParams.get('t') ?? ''
     let pass = await passOf(t, secret(env))
-    return pass?.once ? askLink(t, env) : await followed(req, env, pass)
+    return pass?.once
+      ? askLink(t, pass.once.back ?? null, env)
+      : await followed(req, env, pass)
   }
   if (path == LINK && req.method == 'POST' && field('t')) {
     return await followed(req, env, await passOf(field('t'), secret(env)))

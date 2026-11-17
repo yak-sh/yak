@@ -60,7 +60,7 @@ export let MOST = 365
 export type Once = {
   email: string
   code: string
-  /** The authorize request in flight, when signing in is granting. */
+  /** The authorize request in flight, whose consent card follows signing in. */
   q?: string
   /** Where they were headed when they were asked to sign in. */
   back?: string

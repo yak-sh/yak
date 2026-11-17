@@ -90,15 +90,18 @@ let carried = (q: string | null, back?: string | null) => [
 // that address: somebody who tapped "sign in" on a friend's app reads where
 // they are going, not a pitch for building apps. Only a host under the apex is
 // named; any other address is the door's to judge, and the card says nothing.
-let welcome = (back: string | null, env: Host) => {
+let onSpace = (back: string | null, env: Host) => {
   let to = back && URL.canParse(back) ? new URL(back) : null
   return to?.hostname.endsWith(`.${apex(env)}`)
     ? `Sign in to continue to ${to.hostname + to.pathname.replace(/\/$/, '')}.`
-    : 'Build, host and share web apps.'
+    : null
 }
 
-// Ask for an address. `who` names the app asking, when one is (the OAuth
-// consent page is this page — signing in is the consent), and `why` is the
+let welcome = (back: string | null, env: Host) =>
+  onSpace(back, env) ?? 'Build, host and share web apps.'
+
+// Ask for an address. `who` names the app asking, when one is (an authorize
+// request signed out starts here, and the consent card follows), and `why` is the
 // soft refusal, when there was one: a sign-in link that had already been used
 // lands here, carrying whatever it was going to finish (identity.ts, T-34351).
 //
@@ -515,13 +518,18 @@ export let askConnect = (at: {
 // A one-click link, opened (identity.ts LINK). Opening it spends nothing: a
 // messaging app or mail scanner that fetches the address to draw a preview
 // would otherwise sign itself in and leave the person a dead link. The button
-// carries the pass on, and pressing it is what spends the code.
-export let askLink = (t: string, env: Host = {}) =>
+// carries the pass on, and pressing it is what spends the code. Whoever asked
+// for the letter chose where the link goes on to (`back`), so a page on a
+// space is named before the press, as the sign-in card names it (`welcome`).
+export let askLink = (t: string, back: string | null, env: Host = {}) =>
   page(
     env,
     {
       title: 'Sign in to yaks.app',
-      lead: 'This link signs you in once, for ten minutes.',
+      lead: [
+        'This link signs you in once, for ten minutes.',
+        onSpace(back, env),
+      ].filter(Boolean).join(' '),
       headers: {
         'cache-control': 'private, no-store',
         'referrer-policy': 'no-referrer',

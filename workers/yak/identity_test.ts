@@ -1687,8 +1687,11 @@ test('a link signs a person in, once or until it is revoked', async () => {
     )
     assertEquals((them.signed_in as { via: string }).via, 'link')
 
-    // An authorization in flight is finished by the link, because the authorize
-    // request rides inside the seal rather than on the URL.
+    // A link signs in and grants nothing (T-777). Anybody can ask for a
+    // letter to somebody else's address with their own authorize request
+    // sealed in it, so a press carrying one lands, signed in, on the consent
+    // card, which names the client and the host it reports to; only its
+    // Allow grants.
     let back = 'https://probe.invalid/cb'
     let reg = await k.at('yaks.app', '/oauth/register', {
       method: 'POST',
@@ -1711,23 +1714,47 @@ test('a link signs a person in, once or until it is revoked', async () => {
       code_challenge: await challenge('v'),
       code_challenge_method: 'S256',
     }).toString()
-    let received = letters(k, email).length
-    let asked = await form(k, '/login', { email, q })
-    assertEquals(asked.status, 200)
-    await asked.body?.cancel()
-    let link = new URL(
-      where((await letter(k, email, 'sign in with one click', received)).body),
-      'https://yaks.app',
-    )
+    let sealed = async (fields: Record<string, string>) => {
+      let received = letters(k, email).length
+      let asked = await form(k, '/login', { email, ...fields })
+      assertEquals(asked.status, 200)
+      await asked.body?.cancel()
+      return new URL(
+        where(
+          (await letter(k, email, 'sign in with one click', received)).body,
+        ),
+        'https://yaks.app',
+      )
+    }
+    let link = await sealed({ q })
     let linking = await form(k, '/login/link', {
       t: link.searchParams.get('t') ?? '',
     })
-    assertEquals(linking.status, 302)
     await linking.body?.cancel()
-    let to = new URL(linking.headers.get('location') ?? '')
+    assertEquals(
+      [linking.status, linking.headers.get('location')],
+      [303, `/oauth/authorize?${q}`],
+    )
+    let signed = (linking.headers.get('set-cookie') ?? '').split(';')[0]
+    let card = await (await k.at('yaks.app', `/oauth/authorize?${q}`, {
+      headers: { cookie: signed },
+    })).text()
+    assertStringIncludes(card, 'A probing connector (probe.invalid)')
+    let consent = /name="consent" value="([^"]+)"/.exec(card)?.[1] ?? ''
+    let allowed = await form(k, '/oauth/allow', { q, consent }, signed)
+    await allowed.body?.cancel()
+    let to = new URL(allowed.headers.get('location') ?? '')
     assertEquals(to.origin + to.pathname, back)
     assertEquals(to.searchParams.get('state'), 'a-probe-state')
     assert(to.searchParams.get('code'), 'the connector got its code')
+
+    // Where a link goes on to was chosen by whoever asked for the letter, so
+    // a page on a space is named before the press.
+    let onward = await sealed({ return: 'https://elsewhere.yaks.app/app' })
+    assertStringIncludes(
+      await (await click(onward.pathname + onward.search)).text(),
+      'continue to elsewhere.yaks.app/app',
+    )
 
     // The standing link: minted by whoever is signed in, for themselves, and
     // worth a session and nothing more.
