@@ -221,7 +221,14 @@ import { nameOf } from './names.ts'
 import { system } from '@yaks/fp'
 import { textable } from './phones.ts'
 import { RETRY, source, within } from '@yaks/workerd/rate'
-import { type Caller, minted, sessionAt, signedOut } from './session.ts'
+import {
+  type Caller,
+  minted,
+  sessionAt,
+  sessionStart,
+  signedOut,
+} from './session.ts'
+import type { SessionSeed } from './browser-sessions.ts'
 import { WHO } from './signed.ts'
 import { versionOf } from './running.ts'
 import { background, caught, defect, failing, refusing } from './defects.ts'
@@ -862,14 +869,19 @@ export let textedIn = async (
 // already stamped on the person as their last way in (signin.ts `stamped`),
 // and whether it was their first. An already-signed-in browser lands here too
 // and names none, because nothing was proved.
-type Landing = { person: string; own?: Arrived['own']; proved?: Proved }
+type Landing = {
+  person: string
+  own?: Arrived['own']
+  proved?: Proved
+  session?: SessionSeed
+}
 
 // The person is known: the cookie, the space that is theirs, the first-owner
 // bootstrap, and wherever they were going.
 let landed = async (
   req: Request,
   env: Env,
-  { person, own: home, proved }: Landing,
+  { person, own: home, proved, session }: Landing,
   q: string,
   back: string,
   c: Clock = clock(),
@@ -877,7 +889,8 @@ let landed = async (
   let dir = dirOf(env)
   await c.time(
     'keep',
-    async () => keep(env, dir, await browser(env, req), person),
+    async () =>
+      proved?.address && keep(env, dir, await browser(env, req), person),
   )
   // Their space, and the platform for the first person ever, are settled
   // behind the answer (T-148852). One sent nowhere in particular lands
@@ -907,7 +920,7 @@ let landed = async (
     }
   }
   await c.time('claimed', () => claimed(req, env, person))
-  let set = await minted(req, env, secret(env), person)
+  let set = await minted(req, env, secret(env), person, null, session)
   // Signing in grants nothing more. An authorize request it carried came
   // from whoever asked for the code or the letter, maybe somebody else
   // entirely (T-777), so the browser, signed in now, is sent to the consent
@@ -1025,8 +1038,9 @@ export let codeCheck = async (
   back = '',
   env: Host = {},
   newcomer?: string,
+  session?: SessionSeed,
 ): Promise<Arrived | Response> =>
-  await guess(store, address, digest, { newcomer }) ?? askCode({
+  await guess(store, address, digest, { newcomer, session }) ?? askCode({
     address,
     q,
     back,
@@ -1037,12 +1051,13 @@ export let codeCheck = async (
 
 // What a sign-in proved, for the funnel (`landed`): whether it was their
 // first, and the address it is for (funnel.ts `step`).
-type Proved = { first: boolean; who: string | null }
+type Proved = { first: boolean; who: string | null; address?: true }
 
 let proving = (arrived: Arrived, address: string): Landing => ({
   person: arrived.person,
   own: arrived.own,
-  proved: { first: arrived.first, who: canon(address) },
+  session: arrived.session,
+  proved: { first: arrived.first, who: canon(address), address: true },
 })
 
 // A standing link spends no code, so no guess stamps its person: they are
@@ -1056,7 +1071,11 @@ let stood = async (env: Env, standing: Standing) => {
 // read and stamped as signed in by link, the stamp after the answer, which
 // says nothing that depends on it (T-34158); or null for a person who is
 // gone, whom no link signs in, whatever its ledger says.
-let vouched = async (env: Env, person: string): Promise<Landing | null> => {
+let vouched = async (
+  env: Env,
+  person: string,
+  address = false,
+): Promise<Landing | null> => {
   let store = meta(env)
   let [row] = await store.query(
     line`.entity.eid=${person}&.person ?signed_in ?email`,
@@ -1069,7 +1088,14 @@ let vouched = async (env: Env, person: string): Promise<Landing | null> => {
       signed_in: stamped(before, new Date().toISOString(), 'link'),
     }], KERNEL).then(() => {}, (e) => defect(e, { request: 'signed_in' })),
   )
-  return { person, proved: { first: !before, who: addressIn(row) } }
+  return {
+    person,
+    proved: {
+      first: !before,
+      who: addressIn(row),
+      ...address ? { address: true as const } : {},
+    },
+  }
 }
 
 // The number a person wears, for one with no address.
@@ -1098,6 +1124,7 @@ let signCard = async (env: Env, at: Parameters<typeof askEmail>[0] = {}) => {
 // what the newcomer built (newcomer.ts `keep`).
 let spent = async (env: Env, req: Request, once: Once) => {
   let arrived = await spend(meta(env), secret(env), once.email, once.code, {
+    session: await sessionStart(req, env),
     newcomer: await browser(env, req) ?? undefined,
     via: 'link',
   })
@@ -1305,7 +1332,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   if (path == INVITE && req.method == 'POST') {
     let t = field('t'), dir = dirOf(env)
     let took = await taken(t, env, dir, secret(env))
-    let arrived = took ? await vouched(env, took.person) : null
+    let arrived = took ? await vouched(env, took.person, true) : null
     if (!took || !arrived) {
       return door(t, env, dir, await browser(env, req), secret(env))
     }
@@ -1519,6 +1546,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
           back,
           env,
           await browser(env, req) ?? undefined,
+          await sessionStart(req, env),
         ))
       if (arrived instanceof Response) return timed(arrived, c)
       return timed(
@@ -1531,14 +1559,18 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   // One click instead of six digits (link.ts): the letter's own link, or a
   // standing one somebody was handed. Opening a letter's link spends nothing —
   // a preview fetch would spend it for nobody — so it answers one button that
-  // posts the pass back here, and the press is the spend. A standing link is
-  // not spent at all, and lands at once.
+  // posts the pass back here. A standing link names its account on that same
+  // card and signs in only on the press.
   if (path == LINK && req.method == 'GET') {
     let t = url.searchParams.get('t') ?? ''
     let pass = await passOf(t, secret(env))
-    return pass?.once
-      ? askLink(t, pass.once.back ?? null, env)
-      : await followed(req, env, pass)
+    if (pass?.once) return askLink(t, pass.once.back ?? null, env)
+    let person = pass?.standing &&
+      await whose(pass.standing, links(env.OAUTH_KV))
+    let known = person && await dirOf(env).known(person)
+    return known
+      ? askLink(t, null, env, known.email || known.phone || known.name)
+      : await followed(req, env, null)
   }
   if (path == LINK && req.method == 'POST' && field('t')) {
     return await followed(req, env, await passOf(field('t'), secret(env)))

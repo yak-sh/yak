@@ -311,13 +311,41 @@ let renewed = async (
   return sign(claims, secret)
 }
 
+export let sessionStart = async (
+  req: Request,
+  env: Env,
+): Promise<browsers.SessionSeed> => {
+  let browser = await browserOf(req, env.SESSION_SECRET, env)
+  return {
+    eid: crypto.randomUUID(),
+    via: browser?.source ?? browser?.via ?? crypto.randomUUID(),
+    until: new Date((Math.floor(Date.now() / 1000) + SESSION) * 1000)
+      .toISOString(),
+    agent: (req.headers.get('user-agent') ?? 'Browser').slice(0, 300),
+  }
+}
+
 export let minted = async (
   req: Request,
   env: Env,
   secret: string,
   person: string,
   space: string | null = null,
+  prepared?: browsers.SessionSeed,
 ) => {
+  if (prepared) {
+    return cookie(
+      await sign({
+        person,
+        space,
+        via: prepared.via,
+        session: prepared.eid,
+        exp: Date.parse(prepared.until) / 1000,
+      }, secret),
+      domainOf(req, env),
+      SESSION,
+    )
+  }
   let [browser, current] = await Promise.all([
     browserOf(req, secret, env),
     sessionAt(req, env, space),

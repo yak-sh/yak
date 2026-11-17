@@ -521,13 +521,20 @@ export let askConnect = (at: {
 // carries the pass on, and pressing it is what spends the code. Whoever asked
 // for the letter chose where the link goes on to (`back`), so a page on a
 // space is named before the press, as the sign-in card names it (`welcome`).
-export let askLink = (t: string, back: string | null, env: Host = {}) =>
+export let askLink = (
+  t: string,
+  back: string | null,
+  env: Host = {},
+  account?: string,
+) =>
   page(
     env,
     {
       title: 'Sign in to yaks.app',
       lead: [
-        'This link signs you in once, for ten minutes.',
+        account
+          ? `This link signs you in as ${account}.`
+          : 'This link signs you in once, for ten minutes.',
         onSpace(back, env),
       ].filter(Boolean).join(' '),
       headers: {

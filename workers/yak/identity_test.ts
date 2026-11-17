@@ -1512,7 +1512,7 @@ test('the connector page, and the address chosen on it', async () => {
     // A stranger who posts one is sent to sign in, and nothing is answered
     // about the address they asked for.
     let out = await post({ space: 'whoever' })
-    assertEquals(out.status, 302)
+    assertEquals(out.status, 303)
     assertMatch(out.headers.get('location') ?? '', /^\/login\?return=/)
     await out.body?.cancel()
   } finally {
@@ -1769,7 +1769,10 @@ test('a link signs a person in, once or until it is revoked', async () => {
     // Twice, which is the whole point: a reviewer signs in as often as they
     // need to, with no mailbox anywhere in it.
     for (let _ of [1, 2]) {
-      let r = await click(standing)
+      let card = await click(standing)
+      assertEquals(card.status, 200)
+      assertStringIncludes(await card.text(), email)
+      let r = await form(k, '/login/link', { t: at.searchParams.get('t')! })
       assertEquals(r.status, 303)
       await r.body?.cancel()
       assertMatch(r.headers.get('set-cookie') ?? '', /^yak_session=/)
@@ -1890,7 +1893,7 @@ test(
       let aged = async (days: number) =>
         `${COOKIE}=${await sign(
           {
-            person: 'p-1',
+            person: k.owner.person,
             space: null,
             exp: Math.floor(Date.now() / 1000) + (90 - days) * 24 * 60 * 60,
           },

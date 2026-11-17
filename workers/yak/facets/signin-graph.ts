@@ -41,8 +41,10 @@ import {
 import { texts } from '../operator-texts.ts'
 import { consentEid } from '@yaks/phone'
 import { inside, newcomerIs, ownOf, type Row, seatsLine } from '../directory.ts'
+import { sessionRow, type SessionSeed } from '../browser-sessions.ts'
 
 type Guess = {
+  session?: SessionSeed
   email?: string
   phone?: string
   code: string
@@ -82,7 +84,7 @@ let arrival = (
   address: string,
   eid: string,
   at: string,
-  { newcomer, via = 'code' }: Guess,
+  { newcomer, via = 'code', session }: Guess,
 ): Bundle[] | Promise<Bundle[]> =>
   after(tx.read(personLine(address)), ([found]) =>
     after(
@@ -100,7 +102,13 @@ let arrival = (
             person.entity.eid,
             handed ? undefined : { ...who, ...person } as unknown as Row,
           ),
-          (home) => [person, ...home],
+          (
+            home,
+          ) => [
+            person,
+            ...session ? [sessionRow(session, person.entity.eid)] : [],
+            ...home,
+          ],
         )
       },
     ))

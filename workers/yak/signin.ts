@@ -34,6 +34,7 @@ import { mobile } from '@yaks/phone/mobile'
 import { chose, nameOf } from './names.ts'
 import { type Host, signupAddress } from '@yaks/platform/host'
 import type { Letter } from './mail.ts'
+import type { SessionSeed } from './browser-sessions.ts'
 
 // Ten minutes, five guesses: long enough to switch to the mail app, short
 // enough that a six-digit code is never worth grinding.
@@ -401,6 +402,7 @@ export let spend = async (
  * build the person signing in is handed when they are a newcomer (newcomer.ts
  * `keep`), and `via` is how the code came, a code typed or a letter's link followed (link.ts). */
 export type Arrival = {
+  session?: SessionSeed
   newcomer?: string
   via?: Via
   person?: string
@@ -414,6 +416,7 @@ export type Via = 'code' | 'link'
  * which is the funnel's sign-up (funnel.ts), and the space marked their own,
  * where they land, when they have one (directory.ts `own`). */
 export type Arrived = {
+  session?: SessionSeed
   person: string
   first: boolean
   contact?: boolean
@@ -429,7 +432,7 @@ export let guess = async (
   store: Meta,
   address: string,
   want: string,
-  { newcomer, via = 'code', person, space, source }: Arrival = {},
+  { newcomer, via = 'code', person, space, source, session }: Arrival = {},
 ): Promise<Arrived | null> => {
   for (;;) {
     try {
@@ -441,6 +444,7 @@ export let guess = async (
           via,
           ...(newcomer ? { newcomer } : {}),
           ...(person ? { person, space, source } : {}),
+          ...(session ? { session } : {}),
         },
       }])
       let who = applied.find((b) => b.$alias == '$who')
@@ -450,6 +454,12 @@ export let guess = async (
       return {
         person: who.entity.eid,
         first: !!signed?.first,
+        ...(session &&
+            applied.some((b) =>
+              b.entity.eid == session.eid && b.browser_session
+            )
+          ? { session }
+          : {}),
         ...(person
           ? { contact: applied.some((b) => b.$alias == '$welcome') }
           : {}),

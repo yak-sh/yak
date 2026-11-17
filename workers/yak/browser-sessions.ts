@@ -13,6 +13,17 @@ export type BrowserSession = {
   until: string
   agent: string
 }
+export type SessionSeed = Omit<BrowserSession, 'person'>
+
+export let sessionRow = (seed: SessionSeed, person: string): Bundle => ({
+  entity: { eid: seed.eid },
+  browser_session: {
+    person,
+    via: instrumentEid(seed.via),
+    until: seed.until,
+    agent: seed.agent,
+  },
+})
 
 export let sessions = (env: Env) =>
   directory(bound(env.DIRECTORY, dirPart.fetch, env))
@@ -46,15 +57,14 @@ export let keep = async (
   claims: Claims & { via: string; session: string },
 ) => {
   await sessions(env).stamp({
-    entities: [{
-      entity: { eid: claims.session },
-      browser_session: {
-        person: claims.person,
-        via: instrumentEid(claims.via),
+    entities: [
+      sessionRow({
+        eid: claims.session,
+        via: claims.via,
         until: new Date(claims.exp * 1000).toISOString(),
         agent: (req.headers.get('user-agent') ?? 'Browser').slice(0, 300),
-      },
-    }],
+      }, claims.person),
+    ],
   })
 }
 
