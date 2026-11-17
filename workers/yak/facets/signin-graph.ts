@@ -40,8 +40,15 @@ import {
 } from '../signin.ts'
 import { texts } from '../operator-texts.ts'
 import { consentEid } from '@yaks/phone'
-import { inside, newcomerIs, ownOf, type Row, seatsLine } from '../directory.ts'
-import { sessionRow, type SessionSeed } from '../browser-sessions.ts'
+import {
+  idOf,
+  inside,
+  newcomerIs,
+  ownOf,
+  type Row,
+  seatsLine,
+} from '../directory.ts'
+import { ended, sessionRow, type SessionSeed } from '../browser-sessions.ts'
 
 type Guess = {
   session?: SessionSeed
@@ -65,20 +72,12 @@ let rows = (tx: Tx, address: string) =>
 let addressOf = (s: { email?: string; phone?: string }) =>
   s.email ?? s.phone ?? ''
 
-// Who signs in at an address, as the write finds them: the person wearing
-// it, else a person minted wearing it at `eid`. A newcomer never takes the
-// address themselves (T-770): whoever started their build may still hold
-// their browser's session, so the address is a new person's, and what the
-// newcomer built is handed to them after this write (newcomer.ts `keep`),
-// as it is to somebody who wore the address already. Nothing is minted them
-// here. Nothing asks what to call them (T-34236), so the front of their
-// address does (`called`), written, not merely derived, because a member row
-// names a person by their title and a titleless one reads back as a bare eid
-// (T-32733). It is theirs to change on their own space page. A number is no
-// name, and a person found by one is the one wearing it. They are stamped as
-// signed in at `at`, and the stamp says whether it is their first time, so
-// the write that signs them in answers the funnel's question too (T-149011).
-// The person comes first, under the request's `$alias`, then where they land.
+// Who signs in at an address: its person, else this browser's newcomer,
+// else somebody new. Reusing a newcomer cancels every browser credential in
+// the same transaction that attaches the verified address (T-839); whoever
+// held a copy must not inherit the account (T-770). The proof boundary first
+// revokes credentials held outside the directory (identity.ts `arrivingOn`).
+// Their sign-in stamp and own space are answered beside them in this trip.
 let arrival = (
   tx: Tx,
   address: string,
@@ -91,27 +90,51 @@ let arrival = (
       newcomer ? tx.read(line`.entity.eid=${newcomer}`) : [],
       ([row]) => {
         let who = found as Person | undefined
+        let handed = newcomerIs(row as Row | undefined)
+        let taken = !who && handed
         let person = {
-          ...arriving(address, called(address), who, eid),
+          ...arriving(
+            address,
+            called(address),
+            who,
+            taken ? row.entity.eid : eid,
+          ),
           signed_in: stamped(who?.signed_in, at, via),
         }
-        let handed = newcomerIs(row as Row | undefined)
         return after(
-          landing(
-            tx,
-            person.entity.eid,
-            handed ? undefined : { ...who, ...person } as unknown as Row,
-          ),
-          (
-            home,
-          ) => [
-            person,
-            ...session ? [sessionRow(session, person.entity.eid)] : [],
-            ...home,
-          ],
+          taken ? ending(tx, person.entity.eid) : [],
+          (cancelled) =>
+            after(
+              landing(
+                tx,
+                person.entity.eid,
+                handed ? undefined : { ...who, ...person } as unknown as Row,
+              ),
+              (home) => [
+                person,
+                ...session ? [sessionRow(session, person.entity.eid)] : [],
+                ...home,
+                ...cancelled,
+              ],
+            ),
         )
       },
     ))
+
+let ending = (tx: Tx, person: string) =>
+  after(
+    tx.read(line`.browser_session.person=${person}&!cancelled`),
+    (rows) =>
+      ended(
+        person,
+        (rows as Row[]).map((row) => ({
+          ...row.browser_session!,
+          eid: row.entity.eid,
+          person,
+          via: idOf(row.browser_session!.via),
+        })),
+      ),
+  )
 
 // Where somebody signing in lands: the space marked their own, as the write
 // finds it (directory.ts `own`), so the code and the place it sends them are

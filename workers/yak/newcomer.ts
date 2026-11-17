@@ -410,11 +410,11 @@ export let oneBuild = (env: Env, space: Space, now = new Date()) =>
 
 /**
  * A newcomer keeping what they built (D-146737), once they signed in on the
- * browser a newcomer `was`, as `person`. The address they proved is never
- * the newcomer's own (facets/signin-graph.ts `arrival`, T-770): whoever
- * started the build may still hold the newcomer's session, so the account is
- * a person nobody else has been. Whether the address is new here or held
- * already, they are handed everything that named the newcomer (handover.ts):
+ * browser a newcomer `was`, as `person`. An address new here keeps their
+ * identity; arrival cancels the newcomer's old browser credentials, and the
+ * proof boundary revokes their external credentials before attaching the
+ * address (T-839). An address held already is handed everything that named
+ * the newcomer (handover.ts):
  * in the directory their owner seats, so the spaces and their apps are
  * theirs, and the browsers the newcomer held, so the guest work and the
  * visits made on them are theirs (attribution.ts, visit.ts); and in each

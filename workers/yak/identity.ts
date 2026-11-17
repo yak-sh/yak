@@ -302,8 +302,14 @@ export let unwrapped = async (env: Env, token: string) => {
 // and the box's OAuth grants, the CLI's grants and their standing sign-in
 // links. An erased account's token otherwise outlives it (T-144541): a grant
 // never expires, and the next call as it wrote the dead row back.
-export let unheld = async (env: Env, person: string) => {
-  await (await import('./browser-sessions.ts')).endAll(env, person)
+export let unheld = async (
+  env: Env,
+  person: string,
+  { browsers = true } = {},
+) => {
+  if (browsers) {
+    await (await import('./browser-sessions.ts')).endAll(env, person)
+  }
   await disconnectAll(grants(env), person)
   let granted = ledger(env.OAUTH_KV)
   if (granted) await revokeGrants(granted, person, '')
@@ -874,6 +880,7 @@ type Landing = {
   own?: Arrived['own']
   proved?: Proved
   session?: SessionSeed
+  newcomer?: string
 }
 
 // The person is known: the cookie, the space that is theirs, the first-owner
@@ -881,7 +888,7 @@ type Landing = {
 let landed = async (
   req: Request,
   env: Env,
-  { person, own: home, proved, session }: Landing,
+  { person, own: home, proved, session, newcomer }: Landing,
   q: string,
   back: string,
   c: Clock = clock(),
@@ -890,7 +897,8 @@ let landed = async (
   await c.time(
     'keep',
     async () =>
-      proved?.address && keep(env, dir, await browser(env, req), person),
+      proved?.address &&
+      keep(env, dir, newcomer ?? await browser(env, req), person),
   )
   // Their space, and the platform for the first person ever, are settled
   // behind the answer (T-148852). One sent nowhere in particular lands
@@ -1053,8 +1061,13 @@ export let codeCheck = async (
 // first, and the address it is for (funnel.ts `step`).
 type Proved = { first: boolean; who: string | null; address?: true }
 
-let proving = (arrived: Arrived, address: string): Landing => ({
+let proving = (
+  arrived: Arrived,
+  address: string,
+  newcomer?: string,
+): Landing => ({
   person: arrived.person,
+  newcomer,
   own: arrived.own,
   session: arrived.session,
   proved: { first: arrived.first, who: canon(address), address: true },
@@ -1115,20 +1128,27 @@ let signCard = async (env: Env, at: Parameters<typeof askEmail>[0] = {}) => {
   return askEmail({ ...at, texts, preview }, env)
 }
 
-// A letter's one click, spent: the very code the form would have spent
-// (signin.ts), so following the link is single use, dies with the code, and
-// costs a try on every code standing for the address exactly as a mistyped one
-// does. The person is found or minted in the write that spends it and nowhere
-// earlier, which is what keeps asking for a code from writing a person for
-// every address anyone types; a newcomer's browser proving one is handed
-// what the newcomer built (newcomer.ts `keep`).
+// Revoke a newcomer's old external credentials before their verified address
+// can attach. A wrong guess leaves their browser and retry identity intact;
+// successful arrival cancels browser copies atomically with that address.
+let arrivingOn = async (env: Env, req: Request) => {
+  let person = await browser(env, req)
+  if (person && await dirOf(env).newcomer(person)) {
+    await unheld(env, person, { browsers: false })
+  }
+  return person ?? undefined
+}
+
+// A letter's one click spends its code just as the form does, and keeps
+// the newcomer's build on the browser that proved the address.
 let spent = async (env: Env, req: Request, once: Once) => {
+  let newcomer = await arrivingOn(env, req)
   let arrived = await spend(meta(env), secret(env), once.email, once.code, {
     session: await sessionStart(req, env),
-    newcomer: await browser(env, req) ?? undefined,
+    newcomer,
     via: 'link',
   })
-  return arrived && proving(arrived, once.email)
+  return arrived && proving(arrived, once.email, newcomer)
 }
 
 // A pass followed: it lands where a spent code lands, and one that has been
@@ -1537,6 +1557,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       // stamps them signed in (signin.ts `guess`), so a new person waits on
       // one trip for the code, who they are and whether it is their first
       // sign-in.
+      let newcomer = await c.time('credentials', () => arrivingOn(env, req))
       let arrived = await c.time('check', async () =>
         codeCheck(
           meta(env),
@@ -1545,12 +1566,12 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
           q,
           back,
           env,
-          await browser(env, req) ?? undefined,
+          newcomer,
           await sessionStart(req, env),
         ))
       if (arrived instanceof Response) return timed(arrived, c)
       return timed(
-        await landed(req, env, proving(arrived, address), q, back, c),
+        await landed(req, env, proving(arrived, address, newcomer), q, back, c),
         c,
       )
     })

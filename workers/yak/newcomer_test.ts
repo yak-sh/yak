@@ -24,7 +24,6 @@ import {
   DAILY,
   FULL,
   KEEP,
-  keep,
   KEEPING,
   opened,
   PER_BUILD,
@@ -35,6 +34,8 @@ import { answer } from './admin.ts'
 import { type Id, idOf, META } from './directory.ts'
 import { meta } from './meta.ts'
 import { COOKIE, sign } from './lib/token.ts'
+import { links, onceLink, stand } from './link.ts'
+import { ledger, mint } from './grants.ts'
 import { COOKIE as CAME } from './arrival.ts'
 import { CHECK } from '@yaks/platform/bots'
 import type { Ctx } from './tool.ts'
@@ -61,7 +62,7 @@ let build = (say: string, { ip = '', cookie = '', org = '' } = {}) =>
   })
 
 let cookieOf = (r: Response) =>
-  (r.headers.get('set-cookie') ?? '').split(';')[0]
+  r.headers.getSetCookie().map((set) => set.split(';')[0]).join('; ')
 let spaceOf = (r: Response) =>
   /\/manage\/([a-z0-9-]+)/.exec(r.headers.get('location') ?? '')?.[1] ?? ''
 
@@ -141,15 +142,42 @@ let consentPosted = await signIn('/oauth/allow', {
   consent: 'x',
 })
 let back = new URL(first.headers.get('location')!).pathname
+let signed = async (on: string) =>
+  (await (await k.at('yaks.app', '/login/who', { headers: { cookie: on } }))
+    .json()).signedIn
+// Credentials issued before newcomers stopped minting them must end too.
+let oldLink = await stand(k.secret, links(env.OAUTH_KV)!, { person: owner })
+let oldGrant = await mint(k.secret, ledger(env.OAUTH_KV)!, { person: owner })
 await (await signIn('/login', { address: 'dana@example.com', return: back }))
   .body?.cancel()
+let digits = await mailed(k, 'dana@example.com')
+let wrong = await signIn('/login/code', {
+  address: 'dana@example.com',
+  code: digits == '000000' ? '111111' : '000000',
+  return: back,
+})
+let retrying = await signed(cookie)
+await wrong.body?.cancel()
 let signedIn = await signIn('/login/code', {
   address: 'dana@example.com',
-  code: await mailed(k, 'dana@example.com'),
+  code: digits,
   return: back,
 })
 let dana = (await k.dir.owners(space))[0]
 let linkAfter = await signIn('/login/link', { days: '365' })
+let oldCookieSignedIn = await signed(cookie)
+let verifiedSignedIn = await signed(cookieOf(signedIn))
+let oldLinkFollowed = await k.at(
+  'yaks.app',
+  new URL(oldLink.url).pathname + new URL(oldLink.url).search,
+)
+let oldLinkStatus = oldLinkFollowed.status
+await oldLinkFollowed.body?.cancel()
+let oldGrantUsed = await k.at('yaks.app', '/oauth/me', {
+  headers: { authorization: `Bearer ${oldGrant.token}` },
+})
+let oldGrantStatus = oldGrantUsed.status
+await oldGrantUsed.body?.cancel()
 let danaRow = (await row(dana))[0]
 let chatAfter = await k.at('yaks.app', back, {
   headers: { cookie: cookieOf(signedIn) },
@@ -212,7 +240,21 @@ let checked = await build('A reading list', {
 let checkedSpace = (await k.dir.space(spaceOf(checked)))!
 let checker = (await k.dir.owners(checkedSpace))[0]
 let checkerSteps = await k.dir.stepper(checker)
-await keep(env, k.dir, checker, await person('e2e@bot.yak.sh'))
+await (await signIn('/login', { address: 'e2e@bot.yak.sh' }, cookieOf(checked)))
+  .body?.cancel()
+let letter = new URL(
+  await onceLink(k.secret, {
+    email: 'e2e@bot.yak.sh',
+    code: await mailed(k, 'e2e@bot.yak.sh'),
+  }),
+)
+let keptByLink = await signIn('/login/link', {
+  t: letter.searchParams.get('t')!,
+}, cookieOf(checked))
+let checkerRow = (await row(checker))[0]
+let linkedSignedIn = await signed(cookieOf(keptByLink))
+let linkedOldCookie = await signed(cookieOf(checked))
+await keptByLink.body?.cancel()
 
 // The admin's Visitor builds page, read once everything above is done.
 let root = await person('root@example.com')
@@ -345,19 +387,35 @@ test("a newcomer's chat asks for their email, to come back to it", () => {
   )
 })
 
-test("an address new here is a new person handed the newcomer's chat, and the newcomer goes", async () => {
+test("an address new here keeps the newcomer's identity and chat with fresh credentials", () => {
   assertEquals(signedIn.status, 303)
   assertEquals(
     new URL(signedIn.headers.get('location')!, 'https://yaks.app').pathname,
     back,
   )
-  assert(dana != owner, 'whoever held the newcomer holds nothing of Dana')
-  assertEquals(await row(owner), [])
+  assertEquals(dana, owner)
+  assertEquals(verifiedSignedIn, true)
+  assertEquals(oldCookieSignedIn, false)
+  assertEquals(oldLinkStatus, 400)
+  assertEquals(oldGrantStatus, 401)
   assertEquals(danaRow.email, { address: 'dana@example.com' })
   assertEquals(danaRow.newcomer, undefined)
   assertEquals(chatAfter.status, 200)
   assert(!chatAfterSaid.includes('This chat is not here'), chatAfterSaid)
   assert(!chatAfterSaid.includes('Keep this app'), 'nothing left to keep')
+})
+
+test('a wrong code keeps the newcomer signed in to retry', () => {
+  assertEquals(wrong.status, 400)
+  assertEquals(retrying, true)
+})
+
+test('a letter link keeps newcomer identity with a fresh browser credential too', () => {
+  assertEquals(keptByLink.status, 303)
+  assertEquals(checkerRow.email, { address: 'e2e@bot.yak.sh' })
+  assertEquals(checkerRow.newcomer, undefined)
+  assertEquals(linkedSignedIn, true)
+  assertEquals(linkedOldCookie, false)
 })
 
 test('a newcomer mints no standing link and gives no consent', async () => {
@@ -369,7 +427,7 @@ test('a newcomer mints no standing link and gives no consent', async () => {
 })
 
 test("the newcomer's browser, once kept on, mints nothing for its old cookie", async () => {
-  assertEquals(linkAfter.status, 403)
+  assertEquals(linkAfter.status, 401)
   await linkAfter.body?.cancel()
 })
 

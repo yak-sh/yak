@@ -139,16 +139,25 @@ test('a right code signs in whoever wears the address, named once', async () => 
   assertEquals((await signsIn([unnamed])).title, 'me')
 })
 
-test("a newcomer's browser never takes an address: the address is a person nobody has been", async () => {
+test("a newcomer's browser takes an address new here, and only a newcomer's", async () => {
   let newcomer = { entity: { eid: 'n1' }, person: {}, newcomer: at }
-  // Whoever started the newcomer's build holds its browser, so the address
-  // gets a person of its own (newcomer.ts `keep` hands them the build).
+  assertEquals(await signsIn([newcomer], 'n1'), {
+    eid: 'n1',
+    title: 'me',
+    email: ME,
+    trips: 1,
+  })
+  // Somebody with an address of their own is no newcomer: the address gets a
+  // person of its own.
   for (
-    let held of [newcomer, { ...newcomer, email: { address: 'you@yaks.app' } }]
+    let address of [
+      { email: { address: 'you@yaks.app' } },
+      { phone: { number: '+12695550142' } },
+    ]
   ) {
-    let minted = await signsIn([held], 'n1')
+    let minted = await signsIn([{ ...newcomer, ...address }], 'n1')
     assert(minted.eid && minted.eid != 'n1')
-    assertEquals([minted.email, minted.title, minted.trips], [ME, 'me', 1])
+    assertEquals(minted.email, ME)
   }
 })
 

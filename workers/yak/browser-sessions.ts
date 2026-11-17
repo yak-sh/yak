@@ -89,12 +89,14 @@ export let end = (env: Env, session: BrowserSession) =>
 export let browsers = (env: Env, person: string) =>
   sessions(env).browserSessions(person)
 
+/** Cancel every held browser and all rowless legacy copies in one write. */
+export let ended = (person: string, all: BrowserSession[]): Bundle[] => [
+  { entity: { eid: person }, sessions_ended: {} },
+  ...all.flatMap(ending),
+]
+
 export let endAll = async (env: Env, person: string) => {
-  let all = await browsers(env, person)
   await sessions(env).stamp({
-    entities: [
-      { entity: { eid: person }, sessions_ended: {} },
-      ...all.flatMap(ending),
-    ],
+    entities: ended(person, await browsers(env, person)),
   })
 }
