@@ -9,6 +9,7 @@ import {
 } from '@std/assert'
 import type { Item, Request } from '@yaks/model'
 import type { D1Like } from '@yaks/d1'
+import type { Binding } from '@yaks/cloudflare-mail'
 import { d1 } from '../../packages/d1/testing.ts'
 import { platform } from './testing.ts'
 import { directoryOf } from './directory.ts'
@@ -27,6 +28,7 @@ import { rootOf } from './operator-root.ts'
 import { lineBackfill, LINES } from './line-move.ts'
 import { conversationOf, workOf } from './operator-host.ts'
 import { listed as listing } from './operator-view.ts'
+import { updatesOf } from './operator-updates.ts'
 import { parseHTML } from 'linkedom'
 import {
   answerText,
@@ -73,6 +75,13 @@ await dir.apply({
 }, owner)
 let space = (await dir.at(eid))!
 let held = { person, role: 'owner' as const, space: eid }
+let letters: Parameters<Binding['send']>[0][] = []
+env.MAIL = {
+  send: (letter) => {
+    letters.push(letter)
+    return Promise.resolve({ messageId: `sent-${letters.length}` })
+  },
+} satisfies Binding
 
 // voip.ms, as an account with a home number that mails its texts, a church
 // line whose texts go to a URL of the church's own, and a fax that does not
@@ -352,7 +361,7 @@ let theirs = await conversationOf(store, '/at', rootOf(eid, writer))
 let answeredBack = of('sendSMS').find((t) =>
   t.get('message')?.startsWith('Thank you')
 )!
-let [update] = await store.g.read(ql`.deliver.to=${person}&*`)
+let { updates } = await updatesOf(store, person, eid)
 
 let wrongNumber = await lineDoor(
   new Request(
@@ -697,9 +706,13 @@ test("a text back is answered in its writer's own conversation, with only their 
   assertStringIncludes(root.html, 'A reply to a text: +12695550142 replied')
   assertStringIncludes(root.html, 'Tuesday at 3 works for us.')
   assertEquals(root.html.includes('Thank you; I will tell Jeff.'), false)
-  assertStringIncludes(
-    String((update.doc as { body: string }).body),
-    '+12695550142 replied to the text you sent them: Tuesday at 3 works',
+  let words =
+    '+12695550142 replied to the text you sent them: Tuesday at 3 works for us.'
+  assertEquals(updates.map((u) => u.words), [words])
+  assertEquals(
+    letters.filter((l) => l.to == 'jeff@example.com' && l.text?.includes(words))
+      .length,
+    1,
   )
   assert(!root.html.includes('golf') && !theirs.html.includes('golf'))
   assertEquals(forged.status, 403)
