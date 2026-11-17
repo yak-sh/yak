@@ -1794,6 +1794,91 @@ test('a link signs a person in, once or until it is revoked', async () => {
   }
 })
 
+// A server a person connects can name yaks.app as where it signs in, and
+// would be sent a token for their whole account (T-803). yaks.app grants
+// access to itself and nothing else: an authorize request or a token request
+// naming another resource is refused `invalid_target` (a token minted for one
+// before is nobody: identity-consent_test.ts).
+test('a token is only ever for yaks.app', async () => {
+  let k = await kernel()
+  try {
+    let { cookie } = await signIn(k)
+    let back = 'https://probe.invalid/cb'
+    let reg = await k.at('yaks.app', '/oauth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        client_name: 'A remote server',
+        redirect_uris: [back],
+        token_endpoint_auth_method: 'none',
+        grant_types: ['authorization_code'],
+        response_types: ['code'],
+      }),
+    })
+    let client_id = (await reg.json()).client_id
+    let verifier = crypto.randomUUID() + crypto.randomUUID()
+    let ask = async (resource: string) =>
+      new URLSearchParams({
+        response_type: 'code',
+        client_id,
+        redirect_uri: back,
+        state: 's',
+        scope: 'graph',
+        code_challenge: await challenge(verifier),
+        code_challenge_method: 'S256',
+        resource,
+      }).toString()
+    let token = (code: string, more: Record<string, string> = {}) =>
+      form(k, '/oauth/token', {
+        grant_type: 'authorization_code',
+        code,
+        client_id,
+        redirect_uri: back,
+        code_verifier: verifier,
+        ...more,
+      })
+    let me = async (bearer: string) => {
+      let r = await k.at('yaks.app', '/mcp', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${bearer}`,
+        },
+        body: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
+      })
+      await r.body?.cancel()
+      return r.status
+    }
+    let remote = 'https://remote.invalid/mcp'
+
+    let card = await k.at('yaks.app', `/oauth/authorize?${await ask(remote)}`, {
+      headers: { cookie },
+      redirect: 'manual',
+    })
+    await card.body?.cancel()
+    let refused = new URL(card.headers.get('location') ?? '')
+    equal(
+      [
+        card.status,
+        refused.origin + refused.pathname,
+        refused.searchParams.get('error'),
+        refused.searchParams.get('state'),
+      ],
+      [302, back, 'invalid_target', 's'],
+    )
+
+    let ours = await allowed(k, await ask('https://yaks.app/mcp'), cookie)
+    await ours.body?.cancel()
+    let code = new URL(ours.headers.get('location')!).searchParams.get('code')!
+    let other = await token(code, { resource: remote })
+    equal([other.status, (await other.json()).error], [400, 'invalid_target'])
+    let got = await (await token(code)).json()
+    equal(await me(got.access_token), 200)
+  } finally {
+    await k.stop()
+  }
+})
+
 // The renewal, wired (session.ts `slid`, T-35380): every answer leaves the
 // router past it, so a cookie past half its life comes back fresh from a door
 // that knows nothing about sessions — here the apex's own home page.

@@ -3,9 +3,11 @@ import { test } from '@yaks/testing'
 import {
   getOAuthApi,
   type OAuthHelpers,
+  OAuthProvider,
 } from '@cloudflare/workers-oauth-provider'
+import { challenge } from '@yaks/oauth'
 import { kv } from './binding-probe.ts'
-import { consent } from './identity.ts'
+import { consent, unwrapped } from './identity.ts'
 import { agentsOf, replace } from './connected.ts'
 import type { Env } from './env.ts'
 
@@ -16,13 +18,14 @@ import type { Env } from './env.ts'
 // assistant registered once; each test's person is its own.
 let grants = kv()
 let provider = { OAUTH_KV: grants } as unknown as Env
-let oauth = getOAuthApi<Env>({
+let config = {
   apiRoute: '/api',
   apiHandler: { fetch: () => new Response() },
   defaultHandler: { fetch: () => new Response() },
   authorizeEndpoint: '/oauth/authorize',
   tokenEndpoint: '/oauth/token',
-}, provider)
+}
+let oauth = getOAuthApi<Env>(config, provider)
 let back = 'https://probe.invalid/cb'
 let { clientId } = await oauth.createClient({
   redirectUris: [back],
@@ -97,4 +100,44 @@ test('a grant names its agent as consented, reading no registration', async () =
   }, 'r')
   assertEquals(agents.map((a) => a.name), ['Probe agent'])
   assertEquals(looked, [])
+})
+
+// A token the provider minted for another resource, before yaks.app refused
+// to grant one (T-803), is nobody: a server that named yaks.app as where it
+// signs in holds it, and it must not be the person at /mcp. One for yaks.app,
+// or for no resource at all, is the person still.
+test('a token for another resource is nobody', async () => {
+  let verifier = 'v'.repeat(43)
+  let token = async (resource?: string) => {
+    let { redirectTo } = await consent(oauth, {
+      ...authorization,
+      codeChallenge: await challenge(verifier),
+      ...resource ? { resource } : {},
+    }, 's')
+    let res = await new OAuthProvider<Env>(config).fetch(
+      new Request('https://yaks.app/oauth/token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code: new URL(redirectTo).searchParams.get('code')!,
+          client_id: clientId,
+          redirect_uri: back,
+          code_verifier: verifier,
+        }).toString(),
+      }),
+      provider,
+      { waitUntil: () => {}, passThroughOnException: () => {} } as never,
+    )
+    let { access_token } = await res.json()
+    return (await unwrapped(provider, access_token)).person
+  }
+  assertEquals(
+    [
+      await token('https://remote.invalid/mcp'),
+      await token('https://yaks.app/mcp'),
+      await token(),
+    ],
+    [undefined, 's', 's'],
+  )
 })

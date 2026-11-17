@@ -266,10 +266,27 @@ let provided = (env: Env): Env =>
     })
     : env
 
+// Whether the resources an authorize request, a token request or a token
+// names are this platform: every one on its own origin (`/mcp`, `/oauth/me`,
+// or the origin bare, which our protected-resource metadata names). None
+// named is ours too, as every token from before clients named one is. Any
+// other is a server that named yaks.app as where it signs in, and a token
+// for it would be a credential for the person's whole account in that
+// server's hands (T-803). The provider is told no resource of its own:
+// pinned, it would refuse a grant bound to the origin where a client names
+// `/mcp`, and every connector holding one would be signed out (M-37923).
+let forUs = (resource: string | string[] | undefined, env: Host) =>
+  [resource ?? []].flat().every((r) =>
+    URL.canParse(r) && new URL(r).origin == new URL(hostUrl(env, '/')).origin
+  )
+
+let NOT_US = 'yaks.app grants access to yaks.app and to no other resource'
+
 /** The person an OAuth access token was granted for, and when it ends
- * (asking.ts `asking`). */
+ * (asking.ts `asking`). A token for another resource is nobody here. */
 export let unwrapped = async (env: Env, token: string) => {
   let held = await api(env).unwrapToken<Props>(token)
+  if (held && !forUs(held.audience, env)) return {}
   return { person: held?.grant.props?.person, until: held?.expiresAt }
 }
 
@@ -1125,7 +1142,14 @@ let quiet = (r: Response) => {
 let asked = async (req: Request, env: Env, q: string) => {
   let url = new URL(`/oauth/authorize?${q}`, req.url)
   try {
-    return await api(env).parseAuthRequest(new Request(url.href))
+    let ask = await api(env).parseAuthRequest(new Request(url.href))
+    if (forUs(ask.resource, env)) return ask
+    throw new AuthorizationError('invalid_target', {
+      description: NOT_US,
+      redirectUri: ask.redirectUri,
+      state: ask.state || undefined,
+      issuer: new URL(hostUrl(env, '/')).origin,
+    })
   } catch (e) {
     if (e instanceof CimdFetchError) {
       return new Response(
@@ -1739,6 +1763,19 @@ let plain = async (req: Request, env: Env): Promise<Request> => {
   })
 }
 
+// A token request naming a resource that is not this platform (`forUs`):
+// the provider would mint a token for it on a grant that named none.
+let elsewhere = async (req: Request, env: Env) => {
+  if (req.method != 'POST' || new URL(req.url).pathname != OAUTH.token) {
+    return false
+  }
+  let form = await req.clone().text().then(
+    (body) => new URLSearchParams(body),
+    () => null,
+  )
+  return !forUs(form?.getAll('resource'), env)
+}
+
 // A provider per request, since its configuration is read from the env: the
 // library builds its own implementation per call anyway (`getOAuthApi`), so
 // this costs an object, not a connection.
@@ -1810,6 +1847,12 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     )
   }
   let sent = await plain(req, env)
+  if (await elsewhere(sent, env)) {
+    return Response.json({
+      error: 'invalid_target',
+      error_description: NOT_US,
+    }, { status: 400, headers: { 'cache-control': 'no-store' } })
+  }
   let res = await new OAuthProvider<Env>(opts(env))
     .fetch(sent, provided(env), context() as never)
   // The provider owns all its metadata; add only the account-discovery door
