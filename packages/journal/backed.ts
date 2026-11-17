@@ -29,6 +29,7 @@ import {
   type Derived,
   desc,
   eq,
+  exists,
   type Expr,
   fn,
   join,
@@ -120,13 +121,16 @@ let tells = (id: string) =>
 // entity whose newest change to it wrote it, and each property's newest
 // after-image, null where that is the tombstone a removal wrote. A reference
 // is read back to the referent's integer id, as the component's table keeps
-// it. The newest change and each property's newest row are read through the
-// index on (entity, component), for the one entity a read asks about.
+// it. Start with the owner, then seek its latest change: starting with changes
+// let a scoped get walk their history or build a bloom filter over the journal
+// before testing two owners. This single-table relation also folds into a
+// LEFT JOIN without materializing every owner's history.
 let held = (comp: string, props: Held[]): Select => {
   let jn = (c: string) => col(c, 'jn')
   let jl = (c: string) => col(c, 'jl')
+  let owner = col('id', '__held')
   let ours = (c: (c: string) => Expr) =>
-    and(eq(c('entity'), jc('entity')), eq(c('component'), lit(comp)))
+    and(eq(c('entity'), owner), eq(c('component'), lit(comp)))
   let newest = ({ name, ref }: Held) =>
     sub(select({
       cols: [when([[
@@ -150,22 +154,25 @@ let held = (comp: string, props: Held[]): Select => {
     }))
   return select({
     cols: [
-      as(jc('entity'), 'entity'),
+      as(owner, 'entity'),
       ...props.map((p) => as(newest(p), p.as)),
     ],
-    from: table('journal_change', 'jc'),
-    where: and(
-      eq(jc('component'), lit(comp)),
-      eq(jc('operation'), lit('upsert')),
-      eq(
-        jc('id'),
-        sub(select({
-          cols: [fn('max', jn('id'))],
-          from: table('journal_change', 'jn'),
-          where: ours(jn),
-        })),
+    from: table('entity', '__held'),
+    where: exists(select({
+      cols: [lit(1)],
+      from: table('journal_change', 'jc'),
+      where: and(
+        eq(jc('operation'), lit('upsert')),
+        eq(
+          jc('id'),
+          sub(select({
+            cols: [fn('max', jn('id'))],
+            from: table('journal_change', 'jn'),
+            where: ours(jn),
+          })),
+        ),
       ),
-    ),
+    })),
   })
 }
 
