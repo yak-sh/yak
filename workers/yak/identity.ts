@@ -533,20 +533,22 @@ let closing = async (
 //
 // Keep the setup destination through sign-in. The login form carries its
 // fragment too, because a provider chosen in a link never reaches the server.
+// The account's own page, so only the browser's own session reaches it, never
+// a bearer narrowed to one space (`browser`, T-717).
 let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
-  let who = await withAuth(env, req)
-  if (!who) return redirect('/login?return=%2Fconnect', undefined, 303)
+  let person = await browser(env, req)
+  if (!person) return redirect('/login?return=%2Fconnect', undefined, 303)
   let dir = dirOf(env)
   // Their agents asked beside their space, in the same directory trip.
   let [space, theirAgents, provider] = await Promise.all([
-    dir.own(who.person),
-    agents(env, who.person, dir),
+    dir.own(person),
+    agents(env, person, dir),
     payments(env),
   ])
   return connect(
     {
       slug: space.slug,
-      person: who.person,
+      person,
       agents: theirAgents,
       said,
       say,
@@ -1322,11 +1324,12 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   if (path == '/connect' && req.method == 'GET') return theirs(env, req)
 
   if (path == '/connect' && req.method == 'POST') {
-    let who = await withAuth(env, req)
-    if (!who) return redirect('/login?return=%2Fconnect')
+    // Renaming the account's space is the browser's to do (`theirs`).
+    let person = await browser(env, req)
+    if (!person) return redirect('/login?return=%2Fconnect', undefined, 303)
     let out = await choose(
       env,
-      who.person,
+      person,
       field('space').trim().toLowerCase(),
     )
     // A fetch gets the answer to put in the page; a plain form post — no

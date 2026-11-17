@@ -138,3 +138,44 @@ test('a login bearer mints no session or connector at the sign-in doors', async 
     await k.stop()
   }
 })
+
+test("a login bearer reaches neither the connector page nor its space's address", async () => {
+  let k = await kernel()
+  try {
+    let owner = await signIn(k)
+    let space = owner.email.split('@')[0]
+    let grant = await connector(k, owner.cookie).tool('grant', {
+      space,
+      hours: 1,
+    })
+    let bearer = `Bearer ${/yak login (\S+)/.exec(grant)![1]}`
+    let renamed = `renamed-${crypto.randomUUID().slice(0, 8)}`
+    // Both send it to sign in, as they would a stranger.
+    for (
+      let init of [{}, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ space: renamed }).toString(),
+      }]
+    ) {
+      let r = await k.at(k.host, '/connect', {
+        ...init,
+        redirect: 'manual',
+        headers: { ...init.headers, authorization: bearer },
+      })
+      assertEquals(
+        [r.status, r.headers.get('location')],
+        [303, '/login?return=%2Fconnect'],
+      )
+      await r.body?.cancel()
+    }
+    let page = await k.at(k.host, '/connect', {
+      headers: { cookie: owner.cookie },
+    })
+    let text = await page.text()
+    assertMatch(text, new RegExp(space))
+    assertEquals(text.includes(renamed), false)
+  } finally {
+    await k.stop()
+  }
+})
