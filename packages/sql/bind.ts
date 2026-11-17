@@ -508,12 +508,13 @@ let owned = (ctx: Ctx, comp: string, where?: string): Cond => {
       params: [],
     })
   }
-  // A presence spine, an ordered walk, known outer identities or a
-  // disjunction's candidates already supply the owners. Probe each owner's
-  // key instead of building its entire owning set first: a page's
+  // A presence spine, an ordered walk, a stored value filter, known outer
+  // identities or a disjunction's candidates already supply the owners.
+  // Probe each owner's key instead of building its entire owning set first: a page's
   // `!references` beside its few links read all 36,600 `references` rows to
   // answer for three.
-  return ctx.correlated || ctx.bounded || ctx.present || ctx.walk ||
+  return ctx.correlated || ctx.bounded || ctx.narrowed || ctx.present ||
+      ctx.walk ||
       ctx.candidates || ctx.few || ctx.half == 'numbered'
     ? cond({
       sql: `exists (select 1 from ${ctx.d.table(comp)} where ${
