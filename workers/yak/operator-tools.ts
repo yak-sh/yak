@@ -1,6 +1,6 @@
 import type { Bundle } from '@yaks/graph'
 import type { Args, Ctx, Tool } from './tool.ts'
-import { inSpace, refuse, SPACE, str } from './tool.ts'
+import { inSpace, refuse, rejected, SPACE, str } from './tool.ts'
 import { operatorDoor } from './build-door.ts'
 import { writes } from '@yaks/member'
 
@@ -20,13 +20,17 @@ let ask = async (
   if (!writes(who.role)) {
     throw refuse('access', 'only a member who writes can read operator work')
   }
+  // The Operator's refusal of the caller's arguments stays a refusal.
   let value = await operatorDoor(
     ctx.env,
     space,
     who,
     path.slice('/operator/'.length),
     args,
-  ) as Record<string, unknown>
+  ).catch((error) => {
+    let { status = 500, message } = error as Error & { status?: number }
+    throw status < 500 ? rejected(status, message) : error
+  }) as Record<string, unknown>
   // A request's answer is words, said once beside the rest of its value; a
   // conversation's read is its value alone.
   let { text, ...rest } = value
