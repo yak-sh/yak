@@ -7,6 +7,9 @@ import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { r2Objects } from './lib/objects.ts'
 import { refuse } from './tool.ts'
+import { operatorDoor } from './build-door.ts'
+import type { Who } from './session.ts'
+import type { Bundle } from '@yaks/graph'
 
 /** Where the space keeps the Operator's attachments in the bucket. */
 let attachmentPrefix = (space: Pick<Space, 'store'>) =>
@@ -47,11 +50,21 @@ export let attached = async (
 
 /** An attachment where a caller requires its bytes, refused when absent. */
 export let attachmentBytes = async (
-  env: Pick<Env, 'BLOBS'>,
-  space: Pick<Space, 'store' | 'slug'>,
+  env: Env,
+  space: Space,
   id: string,
+  who: Who,
 ) => {
-  let bytes = await attached(env, space, id)
+  if (!/^[0-9a-f]{64}$/.test(id)) {
+    throw refuse('arguments', `attachment: ${id} is not an attachment id`)
+  }
+  let rows = await operatorDoor(env, space, who, 'attachments', {
+    q: `.attachment.artifact=${id}&*`,
+  }) as Bundle[]
+  let allowed = rows.some((row) =>
+    (row.attachment as { artifact?: string } | undefined)?.artifact == id
+  )
+  let bytes = allowed ? await attached(env, space, id) : null
   if (!bytes) {
     throw refuse('missing', `${space.slug} keeps no attachment ${id}`)
   }

@@ -3015,7 +3015,7 @@ let UNLOGO = 'none'
 
 // The picture space_set's `logo` or `logo_base64` names: its bytes, null to
 // take the logo off, or undefined where neither came.
-let logoSent = async (ctx: Ctx, space: Space, args: Args) => {
+let logoSent = async (ctx: Ctx, space: Space, args: Args, who: Who) => {
   if (args.logo != null && args.logo_base64 != null) {
     throw refuse('arguments', 'one of logo or logo_base64')
   }
@@ -3028,7 +3028,7 @@ let logoSent = async (ctx: Ctx, space: Space, args: Args) => {
   }
   if (args.logo == null) return undefined
   let id = text(args.logo, 'logo')
-  return id == UNLOGO ? null : await attachmentBytes(ctx.env, space, id)
+  return id == UNLOGO ? null : await attachmentBytes(ctx.env, space, id, who)
 }
 
 // A file the person attached in a conversation with their Operator, which
@@ -3042,13 +3042,13 @@ let ATTACHMENT = {
 
 // What sandbox_write writes from an attachment, refused where the space keeps
 // no file by that id; none where it writes the text sent as content.
-let attachedFile = async (ctx: Ctx, space: Space, args: Args) => {
+let attachedFile = async (ctx: Ctx, space: Space, args: Args, who: Who) => {
   if ((args.content == null) == (args.attachment == null)) {
     throw refuse('arguments', 'one of content or attachment')
   }
   if (args.attachment == null) return undefined
   let id = text(args.attachment, 'attachment')
-  let bytes = await attachmentBytes(ctx.env, space, id)
+  let bytes = await attachmentBytes(ctx.env, space, id, who)
   return { path: text(args.path, 'path'), bytes }
 }
 
@@ -3068,8 +3068,8 @@ let SANDBOX: Row[] = machineDeclared().map((t) => {
       required: writes ? ['path'] : shape.required,
     },
     run: async (ctx, args) => {
-      let { space } = await inSpace(ctx, args, true)
-      let file = writes ? await attachedFile(ctx, space, args) : undefined
+      let { space, who } = await inSpace(ctx, args, true)
+      let file = writes ? await attachedFile(ctx, space, args, who) : undefined
       let said = await bench(
         ctx,
         space,
@@ -3421,7 +3421,7 @@ let OURS: Row[] = [
     },
     run: async (ctx, args) => {
       let { space, who } = await owns(ctx, args)
-      let logo = await logoSent(ctx, space, args)
+      let logo = await logoSent(ctx, space, args, who)
       let to = args.slug == null ? null : fresh(args.slug, 'slug')
       let title = args.title == null ? null : titled(args.title)
       let drop = args.forget == null ? null : slug(args.forget, 'forget')
@@ -4553,11 +4553,12 @@ let OURS: Row[] = [
       required: ['attachment'],
     },
     run: async (ctx, args) => {
-      let { space } = await inSpace(ctx, args, true)
+      let { space, who } = await inSpace(ctx, args, true)
       let bytes = await attachmentBytes(
         ctx.env,
         space,
         text(args.attachment, 'attachment'),
+        who,
       )
       return {
         text: `Read ${bytes.byteLength} bytes${

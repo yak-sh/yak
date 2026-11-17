@@ -39,7 +39,8 @@ import {
 import { operating } from './operator.ts'
 import { receive } from './operator-channels.ts'
 import { sandboxes } from './workspace-probe.ts'
-import { attachmentKey } from './attachments.ts'
+import { attachmentBytes, attachmentKey } from './attachments.ts'
+import { attachmentRows } from '@yaks/blob/attachment'
 import { digest } from '@yaks/graph/sha256'
 
 let fixture = (tools: Tool[]) => {
@@ -381,6 +382,14 @@ let service = operatorService(
     })
   }),
 )
+let originalBuilder = env!.BUILDER
+env!.BUILDER = {
+  ...originalBuilder,
+  get: (id) =>
+    String(id) == String(originalBuilder.idFromName(sourceSpace.eid))
+      ? service.binding.get(sourceSpace.eid)
+      : originalBuilder.get(id),
+} as Env['BUILDER']
 let sourceRequest = await receive(service.store, {
   person: k.owner.person,
   space: sourceSpace.eid,
@@ -448,6 +457,14 @@ test('source text reads refuse absent, foreign, malformed and non-text attachmen
   let invalid = new Uint8Array([255, 254])
   let binary = await digest(invalid)
   await env!.BLOBS.put(attachmentKey(sourceSpace, binary), invalid)
+  await service.store.g.apply(
+    attachmentRows(sourceRequest, [{
+      address: binary,
+      name: 'invalid.txt',
+      media_type: 'text/plain',
+    }]),
+    { trusted: true },
+  )
   for (
     let [client, args, reason] of [
       [agent, { attachment: 'f'.repeat(64) }, 'keeps no attachment'],
@@ -570,4 +587,26 @@ test('one connector call creates, writes and deploys a mockup through the shared
   equal(page.status, 200)
   ok((await page.text()).includes('Published in one call'))
   await k.stop()
+})
+
+test('a known digest cannot read another member’s conversation attachment', async () => {
+  let foreign = operatorService(
+    env!,
+    {
+      person: graphPerson.person,
+      space: sourceSpace.eid,
+      role: 'editor',
+    },
+    operatorModel((req) =>
+      Promise.resolve({ id: mint(), model: req.model, items: [] })
+    ),
+    service.store,
+  )
+  await throws(() =>
+    attachmentBytes(
+      { ...env!, BUILDER: foreign.binding },
+      sourceSpace,
+      reference!,
+      { person: graphPerson.person, role: 'editor' },
+    ), 'keeps no attachment')
 })

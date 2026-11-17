@@ -56,6 +56,12 @@ import type { Who } from './session.ts'
 import { SECONDS } from '@yaks/platform/plans'
 import { attachmentKey } from './attachments.ts'
 import { digest } from '@yaks/graph/sha256'
+import {
+  operatorMemory,
+  operatorModel,
+  operatorService,
+} from './operator-testing.ts'
+import { receive } from './operator-channels.ts'
 import { CallError } from '@yaks/tools/errors'
 
 let SECRET = 'a probe secret'
@@ -329,6 +335,29 @@ test('an Operator attachment is written into the sandbox as its bytes', async ()
   let { ctx, box, env, space } = await bench()
   let id = await digest(WASM)
   await env.BLOBS.put(attachmentKey(space, id), WASM)
+  let service = operatorService(
+    env,
+    { person: ADA, space: space.eid, role: 'owner' },
+    operatorModel((req) =>
+      Promise.resolve({
+        id: crypto.randomUUID(),
+        model: req.model,
+        items: [],
+      })
+    ),
+    operatorMemory(),
+  )
+  env.BUILDER = service.binding
+  await receive(service.store, {
+    person: ADA,
+    space: space.eid,
+    channel: 'chat',
+    files: [{
+      key: attachmentKey(space, id),
+      name: 'input.wasm',
+      mime: 'application/wasm',
+    }],
+  }, 'Read this')
   let wrote = await tool('sandbox_write').run(ctx, {
     path: 'in/people.csv',
     attachment: id,
