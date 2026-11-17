@@ -57,12 +57,15 @@
 # 6 minutes. With two bulk jobs at 30 under a slice at 80, that fsync takes
 # 10 ms.
 #
-# Small random IO needs a separate bound. At load 62 the sessions issued
-# 1,900 reads/s and 1,800 writes/s while the servers needed about 700; the
-# disk queued 307 requests at 68 ms each (T-722). That traffic was only
-# 35 MB/s, below the bandwidth caps. Bound the sessions together to 1,500
-# reads and 1,000 writes/s, with each job at half that, so small test writes
-# cannot consume the disk's ~4,500 mixed operations/s.
+# Never an IOPS cap. A job at an operations cap queues its small IO behind
+# itself, and the box's servers wait on that queue twice: a job's dirty pages,
+# written back a page at a time at 500 writes/s, drain at 2 MB/s instead of
+# its 30, so the host's dirty limit stays full and every writer waits in
+# balance_dirty_pages; and a job that reads metadata while it holds a handle on
+# ext4's shared journal holds the journal's commit, so every writer waits in
+# wait_transaction_locked. Beside IOPS caps at load 25, the servers' main
+# threads were held 6-22 s in their COMMITs five times in an hour, both
+# servers at once in the same 21 s (bace8585).
 #
 # Measured on this box, an LXC volume on LVM thin over a SATA SSD: a cold page read
 # from the servers' slice averages 2 ms through a whole copy beside another bulk
@@ -112,13 +115,9 @@
 # set vm.dirty_ratio=20 and vm.dirty_background_ratio=10.
 set -eu
 all="IOWriteBandwidthMax=/ 80M
-IOReadBandwidthMax=/ 150M
-IOReadIOPSMax=/ 1500
-IOWriteIOPSMax=/ 1000"
+IOReadBandwidthMax=/ 150M"
 job="IOWriteBandwidthMax=/ 30M
-IOReadBandwidthMax=/ 100M
-IOReadIOPSMax=/ 750
-IOWriteIOPSMax=/ 500"
+IOReadBandwidthMax=/ 100M"
 sessions="MemoryMax=16G"
 floor=8G
 servers="MemoryMin=$floor"
