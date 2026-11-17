@@ -197,7 +197,7 @@ test('a lasting R2 failure keeps uploaded parts for a later completion', async (
     Error,
     r2Failure.message,
   )
-  equal(fixture.calls(), 5)
+  equal(fixture.calls(), 7)
   equal(fixture.ledger().length, 4)
 })
 

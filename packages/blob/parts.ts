@@ -203,7 +203,7 @@ export let parts = (
       chain.some((r, i) => r.from != (i ? chain[i - 1].to : START)) ||
       chain[chain.length - 1].to != sha
     ) {
-      await patient(() => up.abort().catch(lost), 5, 100, pause)
+      await patient(() => up.abort().catch(lost), pause)
       await drop(held, t)
       throw new Wrong(`the parts sent do not hash to ${sha}`)
     }
@@ -223,8 +223,6 @@ export let parts = (
             throw error
           }
         },
-        5,
-        100,
         pause,
       )
     } catch (e) {
@@ -233,7 +231,7 @@ export let parts = (
       if (bucketCode(e) != NO_UPLOAD) throw e
       let done = await whole()
       if (done) return done
-      await patient(() => up.abort().catch(lost), 5, 100, pause)
+      await patient(() => up.abort().catch(lost), pause)
       await drop(held, t)
       throw new Gone(`the parts of ${sha} could not be assembled: ${e}`)
     }

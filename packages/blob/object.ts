@@ -97,12 +97,15 @@ export class BucketUnavailable extends Error {
 
 /**
  * A bucket call, sent again while the bucket answers that it is busy: a burst
- * of uploads to one space is enough for R2 to refuse some of them. Each wait
+ * of uploads to one space is enough for R2 to refuse some of them, and R2's
+ * internal error (10001) can last a few seconds. Each wait
  * doubles from `wait` milliseconds, jittered so calls that collided once do not
  * collide again, and after `tries` throws {@link BucketUnavailable} with the
- * last answer as its cause. Other failures are thrown at once. `pause` spends each wait, a timer unless the
- * caller brings its own. Every call the stores below make to a bucket goes
- * through it; a stream is read once, so a caller putting one cannot.
+ * last answer as its cause: by default about six seconds of waiting, since a
+ * file that opens late is better than one that fails. Other failures are
+ * thrown at once. `pause` spends each wait, a timer unless the caller brings
+ * its own. Every call the stores below make to a bucket goes through it; a
+ * stream is read once, so a caller putting one cannot.
  *
  * ```ts
  * import { patient } from '@yaks/blob'
@@ -112,15 +115,15 @@ export class BucketUnavailable extends Error {
  * let list = () =>
  *   ++calls < 3 ? Promise.reject({ code: 10058 }) : Promise.resolve(['a/x'])
  * let pause = (ms: number) => Promise.resolve(void waits.push(ms))
- * equal(await patient(list, 5, 100, pause), ['a/x'])
+ * equal(await patient(list, pause), ['a/x'])
  * equal(waits.length, 2)
  * ```
  */
 export let patient = async <T>(
   call: () => Promise<T>,
-  tries = 5,
-  wait = 100,
   pause: (ms: number) => Promise<void> = sleep,
+  tries = 7,
+  wait = 100,
 ): Promise<T> => {
   for (let i = 1;; i++) {
     try {
@@ -159,8 +162,6 @@ let load = (bucket: Pick<Bucket, 'get'>, key: string, pause: Pause) =>
         }
         : null
     },
-    5,
-    100,
     pause,
   )
 
@@ -201,8 +202,6 @@ let reading = async (
           throw error
         }
       },
-      5,
-      100,
       pause,
     )
   let first = await next()
@@ -230,7 +229,7 @@ let open = async (
   key: string,
   pause: Pause,
 ) => {
-  let head = await patient(() => bucket.head(key), 5, 100, pause)
+  let head = await patient(() => bucket.head(key), pause)
   if (!head) return null
   return {
     size: head.size,
@@ -260,14 +259,14 @@ export let objectBlobs = (
 ): Blobs => ({
   exact: true,
   has: async (sha) =>
-    (await patient(() => bucket.head(prefix + sha), 5, 100, pause)) != null,
+    (await patient(() => bucket.head(prefix + sha), pause)) != null,
   get: async (sha) => {
     let found = await load(bucket, prefix + sha, pause)
     return found?.bytes
   },
   open: (sha) => open(bucket, prefix + sha, pause),
   put: async (sha, bytes) => {
-    await patient(() => bucket.put(prefix + sha, bytes), 5, 100, pause)
+    await patient(() => bucket.put(prefix + sha, bytes), pause)
   },
 })
 
@@ -331,8 +330,6 @@ let walk = async (bucket: Bucket, prefix: string, pause: Pause) => {
   do {
     let page = await patient(
       () => bucket.list({ prefix, cursor }),
-      5,
-      100,
       pause,
     )
     for (let o of page.objects) at[o.key] = o.uploaded.getTime()
@@ -352,10 +349,9 @@ let walk = async (bucket: Bucket, prefix: string, pause: Pause) => {
  * ```
  */
 export let bucketObjects = (bucket: Bucket, pause: Pause = sleep): Objects => ({
-  has: async (key) =>
-    (await patient(() => bucket.head(key), 5, 100, pause)) != null,
+  has: async (key) => (await patient(() => bucket.head(key), pause)) != null,
   put: async (key, bytes) => {
-    await patient(() => bucket.put(key, bytes), 5, 100, pause)
+    await patient(() => bucket.put(key, bytes), pause)
   },
   read: async (key) => (await load(bucket, key, pause))?.bytes ?? null,
   load: (key) => load(bucket, key, pause),
@@ -367,13 +363,11 @@ export let bucketObjects = (bucket: Bucket, pause: Pause = sleep): Objects => ({
   open: (key) => open(bucket, key, pause),
   delete: async (keys) => {
     if (typeof keys == 'string') {
-      return void await patient(() => bucket.delete(keys), 5, 100, pause)
+      return void await patient(() => bucket.delete(keys), pause)
     }
     for (let at = 0; at < keys.length; at += DELETES) {
       await patient(
         () => bucket.delete(keys.slice(at, at + DELETES)),
-        5,
-        100,
         pause,
       )
     }

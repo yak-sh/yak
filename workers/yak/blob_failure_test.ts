@@ -139,7 +139,7 @@ for (
 
 for (
   let [i, name, error, attempts] of [
-    [3, 'R2 that stays down', internal, 5],
+    [3, 'R2 that stays down', internal, 7],
     [4, 'a non-R2 failure', broken, 1],
   ] as const
 ) {
@@ -165,7 +165,7 @@ for (
 
 for (
   let [i, name, error, attempts] of [
-    [6, 'a lasting R2 tail failure', internal, 5],
+    [6, 'a lasting R2 tail failure', internal, 7],
     [7, 'a non-R2 tail failure', broken, 1],
   ] as const
 ) {

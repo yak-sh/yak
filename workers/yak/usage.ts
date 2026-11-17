@@ -556,6 +556,7 @@ export let fileSizes = async (
     do {
       let page = await patient(
         () => env.BLOBS.list({ prefix, cursor }),
+        undefined,
         tries,
         wait,
       )

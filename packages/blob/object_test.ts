@@ -148,8 +148,7 @@ test('a busy bucket is asked again, and only while busy', async () => {
     let n = 0
     let call = () =>
       n < answers.length ? Promise.reject(answers[n++]) : Promise.resolve(n)
-    return () =>
-      patient(call, 3, 100, (ms) => Promise.resolve(void waits.push(ms)))
+    return () => patient(call, (ms) => Promise.resolve(void waits.push(ms)), 3)
   }
   assertEquals(await asked([{ code: 10058 }, { code: 10001 }])(), 2)
   // Each wait doubles from `wait`, jittered by up to half either way.
@@ -182,7 +181,7 @@ for (
       calls++
       return Promise.reject(error)
     }
-    let got = await patient(call, 3, 100, immediate).catch((e) => e)
+    let got = await patient(call, immediate, 3).catch((e) => e)
     assertEquals([calls, got instanceof BucketUnavailable, got.cause], [
       3,
       true,
@@ -244,8 +243,6 @@ test('a bucket permission failure is thrown without waiting or resending', async
   let calls = 0, waits = 0
   let got = await patient(
     () => (calls++, Promise.reject(wrong)),
-    5,
-    100,
     () => (waits++, Promise.resolve()),
   ).catch((e) => e)
   assertEquals([calls, waits, got], [1, 0, wrong])
