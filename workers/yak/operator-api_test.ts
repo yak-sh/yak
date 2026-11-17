@@ -1,7 +1,8 @@
 // The Operator's store through @yaks/api (operator-api.ts), as two people who
 // share a space read and write it: each reads, and hears on a socket, only
-// what is theirs or nobody's, and writes only their drafts and the archive
-// marks on their own lines.
+// what is theirs or nobody's, and writes only their drafts, the archive
+// marks on their own lines and the walkthrough marks on their own
+// conversations.
 import { equal, test, until } from '@yaks/testing'
 import { type Bundle, transient } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
@@ -76,6 +77,20 @@ test('a person writes their own drafts and the archive marks on their own lines,
   let [line] = await store.g.get([beas.line], ['archived'])
   equal([!!line.archived, await read(bea, '.draft')], [false, []])
   equal((await store.g.get([shared], ['doc']))[0].doc, { title: 'Ours' })
+})
+
+test('a person marks their own conversation a walkthrough, and nobody else’s', async () => {
+  let mark = (eid: string, app: string | null = 'guestbook', rest = {}) => ({
+    entity: { eid },
+    walkthrough: app && { app },
+    ...rest,
+  })
+  equal(await apply(ada, [mark(adas.root)]), 200)
+  equal(await apply(ada, [mark(adas.root, null)]), 200)
+  equal(await apply(bea, [mark(adas.root)]), 403)
+  equal(await apply(ada, [mark(adas.line)]), 403)
+  equal(await apply(ada, [mark(adas.root, 'guestbook', { doc: {} })]), 403)
+  equal((await store.g.get([adas.root]))[0].walkthrough, undefined)
 })
 
 // A hibernatable socket as the runtime hands one over: the frames it was

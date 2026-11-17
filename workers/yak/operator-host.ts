@@ -7,11 +7,13 @@ import { draftEid } from '@yaks/draft'
 import type { Carried } from './support-reply.ts'
 import { enqueue } from '@yaks/effects'
 import { derivedEid } from '@yaks/graph/identity'
+import { signed } from '@yaks/graph/provenance'
 import { sha256 } from '@yaks/graph/sha256'
 import { short } from '@yaks/id'
 import { eids } from '@yaks/markdown/structural'
 import {
   conversant,
+  mayWrite,
   ownerOf,
   owns,
   placed,
@@ -1650,6 +1652,16 @@ export let operatorRequest = async (
       { trusted: true },
     )
     return Response.json({ entries: ids, restored: args.restore === true })
+  }
+  // What a person writes here from the connector (attachment-core.ts
+  // `self`): signed as them, and only what is theirs to write, as the page's
+  // door takes it (operator-api.ts).
+  if (path == '/operator/apply') {
+    let bundles = Array.isArray(args.bundles) ? args.bundles as Bundle[] : []
+    if (!bundles.length) throw refuse('arguments', 'Name the bundles to write.')
+    let mine = signed(bundles, { by: person })
+    await mayWrite(store, held, mine)
+    return Response.json(await store.g.apply(mine))
   }
   if (path == '/operator/draft') {
     if (Array.isArray(args.bundles)) {

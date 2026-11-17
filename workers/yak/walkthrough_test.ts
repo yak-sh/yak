@@ -1,11 +1,13 @@
-// The home page's walkthroughs as a served page is filled with them
-// (walkthrough.ts `walkedInto`), on the page as home.tsx draws it.
+// The home page's walkthroughs: a recorded conversation's steps
+// (walkthrough.ts `stepsOf`), and a served page filled with them
+// (`walkedInto`), on the page as home.tsx draws it.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { renderToString } from 'preact-render-to-string'
 import { h } from 'preact'
-import { type Shown, walkedInto } from './walkthrough.ts'
+import { toolEid } from '@yaks/tools/result'
+import { type Shown, stepsOf, walkedInto } from './walkthrough.ts'
 
 // A page walking through two apps of two steps each, drawn as home.tsx draws
 // one, by hand so the test names its own apps.
@@ -93,4 +95,31 @@ test('an app short of a step or a picture is cut, with its name and the links to
 test('with no app recorded the walkthrough is cut whole, and the rest stays', () => {
   assertEquals(read({}).walk, false)
   assertEquals(read({}).after, true)
+})
+
+test('a step that released nothing leaves the app at the release before it', () => {
+  let seq = 0
+  let at = (rest: object) => ({
+    entity: { eid: `e${++seq}` },
+    entry: { session: 's', seq },
+    ...rest,
+  })
+  let ask = (body: string) => at({ content: { body } })
+  let deploy = (version: number) => [
+    at({ call: { to: toolEid('app_deploy'), args: { app: 'guestbook' } } }),
+    at({
+      result: { call: `e${seq}`, value: { deployed: true, version } },
+    }),
+  ]
+  let steps = stepsOf([
+    ask('Text me when someone signs'),
+    at({ call: { name: 'subscription_set', args: {} } }),
+    ask('A guestbook'),
+    ...deploy(1),
+    ask('Text me when someone signs'),
+    at({ call: { name: 'subscription_set', args: {} } }),
+    ask('Add photos'),
+    ...deploy(2),
+  ], 'guestbook')
+  assertEquals(steps.map((s) => s.version), [null, 1, 1, 2])
 })

@@ -2,8 +2,10 @@
 // Operator marked walkthrough{app}, which yaks.app's home page shows beside
 // the app it built (site/home.tsx `Walkthrough`). Each of the person's
 // requests is a step, and a step ends in the release its last app_deploy of
-// the app made, so a recorder marks the conversation and nothing else: the
-// transcript says where each step ends and which version it released.
+// the app made, or in the one before it when it released nothing (a step done
+// outside the app, a subscription the Operator set), so a recorder marks the
+// conversation and nothing else: the transcript says where each step ends and
+// which version it left the app at.
 //
 // The Builder object draws each step's lines as the chat page draws them
 // (operator-host.ts `walkthroughOf`); the page is filled with them as it is
@@ -19,7 +21,7 @@ import { builderOf, SPACE } from './build-door.ts'
 export let WALKTHROUGH = '/operator/walkthrough'
 
 /** One step of a walkthrough: its lines, the person's request first, and the
- * version its last release of the app made, if it made one. */
+ * version it left the app at, if any step so far released one. */
 export type Step = { lines: Bundle[]; version: number | null }
 
 /** A walkthrough as its object answers it: each step's lines drawn as HTML. */
@@ -44,7 +46,9 @@ let deploys = (b: Bundle, app: string) => {
 /**
  * The steps of a conversation's entries, in order: each begins at a request
  * of the person's and holds every line before the next but what the Operator
- * sent its model (`ask`). Lines before the first request are no step's.
+ * sent its model (`ask`). Lines before the first request are no step's. A
+ * step's version is its last release of the app, or the step before's when
+ * it released nothing, and none until a step has.
  *
  * ```ts
  * import { stepsOf } from './walkthrough.ts'
@@ -58,9 +62,10 @@ let deploys = (b: Bundle, app: string) => {
  *   at(2, { call: { to: toolEid('app_deploy'), args: { app: 'guestbook' } } }),
  *   at(3, { result: { call: 'e2', value: { deployed: true, version: 1 } } }),
  *   at(4, { output: {}, content: { body: 'Done.' } }),
- *   at(5, { content: { body: 'Add photos' } }),
+ *   at(5, { content: { body: 'Text me when someone signs' } }),
+ *   at(6, { call: { name: 'subscription_set', args: {} } }),
  * ], 'guestbook')
- * assertEquals(steps.map((s) => [s.lines.length, s.version]), [[4, 1], [1, null]])
+ * assertEquals(steps.map((s) => [s.lines.length, s.version]), [[4, 1], [2, 1]])
  * ```
  */
 export let stepsOf = (entries: Bundle[], app: string): Step[] => {
@@ -79,7 +84,9 @@ export let stepsOf = (entries: Bundle[], app: string): Step[] => {
   for (let b of ordered) {
     // What the Operator sent its model is its own, not the exchange.
     if (b.ask) continue
-    if (theirs(b)) steps.push({ lines: [], version: null })
+    if (theirs(b)) {
+      steps.push({ lines: [], version: steps.at(-1)?.version ?? null })
+    }
     let step = steps.at(-1)
     if (!step) continue
     step.lines.push(b)

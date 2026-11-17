@@ -1,7 +1,8 @@
 // The home page's walkthrough (walkthrough.ts) end to end in one process: a
 // demo app released four times in the demo space, a picture kept of each
 // release (app_preview `keep`), and a conversation in the space's Operator
-// store marked walkthrough{app}. The served home page holds each step's
+// store its person marks walkthrough{app} through the connector (graph_apply
+// `self`). The served home page holds each step's
 // exchange beside the picture of the release it ended in, and drops the
 // walkthrough while no conversation is marked.
 import { test } from '@yaks/testing'
@@ -9,6 +10,7 @@ import { line as q } from '@yaks/query'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { toolEid } from '@yaks/tools/result'
+import type { Bundle } from '@yaks/graph'
 import { connector, fresh, owned } from './probe.ts'
 import { directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
@@ -158,10 +160,15 @@ test('the home page shows no walkthrough while no conversation is marked one', a
 })
 
 test("each step of a marked conversation is served beside its release's picture", async () => {
-  await service.store.g.apply([{
-    entity: { eid: session },
-    walkthrough: { app: 'guestbook' },
-  }], { trusted: true })
+  let { value } = await agent.answer('graph_apply', {
+    space: 'yourname',
+    self: true,
+    bundles: [{ entity: { eid: session }, walkthrough: { app: 'guestbook' } }],
+  })
+  assertEquals(
+    (value?.bundles as Bundle[]).map((b) => b.walkthrough),
+    [{ app: 'guestbook' }],
+  )
   assertEquals(WALKS, ['guestbook'])
   let steps = stepsOf('guestbook')
   assertEquals(steps.length, REQUESTS.length)

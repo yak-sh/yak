@@ -12,11 +12,20 @@ import { type Ctx, inSpace, SPACE, str } from './tool.ts'
 // spaces have an app by that name) narrows: a query to that app's rows (`.in=`)
 // and a write's bundles to that app (`$app`). An id names one entity in every
 // app, so graph_show reads it whole with or without them. `self` reads the
-// caller's Operator attachment metadata in the space instead of the apps.
+// caller's Operator attachment metadata in the space instead of the apps, and
+// writes to their own conversations there what is theirs to write
+// (operator-access.ts `mayWrite`).
 let SELF = {
   type: 'boolean',
   description:
     'Read your Operator attachment and artifact metadata in this space instead of the apps.',
+}
+
+let SELF_APPLY = {
+  type: 'boolean',
+  description:
+    'Write bundles to your Operator conversations in this space instead of ' +
+    'the apps: a walkthrough mark on one of yours.',
 }
 
 let APP = {
@@ -78,14 +87,16 @@ let selfQuery = (name: Scoped, args: Record<string, unknown>) => {
 }
 
 /** The connector's ordinary graph tools, with `space` and `app` on the reads
- * and the write, and a read of one's Operator attachments available
- * explicitly with `self`. */
+ * and the write, and with `self` a read of one's Operator attachments, or a
+ * write to one's Operator conversations. That write lands in the Operator's
+ * store, so its answer is the batch as applied there, in words the runner
+ * keeps beside the call rather than bundles it would write to the apps. */
 export let attachmentCore = (ctx: Ctx, opts: CoreOpts): Tool[] =>
   core(opts).map((tool) => {
     let name = tool.name ?? ''
     if (!scoped(name)) return tool
     let schema = inputSchemaOf(tool)
-    let reads = name != 'graph_apply'
+    let writes = name == 'graph_apply'
     return {
       ...tool,
       inputSchema: {
@@ -94,12 +105,12 @@ export let attachmentCore = (ctx: Ctx, opts: CoreOpts): Tool[] =>
           ...schema.properties as Record<string, unknown>,
           space: SPACE,
           app: APP[name],
-          ...reads ? { self: SELF } : {},
+          self: writes ? SELF_APPLY : SELF,
         },
       },
       run: async (call, graph) => {
         let said = argsOf(call)
-        if (!reads || !said.self) {
+        if (!said.self) {
           let { space: _, app: __, self: ___, ...args } = inApp(name, said)
           return tool.run(
             { ...call, call: { ...call.call as object, args } },
@@ -108,6 +119,16 @@ export let attachmentCore = (ctx: Ctx, opts: CoreOpts): Tool[] =>
         }
         let { space: _, app: __, self: ___, ...args } = said
         let { space, who } = await inSpace(ctx, said)
+        if (writes) {
+          let wrote = await operatorDoor(ctx.env, space, who, 'apply', {
+            bundles: args.bundles,
+          }) as Bundle[]
+          return [{
+            entity: { eid: '$applied' },
+            content: { body: JSON.stringify(wrote) },
+            output: { source: call.entity.eid, value: { bundles: wrote } },
+          }]
+        }
         return await operatorDoor(
           ctx.env,
           space,

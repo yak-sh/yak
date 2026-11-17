@@ -246,8 +246,9 @@ let only = (b: Bundle, ...names: string[]) =>
 /**
  * What `who` may write to the Operator's store themselves, the rest of it
  * being the Operator's to write: their own draft (@yaks/draft, at its eid for
- * them and its place) where it is theirs to keep (`placed`), and the archive
- * mark on a line of a conversation of theirs. Anything else refuses the whole
+ * them and its place) where it is theirs to keep (`placed`), the archive
+ * mark on a line of a conversation of theirs, and the walkthrough mark on the
+ * conversation itself (walkthrough.ts). Anything else refuses the whole
  * batch, alike whether what it names is there or not.
  */
 export let mayWrite = async (store: Store, who: Owner, bundles: Bundle[]) => {
@@ -263,12 +264,17 @@ export let mayWrite = async (store: Store, who: Owner, bundles: Bundle[]) => {
       let [line] = await store.g.get([b.entity.eid], ['entry'])
       return !!line?.entry && await owns(store, b.entity.eid, who)
     }
+    if (b.walkthrough !== undefined && only(b, 'walkthrough')) {
+      let [root] = await store.g.get([b.entity.eid], ['session'])
+      return !!root?.session && await owns(store, b.entity.eid, who)
+    }
     return false
   }
   if (!(await Promise.all(bundles.map(one))).every(Boolean)) {
     throw new Denied(
       'Only your own drafts, and the archive marks on the lines of your own ' +
-        'conversations, are yours to write here.',
+        'conversations and the walkthrough marks on them, are yours to write ' +
+        'here.',
     )
   }
 }
