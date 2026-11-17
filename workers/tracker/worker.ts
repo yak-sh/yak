@@ -7,13 +7,7 @@ import { sha256 } from '@yaks/graph/sha256'
 import { Unsigned } from '@yaks/host/senders'
 import { authorize, sign } from './auth.ts'
 import { capture, caught, origin, queue, type Sink } from '@yaks/tracker/report'
-import {
-  evicted,
-  jittered,
-  opaque,
-  retried,
-  stopped,
-} from '@yaks/durable-object'
+import { jittered, stopped } from '@yaks/durable-object'
 import { waits } from '@yaks/api'
 import { type Clock, system } from '@yaks/fp'
 import { platform } from './core.ts'
@@ -22,6 +16,7 @@ import { json } from './door.ts'
 import { lent } from './mail.ts'
 import type { Settings } from './object.ts'
 import type { Explanation } from '@yaks/tracker/resolution'
+import { calling } from './rpc.ts'
 
 export type Stub = {
   fetch: (request: Request) => Promise<Response>
@@ -217,13 +212,7 @@ export let worker = (
   // write keyed by its eids, intake writes immutable rows and the monitor only
   // looks again, so a send that landed before its answer was lost lands the
   // same way again.
-  let call = <T>(scope: string, use: (stub: Stub) => Promise<T>) =>
-    retried(
-      () => use(env.TRACKERS.getByName(scope)),
-      true,
-      (error) => evicted(error) || opaque(error),
-      wait,
-    )
+  let call = calling(env.TRACKERS, wait)
   // A message's body back on the queue, to arrive once a stopped object's
   // window ends.
   let later: Later | undefined = env.ERRORS && Object.assign(

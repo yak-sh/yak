@@ -33,6 +33,7 @@ import { authorize } from './auth.ts'
 import { recovery } from './recovery.ts'
 import { monitor } from './monitor.ts'
 import { directory } from './changes.ts'
+import { calling } from './rpc.ts'
 import { activate, type Mailbox, sender } from './mail.ts'
 import type { Bundle } from '@yaks/graph'
 import { sha256 } from '@yaks/graph/sha256'
@@ -162,6 +163,7 @@ export class Tracker extends Durable {
     public env: Settings = {},
     private now: () => number = Date.now,
     windows?: Window[],
+    private wait?: (ms: number) => Promise<void>,
   ) {
     // A statement of this tracker's that scans, and the tracker past the rows
     // it may read or write, told where the statement ran: a scan is one bug
@@ -451,10 +453,9 @@ export class Tracker extends Durable {
     ) return null
     let populated = (await this.tracker.bugs(undefined, '.bug', 1)).length > 0
     try {
-      await this.env.TRACKERS.getByName(platform).changed(
-        this.scope,
-        tag,
-        populated,
+      await calling(this.env.TRACKERS, this.wait)(
+        platform,
+        (stub) => stub.changed(this.scope, tag, populated),
       )
     } catch (error) {
       // Worker and object versions converge independently during a deploy.
