@@ -135,6 +135,38 @@ export let refusedSpend = (
   return over(space, what, more, now) ? atCeiling(space, what, env) : null
 }
 
+/** A plan as a person reads it: "the free plan", "the Plus plan" or "the
+ * Pro plan", never a bare tier name (M-37846). */
+export let planName = (tier: Tier | null): string =>
+  `the ${{ free: 'free', plus: 'Plus', pro: 'Pro' }[tier ?? 'free']} plan`
+
+/**
+ * The plan a space is on and what it allows a month, in one line: what its
+ * Operator is told, so it speaks of this space's allowances and never a new
+ * free space's. A comped space reads as the plan it is given.
+ *
+ * ```ts
+ * import { planned } from '@yaks/platform/standing'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal(
+ *   planned({ slug: 'yourname', tier: 'plus' }),
+ *   'yourname is on the Plus plan: as many apps as it likes, 2,500 emails, ' +
+ *     '100 built-in builds and 36,000 compute seconds a month.',
+ * )
+ * ```
+ */
+export let planned = (space: Pick<Metered, 'slug' | 'tier'>): string => {
+  let apps = ceilings(space.tier, space.slug)?.apps
+  return `${space.slug} is on ${planName(space.tier)}: ${
+    apps == null ? 'as many apps as it likes' : `${count(apps)} apps`
+  }, ${count(letters(space.tier))} emails, ${
+    count(builds(space.tier))
+  } built-in builds and ${
+    count(allowance('seconds', space.tier))
+  } compute seconds a month.`
+}
+
 /** A ceiling a space answers to: what it has used and what it is allowed. */
 export type Gauge = { used: number; limit: number }
 export type Ceiling = 'apps' | 'requests' | 'bytes' | 'files' | Limited
@@ -326,18 +358,19 @@ export let atCeiling = (
 ): string => {
   if (space.newcomer && what != 'apps' && budgeted(what)) return UNKEPT
   let free = ceilings(space.tier, space.slug)!
-  let tier = space.tier ?? 'free'
   // Comped spaces can hit the letter/build allowances, not the app ceiling.
   let said = {
     apps: () =>
-      `${space.slug} is on the ${tier} tier, which is ${free.apps} apps` +
+      `${space.slug} is on ${
+        planName(space.tier)
+      }, which is ${free.apps} apps` +
       ` — delete one (app_delete) to make another`,
     // The one refusal both tiers can hit, and the one a person cannot clear
     // by deleting something: the month is what lifts it. An arrival is never
     // refused — a letter turned away at the door is somebody else's words
     // lost — so it says which half stopped.
     emails: () =>
-      `${space.slug} is on the ${tier} tier, which is ${
+      `${space.slug} is on ${planName(space.tier)}, which is ${
         count(letters(space.tier))
       } emails a month, and this month's are sent — it can send ` +
       `again on the 1st, and letters written to it still arrive`,
@@ -346,7 +379,7 @@ export let atCeiling = (
     // asked in words is owed an answer in words. What it leaves them is the
     // app they already have and the tools to change it themselves.
     builds: () =>
-      `${space.slug} is on the ${tier} tier, which is ${
+      `${space.slug} is on ${planName(space.tier)}, which is ${
         count(builds(space.tier))
       } built-in builds a month, and this month's are used — it ` +
       `can build again on the 1st, or keep building with a connected agent`,
@@ -368,7 +401,7 @@ export let atCeiling = (
       `${space.slug}'s model and voice budget for this month is spent, and ` +
       `texts spend it too — texts go again on the 1st`,
     seconds: () =>
-      `${space.slug} is on the ${tier} tier, which is ${
+      `${space.slug} is on ${planName(space.tier)}, which is ${
         count(allowance('seconds', space.tier))
       } compute seconds a month (the sandbox, and compiling ` +
       `TypeScript and npm packages at app_deploy), and this month's are ` +
@@ -446,9 +479,11 @@ export let atStored = (
   let tier = space.tier ?? 'free'
   let limit = what == 'files' ? FILES[tier] : ceilings(space.tier)!.bytes
   let each = shares(held, what)
-  return `${space.slug} is on the ${tier} tier, which is ${size(limit)} of ${
-    NAME[what]
-  }, and holds ${size(held[what])}${each ? ` (${each})` : ''} — ${
+  return `${space.slug} is on ${planName(space.tier)}, which is ${
+    size(limit)
+  } of ${NAME[what]}, and holds ${size(held[what])}${
+    each ? ` (${each})` : ''
+  } — ${
     what == 'files'
       ? 'delete files it no longer needs to upload more'
       : 'delete what it no longer needs to save more'

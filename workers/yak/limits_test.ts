@@ -74,7 +74,7 @@ test('one free space a person, and each space answers to its own allowances', as
     }, { timeout: 20_000, poll: 250, label: 'the letter to come to rest' })
     assertStringIncludes(
       said,
-      `${first.slug} is on the free tier, which is 100`,
+      `${first.slug} is on the free plan, which is 100`,
     )
     await send(old.slug, 'Its own hundredth')
     await letter(k, 'nobody@probe.invalid', 'Its own hundredth')

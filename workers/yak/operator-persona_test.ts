@@ -10,7 +10,7 @@ import { directoryOf } from './directory.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
 import { drain } from './operator-store.ts'
 import { operating } from './operator.ts'
-import { BASE, personaFor } from './operator-persona.ts'
+import { BASE, introduced, personaFor } from './operator-persona.ts'
 import { spaced } from './operator-persona.ts'
 import { link } from '@yaks/edge'
 import { KERNEL, meta } from './meta.ts'
@@ -94,6 +94,17 @@ test("the base's files say the platform's own numbers", () => {
     `$${PRICE.plus} a month`,
   )
   assert(!String(first.instructions).includes('{{'))
+})
+
+test('the Operator is told the plan its space is on and what it allows', () => {
+  assertStringIncludes(
+    String(first.instructions),
+    'home is on the free plan: 5 apps, 100 emails',
+  )
+  assertStringIncludes(
+    introduced({ ...space, tier: 'plus' }),
+    'home is on the Plus plan: as many apps as it likes, 2,500 emails',
+  )
 })
 
 test('a doc the files no longer hold leaves the base', () => {

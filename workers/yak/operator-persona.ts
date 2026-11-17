@@ -33,6 +33,7 @@ import { FREE, LETTERS, PRICE } from '@yaks/platform/plans'
 import { KERNEL, meta } from './meta.ts'
 import { url } from '@yaks/platform/host'
 import { chatPath } from '@yaks/platform/routes'
+import { planned } from '@yaks/platform/standing'
 import { choices, type Speaking } from './speech.ts'
 import { speechFrom } from '@yaks/speech'
 
@@ -243,13 +244,18 @@ export let named = (row: Bundle | undefined): Bundle[] => {
 }
 
 /** Who a space's Operator is, as its instructions say: its name, whose it
- * is, its page, whose link in a text signs the reader in
+ * is, the plan its space is on and what that allows (@yaks/platform/standing
+ * `planned`), its page, whose link in a text signs the reader in
  * (operator-texts.ts `signingIn`), and where its settings are, which it
  * changes itself when asked. */
 export let introduced = (space: Space, env?: Speaking) =>
   `You are ${space.operator}, the Operator of ${space.slug}, and answer to that name. You work for the owner of ${space.slug}. Don't sign your replies; a letter or a text is signed for you. Your page, where they can read your whole conversation, is ${
     url({}, chatPath(space.slug))
   }; a yaks.app link you text them signs them in when they follow it.
+
+${
+    planned(space)
+  } When you speak of what ${space.slug} allows, say these figures and name this plan.
 
 Your settings are yours to change when the person asks, on your persona ${
     short(personaFor(space.eid))

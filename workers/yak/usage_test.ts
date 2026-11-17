@@ -469,7 +469,7 @@ test('Plus ceilings are distinct and comped apps/data stay uncapped', () => {
   assertEquals(JSON.parse(JSON.stringify(PLUS)).apps, null)
   assertStringIncludes(
     refusal(space({}, 'plus'), 'bytes'),
-    'plus tier, which is 10 GB',
+    'the Plus plan, which is 10 GB',
   )
 })
 
@@ -527,7 +527,7 @@ let refusal = (
 test('a refusal names the ceiling and where the plans are written', () => {
   for (let what of ['apps', 'bytes', 'emails'] as const) {
     let said = refusal(space(), what)
-    assertStringIncludes(said, 'free tier')
+    assertStringIncludes(said, 'free plan')
     assertStringIncludes(said, 'https://yaks.app/manage/jeff/billing')
     assert(!/checkout|subscribe/i.test(said), said)
   }
@@ -694,13 +694,13 @@ test('Plus byte writes use the 10 GB ceiling as the stores last told it; comped 
   assertEquals(await full(env, plus(PLUS.bytes), 0, NOW), '')
   assertStringIncludes(
     await full(env, plus(PLUS.bytes), 1, NOW),
-    'plus tier, which is 10 GB',
+    'the Plus plan, which is 10 GB',
   )
   // Near the ceiling, what the store told since the reading is what counts,
   // and the refusal says which app holds it.
   await weighed(env, notes.eid, PLUS.bytes + 1)
   let said = await full(env, plus(PLUS.bytes * 0.9), 0, NOW)
-  assertStringIncludes(said, 'plus tier, which is 10 GB of app data')
+  assertStringIncludes(said, 'the Plus plan, which is 10 GB of app data')
   assertStringIncludes(said, 'holds 10 GB (notes 10 GB)')
   assertEquals(
     await full(env, { ...plus(PLUS.bytes), slug: 'yourname' }, PLUS.bytes, NOW),
