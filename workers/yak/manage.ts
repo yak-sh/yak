@@ -165,8 +165,12 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
   })
   // A browser's socket the person lends their Operator comes from an
   // extension, which holds no cookie of ours: it bears the token it signed in
-  // for (identity.ts `bearerIn`), and is refused rather than sent to sign in.
-  let socket = upgrading(req) && !!bearerIn(req)
+  // for (asking.ts `bearerIn`). Only that door accepts its bearer; every
+  // other page and form reads the browser's own session.
+  let socket = req.method == 'GET' && upgrading(req) &&
+    'space' in at && url.pathname == managePath('operator', at.space) &&
+    url.searchParams.has('browser') && url.searchParams.size == 1 &&
+    !!bearerIn(req)
   let caller = socket ? (await asking(env, req)).who : undefined
   let { person, until } = caller
     ? { person: caller.person, until: caller.until }
