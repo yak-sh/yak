@@ -710,9 +710,8 @@ test("a text back is answered in its writer's own conversation, with only their 
     '+12695550142 replied to the text you sent them: Tuesday at 3 works for us.'
   assertEquals(updates.map((u) => u.words), [words])
   assertEquals(
-    letters.filter((l) => l.to == 'jeff@example.com' && l.text?.includes(words))
-      .length,
-    1,
+    letters.filter((l) => l.text?.includes(words)).map((l) => l.to),
+    ['jeff@example.com'],
   )
   assert(!root.html.includes('golf') && !theirs.html.includes('golf'))
   assertEquals(forged.status, 403)
