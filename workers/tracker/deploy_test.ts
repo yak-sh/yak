@@ -150,6 +150,7 @@ let setup = (now: () => number = Date.now) => {
     admitTrace: () => Promise.resolve(false),
     ingestTrace: () => Promise.resolve(false),
     settle: () => Promise.resolve(0),
+    changed: () => Promise.resolve(),
     enroll: () => Promise.resolve(),
   }
   let w = worker({

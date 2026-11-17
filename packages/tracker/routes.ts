@@ -33,7 +33,7 @@ let refused = (error: string, status: number): Read => ({
 /** One bounded remote read, shared by the HTTP door and graph tools. */
 export let read = async (
   options: Options,
-  path: 'bugs' | 'trace' | 'traces',
+  path: 'bugs' | 'trace' | 'traces' | 'changes',
   query: URLSearchParams,
   signal?: AbortSignal,
   go: typeof fetch = fetch,

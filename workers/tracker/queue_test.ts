@@ -20,6 +20,7 @@ let fixture = () => {
     admitTrace: () => Promise.resolve(),
     ingestTrace: () => Promise.resolve(true),
     settle: () => Promise.resolve(0),
+    changed: () => Promise.resolve(),
     enroll: () => Promise.resolve(),
   }
   let env = {

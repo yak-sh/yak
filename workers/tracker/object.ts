@@ -32,6 +32,7 @@ import { door, json, marking } from './door.ts'
 import { authorize } from './auth.ts'
 import { recovery } from './recovery.ts'
 import { monitor } from './monitor.ts'
+import { directory } from './changes.ts'
 import { activate, type Mailbox, sender } from './mail.ts'
 import type { Bundle } from '@yaks/graph'
 import { sha256 } from '@yaks/graph/sha256'
@@ -81,6 +82,7 @@ export type Settings = {
         reason?: string,
         said?: Explanation,
       ) => Promise<number>
+      changed: (scope: string, tag: string) => Promise<void>
     }
   }
   TRACKER_SECRET?: string
@@ -233,6 +235,7 @@ export class Tracker extends Durable {
             let now = this.now(), next = await tracker.next(now)
             return next == null ? null : Math.max(next, now + this.#paced())
           },
+          changes: this.#publish,
         },
       }
     },
@@ -422,14 +425,48 @@ export class Tracker extends Durable {
     }
   }
   #scopes = async () => await this.ctx.storage.get<string[]>('scopes') ?? []
+  #index?: ReturnType<typeof directory>
+  #changes = () =>
+    this.#index ??= directory(
+      this.ctx.storage,
+      async () => [platform, ...await this.#scopes()],
+    )
+  // The bug tag is committed with the graph. Until acknowledged here it owes
+  // publication on the alarm, including after a restart or failed RPC.
+  #publish = async () => {
+    if (this.scope == platform || !this.env.TRACKERS || !this.tracker) {
+      return null
+    }
+    let tag = this.tracker.tag(), kept = this.#traceMeta()
+    if (kept.get('scope-published') == tag) return null
+    try {
+      await this.env.TRACKERS.getByName(platform).changed(this.scope, tag)
+    } catch (error) {
+      // Worker and object versions converge independently during a deploy.
+      if (/does not implement the method/.test(String(error))) {
+        return this.now() + BEHIND
+      }
+      if (!kept.get('scope-publish-failed')) {
+        await this.#report(error, 'Tracker.changes')
+        this.ceiling.free(() => kept.set('scope-publish-failed', '1'))
+      }
+      return this.now() + BEHIND
+    }
+    this.ceiling.free(() => {
+      kept.set('scope-published', tag)
+      if (kept.get('scope-publish-failed')) kept.set('scope-publish-failed', '')
+    })
+    return this.tracker.tag() == tag ? null : this.now() + 1000
+  }
+  changed = (scope: string, tag: string): Promise<void> =>
+    this.scope == platform
+      ? this.#changes().move(scope, tag)
+      : Promise.resolve()
   // Reached only by the Worker, never HTTP: a space tracker it routed to
   // joins the platform's list of them (`/scopes`), once.
   enroll = async (scope: string): Promise<void> => {
     if (this.scope != platform || scope == platform) return
-    let scopes = await this.#scopes()
-    if (!scopes.includes(scope)) {
-      await this.ctx.storage.put('scopes', [...scopes, scope])
-    }
+    await this.#changes().move(scope)
   }
   // Reached only by the platform tracker's `bug_settle`, never HTTP.
   settle = (
@@ -440,7 +477,9 @@ export class Tracker extends Durable {
     this.#run('settle', async () => {
       try {
         await this.open()
-        return await this.tracker!.settle(eids, reason, said)
+        let count = await this.tracker!.settle(eids, reason, said)
+        await this.#owe()
+        return count
       } catch (error) {
         await this.recover(error, 'Tracker.settle')
         throw error
@@ -607,11 +646,32 @@ export class Tracker extends Durable {
       }
       // The space trackers this one has routed to, which every bug door
       // reads beside it.
+      if (new URL(request.url).pathname == '/changes') {
+        if (this.scope != platform || !access.admin) {
+          return json({ error: 'platform only' }, 403)
+        }
+        if (request.method != 'GET') return json({ error: 'read only' }, 405)
+        let tracker = await this.boot()
+        await this.#changes().move(platform, tracker.tag())
+        let held = request.headers.get('if-none-match')
+        let answer = await this.#changes().read(held)
+        let unchanged = held?.replace(/^W\//, '') == answer.tag
+        return new Response(
+          unchanged ? null : JSON.stringify({ scopes: answer.scopes }),
+          {
+            status: unchanged ? 304 : 200,
+            headers: { etag: answer.tag, 'content-type': 'application/json' },
+          },
+        )
+      }
       if (new URL(request.url).pathname == '/scopes') {
         if (this.scope != platform || !access.admin) {
           return json({ error: 'platform only' }, 403)
         }
-        return json({ scopes: await this.#scopes() })
+        let { scopes } = await this.#changes().read()
+        return json({
+          scopes: scopes.map((s) => s.scope).filter((s) => s != platform),
+        })
       }
       if (new URL(request.url).pathname == '/trace-budget') {
         if (this.scope != platform || !access.admin) {

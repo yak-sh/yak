@@ -226,7 +226,7 @@ if (import.meta.main) {
       report: probe.report,
       note: console.log,
       now: Date.now,
-      wait: () => new Promise((done) => setTimeout(done, 1000)),
+      wait: () => new Promise((done) => setTimeout(done, 30_000)),
     })
   } finally {
     await Deno.remove(scratch, { recursive: true })

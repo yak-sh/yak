@@ -157,7 +157,8 @@ export let request = async (
       // A tracker read makes no conflicting write. A 409 on its way back
       // is retried within this request's budget, on a fresh connection.
       // Marks keep their own answer, even where a caller supplied a GET.
-      let reading = ['bugs', 'trace', 'traces', 'scopes'].includes(path) &&
+      let reading =
+        ['bugs', 'trace', 'traces', 'scopes', 'changes'].includes(path) &&
         (init.method ?? 'GET').toUpperCase() == 'GET'
       let pause = Math.min(250 * 2 ** i, 2000)
       if (

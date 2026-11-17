@@ -57,10 +57,12 @@ let held = async () => {
   let stub = {
     fetch: (r: Request) => across(() => object.fetch(r)),
     ingest: (rows: Bundle[]) => (asked++, across(() => object.ingest(rows))),
+    changed: () => Promise.resolve(),
     enroll: () => Promise.resolve(),
   } as unknown as Stub
   let down = {
     ingest: () => Promise.reject(Error('space tracker down')),
+    changed: () => Promise.resolve(),
     enroll: () => Promise.resolve(),
   } as unknown as Stub
   let w = worker(

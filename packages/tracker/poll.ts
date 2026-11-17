@@ -27,6 +27,7 @@ import { pollThread } from './poll_thread.ts'
 
 export { OUTAGE } from './outage.ts'
 export { pollThread }
+export { changes } from './changes.ts'
 
 /** A polled answer of the platform tracker, with its mark door. */
 export type Polled = {
@@ -50,6 +51,8 @@ export type Polled = {
 
 /** The Worker's doors a poll asks: a page of its bugs, and a mark. */
 export type Doors = {
+  /** scopes whose bugs moved since the held tag, through the platform */
+  changes?: (tag?: string, signal?: AbortSignal) => Promise<Read>
   /** a page of the bugs `params` asks for (`limit`, `query`), or that
    * nothing moved since `tag` */
   bugs: (
@@ -70,6 +73,8 @@ export type Doors = {
 
 /** The Worker's doors over the signed transport (./remote.ts), through `go`. */
 export let signed = (remote: Remote, go: typeof fetch = fetch): Doors => ({
+  changes: (tag, signal) =>
+    read({ remote }, 'changes', new URLSearchParams(), signal, go, tag),
   bugs: (params, signal, tag) =>
     read({ remote }, 'bugs', params, signal, go, tag),
   mark: (bug, name, said, scope) => mark(remote, bug, name, go, said, scope),
@@ -89,6 +94,9 @@ export let scoped = (doors: Doors, scope?: string): Doors =>
     : doors
 
 export type PollOpts = {
+  /** A shared change feed's version of this scope. An unchanged version
+   * skips its bug read; a failed read never acknowledges the version. */
+  version?: (scope?: string) => Promise<string | undefined>
   /** time between polls, in ms (default 30000) */
   every?: number
   /** how long one page of a poll may take before the poll counts as failed,
@@ -306,6 +314,8 @@ export let poll = (
   let value: Bundle[] = [], ready = false
   // The tag `value` was read at.
   let held: string | undefined
+  let seen: string | undefined
+  let missing = { version: '', eids: new Set<string>() }
   let listeners = new Set<(bundles: Bundle[]) => void>()
   let stop = new AbortController()
   let page = pages(doors, stop.signal, { timeout: opts.timeout, clock })
@@ -321,12 +331,15 @@ export let poll = (
   let pass = async () => {
     try {
       await watched(async () => {
+        let version = await opts.version?.(opts.scope)
+        if (ready && version != null && version == seen) return
         let fresh = await since(page, query, held)
         if (fresh) {
           value = renewed(value, fresh)
           held = fresh.tag
         }
         ready = true
+        seen = version
       })
     } catch {
       if (stop.signal.aborted) return
@@ -376,6 +389,23 @@ export let poll = (
       }
       return bundles
     },
-    get: (eids) => among(page, '.bug', eids),
+    get: async (eids) => {
+      let version = await opts.version?.(opts.scope)
+      if (version != missing.version) {
+        missing = { version: version ?? '', eids: new Set() }
+      }
+      // Work left on the box may name a bug in another tracker. A scope
+      // already asked about it owes no further read until its bugs move.
+      let due = version ? eids.filter((eid) => !missing.eids.has(eid)) : eids
+      let absent = missing.eids
+      let rows = await among(page, '.bug', due)
+      let found = new Set(rows.map((row) => row.entity.eid))
+      if (version) {
+        for (let eid of due) {
+          if (!found.has(eid)) absent.add(eid)
+        }
+      }
+      return rows
+    },
   }
 }

@@ -90,8 +90,20 @@ occurrence to reopen without changing its report or delivery history.
 `GET /scopes?scope=platform` answers an admin `{scopes: [space eid, …]}`: every
 space tracker the Worker has routed to, which the platform tracker keeps. A
 space's tracker joins it the first time it takes intake or answers a door, once
-an isolate and behind the answer, so every bug door (`bug_list`, `admin_errors`,
-the heal follower) reads each space's bugs beside the platform's.
+an isolate and behind the answer. On-demand bug doors (`bug_list`,
+`admin_errors`) read each space's bugs beside the platform's.
+
+`GET /changes?scope=platform` answers an admin `{scopes: [{scope, tag}, …]}`
+with an `ETag`. Sending that tag as `If-None-Match` returns only scopes that
+moved since, or 304 if none did. An absent, unknown or future tag returns every
+scope, the platform included. The durable `scope-changes` index retains the last
+revision of every scope, and initializes from the existing `scopes` list.
+Concurrent publications are serialized; an unchanged bug tag writes nothing. A
+space's alarm publishes its bug tag after draining writes, and keeps the
+acknowledged tag in `server_meta`. Failed publication leaves it owed for the
+alarm's next attempt, including after hibernation. The platform includes its own
+current bug tag as it answers the feed. Thus the heal follower asks one object
+every 30 seconds, then reads only the trackers whose bugs moved.
 
 `GET /bugs?query=<bug-query>&limit=50&app=<global-eid>` returns bug bundles,
 filtered and ordered before its 1–100 limit. Without `query` it includes all bug
@@ -104,7 +116,9 @@ seconds after its last request and wakes as a new instance. A reader that sends
 the tag it holds as `If-None-Match` (compared weakly, since Cloudflare marks it
 `W/` when it compresses the answer) is answered 304 while it stands, reading
 only the tag's row; the box's poll and its reconciliation of standing both do,
-so a tracker whose bugs have not moved costs their 30 s polls a row each.
+so a platform standing read whose bugs have not moved reads only that row. The
+heal follower first consults `/changes`, so an idle space is never woken by its
+standing poll.
 
 Beside the tag the store keeps the **moves**: each entity those commits wrote,
 under the count it moved the tag to, the latest thousand of them, with an
@@ -304,14 +318,14 @@ main's tip has no newer tracker source (the watched paths above) and no live
 version comes from a newer commit; each version's message names its commit and
 bundle. It sets the nonsecret `BUNDLE_HASH` binding and publishes a content-hash
 canary through the Worker's queue. It republishes the same capture every thirty
-seconds until intake and grouping write its receipt, allowing Worker and object
-versions to converge. A canary the tracker says failed, or one still missing
-after ten minutes, is reported to the tracker and fails the build. Nothing rolls
-back: the new version stays live, and an agent decides whether to roll back or
-fix forward. A build whose canary waited while a newer commit's build deployed
-reports nothing: that build answers for itself, even with the same bundle. No
-legacy error store is deleted, and yak reporting/read-path changes are outside
-this Worker.
+seconds and checks its receipt on that same cadence until intake and grouping
+write it, allowing Worker and object versions to converge. A canary the tracker
+says failed, or one still missing after ten minutes, is reported to the tracker
+and fails the build. Nothing rolls back: the new version stays live, and an
+agent decides whether to roll back or fix forward. A build whose canary waited
+while a newer commit's build deployed reports nothing: that build answers for
+itself, even with the same bundle. No legacy error store is deleted, and yak
+reporting/read-path changes are outside this Worker.
 
 `POST /canary?scope=platform&hash=<bundle-hash>&nonce=<uuid>&at=<iso-time>`
 requires a short-lived bearer ticket signed with that version’s `CANARY_SECRET`,

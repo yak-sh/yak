@@ -27,7 +27,7 @@ import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { trackerDoc } from '@yaks/tracker/vocab'
-import { type Doors, OUTAGE, poll, pollThread } from '@yaks/tracker/poll'
+import { changes, OUTAGE, poll, pollThread } from '@yaks/tracker/poll'
 import {
   type Remote,
   spaces as listed,
@@ -189,8 +189,13 @@ export let service = async (
   // scope, and joins once the platform lists it.
   let scopes = new Map<string, string>()
   let keyOf = (scope: string) => `${PLATFORM} space ${scope}`
-  let list = options.spaces ??
-    (() => listed(options.remote!))
+  let thread = options.remote && !options.open
+    ? pollThread(options.remote)
+    : undefined
+  let feed = thread && changes(thread, {
+    every: options.every && Math.min(options.every, 30_000),
+  })
+  let list = options.spaces ?? feed?.scopes ?? (() => listed(options.remote!))
   let urls = () => [
     ...platform ? [platform, ...scopes.keys()] : [],
     ...trackers,
@@ -274,7 +279,6 @@ export let service = async (
       }
     }
   // The space trackers' polls share one thread for their signed doors.
-  let thread: (Doors & { close: () => void }) | undefined
   let open = options.open ??
     ((url: string, scope?: string) =>
       url == PLATFORM
@@ -282,9 +286,9 @@ export let service = async (
           every: options.every && Math.min(options.every, 30_000),
           report: (error) => void report(error, 'tracker poll'),
           log: options.log,
-          ...scope
-            ? { scope, doors: thread ??= pollThread(options.remote!) }
-            : {},
+          scope,
+          doors: thread,
+          version: feed?.version,
         })
         : track(url, {
           // A refused mark is the tracker refusing heal's own write: an
@@ -321,7 +325,7 @@ export let service = async (
       owing = owing.filter((eid) =>
         ![...members.values()].some((held) => held.has(eid))
       )
-      if (all && platform) {
+      if (platform && (all || feed)) {
         try {
           for (let scope of await list()) scopes.set(keyOf(scope), scope)
           fine('space list', PLATFORM)
@@ -428,6 +432,7 @@ export let service = async (
     } while (!signal.aborted)
   } finally {
     for (let watch of watches.values()) watch.close()
+    feed?.close()
     thread?.close()
   }
 }

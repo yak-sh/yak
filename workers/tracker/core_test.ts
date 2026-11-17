@@ -343,7 +343,11 @@ test("a space's tracker on the release before settle waits for it, unreported", 
     sink: () => {},
     report: (error) => void reports.push(error),
     settle: settling({
-      getByName: () => ({ ingestTrace: behind, settle: behind }),
+      getByName: () => ({
+        ingestTrace: behind,
+        settle: behind,
+        changed: behind,
+      }),
     }),
   })
   let at = new Date().toISOString()

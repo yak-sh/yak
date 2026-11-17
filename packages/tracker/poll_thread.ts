@@ -9,7 +9,13 @@ import type { Mark } from './letter.ts'
 // Each ask carries the remote as it stands, read at use as every door's is,
 // so a fixed address or secret reaches the next poll without a restart.
 export type Said =
-  | { id: number; remote: Remote; params: string; tag?: string }
+  | {
+    id: number
+    remote: Remote
+    params: string
+    tag?: string
+    changes?: boolean
+  }
   | {
     id: number
     remote: Remote
@@ -68,7 +74,7 @@ export let pollThread = (remote: Remote): Doors & { close: () => void } => {
     return w
   }
   let ask = (
-    call: { params: string; tag?: string } | {
+    call: { params: string; tag?: string; changes?: boolean } | {
       bug: string
       name: Mark
       said: Record<string, string>
@@ -107,6 +113,8 @@ export let pollThread = (remote: Remote): Doors & { close: () => void } => {
     })
   }
   return {
+    changes: (tag, signal) =>
+      ask({ params: '', tag, changes: true }, signal) as Promise<Read>,
     bugs: (params, signal, tag) =>
       ask({ params: params.toString(), tag }, signal) as Promise<Read>,
     mark: (bug, name, said, scope) => ask({ bug, name, said, scope }),

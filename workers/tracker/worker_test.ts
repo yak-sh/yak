@@ -32,6 +32,7 @@ let fixture = (doors: Partial<Stub> = {}) => {
     admitTrace: fail,
     ingestTrace: fail,
     settle: fail,
+    changed: () => Promise.resolve(),
     enroll: fail,
     ...doors,
   }

@@ -100,7 +100,13 @@ test('global ceiling serializes spaces, persists across reboot, rolls from compl
     return target.ingestTrace(body)
   }
   let env = {
-    TRACKERS: { getByName: () => ({ ingestTrace: forward, settle }) },
+    TRACKERS: {
+      getByName: () => ({
+        ingestTrace: forward,
+        settle,
+        changed: () => Promise.resolve(),
+      }),
+    },
   }
   let authority = new Tracker(state(db, platform), env, () => clock)
   await authority.boot()
@@ -135,6 +141,7 @@ test('failed forwarding keeps a pending durable charge rather than refunding on 
       getByName: () => ({
         ingestTrace: () => Promise.reject(Error('failed')),
         settle,
+        changed: () => Promise.resolve(),
       }),
     },
   }
