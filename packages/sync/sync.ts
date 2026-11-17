@@ -399,6 +399,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     },
     url: opts.url,
     connect: opts.connect,
+    fetch: opts.fetch,
     timer,
     time: opts.time,
     wait: opts.wait,

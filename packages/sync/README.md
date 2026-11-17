@@ -402,6 +402,14 @@ offline (by default the browser's `navigator.onLine`), an outage is never said,
 and when the network comes back (the `online` event) the wire reopens at once,
 from the first delay, and times what follows afresh.
 
+A machine can also have a network that reaches nothing, such as a laptop
+changing networks, which the browser still calls online. Its handshakes hang
+until each is given up. So before an outage whose socket never reopened is said,
+the wire asks the server over HTTP (a `GET` of `/ws`, through `fetch`). If any
+answer comes back, a refusal included, the server is there and the outage is
+said. If nothing answers within `quiet`, the server is out of this machine's
+reach, and the wire times what follows afresh.
+
 ### The store's clock
 
 `link.now()` returns epoch milliseconds on the store's clock. First use opens

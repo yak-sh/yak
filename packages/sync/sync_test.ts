@@ -467,7 +467,8 @@ test('a subscription refused by the server is reported, not applied', async () =
 
 // A wire over sockets driven by hand, so its server can stay away, or take a
 // connection and never answer its query, and its machine can lose its
-// network. Its server tells the time, as a live one does. It holds one query,
+// network, or keep one that reaches nothing (`cut`). Its server tells the
+// time, as a live one does, and answers a GET. It holds one query,
 // answered and held a second before each script begins.
 let drops = () => {
   let now = 0
@@ -475,6 +476,7 @@ let drops = () => {
   let sockets: ReturnType<typeof pair>[] = []
   let away = false
   let online = true
+  let cut = false
   let backs = new Set<() => void>()
   let said: unknown[] = []
   wire({
@@ -490,6 +492,8 @@ let drops = () => {
       })
       return p.client
     },
+    fetch: () =>
+      cut ? Promise.reject(new TypeError('Failed to fetch')) : new Response(),
     time: () => now,
     timer: (fn, ms) => {
       due.push({ at: now + ms, fn })
@@ -509,27 +513,39 @@ let drops = () => {
   let fail = () => {
     if (away && last().client.readyState == 0) last().client.close(1006)
   }
-  let fire = () => {
+  // What a timer set going (the server asked over HTTP) settles before the
+  // next one fires.
+  let settle = async () => {
+    for (let i = 0; i < 8; i++) await null
+  }
+  let fire = async () => {
     let next = due.shift()!
     now = Math.max(now, next.at)
     next.fn()
     fail()
+    await settle()
   }
-  let pass = (ms: number) => {
+  let pass = async (ms: number) => {
     let until = now + ms
-    while (due.length && due[0].at <= until) fire()
+    while (due.length && due[0].at <= until) await fire()
     now = until
   }
-  let steps: Record<string, (n: number) => void> = {
+  let steps: Record<string, (n: number) => void | Promise<void>> = {
     drop: (code) => last().server.close(code),
-    away: (ms) => {
+    away: async (ms) => {
       away = true
       fail()
-      pass(ms)
+      await pass(ms)
       away = false
     },
-    back: () => {
-      while (last().client.readyState != 0) fire()
+    // A network that reaches nothing: handshakes hang, and HTTP gets nothing.
+    cut: async (ms) => {
+      cut = true
+      await pass(ms)
+      cut = false
+    },
+    back: async () => {
+      while (last().client.readyState != 0) await fire()
       last().server.emit('open')
       last().client.emit('open')
     },
@@ -547,21 +563,21 @@ let drops = () => {
     // This thread runs nothing for a while, then its timers due run first.
     stall: (ms) => {
       now += ms
-      pass(0)
+      return pass(0)
     },
     answer: () => tell({ bundles: [] }),
     refuse: () => tell({ refused: { error: 'Refused', message: 'no word' } }),
     pass,
   }
-  let run = (script: string) => {
+  let run = async (script: string) => {
     for (let step of script.split(' ')) {
       let [verb, n] = step.split(':')
-      steps[verb](Number(n))
+      await steps[verb](Number(n))
     }
     return said
   }
-  run('back answer pass:1000')
-  return run
+  let ready = run('back answer pass:1000')
+  return async (script: string) => (await ready, run(script))
 }
 
 // A drop is said only when the wire has not resumed from it `most` (30 s)
@@ -586,10 +602,15 @@ for (
     ['drop:1001 stall:600000 back answer', 0],
     ['drop:1001 back stall:40000 pass:30000 answer', 1],
     ['drop:1006 stall:40000 away:120000', 1],
+    // Online, but reaching nothing: the machine's, timed afresh once it
+    // reaches the server again.
+    ['drop:1006 cut:120000 back answer', 0],
+    ['drop:1006 cut:120000 pass:20000 back answer', 0],
+    ['drop:1006 cut:120000', 1], // it reaches the server, the socket does not
   ] as const
 ) {
-  test(`a wire that does "${script}" is said dropped ${times} times`, () => {
-    let said = drops()(`${script} pass:120000`)
+  test(`a wire that does "${script}" is said dropped ${times} times`, async () => {
+    let said = await drops()(`${script} pass:120000`)
     assertEquals(said.map((e) => e instanceof Dropped), Array(times).fill(true))
   })
 }
@@ -608,8 +629,8 @@ for (
     ],
   ] as const
 ) {
-  test(`a wire that does "${script}" says "${cause}"`, () => {
-    let [said] = drops()(`${script} pass:120000`)
+  test(`a wire that does "${script}" says "${cause}"`, async () => {
+    let [said] = await drops()(`${script} pass:120000`)
     assertEquals((said as Error).cause, cause)
   })
 }

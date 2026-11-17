@@ -26,8 +26,14 @@
 // is open again and every subscription has been answered again (the set as it
 // now stands, or a refusal, which is said on its own), nothing was missed.
 // Only a drop that has not recovered `most` after it began is a failure, and
-// only while this machine has a network: one with none has no server to fail
-// it, and when its network comes back the wire reopens at once.
+// only while this machine reaches the server: one with no network has no
+// server to fail it, and when its network comes back the wire reopens at once.
+// A machine can also have a network that reaches nothing (a laptop changing
+// networks, a route that went away), which the browser still calls online. So
+// before a socket that never reopened is said, the server is asked over HTTP
+// whether it answers at all: a server that answers anything, even a refusal,
+// is there and the socket is failing; one that does not answer is out of this
+// machine's reach, and what follows is timed afresh.
 
 import type { Bundle, Eid } from '@yaks/graph'
 import { heard } from '@yaks/fp'
@@ -37,6 +43,7 @@ import type { Vocab } from '@yaks/vocab'
 import { coalesced } from '@yaks/graph/bundle'
 import type { Coverage } from './coverage.ts'
 import { clock } from './clock.ts'
+import type { Fetch } from './outbound.ts'
 
 /** The part of a WebSocket this package uses. The standard `WebSocket`
  * satisfies it, and so does any stand-in a test or a caller provides. */
@@ -151,6 +158,9 @@ export type WireOpts = {
   /** whether this machine has a network (default: the browser's say, where
    * there is one) */
   network?: Network
+  /** how the server is asked whether it answers at all, before a socket that
+   * never reopened is said dropped (default: the global `fetch`) */
+  fetch?: Fetch
   /** each frame, once the reset bookkeeping has been done for it */
   land: (frame: Frame) => unknown | Promise<unknown>
   /** a subscription needs a fresh answer: opened, re-pointed or disconnected */
@@ -230,8 +240,8 @@ export let backoff = (wait: number, most: number): number =>
 
 // `https://shelf.example/api` → `wss://shelf.example/api/ws`. The socket is
 // served from the same origin as the HTTP routes, so only the scheme changes.
-let wsUrl = (url: string): string =>
-  `${url.replace(/^http/, 'ws').replace(/\/$/, '')}/ws`
+let httpUrl = (url: string): string => `${url.replace(/\/$/, '')}/ws`
+let wsUrl = (url: string): string => httpUrl(url).replace(/^http/, 'ws')
 
 // What a subscription says beside its query: acks, grouped frames, and in a
 // browser the page asking, which a failure its reads meet names.
@@ -282,6 +292,7 @@ export let wire = (opts: WireOpts): Wire => {
   let most = opts.most ?? 30_000
   let quiet = opts.quiet ?? 10_000
   let network = opts.network ?? browser()
+  let fetch = opts.fetch ?? (globalThis.fetch && ((r) => globalThis.fetch(r)))
 
   let asks = new Map<string, Ask>() // what each subscription asked for
   let refused = new Set<string>() // terminal until explicitly re-pointed
@@ -389,13 +400,35 @@ export let wire = (opts: WireOpts): Wire => {
   // could hear the server in: one that stalls is dropped by the server and
   // then reopens and reads its answers late, its own doing, not the server's.
   let overdue = (outage: Outage) =>
-    within(most, () => down === outage && !closed, () => {
+    within(most, () => down === outage && !closed, async () => {
       if (!network.online()) return
+      if (outage.opened === undefined && !await reaches()) {
+        if (down !== outage || closed) return
+        down = { at: agreed.read(), code: outage.code, tries: 0 }
+        return overdue(down)
+      }
+      if (down !== outage || closed) return
       let ms = agreed.read() - outage.at
       opts.report(
         new Dropped(wsUrl(opts.url), outage.code, ms, waited(outage)),
       )
     })
+
+  // Whether the server answers this machine over HTTP within `quiet`: any
+  // answer, a refusal included, says it is there. A runtime with no `fetch`
+  // cannot ask, and takes the server to be there.
+  let reaches = async (): Promise<boolean> => {
+    if (!fetch) return true
+    try {
+      let res = await fetch(
+        new Request(httpUrl(opts.url), { signal: AbortSignal.timeout(quiet) }),
+      )
+      await res.body?.cancel()
+      return true
+    } catch {
+      return false
+    }
+  }
 
   // What an overdue outage waits on: a socket that never reopened, or the
   // queries a reopened one has not had answered, the first few masked as a
