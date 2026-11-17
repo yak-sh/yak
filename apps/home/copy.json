@@ -70,12 +70,12 @@
             },
             "3": {
               "title": "It can text you",
-              "body": "“Text me when someone signs.” Each new message now reaches your phone, so there is nothing to keep checking.",
+              "body": "“Text me when someone signs.” Each new message now reaches your own phone, at the number you gave yaks.app and agreed to get texts on, so there is nothing to keep checking. Guests are never texted. Each text comes out of your space’s monthly AI budget, which every plan includes.",
               "go": "Ask for your own"
             },
             "4": {
               "title": "It can send email for you",
-              "body": "“After the party, email everyone who signed a thank-you.” Everyone who signed with their email address gets a note from you.",
+              "body": "“After the party, email everyone who signed a thank-you.” The guestbook now asks each guest for an email address, which they can leave blank. The note goes out once, when you ask, from the guestbook’s own address at yaks.app, to the guests who left one. Only you and the people you invite to edit the guestbook can see the addresses. Each note counts toward your plan’s emails for the month.",
               "go": "Ask for your own"
             }
           }
