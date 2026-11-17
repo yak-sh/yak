@@ -97,7 +97,7 @@ test('with no app recorded the walkthrough is cut whole, and the rest stays', ()
   assertEquals(read({}).after, true)
 })
 
-test('a step that released nothing leaves the app at the release before it', () => {
+test('a step that released nothing leaves the app at the release before it, and a Pending line starts none', () => {
   let seq = 0
   let at = (rest: object) => ({
     entity: { eid: `e${++seq}` },
@@ -115,11 +115,18 @@ test('a step that released nothing leaves the app at the release before it', () 
     ask('Text me when someone signs'),
     at({ call: { name: 'subscription_set', args: {} } }),
     ask('A guestbook'),
+    // A background call's Pending line is no request of the person's.
+    at({ tool_progress: { call: 'e3' }, content: { body: 'Pending' } }),
     ...deploy(1),
     ask('Text me when someone signs'),
     at({ call: { name: 'subscription_set', args: {} } }),
     ask('Add photos'),
     ...deploy(2),
   ], 'guestbook')
-  assertEquals(steps.map((s) => s.version), [null, 1, 1, 2])
+  assertEquals(steps.map((s) => [s.lines.length, s.version]), [
+    [2, null],
+    [4, 1],
+    [2, 1],
+    [3, 2],
+  ])
 })

@@ -436,6 +436,7 @@ export let NOT_INPUT = [
   'call',
   'ask',
   'prompt',
+  'tool_progress',
 ]
 
 /** A person's own words: an entry with words that is none of the other

@@ -53,6 +53,13 @@ test('each kind of entry is drawn as the person reads it', () => {
     '',
   ])
   equal(read(e('quiet', { output: {} })), null)
+  // A background call's Pending line is the call's, never the person's.
+  equal(
+    read(
+      e('p', { tool_progress: { call: 'c' }, content: { body: 'Pending' } }),
+    ),
+    null,
+  )
   equal(read(e('stop', { stop: {} })), ['', 'Stopped.', ''])
   equal(read(e('x', { exception: {}, content: { body: 'boom' } })), [
     '',
