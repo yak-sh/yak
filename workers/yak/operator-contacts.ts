@@ -10,6 +10,7 @@ import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { type Ctx, refuse } from './tool.ts'
 import type { OperatorStore } from './operator-store.ts'
+import { toldMoved } from './told-move.ts'
 import { owns } from './operator-access.ts'
 import { inputSource } from './operator-provenance.ts'
 import { canon, LIFE, mint, spend } from './signin.ts'
@@ -156,8 +157,9 @@ let confirmed = async (
     comp(request, 'created')?.at ?? comp(row, 'created')?.at ??
       new Date().toISOString(),
   )
+  await toldMoved(store)
   let owed = await store.g.read(
-    line`.notification .deliver.to=${ctx.person} !delivered !bounced .created.by=${space.eid} .created.at>=${since}`,
+    line`.notification.to=${ctx.person} !delivered !bounced .created.by=${space.eid} .created.at>=${since}`,
   )
   for (let note of owed) {
     if (await inConversation(store, note, c.session)) {
@@ -391,7 +393,7 @@ export let waitingContact = async (
   store: Pick<OperatorStore, 'g'>,
   note: Bundle,
 ) => {
-  let person = comp(note, 'deliver')?.to
+  let person = comp(note, 'notification')?.to
   let at = String(comp(note, 'created')?.at ?? '')
   if (!person || !at) return false
   let rows = await store.g.read(

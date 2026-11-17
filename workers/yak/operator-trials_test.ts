@@ -88,7 +88,7 @@ let ran = async (dollars: number) => {
   await drain(store)
   let written = (await store.g.read('.writing *'))
     .filter((b) => (b.writing as { output?: unknown }).output)
-  let [told] = await store.g.read('.notification .deliver *')
+  let [told] = await store.g.read('.notification *')
   return { store, eid, asked, written, told, round }
 }
 
@@ -99,7 +99,7 @@ test("a round is asked of the space's providers and paid from its budget", async
   let used = (await dir.at(eid))!.meter!.models
   // 100 tokens in at $1 and 20 out at $10 a million, twice.
   assert(Math.abs(used - 0.0006) < 1e-9, String(used))
-  assertEquals((told.deliver as { to: string }).to, eid)
+  assertEquals((told.notification as { to: string }).to, eid)
   assertStringIncludes(
     String((told.doc as { body: string }).body),
     '“Shorter pitches” ran: 2 of its writers and judges came back, for under a cent.',

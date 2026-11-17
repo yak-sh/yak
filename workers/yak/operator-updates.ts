@@ -3,9 +3,9 @@
  * Operator's store for them standing in the space (`readInbox`'s scope), in
  * its lanes Needs you and Updates. Their chats are the chat app's.
  *
- * What the Operator tells them is a @yaks/notify `notification{about}` with
- * its words in `doc{body}`, for whoever `deliver{to}` names: the person, or
- * the space for everyone in it (`notification`). What it asks them is a @yaks/task
+ * What the Operator tells them is a @yaks/notify `notification{to, about}`
+ * with its words in `doc{body}`, for whoever `to` names: the person, or the
+ * space for everyone in it (`notification`). What it asks them is a @yaks/task
  * decision, assigned to them (operator.ts gives every session
  * `decision_new`). A choice, or words sent from their Updates, go into their
  * conversation on the `update` channel (operator-channels.ts `BY`), which is
@@ -24,6 +24,7 @@ import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { caught } from './defects.ts'
 import { builderOf, SPACE } from './build-door.ts'
+import { toldMoved } from './told-move.ts'
 
 type Store = OperatorStore
 let comp = (b: Bundle | undefined, name: string) =>
@@ -77,8 +78,7 @@ export let notification = ({ to, words, about, by, id }: Telling): Bundle => ({
   entity: {
     eid: id ? derivedEid('operator-told|' + id) : crypto.randomUUID(),
   },
-  notification: about ? { about } : {},
-  deliver: { to },
+  notification: about ? { to, about } : { to },
   doc: { body: words },
   ...by ? { $actor: { by } } : {},
 })
@@ -174,9 +174,17 @@ let shownOf = async (store: Store, rows: (Bundle | undefined)[]) => {
 // chats land in Replies, which is the chat app's, so they are never read here.
 let WITHIN = ['task', 'decision', 'notification']
 
-let threadsOf = async (store: Store, person: string, space: string) =>
-  (await readInbox(store.g, store.vocab, person, { within: WITHIN }, space))
+let threadsOf = async (store: Store, person: string, space: string) => {
+  await toldMoved(store)
+  return (await readInbox(
+    store.g,
+    store.vocab,
+    person,
+    { within: WITHIN },
+    space,
+  ))
     .filter((t) => LANES.includes(t.lane))
+}
 
 /** A person's Updates in a space, newest first with what needs them ahead,
  * at most `most` of them, and how many wait on them: what needs them, and

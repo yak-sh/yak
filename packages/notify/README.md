@@ -14,11 +14,11 @@ on that record.
   [@yaks/doc](../doc) on the same record. `from` names whose act or words it
   tells, where it tells someone's: the actor who finished a task, the person who
   sent a text. A knock its writer says for itself leaves it out.
-- `notification{about}` records words emitted, not said, telling someone what
-  happened to `about` (which may live in another graph). Its words are its
-  `doc{body}`, and who it is for is [@yaks/mail](../mail)'s `deliver{to}`: a
-  person, or a project for everyone standing in it. It is a thread of its own;
-  @yaks/inbox lanes it as Updates.
+- `notification{to, about}` records words emitted, not said, telling `to` what
+  happened to `about` (either may live in another graph). `to` is a person, or a
+  space or project for everyone standing in it. Its words are its `doc{body}`.
+  It is a thread of its own; @yaks/inbox lanes it as Updates. It is not a
+  letter, so it carries no [@yaks/mail](../mail) `deliver`.
 - `subscription{actor, target, mode}` records whether an actor watches (`watch`)
   or mutes (`mute`) a target. The actor is the entity identifying the recipient.
   An absent mode neither watches nor mutes. Personal `opened{at, by, via}` and
@@ -28,9 +28,9 @@ on that record.
 
 Both `subscription` and `chat` declare uniqueness for `(actor, target)`.
 Deleting either referenced entity cascades to its subscriptions; deleting a
-knock's target cascades to the knock, while a notification keeps its `about` and
-a knock its `from`. Chat references instead use `death: detach`, clearing the
-reference when its target is deleted.
+knock's target cascades to the knock, while a notification keeps its `to` and
+`about`, and a knock its `from`. Chat references instead use `death: detach`,
+clearing the reference when its target is deleted.
 
 Email belongs to [@yaks/mail](../mail), and scheduled reminders belong to
 [@yaks/wake](../wake). This package does not send either.

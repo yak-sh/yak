@@ -87,11 +87,11 @@ Direct address retains session/claim policy. Session prose answers personal
 inputs; instructions, tool traffic and reasoning are excluded. Updates are
 completion, failure, stuck and other state marks, or commits on work the person
 started or watches. Watching alone does not deliver progress chatter. A
-@yaks/notify `notification{about}` is an update too, a thread of its own: it
-reaches whoever its `deliver{to}` names, or everyone standing in the project it
-names, except whoever wrote it. Recent contains what the person said, started,
-opened or decided. Said search includes decision choices; received search
-excludes the person's words. Mute wins over direct address.
+@yaks/notify `notification{to, about}` is an update too, a thread of its own: it
+reaches whoever its `to` names, or everyone standing in the project it names,
+except whoever wrote it. Recent contains what the person said, started, opened
+or decided. Said search includes decision choices; received search excludes the
+person's words. Mute wins over direct address.
 
 **Personal attention** lives on the existing `subscription{actor, target, mode}`
 row for that actor and thread. Its `opened{at, by, via}` mark records reading;

@@ -254,7 +254,7 @@ test('archived entities do not demand attention as alerts or assigned work', () 
 
 test('a notification tells its person, or everyone in its project, unless they did it', () => {
   let told = (to: string, by = 'agent') =>
-    row('told', { notification: {}, deliver: { to }, doc: {} }, 2, by)
+    row('told', { notification: { to }, doc: {} }, 2, by)
   let lane = (to: string, reader: Reader = who, by?: string) =>
     threads([told(to, by)], reader).map((t) => [t.lane, t.reason, t.unread])
   let space = { ...who, scope: 'space' }
@@ -279,8 +279,7 @@ test('a notification tells its person, or everyone in its project, unless they d
 
 test('an emailed notification stays in Updates when its delivery receipt arrives', () => {
   let note = row('told', {
-    notification: {},
-    deliver: { to: 'person' },
+    notification: { to: 'person' },
     doc: { body: 'Your app is ready.' },
   })
   let [before] = threads([note], who)

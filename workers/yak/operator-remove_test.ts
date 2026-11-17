@@ -47,8 +47,7 @@ let wakeRequest = seed.at(-1)!.entity.eid
 let told = derivedEid('operator-told|' + wakeRequest)
 await store.g.apply([{
   entity: { eid: told },
-  notification: {},
-  deliver: { to: person },
+  notification: { to: person },
   doc: { body: 'Wake-up test fired.' },
 }], { trusted: true })
 
@@ -77,7 +76,7 @@ test('a cancelled subscription, named by its handle, is its owner to remove with
       watch: { query: '.doc' },
     },
     request(fired, { about: sub, channel: 'subscription' }),
-    { entity: { eid: tells }, notification: {}, deliver: { to: person } },
+    { entity: { eid: tells }, notification: { to: person } },
   ], { trusted: true })
   await store.g.apply([{ entity: { eid: sub }, $delete: true }], {
     trusted: true,

@@ -166,7 +166,13 @@ alarm once it serves, fifty rows to a transaction. workers/yak/README.md,
   checks that mark. `yak admin copy [space] --as admin@bot.yak.sh` copies
   every space's Operator store (or one) to `.scratch/operators/<slug>.db`, the
   copies to rehearse a pass on and count; they hold people's words, so remove
-  them once the proof is done.
+  them once the proof is done. A script runs the pass on a throwaway file of
+  a copy as the Builder would: `storage(open(file), operatorVocab, { number:
+  NUMBERS })`, its `install()` fitting the schema to the new words, under
+  `operatorGraph(await memoryPlan(), { storage })`, with `meta(driver)` as
+  the store's marks. A reader's answer is compared by running the same script
+  from an export of main (`git archive main`, its dependencies installed) on
+  the copy as it stood.
 - `yak admin copy --apps [space]` copies every app's store the same way (its
   sample's and its visitors' too) to `.scratch/stores/<space>--<app>.db`, read
   out of each Store object's file as it stands. A pass that changes what a

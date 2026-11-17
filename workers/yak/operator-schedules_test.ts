@@ -101,7 +101,7 @@ await store.g.apply([{
 })
 await service.drain()
 let [request] = await store.g.read('.operator_request.channel=wake')
-let [told] = await store.g.read(line`.deliver.to=${person}&*`)
+let [told] = await store.g.read(line`.notification.to=${person}&*`)
 let [fired] = await store.g.get([set.entity.eid])
 // A second driver, or a replay, gives the same firing again to no effect.
 await fire(store, eid, fired, 'wake', (fired.fired as { at: string }).at)

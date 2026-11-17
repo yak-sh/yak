@@ -58,6 +58,12 @@
       "type": "object",
       "notice": true,
       "properties": {
+        "to": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "whom it tells: a person, or a space or project for everyone standing in it; it may live in another graph"
+        },
         "about": {
           "type": "string",
           "ref": "entity",
@@ -65,7 +71,7 @@
           "description": "what it tells of, which may live in another graph"
         }
       },
-      "description": "words emitted, not said, telling whoever its deliver{to} names (a person, or a project for everyone standing in it) what happened; doc{body} holds them, and it is a thread of its own"
+      "description": "words emitted, not said, telling whoever its `to` names (a person, or a space or project for everyone standing in it) what happened; doc{body} holds them, and it is a thread of its own"
     },
     "subscription": {
       "component": true,
@@ -115,10 +121,9 @@
       ]
     },
     "notification": {
-      "description": "words emitted, not said, telling whoever its deliver{to} names (a person, or a project for everyone standing in it) what happened; doc{body} holds them, and it is a thread of its own",
+      "description": "words emitted, not said, telling whoever its `to` names (a person, or a space or project for everyone standing in it) what happened; doc{body} holds them, and it is a thread of its own",
       "with": {
-        "doc": true,
-        "deliver": true
+        "doc": true
       }
     },
     "subscription": {

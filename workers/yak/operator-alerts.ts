@@ -30,6 +30,7 @@ import { caught } from './defects.ts'
 import { type Ctx, refuse } from './tool.ts'
 import type { Texting } from './operator-texts.ts'
 import type { OperatorStore } from './operator-store.ts'
+import { toldMoved } from './told-move.ts'
 
 type Store = OperatorStore
 
@@ -191,6 +192,7 @@ export let alert = async (
   eid: string,
   defer?: (ms: number) => Promise<void>,
 ) => {
+  await toldMoved(store)
   let { letterFor } = await import('./operator-channels.ts')
   let [row, letter] = await store.g.get([eid, letterFor(eid)])
   if (!row || row.delivered || row.bounced || letter?.mail) return
@@ -200,7 +202,7 @@ export let alert = async (
     if (waiting == 'tool') await defer?.(10)
     return
   }
-  let to = String(part(row, 'deliver')?.to ?? '')
+  let to = String(part(row, 'notification')?.to ?? '')
   let by = String(part(row, 'created')?.by ?? '')
   let words = String(part(row, 'doc')?.body ?? '').trim()
   let dir = directoryOf(env.STORE)

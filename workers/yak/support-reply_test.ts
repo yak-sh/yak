@@ -97,7 +97,7 @@ test("the person's Updates hold it too, linking the thread", async () => {
   let [told] = await store.g.get([
     derivedEid('operator-told|' + `support|${message}`),
   ])
-  equal((told.deliver as { to: string }).to, person)
+  equal((told.notification as { to: string }).to, person)
   equal((told.notification as { about: string }).about, thread)
   ok(
     String((told.doc as { body: string }).body).includes(`/support/${thread}`),

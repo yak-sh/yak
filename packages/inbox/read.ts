@@ -88,6 +88,7 @@ let scalars = [
   'notified.message_id',
   'knock.target',
   'deliver.to',
+  'notification.to',
   'notification.about',
   'bug.title',
   'bug.app',

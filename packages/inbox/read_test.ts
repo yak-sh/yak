@@ -43,7 +43,7 @@ let defs: Record<string, string[]> = {
   notified: ['message_id'],
   knock: ['target'],
   deliver: ['to'],
-  notification: ['about'],
+  notification: ['to', 'about'],
   bug: ['title', 'app', 'first', 'last'],
   created: ['by', 'at'],
   opened: ['by', 'at'],
@@ -248,12 +248,11 @@ let fixture = (): Bundle[] => [
   }, 4),
   ...[['told', 'person'], ['spaced', 'space'], ['elsewhere', 'other']].map((
     [eid, to],
-  ) => row(eid, { notification: {}, deliver: { to }, doc: { body: eid } }, 6)),
+  ) => row(eid, { notification: { to }, doc: { body: eid } }, 6)),
   row(
     'own-notice',
     {
-      notification: { about: 'app' },
-      deliver: { to: 'space' },
+      notification: { to: 'space', about: 'app' },
       doc: { body: 'person joined' },
     },
     6,

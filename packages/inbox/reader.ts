@@ -77,11 +77,11 @@ export let addressed = (who: Reader) => (r: Row): boolean => {
     return t == who.session || !!who.claims?.has(t) ||
       (who.operator == true && !!who.actor && t == who.actor)
   }
-  // A notification was emitted, not said: it reaches whoever its `deliver`
+  // A notification was emitted, not said: it reaches whoever its `to`
   // names, the session or the actor, and for an operator loop the project it
   // stands in, which is everyone there.
   if (r.comps.notification) {
-    let t = String(r.comps.deliver?.to ?? '')
+    let t = String(r.comps.notification.to ?? '')
     return !!t && (t == who.session || t == who.actor ||
       (who.operator == true && t == who.scope))
   }

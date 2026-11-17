@@ -243,7 +243,7 @@ test("the writer's side gets back only what the person's side chose to say, whic
   let [told] = await store.g.get([
     derivedEid('operator-told|' + raised.entity.eid),
   ])
-  assertEquals((told.deliver as { to: string }).to, person)
+  assertEquals((told.notification as { to: string }).to, person)
 })
 
 test('a conversation raises only on a reply of its own, and answers only what was raised with it', async () => {
