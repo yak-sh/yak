@@ -306,10 +306,7 @@ test('a click on a call to action is counted by its button, campaign and the hom
 test("each of the home page's calls to action sends its name when clicked", async () => {
   let { document } = parseHTML(page('index.html'))
   let named = [...document.querySelectorAll('[data-cta]')]
-  assertEquals(
-    named.map((b) => b.getAttribute('data-cta')),
-    CTAS.map((c) => c.name),
-  )
+  let names = named.map((b) => b.getAttribute('data-cta')!)
   assertEquals(
     !!document.querySelector('script[src="cta.js"]'),
     true,
@@ -339,10 +336,15 @@ test("each of the home page's calls to action sends its name when clicked", asyn
     return sent
   }
   let each = (...how: string[]) =>
-    CTAS.flatMap((c) => how.map((h) => [h, '/api/click', c.name]))
+    names.flatMap((name) => how.map((h) => [h, '/api/click', name]))
   assertEquals(clicks(true), each('beacon'))
   assertEquals(clicks(false), each('beacon', 'keepalive'))
   assertEquals(clicks(), each('keepalive'))
+  let views = dataset()
+  for (let [, , name] of clicks(true)) {
+    await clicked(beacon(name), { VIEWS: views } as never)
+  }
+  assertEquals(views.points.map((p) => p.blobs![7]), names)
 })
 
 test("signing in through the doors in a browser counts a person's steps, and a test account's apart", async () => {
