@@ -5,7 +5,8 @@
 // provider only for an agent's token, so a page served to a signed-in browser
 // does not compile the sign-in door (T-148770).
 import { type Host, url as hostUrl } from '@yaks/platform/host'
-import { cookieValue, verify } from './lib/token.ts'
+import { verify } from './lib/token.ts'
+import { sessionCookie } from './browser-cookie.ts'
 import { directory, type Role } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { CLI_GRANT, GRANT, held, ledger } from './grants.ts'
@@ -41,7 +42,7 @@ export let asking = async (
   req: Request,
 ): Promise<{ who: Caller | null; tried: boolean }> => {
   let said = req.headers.get('authorization') ?? ''
-  let cookied = cookieValue(req.headers.get('cookie'))
+  let cookied = sessionCookie(req, env)
   // An `Authorization` header we cannot even parse is still a credential
   // offered: a caller speaking a scheme this door does not take is refused,
   // not mistaken for nobody. So is a subprotocol bearer that does not decode.

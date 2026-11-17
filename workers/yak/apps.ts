@@ -162,7 +162,7 @@ import {
   NAMED_CLIENT,
   passed,
 } from '@yaks/platform/kept'
-import { cookieValue } from '@yaks/platform/cookie'
+import { sessionCookie } from './browser-cookie.ts'
 import { noted, refusal, serving } from './unseen.ts'
 import { door as reportDoor, flood } from '@yaks/tracker/report'
 import { writer } from '@yaks/platform/app-authority'
@@ -798,7 +798,7 @@ export let editing = async (
   env: Env,
   at: { space: { slug: string }; app: { slug: string } },
 ) => {
-  let person = await sessionPerson(req, env.SESSION_SECRET)
+  let person = await sessionPerson(req, env)
   if (!person) return false
   let [{ space, app, role }] = await Promise.all([
     directory(
@@ -2078,7 +2078,7 @@ let served = async (
   let ids: ReturnType<typeof identify> | undefined
   let identify = () =>
     Promise.all([
-      sessionPerson(req, env.SESSION_SECRET),
+      sessionPerson(req, env),
       !edge && req.headers.has('authorization') && !bearing(req) &&
         url.pathname.includes('/api/')
         ? asking(env, req)
@@ -2099,7 +2099,7 @@ let served = async (
     kept: async () => {
       let { cookied } = await identity()
       if (edge) return null
-      let session = cookied && cookieValue(req.headers.get('cookie'))
+      let session = cookied && sessionCookie(req, env)
       return await asked(visitor, env, c, session || null)
     },
     // The space, the app at the address, the front page and the seat of the

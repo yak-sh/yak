@@ -1,4 +1,5 @@
 import { cookieValue } from './lib/token.ts'
+import { HOST_COOKIE } from './browser-cookie.ts'
 // The directory answers every read itself, and a copy of its answers stands in
 // when it stalls: publicDirectory for anonymous pages, signedDirectory for
 // signed access, where a copied body stands only while the independent serving
@@ -570,7 +571,7 @@ export let publicDirectory = (
 export let possiblePerson = (req: Request) => {
   let header = req.headers.get('cookie')
   if (!header) return false
-  let token = cookieValue(header)
+  let token = cookieValue(header, HOST_COOKIE) ?? cookieValue(header)
   if (!token) return false
   try {
     let part = token.split('.')[0]

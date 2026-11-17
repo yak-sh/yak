@@ -43,7 +43,8 @@ export let contributed = async (
 /** The verified cookie alone can claim guest work. Touching its receipts in
  * this same transaction owes durable runs, which survive a restart. */
 export let claimed = async (req: Request, env: Env, by: string) => {
-  let browser = env.SESSION_SECRET && await browserOf(req, env.SESSION_SECRET)
+  let browser = env.SESSION_SECRET &&
+    await browserOf(req, env.SESSION_SECRET, env)
   if (!browser) return
   let g = meta(env)
   let vias = [

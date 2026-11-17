@@ -941,7 +941,7 @@ export let answer = async (
     what: at ? 'app' as const : 'skill' as const,
   }
   if (req.method != 'POST') return confirm(said, env)
-  let session = await browserOf(req, env.SESSION_SECRET)
+  let session = await browserOf(req, env.SESSION_SECRET, env)
   await run({ env, dir, person: who }, 'gallery_review', {
     ...at
       ? { app: `${at.space.slug}/${at.app.slug}` }

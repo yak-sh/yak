@@ -44,7 +44,8 @@ import {
   hostOf,
   ready,
 } from '@yaks/platform/routes'
-import { COOKIE, cookieValue } from '@yaks/platform/cookie'
+import { COOKIE } from '@yaks/platform/cookie'
+import { sessionCookie } from './browser-cookie.ts'
 import { r2Objects } from './lib/objects.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -168,7 +169,7 @@ let fromHome = async (
   dir: dirPart.Directory,
   visitor?: Request,
 ) => {
-  let session = visitor && cookieValue(visitor.headers.get('cookie'))
+  let session = visitor && sessionCookie(visitor, env)
   let headers = new Headers({ [API_AT]: HOME_API })
   if (session) headers.set('cookie', `${COOKIE}=${session}`)
   let page = await edged(

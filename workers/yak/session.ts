@@ -19,15 +19,7 @@
 // is minted as, and the renewal that makes a session slide. The doors that
 // mint one (identity.ts) and the router the renewal hangs off (index.ts) are
 // elsewhere; what a session is belongs beside who is asking.
-import {
-  COOKIE,
-  cookie,
-  cookieValue,
-  opened,
-  seal,
-  sign,
-  verify,
-} from './lib/token.ts'
+import { COOKIE, cookie, opened, seal, sign, verify } from './lib/token.ts'
 import type { Role } from './directory.ts'
 import type { Env } from './env.ts'
 import { apex, type Host } from '@yaks/platform/host'
@@ -37,6 +29,7 @@ import type { Bundle } from '@yaks/graph'
 import { sha256 } from '@yaks/graph/sha256'
 import type { Claims } from './lib/token.ts'
 import * as browsers from './browser-sessions.ts'
+import { HOST_COOKIE, sessionCookie } from './browser-cookie.ts'
 
 import type { ServiceAuthority } from '@yaks/connections'
 
@@ -112,7 +105,7 @@ export let sessionReading = async (
   env: Env,
 ) => {
   let secret = env.SESSION_SECRET
-  let token = cookieValue(req.headers.get('cookie'))
+  let token = sessionCookie(req, env)
   if (!token || !secret) return null
   let claims = await verify(token, secret)
   if (!claims) return null
@@ -138,9 +131,10 @@ export let sessionAt = async (
  * answers both. Nobody for a signed-out browser. */
 export let sessionPerson = async (
   req: Request,
-  secret: string | undefined,
+  env: Env,
 ): Promise<string | null> => {
-  let token = cookieValue(req.headers.get('cookie'))
+  let secret = env.SESSION_SECRET
+  let token = sessionCookie(req, env)
   if (!token || !secret) return null
   return (await verify(token, secret))?.person ?? null
 }
@@ -152,7 +146,7 @@ export let whoIs = async (
   space: string | null = null,
 ): Promise<Who> => {
   let secret = env.SESSION_SECRET
-  let token = cookieValue(req.headers.get('cookie'))
+  let token = sessionCookie(req, env)
   if (!token || !secret) return nobody
   let offered = await verify(token, secret)
   let [claims, role] = await Promise.all([
@@ -162,7 +156,7 @@ export let whoIs = async (
       : null,
   ])
   if (!claims) {
-    let browser = await browserOf(req, secret)
+    let browser = await browserOf(req, secret, env)
     return browser
       ? { ...nobody, via: browser.via, until: browser.exp }
       : nobody
@@ -273,8 +267,9 @@ let browserIdentity = (source: string, exp: number): Browser => {
 export let browserOf = async (
   req: Request,
   secret: string | undefined,
+  env: Host = {},
 ): Promise<Browser | null> => {
-  let token = cookieValue(req.headers.get('cookie'))
+  let token = sessionCookie(req, env)
   if (!token || !secret) return null
   let claims = await verify(token, secret)
   if (claims) {
@@ -324,7 +319,7 @@ export let minted = async (
   space: string | null = null,
 ) => {
   let [browser, current] = await Promise.all([
-    browserOf(req, secret),
+    browserOf(req, secret, env),
     sessionAt(req, env, space),
   ])
   let token = await renewed(req, env, secret, {
@@ -342,7 +337,7 @@ export let minted = async (
 /** Explicit sign-out starts fresh guest work. The preceding instrument keeps
  * its directory claim and unfinished attribution receipts for that person. */
 export let signedOut = async (req: Request, env: Env, secret: string) => {
-  let token = cookieValue(req.headers.get('cookie'))
+  let token = sessionCookie(req, env)
   let claims = token && await verify(token, secret)
   if (claims) {
     let via = claims.via ?? `session:${sha256(token!)}`
@@ -393,10 +388,10 @@ export let browsing = async (
   let secret = env.SESSION_SECRET
   if (!secret) return serve(req)
   let offered = await verify(
-    cookieValue(req.headers.get('cookie')) ?? '',
+    sessionCookie(req, env) ?? '',
     secret,
   )
-  let browser = await browserOf(req, secret)
+  let browser = await browserOf(req, secret, env)
   if (
     browser && (!offered || offered.via && !offered.legacy) &&
     browser.exp - Date.now() / 1000 > SESSION / 2
@@ -417,8 +412,18 @@ export let browsing = async (
     : await seal('browser', { via, exp } satisfies Browser, secret)
   let headers = new Headers(req.headers)
   let kept = (headers.get('cookie') ?? '').split(';').map((c) => c.trim())
-    .filter((c) => c && c.split('=')[0] != COOKIE)
-  headers.set('cookie', [...kept, `${COOKIE}=${token}`].join('; '))
+    .filter((c) =>
+      c && c.split('=')[0] != COOKIE &&
+      (hostOf(req, env) != apex(env) || c.split('=')[0] != HOST_COOKIE)
+    )
+  headers.set(
+    'cookie',
+    [
+      ...kept,
+      `${COOKIE}=${token}`,
+      ...hostOf(req, env) == apex(env) ? [`${HOST_COOKIE}=${token}`] : [],
+    ].join('; '),
+  )
   let res = await serve(new Request(req, { headers }))
   if (!remember || res.status == 101 || sets(res)) return res
   let out = new Headers(res.headers)
@@ -449,7 +454,7 @@ export let slid = async (
   res: Response,
 ): Promise<Response> => {
   if (res.status == 101 || !env.SESSION_SECRET || sets(res)) return res
-  let token = cookieValue(req.headers.get('cookie'))
+  let token = sessionCookie(req, env)
   if (!token) return res
   let offered = await verify(token, env.SESSION_SECRET)
   // A cookie sealed before 2c05d0f6 is re-minted on sight, whatever its age,

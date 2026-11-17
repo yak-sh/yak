@@ -111,6 +111,7 @@ import {
   unmounted,
 } from '@yaks/platform/routes'
 import { slid } from './session.ts'
+import { protectedCookie } from './browser-cookie.ts'
 import { refusal } from './unseen.ts'
 
 // Where a request is, once `hosting` below has carried it to its address on
@@ -466,7 +467,11 @@ export let wrap = (
     {},
     async () => {
       let started = Date.now(), cold = served++ == 0
-      let res = await slid(req, env, await hosting(req, env, next))
+      let res = await protectedCookie(
+        req,
+        env,
+        await slid(req, env, await hosting(req, env, next)),
+      )
       let host = hostOf(req, env)
       if (host != apex(env) && !host.endsWith(`.${apex(env)}`)) return res
       // Every answer on our zone, including refusals and failures, carries
