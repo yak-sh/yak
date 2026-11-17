@@ -22,8 +22,8 @@ On the machine, the server's **filter** answers a marked request only at the
 paths the machine opened to the tunnel, and refuses the rest (403) before any
 route sees them. A marked request is also never one of the machine's own
 callers: it writes as the persona the machine names for the tunnel, and is
-offered only the tools the machine lists. A request without the mark did not
-come through the tunnel, and all of this leaves it alone.
+offered only the tools the machine lists. The dedicated VPC listener sets the
+mark at ingress; the ordinary listener continues serving local requests.
 
 The platform also says who is asking, in `x-yak-caller`: its own word for the
 kind of caller, set on every request it hands the gateway and taken off whatever
@@ -145,6 +145,16 @@ read from the vault:
 {
   "plugins": [
     {
+      "use": "@yaks/api",
+      "with": {
+        "listeners": [{
+          "port": 5174,
+          "hostname": "127.0.0.1",
+          "headers": { "x-yak-tunnel": "1" }
+        }]
+      }
+    },
+    {
       "use": "@yaks/tunnel",
       "with": {
         "token": { "secret": "TUNNEL_TOKEN" },
@@ -154,6 +164,11 @@ read from the vault:
   ]
 }
 ```
+
+Point the VPC service at this dedicated port, rather than the ordinary local
+listener. Every request arriving there receives the tunnel mark before any route
+or policy sees it, even if it bypassed the gateway or supplied a different mark.
+Both listeners stop and restart together.
 
 `routes` are URLPattern pathnames (`/mail/inbound`, `/hooks/*`), and none opens
 nothing: `/apply` and `/query` stay closed to the tunnel unless the machine's

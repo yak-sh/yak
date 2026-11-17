@@ -93,3 +93,51 @@ test('serve authenticates every remote door before its handler runs', async () =
     await work
   }
 })
+
+test('a dedicated listener sets ingress authority even when callers omit or replace it', async () => {
+  let stop = new AbortController()
+  let handlers = new Map<number, Incoming>()
+  let closed: number[] = []
+  let listen: Listen = (opts, handle) => {
+    handlers.set(opts.port, handle)
+    let done = Promise.withResolvers<void>()
+    return {
+      finished: done.promise,
+      shutdown: () => {
+        if (!closed.includes(opts.port)) closed.push(opts.port)
+        done.resolve()
+        return Promise.resolve()
+      },
+    }
+  }
+  let host = {
+    config: { port: 5173 },
+    stopping: stop.signal,
+    duties: () => Promise.resolve(),
+    handler: (req: Request) =>
+      new Response(
+        req.headers.get('x-yak-tunnel') == '1' ? 'narrowed' : 'local',
+      ),
+  } as unknown as Serving
+  let work = runs(host, {
+    listeners: [{ port: 5174, headers: { 'x-yak-tunnel': '1' } }],
+  }, listen).serve({ entity: { eid: 'serve' } }, {} as Graph)
+  let peer = { remoteAddr: { hostname: '127.0.0.1', port: 1 } }
+  try {
+    for (let mark of [undefined, '0', '']) {
+      let req = new Request('http://box/apply', {
+        headers: mark == null ? {} : { 'x-yak-tunnel': mark },
+      })
+      equal(await (await handlers.get(5174)!(req, peer)).text(), 'narrowed')
+    }
+    equal(
+      await (await handlers.get(5173)!(new Request('http://box/apply'), peer))
+        .text(),
+      'local',
+    )
+  } finally {
+    stop.abort()
+    await work
+  }
+  equal(closed.sort(), [5173, 5174])
+})

@@ -43,7 +43,7 @@ import { argsOf } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
 import type { Runner } from '@yaks/tools'
 import { CallError } from '@yaks/tools/errors'
-import { denoListen, denoReady, type Listen } from './deno.ts'
+import { denoListen, denoReady, type Listen, type Listener } from './deno.ts'
 import { secured } from './access.ts'
 import { DB, HOSTNAME, PORT, served } from './address.ts'
 import type { Handler, Route } from './route.ts'
@@ -152,10 +152,27 @@ export let listening = (
   ].join('\n')
 }
 
+/** An additional transport into the same handler, with trusted headers set
+ * by its listener rather than accepted from HTTP input. */
+export type Endpoint = {
+  port: number
+  hostname?: string
+  headers?: Record<string, string>
+}
+
+/** A handler whose ingress sets these headers, replacing caller input. */
+export let entering =
+  (handler: Handler, headers: Record<string, string> = {}): Handler =>
+  (request) => {
+    let set = new Headers(request.headers)
+    for (let [name, value] of Object.entries(headers)) set.set(name, value)
+    return handler(new Request(request, { headers: set }))
+  }
+
 /** The implementation of the tool ./vocab.json declares. */
 export let runs = (
   host: Serving,
-  options: { token?: string } = {},
+  options: { token?: string; listeners?: Endpoint[] } = {},
   listen: Listen = denoListen,
 ): Runs => ({
   serve: async (call): Promise<Bundle[]> => {
@@ -182,21 +199,42 @@ export let runs = (
     let at = ''
     let began = Date.now()
     let active = requests(addressed(handler, host.config.db))
-    let server
+    let servers: Listener[] = []
+    let server = {
+      shutdown: () => Promise.all(servers.map((s) => s.shutdown())),
+      get finished() {
+        return Promise.all(servers.map((s) => s.finished))
+      },
+    }
     try {
-      server = listen({
-        port,
-        hostname,
-        reusePort: args.share === true,
-        onListen: (addr) => {
-          at = `http://${addr.hostname}:${addr.port}`
-          // The one thing printed while the call is still running, because a
-          // person who just started a server wants the address now and the
-          // result is a long way off.
-          console.error(listening(at, served(addr), host))
-        },
-      }, secured(active.handle, () => options.token))
+      for (
+        let [i, endpoint] of [{ port, hostname }, ...options.listeners ?? []]
+          .entries()
+      ) {
+        servers.push(listen(
+          {
+            port: endpoint.port,
+            hostname: endpoint.hostname ?? HOSTNAME,
+            reusePort: args.share === true,
+            onListen: (addr) => {
+              if (i == 0) at = `http://${addr.hostname}:${addr.port}`
+              console.error(
+                listening(
+                  `http://${addr.hostname}:${addr.port}`,
+                  served(addr),
+                  host,
+                ),
+              )
+            },
+          },
+          secured(
+            entering(active.handle, endpoint.headers),
+            () => options.token,
+          ),
+        ))
+      }
     } catch (error) {
+      await server.shutdown()
       if (error instanceof Error && error.name == 'AddrInUse') {
         throw new CallError('address', `${hostname}:${port} is already in use`)
       }
@@ -233,7 +271,7 @@ export let runs = (
       // through leave these roles to a host that stays up.
       // Not awaited: it returns when the host closes.
       if (!host.stopping.aborted) void host.duties()
-      await Promise.race([server.finished, graced])
+      await Promise.race([...servers.map((s) => s.finished), graced])
     } finally {
       // Already stopping unless saying it was ready failed; never awaited,
       // since a shutdown settles only once every request has.
