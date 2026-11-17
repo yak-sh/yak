@@ -294,6 +294,33 @@ test('an unresolved recipient bounces visibly and is also reported', async () =>
   assertEquals(g.reports.length, 1)
 })
 
+test('a notification email envelope neither sends again nor bounces its recipient', async () => {
+  let box = stash()
+  let g = await rig({ mail_post: sending({ sender: box, now: noon }) })
+  await g.apply([{
+    entity: ana.entity,
+    person: ana.person,
+  }, {
+    entity: { eid: 'e-alert' },
+    doc: { body: 'Your report is ready.' },
+    notification: {},
+    deliver: { to: ana.entity.eid },
+  }])
+  // The alert owns its send, and records its envelope before it has a receipt.
+  await g.apply([{
+    entity: { eid: 'e-alert' },
+    mail: { from: 'hello@books.example', to: ana.email.address },
+  }])
+  await g.fx.idle()
+  let row = await read(g, 'e-alert')
+  assertEquals([row.bounced, row.delivered, (row.deliver as Comp).tried], [
+    undefined,
+    undefined,
+    undefined,
+  ])
+  assertEquals([box.sent, g.reports], [[], []])
+})
+
 test('a transport rejection records a bounce and reaches the effect reporter without a resend', async () => {
   let calls = 0
   let error = new Error('mail provider unavailable')

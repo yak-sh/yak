@@ -137,6 +137,7 @@ test('an alert to a person who chose nothing and has an address is an email from
   assertEquals(envelope.to, ADDRESS)
   assertEquals(typeof envelope.at, 'string')
   assertEquals(typeof (byMail.row.delivered as { at: string }).at, 'string')
+  assertEquals(byMail.row.bounced, undefined)
 })
 test('what everyone in a space is told, or a person wrote, is sent to nobody', () => {
   assertEquals(unsent, [[], []])
