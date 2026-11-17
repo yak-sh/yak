@@ -3,6 +3,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import type { Item, Request } from '@yaks/model'
+import type { Message } from '@yaks/mail'
 import { platform } from './directory-rows-probe.ts'
 import { directoryOf } from './directory.ts'
 import { operatorMemory, operatorModel } from './operator-testing.ts'
@@ -27,7 +28,15 @@ let id = await dir.mint(owner, 'home', 'Home', {
   'x-yak-role': 'owner',
 })
 let space = (await dir.at(id))!
-let store = operatorMemory()
+let letters: Message[] = []
+let store = operatorMemory(undefined, {}, {
+  operator: {
+    send: (letter) => {
+      letters.push(letter)
+      return Promise.resolve({ id: `sent-${letters.length}` })
+    },
+  },
+})
 let asked: Request[] = []
 let reply = (text: string): Item[] => [{ kind: 'assistant', text }]
 let forked = (r: Request) => JSON.stringify(r.items).includes('fork of the')
@@ -67,7 +76,6 @@ let channel = (name: string) => (request: Intake, answer: { text: string }) => {
 handleChannels(operator, env, {
   text: channel('text'),
   chat: channel('chat'),
-  email: channel('email'),
   voice: channel('voice'),
 })
 
@@ -101,12 +109,22 @@ let ofFork = await conversationOf(store, '/at', fork.entity.eid)
 // before, and the page shows the four as one conversation.
 let chatted = sent.splice(0)
 for (let [channel, say] of [['email', 'Or Thursday'], ['voice', 'Friday']]) {
-  await receive(store, {
-    space: space.eid,
-    person: owner,
-    channel,
-    address: channel == 'email' ? 'jo@example.com' : '+12695550142',
-  }, say)
+  await receive(
+    store,
+    {
+      space: space.eid,
+      person: owner,
+      channel,
+      address: channel == 'email' ? 'jo@example.com' : '+12695550142',
+    },
+    say,
+    channel == 'email'
+      ? {
+        title: 'Dentist reminder',
+        mail: { from: 'jo@example.com', message_id: 'dentist-thursday' },
+      }
+      : {},
+  )
   await drain(store)
 }
 let atCall = asked.at(-1)!
@@ -183,7 +201,20 @@ test('texts, chat, email and calls are one conversation, read whole by the Opera
   ) {
     assertStringIncludes(items, said)
   }
-  assertEquals(replied.map((r) => r.channel), ['email', 'voice'])
+  assertEquals(replied.map((r) => r.channel), ['voice'])
+  assertEquals(
+    letters.map((l) => ({
+      to: l.to,
+      subject: l.subject,
+      replyTo: l.replyTo,
+    })),
+    [{
+      to: 'jo@example.com',
+      subject: 'Re: Dentist reminder',
+      replyTo: 'dentist-thursday',
+    }],
+  )
+  assertStringIncludes(letters[0].text, 'Moving the dentist to Thursday.')
   assertEquals(lines, [
     {
       via: 'By text',

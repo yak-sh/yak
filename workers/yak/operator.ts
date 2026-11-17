@@ -1382,7 +1382,8 @@ export let operating = (
     })
     // Words a channel's door took in itself name the item they arrived as
     // (@yaks/session `intake`), and are answered in its package's words
-    // (operator-channels.ts `replyRows`).
+    // (operator-channels.ts `replyRows`). A queued request from before its
+    // channel moved is answered by `operator_deliver` above.
     let heard = reply.given.flatMap((b) => {
       let item = comp(b, 'intake')?.item
       let channel = String(comp(b, 'channel')?.name ?? '')
@@ -1393,7 +1394,7 @@ export let operating = (
     let from = heard.length && space ? await dir().at(space) : undefined
     let items = from ? await g.get(heard.map((h) => h.item)) : []
     let sent = heard.flatMap(({ channel }, i) =>
-      items[i] && from
+      items[i] && !items[i].operator_request && from
         ? replyRows(env, from, channel, items[i], {
           eid: derivedEid(
             `operator-reply|${items[i].entity.eid}|${mark.entity.eid}`,
