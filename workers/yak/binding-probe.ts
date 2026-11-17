@@ -232,11 +232,11 @@ export let kvStorage = () => {
  * text or as JSON, a key that lapses at its `expirationTtl`, and a listing
  * by prefix that comes back in one page.
  */
-export let kv = () => {
+export let kv = (now = () => Date.now()) => {
   let held = new Map<string, string>()
   let until = new Map<string, number>()
   let live = (k: string) => {
-    if ((until.get(k) ?? Infinity) > Date.now()) return held.get(k) ?? null
+    if ((until.get(k) ?? Infinity) > now()) return held.get(k) ?? null
     held.delete(k)
     until.delete(k)
     return null
@@ -251,7 +251,7 @@ export let kv = () => {
     },
     put: (k: string, v: string, o: { expirationTtl?: number } = {}) => {
       held.set(k, v)
-      if (o.expirationTtl) until.set(k, Date.now() + o.expirationTtl * 1000)
+      if (o.expirationTtl) until.set(k, now() + o.expirationTtl * 1000)
       else until.delete(k)
       return Promise.resolve()
     },

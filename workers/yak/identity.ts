@@ -1714,6 +1714,7 @@ let opts = (env: Env): OAuthProviderOptions<Env> => ({
   // (grants.ts) — those are pasted into a terminal, not held by a connector.
   accessTokenTTL: YEAR,
   refreshTokenTTL: undefined,
+  clientRegistrationTTL: undefined,
   // A re-authorization replaces the person's older grant for that client only
   // now, when the client holds the new grant (connected.ts `replace`).
   tokenExchangeCallback: async (o) => {
