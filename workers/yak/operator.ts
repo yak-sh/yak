@@ -252,7 +252,17 @@ let opened = (
     actor: eid,
     ...instrument ? { instrument } : {},
   }
-  let here: Ctx = { env, dir: reopen(), reopen, person: held.person, who }
+  // The space it works in narrows its directory, not the person's own MCP
+  // servers: those it reaches by its roster's rule (`operatorRoster`), and a
+  // machine's only from the space whose tunnel reaches it.
+  let here: Ctx = {
+    env,
+    dir: reopen(),
+    reopen,
+    person: held.person,
+    who,
+    remote: true,
+  }
   let ctx = Promise.all([space, reach]).then((
     [space, { role, pa, beyond }],
   ): OperatorCtx => ({

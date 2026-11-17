@@ -9,11 +9,13 @@ import { argsOf, type Tool as GraphTool } from '@yaks/graph'
 import { nameOf } from '@yaks/mcp-client'
 
 // The tunnel's code is loaded by the first server on a machine, which almost
-// nobody has. The servers are the account's, so a channel that may not reach
-// them, and a credential narrowed to one space (tool.ts `accounted`), see
-// nobody's.
+// nobody has. The servers are the account's: a channel says whether it
+// reaches them (an Operator by its own rule, operator.ts `operatorRoster`),
+// and at a door that does not say, a credential narrowed to one space
+// (tool.ts `accounted`) sees nobody's.
+let reaches = (ctx: Ctx) => ctx.remote ?? !ctx.who?.space
 let commands = (ctx: Ctx, asking?: Calling) =>
-  remoteCommands(ctx.remote === false || ctx.who?.space ? '' : ctx.person, {
+  remoteCommands(reaches(ctx) ? ctx.person : '', {
     ...ctxOf(ctx.env, asCaller(ctx, null)),
     report: (e) => caught(e, { request: 'connected MCP' }),
     signIn: url(ctx.env, '/manage/connections'),
@@ -171,7 +173,7 @@ export let mcpConnect: Row = {
     required: ['name', 'url'],
   },
   run: async (ctx, args) => {
-    if (ctx.remote === false) {
+    if (!reaches(ctx)) {
       throw refuse(
         'access',
         'This channel cannot connect personal MCP servers.',

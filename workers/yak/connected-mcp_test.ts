@@ -18,6 +18,7 @@ import { SAID } from './mcp-remote.ts'
 import { platform } from './directory-probe.ts'
 import { directoryOf, stamp } from './directory.ts'
 import type { Env } from './env.ts'
+import type { Ctx } from './tool.ts'
 import { operating, operatorContext, operatorRoster } from './operator.ts'
 import { callable, operatorMemory, operatorModel } from './operator-testing.ts'
 import { listCommands, runCommand } from './declared.ts'
@@ -127,6 +128,19 @@ test('a call from the owner’s connector says so, and names no conversation', a
   assertEquals(
     [...new Set(box.requests.map((r) => r.headers.get('x-yak-caller')))],
     ['connector'],
+  )
+})
+
+test('a credential narrowed to the space at a door is offered none of the account’s servers, which its Operator reaches', async () => {
+  let door = (who: Ctx['who']) => ({ env, dir, person: ada, who })
+  let named = async (who: Ctx['who']) =>
+    (await connectedTools(door(who))).map((t) => t.name)
+  assertEquals(await named({ person: ada, via: 'oauth' }), [
+    'tasks__publish_mockup',
+  ])
+  assertEquals(
+    await named({ person: ada, via: 'grant', grant: mint(), space: 'adas' }),
+    [],
   )
 })
 
