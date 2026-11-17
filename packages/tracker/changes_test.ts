@@ -1,6 +1,6 @@
 import { clock, equal, test } from '@yaks/testing'
 import { changes, type Doors, poll, type Polled } from './poll.ts'
-import { platform } from './remote.ts'
+import { platform, Unavailable } from './remote.ts'
 
 let heard = (open: Polled) =>
   new Promise<void>((done) => {
@@ -9,6 +9,35 @@ let heard = (open: Polled) =>
       done()
     })
   })
+
+test('a feed whose object still runs the previous deploy retries as an outage', async () => {
+  let time = clock(), ready = false
+  let feed = changes({
+    changes: () =>
+      Promise.resolve(
+        ready
+          ? {
+            ok: true,
+            tag: 'one',
+            value: { scopes: [{ scope: platform, tag: 'one' }] },
+          }
+          : { ok: false, status: 404, error: 'tracker route not found' },
+      ),
+    bugs: () => Promise.resolve({ ok: true, value: [] }),
+    mark: () => Promise.resolve(),
+  }, { clock: time })
+  try {
+    equal(
+      await feed.version().catch((error) => error instanceof Unavailable),
+      true,
+    )
+    ready = true
+    await time.advance(30_000)
+    equal(await feed.version(), 'one')
+  } finally {
+    feed.close()
+  }
+})
 
 test('idle trackers share one feed read per interval, and only moved scopes read bugs', async () => {
   let time = clock(), reads = 0, feeds = 0, revision = 0

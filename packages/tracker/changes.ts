@@ -24,7 +24,11 @@ export let changes = (
     if (!doors.changes) throw Error('Tracker has no change feed')
     let got = await doors.changes(tag, stop.signal)
     if (!got.ok) {
-      throw got.status >= 500 ? new Unavailable(got.error) : Error(got.error)
+      // A new Worker door can reach an object still on the previous deploy.
+      // The ordinary outage window reports one that never catches up.
+      throw got.status == 404 || got.status >= 500
+        ? new Unavailable(got.error)
+        : Error(got.error)
     }
     if (got.unchanged) return
     let value = got.value as { scopes?: { scope: string; tag: string }[] }
