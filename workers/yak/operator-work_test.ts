@@ -174,6 +174,7 @@ await dir.apply({
   entities: memberships.map((b) => ({ entity: b.entity, $delete: true })),
 }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
 let revokedRun = await ring(revoked)
+let [revokedWake] = await store.g.get([revoked.entity.eid])
 
 let once = 0, outcomes: string[] = []
 let replay = {
@@ -277,9 +278,10 @@ test('run records are private and wake_list exposes recent occurrences', () => {
   ok(listed.some((w: { call?: Comp }) => w.call?.args))
 })
 
-test('scheduled tools re-read the person permissions at execution', () => {
+test('a removed person’s scheduled tool never runs, and its schedule is cancelled', () => {
   equal(writes, 0)
-  ok(revokedRun.failed)
+  equal(revokedRun, undefined)
+  equal(!!revokedWake?.wake, false)
 })
 
 test('an interrupted occurrence reuses its recorded call outcome for the checking helper', () => {
