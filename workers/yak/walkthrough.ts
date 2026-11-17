@@ -110,7 +110,10 @@ export let walkthroughAt = async (
   if (!answer.ok) {
     throw new Error(`the walkthrough of ${app} was not read (${answer.status})`)
   }
-  return (await answer.json()).walkthrough ?? null
+  let { walkthrough } = await answer.json() as {
+    walkthrough?: Walkthrough | null
+  }
+  return walkthrough ?? null
 }
 
 /** A step as the served page shows it: its lines drawn, and the address of
