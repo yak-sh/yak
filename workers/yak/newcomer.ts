@@ -308,19 +308,21 @@ export let BUILDING = new Set([
   'store_writes',
 ])
 
-/** A tool as a newcomer meets it: the same tool, refusing them when it is not
- * one of BUILDING. Who is a newcomer is read when such a tool is called, so
- * the tools that build cost nobody a read. */
-export let confined = (ctx: Ctx, t: Tool): Tool =>
-  BUILDING.has(t.name ?? '') ? t : {
-    ...t,
-    run: async (...args) => {
-      if (ctx.person && await ctx.dir.newcomer(ctx.person)) {
-        throw refuse('access', KEEP)
-      }
-      return t.run(...args)
-    },
+/** Every execution channel asks the same question before running a tool. */
+export let permit = async (ctx: Ctx, name: string) => {
+  if (!BUILDING.has(name) && ctx.person && await ctx.dir.newcomer(ctx.person)) {
+    throw refuse('access', KEEP)
   }
+}
+
+/** Graph tools use the same execution policy as platform tools. */
+export let confined = (ctx: Ctx, t: Tool): Tool => ({
+  ...t,
+  run: async (...args) => {
+    await permit(ctx, t.name ?? '')
+    return t.run(...args)
+  },
+})
 
 // Bundles for the same rows as one bundle a row, each component's
 // properties together.
@@ -441,11 +443,20 @@ export let keep = async (
     line`.entity.eid=${was}&.newcomer&?email&?phone&?started`,
   ) as Row[]
   if (!came) return
+  let [[recipient], invitations] = await Promise.all([
+    was == person
+      ? Promise.resolve([came])
+      : meta(env).query(line`.entity.eid=${person}&?email&?phone&?started`),
+    meta(env).query(line`.invite.by=${was}`),
+  ])
+  if (!recipient?.email && !recipient?.phone) return
+  let withdrawn = invitations.map((r) => ({ entity: r.entity, tombstone: {} }))
   if (was == person) {
     let started = came.started?.space ? idOf(came.started.space) : ''
     let theirs = await dir.seats(person, 'owner')
     return await stamp(env, {
       entities: [
+        ...withdrawn,
         ...theirs.map((s) => ({
           entity: { eid: s.space.eid },
           budget: null,
@@ -464,7 +475,8 @@ export let keep = async (
   ])
   let first = !row?.started && theirs.length > 0
   let moved = joined([
-    ...handover(named as Bundle[], was, person),
+    ...withdrawn,
+    ...handover((named as Bundle[]).filter((r) => !r.invite), was, person),
     ...theirs.flatMap((s) => [
       {
         entity: { eid: s.seat },

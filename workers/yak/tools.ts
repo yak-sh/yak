@@ -1,3 +1,4 @@
+import { permit } from './newcomer.ts'
 import { type Line, line as ql } from '@yaks/query'
 import { base64, unbase64 } from './bytes.ts'
 import { groupBy, size } from '@yaks/fp'
@@ -8077,4 +8078,10 @@ export let TOOLS: Tool[] = [
   worded(mcpConnect),
   ...numberTools.map(worded),
   ...searchConsoleTools.map(worded),
-].map(accounted)
+].map(accounted).map((tool) => ({
+  ...tool,
+  run: async (ctx, args) => {
+    await permit(ctx, tool.name)
+    return tool.run(ctx, args)
+  },
+}))

@@ -305,9 +305,7 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
  */
 export let platform = (ctx: Ctx): Plugin => {
   let bound = (t: Sugar) =>
-    ctx.person || openly(t)
-      ? confined(ctx, sugared(ctx, t))
-      : barred(sugared(ctx, t), ctx.env)
+    ctx.person || openly(t) ? sugared(ctx, t) : barred(sugared(ctx, t), ctx.env)
   let signed = (t: Tool) => ctx.person ? confined(ctx, t) : barred(t, ctx.env)
   return {
     name: 'yak/platform',

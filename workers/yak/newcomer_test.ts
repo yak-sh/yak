@@ -9,7 +9,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { cleanup, test } from '@yaks/testing'
 import type { Tool } from '@yaks/graph'
-import { authorizing, fresh, mailed } from './probe.ts'
+import { authorizing, fresh, letters, mailed } from './probe.ts'
 import type { Env } from './env.ts'
 import {
   atCeiling,
@@ -24,6 +24,7 @@ import {
   DAILY,
   FULL,
   KEEP,
+  keep as keepNewcomer,
   KEEPING,
   opened,
   PER_BUILD,
@@ -100,6 +101,32 @@ let sitedSaid = parseHTML(
     { headers: { cookie } },
   )).text(),
 ).document.body.textContent ?? ''
+
+let landing = await k.at('yaks.app', '/login', { headers: { cookie } })
+await landing.body?.cancel()
+await keepNewcomer(env, k.dir, owner, owner)
+let afterLanding = {
+  newcomer: await k.dir.newcomer(owner),
+  budget: (await k.dir.at(space.eid))?.budget,
+}
+let forbidden = await k.at('yaks.app', `/manage/${space.slug}/people`, {
+  method: 'POST',
+  headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' },
+  body: new URLSearchParams({
+    invite: 'unasked@example.net',
+    role: 'owner',
+    note: 'Unasked note',
+  }),
+})
+let forbiddenSaid = await forbidden.text()
+let unasked = letters(k, 'unasked@example.net')
+let legacyInvite = crypto.randomUUID()
+await k.dir.stamp({
+  entities: [{
+    entity: { eid: legacyInvite },
+    invite: { to: space.eid, person: k.owner.person, role: 'owner', by: owner },
+  }],
+})
 
 let newcomer = await k.dir.newcomer(owner)
 let known = await k.dir.known(owner)
@@ -188,6 +215,18 @@ let ana = await person('ana@example.com')
 let anas = await k.dir.own(ana)
 let other = (await k.dir.space(spaceOf(second)))!
 let otherNewcomer = (await k.dir.owners(other))[0]
+let transferInvite = crypto.randomUUID()
+await k.dir.stamp({
+  entities: [{
+    entity: { eid: transferInvite },
+    invite: {
+      to: other.eid,
+      person: k.owner.person,
+      role: 'owner',
+      by: otherNewcomer,
+    },
+  }],
+})
 let browser = crypto.randomUUID()
 await k.dir.stamp({ entities: [{ entity: { eid: browser }, browser: {} }] })
 await k.dir.stamp({
@@ -562,4 +601,18 @@ test("the admin's Visitor builds page leaves a test account's build off unless a
     [...d.querySelectorAll('.Directory_Row strong')].map((s) => s.textContent)
   assertEquals(slugs(builds).includes(checkedSpace.slug), false)
   assertEquals(slugs(withTests).includes(checkedSpace.slug), true)
+})
+
+test('a landing without address proof keeps newcomer limits on the browser and People form', () => {
+  assertEquals(afterLanding.newcomer, true)
+  assertEquals(afterLanding.budget, PER_BUILD)
+  assert(forbiddenSaid.includes(KEEP), forbiddenSaid)
+  assertEquals(unasked, [])
+})
+
+test('keeping a newcomer withdraws invitations sent before address proof', async () => {
+  for (let eid of [legacyInvite, transferInvite]) {
+    assertEquals(await row(eid), [])
+    assertEquals(await k.dir.invitation(eid), null)
+  }
 })
