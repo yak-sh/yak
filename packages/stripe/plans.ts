@@ -29,7 +29,8 @@ import type {
   Subscription,
   Tags,
 } from '@yaks/host/payments'
-import { ask, type Keyed, StripeError } from './mod.ts'
+import { ask, type Keyed, list, StripeError } from './mod.ts'
+import { checkout } from './checkout.ts'
 
 /** What a config gives the plans: the key and clock every call is made with
  * (`Keyed`), and each tier's price ids by how often it is paid for, in the
@@ -254,12 +255,19 @@ export let plans = (options: Options): Plans => {
     on: () => !!options.key,
     offers: (tier, per) => !!options.key && !!price(tier, per),
     standing,
-    payer: async ({ email, name, tags }) => {
-      let made = await ask(options, '/v1/customers', {
-        email,
-        name,
-        metadata: tags,
-      })
+    payer: async ({ email, name, tags, key }) => {
+      let made = await ask(
+        options,
+        '/v1/customers',
+        {
+          email,
+          name,
+          metadata: tags,
+        },
+        undefined,
+        'POST',
+        key,
+      )
       let customer = String(made.id ?? '')
       if (!customer) throw new Error('stripe made a customer with no id')
       return customer
@@ -284,7 +292,7 @@ export let plans = (options: Options): Plans => {
       // `customer.subscription.*` event is read by. `allow_promotion_codes`
       // puts the code box on Stripe's page, the only place one belongs, since
       // Stripe is the seller and owns the price it charges.
-      let made = await ask(options, '/v1/checkout/sessions', {
+      return await checkout(options, asked, {
         mode: 'subscription',
         customer: asked.payer,
         line_items: { 0: { price: bought, quantity: 1 } },
@@ -299,9 +307,6 @@ export let plans = (options: Options): Plans => {
         managed_payments: { enabled: true },
         allow_promotion_codes: true,
       })
-      let url = String(made.url ?? '')
-      if (!url) throw new Error('stripe made a checkout session with no url')
-      return url
     },
     // A subscription sent its invoices rather than charged, made here and not
     // at Checkout: the invoices go to the customer's email, so the address
@@ -386,6 +391,17 @@ export let plans = (options: Options): Plans => {
       return url
     },
     subscription,
+    subscriptions: async (payer) => {
+      let out: Subscription[] = []
+      for await (
+        let sub of list<Sub & { id: string }>(options, '/v1/subscriptions', {
+          customer: payer,
+          status: 'all',
+          'expand[]': 'data.latest_invoice',
+        })
+      ) out.push(read(sub, options.prices))
+      return out
+    },
     charges,
     // The trial set to end then, prorating nothing.
     postpone: async (id, until) => {

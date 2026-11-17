@@ -43,6 +43,28 @@ export class StripeError extends Error {
   }
 }
 
+/** Rows from a Stripe list, including every page. */
+export let list = async function* <T extends { id: string }>(
+  at: Keyed,
+  path: string,
+  fields: Record<string, string>,
+): AsyncGenerator<T> {
+  let next: string | undefined
+  do {
+    let query = new URLSearchParams({
+      ...fields,
+      limit: '100',
+      ...next ? { starting_after: next } : {},
+    })
+    let page = await ask(at, `${path}?${query}`) as {
+      data: T[]
+      has_more: boolean
+    }
+    for (let row of page.data) yield row
+    next = page.has_more ? page.data.at(-1)?.id : undefined
+  } while (next)
+}
+
 // One call. A GET has no body; a POST is form-encoded, which is the only shape
 // Stripe's v1 API takes.
 //

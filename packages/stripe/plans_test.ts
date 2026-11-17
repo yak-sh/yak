@@ -174,7 +174,13 @@ test('subscribing while free starts with a trial as long as the free time, and t
 })
 
 test('checkout is a Managed Payments subscription carrying the tags and the trial', async () => {
-  using s = stripe(() => Response.json({ url: 'https://checkout' }))
+  using s = stripe((path) =>
+    Response.json(
+      path.includes('?')
+        ? { data: [], has_more: false }
+        : { url: 'https://checkout' },
+    )
+  )
   let url = await lent.checkout({
     payer: 'cus_1',
     tier: 'pro',
@@ -186,8 +192,11 @@ test('checkout is a Managed Payments subscription carrying the tags and the tria
     trial: '2026-12-05T15:00:00.000Z',
   })
   equal(url, 'https://checkout')
-  let body = Object.fromEntries(s.asked[0].body)
-  equal(s.asked[0].path, '/v1/checkout/sessions')
+  let made = s.asked.find((call) => call.method == 'POST')!
+  let body = Object.fromEntries(made.body)
+  equal(made.path, '/v1/checkout/sessions')
+  ok(body['metadata[_checkout]'])
+  delete body['metadata[_checkout]']
   equal(body, {
     mode: 'subscription',
     customer: 'cus_1',

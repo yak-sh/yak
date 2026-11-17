@@ -143,11 +143,14 @@ export type Plans = {
   /** where a subscription with this status stands */
   standing: (status: string) => Standing
   /** a new payer, its id */
-  payer: (who: { email: string; name: string; tags: Tags }) => Promise<string>
+  payer: (
+    who: { email: string; name: string; tags: Tags; key?: string },
+  ) => Promise<string>
   /** whom a payer is billed to; null where the provider holds none by that
    * id */
   billed: (payer: string) => Promise<{ email: string; name: string } | null>
-  /** the address of a hosted checkout */
+  /** One payable checkout per payer and reference: reuse the same choice,
+   * expire an earlier choice before opening another. */
   checkout: (asked: Checkout) => Promise<string>
   /** a subscription billed by invoice, made now: its first invoice is sent
    * within the hour, and it awaits that invoice's payment before it holds
@@ -160,6 +163,8 @@ export type Plans = {
   portal: (payer: string, back: string) => Promise<string>
   /** a subscription, or null where the provider holds none by that id */
   subscription: (id: string) => Promise<Subscription | null>
+  /** Every subscription this payer currently holds. */
+  subscriptions: (payer: string) => Promise<Subscription[]>
   /** when a subscription next charges; null where nothing says */
   charges: (id: string) => Promise<string | null>
   /** a subscription's next charge moved to `until`, prorating nothing,

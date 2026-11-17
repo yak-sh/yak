@@ -38,7 +38,11 @@ each webhook door's signing secret by its name.
 ## Plans
 
 `plans(options)` (`@yaks/stripe/plans`) sells a party its plan. A payer is a
-customer. Checkout is a subscription session under Managed Payments, which
+customer; a supplied payer key keeps retries on one customer. Checkout reuses
+the payer's matching open session for the same reference, expiring a different
+choice before creating its replacement. Concurrent requests share the creation
+key derived from the preceding session. Other references and one-off purchases
+are left alone. Checkout is a subscription session under Managed Payments, which
 Stripe sells as merchant of record, so it sends none of the parameters Stripe
 controls there; the tags ride the session's and the subscription's `metadata`,
 the reference its `client_reference_id`, and time given free a `trial_end` no

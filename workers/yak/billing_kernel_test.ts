@@ -293,7 +293,11 @@ test('an invoiced plan starts when its invoice is paid, and stops past due', asy
     if (!url.startsWith('https://api.stripe.com')) return real(input, init)
     let path = new URL(url).pathname
     return Promise.resolve(Response.json(
-      path.startsWith('/v1/subscriptions') ? stands : { id: 'cus_invoiced' },
+      path == '/v1/subscriptions' && (init?.method ?? 'GET') == 'GET'
+        ? { data: [stands], has_more: false }
+        : path.startsWith('/v1/subscriptions')
+        ? stands
+        : { id: 'cus_invoiced' },
     ))
   })
   let k = await fresh({

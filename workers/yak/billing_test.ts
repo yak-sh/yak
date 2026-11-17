@@ -178,6 +178,25 @@ test('a new subscription after a cancelled one is not refused', () => {
   assertEquals(moved(dead, fresh).tier, 'plus')
 })
 
+test('another subscription replaces the plan only when its standing is better', () => {
+  for (
+    let status of ['canceled', 'unpaid', 'incomplete', 'past_due', 'active']
+  ) {
+    assert(
+      stale(plan(), plan({ id: 'sub_2', status }, LATER), standing),
+      status,
+    )
+  }
+  assert(
+    !stale(
+      plan({ status: 'canceled' }, LATER),
+      plan({ id: 'sub_2' }),
+      standing,
+    ),
+  )
+  assert(!stale(plan({ status: 'past_due' }), plan({ id: 'sub_2' }), standing))
+})
+
 test('a first plan is never stale', () => {
   assert(!stale(null, plan(), standing))
   assertEquals(Object.keys(moved(null, plan())).length, 7)

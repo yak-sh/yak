@@ -16,7 +16,11 @@
 // event is refused by `stale`, and nothing can walk a cancelled plan back to
 // paid by arriving in the wrong order.
 //
-// Two rules make `stale`, and neither is a clock alone:
+// A different subscription replaces this one only with a better standing.
+// When the one holding the plan ends, the provider's other paid subscriptions
+// are read before the plan falls to free.
+//
+// Within one subscription, two rules make `stale`:
 //
 //   1. A subscription this row has already seen end is never revived. The
 //      provider never moves a subscription out of `ended`, so an event that
@@ -92,6 +96,11 @@ export type Stands = (status: string) => Standing
  * or owing while a failed charge is retried. */
 let holds = (standing: Standing) => standing == 'paying' || standing == 'owing'
 
+let strength = (plan: Plan, stands: Stands) =>
+  ['ended', 'lapsed', 'awaiting', 'owing', 'paying'].indexOf(
+    stands(plan.status),
+  )
+
 /** No plan yet: a space the provider has never billed. */
 let none: Plan = {
   tier: 'free',
@@ -120,6 +129,9 @@ export let planOf = (sub: Subscription, at: string, stands: Stands): Plan => ({
 // than the one that wrote the row is dropped.
 export let stale = (now: Plan | null, next: Plan, stands: Stands) => {
   if (!now) return false
+  if (now.subscription && now.subscription != next.subscription) {
+    return strength(next, stands) <= strength(now, stands)
+  }
   let ended = (plan: Plan) => stands(plan.status) == 'ended'
   if (
     now.subscription && now.subscription == next.subscription &&
@@ -226,6 +238,7 @@ let payerFor = async (
 ) => {
   if (space.plan?.customer) return space.plan.customer
   let customer = await lent.payer({
+    key: `payer|${space.eid}`,
     email,
     name: space.title,
     tags: tagsOf(env, space),
@@ -728,7 +741,34 @@ export let apply = async (env: Env, heard: Changed) => {
     )
     return 'unattributed'
   }
-  return await follow(env, dir, space, next, lent.standing)
+  if (stale(space.plan, next, lent.standing)) return 'stale'
+  // A different subscription's snapshot may itself be old. Read its current
+  // standing before replacing the subscription this space already knows.
+  if (
+    space.plan?.subscription && space.plan.subscription != next.subscription &&
+    lent.on()
+  ) {
+    let current = await lent.subscription(next.subscription)
+    if (!current) return 'stale'
+    next = planOf(current, heard.at, lent.standing)
+  }
+  let others = space.plan?.subscription == next.subscription &&
+      strength(next, lent.standing) < strength(space.plan, lent.standing) &&
+      lent.on()
+    ? (await lent.subscriptions(next.customer)).filter((other) =>
+      other.id != next.subscription && holds(lent.standing(other.status)) &&
+      (!other.tags.space || other.tags.space == space.eid) &&
+      !elsewhere(other.tags, here)
+    )
+    : []
+  return await follow(
+    env,
+    dir,
+    space,
+    next,
+    lent.standing,
+    others.map((other) => planOf(other, heard.at, lent.standing)),
+  )
 }
 
 // A space's plan moved to the row one subscription derives, unless that row
@@ -740,8 +780,12 @@ let follow = async (
   space: Space,
   next: Plan,
   stands: Stands,
+  others: Plan[] = [],
 ) => {
   if (stale(space.plan, next, stands)) return 'stale'
+  for (let other of others) {
+    if (strength(other, stands) > strength(next, stands)) next = other
+  }
   let changed = moved(space.plan, next)
   if (!Object.keys(changed).length) return 'unchanged'
   await stamp(env, {
