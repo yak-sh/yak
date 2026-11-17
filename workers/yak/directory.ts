@@ -65,7 +65,7 @@ import type { Rec } from './domains.ts'
 import { type Fetcher, STATIC_QUERY, storeOf } from './door.ts'
 import { type Door, type Namespace } from '@yaks/durable-object/door'
 import { PLATFORM_STORE, SLUG } from '@yaks/platform/names'
-import { ADMIN } from '@yaks/platform/bots'
+import { ADMIN, isTestAddress } from '@yaks/platform/bots'
 import {
   ambient,
   forget,
@@ -804,7 +804,7 @@ export type Row = MeteredRow & {
     cache_retention?: number | null
   }
   started?: { space?: Id | null }
-  newcomer?: { at?: string; campaign?: string | null }
+  newcomer?: { at?: string; campaign?: string | null; client?: string | null }
   visitor_build?: { at?: string }
   preview?: { site?: string | null; at?: string | null }
   created?: { at?: string; by?: Id | null }
@@ -887,6 +887,14 @@ export type Row = MeteredRow & {
  * signed their browser in, and they have no address and no number yet. */
 export let newcomerIs = (r?: Pick<Row, 'newcomer' | 'email' | 'phone'>) =>
   !!r?.newcomer && !r.email && !r.phone
+
+/** Whether a person's row is nobody's: a test account (@yaks/platform/bots
+ * `isTestAddress`), or a newcomer a browser did not open (`newcomer.client`),
+ * such as an agent checking the home page's box. A newcomer from before the
+ * box said its client is a person's: the safe direction to be wrong in. */
+export let testIs = (r?: Pick<Row, 'newcomer' | 'email'>) =>
+  isTestAddress(r?.email?.address ?? '') ||
+  ![undefined, null, 'browser'].includes(r?.newcomer?.client)
 
 // A person's address as a hostname label: the local part, lowercased, with
 // anything that is not a slug character folded to a dash. `jeff@yak.sh`
@@ -2017,7 +2025,7 @@ let heldOf = (rows: ReadRow[]) =>
 
 /** Whom a funnel step is for, and the campaign it counts under
  * (`stepper`). */
-export type Stepper = { who: string | null; campaign: string }
+export type Stepper = { who: string | null; campaign: string; test: boolean }
 
 /** What to call a person, where their letters go and the number they gave. */
 export type Known = { name: string; email: string; phone: string | null }
@@ -3651,14 +3659,20 @@ export let directoryRows = (rows: {
     // Whether this person is a newcomer (`newcomerIs`).
     newcomer: async (person: string) =>
       newcomerIs(await one(line`.entity.eid=${person}`)),
+    // Whether this person is nobody's (`testIs`): what a failure, an app's
+    // error or a funnel step of theirs is tagged with.
+    tested: async (person: string) =>
+      testIs(await one(line`.entity.eid=${person}`)),
     // Whom a funnel step this person takes away from any request is for, and
-    // the campaign it counts under (funnel.ts `step`): their address, and the
-    // campaign a newcomer came to the box by (identity.ts `begun`).
+    // the campaign it counts under (funnel.ts `step`): their address, the
+    // campaign a newcomer came to the box by (identity.ts `begun`), and
+    // whether they are nobody's (`testIs`).
     stepper: async (person: string): Promise<Stepper> => {
       let row = await one(line`.entity.eid=${person}`)
       return {
         who: row?.email?.address ?? null,
         campaign: row?.newcomer?.campaign ?? '',
+        test: testIs(row),
       }
     },
     // All at once, from the person's one row: what to call them, where to

@@ -19,7 +19,6 @@ import {
   type WindowClock,
 } from '@yaks/tracker/report'
 import type { Env } from './env.ts'
-import { isTestAddress } from '@yaks/platform/bots'
 import { Pending } from '@yaks/api/log'
 import { moved } from '@yaks/durable-object/resets'
 import { stopped } from '@yaks/durable-object/ceiling'
@@ -318,14 +317,11 @@ let aimedAt = (args: unknown): { space?: string; app?: string } => {
 
 let accountOf = async (ctx: Ctx): Promise<Hit | undefined> => {
   if (!ctx.person) return undefined
-  let email = await ctx.dir.emailAt(ctx.person).catch((error) => {
+  let test = await ctx.dir.tested(ctx.person).catch((error) => {
     caught(error, { request: 'read reporting account', person: ctx.person })
-    return null
+    return false
   })
-  return {
-    id: ctx.person,
-    account: isTestAddress(email ?? '') ? 'test' : 'person',
-  }
+  return { id: ctx.person, account: test ? 'test' : 'person' }
 }
 
 /** A connector failure keeps the named tool, space, app, client and account. */

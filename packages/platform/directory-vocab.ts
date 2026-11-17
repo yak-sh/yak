@@ -483,13 +483,19 @@ export let directoryDoc: VocabDoc = {
     // (erase.ts `vacated`). `campaign` is the one their arrival named
     // (arrival.ts `campaign`), '' for none, which the funnel counts their
     // steps under when no request of theirs is there to say it (directory.ts
-    // `stepper`).
+    // `stepper`). `client` is what kind of client opened it, as the funnel
+    // says it (crawlers.ts `classed`): `browser`, `agent` or `bot`, or `test`
+    // for one whose arrival names an agent's check (@yaks/platform/bots
+    // `CHECK`). Only a browser's is a person's (directory.ts `testIs`): a
+    // script's, such as an agent checking the box through curl or Deno's
+    // fetch, is counted apart.
     newcomer: {
       component: true,
       type: 'object',
       properties: {
         at: { type: 'string', format: 'date-time' },
         campaign: text,
+        client: { type: 'string', enum: ['browser', 'agent', 'bot', 'test'] },
       },
     },
     // When the home page's box opened this space for a newcomer

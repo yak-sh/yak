@@ -40,7 +40,6 @@ import {
 } from '@yaks/tracker/report'
 import { errorsAt, errorsIn, type Send } from './app-errors.ts'
 import { refuse } from './tool.ts'
-import { isTestAddress } from '@yaks/platform/bots'
 
 // A refusal is NOT a break (C-32652 item 3, T-32655; C-32869 item 5) — one
 // rule, read off whichever half of the answer the platform is holding.
@@ -112,8 +111,8 @@ let pushes = flood(10)
 let hushed = (space: Space, app: App) => pushes(`${space.slug}/${app.slug}`)
 
 // Whose a space is, as a failure's `account` tag: `test` when every member is
-// a test account (@yaks/platform/bots), so the owner's letter says a probe broke, not
-// a person's app. Asked once a space per ten minutes in an isolate; a lookup
+// nobody's (directory.ts `testIs`), a test account or an agent's check's
+// newcomer, so the owner's letter says a probe broke, not a person's app. Asked once a space per ten minutes in an isolate; a lookup
 // that fails leaves the tag off rather than guessing.
 let owners = new Map<string, { until: number; account: string }>()
 let ownedBy = async (env: Env, space: Space): Promise<string | undefined> => {
@@ -122,10 +121,8 @@ let ownedBy = async (env: Env, space: Space): Promise<string | undefined> => {
   try {
     let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
     let members = await dir.members(space)
-    let emails = await Promise.all(members.map((p) => dir.emailAt(p)))
-    let account = members.length && emails.every((e) => isTestAddress(e ?? ''))
-      ? 'test'
-      : 'person'
+    let tests = await Promise.all(members.map((p) => dir.tested(p)))
+    let account = members.length && tests.every(Boolean) ? 'test' : 'person'
     if (owners.size > 1000) owners.clear()
     owners.set(space.eid, { until: Date.now() + 600_000, account })
     return account

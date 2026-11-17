@@ -127,22 +127,27 @@ export type Who = string | null | readonly (string | null)[]
  * as an agent going through the sign-up live, counts as nothing. One for a
  * test account (`who`, @yaks/platform/bots), such as an agent signing up
  * through a browser, is counted apart from a person's. One taken away from a
- * request counts under the `campaign` its taker came by (directory.ts
- * `stepper`), so an agent's check's newcomer building is counted apart too.
+ * request counts under the `campaign` its taker came by, and apart when its
+ * taker is nobody's (`test`, directory.ts `stepper`), so an agent's check's
+ * newcomer building is counted apart too.
  */
 export let step = (
   env: Pick<Env, 'VIEWS'>,
   name: Step,
   req?: Request,
-  { button, who, campaign }: { button?: string; who?: Who; campaign?: string } =
-    {},
+  { button, who, campaign, test }: {
+    button?: string
+    who?: Who
+    campaign?: string
+    test?: boolean
+  } = {},
 ) => {
   if (!env.VIEWS || (req && !isPerson(req))) return
   try {
     env.VIEWS.writeDataPoint(
       stepOf(name, req as Visited | undefined, {
         button,
-        test: tested(who),
+        test: test || tested(who),
         came: campaign,
       }),
     )

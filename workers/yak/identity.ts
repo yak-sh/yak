@@ -236,6 +236,8 @@ import { versionOf } from './running.ts'
 import { background, caught, defect, failing, refusing } from './defects.ts'
 import { step } from './funnel.ts'
 import { arrival, campaign } from './arrival.ts'
+import { classed } from './crawlers.ts'
+import { CHECK } from '@yaks/platform/bots'
 import * as ads from './ads.ts'
 import { Blocked, consentEid, shown } from '@yaks/phone'
 import { sendable, Undeliverable } from '@yaks/mail'
@@ -1037,12 +1039,16 @@ let begun = async (
       return signCard(env, { why: FULL, status: 429 })
     }
     person = crypto.randomUUID()
+    let came = campaign(arrival(req))
     await meta(env).apply([{
       entity: { eid: person },
       person: {},
+      // A script's newcomer, or an agent's check's, is nobody's
+      // (directory.ts `testIs`), whatever it goes on to build.
       newcomer: {
         at: new Date().toISOString(),
-        campaign: campaign(arrival(req)),
+        campaign: came,
+        client: came.startsWith(`${CHECK}/`) ? 'test' : classed(req),
       },
     }], KERNEL)
     set = await minted(req, env, secret(env), person)

@@ -149,11 +149,32 @@ versions of the Operator takes dozens of runs an arm: 16 could not tell 82% from
 the run itself (`operator_read`: its session's `fixed{parts}` holds each tool
 definition's size, and each tool answer's text is in its entry), not from the
 clock. A script run in the background can find another `yak` first on its PATH;
-name `~/.deno/bin/yak` in it. A check of yaks.app's own pages or funnel tags its
-visit `utm_source=agent-check` (@yaks/platform/bots `CHECK`), in its link or
-its `yak_came` cookie, so whatever it clicks or starts counts apart from
-people's. Acting as the owner is his to grant (M-31958). The box's own server runs main after `yak restart`. The platform
-itself is `yaks-app`.
+name `~/.deno/bin/yak` in it. Acting as the owner is his to grant (M-31958).
+The box's own server runs main after `yak restart`. The platform itself is
+`yaks-app`.
+
+### Checking the public pages as a stranger
+
+A visitor who opens yaks.app's pages, types in a box or signs up is read as a
+person in /admin, the funnel and the people list, unless their visit says
+otherwise. Jeff, after an agent's check through the /churches box showed up in
+admin as an anonymous visitor:
+
+> yeah, just add someway to mark every demo so we don't get confused. or use
+> staging
+
+- **Staging first.** Check the home page, its variants (/churches), the box,
+  sign-up and the funnel as a stranger on staging, `https://yaks.fyi`. It
+  deploys the same commit right after production, and nothing a check leaves
+  there reaches production's admin or funnel.
+- **On yaks.app, send it with curl or Deno's fetch, as they are.** Their user
+  agents name them as scripts. The newcomer the box opens for a script, and
+  every step, failure and app error after it, is counted apart from people
+  (workers/yak directory.ts `testIs`, crawlers.ts `classed`). Never set a
+  browser's user agent on a check.
+- **A check that has to look like a browser** tags its visit
+  `utm_source=agent-check` (@yaks/platform/bots `CHECK`), in its link or its
+  `yak_came` cookie. Its newcomer is then a test too.
 
 ## Seeing a live page at a width
 

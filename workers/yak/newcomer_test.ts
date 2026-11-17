@@ -50,12 +50,18 @@ let k = await fresh({}, (e) => {
 })
 cleanup(() => k.stop())
 
-let build = (say: string, { ip = '', cookie = '', org = '' } = {}) =>
+// A person's browser, unless a build says what else asked.
+let BROWSER = 'Mozilla/5.0 (Macintosh) AppleWebKit Safari'
+let build = (
+  say: string,
+  { ip = '', cookie = '', org = '', ua = BROWSER } = {},
+) =>
   k.at('yaks.app', START, {
     method: 'POST',
     redirect: 'manual',
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
+      'user-agent': ua,
       ...ip ? { 'cf-connecting-ip': ip } : {},
       ...cookie ? { cookie } : {},
     },
@@ -291,6 +297,18 @@ let keptByLink = await signIn('/login/link', {
   t: letter.searchParams.get('t')!,
 }, cookieOf(checked))
 let checkerRow = (await row(checker))[0]
+
+// An agent checking the box through a script, curl here, tags nothing: the
+// newcomer it opens is nobody's all the same, and stays off the admin's page
+// and out of the funnel's people.
+let scripted = await build('A prayer list', {
+  ip: '203.0.113.12',
+  ua: 'curl/8.5.0',
+})
+let scriptedSpace = (await k.dir.space(spaceOf(scripted)))!
+let scripter = (await k.dir.owners(scriptedSpace))[0]
+let scripterSteps = await k.dir.stepper(scripter)
+let tested = [await k.dir.tested(scripter), await k.dir.tested(owner)]
 let linkedSignedIn = await signed(cookieOf(keptByLink))
 let linkedOldCookie = await signed(cookieOf(checked))
 await keptByLink.body?.cancel()
@@ -394,8 +412,13 @@ test('a newcomer is a person with no address yet', () => {
 })
 
 test("a newcomer's steps away from the box count under the campaign they came to it by", () => {
-  assertEquals(steps, { who: null, campaign: '' })
-  assertEquals(checkerSteps, { who: null, campaign: `${CHECK}//` })
+  assertEquals(steps, { who: null, campaign: '', test: false })
+  assertEquals(checkerSteps, { who: null, campaign: `${CHECK}//`, test: true })
+})
+
+test("a newcomer a script opened is nobody's before it has any address", () => {
+  assertEquals(scripterSteps, { who: null, campaign: '', test: true })
+  assertEquals(tested, [true, false])
 })
 
 test("keeping into an account takes the newcomer's browser, and their row goes", () => {
@@ -569,7 +592,7 @@ test('a newcomer builds, and is asked for an address before anything else', asyn
 })
 
 test("the admin's Visitor builds page says today's builds against the day's, and who kept each", () => {
-  assertEquals(today, 4)
+  assertEquals(today, 5)
   let said = (el: ParentNode) =>
     Object.fromEntries(
       [...el.querySelectorAll('dl > div')].map((d) => [
@@ -579,7 +602,7 @@ test("the admin's Visitor builds page says today's builds against the day's, and
     )
   let facts = said(builds.querySelector('.Directory_Facts')!)
   assertEquals([facts['Opened today'], facts.Kept], [
-    `4 of ${DAILY}`,
+    `5 of ${DAILY}`,
     '2 of 3',
   ])
   let rows = [...builds.querySelectorAll('.Directory_Row')].map((row) => [
@@ -599,8 +622,10 @@ test("the admin's Visitor builds page says today's builds against the day's, and
 test("the admin's Visitor builds page leaves a test account's build off unless asked for tests", () => {
   let slugs = (d: Document) =>
     [...d.querySelectorAll('.Directory_Row strong')].map((s) => s.textContent)
-  assertEquals(slugs(builds).includes(checkedSpace.slug), false)
-  assertEquals(slugs(withTests).includes(checkedSpace.slug), true)
+  for (let test of [checkedSpace, scriptedSpace]) {
+    assertEquals(slugs(builds).includes(test.slug), false)
+    assertEquals(slugs(withTests).includes(test.slug), true)
+  }
 })
 
 test('a landing without address proof keeps newcomer limits on the browser and People form', () => {

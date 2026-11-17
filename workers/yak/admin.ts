@@ -47,11 +47,11 @@ import {
   type Row,
   type Space,
   spaceOf,
+  testIs,
 } from './directory.ts'
 import { paid } from '@yaks/platform/plans'
 import { budget, monthOf, starterOf } from '@yaks/platform/meter'
 import { DAILY, opened, PER_BUILD, PER_SOURCE } from './newcomer.ts'
-import { isTestAddress } from '@yaks/platform/bots'
 import { sessionAt } from './session.ts'
 import { drawn } from './render/mod.ts'
 import { type Ref, type Uses } from './render/directory.ts'
@@ -139,8 +139,10 @@ let days = (
  * when it was last deployed, written to and last reported an error, who owns its
  * space and its latest use. A person: their budget over the
  * spaces they own, those spaces' storage and apps, and the latest of their last
- * use (a tool call, a page view), last sign-in and their spaces' latest use. A space is a test space when everyone seated in it is
- * a test account, and its apps are test apps.
+ * use (a tool call, a page view), last sign-in and their spaces' latest use.
+ * A person is a test when they are nobody's (directory.ts `testIs`): a test
+ * account, or a newcomer an agent's check opened. A space is a test space when
+ * everyone seated in it is a test, and its apps are test apps.
  */
 export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
   let month = monthOf(now)
@@ -150,13 +152,10 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
   let everyIn = group(c.apps, appSpace)
   let seatsIn = group(c.seats, seatSpace)
   let seatsOf = group(c.seats, seatPerson)
-  let emails = new Map(
-    c.people.map((r) => [r.entity.eid, r.email?.address ?? '']),
-  )
+  let tests = new Set(c.people.filter(testIs).map((r) => r.entity.eid))
   let tested = (space: string) => {
     let seats = seatsIn.get(space) ?? []
-    return seats.length > 0 &&
-      seats.every((s) => isTestAddress(emails.get(seatPerson(s)) ?? ''))
+    return seats.length > 0 && seats.every((s) => tests.has(seatPerson(s)))
   }
   // What each space holds and each app's share, those in the trash included
   // (held.ts): app data and photos and files together.
@@ -224,7 +223,7 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
         r.signed_in?.at,
         ...owned.map((s) => out.get(s.eid)?.active),
       ),
-      test: isTestAddress(r.email?.address ?? ''),
+      test: tests.has(r.entity.eid),
     })
   }
   return out

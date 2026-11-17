@@ -69,10 +69,10 @@ test('a defect is sent with its tags and the person who hit it', async (s) => {
 
 test('a connector tool names the tool, space, app, client and account', async (s) => {
   let { seen, done } = s
-  let ctx = (email: string) =>
+  let ctx = (test: boolean) =>
     ({
       person: 'p-1',
-      dir: { emailAt: () => Promise.resolve(email) },
+      dir: { tested: () => Promise.resolve(test) },
     }) as unknown as Ctx
   let call = {
     entity: { eid: 'c' },
@@ -81,12 +81,12 @@ test('a connector tool names the tool, space, app, client and account', async (s
       args: { space: 'jeff', app: 'recipes', text: 'secret' },
     },
   }
-  await reporter(ctx('probe-1@bot.yak.sh'), 'claude-ai')(
+  await reporter(ctx(true), 'claude-ai')(
     errors[1],
     call,
     'app_new',
   )
-  await reporter(ctx('jeff@yak.sh'))(errors[2], call, 'app_new')
+  await reporter(ctx(false))(errors[2], call, 'app_new')
   await done()
   assertEquals(seen.map((e) => tagsOf(e)), [
     {
