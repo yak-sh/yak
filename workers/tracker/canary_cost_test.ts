@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { equal, ok, test } from '@yaks/testing'
 import { storage } from '@yaks/sqlite'
 import { stepping } from '../../packages/sqlite/testing.ts'
@@ -24,7 +25,7 @@ let confirming = async (reports: number) => {
       let url = new URL(request.url)
       return url.pathname == '/bundle'
         ? json({ hash })
-        : json(await tracker.graph.read(url.searchParams.get('q')!))
+        : json(await tracker.graph.read(whole(url.searchParams.get('q')!)))
     },
     ingest: tracker.ingest,
   } as Stub

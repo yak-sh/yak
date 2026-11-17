@@ -28,6 +28,7 @@
 // firing forgets the occurrences behind them once their report has left and
 // they are `KEPT` old (`forgotten`). One never counted, or counted in a
 // letter still waiting on the mail, stays until it is reported.
+import { line } from '@yaks/query'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { argsOf, derivedEid, who } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
@@ -159,7 +160,7 @@ let text = (c: Comp | undefined, k: string) =>
 export let reportOf = (at: string) => derivedEid(`refusal_report ${at}`)
 
 /** The query reading every occurrence a report counted. */
-export let countedIn = (report: string) => `.counted.report=${report} *`
+export let countedIn = (report: string) => line`.counted.report=${report} *`
 
 /** The letter for a report's occurrences, grouped by tool, code and cause,
  * the most refused first. */
@@ -238,7 +239,7 @@ export let reported = async (
   let [held] = await g.get([report])
   if (held && !held.tombstone) return report
   let rows = await g.read(
-    `.tool_refusal !counted * .order=tool_refusal.at .limit=${most}`,
+    line`.tool_refusal !counted * .order=tool_refusal.at .limit=${most}`,
   ) as Row[]
   if (!rows.length) return null
   let { title, body } = letter(report, rows)
@@ -267,7 +268,7 @@ export let forgotten = async (
 ): Promise<number> => {
   let before = new Date(Date.parse(at) - KEPT).toISOString()
   let rows = await g.read(
-    `.tool_refusal.at<="${before}" .counted.report.delivered .limit=${most}`,
+    line`.tool_refusal.at<=${before} .counted.report.delivered .limit=${most}`,
   )
   if (!rows.length) return 0
   await g.apply(

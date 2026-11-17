@@ -5,6 +5,7 @@
 // synchronously (./steps.ts): a Durable Object's commits when the body
 // returns.
 
+import { line } from '@yaks/query'
 import type { Bundle, Comp, ReadTx } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import type { Vocab } from '@yaks/vocab'
@@ -31,7 +32,7 @@ export let preserve = (
       })
     }
     let old = yield* step(tx.read(
-      `.build.builder=${builder.entity.eid}&.build.key&!build.inputs&*`,
+      line`.build.builder=${builder.entity.eid}&.build.key&!build.inputs&*`,
     ))
     let missing = old.filter((row) => {
       let b = row.build as Comp

@@ -1,5 +1,6 @@
 // The duty, and the contest for it.
 
+import { line } from '@yaks/query'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { Stale } from '@yaks/graph/errors'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
@@ -164,7 +165,10 @@ test('the holder renews its own, and a rival has to wait out the lapse', async (
     await take(graph, 'sweep', { holder: 'p1', hold: 100, now: at(50) }),
     true,
   )
-  assertEquals((await held(graph, 'sweep'))?.until, new Date(150).toISOString())
+  assertEquals(
+    (await held(graph, 'sweep'))?.until,
+    new Date(150).toISOString(),
+  )
   // Still held at 120 because the renewal pushed it out…
   assertEquals(
     await take(graph, 'sweep', { holder: 'p2', hold: 100, now: at(120) }),
@@ -275,7 +279,7 @@ test('the take is a precondition, so two askers at one instant cannot both win',
     take(graph, 'sweep', { holder: 'p2', now: at(0) }),
   ])
   assertEquals(both.filter(Boolean).length, 1)
-  let row = (await graph.read(`.${LEASE}`))[0][LEASE] as Comp
+  let row = (await graph.read(line`.${LEASE}`))[0][LEASE] as Comp
   assert(row.holder == 'p1' || row.holder == 'p2', String(row.holder))
 })
 

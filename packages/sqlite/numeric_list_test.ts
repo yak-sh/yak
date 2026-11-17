@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -78,7 +79,7 @@ let queries = [
 let ids = (bs: Bundle[]) => bs.map((b) => b.entity.eid).sort()
 let rowIds = (rows: Row[]) => rows.map((row) => String(row.eid)).sort()
 for (let q of queries) {
-  let expected = ids(await memory.read(q))
+  let expected = ids(await memory.read(whole(q)))
   test(`numeric lists preserve query membership: ${q}`, () => {
     equal(rowIds(stored.rows(q)), expected)
   })
@@ -112,7 +113,7 @@ test('numeric list gates preserve page cursors', async () => {
 })
 let scopedQuery = '.point.x=10,11,12,13'
 let scope = { visibility: { entity: `.point.x=10,12` } }
-let visible = ids(await memory.read(scopedQuery, scope))
+let visible = ids(await memory.read(whole(scopedQuery), scope))
 test('numeric lists preserve scoped visibility', () => {
   equal(rowIds(stored.rows(scopedQuery, scope)), visible)
 })

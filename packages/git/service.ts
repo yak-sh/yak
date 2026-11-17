@@ -1,4 +1,5 @@
 import * as io from '@yaks/file/io'
+import { line } from '@yaks/query'
 // Host-checkout maintenance: idle, landed worktrees can be reclaimed only
 // when no graph session's explicitly attached machine or local process uses
 // them. Machine-provisioned sandboxes are their provider's business, not this
@@ -142,7 +143,7 @@ export let service = async (
     let filesystem = await localFilesystem(host.graph)
     for (
       let r of await host.graph.read(
-        '.repository.workspace=' + filesystem.entity.eid,
+        line`.repository.workspace=${filesystem.entity.eid}`,
       )
     ) {
       if (stopping?.aborted) return

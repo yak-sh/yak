@@ -1,6 +1,7 @@
 /** @jsxImportSource preact */
 // A project's inbox line names and opens the thing that asked for attention,
 // in the policy's order, with the whole count above a bounded list.
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
@@ -23,7 +24,7 @@ let assigned = (n: number) =>
   }))
 let drawn = async (rows: Bundle[], ctx = {}) => {
   let g = await shop([project, ...rows])
-  let h = host({ read: (l) => g.read(l) })
+  let h = host({ read: (l) => g.read(whole(l)) })
   let seen = mount(<h.Door e={project} view='Inbox' ctx={ctx} />)
   await wait(() => !!seen.root.querySelector('.Section_Sub'), 'the list')
   return { h, seen }

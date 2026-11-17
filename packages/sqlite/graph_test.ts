@@ -3,6 +3,7 @@
 // stores. These hold the seam where the two meet — including the death words,
 // which used to be SQL in here and are now a rule read off the vocabulary.
 
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { isPromise } from '@yaks/fp'
@@ -26,7 +27,7 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 }
 
 let one = (g: ReturnType<typeof shopGraph>, q: string) =>
-  (g.read(q) as Bundle[])[0]
+  (g.read(whole(q)) as Bundle[])[0]
 
 let journalSchema = snapshot(shop, {}, ddl())
 let journalStore = preparedStore(shop, {}, journalSchema)
@@ -201,7 +202,7 @@ let empty = { entity: '!review' }
 let tombs = (bs: Bundle[]) => bs.map((b) => [b.entity.eid, !!b.tombstone])
 let mourn = (graves?: boolean, visibility?: Visibility) =>
   ['.entity.eid=p9', '.entity.eid=p9&.order=entity.eid'].map((q) =>
-    tombs(mourned.read(q, { graves, visibility }) as Bundle[])
+    tombs(mourned.read(whole(q), { graves, visibility }) as Bundle[])
   )
 let mourning = [
   mourn(),

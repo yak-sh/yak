@@ -3,7 +3,7 @@ import { fileDoc } from '@yaks/file/vocab'
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { type Bundle, type Comp, graph } from '@yaks/graph'
+import { type Bundle, type Comp, type Graph, graph } from '@yaks/graph'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { effectDoc, type Effects, effects, POOL, take } from '@yaks/effects'
 import { modelDoc } from '@yaks/model'
@@ -73,8 +73,8 @@ let watching = (g: ReturnType<typeof tracked>, o: Record<string, unknown>) =>
     spawning({ adapters: { fake }, launch: launched, ...o })({ graph: g.g }),
   )
 
-let said = (g: { read: (q: string) => unknown }) =>
-  g.read('.entry&.order=entry.seq&*') as Promise<Bundle[]>
+let said = async (g: Pick<Graph, 'read'>) =>
+  await g.read('.entry&.order=entry.seq&*')
 
 // The persona a run starts with: the instruction its provider was given.
 let persona = async (...rows: Bundle[]) => {

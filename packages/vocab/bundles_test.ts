@@ -2,6 +2,7 @@
 // @yaks/ram: what loads from the bundles is what loaded from the documents,
 // and the queries that describe a vocabulary answer from its entities.
 
+import { line, whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { docDoc } from '@yaks/doc/vocab'
@@ -159,7 +160,10 @@ test('a saved peer-relayed declaration survives a vocabulary bundle roundtrip', 
   }
   let back = load(fromBundles(toBundles(doc, plain)))
   assertEquals(facts(back), facts(load([doc])))
-  assertEquals(back.def('position')?.save, '!position | .updated.at<="30s ago"')
+  assertEquals(
+    back.def('position')?.save,
+    '!position | .updated.at<="30s ago"',
+  )
   assertEquals(saveOf(back, 'position'), '!position | .updated.at<="30s ago"')
 })
 
@@ -228,7 +232,9 @@ let described = () => {
   let put = (docs: VocabDoc[]) =>
     g.apply(bundlesOf(docs, id) as Bundle[], { trusted: true })
   let titles = async (q: string) =>
-    (await g.read(`${q} ?doc`)).map((b) => (b.doc as { title: string }).title)
+    (await g.read(whole(`${q} ?doc`))).map((b) =>
+      (b.doc as { title: string }).title
+    )
   return { g, id, put, titles }
 }
 
@@ -292,7 +298,9 @@ test('the queries that describe a vocabulary answer from its entities', async ()
   )
   assertEquals(await titles('._prop.ref=note'), ['recipe.book'])
   let before = await g.read(
-    `._before .edge.from=${id('_kind', { name: 'recipe' })} .order=edge.ord`,
+    line`._before .edge.from=${
+      id('_kind', { name: 'recipe' })
+    } .order=edge.ord`,
   )
   assertEquals(
     before.map((b) => (b.edge as { to: string }).to),

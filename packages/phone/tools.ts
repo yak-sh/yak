@@ -7,6 +7,7 @@ import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { argsOf, referenced } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
 import { CallError } from '@yaks/tools/errors'
+import { line } from '@yaks/query'
 import { consentEid } from './mod.ts'
 import { mobile } from './mobile.ts'
 
@@ -17,7 +18,7 @@ let reached = async (graph: Graph, to: string): Promise<Eid | undefined> => {
   let number = /[a-z]/i.test(to) ? null : mobile(to)
   if (number) {
     let [found] = await graph.read(
-      `.phone.number=${JSON.stringify(number)}&.fields=phone.number`,
+      line`.phone.number=${number}&.fields=phone.number`,
     )
     return found?.entity.eid
   }

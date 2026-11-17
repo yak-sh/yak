@@ -1,5 +1,6 @@
 // Synthetic rollouts exercise the same bounded discovery and importer as the
 // duty. No provider process or private transcript is needed to read one.
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Bundle, type Comp, type Graph, identityEid } from '@yaks/graph'
@@ -98,7 +99,7 @@ Deno.writeTextFileSync(
   ),
 )
 let rows = async (graph: typeof g) =>
-  await graph.read(`.entry.session=${id} .order=entry.seq *`)
+  await graph.read(line`.entry.session=${id} .order=entry.seq *`)
 let body = (b: Bundle) => (b.content as Comp | undefined)?.body
 
 let execRun = await (async () => {
@@ -112,8 +113,10 @@ let execRun = await (async () => {
   )
   await read(graph, seen(), { person: ids.ada })
   Deno.removeSync(path(run))
-  let [session] = await graph.read(`.session.id=${run} ?session`)
-  let said = await graph.read(`.entry.session=${session.entity.eid} .content *`)
+  let [session] = await graph.read(line`.session.id=${run} ?session`)
+  let said = await graph.read(
+    line`.entry.session=${session.entity.eid} .content *`,
+  )
   return {
     session,
     owners: said.filter((b) => (b.created as Comp).by == ids.ada),
@@ -254,7 +257,7 @@ let stamps = async () =>
 let stamped = await stamps()
 await read(childGraph, seen(), { person: ids.ada })
 let restamped = await stamps()
-let childEntries = await childGraph.read(`.entry.session=${child} *`)
+let childEntries = await childGraph.read(line`.entry.session=${child} *`)
 Deno.utimeSync(path(id), new Date(0), new Date(0))
 // A month on, both rollouts are old. A look reads one old rollout, whichever
 // the filesystem lists first (tmpfs lists the newest file first), so two

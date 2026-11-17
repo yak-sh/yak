@@ -6,6 +6,7 @@
 // {@link unworded}, {@link respelled}). The schema its words compose is
 // store-schema.ts's. {@link BOUNDARIES} names the stored shapes this code
 // reads, for `yak admin deploys`.
+import { type Line, line, sub } from '@yaks/query'
 import { dropDdl as journalDrop } from '@yaks/journal'
 import {
   catalogue,
@@ -29,10 +30,8 @@ import type { Rule } from './mover.ts'
 // Restrict it to the reported archive-change shape, never-started/unclaimed,
 // recorded before the owner-confirmed T-65357 deployment on October 4, 2026.
 let DEAD_MAIL_BEFORE = '2026-10-04T19:07:36.000Z'
-let deadMailFind = '.effect.handler=mail_inbox&.effect.state=pending' +
-  '&.effect.kind=changed&.effect.comp=archived&.effect.attempts=0' +
-  `&.effect.at<${DEAD_MAIL_BEFORE}` +
-  '&!effect.lease_owner&!effect.lease_token&!effect.lease_expiry'
+let deadMailFind =
+  line`.effect.handler=mail_inbox&.effect.state=pending&.effect.kind=changed&.effect.comp=archived&.effect.attempts=0&.effect.at<${DEAD_MAIL_BEFORE}&!effect.lease_owner&!effect.lease_token&!effect.lease_expiry`
 
 /** Remove only the dead run component, not its entity or its target/archive.
  * Guards also protect an attempt/claim made after selection. Keeping other
@@ -65,10 +64,10 @@ export let deadMailInboxMove = (row: Bundle): Bundle[] => {
 }
 
 /** Dead unhandled runs; the owner activates the app mover explicitly. */
-export let deadMailInboxRule: Rule & { find: string } = {
+export let deadMailInboxRule: Rule & { find: Line } = {
   mark: 'yak/store/dead-mail-inbox/1',
   live: 'apps',
-  find: deadMailFind + '&*',
+  find: line`${sub(deadMailFind)}&*`,
   move: deadMailInboxMove,
 }
 

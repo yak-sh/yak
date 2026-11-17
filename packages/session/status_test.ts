@@ -7,7 +7,7 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { graph, identityEid } from '@yaks/graph'
 import { col, eq, render, select, table, val } from '@yaks/sql'
-import { and as all, eq as qeq, fields, list } from '@yaks/query'
+import { and as all, eq as qeq, fields, line, list, whole } from '@yaks/query'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'
 import { Database } from '@yaks/sqlite/testing'
 import { driver } from '../sqlite/native.ts'
@@ -1003,7 +1003,7 @@ for (let typed of [false, true]) {
     let want = Object.fromEntries(shapes.map(([name, , w]) => [name, w]))
     // Each word filters exactly the transcripts in that shape.
     for (let word of new Set(Object.values(want))) {
-      let found = (g.read(`.session.status=${word}`) as Bundle[])
+      let found = (g.read(line`.session.status=${word}`) as Bundle[])
         .map((b) => (b.session as { id: string }).id).filter((id) =>
           id != 'one'
         )
@@ -1020,7 +1020,7 @@ for (let typed of [false, true]) {
       ]]
     ) {
       let found = (g.read(
-        `.session.status=${words.join(',')} .fields=session.id`,
+        line`.session.status=${words} .fields=session.id`,
       ) as Bundle[]).map((b) => (b.session as { id: string }).id).filter((id) =>
         id != 'one'
       )
@@ -1052,7 +1052,8 @@ for (let typed of [false, true]) {
 // every derived read.
 test('a status filter answers only the entities wearing session', () => {
   let g = store()
-  let eids = (q: string) => (g.read(q) as Bundle[]).map((b) => b.entity.eid)
+  let eids = (q: string) =>
+    (g.read(whole(q)) as Bundle[]).map((b) => b.entity.eid)
   assertEquals(eids('.session.status=empty'), [S])
   // and a session that has entries leaves the empty answer, without the
   // model and the tool ever joining it
@@ -1152,7 +1153,8 @@ test('the SQL rule reads the ended mark as the rule over bundles does', () => {
     assertEquals(statusOf(entries, { ended: true }), status)
     assertEquals(((g.get([S]) as Bundle[])[0].session as Comp).status, status)
     for (let word of ['stopped', 'failed', 'settled', 'empty', 'running']) {
-      let eids = (q: string) => (g.read(q) as Bundle[]).map((b) => b.entity.eid)
+      let eids = (q: string) =>
+        (g.read(whole(q)) as Bundle[]).map((b) => b.entity.eid)
       let want = word == status ? [S] : []
       assertEquals(eids(`.session.status=${word}`), want, word)
       assertEquals(
@@ -1174,7 +1176,7 @@ test('a process of its own owes what its entries leave owing, until it exits', (
   g.apply([request(1)], { trusted: true })
   let now = () => ((g.get([S]) as Bundle[])[0].session as Comp).status
   let found = (word: string) =>
-    (g.read(`.session.status=${word}`) as Bundle[]).map((b) => b.entity.eid)
+    (g.read(line`.session.status=${word}`) as Bundle[]).map((b) => b.entity.eid)
   assertEquals([now(), found('pending')], ['pending', [S]])
   g.apply([{ entity: { eid: S }, process: { pid: 7 } }])
   assertEquals([now(), found('running'), found('pending')], [

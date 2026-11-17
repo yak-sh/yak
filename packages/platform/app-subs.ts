@@ -1,9 +1,10 @@
 // A page's subscriptions use the same listing and row names as its HTTP
 // query. Socket ownership and transport stay with the host.
 import { type Frame, type PeerWriter, type Sink, type Subs } from '@yaks/api'
-import { type Bundle } from '@yaks/graph'
+import { type Bundle, type Taken } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
+import { type Line, whole } from '@yaks/query'
 import { instrumentActor } from './instrument.ts'
 import type { Names } from './listing.ts'
 
@@ -21,7 +22,7 @@ export let naming = (
     kind,
     names = () => ({ refs: [], names: {} }),
   }: {
-    query: (line: string) => string
+    query: (line: Line) => Line
     kind: (row: Bundle) => Bundle
     names?: (rows: Bundle[]) => Names | Promise<Names>
   },
@@ -59,14 +60,15 @@ export let naming = (
     stop: subs.stop,
     snapshot: (line, opts) =>
       subs.snapshot(
-        typeof line == 'string' ? query(line) : line,
+        (typeof line == 'string' ? query(line as Line) : line) as Taken,
         opts,
       ),
     open: (sink, id, line, opts, writer) =>
       subs.open(
         by(sink),
         id,
-        line === true ? line : query(line),
+        // A subscription's line, as its socket's peer asked it, whole.
+        line === true ? line : query(whole(line)),
         opts,
         writer,
       ),
@@ -75,7 +77,7 @@ export let naming = (
         openings.map(({ sink, query: line, ...rest }) => ({
           ...rest,
           sink: by(sink),
-          query: line === true ? line : query(line),
+          query: line === true ? line : query(whole(line)),
         })),
         deferStatic,
       ),

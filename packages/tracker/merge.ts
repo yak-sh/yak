@@ -1,5 +1,6 @@
 // Consolidation keeps issued identities, historical counts and capture bytes.
 import type { Bundle } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { comp, type Desk, str } from './model.ts'
@@ -94,7 +95,7 @@ export let regroup = async (
       )
     ) continue
     let errors = (await Promise.all(rows.map((r) =>
-      g.read(`.error.bug=${r.entity.eid} *`)
+      g.read(line`.error.bug=${r.entity.eid} *`)
     ))).flat()
     try {
       await g.apply(consolidation(rows, errors), { trusted: true })

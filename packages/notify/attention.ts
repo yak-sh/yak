@@ -1,6 +1,7 @@
 /** Graph writes for a person's subscription attention. */
 import type { Bundle, Graph } from '@yaks/graph'
 import { mint } from '@yaks/graph/identity'
+import { joined, line, sub } from '@yaks/query'
 import { attention } from './mod.ts'
 
 /** A letter's ancestors, resolving both graph eids and mail Message-IDs. */
@@ -19,8 +20,8 @@ export let ancestry = async (
       return !!graph.vocab.comp(name) && graph.vocab.props(name).includes(prop)
     })
     if (!paths.length) return
-    let q = paths.map((path) => `(.${path}=${JSON.stringify(ref)})`).join('|')
-    return (await graph.read(`(${q})&*`, { native: true }))[0]
+    let q = joined(paths.map((path) => line`.${path}=${ref}`), '|')
+    return (await graph.read(line`(${sub(q)})&*`, { native: true }))[0]
   }
   for (let current = letter;;) {
     let ref = String((current.mail as Record<string, unknown>)?.reply_to ?? '')
@@ -42,9 +43,7 @@ export let markAttention = async (
   mark: 'opened' | 'archived',
 ): Promise<Bundle[]> => {
   let [had] = await graph.read(
-    `.subscription.actor=${JSON.stringify(actor)}&.subscription.target=${
-      JSON.stringify(target)
-    }&.fields=entity.eid`,
+    line`.subscription.actor=${actor}&.subscription.target=${target}&.fields=entity.eid`,
   )
   let eid = had?.entity.eid ?? mint()
   return [

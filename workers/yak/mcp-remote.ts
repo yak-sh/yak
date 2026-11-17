@@ -7,6 +7,7 @@
 // through the tunnel with no sign-in: the host answers the tunnel as a `fetch`
 // to the space's owner alone, so such a server is its person's only while the
 // space is, and to anyone else it is not connected.
+import { line } from '@yaks/query'
 import {
   credential,
   type Ctx,
@@ -160,7 +161,7 @@ export let remoteCommands = (
   options: Options = {},
 ) => {
   let rows = async () =>
-    person ? await host.graph.read(`.mcp_server.owner=${person}&*`) : []
+    person ? await host.graph.read(line`.mcp_server.owner=${person}&*`) : []
   let reached = async (s: GraphServer): Promise<Reached | null> => {
     if (!s.server.machine) return s
     let fetch = await host.machine?.(s.server.machine)
@@ -490,9 +491,10 @@ export let remoteCommands = (
     // The server's lists, where they were said, are these and no others.
     let lists = settings.lists
       ? [
-        ...(await host.graph.read(`.mcp_list.server=${row.entity.eid}`)).map(
-          (b): Bundle => ({ entity: b.entity, $delete: true }),
-        ),
+        ...(await host.graph.read(line`.mcp_list.server=${row.entity.eid}`))
+          .map(
+            (b): Bundle => ({ entity: b.entity, $delete: true }),
+          ),
         ...settings.lists.map((l, ord): Bundle => ({
           entity: { eid: mint() },
           doc: { title: l.title },

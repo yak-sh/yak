@@ -5,6 +5,7 @@ import * as system from '@yaks/process/system'
 // own worktree cut from the checkout @yaks/spawn's config names. A session
 // doing neither is not the host's to place.
 import type { Graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import type { Config, Host } from '@yaks/host'
 import { given, used } from '@yaks/host/config'
 
@@ -19,7 +20,7 @@ export let working = async (
   if (!owner?.session || !owner.native) return
   if (owner.fixer) return 'fixer'
   let held = await g.read(
-    `.claim.session=${session}&.task&.limit=1&.fields=entity.eid`,
+    line`.claim.session=${session}&.task&.limit=1&.fields=entity.eid`,
   )
   return held.length ? 'task' : undefined
 }

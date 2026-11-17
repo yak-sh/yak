@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
@@ -42,7 +43,7 @@ test('the record survives the batch it condemns', () => {
   let s = store()
   collide(s)
   assertEquals(
-    (s.tx((tx) => tx.read('.conflict.target=' + ids.p1)) as Bundle[])
+    (s.tx((tx) => tx.read(line`.conflict.target=${ids.p1}`)) as Bundle[])
       .length,
     1,
   )

@@ -1,5 +1,6 @@
 // A host boundary can commit a tool's answer in another graph. Its runner
 // records the invocation without writing that answer into its own graph.
+import { line } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import {
   argsOf,
@@ -101,7 +102,7 @@ test('an applied writer returns its committed answer and records only the invoca
   let [stored] = await ledger.get([call.entity.eid])
   equal(stored.call, call.call)
   equal((stored.execution as Comp).state, 'done')
-  equal((await ledger.read(`.result.call=${call.entity.eid}&*`)).length, 1)
+  equal((await ledger.read(line`.result.call=${call.entity.eid}&*`)).length, 1)
 })
 
 let rehearsal = fixture()
@@ -126,10 +127,10 @@ test('an applied writer still records a refusal in its invocation ledger', async
   let call = ask(), answer = await r.call(call)
   equal(faulted(answer, call.entity.eid), true)
   let [fault] = await ledger.read(
-    `.output.source=${call.entity.eid}&.refusal&*`,
+    line`.output.source=${call.entity.eid}&.refusal&*`,
   )
   equal(fault.refusal, { code: 'denied' })
   let [stored] = await ledger.get([call.entity.eid])
   equal((stored.execution as Comp).state, 'failed')
-  equal((await ledger.read(`.result.call=${call.entity.eid}&*`)).length, 1)
+  equal((await ledger.read(line`.result.call=${call.entity.eid}&*`)).length, 1)
 })

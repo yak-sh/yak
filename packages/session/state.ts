@@ -1,5 +1,6 @@
 // Transcript state from entry bundles alone. Rendering and in-memory readers
 // share this pure logic without loading SQL derivations or tool execution.
+import { type Built, line } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Computed } from '@yaks/match'
 import { cachedPrefixExpires } from '@yaks/model'
@@ -208,8 +209,8 @@ export let served = (entries: Bundle[]): boolean =>
  * outside the graph reads `running` while its own runner owes the answer; a
  * graph holds thousands of both (every session a harness's hooks recorded).
  * Unlike `served`, a model chosen by a notice counts as asking. */
-export let live =
-  '.session.status=pending,running,queued (.entries.using|.entries.ask)'
+export let live: Built =
+  line`.session.status=pending,running,queued (.entries.using|.entries.ask)`
 
 /** What the entries leave owing. `session.ended` turns only these into `stopped`:
  * a transcript that settled, failed or never began keeps reading that way. */
@@ -286,7 +287,9 @@ let entriesSay = (entries: Bundle[]): TranscriptStatus => {
       return 'pending'
     }
     if (interrupted.provisional) return 'pending'
-    let turns = all.filter((b) => b.ask || kindOf(b) == 'input').slice(-RETRIES)
+    let turns = all.filter((b) => b.ask || kindOf(b) == 'input').slice(
+      -RETRIES,
+    )
     return turns.length == RETRIES && turns.every((b) => b.ask && b.interrupted)
       ? 'failed'
       : 'pending'

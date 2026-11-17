@@ -1,6 +1,7 @@
 /** @jsxImportSource preact */
 // The views read one exact summary, hold only the rows they draw, and read a
 // thread's history only while it is open.
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { act } from 'preact/test-utils'
@@ -47,7 +48,7 @@ test('counts wait for the summary, ask the list’s one line, and follow watch a
     })),
     { entity: { eid: watched }, task: {}, completed: { at: at(5) } },
   ])
-  let h = host({ read: (l) => g.read(l), answering: false })
+  let h = host({ read: (l) => g.read(whole(l)), answering: false })
   let summary = summaryQuery(actor)
   let Count = () => (
     <span>{waiting({ entity: { eid: actor } }, h.io) ?? '?'}</span>
@@ -125,7 +126,7 @@ test('a large inbox asks one summary, holds only root and newest rows, and reads
     )
   }
   let g = await shop(rows)
-  let h = host({ read: (l) => g.read(l) })
+  let h = host({ read: (l) => g.read(whole(l)) })
   let list: Threads | undefined, detail: Threads | undefined
   let List = () => {
     list = useThreads(h.io, actor)
@@ -211,7 +212,7 @@ test('a summary is not a populated page until the rows it draws arrive', async (
       doc: { title: 'Assigned' },
     },
   ])
-  let h = host({ read: (l) => g.read(l), answering: false })
+  let h = host({ read: (l) => g.read(whole(l)), answering: false })
   let View = () => {
     let found = useThreads(h.io, actor)
     return <span>{found.ready ? found.threads.length : '?'}</span>
@@ -239,7 +240,7 @@ test('a new summary brings a thread in and takes an archived one out, asking no 
       created: { by: actor, at: at(1) },
     },
   ])
-  let h = host({ read: (l) => g.read(l) })
+  let h = host({ read: (l) => g.read(whole(l)) })
   let found: Threads | undefined
   let View = () => {
     found = useThreads(h.io, actor)
@@ -292,7 +293,7 @@ test('a person’s inbox asks its summary and the rows it draws, never their nei
       doc: { title: 'Complete title' },
     },
   ])
-  let h = host({ read: (l) => g.read(l) })
+  let h = host({ read: (l) => g.read(whole(l)) })
   let page = mount(
     <h.Door e={{ entity: { eid: actor }, person: {} }} view='Inbox' />,
   )

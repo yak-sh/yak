@@ -1,5 +1,6 @@
 // The connection tools (T-38030), their rows apart from connections.ts so a
 // page that only serves a space never compiles the roster's words (T-148886).
+import { line } from '@yaks/query'
 import {
   ABOUT,
   attach,
@@ -66,7 +67,7 @@ let CONNECTIONS: Row[] = [
       let connection = text(args.connection, 'connection')
       let c = ctxOf(ctx.env, who)
       let [b] = EID.test(connection)
-        ? await c.graph.read(`.entity.eid=${connection}&.${CONNECTION}`)
+        ? await c.graph.read(line`.entity.eid=${connection}&.${CONNECTION}`)
         : []
       let refused = barred(
         'attach',
@@ -86,7 +87,7 @@ let CONNECTIONS: Row[] = [
       if (bundles.length) await c.graph.apply(bundles)
       await rebound(ctx.env, [app.eid])
       let [l] = await c.graph.read(
-        `.entity.eid=${edgeEid(app.eid, USES, connection)}&.${USES}`,
+        line`.entity.eid=${edgeEid(app.eid, USES, connection)}&.${USES}`,
       )
       return {
         space,
@@ -303,7 +304,7 @@ let CONNECTIONS: Row[] = [
       if (bundles.length) await c.graph.apply(bundles)
       let i = await known(c.graph.read, name)
       let shown = (await c.graph.read(
-        `.entity.eid=${integrationEid(name)}&.${PUBLISHED}`,
+        line`.entity.eid=${integrationEid(name)}&.${PUBLISHED}`,
       )).length > 0
       let said = (['title', 'tagline', 'site'] as const)
         .filter((k) => i?.[k]).map((k) => `${k} ${i![k]}`).join('; ')

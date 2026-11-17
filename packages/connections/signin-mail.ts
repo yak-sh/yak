@@ -1,6 +1,7 @@
 // The sign-in code is read from this graph's incoming mail, never a token argument.
-import type { Bundle, Comp, Query } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
 import { type And, and, eq, ge, limit, want } from '@yaks/query'
+import type { Read } from './integrations.ts'
 
 let prop = (b: Bundle, name: string, field: string) =>
   (b[name] as Comp)?.[field]
@@ -26,7 +27,7 @@ export let lettersFor = (address: string, since: number): And =>
     limit(10),
   )
 export let codeFor = async (
-  read: (q: Query) => Bundle[] | Promise<Bundle[]>,
+  read: Read,
   address: string,
   since: number,
   opts: {

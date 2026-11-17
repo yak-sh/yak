@@ -4,6 +4,7 @@
 // `using`. A managed run that ends keeps the claim it is parked on, and lets
 // it go once nothing is left to wait for.
 
+import { line } from '@yaks/query'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, graph, identityEid } from '@yaks/graph'
 import { dead } from '@yaks/graph/bundle'
@@ -232,9 +233,11 @@ await (await image(managed('m1', 0))).release('m1:end')
 
 // What a transcript was last told, and how many entries it holds.
 let newest = async (g: ReturnType<typeof graph>, session: string) =>
-  (await g.read(`.entry.session=${session}&.order=-entry.seq&.limit=1&*`))[0]
+  (await g.read(line`.entry.session=${session}&.order=-entry.seq&.limit=1&*`))[
+    0
+  ]
 let count = async (g: ReturnType<typeof graph>, session: string) =>
-  (await g.read(`.entry.session=${session}&.fields=entity.eid`)).length
+  (await g.read(line`.entry.session=${session}&.fields=entity.eid`)).length
 
 let last = async (w: ReturnType<typeof world>) =>
   textOf(await newest(w.g, 'm1'))

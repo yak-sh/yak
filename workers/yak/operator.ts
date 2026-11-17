@@ -1,3 +1,4 @@
+import { line as q, whole as wholeLine } from '@yaks/query'
 import { inputSource } from './operator-provenance.ts'
 import { chatFork } from './operator-chat.ts'
 import { questionNotice } from './operator-helpers.ts'
@@ -751,14 +752,14 @@ let channelAt = async (store: Store, session: string, work?: Working) => {
   if (work?.channel) return work.channel
   let top = await topOf(store.g, session)
   let [request] = await store.g.read(
-    `.operator_request.session=${top} .order=-created.at .limit=1 .fields=operator_request.channel`,
+    q`.operator_request.session=${top} .order=-created.at .limit=1 .fields=operator_request.channel`,
   )
   return String(comp(request, 'operator_request')?.channel ?? '')
 }
 // Whether a conversation has begun: its row is a session. Presence is
 // counted, so its computed status is never read.
 let conversed = async ({ g }: Store, session: string) =>
-  Number((await g.rows(`.entity.eid=${session}&.session&.count`))[0]?.n ?? 0) >
+  Number((await g.rows(q`.entity.eid=${session}&.session&.count`))[0]?.n ?? 0) >
     0
 // The space an ask is charged to: its session's, or for an exchange a session
 // has on its own behalf (a compaction's summary, whose session is sourced by a
@@ -769,7 +770,9 @@ let payerOf = async ({ g }: Store, ask?: string) => {
     let session = comp(row, 'entry')?.session
     let [held] = session
       ? await g.read(
-        `.entity.eid=${session}&.fields=operator_session.space,session.source`,
+        q`.entity.eid=${
+          String(session)
+        }&.fields=operator_session.space,session.source`,
       )
       : []
     let o = comp(held, 'operator_session') as Working | undefined
@@ -880,7 +883,7 @@ let operatorAsking = (
 // for a person's conversation.
 let taskOf = async (store: Store, session: string) => {
   let [link] = await store.g.read(
-    `.contains .edge.to=${await topOf(store.g, session)}`,
+    q`.contains .edge.to=${await topOf(store.g, session)}`,
   )
   return String(comp(link, 'edge')?.from ?? '')
 }
@@ -922,7 +925,8 @@ export let operating = (
   let watching: Watching = async (wake, { query, local }) => {
     let person = String((wake.wake as { for?: string } | undefined)?.for ?? '')
     if (!person) throw refuse('missing', 'That subscription names nobody.')
-    if (local) return await seenBy(store, person).read(query)
+    // A watch's query is its own, as the subscription wrote it.
+    if (local) return await seenBy(store, person).read(wholeLine(query))
     let eid = await spaceOf(store)
     let space = eid ? await dir().at(eid) : null
     if (!space || space.trashed) throw refuse('missing', 'That space is gone.')
@@ -932,7 +936,9 @@ export let operating = (
       space,
       options.directory ?? opening(env),
     )
-    return await (await reaching(ctx, await inReach(ctx))).read(query)
+    return await (await reaching(ctx, await inReach(ctx))).read(
+      wholeLine(query),
+    )
   }
   let choice = operatorChoice(env)
   let name = options.name ?? choice.name
@@ -995,7 +1001,7 @@ export let operating = (
     let [[work], [said]] = await Promise.all([
       g.get([top], ['occurrence']),
       g.read(
-        `.entry.session=${top}&.content&.using&!ask&.order=-entry.seq&.limit=1&.fields=channel.name,operator_channel.channel`,
+        q`.entry.session=${top}&.content&.using&!ask&.order=-entry.seq&.limit=1&.fields=channel.name,operator_channel.channel`,
       ),
     ])
     let channel = said && cameBy(said).name
@@ -1200,7 +1206,7 @@ export let operating = (
   // its conversation's next step meets the same machine.
   let hosting = async (session: string) => {
     let [line] = await g.read(
-      `.entry.session=${session}&.operator_hosted&!completed&.limit=1&.fields=entity.eid`,
+      q`.entry.session=${session}&.operator_hosted&!completed&.limit=1&.fields=entity.eid`,
     )
     return line?.entity.eid
   }
@@ -1258,7 +1264,7 @@ export let operating = (
   }
   let away = async (session: string) => {
     let [owed] = await g.read(
-      `.provisional&.ask&.entry.session=${session}&.limit=1&.fields=interrupted.code,created.at`,
+      q`.provisional&.ask&.entry.session=${session}&.limit=1&.fields=interrupted.code,created.at`,
     )
     if (!owed || !await unasked(session)) return false
     let reach = await machineAt(session)
@@ -1280,7 +1286,10 @@ export let operating = (
   // for the machine (`unasked`, `away`).
   models[MACHINE] = Object.assign(
     falling(async (req) => {
-      let names = namesFor(req.model, agents.machine, { model: name, delegate })
+      let names = namesFor(req.model, agents.machine, {
+        model: name,
+        delegate,
+      })
       let own = names.machine.map((name) => ({ model: lent, name }))
       return await unasked(await sessionOf(req.call)) ? own : [
         ...own,
@@ -1336,7 +1345,7 @@ export let operating = (
     let space = (await workingOf(store, session))?.space
     let given = new Set(reply.given.map((b) => b.entity.eid))
     let requests = (await g.read(
-      `.operator_request.session=${session} .order=created.at`,
+      q`.operator_request.session=${session} .order=created.at`,
     )).filter((r) => given.has(inputOf(r.entity.eid)))
     let comment = task
       ? derivedEid('operator-answer|' + mark.entity.eid)
@@ -1452,7 +1461,7 @@ export let operating = (
     // its roster: what that reads of the directory is read once a step
     // (lib/hops.ts `recall`), so the step finds it read when it is sent.
     let last = Promise.resolve(g.read(
-      `.entry.session=${session} .using .order=-entry.seq .limit=1 .fields=using.provider`,
+      q`.entry.session=${session} .using .order=-entry.seq .limit=1 .fields=using.provider`,
     ))
     last.then(([using]) => {
       if (
@@ -1466,7 +1475,7 @@ export let operating = (
         working(env, store, session, options.directory),
         taskOf(store, session),
         g.read(
-          `.entity.eid=${session}&.fields=spawned.parent,fork.from,session.topic`,
+          q`.entity.eid=${session}&.fields=spawned.parent,fork.from,session.topic`,
         ),
         last,
       ])
@@ -1496,9 +1505,7 @@ export let operating = (
     // Someone who replied to what was sent for a person raises with that
     // person's conversation what needs them (operator-escalate.ts).
     let replied = g.read(
-      `.operator_request.person=${ctx.person}&.operator_request.channel=${
-        REPLIES.join(',')
-      }&.limit=1&.fields=entity.eid`,
+      q`.operator_request.person=${ctx.person}&.operator_request.channel=${REPLIES}&.limit=1&.fields=entity.eid`,
     )
     let [roster, google, platform, [reply], [text]] = await Promise.all([
       operatorRoster(ctx, store, {
@@ -1515,7 +1522,7 @@ export let operating = (
       admin({ dir: whole, person: ctx.person! }),
       replied,
       member ? [] : g.read(
-        `.operator_request.session=${await topOf(
+        q`.operator_request.session=${await topOf(
           g,
           session,
         )} .operator_request.channel=text,texted .order=-created.at .limit=1 .fields=operator_request.address`,
@@ -1718,7 +1725,7 @@ export let operating = (
       let [{ eid, space: at, here, ctx: context }, [row]] = await Promise
         .all([
           working(env, store, session, options.directory),
-          g.read(`.entity.eid=${session}&.fields=session.topic`),
+          g.read(q`.entity.eid=${session}&.fields=session.topic`),
         ])
       // Reply channels carry no personal server instructions.
       let work = await workingOf(store, session)
@@ -2116,7 +2123,7 @@ export let operating = (
   // Words carrying on a task's conversation open the task again, and are
   // said on it.
   let reopened = async ({ session, body, by }: Intake) => {
-    let [link] = await g.read(`.contains .edge.to=${session}`)
+    let [link] = await g.read(q`.contains .edge.to=${session}`)
     let task = comp(link, 'edge')?.from as string | undefined
     return task
       ? [{ entity: { eid: task }, completed: null, cancelled: null }, {
@@ -2150,7 +2157,11 @@ export let operating = (
         )
         // The words as they were sent are kept as a file the model may read
         // or pass on by its reference.
-        let { reference, file } = await messageReference(env, space, words.body)
+        let { reference, file } = await messageReference(
+          env,
+          space,
+          words.body,
+        )
         return {
           words: {
             ...words,

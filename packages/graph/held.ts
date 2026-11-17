@@ -29,7 +29,7 @@ import {
 } from '@yaks/query/core'
 import type { Bundle, Eid } from './bundle.ts'
 import type { Graph } from './graph.ts'
-import type { Query, ReadOpts } from './storage.ts'
+import type { Query, ReadOpts, Taken } from './storage.ts'
 import { flat, named, only, projection } from './projection.ts'
 
 type Reads = Pick<Graph, 'read' | 'get'>
@@ -151,7 +151,8 @@ export let held = (tx: Reads, vocab: Vocab): Held => {
     }
   }
 
-  let read = async (query: Query, opts?: ReadOpts): Promise<Bundle[]> => {
+  let read: Reads['read'] = async (said, opts) => {
+    let query = said as Taken
     if (!opts?.native) return tx.read(query, opts)
     asked = true
     let { q, rest, ids, key } = shapeOf(query, opts)

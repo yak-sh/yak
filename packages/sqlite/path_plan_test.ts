@@ -7,7 +7,7 @@ import { loadVocab } from '@yaks/vocab'
 import { compile, render } from '@yaks/sql'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { type Bundle, graph } from '@yaks/graph'
-import { parse } from '@yaks/query'
+import { parse, whole } from '@yaks/query'
 import { catalog } from './catalog.ts'
 import { storage } from './mod.ts'
 import { driver } from './native.ts'
@@ -183,7 +183,9 @@ let turning = (n: number) => {
   return {
     seen: store.rows(q, { visibility: { entity: '!other' } })
       .map((r) => r.eid),
-    read: g.read(`(${q})|(.space&.members_space.member.person=P)`) as Bundle[],
+    read: g.read(
+      whole(`(${q})|(.space&.members_space.member.person=P)`),
+    ) as Bundle[],
     steps: status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 4, 1),
   }
 }

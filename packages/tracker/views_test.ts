@@ -1,4 +1,4 @@
-import { querySearch } from '@yaks/query'
+import { querySearch, whole } from '@yaks/query'
 import { type Bundle } from '@yaks/render'
 // Domain faces and queries are checked with graph bundles, not a fleet boot.
 import { equal, ok, test } from '@yaks/testing'
@@ -293,13 +293,15 @@ test('occurrence traces use request identity or bounded shared context, never ar
     trace('wrong-store', { entity: 'another', space: 'space' }),
   ], { trusted: true })
   let exact = relatedTraces(error)!
-  equal((await g.read(exact.query)).map((b) => b.entity.eid), ['same-request'])
+  equal((await g.read(whole(exact.query))).map((b) => b.entity.eid), [
+    'same-request',
+  ])
   let contextual = relatedTraces({
     ...error,
     during: { entity: 'store', space: 'space' },
   })!
   equal(
-    new Set((await g.read(contextual.query)).map((b) => b.entity.eid)),
+    new Set((await g.read(whole(contextual.query))).map((b) => b.entity.eid)),
     new Set(['same-request', 'nearby']),
   )
   ok(contextual.label.includes('rather than causal'))
@@ -318,7 +320,7 @@ test('occurrence traces use request identity or bounded shared context, never ar
   await g.apply([trace('same-process', { process: 'process' })], {
     trusted: true,
   })
-  equal((await g.read(process.query)).map((b) => b.entity.eid), [
+  equal((await g.read(whole(process.query))).map((b) => b.entity.eid), [
     'same-process',
   ])
 })

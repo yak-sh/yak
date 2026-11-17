@@ -11,7 +11,7 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
-import { conjoin } from '@yaks/query'
+import { conjoin, type Line, line, whole } from '@yaks/query'
 
 type Args = Record<string, unknown>
 
@@ -36,13 +36,15 @@ let serving = (args: Args, goal: string, prefix: string): Bundle[] =>
  * The query a listing runs, with `.goal` always part of it and every goal
  * whole. A goal is never finished, so without a query it lists them all.
  */
-export let listing = (query?: unknown, limit?: unknown): string =>
-  conjoin(
+// A caller's own query, narrowed: `conjoin` groups it, and refuses one whose
+// groups or quotes do not close, so it cannot reach past the narrowing.
+export let listing = (query?: unknown, limit?: unknown): Line =>
+  whole(conjoin(
     '.goal',
     String(query ?? '').trim(),
-    limit == null ? '' : `.limit=${Number(limit)}`,
+    limit == null ? '' : line`.limit=${Number(limit)}`,
     '*',
-  )
+  ))
 
 /** The implementations behind ./vocab.json. */
 export let runs = (): Runs => ({

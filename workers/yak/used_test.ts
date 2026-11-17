@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { equal, test, until } from '@yaks/testing'
 import { ownedBy } from './directory-fixture.ts'
 import { derivedEid, graph, signed } from '@yaks/graph'
@@ -92,7 +93,7 @@ let visits = await (async () => {
     access: 'public',
   })
   let use = async () =>
-    (await meta(p.env).query(`.entity.eid=${app.eid} ?used`))[0].used
+    (await meta(p.env).query(line`.entity.eid=${app.eid} ?used`))[0].used
   let found: unknown[] = []
   let installed = await ask('/vocab', {
     method: 'POST',
@@ -126,7 +127,7 @@ let visits = await (async () => {
   let rule: Rule = {
     mark: 'yak/store/use-proof/1',
     live: 'apps',
-    find: '.pulse.n=1',
+    find: line`.pulse.n=1`,
     move: (row) => [{ entity: row.entity, pulse: { n: 2 } }],
   }
   let state = p.states.get('used-proof/probe')!
@@ -447,7 +448,9 @@ test('a write to an app stamps when its store changed, and an install does not',
     access: 'public',
   })
   let row = async () =>
-    (await meta(p.env).query(`.entity.eid=${app.eid} ?changed ?used`))[0] as {
+    (await meta(p.env).query(line`.entity.eid=${app.eid} ?changed ?used`))[
+      0
+    ] as {
       changed?: { at: string }
     }
   let installed = await ask('/vocab', {

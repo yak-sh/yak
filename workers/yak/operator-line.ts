@@ -30,6 +30,7 @@
 // voip.ms's API answers only addresses its allowlist names, and a Worker
 // calls from Cloudflare's, which change: the person enters 0.0.0.0 there,
 // which lets any address call with the API password.
+import { line as q } from '@yaks/query'
 import { type Bundle, type Comp, derivedEid, identityEid } from '@yaks/graph'
 import { writes } from '@yaks/member'
 import {
@@ -140,13 +141,13 @@ let OWN = 'own_number', LINE = 'operator_line'
 
 /** The numbers a connection's account holds, as listed when it was saved. */
 export let numbersOf = async (env: Env, connection: string) =>
-  (await meta(env).query(`.${OWN}.connection=${connection}&*`))
+  (await meta(env).query(q`.${OWN}.connection=${connection}&*`))
     .map((b) => comp(b, OWN) as Owned)
 
 /** The 10DLC campaign texts from `number` to many people are registered
  * under, as recorded beside it (`phone_numbers`); null while none is. */
 export let campaignOf = async (env: Env, number: string) =>
-  (await meta(env).query(`.${OWN}.number=${JSON.stringify(number)}&*`))
+  (await meta(env).query(q`.${OWN}.number=${number}&*`))
     .map((b) => String(comp(b, OWN).campaign ?? '')).find(Boolean) ?? null
 
 /** How the Operator whose store `g` reads uses each of a connection's
@@ -157,7 +158,7 @@ export let chosen = async (
   line: Bundle,
 ): Promise<Used[]> => {
   let connection = line.entity.eid
-  let used = (await g.read(`.${LINE}.connection=${connection}&*`))
+  let used = (await g.read(q`.${LINE}.connection=${connection}&*`))
     .map((b) => comp(b, LINE) as Used)
   let account = String(comp(line, CONNECTION).account ?? '')
   return used.length || !account.startsWith('+')
@@ -260,7 +261,7 @@ export let pointed = async (
   gone?: string,
 ) => {
   let [line] = await meta(env).query(
-    `.entity.eid=${connection}&.${CONNECTION}&*`,
+    q`.entity.eid=${connection}&.${CONNECTION}&*`,
   )
   if (!line) return
   let via = String(comp(line, CONNECTION).integration ?? '')
@@ -450,13 +451,13 @@ let speaks = async (env: Env, space: Space, owner: string) => {
  * missing. Given a `space`, only a connection it may use counts. */
 export let accountFor = async (env: Env, number: string, space?: Space) => {
   let [held] = await meta(env).query(
-    `.${OWN}.number=${JSON.stringify(number)}&*`,
+    q`.${OWN}.number=${number}&*`,
   )
   let connection = String(comp(held, OWN).connection ?? '')
   let [line] = await meta(env).query(
     connection
-      ? `.entity.eid=${connection}&.${CONNECTION}&*`
-      : `.${CONNECTION}.account=${JSON.stringify(number)}&*`,
+      ? q`.entity.eid=${connection}&.${CONNECTION}&*`
+      : q`.${CONNECTION}.account=${number}&*`,
   )
   connection = line?.entity.eid ?? ''
   let owner = String(comp(line, CONNECTION).owner ?? '')
@@ -618,7 +619,7 @@ export let phoneNumbers = (
           [LINE]: u,
         })
         let written =
-          (await store.g.read(`.${LINE}.connection=${connection}`)).length
+          (await store.g.read(q`.${LINE}.connection=${connection}`)).length
         await store.g.apply([
           // A connection saved before numbers were listed keeps using its
           // number as it did, written out once a number is chosen.
@@ -683,7 +684,7 @@ export let lineDoor = async (
     new Response('ok', { headers: { 'content-type': 'text/plain' } })
   let arrival = own.called(url.searchParams)
   let [line] = await meta(env).query(
-    `.entity.eid=${held.connection}&.${CONNECTION}&*`,
+    q`.entity.eid=${held.connection}&.${CONNECTION}&*`,
   )
   let owner = String(comp(line, CONNECTION).owner ?? '')
   if (!arrival || echo(arrival) || !line || !owner) return ok()

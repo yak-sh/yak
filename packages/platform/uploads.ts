@@ -7,6 +7,7 @@
 // instead.
 import type { Bundle, Comp } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
+import { line } from '@yaks/query'
 import type { Naming } from '@yaks/blob/upload'
 
 /** Where an app's file door answers, beside its pages. */
@@ -63,6 +64,5 @@ export let uploads: Naming = {
   // The content row while it carries the bytes (an upload's `blob`, a
   // model's `artifact`), and any attachment pointing at them.
   names: (sha) =>
-    `.entity.eid=${sha} .blob|.entity.eid=${sha} .artifact|` +
-    `.attachment.blob=${sha}|.attachment.artifact=${sha}`,
+    line`.entity.eid=${sha} .blob|.entity.eid=${sha} .artifact|.attachment.blob=${sha}|.attachment.artifact=${sha}`,
 }

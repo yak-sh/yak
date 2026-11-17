@@ -1,6 +1,7 @@
 // Which components a read answers with: the ones its query names, or with a
 // `.fields` projection the properties it names and the entities they reach.
 
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { ram } from '@yaks/ram'
@@ -78,7 +79,7 @@ marked.apply([
   at('b', { doc: { title: 'B', body: 'large body' } }),
 ])
 let markerQuery = '.doc ?doc .fields=doc.title,native .order=doc.title'
-let markerRead = marked.read(markerQuery)
+let markerRead = marked.read(whole(markerQuery))
 let markerCut = projection(markers, markerQuery)!
 
 test('property projections retain requested empty markers without widening other components', () => {
@@ -138,13 +139,13 @@ test('a projection answers what it names, and what its paths reach', () => {
     ]],
   ]
   for (let [fields, answer] of cases) {
-    assertEquals(g.read(reviews + fields), answer, fields)
+    assertEquals(g.read(whole(reviews + fields)), answer, fields)
   }
 })
 
 test('an entity both selected and reached is answered once', () => {
   let docs = '.doc&.order=doc.title&.fields=doc.title,book.publisher.doc.title'
-  assertEquals(shelf().read(docs), [
+  assertEquals(shelf().read(whole(docs)), [
     at('p1', { doc: { title: 'Ace' } }),
     at('b1', { doc: { title: 'Dune' }, book: { publisher: 'p1' } }),
     at('b2', { doc: { title: 'Emma' } }),

@@ -1,6 +1,7 @@
 // The page over the box's own doors: a host composed in this process serves
 // the deck and takes the taps, and the page runs on a linkedom document.
 
+import { line } from '@yaks/query'
 import { equal, ok, test, until } from '@yaks/testing'
 import { compose } from '@yaks/cli/host'
 import { parseHTML } from 'linkedom'
@@ -97,7 +98,7 @@ let open = async () => {
     return main as Any
   }
   let rows = async (comp: string): Promise<Any[]> =>
-    await host.graph.read(`.${comp} *`)
+    await host.graph.read(line`.${comp} *`)
   return { host, owner: owner.entity.eid, visit, rows }
 }
 

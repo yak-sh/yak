@@ -7,6 +7,7 @@
 // out rather than holding the words, and one that fails is reported and left
 // out the same way.
 
+import { line } from '@yaks/query'
 import { earlier } from '@yaks/memory/earlier'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import type { Host, Meaning } from '@yaks/host'
@@ -54,12 +55,13 @@ export type Recall = {
 let unseen = async (g: Graph, session: Eid) => {
   let [cut] = g.vocab.comp('checkpoint')
     ? await g.read(
-      `.entry.session=${session}&.checkpoint&.order=-entry.seq&.limit=1&.fields=created.at`,
+      line`.entry.session=${session}&.checkpoint&.order=-entry.seq&.limit=1&.fields=created.at`,
     )
     : []
   let at = cut && comp(cut, 'created').at
-  return `(.entry.session!=${session})` +
-    (at ? `|(.created.at<${JSON.stringify(at)})` : '')
+  return at
+    ? line`(.entry.session!=${session})|(.created.at<${String(at)})`
+    : line`(.entry.session!=${session})`
 }
 
 /** A host's recall, each given `wait` ms; a null `wait` waits as long as it

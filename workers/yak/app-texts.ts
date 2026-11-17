@@ -19,6 +19,7 @@
 // same way.
 //
 // Every text that leaves spends from the space's one budget (text-spend.ts).
+import { line } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
 import { mode, reads } from '@yaks/member'
 import type { Answer } from './apps.ts'
@@ -161,27 +162,30 @@ export let signsUp = (text: string, known: boolean, stopped: boolean) =>
  */
 export let appArrived = async (
   env: Env,
-  line: { space: Space; app: App },
+  to: { space: Space; app: App },
   arrival: Arrival,
   sender?: string,
 ) => {
-  let graph = metaOf(appStore(env.STORE, line.space, line.app, env), KERNEL)
-  let from = JSON.stringify(arrival.from)
-  let people = await graph.query(`.phone.number=${from}`, { trusted: true })
+  let graph = metaOf(appStore(env.STORE, to.space, to.app, env), KERNEL)
+  let from = arrival.from
+  let people = await graph.query(line`.phone.number=${from}`, {
+    trusted: true,
+  })
   // What this number said before this text decides whether a YES opts it in.
-  let before = (await graph.query(`.text.from=${from}&?doc`, { trusted: true }))
-    .map((t) => ({
-      ...t.text as { message_id?: string; at?: string },
-      body: (t.doc as { body?: string } | undefined)?.body,
-    }))
-    .filter((t) => t.message_id != arrival.id)
-    .sort((a, b) => String(a.at).localeCompare(String(b.at)))
-    .map((t) => String(t.body ?? ''))
+  let before =
+    (await graph.query(line`.text.from=${from}&?doc`, { trusted: true }))
+      .map((t) => ({
+        ...t.text as { message_id?: string; at?: string },
+        body: (t.doc as { body?: string } | undefined)?.body,
+      }))
+      .filter((t) => t.message_id != arrival.id)
+      .sort((a, b) => String(a.at).localeCompare(String(b.at)))
+      .map((t) => String(t.body ?? ''))
   let stopped = stoppedBy(before)
   // A provider posts a text again until it is answered; the keyword's answer
   // goes once, with the first.
   let again = (await graph.query(
-    `.text.message_id=${JSON.stringify(arrival.id)}&.text.from=${from}`,
+    line`.text.message_id=${arrival.id}&.text.from=${from}`,
     { trusted: true },
   )).length > 0
   await graph.apply(
@@ -196,7 +200,7 @@ export let appArrived = async (
     let { signupArrived } = await import('./operator-signup.ts')
     await signupArrived(
       env,
-      line.space,
+      to.space,
       { ...arrival, via: arrival.via ?? '' },
       sender,
     )
@@ -204,7 +208,7 @@ export let appArrived = async (
   }
   if (again) return
   let said = answers(
-    line.space.title || line.space.slug,
+    to.space.title || to.space.slug,
     await contactOf(graph),
   )[word]
   let answer: Bundle = {
@@ -217,7 +221,7 @@ export let appArrived = async (
   try {
     let { phone, paid } = await lineFor(
       env,
-      line.space,
+      to.space,
       arrival.to,
       arrival.via,
     )
@@ -226,7 +230,7 @@ export let appArrived = async (
       text: said,
       from: arrival.to,
     })
-    if (paid) await countedTexts(env, line.space, costOf(said))
+    if (paid) await countedTexts(env, to.space, costOf(said))
     answer.text = {
       ...answer.text as object,
       ...(id ? { message_id: id } : {}),

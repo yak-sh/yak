@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { equal, ok, test } from '@yaks/testing'
 import { derivedEid, minted } from '@yaks/graph/identity'
 import { sessionTools } from './children.ts'
@@ -15,13 +16,13 @@ let child = await spawn.run(
   { prompt: 'hello', instructions: 'stay focused' },
   context,
 )
-let initial = await g.read(`.entry.session=${child}&*`)
+let initial = await g.read(line`.entry.session=${String(child)}&*`)
 
 test('delegation replays the same UUID child and leaves one set of UUID entries', async () => {
   equal(await spawn.run({ prompt: 'hello' }, context), child)
   equal(child, derivedEid('child:delegate-call'))
   ok(minted(String(child)))
-  let entries = await g.read(`.entry.session=${child}&*`)
+  let entries = await g.read(line`.entry.session=${String(child)}&*`)
   equal(
     entries.map((row) => row.entity.eid),
     initial.map((row) => row.entity.eid),

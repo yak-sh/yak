@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { equal, test, throws } from '@yaks/testing'
 import { bare, fixture } from './fixture_test.ts'
 import { group } from './group.ts'
@@ -48,7 +49,7 @@ test('regroup preserves historical hits, capture bytes, marks and issued address
   equal(comp(bugs[0], 'bug').spot, 'kernel.js:82 elapsed')
   equal(comp(bugs[0], 'notified').at, '2026-10-30T15:00:01Z')
   equal((await survivor(g, ids[2]))?.entity.eid, ids[0])
-  let errors = await g.read(`.error.bug=${ids[0]} *`)
+  let errors = await g.read(line`.error.bug=${ids[0]} *`)
   equal(errors.length, 4)
   equal(
     comp(errors.find((r) => r.entity.eid == ids[5]), 'exception').stack,

@@ -5,6 +5,7 @@
 // age, a code dies of too many guesses, a code minted for one address never
 // opens another, and an address gets three letters an hour — a window no test
 // can sit through, and a count nobody buys back by burning a code.
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -97,12 +98,15 @@ test('the live code opens, and is spent', async () => {
   // trip, and they are called the front of their address.
   assertEquals(d.trips(), 1)
   assertEquals(await d.rows(), [])
-  assertEquals(await d.graph.read(`.entity.eid=${eid}&?person&?email&?doc`), [{
-    entity: { eid: eid! },
-    person: {},
-    email: { address: ME },
-    doc: { title: 'me' },
-  }])
+  assertEquals(
+    await d.graph.read(line`.entity.eid=${eid!}&?person&?email&?doc`),
+    [{
+      entity: { eid: eid! },
+      person: {},
+      email: { address: ME },
+      doc: { title: 'me' },
+    }],
+  )
 })
 
 // Who a right code signs in (T-148969), decided in the write that spends it:
@@ -111,7 +115,9 @@ test('the live code opens, and is spent', async () => {
 let signsIn = async (rows: Bundle[], newcomer?: string) => {
   let d = await held([row(ME, CODE, soon()), ...rows])
   let eid = (await spend(d.at, SECRET, ME, '123456', { newcomer }))?.person
-  let [who] = await d.graph.read(`.entity.eid=${eid}&?doc&?email&?newcomer`)
+  let [who] = await d.graph.read(
+    line`.entity.eid=${eid!}&?doc&?email&?newcomer`,
+  )
   return {
     eid,
     title: (who?.doc as { title?: string } | undefined)?.title,
@@ -157,7 +163,9 @@ test('a right code says whether it is their first sign-in, in its one trip', asy
   let arrive = async (rows: Bundle[], via?: 'link') => {
     let d = await held([row(ME, CODE, soon()), ...rows])
     let arrived = await spend(d.at, SECRET, ME, '123456', { via })
-    let [who] = await d.graph.read(`.entity.eid=${arrived?.person}&?signed_in`)
+    let [who] = await d.graph.read(
+      line`.entity.eid=${arrived!.person}&?signed_in`,
+    )
     let { at, ...signed } = who?.signed_in as Record<string, string>
     assert(at)
     return { first: arrived?.first, signed, trips: d.trips(), at }
@@ -374,7 +382,7 @@ test('an address that reads as a query signs in nobody else', async () => {
     ])
     let eid = (await spend(d.at, SECRET, address, '123456', {}))?.person
     assert(eid && eid != 'p1', address)
-    let [who] = await d.graph.read(`.entity.eid=${eid}&?email`)
+    let [who] = await d.graph.read(line`.entity.eid=${eid}&?email`)
     assertEquals((who?.email as { address?: string })?.address, canon(address))
     assertEquals(await personOf(d.at, address), eid, address)
     assert(await personOf(d.at, 'pastor@church.example') == 'p1')
@@ -448,12 +456,12 @@ test('a number signs in with its code, and a person wears the number', async () 
     signin: { phone: NUMBER, code, expires: soon(), tries: 0 },
   }])
   let eid = (await spend(d.at, SECRET, '(269) 555-0142', '123456'))?.person
-  let [wearing] = await d.graph.read(`.person&.phone.number="${NUMBER}"`)
+  let [wearing] = await d.graph.read(line`.person&.phone.number=${NUMBER}`)
   assertEquals(wearing?.entity.eid, eid)
   let fresh = asking(() => [])
   assertEquals(await personOf(fresh.at, NUMBER), 'p1')
   assertEquals(fresh.asked, [
-    `.person&.phone.number="${NUMBER}"&?doc&?signed_in`,
+    `.person&.phone.number=${NUMBER}&?doc&?signed_in`,
   ])
   assertEquals(fresh.wrote, [{
     entity: { eid: '$who' },
@@ -488,7 +496,7 @@ test('five texted codes an hour from one visitor, and no more', async () => {
     Array.from({ length: VISITS - 1 }, () => visit(me, 60_000))
   )
   assert(await mayText(under.at, me))
-  assertEquals(under.asked, [`.signin.from="${me}"`])
+  assertEquals(under.asked, [`.signin.from=${me}`])
   let full = asking(() =>
     Array.from({ length: VISITS }, () => visit(me, 60_000))
   )

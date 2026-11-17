@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { meta } from './meta.ts'
 import { TOOLS } from './tools.ts'
 // The admin's view of a space's Operator (admin.ts `operatorPage`): every
@@ -412,7 +413,7 @@ test('admin page and tool reads record the administrator and their requested con
     who: { person: root, via: 'oauth', instrument: via },
   }, { space: 'clerk', task: target })
   let rows = await meta(p.env).query(
-    `.admin_action.space=${eid} .admin_action.target=${target} &*`,
+    line`.admin_action.space=${eid} .admin_action.target=${target} &*`,
   )
   for (let operation of ['operator_conversation', 'operator_read']) {
     let action = rows.find((row) =>
@@ -428,7 +429,7 @@ test('admin page and tool reads record the administrator and their requested con
   await get(`${at}/${target}`, jeff)
   assertEquals(
     (await meta(p.env).query(
-      `.admin_action.space=${eid} .admin_action.target=${target} &*`,
+      line`.admin_action.space=${eid} .admin_action.target=${target} &*`,
     )).length,
     before,
   )

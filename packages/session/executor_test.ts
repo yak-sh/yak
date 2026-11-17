@@ -113,7 +113,10 @@ let saved: Reply = {
 // runs its fixture before timing; all comparisons still run in the named case.
 let scenario = async (
   name: string,
-  body: (p: ReturnType<typeof fixture>, check: typeof equal) => Promise<void>,
+  body: (
+    p: ReturnType<typeof fixture>,
+    check: <T>(actual: T, expected: T, message?: string) => T,
+  ) => Promise<void>,
 ) => {
   let p = fixture()
   let checks: (() => void)[] = []

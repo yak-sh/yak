@@ -1,5 +1,6 @@
 // Contact changes start in the conversation. Email ownership codes and the
 // person's optional SMS consent put contacts on the directory person.
+import { line } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
@@ -87,9 +88,7 @@ let pending = async (
   address: string,
 ) =>
   (await store.g.read(
-    `.operator_contact.person=${person} .operator_contact.session=${session} .operator_contact.address=${
-      JSON.stringify(address)
-    } !cancelled ?created ?verified .order=-created.at .limit=1`,
+    line`.operator_contact.person=${person} .operator_contact.session=${session} .operator_contact.address=${address} !cancelled ?created ?verified .order=-created.at .limit=1`,
   ))[0]
 
 let sendCode = async (send: Mail, address: string, code: string) => {
@@ -172,9 +171,7 @@ let confirmed = async (
       new Date().toISOString(),
   )
   let owed = await store.g.read(
-    `.notification .deliver.to=${ctx.person} !delivered !bounced .created.by=${space.eid} .created.at>=${
-      JSON.stringify(since)
-    }`,
+    line`.notification .deliver.to=${ctx.person} !delivered !bounced .created.by=${space.eid} .created.at>=${since}`,
   )
   for (let note of owed) {
     if (await inConversation(store, note, c.session)) {
@@ -233,7 +230,7 @@ export let contactAdd = (
     let [entry] = await store.g.get([source.eid], ['entry'])
     let session = String(comp(entry, 'entry')!.session)
     let opened = await store.g.read(
-      `.operator_contact.person=${ctx.person} .operator_contact.session=${session} !verified !cancelled ?created .order=created.at .limit=2`,
+      line`.operator_contact.person=${ctx.person} .operator_contact.session=${session} !verified !cancelled ?created .order=created.at .limit=2`,
     )
     let [open] = opened
     if (
@@ -393,7 +390,15 @@ export let confirmTextContact = async (
   if (!agreed) throw refuse('arguments', 'Tick the box to agree to texts.')
   if (row.verified) return { confirmed: c.address }
   await sourceOf(store, ctx, space, c.source)
-  let proof = await provePhone(env, ctx.person, space, number, agreed, code, id)
+  let proof = await provePhone(
+    env,
+    ctx.person,
+    space,
+    number,
+    agreed,
+    code,
+    id,
+  )
   if (proof) return proof
   await confirmed(env, ctx, space, store, row, id)
   return { confirmed: c.address }
@@ -424,7 +429,7 @@ export let waitingContact = async (
   let at = String(comp(note, 'created')?.at ?? '')
   if (!person || !at) return false
   let rows = await store.g.read(
-    `.operator_contact.person=${person} !verified !cancelled`,
+    line`.operator_contact.person=${String(person)} !verified !cancelled`,
   )
   for (let row of rows) {
     if (
@@ -444,7 +449,7 @@ export let waitingContact = async (
   let session = String(comp(note, 'created')?.via ?? '')
   if (!session) return false
   let calls = await store.g.read(
-    `.call.to.tool.name=contact_add .entry.session=${session} ?execution`,
+    line`.call.to.tool.name=contact_add .entry.session=${session} ?execution`,
   )
   return calls.some((row) => {
       let args = comp(row, 'call')?.args as Record<string, unknown> | undefined
@@ -462,7 +467,7 @@ let supersede = async (
   keep: string,
 ) => {
   let older = await store.g.read(
-    `.operator_contact.person=${person} .operator_contact.session=${session} !verified !cancelled`,
+    line`.operator_contact.person=${person} .operator_contact.session=${session} !verified !cancelled`,
   )
   await store.g.apply(
     older.filter((r) => r.entity.eid != keep).map((r) => ({

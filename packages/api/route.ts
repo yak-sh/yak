@@ -9,6 +9,7 @@
 
 import type { Actor, ReadOpts } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
+import { whole } from '@yaks/query'
 import { type Authenticate } from './actor.ts'
 import { applier, type Applying, ask } from './doors.ts'
 import { denoUpgrade } from './deno.ts'
@@ -171,7 +172,10 @@ export let api = (opts: Options): Handler => {
         let q = url.searchParams.get('q')
         if (q == null) throw new Refused('/query needs a query: ?q=…')
         return json(
-          await subs.snapshot(q, { ...readOpts, signal: request.signal }),
+          await subs.snapshot(whole(q), {
+            ...readOpts,
+            signal: request.signal,
+          }),
         )
       }
       return await ask(graph, request, opts.activity ?? graph, readOpts)

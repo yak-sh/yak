@@ -12,6 +12,7 @@
 // `Calling.own`). The machine then writes it by its own person and through no
 // session (@yaks/tunnel `arrived`), which is how everything there tells a
 // person's comment from an agent's.
+import { line } from '@yaks/query'
 import type { Bundle, Comp, Tool as GraphTool } from '@yaks/graph'
 import { nameOf } from '@yaks/mcp-client'
 import { kindOf, textOf, type Tool } from '@yaks/session'
@@ -80,13 +81,13 @@ let lineOf = async (
 ): Promise<Bundle | undefined> => {
   if (!said) {
     return (await work.g.read(
-      `.entry.session=${conversation}&.order=-entry.seq&.limit=${RECENT}&*`,
+      line`.entry.session=${conversation}&.order=-entry.seq&.limit=${RECENT}&*`,
     )).find((b: Bundle) => ownWords(b, person))
   }
   let found = Number.isNaN(Date.parse(said)) || !said.includes('T')
     ? await work.g.get([(await work.g.address([said])).get(said) ?? said])
     : await work.g.read(
-      `.entry.session=${conversation}&.created.at=${JSON.stringify(said)}&*`,
+      line`.entry.session=${conversation}&.created.at=${said}&*`,
     )
   return found.find((b: Bundle) => comp(b, 'entry')?.session == conversation)
 }

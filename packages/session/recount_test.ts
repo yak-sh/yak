@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Graph } from '@yaks/graph'
@@ -23,7 +24,7 @@ let before: Reader = (e) =>
     : { ...claude(e), entries: claude(e).entries.filter((c) => !c.ask) }
 
 let used = async (g: Graph, session: string) =>
-  (await g.read(`.entry.session=${session} .usage .order=entry.seq *`))
+  (await g.read(line`.entry.session=${session} .usage .order=entry.seq *`))
     .map((b) => (b.usage as { input_tokens: number }).input_tokens)
 
 let log = async (): Promise<string> => {

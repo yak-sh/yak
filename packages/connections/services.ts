@@ -1,4 +1,5 @@
 // Service publication references the app's declaration, never a second schema.
+import { line } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { CallError } from '@yaks/tools/errors'
@@ -27,7 +28,7 @@ export let publishService = async (
 ): Promise<Bundle[]> => {
   let name = serviceName(a.app)
   let eid = integrationEid(name)
-  let [held] = await read(`.entity.eid=${eid}&.integration&?${PUBLISHED}`)
+  let [held] = await read(line`.entity.eid=${eid}&.integration&?${PUBLISHED}`)
   let i = held?.integration as Integration | undefined
   if (i && (i.owner != a.owner || i.service?.app != a.app)) {
     throw new CallError(
@@ -68,7 +69,7 @@ export let serviceAuthority = async (
   a: ServiceAuthority,
 ): Promise<boolean> => {
   let rows = await read(
-    `(.entity.eid=${a.connection}&.connection)|(.edge.from=${a.app}&.edge.to=${a.connection}&.uses)`,
+    line`(.entity.eid=${a.connection}&.connection)|(.edge.from=${a.app}&.edge.to=${a.connection}&.uses)`,
   )
   let c = rows.find((b) => b.entity.eid == a.connection)?.connection as
     | Comp
@@ -87,7 +88,7 @@ export let grantService = async (
   read: Read,
   a: { person: string; connection: string; operations: string[] },
 ): Promise<Bundle[]> => {
-  let [held] = await read(`.entity.eid=${a.connection}&.connection`)
+  let [held] = await read(line`.entity.eid=${a.connection}&.connection`)
   let c = held?.connection as Comp | undefined as Comp | undefined
   if (!c || c.owner != a.person) {
     throw new CallError(

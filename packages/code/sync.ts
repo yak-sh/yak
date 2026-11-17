@@ -23,6 +23,7 @@ import { localFilesystem } from '@yaks/git/host'
 import { identities } from '@yaks/graph/identity'
 import { signed } from '@yaks/graph/provenance'
 import type { Actor } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { link, unlink } from '@yaks/edge'
 import type { Binding } from '@yaks/mirror'
 import { blobOf } from '@yaks/mirror'
@@ -305,7 +306,7 @@ export let codeMirror = async (
     read,
     agreed: async () => {
       known.clear()
-      for (let b of await g.read(`.file.root=${repository}&?module`)) {
+      for (let b of await g.read(line`.file.root=${repository}&?module`)) {
         let path = str(comp(b, 'file')?.path)
         if (path && comp(b, 'module')) known.set(path, b)
       }

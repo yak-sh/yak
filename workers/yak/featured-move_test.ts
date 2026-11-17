@@ -1,6 +1,7 @@
 // What yaks.app featured moves into its `featured` mark, once: an integration
 // that said `featured` itself, and each app the home pages showed from the
 // demo space, and nothing else.
+import { line, whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
@@ -43,12 +44,12 @@ await g.apply([
 
 let moving = async (rule: typeof demoFeaturedRule) => {
   let rows = await g.read(rule.find)
-  let read = (line: string) => g.read(line) as Bundle[]
+  let read = (line: string) => g.read(whole(line)) as Bundle[]
   await g.apply(rows.flatMap((row) => rule.move(row, read)), { trusted: true })
   return rows.length
 }
 let featured = async (eids: string[]) =>
-  (await g.read(`.entity.eid=${eids.join(',')}&?featured`))
+  (await g.read(line`.entity.eid=${eids}&?featured`))
     .filter((r) => r.featured).map((r) => r.entity.eid).sort()
 
 test("an integration's own featured becomes the mark, and the property goes", async () => {
@@ -58,7 +59,7 @@ test("an integration's own featured becomes the mark, and the property goes", as
   ], [2, 0])
   let [slack, ashby, plain] = ['slack', 'ashby', 'plain'].map(integrationEid)
   assertEquals(await featured([slack, ashby, plain]), [slack])
-  let rows = await g.read(`.entity.eid=${slack},${ashby}&.integration`)
+  let rows = await g.read(line`.entity.eid=${slack},${ashby}&.integration`)
   assertEquals(
     rows.map((r) => (r.integration as { featured?: unknown }).featured ?? null),
     [null, null],

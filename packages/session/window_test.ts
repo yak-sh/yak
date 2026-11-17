@@ -1,3 +1,4 @@
+import { type Line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
@@ -29,7 +30,7 @@ test('transcript windows bound bodies, support both edges and entry anchors', as
     })),
   ])
   let calls: string[] = [], read = g.read.bind(g)
-  g.read = ((q: string, ...args: unknown[]) => {
+  g.read = ((q: Line, ...args: unknown[]) => {
     calls.push(q)
     return read(q, ...args as [])
   }) as typeof g.read

@@ -2,6 +2,7 @@
 // Guards preserve a concurrent edit; a conflicting human title stops, never
 // discards either value. This module is not imported by the running tracker.
 import type { Graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { token } from '@yaks/graph/sha256'
 import { comp, str, title } from './model.ts'
 
@@ -16,7 +17,9 @@ export let migrateTitles = async (g: Graph): Promise<number> => {
     }
     if (old == null && held) continue
     let occurrences = !old && !held
-      ? await g.read(`.error.bug=${row.entity.eid} * .order=error.at .limit=1`)
+      ? await g.read(
+        line`.error.bug=${row.entity.eid} * .order=error.at .limit=1`,
+      )
       : []
     patches.push({
       entity: row.entity,

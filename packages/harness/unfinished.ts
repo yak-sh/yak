@@ -3,6 +3,7 @@
 // baseline on a shared box, and the `harness-steps` benchmark guards overhead.
 
 import type { Comp } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Host } from '@yaks/host'
 import type { Runner, Step } from '@yaks/session'
@@ -41,16 +42,18 @@ export let unfinishedNativeFinal = async (
 ): Promise<void> => {
   if (step.status != 'settled' || step.did != 'asked') return
   let [native] = await host.graph.read(
-    `.entity.eid=${session}&.native&.fields=entity.eid,session.source`,
+    line`.entity.eid=${session}&.native&.fields=entity.eid,session.source`,
   )
   if (!native) return
   let source = (native.session as Comp | undefined)?.source
   let [asked] = source
-    ? await host.graph.read(`.entity.eid=${source}&.fields=comment.target`)
+    ? await host.graph.read(
+      line`.entity.eid=${String(source)}&.fields=comment.target`,
+    )
     : []
   let answering = (asked?.comment as Comp | undefined)?.target
   let tasks = await host.graph.read(
-    `.task&.claim.session=${session}&!completed&!cancelled&!blocked&.fields=entity.eid,doc.title`,
+    line`.task&.claim.session=${session}&!completed&!cancelled&!blocked&.fields=entity.eid,doc.title`,
   )
   // Heal's follower owns continuation of an open fixer, including the quiet
   // interval between its final answer and the next tracker reconciliation.
@@ -63,23 +66,25 @@ export let unfinishedNativeFinal = async (
   for (let task of tasks) {
     if (task.entity.eid == answering) {
       let [answer] = await host.graph.read(
-        `.comment.target=${answering}&.created.via=${session}&.fields=entity.eid&.limit=1`,
+        line`.comment.target=${
+          String(answering)
+        }&.created.via=${session}&.fields=entity.eid&.limit=1`,
       )
       if (answer) continue
     }
     if (bug && !fixer?.stop && !fixer?.exit) {
       const [muted] = await host.graph.read(
-        `.entity.eid=${task.entity.eid}&.filed.project.nofix&.fields=entity.eid`,
+        line`.entity.eid=${task.entity.eid}&.filed.project.nofix&.fields=entity.eid`,
       )
       const [owned] = await host.graph.read(
-        `.about&.edge.from=${task.entity.eid}&.edge.to=${
+        line`.about&.edge.from=${task.entity.eid}&.edge.to=${
           String(bug)
         }&.fields=entity.eid&.limit=1`,
       )
       if (!muted && (owned || task.entity.eid == bug)) continue
     }
     let waiting = await host.graph.read(
-      `(.requires|.contains)&.edge.from=${task.entity.eid}&.edge.to.task&!edge.to.completed&!edge.to.cancelled&.fields=entity.eid&.limit=1`,
+      line`(.requires|.contains)&.edge.from=${task.entity.eid}&.edge.to.task&!edge.to.completed&!edge.to.cancelled&.fields=entity.eid&.limit=1`,
     )
     if (waiting.length) continue
     let final = step.added.findLast((b) => b.ask)?.entity.eid ??

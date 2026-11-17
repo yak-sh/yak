@@ -2,6 +2,7 @@
 // platform-wide name, reviewed before anyone may install it, installed as a
 // copy pinned to the version reviewed, and updated by pulling the next
 // reviewed version, which says what changed.
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { platform } from './testing.ts'
@@ -379,7 +380,7 @@ test('a published name is one thing on the whole platform', async () => {
 // Someone else's skill, kept in kitchen as it was found (T-161785).
 let found = async (title: string, upstream: Record<string, string>) => {
   await skillIn(kitchen, title, `The ${title} way.\n`)
-  let [b] = await storeOf(kitchen).g.read(`.skill&.doc.title=${title}`)
+  let [b] = await storeOf(kitchen).g.read(line`.skill&.doc.title=${title}`)
   await storeOf(kitchen).g.apply([{ entity: b.entity, upstream }])
 }
 let at = { source: 'https://github.com/ann/skills', commit: 'abc123' }

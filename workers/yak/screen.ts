@@ -18,6 +18,7 @@
 // row is gone. So unpairing from the phone is deleting the row, and the TV is
 // back to a code at its next look. Nothing the TV holds can write: not the
 // draft, not the preview's data, not the person's account.
+import { line } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
@@ -119,14 +120,14 @@ let screenOf = (row: Bundle): Screen | null => {
 
 /** The pairing standing at a row, or null. */
 export let screen = async (dir: Directory, eid: string) => {
-  let [row] = await dir.read(`.entity.eid=${eid}&.screen`)
+  let [row] = await dir.read(line`.entity.eid=${eid}&.screen`)
   return row ? screenOf(row) : null
 }
 
 /** A person's screens, newest first. A code they typed that no TV took up
  * in its ten minutes was never on a screen, so it goes as it is read. */
 export let screens = async (dir: Directory, person: string, now: number) => {
-  let all = (await dir.read(`.screen.person=${person}`))
+  let all = (await dir.read(line`.screen.person=${person}`))
     .map(screenOf)
     .filter((s): s is Screen => !!s)
   let stale = all.filter((s) => !s.at && Date.parse(s.paired) + LIFE <= now)
@@ -241,12 +242,12 @@ export let showing = async (
   s: Screen,
 ): Promise<Showing> => {
   let [row] = await dir.read(
-    `.written.by=${s.person}&.order=-written.at&.limit=1`,
+    line`.written.by=${s.person}&.order=-written.at&.limit=1`,
   )
   let written = row?.written as { app?: string; draft?: string } | undefined
   if (!written?.app) return null
   let app = idOf(written.app)
-  let [named] = await dir.read(`.entity.eid=${app}&.app`)
+  let [named] = await dir.read(line`.entity.eid=${app}&.app`)
   let space = (named?.app as { space?: string } | undefined)?.space
   if (!space) return null
   let found = await dir.target(idOf(space), s.person, app)

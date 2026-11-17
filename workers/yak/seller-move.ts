@@ -8,6 +8,7 @@
 // The release before this one read both words and wrote only the new, and its
 // rehearsal found no old row in production's directory; so the old word is
 // retired here, declared only for this rule's reads (`source`).
+import { line } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import type { VocabDoc } from '@yaks/vocab'
@@ -61,7 +62,7 @@ export let sellerRule: Rule = {
   mark: 'yak/store/seller/1',
   stores: [PLATFORM_STORE],
   live: 'all',
-  find: '.stripe&*',
+  find: line`.stripe&*`,
   source: stripeSource,
   move: sellerMove,
   drop: OLD.map((prop) => `stripe.${prop}`),

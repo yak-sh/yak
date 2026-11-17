@@ -1,4 +1,5 @@
 // Figure outputs enter through store admission; only current main looks draw.
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { graph } from '@yaks/graph'
@@ -144,8 +145,8 @@ test('figure subscription and installer leave stale and shadow outputs out', asy
     ...rows,
     ...inputs,
   ], { trusted: true })
-  let filtered = await g.read(FIGURE_ROWS)
-  let meta = await g.read(FIGURE_BUILDS)
+  let filtered = await g.read(whole(FIGURE_ROWS))
+  let meta = await g.read(whole(FIGURE_BUILDS))
   let at = new Map(filtered.map((row) => [row.entity.eid, row]))
   for (let row of meta) {
     let prior = at.get(row.entity.eid)

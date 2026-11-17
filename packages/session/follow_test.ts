@@ -58,7 +58,9 @@ let followed = async (
   }
   let watched = {
     ...g,
-    read: async (...a: Parameters<typeof g.read>) => count(await g.read(...a)),
+    read:
+      (async (...a: Parameters<typeof g.read>) =>
+        count(await g.read(...a))) as typeof g.read,
     get: async (...a: Parameters<typeof g.get>) => count(await g.get(...a)),
   }
   let others: ((news: News) => void | Promise<void>) | undefined
@@ -160,7 +162,10 @@ test('a claim taken later routes a knock that waited', async () => {
   try {
     await f.settled()
     equal(await f.said('waiting'), false)
-    await f.g.apply([{ entity: { eid: 'page' }, claim: { session: 'native' } }])
+    await f.g.apply([{
+      entity: { eid: 'page' },
+      claim: { session: 'native' },
+    }])
     await until(() => f.said('waiting'))
   } finally {
     await f.close()
@@ -246,8 +251,9 @@ let door = async (rows: Bundle[]) => {
   }
   let watched = {
     ...g,
-    read: async (...a: Parameters<typeof g.read>) =>
-      queried(await g.read(...a)),
+    read:
+      (async (...a: Parameters<typeof g.read>) =>
+        queried(await g.read(...a))) as typeof g.read,
     get: async (...a: Parameters<typeof g.get>) => count(await g.get(...a)),
   }
   let others: Parameters<Feed>[0] | undefined
@@ -360,7 +366,10 @@ test('the hook door reads its projects again only after a project is written', a
     let { lines, projects } = await d.hook()
     return { lines: lines.map((l) => l.split(': ')[1]), projects }
   }
-  equal(await heard(), { lines: ['first'], projects: ['apart', 'home', 'sub'] })
+  equal(await heard(), {
+    lines: ['first'],
+    projects: ['apart', 'home', 'sub'],
+  })
   await d.elsewhere([knock('again', 'sub'), knock('aside', 'apart')])
   equal(await heard(), { lines: ['again'], projects: [] })
   await d.elsewhere([

@@ -1,6 +1,7 @@
 import * as system from '@yaks/process/system'
 import * as disk from '@yaks/file/io'
 import { importing } from '@yaks/fp/imports'
+import { line } from '@yaks/query'
 // Remote account credentials come from the configured graph, or a small
 // personal graph beside the CLI's other state. Nothing reads a token file.
 import type { Served } from './host.ts'
@@ -160,10 +161,9 @@ export let accounts = <H extends AccountHost>(
           ),
       )
       let owner = await person({ config, graph: r.graph })
+      if (!owner) return null
       let found = await r.graph.read(
-        `.connection.owner=${owner} .connection.integration=${
-          JSON.stringify(integration)
-        } .fields=entity.eid .limit=1`,
+        line`.connection.owner=${owner} .connection.integration=${integration} .fields=entity.eid .limit=1`,
       )
       if (!found.length) return null
     }

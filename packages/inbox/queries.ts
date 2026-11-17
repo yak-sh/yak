@@ -1,4 +1,4 @@
-import { listed } from '@yaks/query'
+import { type Built, joined, line, sub } from '@yaks/query'
 import { type Reader, type Row } from './reader.ts'
 import type { Search } from './threads.ts'
 import { threadOf } from './threads.ts'
@@ -23,16 +23,18 @@ export let words = (
     return yes
   }
 }
+let NONE = line``
 // Each set of values is sorted, so the same set always reads as one line.
-let select = (prop: string, items: Iterable<string | undefined>) => {
-  let v = listed(
-    [...new Set([...items].filter((i): i is string => !!i))].sort(),
-  )
-  return v ? `.${prop}=${v}` : ''
+let select = (prop: string, items: Iterable<string | undefined>): Built => {
+  let v = [...new Set([...items].filter((i): i is string => !!i))].sort()
+  return v.length ? line`.${prop}=${v}` : NONE
 }
-let union = (arms: string[], has: Words) =>
-  arms.filter((q) => q && has(q.slice(1).split(/[&=]/)[0])).map((q) => `(${q})`)
-    .join('|')
+// Lines one after another, each joined to the one before by `by`.
+let chain = (all: Built[], by: (a: Built, b: Built) => Built): Built =>
+  all.reduce<Built>((a, l) => a ? by(a, l) : l, NONE)
+let bar = (all: Built[]) => chain(all, (a, b) => line`${sub(a)}|${sub(b)}`)
+let union = (arms: Built[], has: Words) =>
+  joined(arms.filter((q) => q && has(q.slice(1).split(/[&=]/)[0])), '|')
 // Explicit optional components preserve sparse host vocabularies, and include
 // message bodies for said/received search. No unrelated delivery job payloads.
 let fields = [
@@ -80,8 +82,13 @@ let fields = [
   'requires',
   'edge',
 ]
-let read = (q: string, has: Words) =>
-  q ? `(${q})` + fields.filter(has).map((s) => `&?${s}`).join('') : ''
+let read = (q: Built, has: Words): Built =>
+  q
+    ? fields.filter(has).reduce<Built>(
+      (l, s) => line`${sub(l)}&?${s}`,
+      line`(${sub(q)})`,
+    )
+    : NONE
 
 /** First read: direct address, assigned work, watched work and attention,
  * of only the components `within` names when it names any. */
@@ -89,7 +96,7 @@ export let candidates = (
   who: Reader,
   has: Words = () => true,
   within?: string[],
-): string => {
+): Built => {
   let targets = [
     who.actor,
     who.session,
@@ -108,8 +115,9 @@ export let candidates = (
     'mail_notice',
     'comment',
     'entry',
-  ].filter(has).map((name) => `.${name}`).join('|')
-  if (authored && kinds) authored += `&(${kinds})`
+  ].filter(has).map((name) => line`.${name}`)
+  let kind = bar(kinds)
+  if (authored && kind) authored = line`${sub(authored)}&(${sub(kind)})`
   let arms = union([
     select('comment.target', targets),
     select('deliver.to', [who.actor, who.session, who.scope]),
@@ -122,41 +130,47 @@ export let candidates = (
     select('decided.by', [who.actor]),
     select('session.actor', [who.actor]),
     select('entity.eid', who.watching ?? []),
-    who.actor && who.operator ? '.bug' : '',
-    who.actor && who.operator ? '.decision' : '',
+    who.actor && who.operator ? line`.bug` : NONE,
+    who.actor && who.operator ? line`.decision` : NONE,
   ], has)
   if (!within || !arms) return read(arms, has)
-  let held = union(within.map((name) => `.${name}`), has)
-  return held ? read(`(${arms})&(${held})`, has) : ''
+  let held = union(within.map((name) => line`.${name}`), has)
+  return held ? read(line`(${sub(arms)})&(${sub(held)})`, has) : NONE
 }
 
 // The lane policy consumes human inputs, visible answers and state changes.
 // Model attempts, tools, reasoning and passive notices do not enter messages,
 // latest, activity or attention. Text/direction search still sees all words.
-let activityEntries = (has: Words): string => {
+let activityEntries = (has: Words): Built => {
   let input = has('content')
-    ? '.content' +
-      [
-        'output',
-        'prompt',
-        'notice',
-        'result',
-        'refusal',
-        'exception',
-        'ask',
-        'call',
-      ]
-        .filter(has).map((name) => `&!${name}`).join('')
-    : ''
+    ? [
+      'output',
+      'prompt',
+      'notice',
+      'result',
+      'refusal',
+      'exception',
+      'ask',
+      'call',
+    ]
+      .filter(has).reduce<Built>(
+        (l, name) => line`${sub(l)}&!${name}`,
+        line`.content`,
+      )
+    : NONE
   let output = has('output')
-    ? '.output' + (has('reasoning') ? '&!reasoning' : '')
-    : ''
-  return [
-    input,
-    output,
-    ...['exception', 'refusal', 'stop'].filter(has).map((name) => `.${name}`),
-  ]
-    .filter(Boolean).map((line) => `(${line})`).join('|')
+    ? has('reasoning') ? line`.output&!reasoning` : line`.output`
+    : NONE
+  return joined(
+    [
+      input,
+      output,
+      ...['exception', 'refusal', 'stop'].filter(has).map((name) =>
+        line`.${name}`
+      ),
+    ].filter(Boolean),
+    '|',
+  )
 }
 
 /** Second read: complete roots and policy-relevant conversation. Searches
@@ -165,14 +179,14 @@ export let discussion = (
   rows: Row[],
   has: Words = () => true,
   search: Search = {},
-): string => {
+): Built => {
   let targets = rows.filter((r) => !r.comps.edge && !r.comps.subscription).map(
     (r) => threadOf(r),
   )
   let entries = select('entry.session', targets)
   let activity = activityEntries(has)
   if (entries && !search.text?.trim() && !search.direction && activity) {
-    entries += `&(${activity})`
+    entries = line`${sub(entries)}&(${sub(activity)})`
   }
   return read(
     union([
@@ -195,15 +209,18 @@ export let discussion = (
 }
 
 /** Third/fourth reads: requires edges and their dependent task state. */
-export let requirements = (rows: Row[], has: Words = () => true): string =>
+export let requirements = (rows: Row[], has: Words = () => true): Built =>
   has('requires') && has('edge')
     ? read(
-      select('edge.to', rows.map((r) => threadOf(r))) +
-        (rows.length ? '&.requires' : ''),
+      rows.length
+        ? line`${
+          sub(select('edge.to', rows.map((r) => threadOf(r))))
+        }&.requires`
+        : NONE,
       has,
     )
-    : ''
-export let dependents = (edges: Row[], has: Words = () => true): string =>
+    : NONE
+export let dependents = (edges: Row[], has: Words = () => true): Built =>
   read(
     select('entity.eid', edges.map((r) => String(r.comps.edge?.from ?? ''))),
     has,
@@ -217,9 +234,9 @@ const BUDGET = 48 * 1024
  */
 export let boundedReads = (
   rows: Row[],
-  read: (rows: Row[]) => string,
-): string[] => {
-  let out = new Set<string>()
+  read: (rows: Row[]) => Built,
+): Built[] => {
+  let out = new Set<Built>()
   let split = (part: Row[]) => {
     let query = read(part)
     if (!query) return
@@ -270,10 +287,15 @@ export let summaryQuery = (
   actor: string,
   search: Search = {},
   thread?: string,
-): string =>
-  `.inbox_summary.actor=${JSON.stringify(actor)}` +
-  (search.text ? `&.inbox_summary.text=${JSON.stringify(search.text)}` : '') +
-  (search.direction ? `&.inbox_summary.direction=${search.direction}` : '') +
-  (search.all ? '&.inbox_summary.all=true' : '') +
-  (search.lane ? `&.inbox_summary.lane=${JSON.stringify(search.lane)}` : '') +
-  (thread ? `&.inbox_summary.thread=${JSON.stringify(thread)}` : '')
+): Built =>
+  line`.inbox_summary.actor=${actor}${
+    sub(search.text ? line`&.inbox_summary.text=${search.text}` : NONE)
+  }${
+    sub(
+      search.direction
+        ? line`&.inbox_summary.direction=${search.direction}`
+        : NONE,
+    )
+  }${sub(search.all ? line`&.inbox_summary.all=true` : NONE)}${
+    sub(search.lane ? line`&.inbox_summary.lane=${search.lane}` : NONE)
+  }${sub(thread ? line`&.inbox_summary.thread=${thread}` : NONE)}`

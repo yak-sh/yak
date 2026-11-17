@@ -30,6 +30,7 @@ import { Pending, said } from '@yaks/api/log'
 import { background, reported } from './defects.ts'
 import { FILED } from '@yaks/api/refuse'
 import { setImmediate } from 'node:timers'
+import type { Asked } from '@yaks/query'
 
 /** The meta store, in the graph's own wire. */
 export type Meta = {
@@ -38,8 +39,8 @@ export type Meta = {
   /** A filter line → the entities it selects, with canonical reference ids.
    * Public page adapters request names explicitly. A listing asks the Store
    * to screen platform bookkeeping using its authoritative vocabulary. */
-  query: (
-    line: string,
+  query: <Q extends string>(
+    line: Q & Asked<Q>,
     opts?: {
       live?: boolean
       listing?: boolean

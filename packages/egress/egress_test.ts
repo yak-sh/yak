@@ -3,7 +3,7 @@
 // place, who and what is refused, and the one retry after a refresh.
 
 import { test } from '@yaks/testing'
-import { parse } from '@yaks/query'
+import { line, parse } from '@yaks/query'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Comp, graph, type Query } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -143,7 +143,7 @@ let texts = await needs('texts')
 await connect(c, texts, { key: 'sk-live' })
 await g.apply([{ ...link('widget', USES, texts), [USES]: { anyone: true } }])
 let calendar = await needs('calendar')
-let [held] = await g.read(`.entity.eid=${calendar}`)
+let [held] = await g.read(line`.entity.eid=${calendar}`)
 await g.apply([{
   entity: { eid: calendar },
   connection: { status: 'connected' },

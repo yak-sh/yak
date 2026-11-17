@@ -1,4 +1,5 @@
 // A seller's immutable document quote, persisted before any payment is asked.
+import { line } from '@yaks/query'
 import type { Paid, Quote, Sale } from '@yaks/host/payments'
 import { sha256 } from '@yaks/graph/sha256'
 import type { Meta } from './meta.ts'
@@ -59,7 +60,7 @@ export let validQuote = (q: Quote): Quote => {
 export let issueQuote = async (store: Meta, quote: Quote): Promise<Quote> => {
   validQuote(quote)
   let hash = quoteHash(quote)
-  let [old] = await store.query(`.entity.eid=${quote.id}`) as Quoted[]
+  let [old] = await store.query(line`.entity.eid=${quote.id}`) as Quoted[]
   if (old) {
     if (old.service_quote?.hash != hash) {
       refuse('a quote cannot be changed; issue a new quote')
@@ -77,7 +78,7 @@ export let issueQuote = async (store: Meta, quote: Quote): Promise<Quote> => {
 
 export let readQuote = async (store: Meta, id: string): Promise<Quote> => {
   if (!eid(id)) refuse('invalid quote identity')
-  let [row] = await store.query(`.entity.eid=${id}`) as Quoted[]
+  let [row] = await store.query(line`.entity.eid=${id}`) as Quoted[]
   if (!row?.service_quote) refuse('quote not found; request a new quote')
   let q: Quote
   try {
@@ -161,7 +162,7 @@ export let checkoutQuote = async (
   quote: Quote,
   at: Parameters<typeof quotedSale>[1],
 ): Promise<Sale> => {
-  let [row] = await store.query(`.entity.eid=${quote.id}`)
+  let [row] = await store.query(line`.entity.eid=${quote.id}`)
   let saved = row?.service_checkout as { snapshot?: string } | undefined
   if (saved?.snapshot) {
     let sale = JSON.parse(saved.snapshot) as Sale

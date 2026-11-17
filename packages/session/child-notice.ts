@@ -1,5 +1,6 @@
 // Passive child completion shares fork lineage and entry ordering with normal
 // delegation. Its single receipt is refreshed when a closed chat is resumed.
+import { type Built, line, sub } from '@yaks/query'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { kindOf, statusOf, textOf } from './state.ts'
@@ -37,7 +38,7 @@ export let childNotice = async (
   working: () => Promise<boolean>,
 ): Promise<number | undefined> => {
   let [last] = await g.read(
-    `.entry.session=${child}&.order=-entry.seq&.limit=1&.fields=entity.eid`,
+    line`.entry.session=${child}&.order=-entry.seq&.limit=1&.fields=entity.eid`,
   )
   if (!last) return
   let eid = derivedEid(`delivery:${child}:notice`)
@@ -55,16 +56,19 @@ export let childNotice = async (
     'refusal',
     'exception',
   ]
-    .filter((name) => g.vocab.comp(name)).map((name) => '!' + name).join('&')
-  let query = `.entry.session=${child}&.content&${inputsOnly}`
+    .filter((name) => g.vocab.comp(name))
+    .reduce<Built>(
+      (q, name) => line`${sub(q)}&!${name}`,
+      line`.entry.session=${child}&.content`,
+    )
   let [sent] = await g.read(
-    query + '&.order=-entry.seq&.limit=1&.fields=created.at',
+    line`${sub(inputsOnly)}&.order=-entry.seq&.limit=1&.fields=created.at`,
   )
   let at = Date.parse(String((sent?.created as Comp | undefined)?.at ?? ''))
   let due = at + Math.max(0, Number(link.quiet ?? 0))
   if (status == 'settled' && due > now) return due
   if (status == 'settled' && await working()) return
-  let entries = await g.read(`.entry.session=${child}&.order=entry.seq&*`)
+  let entries = await g.read(line`.entry.session=${child}&.order=entry.seq&*`)
   if (
     entries.at(-1)?.entity.eid != last.entity.eid || statusOf(entries) != status
   ) return now

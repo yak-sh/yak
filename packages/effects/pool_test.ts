@@ -12,12 +12,13 @@ import {
   detached,
   graph,
   guard,
+  type Reads,
   type Storage,
 } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { after, system } from '@yaks/fp'
 import { loadVocab, pick } from '@yaks/vocab'
-import { parse } from '@yaks/query'
+import { parse, whole } from '@yaks/query'
 import { memory } from '../graph/testing.ts'
 import { test, until } from '@yaks/testing'
 import { effects, type Handler, type Opts } from './registry.ts'
@@ -47,17 +48,17 @@ let post = (eid: string, comp: Comp = { title: 'One' }) => ({
   post: comp,
 })
 
-type Reads = { read: (q: string) => Bundle[] | Promise<Bundle[]> }
+type Reader = { read: Reads<Bundle[] | Promise<Bundle[]>> }
 
-let rows = async (g: Reads, q = '.effect') =>
-  (await g.read(q)).map((b) => b[q.slice(1)] as Comp)
+let rows = async (g: Reader, q = '.effect') =>
+  (await g.read(whole(q))).map((b) => b[q.slice(1)] as Comp)
 
 // The runs written down, as `handler target state`, in a stable order.
-let owed = async (g: Reads) =>
+let owed = async (g: Reader) =>
   (await rows(g)).map((e) => `${e.handler} ${e.target} ${e.state}`).sort()
 
 // The first run written down for `handler` and `target`.
-let run = async (g: Reads, handler: string, target = 'p1') =>
+let run = async (g: Reader, handler: string, target = 'p1') =>
   (await rows(g)).find((e) => e.handler == handler && e.target == target)!
 
 test('a commit writes down what it owes, and a writer working nothing runs none', async () => {
@@ -654,7 +655,10 @@ test('a worker that stays drains a backlog wider than a pass without waiting bet
   let up = new AbortController()
   let serving = server.fx.work(server.g, up.signal)
   try {
-    assertEquals(await Promise.race([drained.promise, idle.promise]), 'drained')
+    assertEquals(
+      await Promise.race([drained.promise, idle.promise]),
+      'drained',
+    )
     assertEquals(
       server.ran.sort(),
       Array.from({ length: 64 }, (_, i) => `created p${i}`).sort(),

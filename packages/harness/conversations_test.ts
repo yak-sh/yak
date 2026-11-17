@@ -1,6 +1,7 @@
 // Drive each real MCP/native scenario on its own disposable graph before test
 // registration, then assert immutable observations. Provider/HTTP/database work
 // is fixture preparation, not part of the synchronous assertion budget.
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -133,7 +134,9 @@ let listed = await (async () => {
       actor: project,
       operator: false,
     })
-    let untitled = await session('', '2026-09-01T00:00:00Z', { actor: project })
+    let untitled = await session('', '2026-09-01T00:00:00Z', {
+      actor: project,
+    })
     let { conversations } = await call('conversation_recent', { project })
     let read = await call('conversation_read', { project, session: actor })
     let refusals = await Promise.all(
@@ -171,7 +174,10 @@ let isolation = await (async () => {
     $actor: actor,
   })
   try {
-    let started = await call('conversation_start', { project, prompt: 'hello' })
+    let started = await call('conversation_start', {
+      project,
+      prompt: 'hello',
+    })
     let forged = await request('conversation_start', {
       project,
       prompt: 'forged',
@@ -208,7 +214,10 @@ let isolation = await (async () => {
         ),
       )
     }
-    let [out] = await run.conversation_projects!(bundle({ by: other }, {}), h.g)
+    let [out] = await run.conversation_projects!(
+      bundle({ by: other }, {}),
+      h.g,
+    )
     return frozen({
       forged,
       crossed,
@@ -290,7 +299,11 @@ let reading = await (async () => {
       seen.unshift(...page.messages.map((m: { text: string }) => m.text))
       before = page.nextBefore ?? undefined
     } while (before)
-    await call('conversation_send', { project, session, text: '  follow up  ' })
+    await call('conversation_send', {
+      project,
+      session,
+      text: '  follow up  ',
+    })
     let all = await call('conversation_read', { project, session })
     return frozen({
       tail,
@@ -378,11 +391,11 @@ let intake = await (async () => {
     await call('conversation_send', send)
     await call('conversation_send', send)
     let lines = await h.g.read(
-      `.entry.session=${JSON.stringify(session)} .content !prompt ?using`,
+      line`.entry.session=${session} .content !prompt ?using`,
     )
-    let last = JSON.stringify(lines.at(-1)!.entity.eid)
+    let last = lines.at(-1)!.entity.eid
     let [use] = await h.g.read(
-      `.attachment.message=${last} .fields=attachment.name,attachment.artifact`,
+      line`.attachment.message=${last} .fields=attachment.name,attachment.artifact`,
     )
     return frozen({
       same: again.session == session,

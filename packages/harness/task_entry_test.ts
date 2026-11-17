@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
@@ -22,7 +23,7 @@ test('taskEntry atomically mints bare work, contains it, and spawns with inherit
       },
     ])
     let first = await taskEntry(h.g, 'p', 'Title\n\nComplete body')
-    let [task] = await h.g.read(`.task .claim.session=${first.child}&*`)
+    let [task] = await h.g.read(line`.task .claim.session=${first.child}&*`)
     assertEquals(task.doc, { title: 'Title', body: 'Title\n\nComplete body' })
     assertEquals((task.task as Comp).status, 'wip') // derived, not written
     assert(
@@ -31,14 +32,14 @@ test('taskEntry atomically mints bare work, contains it, and spawns with inherit
       ),
     )
     assert(!task.filed)
-    let [edge] = await h.g.read(`.contains .edge.to=${first.task}&*`)
+    let [edge] = await h.g.read(line`.contains .edge.to=${first.task}&*`)
     assertEquals((edge.edge as Comp).from, 'p')
     let [child] = await h.g.read(`.spawned.parent=p&*`)
     assertEquals((child.spawned as Comp).parent, 'p')
     assert(!(child.spawned as Comp).call) // no invented tool call
-    let input = (await h.g.read(`.entry.session=${first.child}&*`)).find((b) =>
-      b.using
-    )!
+    let input = (await h.g.read(line`.entry.session=${first.child}&*`)).find((
+      b,
+    ) => b.using)!
     assertEquals((input.using as Comp).model, M)
     assertEquals((input.using as Comp).effort, 'high')
     assertEquals(
@@ -50,7 +51,7 @@ test('taskEntry atomically mints bare work, contains it, and spawns with inherit
       { entity: { eid: 'work2' }, task: {}, claim: { session: 'p' } },
     ])
     let second = await taskEntry(h.g, 'p', 'Nested')
-    let edges = await h.g.read(`.contains .edge.to=${second.task}&*`)
+    let edges = await h.g.read(line`.contains .edge.to=${second.task}&*`)
     assertEquals(edges.map((b) => (b.edge as Comp).from).sort(), [
       'work1',
       'work2',
@@ -158,7 +159,10 @@ test('auto-task notice is lazy, reaches next ask, and contextual completion is i
           .session as Comp).status,
       'settled',
     )
-    assertEquals((await a.transcript(parent)).filter((b) => b.notice).length, 1)
+    assertEquals(
+      (await a.transcript(parent)).filter((b) => b.notice).length,
+      1,
+    )
     assertEquals((await a.transcript(parent)).filter((b) => b.ask).length, 1)
     await a.send(parent, 'Continue naturally')
     await a.idle(parent)
@@ -246,7 +250,7 @@ test('taskEntry references the stable prefix without copying later inputs', asyn
       before.some((b) => b.entity.eid.includes('snapshot-limit')),
       false,
     )
-    let [child] = await h.g.read('.entity.eid=' + result.child)
+    let [child] = await h.g.read(line`.entity.eid=${result.child}`)
     assertEquals((child.fork as Comp).from, 'first')
     assertEquals(before.some((b) => b.entity.eid == 'partial'), false)
     assertEquals(before.some((b) => b.entity.eid == 'first'), true)
@@ -339,7 +343,10 @@ test('terminal attempts do not pin task forks to an old prefix', async () => {
       let [child] = await h.g.get([result.child])
       assertEquals((child.fork as Comp).from, 'new-input')
       let entries = await transcript(h.g, result.child)
-      assertEquals(entries.filter((b) => b.entity.eid == 'new-input').length, 1)
+      assertEquals(
+        entries.filter((b) => b.entity.eid == 'new-input').length,
+        1,
+      )
       assertEquals(
         entries.some((b) => b.entity.eid.includes('recorded-input')),
         false,

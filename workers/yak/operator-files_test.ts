@@ -3,6 +3,7 @@
 // the page to an Operator on Claude, which is shown a picture and a PDF as
 // they are; and drawn in the person's message.
 
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
@@ -416,7 +417,7 @@ test('a run on another provider sends its DOCX as a document with its original f
   })
   assertEquals(fileRun.model, 'files')
   let [input] = await store.g.read(
-    `.entry.session=${fileRun.session}&.using&.order=entry.seq&.limit=1`,
+    line`.entry.session=${fileRun.session}&.using&.order=entry.seq&.limit=1`,
   )
   let [provider] = await store.g.get([
     String((input.using as { provider: string }).provider),

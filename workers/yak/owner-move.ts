@@ -4,6 +4,7 @@
 // the rule's. The pass walks the store in eid order from where it stopped;
 // until it is done, the store is read by the paths an owner is named on
 // (operator-access.ts `owned`), never by owners it has yet to write.
+import { joined, line, sub } from '@yaks/query'
 import type { Meta } from '@yaks/sqlite'
 import type { Graph } from '@yaks/graph'
 import { MADE, OWNED, OWNERS, reckon } from '@yaks/platform/operator-owner'
@@ -14,7 +15,8 @@ let BEARING = [
   'spawned',
   'entry',
   ...MADE,
-].map((c) => `.${c}`).join('|')
+].map((c) => line`.${c}`)
+let BEARS = joined(BEARING, '|')
 
 /** How many entities one batch reads. */
 export let BATCH = 200
@@ -35,8 +37,8 @@ export let ownerBackfill = async (
   if (!marks || at == 'done') return false
   if (store.waiting?.()) return true
   let rows = await g.read(
-    `(${BEARING})${
-      at ? `&.entity.eid>${at}` : ''
+    line`(${sub(BEARS)})${
+      sub(at ? line`&.entity.eid>${at}` : line``)
     }&.order=entity.eid&.limit=${BATCH}&.fields=entity.eid`,
   )
   let eids = rows.map((r) => r.entity.eid)

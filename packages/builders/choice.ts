@@ -1,6 +1,7 @@
 // Choosing a retained take changes only the chosen marks. The hook enforces
 // one mark per build/slot at every graph door, including plain entity patches.
 
+import { line } from '@yaks/query'
 import type { Actor, Comp, Graph, Hook, Plugin } from '@yaks/graph'
 import { comps, dead } from '@yaks/graph/bundle'
 import { Refused } from '@yaks/graph/errors'
@@ -32,8 +33,10 @@ export let choosing: Hook = (bundles, tx) => {
       want.set(slot, row.entity.eid)
       builds.add(String(built.build))
     }
-    let line = `.built.build=${[...builds].join(',')}&.chosen&*`
-    return after(tx.read(line), (prior) => [
+    let prior = builds.size
+      ? tx.read(line`.built.build=${[...builds]}&.chosen&*`)
+      : []
+    return after(prior, (prior) => [
       ...prior.filter((row) => {
         let built = row.built as Comp
         let chosen = want.get(JSON.stringify([built.build, built.slot]))

@@ -9,6 +9,7 @@
 // because the whole claim is that a deploy mints a commit: the plugin list, the
 // registration, the cross-store write and the vocabulary all have to be right
 // for this file to pass.
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -104,7 +105,7 @@ let deploy = async (
 
 // A committed object's own bytes, read back from where @yaks/git put them.
 let bodyOf = async (env: Env, git: ReturnType<typeof metaOf>, oid: string) => {
-  let [row] = await git.query(`.entity.eid=${oid}`)
+  let [row] = await git.query(line`.entity.eid=${oid}`)
   assert(row, `no object ${oid}`)
   let sha = (row.blob as { sha: string }).sha
   let bytes = await r2Objects(env.BLOBS).read(BODY + sha)
@@ -120,8 +121,8 @@ let headOf = (env: Env, app: App) => refAt(held(meta(env)), app.eid)
 // clone walks, read from the directory and the object store together.
 let chain = async (env: Env, git: ReturnType<typeof metaOf>, app: App) => {
   let out: { oid: string; parent: string | null; message: string }[] = []
-  for (let d of await meta(env).query(`.deploy.app=${app.eid}`)) {
-    let [c] = await meta(env).query(`.commit.target=${d.entity.eid}`)
+  for (let d of await meta(env).query(line`.deploy.app=${app.eid}`)) {
+    let [c] = await meta(env).query(line`.commit.target=${d.entity.eid}`)
     if (!c) continue
     let { body } = await bodyOf(env, git, c.entity.eid)
     out.push({
@@ -153,16 +154,18 @@ test('a deploy mints one commit whose tree is the manifest', async () => {
   assert(row.entity.archetype, 'Git objects carry derived classification')
   const shapes = await git.query('.archetype')
   assert(shapes.some((b) => b.entity.eid == row.entity.archetype))
-  const [ref] = await meta(env).query(`.ref.app=${app.eid}`)
+  const [ref] = await meta(env).query(line`.ref.app=${app.eid}`)
   assert(ref.entity.archetype, 'directory refs carry derived classification')
-  let [commit] = await meta(env).query(`.commit&.entity.eid=${head}`)
+  let [commit] = await meta(env).query(line`.commit&.entity.eid=${head}`)
   assertEquals(Object.keys(commit.commit as object).sort(), [
     'message',
     'repo',
     'target',
   ])
   let repo = (commit.commit as { repo: string }).repo
-  let [repository] = await meta(env).query(`.entity.eid=${repo}&?repository`)
+  let [repository] = await meta(env).query(
+    line`.entity.eid=${repo}&?repository`,
+  )
   let origin = (repository.repository as { origin: string }).origin
   assert(
     origin.startsWith('https://'),
@@ -170,9 +173,11 @@ test('a deploy mints one commit whose tree is the manifest', async () => {
   )
   assertNotEquals(repo, origin, 'a clone address is not an entity identity')
   assertEquals(
-    (await meta(env).query(`.commit.repo.repository.origin=${origin}`)).map((
-      b,
-    ) => b.entity.eid),
+    (await meta(env).query(line`.commit.repo.repository.origin=${origin}`)).map(
+      (
+        b,
+      ) => b.entity.eid,
+    ),
     [head],
   )
   // The platform signed it; the person who deployed authored it, under the
@@ -198,7 +203,7 @@ test('a deploy mints one commit whose tree is the manifest', async () => {
   )
   let page = entries.find((e) => e.name == 'index.html')!
   let [blob] = await git.query(
-    `.entity.eid=${page.oid}`,
+    line`.entity.eid=${page.oid}`,
   )
   assertEquals((blob.blob as { sha: string }).sha, manifest['index.html'])
 })
@@ -241,7 +246,9 @@ test('the next deploy follows the last one and moves the branch', async () => {
       return String(id) != GIT_STORE ? store : {
         fetch: (r: Request) => {
           let q = new URL(r.url).searchParams.get('q') ?? ''
-          named.push(...q.match(/blob\.sha=([0-9a-f,]+)/)?.[1].split(',') ?? [])
+          named.push(
+            ...q.match(/blob\.sha=([0-9a-f,]+)/)?.[1].split(',') ?? [],
+          )
           return store.fetch(r)
         },
       }

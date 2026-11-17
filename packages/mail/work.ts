@@ -28,6 +28,7 @@
 // search. Every word is the vocabulary's to declare: a graph without tasks,
 // projects or edges files nothing, or files without the link.
 
+import { line } from '@yaks/query'
 import type { Bundle, Comp, Eid, ReadTx } from '@yaks/graph'
 import type { Handlers } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
@@ -111,7 +112,7 @@ export let work = (vocab?: Vocab): Handlers => ({
     let cancelled = task?.cancelled as Comp | undefined
     if (!cancelled) return
     let links = await tx.read(
-      `.about&.edge.from=${task!.entity.eid}`,
+      line`.about&.edge.from=${task!.entity.eid}`,
     )
     let letters = await tx.get(
       links.map((l) => str(comp(l, 'edge').to))

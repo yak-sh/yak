@@ -1,5 +1,6 @@
 // Re-admit the directory's platform rows through the package's declarations.
 // Entity ids and property values stay fixed, including kept deploy pointers.
+import { joined, line } from '@yaks/query'
 import type { Comp } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { PLATFORM_STORE } from '@yaks/platform/names'
@@ -19,7 +20,7 @@ export let platformRule: Rule = {
   mark: 'yak/store/platform-words/1',
   stores: [PLATFORM_STORE],
   live: 'all',
-  find: words.map((word) => `.${word}`).join('|'),
+  find: joined(words.map((word) => line`.${word}`), '|'),
   move: (row) => {
     let comps = Object.fromEntries(
       words.flatMap((word) => row[word] ? [[word, row[word] as Comp]] : []),

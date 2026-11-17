@@ -42,8 +42,8 @@ let logged = async (lines: unknown[], code = 0) => {
   return { g, dir, close: () => Deno.removeSync(dir, { recursive: true }) }
 }
 
-let entries = async (g: { read: (q: string) => unknown }) =>
-  (await g.read('.entry&.order=entry.seq&*')) as Bundle[]
+let entries = async (g: Pick<Graph, 'read'>) =>
+  await g.read('.entry&.order=entry.seq&*')
 
 let comp = (b: Bundle | undefined, name: string) => b?.[name] as Comp
 
@@ -553,7 +553,11 @@ let watched = stepping()
 let long = await (async () => {
   let s = storage(watched.driver, host, { derived: sessionDerived(host) })
   s.install()
-  let g = graph({ storage: s, vocab: host, plugins: [sessions(), processes()] })
+  let g = graph({
+    storage: s,
+    vocab: host,
+    plugins: [sessions(), processes()],
+  })
   await g.apply(asking('S1', 'E1', 'do it'))
   await g.apply(Array.from({ length: ENTRIES }, (_, n) => ({
     entity: { eid: `said-${n}` },

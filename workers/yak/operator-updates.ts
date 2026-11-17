@@ -11,6 +11,7 @@
  * conversation on the `update` channel (operator-channels.ts `BY`), which is
  * the chat about it.
  */
+import { line, sub } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { readInbox } from '@yaks/inbox/read'
@@ -129,7 +130,7 @@ let updateOf = (
 let shownOf = async (store: Store, rows: (Bundle | undefined)[]) => {
   let asks = rows.filter((b): b is Bundle => !!b?.decision)
   let edges = await Promise.all(
-    asks.map((b) => store.g.read(showing(b.entity.eid) + '&*')),
+    asks.map((b) => store.g.read(line`${sub(showing(b.entity.eid))}&*`)),
   )
   let eids = [...new Set(edges.flat().map((b) => String(comp(b, 'edge')!.to)))]
   let held = new Map(

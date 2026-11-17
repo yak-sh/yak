@@ -13,6 +13,7 @@ import { Refused } from '@yaks/graph/errors'
 import { cleanup } from '@yaks/testing'
 import { driver, type Measure } from '@yaks/durable-object'
 import type { VocabDoc } from '@yaks/vocab'
+import { line } from '@yaks/query'
 import {
   candidate,
   declarationSlot,
@@ -181,7 +182,7 @@ export let lifecycleStores = (
     let rows = (comp: string, prop?: string) => {
       if (!wire.graph.vocab.comp(comp)) return 0
       let held = wire.graph.read(
-        `.${comp}${prop ? '.' + prop : ''}&.limit=1`,
+        prop ? line`.${comp}.${prop}&.limit=1` : line`.${comp}&.limit=1`,
         { administrative: true },
       )
       if (held instanceof Promise) {

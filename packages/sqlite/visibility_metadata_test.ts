@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
@@ -43,7 +44,7 @@ test('an owner can select their private component on a public entity', () =>
   assertEquals(g.rows('.pref', opts), [{ eid: 'alice' }]))
 test('private component archetypes cannot be selected through entity metadata', () =>
   assertEquals(
-    g.rows(`.entity.eid=bob .entity.archetype=${pointer}`, opts),
+    g.rows(line`.entity.eid=bob .entity.archetype=${pointer}`, opts),
     [],
   ))
 test('private component archetypes cannot be dereferenced through entity metadata', () =>

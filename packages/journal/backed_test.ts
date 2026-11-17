@@ -1,3 +1,4 @@
+import { line, whole } from '@yaks/query'
 import { statements } from '@yaks/sqlite'
 /// <reference lib="deno.ns" />
 // The journal read as entities: `_tx` and `_change` answer the same query
@@ -65,8 +66,8 @@ let build = (
   }))
   sync(g.apply(described, { trusted: true }))
   apply([{ entity: { eid: 'n1' }, note: { text: 'aside' } }])
-  let read = (q: string) => sync(g.read(q))
-  let rows = (q: string) => sync(g.rows(q))
+  let read = (q: string) => sync(g.read(whole(q)))
+  let rows = (q: string) => sync(g.rows(whole(q)))
   // The same store as a reader under `visibility` reads it.
   let seen = (visibility: Visibility) =>
     graph({
@@ -283,7 +284,7 @@ let every = changes.concat(built.read('._change.target=p2,n1'))
   .map((b) => b.entity.eid)
 let sees = (visibility: Visibility) => {
   let g = built.seen(visibility)
-  let column = (q: string, f: string) => sync(g.rows(q)).map((r) => r[f])
+  let column = (q: string, f: string) => sync(g.rows(whole(q))).map((r) => r[f])
   return {
     got: built.said(sync(g.get(every))),
     targets: column('._change&.fields=_change.target', '_change.target'),
@@ -351,7 +352,7 @@ let reach = (visibility?: Visibility) => {
     creators: sync(g.get(['w1', 'w2'])).map((b) => (b.created as Comp)?.by),
     selected: eids(sync(g.read('.entity.eid=pd,nd,rd', { graves: true }))),
     history: ['pd', 'nd', 'rd'].map((eid) =>
-      sync(g.rows(`._change&._change.target=${eid}&.count`))[0]?.n ?? 0
+      sync(g.rows(line`._change&._change.target=${eid}&.count`))[0]?.n ?? 0
     ),
   }
 }

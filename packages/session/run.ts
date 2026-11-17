@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 // Hosted transcripts advance through independently owed effects: session_run
 // owns one model/context step and session_tool owns one call. Committed inputs,
@@ -95,7 +96,7 @@ export let RUN = '@yaks/session/run'
 let ENDED: TranscriptStatus[] = ['settled', 'failed', 'stopped']
 
 // A background call some runner claimed and nothing has answered.
-let HELD = '.call&.entry&.tool_async&.execution&!results'
+let HELD = line`.call&.entry&.tool_async&.execution&!results`
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -109,7 +110,8 @@ let one = async (
 
 // Routing needs presence, not a session's computed status and transcript cost.
 let isSession = async (g: Graph, eid: Eid): Promise<boolean> =>
-  Number((await g.rows(`.entity.eid=${eid}&.session&.count`))[0]?.n ?? 0) > 0
+  Number((await g.rows(line`.entity.eid=${eid}&.session&.count`))[0]?.n ?? 0) >
+    0
 
 let admission = ['spawned', 'dispatch', 'admitted', 'waiting']
 
@@ -119,7 +121,7 @@ type Seen = { seq: number; waiting?: Step['waiting'] }
 // receipt mutations leave entry positions unchanged.
 let newest = async (g: Graph, session: Eid): Promise<Seen> => {
   let [last] = await g.read(
-    `.entry.session=${session}&.order=-entry.seq&.limit=1`,
+    line`.entry.session=${session}&.order=-entry.seq&.limit=1`,
   )
   return { seq: last ? seqOf(last) : 0 }
 }
@@ -138,7 +140,9 @@ let ended = async (g: Graph, session: Eid, r: Runner) => {
   if (await currentStatus(g, session) == 'pending') return
   await r.ended?.(session)
   if (g.vocab.comp('provisional')) {
-    let owed = await g.read(`.entry.session=${session}&.ask&.provisional`)
+    let owed = await g.read(
+      line`.entry.session=${session}&.ask&.provisional`,
+    )
     if (owed.length) {
       await g.apply(
         owed.map((b) => ({
@@ -284,10 +288,10 @@ let withdrawn = async (
   since: number,
 ): Promise<boolean> => {
   let stops = await g.read(
-    `.entry.session=${session}&.${STOP_ENTRY}&.entry.seq>${since}`,
+    line`.entry.session=${session}&.${STOP_ENTRY}&.entry.seq>${since}`,
   )
   if (stops.length) return true
-  let said = await g.read(`.entry.session=${session}&.cancel&*`)
+  let said = await g.read(line`.entry.session=${session}&.cancel&*`)
   if (!said.length) return false
   let targets = said.map((b) => String(comp(b, 'cancel')?.target))
   let found = await g.get(targets)
@@ -340,7 +344,7 @@ let cancelled = async (
   status: TranscriptStatus,
 ): Promise<boolean> => {
   if (status == 'stopped' || !holds(g)) return false
-  let held = await g.read(`.task&.claim.session=${session}&.cancelled`)
+  let held = await g.read(line`.task&.claim.session=${session}&.cancelled`)
   if (!held.length) return false
   await g.apply([{
     entity: { eid: derivedEid(`${session}:cancelled`) },
@@ -728,7 +732,7 @@ let release = async (g: Graph, e: Event, tx: ReadTx): Promise<void> => {
   }
   let present = async () =>
     (await tx.read(
-      `.entity.eid=${session}&.session&.fields=entity.eid`,
+      line`.entity.eid=${session}&.session&.fields=entity.eid`,
     )).length > 0
   let live = await present()
   // A hidden holder is not a missing holder. Effects receive an authoritative
@@ -737,7 +741,7 @@ let release = async (g: Graph, e: Event, tx: ReadTx): Promise<void> => {
   let row = await one(g, session, ['process', 'exit', STOP_ENTRY])
   if (live && row?.process && !row.exit) return
   let [mark] = live
-    ? await g.rows(`.entity.eid=${session}&.fields=session.ended`)
+    ? await g.rows(line`.entity.eid=${session}&.fields=session.ended`)
     : []
   if (live && mark?.['session.ended'] !== true) {
     let status: TranscriptStatus | undefined
@@ -756,7 +760,7 @@ let release = async (g: Graph, e: Event, tx: ReadTx): Promise<void> => {
   let owed = parked && await requested(g, session)
   for (
     let held of await g.read(
-      `.${CLAIM}.session=${session}&.fields=entity.eid`,
+      line`.${CLAIM}.session=${session}&.fields=entity.eid`,
     )
   ) {
     if (owed || parked && await waits(g, session, held.entity.eid)) {

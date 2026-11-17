@@ -4,6 +4,7 @@
 // conversation its own lines (a fork's, not those it inherits); a wake-up or
 // subscription the requests it fired; a request what it told them in their
 // Updates.
+import { line } from '@yaks/query'
 import type { Bundle, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import type { OperatorStore } from './operator-store.ts'
@@ -18,17 +19,17 @@ export let removal = async (g: Reader, ids: string[]): Promise<string[]> => {
     if (gone.has(eid)) return
     gone.add(eid)
     let [row] = await g.get([eid])
-    let links = row?.task ? await g.read(`.contains .edge.from=${eid}`) : []
+    let links = row?.task ? await g.read(line`.contains .edge.from=${eid}`) : []
     let hung = [
-      ...await g.read(`.comment.target=${eid}`),
-      ...await g.read(`.operator_request.about=${eid}`),
-      ...await g.read(`.operator_request.task=${eid}`),
-      ...await g.read(`.call.source=${eid}`),
-      ...await g.read(`.result.call=${eid}`),
-      ...await g.read(`.output.source=${eid}`),
-      ...await g.read(`.context_output.source=${eid}`),
+      ...await g.read(line`.comment.target=${eid}`),
+      ...await g.read(line`.operator_request.about=${eid}`),
+      ...await g.read(line`.operator_request.task=${eid}`),
+      ...await g.read(line`.call.source=${eid}`),
+      ...await g.read(line`.result.call=${eid}`),
+      ...await g.read(line`.output.source=${eid}`),
+      ...await g.read(line`.context_output.source=${eid}`),
       ...links,
-      ...row?.session ? await g.read(`.entry.session=${eid}`) : [],
+      ...row?.session ? await g.read(line`.entry.session=${eid}`) : [],
     ].map((b) => b.entity.eid)
     let told = row?.operator_request ? [derivedEid('operator-told|' + eid)] : []
     let sessions = links.map((b) => String((b.edge as { to: string }).to))

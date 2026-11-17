@@ -2,6 +2,7 @@
 // reaches that Operator conversation as a note it reads on its next turn, once,
 // and starts no turn of its own; and only the person's own conversation takes
 // it.
+import { line } from '@yaks/query'
 import { equal, ok, test } from '@yaks/testing'
 import type { Item, Request } from '@yaks/model'
 import { platform } from './directory-rows-probe.ts'
@@ -76,7 +77,7 @@ await carry(env, kept, message)
 await carry(env, kept, message)
 await service.drain()
 let notes = await store.g.read(
-  `.entry.session=${root}&.channel.name=support&*`,
+  line`.entry.session=${root}&.channel.name=support&*`,
 )
 await chat('Did they answer?')
 let next = JSON.stringify(asked.at(-1)!.items)
@@ -98,7 +99,9 @@ test("the person's Updates hold it too, linking the thread", async () => {
   ])
   equal((told.deliver as { to: string }).to, person)
   equal((told.notification as { about: string }).about, thread)
-  ok(String((told.doc as { body: string }).body).includes(`/support/${thread}`))
+  ok(
+    String((told.doc as { body: string }).body).includes(`/support/${thread}`),
+  )
 })
 
 test("somebody else's conversation never takes it", async () => {
@@ -111,7 +114,7 @@ test("somebody else's conversation never takes it", async () => {
   })
   equal(took.session, null)
   equal(
-    (await store.g.read(`.entry.session=${root}&.content.body=not yours`))
+    (await store.g.read(line`.entry.session=${root}&.content.body=not yours`))
       .length,
     0,
   )

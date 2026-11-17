@@ -13,6 +13,7 @@
 // `channel{name, framing}` once its store's pass reaches it
 // ({@link channelBackfill}), in bounded alarm batches beside the store's
 // other passes. Until then a reader takes either (operator-draw.ts `cameBy`).
+import { joined, line, sub } from '@yaks/query'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Meta } from '@yaks/sqlite'
 import { channelOf } from './operator-view.ts'
@@ -40,18 +41,21 @@ let FRAMED: [string, RegExp][] = [
   ['chat', /^About the app [^,]+, open beside the chat as they wrote: /],
 ]
 
-let FIND = `.entry&!channel&!operator_channel&!output&!result&(${
-  [
-    'By phone',
-    'On the phone, you said',
-    'By email',
-    'By text',
-    'In their Updates',
-    'open beside the chat as they wrote',
-  ].map((s) => `.content.body~=${JSON.stringify(s)}`).join('|')
+let FIND = line`.entry&!channel&!operator_channel&!output&!result&(${
+  sub(joined(
+    [
+      'By phone',
+      'On the phone, you said',
+      'By email',
+      'By text',
+      'In their Updates',
+      'open beside the chat as they wrote',
+    ].map((s) => line`.content.body~=${s}`),
+    '|',
+  ))
 })`
 
-let OLD = '.operator_call.said=true&(.channel|.operator_channel)&?content'
+let OLD = line`.operator_call.said=true&(.channel|.operator_channel)&?content`
 
 // A task's first words are its row as JSON (operator.ts `ask`).
 let wordsOf = (body: string) => {

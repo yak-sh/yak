@@ -9,7 +9,7 @@
 // storage: `patch` creates whatever identity row an eid needs and returns the
 // entities it created, including the `num` if the adapter assigns one.
 
-import type { Query as Ast } from '@yaks/query'
+import type { Asked, Line, Query as Ast } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Eid, Entity } from './bundle.ts'
 import { Misfit, Refused } from './errors.ts'
@@ -20,6 +20,20 @@ export type Row = Record<string, unknown>
 
 /** A query, as text (parsed by @yaks/query) or an already-parsed AST. */
 export type Query = string | Ast
+
+/** A query a reader already took, as it passes it on: a line or a tree. */
+export type Taken = Line | Ast
+
+/** A reader of queries: it takes a line, a tree or text written in the
+ * source as one literal (@yaks/query `Asked`), never text put together at
+ * run time. Every reader is this one alias, so one stands in for another
+ * whatever arguments follow the query. */
+export type Reads<R, Rest extends unknown[] = [opts?: ReadOpts]> = <
+  Q extends Query,
+>(
+  query: Q & Asked<Q>,
+  ...rest: Rest
+) => R
 
 /** The owners visible in a read. Component queries hide that component while
  * preserving the entity's other aspects. Evaluated against committed rows. */
@@ -102,11 +116,10 @@ export type Tx = {
    * `History`). Its history plugin writes the transaction's row under it. */
   clock?: () => number
   /** a query → whole bundles, or only `comps` when named */
-  read: (
-    query: Query,
-    opts?: ReadOpts,
-    comps?: string[],
-  ) => Bundle[] | Promise<Bundle[]>
+  read: Reads<
+    Bundle[] | Promise<Bundle[]>,
+    [opts?: ReadOpts, comps?: string[]]
+  >
   /** the same result as `read`, in one round trip: an adapter that talks over
    * a network embeds the matching set as a subquery in each statement of its
    * read, so the whole result is one request instead of one request to learn
@@ -116,7 +129,7 @@ export type Tx = {
    * `pointing`) use it and nothing else does. An adapter with nothing to gain
    * leaves it out and `read` is used instead, which is why every read here is
    * written to work either way. */
-  whole?: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
+  whole?: Reads<Bundle[] | Promise<Bundle[]>>
   /** lookup by identity, not search: these entities as they stand. A deleted
    * one comes back carrying `tombstone`; one that does not exist is simply
    * absent from the result. `comps` names the components to read, and each
@@ -440,7 +453,10 @@ export let stating = (
       prop: 'prefix',
     })
   }
-  return { prefix: prefix === undefined ? now?.prefix ?? null : prefix, num: n }
+  return {
+    prefix: prefix === undefined ? now?.prefix ?? null : prefix,
+    num: n,
+  }
 }
 
 /**

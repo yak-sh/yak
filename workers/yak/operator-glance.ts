@@ -5,6 +5,7 @@
 // moves (operator-calls.ts `talking`), and looks up any of it with its status
 // tools (`looks`). All of it is read: every action stays with the Operator,
 // which the voice asks (operator-calls.ts `ASK`).
+import { line } from '@yaks/query'
 import type { Directory } from './directory.ts'
 import { moment } from './html.ts'
 import { rootAt } from './operator-root.ts'
@@ -46,7 +47,7 @@ let cut = (text: string, most = LONGEST) => {
 export let recentOf = async (g: Glance, most = RECENT) => {
   // Most entries are steps and tool calls, not words.
   let entries = await g.store.g.read(
-    `.entry.session=${await rootAt(
+    line`.entry.session=${await rootAt(
       g.store,
       g.space,
       g.person,

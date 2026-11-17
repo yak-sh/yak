@@ -2,6 +2,7 @@
 // in one process. The Operator's roster is the platform's, the machine is a
 // host composed from the box's own packages behind its tunnel's filter, and
 // the gateway between them is the stub that marks each request.
+import { line as q } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, mint } from '@yaks/graph'
@@ -93,7 +94,7 @@ let { run, named } = await turn(ada)
 // The comments on an entity of the machine, oldest first: their words, who
 // they are by, and what they came through.
 let comments = async (target: string) =>
-  (await box.graph.read(`.comment.target=${target}&?doc&?created`))
+  (await box.graph.read(q`.comment.target=${target}&?doc&?created`))
     .toSorted((a, b) =>
       String((a.created as Comp).at).localeCompare(
         String((b.created as Comp).at),
@@ -107,7 +108,7 @@ let comments = async (target: string) =>
 // their comment matches (@yaks/session `session_start`).
 let theirs = async (target: string) =>
   (await box.graph.read(
-    `.comment .created.by.person !created.via.session .comment.target=${target} ?doc`,
+    q`.comment .created.by.person !created.via.session .comment.target=${target} ?doc`,
   )).map((b) => (b.doc as Comp).body)
 
 test('the newest message a person wrote becomes their own comment on their machine, word for word, by them and through no session', async () => {

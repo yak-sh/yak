@@ -4,6 +4,7 @@
 // before the word one (`operatorNameRule`). Its people change it on its
 // settings page. The names and how one is chosen are @yaks/persona's.
 import type { Bundle, Comp } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { christened, pick } from '@yaks/persona'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Rule } from './mover.ts'
@@ -19,19 +20,19 @@ export let operatorNameRule: Rule = {
   mark: 'yak/store/operator-name/1',
   stores: [PLATFORM_STORE],
   live: 'all',
-  find: '.space&!operator&*',
+  find: line`.space&!operator&*`,
   move: (row, read) => {
     if (!read) throw new Error("an Operator's name is read off its people's")
     let eid = row.entity.eid
-    let people = read(`.member.space=${eid}`)
+    let people = read(line`.member.space=${eid}`)
       .map((b) => String((b.member as Comp).person))
     let seats = people.length
-      ? read(`.member.person=${[...new Set(people)].join(',')}`)
+      ? read(line`.member.person=${[...new Set(people)]}`)
         .map((b) => String((b.member as Comp).space))
         .filter((s) => s != eid)
       : []
     let others = seats.length
-      ? read(`.entity.eid=${[...new Set(seats)].join(',')}&.space&?operator`)
+      ? read(line`.entity.eid=${[...new Set(seats)]}&.space&?operator`)
         .map((b) => ({
           eid: b.entity.eid,
           name: (b.operator as Comp | undefined)?.name as string | undefined,

@@ -76,7 +76,15 @@ import {
   type Eid,
   gives,
 } from './bundle.ts'
-import type { Branch, Change, ReadTx, Row, Storage, Tx } from './storage.ts'
+import type {
+  Branch,
+  Change,
+  Reads,
+  ReadTx,
+  Row,
+  Storage,
+  Tx,
+} from './storage.ts'
 import { isProse, proseOn } from './prose.ts'
 import {
   type Committed,
@@ -383,9 +391,9 @@ export type Graph = {
   ) => ReadView | null | Promise<ReadView | null>
   /** a query → the matching entities, each carrying the components the query
    * names (`*` for every one, ./projection.ts) */
-  read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
+  read: Reads<Bundle[] | Promise<Bundle[]>>
   /** a query → the compiled statement's raw rows */
-  rows: (query: Query, opts?: ReadOpts) => Row[] | Promise<Row[]>
+  rows: Reads<Row[] | Promise<Row[]>>
   /** these entities as they stand, by eid: a deleted one comes back carrying
    * `tombstone`, one that does not exist is absent. Each carries the
    * components `comps` names, or every one when it is left out. A lookup, not
@@ -467,7 +475,10 @@ export type Access =
   & Pick<Graph, 'vocab' | 'read' | 'rows' | 'get' | 'outside'>
   & {
     /** Write data through the owning graph; local controls stay on Graph. */
-    apply: (bundles: Bundle[], opts?: WriteOpts) => Bundle[] | Promise<Bundle[]>
+    apply: (
+      bundles: Bundle[],
+      opts?: WriteOpts,
+    ) => Bundle[] | Promise<Bundle[]>
   }
 
 // One step of the pipeline: the bundles in, the bundles the next step sees

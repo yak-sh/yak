@@ -4,6 +4,7 @@
 // Until a store is moved, written.ts `withLegacy` reads the pointer as that
 // row, and a write or a release into the draft writes the row and drops the
 // pointer itself. Only the directory holds apps.
+import { type Line, line } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { PLATFORM_STORE } from '@yaks/platform/names'
@@ -11,14 +12,14 @@ import type { Rule } from './mover.ts'
 
 export let draftMove = (
   row: Bundle,
-  read?: (line: string) => Bundle[],
+  read?: (line: Line) => Bundle[],
 ): Bundle[] => {
   let app = row.app as Comp | undefined
   let id = app?.draft
   if (typeof id != 'string' || !id) return []
   // When it opened: its first write, where it kept one.
   let first = read?.(
-    `.written.draft=${id}&.order=written.at&.limit=1&.written.at`,
+    line`.written.draft=${id}&.order=written.at&.limit=1&.written.at`,
   )[0]?.written as Comp | undefined
   return [
     {
@@ -43,6 +44,6 @@ export let draftRule: Rule = {
   stores: [PLATFORM_STORE],
   core: ['app', 'app_draft', 'written'],
   live: 'all',
-  find: '.app.draft&*',
+  find: line`.app.draft&*`,
   move: draftMove,
 }

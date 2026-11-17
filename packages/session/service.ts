@@ -39,6 +39,7 @@
 // what a session says now never waits behind it. What a person typed and what
 // the model said stay, and so does everything nobody imported.
 
+import { type Built, line, sub } from '@yaks/query'
 import * as fs from '@yaks/file/io'
 
 import { sleep } from '@yaks/fp'
@@ -136,7 +137,7 @@ export type Seen = {
  * one, which is the request @yaks/spawn answers. */
 export let managed = async (g: Graph, session: Eid): Promise<boolean> =>
   (await g.read(
-    `.entry.session=${session}&.using.provider&!lines&.limit=1`,
+    line`.entry.session=${session}&.using.provider&!lines&.limit=1`,
   )).length > 0
 
 // What the harness says of a subagent in the meta file beside its
@@ -572,11 +573,13 @@ let STRIPPED = [
   'stop',
   'usage',
 ]
-let stripped = (g: Graph) =>
-  `.lines&!using${g.vocab.comp('cost') ? '&!cost' : ''}&(${
-    ['!content', ...STRIPPED.filter((c) => g.vocab.comp(c)).map((c) => `.${c}`)]
-      .join('|')
-  })`
+let stripped = (g: Graph): Built => {
+  let kept = STRIPPED.filter((c) => g.vocab.comp(c))
+    .reduce<Built>((q, c) => line`${sub(q)}|.${c}`, line`!content`)
+  return g.vocab.comp('cost')
+    ? line`.lines&!using&!cost&(${sub(kept)})`
+    : line`.lines&!using&(${sub(kept)})`
+}
 
 /**
  * One bounded page of imported entries to strip from a quiet session. Empty
@@ -590,25 +593,27 @@ export let stale = async function* (
 ): AsyncGenerator<Eid[]> {
   let before = new Date((o.now ?? Date.now()) - (o.full ?? FULL))
     .toISOString()
-  let page = (query: string, after?: Eid, limit = 1) =>
-    `${query} .fields=entity.eid .order=entity.eid .limit=${limit}${
-      after ? ` .after=${after}` : ''
-    }`
+  let page = (query: Built, after?: Eid, limit = 1) =>
+    after
+      ? line`${
+        sub(query)
+      } .fields=entity.eid .order=entity.eid .limit=${limit} .after=${after}`
+      : line`${sub(query)} .fields=entity.eid .order=entity.eid .limit=${limit}`
   let after: Eid | undefined
   while (!o.signal?.aborted) {
     let [found] = await g.rows(
-      page('.session', after),
+      page(line`.session`, after),
     ) as { eid: Eid }[]
     if (!found) return
     after = found.eid
     let cursor: Eid | undefined
     while (!o.signal?.aborted) {
       let [last] = await g.rows(
-        `.entry.session=${after} .order=-entry.seq .limit=1 .fields=created.at`,
+        line`.entry.session=${after} .order=-entry.seq .limit=1 .fields=created.at`,
       ) as { 'created.at'?: string }[]
       if ((last?.['created.at'] ?? '') >= before) break
       let rows = await g.rows(
-        page(`${stripped(g)} .entry.session=${after}`, cursor, BATCH),
+        page(line`${sub(stripped(g))} .entry.session=${after}`, cursor, BATCH),
       ) as { eid: Eid }[]
       if (!rows.length) break
       cursor = rows[rows.length - 1].eid
@@ -724,7 +729,9 @@ export let service = async (
 // How many model requests a session's entries hold.
 let requests = async (g: Graph, session?: Eid): Promise<number> =>
   session
-    ? (await g.rows(`.entry.session=${session} .ask .usage .fields=entity.eid`))
+    ? (await g.rows(
+      line`.entry.session=${session} .ask .usage .fields=entity.eid`,
+    ))
       .length
     : 0
 
@@ -859,9 +866,7 @@ let natives = async (
   signal?: AbortSignal,
 ): Promise<number> => {
   let owed = await g.rows(
-    `.ask .usage !lines !context_parts .created.at>=${
-      JSON.stringify(since)
-    } .fields=entry.session`,
+    line`.ask .usage !lines !context_parts .created.at>=${since} .fields=entry.session`,
   ) as { 'entry.session'?: Eid }[]
   let sessions = [...new Set(owed.map((r) => r['entry.session']))]
     .filter((s): s is Eid => !!s)
@@ -878,7 +883,7 @@ let natives = async (
     let [held] = await g.get([session], ['fixed'])
     let bundles: Bundle[] = []
     for (
-      let b of await g.read(`.entry.session=${session} .order=entry.seq *`)
+      let b of await g.read(line`.entry.session=${session} .order=entry.seq *`)
     ) {
       let made = step(w, b)
       if (!b.usage || b.context_parts) continue

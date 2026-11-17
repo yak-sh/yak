@@ -1,6 +1,7 @@
 // A browser's guest work, and the durable handover when it signs in. The
 // directory keeps one browser and a worked edge to each app it reached. The
 // edge remains unfinished until that store has filled every matching byline.
+import { line } from '@yaks/query'
 import { link } from '@yaks/edge'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
@@ -18,7 +19,7 @@ export let browsersOf = async (
 ): Promise<Who> => ({
   ...who,
   browsers: who.person
-    ? (await meta(env).query(`.browser.by=${who.person}`, { live: true }))
+    ? (await meta(env).query(line`.browser.by=${who.person}`, { live: true }))
       .map((row) => instrumentEid(row.entity.eid))
     : [],
 })
@@ -49,9 +50,7 @@ export let claimed = async (req: Request, env: Env, by: string) => {
     ...new Set([browser.via, ...browser.source ? [browser.source] : []]),
   ]
   let found = await g.query(
-    `.entity.eid=${vias.join(',')} .browser|.worked .edge.from=${
-      vias.join(',')
-    } !completed`,
+    line`.entity.eid=${vias} .browser|.worked .edge.from=${vias} !completed`,
   )
   let rows = found.filter((row) => row.browser)
   if (
@@ -94,9 +93,7 @@ export let attributed = async (
 ) => {
   let vias = [...new Set([via, instrumentEid(via)])]
   let rows = await graph.read(
-    `(.created.via=${vias.join(',')} !created.by|.updated.via=${
-      vias.join(',')
-    } !updated.by) .limit=${size} ?created ?updated`,
+    line`(.created.via=${vias} !created.by|.updated.via=${vias} !updated.by) .limit=${size} ?created ?updated`,
   ) as Bundle[]
   let bundles = rows.map((r) => {
     let out: Bundle = { entity: r.entity, $was: {} }

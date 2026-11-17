@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { identityEid } from '@yaks/graph/identity'
@@ -225,9 +226,12 @@ test('a send to a session running outside the graph knocks and returns at once',
       call: { args: { session: s, text: 'cache the scripts too' } },
     }, h.g)
     assertEquals(knock.knock, { target: s })
-    assertEquals((knock.doc as { body?: string }).body, 'cache the scripts too')
+    assertEquals(
+      (knock.doc as { body?: string }).body,
+      'cache the scripts too',
+    )
     // No request: the run going is not asked for another.
-    assertEquals(await h.g.read(`.entry.session=${s}&.using`), [])
+    assertEquals(await h.g.read(line`.entry.session=${s}&.using`), [])
   } finally {
     await h.close()
   }
@@ -273,7 +277,7 @@ let finished = async () => {
       call: { args: { session: s, text: 'go on', wait: false, ...args } },
     }, h.g)
     let [input] = await h.g.read(
-      `.entry.session=${s}&.using&.order=-entry.seq&.limit=1`,
+      line`.entry.session=${s}&.using&.order=-entry.seq&.limit=1`,
     )
     return input.using
   }
@@ -319,7 +323,7 @@ test('a follow-up to a finished spawned session answers once its run has started
       entity: { eid: mint() },
       call: { args: { session: s, text: 'go on' } },
     }, h.g)
-    let asked = `.entry.session=${s}&.content.body="go on"`
+    let asked = line`.entry.session=${s}&.content.body=${'go on'}`
     for await (let _ of changes(h.g)) if ((await h.g.read(asked)).length) break
     // Launched as @yaks/spawn leaves it: the run's reply is minutes away.
     await h.g.apply([{
@@ -506,7 +510,10 @@ test('JSON Schema tool uses identical metadata and constraints through MCP and p
     assertEquals<unknown>(listed.inputSchema, published)
     assertEquals<unknown>(inputSchemaOf(tool), published)
     const args = await argsFor(tool, ['root', '-n', '3'], reads)
-    const response = await c.callTool({ name: 'example_list', arguments: args })
+    const response = await c.callTool({
+      name: 'example_list',
+      arguments: args,
+    })
     assertEquals(response.isError, undefined)
     assertEquals(JSON.stringify(response).includes('root'), true)
     const invalid = await c.callTool({

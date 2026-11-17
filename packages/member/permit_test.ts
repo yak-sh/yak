@@ -1,6 +1,7 @@
 // Referenced ownership grants a mark on an existing request, through the same
 // graph apply boundary as ordinary row ownership and component floors.
 
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import {
@@ -72,7 +73,8 @@ let paced = (pace?: string) => {
       completed: { ...declaration.$defs!.completed, ...(pace ? { pace } : {}) },
     },
   }
-  let got = vocabs.get(pace) ?? loadVocab([...club.docs, doc], [memberKeywords])
+  let got = vocabs.get(pace) ??
+    loadVocab([...club.docs, doc], [memberKeywords])
   vocabs.set(pace, got)
   return got
 }
@@ -118,7 +120,8 @@ let fixture = (floors = {}, kernelFirst = true, pace?: string) => {
   }
   return {
     g,
-    read: async (eid = 'request') => (await g.read(`.entity.eid=${eid}`))[0],
+    read: async (eid = 'request') =>
+      (await g.read(line`.entity.eid=${eid}`))[0],
     apply: (actor: Actor | null, ...b: Bundle[]) =>
       g.apply(signed(b, actor), { now: '2026-10-02T00:00:00Z' }),
   }

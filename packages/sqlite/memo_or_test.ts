@@ -1,5 +1,6 @@
 // A kept answer to a query with a disjunction stands across a write its
 // query selects neither before nor after, as a conjunction's does.
+import { whole } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -28,7 +29,7 @@ await g.apply([
   { entity: { eid: 'b' }, doc: { title: 'b' } },
 ])
 let q = ".doc.title='a' | .doc.title='b'"
-let eids = async () => (await g.read(q)).map((b) => b.entity.eid).sort()
+let eids = async () => (await g.read(whole(q))).map((b) => b.entity.eid).sort()
 // Asked twice, the answer is kept.
 await eids()
 await eids()

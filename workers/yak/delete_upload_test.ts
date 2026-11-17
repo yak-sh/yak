@@ -13,7 +13,7 @@ import { Denied } from '@yaks/member'
 import { matcher, type Query } from '@yaks/match'
 import { ram } from '@yaks/ram'
 import { blobPrefix, released } from './blob-key.ts'
-import { servable } from '@yaks/blob/upload'
+import { type Read, servable } from '@yaks/blob/upload'
 import { uploads } from '@yaks/platform/uploads'
 import { appGuard } from '@yaks/platform/app-authority'
 import { loadVocab, pick } from '@yaks/vocab'
@@ -41,7 +41,7 @@ let keptRows = [
   { entity: { eid: sha(2) }, blob: { bytes: 3 } },
   { entity: { eid: sha(3) }, attachment: { artifact: sha(3) } },
 ]
-let plans = new Map(
+let plans = new Map<string, ReturnType<typeof matcher>>(
   [1, 2, 3].map((
     n,
   ) => [uploads.names(sha(n)), matcher(uploads.names(sha(n)), vocab)]),
@@ -132,8 +132,10 @@ let held = (...uploads: { sha: string }[]) =>
     .filter((row) => row.blob).map((row) => row.entity.eid)
 let serveRows: Bundle[]
 let serving = new Map<string, ReturnType<typeof matcher>>()
-let read = (q: string) =>
-  Promise.resolve((serving.get(q) ?? matcher(q, vocab))(serveRows))
+let read: Read = (q) =>
+  Promise.resolve(
+    (serving.get(String(q)) ?? matcher(q as Query, vocab))(serveRows),
+  ) as Promise<Bundle[]>
 let served = async (upload: { sha: string; eid: string }, of = app) =>
   (await servable(
     read,

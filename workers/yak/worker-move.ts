@@ -3,6 +3,7 @@
 // nothing, so each of its page views asks the dispatch namespace for a script,
 // and the edge never keeps its pages (apps.ts `served`). Its release's deploy
 // row has always said it: this copies that word onto the app.
+import { type Line, line } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { PLATFORM_STORE } from '@yaks/platform/names'
@@ -27,13 +28,15 @@ import type { Rule } from './mover.ts'
  */
 export let workerMove = (
   row: Bundle,
-  read?: (line: string) => Bundle[],
+  read?: (line: Line) => Bundle[],
 ): Bundle[] => {
   let app = row.app as Comp
   if (app.version == null || app.worker != null) return []
   if (!read) throw new Error('an app worker needs its deploy row')
   let [made] = read(
-    `.deploy.app=${row.entity.eid}&.deploy.version=${app.version}&*`,
+    line`.deploy.app=${row.entity.eid}&.deploy.version=${
+      String(app.version)
+    }&*`,
   )
   let worker = (made?.deploy as Comp | undefined)?.worker
   if (typeof worker != 'string') return []
@@ -48,6 +51,6 @@ export let workerRule: Rule = {
   mark: 'yak/store/app-worker/1',
   stores: [PLATFORM_STORE],
   live: 'all',
-  find: '.app !app.worker&*',
+  find: line`.app !app.worker&*`,
   move: workerMove,
 }

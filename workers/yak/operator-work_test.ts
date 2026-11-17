@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { equal, match, ok, test } from '@yaks/testing'
 import { addressed, type Bundle, type Comp } from '@yaks/graph'
 import type { Request } from '@yaks/model'
@@ -79,7 +80,9 @@ let ring = async (row: Bundle) => {
     wake: { at: new Date().toISOString() },
   }], { trusted: true })
   await within(env, { request: 'scheduled test' }, () => service.drain())
-  return (await store.g.read(`.occurrence.wake=${row.entity.eid}&*`)).at(-1)!
+  return (await store.g.read(line`.occurrence.wake=${row.entity.eid}&*`)).at(
+    -1,
+  )!
 }
 
 let script = await setting({
@@ -92,14 +95,14 @@ let afterScript = models.length
 let scriptCall =
   (await store.g.get([String((scriptRun.occurrence as Comp).call)]))[0]
 let scriptOutputs = await store.g.read(
-  `.output.source=${scriptCall.entity.eid}&*`,
+  line`.output.source=${scriptCall.entity.eid}&*`,
 )
-let nested = await store.g.read(`.call.source=${scriptCall.entity.eid}&*`)
+let nested = await store.g.read(line`.call.source=${scriptCall.entity.eid}&*`)
 let nestedOutputs = (await Promise.all(
-  nested.map((b) => store.g.read(`.output.source=${b.entity.eid}&*`)),
+  nested.map((b) => store.g.read(line`.output.source=${b.entity.eid}&*`)),
 )).flat()
 let nestedResults = (await Promise.all(
-  nested.map((b) => store.g.read(`.result.call=${b.entity.eid}&*`)),
+  nested.map((b) => store.g.read(line`.result.call=${b.entity.eid}&*`)),
 )).flat()
 let snapshot = crypto.randomUUID()
 let memory = crypto.randomUUID()
@@ -129,7 +132,7 @@ let checked = await setting({
 })
 let checkedRun = await ring(checked)
 let checkInput = await store.g.read(
-  `.entry.session=${checkedRun.entity.eid} .content .order=entry.seq&*`,
+  line`.entry.session=${checkedRun.entity.eid} .content .order=entry.seq&*`,
 )
 
 let broken = await setting({
@@ -139,7 +142,7 @@ let broken = await setting({
 })
 let brokenRun = await ring(broken)
 let recoveries = await store.g.read(
-  `.operator_request.about=${broken.entity.eid} .operator_request.channel=wake&*`,
+  line`.operator_request.about=${broken.entity.eid} .operator_request.channel=wake&*`,
 )
 
 let privateIds = [
@@ -169,7 +172,7 @@ let removedHistory = (await store.g.get([
 ])).filter((b) => !b.tombstone)
 
 let revoked = await setting({ tool: 'work_write', args: {} })
-let memberships = await dir.read(`.member.person=${person}`)
+let memberships = await dir.read(line`.member.person=${person}`)
 await dir.apply({
   entities: memberships.map((b) => ({ entity: b.entity, $delete: true })),
 }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
@@ -222,13 +225,15 @@ await within(
       helper: () => Promise.reject(new Error('helper model unavailable')),
     }),
 )
-let [startupRun] = await store.g.get([occurrenceOf(cannotStart.entity.eid, at)])
+let [startupRun] = await store.g.get([
+  occurrenceOf(cannotStart.entity.eid, at),
+])
 let startupRecovery = await store.g.read(
-  `.operator_request.about=${cannotStart.entity.eid}&*`,
+  line`.operator_request.about=${cannotStart.entity.eid}&*`,
 )
 
 let told = async (run: Bundle) =>
-  (await store.g.read(`.notification.about=${run.entity.eid}`)).length
+  (await store.g.read(line`.notification.about=${run.entity.eid}`)).length
 let scriptTold = await told(scriptRun)
 let helperTold = await told(helperRun)
 
@@ -249,7 +254,9 @@ test('a weekly code_mode call keeps its outcome without asking a model', () => {
 test('weekly helpers run fresh and a checking helper receives the call outcome', () => {
   ok(helperRun.completed)
   ok(checkedRun.completed)
-  ok(checkInput.some((b) => b.entity.eid == helperInput(checkedRun.entity.eid)))
+  ok(
+    checkInput.some((b) => b.entity.eid == helperInput(checkedRun.entity.eid)),
+  )
   ok(JSON.stringify(checkInput).includes('upserted'))
   ok(JSON.stringify(checkInput).includes('Call outcome'))
   ok(models.length >= 3)

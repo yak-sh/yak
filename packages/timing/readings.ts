@@ -1,5 +1,6 @@
 /** Read stored span entities without adding inclusive parent metrics twice. */
 import type { Bundle } from '@yaks/graph'
+import { type Built, joined, line, sub } from '@yaks/query'
 export let comp = (b: Bundle, name: string): Record<string, unknown> =>
   (b[name] ?? {}) as Record<string, unknown>
 export let str = (v: unknown): string => v == null ? '' : String(v)
@@ -86,21 +87,21 @@ export let ordinary = (rows: Bundle[]): boolean => {
     (t.elapsed == null || t.elapsed <= 500) &&
     rows.every((b) => comp(b, 'span').outcome != 'error')
 }
-export let peers = (e: Bundle): string => {
+export let peers = (e: Bundle): Built => {
   let clauses = [
-    '.trace',
+    line`.trace`,
     ...['op', 'name'].map((k) =>
-      `.trace.${k}=${JSON.stringify(comp(e, 'trace')[k])}`
+      line`.trace.${k}=${String(comp(e, 'trace')[k])}`
     ),
   ]
   for (let k of ['space', 'app', 'entity', 'kind']) {
     let v = comp(e, 'during')[k]
-    if (v != null) clauses.push(`.during.${k}=${JSON.stringify(v)}`)
+    if (v != null) clauses.push(line`.during.${k}=${String(v)}`)
   }
-  return `${clauses.join(' ')} * .order=-trace.at .limit=100`
+  return line`${sub(joined(clauses, '&'))} * .order=-trace.at .limit=100`
 }
-export let spans = (ids: string[]): string =>
-  ids.length ? `.span.trace=${ids.join(',')} * .order=elapsed.start` : ''
+export let spans = (ids: string[]): Built | '' =>
+  ids.length ? line`.span.trace=${ids} * .order=elapsed.start` : ''
 export let format = (v: number | undefined): string =>
   v == null
     ? 'not recorded'

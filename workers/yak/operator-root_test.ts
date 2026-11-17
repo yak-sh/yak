@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
@@ -78,7 +79,7 @@ let first = await receive(store, {
 }, 'Remind me about the dentist Tuesday at 3')
 await drain(store)
 let root = rootOf(space.eid, owner)
-let [fork] = await store.g.read(`.spawned.parent=${root}`)
+let [fork] = await store.g.read(line`.spawned.parent=${root}`)
 let atFork = asked.find(forked)!
 let atRoot = asked.find((r) => !forked(r))!
 let texted = sent.splice(0)

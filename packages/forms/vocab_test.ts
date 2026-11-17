@@ -1,5 +1,6 @@
 // Stored rows round-trip through a graph, and marks determine registration status.
 
+import { line } from '@yaks/query'
 import { type Comp, graph } from '@yaks/graph'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { ram } from '@yaks/ram'
@@ -69,7 +70,7 @@ for (let { name, initial, patch, status } of transitions) {
       ...initial,
     },
   ])
-  let query = `.registration.status=${status}&*`
+  let query = line`.registration.status=${status}&*`
   await store.read(query)
   test(name, async () => {
     await store.apply([{ entity: { eid: 'registration' }, ...patch }])

@@ -1,6 +1,7 @@
 // The memory tools, over a graph small enough to read: what a save writes or
 // marks, what a patch leaves alone, the token that stands between a merge and a
 // clobber, and the four reads around a memory.
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
@@ -166,7 +167,11 @@ test('the words are marked where their speaker first said them', async () => {
   }], agent)
   await write(g, [said('s1', 1, 'always commit your changes')], jeff)
   await write(g, [said('s1', 2, 'always commit your changes')], jeff)
-  await save({ said: 'always commit your changes', feedback: 'jeff' }, g, agent)
+  await save(
+    { said: 'always commit your changes', feedback: 'jeff' },
+    g,
+    agent,
+  )
   assertEquals(await marks(g), ['s1.1'])
   // Words nobody says whose they are cannot be placed, so they are kept as
   // their own.
@@ -372,7 +377,7 @@ let two = await (async () => {
   // An index that ranks the gentle one nearest, among what `within` admits.
   let ranked = recall({
     meaning: async (_, { within = '' } = {}) => {
-      let admitted = eids(await g.read(within))
+      let admitted = eids(await g.read(whole(within)))
       return [soft, grams].filter((e) => admitted.includes(e))
         .map((entity) => ({ entity, similarity: 1, excerpt: '' }))
     },
@@ -581,7 +586,11 @@ let discussion = async (g: G) => {
   await write(g, [on('k2', 't1')])
   await write(g, [on('r1', 'k1')])
   await write(g, [on('r2', 'r1')])
-  await write(g, [{ entity: { eid: 't9' }, task: {}, doc: { title: 'quiet' } }])
+  await write(g, [{
+    entity: { eid: 't9' },
+    task: {},
+    doc: { title: 'quiet' },
+  }])
 }
 
 // One discussion, written once at load: the target and thread tools only read.

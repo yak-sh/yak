@@ -6,7 +6,7 @@ import { dead } from '@yaks/graph/bundle'
 import { writers } from '@yaks/graph/provenance'
 import { Refused } from '@yaks/graph/errors'
 import { hook } from '@yaks/graph/plugin'
-import { parse } from '@yaks/query'
+import { line } from '@yaks/query'
 
 let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
@@ -30,9 +30,9 @@ let patches = (bundles: Bundle[]): Bundle[] => {
 
 let owned = (tx: Tx, person: string | null, owner: unknown) =>
   typeof owner != 'string' || !person ? false : owner == person ? true : after(
-    tx.read(parse(
-      `.member.space=${owner}&.member.person=${person}&.member.role=owner`,
-    )),
+    tx.read(
+      line`.member.space=${owner}&.member.person=${person}&.member.role=owner`,
+    ),
     (rows) => rows.length > 0,
   )
 

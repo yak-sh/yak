@@ -17,7 +17,8 @@
 // It is its own entry (`@yaks/blob/upload`), since reading a type off the
 // bytes loads the file-type detector (./identify.ts).
 
-import type { Bundle, Comp } from '@yaks/graph'
+import { type Built, line, sub } from '@yaks/query'
+import type { Bundle, Comp, Reads } from '@yaks/graph'
 import { digest, token } from '@yaks/graph/sha256'
 import { size as said } from '@yaks/fp'
 import { type Accepts, fits, taken, takes } from './accepts.ts'
@@ -70,7 +71,7 @@ export type Naming = {
   said: (rows: Bundle[], at: { sha: string; use: string }) => Said | null
   /** The query for the rows still naming the bytes at `sha`. While one
    * answers, the bytes are served. */
-  names: (sha: string) => string
+  names: (sha: string) => Built
 }
 
 let comp = (rows: Bundle[], eid: string, name: string) =>
@@ -107,7 +108,8 @@ export let artifacts: Naming = {
       }],
     }
   },
-  names: (sha) => `.entity.eid=${sha} .artifact|.attachment.artifact=${sha}`,
+  names: (sha) =>
+    line`.entity.eid=${sha} .artifact|.attachment.artifact=${sha}`,
 }
 
 /** Where bytes are kept and what is taken there. */
@@ -198,7 +200,7 @@ export type File = Kept & {
 }
 
 /** How the rows a store holds are read: a query line, its rows. */
-export type Read = (query: string) => Bundle[] | Promise<Bundle[]>
+export type Read = Reads<Bundle[] | Promise<Bundle[]>, []>
 
 /**
  * The rows that name the `bytes` bytes at `sha`, read off `head`: their first
@@ -219,7 +221,7 @@ export let described = async (
   let naming = at.naming ?? artifacts
   let use = await useOf(sha)
   if (!name || mime == UNKNOWN) {
-    let prior = naming.said(await read(`.entity.eid=${use}`), { sha, use })
+    let prior = naming.said(await read(line`.entity.eid=${use}`), { sha, use })
     name ||= prior?.name ?? ''
     if (mime == UNKNOWN && prior?.mime) mime = prior.mime
   }
@@ -287,7 +289,7 @@ export let servable = async (
   eid: string,
 ): Promise<Representation | null> => {
   let names = (at.naming ?? artifacts).names(sha)
-  let rows = await read(`.entity.eid=${eid} .representation|${names}`)
+  let rows = await read(line`.entity.eid=${eid} .representation|${sub(names)}`)
   let rep = rows.find((r) => r.entity.eid == eid)?.representation as
     | Representation
     | undefined

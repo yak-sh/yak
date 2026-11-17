@@ -20,6 +20,7 @@
 // code sent to it proved (T-153688). Taking a row away stops its person
 // joining; a grant already written stays until member_remove takes it, as
 // any grant does.
+import { line, parse, stringify, sub } from '@yaks/query'
 import type { Directory, Role, Space } from './directory.ts'
 import { type App, appStore } from './directory.ts'
 import { declarationOf } from './declaration.ts'
@@ -54,8 +55,15 @@ export let listed = (join: Join, email: string, values: unknown[]) => {
     values.some((v) => addresses(v).includes(at))
 }
 
+// A property path the word names, `individual.email`: words joined by dots,
+// and nothing a query would read as structure.
+let PATH = /^[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)+$/i
+
 // The values the word's properties hold in the app's store, among the rows
-// `where` keeps, read by the kernel: one distinct read a property.
+// `where` keeps, read by the kernel: one distinct read a property. `where` is
+// the app's own query, so it is read whole: parsed and written back, it is
+// one group whatever its author typed, and a path that is not one is asked of
+// nobody.
 let values = async (
   env: Env,
   space: Space,
@@ -64,12 +72,13 @@ let values = async (
   paths: string[],
 ) => {
   let store = metaOf(appStore(env.STORE, space, app, env), KERNEL)
+  let where = join.where
+    ? line`&(${sub(stringify(parse(join.where)))})`
+    : line``
   let said = await Promise.all(
-    paths.map((path) =>
+    paths.filter((path) => PATH.test(path)).map((path) =>
       store.query(
-        `.${path.split('.')[0]}${
-          join.where ? `&(${join.where})` : ''
-        }&.distinct=${path}`,
+        line`.${path.split('.')[0]}${sub(where)}&.distinct=${path}`,
         { trusted: true },
       )
     ),

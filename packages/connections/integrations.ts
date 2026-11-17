@@ -16,8 +16,9 @@
 // where no integration holds the name yet — so no verb a space can reach
 // writes over a built integration, or changes where its tokens are sent.
 
+import { line } from '@yaks/query'
 import { after, cmp } from '@yaks/fp'
-import type { Bundle, Eid, Query } from '@yaks/graph'
+import type { Bundle, Eid, Reads } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import type { Scheme } from '@yaks/hook'
 import { CallError } from '@yaks/tools/errors'
@@ -112,7 +113,7 @@ export let fieldsOf = (i?: Integration): Field[] =>
   i?.fields?.length ? i.fields : [KEY]
 
 /** A read of the graph: what a tool's context and a graph both offer. */
-export type Read = (query: Query) => Bundle[] | Promise<Bundle[]>
+export type Read = Reads<Bundle[] | Promise<Bundle[]>, []>
 
 // The integrations this package builds, as their seed files say them. The JSON
 // types `answers` as any string, so OpenRouter's is said again as the word it
@@ -143,7 +144,9 @@ export let known = async (
   read: Read,
   name: string,
 ): Promise<Integration | undefined> => {
-  let [b] = await read(`.entity.eid=${integrationEid(name)}&.${INTEGRATION}`)
+  let [b] = await read(
+    line`.entity.eid=${integrationEid(name)}&.${INTEGRATION}`,
+  )
   return b?.[INTEGRATION] as Integration | undefined
 }
 
@@ -158,7 +161,7 @@ export let knownIn = (
 
 /** The built integrations a graph holds. */
 export let installed = async (read: Read): Promise<Integration[]> =>
-  (await read(`.${INTEGRATION}.built`)).map((b) =>
+  (await read(line`.${INTEGRATION}.built`)).map((b) =>
     b[INTEGRATION] as Integration
   )
 
@@ -176,7 +179,7 @@ let marked = (b: Bundle): Marked => ({
 
 /** The host catalog's rows, including integrations not connected yet. */
 export let catalogued = async (read: Read): Promise<Marked[]> =>
-  (await read(`.${INTEGRATION}&?${FEATURED}`)).map(marked)
+  (await read(line`.${INTEGRATION}&?${FEATURED}`)).map(marked)
     .filter((i) => !i.owner && (i.built || Array.isArray(i.categories)))
 
 /** What a person reads about an integration, which its owner may change:
@@ -224,7 +227,7 @@ export let set = async (
 ): Promise<Bundle[]> => {
   let name = a.integration
   let [held] = await read(
-    `.entity.eid=${integrationEid(name)}&.${INTEGRATION}&?${PUBLISHED}`,
+    line`.entity.eid=${integrationEid(name)}&.${INTEGRATION}&?${PUBLISHED}`,
   )
   let i = held?.[INTEGRATION] as Integration | undefined
   if (!i) {
@@ -266,7 +269,7 @@ export type Listed = Marked & { published?: string; unchecked?: boolean }
 export let listing = async (read: Read, words = ''): Promise<Listed[]> => {
   let terms = words.toLowerCase().split(/\s+/).filter(Boolean)
   let all = (await read(
-    `.${INTEGRATION}&?${PUBLISHED}&?unchecked&?${FEATURED}`,
+    line`.${INTEGRATION}&?${PUBLISHED}&?unchecked&?${FEATURED}`,
   )).flatMap(
     (b) => {
       let i = marked(b)
@@ -340,9 +343,13 @@ export let install = (
   seeds: Integration[] = SEEDS,
 ): Bundle[] | Promise<Bundle[]> =>
   after(
-    read(`.entity.eid=${
-      seeds.map((i) => integrationEid(i.name)).join(',')
-    }&.${INTEGRATION}`),
+    seeds.length
+      ? read(
+        line`.entity.eid=${
+          seeds.map((i) => integrationEid(i.name))
+        }&.${INTEGRATION}`,
+      )
+      : [],
     (found: Bundle[]) => {
       let held = new Map(found.map((b) => [
         b.entity.eid,
@@ -352,9 +359,7 @@ export let install = (
         let eid = integrationEid(seed.name)
         let was = held.get(eid) ?? {}
         let editorial = Object.fromEntries(
-          EDITORIAL.filter((k) =>
-            was[k] != null
-          ).map((k) => [k, was[k]]),
+          EDITORIAL.filter((k) => was[k] != null).map((k) => [k, was[k]]),
         )
         let now: Record<string, unknown> = {
           ...seed,

@@ -4,6 +4,7 @@
 // is, with the Operator's beginning and model choice (operator.ts `chats`).
 // operator_chat is one of them begun or carried on, waited on for a while,
 // and its answer read.
+import { line } from '@yaks/query'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Clock } from '@yaks/fp'
 import { conversations } from '@yaks/harness/conversations'
@@ -109,9 +110,11 @@ export let chat = async (
   let session = String(said.session)
   await settle(session)
   let entries = await transcript(g, session)
-  let mine = entries.slice(entries.findIndex((b) => b.entity.eid == said.input))
+  let mine = entries.slice(
+    entries.findIndex((b) => b.entity.eid == said.input),
+  )
   let status = statusOf(entries)
-  let [link] = task ? [] : await g.read(`.contains .edge.to=${session}`)
+  let [link] = task ? [] : await g.read(line`.contains .edge.to=${session}`)
   task ||= String(comp(link, 'edge')?.from ?? '')
   // The model its words were answered in, by the name it is chosen by.
   let [input] = await g.get([String(said.input)], ['using'])

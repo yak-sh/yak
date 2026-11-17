@@ -1,4 +1,5 @@
 // Hero movement stays live between saves; only players keep a snapshot.
+import { whole } from '@yaks/query'
 import { type Clock, clock, equal, test } from '@yaks/testing'
 import { timer } from './clock_fixture.ts'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
@@ -36,10 +37,10 @@ test('hero saves use position age, settle after disconnect and never save wildli
   // Unrelated hero writes must not defer its pending position save.
   await g.apply([{ entity: { eid: 'hero' }, damageable: { on: true } }])
   let connected = '.player .position.level=mossvale'
-  equal((await subs.read(connected)).length, 1)
-  equal(comp((await subs.read(connected))[0], 'position').x, 135)
+  equal((await subs.read(whole(connected))).length, 1)
+  equal(comp((await subs.read(whole(connected)))[0], 'position').x, 135)
   await subs.drop(sink)
-  equal((await subs.read(connected)).length, 0)
+  equal((await subs.read(whole(connected))).length, 0)
   await time.advance(19_999)
   equal(stored().x, 128)
   await time.advance(1)
@@ -59,20 +60,22 @@ test('hibernation restores surviving hero holders and peer wake observers may re
   await before.relay(sink, [{ entity: { eid: 'connected' }, position }])
   let keys = before.relaying(sink)
   let after = live(g, time), connected = '.player .position.level=mossvale'
-  equal(await after.read(connected), [])
+  equal(await after.read(whole(connected)), [])
   let heard: number[] = []
   let off = after.observe(async () => {
-    heard.push((await after.read(connected)).length)
+    heard.push((await after.read(whole(connected))).length)
     await g.apply([{ entity: { eid: 'observer' }, player: {} }])
   })
   await after.relayed(sink, keys)
-  equal((await after.read(connected)).map((r) => r.entity.eid), ['connected'])
+  equal((await after.read(whole(connected))).map((r) => r.entity.eid), [
+    'connected',
+  ])
   await time.advance(0)
   equal(heard[0], 1)
   await after.drop(sink)
   await time.advance(0)
   equal(heard.includes(0), true)
-  equal(await after.read(connected), [])
+  equal(await after.read(whole(connected)), [])
   off()
 })
 
@@ -89,11 +92,15 @@ test('the stored Vale save query compares numeric position age in SQLite', async
     ])
     let query = words.$defs.position.save
     equal(
-      (await g.read(query, { now: at + 29_999 })).map((r) => r.entity.eid),
+      (await g.read(whole(query), { now: at + 29_999 })).map((r) =>
+        r.entity.eid
+      ),
       ['new-hero'],
     )
     equal(
-      (await g.read(query, { now: at + 30_000 })).map((r) => r.entity.eid)
+      (await g.read(whole(query), { now: at + 30_000 })).map((r) =>
+        r.entity.eid
+      )
         .sort(),
       ['hero', 'new-hero'],
     )

@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { derivedEid, type Graph, graph } from '@yaks/graph'
@@ -137,10 +138,10 @@ test('a PUT to an address stores the bytes and mints the artifact', async () => 
     mime: 'text/plain',
     bytes: text.length,
   })
-  let [row] = await h.graph.read(`.entity.eid=${sha}`)
+  let [row] = await h.graph.read(line`.entity.eid=${sha}`)
   assertEquals((row.artifact as Artifact).size, text.length)
   // …and beside the artifact, its use: what it is called and what it is.
-  let [named] = await h.graph.read(`.entity.eid=${use}`)
+  let [named] = await h.graph.read(line`.entity.eid=${use}`)
   assertEquals(named.attachment, { artifact: sha, media_type: 'text/plain' })
 
   let versioned = new URL(file.url, at(sha)).href
@@ -264,7 +265,7 @@ test('bytes that do not hash to their address are refused, and nothing lands', a
   let res = await ask(put(sha, 'something else', 'text/plain'))
   assertEquals(res.status, 400)
   assert((await res.json()).message.startsWith('these bytes address '))
-  assertEquals((await h.graph.read(`.entity.eid=${sha}`)).length, 0)
+  assertEquals((await h.graph.read(line`.entity.eid=${sha}`)).length, 0)
   assertEquals(tally(h.driver, 'blob_text'), 0)
 })
 
@@ -349,7 +350,7 @@ test('an upload is by whoever the door says is calling', async () => {
   let ask = door({ ...h, who: () => ({ by: ANA }) })
   let sha = await addressOf(text)
   assertEquals((await ask(put(sha, text))).status, 200)
-  let [row] = await h.graph.read(`.entity.eid=${sha}`)
+  let [row] = await h.graph.read(line`.entity.eid=${sha}`)
   assertEquals((row.created as { by: string }).by, ANA)
 })
 
@@ -358,7 +359,7 @@ test('a door that knows nobody uploads as nobody, not as the caller', async () =
   let ask = door({ ...h, who: () => null })
   let sha = await addressOf(text)
   assertEquals((await ask(put(sha, text))).status, 200)
-  let [row] = await h.graph.read(`.entity.eid=${sha}`)
+  let [row] = await h.graph.read(line`.entity.eid=${sha}`)
   assertEquals((row.created as { by?: string }).by, undefined)
 })
 

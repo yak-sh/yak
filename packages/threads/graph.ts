@@ -3,8 +3,8 @@ import type {
   Bundle,
   Eid,
   Match,
-  Query,
   ReadOpts,
+  Taken,
   WriteOpts,
 } from '@yaks/graph'
 import { Refused, Stale } from '@yaks/graph/errors'
@@ -50,15 +50,15 @@ export let serve = (port: Port, graph: Access): PortLink =>
       let args = value as unknown[]
       switch (method) {
         case 'read':
-          return graph.read(...args as [Query, ReadOpts?])
+          return graph.read(...args as [Taken, ReadOpts?])
         case 'rows':
-          return graph.rows(...args as [Query, ReadOpts?])
+          return graph.rows(...args as [Taken, ReadOpts?])
         case 'get':
           return graph.get(...args as [Eid[], string[]?, ReadOpts?])
         case 'apply':
           return graph.apply(...args as [Bundle[], WriteOpts?])
         case 'outside.read':
-          return graph.outside.read(...args as [Query, ReadOpts?])
+          return graph.outside.read(...args as [Taken, ReadOpts?])
         case 'outside.get':
           return graph.outside.get(...args as [Eid[], string[]?])
         // A graph that keeps no deletion time offers no graves.

@@ -34,7 +34,18 @@
 // its parent, so its eid derives from the two (`subagentSession`).
 
 import { after } from '@yaks/fp'
-import { and, eq, fields, limit, list, or, present } from '@yaks/query'
+import {
+  and,
+  type Built,
+  eq,
+  fields,
+  limit,
+  line,
+  list,
+  or,
+  present,
+  sub,
+} from '@yaks/query'
 import type { Actor, Bundle, Comp, Eid, Graph, Hook, Tx } from '@yaks/graph'
 import { writers } from '@yaks/graph'
 import { hook } from '@yaks/graph/plugin'
@@ -42,6 +53,10 @@ import { addressed } from '@yaks/graph/call'
 import { identityEid } from '@yaks/graph/identity'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import { SESSION } from './comp.ts'
+
+// The properties a read projects, as its `.fields` clause.
+let projected = (names: string[]): Built =>
+  names.length ? line`.fields=${names}` : line`.fields=`
 
 /** Whether a request came from a person or their command, rather than an
  * agent or automation. An agent may speak for an identity, so both the author
@@ -121,7 +136,7 @@ export let runners = (
     (at, id) =>
       after(at, (found) =>
         after(
-          tx.read(`.${SESSION}.id=${JSON.stringify(id)} .fields=entity.eid`),
+          tx.read(line`.${SESSION}.id=${id} .fields=entity.eid`),
           ([b]) => b ? new Map([...found, [id, b.entity.eid]]) : found,
         )),
     new Map(),
@@ -142,8 +157,8 @@ export let sessionFor = async (
   if (typeof said != 'string') {
     if (!said.id) return undefined
     return (await g.read(
-      `.${SESSION}.id=${JSON.stringify(said.id)} ${
-        fields ? `.fields=${fields.join(',')}` : '*'
+      line`.${SESSION}.id=${said.id} ${
+        sub(fields ? projected(fields) : line`*`)
       }`,
     ))[0]
   }
@@ -152,9 +167,7 @@ export let sessionFor = async (
   let get = async (id: Eid): Promise<Bundle | undefined> =>
     (fields
       ? await g.read(
-        `.entity.eid=${JSON.stringify(id)} .${SESSION} .fields=${
-          fields.join(',')
-        }`,
+        line`.entity.eid=${id} .${SESSION} ${sub(projected(fields))}`,
       )
       : await g.get([id]))[0]
   let row = await get(eid)
@@ -195,9 +208,7 @@ export let actorOf = async (
   for (let at: Eid = session; at && !seen.has(at) && seen.size < DEPTH;) {
     seen.add(at)
     let [s] = await g.read(
-      `.entity.eid=${JSON.stringify(at)} .${SESSION} .fields=${
-        fields.join(',')
-      }`,
+      line`.entity.eid=${at} .${SESSION} ${sub(projected(fields))}`,
     )
     if (!s) return
     let named = s[SESSION] as Comp | undefined

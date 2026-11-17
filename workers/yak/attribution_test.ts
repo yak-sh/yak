@@ -1,6 +1,15 @@
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { type Bundle, type Comp, graph, Stale, type Storage } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  graph,
+  type ReadOpts,
+  Stale,
+  type Storage,
+  type Taken,
+} from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { spineDoc } from '@yaks/kernel/vocab'
@@ -72,10 +81,10 @@ let boot = (
         args[0].filter((r) => (r.effect as Comp)?.state == 'pending').length
       return g.apply(...args)
     },
-    rows: (...args: Parameters<typeof g.rows>) => {
+    rows: ((q: Taken, opts?: ReadOpts) => {
       selections++
-      return g.rows(...args)
-    },
+      return g.rows(q, opts)
+    }) as typeof g.rows,
   }
   return {
     g,
@@ -199,7 +208,7 @@ test('directory attribution recovery still fills unfinished signed-in receipts',
         let url = new URL(req.url)
         if (url.pathname == '/query') {
           return Response.json(
-            await writer.g.read(url.searchParams.get('q')!),
+            await writer.g.read(whole(url.searchParams.get('q')!)),
             {
               headers: { [EPOCH]: '7' },
             },
@@ -233,7 +242,10 @@ test('directory attribution recovery still fills unfinished signed-in receipts',
   await recovery.drain()
   assertEquals(calls, 1)
   let [row] = await app.get(['guest'])
-  assertEquals((row.created as Comp).by, 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa')
+  assertEquals(
+    (row.created as Comp).by,
+    'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',
+  )
   let [receipt] = await recovery.g.read('.worked ?completed')
   assertEquals(!!receipt.completed, true)
   await recovery.fx.stop()
@@ -301,15 +313,15 @@ test('a byline that moved after selection cannot be assigned to the wrong browse
   }])
   let changed = {
     ...g,
-    read: async (...args: Parameters<typeof g.read>) => {
-      let rows = await g.read(...args)
+    read: (async (q: Taken, opts?: ReadOpts) => {
+      let rows = await g.read(q, opts)
       g.apply([{
         entity: { eid: 'a' },
         doc: { title: 'Third' },
         $actor: { via: another },
       }])
       return rows
-    },
+    }) as typeof g.read,
   }
   await assertRejects(
     () => attributed(changed, browser, 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'),

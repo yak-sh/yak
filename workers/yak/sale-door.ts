@@ -1,7 +1,7 @@
 // The customer door returns one checked receipt or artifact. The seller's
 // graph remains behind its existing editor authority.
 import type { Bundle, Comp } from '@yaks/graph'
-import { listed } from '@yaks/query'
+import { type Built, joined, type Line, line, sub } from '@yaks/query'
 import type { Answer, Asked } from './apps.ts'
 import { appStore } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
@@ -97,7 +97,7 @@ let orders = async (at: Asked, id: string) => {
   if (at.req.method != 'GET') return at.json(405, 'method_not_allowed')
   let graph = storeOf(at)
   let rows = await graph.query(
-    `(.entity.eid=${id} .order|.order.quote=${id}) ?sale_access ?doc`,
+    line`(.entity.eid=${id} .order|.order.quote=${id}) ?sale_access ?doc`,
   )
   let row = rows.find((row) => row.order && allowed(at, row))
   return row ? privateJson(customerReceipt(row)) : missing()
@@ -145,7 +145,7 @@ let upload = async (at: Asked) => {
 
 let entitled = async (at: Asked, sha: string, subject?: Buyer) => {
   let rows = await storeOf(at).query(
-    `.sale_artifact.artifact=${sha} ?sale_access`,
+    line`.sale_artifact.artifact=${sha} ?sale_access`,
   )
   return rows.some((row) => allowed(at, row, subject))
 }
@@ -183,36 +183,34 @@ let artifactSubject = (at: Asked): Buyer | Response | undefined => {
   return { person, via }
 }
 
-let accessFilter = (who: Buyer) => {
+let accessFilter = (who: Buyer): Built | null => {
   let clauses = [
-    ...who.person ? [`.sale_access.buyer=${listed([who.person])}`] : [],
+    ...who.person ? [line`.sale_access.buyer=${who.person}`] : [],
     ...who.via
       ? [
-        `(!sale_access.buyer .sale_access.via=${
-          listed([instrumentEid(who.via)])
-        })`,
+        line`(!sale_access.buyer .sale_access.via=${instrumentEid(who.via)})`,
       ]
       : [],
   ]
-  return clauses.length ? `(${clauses.join('|')})` : null
+  return clauses.length ? line`(${sub(joined(clauses, '|'))})` : null
 }
 
 // One returned value per selected address, even if many customers or browser
 // instruments hold it. Chunked reads keep query URLs and returned rows bounded.
 let linkedArtifacts = async (
-  read: (line: string) => Promise<unknown>,
+  read: (asked: Line) => Promise<unknown>,
   artifacts: string[],
   who?: Buyer,
 ): Promise<Set<string>> => {
-  let filter = who ? accessFilter(who) : ''
+  let filter = who ? accessFilter(who) : line``
   if (filter === null) return new Set()
   let found = new Set<string>()
   for (let at = 0; at < artifacts.length; at += 128) {
     let chunk = artifacts.slice(at, at + 128)
     let rows = await read(
-      `.sale_artifact.artifact=${
-        listed(chunk)
-      } ${filter} .distinct=sale_artifact.artifact`,
+      line`.sale_artifact.artifact=${chunk} ${
+        sub(filter)
+      } .distinct=sale_artifact.artifact`,
     ) as { distinct: string[] }
     for (let sha of rows.distinct) found.add(sha)
   }
@@ -252,7 +250,7 @@ let artifactLinks = async (at: Asked) => {
   let artifacts = [...new Set(input)] as string[]
   let graph = storeOf(at)
   let found = await linkedArtifacts(
-    (line) => graph.query(line),
+    (asked) => graph.query(asked),
     artifacts,
     !subject && editor(at) ? undefined : customer(at, subject),
   )
@@ -289,11 +287,11 @@ let artifacts = async (at: Asked, sha: string, link: boolean) => {
   // A signed URL never revives bytes whose entitlement has been removed.
   if (
     signed &&
-    !(await storeOf(at).query(`.sale_artifact.artifact=${sha}`)).length
+    !(await storeOf(at).query(line`.sale_artifact.artifact=${sha}`)).length
   ) {
     return missing()
   }
-  let [file] = await storeOf(at).query(`.entity.eid=${await useOf(sha)}`)
+  let [file] = await storeOf(at).query(line`.entity.eid=${await useOf(sha)}`)
   if (!file?.attachment) return missing()
   let body = await blobBytes(
     env,

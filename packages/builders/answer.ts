@@ -27,7 +27,7 @@ import type { Binding, Bundle, Comp, Eid, ReadTx } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import type { Vocab } from '@yaks/vocab'
-import { and, eq, present } from '@yaks/query'
+import { and, eq, line, present } from '@yaks/query'
 import { EDGE, edgeEid, link, relations, unlink } from '@yaks/edge'
 import { held, keyed, keyEid, unkeyed } from '@yaks/key'
 import { verify } from '@yaks/kernel'
@@ -394,7 +394,10 @@ export let outputs = (
   steps(function* () {
     let source = run.entity.eid
     let b = comp(run, BUILD)!
-    let args = comp(call, 'call')?.args as { binding: Binding; wiring?: Wiring }
+    let args = comp(call, 'call')?.args as {
+      binding: Binding
+      wiring?: Wiring
+    }
     // Only a nonedge slot's take key chooses its owner. Links derive from the
     // siblings this call made; enumeration below changes choices, never ids.
     let slots = object(value) && Array.isArray(value.outputs)
@@ -433,7 +436,7 @@ export let outputs = (
     let eids = specs.map((s) => s.eid)
     let prior = yield* step(tx.get(eids))
     // The links an earlier answer of this build stated and this one does not.
-    let made = yield* step(tx.read(`.${BUILT}.build=${source}&*`))
+    let made = yield* step(tx.read(line`.${BUILT}.build=${source}&*`))
     let have = new Map(prior.map((row) => [row.entity.eid, row]))
     let targets = yield* step(tx.get([
       ...new Set(
@@ -442,7 +445,9 @@ export let outputs = (
     ]))
     let found = new Map(targets.map((row) => [row.entity.eid, row]))
     // A replay never rewrites a take or changes the person's choice.
-    if (made.some((row) => comp(row, BUILT)?.call == call.entity.eid)) return []
+    if (made.some((row) => comp(row, BUILT)?.call == call.entity.eid)) {
+      return []
+    }
     let newest = b.call == call.entity.eid
     let slotsMade = new Set(specs.map((spec) => spec.slot))
     let writes: Bundle[] = !newest

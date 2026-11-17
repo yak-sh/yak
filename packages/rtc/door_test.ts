@@ -3,6 +3,7 @@
 // an app's store (@yaks/ram) and a Realtime that answers the way Cloudflare's
 // schema says it does.
 
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
@@ -61,7 +62,7 @@ let vocab = loadVocab([wakeDoc, rtcDoc])
 let app = (allowance = Infinity) => {
   let g = graph({ storage: ram(vocab), vocab })
   let store = {
-    read: async (q: string) => await g.read(q),
+    read: async (q: string) => await g.read(whole(q)),
     // the host writes as itself: `sfu` is no client's to write
     write: async (bs: Bundle[]) => await g.apply(bs, { trusted: true }),
   }
@@ -138,7 +139,10 @@ test('a session opens at the ceiling as a refusal, and nothing at Realtime', asy
   let a = app(0)
   let { status, body } = await a.call('POST', '/sessions/new')
   assertEquals(status, 429)
-  assertEquals(body.error, { code: 'limit', message: 'the allowance is spent' })
+  assertEquals(body.error, {
+    code: 'limit',
+    message: 'the allowance is spent',
+  })
   assertEquals(a.rt.sent, [])
 })
 

@@ -1,4 +1,5 @@
 // Catalogue joins and next-song choices remain stable while outputs rebuild.
+import { whole } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { shop } from '../../packages/builders/testing.ts'
 import vale from './vocab.json' with { type: 'json' }
@@ -113,7 +114,7 @@ test('song subscription projects the current main audio and its qualified riders
     ]),
     { entity: { eid: 'sample-call' }, call: {}, completed: {} },
   ], { trusted: true })
-  let rows: Row[] = await g.read(SONGS)
+  let rows: Row[] = await g.read(whole(SONGS))
   equal(rows.map((row) => row.entity.eid).toSorted(), [
     'clip',
     'land',

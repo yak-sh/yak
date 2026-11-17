@@ -1,5 +1,6 @@
 // Resolve file-and-command targets once. A session default is only a convenience;
 // process recovery always follows its original workspace.
+import { line, sub } from '@yaks/query'
 import { type Bundle, type Comp, type Graph, Refused } from '@yaks/graph'
 import { token } from '@yaks/graph/guard'
 import type { Workspace } from './workspace.ts'
@@ -16,8 +17,8 @@ let component = (value: unknown) => value as Comp | undefined
  * newest workspaces, one per directory, since many share one.
  */
 export let naming = async (g: Graph): Promise<string> => {
-  let newest = g.vocab.comp('created') ? '&.order=-created.at' : ''
-  let rows = await g.read(`.workspace${newest}&.limit=40&*`)
+  let newest = g.vocab.comp('created') ? line`&.order=-created.at` : line``
+  let rows = await g.read(line`.workspace${sub(newest)}&.limit=40&*`)
   let roots = new Map<string, string>()
   for (let row of rows) {
     let root = component(row.workspace)?.root

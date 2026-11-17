@@ -2,6 +2,7 @@
 // that a page has a use for, composed from their facets over memory by
 // @yaks/host's assembly as `yak` and yaks.app compose theirs, and the `yak`
 // command line typed into it.
+import { whole } from '@yaks/query'
 import { type Bundle, type Comp, graph, mint, type Plugin } from '@yaks/graph'
 import { type Phase, PHASES } from '@yaks/graph/plugin'
 import { assembly } from '@yaks/host/assembly'
@@ -318,7 +319,7 @@ export let yak = async (
   )
   let from = {
     lookup: (eids: string[]) => g.get(eids),
-    query: (q: string) => g.read(q),
+    query: (q: string) => g.read(whole(q)),
   }
 
   // What a view reads without waiting: each entity a commit touched, read
@@ -423,7 +424,7 @@ export let yak = async (
       let value: Bundle[] = []
       let heard = new Set<(rows: Bundle[]) => void>()
       let read = () =>
-        Promise.resolve(g.read(q)).then((rows) => {
+        Promise.resolve(g.read(whole(q))).then((rows) => {
           value = rows
           for (let h of heard) h(rows)
         })

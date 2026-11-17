@@ -5,6 +5,7 @@
 // is erased. The
 // provider is Telnyx in memory: what is on offer, what is held, and every
 // call, so nothing is bought.
+import { line as q } from '@yaks/query'
 import { test, until } from '@yaks/testing'
 import {
   assert,
@@ -178,7 +179,7 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
     // Bought again, its row wakes on that day next month and spends a month.
     let bought = Date.now()
     await tool('number_buy', { number: FREE })
-    let [line] = await k.dir.read(`.phone_line.number=${FREE} ?wake`)
+    let [line] = await k.dir.read(q`.phone_line.number=${FREE} ?wake`)
     let wake = line.wake as { every: string; at: string }
     assertEquals(wake.every, monthly(new Date(bought)))
     assert(Date.parse(wake.at) - bought > 27 * 86_400_000)
@@ -191,7 +192,7 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
     await until(async () => (await k.dir.at(eids[slug]))?.meter?.texts == 5, {
       label: 'the next month spent',
     })
-    let [after] = await k.dir.read(`.phone_line.number=${FREE} ?wake`)
+    let [after] = await k.dir.read(q`.phone_line.number=${FREE} ?wake`)
     assertEquals(
       (after.wake as { at: string }).at,
       next(wake.every, Date.now()),
@@ -205,7 +206,7 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
     })
     assertEquals(held.size, 0)
     assertEquals(calls.at(-1), 'DELETE /phone_numbers/number-1')
-    assertEquals(await k.dir.read(`.phone_line.number=${FREE}`), [])
+    assertEquals(await k.dir.read(q`.phone_line.number=${FREE}`), [])
   } finally {
     await k.stop()
     await telnyx.stop()

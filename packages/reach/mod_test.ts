@@ -1,5 +1,6 @@
 // Two graphs in memory as the members of one composition: a read spans them
 // as one bundle per eid, and a write lands each component where its word lives.
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
@@ -17,7 +18,7 @@ let member = (at: string, own: VocabDoc): Member => {
   g.install()
   return {
     at,
-    read: async (line) => await g.read(line),
+    read: async (line) => await g.read(whole(line)),
     apply: (bundles, check) => g.apply(bundles, { check }) as Promise<Bundle[]>,
     vocab: () => Promise.resolve(own),
   }

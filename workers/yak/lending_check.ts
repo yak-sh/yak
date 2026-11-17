@@ -3,6 +3,7 @@
 // Run this end-to-end check explicitly:
 // deno test -A --no-check workers/yak/lending_check.ts
 import { cleanup, test } from '@yaks/testing'
+import { line } from '@yaks/query'
 import {
   assert,
   assertEquals,
@@ -118,7 +119,7 @@ let setup = async (words = false) => {
   await home.run('app_publish', { name: 'lent-notes' })
   let install = await away.run('app_install', { name: 'lent-notes' })
   let copy = (await dir.app(away.space, 'notes'))!
-  let links = () => c.graph.read(`.edge.from=${copy.eid}&.uses&*`)
+  let links = () => c.graph.read(line`.edge.from=${copy.eid}&.uses&*`)
   let post = (fields: Record<string, string>) => {
     let form = new FormData()
     for (let [name, value] of Object.entries(fields)) form.set(name, value)
@@ -294,7 +295,7 @@ test('a borrower names its own borrowed link through the connector and changes n
   // What the lender's connection is; `updated` and `used` are stamped by the
   // answer naming it (T-132938).
   let lender = async () =>
-    (await s.at.query(`.entity.eid=${s.connection}&*`))
+    (await s.at.query(line`.entity.eid=${s.connection}&*`))
       .map((b) => [b.connection, b.secret])
   let was = await lender()
   let run = (name: string, args: Record<string, unknown>) =>

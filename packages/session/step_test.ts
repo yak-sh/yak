@@ -1,6 +1,7 @@
 // Hosted steps return independently; a model turn starts while tools run only
 // for something new: a result, an input, or the Pending of a call that
 // outlasted its patience.
+import { line } from '@yaks/query'
 import { equal, test, until } from '@yaks/testing'
 import { graph, identityEid } from '@yaks/graph'
 import { effectDoc } from '@yaks/effects'
@@ -104,7 +105,7 @@ let handlers = (patience?: number) =>
     }],
   })
 let entries = async (session: string) =>
-  await g.read(`.entry.session=${session} .order=entry.seq *`)
+  await g.read(line`.entry.session=${session} .order=entry.seq *`)
 // A transcript asked once, its two calls run to their finals, and every
 // model turn taken while they ran.
 let turn = async (session: string, patience?: number) => {

@@ -16,6 +16,7 @@
 // and records that the store requires the journal. Never point it at the live
 // graph. Prints one JSON line per measurement.
 
+import { whole } from '@yaks/query'
 import { stopwatch } from '@yaks/benchmark'
 import { compose, facet } from '@yaks/cli/host'
 import { read as config } from '@yaks/cli'
@@ -156,12 +157,14 @@ let titleOf = async (on: typeof g, eid: string) =>
 // The writer: a session, as a session's writes are signed.
 let [session] = await g.read('.session .limit=1')
 let who = { by: session.entity.eid, via: session.entity.eid }
-let tasks = eids(await g.read('.task.status=open .order=entity.num .limit=100'))
+let tasks = eids(
+  await g.read('.task.status=open .order=entity.num .limit=100'),
+)
 out({ m: 'tasks', n: tasks.length })
 
 // Reads, before this run writes anything.
 let page = '.task.status=open .order=-entity.num .limit=50'
-await time('read:open-page', () => g.read(page), rounds, true)
+await time('read:open-page', () => g.read(whole(page)), rounds, true)
 let [busiest] = other.query(select({
   cols: [as(col('eid', 'e'), 'eid'), as(fn('count', lit('*')), 'n')],
   from: table('entry', 'x'),
@@ -171,7 +174,7 @@ let [busiest] = other.query(select({
   limit: lit(1),
 }))
 let entries = `.entry.session=${busiest.eid} .order=-entry.seq .limit=100`
-await time('read:session-entries', () => g.read(entries), rounds, true)
+await time('read:session-entries', () => g.read(whole(entries)), rounds, true)
 await time('read:get-10-tasks', () => g.get(tasks.slice(0, 10)), rounds, true)
 
 // Writes.
@@ -235,10 +238,15 @@ if (kind == 'versions') {
     now: await titleOf(g, probe),
   })
   await time('as-of:get', () => past.graph.get([probe]), rounds, true)
-  await time('as-of:open-page', () => past.graph.read(page), rounds, true)
+  await time(
+    'as-of:open-page',
+    () => past.graph.read(whole(page)),
+    rounds,
+    true,
+  )
   await time(
     'as-of:session-entries',
-    () => past.graph.read(entries),
+    () => past.graph.read(whole(entries)),
     rounds,
     true,
   )
@@ -263,7 +271,12 @@ if (kind == 'versions') {
     main: await titleOf(g, probe),
   })
   await time('branch:get', () => on.graph.get([probe]), rounds, true)
-  await time('branch:open-page', () => on.graph.read(page), rounds, true)
+  await time(
+    'branch:open-page',
+    () => on.graph.read(whole(page)),
+    rounds,
+    true,
+  )
   await on.close()
 }
 await h.close()

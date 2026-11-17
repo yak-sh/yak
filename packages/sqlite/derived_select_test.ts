@@ -1,5 +1,6 @@
 // A derived owner selector has the same typed equality and presence semantics
 // as its scalar expression; projection and unsupported operands retain expr.
+import { whole } from '@yaks/query'
 import { equal, ok, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -99,8 +100,8 @@ for (
   test(`derived owner selection preserves ${predicate}`, async () => {
     let query = `${predicate} .fields=entity.eid`
     equal(
-      (await optimized.rows(query)).map((b) => b.eid).sort(),
-      (await scalar.rows(query)).map((b) => b.eid).sort(),
+      (await optimized.rows(whole(query))).map((b) => b.eid).sort(),
+      (await scalar.rows(whole(query))).map((b) => b.eid).sort(),
     )
   })
 }

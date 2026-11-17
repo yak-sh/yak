@@ -21,6 +21,7 @@ import type {
   ReadOpts,
   Ready,
   StampPolicy,
+  Taken,
 } from '@yaks/graph'
 import { isPromise } from '@yaks/fp'
 import { admit, graph } from '@yaks/graph'
@@ -511,7 +512,7 @@ export let client = (
     // asynchronously could make it a promise, which is refused here rather
     // than handed back as rows.
     read: (query, readOpts) => {
-      let rows = g.read(query, readOpts)
+      let rows = g.read(query as Taken, readOpts)
       if (isPromise(rows)) {
         throw new Error(
           'client.read is synchronous, and a plugin made it async',

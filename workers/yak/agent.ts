@@ -43,7 +43,7 @@ import { aggregate } from '@yaks/graph/read'
 import { argsOf } from '@yaks/graph/call'
 import { composed as perEntity } from '@yaks/graph/bundle'
 import { detached } from '@yaks/graph/storage'
-import { parse, stringify } from '@yaks/query'
+import { parse, stringify, whole } from '@yaks/query'
 import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'
 import { confined } from './newcomer.ts'
@@ -454,7 +454,7 @@ let held = (
         false,
         at.headers,
       )
-      : await read(ctx.env, where, one)
+      : await read(ctx.env, where, whole(one))
     return { answer, reduced: !!aggregate(parse(one)) }
   }
   let rows = async (q: Query): Promise<Row[]> => {
@@ -601,7 +601,7 @@ export let searching =
     let q = `${encodeURIComponent(words)}&limit=${opts?.limit ?? 20}`
     let some = await narrowed(ctx.env, reach, words)
     if (!some.length) return []
-    let hits = await read(ctx.env, some, lined(q))
+    let hits = await read(ctx.env, some, whole(lined(q)))
     return Array.isArray(hits) ? hits as Bundle[] : []
   }
 

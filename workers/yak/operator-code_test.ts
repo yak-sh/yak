@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { equal, match, ok, test, until } from '@yaks/testing'
 import type { Item, Request } from '@yaks/model'
 import type { Comp } from '@yaks/graph'
@@ -76,10 +77,10 @@ await receive(store, {
 }, 'Create an app and write its first note.')
 await drain(store)
 let root = rootOf(space.eid, owner)
-let [fork] = await store.g.read(`.spawned.parent=${root}`)
-let calls = await store.g.read(`.call.to=${toolEid('code_mode')} &*`)
+let [fork] = await store.g.read(line`.spawned.parent=${root}`)
+let calls = await store.g.read(line`.call.to=${toolEid('code_mode')} &*`)
 let bulk = calls.find((b) => ((b.call as Comp).args as Comp)?.script)
-let nested = await store.g.read(`.call.source=${bulk?.entity.eid} &*`)
+let nested = await store.g.read(line`.call.source=${bulk!.entity.eid} &*`)
 
 test('root and fork offer the same code mode; the fork discovers and runs connector tools in bulk', () => {
   let atRoot = asked[0].tools.find((t) => t.name == 'code_mode')

@@ -1,7 +1,7 @@
 import type { Bundle, Plugin } from '@yaks/graph'
 import { Refused, Stale } from '@yaks/graph/errors'
 import { after, each } from '@yaks/fp'
-import { and, every, map, or, parse, present } from '@yaks/query'
+import { and, every, line, map, or, parse, present } from '@yaks/query'
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import { compile, type Lens, type Speaks } from './compile.ts'
 import { docs } from './vocab.ts'
@@ -22,7 +22,7 @@ let facts = (
         Object.values(v.props).flatMap((p) =>
           'ack' in p
             ? [
-              `.${p.ack.component}&?${
+              line`.${p.ack.component}&?${
                 p.ack.order.split('.')[0]
               }&?${p.ack.mark}&*`,
             ]
@@ -137,7 +137,7 @@ export let lenses = (
           held,
           (out, v) =>
             after(
-              tx.read(`.${v.from}&?created&?updated&*`),
+              tx.read(line`.${v.from}&?created&?updated&*`),
               (source) => [...out, ...source],
             ),
         ),

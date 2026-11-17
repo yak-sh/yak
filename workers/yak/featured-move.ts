@@ -5,6 +5,7 @@
 // now (@yaks/platform, T-160642), server-owned, on the thing featured. These
 // move each into the mark, and the first sheds the old column. Only the
 // directory holds integrations and apps.
+import { type Line, line } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import type { VocabDoc } from '@yaks/vocab'
@@ -50,7 +51,7 @@ export let integrationFeaturedRule: Rule = {
   mark: 'yak/store/integration-featured/1',
   stores: [PLATFORM_STORE],
   live: 'all',
-  find: '.integration.featured&?featured&*',
+  find: line`.integration.featured&?featured&*`,
   source: integrationFeaturedSource,
   move: (row) => integrationFeaturedMove(row),
   drop: ['integration.featured'],
@@ -78,7 +79,7 @@ let SHOWN = [
  * yet. */
 export let demoFeaturedMove = (
   row: Bundle,
-  read: (line: string) => Bundle[],
+  read: (line: Line) => Bundle[],
   now = new Date().toISOString(),
 ): Bundle[] => {
   let ref = (row.app as Comp | undefined)?.space as
@@ -87,7 +88,7 @@ export let demoFeaturedMove = (
     | undefined
   let space = typeof ref == 'object' ? ref?.eid : ref
   if (row.featured || !space) return []
-  let [at] = read(`.entity.eid=${space}&.space`)
+  let [at] = read(line`.entity.eid=${space}&.space`)
   return (at?.space as Comp | undefined)?.slug == DEMO
     ? [{ entity: { eid: row.entity.eid }, ...marked(now) }]
     : []
@@ -97,7 +98,7 @@ export let demoFeaturedRule: Rule = {
   mark: 'yak/store/demo-featured/1',
   stores: [PLATFORM_STORE],
   live: 'all',
-  find: `.app.slug=${SHOWN.join(',')}&!featured&*`,
+  find: line`.app.slug=${SHOWN}&!featured&*`,
   move: (row, read) => {
     if (!read) throw new Error("a demo app's space is read to feature it")
     return demoFeaturedMove(row, read)

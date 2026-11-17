@@ -1,3 +1,4 @@
+import { line as q } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Comp } from '@yaks/graph'
@@ -123,7 +124,7 @@ let texted = async (words: string) => {
 // compaction leaves it (@yaks/session compact.ts): the model is shown the
 // summary from here on, and not the words.
 let settle = async () => {
-  let entries = await store.g.read(`.entry.session=${root} .order=entry.seq`)
+  let entries = await store.g.read(q`.entry.session=${root} .order=entry.seq`)
   let through = entries.at(-1)!
   await store.g.apply([{
     entity: { eid: crypto.randomUUID() },

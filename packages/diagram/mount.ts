@@ -2,6 +2,7 @@
 // over the last layout and puts the SVG into an element, again after every
 // commit. The graph's own `effect` phase is the signal, so a write through any
 // door redraws it.
+import { whole as asked } from '@yaks/query'
 import { human } from '@yaks/id'
 import type { Bundle, Graph } from '@yaks/graph'
 import { type Layout, layout, type Options } from './layout.ts'
@@ -155,7 +156,7 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
     return last
   }
   let read = (query: string, s: number) =>
-    Promise.resolve(graph.read(query)).then((bundles) => {
+    Promise.resolve(graph.read(asked(query))).then((bundles) => {
       let now = JSON.stringify([query, bundles])
       if (last && now == answer) return last
       answer = now
@@ -183,7 +184,7 @@ export let mount = (sheet: Sheet, opts: MountOptions): Mounted => {
   redraw().catch(failed)
   return {
     query: (query, stage) =>
-      Promise.resolve(graph.read(query)).then((bundles) => {
+      Promise.resolve(graph.read(asked(query))).then((bundles) => {
         current = query
         answer = JSON.stringify([query, bundles])
         return draw(bundles, stage ?? opts.stage?.() ?? 0)

@@ -1,3 +1,4 @@
+import { type Line } from '@yaks/query'
 import { decodedPath } from './request-path.ts'
 import { type Clock, clock, timed } from './timing.ts'
 // The cached half of serving an app's files and blobs: bytes out of R2, and
@@ -403,7 +404,12 @@ let serves = (req: Request, env: Env, path: string) => {
   let [, app, sha, rep] = match
   let graph = metaOf(storeOf(env.STORE, store.name, store.app))
   return servedAs(() =>
-    servable((q) => graph.query(q), { scope: app, naming: uploads }, sha, rep)
+    servable(
+      (q) => graph.query(q as Line),
+      { scope: app, naming: uploads },
+      sha,
+      rep,
+    )
   )
 }
 

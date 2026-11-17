@@ -6,7 +6,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { act } from 'preact/test-utils'
 import type { Bundle } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
-import { parse } from '@yaks/query'
+import { parse, whole } from '@yaks/query'
 import { commentPlace } from '@yaks/kernel/Comments'
 import { drafts } from '@yaks/draft/input'
 import type { Search } from './threads.ts'
@@ -403,7 +403,7 @@ test('a person’s inbox draws summary rows and reads a thread’s history only 
       created: { at: '2026-10-02T12:02:00Z' },
     },
   ])
-  let h = host({ read: (l) => g.read(l) })
+  let h = host({ read: (l) => g.read(whole(l)) })
   let seen = mount(
     <h.Door e={{ entity: { eid: actor }, person: {} }} view='Inbox' />,
   )

@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { assertRejects } from '@std/assert'
 import { platform } from './directory-rows-probe.ts'
@@ -223,7 +224,7 @@ await consentPhone(
   source,
 )
 let [routed] = await meta(existing.env).query(
-  `.entity.eid=${consentEid(existing.person)}`,
+  line`.entity.eid=${consentEid(existing.person)}`,
 )
 test('agreeing an existing number updates its chosen space and consent source without another welcome', () => {
   equal((routed.sms_consent as { space: string }).space, route)

@@ -2,6 +2,7 @@
 // they say, and the two ways an app declines them. The kernel half — the same
 // manifest through app_deploy and a call at the MCP door — is in workers/yak mcp_test.ts. Below them, the old command grammar
 // a kept release declares, read as the new.
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import {
@@ -116,7 +117,7 @@ test('find is a filter line, one clause per argument given', () => {
   // A clause whose argument nobody sent drops out, and the rest still reads.
   assertEquals(
     filled(find, { cuisine: 'thai & lao' }).query,
-    '.recipe&?doc&.recipe.cuisine=thai%20%26%20lao',
+    '.recipe&?doc&.recipe.cuisine="thai & lao"',
   )
   // Nothing at all is every recipe there is.
   assertEquals(filled(find, {}).query, '.recipe&?doc')
@@ -177,7 +178,10 @@ test('a kind starting with a vowel takes an', () => {
   let made = tools({
     $defs: { official: { component: true, properties: {} } },
   })
-  assertEquals(made.add_official.description, 'Add an official to jeff/recipes')
+  assertEquals(
+    made.add_official.description,
+    'Add an official to jeff/recipes',
+  )
 })
 
 test('the commands a kind made are told from the ones an app wrote', () => {
@@ -245,7 +249,7 @@ test('a declared kind adds its whole shape, and a rule adds the rest', () => {
   )
   assertEquals(
     filled(made.find_gig, { act: 'The Owls', venue_at: 'Main St' }).query,
-    '.show&?doc&.show.act=The%20Owls&.venue.at=Main%20St',
+    '.show&?doc&.show.act="The Owls"&.venue.at="Main St"',
   )
 })
 
@@ -279,7 +283,7 @@ test('kept app declarations translate their grammar without changing input requi
     required: old.required,
   })
   assertEquals(filled(tool, { title: 'The old release', limit: 3 }), {
-    query: '.doc.title=The%20old%20release&.limit=3',
+    query: whole('.doc.title="The old release"&.limit=3'),
   })
   assertThrows(() => filled(tool, {}), Error, 'title')
   assertEquals(manifest.$defs.note.options, old.options)

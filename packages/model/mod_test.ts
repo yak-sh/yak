@@ -1,6 +1,7 @@
 // A provider or a model is named where its eid is expected: at every door that
 // resolves ids through Graph.address, a read, a write and a caller's lookup.
 
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, type Comp, graph, identityEid } from '@yaks/graph'
@@ -63,7 +64,9 @@ test('a name is accepted wherever a model reference is', () => {
   let g = shelf()
   g.apply([{ entity: { eid: E }, using: { model: 'gpt-6-astra' } }])
   let read = (q: string) =>
-    (g.read(q) as Bundle[]).map((b) => [b.entity.eid, (b.using as Comp).model])
+    (g.read(whole(q)) as Bundle[]).map((
+      b,
+    ) => [b.entity.eid, (b.using as Comp).model])
   assertEquals(read(`.entity.eid=${E}`), [[E, ASTRA]])
   assertEquals(read('.using.model=gpt-6-astra'), [[E, ASTRA]])
 })
@@ -71,7 +74,11 @@ test('a name is accepted wherever a model reference is', () => {
 test('a name a provider and a model both hold is refused', () => {
   let g = shelf()
   g.apply([{ entity: { eid: '$m' }, model: { name: 'codex' } }])
-  assertThrows(() => g.address(['codex']), Error, 'both a provider and a model')
+  assertThrows(
+    () => g.address(['codex']),
+    Error,
+    'both a provider and a model',
+  )
 })
 
 test('a new name on a staged builder exists pending, never offered', () => {

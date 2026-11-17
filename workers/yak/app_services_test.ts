@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseTools } from '@yaks/tools/declared'
@@ -107,7 +108,7 @@ test('service customers retain their identity and lose authority after revocatio
     tools,
   })
   let g = meta(env)
-  let read = (q: unknown) => g.query(String(q))
+  let read = (q: unknown) => g.query(whole(String(q)))
   await g.apply(
     await publishService(read, {
       app: app.eid,

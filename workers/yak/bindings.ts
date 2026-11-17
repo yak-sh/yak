@@ -1,6 +1,7 @@
 // A resource belongs to the app's immutable store handle. The directory keeps
 // the intent before Cloudflare is called, so a lost reply can be found by name
 // on retry and a failed deploy never strands storage without an owner.
+import { line } from '@yaks/query'
 import { sha256, token } from '@yaks/graph/sha256'
 import type { App } from './directory.ts'
 import type { Env } from './env.ts'
@@ -48,7 +49,7 @@ export let bindings = async (
 ) => {
   let eids = [app].flat().map((a) => a.eid)
   if (!eids.length) return []
-  return boundOf(await meta(env).query(`.binding.app=${eids.join(',')}`))
+  return boundOf(await meta(env).query(line`.binding.app=${eids}`))
 }
 
 /** The bindings among rows already read, in the order `bindings` says them

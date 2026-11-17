@@ -1,5 +1,6 @@
 // Outside helpers belong to a caller-owned chat, never the person's main
 // thread. Questions for the person cross that boundary as passive notices.
+import { line } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import {
@@ -26,7 +27,7 @@ export let helperParent = async (
   let row: Bundle | undefined = (await store.g.get([open]))[0]
   if (row?.task) {
     // Containment points from the task to its session.
-    let links = await store.g.read(`.contains&.edge.from=${open}`)
+    let links = await store.g.read(line`.contains&.edge.from=${open}`)
     let sessions = await store.g.get(
       links.map((b) => String((b.edge as Comp).to)),
     )

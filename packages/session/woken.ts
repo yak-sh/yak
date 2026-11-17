@@ -19,6 +19,7 @@
 // session a daily wake reaches is the one that has not ended, not a run that
 // once answered a question about the topic.
 
+import { line } from '@yaks/query'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { SESSION } from './comp.ts'
@@ -36,8 +37,10 @@ let str = (v: unknown): string => typeof v == 'string' ? v : ''
 export let attending = async (g: G, topic: Eid): Promise<Eid | undefined> => {
   if (!g.vocab.prop(SESSION, 'topic')) return
   let open = await g.read(
-    `.${SESSION}.topic=${topic}&!${SESSION}.ended` +
-      `&.fields=${SESSION}.ended,created.at`,
+    line`.${SESSION}.topic=${topic}&!${SESSION}.ended&.fields=${[
+      `${SESSION}.ended`,
+      'created.at',
+    ]}`,
   )
   let gone = await ended(g, open)
   let opened = (b: Bundle) => str(comp(b, 'created').at) + b.entity.eid
@@ -48,14 +51,16 @@ export let attending = async (g: G, topic: Eid): Promise<Eid | undefined> => {
 /** The sessions a wake still to fire reaches ({@link attending}): each has a
  * turn coming, so it is not over however long it has rested. */
 export let awaited = async (g: G): Promise<Set<Eid>> => {
-  if (!g.vocab.comp('wake') || !g.vocab.prop(SESSION, 'topic')) return new Set()
+  if (!g.vocab.comp('wake') || !g.vocab.prop(SESSION, 'topic')) {
+    return new Set()
+  }
   let open = await g.read(
-    `.${SESSION}.topic&!${SESSION}.ended&.fields=${SESSION}.topic`,
+    line`.${SESSION}.topic&!${SESSION}.ended&.fields=${SESSION}.topic`,
   )
   let topics = [...new Set(open.map((s) => str(comp(s, SESSION).topic)))]
   if (!topics.length) return new Set()
   let coming = await g.read(
-    `.wake.at&.wake.target=${topics.join(',')}&.fields=wake.target`,
+    line`.wake.at&.wake.target=${topics}&.fields=wake.target`,
   )
   let aimed = [...new Set(coming.map((w) => str(comp(w, 'wake').target)))]
   let reached = await Promise.all(aimed.map((topic) => attending(g, topic)))

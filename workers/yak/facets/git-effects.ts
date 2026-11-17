@@ -1,4 +1,5 @@
 // Mint each deployed version as a Git commit.
+import { type Line } from '@yaks/query'
 import { minting } from '@yaks/git'
 import type { Bundle } from '@yaks/graph'
 import type { Handlers } from '@yaks/effects'
@@ -13,7 +14,7 @@ export let effects = (_host: unknown, options: Options): Handlers => {
       if (!row?.deploy || row.tombstone) return
       let { releases } = await import('../gitobj.ts')
       let dir = {
-        read: async (line: string) => await tx.read(line),
+        read: async (line: Line) => await tx.read(line),
         write: (bundles: Bundle[]) => Promise.resolve(write(bundles)),
       }
       await minting(releases(at.env, dir))([row], tx)

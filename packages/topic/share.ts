@@ -9,6 +9,7 @@
  * @module
  */
 import type { Eid, Graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { HOLDS, TOPIC, TOPICS } from './topic.ts'
 
 /** The component that gives a topic its share. */
@@ -93,16 +94,17 @@ export let kept = (s: Shares): Map<Eid, number> => {
 export let shares = async (g: Graph): Promise<Shares> => {
   let out: Shares = { share: new Map(), up: new Map() }
   if (!g.vocab.comp(SHARE)) return out
-  for (let b of await g.read(`.${TOPIC}&.${SHARE}&.limit=${TOPICS}`)) {
+  for (let b of await g.read(line`.${TOPIC}&.${SHARE}&.limit=${TOPICS}`)) {
     let share = Number((b[SHARE] as { share?: unknown }).share)
     if (share >= 0) out.share.set(b.entity.eid, share)
   }
   if (!out.share.size) return out
   let topics = new Set(
-    (await g.read(`.${TOPIC}&.limit=${TOPICS}`)).map((b) => b.entity.eid),
+    (await g.read(line`.${TOPIC}&.limit=${TOPICS}`)).map((b) => b.entity.eid),
   )
+  if (!topics.size) return out
   let edges = await g.read(
-    `.${HOLDS}&.edge.to=${[...topics].join(',')}&?edge&.limit=${TOPICS}`,
+    line`.${HOLDS}&.edge.to=${[...topics]}&?edge&.limit=${TOPICS}`,
   )
   for (let b of edges) {
     let { from, to } = b.edge as { from: Eid; to: Eid }

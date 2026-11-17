@@ -3,6 +3,7 @@
  * databases and owned processes go away in finally. Timings include the
  * response, not merely dispatch. No detached duties.
  */
+import { line } from '@yaks/query'
 import { type Samples, stopwatch } from '@yaks/benchmark'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
@@ -231,7 +232,7 @@ export async function measure(
         JSON.stringify([{ entity: { eid: TARGET }, doc: { body } }]),
       ])
       if (
-        JSON.stringify(await host!.graph.read(`.entity.eid=${TARGET} ?doc`))
+        JSON.stringify(await host!.graph.read(line`.entity.eid=${TARGET} ?doc`))
           .includes(body) == false
       ) throw new Error('CLI write not committed')
     })

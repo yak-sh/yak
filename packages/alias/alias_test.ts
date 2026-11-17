@@ -2,6 +2,7 @@
 // writes one recipe, a reference by name follows, and a clash is refused with
 // the holder named.
 
+import { line, whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
@@ -15,7 +16,7 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 }
 
 let read = (g: ReturnType<typeof cookbookGraph>, q: string) =>
-  (g.read(q) as Bundle[]).map((b) => b.entity.eid).sort()
+  (g.read(whole(q)) as Bundle[]).map((b) => b.entity.eid).sort()
 
 // The seed, as anybody would write it.
 let CAKE = 'recipe:lemon-cakes'
@@ -34,11 +35,14 @@ test('the sugar becomes a key entity of its own', () => {
   let r = out.find((b) => b.$alias == '$r')!.entity.eid
   assertEquals(read(g, '.alias'), [aliasEid(CAKE)])
   assertEquals(
-    (g.read(`.entity.eid=${aliasEid(CAKE)}`) as Bundle[])[0].key,
+    (g.read(line`.entity.eid=${aliasEid(CAKE)}`) as Bundle[])[0].key,
     { of: r, value: CAKE },
   )
   // and the name is not a property on the recipe
-  assertEquals((g.read(`.entity.eid=${r}`) as Bundle[])[0].alias, undefined)
+  assertEquals(
+    (g.read(line`.entity.eid=${r}`) as Bundle[])[0].alias,
+    undefined,
+  )
 })
 
 test('the same seed loaded twice writes one entity', () => {
@@ -49,7 +53,7 @@ test('the same seed loaded twice writes one entity', () => {
   assertEquals(again.find((b) => b.$alias == '$r')!.entity.eid, r)
   assertEquals(read(g, '.recipe'), [r])
   assertEquals(
-    ((g.read(`.entity.eid=${r}`) as Bundle[])[0].doc as { title: string })
+    ((g.read(line`.entity.eid=${r}`) as Bundle[])[0].doc as { title: string })
       .title,
     'Lemon cakes (better)',
   )
@@ -77,7 +81,9 @@ test('a bundle addressed by name patches that entity', () => {
     .find((b) => b.$alias == '$r')!.entity.eid
   sync(g.apply([{ entity: { eid: CAKE }, recipe: { serves: 12 } }]))
   assertEquals(
-    ((g.read(`.entity.eid=${r}`) as Bundle[])[0].recipe as { serves: number })
+    ((g.read(line`.entity.eid=${r}`) as Bundle[])[0].recipe as {
+      serves: number
+    })
       .serves,
     12,
   )

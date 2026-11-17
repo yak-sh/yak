@@ -1,6 +1,7 @@
 // One message shape beside the Operator's conversation link. The old source
 // columns stay declared until dormant Operators have been reached; only this
 // migration reads them. They are never written on new texts.
+import { line } from '@yaks/query'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Rule } from './mover.ts'
 
@@ -35,7 +36,7 @@ export let phoneTexts = async (g: Graph) => {
 export let phoneRule: Rule = {
   mark: 'yak/store/phone-provider/1',
   core: ['text'],
-  find: '.text&!text.via',
+  find: line`.text&!text.via`,
   live: 'all',
   move: (row) => [{ entity: row.entity, text: { via: 'telnyx' } }],
 }

@@ -60,6 +60,7 @@
 // a sentinel among an app's connections, swapping in the credential and
 // refreshing a token), and act on the graph and vault they are given.
 
+import { type Built, line, sub } from '@yaks/query'
 import { CallError } from '@yaks/tools/errors'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
@@ -188,8 +189,7 @@ let strs = (v: unknown): string[] => Array.isArray(v) ? v.map(String) : []
 // never a name somebody chose, which a line would have to quote: a connection's
 // integration is compared here, after the read. A line answers the components
 // it names, so one that needs the rest of an entity asks for them (`*`).
-let any = (eids: Eid[]) => eids.join(',')
-let ALL = '&*'
+let ALL = line`&*`
 
 let nameOf = (b: Bundle): string => String(comp(b, SECRET).name)
 
@@ -210,14 +210,14 @@ let fresh = (owner: Eid, integration: string, scopes: string[]): Bundle => {
 
 // The connection as the graph holds it, or a refusal naming it.
 let held = async (read: Read, eid: Eid): Promise<Bundle> => {
-  let [b] = await read(`.entity.eid=${eid}&.${CONNECTION}${ALL}`)
+  let [b] = await read(line`.entity.eid=${eid}&.${CONNECTION}${sub(ALL)}`)
   if (!b) throw new Error(`no connection ${eid}`)
   return b
 }
 
 // The `uses` links at one end, and the far end of one.
-let links = (read: Read, at: 'from' | 'to', eid: Eid) =>
-  read(`.${EDGE}.${at}=${eid}&.${USES}${ALL}`)
+let links = (read: Read, at: 'from' | 'to', eid: Eid | Eid[]) =>
+  read(line`.${EDGE}.${at}=${eid}&.${USES}${sub(ALL)}`)
 let far = (l: Bundle, at: 'from' | 'to'): Eid =>
   String(comp(l, EDGE)[at == 'from' ? 'to' : 'from'])
 
@@ -232,7 +232,7 @@ export let using = async (
     .filter((l) => !comp(l, USES).each == !a.each)
   if (!out.length) return undefined
   let found = await read(
-    `.entity.eid=${any(out.map((l) => far(l, 'from')))}&.${CONNECTION}`,
+    line`.entity.eid=${out.map((l) => far(l, 'from'))}&.${CONNECTION}`,
   )
   return found.find((b) => {
     let c = comp(b, CONNECTION)
@@ -393,7 +393,7 @@ export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
   if (used) {
     if (a.direct) {
       let [l] = await read(
-        `.entity.eid=${edgeEid(a.app!, USES, used.entity.eid)}&.${USES}`,
+        line`.entity.eid=${edgeEid(a.app!, USES, used.entity.eid)}&.${USES}`,
       )
       let loan = comp(l, USES)
       if (loan.lender != null || loan.lends != null) {
@@ -473,10 +473,10 @@ export let carry = async (
   read: Read,
   a: { source: Eid; app: Eid; owner: Eid },
 ): Promise<Bundle[]> => {
-  let out = await links(read, 'from', any([a.source, a.app]))
+  let out = await links(read, 'from', [a.source, a.app])
   if (!out.length) return []
   let to = await read(
-    `.entity.eid=${any(out.map((l) => far(l, 'from')))}&.${CONNECTION}`,
+    line`.entity.eid=${out.map((l) => far(l, 'from'))}&.${CONNECTION}`,
   )
   // One ask for each integration, shared or each: every person's own
   // connection is linked by the name and scopes of the ask it answers. What
@@ -543,7 +543,7 @@ export let lend = async (
     )
   }
   let eid = edgeEid(a.app, USES, c.entity.eid)
-  let u = comp((await read(`.entity.eid=${eid}&.${USES}`))[0], USES)
+  let u = comp((await read(line`.entity.eid=${eid}&.${USES}`))[0], USES)
   if (u.direct) {
     throw new CallError(
       'integration',
@@ -558,10 +558,10 @@ export let lend = async (
     )
   }
   let lends = { entity: { eid }, [USES]: { lends: a.cap } }
-  let loans = await read(`.${USES}.lender=${a.app}${ALL}`)
+  let loans = await read(line`.${USES}.lender=${a.app}${sub(ALL)}`)
   let connections = loans.length
     ? await read(
-      `.entity.eid=${any(loans.map((l) => far(l, 'from')))}&.${CONNECTION}`,
+      line`.entity.eid=${loans.map((l) => far(l, 'from'))}&.${CONNECTION}`,
     )
     : []
   let targets = new Set(
@@ -624,7 +624,7 @@ export let borrowed = async (
   let loans = out.filter((l) => l[USES] && comp(l, USES).lender != null)
   if (!loans.length) return []
   let lent = await read(
-    `.entity.eid=${any(loans.map((l) => far(l, 'from')))}&.${CONNECTION}`,
+    line`.entity.eid=${loans.map((l) => far(l, 'from'))}&.${CONNECTION}`,
   )
   return [...lent, ...loans, ...await through(read, lent)]
 }
@@ -646,7 +646,7 @@ export let attach = async (
   let old = await using(read, { app: a.app, integration })
   let previous = old?.entity.eid
   let oldLink = previous && (await read(
-    `.entity.eid=${edgeEid(a.app, USES, previous)}&.${USES}${ALL}`,
+    line`.entity.eid=${edgeEid(a.app, USES, previous)}&.${USES}${sub(ALL)}`,
   ))[0]
   if (previous == a.connection) {
     // Attached again, it is renamed when given a new name, and otherwise
@@ -716,7 +716,7 @@ export let attach = async (
  * to what names it, as `.space.slug=ada` names a space by its address, and
  * its eid as whatever learns it answers. The host spells the walk, and one
  * may reach more than one owner: only the eid's are kept. */
-export type Path = { path: `.${string}`; eid: Promise<Eid> }
+export type Path = { path: Built; eid: Promise<Eid> }
 
 /** A space's or a person's connections, the `uses` links from the apps that
  * use them, and the integrations they go through. Each is asked by the owner,
@@ -726,12 +726,12 @@ export type Path = { path: `.${string}`; eid: Promise<Eid> }
  * listed is asked after. An owner named by a {@link Path} is asked before its
  * eid is known, beside whatever learns it. */
 export let list = async (read: Read, owner: Eid | Path): Promise<Bundle[]> => {
-  let at = typeof owner == 'string' ? `=${owner}` : owner.path
+  let at = typeof owner == 'string' ? line`=${owner}` : owner.path
   let [reached, links, built, theirs, eid] = await Promise.all([
-    read(`.${CONNECTION}.owner${at}${ALL}`),
-    read(`.${EDGE}.to.${CONNECTION}.owner${at}&.${USES}${ALL}`),
-    read(`.${INTEGRATION}.built`),
-    read(`.${INTEGRATION}.owner${at}`),
+    read(line`.${CONNECTION}.owner${sub(at)}${sub(ALL)}`),
+    read(line`.${EDGE}.to.${CONNECTION}.owner${sub(at)}&.${USES}${sub(ALL)}`),
+    read(line`.${INTEGRATION}.built`),
+    read(line`.${INTEGRATION}.owner${sub(at)}`),
     typeof owner == 'string' ? owner : owner.eid,
   ])
   let owned = reached.filter((b) => comp(b, CONNECTION).owner == eid)
@@ -764,9 +764,9 @@ export let used = async (
   let out = await links(c.graph.read, 'from', app)
   if (!out.length) return []
   let found = await c.graph.read(
-    `.entity.eid=${
-      any(out.map((l) => far(l, 'from')))
-    }&.${CONNECTION}.status=${'connected' satisfies Status}${ALL}`,
+    line`.entity.eid=${
+      out.map((l) => far(l, 'from'))
+    }&.${CONNECTION}.status=${'connected' satisfies Status}${sub(ALL)}`,
   )
   let all = await Promise.all(found.map(async (connection) => ({
     connection,
@@ -852,9 +852,10 @@ export let pick = async (
   integration: string,
   as?: string,
 ): Promise<Bundle | undefined> => {
-  let found =
-    (await read(`.${CONNECTION}.owner=${owner}${ALL}&.order=created.at`))
-      .filter((b) => comp(b, CONNECTION).integration == integration)
+  let found = (await read(
+    line`.${CONNECTION}.owner=${owner}${sub(ALL)}&.order=created.at`,
+  ))
+    .filter((b) => comp(b, CONNECTION).integration == integration)
   let address = (b: Bundle) =>
     String(comp(b, CONNECTION).account ?? '').toLowerCase()
   if (as) {
@@ -881,7 +882,7 @@ export let pick = async (
     }
     return matches[0]
   }
-  let [person] = await read(`.entity.eid=${owner}&*`)
+  let [person] = await read(line`.entity.eid=${owner}&*`)
   let own = String(comp(person, 'email').address ?? '').toLowerCase()
   return found.find((b) => own && address(b) == own) ?? found[0]
 }
@@ -893,7 +894,7 @@ export let toAccount = async (
   integration: string,
   address: string,
 ): Promise<Bundle[]> =>
-  (await read(`.${CONNECTION}.integration="${integration}"`)).filter((b) =>
+  (await read(line`.${CONNECTION}.integration=${integration}`)).filter((b) =>
     String(comp(b, CONNECTION).account ?? '').toLowerCase() ==
       address.toLowerCase()
   )
@@ -1088,7 +1089,9 @@ export let connect = async (
   }
   let grant = comp(b, CONNECTION)
   let existing = account
-    ? (await c.graph.read(`.${CONNECTION}.owner=${grant.owner}${ALL}`))
+    ? (await c.graph.read(
+      line`.${CONNECTION}.owner=${String(grant.owner)}${sub(ALL)}`,
+    ))
       .find((other) =>
         other.entity.eid != connection &&
         comp(other, CONNECTION).integration == grant.integration &&
@@ -1342,7 +1345,11 @@ let brokered = (c: Ctx, b: Bundle, stale?: string) => {
       if (!broker || !integration || !id) {
         throw new Error(`${nameOf(b)} names no connection at its broker`)
       }
-      let g = await (await brokering(c, broker)).grant(integration, id, !!stale)
+      let g = await (await brokering(c, broker)).grant(
+        integration,
+        id,
+        !!stale,
+      )
       if (!g.expires_at) delete r.expires_at
       Object.assign(r, keptGrant(broker, integration, id, g))
       return g.access_token

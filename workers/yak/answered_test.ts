@@ -2,6 +2,7 @@
 // deploy, as the store's own slot does, and a deploy is a new platform
 // vocabulary under the same app words. The second one drops `effect.attempts`,
 // the way d9f015365 stopped compiling `.effect.attempts=0`.
+import { whole } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -62,7 +63,7 @@ let deploy = (slot: Map<string, string>, attempts = true, words = APP) => {
       ),
     )
   let read = (line: string) =>
-    recalled(held, line, async () => json(await g.read(line)))
+    recalled(held, line, async () => json(await g.read(whole(line))))
       .then(status, (e: Error) => e.name)
   return { ask, read, heard, recalled, held }
 }

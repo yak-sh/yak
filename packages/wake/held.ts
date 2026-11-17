@@ -4,6 +4,7 @@
 // person never sees or ends another's.
 
 import { addressed, type Bundle, type Eid, type Graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { WAKE } from './comp.ts'
 
 type G = Pick<Graph, 'read' | 'get' | 'apply' | 'address'>
@@ -11,7 +12,7 @@ type G = Pick<Graph, 'read' | 'get' | 'apply' | 'address'>
 /** The wakes set for `person` that will fire again, soonest first, whole. */
 export let held = (g: Pick<Graph, 'read'>, person: Eid): Promise<Bundle[]> =>
   Promise.resolve(
-    g.read(`.${WAKE}.for=${person}&.${WAKE}.at&.order=${WAKE}.at&*`),
+    g.read(line`.${WAKE}.for=${person}&.${WAKE}.at&.order=${WAKE}.at&*`),
   )
 
 /** The wake `id` names (an eid, a short `#id` or a `W-` number) when it is

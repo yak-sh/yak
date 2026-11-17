@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Comp } from '@yaks/graph'
@@ -54,7 +55,7 @@ let second = await chatted(operator, held, space, {
 let continued = asked.at(-1)!
 let next = await drain(store)
 let inputs = await store.g.read(
-  `.entry.session=${first.session}&.using&!ask&.order=entry.seq&*`,
+  line`.entry.session=${first.session}&.using&!ask&.order=entry.seq&*`,
 )
 let deadline = Date.parse(String((inputs.at(-1)!.created as Comp).at)) +
   CHAT_QUIET

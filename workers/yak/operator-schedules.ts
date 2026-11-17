@@ -9,6 +9,7 @@
 // (`watch`): it fires only when the query's rows changed, and its note comes
 // with what changed. The tools are the Operator's published ones; their names
 // and schemas are kept (M-37853).
+import { line } from '@yaks/query'
 import { type Bundle, derivedEid } from '@yaks/graph'
 import { short } from '@yaks/id'
 import type { Tool } from '@yaks/session'
@@ -192,7 +193,7 @@ export let wakeTools = (store: Store): Tool[] => [
         await Promise.all(rows.map(async (row) => ({
           ...shownWake(row),
           runs: await store.g.read(
-            `.occurrence.wake=${row.entity.eid} ?completed ?failed ?session .order=-occurrence.at .limit=10`,
+            line`.occurrence.wake=${row.entity.eid} ?completed ?failed ?session .order=-occurrence.at .limit=10`,
           ),
         }))),
       )
@@ -215,7 +216,9 @@ export let wakeTools = (store: Store): Tool[] => [
       let id = String(args.wake ?? '').trim()
       let { person } = await whoseOf(store, context)
       let gone = await cancel(store.g, person, id, { trusted: true })
-      if (!gone) throw refuse('missing', `There is no wake-up ${id} to cancel.`)
+      if (!gone) {
+        throw refuse('missing', `There is no wake-up ${id} to cancel.`)
+      }
       return JSON.stringify({ cancelled: short(gone.entity.eid) })
     },
   },

@@ -25,7 +25,7 @@ import {
 } from '@yaks/render'
 import type { Shown } from '@yaks/render/views'
 import { graph, token } from '@yaks/graph'
-import { parse } from '@yaks/query'
+import { parse, whole } from '@yaks/query'
 import { ram } from '@yaks/ram'
 import { NONE, printed, referenced, registry, terminal } from './answer.ts'
 import { show } from './terminal.ts'
@@ -297,7 +297,7 @@ test('a lone entity’s page asks for its links and comments, and leaves bookkee
     vocab,
     [t9] as never,
     {},
-    { lookup: () => [t10] as never, query: (q) => g.read(q) },
+    { lookup: () => [t10] as never, query: (q) => g.read(whole(q)) },
     { readOnly: true, page: true },
   )
   let page = lines.join('\n').split('\n\nDetails')[0]

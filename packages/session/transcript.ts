@@ -1,5 +1,6 @@
 // A transcript's entries, read: what a page or a door showing a session reads,
 // apart from the loop that runs one (./react.ts).
+import { line } from '@yaks/query'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { ENTRY, FORK } from './native.ts'
 import { ordered, seqOf } from './state.ts'
@@ -14,11 +15,13 @@ export let transcript = async (
   session: Eid,
 ): Promise<Bundle[]> => {
   let [self] = await g.read(
-    `.entity.eid=${session}&.session&.fields=entity.eid` +
-      (g.vocab.comp(FORK) ? ',fork.from' : ''),
+    line`.entity.eid=${session}&.session&.fields=${[
+      'entity.eid',
+      ...g.vocab.comp(FORK) ? [`${FORK}.from`] : [],
+    ]}`,
   )
   if (!self) throw new UnknownSession(session)
-  let own = await g.read(`.${ENTRY}.session=${session}&*`)
+  let own = await g.read(line`.${ENTRY}.session=${session}&*`)
   let from = comp(self, FORK)?.from
   if (!from) return ordered(own)
   let [anchor] = await g.get([String(from)], [ENTRY])

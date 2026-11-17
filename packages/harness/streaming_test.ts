@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { local } from './local.ts'
@@ -76,7 +77,10 @@ test('streaming records ask before dispatch, projects text without durable token
     await a.idle(id)
     const final = await a.transcript(id)
     assertEquals(final.filter((b) => b.output).length, 1)
-    assertEquals((final.find((b) => b.ask)!.attempt as Comp).state, 'completed')
+    assertEquals(
+      (final.find((b) => b.ask)!.attempt as Comp).state,
+      'completed',
+    )
     assertEquals(statusOf(final), 'settled')
     assert(writes - before < 10)
     assertEquals(transient(h.g).snapshots(), [])
@@ -580,7 +584,7 @@ test('provider rejection paints crashed and successful recovery clears it', asyn
     let id = await a.start('hello')
     await a.idle(id)
     let check = async (status: string, color: string, title: string) => {
-      let [row] = await h.g.read(`.session.status=${status}&*`)
+      let [row] = await h.g.read(line`.session.status=${status}&*`)
       assertEquals(row?.entity.eid, id)
       assertEquals(statusOf(await a.transcript(id)), status)
       let renderer = resolve(statusViews, row, 'Indicator', statusVocab)!

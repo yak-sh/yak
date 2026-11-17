@@ -6,6 +6,7 @@
 // until the remaining dollars cannot cover a call. Workers AI
 // is a fake binding here; the directory and the stores are the platform's own.
 
+import { line as q } from '@yaks/query'
 import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
 import { begin, connect, need } from '@yaks/connections'
 import type { D1Like } from '@yaks/d1'
@@ -54,7 +55,7 @@ import type { Inference } from '@yaks/model'
 let MONTH = 0.2
 
 let sourceTotal = async (env: Env, space: string, source: string) => {
-  let [row] = await appMeta(env).query(`.entity.eid=${space}&?trend`)
+  let [row] = await appMeta(env).query(q`.entity.eid=${space}&?trend`)
   let sources = (row.trend as Comp).sources as Record<
     string,
     Record<string, number>
@@ -332,7 +333,7 @@ test('an existing OpenRouter receipt delivers audio and settles once without gen
     for (let { cost, job: next } of texts) {
       await host.delivered(next)
       await host.delivered(next)
-      let [ask] = await store.query(`.entity.eid=${next.call}&*`, {
+      let [ask] = await store.query(q`.entity.eid=${next.call}&*`, {
         trusted: true,
       })
       assertEquals((ask.inference as Comp).receipt, next.receipt)
@@ -1106,7 +1107,7 @@ test('./api/ai/run waits for current pricing before reserving and purchasing inf
   )
   assertEquals((await result).status, 200)
   assertAlmostEquals((await v.spent()).meter!.models, 0.0034)
-  assertEquals((await graph.query(`.entity.eid=${eid}&.price`))[0].price, {
+  assertEquals((await graph.query(q`.entity.eid=${eid}&.price`))[0].price, {
     input: 3,
     output: 4,
   })

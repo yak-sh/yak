@@ -53,6 +53,7 @@
 // the comment a second time nor, a little earlier, for the run marking the
 // task completed or cancelled.
 
+import { line, sub } from '@yaks/query'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { addressed, argsOf } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
@@ -85,13 +86,12 @@ let mentioners = async (g: G, task: Eid, id: string): Promise<Eid[]> => {
   if (!HUMAN.test(id)) return []
   let said = g.vocab.prop('content', 'body') && g.vocab.comp('entry')
     ? await g.read(
-      `.content.body~=${id}&.entry&!result&!notice` +
-        `&.fields=entry.session,content.body&.limit=500`,
+      line`.content.body~=${id}&.entry&!result&!notice&.fields=entry.session,content.body&.limit=500`,
     )
     : []
   let written = g.vocab.prop('doc', 'body')
     ? await g.read(
-      `${id}&.doc&.fields=created.by,created.via,doc.body&.limit=200`,
+      line`${id}&.doc&.fields=created.by,created.via,doc.body&.limit=200`,
     )
     : []
   return [
@@ -109,20 +109,19 @@ let mentioners = async (g: G, task: Eid, id: string): Promise<Eid[]> => {
 let subscribed = async (g: G, task: Eid, mode: string): Promise<Eid[]> =>
   g.vocab.prop('subscription', 'mode')
     ? (await g.read(
-      `.subscription.target=${task}&.subscription.mode=${mode}` +
-        `&.fields=subscription.actor`,
+      line`.subscription.target=${task}&.subscription.mode=${mode}&.fields=subscription.actor`,
     )).map((b) => str(comp(b, 'subscription').actor)).filter(Boolean)
     : []
 
 // A person's own words: by a person and through no session, as
 // `session_start` reads a person's comment.
-let OWN = `.created.by.person&!created.via.${SESSION}`
+let OWN = line`.created.by.person&!created.via.${SESSION}`
 
 /** The people who commented on `task` themselves. */
 let spoke = async (g: G, task: Eid): Promise<Eid[]> =>
   g.vocab.comp('person') && g.vocab.comp('comment')
     ? (await g.read(
-      `.comment.target=${task}&${OWN}&.fields=created.by&.limit=500`,
+      line`.comment.target=${task}&${sub(OWN)}&.fields=created.by&.limit=500`,
     )).map((b) => str(comp(b, 'created').by)).filter(Boolean)
     : []
 
@@ -131,7 +130,7 @@ let answered = async (g: G, row: Bundle): Promise<Eid> => {
   let to = str(comp(row, 'comment').reply_to)
   if (!to || !g.vocab.comp('person')) return ''
   let [own] = await g.read(
-    `.entity.eid=${JSON.stringify(to)}&${OWN}&.fields=created.by`,
+    line`.entity.eid=${to}&${sub(OWN)}&.fields=created.by`,
   )
   return str(comp(own, 'created').by)
 }
@@ -145,8 +144,7 @@ export let standingFor = async (
 ): Promise<Eid | undefined> =>
   g.vocab.prop(SESSION, 'person')
     ? (await g.read(
-      `.${SESSION}.person=${person}&.${SESSION}.door` +
-        `&.order=-created.at&.limit=1&.fields=entity.eid`,
+      line`.${SESSION}.person=${person}&.${SESSION}.door&.order=-created.at&.limit=1&.fields=entity.eid`,
     ))[0]?.entity.eid
     : undefined
 
@@ -198,17 +196,15 @@ export let operatorOf = async (
 ): Promise<Eid | undefined> => {
   if (!g.vocab.prop(SESSION, 'operator')) return
   let homes = above(await projects(g), project)
+  if (!homes.length) return
   let open = await g.read(
-    `.${SESSION}.operator=true` +
-      `&.${SESSION}.persona.persona.home=${homes.join(',')}` +
-      `&!${SESSION}.ended&.fields=${SESSION}.ended`,
+    line`.${SESSION}.operator=true&.${SESSION}.persona.persona.home=${homes}&!${SESSION}.ended&.fields=${SESSION}.ended`,
   )
   let gone = await ended(g, open)
   let live = open.filter((s) => !gone.has(s.entity.eid))
   let last = await Promise.all(live.map(async (s) => {
     let [entry] = await g.read(
-      `.entry.session=${s.entity.eid}&.order=-entry.seq&.limit=1` +
-        `&.fields=created.at`,
+      line`.entry.session=${s.entity.eid}&.order=-entry.seq&.limit=1&.fields=created.at`,
     )
     return { eid: s.entity.eid, at: str(comp(entry, 'created').at) }
   }))
@@ -283,10 +279,11 @@ let DEPTH = 8
 // computed status above all) is derived from its whole log.
 let placed = async (g: G, eid: Eid): Promise<Bundle | undefined> =>
   (await g.read(
-    `.entity.eid=${JSON.stringify(eid)}&.${SESSION}&.fields=` +
+    line`.entity.eid=${eid}&.${SESSION}&.fields=${
       [`${SESSION}.source`, `${SESSION}.ended`, `${SESSION}.transcript`]
         .concat(g.vocab.comp('spawned') ? ['spawned.parent'] : [])
-        .concat(g.vocab.comp('helping') ? ['helping.project'] : []).join(','),
+        .concat(g.vocab.comp('helping') ? ['helping.project'] : [])
+    }`,
   ))[0]
 
 let managed = async (g: G, eid: Eid): Promise<Bundle | undefined> =>
@@ -366,7 +363,9 @@ export let reported = async (
   let tasks = task
     ? [task]
     : g.vocab.comp('task')
-    ? (await g.read(`.task&.${CLAIM}.session=${run}`)).map((b) => b.entity.eid)
+    ? (await g.read(line`.task&.${CLAIM}.session=${run}`)).map((b) =>
+      b.entity.eid
+    )
     : []
   if (row?.helping) return { tasks }
   let seen = new Set<Eid>([run])

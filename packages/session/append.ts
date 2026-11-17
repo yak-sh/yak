@@ -4,7 +4,7 @@ import { after } from '@yaks/fp'
 import type { Bundle, Comp } from '@yaks/graph/bundle'
 import type { Graph } from '@yaks/graph'
 import type { Hook } from '@yaks/graph/plugin'
-import { parse } from '@yaks/query'
+import { line, parse } from '@yaks/query'
 import { UnknownSession } from './unknown.ts'
 
 let entry = (b: Bundle | undefined) => b?.entry as Comp | undefined
@@ -24,7 +24,9 @@ export let sequencing: Hook = (bundles, tx) =>
             'entry.seq must be a positive integer; omit seq to append atomically',
           )
         }
-        let previous = entry(existing.find((o) => o.entity.eid == b.entity.eid))
+        let previous = entry(
+          existing.find((o) => o.entity.eid == b.entity.eid),
+        )
         if (
           previous?.session != null && e.session != null &&
           previous.session != e.session
@@ -102,8 +104,7 @@ export let sequencing: Hook = (bundles, tx) =>
                   ]
                   return after(
                     tx.read(
-                      '.entity.eid=' + session +
-                        '&.session',
+                      line`.entity.eid=${session}&.session`,
                       undefined,
                       ['fork'],
                     ),

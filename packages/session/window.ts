@@ -1,5 +1,6 @@
 /** Bounded, fork-aware transcript queries. This does not change model history. */
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { type Built, line, sub } from '@yaks/query'
 import { UnknownSession } from './unknown.ts'
 
 export type TranscriptWindow = {
@@ -22,7 +23,7 @@ export type TranscriptPage = {
   offset?: number
 }
 export type TranscriptPlan = Omit<TranscriptPage, 'entries'> & {
-  queries: string[]
+  queries: Built[]
 }
 export type Segment = { session: Eid; through: number }
 type Position = { entity: { eid: Eid }; entry: Comp }
@@ -36,8 +37,10 @@ export let transcriptSegments = async (
   while (!seen.has(session)) {
     seen.add(session)
     let [row] = await g.read(
-      `.entity.eid=${session}&.session&.fields=entity.eid` +
-        (g.vocab.comp('fork') ? ',fork.from' : ''),
+      line`.entity.eid=${session}&.session&.fields=${[
+        'entity.eid',
+        ...g.vocab.comp('fork') ? ['fork.from'] : [],
+      ]}`,
     )
     if (!row) throw new UnknownSession(session)
     segments.unshift({ session, through })
@@ -53,9 +56,10 @@ export let transcriptSegments = async (
 }
 /** The query for one segment of a transcript: its session's entries, up to
  * where a fork left it. */
-export let within = (s: Segment): string =>
-  '.entry.session=' + s.session +
-  (Number.isFinite(s.through) ? '&.entry.seq<=' + s.through : '')
+export let within = (s: Segment): Built =>
+  Number.isFinite(s.through)
+    ? line`.entry.session=${s.session}&.entry.seq<=${s.through}`
+    : line`.entry.session=${s.session}`
 
 /** A transcript's newest entries, oldest first, read back through its
  * segments a page at a time until `enough` holds of what was read, or to its
@@ -67,14 +71,16 @@ export let transcriptBack = async (
   enough: (entries: Bundle[]) => boolean | Promise<boolean>,
 ): Promise<{ entries: Bundle[]; whole: boolean }> => {
   let segs = await transcriptSegments(g, session)
-  let read: Bundle[] = [], i = segs.length - 1, after = '', size = 32
+  let read: Bundle[] = [], i = segs.length - 1, size = 32
+  let after: Eid | undefined
   while (i >= 0) {
+    let page = line`${sub(within(segs[i]))}&.order=-entry.seq&.limit=${size}`
     let rows = await g.read(
-      `${within(segs[i])}&.order=-entry.seq&.limit=${size}${after}&*`,
+      after ? line`${sub(page)}&.after=${after}&*` : line`${sub(page)}&*`,
     )
     read.push(...rows)
-    if (rows.length < size) i--, after = ''
-    else after = `&.after=${rows.at(-1)!.entity.eid}`
+    if (rows.length < size) i--, after = undefined
+    else after = rows.at(-1)!.entity.eid
     if (i >= 0 && await enough(read.toReversed())) {
       return { entries: read.toReversed(), whole: false }
     }
@@ -90,7 +96,9 @@ export let transcriptPlan = async (
   request: TranscriptWindow = {},
 ): Promise<TranscriptPlan> => {
   let size = Math.max(1, Math.min(256, Math.floor(request.limit ?? 64)))
-  if (!Number.isFinite(size)) throw new Error('Invalid transcript window limit')
+  if (!Number.isFinite(size)) {
+    throw new Error('Invalid transcript window limit')
+  }
   let segments = await transcriptSegments(g, session)
   let anchor: { segment: number; seq: number } | undefined
   let at = request.before ?? (request.edge ? undefined : request.anchor)
@@ -107,7 +115,6 @@ export let transcriptPlan = async (
     n: number,
   ): Promise<Position[]> => {
     let found: Position[] = []
-    let order = direction == 'before' ? '-' : ''
     let indices = segments.map((_, i) => i)
     if (direction == 'before') indices.reverse()
     for (let i of indices) {
@@ -115,13 +122,19 @@ export let transcriptPlan = async (
         anchor &&
         (direction == 'before' ? i > anchor.segment : i < anchor.segment)
       ) continue
-      let bound = anchor && i == anchor.segment
-        ? '&.entry.seq' + (direction == 'before' ? '<' : '>=') + anchor.seq
-        : ''
+      let at = within(segments[i])
+      let bound = !anchor || i != anchor.segment
+        ? at
+        : direction == 'before'
+        ? line`${sub(at)}&.entry.seq<${anchor.seq}`
+        : line`${sub(at)}&.entry.seq>=${anchor.seq}`
+      let order = direction == 'before'
+        ? line`.order=-entry.seq`
+        : line`.order=entry.seq`
       let rows = await g.read(
-        within(segments[i]) + bound +
-          '&.fields=entry.session,entry.seq&.order=' +
-          order + 'entry.seq&.limit=' + (n - found.length),
+        line`${sub(bound)}&.fields=entry.session,entry.seq&${
+          sub(order)
+        }&.limit=${n - found.length}`,
       )
       found.push(...rows as Position[])
       if (found.length >= n) break
@@ -142,7 +155,10 @@ export let transcriptPlan = async (
     )
     // Near the end, use unused right-hand capacity for older entries.
     let leftSize = size -
-      Math.min(right.length, size - Math.min(left.length, Math.floor(size / 2)))
+      Math.min(
+        right.length,
+        size - Math.min(left.length, Math.floor(size / 2)),
+      )
     if (leftSize > Math.floor(size / 2)) {
       left = await positions('before', leftSize + 1)
     }
@@ -163,20 +179,21 @@ export let transcriptPlan = async (
   }
   // Bound subscriptions to the page's entry intervals. Membership/updates still
   // travel through ordinary graph queries, API subscriptions and sync frames.
-  let queries: string[] = []
+  let queries: Built[] = []
   for (let s of segments) {
     let own = chosen.filter((r) => r.entry.session == s.session)
     if (!own.length) continue
     let low = Number(own[0].entry.seq), high = Number(own.at(-1)!.entry.seq)
     queries.push(
-      within(s) + '&.entry.seq>=' + low + '&.entry.seq<=' + high +
-        '&.order=entry.seq&.limit=' + size + '&*',
+      line`${
+        sub(within(s))
+      }&.entry.seq>=${low}&.entry.seq<=${high}&.order=entry.seq&.limit=${size}&*`,
     )
   }
   // Count metadata, not bodies. Fork segments are disjoint logical ranges.
   const counts = await Promise.all(
     segments.map(async (s) =>
-      Number((await g.rows(within(s) + '&.count'))[0]?.n ?? 0)
+      Number((await g.rows(line`${sub(within(s))}&.count`))[0]?.n ?? 0)
     ),
   )
   let offset = 0
@@ -187,7 +204,9 @@ export let transcriptPlan = async (
       if (segment.session == first.entry.session) {
         offset += Number(
           (await g.rows(
-            within(segment) + '&.entry.seq<' + first.entry.seq + '&.count',
+            line`${sub(within(segment))}&.entry.seq<${
+              Number(first.entry.seq)
+            }&.count`,
           ))[0]?.n ?? 0,
         )
         break
@@ -226,8 +245,9 @@ export let transcriptUsage = async (
 ): Promise<Bundle[]> => {
   for (let segment of (await transcriptSegments(g, session)).reverse()) {
     let rows = await g.read(
-      within(segment) +
-        '&.ask&.usage&.fields=ask.to,ask.through,usage.input_tokens,usage.output_tokens,usage.total_tokens,usage.cached_tokens,usage.reasoning_tokens&.order=-entry.seq&.limit=1',
+      line`${
+        sub(within(segment))
+      }&.ask&.usage&.fields=ask.to,ask.through,usage.input_tokens,usage.output_tokens,usage.total_tokens,usage.cached_tokens,usage.reasoning_tokens&.order=-entry.seq&.limit=1`,
     )
     if (rows.length) return rows
   }

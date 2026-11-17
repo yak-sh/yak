@@ -4,6 +4,7 @@
 // its minutes once; a file past what the provider hears, or a budget that
 // can't cover it, is refused in words that say so; a failed hearing is asked
 // again.
+import { whole } from '@yaks/query'
 import type { Comp } from '@yaks/graph'
 import { equal, test } from '@yaks/testing'
 import { fetch } from './apps.ts'
@@ -68,7 +69,10 @@ let hear = async (blob: unknown) => {
   return [res.status, await res.json()]
 }
 let rows = async (q: string) =>
-  (await g.query(q, { trusted: true })) as unknown as Record<string, Comp>[]
+  (await g.query(whole(q), { trusted: true })) as unknown as Record<
+    string,
+    Comp
+  >[]
 let row = async (eid: string) => (await rows(`.entity.eid=${eid}&*`))[0]
 
 test('a kept recording is heard whole in its store, its turns written and charged once', async () => {

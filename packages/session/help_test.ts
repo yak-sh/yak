@@ -4,6 +4,7 @@
 // helper or from a session opened on a topic, committed and run as the rule
 // (./routine.ts) and `session_help` are.
 
+import { line } from '@yaks/query'
 import { type Bundle, graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import { signed } from '@yaks/graph/provenance'
@@ -128,7 +129,7 @@ let office = async (helper: object | null = HELPER) => {
     let out = []
     for (let b of rows as (Bundle & Row)[]) {
       let [first] = await g.read(
-        `.entry.session=${b.entity.eid} ?content ?using`,
+        line`.entry.session=${b.entity.eid} ?content ?using`,
       ) as (Bundle & Row)[]
       out.push({
         eid: b.entity.eid,
@@ -216,7 +217,10 @@ test('a person’s words reach the operator, whoever relays them', async () => {
   await o.knock('T-1 completed by TaskMaster', {
     knock: { target: 'operator', from: 'taskmaster' },
   })
-  equal(await o.heard(), ['C-7 on T-1 by Jeff: do it this way', 'look at this'])
+  equal(await o.heard(), [
+    'C-7 on T-1 by Jeff: do it this way',
+    'look at this',
+  ])
   equal((await o.helpers()).map((h) => h.told), [[
     'T-1 completed by TaskMaster',
   ]])

@@ -1,6 +1,7 @@
 /** File snapshots and explicit image context: @yaks/blob artifacts, each an
  * entity named by its bytes' address, the bytes in the graph's byte store. */
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import type { Item } from '@yaks/model'
 import { type Tool, ToolError } from '@yaks/session'
 import { artifactBytes, type Blobs, mediaTypeOf, sizeOf } from '@yaks/blob'
@@ -20,7 +21,7 @@ export let imageType = (b: Uint8Array): string | undefined => {
 /** A registered artifact's bytes. Graph authorization is applied before
  * resolving an external address. */
 export let registered = async (g: Graph, eid: string, blobs?: Blobs) => {
-  let [row] = await g.read('.entity.eid=' + JSON.stringify(eid))
+  let [row] = await g.read(line`.entity.eid=${eid}`)
   let a = row?.artifact as Comp | undefined
   if (
     !a || typeof a.address != 'string' || !/^[a-f0-9]{64}$/.test(a.address) ||

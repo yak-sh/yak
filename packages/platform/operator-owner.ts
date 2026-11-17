@@ -24,6 +24,7 @@ import { dead } from '@yaks/graph/bundle'
 import { minted } from '@yaks/graph/identity'
 import { inputOf } from '@yaks/session/intake'
 import { after, each } from '@yaks/fp'
+import { type Built, joined, line, sub } from '@yaks/query'
 
 /** What names its person as an owner, by the property that names them:
  * their conversations and the sessions working for them, their requests, the
@@ -204,30 +205,30 @@ let part = (b: Bundle | undefined) =>
 let fifties = (eids: string[]) =>
   Array.from(
     { length: Math.ceil(eids.length / 50) },
-    (_, i) => eids.slice(i * 50, i * 50 + 50).join(','),
+    (_, i) => eids.slice(i * 50, i * 50 + 50),
   )
 
-let MADE_BY = MADE.map((c) => `.${c}`).join('|')
+let MADE_BY = joined(MADE.map((c) => line`.${c}`), '|')
 
 // The entities that hang on these: a helper's session, an entry, a request's
 // files, what a conversation made, and an entry of a helper's session.
 let hanging = (tx: Pick<Tx, 'read'>, eids: string[]): Maybe<string[]> => {
-  let ids = (qs: string[]) =>
+  let ids = (qs: Built[]) =>
     each(qs, [] as string[], (out, q) =>
       after(
-        tx.read(`${q}&.fields=entity.eid`),
+        tx.read(line`${sub(q)}&.fields=entity.eid`),
         (rows) => [...out, ...rows.map((r) => r.entity.eid)],
       ))
   return after(
-    ids(fifties(eids).map((list) => `.spawned.parent=${list}`)),
+    ids(fifties(eids).map((list) => line`.spawned.parent=${list}`)),
     (helpers) =>
       after(
         ids(
           fifties(eids).flatMap((list) => [
-            `.entry.session=${list}`,
-            `.created.via=${list}&(${MADE_BY})`,
+            line`.entry.session=${list}`,
+            line`.created.via=${list}&(${sub(MADE_BY)})`,
           ]).concat(
-            fifties(helpers).map((list) => `.entry.session=${list}`),
+            fifties(helpers).map((list) => line`.entry.session=${list}`),
           ),
         ),
         (rest) => [...helpers, ...rest],

@@ -1,5 +1,6 @@
 // Real directory Store mutations, with a separate durable serving-copy core
 // behind an asynchronous RPC-shaped door. No Store state is shared with it.
+import { line } from '@yaks/query'
 import { backoff } from '@yaks/durable-object'
 import { enqueue } from '@yaks/effects'
 import { type Bundle, graph } from '@yaks/graph'
@@ -305,7 +306,11 @@ await proof(
       let missed = await spend(f.at, 'secret', at, wrong)
       let opened = await spend(f.at, 'secret', at, code)
       let spent = [missed, opened?.person]
-      return { spent, own: opened?.own?.slug, fences: f.begins.length - before }
+      return {
+        spent,
+        own: opened?.own?.slug,
+        fences: f.begins.length - before,
+      }
     }
     let first = await signIn()
     let again = await signIn()
@@ -319,11 +324,11 @@ await proof(
       await trail(code == '000000' ? '000001' : '000000'),
       await trail(code),
     ]
-    let [person] = await f.at.query(`.person&.email.address=${at}&?doc`)
-    let left = (await f.at.query(`.signin.email=${at}`)).length
-    let [seat] = await f.at.query(`.member.person=${person?.entity.eid}`)
+    let [person] = await f.at.query(line`.person&.email.address=${at}&?doc`)
+    let left = (await f.at.query(line`.signin.email=${at}`)).length
+    let [seat] = await f.at.query(line`.member.person=${person?.entity.eid}`)
     let [home] = await f.at.query(
-      `.entity.eid=${(seat?.member as { space?: string })?.space}`,
+      line`.entity.eid=${(seat?.member as { space: string }).space}`,
     )
     let slug = (home?.space as { slug?: string })?.slug
     return () =>
@@ -359,8 +364,8 @@ await proof(
       return f.initial - 1
     })
     let opened = await spend(f.at, 'secret', at, code)
-    let people = await f.at.query(`.person&.email.address=${at}`)
-    let seats = await f.at.query(`.member.person=${people[0]?.entity.eid}`)
+    let people = await f.at.query(line`.person&.email.address=${at}`)
+    let seats = await f.at.query(line`.member.person=${people[0]?.entity.eid}`)
     return () =>
       equal({
         opened: opened?.person,
@@ -752,7 +757,7 @@ await proof(
 let rule: Rule = {
   mark: 'yak/store/directory-fence-proof/1',
   stores: [PLATFORM_STORE],
-  find: '.doc.title=Before&*',
+  find: line`.doc.title=Before&*`,
   move: (row) => [{ entity: row.entity, doc: { title: 'Moved' } }],
 }
 let retired: Rule = {
@@ -766,7 +771,7 @@ let retired: Rule = {
       },
     },
   },
-  find: '.doc.former&*',
+  find: line`.doc.former&*`,
   move: (row) => [{
     entity: row.entity,
     doc: { title: (row.doc as { former: string }).former, former: null },

@@ -41,7 +41,15 @@
 import type { Bundle, Comp, Row } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { isPromise } from '@yaks/fp'
-import { and, conjoin, parse, type Query } from '@yaks/query'
+import {
+  and,
+  type Built,
+  conjoin,
+  type Line,
+  line as ql,
+  parse,
+  type Query,
+} from '@yaks/query'
 import type { Settled } from '@yaks/sql'
 import { Unknown, type VocabDoc } from '@yaks/vocab'
 import { GIT_STORE } from './door.ts'
@@ -76,17 +84,17 @@ export type Rule = {
   /** These components must belong to the platform, never this app's declaration. */
   core?: string[]
   /** The rows still in the old shape, naming what `move` reads. */
-  find: string | Query
+  find: Line | Query
   /** One candidate's patch. `read` looks up evidence synchronously without
    * adding reached rows to the candidate page or cursor. */
-  move: (row: Bundle, read?: (line: string) => Bundle[]) => Bundle[]
+  move: (row: Bundle, read?: (line: Line) => Bundle[]) => Bundle[]
   /** Retired declarations, visible only while reading/applying this move. */
   source?: VocabDoc
   /** Durable records delivered before the guarded source patches commit.
    * Rehearsal computes these records but never delivers them. */
   forward?: (
     row: Bundle,
-    read?: (line: string) => Bundle[],
+    read?: (line: Line) => Bundle[],
     context?: MoveContext,
   ) => Bundle[]
   /** Where it runs for real. Absent, it is only rehearsed. */
@@ -135,9 +143,9 @@ export let dispatchMove = (row: Bundle): Bundle[] => {
   }]
 }
 
-export let dispatchRule: Rule & { find: string } = {
+export let dispatchRule: Rule & { find: Line } = {
   mark: 'yak/store/dispatch/1',
-  find: '.dispatch.state=queued,active,waiting,settled&*',
+  find: ql`.dispatch.state=queued,active,waiting,settled&*`,
   move: dispatchMove,
 }
 
@@ -146,7 +154,7 @@ export let dispatchRule: Rule & { find: string } = {
 export let doneEffectsRule: Rule = {
   mark: 'yak/store/done-effects/1',
   live: 'apps',
-  find: '.effect.state=done&*',
+  find: ql`.effect.state=done&*`,
   move: doneRun,
 }
 
@@ -156,7 +164,7 @@ export let doneEffectsRule: Rule = {
 export let takeRule: Rule = {
   mark: 'yak/store/builder-takes/19',
   live: 'apps',
-  find: '.build.call&*|.built.call&*',
+  find: ql`.build.call&*|.built.call&*`,
   move: (row, read) => {
     if (!read) throw new Error('take conversion needs its build and call')
     let made = row.built as Comp | undefined
@@ -164,18 +172,21 @@ export let takeRule: Rule = {
       let call = (row.build as Comp).call
       return frozenMove(
         row,
-        call ? read(`.entity.eid=${call}&*`)[0] : undefined,
+        call ? read(ql`.entity.eid=${String(call)}&*`)[0] : undefined,
       )
     }
     let old = `${made.build}/${made.slot}`
     let value = `${old}/${made.call}`
     return takeMove(row, [
       ...read(
-        `.entity.eid=${made.build},${made.call},${keyEid('output_of', old)},${
-          keyEid('output_of', value)
-        }&*`,
+        ql`.entity.eid=${[
+          String(made.build),
+          String(made.call),
+          keyEid('output_of', old),
+          keyEid('output_of', value),
+        ]}&*`,
       ),
-      ...read(`.built.build=${made.build}&.chosen&*`),
+      ...read(ql`.built.build=${String(made.build)}&.chosen&*`),
     ])
   },
 }
@@ -209,8 +220,8 @@ export let RULES: Rule[] = [
  * the caller, which runs them once the batch commits, or drops them. */
 export type Moving = {
   context?: MoveContext
-  read: (line: string | Query) => Bundle[] | Promise<Bundle[]>
-  rows: (line: string | Query) => Row[] | Promise<Row[]>
+  read: (line: Line | Query) => Bundle[] | Promise<Bundle[]>
+  rows: (line: Line | Query) => Row[] | Promise<Row[]>
   apply: (patch: Bundle[]) => Bundle[] | Promise<Bundle[]>
   tx: <T extends Settled>(body: () => T) => T
   drop?: (paths: string[]) => void
@@ -237,7 +248,7 @@ let paths = (node: unknown): string[][] =>
  * moves, so the rule is done there. A line whose words it speaks and that is
  * still refused was refused by our own code (a compiler a deploy changed), and
  * fails the batch, which reports it. */
-export let spoken = (m: Moving, find: string | Query) =>
+export let spoken = (m: Moving, find: Line | Query) =>
   paths(typeof find == 'string' ? parse(find) : find).every(([comp, prop]) =>
     m.speaks(comp, prop)
   )
@@ -272,12 +283,15 @@ let sync = <T>(v: T | Promise<T>): T => {
 }
 
 // The next page of a rule's rows, newest first, past the cursor.
-let joined = (query: string | Query, line: string) =>
+let joined = (query: Line | Query, line: Built): Line | Query =>
   typeof query == 'string'
-    ? conjoin(query, line)
+    ? conjoin(query, line) as Line
     : and(...query.clauses, ...parse(line).clauses)
 let page = (rule: Rule, n: number, after?: string) =>
-  joined(rule.find, conjoin(`.limit=${n}`, after ? `.after=${after}` : ''))
+  joined(
+    rule.find,
+    conjoin(ql`.limit=${n}`, after ? ql`.after=${after}` : '') as Built,
+  )
 
 /** A bounded snapshot and its pure plan. A host can durably deliver `forward`
  * outside the transaction before committing the guarded source patches. */
@@ -301,7 +315,7 @@ export let batch = (
     if (!(e instanceof Unknown) || spoken(m, rule.find)) throw e
     return { rows: [], patch: [], forward: [], unspoken: e.prop }
   }
-  let read = (line: string) => sync(m.read(line))
+  let read = (line: Line) => sync(m.read(line))
   return {
     rows,
     patch: rows.flatMap((row) => rule.move(row, read)),
@@ -369,7 +383,7 @@ export let rehearse = (
     }
     let back = Symbol('rehearsal')
     try {
-      let [counted] = sync(m.rows(joined(rule.find, '.count')))
+      let [counted] = sync(m.rows(joined(rule.find, ql`.count`)))
       r.rows = Number(counted?.n ?? 0)
       m.tx(() => {
         let s: Stamp | null = null

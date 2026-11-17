@@ -1,4 +1,5 @@
 // A refused service never reaches the launch boundary.
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { PROCESS, SERVICE } from './comp.ts'
@@ -24,5 +25,5 @@ test('supervise refuses its own program, and whatever else the host names', asyn
     },
   ])
   assertEquals(await pass(), [])
-  assertEquals(await g.read(`.${PROCESS}&*`), [])
+  assertEquals(await g.read(line`.${PROCESS}&*`), [])
 })

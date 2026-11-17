@@ -33,6 +33,7 @@
 // it, and the words select.
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { line as q, sub } from '@yaks/query'
 import { argsOf } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import { guarded, witnessed } from '@yaks/doc'
@@ -80,7 +81,7 @@ let held = async (
   space?: string,
 ): Promise<Bundle | undefined> =>
   (await graph.read(
-    `.entity.eid=${eid}&.${MEMORY}${space ? `.space=${space}` : ''}&*`,
+    q`.entity.eid=${eid}&.${MEMORY}${sub(space ? q`.space=${space}` : q``)}&*`,
   ))[0]
 
 // Where the graph already holds what `by` said: the earliest entity they
@@ -98,9 +99,9 @@ let holding = async (
   let phrase = terms(said)
   if (!phrase) return undefined
   let found = await graph.read(
-    `"${phrase}"&.created.by=${by}` +
-      (space ? `&.${MEMORY}.space=${space}` : '') +
-      `&*&.order=created.at&.limit=${LOOK}`,
+    q`${phrase}&.created.by=${by}${
+      sub(space ? q`&.${MEMORY}.space=${space}` : q``)
+    }&*&.order=created.at&.limit=${LOOK}`,
   )
   let want = flat(said)
   return found.find((b) => flat(words(b)).includes(want))

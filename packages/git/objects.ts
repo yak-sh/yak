@@ -22,6 +22,7 @@
 
 import type { Blobs } from '@yaks/blob'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { type Line, line } from '@yaks/query'
 import { treeOf } from './commit.ts'
 import { BLOB, GITOBJ, PARENT } from './comp.ts'
 import type { Kind } from './oid.ts'
@@ -60,12 +61,12 @@ let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
 export let objects = (g: Reads, store: Blobs): Objects => {
   // One query per batch of the frontier, with the results appended.
   let some = async (
-    query: (list: string) => string,
+    query: (list: string[]) => Line,
     oids: string[],
   ): Promise<Bundle[]> => {
     let out: Bundle[] = []
     for (let i = 0; i < oids.length; i += BITE) {
-      out.push(...await g.read(query(oids.slice(i, i + BITE).join(','))))
+      out.push(...await g.read(query(oids.slice(i, i + BITE))))
     }
     return out
   }
@@ -73,14 +74,14 @@ export let objects = (g: Reads, store: Blobs): Objects => {
   // The type of each of these objects — and, by absence, which we never had.
   let kinds = async (oids: string[]): Promise<Map<string, Kind>> =>
     new Map(
-      (await some((l) => `.${GITOBJ}&.entity.eid=${l}`, oids))
+      (await some((l) => line`.${GITOBJ}&.entity.eid=${l}`, oids))
         .map((r) => [r.entity.eid, comp(r, GITOBJ).type as Kind]),
     )
 
   // The far end of every edge of one relation leaving these objects.
   let out = async (relation: string, from: string[]): Promise<string[]> =>
     (await some(
-      (l) => `.${relation}&.edge.from=${l}&.order=edge.ord`,
+      (l) => line`.${relation}&.edge.from=${l}&.order=edge.ord`,
       from,
     )).map((r) => String(comp(r, 'edge').to))
 
@@ -93,7 +94,7 @@ export let objects = (g: Reads, store: Blobs): Objects => {
       // that did not include where the bytes were, and every object was
       // reported missing.
       let rows = new Map(
-        (await some((l) => `.${GITOBJ}&?${BLOB}&.entity.eid=${l}`, bite))
+        (await some((l) => line`.${GITOBJ}&?${BLOB}&.entity.eid=${l}`, bite))
           .map((r) => [r.entity.eid, r]),
       )
       for (let oid of bite) {

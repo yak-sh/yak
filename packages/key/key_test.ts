@@ -2,6 +2,7 @@
 // dies with what it names, cannot be half-said, and a value somebody holds
 // takes the batch's minted entity onto its holder.
 
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import {
@@ -37,7 +38,7 @@ let books = (g: ReturnType<typeof libraryGraph>) => {
 }
 
 let read = (g: ReturnType<typeof libraryGraph>, q: string) =>
-  (g.read(q) as Bundle[]).map((b) => b.entity.eid).sort()
+  (g.read(whole(q)) as Bundle[]).map((b) => b.entity.eid).sort()
 
 let DUNE = '9780441013593'
 

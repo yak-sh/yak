@@ -58,7 +58,15 @@ import { after, each, isPromise, over } from '@yaks/fp'
 import { during, link, peek, unlink } from '@yaks/trace'
 import { asked, match, reads } from '@yaks/graph/declared'
 import { filter } from '@yaks/match'
-import { type And, bare, type Clause, fields } from '@yaks/query'
+import {
+  type And,
+  and,
+  bare,
+  type Clause,
+  fields,
+  limit,
+  parse,
+} from '@yaks/query'
 import { type EffectDecl, effectsIn, type Vocab } from '@yaks/vocab'
 import {
   BEFORE,
@@ -678,7 +686,10 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       if (!active.has(query)) {
         active.set(
           query,
-          after(tx.read(`${query} .limit=1`), (rows) => rows.length > 0),
+          after(
+            tx.read(and(...parse(query).clauses, limit(1))),
+            (rows) => rows.length > 0,
+          ),
         )
       }
       return active.get(query)!

@@ -13,6 +13,7 @@ import { configPath, read as readConfig } from '../packages/cli/config.ts'
 import { words } from '../packages/cli/host.ts'
 import { numbering } from '@yaks/host/config'
 import { graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { archetypes } from '@yaks/archetype'
 import { ddl as journalDdl, journal, log } from '@yaks/journal'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -34,7 +35,7 @@ import {
 import { dispatchMove } from '../workers/yak/mover.ts'
 
 let AUTHORIZED = '/tmp/t59129-proof.IRXjON/copy.db'
-let FIND = '.dispatch.state=queued,active,waiting,settled&*'
+let FIND = line`.dispatch.state=queued,active,waiting,settled&*`
 let MARKS = new Set(['admitted', 'waiting'])
 let JOURNAL = ['journal_tx', 'journal_change', 'journal_field']
 let began = performance.now()

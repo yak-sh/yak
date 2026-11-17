@@ -4,6 +4,7 @@
 // goes on in that space; and past an address's builds they meet the sign-in
 // card saying why. A newcomer's Operator may build and nothing else. The
 // platform admin sees each build, what it spent and who kept it.
+import { line } from '@yaks/query'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { cleanup, test } from '@yaks/testing'
@@ -115,7 +116,7 @@ let person = async (address: string) => {
   })
   return eid
 }
-let row = (eid: string) => meta(env).query(`.entity.eid=${eid}`)
+let row = (eid: string) => meta(env).query(line`.entity.eid=${eid}`)
 let signIn = (path: string, fields: Record<string, string>, on = cookie) =>
   k.at('yaks.app', path, {
     method: 'POST',
@@ -480,7 +481,10 @@ test("the admin's Visitor builds page says today's builds against the day's, and
       ]),
     )
   let facts = said(builds.querySelector('.Directory_Facts')!)
-  assertEquals([facts['Opened today'], facts.Kept], [`4 of ${DAILY}`, '2 of 3'])
+  assertEquals([facts['Opened today'], facts.Kept], [
+    `4 of ${DAILY}`,
+    '2 of 3',
+  ])
   let rows = [...builds.querySelectorAll('.Directory_Row')].map((row) => [
     row.querySelector('strong')!.textContent,
     [...row.querySelectorAll('.Chips > *')].map((t) => t.textContent).join(),

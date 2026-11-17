@@ -6,6 +6,7 @@
 // rehearses that batch without keeping a row of it. So this is the tree the
 // tool used to write, rehearsed, landed, and refused.
 
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
@@ -93,7 +94,7 @@ test('the same batch, for real, lands the whole tree at once', async () => {
   assertEquals((await g.read('.edge')).length, 3)
   let [goal] = await g.read('.doc.title="The outcome"')
   assertEquals(
-    (await g.read(`.edge.from="${goal.entity.eid}"`)).length,
+    (await g.read(line`.edge.from=${goal.entity.eid}`)).length,
     2,
   )
 })

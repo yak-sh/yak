@@ -1,5 +1,5 @@
 import { equal, test } from '@yaks/testing'
-import { graph } from '@yaks/graph'
+import { graph, type Taken } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { platformVocab } from './vocab.ts'
 import { directory, over, type Row } from './directory.ts'
@@ -61,7 +61,7 @@ let asked: string[] = []
 let dir = directory(fixture({
   query: async (q) => {
     asked.push(q)
-    return await g.read(q) as Row[]
+    return await g.read(q as Taken) as Row[]
   },
   apply: () => Promise.resolve([]),
 }))
@@ -91,7 +91,7 @@ test('app routing returns a visitor’s app grant alongside their seat', () => {
 })
 
 let backed = directory(fixture({
-  query: async (q) => await database.read(q) as Row[],
+  query: async (q) => await database.read(q as Taken) as Row[],
   apply: () => Promise.resolve([]),
 }))
 let stored = await backed.reachable(person)

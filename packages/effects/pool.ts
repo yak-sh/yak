@@ -122,6 +122,7 @@ import {
   eq,
   fields,
   limit as window,
+  line,
   list,
   ne,
   order,
@@ -382,7 +383,7 @@ export let working = async (
 ): Promise<boolean> => {
   if (!g.vocab.comp(LEASE)) return false
   let now = o.now ?? Date.now()
-  let rows = (await g.read(`.${LEASE}`)) as Bundle[]
+  let rows = (await g.read(line`.${LEASE}`)) as Bundle[]
   for (let b of rows) {
     let l = (b[LEASE] ?? {}) as Comp
     let holder = l.holder as Eid | undefined
@@ -986,7 +987,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     }
     // The rows of workers killed before they could take them.
     let clear = async () => {
-      let rows = (await g.read(`.${WORKER}`)) as Bundle[]
+      let rows = (await g.read(line`.${WORKER}`)) as Bundle[]
       let over = []
       for (let b of rows) {
         if (b.entity.eid != me && await opts.gone?.(b.entity.eid)) over.push(b)

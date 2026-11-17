@@ -1,4 +1,5 @@
 import { after } from '@yaks/fp'
+import { type Built, line, sub } from '@yaks/query'
 import { edgeEid } from '@yaks/edge'
 import { inputText, senders } from './input_text.ts'
 import { dispatchStatus } from '@yaks/session/admission'
@@ -307,12 +308,10 @@ export type Agent<H extends Host = Host> = {
 /** A page of sidebar rows. A selected session only queries its direct children. */
 export type ListPage = { after?: string | number; limit?: number }
 export let LISTED = 20
-let page = (query: string, options: ListPage = {}) =>
-  query +
-  `&.order=-created.at&.limit=${
+let page = (query: Built, options: ListPage = {}) =>
+  line`${sub(query)}&.order=-created.at&.limit=${
     Math.min(LISTED, Math.max(1, options.limit ?? LISTED))
-  }` +
-  (options.after == null ? '' : `&.after=${options.after}`) + '&*'
+  }${sub(options.after == null ? line`` : line`&.after=${options.after}`)}&*`
 
 // What attributes a write made here: the transcript it is about, and who
 // wrote it where the caller said. The terminal says who is at its keyboard,
@@ -758,13 +757,13 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     }),
     sessions: admitted(async (selected?: Eid, options?: ListPage) => {
       let rows = options || !selected
-        ? await h.g.read(page('.session', options))
+        ? await h.g.read(page(line`.session`, options))
         : [
           ...(await h.g.get([selected])).filter((b) => b.session),
           // The closed browser is a selected-session tree, not an archive page.
           // Include direct children even before they start (spawned.call may be
           // null), without scanning or titling every historical session.
-          ...await h.g.read('.session&.spawned.parent=' + selected + '&*'),
+          ...await h.g.read(line`.session&.spawned.parent=${selected}&*`),
         ]
       // A selected session need not belong to the current page.
       if (selected && !rows.some((b) => b.entity.eid == selected)) {
@@ -782,7 +781,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     control: (session, action) => runtimeAction(a, session, action),
     children: admitted((session: Eid) => children(h.g, session)),
     tasks: admitted(async (options?: ListPage) =>
-      await h.g.read(page('.task.status=open,wip', options))
+      await h.g.read(page(line`.task.status=open,wip`, options))
     ),
     entrySource: (session, eid, request) =>
       entrySource(h.g, session, eid, request),
@@ -795,7 +794,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
       // retries an interrupted delivery without revisiting finished children.
       let woken = [
         ...new Set((await h.g.read(
-          `${live}|.session&.dispatch.status=active,queued,waiting`,
+          line`${sub(live)}|.session&.dispatch.status=active,queued,waiting`,
         )).map((b) => b.entity.eid)),
       ]
       await opts.resuming?.()
@@ -851,8 +850,7 @@ export let sessionTitle = async (
   }
   return titleOf(
     await g.read(
-      '.entry.session=' + session.entity.eid +
-        '&.content&!prompt&!notice&.order=entry.seq&.limit=1',
+      line`.entry.session=${session.entity.eid}&.content&!prompt&!notice&.order=entry.seq&.limit=1`,
     ),
   )
 }

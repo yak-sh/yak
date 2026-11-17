@@ -1,4 +1,5 @@
 // Provider replacement and discovery through the registry and runner interfaces.
+import { line } from '@yaks/query'
 import { equal, match, ok, test, throws } from '@yaks/testing'
 import { type Bundle, type Comp, graph, mint, type Tool } from '@yaks/graph'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
@@ -142,7 +143,7 @@ test('future calls follow replacements at the existing identity and record ordin
     ((await g.get([next.entity.eid]))[0].call as Comp)?.to,
     toolEid('sample_read'),
   )
-  equal((await g.read(`.result.call=${next.entity.eid}`)).length, 1)
+  equal((await g.read(line`.result.call=${next.entity.eid}`)).length, 1)
 })
 
 test('registration batches cannot finish an older declaration after its replacement', async () => {

@@ -14,6 +14,7 @@
 // What this proves is what the DO export flip turned on (T-33808): every listed
 // caller speaks the graph's own wire, `meta` is `metaOf` over the platform's
 // door, and the fleet-shaped object they used to reach is gone (T-33807).
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
@@ -52,7 +53,10 @@ let SECRET = 'a probe secret'
 let DANA = 'dana@yaks.app'
 
 // The person the kernel vouches for on a write.
-let as = (person: string) => ({ 'x-yak-person': person, 'x-yak-role': 'owner' })
+let as = (person: string) => ({
+  'x-yak-person': person,
+  'x-yak-role': 'owner',
+})
 
 // A space and an app in it, written the way space_new and app_new write them.
 let space = async (
@@ -163,7 +167,9 @@ test('a hostname resolves to the app it serves and the space it is in', async ()
   assertEquals(served.app!.eid, app)
   assertEquals(served.space.slug, 'ada')
   assertEquals(served.host.stage, 'pending')
-  assertEquals((await dir.hosts(s)).map((h) => h.name), ['recipes.example.com'])
+  assertEquals((await dir.hosts(s)).map((h) => h.name), [
+    'recipes.example.com',
+  ])
 })
 
 test('a sign-in code is minted, spent once, and gone', async () => {
@@ -173,7 +179,7 @@ test('a sign-in code is minted, spent once, and gone', async () => {
   // The row is server-stamped through and through, so the ordinary door would
   // refuse it — only the kernel's writes it, and the store keeps a mac and
   // never the digits.
-  let [row] = await at.query(`.signin.email=${DANA}`)
+  let [row] = await at.query(line`.signin.email=${DANA}`)
   assert(row.signin)
   assertEquals((row.signin as { code: string }).code == code, false)
 
@@ -183,7 +189,7 @@ test('a sign-in code is minted, spent once, and gone', async () => {
     await personOf(at, DANA),
   )
   // Signing in ends the address's whole story.
-  assertEquals((await at.query(`.signin.email=${DANA}`)).length, 0)
+  assertEquals((await at.query(line`.signin.email=${DANA}`)).length, 0)
 })
 
 test('a person is found by their address, or minted at it', async () => {
@@ -191,7 +197,7 @@ test('a person is found by their address, or minted at it', async () => {
   let one = await personOf(at, DANA)
   assertEquals(await personOf(at, DANA), one)
   let named = await personOf(at, 'ana@yaks.app', 'Ana')
-  let [row] = await at.query(`.entity.eid=${named}`)
+  let [row] = await at.query(line`.entity.eid=${named}`)
   assertEquals((row.doc as { title: string }).title, 'Ana')
   assertEquals((row.email as { address: string }).address, 'ana@yaks.app')
 })
@@ -226,8 +232,8 @@ let planted = async (before: Bundle[]) => {
   assert(admin, 'no admin person')
   let yak = (await p.dir.space(META.space))!
   // One of each, however much of it was there before.
-  assertEquals((await p.at.query(`.email.address=${ADMIN}`)).length, 1)
-  assertEquals((await p.at.query(`.member.space=${yak.eid}`)).length, 1)
+  assertEquals((await p.at.query(line`.email.address=${ADMIN}`)).length, 1)
+  assertEquals((await p.at.query(line`.member.space=${yak.eid}`)).length, 1)
   assertEquals(await p.dir.role(yak, admin), 'owner')
   return { ...p, admin, yak }
 }
@@ -251,7 +257,9 @@ test('the platform seeds an admin person, and completes a half-seeded store', as
   // seeded row, so a session at the admin's address is the admin.
   assertEquals(
     await personOf(at, ADMIN),
-    ((await at.query(`.email.address=${ADMIN}`))[0].entity as { eid: string })
+    ((await at.query(line`.email.address=${ADMIN}`))[0].entity as {
+      eid: string
+    })
       .eid,
   )
 })
@@ -390,10 +398,10 @@ test('erasing a space buries everything that named it', async () => {
   }, as(ada))
 
   assertEquals(await dir.space('ada'), null)
-  assertEquals((await at.query(`.app.space=${s.eid}`)).length, 0)
-  assertEquals((await at.query(`.deploy.app=${app}`)).length, 0)
+  assertEquals((await at.query(line`.app.space=${s.eid}`)).length, 0)
+  assertEquals((await at.query(line`.deploy.app=${app}`)).length, 0)
   assertEquals((await at.query('.hostname')).length, 0)
-  assertEquals((await at.query(`.member.space=${s.eid}`)).length, 0)
+  assertEquals((await at.query(line`.member.space=${s.eid}`)).length, 0)
   // The slug is free for somebody else to take.
   let other = crypto.randomUUID()
   assertEquals((await space(dir, other, 'ada')).slug, 'ada')

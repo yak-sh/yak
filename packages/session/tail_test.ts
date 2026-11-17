@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Bundle, type Comp, type Graph, graph } from '@yaks/graph'
@@ -47,7 +48,12 @@ let fixture = (g: Graph = locked(store())) => {
       ) + '\n',
       { append: true },
     )
-  return { g, log, path, free: () => Deno.removeSync(dir, { recursive: true }) }
+  return {
+    g,
+    log,
+    path,
+    free: () => Deno.removeSync(dir, { recursive: true }),
+  }
 }
 let file = async (
   body: (
@@ -92,7 +98,7 @@ let otherTail = await tail(separate.g, other, { session: ids.run1 })
 
 // A session's transcript, in entry order, as the kinds each entry wears.
 let told = async (g: Graph, session: string) =>
-  (await g.read(`.entry.session=${session}&.order=entry.seq&*`)).map((b) =>
+  (await g.read(line`.entry.session=${session}&.order=entry.seq&*`)).map((b) =>
     ['content', 'output', 'reasoning', 'notice', 'call', 'result']
       .filter((k) => b[k]).join('+')
   )
@@ -118,7 +124,7 @@ test('a transcript file becomes the session it names, at full depth', () =>
       'content+output',
     ])
     let [input] = await g.read(
-      `.entry.session=${s.entity.eid}&.order=entry.seq&*`,
+      line`.entry.session=${s.entity.eid}&.order=entry.seq&*`,
     )
     assertEquals(c(input, 'created')?.by, ids.ada)
     assertEquals(c(input, 'created')?.at, '2026-09-01T00:00:00.000Z')
@@ -160,7 +166,9 @@ test('lines read in one write are each dated by their own line, and a refused on
       await pull(g, t, claude, { report: (e) => refused.push(e) }),
       4,
     )
-    let rows = await g.read(`.entry.session=${ids.run1}&.order=entry.seq&*`)
+    let rows = await g.read(
+      line`.entry.session=${ids.run1}&.order=entry.seq&*`,
+    )
     assertEquals(
       rows.map((b) => [c(b, 'content')?.body, c(b, 'created')?.at]),
       [['one', days[0]], ['three', days[2]], ['four', days[3]]],
@@ -231,7 +239,10 @@ test('a log compressed moves its session to the new file and leaves its updated 
   await pull(g, t, claude)
   let eid = t.session!
   let updated = { at: '2026-01-01T00:00:00.000Z', by: ids.ada }
-  await g.apply([{ entity: { eid }, updated }], { trusted: true, stamp: false })
+  await g.apply([{ entity: { eid }, updated }], {
+    trusted: true,
+    stamp: false,
+  })
   let was = c((await g.get([eid]))[0], 'session')?.transcript
   await tail(g, `${path}.zst`)
   let [s] = await g.get([eid])
@@ -259,7 +270,7 @@ test('a resume starts where the log was read, whatever became of its entries', (
       prose: true,
     })
     // The lines that made nothing, and an entry deleted since, stay read.
-    let [entry] = await g.read(`.entry.session=${ids.run1}`)
+    let [entry] = await g.read(line`.entry.session=${ids.run1}`)
     await g.apply([{ entity: { eid: entry.entity.eid }, $delete: true }])
     assertEquals((await tail(g, path, { session: ids.run1 })).line, 3)
     // A log that says nothing at all is read once, into a session of its own.
@@ -315,7 +326,9 @@ test('a compacted summary survives a prose-only import', () =>
       prose: true,
       person: ids.ada,
     })
-    let rows = await g.read(`.entry.session=${ids.run1}&.order=entry.seq&*`)
+    let rows = await g.read(
+      line`.entry.session=${ids.run1}&.order=entry.seq&*`,
+    )
     assertEquals(rows.map((b) => c(b, 'content')?.body), [
       'old instruction',
       'Keep the bridge.',
@@ -329,7 +342,9 @@ test('two logs of one session each keep their own entries and their own place', 
   let { g, path, free } = separate
   try {
     await pull(g, otherTail, claude)
-    let said = await g.read(`.entry.session=${ids.run1}&.order=entry.seq&*`)
+    let said = await g.read(
+      line`.entry.session=${ids.run1}&.order=entry.seq&*`,
+    )
     assertEquals(said.map((b) => c(b, 'content')?.body), [
       'one',
       'two',

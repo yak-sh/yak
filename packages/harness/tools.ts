@@ -1,5 +1,6 @@
 import { derivedEid, mint } from '@yaks/graph/identity'
 import { toolName } from '@yaks/graph/call'
+import { line } from '@yaks/query'
 import type { Reply } from '@yaks/tools'
 import { answerOf, faultOf, toolEid, worded } from '@yaks/tools/result'
 import { Interrupted } from '@yaks/tools/errors'
@@ -238,7 +239,7 @@ export let harnessTools = (
       t.name != 'session_home'
     ),
     ...valueTools(async (entity) =>
-      (await g.read('.entity.eid=' + JSON.stringify(entity)))[0]
+      (await g.read(line`.entity.eid=${entity}`))[0]
     ),
   ]
 }

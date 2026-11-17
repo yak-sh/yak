@@ -1,6 +1,7 @@
 // What a transcript cost: each request weighed where its usage is written, and
 // the session's cost summed from its entries through a SQLite store.
 
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertAlmostEquals, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, graph, identityEid } from '@yaks/graph'
@@ -51,7 +52,7 @@ let costOf = (
   eid: string,
 ) => ((g.get([eid]) as Bundle[])[0]?.cost as Comp | undefined)
 let session = (g: ReturnType<typeof shop>, eid: string) =>
-  ((g.read(`.entity.eid=${eid} .fields=session.cost`) as Bundle[])[0]
+  ((g.read(line`.entity.eid=${eid} .fields=session.cost`) as Bundle[])[0]
     .session as Comp | undefined)?.cost
 
 test('a request is weighed at its model price unless its provider said', () => {
@@ -109,11 +110,14 @@ test("a session's cost is its entries' sum, and absent where none cost", () => {
 test('whole session reads leave its transcript cost for an explicit query', () => {
   let g = shop()
   g.apply([asked(PRICED, { usage })])
-  for (let query of ['.entity.eid=S ?session', '.entity.eid=S *']) {
+  for (let query of [line`.entity.eid=S ?session`, line`.entity.eid=S *`]) {
     let [row] = g.read(query) as Bundle[]
     assertEquals('cost' in (row.session as Comp), false, query)
   }
-  assertEquals('cost' in ((g.get(['S']) as Bundle[])[0].session as Comp), false)
+  assertEquals(
+    'cost' in ((g.get(['S']) as Bundle[])[0].session as Comp),
+    false,
+  )
   let [row] = g.read('.session.cost>1') as Bundle[]
   assertAlmostEquals(Number((row.session as Comp).cost), 2.25)
 })

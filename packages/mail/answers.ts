@@ -6,6 +6,7 @@
 // from the letters, never stored.
 
 import type { Bundle, Comp } from '@yaks/graph'
+import { type Built, line } from '@yaks/query'
 
 let comp = (b: Bundle, name: string) => (b[name] ?? {}) as Comp
 let lower = (v: unknown) => typeof v == 'string' ? v.trim().toLowerCase() : ''
@@ -52,8 +53,8 @@ export let answering = (sent: Bundle): string[] => {
 
 /** The query for letters we sent that may answer one, delivered since
  * `from`: every letter {@link answering} reads something from. */
-export let answersSince = (from: string): string =>
-  `.delivered.at>=${from} (.mail.reply_to | .mail.target) ?mail ?delivered`
+export let answersSince = (from: string): Built =>
+  line`.delivered.at>=${from} (.mail.reply_to | .mail.target) ?mail ?delivered`
 
 export type Answered = {
   letter: Bundle

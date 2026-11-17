@@ -2,6 +2,7 @@
  * rendered. The graph keeps each queued snapshot (`mail_notice`); @yaks/mail
  * sends the letters, and clocks are supplied at the boundary. */
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { line, sub } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 import { held } from '@yaks/graph/held'
 import type { Vocab } from '@yaks/vocab'
@@ -38,7 +39,7 @@ let showsOf = async (
       eids.map(async (eid) =>
         [
           eid,
-          shown(await tx.read(`${showing(eid)}&*`, { native: true })),
+          shown(await tx.read(line`${sub(showing(eid))}&*`, { native: true })),
         ] as const
       ),
     ),
@@ -274,7 +275,7 @@ export let queue = async (
 ): Promise<void> => {
   let inbox = await inboxAt(tx, vocab, options.person)
   let notices = await tx.read(
-    `.mail_notice&.deliver.to=${JSON.stringify(options.person)}&*`,
+    line`.mail_notice&.deliver.to=${options.person}&*`,
     { native: true },
   )
   let bundles = planned(inbox, notices, options, now, daily)

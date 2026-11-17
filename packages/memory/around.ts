@@ -13,6 +13,7 @@
 // without it or says it cannot.
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { argsOf } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
@@ -71,8 +72,13 @@ export let around: Runs = {
     let side = async (op: '<' | '>', n: number) =>
       n
         ? await graph.read(
-          `.entry.session=${at.session}&.entry.seq${op}${Number(at.seq)}&*` +
-            `&.order=${op == '<' ? '-' : ''}entry.seq&.limit=${n}`,
+          op == '<'
+            ? line`.entry.session=${str(at.session)}&.entry.seq<${
+              Number(at.seq)
+            }&*&.order=-entry.seq&.limit=${n}`
+            : line`.entry.session=${str(at.session)}&.entry.seq>${
+              Number(at.seq)
+            }&*&.order=entry.seq&.limit=${n}`,
         )
         : []
     let ahead = await side('<', count(args.before))
@@ -111,7 +117,7 @@ export let around: Runs = {
     let below: Bundle[] = []
     let known = new Set([root.entity.eid])
     for (let level = [root.entity.eid]; level.length;) {
-      let found = (await graph.read(`.comment.target=${level.join(',')}&*`))
+      let found = (await graph.read(line`.comment.target=${level}&*`))
         .filter((b) => !known.has(b.entity.eid))
       for (let b of found) known.add(b.entity.eid)
       below.push(...found)
@@ -135,11 +141,11 @@ export let around: Runs = {
     }
     let has = (c: string) => !!graph.vocab.comp(c)
     let worked = has('edge') && has('worked')
-      ? (await graph.read(`.edge.from=${s}&.worked&?edge`))
+      ? (await graph.read(line`.edge.from=${s}&.worked&?edge`))
         .map((b) => str(comp(b, 'edge')?.to))
       : []
     let claimed = has('claim')
-      ? (await graph.read(`.claim.session=${s}`)).map((b) => b.entity.eid)
+      ? (await graph.read(line`.claim.session=${s}`)).map((b) => b.entity.eid)
       : []
     return [session, ...await wholes(graph, [...worked, ...claimed])]
   },

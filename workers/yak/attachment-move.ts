@@ -1,6 +1,7 @@
 // Operator attachments kept before their graph rows: add their metadata in
 // bounded alarm batches. Bytes stay where they are, and a retry finds the
 // same entities. This is additive, so old code keeps reading the file lists.
+import { line, sub } from '@yaks/query'
 import type { Comp } from '@yaks/graph'
 import type { Meta } from '@yaks/sqlite'
 import { link } from '@yaks/edge'
@@ -59,8 +60,8 @@ export let attachmentBackfill = async (
   }
   if (!pass.blobs && pass.sessions == null) {
     let rows = await store.g.read(
-      `( .operator_request|.operator_files|.operator_session|.entry&.content.body~="Original message text: message.txt (attachment " )${
-        pass.source ? `&.entity.eid>${pass.source}` : ''
+      line`( .operator_request|.operator_files|.operator_session|.entry&.content.body~=${'Original message text: message.txt (attachment '} )${
+        sub(pass.source ? line`&.entity.eid>${pass.source}` : line``)
       }&.order=entity.eid&.limit=50`,
     )
     for (let row of rows) {
@@ -102,8 +103,8 @@ export let attachmentBackfill = async (
   }
   if (!pass.blobs) {
     let rows = await store.g.read(
-      `.operator_session${
-        pass.sessions ? `&.entity.eid>${pass.sessions}` : ''
+      line`.operator_session${
+        sub(pass.sessions ? line`&.entity.eid>${pass.sessions}` : line``)
       }&.order=entity.eid&.limit=50`,
     )
     for (let row of rows) {
@@ -111,7 +112,8 @@ export let attachmentBackfill = async (
       for (let [i, file] of files.entries()) {
         let sha = file.key.split('/').at(-1)!
         if (
-          (await store.g.read(`.attachment.artifact=${sha}&.limit=1`)).length
+          (await store.g.read(line`.attachment.artifact=${sha}&.limit=1`))
+            .length
         ) continue
         let bundles = attachmentRows(row.entity.eid, [
           attachedOf(await sized(env, file)),

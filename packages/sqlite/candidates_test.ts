@@ -8,7 +8,7 @@ import {
   type Storage,
 } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { parse } from '@yaks/query'
+import { parse, whole } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { ID_URI, idKeywords } from '@yaks/id'
 import { preparedDriver, snapshot } from './testing.ts'
@@ -57,37 +57,38 @@ for (let [name, query, eid] of cases) {
   let checks: [string, () => unknown, unknown][] = [
     [
       'exact subjects keep referenced entities',
-      () => g.rows(relation, selected),
+      () => g.rows(whole(relation), selected),
       [{ eid }],
     ],
     [
       'human identity operands retain their meaning',
-      () => g.rows(query, selected),
+      () => g.rows(whole(query), selected),
       [{ eid }],
     ],
     [
       'a window selects within canonical subjects',
-      () => g.rows(`${relation} .limit=1`, selected),
+      () => g.rows(whole(`${relation} .limit=1`), selected),
       [{ eid }],
     ],
     [
       'an aggregate counts only canonical subjects',
-      () => g.rows(`${relation} .count`, selected),
+      () => g.rows(whole(`${relation} .count`), selected),
       [{ value: '', n: 1 }],
     ],
     [
       'projection reaches outside the candidate set',
-      () => g.rows(`${relation} .fields=comment.post.post.title`, selected),
+      () =>
+        g.rows(whole(`${relation} .fields=comment.post.post.title`), selected),
       [{ eid, 'comment.post.post.title': 'Parent' }],
     ],
     [
       'whole reads keep canonical subjects',
-      () => ids(g.read(relation, selected)),
+      () => ids(g.read(whole(relation), selected)),
       [eid],
     ],
     [
       'empty canonical candidates select nothing',
-      () => g.rows(relation, { eids: [] }),
+      () => g.rows(whole(relation), { eids: [] }),
       [],
     ],
     [
@@ -103,7 +104,7 @@ for (let [name, query, eid] of cases) {
     [
       'canonical candidates leave visibility relations intact',
       () =>
-        g.rows(relation, {
+        g.rows(whole(relation), {
           ...selected,
           visibility: { entity: '.comment|.post' },
         }),
@@ -112,12 +113,15 @@ for (let [name, query, eid] of cases) {
     [
       'hidden referents stay hidden with canonical candidates',
       () =>
-        g.rows(relation, { ...selected, visibility: { entity: '.comment' } }),
+        g.rows(whole(relation), {
+          ...selected,
+          visibility: { entity: '.comment' },
+        }),
       [],
     ],
     [
       'transactions select canonical subjects',
-      () => storage.tx((tx) => ids(tx.read(relation, selected))),
+      () => storage.tx((tx) => ids(tx.read(whole(relation), selected))),
       [eid],
     ],
   ]

@@ -1,3 +1,4 @@
+import { line as q } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { project } from '@yaks/session'
@@ -162,7 +163,7 @@ let named = await (async () => {
     let names = await senders(h.g, [line(jeff, self), line(oracle, other)])
     let id = async (eid: string) =>
       human(h.g.vocab)(
-        (await h.g.read(`.entity.eid=${eid} ?person ?persona ?session`))[0],
+        (await h.g.read(q`.entity.eid=${eid} ?person ?persona ?session`))[0],
       )
     let [j, o, s] = await Promise.all([jeff, oracle, other].map(id))
     return {

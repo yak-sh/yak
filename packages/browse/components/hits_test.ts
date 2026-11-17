@@ -1,4 +1,5 @@
 // A picker filter keeps the complete bundles its domain renderers need.
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
@@ -21,7 +22,7 @@ test('filtered picker results retain the session brief for its tile', async () =
   config.host = 'search.test'
   globalThis.fetch = (input) => {
     let q = new URL(String(input), 'http://search.test').searchParams.get('q')!
-    return Promise.resolve(Response.json(g.read(q)))
+    return Promise.resolve(Response.json(g.read(whole(q))))
   }
   try {
     let found = await rows('.session')
@@ -38,7 +39,7 @@ test('an aggregate query has no navigable picker hits', async () => {
   config.host = 'search.test'
   globalThis.fetch = (input) => {
     let q = new URL(String(input), 'http://search.test').searchParams.get('q')!
-    return Promise.resolve(Response.json(g.read(q)))
+    return Promise.resolve(Response.json(g.read(whole(q))))
   }
   try {
     assertEquals(await hits('.task .count'), [])

@@ -122,7 +122,17 @@ import { shown } from '@yaks/phone'
 import { caught } from './defects.ts'
 import { unkept } from './newcomer.ts'
 import { delivered, type Rows } from './trash.ts'
-import { and, eq, every, list, stringify } from '@yaks/query'
+import {
+  and,
+  eq,
+  every,
+  joined,
+  line,
+  list,
+  stringify,
+  sub,
+  whole,
+} from '@yaks/query'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
 // sign-in code's ten minutes, because nobody is standing at the form waiting
@@ -718,7 +728,8 @@ let woken = async (env: Env, apps: App[]) => {
   let rows: Rows = {
     get: (eids) =>
       meta(env).query(
-        stringify(and(eq('entity.eid', list(...eids)), every())),
+        // A tree printed, every eid written as `parse` reads it back.
+        whole(stringify(and(eq('entity.eid', list(...eids)), every()))),
         {
           trusted: true,
         },
@@ -984,8 +995,8 @@ export type Closing = {
 let account = async (env: Env, named: string) => {
   let [row] = await meta(env).query(
     minted(named)
-      ? `.entity.eid=${named}&.person ?email ?phone ?newcomer`
-      : `.email.address="${named}"`,
+      ? line`.entity.eid=${named}&.person ?email ?phone ?newcomer`
+      : line`.email.address=${named}`,
   ) as unknown as DirRow[]
   if (!row) return null
   let address = row.email?.address
@@ -1112,8 +1123,10 @@ export let abandoned = async (env: Env, now = new Date(), only?: string) => {
     // directory's parameter and SQL statement-size limits.
     for (let i = 0; i < refs.length && !used; i += 5) {
       let writes = await meta(env).query(
-        `(${
-          refs.slice(i, i + 5).map((eid) => `.refs=${eid}`).join(' | ')
+        line`(${
+          sub(
+            joined(refs.slice(i, i + 5).map((eid) => line`.refs=${eid}`), '|'),
+          )
         }) ?created ?used ?written`,
       ) as unknown as Row[]
       used = !inactive(

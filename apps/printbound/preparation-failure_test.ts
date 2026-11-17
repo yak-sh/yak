@@ -1,3 +1,4 @@
+import { line, whole } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -95,7 +96,7 @@ for (
       async fetch(path: string, init?: RequestInit) {
         let url = new URL(path, 'https://fixture.invalid')
         if (url.pathname === '/query') {
-          return Response.json(await g.read(url.searchParams.get('q')!))
+          return Response.json(await g.read(whole(url.searchParams.get('q')!)))
         }
         return Response.json(
           await g.apply(JSON.parse(String(init?.body)).entities),
@@ -125,7 +126,7 @@ for (
       trusted: true,
     })
     equal((await documentStatus(ports, { document: job }, who)).pending, true)
-    let [saved] = await g.read(`.entity.eid=${job}`)
+    let [saved] = await g.read(line`.entity.eid=${job}`)
     equal((saved.print_preparation as { state: unknown }).state, state)
     equal(saved.print_preparation_failed, undefined)
     let current =

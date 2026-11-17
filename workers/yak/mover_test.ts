@@ -1,3 +1,4 @@
+import { line, whole } from '@yaks/query'
 import { statements } from '@yaks/sqlite'
 // The store mover (mover.ts) through a Store's own doors: rows moved from the
 // alarm after boot, a rehearsal that moves nothing, and a failing batch that
@@ -46,7 +47,7 @@ let WORDS = JSON.stringify({
 
 let rule = (o: Partial<Rule> = {}): Rule => ({
   mark: 'yak/store/now/1',
-  find: '.was',
+  find: line`.was`,
   move: (row) => [{
     entity: row.entity,
     was: null,
@@ -103,7 +104,7 @@ let movingStore = async (
     /** Spend rows written against the store's ceiling, as its requests do. */
     write: (rowsWritten: number) =>
       bound.count({ shape: () => 'w', rowsRead: 0, rowsWritten, returned: 0 }),
-    query: (q: string) => meta.query(q),
+    query: (q: string) => meta.query(whole(q)),
     declare: (doc: unknown) => post('/vocab', JSON.stringify(doc)),
     apply: (rows: Bundle[]) => meta.apply(rows, KERNEL),
     source: (rows: Bundle[], doc: VocabDoc) => {
@@ -278,7 +279,7 @@ test('a failing batch unwinds, the store serves, and a fix finishes it', async (
 })
 
 test('a rule reading words a store does not speak is done there', async () => {
-  let s = await store(1, rule({ find: '.nowhere' }))
+  let s = await store(1, rule({ find: line`.nowhere` }))
   assertEquals((await s.rehearse())[0].unspoken, 'nowhere')
   await s.alarm()
   let [said] = await s.moves()
@@ -297,7 +298,7 @@ test('a rule refused in words the store speaks fails its batch', () => {
     tx: <T>(body: () => T) => body(),
     speaks: () => speaks,
   })
-  let attempts = rule({ find: '.effect.attempts=0' })
+  let attempts = rule({ find: line`.effect.attempts=0` })
   assertThrows(() => batch(refusing(true), attempts, null, 5), Unknown)
   assertEquals(
     batch(refusing(false), attempts, null, 5).unspoken,
@@ -487,7 +488,7 @@ test('source reads do not move or count sources, and rehearsal rolls back', asyn
     live: undefined,
     move: (row, read) => {
       assert(read)
-      let [from] = read(`.entity.eid=${source}&.now`)
+      let [from] = read(line`.entity.eid=${source}&.now`)
       return [{
         entity: row.entity,
         was: null,
@@ -514,7 +515,7 @@ test('source reads do not move or count sources, and rehearsal rolls back', asyn
 
 let contracting = () =>
   rule({
-    find: '.was.word',
+    find: line`.was.word`,
     move: (
       row,
     ) => [{
@@ -583,7 +584,7 @@ test('mover contraction waits for the last value and rehearsal restores the colu
   own = new Store(ctx, {}, [commitRule])
   assertEquals(await meta.query('.commit&*'), before)
   assertEquals(
-    (await meta.query(`.commit.repo.repository.origin=${repo}`)).map((b) =>
+    (await meta.query(line`.commit.repo.repository.origin=${repo}`)).map((b) =>
       b.entity.eid
     ),
     [eid],
@@ -674,7 +675,12 @@ test('dead mail rehearsal rolls back 141 rows before explicit activation', async
   let s = await deadMailStore()
   let before = await s.query('*')
   let [r] = await s.rehearse()
-  assertEquals([r.rows, r.moved, r.batches, r.failed], [141, 141, 3, undefined])
+  assertEquals([r.rows, r.moved, r.batches, r.failed], [
+    141,
+    141,
+    3,
+    undefined,
+  ])
   assertEquals(await s.query('*'), before)
   assertEquals(await remainingEffects(s), 154)
   assertEquals(await count(s, '.effect.state=pending'), 152)
@@ -807,7 +813,8 @@ let proof = async (
   let checks: (() => void)[] = []
   await run(
     (actual, expected) => {
-      let observed = structuredClone(actual), wanted = structuredClone(expected)
+      let observed = structuredClone(actual),
+        wanted = structuredClone(expected)
       checks.push(() => assertEquals(observed, wanted))
     },
     (value) => checks.push(() => assert(value)),
@@ -823,7 +830,7 @@ await proof(
     let s = await store(
       1,
       rule({
-        find: '.now',
+        find: line`.now`,
         move: () => [],
         drop: ['now.earlier', 'missing.earlier'],
       }),
@@ -920,7 +927,7 @@ await proof(
     }
     let moving: Rule = {
       mark: 'yak/store/retired-source/1',
-      find: '.now.earlier&*',
+      find: line`.now.earlier&*`,
       source,
       move: (row) => [{
         entity: row.entity,

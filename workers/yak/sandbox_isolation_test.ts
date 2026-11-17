@@ -1,4 +1,5 @@
 // A leftover process must never see a different member's command environment.
+import { whole } from '@yaks/query'
 import { equal, match, test } from '@yaks/testing'
 import { kv, sandboxes } from './testing.ts'
 import type { Space } from './directory.ts'
@@ -23,7 +24,9 @@ let secret = 'sandbox isolation probe'
 let containers = () => {
   let tokens = new Map<string, string>()
   let calls: string[] = []
-  let box = sandboxes((command) => ({ running: command == 'leftover-process' }))
+  let box = sandboxes((command) => ({
+    running: command == 'leftover-process',
+  }))
   return {
     box,
     tokens,
@@ -136,7 +139,7 @@ let lending = async () => {
     })),
   )
   return {
-    query: async (line: string) => await store.read(line),
+    query: async (line: string) => await store.read(whole(line)),
     apply: async (bundles: Bundle[]) => await store.apply(bundles),
   }
 }

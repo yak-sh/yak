@@ -20,6 +20,7 @@
 // stand by the hooks that ask what a delete takes (graph.ts's serving fence,
 // pages-graph.ts `quietened`), and its counts are checked by the core's
 // `$was` like any caller's.
+import { line } from '@yaks/query'
 import type { Bundle, Plugin, Tx } from '@yaks/graph'
 import { hook } from '@yaks/graph/plugin'
 import { Refused } from '@yaks/graph/errors'
@@ -30,10 +31,10 @@ import {
   asked,
   called,
   guessed,
-  line,
   type Person,
   personLine,
   type Signin,
+  signinLine,
   stamped,
   type Via,
 } from '../signin.ts'
@@ -55,7 +56,7 @@ type Guess = {
 // Every row an address's codes left.
 let rows = (tx: Tx, address: string) =>
   after(
-    tx.read(line(address)),
+    tx.read(signinLine(address)),
     (found) => found.filter((r) => r.signin) as unknown as Signin[],
   )
 
@@ -85,7 +86,7 @@ let arrival = (
 ): Bundle[] | Promise<Bundle[]> =>
   after(tx.read(personLine(address)), ([found]) =>
     after(
-      newcomer ? tx.read(`.entity.eid=${newcomer}`) : [],
+      newcomer ? tx.read(line`.entity.eid=${newcomer}`) : [],
       ([row]) => {
         let who = found as Person | undefined
         let person = {
@@ -150,7 +151,7 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
               )
             }
             return after(
-              tx.read(`.entity.eid=${consentEid(g.person!)}`),
+              tx.read(line`.entity.eid=${consentEid(g.person!)}`),
               ([before]) => {
                 let welcome = !holders.length || !before?.sms_consent
                 return texts(

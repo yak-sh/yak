@@ -1,3 +1,4 @@
+import { type Line } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Comp, identityEid } from '@yaks/graph'
@@ -387,7 +388,9 @@ test('session titles use local assignment, not inherited parent context', async 
       ),
       false,
     )
-    assert((await a.sessions()).find((b) => b.entity.eid == 'worker')?.archived)
+    assert(
+      (await a.sessions()).find((b) => b.entity.eid == 'worker')?.archived,
+    )
   } finally {
     await a.close()
   }
@@ -535,7 +538,7 @@ test('session titles read only the first eligible local entry', async () => {
     await a.idle(id)
     let read = a.h.g.read.bind(a.h.g)
     let queries: string[] = []
-    a.h.g.read = ((query: string, ...rest: unknown[]) => {
+    a.h.g.read = ((query: Line, ...rest: unknown[]) => {
       queries.push(query)
       return read(query, ...rest as [])
     }) as typeof a.h.g.read

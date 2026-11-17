@@ -1,5 +1,6 @@
 // The kernel lends hosted execution and authenticates each callback against
 // the original ask. Private inputs contain app identity and credential sentinels.
+import { line } from '@yaks/query'
 import { type Bucket, objectBlobs } from '@yaks/blob'
 import { artifactStore } from '@yaks/blob/identify'
 import { type Grant, grants as authorized } from '@yaks/egress'
@@ -96,7 +97,9 @@ let askAt = async (
   found: Awaited<ReturnType<typeof location>>,
 ) => {
   let graph = metaOf(appStore(env.STORE!, found.space, found.app, env), KERNEL)
-  let [ask] = await graph.query(`.entity.eid=${job.call}&*`, { trusted: true })
+  let [ask] = await graph.query(line`.entity.eid=${job.call}&*`, {
+    trusted: true,
+  })
   let pinned = ask?.inference as Comp | undefined
   if (
     !ask?.ask || !ask.entry || pinned?.executor !== job.executor ||
@@ -283,7 +286,7 @@ export let hosting = (env: Bindings): Kernel => ({
     let { graph, found, ask, frozen } = await authenticated(env, job)
     if (ask.submitted) return { claimed: false }
     let [row] = frozen.context == null
-      ? await graph.query(`.entity.eid=${String((ask.ask as Comp).to)}&*`, {
+      ? await graph.query(line`.entity.eid=${String((ask.ask as Comp).to)}&*`, {
         trusted: true,
       })
       : []
@@ -307,7 +310,12 @@ export let hosting = (env: Bindings): Kernel => ({
           { STORE: env.STORE! },
           found.space,
           (remaining) => {
-            let quote = quoted(frozen.request, frozen.price, context, remaining)
+            let quote = quoted(
+              frozen.request,
+              frozen.price,
+              context,
+              remaining,
+            )
             return quote?.tokens == desired ? quote : null
           },
           job.call,

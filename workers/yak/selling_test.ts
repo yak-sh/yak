@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { meta } from './meta.ts'
 /// <reference lib="deno.ns" />
 // Selling through the platform in memory: the shop example, checkout inputs,
@@ -408,7 +409,7 @@ test('the fee is an owner’s to set, and is charged on the next request', async
   // write went through `stamp`, which empties it.
   assertEquals(await sell.feeOf(dir), 250)
   let platformSpace = (await dir.space('yak'))!
-  let [written] = await meta(env).query(`.entity.eid=${platformSpace.eid}`)
+  let [written] = await meta(env).query(line`.entity.eid=${platformSpace.eid}`)
   assertEquals((written.updated as { by: string }).by, ADA)
   assertEquals(typeof (written.updated as { via: string }).via, 'string')
   assertEquals(await (await feeAt(env, { headers: { cookie } })).json(), {

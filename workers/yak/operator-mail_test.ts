@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { short } from '@yaks/id'
 import { test } from '@yaks/testing'
 import type { Binding } from '@yaks/cloudflare-mail'
@@ -108,7 +109,7 @@ await receive(
 await service.drain()
 let [sent] = letters
 let [kept] = await store.g.read('.operator_letter&*')
-let [fork] = await store.g.read(`.spawned.parent=${rootOf(eid, person)}`)
+let [fork] = await store.g.read(line`.spawned.parent=${rootOf(eid, person)}`)
 let ofFork = await conversationOf(store, '/at', fork.entity.eid)
 
 // Dr Alvarez answers only the Operator, the way Reply does.

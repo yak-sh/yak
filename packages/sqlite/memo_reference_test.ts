@@ -1,5 +1,6 @@
 // Reference predicates keep cached projections across unrelated owner writes,
 // while changes to their referents and visibility still change the answer.
+import { whole } from '@yaks/query'
 import { equal, ok, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
@@ -57,8 +58,8 @@ await g.apply(
 let q = '.comment !notified !created.via.session .fields=comment.target'
 let opts = { visibility: { entity: '!apply_receipt' } }
 let warm = async (query = q) => {
-  await g.read(query, opts)
-  await g.read(query, opts)
+  await g.read(whole(query), opts)
+  await g.read(whole(query), opts)
 }
 await warm()
 await g.apply([{
@@ -66,21 +67,23 @@ await g.apply([{
   doc: { title: 'unrelated' },
   $actor: { by: id(1), via: id(1) },
 }], { trusted: true })
-let before = reads, held = await g.read(q, opts), reused = reads - before
+let before = reads,
+  held = await g.read(whole(q), opts),
+  reused = reads - before
 await g.apply([{ entity: { eid: id(1) }, session: {} }])
-let session = await g.read(q, opts)
+let session = await g.read(whole(q), opts)
 await g.apply([{ entity: { eid: id(1) }, session: null }])
-let person = await g.read(q, opts)
+let person = await g.read(whole(q), opts)
 await warm()
 await g.apply([{
   entity: { eid: id(1000) },
   created: { via: id(2) },
 }], { trusted: true })
-let moved = await g.read(q, opts)
-let masked = await g.read(q, {
+let moved = await g.read(whole(q), opts)
+let masked = await g.read(whole(q), {
   visibility: { components: { session: ".entity.eid!='" + id(2) + "'" } },
 })
-let hidden = await g.read(q, {
+let hidden = await g.read(whole(q), {
   visibility: { components: { created: '!comment' } },
 })
 test('a large projected answer survives unrelated writes within its cache bound', () => {
@@ -100,7 +103,7 @@ test('component masks retain their own reference-predicate answers', () => {
 let propertyQuery = '.comment.target.doc.title=news .fields=entity.eid'
 await warm(propertyQuery)
 await g.apply([{ entity: { eid: id(10) }, doc: { title: 'news' } }])
-let property = await g.read(propertyQuery, opts)
+let property = await g.read(whole(propertyQuery), opts)
 test('a referenced property edit changes an otherwise unselected owner answer', () => {
   equal(property.map((b) => b.entity.eid), [id(1000), id(1382)])
 })
@@ -110,7 +113,7 @@ await g.apply([{
   entity: { eid: id(2001) },
   doc: { title: 'match', body: 'value' },
 }])
-let added = await g.read(alternate, opts)
+let added = await g.read(whole(alternate), opts)
 test('unknown values that can match an alternative still invalidate its answer', () => {
   equal(added.length, 536)
   ok(added.some((b) => b.entity.eid == id(2001)))
@@ -135,15 +138,15 @@ try {
       $actor: { by: id(1), via: id(1) },
     })),
   ], { trusted: true })
-  await first.read(q, opts)
-  await first.read(q, opts)
+  await first.read(whole(q), opts)
+  await first.read(whole(q), opts)
   await second.apply([{ entity: { eid: id(1) }, session: {} }])
-  external = (await first.read(q, opts)).length
+  external = (await first.read(whole(q), opts)).length
   await second.apply([{ entity: { eid: id(1) }, session: null }])
-  await first.read(q, opts)
-  await first.read(q, opts)
+  await first.read(whole(q), opts)
+  await first.read(whole(q), opts)
   b.query({ t: 'create table', name: 'unrelated', cols: [{ name: 'v' }] })
-  schema = (await first.read(q, opts)).length
+  schema = (await first.read(whole(q), opts)).length
 } finally {
   b.close()
   a.close()

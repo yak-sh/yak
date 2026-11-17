@@ -16,6 +16,7 @@ import type { Graph } from '@yaks/graph'
 import type { Route } from '@yaks/api'
 import { fault, json, refuse } from '@yaks/api/refuse'
 import { Refused } from '@yaks/graph/errors'
+import { line } from '@yaks/query'
 import type { Transport } from './options.ts'
 import { kept, settled } from './received.ts'
 import {
@@ -133,16 +134,14 @@ export let texters =
 let keep = async (graph: Graph, via: string, heard: Heard): Promise<void> => {
   let { arrival, outcome } = heard
   if (arrival) {
-    let people = await graph.read(
-      `.phone.number=${JSON.stringify(arrival.from)}`,
-    )
+    let people = await graph.read(line`.phone.number=${arrival.from}`)
     await graph.apply(
       kept({ ...arrival, via }, people.map((p) => p.entity.eid)),
     )
   }
   if (outcome) {
     let [sent] = await graph.read(
-      `.text.via=${via}&.text.message_id=${JSON.stringify(outcome.id)}`,
+      line`.text.via=${via}&.text.message_id=${outcome.id}`,
     )
     if (sent) {
       await graph.apply(settled(outcome, sent.entity.eid), { trusted: true })

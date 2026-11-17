@@ -2,6 +2,7 @@
 // Late extraction completions are discarded against the source in that write.
 import { after } from '@yaks/fp'
 import { type Bundle, type Comp, dead, hook, type Plugin } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { supported } from './documents.ts'
 
 export let documentPages = (): Plugin => ({
@@ -47,7 +48,7 @@ export let documentPages = (): Plugin => ({
             supported(String(file.name ?? ''), String(file.mime ?? ''))
         }
         return after(
-          tx.read(`.document_page.document=${ids.join(',')}&*`),
+          tx.read(line`.document_page.document=${ids}&*`),
           (pages) => {
             let stale = new Map(
               pages.filter((b) => {

@@ -2,6 +2,7 @@
 // reading the declarations admits, for every reader, through every change to
 // what the privacy is read from; and is read by the declarations until every
 // entity's privacy is current.
+import { line, whole } from '@yaks/query'
 import {
   type Bundle,
   graph,
@@ -140,12 +141,12 @@ for (let [name, make] of Object.entries(stores)) {
     await write(SEED)
     // Every entity read from keeps it, and nothing else does.
     equal(
-      (await gs[0].read(`.${PRIVACY}`)).map((b) => b.entity.eid).sort(),
+      (await gs[0].read(line`.${PRIVACY}`)).map((b) => b.entity.eid).sort(),
       SEED.filter((b) => !b.person && !b.plain).map((b) => b.entity.eid).sort(),
     )
     let p = privacy(declarationsOf(keeping, {}, through))
     // So it is read by them.
-    equal(await p.current((line) => gs[0].read(line)), true)
+    equal(await p.current((line) => gs[0].read(whole(line))), true)
     await agree(gs)
     for (
       let change of [
@@ -175,14 +176,16 @@ for (let [name, make] of Object.entries(stores)) {
       let gs = pair(make, SEED, earlier)
       await agree(gs)
       let p = privacy(declarationsOf(keeping, {}, through))
-      let stale = (await Promise.all(p.stale.map((line) => gs[0].read(line))))
+      let stale = (await Promise.all(p.stale.map((line) =>
+        gs[0].read(whole(line))
+      )))
         .flat().map((b) => b.entity.eid)
       await gs[0].apply(
         await p.reckon((e, c) => gs[0].get(e, c), stale),
         { trusted: true },
       )
       equal(stale.length > 0, true)
-      equal(await p.current((line) => gs[0].read(line)), true)
+      equal(await p.current((line) => gs[0].read(whole(line))), true)
       await agree(gs)
     })
   }

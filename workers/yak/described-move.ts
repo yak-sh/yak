@@ -6,6 +6,7 @@
 // all (T-143252). They go. A `_package` a `_lens` names is the store's own
 // (@yaks/lens) and stays. The platform's own stores describe theirs in rows,
 // so only an app's store owes this.
+import { joined, line, sub } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
 import { DESCRIBED as ROWS } from '@yaks/platform/listing'
 import type { Rule } from './mover.ts'
@@ -15,8 +16,13 @@ export let describedRule: Rule = {
   stores: 'apps',
   live: 'apps',
   core: ROWS,
-  find:
-    ROWS.map((c) => c == '_package' ? '(._package&!_lens_package)' : `(.${c})`)
-      .join('|') + '&*',
+  find: line`${
+    sub(joined(
+      ROWS.map((c) =>
+        c == '_package' ? line`._package&!_lens_package` : line`.${c}`
+      ),
+      '|',
+    ))
+  }&*`,
   move: (row: Bundle) => [{ entity: { eid: row.entity.eid }, $delete: true }],
 }

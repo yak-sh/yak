@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { short } from '@yaks/id'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
@@ -85,7 +86,7 @@ let ask = async (say: string) => {
 }
 
 await ask('Remind me in ten minutes to call Mom')
-let [set] = await store.g.read(`.wake.for=${person}&*`)
+let [set] = await store.g.read(line`.wake.for=${person}&*`)
 let wake = set.wake as { at: string }
 let inTen = Date.parse(wake.at) - Date.now()
 
@@ -100,7 +101,7 @@ await store.g.apply([{
 })
 await service.drain()
 let [request] = await store.g.read('.operator_request.channel=wake')
-let [told] = await store.g.read(`.deliver.to=${person}&*`)
+let [told] = await store.g.read(line`.deliver.to=${person}&*`)
 let [fired] = await store.g.get([set.entity.eid])
 // A second driver, or a replay, gives the same firing again to no effect.
 await fire(store, eid, fired, 'wake', (fired.fired as { at: string }).at)
@@ -110,7 +111,7 @@ let again = (await store.g.read('.operator_request.channel=wake')).length
 await ask('Check my mail every morning')
 await ask('What wake-ups do I have?')
 let listed = JSON.parse(results.at(-1)!.split('\n')[1])
-let [daily] = await store.g.read(`.wake.for=${person} .wake.every`)
+let [daily] = await store.g.read(line`.wake.for=${person} .wake.every`)
 await ask(`Cancel ${short(daily.entity.eid)}`)
 let gone = await store.g.get([daily.entity.eid])
 
@@ -198,7 +199,10 @@ await removed.store.g.apply([
     },
   },
 ], { trusted: true })
-await dir.apply({ entities: [{ entity: { eid: seat }, $delete: true }] }, owner)
+await dir.apply(
+  { entities: [{ entity: { eid: seat }, $delete: true }] },
+  owner,
+)
 await removed.drain()
 let [cancelled] = await removed.store.g.get([alarm])
 test('removing a member cancels their helper wake before any model turn or occurrence', async () => {

@@ -37,7 +37,7 @@ import type { Bundle, Eid, Graph, Reduced } from '@yaks/graph'
 import { after, over, same } from '@yaks/fp'
 import { named, only, projection, transient } from '@yaks/graph/read'
 import { type Net, net } from '@yaks/match'
-import { parse } from '@yaks/query'
+import { parse, whole } from '@yaks/query'
 
 /** Something with a `value` that can be replaced: the one thing this package
  * needs from a signal. A `@preact/signals` signal is one; so is `{ value }`. */
@@ -202,7 +202,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
   // again. It moved when a member left, or when an entity the transaction
   // wrote is in it and was not, as it now is, before.
   let refresh = (w: Live, now: Map<Eid, Bundle>) =>
-    after(graph.read(w.query, { now: w.now, durable: true }), (set) => {
+    after(graph.read(whole(w.query), { now: w.now, durable: true }), (set) => {
       let rows = new Map(set.map((b) => [b.entity.eid, b]))
       let left = [...w.members.keys()].some((eid) => !rows.has(eid))
       let moved = [...now].some(([eid, b]) =>
@@ -266,7 +266,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
     // later commit for the life of the page. Its members are read whole too,
     // as a commit reads what it wrote.
     after(
-      graph.read(query, { now, durable: true }),
+      graph.read(whole(query), { now, durable: true }),
       (set) =>
         after(graph.get(set.map((b) => b.entity.eid)), (whole) => {
           if (!active || closed) return

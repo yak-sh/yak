@@ -43,7 +43,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { signed } from '@yaks/graph/provenance'
 import { token } from '@yaks/graph/sha256'
 import { human } from '@yaks/id'
-import { absent, and, eq, every, fields, present } from '@yaks/query'
+import { absent, and, eq, every, fields, line, present } from '@yaks/query'
 import { SESSION } from './comp.ts'
 import { ended as over, type Owed, owing, worksFor } from './listen.ts'
 import { HELPER, HELPING, ROUTINE } from './routine.ts'
@@ -172,7 +172,9 @@ let going = async (g: G, project: Eid): Promise<Bundle[]> => {
 
 // A transcript's newest entry.
 let newest = async (g: G, session: Eid): Promise<Bundle | undefined> =>
-  (await g.read(`.entry.session=${session}&.order=-entry.seq&.limit=1&*`))[0]
+  (await g.read(line`.entry.session=${session}&.order=-entry.seq&.limit=1&*`))[
+    0
+  ]
 
 let fold = (text: string, max: number): string => {
   let line = text.replace(/\s+/g, ' ').trim()

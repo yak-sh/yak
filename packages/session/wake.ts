@@ -25,6 +25,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { human } from '@yaks/id'
+import { type Built, line, sub } from '@yaks/query'
 import {
   dependencies,
   dependents,
@@ -84,11 +85,13 @@ export let resting = async (
 // newest ask read through, or its newest stop, whichever is later; 0 where it
 // has neither.
 let given = async (g: Graph, session: Eid): Promise<number> => {
-  let newest = (q: string) =>
-    g.read(`.entry.session=${session}&${q}&.order=-entry.seq&.limit=1`)
+  let newest = (q: Built) =>
+    g.read(
+      line`.entry.session=${session}&${sub(q)}&.order=-entry.seq&.limit=1`,
+    )
   let [[ask], [stop]] = await Promise.all([
-    newest('.ask'),
-    newest(`.${STOP_ENTRY}`),
+    newest(line`.ask`),
+    newest(line`.${STOP_ENTRY}`),
   ])
   let through = comp(ask, 'ask')?.through
   let [read] = through == null ? [] : await g.get([String(through)], ['entry'])
@@ -109,7 +112,7 @@ let given = async (g: Graph, session: Eid): Promise<number> => {
  * ```
  */
 export let unanswered = async (g: Graph, session: Eid): Promise<Bundle[]> =>
-  await g.read(`${await saidSince(g, session)}&.order=entry.seq&*`)
+  await g.read(line`${sub(await saidSince(g, session))}&.order=entry.seq&*`)
 
 /**
  * Everything a transcript was told, in order: what a run that never began is
@@ -122,23 +125,25 @@ export let unanswered = async (g: Graph, session: Eid): Promise<Bundle[]> =>
  * ```
  */
 export let told = async (g: Graph, session: Eid): Promise<Bundle[]> =>
-  await g.read(`${inputs(g, session)}&.order=entry.seq&*`)
+  await g.read(line`${sub(inputs(g, session))}&.order=entry.seq&*`)
 
 // What a transcript is told: an input, not its own output, an ending, a notice,
 // a line read from a file or the instructions a run was started with.
-let inputs = (g: Graph, session: Eid): string =>
-  `.entry.session=${session}&.content&!output&!${STOP_ENTRY}&!notice` +
-  ['lines', 'prompt'].filter((c) => g.vocab.comp(c)).map((c) => `&!${c}`)
-    .join('')
+let inputs = (g: Graph, session: Eid): Built =>
+  ['lines', 'prompt'].filter((c) => g.vocab.comp(c)).reduce<Built>(
+    (q, c) => line`${sub(q)}&!${c}`,
+    line`.entry.session=${session}&.content&!output&!${STOP_ENTRY}&!notice`,
+  )
 
 // The query for what a transcript was told that it was not given.
-let saidSince = async (g: Graph, session: Eid): Promise<string> =>
-  `${inputs(g, session)}&.entry.seq>${await given(g, session)}`
+let saidSince = async (g: Graph, session: Eid): Promise<Built> =>
+  line`${sub(inputs(g, session))}&.entry.seq>${await given(g, session)}`
 
 /** Whether a request waits in a transcript for its next turn or run: an input
  * asking for one that its newest ask was not given. */
 export let requested = async (g: Graph, session: Eid): Promise<boolean> =>
-  (await g.read(`${await saidSince(g, session)}&.using&.limit=1`)).length > 0
+  (await g.read(line`${sub(await saidSince(g, session))}&.using&.limit=1`))
+    .length > 0
 
 let finished = (b: Bundle): Comp | undefined =>
   comp(b, 'cancelled') ?? comp(b, 'completed')
@@ -231,7 +236,7 @@ export let parked = async (g: Graph, session: Eid): Promise<boolean> =>
 /** The tasks a transcript holds that {@link waits} says it is parked on. */
 export let parkedOn = async (g: Graph, session: Eid): Promise<Bundle[]> => {
   let held = holds(g)
-    ? await g.read(`.task&.${CLAIM}.session=${session}&*`)
+    ? await g.read(line`.task&.${CLAIM}.session=${session}&*`)
     : []
   let on: Bundle[] = []
   for (let b of held) {
@@ -290,7 +295,7 @@ let onward = async (g: Graph, session: Eid, task: Eid): Promise<boolean> => {
   if (!managed && ENDED.includes(await currentStatus(g, session))) return false
   if (await requested(g, session)) return true
   return (await g.read(
-    `.entry.session=${session}&.${WOKEN}.task=${task}&.limit=1`,
+    line`.entry.session=${session}&.${WOKEN}.task=${task}&.limit=1`,
   )).length > 0
 }
 
@@ -311,7 +316,7 @@ export let carrying = async (g: Graph, task: Eid): Promise<Eid | undefined> => {
   let holder = comp(await one(g, task, [CLAIM]), CLAIM)?.session
   let them = holder ? [String(holder)] : [
     ...new Set(
-      (await g.read(`.${WOKEN}.task=${task}&*`))
+      (await g.read(line`.${WOKEN}.task=${task}&*`))
         .map((b) => String(comp(b, 'entry')?.session)),
     ),
   ]
@@ -326,7 +331,7 @@ export let carrying = async (g: Graph, task: Eid): Promise<Eid | undefined> => {
 let inForce = async (g: Graph, session: Eid): Promise<Comp | undefined> =>
   comp(
     (await g.read(
-      `.entry.session=${session}&.using&.order=-entry.seq&.limit=1`,
+      line`.entry.session=${session}&.using&.order=-entry.seq&.limit=1`,
     ))[0],
     'using',
   )
@@ -434,7 +439,7 @@ export let rouse = async (
   if (!holds(g)) return
   let row = await one(g, session, SEEN)
   if (!await resting(g, session, row)) return
-  let held = await g.read(`.task&.${CLAIM}.session=${session}&*`)
+  let held = await g.read(line`.task&.${CLAIM}.session=${session}&*`)
   let open = held.filter((task) => !settled(taskStatus(g.vocab, task)))
   let work = await unattended(g, session, open)
   for (let task of work.release) {

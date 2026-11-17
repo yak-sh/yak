@@ -1,4 +1,5 @@
 // Reader scheduling and teardown through an in-process worker.
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { readThread } from './read_thread.ts'
@@ -164,7 +165,7 @@ let fakes = ({ starting = false } = {}) => {
 let abandoned = (reader: ReturnType<typeof readThread>, query: string) => {
   let abort = new AbortController()
   let refused = assertRejects(
-    () => Promise.resolve(reader.read(query, { signal: abort.signal })),
+    () => Promise.resolve(reader.read(whole(query), { signal: abort.signal })),
     DOMException,
     'aborted',
   )

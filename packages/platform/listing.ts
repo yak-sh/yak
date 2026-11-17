@@ -14,7 +14,15 @@
 // what was asked for. Anything that is not a row listing (an aggregate, a
 // count) passes through as it came.
 
-import { type Clause, clauses, conjoin, parse } from '@yaks/query'
+import {
+  type Asked,
+  type Clause,
+  clauses,
+  conjoin,
+  type Line,
+  parse,
+  whole,
+} from '@yaks/query'
 import type { Personal } from '@yaks/member'
 
 // The platform's bookkeeping about a row — who wrote it and when, whether it
@@ -118,13 +126,13 @@ export let names = (line: string, word: string): boolean =>
 // An explicitly requested person-owned aspect is app data on that person's
 // row. The store supplies its composed Personal declarations so this screen
 // retains the row; the graph's ownership policy still governs the aspect.
-export let asking = (
-  line: string,
+export let asking = <Q extends string>(
+  line: Q & Asked<Q>,
   words: string[] = PLATFORM,
   personal: Personal = {},
-): string => {
+): Line => {
   let ask = line.replace(/^[?&]+/, '')
-  if (!ask || line.includes('id=')) return line
+  if (!ask || line.includes('id=')) return line as Line
   let aspect = Object.entries(personal).some(([name, owner]) =>
     owner == 'entity' && names(line, name)
   )
@@ -145,7 +153,9 @@ export let asking = (
     !(k == 'person' && aspect) &&
     !(k == 'refusal' && names(line, 'entry'))
   ).map((k) => `!${k}`)
-  return line.slice(0, line.length - ask.length) + conjoin(ask, ...screen)
+  return whole(
+    line.slice(0, line.length - ask.length) + conjoin(ask, ...screen),
+  )
 }
 
 // Whether every row a clause matches holds some component: a present test

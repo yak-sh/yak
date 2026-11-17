@@ -8,6 +8,7 @@
 // tab). A target minted in the same batch counts: the check is against the
 // graph as the batch will leave it.
 
+import { line } from '@yaks/query'
 import type { Bundle, Comp, Hook } from '@yaks/graph'
 import { attemptState } from './attempt.ts'
 
@@ -59,7 +60,7 @@ const names: Hook = (bundles, tx) => {
   return after(
     over(asked, ([comp, prop, eid, must]) =>
       after(
-        tx.read('.entity.eid=' + eid + '&.' + must + '&.fields=entity.eid'),
+        tx.read(line`.entity.eid=${eid}&.${must}&.fields=entity.eid`),
         (found) => {
           if (!found.length) throw new Unnamed(comp, prop, eid)
         },
@@ -80,8 +81,7 @@ export const naming: Hook = (bundles, tx, err) =>
         if (!entry) return
         return after(
           tx.read(
-            '.entry.session=' + String(entry.session) +
-              '&.attempt&?interrupted',
+            line`.entry.session=${String(entry.session)}&.attempt&?interrupted`,
           ),
           (entries) => {
             if (

@@ -19,6 +19,7 @@
 // one. It is idempotent by construction — a freed lock is gone, so the next
 // start-up finds nothing to do.
 
+import { line } from '@yaks/query'
 import type { Bundle, Eid, ReadTx, Storage } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { detached } from '@yaks/graph/storage'
@@ -30,11 +31,11 @@ import { CLAIM } from './comp.ts'
  * you want the release journaled and its effects fired.
  */
 export let staleLeases = (tx: ReadTx): Bundle[] | Promise<Bundle[]> =>
-  after(tx.read(`.${CLAIM}.session`), (locked) => {
+  after(tx.read(line`.${CLAIM}.session`), (locked) => {
     if (!locked.length) return []
     // Ask whether the holder is a session through the claim's reference. The
     // answer carries claims, not the holders' transcript-derived properties.
-    return after(tx.read(`.${CLAIM}.session.session`), (held) => {
+    return after(tx.read(line`.${CLAIM}.session.session`), (held) => {
       let live = new Set<Eid>(held.map((b) => b.entity.eid))
       return locked.filter((b) => !live.has(b.entity.eid))
         .map((b): Bundle => ({ entity: { eid: b.entity.eid }, [CLAIM]: null }))

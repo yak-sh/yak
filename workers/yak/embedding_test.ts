@@ -1,6 +1,7 @@
 // A store keeps a vector beside each text it searches and ranks by meaning
 // over them (embedding.ts, T-59101): `.near` in a query, and words through the
 // meaning it lends its host, which memory recall asks.
+import { whole } from '@yaks/query'
 import { test, until } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { hashEmbedder, pack, TABLE, unit, Withheld } from '@yaks/embedding'
@@ -45,14 +46,19 @@ let notes = async (st = state()) => {
     { entity: { eid: 'kitchen' }, doc: { title: 'what cooks do at night' } },
   ], KERNEL)
   let near = (q: string) =>
-    door.query(`${NOTES}&${q}`).then((rows) => rows.map((b) => b.entity.eid))
+    door.query(whole(`${NOTES}&${q}`)).then((rows) =>
+      rows.map((b) => b.entity.eid)
+    )
   await until(() => near('.near=hobbit').then((eids) => eids.length == 2))
   return { door, near }
 }
 
 test('a store answers .near from its own vectors, closest first', async () => {
   let { near } = await notes()
-  assertEquals(await near('.near=hobbit&.order=similar'), ['flight', 'kitchen'])
+  assertEquals(await near('.near=hobbit&.order=similar'), [
+    'flight',
+    'kitchen',
+  ])
   assertEquals(await near('.near=hobbit&.order=similar&.limit=1'), ['flight'])
 })
 
@@ -79,9 +85,14 @@ test('deployment of vectors in another space re-embeds them all', async () => {
   )
   let door = open(st)
   let near = (q: string) =>
-    door.query(`${NOTES}&${q}`).then((rows) => rows.map((b) => b.entity.eid))
+    door.query(whole(`${NOTES}&${q}`)).then((rows) =>
+      rows.map((b) => b.entity.eid)
+    )
   await until(() => near('.near=hobbit').then((eids) => eids.length))
-  assertEquals(await near('.near=hobbit&.order=similar'), ['flight', 'kitchen'])
+  assertEquals(await near('.near=hobbit&.order=similar'), [
+    'flight',
+    'kitchen',
+  ])
   let spaces = () =>
     sql.query(select({
       cols: [col('model')],

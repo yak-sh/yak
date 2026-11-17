@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { short } from '@yaks/id'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
@@ -136,7 +137,7 @@ let hearing = await meeting('Budget hearing: Monday at 6')
 await meeting('Road millage: Thursday at 8', road)
 await look(sub)
 let [request] = await fired()
-let [told] = await store.g.read(`.deliver.to=${person}&*`)
+let [told] = await store.g.read(line`.deliver.to=${person}&*`)
 // The change is now what it saw, so the next look is quiet again.
 await look(sub)
 let after = (await fired()).length

@@ -8,6 +8,7 @@
 // project does. `session_texted` knocks that one target once, named for the
 // text.
 
+import { line } from '@yaks/query'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { human } from '@yaks/id'
@@ -18,7 +19,6 @@ type G = Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>
 let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
-let q = JSON.stringify
 
 /** The knock a text that arrived owes: none where `eid` is no arrival, it
  * was knocked for already, or nobody here is its reader. */
@@ -31,18 +31,17 @@ export let texted = async (g: G, eid: Eid): Promise<Bundle[]> => {
   let knock = derivedEid(`session texted ${eid}`)
   if ((await g.get([knock], ['knock']))[0]?.knock) return []
   let [last] = await g.read(
-    `.text.to=${q(from)}&.delivered&.order=-delivered.at&.limit=1` +
-      `&.fields=created.via`,
+    line`.text.to=${from}&.delivered&.order=-delivered.at&.limit=1&.fields=created.via`,
   )
   let writer = str(comp(last, 'created').via)
-  let [line] = writer || !g.vocab.prop('filed', 'project') ? [] : await g.read(
-    `.phone.number=${q(str(text.to))}&.filed.project&.fields=filed.project`,
+  let [filed] = writer || !g.vocab.prop('filed', 'project') ? [] : await g.read(
+    line`.phone.number=${str(text.to)}&.filed.project&.fields=filed.project`,
   )
-  let reader = writer || str(comp(line, 'filed').project)
+  let reader = writer || str(comp(filed, 'filed').project)
   let [to] = reader ? await targets(g, [reader], new Set()) : []
   if (!to) return []
   let [person] = await g.read(
-    `.phone.number=${q(from)}&.doc&.limit=1&.fields=doc.title`,
+    line`.phone.number=${from}&.doc&.limit=1&.fields=doc.title`,
   )
   let known = person?.entity.eid
   let who = str(comp(person, 'doc').title)

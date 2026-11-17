@@ -23,8 +23,9 @@
 // which is why the tests take microseconds, and why two processes reading the
 // same graph at the same instant agree.
 
-import type { Bundle, Comp, Entity, Storage } from '@yaks/graph'
+import type { Bundle, Comp, Entity, ReadOpts } from '@yaks/graph'
 import { after } from '@yaks/fp'
+import { type Built, line, sub } from '@yaks/query'
 import { FIRED, WAKE, type Wake, WATCH } from './comp.ts'
 import { recur } from './every.ts'
 
@@ -35,6 +36,11 @@ export type Clock = {
 }
 
 let iso = (t: number): string => new Date(t).toISOString()
+
+/** What reads the wakes: a graph, or the storage under one. */
+export type Reads = {
+  read: (query: Built, opts: ReadOpts) => Bundle[] | Promise<Bundle[]>
+}
 
 /** The wake a bundle carries, or `undefined`. */
 export let wakeOf = (b: Bundle): Wake | undefined =>
@@ -60,13 +66,14 @@ export let wakeOf = (b: Bundle): Wake | undefined =>
  * it returns the bundles, and over an asynchronous one a promise for them.
  */
 export let due = (
-  storage: Pick<Storage, 'read'>,
+  storage: Reads,
   now: number = Date.now(),
 ): Bundle[] | Promise<Bundle[]> =>
-  storage.read(`${owed(now)}&.order=${WAKE}.at`, { now })
+  storage.read(line`${sub(owed(now))}&.order=${WAKE}.at`, { now })
 
 /** The query clauses a wake due at `now` matches, with what it watches. */
-export let owed = (now: number): string => `.${WAKE}.at<=${iso(now)}&?${WATCH}`
+export let owed = (now: number): Built =>
+  line`.${WAKE}.at<=${iso(now)}&?${WATCH}`
 
 /**
  * The next ISO instant after `now`, computed from a recurrence string or from a
@@ -159,11 +166,13 @@ export let ring = (
  * here so that one able to sleep until an exact instant does not have to poll.
  */
 export let soonest = (
-  storage: Pick<Storage, 'read'>,
+  storage: Reads,
   now: number = Date.now(),
 ): number | null | Promise<number | null> =>
   after(
-    storage.read(`.${WAKE}.at>${iso(now)}&.order=${WAKE}.at&.limit=1`, { now }),
+    storage.read(line`.${WAKE}.at>${iso(now)}&.order=${WAKE}.at&.limit=1`, {
+      now,
+    }),
     ([b]) => {
       let at = wakeOf(b ?? { entity: {} as Entity })?.at
       return at ? Date.parse(at) : null

@@ -114,9 +114,8 @@ export let plugins = (
             : pending.get(pendingKey)
           if (inFlight) return structuredClone(await inFlight)
           let compute = async () => {
-            let source = {
-              read: (query: Parameters<Graph['read']>[0]) =>
-                host.graph.read(query, { native: true }),
+            let source: Pick<Graph, 'read' | 'get'> = {
+              read: (query) => host.graph.read(query, { native: true }),
               get: (ids: string[], comps?: string[]) =>
                 host.graph.get(ids, comps, { native: true }),
             }

@@ -72,6 +72,7 @@ import {
   who,
 } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
+import { line } from '@yaks/query'
 import { CallError, UnfinishedCall } from './errors.ts'
 export { UnfinishedCall } from './errors.ts'
 import { persist } from './persist.ts'
@@ -435,9 +436,9 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   // was never written, so only the result comes back for one, and the way to
   // see the answer again is to call it again.
   let recalled = async (id: Eid): Promise<Bundle[]> => {
-    let result = await g.read(`.result.call=${id}&*`)
+    let result = await g.read(line`.result.call=${id}&*`)
     if (!result.length) return []
-    let made = await g.read(`.output.source=${id}&*`)
+    let made = await g.read(line`.output.source=${id}&*`)
     return [...made, ...result]
   }
 
@@ -786,7 +787,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       let out: Bundle[] = []
       let cut: { call: Bundle; started?: number }[] = holder == null
         ? [...held.values()]
-        : (await g.read(`.execution.by=${holder}&!results&.call&*`))
+        : (await g.read(line`.execution.by=${holder}&!results&.call&*`))
           .map((call) => ({ call }))
       for (let { call, started } of cut) {
         let id = call.entity.eid

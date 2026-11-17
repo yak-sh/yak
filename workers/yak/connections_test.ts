@@ -3,6 +3,7 @@
 // vault and nowhere else, a seal's state reaches the page, an app calls out
 // with it only as its link allows, and a webhook lands in the app's store only
 // when its signature holds.
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -124,7 +125,7 @@ test(
       ],
       ['Weather', 'connected', true, ['api.weather.test'], '', ''],
     )
-    let [b] = await s.at.query(`.entity.eid=${one.eid}&.secret`)
+    let [b] = await s.at.query(line`.entity.eid=${one.eid}&.secret`)
     let handle = (b.secret as { value: string }).value
     assertEquals(handle, '[set]')
     assertEquals(
@@ -205,7 +206,7 @@ test(
     let s = await setup()
     let hosts = async () => {
       let [b] = await s.at.query(
-        `.entity.eid=${integrationEid('openrouter')}&.integration`,
+        line`.entity.eid=${integrationEid('openrouter')}&.integration`,
       )
       let i = b.integration as { hosts: string[]; built: boolean }
       return [i.hosts, i.built]
@@ -634,7 +635,10 @@ test(
       to(await door({ person: null, role: null })),
       [303, `https://yaks.app/login?return=${encodeURIComponent(here)}`],
     )
-    assertEquals(to(await door(him, undefined, undefined, 'n.io')), [303, here])
+    assertEquals(to(await door(him, undefined, undefined, 'n.io')), [
+      303,
+      here,
+    ])
     assertEquals((await door(him, undefined, '/connections/Mail')).status, 404)
     assert((await (await door(him)).text()).includes('Notes asks each person'))
     assertEquals(
@@ -655,7 +659,11 @@ test(
       [['SKY'], []],
     )
     let [asked] = (await s.shown()).list
-    assertEquals([asked.each, asked.own, asked.status], [true, false, 'needed'])
+    assertEquals([asked.each, asked.own, asked.status], [
+      true,
+      false,
+      'needed',
+    ])
     assertEquals(
       await s.post({ do: 'key', connection: asked.eid, key: 'k' }),
       { say: 'Each person connects their own, from the app.', no: true },
@@ -695,7 +703,9 @@ test(
     }], KERNEL)
     let { bob, door, his } = await asks(s, 'Cal')
     let went = await door({ person: bob, role: null }, posted())
-    let state = new URL(went.headers.get('location')!).searchParams.get('state')
+    let state = new URL(went.headers.get('location')!).searchParams.get(
+      'state',
+    )
     let attempt = went.headers.get('set-cookie')!.split(';')[0]
     let session = (await minted(
       new Request('https://yaks.app/'),
@@ -1065,7 +1075,7 @@ test('connection_list reads the directory in one trip, whatever the space holds'
   // A walk that missed the space it learns is asked again by its eid.
   assertEquals(
     (await connectionsOf(s.p.env, Promise.resolve(s.space), s.person, {
-      by: '.space.slug=bea',
+      by: line`.space.slug=bea`,
     })).list.map((c) => c.integration),
     ['W0', 'W1', 'W2', 'W3'],
   )
@@ -1122,7 +1132,9 @@ test('the catalog offers what its broker lists, a search finds it, and Connect m
     if (said == 'GET api.nango.dev/providers') {
       return answer({ data: PROVIDERS })
     }
-    if (said == 'GET api.nango.dev/integrations/hubspot') return answer({}, 404)
+    if (said == 'GET api.nango.dev/integrations/hubspot') {
+      return answer({}, 404)
+    }
     if (said == 'POST api.nango.dev/integrations') return answer({ data: {} })
     if (said == 'POST api.nango.dev/connect/sessions') {
       return answer({ data: { connect_link: 'https://connect.test/?s=1' } })
@@ -1188,7 +1200,7 @@ test('the catalog offers what its broker lists, a search finds it, and Connect m
     assertEquals(sent.headers.get('location'), 'https://connect.test/?s=1')
     assert(asked.includes('POST api.nango.dev/integrations'))
     let [hub] = await s.at.query(
-      `.entity.eid=${integrationEid('hubspot')}&.integration`,
+      line`.entity.eid=${integrationEid('hubspot')}&.integration`,
     )
     let i = hub.integration as Record<string, unknown>
     assertEquals(
@@ -1222,7 +1234,7 @@ test('the catalog offers what its broker lists, a search finds it, and Connect m
     )
     assertEquals(asked.slice(before).filter((a) => a.includes('nango')), [])
     let [aby] = await s.at.query(
-      `.entity.eid=${integrationEid('abyssale')}&.integration`,
+      line`.entity.eid=${integrationEid('abyssale')}&.integration`,
     )
     assertEquals(
       (aby.integration as { hosts: string[] }).hosts,

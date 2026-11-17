@@ -5,6 +5,8 @@
 // of them, where a run each would cost the release its pool bookkeeping five
 // times over. And the month an invite gives once its invitee builds their
 // first app (reward.ts).
+import type { Taken } from '@yaks/graph'
+import { line } from '@yaks/query'
 import type { Handlers } from '@yaks/effects'
 import type { Options } from './store.ts'
 import { seeded, type Wake } from '../wake.ts'
@@ -67,7 +69,7 @@ export let effects = (_host: unknown, options: Options): Handlers => {
     sweep_install: async () => {
       let now = Date.now()
       await seeded(at.graph, schedules, now)
-      let [wrap] = await at.graph.read(`.entity.eid=${ROW} ?wake`)
+      let [wrap] = await at.graph.read(line`.entity.eid=${ROW} ?wake`)
       await at.graph.apply(forward(wrap, now))
     },
     // Carried until every place it goes took it, as trash is (trash-effects.ts):
@@ -78,7 +80,7 @@ export let effects = (_host: unknown, options: Options): Handlers => {
           try {
             await carry(
               at.env as Env,
-              { query: async (q) => await at.graph.read(q) },
+              { query: async (q) => await at.graph.read(q as Taken) },
               event.entity.eid,
             )
           } catch (error) {

@@ -16,6 +16,7 @@
 // the words.
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
+import { line } from '@yaks/query'
 import type { Book, Read, Reading } from '@yaks/mail'
 import { answer, type Decision } from '@yaks/task'
 import type { Options } from './options.ts'
@@ -58,10 +59,10 @@ let replied = async (
   // A stored outgoing envelope proves whom we asked. Without it, only an
   // explicitly enabled inbox recipient can act via a thread's email address.
   if (parent?.deliver ? recipient != by : owner != by) return [letter]
-  let addressed = (await graph.read(`.entity.eid=${JSON.stringify(target)}`))[0]
+  let addressed = (await graph.read(line`.entity.eid=${target}`))[0]
   let ancestor = str(comp(addressed, 'comment').target)
   let root = ancestor
-    ? (await graph.read(`.entity.eid=${JSON.stringify(ancestor)}`))[0]
+    ? (await graph.read(line`.entity.eid=${ancestor}`))[0]
     : addressed
   if (ancestor) target = ancestor
   if (
@@ -93,7 +94,7 @@ let replied = async (
 }
 
 let one = async (graph: Book, eid: Eid): Promise<Bundle | undefined> =>
-  (await graph.read(`.entity.eid=${JSON.stringify(eid)}`))[0]
+  (await graph.read(line`.entity.eid=${eid}`))[0]
 
 /** Whether a letter is a person's own words from outside: not a known
  * session, effect, call, output or transcript entry, not the inbox address

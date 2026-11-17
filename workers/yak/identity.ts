@@ -77,6 +77,7 @@ import { linked } from './preview-route.ts'
 // `memberless`). After that the ordinary membership rule holds. It is the
 // only way that row is ever written: nothing serves the meta store at an
 // address (apps.ts), so no request can write the directory from outside.
+import { line } from '@yaks/query'
 import { claimed } from './attribution.ts'
 import { apex, type Host, url as hostUrl } from '@yaks/platform/host'
 import {
@@ -347,7 +348,7 @@ type Addressed = { email?: { address: string }; phone?: { number: string } }
 let addressed = async (env: Env, person: string | null) => {
   if (!person) return null
   let [row] = await meta(env).query(
-    `.entity.eid=${person}&.person ?email ?phone`,
+    line`.entity.eid=${person}&.person ?email ?phone`,
   ) as Addressed[]
   return row?.email || row?.phone ? row : null
 }
@@ -967,7 +968,7 @@ let begun = async (req: Request, env: Env, said: string, org = '') => {
   // A cookie outlives a newcomer whose space nobody kept and was erased
   // (erase.ts `vacated`): their browser is a stranger again.
   let [known] = person
-    ? await meta(env).query(`.entity.eid=${person}&.person ?email`)
+    ? await meta(env).query(line`.entity.eid=${person}&.person ?email`)
     : []
   if (!known) person = null
   let set: string | undefined
@@ -1055,7 +1056,7 @@ let stood = async (env: Env, standing: Standing) => {
 let vouched = async (env: Env, person: string): Promise<Landing | null> => {
   let store = meta(env)
   let [row] = await store.query(
-    `.entity.eid=${person}&.person ?signed_in ?email`,
+    line`.entity.eid=${person}&.person ?signed_in ?email`,
   )
   if (!row) return null
   let before = (row as Person | undefined)?.signed_in
@@ -1070,7 +1071,7 @@ let vouched = async (env: Env, person: string): Promise<Landing | null> => {
 
 // The number a person wears, for one with no address.
 let phoneAt = async (env: Env, person: string) => {
-  let [row] = await meta(env).query(`.entity.eid=${person}`) as {
+  let [row] = await meta(env).query(line`.entity.eid=${person}`) as {
     phone?: { number: string }
   }[]
   return row?.phone?.number ?? null

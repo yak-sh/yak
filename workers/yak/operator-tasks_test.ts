@@ -1,5 +1,6 @@
 // A space's tasks and goals, kept in its Operator's store: made, listed and
 // finished there by the shared tools, which the connector lists and sends on.
+import { line } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -30,7 +31,7 @@ let [goal] = await work('goal_new', {
 test('a task and a goal made in the store are listed there', async () => {
   equal(titles(await work('task_list', {})), ['Order the hymnals'])
   equal(titles(await work('goal_list', {})), ['Sunday runs itself'])
-  let links = await store.g.read(`.satisfies&.edge.to=${goal.entity.eid}`)
+  let links = await store.g.read(line`.satisfies&.edge.to=${goal.entity.eid}`)
   equal(links.map((b) => (b.edge as Comp).from), [task.entity.eid])
 })
 

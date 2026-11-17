@@ -31,15 +31,19 @@
 
 import {
   adopt,
+  and,
   conjoin,
   directive,
   eq,
+  limit,
   map,
   parse,
   type Pred,
   present,
   type Query,
   stringify,
+  text,
+  whole,
   words,
 } from '@yaks/query/core'
 import { toolsIn, toolsSaid } from '@yaks/vocab/tools'
@@ -159,7 +163,7 @@ export let textSearch =
     if (!terms.length) return []
     let line = hit(graph.vocab, terms)
     let rows = await graph.read(
-      conjoin(...terms.map((t) => `"${t}"`), `.limit=${opts?.limit ?? BEST}`),
+      and(...terms.map(text), limit(opts?.limit ?? BEST)),
     )
     return rows.map((b) => ({ ...b, hit: line(b) }))
   }
@@ -330,14 +334,14 @@ export let runs = (seams: Seams = {}): Runs => {
         let said = words(ast)
         let windowed = ast.clauses.some((c) => c.kind == 'limit')
         let rows = await graph.read(
-          said.length && !windowed ? conjoin(q, `.limit=${BEST}`) : q,
+          whole(said.length && !windowed ? conjoin(q, `.limit=${BEST}`) : q),
           on(args),
         )
         if (!said.length || named(graph.vocab, ast)) return rows
         let line = hit(graph.vocab, said)
         return rows.map((b) => ({ ...b, hit: line(b) }))
       }
-      let value = reduced(op, await graph.rows(q, on(args)))
+      let value = reduced(op, await graph.rows(whole(q), on(args)))
       return [{
         entity: { eid: '$said' },
         output: { source: call.entity.eid, value },

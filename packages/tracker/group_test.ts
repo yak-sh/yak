@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { equal, ok, test } from '@yaks/testing'
 import { type Bundle, Stale } from '@yaks/graph'
 import { fixture } from './fixture_test.ts'
@@ -102,7 +103,9 @@ let existingOpen = await historyGroup(
   imported('2', historical),
 )
 test('marked imported samples cannot close an existing open reporter group', () => {
-  for (let name of Object.keys(historical)) equal(existingOpen[name], undefined)
+  for (let name of Object.keys(historical)) {
+    equal(existingOpen[name], undefined)
+  }
   equal(comp(existingOpen, 'bug').status, 'open')
 })
 
@@ -139,7 +142,7 @@ let markRace = await (async () => {
   let row = imported('2')
   await g.apply([row], { trusted: true })
   let [bug] = await bugs(g)
-  let before = await g.read('.error.bug=' + bug.entity.eid + ' *')
+  let before = await g.read(line`.error.bug=${bug.entity.eid} *`)
   await g.apply([{
     entity: bug.entity,
     archived: later.archived,
@@ -300,7 +303,10 @@ test('bug tools mark resolve/archive and show retained occurrences', async () =>
   let tools = runs()
   equal((valueIn(await tools.bug_show(call, g))?.rows as Bundle[]).length, 2)
   await g.apply(await tools.bug_resolve(call, g), { trusted: true })
-  equal(valueIn(await tools.bug_list({ entity: { eid: 'list' } }, g))?.rows, [])
+  equal(
+    valueIn(await tools.bug_list({ entity: { eid: 'list' } }, g))?.rows,
+    [],
+  )
   await g.apply(await tools.bug_archive(call, g), { trusted: true })
   equal(comp((await bugs(g))[0], 'bug').status, 'archived')
 })
@@ -312,7 +318,7 @@ test('concurrent grouper snapshots cannot lose a hit or count an eid twice', asy
   let b = occurrence('3')
   await g.apply([a, b], { trusted: true })
   let [bug] = await bugs(g)
-  let before = await g.read('.error.bug=' + bug.entity.eid + ' *')
+  let before = await g.read(line`.error.bug=${bug.entity.eid} *`)
   await g.apply(grouped(a, bug, before), { trusted: true })
   let failed = false
   try {

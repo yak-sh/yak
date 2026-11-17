@@ -9,6 +9,7 @@
 // Reads and marks go through the store's own doors with the caller vouched,
 // never SQL; the apps of a space come from the directory part. The same
 // rows are the `app_errors` answer, one line each.
+import { type Line, line as ql, sub } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
 import { cmp } from '@yaks/fp'
 import { addressId, format, names as numbered, short } from '@yaks/id'
@@ -579,8 +580,8 @@ let appsOf = (env: Env, space: Space) =>
 let graphAt = (env: Env, space: Space, app: App, who: Who, send?: Send) => {
   let store = appStore(env.STORE, space, app, env)
   return {
-    query: (line: string) =>
-      metaOf(store, { ...vouched(who), 'x-yak-observe': '1' }).query(line),
+    query: (asked: Line) =>
+      metaOf(store, { ...vouched(who), 'x-yak-observe': '1' }).query(asked),
     mark: async (hits: Hit[], mark: 'notified' | 'archived') => {
       let legacy = hits.filter((h) => !h.tracked)
       let tracked = hits.filter((h) => h.tracked)
@@ -621,14 +622,14 @@ export let openIn = async (
 ) => {
   // A trashed store is dormant; its errors return with the app on restore.
   if (app.trashed || space.trashed) return []
-  let seen = all ? '' : '&!notified'
+  let seen = all ? ql`` : ql`&!notified`
   let at = graphAt(env, space, app, who, send)
   try {
     let found = await Promise.all([
       // Published ids still name pre-tracker rows in their original app store.
       // New reports never write there; this translation preserves old handles.
       ...['exception', 'error'].map(async (facet) =>
-        (await at.query(`.${facet}&?doc&?content&!archived${seen}`))
+        (await at.query(ql`.${facet}&?doc&?content&!archived${sub(seen)}`))
           .map((b) => ({ kind: facet, ...b }) as unknown as Hit)
       ),
       errorsAt(env, space, app, who, send).read(all).then((rows) =>
@@ -925,7 +926,9 @@ export let ceiling = async (
   let alive = apps.filter((a) => !a.trashed).length
   let now = new Date()
   if (level(space, alive, now) == 'ok') return ''
-  await stamp(env, { entities: [{ entity: { eid: space.eid }, notified: {} }] })
+  await stamp(env, {
+    entities: [{ entity: { eid: space.eid }, notified: {} }],
+  })
   return [
     `\n\n## ceiling\n${space.slug}: ${gauged(space, alive, now, env)}`,
     ...divided(space, alive, holding(space, apps), now),

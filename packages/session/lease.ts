@@ -25,6 +25,7 @@
 // The batch is checked as a whole, because a batch may take two locks, and the
 // verdict has to be about the batch rather than about each bundle in turn.
 
+import { line } from '@yaks/query'
 import type { Bundle, Comp, Eid, Graph, Hook } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { after } from '@yaks/fp'
@@ -66,7 +67,7 @@ let across = async (
   if (!ids.length || !g.vocab.comp(WORKED)) return []
   let far = end == 'from' ? 'to' : 'from'
   let rows = await g.rows(
-    `.${WORKED}&.${EDGE}.${end}=${ids.join(',')}&.fields=${EDGE}.${far}`,
+    line`.${WORKED}&.${EDGE}.${end}=${ids}&.fields=${EDGE}.${far}`,
   )
   return [...new Set(rows.map((r) => String(r[`${EDGE}.${far}`])))]
 }

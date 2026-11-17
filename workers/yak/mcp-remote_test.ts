@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -69,7 +70,10 @@ test('connected MCP discovery and dispatch retain exact schemas, names and struc
     name: 'Books: Print',
     url: 'https://one.test/mcp',
   })
-  let two = await remote.configure({ name: 'Art', url: 'https://two.test/mcp' })
+  let two = await remote.configure({
+    name: 'Art',
+    url: 'https://two.test/mcp',
+  })
   let all = await remote.list()
   assertEquals(all.map((t) => [t.at, t.name]), [
     [`mcp:${one.server}`, 'publish_mockup'],
@@ -104,7 +108,8 @@ test('connected MCP discovery and dispatch retain exact schemas, names and struc
 
 test('configuration is idempotent, namespace collisions are visible and removing access stops calls', async () => {
   let { g, host, person } = await setup()
-  let f = fixture(), remote = remoteCommands(person, host, { fetch: f.fetcher })
+  let f = fixture(),
+    remote = remoteCommands(person, host, { fetch: f.fetcher })
   let one = await remote.configure({
     name: 'Books',
     url: 'https://one.test/mcp',
@@ -352,7 +357,7 @@ test('MCP OAuth asks for the current person to sign in once and revoked grants n
   assertEquals(registrations, 1)
   assertEquals(f.calls.filter((c) => c.method == 'tools/call'), [])
   let [now] = await host.graph.read(
-    `.entity.eid=${held.entity.eid}&.connection`,
+    line`.entity.eid=${held.entity.eid}&.connection`,
   )
   assertEquals((now.connection as { status: string }).status, 'broken')
   await disconnect(host, held.entity.eid)

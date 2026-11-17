@@ -1,5 +1,6 @@
 // Connector conversations use the harness's ordinary fork boundary, anchored
 // before a response still being written so their inherited prefix is immutable.
+import { line, sub } from '@yaks/query'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { openOf } from '@yaks/session'
@@ -13,16 +14,18 @@ export let chatFork = async (
   session: string,
 ): Promise<Bundle[]> => {
   let [active] = await g.read(
-    `.entry.session=${parent}&.attempt.by&.order=entry.seq&.limit=1&.fields=entry.seq`,
+    line`.entry.session=${parent}&.attempt.by&.order=entry.seq&.limit=1&.fields=entry.seq`,
   )
   let calls = await openOf(g, parent)
   let sources = [...new Set(calls.map((b) => String((b.call as Comp).source)))]
   let asks = await g.get(sources, ['entry'])
   let floor = Math.min(...[...asks, ...active ? [active] : []]
     .map((b) => Number((b.entry as Comp).seq)))
-  let before = Number.isFinite(floor) ? `&.entry.seq<${floor}` : ''
+  let before = Number.isFinite(floor) ? line`&.entry.seq<${floor}` : line``
   let [anchor] = await g.read(
-    `.entry.session=${parent}${before}&.order=-entry.seq&.limit=1&.fields=entity.eid`,
+    line`.entry.session=${parent}${
+      sub(before)
+    }&.order=-entry.seq&.limit=1&.fields=entity.eid`,
   )
   // A conversation begun by a connector has no words yet. An instruction
   // anchors its empty prefix without inventing an input from the person.

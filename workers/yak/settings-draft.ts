@@ -1,5 +1,6 @@
 // Settings use the same durable draft desk as chat and app inputs. This door
 // only admits this person's draft text; it never applies the browser's bundles.
+import { line } from '@yaks/query'
 import { draftEid } from '@yaks/draft'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Directory } from './directory.ts'
@@ -24,10 +25,12 @@ export let settingsDraft = async (
   let answer = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers })
   if (req.method == 'GET') {
-    let bundles = (await dir.read(`.draft.by=${who.person}`)).filter((b) => {
-      let d = b.draft as Comp | undefined
-      return typeof d?.place == 'string' && d.place.startsWith(prefix)
-    })
+    let bundles = (await dir.read(line`.draft.by=${who.person}`)).filter(
+      (b) => {
+        let d = b.draft as Comp | undefined
+        return typeof d?.place == 'string' && d.place.startsWith(prefix)
+      },
+    )
     return answer({ person: who.person, bundles })
   }
   if (req.method != 'POST') return answer({ message: 'Use GET or POST.' }, 405)

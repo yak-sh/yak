@@ -35,14 +35,17 @@ export type Bundle = {
 }
 
 /** A transaction, as these plugins use one: read entities by id, or by query,
- * the deleted too where `graves` asks for them. */
+ * the deleted too where `graves` asks for them. `read` is a method so a graph's
+ * reader, which takes only a line (@yaks/query `line`), stands in for it: this
+ * package sits below @yaks/query, and the text it reads holds only ids and
+ * numbers it has parsed. */
 export type Tx = {
   /** the entities, with only `comps` (and their `entity` row) where named */
   get: (eids: Eid[], comps?: string[]) => Bundle[] | Promise<Bundle[]>
-  read: (
+  read(
     query: string,
     opts?: { graves?: boolean },
-  ) => Bundle[] | Promise<Bundle[]>
+  ): Bundle[] | Promise<Bundle[]>
 }
 
 /** A graph plugin, narrowed to what this package contributes: a vocabulary,

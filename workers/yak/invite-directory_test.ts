@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -164,7 +165,10 @@ test('an accepted invitation redirects its person to the app', async () => {
     SECRET,
   )
   assertEquals(response.status, 303)
-  assertEquals(response.headers.get('location'), 'https://jeff.yaks.app/diary/')
+  assertEquals(
+    response.headers.get('location'),
+    'https://jeff.yaks.app/diary/',
+  )
 })
 
 let pending = invited()
@@ -179,7 +183,10 @@ test('a pending invitation is accepted by its person before redirecting to the a
     (...args) => Promise.resolve(void announcements.push(args[2])),
   )
   assertEquals(response.status, 303)
-  assertEquals(response.headers.get('location'), 'https://jeff.yaks.app/diary/')
+  assertEquals(
+    response.headers.get('location'),
+    'https://jeff.yaks.app/diary/',
+  )
   assertMatch(
     JSON.stringify(pending.applied),
     /"tombstone".*"grant".*"person":"ana"/,
@@ -321,7 +328,10 @@ let directoryWith = async () => {
   let g = graph({ vocab, storage: ram(vocab) })
   let dir = directoryRows({
     query: async (line: string) =>
-      (await g.read(line)).map((row) => ({ ...row, policy: { revision: 0 } })),
+      (await g.read(whole(line))).map((row) => ({
+        ...row,
+        policy: { revision: 0 },
+      })),
     apply: (b: Bundle[], headers: Record<string, string> = {}) =>
       Promise.resolve(g.apply(b, { trusted: headers['x-yak-kernel'] == '1' })),
   })

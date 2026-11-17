@@ -1,3 +1,4 @@
+import { line, sub } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Comp, graph, mint, Refused } from '@yaks/graph'
@@ -179,7 +180,7 @@ test('a choice that shows an entity is drawn from a shows edge carrying its labe
   }, agent)
   let [asked] = await g.read('.decision&*')
   assertEquals(asked.decision, ask)
-  let edges = await g.read(showing(asked.entity.eid) + '&*')
+  let edges = await g.read(line`${sub(showing(asked.entity.eid))}&*`)
   assertEquals(shown(edges), new Map([['Train', ['sketch']]]))
   await g.apply([{ entity: { eid: 'sketch' }, $delete: true }])
   assertEquals(await g.read(showing(asked.entity.eid)), [])

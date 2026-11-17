@@ -11,7 +11,7 @@ import { fileOf } from '@yaks/file'
 import { archetypeDoc } from '@yaks/archetype/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { compile, fn, val } from '@yaks/sql'
-import { parse } from '@yaks/query'
+import { parse, whole } from '@yaks/query'
 import { equal, ok, test } from '@yaks/testing'
 import { storage } from './mod.ts'
 import { catalog } from './catalog.ts'
@@ -80,7 +80,7 @@ for (let phase of ['first', 'warm', 'after write']) {
   if (phase == 'after write') {
     s.tx((tx) => tx.patch([{ ...line('late', 'quiet', 3004), notice: {} }]))
   }
-  let before = steps(), rows = await g.rows(selector)
+  let before = steps(), rows = await g.rows(whole(selector))
   costs.push({ phase, rows: rows.map((r) => r.eid), steps: steps() - before })
 }
 for (let { phase, rows, steps } of costs) {

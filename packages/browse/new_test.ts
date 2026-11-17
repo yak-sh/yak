@@ -1,5 +1,6 @@
 // A sketch written to a graph: what it makes, how the outline nests, which
 // ids the graph gives it, and where a refusal points.
+import { whole } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { type Bundle, type Comp, graph, Refused } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -51,7 +52,7 @@ let written = async (s: Partial<Sketch>, cx: Partial<Context> = {}) => {
   await g.apply([plan])
   await g.apply(batch(sketch(s), { vocab, read, ...cx }).bundles)
   let eids = async (q: string) =>
-    (await g.read(q)).map((b) => b.entity.eid).toSorted()
+    (await g.read(whole(q))).map((b) => b.entity.eid).toSorted()
   let title = new Map(
     (await g.read('.doc')).map((b) => [b.entity.eid, (b.doc as Comp).title]),
   )

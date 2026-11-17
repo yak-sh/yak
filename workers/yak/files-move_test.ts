@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { mint } from '@yaks/graph'
 import { attachmentRows } from '@yaks/blob/attachment'
@@ -76,7 +77,7 @@ let marked = {
     set: (key: string, value: string) => void marks.set(key, value),
   },
 }
-let lines = () => store.g.read(`.entry.session=${session}&*`)
+let lines = () => store.g.read(line`.entry.session=${session}&*`)
 let drawn = async () =>
   [...(await filesOf(marked, await lines())).values()].map((s) =>
     s.files.map((f) => [f.name, f.text ?? null])

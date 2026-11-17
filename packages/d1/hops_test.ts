@@ -74,6 +74,7 @@
 //                             still one statement: the cut is OR'd groups, not
 //                             rounds.
 
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, graph, mint, token } from '@yaks/graph'
@@ -237,7 +238,7 @@ test('a .refs= read over a wide vocabulary', async () => {
   // compound SELECT may carry on workerd (@yaks/sql `ARMS`), so the predicate
   // is OR'd groups rather than one union. It is still one statement, which is
   // what the pin says: the read, and the gather of what it hit.
-  let back = await g.read(`.refs=${c}`)
+  let back = await g.read(line`.refs=${c}`)
   assertEquals(back.map((b) => b.entity.eid).sort(), ['list', 'seat1'])
   holds(name, hops())
 })

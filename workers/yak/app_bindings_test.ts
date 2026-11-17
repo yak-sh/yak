@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -246,7 +247,7 @@ let fixture = async (vault = false) => {
     uploadedFiles,
     resources,
     state,
-    rows: (q: string) => meta(env).query(q),
+    rows: (q: string) => meta(env).query(whole(q)),
     done: () => {
       globalThis.fetch = was
       return scenario[Symbol.asyncDispose]()
@@ -498,7 +499,9 @@ test('resource names fit every product and distinguish normalized binding names'
   )
   assertEquals(names.map((name) => name.slice(-10)), namingSuffixes)
   assertEquals(new Set(names).size, names.length)
-  for (let name of names) assert(/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(name))
+  for (let name of names) {
+    assert(/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(name))
+  }
   assertEquals(await resourceName(store, 'DB'), names[0])
   assert(await resourceName('app.bbb', 'DB') != names[0])
 })
@@ -546,7 +549,10 @@ test('a missing explicit main refuses before resource creation, upload or deleti
       error.message,
       'refused main: missing/server.js is not an app file',
     )
-    assertStringIncludes(error.message, 'upload the server source at that path')
+    assertStringIncludes(
+      error.message,
+      'upload the server source at that path',
+    )
     assertEquals(k.calls, [])
     assertEquals(k.uploads, [])
     assertEquals(await k.rows('.binding'), [])
@@ -700,7 +706,10 @@ export default { fetch() { return new Response(value) } }`,
     })
     let result = await k.tool('app_deploy')
     assertStringIncludes(result, 'worker: dist/server.mjs answers first')
-    assertStringIncludes(result, 'main is the server source; default worker.js')
+    assertStringIncludes(
+      result,
+      'main is the server source; default worker.js',
+    )
     assertStringIncludes(result, 'wrapper is platform-owned')
     let form = k.uploadedFiles[0]
     assertEquals([...form.keys()], [

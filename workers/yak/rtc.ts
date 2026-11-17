@@ -15,6 +15,7 @@
 // publishes, about 48 kbit/s on the wire, and each DataChannel at a flat 16
 // kbit/s. The owner pays from the space's budget shared with models
 // (meter.ts `realtime`).
+import { type Line } from '@yaks/query'
 import { edits, mode, writes } from '@yaks/member'
 import { mint } from '@yaks/graph'
 import { ModelError } from '@yaks/model'
@@ -55,7 +56,10 @@ export let realtimeOf = (env: Partial<Env>): Realtime | null =>
 // platform's own, written by nobody else.
 let kept = (door: Door): Store => {
   let meta = metaOf(door, KERNEL)
-  return { read: meta.query, write: (bundles) => meta.apply(bundles, KERNEL) }
+  return {
+    read: (line) => meta.query(line as Line),
+    write: (bundles) => meta.apply(bundles, KERNEL),
+  }
 }
 
 // Whether the app's own manifest opens its voice to visitors.

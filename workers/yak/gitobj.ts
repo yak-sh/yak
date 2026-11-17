@@ -41,7 +41,7 @@ import {
 } from '@yaks/git'
 import type { Bundle, Eid } from '@yaks/graph/bundle'
 import { identityEid } from '@yaks/graph/identity'
-import { stringify } from '@yaks/query'
+import { type Line, line, stringify, whole } from '@yaks/query'
 import { r2Objects } from './lib/objects.ts'
 import { GIT_STORE, storeOf } from './door.ts'
 import { type Namespace } from '@yaks/durable-object/door'
@@ -91,7 +91,7 @@ export type Bound = {
  * (meta.ts). One seam, so minting is the same code from either.
  */
 export type Held = {
-  read: (line: string) => Promise<Bundle[]>
+  read: (line: Line) => Promise<Bundle[]>
   write: (bundles: Bundle[]) => Promise<Bundle[]>
 }
 
@@ -106,7 +106,9 @@ export let held = (m: Meta): Held => ({
 // index as one over a graph in this process — which is the whole reason the
 // package asks for {@link Writes} and not a `Graph`.
 let writes = (dir: Held): Writes => ({
-  read: (query) => dir.read(stringify(query)),
+  // The query came checked (a line, or a tree whose printed text parses back
+  // to it), so its text is read whole.
+  read: (query) => dir.read(whole(stringify(query))),
   apply: (bundles) => dir.write(bundles),
 })
 
@@ -181,10 +183,10 @@ let deployOf = (b: Bundle): Deploy | null => {
  * on the web. Both are addresses — they move when a slug does — which is why
  * they are read at mint time and not kept. */
 let placed = async (dir: Held, env: Bound, app: Eid) => {
-  let [row] = await dir.read(`.entity.eid=${app}`)
+  let [row] = await dir.read(line`.entity.eid=${app}`)
   let a = row?.app as Record<string, unknown> | undefined
   if (!a) return null
-  let [space] = await dir.read(`.entity.eid=${id(a.space)}`)
+  let [space] = await dir.read(line`.entity.eid=${id(a.space)}`)
   let s = space?.space as Record<string, unknown> | undefined
   if (!s) return null
   return {
@@ -197,7 +199,7 @@ let placed = async (dir: Held, env: Bound, app: Eid) => {
  * restore — is authored by the platform that wrote it. */
 let author = async (dir: Held, deploy: Deploy) => {
   if (!deploy.by) return { ...COMMITTER, at: deploy.at }
-  let [row] = await dir.read(`.entity.eid=${deploy.by}`)
+  let [row] = await dir.read(line`.entity.eid=${deploy.by}`)
   let doc = row?.doc as Record<string, unknown> | undefined
   return {
     name: str(doc?.title) || deploy.by,
@@ -226,7 +228,7 @@ let landing = async (
   deploy: Deploy,
 ): Promise<Released | null> => {
   if (!env.BLOBS || !env.STORE) return null
-  if ((await dir.read(`.commit.target=${deploy.eid}`)).length) return null
+  if ((await dir.read(line`.commit.target=${deploy.eid}`)).length) return null
   let at = await placed(dir, env, deploy.app)
   if (!at) return null
   let recorded = repository(at.repo)
@@ -245,9 +247,9 @@ let landing = async (
     // The manifest the branch's last commit was minted from: the deploy its
     // `commit{target}` row names, so the release reads only what it changed.
     was: async (commit) => {
-      let [row] = await dir.read(`.commit&.entity.eid=${commit}`)
+      let [row] = await dir.read(line`.commit&.entity.eid=${commit}`)
       let target = id((row?.commit as Record<string, unknown>)?.target)
-      let [made] = target ? await dir.read(`.entity.eid=${target}`) : []
+      let [made] = target ? await dir.read(line`.entity.eid=${target}`) : []
       return made ? deployOf(made)?.files ?? null : null
     },
     author: await author(dir, deploy),
@@ -282,7 +284,7 @@ export let repository = (origin: string): Bundle => ({
 export let releases = (env: Bound, dir: Held): Releases => ({
   comp: 'deploy',
   of: async (b) => {
-    let [row] = await dir.read(`.entity.eid=${b.entity.eid}`)
+    let [row] = await dir.read(line`.entity.eid=${b.entity.eid}`)
     let deploy = row && deployOf(row)
     return deploy ? await landing(env, dir, deploy) : null
   },
@@ -298,7 +300,7 @@ export let releases = (env: Bound, dir: Held): Releases => ({
  * for tomorrow: one app's bucket is never another app's problem.
  */
 export let backfilled = async (env: Bound, dir: Held): Promise<number> => {
-  let deploys = (await dir.read('.deploy&?created'))
+  let deploys = (await dir.read(line`.deploy&?created`))
     .map(deployOf)
     .filter((d): d is Deploy => !!d)
   let apps = new Map<Eid, Deploy[]>()

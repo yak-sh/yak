@@ -36,6 +36,7 @@ import { link } from '@yaks/edge'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { keyed, valueOf } from '@yaks/key'
+import { line } from '@yaks/query'
 import { type Commit, commitBody } from './commit.ts'
 import { BLOB, COMPAT, GITOBJ, PARENT, TREE_ENTRY } from './comp.ts'
 import {
@@ -108,8 +109,8 @@ export let names = async (
   let out = new Map<string, string>()
   let unique = [...new Set(oids)]
   for (let i = 0; i < unique.length; i += 100) {
-    let part = unique.slice(i, i + 100).join(',')
-    for (let b of await g.read(`.key.of=${part}&?${COMPAT}`)) {
+    let part = unique.slice(i, i + 100)
+    for (let b of await g.read(line`.key.of=${part}&?${COMPAT}`)) {
       let name = b[COMPAT] && valueOf(b)
       if (name) out.set(String((b.key as { of: string }).of), name)
     }
@@ -198,7 +199,7 @@ export let index = (g: Writes, store: Blobs): Index => {
   ): Promise<Oids> => {
     // The object and its links are one atomic graph write. Its digest names
     // immutable bytes, so finding it also means its keys and links stand.
-    if ((await g.read(`.${GITOBJ}&.entity.eid=${oids.oid}`)).length) {
+    if ((await g.read(line`.${GITOBJ}&.entity.eid=${oids.oid}`)).length) {
       return oids
     }
     let [sha] = await Promise.all([
@@ -217,7 +218,7 @@ export let index = (g: Writes, store: Blobs): Index => {
     let unique = [...new Set(shas)]
     for (let i = 0; i < unique.length; i += 100) {
       let part = unique.slice(i, i + 100)
-      let found = await g.read(`.gitobj.type=blob&.blob.sha=${part.join(',')}`)
+      let found = await g.read(line`.gitobj.type=blob&.blob.sha=${part}`)
       let byId = await names(g, found.map((b) => b.entity.eid))
       for (let b of found) {
         let sha = String((b[BLOB] as { sha: string }).sha)
@@ -282,7 +283,7 @@ export let index = (g: Writes, store: Blobs): Index => {
   // child ids in their own format. Read one object row, then bytes, regardless
   // of how many unchanged entries the directory contains.
   let entries = async (tree: Oids): Promise<Map<string, Oids>> => {
-    let [row] = await g.read(`.${GITOBJ}&?${BLOB}&.entity.eid=${tree.oid}`)
+    let [row] = await g.read(line`.${GITOBJ}&?${BLOB}&.entity.eid=${tree.oid}`)
     let sha = String((row?.[BLOB] as Comp)?.sha ?? '')
     let body = sha && await store.get(sha)
     if (!body) throw new Error(`git: no bytes stored under ${sha}`)

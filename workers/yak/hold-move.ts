@@ -3,6 +3,7 @@
 // which ensures a component, so a hold on a space without one wrote it with
 // nothing in it. Each is dropped only while it holds none of its properties.
 // Only the directory holds spaces.
+import { joined, line, sub } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Rule } from './mover.ts'
@@ -23,10 +24,17 @@ export let holdEmptyRule: Rule = {
   mark: 'yak/store/hold-empty/1',
   stores: [PLATFORM_STORE],
   live: 'all',
-  find:
-    Object.entries(EMPTY).map(([comp, props]) =>
-      `(.space&.${comp}${props.map((p) => `&!${comp}.${p}`).join('')})`
-    ).join('|') + '&*',
+  find: line`${
+    sub(joined(
+      Object.entries(EMPTY).map(([comp, props]) =>
+        joined([
+          line`.space&.${comp}`,
+          ...props.map((p) => line`!${comp}.${p}`),
+        ], '&')
+      ),
+      '|',
+    ))
+  }&*`,
   move: (row) => {
     let gone = Object.keys(EMPTY).filter((c) => empty(row, c))
     return gone.length

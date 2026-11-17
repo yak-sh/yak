@@ -18,10 +18,10 @@
 // goes off.
 
 import { after, over } from '@yaks/fp'
-import type { Bundle, Hook, Query, ReadTx } from '@yaks/graph'
+import type { Bundle, Hook, ReadTx } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
-import { and, limit, parse } from '@yaks/query'
+import { and, limit, line, parse, type Query } from '@yaks/query'
 import { WAKE, type Wake } from './comp.ts'
 import { wakeOf } from './due.ts'
 import { recur } from './every.ts'
@@ -104,7 +104,9 @@ export let rouse = async (
     | { wake: Bundle; at: number }
     | { wake: Bundle; error: unknown }
   )[] = []
-  for (let wake of catalog ?? await graph.read(`.${WAKE}.while`, { now })) {
+  for (
+    let wake of catalog ?? await graph.read(line`.${WAKE}.while`, { now })
+  ) {
     let w = wakeOf(wake) ?? {}
     try {
       let every = await cadence(graph, w, now, holds)

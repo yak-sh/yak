@@ -2,6 +2,7 @@
 // verifies, but what it asks for next brings back no `person{}` with nothing
 // to name it by.
 
+import { line } from '@yaks/query'
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { directoryOf } from './directory.ts'
@@ -36,7 +37,7 @@ let called = await connector(k, undefined, token).call('initialize', {
   capabilities: {},
   clientInfo: { name: 'probe', version: '1' },
 }).then(() => 'answered', (e: Error) => e.message.slice(0, 7))
-let left = await meta(env).query(`.entity.eid=${cy.person}`)
+let left = await meta(env).query(line`.entity.eid=${cy.person}`)
 
 test('an erased account is not revived by its cookie', () => {
   assertEquals(left, [])
@@ -69,7 +70,7 @@ let kept = await closed(env, dir, newcomer, owner).then(
 
 test('a bare person row is erased by its eid', async () => {
   assertEquals(gone?.person, revived)
-  assertEquals(await meta(env).query(`.entity.eid=${revived}`), [])
+  assertEquals(await meta(env).query(line`.entity.eid=${revived}`), [])
 })
 
 test("a newcomer's row is not erased by its eid", () => {

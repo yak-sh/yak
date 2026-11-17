@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import type { Comp } from '@yaks/graph'
+import type { Comp, ReadOpts, Taken } from '@yaks/graph'
 import { conditionalWakes } from './conditional-wakes.ts'
 import { store, T0, woken } from '../../packages/wake/testing.ts'
 
@@ -15,14 +15,11 @@ await catalogGraph.apply([{
 test('conditional wake catalog is read once while conditions stay authoritative', async () => {
   let g = catalogGraph, catalogs = 0, conditions = 0
   let driver = {
-    read: (
-      q: Parameters<typeof g.read>[0],
-      opts?: Parameters<typeof g.read>[1],
-    ) => {
+    read: ((q: Taken, opts?: ReadOpts) => {
       if (q == '.wake.while') catalogs++
       else conditions++
       return g.read(q, opts)
-    },
+    }) as typeof g.read,
     apply: g.apply,
   }
   let run = conditionalWakes(driver)

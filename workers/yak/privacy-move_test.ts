@@ -9,7 +9,7 @@ import { personal } from '@yaks/member'
 import { appVocab } from './vocab.ts'
 import { privacyRules } from './privacy-move.ts'
 import { THROUGH } from '@yaks/platform/config'
-import type { Query } from '@yaks/query'
+import type { Line, Query } from '@yaks/query'
 
 let vocab = appVocab({})
 let g = graph({ vocab, storage: ram(vocab) })
@@ -32,7 +32,7 @@ let seen = async (person: string) =>
   (await g.read('.draft|.document_page', { person })).map((b) => b.entity.eid)
     .sort()
 
-let read = (line: string | Query) => {
+let read = (line: Line | Query) => {
   let got = g.read(line)
   if (got instanceof Promise) throw new Error('ram reads at once')
   return got

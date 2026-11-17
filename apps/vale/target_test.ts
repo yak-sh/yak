@@ -1,5 +1,6 @@
 // Command names find the current hero, villager or land, with ids for
 // ambiguous names and ephemeral entities.
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { graph } from '@yaks/graph'
@@ -80,7 +81,7 @@ test('command name queries parse spaces and ampersands in graph', async () => {
       look: { player: hero, name: 'Pip & Hazel', at: 2 },
     },
   ])
-  let query = async (line: string) => await g.read(line)
+  let query = async (line: string) => await g.read(whole(line))
   assertEquals(await resolveTarget('Pip & Wren', query), null)
   assertEquals(await resolveTarget('Pip & Hazel', query), { eid: hero })
 })

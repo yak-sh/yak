@@ -1,4 +1,5 @@
 import * as io from '@yaks/file/io'
+import { line } from '@yaks/query'
 import * as system from '@yaks/process/system'
 import { command as processCommand } from '@yaks/process/command'
 // Git checkouts on the machine this process runs on: find one, record what Git
@@ -130,7 +131,9 @@ export let locate = async (cwd: string): Promise<
       }
     }
     if (!io.isNotFound(error)) {
-      throw new Error(`Git checkout ${cwd}: ${String(error)}`, { cause: error })
+      throw new Error(`Git checkout ${cwd}: ${String(error)}`, {
+        cause: error,
+      })
     }
     // ENOENT can also mean the git executable is missing. Only a missing
     // checkout directory is an absent observation.
@@ -212,7 +215,7 @@ export let reconcile = async (g: Graph, common: string): Promise<void> => {
   let repository = repositoryEid(common, filesystem.entity.eid)
   for (
     let tree of await g.read(
-      '.worktree.repository=' + repository + ' ?workspace',
+      line`.worktree.repository=${repository} ?workspace`,
     )
   ) {
     let w = tree.worktree as Comp
@@ -296,7 +299,7 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
   // Only a ref still marked present can have gone: the repository's absent
   // ones, every branch a session ever cut, are many times the present.
   let present = await g.rows(
-    '.ref.app=' + repository + '&.ref.present=true .fields=entity.eid',
+    line`.ref.app=${repository}&.ref.present=true .fields=entity.eid`,
   ) as { eid: string }[]
   for (let { eid } of present) {
     if (!found.has(eid)) {

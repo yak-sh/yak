@@ -11,6 +11,7 @@
 // (attachment-move.ts, output-move.ts), so no file is left to only the line.
 // Until it is done, a reader takes a line's files from the line where it
 // still names them (operator-files.ts `filesOf`).
+import { line } from '@yaks/query'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Meta } from '@yaks/sqlite'
 import { attachedTo, attachmentOf } from '@yaks/blob/attachment'
@@ -52,7 +53,7 @@ export let filesBackfill = async (store: {
     return true
   }
   let rows = await g.read(
-    `.operator_files&.limit=${BATCH}&.fields=operator_files.request,intake.item`,
+    line`.operator_files&.limit=${BATCH}&.fields=operator_files.request,intake.item`,
   )
   let asked = (b: Bundle) => {
     let request = String(comp(b, 'operator_files')?.request ?? '')
@@ -103,7 +104,7 @@ export let intakeBackfill = async (store: {
   let { g, marks } = store
   if (!marks || marks.get(INTAKE) == 'done') return false
   if (store.waiting?.()) return true
-  let rows = await g.read(`.taken&.limit=${BATCH}&.fields=taken.item`)
+  let rows = await g.read(line`.taken&.limit=${BATCH}&.fields=taken.item`)
   let moved = rows.map((b) => ({
     entity: b.entity,
     intake: { item: String(comp(b, 'taken')?.item ?? '') },

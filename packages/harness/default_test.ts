@@ -1,5 +1,6 @@
 // A session that names no model asks the offering the router chooses among
 // those the harness routes, and records why; one that names a model keeps it.
+import { line } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { assertRejects } from '@std/assert'
 import type { Model } from '@yaks/model'
@@ -41,8 +42,8 @@ test('the default is the routed offering whose plan has the most usage left', as
   let start = async (o?: { model: string }) => {
     let s = await a.start('hello', o)
     await a.idle(s)
-    let [input] = await h.g.read(`.entry.session=${s}&.using&!ask&*`)
-    let [ask] = await h.g.read(`.entry.session=${s}&.ask&*`)
+    let [input] = await h.g.read(line`.entry.session=${s}&.using&!ask&*`)
+    let [ask] = await h.g.read(line`.entry.session=${s}&.ask&*`)
     // The ask records what was served, and the reason stays on the input.
     equal(ask.using, {
       provider: (input.using as Comp).provider,

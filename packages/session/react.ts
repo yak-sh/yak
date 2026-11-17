@@ -1,7 +1,7 @@
 import { compactAsk } from './compact_ask.ts'
 import { loading, schemas } from './deferred.ts'
 import { answered, checkpointOf, pruning, replied } from './pruning.ts'
-import { absent, and, eq, or, present } from '@yaks/query'
+import { absent, and, eq, line as query, or, present } from '@yaks/query'
 import { entryStatus, reach } from './reach.ts'
 import { actionable, exceptionOf } from '@yaks/tools/fault'
 import { UnfinishedCall } from '@yaks/tools/errors'
@@ -454,7 +454,7 @@ export let reading = async (
   let bodies = !!(deps.contextItems || deps.requestItems ||
     deps.compactModel)
   let [row] = await g.rows(
-    `.entity.eid=${session}&.fields=entity.eid,session.ended`,
+    query`.entity.eid=${session}&.fields=entity.eid,session.ended`,
   )
   session = String(row?.['entity.eid'] ?? session)
   let read = deps.runCall ? { call: true } : { turn: true }
@@ -475,10 +475,10 @@ let ownNewest = (entries: Bundle[], session: Eid) =>
 // `session.ended`, so with neither, the status the step read stands, and it
 // need not read every open call again to find out.
 let moved = async (g: Graph, session: Eid, seen: Bundle | undefined) => {
-  let [row] = await g.rows(`.entity.eid=${session}&.fields=session.ended`)
+  let [row] = await g.rows(query`.entity.eid=${session}&.fields=session.ended`)
   if (row?.['session.ended'] === true) return true
   let [last] = await g.rows(
-    `.entry.session=${session}&.order=-entry.seq&.limit=1&.fields=entity.eid`,
+    query`.entry.session=${session}&.order=-entry.seq&.limit=1&.fields=entity.eid`,
   )
   return last?.['entity.eid'] != seen?.entity.eid
 }
@@ -690,7 +690,7 @@ let drop = async (
 // A task's current specification is graph data, never a summary of what a
 // tool once returned. Read only at/after a cut, not on ordinary uncut turns.
 let tasksOf = async (g: Graph, session: Eid): Promise<Bundle[]> =>
-  (await g.read(`.task .claim.session=${session}&*`))
+  (await g.read(query`.task .claim.session=${session}&*`))
     .toSorted((a, b) => a.entity.eid.localeCompare(b.entity.eid))
 
 // A task-spawn's original input is its specification, not conversational
@@ -989,7 +989,7 @@ export let react = async (
       ...saved ? [] : await readings(g, finalAsk, reply.limits),
     ]
     let partials = saved
-      ? await g.read(`.output.source=${ask.entity.eid}&.stream_item&*`)
+      ? await g.read(query`.output.source=${ask.entity.eid}&.stream_item&*`)
       : []
     let matching = (item: Item, index: number) =>
       partials.find((b) => {
@@ -1148,7 +1148,14 @@ export let react = async (
     let result = await deps.model.result?.(ask.entity.eid)
     if (!result) return current()
     signer = { by: String(comp(ask, ASK)?.to), via: session }
-    return complete(ask, result.reply, deps.model, new Map(), undefined, result)
+    return complete(
+      ask,
+      result.reply,
+      deps.model,
+      new Map(),
+      undefined,
+      result,
+    )
   }
   const unfinished = deps.runCall
     ? undefined
@@ -1474,8 +1481,7 @@ export let react = async (
     }
     const outlasted = async (call: Bundle, pending: Pending) => {
       let [newest] = await g.read(
-        `.ask&.entry.session=${session} .order=-entry.seq .limit=1 ` +
-          '.fields=entity.eid',
+        query`.ask&.entry.session=${session} .order=-entry.seq .limit=1 .fields=entity.eid`,
       )
       if (newest?.entity.eid != comp(call, CALL)?.source || pending.late) {
         return

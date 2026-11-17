@@ -13,6 +13,7 @@
 //
 // Installing with `visit` (tools.ts app_install) makes the store an app of the
 // installer's own (@yaks/platform/visits `adopt`).
+import { type Line } from '@yaks/query'
 import {
   claim,
   holder,
@@ -38,7 +39,7 @@ import { sharing } from './lib/shared.ts'
 /** The directory as @yaks/platform/visits reads and writes it: every write
  * the kernel's own. */
 export let ledgerOf = (env: Pick<Env, 'STORE'>): Ledger => ({
-  query: (line) => meta(env).query(line),
+  query: (line) => meta(env).query(line as Line),
   apply: (bundles) => meta(env).apply(bundles, KERNEL),
 })
 

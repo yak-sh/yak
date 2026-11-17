@@ -6,7 +6,7 @@ import type { Bundle, Graph, ReadOpts } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import type { Hit } from '@yaks/fts'
 import { personalsIn } from '@yaks/member'
-import { parse } from '@yaks/query'
+import { type Line, parse, whole } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { decode } from '@yaks/vocab/wire'
 import { kinded } from './app-subs.ts'
@@ -36,7 +36,7 @@ export let appRead = (options: Options): Handler => {
   let { graph, vocab, route, authenticate, read, own } = options
   let words = screened((word) => !!vocab.comp(word), own)
   let personal = personalsIn(vocab)
-  let counted = async (line: string, agg: Agg, opts: ReadOpts) => {
+  let counted = async (line: Line, agg: Agg, opts: ReadOpts) => {
     let rows = await graph.rows(line, opts) as { value: string; n: number }[]
     if (agg == 'count') return json({ count: rows[0]?.n ?? 0 })
     let said = rows.map((r) => [String(r.value ?? ''), r.n] as const)
@@ -64,7 +64,8 @@ export let appRead = (options: Options): Handler => {
   }
   return async (request) => {
     let url = new URL(request.url)
-    let line = url.searchParams.get('q') ?? ''
+    // The caller's own query, read as they wrote it.
+    let line = whole(url.searchParams.get('q') ?? '')
     if (url.searchParams.get('listing') == '1') {
       line = asking(line, words, personal)
       url.searchParams.set('q', line)

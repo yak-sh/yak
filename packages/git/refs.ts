@@ -23,6 +23,7 @@
 
 import type { Blobs } from '@yaks/blob'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { treeOf, type Who } from './commit.ts'
 import { BLOB, REF, refEid } from './comp.ts'
 import { MAIN } from './http.ts'
@@ -95,7 +96,7 @@ export let refAt = async (
   app: Eid,
   name = MAIN,
 ): Promise<string | null> => {
-  let [row] = await refs.read(`.entity.eid=${refEid(app, name)}`)
+  let [row] = await refs.read(line`.entity.eid=${refEid(app, name)}`)
   return id((row?.[REF] as Record<string, unknown> | undefined)?.commit) ||
     null
 }
@@ -117,7 +118,7 @@ let based = async (
   let files = await was(commit)
   if (!files) return
   let [row] = await repo.objects.read(
-    `.gitobj.type=commit&?${BLOB}&.entity.eid=${commit}`,
+    line`.gitobj.type=commit&?${BLOB}&.entity.eid=${commit}`,
   )
   let body = row && await repo.bytes.get(String((row[BLOB] as Comp)?.sha))
   let tree = body && treeOf(body)

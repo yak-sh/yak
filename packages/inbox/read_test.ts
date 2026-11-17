@@ -1,3 +1,4 @@
+import { stringify } from '@yaks/query'
 import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { type Bundle, type Comp, type Graph, graph } from '@yaks/graph'
@@ -427,7 +428,12 @@ let spied = (tx: Pick<Graph, 'read' | 'get'>) => {
   ) => (found.forEach((b) => b && seen.add(b.entity.eid)), found)
   let counted: Pick<Graph, 'read' | 'get'> = {
     read: async (q, opts) =>
-      saw(await tx.read((queries.push(String(q)), q), opts)),
+      saw(
+        await tx.read(
+          (queries.push(typeof q == 'string' ? q : stringify(q)), q),
+          opts,
+        ),
+      ),
     get: async (ids, comps) => saw(await tx.get(ids, comps)),
   }
   return { counted, queries, seen }

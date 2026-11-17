@@ -8,6 +8,7 @@ import {
   type Storage,
 } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
+import { type Line, line, whole } from '@yaks/query'
 import { secrets } from '@yaks/secrets'
 import { effects, type Handlers } from '@yaks/effects'
 import { cleanup } from '@yaks/testing'
@@ -108,7 +109,7 @@ export let rows = (
         assertEquals(req.headers.get('x-yak-kernel'), '1')
         let { eid, word } = await req.json() as { eid: string; word?: string }
         let mark = word == 'changed' || word == 'errored' ? word : 'used'
-        let [row] = await g.read(`.entity.eid=${eid} ?${mark}`)
+        let [row] = await g.read(line`.entity.eid=${eid} ?${mark}`)
         if (!row) return Response.json({}, { status: 404 })
         if (stale((row[mark] as { at?: string } | undefined)?.at)) {
           await g.apply([{
@@ -124,16 +125,20 @@ export let rows = (
             url.searchParams.getAll('q').map(async (q) => ({
               status: 200,
               epoch: String(revision),
-              body: JSON.stringify(await g.read(q)),
+              // The line as the directory's own client wrote it, whole.
+              body: JSON.stringify(await g.read(whole(q))),
             })),
           ),
           { headers },
         )
       }
       if (url.pathname == '/query') {
-        return Response.json(await g.read(url.searchParams.get('q') ?? ''), {
-          headers,
-        })
+        return Response.json(
+          await g.read(whole(url.searchParams.get('q') ?? '')),
+          {
+            headers,
+          },
+        )
       }
       if (url.pathname == '/apply' && req.method == 'POST') {
         let out = await apply(
@@ -152,7 +157,7 @@ export let rows = (
   }
   let meta: Meta = {
     door: doorOf(fetch, PLATFORM_STORE),
-    query: async (q) => await g.read(q),
+    query: async (q) => await g.read(q as Line),
     apply: (entities, headers = {}, opts = {}) =>
       apply(
         entities,

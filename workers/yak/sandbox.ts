@@ -66,6 +66,7 @@
 // container rather than one per command ({@link signed}), and it dies with the
 // container ({@link destroyed}). The placeholder rides the SDK's per-invocation
 // env and is never exported into a shell.
+import { type Line } from '@yaks/query'
 import {
   cloudflareProvider,
   hold,
@@ -179,7 +180,7 @@ let lendingOf = (
   if (!env.STORE && !env.META) return
   let bound = env as { STORE: Namespace; META?: Meta }
   return {
-    read: (line) => meta(bound).query(line),
+    read: (line) => meta(bound).query(line as Line),
     apply: (bundles) => stamp(bound, { entities: bundles }),
   }
 }

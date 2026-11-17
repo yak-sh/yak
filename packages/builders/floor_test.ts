@@ -1,5 +1,6 @@
 // A future builder floor is clock readiness, independent of worker restarts.
 
+import { line } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { tick } from '@yaks/wake'
 import { toolEid } from '@yaks/tools'
@@ -35,7 +36,7 @@ await g.apply([{
 }])
 await fx.idle()
 let early = calls
-let wakes = await g.read(`.wake.target=${ids.builder}`)
+let wakes = await g.read(line`.wake.target=${ids.builder}`)
 now = floor
 let rang = await tick(g, Date.parse(now))
 await fx.idle()

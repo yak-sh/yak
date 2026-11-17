@@ -1,5 +1,6 @@
 // The service door admits one operation, carrying no merchant membership.
-import { type Bundle, type Comp } from '@yaks/graph'
+import { line, stringify, whole } from '@yaks/query'
+import { type Bundle, type Comp, type Taken } from '@yaks/graph'
 import {
   grantService,
   known,
@@ -21,8 +22,13 @@ import { vouched, type Who } from './session.ts'
 import type { Command } from './declared.ts'
 import { opened, seal } from './lib/token.ts'
 
-let read = (env: Env): Read => (q) =>
-  meta(env).query(String(q)) as Promise<Bundle[]>
+// A tree is printed as the line it parses back from.
+let read = (env: Env): Read => (said) => {
+  let q = said as Taken
+  return meta(env).query(
+    typeof q == 'string' ? q : whole(stringify(q)),
+  ) as Promise<Bundle[]>
+}
 
 /** Recheck after a queue delay as well as at the initial dispatch. */
 export let verifyService = async (
@@ -39,7 +45,8 @@ export let verifyService = async (
   let target = await dir.appAt(a.service)
   if (!target || target.app.trashed || target.space.trashed) return false
   let tool = (await toolsOf(env, target.space, target.app))[a.operation]
-  return !!tool?.service && !!tool.worker && mayCall(tool.floor, a.person, null)
+  return !!tool?.service && !!tool.worker &&
+    mayCall(tool.floor, a.person, null)
 }
 
 export let serviceToken = (env: Env, a: ServiceAuthority) =>
@@ -91,7 +98,13 @@ export let requestService = async (
   service: string,
   operations: string[],
 ) => {
-  let { integration } = await offeredService(env, dir, who, service, operations)
+  let { integration } = await offeredService(
+    env,
+    dir,
+    who,
+    service,
+    operations,
+  )
   let g = meta(env)
   await g.apply(
     await need(read(env), {
@@ -160,7 +173,7 @@ export let callService = async (
     throw refuse('missing', 'No app service has that identity')
   }
   let connections = await read(env)(
-    `.connection.owner=${who.person}&.connection.integration=${
+    line`.connection.owner=${who.person}&.connection.integration=${
       serviceName(service)
     }`,
   )
@@ -201,7 +214,12 @@ export let callService = async (
   if (
     !tool?.service || !tool.worker ||
     !mayCall(tool.floor, customer.person, null)
-  ) throw refuse('access', 'This operation is not offered to service customers')
+  ) {
+    throw refuse(
+      'access',
+      'This operation is not offered to service customers',
+    )
+  }
   let answer = await commandAt(
     env,
     target.space,
@@ -251,7 +269,7 @@ export let listServiceCommands = async (
 ): Promise<Command[]> => {
   let out: Command[] = []
   let connections = await read(ctx.env)(
-    `.connection.owner=${ctx.person}&.connection.status=connected`,
+    line`.connection.owner=${ctx.person}&.connection.status=connected`,
   )
   for (let connection of connections) {
     let c = connection.connection as Comp | undefined
@@ -264,7 +282,7 @@ export let listServiceCommands = async (
     if (!target || target.app.trashed || target.space.trashed) continue
     let tools = await toolsOf(ctx.env, target.space, target.app)
     let links = await read(ctx.env)(
-      `.edge.to=${connection.entity.eid}&.uses&?edge`,
+      line`.edge.to=${connection.entity.eid}&.uses&?edge`,
     )
     for (let link of links) {
       let app = (link.edge as Comp | undefined)?.from

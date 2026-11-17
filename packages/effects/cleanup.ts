@@ -1,5 +1,6 @@
 // One owner-invoked cleanup for legacy successful runs. Failed/pending work,
 // other components on a run, and its target's human-readable data stay intact.
+import { line } from '@yaks/query'
 import type { Access, Bundle, Comp } from '@yaks/graph'
 import { comps } from '@yaks/graph/bundle'
 import { Stale } from '@yaks/graph/errors'
@@ -41,7 +42,7 @@ export let cleanupDone = async (
   let removed = 0
   while (removed < limit) {
     let rows = await g.read(
-      `.effect.state=done&.limit=${Math.min(batch, limit - removed)}&*`,
+      line`.effect.state=done&.limit=${Math.min(batch, limit - removed)}&*`,
     )
     if (!rows.length) return removed
     try {
@@ -65,7 +66,7 @@ export let settleStale = async (
   let settled = 0
   for (
     let row of await g.read(
-      `.effect.handler=${handler} .effect.state=pending *`,
+      line`.effect.handler=${handler} .effect.state=pending *`,
     )
   ) {
     let effect = row.effect as Comp

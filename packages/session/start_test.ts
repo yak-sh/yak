@@ -3,6 +3,7 @@
 // Committed and worked as the box does: the commit owes `session_start`, a
 // pool worker runs it, and the bus feeds what follows.
 
+import { line } from '@yaks/query'
 import { system } from '@yaks/fp'
 import { type Bundle, type Comp, graph, type Storage } from '@yaks/graph'
 import { docDoc } from '@yaks/doc'
@@ -111,10 +112,12 @@ let box = async (storage: Storage, limit = 2) => {
     let out: Record<string, unknown>[] = []
     for (let s of await g.read('.session.source&.fields=session.source')) {
       let eid = s.entity.eid
-      let said = await g.read(`.entry.session=${eid}&.content&*`)
+      let said = await g.read(line`.entry.session=${eid}&.content&*`)
       out.push({
         on: (s.session as Comp).source,
-        holds: (await g.read(`.claim.session=${eid}`)).map((b) => b.entity.eid),
+        holds: (await g.read(line`.claim.session=${eid}`)).map((b) =>
+          b.entity.eid
+        ),
         inputs: said.map((e) =>
           String((e.content as Comp).body).split('\n')[0]
         ),
@@ -124,7 +127,7 @@ let box = async (storage: Storage, limit = 2) => {
   }
   // A started session's turn ends: it answers and rests.
   let settle = async (on: string) => {
-    let [s] = await g.read(`.session.source=${on}`)
+    let [s] = await g.read(line`.session.source=${on}`)
     await g.apply([{
       entity: { eid: `${on}-answer` },
       entry: { session: s.entity.eid },

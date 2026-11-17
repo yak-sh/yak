@@ -1,6 +1,7 @@
 // The space's private work stays beside its builder, outside app restores.
 // Its store is composed from its config (config.ts `operatorConfig`) through
 // @yaks/host's assembly, as the Store object composes each kind it serves.
+import { line } from '@yaks/query'
 import { statements } from '@yaks/sqlite'
 import type { Graph, Storage } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
@@ -329,7 +330,9 @@ export let drain = async (
     caught(error, { request: 'operator wake', wake: wake.entity.eid })
   }
   let run = await working({ g, fx }, until)
-  let chats = await g.read('.spawned.notice=true&!completed&.fields=entity.eid')
+  let chats = await g.read(
+    '.spawned.notice=true&!completed&.fields=entity.eid',
+  )
   for (let chat of chats) {
     let next = await deliverChild(g, chat.entity.eid)
     if (next != null) run = run == null ? next : Math.min(run, next)
@@ -386,9 +389,7 @@ let working = async (
     await fx.work(g, undefined, { until })
     await fx.idle()
     let [next] = await g.read(
-      `.effect.state=pending .effect.handler=${
-        handled.join(',')
-      } .order=effect.next .limit=1`,
+      line`.effect.state=pending .effect.handler=${handled} .order=effect.next .limit=1`,
     )
     if (!next) return null
     let at = Date.parse(String((next.effect as { next?: string }).next)) ||

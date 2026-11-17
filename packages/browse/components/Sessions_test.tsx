@@ -1,4 +1,5 @@
 /** @jsxImportSource preact */
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { faked, until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
@@ -18,7 +19,10 @@ import { contribute } from './inspect.tsx'
 import * as sessionFacet from '@yaks/session/views'
 
 // Resolve the package's lazy views once, before timing its consumers.
-let facet = { ...sessionFacet, inspectViews: await sessionFacet.inspectViews() }
+let facet = {
+  ...sessionFacet,
+  inspectViews: await sessionFacet.inspectViews(),
+}
 
 let list = 'destination:sessions'
 let sessions: Bundle[] = Array.from({ length: 15 }, (_, i) => ({
@@ -105,7 +109,10 @@ test('All sessions reuses the paged list and accepts words and query filters, ne
 })
 
 test('the sidebar leads to every session, even with none of your own', () => {
-  using _ = faked({ addEventListener: () => {}, removeEventListener: () => {} })
+  using _ = faked({
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  })
   let prior = config.host
   config.host = 'browser.test'
   cache.value = {}
@@ -262,7 +269,7 @@ async function origins() {
   let draw = async () => {
     cache.value = {}
     let wire = host(({ subscribe }) => {
-      let bundles = g.read(subscribe)
+      let bundles = g.read(whole(subscribe))
       if (!Array.isArray(bundles)) throw Error('expected synchronous fixture')
       return { bundles }
     })

@@ -1,6 +1,7 @@
 // Upgrade customer callbacks kept before their tickets named the receiving
 // number. One connection per alarm pass, through the same reconciliation as
 // a line-setting write; a failed provider call leaves its cursor unchanged.
+import { line, sub } from '@yaks/query'
 import type { Comp, Graph } from '@yaks/graph'
 import type { Meta } from '@yaks/sqlite'
 import type { Env } from './env.ts'
@@ -24,16 +25,18 @@ let legacy = async (g: Graph, env: Env, cursor: string) => {
   if (!space) return []
   let dir = meta(env)
   let writers = await dir.query(
-    `.member.space=${space}&.member.role=owner,editor&.fields=member.person`,
+    line`.member.space=${
+      String(space)
+    }&.member.role=owner,editor&.fields=member.person`,
   )
   let ids = [
     space,
     ...writers.map((b) => (b.member as Comp | undefined)?.person),
-  ].filter(Boolean)
+  ].filter(Boolean).map(String)
   return dir.query(
-    `.connection.owner=${ids.join(',')}&.connection.status=connected&` +
-      `.connection.account~="+"${cursor ? `&.entity.eid>${cursor}` : ''}&` +
-      '.order=entity.eid&.limit=1&.fields=entity.eid',
+    line`.connection.owner=${ids}&.connection.status=connected&.connection.account~="+"${
+      sub(cursor ? line`&.entity.eid>${cursor}` : line``)
+    }&.order=entity.eid&.limit=1&.fields=entity.eid`,
   )
 }
 
@@ -43,8 +46,9 @@ export let lineBackfill = async (store: Store, env: Env): Promise<boolean> => {
   if (!marks || cursor == 'done') return false
   if (store.waiting?.()) return true
   let rows = await g.read(
-    `.operator_line${cursor ? `&.operator_line.connection>${cursor}` : ''}&` +
-      '.order=operator_line.connection&.limit=1&.fields=operator_line.connection',
+    line`.operator_line${
+      sub(cursor ? line`&.operator_line.connection>${cursor}` : line``)
+    }&.order=operator_line.connection&.limit=1&.fields=operator_line.connection`,
   )
   let old = await legacy(g, env, cursor ?? '')
   let next = [

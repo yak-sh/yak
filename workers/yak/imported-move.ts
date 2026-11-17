@@ -3,6 +3,7 @@
 // `lines{file, start}` (D-131267). No app store imports a file: both
 // properties are server-owned and nothing in the Worker writes them, so a store
 // holds at most bare rows. This clears any it holds and sheds the columns.
+import { line } from '@yaks/query'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Rule } from './mover.ts'
 
@@ -28,7 +29,7 @@ export let importedRule: Rule = {
   // keeps its rows.
   core: ['imported'],
   live: 'apps',
-  find: '.imported',
+  find: line`.imported`,
   source: importedSource,
   move: (row) => [{ entity: { eid: row.entity.eid }, imported: null }],
   drop: ['imported.source', 'imported.line'],

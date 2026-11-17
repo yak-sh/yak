@@ -6,6 +6,7 @@
 import { type Bundle, type Comp, dead } from '@yaks/graph'
 import { same } from '@yaks/fp'
 import { e164 } from '@yaks/phone/mobile'
+import { type Built, line } from '@yaks/query'
 import { typesOf, type Vocab } from '@yaks/vocab'
 import { peopleDoc } from './vocab.ts'
 
@@ -17,7 +18,6 @@ let fields = (row: Bundle | undefined, name: string): Comp =>
 let empty = (v: unknown) => v == null || typeof v == 'string' && !v.trim()
 let folded = (v: unknown) => typeof v == 'string' ? v.trim().toLowerCase() : ''
 let number = (v: unknown) => typeof v == 'string' ? e164(v) : null
-let quoted = (v: string) => JSON.stringify(v)
 
 /**
  * Whether a store keeps `word` as this package means it: the store declares
@@ -216,14 +216,12 @@ export let matching = (
 export let seeking = (
   vocab: Vocab,
   { phone, email }: { phone?: string | null; email?: string | null },
-): string[] => {
+): Built[] => {
   let number = phone && e164(phone), address = folded(email)
   let people = speaks(vocab, 'individual')
   return [
-    ...number ? [`.phone.number=${quoted(number)}&*`] : [],
-    ...address && people
-      ? [`.individual.email~=${quoted(address)}&?phone`]
-      : [],
+    ...number ? [line`.phone.number=${number}&*`] : [],
+    ...address && people ? [line`.individual.email~=${address}&?phone`] : [],
   ]
 }
 

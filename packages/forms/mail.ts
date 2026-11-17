@@ -1,6 +1,7 @@
 // The letters a completed sign-up owes: its thanks to the person who signed
 // up and the word to each person the form notifies. Letters are separate
 // writes so their bodies pass through blob preparation.
+import { line } from '@yaks/query'
 import { answered, type Answers, type Form } from './mod.ts'
 import { type Bundle, type Comp, derivedEid } from '@yaks/graph'
 import type { Handler } from '@yaks/effects'
@@ -129,7 +130,7 @@ export let formPost =
     let form: Form = {
       form: comp(source, 'form'),
       questions: await tx.read(
-        `.question.form=${JSON.stringify(formId)}`,
+        line`.question.form=${formId}`,
       ) as unknown as Form['questions'],
     }
     let person = String(registration.person ?? '')

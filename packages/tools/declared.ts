@@ -57,6 +57,7 @@
 // (workers/yak/declared.ts). So a tool can do exactly what the person
 // calling it could do on the page, and never more.
 import type { Bundle, Graph, NamedTool } from '@yaks/graph'
+import { type Line, listed, whole } from '@yaks/query'
 import { argsOf } from '@yaks/graph/call'
 import {
   publicToolSchema,
@@ -329,7 +330,9 @@ export let parseTools = (
       (!object(entry.service) || typeof entry.service.pricing != 'string' ||
         !entry.service.pricing.trim())
     ) {
-      wrong.push(`${name}.service names its pricing terms as {pricing: string}`)
+      wrong.push(
+        `${name}.service names its pricing terms as {pricing: string}`,
+      )
     }
     if (entry.service != null && entry.worker == null) {
       wrong.push(
@@ -535,7 +538,7 @@ let fill = (
   if (only && only[1] in vals) return vals[only[1]]
   return s.replace(
     VAR,
-    (whole, arg) => !arg ? '$' : arg in vals ? encode(vals[arg]) : whole,
+    (as, arg) => !arg ? '$' : arg in vals ? encode(vals[arg]) : as,
   )
 }
 
@@ -576,11 +579,12 @@ let dropped = (v: unknown, drop: string[]): unknown =>
 // One `&`-clause of a filter line, or absent when the argument it asks about
 // is. A value is percent-encoded — a filter line is a query string, and a
 // title with an `&` in it would otherwise read as the next filter.
+// A value fills its variable as one operand (@yaks/query `listed`), so an `&`
+// or a `)` in what a caller sent is part of the value, not the line.
 let clause = (s: string, tool: ToolDef, vals: Record<string, unknown>) =>
   gaps(s, tool, vals) ? ABSENT : s.replace(
     VAR,
-    (whole, arg) =>
-      !arg ? '$' : arg in vals ? encodeURIComponent(String(vals[arg])) : whole,
+    (as, arg) => !arg ? '$' : arg in vals ? listed([String(vals[arg])]) : as,
   )
 
 // What the call binds from where it runs: each context variable the template
@@ -612,7 +616,7 @@ export let filled = (
   context: Context = {},
 ): {
   apply?: unknown
-  query?: string
+  query?: Line
   worker?: string
   args?: Record<string, unknown>
 } => {
@@ -625,13 +629,16 @@ export let filled = (
     // through, so it keeps its `&`s rather than being read as one clause.
     let only = ONLY.exec(tool.query)
     if (only && only[1] in tool.input) {
-      return { query: String(vals[only[1]] ?? '') }
+      return { query: whole(String(vals[only[1]] ?? '')) }
     }
+    // The app's own line, its variables filled as operands.
     return {
-      query: tool.query.split('&')
-        .map((one) => clause(one, tool, vals))
-        .filter((one) => one !== ABSENT && one !== '')
-        .join('&'),
+      query: whole(
+        tool.query.split('&')
+          .map((one) => clause(one, tool, vals))
+          .filter((one) => one !== ABSENT && one !== '')
+          .join('&'),
+      ),
     }
   }
   return {
@@ -648,7 +655,7 @@ export let invoke = <T>(
   args: Record<string, unknown>,
   acts: {
     apply: (bundles: Bundle[]) => T | Promise<T>
-    query: (line: string) => T | Promise<T>
+    query: (line: Line) => T | Promise<T>
     worker: (path: string, args: Record<string, unknown>) => T | Promise<T>
   },
   context: Context = {},

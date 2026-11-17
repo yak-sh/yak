@@ -234,11 +234,15 @@ test('the call fills the template, typed by the input', () => {
       jog: { who: 'Ada', miles: 5 },
     },
   })
-  // A filter line's value is percent-encoded: the line is a query string, and
-  // an `&` in a value would read as the next filter.
+  // A filter line's value is one operand, quoted where it holds a space, so
+  // an `&` or a `)` in a value is part of it rather than the next filter.
   assertEquals(
     filled(tools.leaderboard, { since: '2026-09-01 10:00' }).query,
-    '.jog&.created.at>=2026-09-01%2010%3A00',
+    '.jog&.created.at>="2026-09-01 10:00"',
+  )
+  assertEquals(
+    filled(tools.leaderboard, { since: 'x)|(.secret' }).query,
+    '.jog&.created.at>="x)|(.secret"',
   )
   // A variable inside a sentence is spliced in as text.
   let hello = parsed({

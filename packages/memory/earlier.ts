@@ -13,6 +13,7 @@
  * @module
  */
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { type Built, joined, line, sub } from '@yaks/query'
 import type { Meaning } from '@yaks/host'
 import { human } from '@yaks/id'
 
@@ -92,7 +93,7 @@ type Asked = {
   wait?: number | null
   /** a filter line the person's own inputs are kept to, such as those the
    * agent answering does not already have in front of it */
-  among?: string
+  among?: Built
   /** the similarity a memory or decision must reach to be listed (default
    * {@link FLOOR}) */
   floor?: number
@@ -114,24 +115,24 @@ let theirs = (
     person: string
     name: string
     before: string
-    among?: string
+    among?: Built
   },
-): string => {
+): Built => {
   let has = (c: string) => !!g.vocab.comp(c)
-  let by = `.created.by=${JSON.stringify(person)}`
-  let typed = `.entry ${by} ${
-    UNSAID.filter(has).map((c) => '!' + c).join(' ')
-  }${among ? ` (${among})` : ''}`
+  let by = line`.created.by=${person}`
+  let unsaid = UNSAID.filter(has).reduce<Built>(
+    (l, c) => line`${sub(l)} !${c}`,
+    line``,
+  )
+  let typed = line`.entry ${sub(by)}${sub(unsaid)}${
+    sub(among ? line` (${sub(among)})` : line``)
+  }`
   let kinds = [
     ...has('entry') ? [typed] : [],
-    ...has('comment') ? [`.comment ${by}`] : [],
-    ...has('comment') && name
-      ? [`.comment .doc.body~=${JSON.stringify(name + ', ')}`]
-      : [],
+    ...has('comment') ? [line`.comment ${sub(by)}`] : [],
+    ...has('comment') && name ? [line`.comment .doc.body~=${name + ', '}`] : [],
   ]
-  return `(.created.at<${JSON.stringify(before)}) (${
-    kinds.map((k) => `(${k})`).join('|')
-  })`
+  return line`(.created.at<${before}) (${sub(joined(kinds, '|'))})`
 }
 
 // The rows among `line` nearest `words` in meaning and at least `floor`
@@ -140,7 +141,7 @@ let nearest = async (
   g: Graph,
   meaning: Meaning | undefined,
   words: string,
-  line: string,
+  line: Built,
   floor: number,
 ): Promise<Bundle[] | undefined> => {
   let hits = meaning
@@ -197,7 +198,7 @@ async function recalled(g: Graph, options: Asked): Promise<string> {
     return ''
   }
   let name = await named(g, person, options.name)
-  let line = theirs(g, { person, name, before, among: options.among })
+  let own = theirs(g, { person, name, before, among: options.among })
   let stop = new Set(
     'that this with have your from what would could should just like here there then them they been will into when about some only also really actually feel myself'
       .split(' '),
@@ -212,7 +213,7 @@ async function recalled(g: Graph, options: Asked): Promise<string> {
   let held = decided(g, words, before, meaning, options.floor)
   // Granite 30M: unrelated corpus pairs reached .642; the attachment
   // paraphrase reached .669 and inspect's two earlier asks .664/.677.
-  let semantic = await nearest(g, meaning, words, line, .65)
+  let semantic = await nearest(g, meaning, words, own, .65)
   // A semantic answer needs no second whole-corpus lexical search. The
   // fallback ranks one term at a time, avoiding a 24-way OR whose repeated
   // policy joins held the serving thread for 55 seconds on the live corpus.
@@ -222,7 +223,7 @@ async function recalled(g: Graph, options: Asked): Promise<string> {
     for (let word of tokens) {
       for (
         let row of await g.read(
-          `${JSON.stringify(word)} (${line}) * .order=search .limit=24`,
+          line`${word} (${sub(own)}) * .order=search .limit=24`,
         )
       ) {
         candidates.set(row.entity.eid, row)
@@ -306,17 +307,19 @@ export async function decided(
   memories = true,
 ): Promise<Bundle[]> {
   if (!meaning || !words.trim()) return []
-  let at = `.created.at<${JSON.stringify(before)}`
-  let ask = (within: string, limit: number) => meaning(words, { within, limit })
+  let at = line`.created.at<${before}`
+  let ask = (within: Built, limit: number) => meaning(words, { within, limit })
   let [kept, decisions] = await Promise.all([
     memories && g.vocab.comp('memory')
       ? ask(
-        `(${at}) .memory${g.vocab.comp('quarantined') ? ' !quarantined' : ''}`,
+        line`(${sub(at)}) .memory${
+          sub(g.vocab.comp('quarantined') ? line` !quarantined` : line``)
+        }`,
         6,
       )
       : [],
     g.vocab.comp('decision') && g.vocab.comp('decided')
-      ? ask(`(${at}) .decision .decided`, 2)
+      ? ask(line`(${sub(at)}) .decision .decided`, 2)
       : [],
   ])
   let ids = [...kept, ...decisions].filter((h) => h.similarity >= floor)

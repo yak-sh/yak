@@ -18,6 +18,7 @@ import {
   TOMBSTONE,
   type Tx,
 } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { type Id, idOf } from './listing.ts'
 
 type File = { app?: Id; path?: string }
@@ -92,7 +93,7 @@ let kept: Hook = Object.assign(
       // An app this batch deletes takes its files with it.
       for (let b of bundles) if (dead(b)) apps.delete(b.entity.eid)
       if (!apps.size) return bundles
-      let asked = `.public_file.app=${[...apps].join(',')}`
+      let asked = line`.public_file.app=${[...apps]}`
       return after(tx.read(asked, {}, ['public_file']), (stored) => {
         let owed = new Map([...apps].map((app) => [
           app,

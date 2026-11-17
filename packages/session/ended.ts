@@ -17,6 +17,7 @@
 // (./woken.ts `awaited`): a session that stays on a topic rests a day between
 // turns and is not over. Anything new said to it clears the mark (./reopen.ts).
 
+import { line } from '@yaks/query'
 import * as fs from '@yaks/file/io'
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
@@ -106,7 +107,7 @@ let endedFile = (path: string, read: Comp, cutoff: number): boolean => {
 // Nothing has been written to this session since `cutoff`.
 let quiet = async (g: Graph, b: Bundle, cutoff: number): Promise<boolean> => {
   let [last] = await g.rows(
-    `.entry.session=${b.entity.eid}&.order=-entry.seq&.limit=1&.fields=created.at`,
+    line`.entry.session=${b.entity.eid}&.order=-entry.seq&.limit=1&.fields=created.at`,
   )
   let at = last?.['created.at'] ?? comp(b, 'created').at
   return Date.parse(String(at)) <= cutoff
@@ -129,8 +130,10 @@ export let goneSessions = async (g: Graph, o: Sweep = {}): Promise<Eid[]> => {
       live: await runningSessions(a.running, o.alive),
     })),
   )
-  let open = await g.read(`.${SESSION} !${SESSION}.ended .fields=entity.eid`)
-  let held = await g.read(`.${CLAIM}.session .fields=${CLAIM}.session`)
+  let open = await g.read(
+    line`.${SESSION} !${SESSION}.ended .fields=entity.eid`,
+  )
+  let held = await g.read(line`.${CLAIM}.session .fields=${CLAIM}.session`)
   let parts = [SESSION, 'spawned', 'process', 'exit', 'created']
   let rows = new Map<string, Bundle>()
   let read = async (eids: string[]) => {

@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { assertRejects } from '@std/assert'
 import { equal, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
@@ -52,7 +53,7 @@ let fixture = async () => {
       let url = new URL(path, 'https://fixture.invalid')
       if (url.pathname === '/query') {
         return Response.json(
-          await g.read(url.searchParams.get('q')!),
+          await g.read(whole(url.searchParams.get('q')!)),
         )
       }
       try {

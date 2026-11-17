@@ -4,6 +4,7 @@
 
 import type { Comp, Eid, Graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
+import { line } from '@yaks/query'
 import { type Model, ModelError } from './mod.ts'
 import { MODEL } from './vocab.ts'
 
@@ -23,7 +24,7 @@ export let offers = async (
   model: Eid,
   implementations: Readonly<Record<string, Model>>,
 ): Promise<Offer[]> => {
-  let edges = await g.read(`.serves .edge.to=${model}`)
+  let edges = await g.read(line`.serves .edge.to=${model}`)
   let froms = edges.map((b) => String((b.edge as Comp).from))
   let rows = froms.length ? await g.get(froms) : []
   let named = new Map(

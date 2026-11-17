@@ -1,5 +1,6 @@
 // A session's computed status costs its newest turn, however many turns its
 // transcript holds: every get of a conversation's `session` component reads it.
+import { line } from '@yaks/query'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
@@ -74,7 +75,7 @@ let cost = async (long: number, apart: number) => {
     equal((row.session as { status: string }).status, status)
     return steps() - before
   }
-  let query = '.entity.eid=chat .session.status=running .fields=entity.eid'
+  let query = line`.entity.eid=chat .session.status=running .fields=entity.eid`
   await g.read(query)
   let before = steps()
   equal(await g.read(query), [])
@@ -133,11 +134,14 @@ let history = async (size: number, ended = false) => {
       }]
       : [],
   ], { trusted: true })
-  let query = '.session.status=stopped .fields=entity.eid'
+  let query = line`.session.status=stopped .fields=entity.eid`
   await g.read(query)
   return async () => {
     let before = steps()
-    equal((await g.read(query)).map((b) => b.entity.eid), ended ? ['chat'] : [])
+    equal(
+      (await g.read(query)).map((b) => b.entity.eid),
+      ended ? ['chat'] : [],
+    )
     return steps() - before
   }
 }

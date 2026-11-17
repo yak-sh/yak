@@ -1,5 +1,6 @@
 // Availability and completion are checked in the registration’s transaction,
 // and what its sender chose to share is written beside it.
+import { line } from '@yaks/query'
 import {
   accepted,
   answered,
@@ -22,7 +23,6 @@ import { Refused } from '@yaks/graph/errors'
 
 let comp = (row: Bundle | undefined, name: string): Comp =>
   row?.[name] as Comp ?? {}
-let quote = (value: unknown) => JSON.stringify(value)
 // A retried completion finds the same shared row again.
 let share = (registration: string) =>
   derivedEid(JSON.stringify(['registration-shared', registration]))
@@ -52,7 +52,7 @@ export let formRules = (
           return after(tx.get([id]), ([source]) => {
             if (!source?.form) throw new Refused('No such form.')
             return after(
-              tx.read(`.question.form=${quote(id)}`),
+              tx.read(line`.question.form=${id}`),
               (questions) => {
                 let form: Form = {
                   form: comp(source, 'form'),

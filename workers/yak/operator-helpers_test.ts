@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Comp } from '@yaks/graph'
@@ -189,7 +190,7 @@ let nativeChat = (await call(ctx, 'operator_chat', {
   say: 'NATIVE_HELPER: use a helper.',
 })).value!
 let [nativeChild] = await service.store.g.read(
-  `.spawned.parent=${nativeChat.session}&*`,
+  line`.spawned.parent=${String(nativeChat.session)}&*`,
 )
 let nativeReports =
   (await transcript(service.store.g, String(nativeChat.session))).filter((b) =>

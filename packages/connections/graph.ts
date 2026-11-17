@@ -8,6 +8,7 @@
 // Every process composing this package loads this module as it starts, so it
 // needs only the names (./identity.ts), never the connection actions.
 
+import { line } from '@yaks/query'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
 import type { Reply } from '@yaks/tools'
 import type { Read } from './integrations.ts'
@@ -15,8 +16,6 @@ import { CONNECTION, INTEGRATION, integrationEid, USES } from './identity.ts'
 
 /** What this needs of the host: a read of its graph. */
 export type Host = { graph: { read: Read } }
-
-let any = (eids: Eid[]) => eids.join(',')
 
 /** The integrations the connections among `bundles` go through, as the graph
  * holds them, but for any `bundles` already carry: what a person and their
@@ -34,7 +33,7 @@ export let through = async (
     else if (b[USES]) ask.push(String((b.edge as Comp | undefined)?.to))
   }
   if (ask.length) {
-    for (let b of await read(`.entity.eid=${any(ask)}&.${CONNECTION}`)) {
+    for (let b of await read(line`.entity.eid=${ask}&.${CONNECTION}`)) {
       names.add(String((b[CONNECTION] as Comp).integration))
     }
   }
@@ -43,7 +42,7 @@ export let through = async (
   )
   let wanted = [...names].map(integrationEid).filter((e) => !have.has(e))
   return wanted.length
-    ? await read(`.entity.eid=${any(wanted)}&.${INTEGRATION}`)
+    ? await read(line`.entity.eid=${wanted}&.${INTEGRATION}`)
     : []
 }
 

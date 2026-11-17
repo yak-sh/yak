@@ -1,3 +1,4 @@
+import { line as ql } from '@yaks/query'
 import { test, until } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
@@ -544,7 +545,7 @@ test('Stop ends the run at once with one answer, and new words reopen the sessio
 let pieces: [string, string][] = [], kept: unknown[] = []
 let streamed = operatorMemory()
 let keeping = async (call?: string) => {
-  let [line] = await streamed.g.read(`.output.source=${call}&*`, {
+  let [line] = await streamed.g.read(ql`.output.source=${call!}&*`, {
     durable: true,
   })
   kept.push(comp(line, 'content')?.body)
@@ -607,7 +608,7 @@ operate(
   ),
 )
 await drain(incarnation)
-let resumed = (await incarnation.g.read(`.entry.session=${cut.session}&*`, {
+let resumed = (await incarnation.g.read(ql`.entry.session=${cut.session}&*`, {
   durable: true,
 })).map((b) => comp(b, 'content')?.body).filter(Boolean)
 test('a reply a reset cut off keeps the words it showed, and its turn is taken up again', () => {
@@ -673,7 +674,7 @@ let cutOff = async (finished: boolean) => {
     tools: preview(() => Promise.resolve('previewed')),
   })
   await drain(reborn)
-  let after = (await reborn.g.read(`.entry.session=${stalled.session}&*`, {
+  let after = (await reborn.g.read(ql`.entry.session=${stalled.session}&*`, {
     durable: true,
   })).map((b) => comp(b, 'content')?.body).filter(Boolean)
   return { retold: retold.join(), said: after.at(-1) }

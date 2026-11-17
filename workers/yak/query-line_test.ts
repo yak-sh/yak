@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
@@ -69,7 +70,7 @@ let rows = await store.read('*')
 let queries = new Map(
   ['.limit=5', '*', '.limit=50', '.archetype'].map((
     q,
-  ) => [q, matcher(asking(q, words), kept)]),
+  ) => [q, matcher(asking(whole(q), words), kept)]),
 )
 let keptIds = (q: string) => queries.get(q)!(rows).map((b) => b.entity.eid)
 

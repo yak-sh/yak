@@ -1,5 +1,6 @@
 // Subscription links are app-bound seals. Subscription rows, confirmations
 // and fan-out letters use the app's graph and its existing metered mail effect.
+import { line } from '@yaks/query'
 import { type Bundle, mint } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
@@ -269,9 +270,11 @@ export let noticePost = (at: Stored): Handler => async (event) => {
   let posted = (notice.notice_posted as { at?: string } | undefined)?.at ??
     event.at
   for (
-    let row of await at.graph.read(
-      `.notice_subscription.owner=${at.app} .notice_confirmed`,
-    ) as Subscription[]
+    let row of (at.app
+      ? await at.graph.read(
+        line`.notice_subscription.owner=${at.app} .notice_confirmed`,
+      )
+      : []) as Subscription[]
   ) {
     if (posted && row.notice_confirmed!.at > posted) continue
     let eid = derivedEid(

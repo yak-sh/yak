@@ -1,6 +1,7 @@
 // Test-space eligibility, from directory evidence of use. Lifecycle stamps
 // and monthly bills describe platform work too; neither is a use clock.
 // Creation gives a new record its grace period, and used survives bookkeeping.
+import { line } from '@yaks/query'
 import { isTestAddress } from '@yaks/platform/bots'
 
 // `checks` is the agents' own space for live checks, its Operator included
@@ -107,5 +108,4 @@ export let idleAccounts = (rows: Row[], now = Date.now()): string[] => {
 }
 
 export let CENSUS =
-  '(.space | .app | .member | .grant | .invite | .hostname | .email)' +
-  ' ?created ?used ?published ?signed_in'
+  line`(.space | .app | .member | .grant | .invite | .hostname | .email) ?created ?used ?published ?signed_in`

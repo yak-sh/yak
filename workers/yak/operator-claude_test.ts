@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { type Item, type Model, ModelError, type Request } from '@yaks/model'
@@ -66,7 +67,7 @@ let out = await operating(store, env, { model, name: SONNET })
     say: 'The page is broken; fix it.',
   })
 await drain(store)
-let [child] = await store.g.read(`.spawned.parent=${out.session}&*`)
+let [child] = await store.g.read(line`.spawned.parent=${out.session}&*`)
 let entries = async (session: string) =>
   (await transcript(store.g, session)).flatMap((b) =>
     b.cost ? [(b.cost as { dollars: number }).dollars] : []

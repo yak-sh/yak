@@ -2,6 +2,7 @@
 // effect's receipt and each completed page survive a retry or object restart;
 // each page read gives the run its tries back, and a run out of tries leaves
 // its error on the document as `failed{reason}`.
+import { line } from '@yaks/query'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Attempt } from '@yaks/effects'
 import { derivedEid } from '@yaks/graph/identity'
@@ -211,7 +212,9 @@ export let extractor = (
           body,
         }),
       )
-      if (!res.ok) throw new Error('PDF extraction failed: ' + await res.text())
+      if (!res.ok) {
+        throw new Error('PDF extraction failed: ' + await res.text())
+      }
       return res.json()
     },
     ocr: (image) =>
@@ -249,7 +252,7 @@ export let indexDocument = async (
 ) => {
   let [row] = await graph.get([document])
   if ((row?.document_text as Comp | undefined)?.blob == blob) return
-  let old = await graph.read(`.document_page.document=${document}&*`)
+  let old = await graph.read(line`.document_page.document=${document}&*`)
   let count = 0
   // Pages already committed are read without calling OCR again.
   let completed = new Map(

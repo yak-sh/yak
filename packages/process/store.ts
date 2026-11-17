@@ -10,6 +10,7 @@
 // read.
 
 import type { Bundle, Graph } from '@yaks/graph'
+import { type Built, line } from '@yaks/query'
 import { EXIT, PROCESS, SERVICE } from './comp.ts'
 
 /** Where a supervisor's rows live. */
@@ -26,10 +27,10 @@ export type Store = {
 }
 
 /** The query {@link store} runs: every process with no `exit` yet, whole. */
-export let RUNNING = `.${PROCESS}&!${EXIT}&*`
+export let RUNNING: Built = line`.${PROCESS}&!${EXIT}&*`
 
 /** The query {@link store} runs for what is wanted: every service row. */
-export let SERVICES = `.${SERVICE}&*`
+export let SERVICES: Built = line`.${SERVICE}&*`
 
 /**
  * A @yaks/graph as this package's store — every read is an ordinary one, so

@@ -33,7 +33,16 @@
 // its set — it never sees the row that stopped matching — so the server is
 // what remembers who is in.
 
-import type { Bundle, Eid, Graph, News, Query, ReadOpts } from '@yaks/graph'
+import type {
+  Bundle,
+  Eid,
+  Graph,
+  News,
+  Query,
+  ReadOpts,
+  Reads,
+  Taken,
+} from '@yaks/graph'
 import { type Asker, asker, asking } from '@yaks/graph/asker'
 import { after, isPromise, over } from '@yaks/fp'
 import { during, link, parent, peek, scope, unlink } from '@yaks/trace'
@@ -60,7 +69,7 @@ import {
 import { comps } from '@yaks/graph/bundle'
 import { Refused } from '@yaks/graph/errors'
 import { matcher, net, rows as matchRows } from '@yaks/match'
-import { type And, bare, drifts, parse } from '@yaks/query'
+import { type And, bare, drifts, line, parse, whole as said } from '@yaks/query'
 import { paceOf, saveOf, syncOf } from '@yaks/vocab'
 import { published } from './publish.ts'
 import { cares, type Interest, interest, refers } from './interest.ts'
@@ -144,10 +153,7 @@ export type Subs = {
    * Observers may read the registry or write the graph. */
   observe: (fn: (bundles: Bundle[]) => void | Promise<unknown>) => () => void
   /** Answer one query from storage and the peer values held right now. */
-  snapshot: (
-    query: Query,
-    opts?: ReadOpts,
-  ) => Bundle[] | Reduced | Promise<Bundle[] | Reduced>
+  snapshot: Reads<Bundle[] | Reduced | Promise<Bundle[] | Reduced>>
   /** open (or replace) a subscription and send its current set, as `opts`
    * reads; `writer` is who opened it, for a registry that vouches its opener
    * onward ({@link import('./reached.ts').reached}) */
@@ -299,8 +305,9 @@ type Shared = { key: string; rows: Map<Eid, Bundle>; users: Set<Sub> }
 const HELD = 512, KEPT = 8192, KEEP = 256
 
 // Membership and projection use storage's vocabulary; delivery uses the caller's.
-let queryOf = (sub: Sub, q = sub.query): Query => {
-  if (!sub.ast) return q
+// A subscriber's line is its own whole query (@yaks/query `whole`).
+let queryOf = (sub: Sub, q = sub.query): Taken => {
+  if (!sub.ast) return said(q)
   if (q == sub.query) return sub.ast
   return {
     ...sub.ast,
@@ -585,7 +592,7 @@ export let subscriptions = (graph: Graph, opts: {
     let fresh = missing.length
       ? after(
         graph.read(
-          `.${ref.comp}.${ref.prop}=${missing.join(',')}`,
+          line`.${ref.comp}.${ref.prop}=${missing}`,
           { durable: true, native: true },
         ),
         (refs) =>
@@ -2111,7 +2118,7 @@ export let subscriptions = (graph: Graph, opts: {
   }
 
   let snapshot = (
-    line: Query,
+    line: Taken,
     readOpts: ReadOpts = {},
     nested = false,
     reduce = true,
@@ -2477,7 +2484,7 @@ export let subscriptions = (graph: Graph, opts: {
           .map(only(named(view.vocab, view.original))),
       )
     })
-  let answering = (query: Query, readOpts: ReadOpts = {}, reduce = true) => {
+  let answering = (query: Taken, readOpts: ReadOpts = {}, reduce = true) => {
     if (readOpts.durable) return snapshot(query, readOpts, false, reduce)
     return after(graph.view(query, readOpts), (view) => {
       if (view) {
@@ -2497,7 +2504,7 @@ export let subscriptions = (graph: Graph, opts: {
         graph.ask(query, readOpts),
         (q) =>
           after(
-            snapshot(q, readOpts, q !== query, reduce),
+            snapshot(q as Taken, readOpts, q !== query, reduce),
             (out) => Array.isArray(out) ? graph.answer(out, readOpts) : out,
           ),
       )
@@ -2563,7 +2570,10 @@ export let subscriptions = (graph: Graph, opts: {
     // A host can read while its own graph apply is saving a relay. This read
     // takes the currently admitted held values without entering ordered work.
     read: (query, readOpts) =>
-      after(answering(query, readOpts, false), (out) => out as Bundle[]),
+      after(
+        answering(query as Taken, readOpts, false),
+        (out) => out as Bundle[],
+      ),
     observe: (fn) => {
       observers.add(fn)
       return () => void observers.delete(fn)
@@ -2572,7 +2582,7 @@ export let subscriptions = (graph: Graph, opts: {
       flushPeers()
       checking()
       return after(
-        answering(query, readOpts),
+        answering(query as Taken, readOpts),
         (out) => Array.isArray(out) ? published(graph.vocab, out) : out,
       )
     },

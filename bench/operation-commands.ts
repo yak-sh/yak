@@ -3,6 +3,7 @@
  * or generic graph I/O. SQLite, session state and the HTTP listener are private
  * to this collection; no duties, providers, external connections or live writes.
  */
+import { line, whole } from '@yaks/query'
 import { type Sample, type Samples, stopwatch } from '@yaks/benchmark'
 import { sessionEnv } from '@yaks/session'
 import { compose } from '../packages/cli/host.ts'
@@ -240,7 +241,7 @@ async function collect(
     let seq = 0
     let fresh = (kind: string) => `operation ${kind} ${++seq}`
     let saved = async (q: string, mark: string) =>
-      includes(JSON.stringify(await graph.read(q)), mark)
+      includes(JSON.stringify(await graph.read(whole(q))), mark)
     let decision = id(7)
     let operations: Operation[] = [
       {
@@ -384,7 +385,7 @@ async function collect(
         verify: async (text) => {
           includes(text, TARGET)
           if (
-            JSON.stringify(await graph.read(`.entity.eid=${TARGET} ?claim`))
+            JSON.stringify(await graph.read(line`.entity.eid=${TARGET} ?claim`))
               .includes('"claim"')
           ) throw new Error('claim not released')
         },

@@ -65,6 +65,7 @@
 // T-34242); what that page draws is `POST /say` below — the round waited for,
 // then the whole conversation as this same list. One wire, two ways to read
 // it.
+import { line as ql } from '@yaks/query'
 import type { Hibernation, Wire } from '@yaks/durable-object'
 import { driver, type DurableStorage, freely } from '@yaks/durable-object/sql'
 import type { Stopped } from '@yaks/durable-object/ceiling'
@@ -705,7 +706,9 @@ export class Builder extends Durable {
         !request.headers.get(SPACE)
       ) return no(403, NOBODY)
       let args = await request.json() as Record<string, unknown>
-      if (typeof args.reader != 'string' || !args.reader) return no(403, NOBODY)
+      if (typeof args.reader != 'string' || !args.reader) {
+        return no(403, NOBODY)
+      }
       let { resultRequest } = await import('./result-host.ts')
       try {
         return await resultRequest(
@@ -847,7 +850,7 @@ export class Builder extends Durable {
       if (request.method == 'POST' && answer.ok) {
         this.#frames?.drafts(
           asker,
-          await read.store.g.read(`.draft.by=${person}`),
+          await read.store.g.read(ql`.draft.by=${person}`),
         )
       }
       return answer

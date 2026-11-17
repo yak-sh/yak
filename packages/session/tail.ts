@@ -36,6 +36,7 @@
 // This module reads files; it is reached through `@yaks/session/tail`, never
 // the main module, which a browser loads.
 
+import { line as query } from '@yaks/query'
 import { after, batches, records } from './log.ts'
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
@@ -371,7 +372,7 @@ let owns = async (g: Graph, session: Eid | undefined, file: Eid) => {
   if (!session) return true
   // Ownership needs one stored reference, not the derived transcript status.
   let [s] = await g.read(
-    `.entity.eid=${JSON.stringify(session)} .fields=session.transcript`,
+    query`.entity.eid=${session} .fields=session.transcript`,
   )
   let first = comp(s, 'session')?.transcript
   return !first || first == file
@@ -395,7 +396,7 @@ let compressed = async (
   let session = held.session as Eid | undefined
   let [s] = session
     ? await g.read(
-      `.entity.eid=${JSON.stringify(session)} .fields=session.transcript`,
+      query`.entity.eid=${session} .fields=session.transcript`,
     )
     : []
   // Compressing a log is no edit to its session, so `updated` stays. The session
@@ -459,7 +460,9 @@ export let tail = async (
     })
   let [session] = o.session
     ? await g.read(
-      `.entity.eid=${JSON.stringify(o.session)} .fields=${fields.join(',')}`,
+      fields.length
+        ? query`.entity.eid=${o.session} .fields=${fields}`
+        : query`.entity.eid=${o.session} .fields=`,
     )
     : []
   let operatorStored = comp(session, 'session')?.operator as
@@ -909,10 +912,12 @@ export let recount = async (
 // read again. A provider that reports usage only per run keeps it there.
 let ended = async (g: Graph, session: Eid): Promise<Bundle[]> => {
   let [counted] = await g.read(
-    `.entry.session=${session} .ask .usage !stop .limit=1`,
+    query`.entry.session=${session} .ask .usage !stop .limit=1`,
   )
   if (!counted) return []
-  return (await g.read(`.entry.session=${session} .stop .usage`)).map((b) => ({
+  return (await g.read(query`.entry.session=${session} .stop .usage`)).map((
+    b,
+  ) => ({
     entity: { eid: b.entity.eid },
     usage: null,
     cost: null,

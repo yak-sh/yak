@@ -1,6 +1,7 @@
 // A graph describing the vocabulary it is served with, as the vocabulary a
 // store is served with changes under it.
 
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { docDoc } from '@yaks/doc/vocab'
@@ -86,11 +87,13 @@ test('a graph describes what it is served with, and stops describing what it is 
   }
   let titles = (q: string) =>
     both(async (g) =>
-      (await g.read(`${q} ?doc`)).map((b) => (b.doc as Comp).title as string)
+      (await g.read(whole(`${q} ?doc`))).map((b) =>
+        (b.doc as Comp).title as string
+      )
     )
   let note = identityEid('_comp', ['note'])
   let eids = (q: string) =>
-    both(async (g) => (await g.read(q)).map((b) => b.entity.eid))
+    both(async (g) => (await g.read(whole(q))).map((b) => b.entity.eid))
   let kind = identityEid('_kind', ['note'])
   let befores = async () => (await eids(`._before .edge.from=${kind}`)).length
   await serve([p({ a: { type: 'string' }, b: { type: 'number' } }), q])
@@ -135,8 +138,8 @@ test('a graph describes what it is served with, and stops describing what it is 
       b: { entity: { eid: string } },
     ) => a.entity.eid.localeCompare(b.entity.eid)
     assertEquals(
-      (await d.read(query)).sort(byId),
-      (await g.read(query)).sort(byId),
+      (await d.read(whole(query))).sort(byId),
+      (await g.read(whole(query))).sort(byId),
     )
   }
   // Described already, so a worker starting writes nothing.

@@ -1,4 +1,5 @@
 // Count physical effect writes, not just the runs left after a worker drains.
+import { whole } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
@@ -115,7 +116,7 @@ test('matching input changes reconcile inside transactionSync', () => {
     equal(isPromise(plan), false)
     g.apply((plan as { writes: Bundle[] }).writes, { trusted: true })
   }
-  let read = (q: string) => g.read(`${q}&*`) as Bundle[]
+  let read = (q: string) => g.read(whole(`${q}&*`)) as Bundle[]
   let said = () => read('.built&.chosen').map((b) => (b.doc as Comp).body)
   let wrote = g.apply([{
     entity: { eid: 'source' },

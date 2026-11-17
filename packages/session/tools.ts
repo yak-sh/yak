@@ -54,7 +54,7 @@ import { Refused } from '@yaks/graph/errors'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
-import { and, every, present } from '@yaks/query'
+import { and, every, line as query, present, whole } from '@yaks/query'
 import type { Finding } from '@yaks/tools'
 import { checked } from '@yaks/tools/check'
 import { valued } from '@yaks/tools/value'
@@ -77,7 +77,7 @@ export type Options = Reading & {
 
 let HOURS = 2
 // What a transcript owes while it stalls: a turn, or an answer.
-let OWING = 'pending,running'
+let OWING = ['pending', 'running']
 
 // A run nothing will resume. `settled` is left out on purpose: it means
 // nothing is outstanding, not that the session is over.
@@ -183,7 +183,7 @@ export let asked = async (
   let worn = own && theirs ? fold(own, theirs) : own ?? theirs
   return await Promise.all((worn?.queries ?? []).map(async (b) => {
     let query = str(comp(b, 'board').query)
-    let rows = query ? await graph.read(query) : []
+    let rows = query ? await graph.read(whole(query)) : []
     let title = str(comp(b, 'doc').title) || query
     return [title, await graph.get(rows.map((r) => r.entity.eid))] as [
       string,
@@ -375,7 +375,7 @@ export let runs = (
     // A fresh transcript holds nothing: it has no entity yet, so nothing in
     // the graph can name it as a holder.
     let held = minted(eid)
-      ? await graph.read(`.${CLAIM}.session=${JSON.stringify(eid)}&*`)
+      ? await graph.read(query`.${CLAIM}.session=${eid}&*`)
       : []
     let operator = comp(found, SESSION).operator == true
     let told = await asked(
@@ -424,7 +424,7 @@ export let runs = (
       : undefined
     if (!s) return []
     let eid = s.entity.eid
-    let held = await graph.read(`.${CLAIM}.session=${JSON.stringify(eid)}`)
+    let held = await graph.read(query`.${CLAIM}.session=${eid}`)
     // A managed run keeps the task it is parked on: a dependency finishing
     // runs it again, and its ending lets go of the rest (./wake.ts).
     let kept = new Set<string>()
@@ -523,7 +523,7 @@ export let runs = (
     // The transcripts owing something, by their status (./status.ts, the
     // rule everything reads), and the newest line of each alone: when it was
     // written.
-    let owing = await graph.read(`.${SESSION}.status=${OWING}&*`)
+    let owing = await graph.read(query`.${SESSION}.status=${OWING}&*`)
     let newest = await Promise.all(
       owing.map((s) => newestOf(graph, s.entity.eid)),
     )

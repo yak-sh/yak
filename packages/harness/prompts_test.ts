@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import type { Comp } from '@yaks/graph'
 import { assertEquals, assertRejects } from '@std/assert'
@@ -88,7 +89,9 @@ test('instruction admission snapshots machine files in stable ancestor order', a
       Error,
       'Instruction projection is missing',
     )
-    let opened = await openingFor(h.g, home, binding.workspaces, { work: task })
+    let opened = await openingFor(h.g, home, binding.workspaces, {
+      work: task,
+    })
     assertEquals(opened, { files: [], persona })
     // A file that is the worn persona's projection is left out; another stays.
     await Deno.mkdir(dir + '/kept')
@@ -113,7 +116,7 @@ test('instruction admission snapshots machine files in stable ancestor order', a
       using: {},
     })
     assertEquals((await h.g.get([session]))[0].filed, { project })
-    let entries = await h.g.read(`.entry.session=${session}&.prompt&*`)
+    let entries = await h.g.read(line`.entry.session=${session}&.prompt&*`)
     assertEquals(entries.map((e) => (e.content as Comp).body), [
       admittedFiles[0].body,
     ])
@@ -145,7 +148,7 @@ test('a session begun for a person holds their words, and none of the instructio
       using: {},
       by: ada.entity.eid,
     })
-    let said = (await h.g.read(`.entry.session=${session}&*`)).map((b) => [
+    let said = (await h.g.read(line`.entry.session=${session}&*`)).map((b) => [
       String((b.content as Comp).body),
       (b.created as Comp).by ?? null,
       (b.created as Comp).via,

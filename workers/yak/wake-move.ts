@@ -14,6 +14,7 @@
 // under the old code is left to the old code's records, so none runs twice.
 // Until the pass is done the store fires no wake (operator-store.ts `drain`),
 // so no firing is owed in words nothing runs.
+import { line, sub } from '@yaks/query'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Meta } from '@yaks/sqlite'
 import { caught } from './defects.ts'
@@ -79,8 +80,8 @@ export let wakeBackfill = async (
   if (!marks || at == 'done') return false
   if (store.waiting?.()) return true
   let rows = await g.read(
-    `(.operator_ask|.operator_subscription|.operator_work)${
-      at ? `&.entity.eid>${at}` : ''
+    line`(.operator_ask|.operator_subscription|.operator_work)${
+      sub(at ? line`&.entity.eid>${at}` : line``)
     }&.order=entity.eid&.limit=${BATCH}&*`,
   )
   let patches = rows.flatMap((row) => moved(row) ?? [])
@@ -109,7 +110,7 @@ let owed = async (g: Graph) => {
     let fired = String(part(wake, 'fired')?.at ?? '')
     let began = fired
       ? await g.read(
-        `.operator_work.schedule=${target}&.operator_work.at=${fired}&.fields=entity.eid`,
+        line`.operator_work.schedule=${target}&.operator_work.at=${fired}&.fields=entity.eid`,
       )
       : []
     if (began.length) {

@@ -3,6 +3,7 @@
 // session wearing the common persona of the task's lineage and asking what
 // the task's project says its work runs on, `using{provider, model}` on the
 // project; a project that names none gets the harness's default model.
+import { line } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { compose } from '@yaks/cli/host'
 import { type Comp, identityEid } from '@yaks/graph'
@@ -73,9 +74,9 @@ let started = await (async () => {
         {} as never,
         {} as never,
       )
-      let [session] = await g.read(`.session.source=${comment}&*`)
+      let [session] = await g.read(line`.session.source=${comment}&*`)
       let [input] = await g.read(
-        `.entry.session=${session.entity.eid}&.using&*`,
+        line`.entry.session=${session.entity.eid}&.using&*`,
       )
       return { session, using: input.using }
     }

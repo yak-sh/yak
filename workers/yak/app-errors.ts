@@ -1,5 +1,6 @@
 // The published app_errors tool reads and marks tracker occurrences under the
 // space authority already checked by yak. Bug mail marks remain separate.
+import { type Built, line, sub } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
 import { sign } from '@yaks/tracker/ticket'
 import type { App, Space } from './directory.ts'
@@ -104,16 +105,17 @@ let opened = async (
   env: Env,
   space: Space,
   who: Who,
-  filter: string,
+  filter: Built,
   all: boolean,
   send?: Send,
 ): Promise<Bundle[]> => {
   let rows: Bundle[] = [], after = ''
+  let seen = all ? line`` : line`!notified`
   for (;;) {
-    let query =
-      `.error ${filter} !archived ${
-        all ? '' : '!notified'
-      } * .order=entity.eid .limit=100` + (after ? ` .after=${after}` : '')
+    let past = after ? line` .after=${after}` : line``
+    let query = line`.error ${sub(filter)} !archived ${
+      sub(seen)
+    } * .order=entity.eid .limit=100${sub(past)}`
     let page = await request(
       env,
       space,
@@ -133,7 +135,7 @@ let opened = async (
 /** Every app's open occurrences in a space, in one read of the space's
  * tracker: what a listing or a reply needs without waking any app's store. */
 export let errorsIn = (env: Env, space: Space, who: Who, send?: Send) => ({
-  read: (all: boolean) => opened(env, space, who, '.during.app', all, send),
+  read: (all: boolean) => opened(env, space, who, line`.during.app`, all, send),
 })
 
 export let errorsAt = (
@@ -144,7 +146,7 @@ export let errorsAt = (
   send?: Send,
 ) => ({
   read: (all: boolean) =>
-    opened(env, space, who, `.during.app=${app.eid}`, all, send),
+    opened(env, space, who, line`.during.app=${app.eid}`, all, send),
   mark: async (rows: Bundle[], mark: 'notified' | 'archived') => {
     for (let at = 0; at < rows.length; at += 100) {
       await request(env, space, who, '/app-errors', {

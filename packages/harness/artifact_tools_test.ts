@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { artifactTools, imageContext } from './artifact_tools.ts'
@@ -201,7 +202,7 @@ test('tool-driven vision reaches the next model request and survives database re
     assertEquals(entries.filter((e) => e.exception).length, 0)
     await a.close()
     h = await harness(dir + '/test.db')
-    entries = await h.g.read(`.entry.session=${session}&*`)
+    entries = await h.g.read(line`.entry.session=${session}&*`)
     let restored = [...(await imageContext(
       h.g,
       entries,

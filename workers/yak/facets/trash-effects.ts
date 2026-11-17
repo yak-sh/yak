@@ -1,4 +1,5 @@
 // Trash dormancy notification.
+import { line } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
 import { delivered } from '../trash.ts'
 import type { Handlers } from '@yaks/effects'
@@ -14,10 +15,10 @@ export let effects = (_host: unknown, options: Options): Handlers => {
           try {
             let [row] = await tx.get([event.entity.eid])
             if (!row || row.tombstone) return
-            let apps: Bundle[] = row.app
-              ? [row]
-              : row.space
-              ? await tx.read(`.app.space=${row.entity.eid} .app`) as Bundle[]
+            let apps: Bundle[] = row.app ? [row] : row.space
+              ? await tx.read(
+                line`.app.space=${row.entity.eid} .app`,
+              ) as Bundle[]
               : []
             for (let app of apps) {
               await delivered(at.env.STORE!, tx, app.entity.eid)

@@ -49,6 +49,7 @@
 // receipt yet. A build delivered twice is decided by its first delivery, and
 // only the commit's first note earns the rebuild.
 
+import { line } from '@yaks/query'
 import { Stale } from '@yaks/graph/errors'
 import type { Env } from './env.ts'
 import { caught, defect } from './defects.ts'
@@ -126,7 +127,7 @@ let named = (b: Broke, commit: string): Broke => ({
  * build, when it names none and the kernel started it. */
 export let asked = async (env: Env, b: Broke): Promise<Broke> => {
   if (b.commit || !b.uuid) return b
-  let [row] = await meta(env).query(`.entity.eid=${b.uuid}&.built`)
+  let [row] = await meta(env).query(line`.entity.eid=${b.uuid}&.built`)
     .catch((error) => {
       caught(error, { request: 'read built', build: b.uuid })
       return []

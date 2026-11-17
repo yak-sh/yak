@@ -1,6 +1,7 @@
 // Sub-projects: everything under a project is one walk, the way up is its
 // lineage, and a project is never filed under itself.
 
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, Refused } from '@yaks/graph'
@@ -31,7 +32,7 @@ let eids = (bs: { entity: { eid: string } }[]) =>
 let planted = tree()
 test('what is under a project is one walk, at any depth', async () => {
   let g = planted
-  let under = async (q: string) => eids(await g.read(q))
+  let under = async (q: string) => eids(await g.read(whole(q)))
   assertEquals(await under('.task .filed.project->p1'), [
     't-p1',
     't-p2',

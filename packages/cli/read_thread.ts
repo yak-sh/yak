@@ -16,6 +16,7 @@ import type {
   Query,
   ReadOpts,
   Row,
+  Taken,
   Tx,
 } from '@yaks/graph'
 import type { Search } from '@yaks/graph/tools'
@@ -45,7 +46,7 @@ type Call =
   | { op: 'buried'; before: string; page: { after?: string; limit: number } }
   | { op: 'bindings'; args: Parameters<NonNullable<Tx['bindings']>> }
   | { op: 'statement'; stmt: Stmt }
-  | { op: 'read' | 'rows'; query: Query; opts?: ReadOpts }
+  | { op: 'read' | 'rows'; query: Taken; opts?: ReadOpts }
   | { op: 'get'; eids: Eid[]; comps?: string[]; opts?: ReadOpts }
   | {
     op: 'hits' | 'meaning'
@@ -391,9 +392,13 @@ export let readThread = (
         ask({ op: 'statement', stmt }).then((value) => value as Row[]),
     },
     read: (query, opts) =>
-      ask({ op: 'read', query, opts }).then((value) => value as Bundle[]),
+      ask({ op: 'read', query: query as Taken, opts }).then((value) =>
+        value as Bundle[]
+      ),
     rows: (query, opts) =>
-      ask({ op: 'rows', query, opts }).then((value) => value as Row[]),
+      ask({ op: 'rows', query: query as Taken, opts }).then((value) =>
+        value as Row[]
+      ),
     get: (eids, comps, opts) =>
       ask({ op: 'get', eids, comps, opts }).then((value) => value as Bundle[]),
     // Each half of a search on a lane of its own, at once, then its lines

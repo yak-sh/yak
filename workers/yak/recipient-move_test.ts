@@ -1,5 +1,6 @@
 // The addresses letters were written to before `recipient` are kept to the
 // app's editors once; a staff address, and one no letter is for, are left alone.
+import { whole } from '@yaks/query'
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { kernelDoc } from '@yaks/kernel/vocab'
@@ -30,7 +31,8 @@ await g.apply([
 ])
 let move = async () => {
   let rows = await g.read(recipientRule.find)
-  let read = (line: string) => g.storage.tx((tx) => tx.read(line)) as Bundle[]
+  let read = (line: string) =>
+    g.storage.tx((tx) => tx.read(whole(line))) as Bundle[]
   await g.apply(rows.flatMap((row) => recipientRule.move(row, read)))
   return (await g.read('.recipient')).map((r) => r.entity.eid)
 }

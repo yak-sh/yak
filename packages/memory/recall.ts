@@ -18,6 +18,7 @@
 // here, once, and no door that recalls hands it back as if it stood.
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
+import { type Built, line as q, sub } from '@yaks/query'
 import { MEMORY } from './comp.ts'
 
 // The stamp @yaks/kernel puts on what is set aside as harmful to act on.
@@ -139,23 +140,28 @@ export type Asked = {
  * // '.memory.space=s1&!quarantined&*&.order=-created.at&.limit=8'
  * ```
  */
-export let line = (asked: Asked): string => {
+export let line = (asked: Asked): Built => {
   let said = terms(asked.said ?? '')
   let ranked = !!(asked.eids?.length || asked.near)
   return [
-    ...(said ? [said] : []),
-    ...(asked.eids?.length ? [`.entity.eid=${asked.eids.join(',')}`] : []),
-    ...(asked.near ? [`.near=${asked.near}`] : []),
+    // Each word is one text term, quoted where it holds a quote or a dash.
+    ...(said ? said.split(' ').map((w) => q`${w}`) : []),
+    ...(asked.eids?.length ? [q`.entity.eid=${asked.eids}`] : []),
+    ...(asked.near ? [q`.near=${asked.near}`] : []),
     // A memory is what is being asked for, so the component is always in the
     // query; naming it with a space bounds the result and names it at once.
-    asked.space ? `.${MEMORY}.space=${asked.space}` : `.${MEMORY}`,
-    `!${QUARANTINED}`,
-    ...(asked.scope ? [`.${MEMORY}.scope=${asked.scope}`] : []),
-    ...(asked.feedback ? ['.feedback'] : []),
-    '*',
-    ...(asked.near ? ['.order=similar'] : ranked ? [] : ['.order=-created.at']),
-    `.limit=${asked.limit}`,
-  ].join('&')
+    asked.space ? q`.${MEMORY}.space=${asked.space}` : q`.${MEMORY}`,
+    q`!${QUARANTINED}`,
+    ...(asked.scope ? [q`.${MEMORY}.scope=${asked.scope}`] : []),
+    ...(asked.feedback ? [q`.feedback`] : []),
+    q`*`,
+    ...(asked.near
+      ? [q`.order=similar`]
+      : ranked
+      ? []
+      : [q`.order=-created.at`]),
+    q`.limit=${asked.limit}`,
+  ].reduce((all, l) => q`${sub(all)}&${sub(l)}`)
 }
 
 /**

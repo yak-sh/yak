@@ -1,3 +1,4 @@
+import { line, sub } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 import { appendEntry } from './append.ts'
 import { workedOn } from './lease.ts'
@@ -62,18 +63,18 @@ let taskRow = async (
   comps?: string[],
 ): Promise<Bundle> => {
   let b = await row(g, id, comps)
-  if (!b && parse(id)) [b] = await g.read(`.task .entity.eid=${id} *`)
+  if (!b && parse(id)) [b] = await g.read(line`.task .entity.eid=${id} *`)
   if (!b?.task) throw new ToolError('task', `not a task: ${id}`)
   return b
 }
 
 /** Direct children, including forks created by the session tools. */
 export let children = (g: Graph, session: Eid): Promise<Bundle[]> =>
-  Promise.resolve(g.read(`.spawned.parent=${session}&*`))
+  Promise.resolve(g.read(line`.spawned.parent=${session}&*`))
 
 // How many sessions the cap counts: their number, never their rows.
 let running = async (g: Graph): Promise<number> =>
-  Number((await g.rows(`${live} .count`))[0]?.n ?? 0)
+  Number((await g.rows(line`${sub(live)} .count`))[0]?.n ?? 0)
 
 /** The admission path the harness calls, shared by root starts and delegated
  * starts. */
@@ -188,7 +189,7 @@ let delegation = (
       let task = minted ??
         (args.task == null ? undefined : await taskRow(g, String(args.task)))
       let work = minted
-        ? await g.read(`.task .claim.session=${ctx.session}`)
+        ? await g.read(line`.task .claim.session=${ctx.session}`)
         : []
       let parents = work.length ? work.map((b) => b.entity.eid) : [ctx.session]
       let doc = comp(task, 'doc')
@@ -217,7 +218,7 @@ let delegation = (
         using.model = model
         let held = known?.model ? known : await row(g, model)
         if (held && !held.pending) {
-          let offers = await g.read(`.serves .edge.to=${model}`)
+          let offers = await g.read(line`.serves .edge.to=${model}`)
           if (!offers.some((o) => comp(o, 'edge')?.from == using.provider)) {
             delete using.provider
           }
@@ -555,7 +556,7 @@ let askedOf = async (g: Graph, helper: Eid) => {
   let title = String(comp(await row(g, helper, ['doc']), 'doc')?.title ?? '')
   if (title) return title
   let opening = await g.read(
-    `.entry.session=${helper}&.order=entry.seq&.limit=3&*`,
+    line`.entry.session=${helper}&.order=entry.seq&.limit=3&*`,
   )
   let first = opening.find((b) => !b.prompt && b.content)
   return textOf(first ?? { entity: { eid: helper } }).trim().split('\n')[0]
@@ -579,7 +580,7 @@ export let stopAll = async (
 ): Promise<boolean> => {
   let helpers: Eid[] = []
   for (let parents = [session]; parents.length;) {
-    parents = (await g.read(`.spawned.parent=${parents.join(',')}`))
+    parents = (await g.read(line`.spawned.parent=${parents}`))
       .map((b) => b.entity.eid)
     helpers.push(...parents)
   }
@@ -664,7 +665,7 @@ export let deliverChild = async (
   // A settled child's receipt usually already exists. Inspect its local tail
   // before materializing the inherited prefix (which can be very large).
   let [tail] = await g.read(
-    '.entry.session=' + child + '&.order=-entry.seq&.limit=1&*',
+    line`.entry.session=${child}&.order=-entry.seq&.limit=1&*`,
   )
   // The task it was given, which lets go of the child's claim once done.
   let tasks = g.vocab.comps.includes('task')

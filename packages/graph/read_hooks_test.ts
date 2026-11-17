@@ -1,6 +1,6 @@
 import { equal, test } from '@yaks/testing'
 import { ram } from '@yaks/ram'
-import { and, every, map, present, want } from '@yaks/query'
+import { and, every, map, present, want, whole } from '@yaks/query'
 import { graph } from './graph.ts'
 import { graph as readonly } from '@yaks/graph/read'
 import { type Bundle, type Comp } from './bundle.ts'
@@ -97,7 +97,7 @@ test('read hooks leave the current query text and result objects untouched', () 
   })
   let line = ' .book.pages>7  &?doc '
   equal(g.ask(line), line)
-  equal(g.read(line), [])
+  equal(g.read(whole(line)), [])
   equal(q, line)
   equal(calls, 0)
   let rows = [{ entity: { eid: 'r' } }]

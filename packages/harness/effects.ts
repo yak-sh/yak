@@ -13,6 +13,7 @@
 
 import { promptEntry } from '@yaks/context'
 import { type Comp, derivedEid, Refused } from '@yaks/graph'
+import { type Built, line, sub } from '@yaks/query'
 import { openingFor } from './instructions.ts'
 import type { Handlers } from '@yaks/effects'
 import type { Host } from '@yaks/host'
@@ -51,8 +52,10 @@ export let effects = (
     host.workspaces,
   )
   let g = host.graph
-  let entries = (session: string, q: string) =>
-    g.read(`.entry.session=${session}&${q}&.limit=1&.fields=entity.eid`)
+  let entries = (session: string, q: Built) =>
+    g.read(
+      line`.entry.session=${session}&${sub(q)}&.limit=1&.fields=entity.eid`,
+    )
   // What a transcript opens with, admitted once before it is answered, when
   // whoever began it wrote none: an HTTP fixer's instruction files (its home,
   // its claimed task or project), and those of the workspace a session's home
@@ -82,11 +85,11 @@ export let effects = (
         }
         await binding.cwd(session)
         ;[owner] = await g.get([session])
-      } else if ((await entries(session, '.ask')).length) return
+      } else if ((await entries(session, line`.ask`)).length) return
       // Preparation is restartable. Admit each immutable source only once.
-      if ((await entries(session, '.prompt')).length) return
+      if ((await entries(session, line`.prompt`)).length) return
       let work = fixer
-        ? (await g.read(`.claim.session=${session}&.task&.limit=1`))[0]
+        ? (await g.read(line`.claim.session=${session}&.task&.limit=1`))[0]
           ?.entity.eid ?? (owner.filed as Comp | undefined)?.project
         : undefined
       let { files, persona: worn } = await openingFor(
@@ -117,7 +120,7 @@ export let effects = (
       // Keep a terminal answer in the transcript, also seen after restart.
       if (!(error instanceof Refused)) throw error
       let [last] = await g.read(
-        `.entry.session=${session}&.order=-entry.seq&.limit=1`,
+        line`.entry.session=${session}&.order=-entry.seq&.limit=1`,
       )
       await g.apply([{
         entity: {

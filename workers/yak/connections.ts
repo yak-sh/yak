@@ -1,3 +1,4 @@
+import { type Built, line, sub } from '@yaks/query'
 import { decodedPath } from './request-path.ts'
 // Connections on yaks.app (D-38019): what the dashboard's connections page
 // shows and does, the door an outside service sends a person back to after
@@ -78,7 +79,7 @@ import {
 import { edgeEid } from '@yaks/edge'
 import { PROVISIONAL } from '@yaks/effects'
 import { capOf, monthOf, spent } from '@yaks/egress'
-import type { Bundle, Comp } from '@yaks/graph'
+import type { Bundle, Comp, Taken } from '@yaks/graph'
 import { hooked, refusal } from '@yaks/hook'
 import { mode, reads } from '@yaks/member'
 import { reveal, SECRET } from '@yaks/secrets'
@@ -339,8 +340,10 @@ export type Connections = {
 }
 
 // A read of the directory. Every read the verbs make is a filter line.
-let readOf = (env: Partial<Env> & Pick<Env, 'STORE'>): Read => (q) =>
-  typeof q == 'string' ? meta(env).query(q) : []
+let readOf = (env: Partial<Env> & Pick<Env, 'STORE'>): Read => (said) => {
+  let q = said as Taken
+  return typeof q == 'string' ? meta(env).query(q) : []
+}
 
 /** The verbs' context: the directory, the vault, and the person acting — or
  * the kernel, for what nobody in particular does (a token refreshed on the way
@@ -368,13 +371,17 @@ export let settling = async (
   integration?: string,
 ) => {
   let { read } = ctxOf(env).graph
-  let needed = await read(
-    `.${CONNECTION}.owner=${
-      owners.filter(Boolean).join(',')
-    }&.${CONNECTION}.status=needed${
-      integration ? `&.${CONNECTION}.integration=${integration}` : ''
-    }&*`,
-  )
+  let held = owners.filter(Boolean)
+  let named = integration
+    ? line`&.${CONNECTION}.integration=${integration}`
+    : line``
+  let needed = held.length
+    ? await read(
+      line`.${CONNECTION}.owner=${held}&.${CONNECTION}.status=needed${
+        sub(named)
+      }&*`,
+    )
+    : []
   return await settled(env, needed, (name) => known(read, name))
 }
 
@@ -416,7 +423,7 @@ export let ownersOf =
   (env: Partial<Env> & Pick<Env, 'STORE'>): Owners => async (apps) =>
     apps.length
       ? Object.fromEntries(
-        (await readOf(env)(`.entity.eid=${apps.join(',')}&.app`))
+        (await readOf(env)(line`.entity.eid=${apps}&.app`))
           .map((b) => [b.entity.eid, String(comp(b, 'app').space)]),
       )
       : {}
@@ -428,7 +435,7 @@ let spaceNames = async (read: Read, here: Space, spaces: string[]) => {
   return new Map([
     [here.eid, here.title || here.slug],
     ...away.length
-      ? (await read(`.entity.eid=${away.join(',')}&.space&?doc`))
+      ? (await read(line`.entity.eid=${away}&.space&?doc`))
         .map((b) =>
           [
             b.entity.eid,
@@ -473,11 +480,11 @@ export let rebind = async (
   }
   let want = await connectedEnv(env, app)
   let read = readOf(env)
-  let links = await read(`.edge.from=${app.eid}&.${USES}&*`)
+  let links = await read(line`.edge.from=${app.eid}&.${USES}&*`)
   let held = links.length
     ? await read(
-      `.entity.eid=${
-        links.map((l) => comp(l, 'edge').to).join(',')
+      line`.entity.eid=${
+        links.map((l) => String(comp(l, 'edge').to))
       }&.${CONNECTION}`,
     )
     : []
@@ -522,8 +529,8 @@ export let carried = async (
   let loans = asks.filter((l) => comp(l, USES).lender != null)
   let lent = loans.length
     ? await readOf(env)(
-      `.entity.eid=${
-        loans.map((l) => comp(l, 'edge').to).join(',')
+      line`.entity.eid=${
+        loans.map((l) => String(comp(l, 'edge').to))
       }&.${CONNECTION}`,
     )
     : []
@@ -563,7 +570,7 @@ export let carried = async (
 // The apps that use a connection, asked before it changes: a connection ended
 // takes its links with it, and its apps are linked to a new one.
 let usersOf = async (env: Env, connection: string): Promise<string[]> =>
-  (await readOf(env)(`.edge.to=${connection}&.${USES}&*`))
+  (await readOf(env)(line`.edge.to=${connection}&.${USES}&*`))
     .map((l) => String(comp(l, 'edge').from))
 
 // The same for each of those apps: after a key is kept, a sign-in finished,
@@ -600,11 +607,13 @@ type Asked = {
   dir?: ReturnType<typeof dirOf>
   /** the walk to the space, `.space.slug=ada`, while its eid is still being
    * read (@yaks/connections `Path`) */
-  by?: `.${string}`
+  by?: Built
 }
 
-let readOn = (dir: ReturnType<typeof dirOf>): Read => (q) =>
-  typeof q == 'string' ? dir.read(q) : []
+let readOn = (dir: ReturnType<typeof dirOf>): Read => (said) => {
+  let q = said as Taken
+  return typeof q == 'string' ? dir.read(q) : []
+}
 
 // The space's apps, connections and the links out of its apps, by its eid
 // or the walk to it.
@@ -613,9 +622,9 @@ let ownedBy = (dir: ReturnType<typeof dirOf>, owner: string | Path) =>
     dir.apps(typeof owner == 'string' ? { eid: owner } : owner),
     list(readOn(dir), owner),
     dir.read(
-      `.edge.from.app.space${
-        typeof owner == 'string' ? `=${owner}` : owner.path
-      }&.${USES}&*`,
+      typeof owner == 'string'
+        ? line`.edge.from.app.space=${owner}&.${USES}&*`
+        : line`.edge.from.app.space${sub(owner.path)}&.${USES}&*`,
     ),
   ])
 
@@ -635,9 +644,9 @@ export let connectionsAsked = async (
   return await Promise.all(
     [
       space,
-      by ? read(`${by}&.space`) : undefined,
+      by ? read(line`${sub(by)}&.space`) : undefined,
       ownedBy(dir, by ? { path: by, eid } : await eid),
-      read(`.${PUBLISHED}&.${INTEGRATION}`),
+      read(line`.${PUBLISHED}&.${INTEGRATION}`),
       own ? list(read, person) : [],
       catalogued(read),
       add ? known(read, add) : undefined,
@@ -762,7 +771,7 @@ export let connectionsOf = async (
     ),
   ]
   if (away.length) {
-    for (let b of await read(`.entity.eid=${away.join(',')}&.app&?doc`)) {
+    for (let b of await read(line`.entity.eid=${away}&.app&?doc`)) {
       named.set(
         b.entity.eid,
         String(comp(b, 'doc').title || comp(b, 'app').slug),
@@ -901,7 +910,7 @@ export let lending = async (
   // Read the changed links before tombstoning them so those copies rebind too.
   let was = bundles.length
     ? await c.graph.read(
-      `.entity.eid=${bundles.map((b) => b.entity.eid).join(',')}&.${USES}&*`,
+      line`.entity.eid=${bundles.map((b) => b.entity.eid)}&.${USES}&*`,
     )
     : []
   let apps = [
@@ -917,7 +926,7 @@ export let lending = async (
 // A connected mark is written beside the credential, before the vault has
 // sealed it. Do not replace a working loan when sealing was given up on.
 let ready = async (env: Env, connection: string) => {
-  let [b] = await readOf(env)(`.entity.eid=${connection}&.${CONNECTION}&*`)
+  let [b] = await readOf(env)(line`.entity.eid=${connection}&.${CONNECTION}&*`)
   if (!b || comp(b, CONNECTION).status != 'connected') {
     throw new Error('The connection was not saved.')
   }
@@ -987,7 +996,7 @@ export let holdOf = async (
   let at = b && EID.test(app) ? await dirOf(env).appAt(app) : null
   let [l] = at
     ? await readOf(env)(
-      `.entity.eid=${edgeEid(app, USES, b!.entity.eid)}&.${USES}`,
+      line`.entity.eid=${edgeEid(app, USES, b!.entity.eid)}&.${USES}`,
     )
     : []
   return {
@@ -1094,8 +1103,8 @@ export let ownConnection = async (
   let [role, held] = await Promise.all([
     ctx.dir.role(space, ctx.person),
     meta(env).query(
-      `.${CONNECTION}.owner=${
-        [ctx.person, space.eid].filter(Boolean).join(',')
+      line`.${CONNECTION}.owner=${
+        [ctx.person, space.eid].filter(Boolean)
       }&.${CONNECTION}.integration=${integration}&.${CONNECTION}.status=connected&*`,
     ),
   ])
@@ -1117,7 +1126,7 @@ let told = (page: string, how: 'connected' | 'refused') => {
 // Whether a connection is an app's ask that each person answers with their
 // own, which is nobody's to connect.
 let asking = async (read: Read, eid: string) =>
-  (await read(`.edge.to=${eid}&.${USES}&*`)).some((l) => comp(l, USES).each)
+  (await read(line`.edge.to=${eid}&.${USES}&*`)).some((l) => comp(l, USES).each)
 
 // Send the person to the service, the attempt riding a cookie to the return.
 let signingIn = async (
@@ -1224,7 +1233,7 @@ export let connecting = async (
       if (i && !keyed(i)) return signingIn(req, env, c, space, who, eid)
     }
     let [b] = EID.test(eid)
-      ? await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}`)
+      ? await c.graph.read(line`.entity.eid=${eid}&.${CONNECTION}`)
       : []
     let owner = comp(b, CONNECTION).owner
     let app = field('app')
@@ -1306,7 +1315,7 @@ export let connecting = async (
       if (bundles.length) await c.graph.apply(bundles)
       await rebound(env, [app])
       let [l] = await c.graph.read(
-        `.entity.eid=${edgeEid(app, USES, eid)}&.${USES}`,
+        line`.entity.eid=${edgeEid(app, USES, eid)}&.${USES}`,
       )
       let at = (await dirOf(env).appAt(app))!.app
       return {
@@ -1344,7 +1353,7 @@ export let connecting = async (
     if (typeof given == 'string') return no(given)
     await connect(c, eid, given)
     await rebound(env, apps)
-    let [now] = await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}&*`)
+    let [now] = await c.graph.read(line`.entity.eid=${eid}&.${CONNECTION}&*`)
     if (now?.exception) {
       return no(
         String(comp(now, 'content').body ?? 'The key could not be saved.'),
@@ -1353,8 +1362,8 @@ export let connecting = async (
     // A person's own number is set up once its key is kept, where a phone
     // connects one through this integration (operator-line.ts).
     let { lined } = await import('./operator-line.ts')
-    let line = await lined(env, integrationOf(now), eid)
-    if (line) return line
+    let number = await lined(env, integrationOf(now), eid)
+    if (number) return number
     return {
       say: 'Saved. The key is kept safe and never shown again.',
       no: false,
@@ -1388,7 +1397,7 @@ export let callback: Door<Env> = async ({ env, req, path, space }) => {
   let who = at &&
     await whoIs(req, env.SESSION_SECRET, (p) => dir.role(at, p), at.eid)
   let [b] = held && who?.person == held.person
-    ? await readOf(env)(`.entity.eid=${held.connection}&.${CONNECTION}`)
+    ? await readOf(env)(line`.entity.eid=${held.connection}&.${CONNECTION}`)
     : []
   let owner = comp(b, CONNECTION).owner
   if (
@@ -1484,7 +1493,7 @@ export let own: Answer = async (
   try {
     // Their own is read by the name the app's ask gives it.
     let [ask] = await c.graph.read(
-      `.entity.eid=${edgeEid(app.eid, USES, asked.entity.eid)}&.${USES}`,
+      line`.entity.eid=${edgeEid(app.eid, USES, asked.entity.eid)}&.${USES}`,
     )
     let binding = comp(ask, USES).binding
     let [made] = await c.graph.apply(
@@ -1500,7 +1509,7 @@ export let own: Answer = async (
     let eid = made.entity.eid
     if (!keyed(i)) return signingIn(req, env, c, space, who, eid, back)
     await connect(c, eid, given as Given)
-    let [now] = await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}&*`)
+    let [now] = await c.graph.read(line`.entity.eid=${eid}&.${CONNECTION}&*`)
     return now?.exception
       ? page(
         no(String(comp(now, 'content').body ?? 'The key could not be saved.')),
@@ -1517,9 +1526,9 @@ export let own: Answer = async (
 let hookable = async (env: Env, space: Space, app: App, eid: string) => {
   if (!EID.test(eid)) return null
   let read = readOf(env)
-  let [b] = await read(`.entity.eid=${eid}&.${CONNECTION}&*`)
+  let [b] = await read(line`.entity.eid=${eid}&.${CONNECTION}&*`)
   if (!b || comp(b, CONNECTION).owner != space.eid) return null
-  let used = await read(`.edge.from=${app.eid}&.edge.to=${eid}&.${USES}`)
+  let used = await read(line`.edge.from=${app.eid}&.edge.to=${eid}&.${USES}`)
   return used.length ? b : null
 }
 

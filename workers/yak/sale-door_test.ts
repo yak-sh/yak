@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { appStore, stamp, storeName } from './directory.ts'
@@ -122,7 +123,7 @@ test('each buyer receives only their own receipt without provider identifiers', 
       JSON.stringify({
         buyer,
         rows: await orders.graph.query(
-          `.entity.eid=${id} .order|.order.quote=${id}`,
+          line`.entity.eid=${id} .order|.order.quote=${id}`,
         ),
         me: await (await orders.ask('who', buyer)).json(),
       }),

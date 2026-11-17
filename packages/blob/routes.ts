@@ -35,6 +35,7 @@
 //
 // The read is fenced by ./serve.ts.
 
+import { line } from '@yaks/query'
 import {
   type Authenticate,
   fault,
@@ -44,7 +45,7 @@ import {
   signed,
 } from '@yaks/api'
 import { Pending } from '@yaks/api/log'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Taken } from '@yaks/graph'
 import { Stale, status } from '@yaks/graph/errors'
 import { addressOf } from './artifact.ts'
 import { mediaType } from './content_type.ts'
@@ -201,7 +202,7 @@ export let routes = (
   let upload: Upload = { ...options, store, limit: options.limit ?? LIMIT }
   let naming = options.naming ?? artifacts
   let scope = options.scope ?? SCOPE
-  let read: Read = (query) => host.graph.read(query)
+  let read: Read = (query) => host.graph.read(query as Taken)
   let where = (request: Request) => `${request.method} ${PREFIX}*`
 
   // The address and the rest of the path below `at`.
@@ -361,13 +362,13 @@ export let routes = (
   // The representation the rows at `sha` say now, fixed once and kept.
   let current = async (sha: string) => {
     let use = await useOf(sha)
-    let said = naming.said(await read(`.entity.eid=${use},${sha}&*`), {
+    let said = naming.said(await read(line`.entity.eid=${[use, sha]}&*`), {
       sha,
       use,
     })
     if (!said) return null
     let rep = representation(scope, sha, said.mime, said.name)
-    if ((await read(`.entity.eid=${rep.eid}`)).length) return rep
+    if ((await read(line`.entity.eid=${rep.eid}`)).length) return rep
     let bytes = await store.get(sha)
     if (!bytes) return null
     let fixed = await contentType(bytes, said.mime)

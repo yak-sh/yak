@@ -16,6 +16,7 @@
 // project to be its own topic, and keeps its eid when its name changes.
 
 import type { Bundle } from '@yaks/graph'
+import { type Built, line } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 import { tokens } from '@yaks/match'
 import { stemmer } from 'stemmer'
@@ -121,11 +122,7 @@ export let about = (t: Bundle): string =>
  * // '.near=T-9&.topic&?doc&.order=similar&.limit=100000'
  * ```
  */
-export let found = (o: { near?: string }): string =>
-  [
-    ...(o.near ? [`.near=${o.near}`] : []),
-    `.${TOPIC}`,
-    '?doc',
-    o.near ? '.order=similar' : `.order=${TOPIC}.name`,
-    `.limit=${TOPICS}`,
-  ].join('&')
+export let found = (o: { near?: string }): Built =>
+  o.near
+    ? line`.near=${o.near}&.${TOPIC}&?doc&.order=similar&.limit=${TOPICS}`
+    : line`.${TOPIC}&?doc&.order=${TOPIC}.name&.limit=${TOPICS}`

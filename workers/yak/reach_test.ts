@@ -6,6 +6,7 @@
 // kernel named. What is under test is the composition — the merge by eid, the
 // order settled after it, and the dry run that keeps a refused half-batch from
 // landing anywhere.
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, identityEid } from '@yaks/graph'
@@ -319,7 +320,10 @@ test('a changed draft identity leaves serving reads and writes alone', async () 
   )
   // The later rows are distinct under the serving identity. A candidate index
   // over owner + match would reject the second if it touched the schema.
-  assertEquals((await put(serving, '/apply', [row('two', 'same')])).status, 200)
+  assertEquals(
+    (await put(serving, '/apply', [row('two', 'same')])).status,
+    200,
+  )
   assertEquals(
     (await put(serving, '/apply', [row('three', 'same')])).status,
     200,
@@ -346,7 +350,11 @@ test('a changed identity replaces its index when the release moves', async () =>
     }])).status,
     200,
   )
-  let staged = await put(draft, '/vocab', widget(['owner', 'match', 'variant']))
+  let staged = await put(
+    draft,
+    '/vocab',
+    widget(['owner', 'match', 'variant']),
+  )
   assertEquals(staged.status, 200, await staged.text())
   let released = appStore(env.STORE, here, { ...page, version: 2 })
   assertEquals(
@@ -405,7 +413,8 @@ test('a candidate seed waits for release and lands once', async () => {
     undefined,
   )
   let released = appStore(env.STORE, here, { ...page, version: 2 })
-  let rows = await (await released('/query?q=.card', {}, vouched(owner))).json()
+  let rows = await (await released('/query?q=.card', {}, vouched(owner)))
+    .json()
   assertEquals(rows.map((row: { card: { title: string } }) => row.card.title), [
     'seeded',
   ])
@@ -520,7 +529,10 @@ test('a spanning read merges the two stores into one bundle per eid', async () =
   assertEquals(both[0].entity.eid, dune)
   assertEquals(comp(both[0], 'book').pages, 412)
   assertEquals(comp(both[0], 'loan').to, 'Ada')
-  assertEquals((both[0]._stores as Record<string, string>).book, 'nora/reading')
+  assertEquals(
+    (both[0]._stores as Record<string, string>).book,
+    'nora/reading',
+  )
   assertEquals(
     (both[0]._stores as Record<string, string>).loan,
     'nora/lending',
@@ -543,7 +555,7 @@ test('an order holds across the merge, and its window cuts after it', async () =
   }
 
   let by = (line: string) =>
-    read(env, reach, line).then((out) =>
+    read(env, reach, whole(line)).then((out) =>
       bundles(out).map((b) => comp(b, 'book').pages)
     )
   assertEquals(await by('.book&?loan&.book.pages>0&.order=book.pages'), [
@@ -666,7 +678,7 @@ test('a projection answers what it names, and what its paths reach across the st
     { entity: { eid: lent }, loan: { to: 'Ada', of: dune } },
   ])
   let asked = async (line: string, where = reach) =>
-    bundles(await read(env, where, line))
+    bundles(await read(env, where, whole(line)))
   // One store narrows its own rows.
   assertEquals(await asked('.book&.fields=book.pages', [reach[0]]), [
     { kind: 'book', entity: { eid: dune }, book: { pages: 412 } },

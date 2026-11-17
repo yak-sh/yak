@@ -2,12 +2,14 @@
 // graph whose letters wait, never a host that will not come up — and the first
 // process that can send sends them, once.
 
+import { line } from '@yaks/query'
 import { system } from '@yaks/fp'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
   type Bundle,
   type Comp,
+  type Graph,
   graph,
   type ReadTx,
   type Storage,
@@ -84,8 +86,8 @@ let letter = (eid: string, extra: Bundle = { entity: { eid } }): Bundle => ({
   deliver: { to: 'p-ana', ...(extra.deliver as Comp) },
 })
 
-let read = async (g: { read: (q: string) => unknown }, eid: string) =>
-  ((await g.read(`.entity.eid=${eid}`)) as Bundle[])[0]
+let read = async (g: Pick<Graph, 'read'>, eid: string) =>
+  (await g.read(line`.entity.eid=${eid}`))[0]
 
 // Committed letters at the handler boundary keep sender checks independent
 // of the pool's scheduling and startup work.

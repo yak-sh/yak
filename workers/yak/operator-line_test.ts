@@ -1,3 +1,4 @@
+import { line, line as ql } from '@yaks/query'
 import { ok, test } from '@yaks/testing'
 import { identityEid } from '@yaks/graph'
 import {
@@ -240,7 +241,7 @@ await receive(
 await service.drain()
 let [sent] = of('sendSMS').concat(of('sendMMS'))
 let [kept] = await store.g.read('.operator_text&*')
-let [fork] = await store.g.read(`.spawned.parent=${rootOf(eid, person)}`)
+let [fork] = await store.g.read(ql`.spawned.parent=${rootOf(eid, person)}`)
 let ofFork = await conversationOf(store, '/at', fork.entity.eid)
 
 // The church line's texts come to the Operator too.
@@ -351,7 +352,7 @@ let theirs = await conversationOf(store, '/at', rootOf(eid, writer))
 let answeredBack = of('sendSMS').find((t) =>
   t.get('message')?.startsWith('Thank you')
 )!
-let [update] = await store.g.read(`.deliver.to=${person}&*`)
+let [update] = await store.g.read(ql`.deliver.to=${person}&*`)
 
 let wrongNumber = await lineDoor(
   new Request(
@@ -391,7 +392,7 @@ let forged = await lineDoor(
 // A retained account-number connection can answer before own_number rows exist.
 let local = ctxOf(env).graph
 let retained = await local.read(
-  `.own_number.connection=${connection.entity.eid}&*`,
+  line`.own_number.connection=${connection.entity.eid}&*`,
 )
 let previousAccount = (connection.connection as { account: string }).account
 await local.apply([

@@ -1,6 +1,7 @@
 // Where a person's talk with a space's Operator is: what a chat page reads
 // first, apart from the channels that take in what they send
 // (operator-channels.ts).
+import { line } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 import type { ToolContext } from '@yaks/session'
 import type { OperatorStore } from './operator-store.ts'
@@ -56,7 +57,7 @@ export let rootAt = async (store: Store, space: string, person: string) => {
   let mine = rootOf(space, person)
   let held = person
     ? await store.g.read(
-      `.operator_session.person=${person}&.operator_session.conversation=true&!spawned&.fields=entity.eid`,
+      line`.operator_session.person=${person}&.operator_session.conversation=true&!spawned&.fields=entity.eid`,
     )
     : []
   return held.length && !held.some((b) => b.entity.eid == mine)
@@ -68,7 +69,7 @@ export let rootAt = async (store: Store, space: string, person: string) => {
  * was started with, from its first lines (`briefly`). */
 export let askedAt = async (store: Store, session: string) => {
   let opening = await store.g.read(
-    `.entry.session=${session}&.order=entry.seq&.limit=3&*`,
+    line`.entry.session=${session}&.order=entry.seq&.limit=3&*`,
   )
   let first = opening.find((b) => !b.prompt && b.content)?.content as
     | { body?: unknown }

@@ -12,6 +12,7 @@
 // upgrade — `WebSocketPair` and a 101 `Response` are the runtime's, not the
 // web's — so a socket is driven the way the runtime drives a hibernated one,
 // through `webSocketMessage`.
+import { whole } from '@yaks/query'
 import { clock, equal, ok, test } from '@yaks/testing'
 import {
   assert,
@@ -820,7 +821,7 @@ test('a malformed query is a 400 to the caller, not a failure', async () => {
               new URL(req.url).pathname + new URL(req.url).search,
               owner,
             ), 'test'),
-        ).query(q),
+        ).query(whole(q)),
       Error,
     )
     assertEquals(
@@ -2395,7 +2396,7 @@ for (
   await dir.apply(rows, { trusted: true })
   let f = await authority(12, async (req) =>
     Response.json(
-      await dir.read(new URL(req.url).searchParams.get('q')!),
+      await dir.read(whole(new URL(req.url).searchParams.get('q')!)),
       { headers: { 'x-yak-directory-revision': '12' } },
     ))
   let ws = wire()

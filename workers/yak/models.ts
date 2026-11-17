@@ -1,4 +1,5 @@
 // Providers lent to each app store; model offerings come from successful answers.
+import { type Line, line, whole } from '@yaks/query'
 import type { Handlers } from '@yaks/effects'
 import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
@@ -106,7 +107,11 @@ export let tooled = (at: Stored): Tool[] =>
       parameters: schemaOf(def),
       run: async (args, ctx) => {
         let act = filled(def, args, { session: ctx?.session })
-        if (act.query != null) return worded(await at.graph.read(act.query))
+        // The command's own declared line, its arguments filled in by
+        // @yaks/tools `filled`: the app wrote it whole.
+        if (act.query != null) {
+          return worded(await at.graph.read(whole(act.query)))
+        }
         let bundles = Array.isArray(act.apply) ? act.apply : [act.apply]
         return worded(
           await at.as(asker(ctx), bundles as Bundle[], ctx?.session),
@@ -196,7 +201,7 @@ export let recovering = async (at: Stored, call: string) => {
   }
   let found = at.context ?? await directoryOf(at.env.STORE).appAt(at.app)
   if (!found) throw new ModelError('unbound', 'No account bound to this call')
-  let outputs = await at.graph.read(`.output.source=${call}&.attachment&*`)
+  let outputs = await at.graph.read(line`.output.source=${call}&.attachment&*`)
   let cost = ask.cost as { dollars?: number; reported?: boolean } | undefined
   if (outputs.length && cost?.dollars != null) {
     let using = (ask.using as Comp | undefined)?.provider
@@ -356,12 +361,12 @@ export let provided = (at: Stored): Record<string, Model> =>
   served(at.env, lent(at), serving)
 
 let modelRows = (graph: {
-  read(query: string): Bundle[] | Promise<Bundle[]>
+  read(query: Line): Bundle[] | Promise<Bundle[]>
   apply(bundles: Bundle[]): unknown
 }) => ({
   price: async (name: string) => {
     let [row] = await graph.read(
-      `.entity.eid=${identityEid('model', [name])}&?price`,
+      line`.entity.eid=${identityEid('model', [name])}&?price`,
     )
     return row?.price as Price | undefined
   },

@@ -15,6 +15,7 @@
 // engine, and a box may have the Docker CLI and no daemon —
 // `--containers-rollout=none` is what gets a dry run past it. So the last test
 // here reads the deploy's own config instead (sandbox/wrangler.toml).
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -707,7 +708,9 @@ test('a build that ships pays for both in one write', async () => {
     },
     { text: 'it is at https://ada.yaks.app/chess/' },
   ])
-  await build(env, owner, space, [{ said: 'person', text: 'chess' }], { model })
+  await build(env, owner, space, [{ said: 'person', text: 'chess' }], {
+    model,
+  })
 
   // The month with no row before this: one build, what its model cost, and
   // the container seconds — none of them zeroed by the other.
@@ -956,7 +959,7 @@ test('a free space holds one sandbox awake, and each space counts its own', asyn
   await tool('space_delete').run(ada, { space: 'ada', forever: true })
   assertEquals(await ada.dir.space('ada'), null)
   assert(![...box.alive].some((n) => n.includes(space.eid)))
-  assertEquals(await meta(env).query(`.lent.within=${space.eid}`), [])
+  assertEquals(await meta(env).query(line`.lent.within=${space.eid}`), [])
 })
 
 test("the month of sandbox time is the space's, and it refuses", async () => {

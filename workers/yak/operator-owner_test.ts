@@ -3,6 +3,7 @@
 // owner is named on, the kept owner admits for each person what the paths
 // themselves admit, and a person's whole `.session` read answers under
 // workerd's SQLite.
+import { line, sub } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { type Bundle, signed } from '@yaks/graph'
 import { operatorMemory } from './operator-testing.ts'
@@ -209,8 +210,8 @@ test('a person reads every session of the Operator’s store under workerd’s S
       content: { body: 'b' },
     },
   ], { trusted: true })
-  for (let q of ['.session', '.entity']) {
-    let read = await seenBy(at, ada).read(`${q}&.fields=entity.eid`)
+  for (let q of [line`.session`, line`.entity`]) {
+    let read = await seenBy(at, ada).read(line`${sub(q)}&.fields=entity.eid`)
     equal(read.some((b) => b.entity.eid == root), true)
     equal(read.some((b) => b.entity.eid == helper), false)
   }

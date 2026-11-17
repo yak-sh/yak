@@ -24,6 +24,7 @@ import type {
   ReadTx,
   Row,
   Storage,
+  Taken,
   Visibility,
 } from './storage.ts'
 import { detached } from './storage.ts'
@@ -230,8 +231,8 @@ export let reader = (opts: {
     let asks = plugins.flatMap((p) => p.address ?? [])
     let outside = outsideRead()
     let under = (o?: ReadOpts) => ({ ...readOpts, ...o })
-    let read = (q: Query, o?: ReadOpts, comps?: string[]) =>
-      outside.read(q, under(o), comps)
+    let read: ReadTx['read'] = (q, o, comps) =>
+      outside.read(q as Taken, under(o), comps)
     let reader: ReadTx = readOpts?.visibility
       ? {
         ...outside,

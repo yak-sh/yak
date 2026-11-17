@@ -1,6 +1,7 @@
 // A person's MCP server on their own machine, asked the way their Operator
 // asks it: through the tunnel of a space they own, to a stub machine behind a
 // stub gateway.
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { mint } from '@yaks/graph'
@@ -68,7 +69,10 @@ await store.g.apply([
 ], { trusted: true })
 let turn = async (person: string, at = space) => {
   let ctx = await operatorContext(env, { person }, at, () => dir)
-  let tools = await operatorRoster(ctx, store, { space: at.eid, session: fork })
+  let tools = await operatorRoster(ctx, store, {
+    space: at.eid,
+    session: fork,
+  })
   let run = (name: string, args: Record<string, unknown>) =>
     tools.find((t) => t.name == name)!.run(args, {
       session: fork,
@@ -109,7 +113,7 @@ test('the owner’s turn lists and calls a tool on their machine as their Operat
   }
   assertEquals(
     await ctxOf(env).graph.read(
-      `(.integration.owner=${ada})|(.connection.owner=${ada})`,
+      line`(.integration.owner=${ada})|(.connection.owner=${ada})`,
     ),
     [],
   )

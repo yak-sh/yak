@@ -7,6 +7,7 @@
 // `builder build` builds it until the mark comes off, and `builder_open`
 // answers that removal.
 
+import { line } from '@yaks/query'
 import type { Bundle, Comp, ReadTx } from '@yaks/graph'
 import { Refused, Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
@@ -117,7 +118,7 @@ export let modeling = (): Handler => async (event, tx, write) => {
   if (said.ask) {
     if (str(comp(said, 'attempt'), 'state') != 'completed') return
     let replies = await tx.read(
-      `.output.source=${said.entity.eid}&.order=entry.seq&*`,
+      line`.output.source=${said.entity.eid}&.order=entry.seq&*`,
     )
     let result = await adapted(tx, replies)
     if (result) await write([result])
@@ -125,7 +126,7 @@ export let modeling = (): Handler => async (event, tx, write) => {
     // too: the model spent its reply's length before it wrote a word.
     else if (
       !replies.length &&
-      !(await tx.read(`.call.source=${said.entity.eid}&.limit=1`)).length
+      !(await tx.read(line`.call.source=${said.entity.eid}&.limit=1`)).length
     ) {
       await ending(
         'The model answered nothing: its reply ran out before it wrote any',

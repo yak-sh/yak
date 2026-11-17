@@ -1,6 +1,7 @@
 // A comment the host's person wrote reaches the session it is owed to with
 // what they said before on its subject; anyone else's comment arrives alone.
 
+import { whole } from '@yaks/query'
 import { graph } from '@yaks/graph'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { provenanceDoc } from '@yaks/provenance'
@@ -84,7 +85,7 @@ let seen = async () => {
   let within = {
     ...host,
     meaning: async (_: string, o: { within?: string } = {}) =>
-      (await g.read(`${o.within} .fields=entity.eid`)).map((b) => ({
+      (await g.read(whole(o.within!))).map((b) => ({
         entity: b.entity.eid,
         similarity: .9,
         excerpt: '',

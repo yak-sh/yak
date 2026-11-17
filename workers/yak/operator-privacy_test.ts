@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
@@ -161,7 +162,10 @@ test('request and transcript doors hide other people’s requests and tasks', as
   )
   assertEquals((await read(bea, 'messages')).body, [])
   assertEquals((await read(bea, 'work')).body, [])
-  assertEquals((await read(bea, 'read')).body, { tasks: [], conversations: [] })
+  assertEquals((await read(bea, 'read')).body, {
+    tasks: [],
+    conversations: [],
+  })
   assertEquals(
     await read(bea, 'read', { task }),
     await read(bea, 'read', { task: unknown }),
@@ -310,7 +314,7 @@ test('a saved draft is told only to its owner’s pages in its space', async () 
 
 test("the Operator's own store, read for one person, shows none of another's conversations", async () => {
   let words = async (person: string, query: string) =>
-    JSON.stringify(await seenBy(store, person).read(query))
+    JSON.stringify(await seenBy(store, person).read(whole(query)))
   for (let query of ['.entry&*', '.operator_request&*', '.session&*']) {
     assertEquals((await words(bea, query)).includes(secret), false, query)
   }

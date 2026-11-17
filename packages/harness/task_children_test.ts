@@ -1,3 +1,4 @@
+import { type Line } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, Refused } from '@yaks/graph'
@@ -554,7 +555,7 @@ test('existing fork receipts do not read inherited transcript bodies on resume',
   ])
   let reads: string[] = []
   let read = h.g.read.bind(h.g)
-  h.g.read = ((query: string, ...rest: unknown[]) => {
+  h.g.read = ((query: Line, ...rest: unknown[]) => {
     reads.push(query)
     return read(query, ...rest as [])
   }) as typeof h.g.read
@@ -602,7 +603,7 @@ test('receipt fast-path refreshes its tail when a child finishes between reads',
   ])
   let read = h.g.read.bind(h.g)
   let finished = false
-  h.g.read = (async (query: string, ...rest: unknown[]) => {
+  h.g.read = (async (query: Line, ...rest: unknown[]) => {
     let rows = await read(query, ...rest as [])
     if (!finished && query.includes('.order=-entry.seq')) {
       finished = true

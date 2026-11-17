@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import {
   assert,
   assertEquals,
@@ -329,7 +330,9 @@ test("a keyed write at a box's door keeps its receipt in the file's write log, a
     assertEquals(await send(), first)
     let db = open(config.db)
     let kept = writes(db, undefined, true).length
-    let books = db.query(select({ cols: [col('entity')], from: table('book') }))
+    let books = db.query(
+      select({ cols: [col('entity')], from: table('book') }),
+    )
     db.close()
     assertEquals([first[0], kept, books.length], [200, 1, 1])
   } finally {
@@ -409,7 +412,7 @@ test('a numbered host reads an eid in prose as the id it holds', async () => {
     { entity: { eid: 'book' }, book: { title: 'Dune' } },
   ])
   let held = await host.graph.read(
-    `.entity.eid=${made.map((b) => b.entity.eid).join(',')}`,
+    line`.entity.eid=${made.map((b) => b.entity.eid)}`,
   )
   let pair = (eid: string) => {
     let { prefix, num } = held.find((b) => b.entity.eid == eid)!.entity
@@ -424,7 +427,9 @@ test('a numbered host reads an eid in prose as the id it holds', async () => {
   })
   // Resolution is the behavior; closing the fixture also drains host effects
   // and cannot be charged to reading one short address.
-  let addressed = (await host.graph.address(['#a3f19c024b'])).get('#a3f19c024b')
+  let addressed = (await host.graph.address(['#a3f19c024b'])).get(
+    '#a3f19c024b',
+  )
   await host.close()
   test('an unnumbered entity retains its short address', () => {
     assertEquals(addressed, snapshot)
@@ -2267,7 +2272,7 @@ test("a call through the tunnel writes as the tunnel's persona through its conve
       }, headers)
       assertEquals(said.error, undefined)
       let [made] = await host.graph.read(
-        `.book.title=${JSON.stringify(title)}&?created`,
+        line`.book.title=${title}&?created`,
       )
       let { by, via } = made.created as Comp
       return [by, via] as [string | undefined, string]
@@ -2417,10 +2422,14 @@ test("a request through the tunnel that the platform says is its owner's own act
         }),
       )
     let conversation = mint()
-    let through = { [HEADER]: '1', [CALLER]: 'operator', 'x-via': conversation }
+    let through = {
+      [HEADER]: '1',
+      [CALLER]: 'operator',
+      'x-via': conversation,
+    }
     let stamped = async (title: string) => {
       let [made] = await host.graph.read(
-        `.book.title=${JSON.stringify(title)}&?created`,
+        line`.book.title=${title}&?created`,
       )
       let { by, via } = (made?.created ?? {}) as Comp
       return [by, via]

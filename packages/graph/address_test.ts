@@ -9,7 +9,7 @@ import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import type { Plugin } from './plugin.ts'
 import type { Storage } from './storage.ts'
-import { and, eq } from '@yaks/query/core'
+import { and, eq, line } from '@yaks/query/core'
 import { Refused } from './admit.ts'
 import { books, comp, memory } from './testing.ts'
 import { ram } from '@yaks/ram'
@@ -47,7 +47,10 @@ test('an id that names nothing is refused, by name', () => {
     Refused,
     'B-9, B-10 name nothing',
   )
-  assertEquals(g(numbered).address(['dune', 'B-7']), new Map([['B-7', 'dune']]))
+  assertEquals(
+    g(numbered).address(['dune', 'B-7']),
+    new Map([['B-7', 'dune']]),
+  )
 })
 
 test('a later plugin may resolve what an earlier one found nothing for', () => {
@@ -217,7 +220,7 @@ let grave = `D-${get(buried, 'gone').entity.num}`
 buried.apply([{ entity: { eid: 'gone' }, $delete: true }])
 test('a deleted entity’s number still names it', () => {
   resolves(grave, 'gone', buried)
-  assertEquals(buried.read(`.entity.eid=${grave}`), [])
+  assertEquals(buried.read(line`.entity.eid=${grave}`), [])
 })
 
 test('a read and a write name the entity a bare handle does', () => {

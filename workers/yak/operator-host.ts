@@ -1,3 +1,4 @@
+import { type Line, line as q, sub } from '@yaks/query'
 import { updatesOf, updating } from './operator-updates.ts'
 import { addressed, type Bundle, type Comp, type Graph } from '@yaks/graph'
 import { refuse } from './tool.ts'
@@ -154,7 +155,7 @@ let metadataOf = async (store: Store, entries: Bundle[]) => {
   let [checkpoints, asks] = await Promise.all([
     Promise.all(sessions.map((id) =>
       store.g.read(
-        `.checkpoint .entry.session=${id}&.fields=entry.session,entry.seq`,
+        q`.checkpoint .entry.session=${id}&.fields=entry.session,entry.seq`,
       )
     )).then((rows) => rows.flat()),
     store.g.get(sources),
@@ -184,7 +185,7 @@ let withHelpers = (entries: Bundle[], helpers: Helper[]) => [
 
 // A task's sessions, oldest first.
 let sessionsOf = async (store: Store, task: string) => {
-  let links = await store.g.read(`.contains .edge.from=${task}`)
+  let links = await store.g.read(q`.contains .edge.from=${task}`)
   return (await store.g.get(links.map((b) => String(comp(b, 'edge')!.to))))
     .filter((b) => b?.session)
     .sort((a, b) =>
@@ -223,14 +224,14 @@ let childrenOf = async (
   calls?: Set<string>,
 ) =>
   (await Promise.all(
-    sessions.map((b) => store.g.read(`.spawned.parent=${b.entity.eid}`)),
+    sessions.map((b) => store.g.read(q`.spawned.parent=${b.entity.eid}`)),
   )).flat().filter((b) => !calls || calls.has(String(comp(b, 'spawned')?.call)))
 
 // The calls among a session's newest lines, `most` of them.
 let callsOf = async (store: Store, session: string, most: number) =>
   new Set(
     (await store.g.read(
-      `.entry.session=${session}&.order=-entry.seq&.limit=${most}&.fields=call.to`,
+      q`.entry.session=${session}&.order=-entry.seq&.limit=${most}&.fields=call.to`,
     )).flatMap((b) => b.call ? [b.entity.eid] : []),
   )
 
@@ -244,7 +245,7 @@ let linesOf = async (
   from?: number,
 ) => {
   let newest = (await store.g.read(
-    `.entry.session=${session}&.order=-entry.seq&.limit=${most}&*`,
+    q`.entry.session=${session}&.order=-entry.seq&.limit=${most}&*`,
   )).reverse()
   let oldest = Number(comp(newest[0], 'entry')?.seq)
   if (from == null || newest.length < most || !(oldest > from + 1)) {
@@ -252,7 +253,7 @@ let linesOf = async (
   }
   return [
     ...await store.g.read(
-      `.entry.session=${session}&.entry.seq>${from}&.entry.seq<${oldest}&.order=entry.seq&*`,
+      q`.entry.session=${session}&.entry.seq>${from}&.entry.seq<${oldest}&.order=entry.seq&*`,
     ),
     ...newest,
   ]
@@ -261,7 +262,7 @@ let linesOf = async (
 let helpersBy = async (store: Store, calls: Set<string>): Promise<Helper[]> =>
   calls.size
     ? await Promise.all(
-      (await store.g.read(`.spawned.call=${[...calls].join(',')}`)).map(
+      (await store.g.read(q`.spawned.call=${[...calls]}`)).map(
         async (b) => ({
           session: b.entity.eid,
           call: comp(b, 'spawned')?.call as string | undefined,
@@ -426,12 +427,12 @@ let threadsOf = async (
 
 // The task holding a session, by the link a task keeps to it.
 let holding = async (store: Store, session: string) => {
-  let [link] = await store.g.read(`.contains .edge.to=${session}`)
+  let [link] = await store.g.read(q`.contains .edge.to=${session}`)
   return String(comp(link, 'edge')?.from ?? '')
 }
 
 let REQUESTS =
-  '.operator_request ?doc ?failed ?created .order=-created.at .limit=100'
+  q`.operator_request ?doc ?failed ?created .order=-created.at .limit=100`
 
 /** Requests with the newest answer each was given, and whether that answer
  * reached them, as one row each: an answer is its own row
@@ -440,8 +441,8 @@ let REQUESTS =
 export let answering = async (store: Store, requests: Bundle[]) => {
   if (!requests.length) return requests
   let read = await store.g.read(
-    `.operator_answer.request=${
-      requests.map((r) => r.entity.eid).join(',')
+    q`.operator_answer.request=${
+      requests.map((r) => r.entity.eid)
     } ?delivered ?bounced .order=created.at`,
   )
   let carriers = new Map(
@@ -481,7 +482,7 @@ export let answering = async (store: Store, requests: Bundle[]) => {
       : r
   })
 }
-let requested = async (store: Store, query = REQUESTS) =>
+let requested = async (store: Store, query: Line = REQUESTS) =>
   answering(store, await store.g.read(query))
 
 // What the chat app opens a session by: the task holding it, or the session
@@ -602,7 +603,7 @@ export let helpingOf = async (
   named: Named = nameless,
 ): Promise<Helping[]> => {
   let helpers = await store.g.read(
-    `.spawned.parent=${await rootAt(
+    q`.spawned.parent=${await rootAt(
       store,
       space,
       person,
@@ -640,8 +641,8 @@ export let workOf = async (
     requested(store),
     conversations.length
       ? store.g.read(
-        `.spawned.parent=${
-          conversations.map((c) => c.root).join(',')
+        q`.spawned.parent=${
+          conversations.map((c) => c.root)
         } ?created ?doc .order=-created.at .limit=50`,
       )
       : [],
@@ -706,6 +707,10 @@ export let workOf = async (
 let SPENT_DAYS = 30
 let NAMED = 200
 
+// What an ask's row carries for spending: who it went to and what it cost.
+let ASKED =
+  q`ask.to,entry.session,using.provider,attempt.state,usage.input_tokens,usage.cached_tokens,usage.output_tokens,cost.dollars,context_parts.parts,created.at,updated.at`
+
 /**
  * What this space's Operator spent over the last thirty days, for the
  * platform's admin (`everyone`): every conversation and task with its helpers
@@ -725,10 +730,7 @@ export let spendingOf = async (
   let [asks, sessions, tasks, edges, prices, providers, conversations] =
     await Promise.all([
       store.g.read(
-        `.ask .created.at>=${JSON.stringify(since)} .fields=` +
-          'ask.to,entry.session,using.provider,attempt.state,usage.input_tokens,' +
-          'usage.cached_tokens,usage.output_tokens,cost.dollars,' +
-          'context_parts.parts,created.at,updated.at',
+        q`.ask .created.at>=${since} .fields=${sub(ASKED)}`,
       ),
       store.g.read(
         '.session .fields=spawned.parent,spawned.call,fixed.parts,session.status,session.source,created.at,updated.at',
@@ -736,8 +738,7 @@ export let spendingOf = async (
       store.g.read('.task .fields=doc.title'),
       store.g.read('.contains .fields=edge.from,edge.to'),
       store.g.read(
-        '.price .fields=price.input,price.output,price.cached,' +
-          'price.cache_write',
+        '.price .fields=price.input,price.output,price.cached,price.cache_write',
       ),
       store.g.read('.provider .fields=provider.name'),
       conversationsOf(store, space, person, everyone),
@@ -881,7 +882,7 @@ let standing = (sessions: string[], entries: Bundle[], archived: Bundle[]) =>
 let archivesOf = (store: Store, sessions: string[]) =>
   sessions.length
     ? store.g.read(
-      `.entry.session=${sessions.join(',')}&.archived .fields=entry.session`,
+      q`.entry.session=${sessions}&.archived .fields=entry.session`,
     )
     : Promise.resolve([])
 // The standing of these sessions and the helpers drawn with them.
@@ -931,7 +932,7 @@ export let standingAt = async (
   let [newest, archived] = await Promise.all([
     Promise.all(drawn.map((eid) =>
       store.g.read(
-        `.entry.session=${eid}&.order=-entry.seq&.limit=1&.fields=entry.session,entry.seq`,
+        q`.entry.session=${eid}&.order=-entry.seq&.limit=1&.fields=entry.session,entry.seq`,
       )
     )),
     archivesOf(store, drawn),
@@ -955,7 +956,7 @@ let arriving = async (store: Store, row: Bundle, entries: Bundle[]) => {
   let drawn = new Set(entries.map((b) => b.entity.eid))
   let since = String(comp(entries[0], 'created')?.at ?? '')
   let requests = await store.g.read(
-    `.operator_request.person=${person} ?doc ?created .order=-created.at .limit=20`,
+    q`.operator_request.person=${person} ?doc ?created .order=-created.at .limit=20`,
   )
   return requests.flatMap((r): Bundle[] => {
     let asked = comp(r, 'operator_request')!
@@ -1125,7 +1126,7 @@ export let frameOf = async (
   opens?: string,
 ) => {
   let [row] = await store.g.read(
-    `.entity.eid=${session}&.session&.fields=entity.eid,spawned.parent,spawned.call,spawned.quiet`,
+    q`.entity.eid=${session}&.session&.fields=entity.eid,spawned.parent,spawned.call,spawned.quiet`,
   )
   if (!row) return null
   // Every session is read from its own newest lines, and those past the
@@ -1593,7 +1594,7 @@ export let operatorRequest = async (
       }
       await store.g.apply(bundles)
     }
-    let kept = await allowedDrafts(await store.g.read(`.draft.by=${person}`))
+    let kept = await allowedDrafts(await store.g.read(q`.draft.by=${person}`))
     if (Array.isArray(args.bundles)) drafted(kept)
     return Response.json({ bundles: kept })
   }
@@ -1623,7 +1624,7 @@ export let operatorRequest = async (
     let id = await receive(store, intake, String(args.say ?? ''), options)
     await armed()
     if (options?.also) {
-      drafted(await allowedDrafts(await store.g.read(`.draft.by=${person}`)))
+      drafted(await allowedDrafts(await store.g.read(q`.draft.by=${person}`)))
     }
     return Response.json({
       request: id,
@@ -1754,7 +1755,10 @@ export let operatorRequest = async (
   if (path == '/operator/skill') {
     let { skillText } = await import('./operator-skills.ts')
     let { seenBy } = await import('./operator-access.ts')
-    let found = await skillText(seenBy(store, person), String(args.title ?? ''))
+    let found = await skillText(
+      seenBy(store, person),
+      String(args.title ?? ''),
+    )
     return found ? Response.json(found) : Response.json({
       code: 'missing',
       message: `this space keeps no skill called ${args.title}`,

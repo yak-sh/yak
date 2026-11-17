@@ -1,6 +1,7 @@
 // One rule for a listing, at the one seam both doors read (listing.ts): the
 // tools' graph_query and the page's `/api/query` used to answer the same
 // filter line differently (C-32574 item 5).
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { asking, listing, mentions, named } from './listing.ts'
@@ -42,15 +43,15 @@ for (
   ]
 ) {
   test(`a listing selects a person's own aspect through ${q}`, () => {
-    let line = asking(q, ['person'], policies)
+    let line = asking(whole(q), ['person'], policies)
     let read = q.includes('.count') ? privateRows.rows : privateRows.read
-    let own = read(line, { person: 'owner' }) as unknown[]
+    let own = read(whole(line), { person: 'owner' }) as unknown[]
     assertEquals(
       q.includes('.count') ? own[0] : own.length,
       q.includes('.count') ? { value: '', n: 1 } : 1,
     )
     for (let person of ['other', null]) {
-      let foreign = read(line, { person }) as unknown[]
+      let foreign = read(whole(line), { person }) as unknown[]
       assertEquals(
         q.includes('.count') ? foreign[0] : foreign.length,
         q.includes('.count') ? { value: '', n: 0 } : 0,
@@ -187,7 +188,7 @@ test('a saved aspect cannot be a lens step, while a stamp can', () => {
 test('a saved aspect cannot describe the vocabulary, while a doc or edge can', () => {
   let words = ['_comp', '_effect', '_before']
   let screens = (line: string) => {
-    let asked = asking(line, words)
+    let asked = asking(whole(line), words)
     return words.map((w) => asked.includes(`!${w}`))
   }
   assertEquals(screens('.recipe'), [false, false, false])

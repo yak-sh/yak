@@ -1,5 +1,6 @@
 // Calls read the same outcome from marks and named answers in RAM and SQL.
 
+import { whole } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -20,7 +21,11 @@ let words = (): VocabDoc => {
 let sessions = (): VocabDoc => {
   let defs = structuredClone(sessionDoc.$defs!)
   defs.attempt.properties!.state.computed = true
-  defs.attempt.properties!.by = { type: 'string', ref: 'entity', death: 'keep' }
+  defs.attempt.properties!.by = {
+    type: 'string',
+    ref: 'entity',
+    death: 'keep',
+  }
   return { $defs: defs }
 }
 
@@ -68,7 +73,7 @@ for (let sql of [false, true]) {
       },
     ])
     let ids = async (query: string) =>
-      (await g.read(query)).map((b) => b.entity.eid).sort()
+      (await g.read(whole(query))).map((b) => b.entity.eid).sort()
     equal(await ids('.execution.state=running'), ['held'])
     equal(await ids('.execution.state=done'), ['done'])
     equal(await ids('.execution.state=failed'), ['defect', 'failed'])

@@ -49,6 +49,7 @@
 // the reading is.
 
 import type { Bundle, Comp, Eid, Graph, Row } from '@yaks/graph'
+import { type Built, line, sub } from '@yaks/query'
 import { stoppedNotice } from './claude-control.ts'
 import { askingOf, lines } from './compact.ts'
 import { checkpointOf } from './pruning.ts'
@@ -100,7 +101,7 @@ type Read = {
   g: Graph
   segs: Segment[]
   names?: string[]
-  fields: string
+  fields: Built
   found: Map<string, Promise<Bundle | undefined>>
   shapes: Map<string, string[]>
   /** the lines of a segment it looked at, by the query naming them */
@@ -135,7 +136,12 @@ let chain = async (g: Graph, session: Eid, o: Reach): Promise<Read> => {
     g,
     segs: await transcriptSegments(g, session),
     names,
-    fields: names ? names.map((n) => '?' + n).join('&') : '*',
+    fields: names
+      ? names.reduce<Built>(
+        (q, n, i) => i ? line`${sub(q)}&?${n}` : line`?${n}`,
+        line``,
+      )
+      : line`*`,
     found: new Map(),
     shapes: shapesOf(g),
     lines: new Map(),
@@ -147,17 +153,17 @@ let chain = async (g: Graph, session: Eid, o: Reach): Promise<Read> => {
 // component, even though an entry carries only a handful of them. Several
 // queries' entities are gathered at once; a query asked of named entities
 // alone carries them beside it.
-type Ask = string | { q: string; eids: Eid[] }
+type Ask = Built | { q: Built; eids: Eid[] }
 let selected = async (r: Read, ...asks: Ask[]): Promise<Bundle[]> => {
   let fields = r.g.vocab.comp('archetype')
-    ? '&.fields=entity.eid,entity.archetype'
-    : '&.fields=entity.eid'
+    ? line`&.fields=entity.eid,entity.archetype`
+    : line`&.fields=entity.eid`
   let owners = []
   for (let a of asks) {
     owners.push(
       ...typeof a == 'string'
-        ? await r.g.rows(a + fields)
-        : await r.g.rows(a.q + fields, { eids: a.eids }),
+        ? await r.g.rows(line`${sub(a)}${sub(fields)}`)
+        : await r.g.rows(line`${sub(a.q)}${sub(fields)}`, { eids: a.eids }),
     )
   }
   return await gathered(r, owners)
@@ -240,7 +246,7 @@ let recalled = async (
 // Older rows of the whole chain, `n` at a time, newest first.
 let pages = (r: Read) => {
   let { segs } = r
-  let i = segs.length - 1, after = ''
+  let i = segs.length - 1, after = line``
   let below: Read = {
     ...r,
     names: (r.names ?? r.g.vocab.all).filter((n) => !LIFECYCLES.includes(n)),
@@ -262,16 +268,18 @@ let pages = (r: Read) => {
         let want = n - got.length
         let rows = await selected(
           r,
-          `${within(segs[i])}&.order=-entry.seq&.limit=${want}${after}`,
+          line`${sub(within(segs[i]))}&.order=-entry.seq&.limit=${want}${
+            sub(after)
+          }`,
         )
         got.push(...rows)
         if (rows.length < want) {
           took(i, rows, -Infinity)
           i--
-          after = ''
+          after = line``
         } else {
           took(i, rows, seqOf(rows.at(-1)!))
-          after = `&.after=${rows.at(-1)!.entity.eid}`
+          after = line`&.after=${rows.at(-1)!.entity.eid}`
         }
       }
       return got
@@ -290,14 +298,16 @@ let pages = (r: Read) => {
           await recalled(below, s, at, oldest ? seqOf(oldest) : Infinity) ??
             await selected(
               below,
-              `${within(s)}&.entry.seq>=${at}&.order=-entry.seq${after}`,
+              line`${sub(within(s))}&.entry.seq>=${at}&.order=-entry.seq${
+                sub(after)
+              }`,
             )
         got.push(...rows)
         took(i, rows, at)
-        if (rows.length) after = `&.after=${rows.at(-1)!.entity.eid}`
+        if (rows.length) after = line`&.after=${rows.at(-1)!.entity.eid}`
         if (i == 0 || segs[i - 1].through < at) break
         i--
-        after = ''
+        after = line``
       }
       return got
     },
@@ -331,17 +341,19 @@ let pages = (r: Read) => {
 // appended after it, or its newest line alone: their identities, read once a
 // reading.
 let tail = (r: Read, s: Segment, seq?: number): Promise<Line[]> => {
-  let q = within(s) +
-    (seq == null ? '&.limit=1' : `&.entry.seq>=${seq}&.limit=${SINCE + 1}`)
+  let q = seq == null
+    ? line`${sub(within(s))}&.limit=1`
+    : line`${sub(within(s))}&.entry.seq>=${seq}&.limit=${SINCE + 1}`
   let held = r.lines.get(q)
   if (held) return held
-  let read =
-    (async () =>
-      (await r.g.rows(q + '&.order=-entry.seq&.fields=entity.eid,entry.seq'))
-        .map((row) => ({
-          eid: String(row['entity.eid']),
-          seq: Number(row['entry.seq']),
-        })))()
+  let read = (async () =>
+    (await r.g.rows(
+      line`${sub(q)}&.order=-entry.seq&.fields=entity.eid,entry.seq`,
+    ))
+      .map((row) => ({
+        eid: String(row['entity.eid']),
+        seq: Number(row['entry.seq']),
+      })))()
   r.lines.set(q, read)
   return read
 }
@@ -352,7 +364,7 @@ let tail = (r: Read, s: Segment, seq?: number): Promise<Line[]> => {
 let recall = async (
   r: Read,
   s: Segment,
-  qualifier: string,
+  qualifier: Built,
 ): Promise<{ known?: Known; edge?: Line; ask: Eid[] }> => {
   let known = memories.get(r.g)?.get(within(s) + qualifier)
   let lines = await tail(r, s, known?.seq)
@@ -371,7 +383,7 @@ let recall = async (
 let keep = (
   r: Read,
   s: Segment,
-  qualifier: string,
+  qualifier: Built,
   edge: Line | undefined,
   found: Bundle[],
 ) => {
@@ -385,13 +397,15 @@ let keep = (
 }
 
 // The newest entry a qualifier selects, and every one of them.
-let newest = (r: Read, qualifier: string): Promise<Bundle | undefined> => {
+let newest = (r: Read, qualifier: Built): Promise<Bundle | undefined> => {
   let seen = r.found.get(qualifier)
   if (seen) return seen
   let found = (async () => {
     for (let s of r.segs.toReversed()) {
       let { known, edge, ask } = await recall(r, s, qualifier)
-      let q = `${within(s)}${qualifier}&.order=-entry.seq&.limit=1`
+      let q = line`${sub(within(s))}${
+        sub(qualifier)
+      }&.order=-entry.seq&.limit=1`
       let page = async (eids?: Eid[]) =>
         (await selected(r, eids ? { q, eids } : q))[0]
       let row = !known ? await page() : ask.length ? await page(ask) : undefined
@@ -404,10 +418,10 @@ let newest = (r: Read, qualifier: string): Promise<Bundle | undefined> => {
   r.found.set(qualifier, found)
   return found
 }
-let every = async (r: Read, qualifier: string): Promise<Bundle[]> =>
+let every = async (r: Read, qualifier: Built): Promise<Bundle[]> =>
   (await Promise.all(r.segs.map(async (s) => {
     let { known, edge, ask } = await recall(r, s, qualifier)
-    let q = within(s) + qualifier
+    let q = line`${sub(within(s))}${sub(qualifier)}`
     let found = !known
       ? await selected(r, q)
       : ask.length
@@ -444,11 +458,10 @@ let aspect = async (
 ): Promise<Bundle[]> => {
   if (!r.g.vocab.comp(name)) return []
   let carry = near.filter((b) => name in b)
-  let latest = carry.at(-1) ?? await newest(r, `&.${name}`)
+  let latest = carry.at(-1) ?? await newest(r, line`&.${name}`)
   if (!latest) return []
-  let chosen = !latest.ask
-    ? undefined
-    : carry.findLast((b) => !b.ask) ?? await newest(r, `&.${name}&!${ASK}`)
+  let chosen = !latest.ask ? undefined : carry.findLast((b) => !b.ask) ??
+    await newest(r, line`&.${name}&!${ASK}`)
   let through = comp(latest, ASK)?.through
   let sent = through == null ? [] : near.filter((b) => b.entity.eid == through)
   return [
@@ -498,7 +511,7 @@ export let entryStatus = async (
   // The session component itself is never read whole: it wears the status.
   let run = ['process', 'exit'].filter((name) => g.vocab.comp(name))
   let [[row], [ran]] = await Promise.all([
-    g.rows(`.entity.eid=${session}&.fields=session.ended`),
+    g.rows(line`.entity.eid=${session}&.fields=session.ended`),
     run.length ? g.get([session], run) : [],
   ])
   return statusOf(
@@ -526,22 +539,22 @@ export let newestOf = async (
   g: Graph,
   session: Eid,
 ): Promise<Bundle | undefined> =>
-  newest(await chain(g, session, { bodies: true }), '')
+  newest(await chain(g, session, { bodies: true }), line``)
 
 /** Whether a transcript holds an ask. */
 export let hasAsk = async (g: Graph, session: Eid): Promise<boolean> =>
-  !!await newest(await chain(g, session, { comps: [ENTRY] }), `&.${ASK}`)
+  !!await newest(await chain(g, session, { comps: [ENTRY] }), line`&.${ASK}`)
 
 // The oldest entry a qualifier selects: what was said first never moves, so
 // nothing of it is remembered.
 let oldest = async (
   r: Read,
-  qualifier: string,
+  qualifier: Built,
 ): Promise<Bundle | undefined> => {
   for (let s of r.segs) {
     let [row] = await selected(
       r,
-      `${within(s)}${qualifier}&.order=entry.seq&.limit=1`,
+      line`${sub(within(s))}${sub(qualifier)}&.order=entry.seq&.limit=1`,
     )
     if (row) return row
   }
@@ -549,12 +562,13 @@ let oldest = async (
 
 // A qualifier leaving out entries that carry any of `names` the vocabulary
 // declares: an undeclared one is carried by none.
-let without = (g: Graph, ...names: string[]) =>
-  names.filter((n) => g.vocab.comp(n)).map((n) => `&!${n}`).join('')
+let without = (g: Graph, ...names: string[]): Built =>
+  names.filter((n) => g.vocab.comp(n))
+    .reduce<Built>((q, n) => line`${sub(q)}&!${n}`, line``)
 
 // A request: an entry choosing the model a run goes on with, not an ask and
 // not a line read from a provider's log.
-let request = (g: Graph) => `&.${USING}${without(g, ASK, 'lines')}`
+let request = (g: Graph) => line`&.${USING}${sub(without(g, ASK, 'lines'))}`
 
 /** The first request of a transcript, prose and all: what a run was started
  * with. */
@@ -578,7 +592,7 @@ export let firstInput = async (
 ): Promise<Bundle | undefined> =>
   oldest(
     await chain(g, session, { bodies: true }),
-    `&.${CONTENT}${without(g, OUTPUT, 'lines', 'notice')}`,
+    line`&.${CONTENT}${sub(without(g, OUTPUT, 'lines', 'notice'))}`,
   )
 
 /** The newest receipt of a transcript: the stop that says a run ended, naming
@@ -590,8 +604,9 @@ export let receiptOf = async (
 ): Promise<Bundle | undefined> =>
   newest(
     await chain(g, session, { comps: [ENTRY, ASK, 'stop'] }),
-    `&.stop${without(g, 'lines')}&.${ASK}.through` +
-      (through == null ? '' : `=${through}`),
+    through == null
+      ? line`&.stop${sub(without(g, 'lines'))}&.${ASK}.through`
+      : line`&.stop${sub(without(g, 'lines'))}&.${ASK}.through=${through}`,
   )
 
 /** What a transcript said last, prose and all: its newest spoken output (not a
@@ -604,9 +619,10 @@ export let saidOf = async (
   let r = await chain(g, session, { bodies: true })
   return await newest(
     r,
-    `&.${OUTPUT}&.${CONTENT}` +
-      without(g, 'reasoning', CALL, RESULT, 'stop'),
-  ) ?? await newest(r, `&.stop&.${CONTENT}`)
+    line`&.${OUTPUT}&.${CONTENT}${
+      sub(without(g, 'reasoning', CALL, RESULT, 'stop'))
+    }`,
+  ) ?? await newest(r, line`&.stop&.${CONTENT}`)
 }
 
 // What a reading holds besides its newest rows, found by one lookup for all:
@@ -620,15 +636,22 @@ let named = async (r: Read, o: Reach): Promise<Bundle[]> => {
   let has = (name: string) => r.g.vocab.comp(name)
   let turn = !!o.turn
   let parts = [
-    ...turn && has('checkpoint') ? ['.checkpoint'] : [],
-    ...(turn || o.call) && has('prompt') ? ['.prompt'] : [],
-    ...has(CALL) && has(RESULT) ? [`.${CALL} !${RESULT}s`] : [],
+    ...turn && has('checkpoint') ? [line`.checkpoint`] : [],
+    ...(turn || o.call) && has('prompt') ? [line`.prompt`] : [],
+    ...has(CALL) && has(RESULT) ? [line`.${CALL} !${RESULT}s`] : [],
   ]
-  let retry = `&.provisional&.${ASK}`
   return [
-    ...parts.length ? await every(r, `&(${parts.join('|')})`) : [],
+    ...parts.length
+      ? await every(
+        r,
+        line`&(${sub(parts.reduce((q, p) => line`${sub(q)}|${sub(p)}`))})`,
+      )
+      : [],
     ...turn && has('provisional')
-      ? await selected(r, ...r.segs.map((s) => within(s) + retry))
+      ? await selected(
+        r,
+        ...r.segs.map((s) => line`${sub(within(s))}&.provisional&.${ASK}`),
+      )
       : [],
   ]
 }
@@ -716,7 +739,7 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
           g.vocab.comp(n)
         ),
       },
-      ...r.segs.map((s) => within(s) + '&.archived'),
+      ...r.segs.map((s) => line`${sub(within(s))}&.archived`),
     )
     for (let b of marks) {
       let found = held.find((h) => h.entity.eid == b.entity.eid)
@@ -734,7 +757,7 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
     stop: () =>
       stop ??= (async () => {
         let hit = g.vocab.comp('stop') &&
-          await newest({ ...r, fields: '?entry' }, '&.stop')
+          await newest({ ...r, fields: line`?entry` }, line`&.stop`)
         return hit ? seqOf(hit) : undefined
       })(),
     seqAt: async (eid) => {
@@ -769,8 +792,8 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
       rows.unshift(...next.reverse())
       if (n.noAsk == null && !rows.some((b) => kindOf(b) == 'ask')) {
         n.noAsk = !await newest(
-          { ...r, names: [ENTRY], fields: '?entry' },
-          `&.${ASK}${without(g, ...outranking('ask'))}`,
+          { ...r, names: [ENTRY], fields: line`?entry` },
+          line`&.${ASK}${sub(without(g, ...outranking('ask')))}`,
         )
       }
     }
@@ -795,7 +818,7 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
     for (let eid of open) reported.add(eid)
     if (open.length && g.vocab.comp(PROGRESS)) {
       held.push(
-        ...await g.read(`.${PROGRESS}.call=${open.join(',')}&${r.fields}`),
+        ...await g.read(line`.${PROGRESS}.call=${open}&${sub(r.fields)}`),
       )
     }
     held.push(

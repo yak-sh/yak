@@ -1,6 +1,7 @@
 // The edge as a graph plugin: a link states itself, is named by what it says,
 // dies with either end, and cannot be half-said.
 
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
@@ -26,7 +27,7 @@ let posts = (g: ReturnType<typeof blogGraph>) => {
 }
 
 let read = (g: ReturnType<typeof blogGraph>, q: string) =>
-  (g.read(q) as Bundle[]).map((b) => b.entity.eid).sort()
+  (g.read(whole(q)) as Bundle[]).map((b) => b.entity.eid).sort()
 
 test('a link states itself and is stored', () => {
   let g = posts(blogGraph())
@@ -53,7 +54,11 @@ test('an aliased link mints at the sentence it states', () => {
   assertEquals(made.entity.eid, edgeEid('p1', 'cites', 'p2'))
 })
 
-let minting = graph({ storage: ram(blog), vocab: blog, plugins: [edges(blog)] })
+let minting = graph({
+  storage: ram(blog),
+  vocab: blog,
+  plugins: [edges(blog)],
+})
 test('a link to an entity the same batch mints resolves first', () => {
   let g = minting
   let out = sync(g.apply([

@@ -6,6 +6,7 @@
 // document's text; and remove one. Every upload is the caller's own, through
 // the same write `POST ./api/blob` makes (uploads.ts `uploaded`), so the app's
 // `blob` floor and limits hold and extraction runs as it does for a page's.
+import { line, sub } from '@yaks/query'
 import { mimeOf } from '@yaks/blob'
 import type { Bundle, Comp } from '@yaks/graph'
 import { CallError } from '@yaks/tools/errors'
@@ -316,7 +317,7 @@ let documentsOf = (args: Args): Asked[] => {
 }
 
 // A document's rows: the file, and its extraction or why it failed.
-let SHELF = '.attachment&?document_text&?failed'
+let SHELF = line`.attachment&?document_text&?failed`
 
 // The library's rows as the caller reads them.
 let shelf = (store: Parameters<typeof metaOf>[0], who: Who) =>
@@ -352,7 +353,7 @@ let attachmentsAt = async (
   eids: string[],
 ) => {
   let rows = eids.length
-    ? await graph.query(`${SHELF}&.entity.eid=${eids.join(',')}`)
+    ? await graph.query(line`${sub(SHELF)}&.entity.eid=${eids}`)
     : []
   let found = new Map(rows.map((r) => [r.entity.eid, r]))
   let missing = eids.filter((e) => !found.has(e))
@@ -456,7 +457,7 @@ let added = async (
   })
 }
 
-let line = (s: string) => s.replace(/\s+/g, ' ').trim()
+let flat = (s: string) => s.replace(/\s+/g, ' ').trim()
 
 export let libraryTools: Row[] = [
   {
@@ -516,7 +517,7 @@ export let libraryTools: Row[] = [
               ? `- added ${r.name} (${r.eid})${
                 r.label != r.name ? ` from ${r.label}` : ''
               }${r.replaced ? `, replacing ${r.replaced}` : ''}`
-              : `- skipped ${r.label}: ${line(r.reason)}`
+              : `- skipped ${r.label}: ${flat(r.reason)}`
           ),
         ].join('\n'),
         space,
@@ -611,7 +612,7 @@ export let libraryTools: Row[] = [
             : `${eid} is still being read; library_list says when it is searchable`,
         )
       }
-      let pages = (await graph.query(`.document_page.document=${eid}`))
+      let pages = (await graph.query(line`.document_page.document=${eid}`))
         .map((b) => b.document_page as Comp)
         .sort((a, b) => Number(a.page) - Number(b.page))
         .filter((p) => Number(p.page) >= from)

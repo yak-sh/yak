@@ -1,5 +1,6 @@
 // Input prose, sender identities and timing, kept separate until prompt assembly.
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { human } from '@yaks/id'
 import {
   attemptState,
@@ -71,9 +72,7 @@ export let senders = async (
   // Read, not got: a read answers each row's number, which its id shows.
   let named = (eids: Iterable<Eid>) =>
     g.read(
-      `.entity.eid=${
-        [...eids].map((e) => JSON.stringify(e)).join(',')
-      } ?person ?persona ?session ?doc`,
+      line`.entity.eid=${[...eids]} ?person ?persona ?session ?doc`,
     )
   if (!ids.size) return new Map()
   let rows = await named(ids)

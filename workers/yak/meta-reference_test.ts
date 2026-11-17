@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { assert, assertEquals as equal } from '@std/assert'
 import { test } from '@yaks/testing'
 import { type Comp, mint } from '@yaks/graph'
@@ -18,7 +19,7 @@ test('internal graph reads retain canonical references while public named reads 
       slug,
       apps: ['consumer', 'merchant', 'notes'],
     }])
-    let graph = meta(env), read = (q: unknown) => graph.query(String(q))
+    let graph = meta(env), read = (q: unknown) => graph.query(whole(String(q)))
     await graph.apply([
       {
         entity: { eid: owner.person },
@@ -75,7 +76,7 @@ test('internal graph reads retain canonical references while public named reads 
     equal(response.status, 200, await response.clone().text())
     let connection = (await response.json()).connection
     let query = `.entity.eid=${connection}&.connection`
-    let [row] = await graph.query(query)
+    let [row] = await graph.query(whole(query))
     equal((row.connection as Comp).owner, owner.person)
     let named = await graph.door!('/query?q=' + encodeURIComponent(query))
       .then((r) => r.json())
@@ -105,7 +106,10 @@ test('internal graph reads retain canonical references while public named reads 
       }),
     })
     equal(response.status, 200, await response.clone().text())
-    equal(JSON.parse((await response.json()).value.answer).person, owner.person)
+    equal(
+      JSON.parse((await response.json()).value.answer).person,
+      owner.person,
+    )
     assert(provenance)
     let authority = await serviceFrom(env, provenance)
     assert(authority)

@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
@@ -68,7 +69,7 @@ test('an edited skill imports through the locator it holds, whatever its id', as
     read: 1,
   })
   assertEquals(
-    (await g.read(`.references&.edge.to=${file}`)).map((b) => b.entity.eid),
+    (await g.read(line`.references&.edge.to=${file}`)).map((b) => b.entity.eid),
     [former],
   )
   let [skill] = await g.get(['skill'], ['content'])

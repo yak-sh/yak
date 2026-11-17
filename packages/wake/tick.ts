@@ -7,6 +7,7 @@
 // again rather than calling the other's write a failure.
 
 import type { Bundle, Graph } from '@yaks/graph'
+import { line, sub, whole } from '@yaks/query'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { WAKE } from './comp.ts'
@@ -59,7 +60,7 @@ export let tick = async (
   opts: TickOpts = {},
 ): Promise<Ticked> => {
   let watching = opts.watching ??
-    ((_: Bundle, w: { query: string }) => graph.read(w.query))
+    ((_: Bundle, w: { query: string }) => graph.read(whole(w.query)))
   let result: Ticked = { fired: [], refused: [] }
   let at = new Date(now).toISOString()
   let holds = matches(graph, now)
@@ -87,7 +88,7 @@ export let tick = async (
         if (!(error instanceof Stale) || tries == TRIES) throw error
       }
       let [fresh] = await graph.read(
-        `.entity.eid=${wake.entity.eid}&${owed(now)}`,
+        line`.entity.eid=${wake.entity.eid}&${sub(owed(now))}`,
         { now },
       )
       if (!fresh) return []

@@ -13,6 +13,7 @@
 //
 // The release that publishes a new listing replaces LISTING with the tools it
 // lists and deletes every translation whose name it no longer carries.
+import { line } from '@yaks/query'
 import {
   connect,
   CONNECTION,
@@ -129,7 +130,7 @@ let NAME = str(
 
 // The shared links an app's worker reads a name through.
 let linksOf = async (read: Read, app: string) =>
-  (await read(`.edge.from=${app}&.${USES}&*`))
+  (await read(line`.edge.from=${app}&.${USES}&*`))
     .filter((l) => !comp(l, USES).each)
 
 let ROWS: Row[] = [
@@ -202,7 +203,7 @@ let ROWS: Row[] = [
       // it, which takes a new key only where it is this space's or the
       // caller's own.
       let eid = asked.find((b) => !b.edge && !b[INTEGRATION])!.entity.eid
-      let [held] = await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}`)
+      let [held] = await c.graph.read(line`.entity.eid=${eid}&.${CONNECTION}`)
       let refused = held &&
         barred('key', await holdOf(ctx.env, space, who, held, app.eid))
       if (refused) throw refuse('access', refused)
@@ -264,7 +265,7 @@ let ROWS: Row[] = [
         let to = String(comp(link, 'edge').to)
         // The link is the app's, and the key is forgotten with it only where
         // the connection is this space's or the caller's own.
-        let [held] = await c.graph.read(`.entity.eid=${to}&.${CONNECTION}`)
+        let [held] = await c.graph.read(line`.entity.eid=${to}&.${CONNECTION}`)
         let ours = !barred(
           'disconnect',
           await holdOf(ctx.env, space, who, held, app.eid),
@@ -273,7 +274,7 @@ let ROWS: Row[] = [
           entity: { eid: link.entity.eid },
           tombstone: {},
         }])
-        let left = await c.graph.read(`.edge.to=${to}&.${USES}`)
+        let left = await c.graph.read(line`.edge.to=${to}&.${USES}`)
         if (comp(link, USES).direct && !left.length && ours) {
           await disconnect(c, to)
         }
@@ -473,9 +474,9 @@ let CONNECTIONS: Row[] = [
       let read = ctxOf(ctx.env).graph.read
       // The connection: made now, or the one the app already used.
       let eid = made.find((b) => !b.edge && !b[INTEGRATION])!.entity.eid
-      let [b] = await read(`.entity.eid=${eid}&.${CONNECTION}&*`)
+      let [b] = await read(line`.entity.eid=${eid}&.${CONNECTION}&*`)
       let [l] = await read(
-        `.entity.eid=${edgeEid(app.eid, USES, eid)}&.${USES}&*`,
+        line`.entity.eid=${edgeEid(app.eid, USES, eid)}&.${USES}&*`,
       )
       let status = comp(b, CONNECTION).status
       let u = comp(l, USES)
@@ -535,8 +536,8 @@ let CONNECTIONS: Row[] = [
         {
           dir: ctx.dir,
           by: args.space == null
-            ? `.members_space.member.person=${ctx.person}`
-            : `.space.slug=${text(args.space, 'space')}`,
+            ? line`.members_space.member.person=${ctx.person}`
+            : line`.space.slug=${text(args.space, 'space')}`,
         },
       )
       let { space } = await admitted

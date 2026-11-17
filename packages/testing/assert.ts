@@ -50,13 +50,17 @@ let check = (actual: unknown, expected: unknown, message?: string) => {
 }
 
 /**
- * Deep equality: `actual` is `expected`, structurally.
+ * Deep equality: `actual` is `expected`, structurally. Text is compared as
+ * text, so a branded string (a query `Line`) meets a plain literal.
  *
  * ```ts
  * equal({ a: [1, 2] }, { a: [1, 2] })
  * ```
  */
-export let equal = <T>(actual: T, expected: T, message?: string): T => {
+export let equal: {
+  <T extends string>(actual: T, expected: string, message?: string): T
+  <T>(actual: T, expected: T, message?: string): T
+} = <T>(actual: T, expected: T, message?: string): T => {
   check(actual, expected, message)
   return actual
 }

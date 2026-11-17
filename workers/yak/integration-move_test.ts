@@ -1,6 +1,7 @@
 // A custom integration made before owners were kept takes the space holding
 // its oldest connection, and one no space holds a connection through keeps
 // none.
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
@@ -42,7 +43,7 @@ await g.apply([
   through('theirs', 'cy', 1),
 ], { trusted: true, stamp: false })
 let rows = await g.read(integrationOwnerRule.find)
-let read = (line: string) => g.read(line) as Bundle[]
+let read = (line: string) => g.read(whole(line)) as Bundle[]
 
 test('a custom integration made before owners were kept takes the space that first asked for it', () => {
   let moved = Object.fromEntries(

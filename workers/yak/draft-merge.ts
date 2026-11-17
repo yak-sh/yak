@@ -19,6 +19,7 @@
 // A pick names the live value it was made seeing: a person's write on the
 // live app since is one they never chose over, so that property is asked
 // about again rather than written over.
+import { line } from '@yaks/query'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Choice, Conflict } from '@yaks/journal'
@@ -382,8 +383,9 @@ export let settled = async (env: Env, g: Graph, eid: string) => {
   let c = row?.draft_conflict as Comp | undefined
   if (!c || !row.decided) return
   let rows = await g.read(
-    `.draft_conflict.app=${c.app} .draft_conflict.branch=${c.branch} ` +
-      '?decided ?cancelled',
+    line`.draft_conflict.app=${String(c.app)} .draft_conflict.branch=${
+      String(c.branch)
+    } ?decided ?cancelled`,
   )
   let picks = picksOf(rows)
   if (!picks) return

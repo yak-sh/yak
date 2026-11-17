@@ -2,6 +2,7 @@
 // written at birth since D-134327. A row born before then kept them beneath
 // its own files (file-root.ts `ownedPrefix`), and this writes that prefix down,
 // so no byte moves. Only the directory holds app rows.
+import { type Line, line } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { blobPrefix } from './blob-key.ts'
@@ -32,12 +33,12 @@ import type { Rule } from './mover.ts'
  */
 export let blobsMove = (
   row: Bundle,
-  read?: (line: string) => Bundle[],
+  read?: (line: Line) => Bundle[],
 ): Bundle[] => {
   let app = row.app as Comp
   if (app.blobs != null) return []
   if (!read) throw new Error("an app's uploads are rooted in its space")
-  let [space] = read(`.entity.eid=${app.space}&.space&*`)
+  let [space] = read(line`.entity.eid=${String(app.space)}&.space&*`)
   let store = (space?.space as Comp | undefined)?.store
   let slug = app.slug ?? (row.former as Comp | undefined)?.slug
   if (typeof store != 'string' || typeof slug != 'string') return []
@@ -53,6 +54,6 @@ export let blobsRule: Rule = {
   mark: 'yak/store/app-blobs/1',
   stores: [PLATFORM_STORE],
   live: 'all',
-  find: '.app !app.blobs&*',
+  find: line`.app !app.blobs&*`,
   move: blobsMove,
 }

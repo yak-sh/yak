@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -53,7 +54,8 @@ let pages = [
   },
 ]
 for (let page of pages) {
-  let rows = () => g.rows(page.query, { storageOrder: page.storageOrder })
+  let rows = () =>
+    g.rows(whole(page.query), { storageOrder: page.storageOrder })
   rows()
   test(`scoped ${page.name} cursor pages only visible rows`, () =>
     equal(rows(), page.ids.map((eid) => ({ eid }))))

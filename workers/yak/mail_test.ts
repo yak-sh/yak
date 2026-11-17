@@ -12,6 +12,7 @@
 // in these tests is the directory — the same class, woken on the platform's own
 // vocabulary because of the name it is given — so a letter counted against a
 // space is counted through the wire that counts it in life.
+import { line } from '@yaks/query'
 import { cloudflare } from '@yaks/cloudflare-mail'
 import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
@@ -164,7 +165,12 @@ test('one send carries every reader, from one address', async () => {
     )
     await send({ to: REPLY_TO, subject: 's', body: 'b' })
     await send({ to: [REPLY_TO, 'ann@x.test'], subject: 's', body: 'b' })
-    await send({ to: REPLY_TO, subject: 's', body: 'b', replyTo: 'ann@x.test' })
+    await send({
+      to: REPLY_TO,
+      subject: 's',
+      body: 'b',
+      replyTo: 'ann@x.test',
+    })
   } finally {
     globalThis.fetch = real
   }
@@ -369,7 +375,7 @@ let platform = async (meter?: Record<string, unknown>) => {
   }], KERNEL)
   // What the space has spent this month, as the directory holds it.
   let spent = async () => {
-    let [row] = await store.query(`.entity.eid=${SPACE}&?meter`)
+    let [row] = await store.query(line`.entity.eid=${SPACE}&?meter`)
     return (row?.meter ?? {}) as { emails?: number }
   }
   return { ns, spent }

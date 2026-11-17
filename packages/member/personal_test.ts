@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { type Comp, graph, signed, type Tx } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { graph as readonly } from '@yaks/graph/read'
@@ -387,8 +388,10 @@ for (let person of ['alice', 'bob', null]) {
     let who = `${person ?? 'guest'}, native ${native}`
     for (let q of ['.draft', '.draft .fields=draft.text', '.draft .count']) {
       test(`read-only personal scopes: ${q} (${who})`, () => {
-        if (!q.endsWith('.count')) equal(g.read(q, opts), read.read(q, opts))
-        equal(g.rows(q, opts), read.rows(q, opts))
+        if (!q.endsWith('.count')) {
+          equal(g.read(whole(q), opts), read.read(whole(q), opts))
+        }
+        equal(g.rows(whole(q), opts), read.rows(whole(q), opts))
       })
     }
     test(`read-only personal scopes: get (${who})`, () => {

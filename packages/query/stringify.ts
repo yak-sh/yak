@@ -18,6 +18,7 @@ import {
   type Value,
 } from './ast.ts'
 import { parseDot } from './parse.ts'
+import type { Built } from './line.ts'
 
 let unwritable = (what: string) =>
   new SyntaxError(`${what} cannot be written as a query line`)
@@ -95,7 +96,9 @@ let pred = (c: Pred): string => {
 // with its own leading dot, and a `!` between says none rather than some.
 let reverse = (c: Pred): string => {
   let [assoc, ...rest] = c.path
-  if (!c.where && !rest.length) throw unwritable('a reverse test with no child')
+  if (!c.where && !rest.length) {
+    throw unwritable('a reverse test with no child')
+  }
   let child = c.where ?? { ...c, path: rest, not: undefined }
   let inner = child.kind == 'pred' ? pred(child) : ''
   if (!inner.startsWith('.')) throw unwritable('this reverse association')
@@ -198,5 +201,7 @@ let one = (c: Clause): string => {
  *   parse('.comments.reviews!.stars=5'))
  * ```
  */
-export let stringify = (q: string | Clause): string =>
-  typeof q == 'string' ? q : one(q)
+export let stringify = <Q extends string | Clause>(
+  q: Q,
+): Q extends Clause ? Built : Q =>
+  (typeof q == 'string' ? q : one(q)) as Q extends Clause ? Built : Q

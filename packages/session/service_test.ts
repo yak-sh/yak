@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Comp, type Graph, identityEid } from '@yaks/graph'
@@ -89,9 +90,9 @@ let projects = async (
 }
 
 let told = async (g: Graph, id: string) => {
-  let [s] = await g.read(`.session.id=${id}`)
+  let [s] = await g.read(line`.session.id=${id}`)
   if (!s) return undefined
-  return (await g.read(`.entry.session=${s.entity.eid}&.order=entry.seq&*`))
+  return (await g.read(line`.entry.session=${s.entity.eid}&.order=entry.seq&*`))
     .map((b) => (b.content as { body: string } | undefined)?.body ?? '(call)')
 }
 
@@ -303,7 +304,7 @@ test('a session is the entity its harness id names', () => {
     await hook(id)
     await hook('run')
     await hook('run')
-    assertEquals((await g.read(`.session.id=${id}`)).length, 1)
+    assertEquals((await g.read(line`.session.id=${id}`)).length, 1)
     assertEquals((await g.read('.session.id=run')).length, 1)
   })
 })
@@ -442,7 +443,7 @@ test('a session quiet past its full depth is stripped to its prose and its cost'
     await trim(g)
     assertEquals(await told(g, 'past'), ['long ago', 'said 0', '(call)'])
     let [past] = await g.read('.session.id=past')
-    let [spent] = await g.read(`.entry.session=${past.entity.eid}&.cost&*`)
+    let [spent] = await g.read(line`.entry.session=${past.entity.eid}&.cost&*`)
     assertEquals(spent.cost, { dollars: 0.25, reported: false })
     assertEquals(await told(g, 'p'), [])
     assertEquals(await told(g, 'today'), [

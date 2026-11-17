@@ -3,6 +3,7 @@
 // no copy of its persona: each ask is told the persona's text and the topic's
 // tree afresh, and offered the tools the persona contains then
 // (./wear_test.ts).
+import { line } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { compose } from '@yaks/cli/host'
 import { type Comp, identityEid } from '@yaks/graph'
@@ -92,7 +93,7 @@ let opened = await (async () => {
       ]))[0]
     let helped = await from('helper')
     let entries = (s: string) =>
-      g.read(`.entry.session=${s}&!ask&*&.order=entry.seq`)
+      g.read(line`.entry.session=${s}&!ask&*&.order=entry.seq`)
     let rejected = await openingFor(g, {}, undefined, {
       persona: 'oracle',
       topic: 'nowhere',

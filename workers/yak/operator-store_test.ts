@@ -1,5 +1,6 @@
 // The Operator's store: its drain works a slice an alarm and keeps its
 // vocabulary's retention, and a wake fits its file once a schema.
+import { whole } from '@yaks/query'
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import {
@@ -92,7 +93,7 @@ let said = (body: string) => {
   }]
 }
 let found = async (g: OperatorStore['g'], word: string) =>
-  (await g.read(word)).map((b) => (b.content as { body: string }).body)
+  (await g.read(whole(word))).map((b) => (b.content as { body: string }).body)
 
 test('a word is found in an entry written after its store was fitted', async () => {
   let { g } = await operatorStore(durable())

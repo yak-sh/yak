@@ -1,4 +1,5 @@
 // A worker's customer keeps drafts without opening the app's private graph.
+import { type Line } from '@yaks/query'
 import { draftGateway, DraftRefused } from '@yaks/draft'
 import type { Answer } from './apps.ts'
 import { appStore } from './directory.ts'
@@ -23,7 +24,7 @@ export let draftDoor: Answer = async (at) => {
   })
   try {
     let gateway = draftGateway({
-      query: (line) => graph.query(line),
+      query: (line) => graph.query(line as Line),
       apply: async (rows) => ({ bundles: await graph.apply(rows) }),
     }, who)
     let value

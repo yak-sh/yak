@@ -1,5 +1,6 @@
 // A paid call reserves its quoted cost before submission. Uncertain submissions
 // keep that debit; only a measured answer or a known unsubmitted call frees it.
+import { line } from '@yaks/query'
 import { type Bundle, type Comp, mint, token } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
@@ -36,7 +37,7 @@ export type Paying = {
 export let receiptEid = (call: string) =>
   derivedEid('generated-media-spend|' + call)
 let read = async (env: Env, eid: string) =>
-  (await meta(env).query(`.entity.eid=${eid}`))[0]
+  (await meta(env).query(line`.entity.eid=${eid}`))[0]
 let guard = (row: Bundle | undefined, comp: string, props: string[]) => ({
   [comp]: Object.fromEntries(
     props.map((p) => [p, token((row?.[comp] as Comp)?.[p] ?? null)]),

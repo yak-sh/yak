@@ -15,6 +15,7 @@
 // The answer is the generic tier's shape: whole bundles, under the generic
 // bundle output schema (@yaks/mcp `answerSchema`), so a letter reads back the
 // way every other row does.
+import { type Built, line, sub } from '@yaks/query'
 import type { Bundle, Tool } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import { mailbox } from './directory.ts'
@@ -40,7 +41,7 @@ export let SCOPE = scope()
 // The components a letter is made of, asked for by name: a row carries only
 // what its filter names (listing.ts), and what a reader wants off a letter is
 // the words, the envelope, who it was for, and what became of it.
-let LETTER = '.mail&?doc&?deliver&?delivered&?bounced'
+let LETTER = line`.mail&?doc&?deliver&?delivered&?bounced`
 
 // Which side of the mailbox, given the app's own address.
 //
@@ -50,13 +51,13 @@ let LETTER = '.mail&?doc&?deliver&?delivered&?bounced'
 // asked to go (graph.ts `#posting`), so a letter from anywhere else is one
 // that arrived — and a draft, which is both kept and unsent, is in
 // neither side.
-let side = (said: string, mine: string): string | null =>
+let side = (said: string, mine: string): Built | null =>
   said == 'all'
-    ? ''
+    ? line``
     : said == 'sent'
-    ? '&.deliver'
+    ? line`&.deliver`
     : said == 'received'
-    ? `&!deliver.to&.mail.from!=${mine}`
+    ? line`&!deliver.to&.mail.from!=${mine}`
     : null
 
 let num = (v: unknown): number | undefined =>
@@ -68,7 +69,7 @@ let num = (v: unknown): number | undefined =>
 // The store sorts it, because the store is where the window is cut — sorting
 // the page after it came back would only order whichever letters the limit
 // happened to leave.
-let NEWEST = '&.order=-created.at'
+let NEWEST = line`&.order=-created.at`
 
 let address = (env: Host) =>
   `the app slug; its email address is <space>.<app>@${apex(env)}`
@@ -111,7 +112,9 @@ let listing = (ctx: Ctx): Tool => ({
     let rows = await read(
       ctx.env,
       [{ space, app, who }],
-      `${LETTER}${which}${NEWEST}&.limit=${num(args.limit) ?? 20}`,
+      line`${sub(LETTER)}${sub(which)}${sub(NEWEST)}&.limit=${
+        num(args.limit) ?? 20
+      }`,
     )
     return Array.isArray(rows) ? rows as Bundle[] : []
   },

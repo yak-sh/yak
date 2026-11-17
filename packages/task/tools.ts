@@ -21,7 +21,7 @@ import { argsOf } from '@yaks/graph/call'
 import { answer, check, type Choice, shows } from './decision.ts'
 import { type Edit, edited, type Runs, type TextEdit } from '@yaks/graph/tools'
 import { Refused } from '@yaks/graph/errors'
-import { conjoin } from '@yaks/query'
+import { conjoin, type Line, line, whole } from '@yaks/query'
 
 // Where the work is filed, as arguments. The two that name an entity arrive
 // as eids: a person types `P-19`, and the runner resolves every argument the
@@ -67,13 +67,15 @@ export let marked: Record<string, Record<string, Comp | null>> = {
  * that are either), and every task comes back whole (`*`): a listing shows
  * tasks, not the words it matched.
  */
-export let listing = (query?: unknown, limit?: unknown): string =>
-  conjoin(
+// A caller's own query, narrowed: `conjoin` groups it, and refuses one whose
+// groups or quotes do not close, so it cannot reach past the narrowing.
+export let listing = (query?: unknown, limit?: unknown): Line =>
+  whole(conjoin(
     '.task',
     String(query ?? '').trim() || '.task.status=open',
-    limit == null ? '' : `.limit=${Number(limit)}`,
+    limit == null ? '' : line`.limit=${Number(limit)}`,
     '*',
-  )
+  ))
 
 type Args = Record<string, unknown>
 

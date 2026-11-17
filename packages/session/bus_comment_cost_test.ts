@@ -1,4 +1,5 @@
 // Delivered comment history must not make a bus pass scan its target joins.
+import { line } from '@yaks/query'
 import { equal, ok, test } from '@yaks/testing'
 import { type Bundle, graph, type Visibility } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -177,8 +178,7 @@ for (let [name, visibility, count] of scopes) {
   })
 }
 let alternatives = await g.read(
-  '.comment !notified (!created.via.session | .entity.eid=agent-comment) ' +
-    '.fields=entity.eid',
+  '.comment !notified (!created.via.session | .entity.eid=agent-comment) .fields=entity.eid',
 )
 test('an alternative reference filter keeps the other branch', () => {
   equal(alternatives.map((b) => b.entity.eid), [
@@ -260,7 +260,8 @@ for (let [name, visibility] of mailScopes) {
   test(`reply routing preserves ${name} visibility`, () => equal(items, []))
 }
 
-let unreadReplies = '.mail.reply_to !notified .fields=mail.reply_to,mail.target'
+let unreadReplies =
+  line`.mail.reply_to !notified .fields=mail.reply_to,mail.target`
 let replyScope = graph({
   vocab: v,
   storage: mailStore,

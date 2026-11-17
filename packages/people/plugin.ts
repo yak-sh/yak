@@ -14,6 +14,7 @@ import {
   type Plugin,
 } from '@yaks/graph'
 import { e164 } from '@yaks/phone/mobile'
+import { line } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import {
   address,
@@ -28,7 +29,6 @@ let fields = (row: Bundle | undefined, name: string): Comp =>
   row?.[name] as Comp ?? {}
 let email = (v: unknown) => typeof v == 'string' ? v.trim().toLowerCase() : ''
 let number = (v: unknown) => typeof v == 'string' ? e164(v) : null
-let quoted = (v: string) => JSON.stringify(v)
 
 // The path, including the repeat index, makes retries and partial answers find
 // the same guest again. It does not identify people across registrations.
@@ -128,8 +128,8 @@ export let people = (vocab: Vocab): Plugin => ({
       let match = (values: Record<string, unknown>, except: string) => {
         let phone = number(values.phone), address = email(values.email)
         let lines = [
-          ...phone ? [`.individual&.phone.number=${quoted(phone)}&*`] : [],
-          ...address ? [`.individual.email~=${quoted(address)}&?phone`] : [],
+          ...phone ? [line`.individual&.phone.number=${phone}&*`] : [],
+          ...address ? [line`.individual.email~=${address}&?phone`] : [],
         ]
         return after(
           each(
@@ -165,9 +165,9 @@ export let people = (vocab: Vocab): Plugin => ({
             (ids, side) =>
               after(
                 tx.read(
-                  `.relation.kind=${quoted(rel.kind)}&.relation.${
+                  line`.relation.kind=${rel.kind}&.relation.${
                     other(side)
-                  }=${quoted(outer)}`,
+                  }=${outer}`,
                 ),
                 (rows) => [
                   ...ids,
@@ -226,7 +226,7 @@ export let people = (vocab: Vocab): Plugin => ({
           if (!registration.form || held) return
           return after(
             tx.read(
-              `.question.form=${quoted(String(registration.form))}`,
+              line`.question.form=${String(registration.form)}`,
             ),
             (rows) => {
               let form: Form = { form: {}, questions: rows as Question[] }
@@ -326,7 +326,7 @@ export let people = (vocab: Vocab): Plugin => ({
                         eid == provisional && held && who.entity.eid != eid
                       ) {
                         return after(
-                          tx.read(`.refs=${quoted(eid)}&*`),
+                          tx.read(line`.refs=${eid}&*`),
                           (refs) => {
                             let side = (r: Bundle) =>
                               (['a', 'b'] as const).find((s) =>

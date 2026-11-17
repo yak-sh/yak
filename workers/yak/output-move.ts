@@ -6,6 +6,7 @@
 // it stopped. A result whose files have rows already, named by it (the
 // attachment pass, attachment-move.ts, before it left results to this one)
 // or by its call, is left as it is, so a second run writes nothing.
+import { line, sub } from '@yaks/query'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Meta } from '@yaks/sqlite'
 import { attachmentOf, attachmentRows } from '@yaks/blob/attachment'
@@ -35,8 +36,8 @@ export let outputBackfill = async (
   if (!marks || at == 'done') return false
   if (store.waiting?.()) return true
   let rows = await g.read(
-    `.result&.operator_files${
-      at ? `&.entity.eid>${at}` : ''
+    line`.result&.operator_files${
+      sub(at ? line`&.entity.eid>${at}` : line``)
     }&.order=entity.eid&.limit=${BATCH}`,
   )
   let made = rows.flatMap((row) => {

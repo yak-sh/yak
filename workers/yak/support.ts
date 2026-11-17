@@ -28,6 +28,7 @@
 // tool and the thread's page (support-page.ts) both go through them, and
 // each platform answer is carried to whoever the thread is for
 // (support-reply.ts).
+import { line, sub } from '@yaks/query'
 import { type Bundle, mint, minted } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { link as linked } from '@yaks/edge'
@@ -355,7 +356,7 @@ export let opens = async (t: Thread, a: Asking): Promise<boolean> => {
   return await a.admin()
 }
 
-let THREAD = '.conversation&.report&?doc&?support&?completed&?created'
+let THREAD = line`.conversation&.report&?doc&?support&?completed&?created`
 
 /** A thread by its eid, or null where there is none. */
 export let read = async (
@@ -363,19 +364,19 @@ export let read = async (
   eid: string,
 ): Promise<Thread | null> => {
   if (!minted(eid)) return null
-  let [row] = await store.query(`.entity.eid=${eid}&${THREAD}`)
+  let [row] = await store.query(line`.entity.eid=${eid}&${sub(THREAD)}`)
   if (!row) return null
   let messages = await store.query(
-    `.comment.target=${eid}&?doc&?support&?created&.order=created.at`,
+    line`.comment.target=${eid}&?doc&?support&?created&.order=created.at`,
   )
   let edges = messages.length
     ? await store.query(
-      `.about&.edge.from=${messages.map((m) => m.entity.eid).join(',')}`,
+      line`.about&.edge.from=${messages.map((m) => m.entity.eid)}`,
     )
     : []
   let to = [...new Set(edges.flatMap((e) => ref(comp(e, 'edge').to) ?? []))]
   let kept = to.length
-    ? await store.query(`.entity.eid=${to.join(',')}&?commit&?doc`)
+    ? await store.query(line`.entity.eid=${to}&?commit&?doc`)
     : []
   return threadOf(row, messages, edges, kept)
 }
@@ -383,7 +384,7 @@ export let read = async (
 /** The threads the platform has not completed, newest first. */
 export let waiting = async (store: Meta, limit = 20): Promise<Thread[]> =>
   (await store.query(
-    `${THREAD}&!completed&.order=-created.at&.limit=${limit}`,
+    line`${sub(THREAD)}&!completed&.order=-created.at&.limit=${limit}`,
   )).map((row) => threadOf(row, [], []))
 
 // The batch written as the platform about its own words: support{} is
@@ -554,7 +555,7 @@ export let SAYS = 12
 export let lately = async (store: Meta, person: string): Promise<number> => {
   try {
     return (await store.query(
-      `.comment&.support.person=${person}&.created.at>=1-hour-ago`,
+      line`.comment&.support.person=${person}&.created.at>=1-hour-ago`,
     )).length
   } catch (e) {
     caught(e, { request: 'support lately' })

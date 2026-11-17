@@ -1,5 +1,6 @@
 // Process bookkeeping through graph and liveness interfaces, with temporary receipt files.
 
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -149,7 +150,7 @@ test('adopting a pid that is already gone stamps the ending, code unknown', asyn
     running: () => Promise.resolve(false),
   })
   assertEquals(await run.done, null)
-  let row = (await g.read(`.${PROCESS}&*`))[0]
+  let row = (await g.read(line`.${PROCESS}&*`))[0]
   assertEquals(comp(row, PROCESS)?.pid, run.pid)
   assertEquals(comp(row, PROCESS), { pid: run.pid })
   assertEquals(comp(row, EXIT), {})
@@ -165,7 +166,7 @@ test('watch picks up an unfinished row and stamps the one already gone', async (
   let runs = await watch(store(g), opts)
   assertEquals(runs.map((r) => r.eid), ['p1'])
   assertEquals(await runs[0].done, null)
-  assertEquals(comp((await g.read(`.${PROCESS}&*`))[0], EXIT), {})
+  assertEquals(comp((await g.read(line`.${PROCESS}&*`))[0], EXIT), {})
   // Stamped, so the next boot's reconcile has nothing left to pick up.
   assertEquals(await watch(store(g), opts), [])
 })
@@ -215,17 +216,17 @@ test('an exit-code file read before it is written is waited for, never read as 0
 })
 
 test("an ending records the memory limit's kills the wrapper counted beside its code", async () => {
-  let ended = async (line: string) => {
+  let ended = async (code: string) => {
     let g = tracked()
     let d = dir()
     await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: 7002 } }])
-    Deno.writeTextFileSync(`${d}/p1.code`, line)
+    Deno.writeTextFileSync(`${d}/p1.code`, code)
     Deno.writeTextFileSync(`${d}/p1.pid`, '7001 7002\n')
     let [run] = await watch(store(g), {
       dir: d,
       running: () => Promise.resolve(false),
     })
-    return [await run.done, comp((await g.read(`.${PROCESS}&*`))[0], EXIT)]
+    return [await run.done, comp((await g.read(line`.${PROCESS}&*`))[0], EXIT)]
   }
   assertEquals(await ended('137 2\n'), [137, { code: 137, oom: 2 }])
   assertEquals(await ended('1 0\n'), [1, { code: 1 }])

@@ -1,6 +1,7 @@
 // The page drawn from its graph in a LinkeDOM document, as a tab draws it:
 // the story typed into the prompt, the drawing following the graph, and a
 // section changed from the prompt redrawn in place.
+import { line } from '@yaks/query'
 import { cleanup, equal, match, test } from '@yaks/testing'
 import { parseHTML } from 'linkedom'
 import { start } from './page.ts'
@@ -122,7 +123,7 @@ test('each interface in the doors band makes its own change to the one graph, dr
   let band = SECTIONS.find((s) => s.view == 'Doors')!
   let { you, agent } = page.yak
   let task = async (title: string) =>
-    (await page.yak.graph.read(`.doc.title="${title}" *`))[0]
+    (await page.yak.graph.read(line`.doc.title=${title} *`))[0]
   let paid = await task('Sign up for payments')
   let checkout = await task('Build the checkout')
   let fix = await task('Fix the failing build')
@@ -260,7 +261,7 @@ test('in the rules band your inbox writes a question that holds up the build as 
   let replied = await reach(7)
   ;[question] = await page.yak.graph.read('.decision *')
   let [reply] = await page.yak.graph.read(
-    `.comment.target=${question.entity.eid} *`,
+    line`.comment.target=${question.entity.eid} *`,
   )
   equal(
     [replied.door, replied.windows, replied.declared, replied.told],

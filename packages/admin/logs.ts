@@ -2,6 +2,7 @@ import { freshFetch } from '@yaks/process/http'
 // The owner’s view of yaks.app failures: tail watches live traffic through
 // Wrangler, and errors reads grouped failures through the signed tracker door.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { line as query, sub } from '@yaks/query'
 import { human } from '@yaks/id'
 import {
   answers,
@@ -237,12 +238,12 @@ let letters = async (
   last: string,
 ): Promise<string[]> => {
   let got = (await graph.read(
-    `!deliver .mail.at>=${from} ?mail ?doc ?archived .limit=1000`,
+    query`!deliver .mail.at>=${from} ?mail ?doc ?archived .limit=1000`,
   )).filter((b) => {
     let who = sender(b), to = String((b.mail as Comp | undefined)?.to ?? '')
     return ours(to) && who && !ours(who) && !automated(who)
   })
-  let sent = await graph.read(`${answersSince(from)} .limit=1000`)
+  let sent = await graph.read(query`${sub(answersSince(from))} .limit=1000`)
   let paired = answers(got, sent).filter((a) => a.answer || !a.letter.archived)
   let id = human(graph.vocab)
   let { count, median, worst } = spread(

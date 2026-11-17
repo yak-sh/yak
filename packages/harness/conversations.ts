@@ -1,6 +1,7 @@
 // Human conversation tools over the native transcript. Identity is resolved at
 // the server door; inputs never choose an actor, machine, persona or model.
 import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
+import { type Built, joined, line, sub } from '@yaks/query'
 import { argsOf, who } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
@@ -22,7 +23,6 @@ import { begin } from './agent.ts'
 import { defaultUsing } from './default.ts'
 
 let part = (b: Bundle | undefined, c: string): Comp => (b?.[c] ?? {}) as Comp
-let quote = (value: string) => JSON.stringify(value)
 let required = (args: Record<string, unknown>, key: string): string => {
   let value = args[key]
   if (typeof value != 'string' || !value.trim()) {
@@ -83,13 +83,17 @@ let projectAt = async (g: Graph, args: Record<string, unknown>) => {
 }
 // A session works for a project by filing, by the actor it names, or by the
 // persona it wears (@yaks/session actorOf). Most sessions say so only one way.
-let worksFor = (projects: string, at = '') =>
-  `(.${at}filed.project=${projects} | .${at}session.actor=${projects} | .${at}session.persona.persona.home=${projects})`
+let worksFor = (projects: string | string[], at: Built = line``) =>
+  line`(.${sub(at)}filed.project=${projects} | .${
+    sub(at)
+  }session.actor=${projects} | .${
+    sub(at)
+  }session.persona.persona.home=${projects})`
 // Who created a session says little: a harness writes that row, as its agent or
 // its door. The conversation is the owner's where the owner's words are in it.
 let conversation = (owner: string, project: string) =>
-  `.session.operator=true .entries.created.by=${quote(owner)} ${
-    worksFor(quote(project))
+  line`.session.operator=true .entries.created.by=${owner} ${
+    sub(worksFor(project))
   }`
 let sessionAt = async (
   g: Graph,
@@ -100,7 +104,7 @@ let sessionAt = async (
   let said = required(args, 'session')
   let id = (await g.address([said], 'session')).get(said) ?? said
   let [s] = await g.read(
-    `.entity.eid=${quote(id)} ${conversation(owner, project)}`,
+    line`.entity.eid=${id} ${sub(conversation(owner, project))}`,
   )
   if (!s) {
     throw new Refused('Conversation not found for this owner and project')
@@ -135,8 +139,8 @@ let readable = async (
   }
   for (let eid = row.entity.eid, hops = 0; eid && hops < 8; hops++) {
     let [s] = await g.read(
-      `.entity.eid=${quote(eid)} ${
-        conversation(owner, project)
+      line`.entity.eid=${eid} ${
+        sub(conversation(owner, project))
       } .fields=entity.eid`,
     )
     if (s) return true
@@ -147,7 +151,7 @@ let readable = async (
 }
 let sessionsOf = async (g: Graph, task: string) => {
   let links = g.vocab.comp('contains')
-    ? await g.read(`.contains .edge.from=${quote(task)}`)
+    ? await g.read(line`.contains .edge.from=${task}`)
     : []
   return await g.get(links.map((b) => String(part(b, 'edge').to)))
 }
@@ -173,9 +177,7 @@ let titleOf = async (g: Graph, s: Bundle, owner: string) => {
   let title = String(part(s, 'doc').title ?? '')
   if (title) return title
   let [first] = await g.read(
-    `.entry.session=${quote(s.entity.eid)} .created.by=${
-      quote(owner)
-    } .content !prompt !output !notice .order=created.at .limit=1 .fields=content.body`,
+    line`.entry.session=${s.entity.eid} .created.by=${owner} .content !prompt !output !notice .order=created.at .limit=1 .fields=content.body`,
   )
   return headline(String(part(first, 'content').body ?? ''))
 }
@@ -220,9 +222,7 @@ let filesAt = async (g: Graph, args: Record<string, unknown>) => {
       throw new Refused(`No artifact is kept at ${address}`)
     }
     let [use] = await g.read(
-      `.attachment.artifact=${
-        quote(address)
-      } .order=-created.at .limit=1 .fields=attachment.name`,
+      line`.attachment.artifact=${address} .order=-created.at .limit=1 .fields=attachment.name`,
     )
     return {
       name: String(part(use, 'attachment').name ?? address),
@@ -262,33 +262,34 @@ let answer = (call: Bundle, value: unknown): Bundle[] => [{
  * words are evidence, not instructions; only genuine human entries qualify. */
 let contextAt = async (g: Graph, owner: string, project: Bundle) => {
   let ids = (await lineage(g, project.entity.eid)).map((b) => b.entity.eid)
-  let projects = ids.map(quote).join(',')
+  let projects = ids.length ? ids : [project.entity.eid]
   let goals = g.vocab.comp('goal')
     ? await g.read(
-      `.goal.scope=${projects} ?doc .limit=20`,
+      line`.goal.scope=${projects} ?doc .limit=20`,
     )
     : []
   let work = await g.read(
-    `.filed.project=${projects} !session ?doc ?task ?completed ?updated .order=-updated.at .limit=12`,
+    line`.filed.project=${projects} !session ?doc ?task ?completed ?updated .order=-updated.at .limit=12`,
   )
   // Across conversation, terminal, mail and comments, bounded before reading
   // prose. Agent-authored entries are never presented as the owner's words.
   let scopes = [
-    worksFor(projects, 'entry.session.'),
-    `.filed.project=${projects}`,
+    worksFor(projects, line`entry.session.`),
+    line`.filed.project=${projects}`,
     ...g.vocab.comp('comment')
-      ? [`.comment.target.filed.project=${projects}`]
+      ? [line`.comment.target.filed.project=${projects}`]
       : [],
-    ...g.vocab.comp('mail') ? [`.mail.target.filed.project=${projects}`] : [],
+    ...g.vocab.comp('mail')
+      ? [line`.mail.target.filed.project=${projects}`]
+      : [],
   ]
   let carries = ['content', 'doc', 'entry', 'created', 'comment', 'mail']
-    .filter((c) => g.vocab.comp(c)).map((c) => '?' + c).join(' ')
+    .filter((c) => g.vocab.comp(c))
+    .reduce<Built>((l, c) => line`${sub(l)} ?${c}`, line``)
   let candidates = await g.read(
-    `(.created.by=${quote(owner)} | .entry.session.session.actor=${
-      quote(owner)
-    }) (${
-      scopes.join(' | ')
-    }) ${carries} !prompt !output !call .order=-created.at .limit=24`,
+    line`(.created.by=${owner} | .entry.session.session.actor=${owner}) (${
+      sub(joined(scopes, '|'))
+    })${sub(carries)} !prompt !output !call .order=-created.at .limit=24`,
   )
   let words: { id: string; text: string }[] = []
   for (let b of candidates.reverse()) {
@@ -453,7 +454,7 @@ export let conversations = (host: Conversing = {}): Runs => {
           task: row,
           comments: g.vocab.comp('comment')
             ? await g.read(
-              `.comment.target=${quote(row.entity.eid)} ?doc .order=created.at`,
+              line`.comment.target=${row.entity.eid} ?doc .order=created.at`,
             )
             : [],
           sessions,
@@ -491,8 +492,8 @@ export let conversations = (host: Conversing = {}): Runs => {
         throw new Refused('before must be a positive entry sequence')
       }
       let rows = await g.read(
-        `.entry.session=${quote(row.entity.eid)}${
-          before == null ? '' : ` .entry.seq<${before}`
+        line`.entry.session=${row.entity.eid}${
+          sub(before == null ? line`` : line` .entry.seq<${before}`)
         } * .order=-entry.seq .limit=${n + 1}`,
       )
       let more = rows.length > n
@@ -509,9 +510,9 @@ export let conversations = (host: Conversing = {}): Runs => {
       let owner = await ownerOf(call, g)
       let p = (await projectOf(g, args)).entity.eid
       let rows = await g.read(
-        `${conversation(owner, p)} ?doc ?updated .order=-updated.at .limit=${
-          limit(args, 20)
-        }`,
+        line`${
+          sub(conversation(owner, p))
+        } ?doc ?updated .order=-updated.at .limit=${limit(args, 20)}`,
       )
       return answer(call, {
         conversations: await Promise.all(rows.map(async (s) => ({

@@ -1,6 +1,7 @@
 /// <reference lib="deno.ns" />
 import { equal, test } from '@yaks/testing'
 import { type Bundle, type Graph, graph, type ReadOpts } from '@yaks/graph'
+import { line, range } from '@yaks/query'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { type Frame, type Sink, subscriptions } from './subs.ts'
@@ -25,7 +26,7 @@ let vocab = loadVocab({
 })
 let ids = (rows: Bundle[]) => rows.map((b) => b.entity.eid)
 let query = (x: number) =>
-  `(.look.player.position.x=${x}..${x + 10}|.look.player=one)&.look&*`
+  line`(.look.player.position.x=${range(x, x + 10)}|.look.player=one)&.look&*`
 let fixture = (withRevision = false, gate?: Promise<void>) => {
   let g = graph({ vocab, storage: ram(vocab) })
   g.apply([

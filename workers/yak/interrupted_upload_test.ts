@@ -1,4 +1,5 @@
 // An unread request body never reaches graph writes or the defect tracker.
+import { line } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { within } from './defects.ts'
@@ -48,7 +49,7 @@ test('an interrupted request keeps no graph rows, write receipts or reports', as
         equal(response.status, 400)
         await response.body?.cancel()
       }
-      equal(await metaOf(door).query(`.entity.eid=${eid}`), [])
+      equal(await metaOf(door).query(line`.entity.eid=${eid}`), [])
       equal(await (await door('/writes', {}, KERNEL)).json(), [])
     },
   )

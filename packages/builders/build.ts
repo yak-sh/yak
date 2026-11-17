@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { step, steps } from './steps.ts'
 // A builder is a query-to-tool definition. Each outer binding has one stable
 // build; its changing content asks the tool through a fresh recorded call.
@@ -106,7 +107,7 @@ export let outputFor = async (
   call?: Eid,
 ): Promise<Eid | undefined> => {
   if (!call) {
-    return (await g.read(`.built.build=${build}&.chosen&*`))
+    return (await g.read(line`.built.build=${build}&.chosen&*`))
       .find((row) => (row.built as Comp).slot == slot)?.entity.eid
   }
   let value = outputOf(build, slot, call)
@@ -314,9 +315,7 @@ export let reconcile = (
     chosen ??= yield* step(selected(tx, builder, o.vocab))
     let partial = o.only != null || o.limit != null
     let prior = partial ? [] : (yield* step(tx.read(
-      `.build.builder=${builder.entity.eid}&.build.variant=${
-        encodeURIComponent(variant)
-      }&*`,
+      line`.build.builder=${builder.entity.eid}&.build.variant=${variant}&*`,
     )))
     let left = new Map(prior.map((b) => [b.entity.eid, b]))
     // The build each outer tuple already has. A new one is written under an

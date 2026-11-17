@@ -1,5 +1,6 @@
 // Refunds are durable merchant requests; the effect may restart after its
 // provider accepted a request but before its answer was recorded.
+import { type Line, line } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
 import type { Refunded, Shops } from '@yaks/host/payments'
 import type { Meta } from './meta.ts'
@@ -41,7 +42,7 @@ let get = async <T extends Bundle>(
   store: Meta,
   id: string,
 ): Promise<T | undefined> =>
-  (await store.query(`.entity.eid=${id}`))[0] as T | undefined
+  (await store.query(line`.entity.eid=${id}`))[0] as T | undefined
 
 /** The merchant supplies the request identity, so replaying a failed service
  * call addresses the same refund, even after a process replacement. */
@@ -74,7 +75,7 @@ export let requestRefund = async (store: Meta, ask: RefundAsk, now: string) => {
     throw refuse('refund', 'paid order not found')
   }
   let pending = await store.query(
-    `.refund_request.order=${ask.order}`,
+    line`.refund_request.order=${ask.order}`,
   ) as RefundRow[]
   let completed = pending.filter((r) => r.completed)
     .reduce((n, r) => n + r.refund_request.amount, 0)
@@ -178,7 +179,7 @@ export let refundSale =
     let found = await directoryOf(at.env.STORE).appAt(at.app)
     if (!found) throw new Error('refund effect lost its merchant app')
     let store: Meta = {
-      query: async (q) => await at.graph.read(q),
+      query: async (q) => await at.graph.read(q as Line),
       apply: async (bs) => await at.graph.apply(bs, { trusted: true }),
     }
     try {

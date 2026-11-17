@@ -1,4 +1,5 @@
 // Merely playing near villagers must not persist model turns or a clock.
+import { whole } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { born } from './villagers.ts'
 import { GIVERS } from './quests.ts'
@@ -74,7 +75,9 @@ test('legacy think worker retires its named clock once without touching dialogue
     fetch: async (path: string, init?: RequestInit) => {
       if (path.startsWith('query?')) {
         return Response.json(
-          await g.read(new URL('http://store/' + path).searchParams.get('q')!),
+          await g.read(
+            whole(new URL('http://store/' + path).searchParams.get('q')!),
+          ),
         )
       }
       writes++

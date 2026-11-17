@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -47,7 +48,9 @@ export let memory = (manifest: VocabDoc) => {
     async fetch(path: string, init?: RequestInit): Promise<Response> {
       let url = new URL(path, 'https://store.invalid')
       if (url.pathname === '/query') {
-        return Response.json(await g.read(url.searchParams.get('q') ?? ''))
+        return Response.json(
+          await g.read(whole(url.searchParams.get('q') ?? '')),
+        )
       }
       let body = JSON.parse(String(init!.body)) as { entities: Bundle[] }
       return Response.json({ bundles: await g.apply(body.entities) })

@@ -50,6 +50,7 @@ import * as system from '@yaks/process/system'
 // the other on an entry.
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { type Built, line, sub } from '@yaks/query'
 import { Stale } from '@yaks/graph/errors'
 import { sleep } from '@yaks/effects'
 import { derivedEid } from '@yaks/graph/identity'
@@ -545,7 +546,7 @@ let given = async (
 ): Promise<string | undefined> => {
   let found = adapter.file ? await text(`${checkout}/${adapter.file}`) : null
   let selected = comp(await one(g, session), SESSION)?.persona
-  let [work] = (await g.read(`.${CLAIM}.session=${JSON.stringify(session)}`))
+  let [work] = (await g.read(line`.${CLAIM}.session=${session}`))
     .map((b) => b.entity.eid).sort()
   let owes = await owed(g, checkout, found == null ? [] : [found], {
     persona: selected == null ? undefined : String(selected),
@@ -829,7 +830,7 @@ export let takeUp = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
   let mine: Bundle[] = []
   // Many runs share a watcher, and asking after one starts a process.
   let looked = new Map<unknown, Promise<Watcher>>()
-  for (let row of await g.read(`.${SESSION}&.${PROCESS}&!${EXIT}&*`)) {
+  for (let row of await g.read(line`.${SESSION}&.${PROCESS}&!${EXIT}&*`)) {
     let w = proc(row)?.watcher
     if (!looked.has(w)) looked.set(w, watcherOf(g, row))
     let watcher = await looked.get(w)!
@@ -907,14 +908,14 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
   // A run asked here that is over, but whose request has no ending after it,
   // was left unread partway. Each run asks once and ends once, so a session
   // with more requests than stops is looked at.
-  let counts = async (q: string) =>
+  let counts = async (q: Built) =>
     new Map(
-      (await g.rows(`${q}&.tally=entry.session`))
+      (await g.rows(line`${sub(q)}&.tally=entry.session`))
         .map((r) => [String(r.value), Number(r.n)]),
     )
   let [asks, over] = await Promise.all([
-    counts('.using&!ask'),
-    counts('.stop'),
+    counts(line`.using&!ask`),
+    counts(line`.stop`),
   ])
   // A provider can print its stop before the process exits. Logs remain
   // until final import and completion succeed, so those left on disk also
@@ -934,7 +935,7 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
   // Only their eids: every ended run's whole row is megabytes read cold at
   // each start-up.
   let unread =
-    (await g.read(`.${SESSION}&.${PROCESS}&.${EXIT}&.fields=entity.eid`))
+    (await g.read(line`.${SESSION}&.${PROCESS}&.${EXIT}&.fields=entity.eid`))
       .map((b) => b.entity.eid)
       .filter((eid) =>
         !read.has(eid) &&
@@ -1039,8 +1040,7 @@ let refused = async (
   after: number,
 ): Promise<{ code: string; body: string } | undefined> => {
   let rows = await g.read(
-    `.entry.session=${session}&.refusal&.entry.seq>${after}` +
-      `&.order=-entry.seq&.limit=8&*`,
+    line`.entry.session=${session}&.refusal&.entry.seq>${after}&.order=-entry.seq&.limit=8&*`,
   )
   let hit = rows.find((r) => declined(String(comp(r, 'refusal')?.code))) ??
     rows[0]
@@ -1176,7 +1176,7 @@ export let recounted = async (
   let after = Date.parse(since)
   let copies = await kept()
   let wrote = 0
-  for (let b of await g.read(`.${SESSION}&.${PROCESS}&*`)) {
+  for (let b of await g.read(line`.${SESSION}&.${PROCESS}&*`)) {
     if (o.signal?.aborted) break
     let session = b.entity.eid
     let copy = copies.get(String(comp(b, SESSION)?.id ?? session))

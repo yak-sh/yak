@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { ram } from '@yaks/ram'
 import type { Bundle } from './bundle.ts'
@@ -40,7 +41,7 @@ let shop = async (queries: string[]) => {
     return reads - before
   }
   let ask = (qs = queries, opts: object = native) =>
-    Promise.all(qs.map((q) => h.read(q, opts)))
+    Promise.all(qs.map((q) => h.read(whole(q), opts)))
   let commit = async (bundles: Bundle[]) => {
     await g.apply(bundles)
     let changed = false
@@ -48,7 +49,9 @@ let shop = async (queries: string[]) => {
       changed = await h.moved(bundles.map((b) => b.entity.eid))
       equal(
         (await ask()).map(byEid),
-        (await Promise.all(queries.map((q) => g.read(q, native)))).map(byEid),
+        (await Promise.all(queries.map((q) => g.read(whole(q), native)))).map(
+          byEid,
+        ),
       )
     })
     return { reads: n, changed }

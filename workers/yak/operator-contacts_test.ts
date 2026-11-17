@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { clock, test } from '@yaks/testing'
 import type { Clock } from '@yaks/fp'
 import { drain } from './operator-store.ts'
@@ -186,7 +187,7 @@ let unticked = await assertRejects(() =>
 )
 await sms.confirm(proposal.contact.id, '+12695550142')
 let [consent] = await meta(sms.env).query(
-  `.entity.eid=${consentEid(sms.person)}`,
+  line`.entity.eid=${consentEid(sms.person)}`,
 )
 let read = await sms.invoke({})
 let smsAfter = [...sms.sent]

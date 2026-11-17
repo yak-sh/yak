@@ -20,6 +20,7 @@ import { after, each } from '@yaks/fp'
 import { graph } from '@yaks/graph'
 import { only } from '@yaks/graph/read'
 import { token } from '@yaks/graph/sha256'
+import { whole } from '@yaks/query'
 import { shop } from './testing.ts'
 
 /** A bookmark is content-addressed: its eid is derived from what it marks, so
@@ -266,7 +267,7 @@ let say = (
 let state = (g: Graph) =>
   after(
     each(READS, [] as Bundle[][], (acc, q) =>
-      after(g.read(q), (bs) => [...acc, byNum(bs)])),
+      after(g.read(whole(q)), (bs) => [...acc, byNum(bs)])),
     (reads) =>
       after(
         g.get(NAMED),
@@ -361,7 +362,7 @@ export let answers = (g: Graph): void | Promise<void> =>
     () =>
       after(
         each(ANSWERS, null, (_, [q, want]) =>
-          after(g.read(q, { now: AROUND }), (bs) => {
+          after(g.read(whole(q), { now: AROUND }), (bs) => {
             assertEquals(bs.map((b) => b.entity.eid).sort(), want, q)
             return null
           })),

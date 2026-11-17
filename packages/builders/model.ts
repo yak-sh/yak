@@ -1,6 +1,7 @@
 // The model is one registered builder tool. It opens an ordinary transcript;
 // its completed entry is adapted to the same output value code tools return.
 
+import { line } from '@yaks/query'
 import type { Binding, Bundle, Comp, Eid, Graph, Tool, Tx } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
@@ -136,7 +137,8 @@ export let modelTool = (desk: Desk = {}): Tool => ({
     // Retrying the adapter must not open another model session, including a
     // call whose session was minted before this idempotency boundary existed.
     if (
-      (await graph.read(`.session.source=${call.entity.eid}&.limit=1`)).length
+      (await graph.read(line`.session.source=${call.entity.eid}&.limit=1`))
+        .length
     ) {
       return []
     }
@@ -177,7 +179,7 @@ export let adapted = async (
   if (!said) return
   let ask = str(comp(said, 'output')?.source)
   // A turn asking for tools is still working, even if it includes media.
-  if (ask && (await tx.read(`.call.source=${ask}&.limit=1`)).length) return
+  if (ask && (await tx.read(line`.call.source=${ask}&.limit=1`)).length) return
   let session = str(comp(said, 'entry')?.session)
   if (!session || !said.output) return
   let [transcript] = await tx.get([session])

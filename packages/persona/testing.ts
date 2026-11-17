@@ -10,6 +10,7 @@
 import { machineDoc } from '@yaks/machine/vocab'
 import { fileDoc } from '@yaks/file/vocab'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { line } from '@yaks/query'
 import {
   type Bundle,
   type Comp,
@@ -135,7 +136,7 @@ export let owing = (handler: string) => {
     report: (e) => void errors.push(e),
   })
   let g = graph({ vocab, storage: ram(vocab), plugins: [fx] })
-  let queued = () => g.read(`.effect.handler=${handler}`)
+  let queued = () => g.read(line`.effect.handler=${handler}`)
   let clear = async () => {
     await g.apply(
       (await g.read('.effect')).map((b) => ({

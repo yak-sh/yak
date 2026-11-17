@@ -3,6 +3,7 @@
 // person's write is kept and lands once the window ends, and nothing it meets
 // meanwhile is marked failed. Each store spends its rows through the ceiling
 // its driver counts against, on a clock the case moves.
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { bounded } from '@yaks/durable-object/ceiling'
@@ -64,7 +65,7 @@ let object = async (words?: unknown) => {
   )
   let apply = (b: unknown[]) => door.apply(b as never, KERNEL)
   let title = async (eid: string) =>
-    ((await door.query(`.entity.eid=${eid}`))[0]?.doc as { title?: string })
+    ((await door.query(line`.entity.eid=${eid}`))[0]?.doc as { title?: string })
       ?.title
   let writes = (state: string) =>
     h.ceiling.free(() => tally(db(h.ctx), 'yak_writes', by({ state })))

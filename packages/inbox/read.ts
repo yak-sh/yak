@@ -3,7 +3,7 @@
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { tablesOf } from '@yaks/archetype/sets'
-import { listed } from '@yaks/query'
+import { type Built, joined, line, parse, type Query, sub } from '@yaks/query'
 import {
   candidates,
   dependents,
@@ -133,7 +133,7 @@ let unique = (all: Row[]): Row[] => {
   }
   return [...out.values()]
 }
-let ids = (all: Row[]) => `.entity.eid=${listed(all.map((r) => r.eid))}`
+let ids = (all: Row[]) => line`.entity.eid=${all.map((r) => r.eid)}`
 // Batches for identity lookups do not need stable subscription buckets.
 let batches = (all: Row[]): Row[][] => {
   let out: Row[][] = []
@@ -143,12 +143,23 @@ let batches = (all: Row[]): Row[][] => {
 // A server read asks each round once. boundedReads splits a subscription's
 // query to fit a socket message, and here every part would only scan the same
 // tables again.
-let whole = (rows: Row[], read: (rows: Row[]) => string): string[] => {
-  let query = rows.length ? read(rows) : ''
+let whole = (rows: Row[], read: (rows: Row[]) => Built): Built[] => {
+  let query = rows.length ? read(rows) : undefined
   return query ? [query] : []
 }
-let membership = (query: string): string =>
-  query.replace(/&\?\w+/g, '') + '&.fields=entity.eid'
+// The rows a query selects, without the components it asks along: its
+// top-level `?` projections give way to the eid alone.
+let ONLY_EID = parse(line`.fields=entity.eid`).clauses
+let membership = (query: Built): Query => {
+  let tree = parse(query)
+  return {
+    ...tree,
+    clauses: [
+      ...tree.clauses.filter((c) => !(c.kind == 'pred' && c.op == '?')),
+      ...ONLY_EID,
+    ],
+  }
+}
 
 let reads = (tx: ReadTx, has: Words, mode: Mode) => {
   let comps = components.filter(has)
@@ -159,7 +170,7 @@ let reads = (tx: ReadTx, has: Words, mode: Mode) => {
     ...(has('entity.archetype') ? ['entity.archetype'] : []),
     ...scalars.filter(has),
     ...(mode == 'search' ? ['doc.body', 'content.body'].filter(has) : []),
-  ].join(',')
+  ]
   let descriptors = new Map<string, Set<string>>()
   // One computation owns one metadata working set. Overlapping discussion
   // arms must not hydrate the same entity repeatedly; never retain it across
@@ -174,7 +185,9 @@ let reads = (tx: ReadTx, has: Words, mode: Mode) => {
         out.push(...rows(await tx.get(part.map((r) => r.eid), comps)))
         continue
       }
-      let projectedRows = await tx.read(`${ids(part)}&.fields=${fields}`)
+      let projectedRows = await tx.read(
+        line`${sub(ids(part))}&.fields=${fields}`,
+      )
       let projected = new Map(rows(projectedRows).map((r) => [r.eid, r]))
       let spines = has('entity.archetype')
         ? projectedRows
@@ -231,7 +244,7 @@ let reads = (tx: ReadTx, has: Words, mode: Mode) => {
         if (!missing.length) continue
         for (
           let b of await tx.read(
-            `.${comp}&${ids(missing)}&.fields=entity.eid`,
+            line`.${comp}&${sub(ids(missing))}&.fields=entity.eid`,
           )
         ) mark(b.entity.eid, comp)
       }
@@ -242,7 +255,7 @@ let reads = (tx: ReadTx, has: Words, mode: Mode) => {
       hydrated.has(r.eid) ? [hydrated.get(r.eid)!] : []
     )
   }
-  let read = async (queries: string[]): Promise<Row[]> => {
+  let read = async (queries: Built[]): Promise<Row[]> => {
     let members: Row[] = []
     for (let q of new Set(queries.filter(Boolean))) {
       members.push(...rows(await tx.read(membership(q))))
@@ -266,17 +279,17 @@ let reader = async (
     'subscription.mode',
     'opened.at',
     'archived.at',
-  ].filter(has).join(',')
+  ].filter(has)
   let person = rows(
     await tx.read(
-      `.entity.eid=${JSON.stringify(actor)}&.fields=${fields}`,
+      line`.entity.eid=${actor}&.fields=${fields}`,
     ),
   )
   if (has('project')) {
     for (
       let r of rows(
         await tx.read(
-          `.project&.entity.eid=${JSON.stringify(actor)}&.fields=entity.eid`,
+          line`.project&.entity.eid=${actor}&.fields=entity.eid`,
         ),
       )
     ) {
@@ -288,7 +301,7 @@ let reader = async (
   let subs = has('subscription.actor')
     ? rows(
       await tx.read(
-        `.subscription.actor=${JSON.stringify(actor)}&.fields=${fields}`,
+        line`.subscription.actor=${actor}&.fields=${fields}`,
       ),
     )
     : []
@@ -300,7 +313,7 @@ let reader = async (
       for (
         let r of rows(
           await tx.read(
-            `.${name}&${ids(subs)}&.fields=entity.eid`,
+            line`.${name}&${sub(ids(subs))}&.fields=entity.eid`,
           ),
         )
       ) targets.get(r.eid)!.comps[name] ??= {}
@@ -348,12 +361,15 @@ let conversation = async (
       .map((eid) => ({ eid, comps: {} }))
     parents.forEach((r) => queriedParents.add(r.eid))
     queries.push(...whole(parents, (part) => {
-      let refs = listed(part.map((r) => r.eid))
-      return [
-        `.entity.eid=${refs}`,
-        ...['mail.message_id', 'notified.message_id'].filter(has)
-          .map((p) => `.${p}=${refs}`),
-      ].map((q) => `(${q})`).join('|')
+      let refs = part.map((r) => r.eid)
+      return joined(
+        [
+          line`.entity.eid=${refs}`,
+          ...['mail.message_id', 'notified.message_id'].filter(has)
+            .map((p) => line`.${p}=${refs}`),
+        ],
+        '|',
+      )
     }))
     if (has('mail.reply_to')) {
       let replies = [
@@ -371,7 +387,7 @@ let conversation = async (
       queries.push(
         ...whole(
           replies,
-          (part) => `.mail.reply_to=${listed(part.map((r) => r.eid))}`,
+          (part) => line`.mail.reply_to=${part.map((r) => r.eid)}`,
         ),
       )
     }

@@ -42,6 +42,7 @@ import { output } from './subprocess.ts'
 import { ADMIN } from '@yaks/platform/bots'
 import { posix } from 'node:path'
 import type { Comp, Graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { Interrupted } from '@yaks/tools/errors'
@@ -543,7 +544,7 @@ let measure = async (
 
 /** main's latest timed deploys, the window `slow` judges. */
 let latest = async (g: Graph): Promise<Deployed[]> =>
-  (await g.read(`.deployed .order=-deployed.live .limit=${WINDOW}`))
+  (await g.read(line`.deployed .order=-deployed.live .limit=${WINDOW}`))
     .map((row) => {
       let d = row.deployed as Comp
       return {

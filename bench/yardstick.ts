@@ -4,6 +4,7 @@
  * deno run -A bench/yardstick.ts coarse <spool> <db> <result.json> file|declaration
  * deno run -A bench/yardstick.ts restart <db> <file> <expected count>
  */
+import { line } from '@yaks/query'
 import { stopwatch } from '@yaks/benchmark'
 import { type Bundle, graph } from '@yaks/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -152,7 +153,7 @@ function timedRead(read: () => unknown, n = 21) {
 }
 function ordered(g: ReturnType<typeof graph>, file: string) {
   let rows = g.read(
-    `.node.file=${file}&.order=node.start&.limit=1000000`,
+    line`.node.file=${file}&.order=node.start&.limit=1000000`,
   ) as Bundle[]
   let children = new Map<string | null, Bundle[]>()
   for (let row of rows) {
@@ -340,7 +341,7 @@ async function run(spool: string, db: string, out: string) {
       samples.push(start().cpu)
       growth.push((await Deno.stat(db)).size - sizeBefore)
       // Compare actual read content, not just timing an unanswered query.
-      let actual = g.read(`.node.file=${file}&.limit=1000000`) as Bundle[]
+      let actual = g.read(line`.node.file=${file}&.limit=1000000`) as Bundle[]
       let expected = new Map(
         diff.after.nodes.map((r) => [r.entity.eid, r.node]),
       )
@@ -389,11 +390,11 @@ async function run(spool: string, db: string, out: string) {
   }
   let [target, expected] = [...counts].sort((a, b) => b[1] - a[1])[0]
   let reverse = await timedRead(() =>
-    g.read(`.reference.target=${target}&.limit=1000000`)
+    g.read(line`.reference.target=${target}&.limit=1000000`)
   )
   if (reverse.rows != expected) throw new Error('reverse reference count')
   let source = edges.find((r) => r.reference.target == target)!.reference.source
-  let forward = await timedRead(() => g.read(`.reference.source=${source}`))
+  let forward = await timedRead(() => g.read(line`.reference.source=${source}`))
   if (forward.rows != 1) throw new Error('forward reference count')
   let rss = Deno.memoryUsage().rss
   driver.close?.()
@@ -562,7 +563,9 @@ async function coarse(
     )[0].n,
   )
   if (storedNodes != manifest.nodes) throw new Error('stored node count')
-  if (!chosen || !expectedRefs.length) throw new Error('missing query fixtures')
+  if (!chosen || !expectedRefs.length) {
+    throw new Error('missing query fixtures')
+  }
   let types = driver.query(
     select({
       cols: [as(fn('typeof', col('value')), 'type'), as(fn('count'), 'n')],
@@ -678,7 +681,9 @@ async function coarse(
   // Scans use seven warm repetitions: traversing the whole corpus is deliberate.
   let referenceScan = timedRead(() => checkRefs(driver.query(refScan)), 7)
   let graphFunction = timedRead(() => {
-    let rows = g.read(`.entity.eid=${chosen!.packed.entity.eid}`) as Bundle[]
+    let rows = g.read(
+      line`.entity.eid=${chosen!.packed.entity.eid}`,
+    ) as Bundle[]
     let nodes = (rows[0].tree as Packed['tree']).value.nodes
     let root = nodes[chosen!.index]
     let result = nodes.filter((n, i) =>
@@ -860,7 +865,7 @@ async function coarse(
     transaction(() => refresh(ids))
     editIndex.push(start().cpu)
     let actual = g.read(
-      `.tree.file=${chosen.packed.tree.file}&.limit=1000000`,
+      line`.tree.file=${chosen.packed.tree.file}&.limit=1000000`,
     ) as Bundle[]
     let got = actual.map((p) => ({
       entity: { eid: p.entity.eid },

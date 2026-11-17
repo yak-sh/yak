@@ -1,4 +1,5 @@
 // Explicit administrative migration is allowed while ordinary app work sleeps.
+import { line } from '@yaks/query'
 import { ownedBy } from './directory-fixture.ts'
 import { equal, test, until } from '@yaks/testing'
 import { system } from '@yaks/fp'
@@ -61,7 +62,9 @@ let fixture = async () => {
       body: JSON.stringify(rows.slice(i, i + 100)),
     }, KERNEL)
     if (!written.ok) {
-      throw new Error(`source write: ${written.status} ${await written.text()}`)
+      throw new Error(
+        `source write: ${written.status} ${await written.text()}`,
+      )
     }
     await written.body?.cancel()
   }
@@ -84,10 +87,10 @@ let fixture = async () => {
   let rule: Rule = {
     mark: 'yak/store/dormant-probe/1',
     live: 'apps',
-    find: '.doc.title=Legacy&*',
+    find: line`.doc.title=Legacy&*`,
     move: (row, read) => {
-      fired.push(read?.('.fired')?.length ?? -1)
-      results.push(read?.(`.result.call=${call}`)?.length ?? -1)
+      fired.push(read?.(line`.fired`)?.length ?? -1)
+      results.push(read?.(line`.result.call=${call}`)?.length ?? -1)
       return [
         {
           entity: row.entity,
@@ -202,7 +205,8 @@ let fixture = async () => {
   let firstFiring = await query('.fired')
   await current.alarm()
   let secondFiring = await query('.fired')
-  let dormantResults = [...new Set(results)], dormantFired = [...new Set(fired)]
+  let dormantResults = [...new Set(results)],
+    dormantFired = [...new Set(fired)]
   // A restore already in flight can complete while the mover sheds its permit.
   await (await ask('/apply', {
     method: 'POST',

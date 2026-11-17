@@ -4,6 +4,7 @@
 // line adds to the tool: a dry run is `check` on the call, and a sign-out ends
 // the token rather than only forgetting it.
 
+import { line } from '@yaks/query'
 import { human } from '@yaks/id'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
@@ -93,7 +94,7 @@ test('init writes a config whose graph knows its person', async () => {
   let dir = Deno.makeTempDirSync()
   let path = `${dir}/yak.json`
   let said: string[] = []
-  let line = (argv: string[]) =>
+  let yak = (argv: string[]) =>
     cli(own, {
       ...YAK,
       argv: [...argv, '--config', path],
@@ -103,24 +104,28 @@ test('init writes a config whose graph knows its person', async () => {
       note: () => {},
     })
   try {
-    assertEquals(await line(['init']), 0)
+    assertEquals(await yak(['init']), 0)
     let first = Deno.readTextFileSync(path)
     let { person } = JSON.parse(first)
     let host = await opened(path, ['graph'], false)
-    let [task] = await host.graph.read(`.task&.filed.assignee=${person}`)
+    let [task] = await host.graph.read(line`.task&.filed.assignee=${person}`)
     assertEquals(human(host.vocab)(task), 'T-1')
-    assertEquals(await line(['name', 'Ada']), 0)
-    let [me] = await host.graph.read(`.entity.eid=${person}&.person&.doc`)
+    assertEquals(await yak(['name', 'Ada']), 0)
+    let [me] = await host.graph.read(line`.entity.eid=${person}&.person&.doc`)
     assertEquals((me?.doc as { title?: string } | undefined)?.title, 'Ada')
     await close(0)
-    assertEquals(await line(['init']), 1)
+    assertEquals(await yak(['init']), 1)
     assertEquals(Deno.readTextFileSync(path), first)
     let older = { ...JSON.parse(first), db: 'mine.db', port: 9 }
     Deno.writeTextFileSync(path, JSON.stringify(older))
     said.length = 0
-    assertEquals(await line(['init', '--force']), 0)
+    assertEquals(await yak(['init', '--force']), 0)
     let now = JSON.parse(Deno.readTextFileSync(path))
-    assertEquals([now.person, now.db, now.port], [person, 'mine.db', undefined])
+    assertEquals([now.person, now.db, now.port], [
+      person,
+      'mine.db',
+      undefined,
+    ])
     assertEquals(said.includes('Replaced port: dropped 9'), true)
     let [saved] = [...Deno.readDirSync(dir)]
       .filter((e) => e.name.startsWith('yak.json.'))

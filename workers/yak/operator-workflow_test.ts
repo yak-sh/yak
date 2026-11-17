@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { cleanup, equal, ok, test } from '@yaks/testing'
 import type { Item, Request } from '@yaks/model'
 import type { Comp } from '@yaks/graph'
@@ -216,7 +217,7 @@ handleChannels(operator, env)
 await receive(store, { space: spaceId, person, channel: 'chat' }, message)
 await drain(store)
 let requested = await connectionsOf(env, space, person)
-let [schedule] = await store.g.read(`.wake.for=${person}&*`)
+let [schedule] = await store.g.read(line`.wake.for=${person}&*`)
 ok(schedule, 'The Operator did not create the weekly import schedule.')
 let app = (await dir.apps(space)).find((app) => app.slug == 'church')!
 let graph = appStore(env.STORE, space, app)

@@ -1,5 +1,6 @@
 // During the marks expansion, old dispatch state writes remain authoritative.
 // Read and filter through the real SQL store, including session's queued check.
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
@@ -59,7 +60,7 @@ test('dispatch compatibility reads and filters legacy state before marks', () =>
     )
   }
   for (let status of dispatchStatus.values) {
-    let got = (g.read(`.dispatch.status=${status}`) as Bundle[]).map((b) =>
+    let got = (g.read(line`.dispatch.status=${status}`) as Bundle[]).map((b) =>
       b.entity.eid
     ).sort()
     assertEquals(

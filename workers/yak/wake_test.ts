@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { system } from '@yaks/fp'
 import { BucketUnavailable } from '@yaks/blob'
 // The clock, as every store now keeps it (D-37562): a wake row is owed at an
@@ -31,7 +32,7 @@ import { ADA, platform as probe, seeded } from './serving-probe.ts'
 let at = (time: string) => Date.parse(`2026-09-07T${time}:00Z`)
 let iso = (time: string) => new Date(at(time)).toISOString()
 let wake = async (env: ReturnType<typeof platform>['env'], eid: string) =>
-  (await meta(env).query(`.entity.eid=${eid}`))[0] as Wake
+  (await meta(env).query(line`.entity.eid=${eid}`))[0] as Wake
 // The directory's own object, awake: the platform deploys it ahead of the
 // first read through its door (testing.ts), which names it. Deploying it again
 // here would be a second pass, owing planner statistics for every table the
@@ -208,12 +209,17 @@ test('a run with more to do than a step stops, and its row fires again', async (
     (await stepped({ at: iso('04:20'), every }, 3)).ended.wake,
     undefined,
   )
-  assertEquals((await stepped({ at: null, every }, MORE)).ended.wake, undefined)
+  assertEquals(
+    (await stepped({ at: null, every }, MORE)).ended.wake,
+    undefined,
+  )
 })
 
 // A run Cloudflare could not answer through every resend, on a row holding
 // `sweep`, at `now`: the marks it ends with, and what it reported.
-let down = new Unavailable('analytics: HTTP 500: Internal authentication error')
+let down = new Unavailable(
+  'analytics: HTTP 500: Internal authentication error',
+)
 let ran = async (
   sweep: Record<string, string | null>,
   now: number,
@@ -224,7 +230,10 @@ let ran = async (
   let META = {
     apply: (b: Bundle[]) => (ended = b[0].sweep, Promise.resolve(b)),
   }
-  let row = { entity: { eid: 'yak-kills' }, sweep: { kind: 'kills', ...sweep } }
+  let row = {
+    entity: { eid: 'yak-kills' },
+    sweep: { kind: 'kills', ...sweep },
+  }
   let warn = console.warn
   console.warn = () => {}
   try {
@@ -679,7 +688,8 @@ let app = (name = 'ada/chores', ctx = state(), now = Date.now) => {
       }),
     )
   let rows = async (line: string) =>
-    await (await ask(`/query?q=${encodeURIComponent(line)}`)).json() as Bundle[]
+    await (await ask(`/query?q=${encodeURIComponent(line)}`))
+      .json() as Bundle[]
   // A call runs in the store's effect pool once the write that owes it
   // commits, so what it writes is waited for rather than read at once.
   let holds = (line: string, n: number) =>

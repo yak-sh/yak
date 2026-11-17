@@ -1,4 +1,5 @@
 // The HTTP lifecycle door records through the same runner as the CLI.
+import { whole } from '@yaks/query'
 import type { Comp } from '@yaks/graph'
 import { equal, test } from '@yaks/testing'
 import { compose } from '../cli/host.ts'
@@ -33,7 +34,10 @@ host.text = async (answer, tool) => {
     host.vocab,
     answer,
     {},
-    { lookup: (ids) => host.graph.get(ids), query: (q) => host.graph.read(q) },
+    {
+      lookup: (ids) => host.graph.get(ids),
+      query: (q) => host.graph.read(whole(q)),
+    },
     tool,
   )
   prior.push(lines.join('\n'))

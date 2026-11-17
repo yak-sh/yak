@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -35,7 +36,7 @@ import { loadTools } from '@yaks/graph/tools'
 
 let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
-let rows = async (g: Graph, q: string) => await g.read(`${q}&*`)
+let rows = async (g: Graph, q: string) => await g.read(whole(`${q}&*`))
 let one = async (g: Graph, eid: string) => (await g.get([eid]))[0]
 // A build and an output, found by their keys.
 let runOf = async (
@@ -349,7 +350,10 @@ test('nested collection changes the key, retains the build and adds a take', asy
   let build = await runOf(g, ['a'])
   let before = comp(await one(g, build), 'build')?.key
   await drive(g, runner, build)
-  await g.apply([{ entity: { eid: 'n1' }, note: { parent: 'a', text: 'one' } }])
+  await g.apply([{
+    entity: { eid: 'n1' },
+    note: { parent: 'a', text: 'one' },
+  }])
   assertEquals((await rows(g, '.build')).length, 1)
   assertNotEquals(comp(await one(g, build), 'build')?.key, before)
   assertEquals((await calls(g, build)).length, 2)
@@ -500,7 +504,10 @@ test('store admission fails an answer atomically and a fresh call clears the fai
   assertEquals(comp(await one(g, buildId), 'failed'), undefined)
   await drive(g, runner, buildId)
   assertEquals((await rows(g, '.built')).length, 2)
-  assertEquals(comp(await one(g, await outOf(g, buildId)), 'note')?.parent, 'a')
+  assertEquals(
+    comp(await one(g, await outOf(g, buildId)), 'note')?.parent,
+    'a',
+  )
 })
 
 test('a refused late answer leaves the newer successful build alone', async () => {
@@ -666,7 +673,10 @@ test('input content changes the attempt, a tool revision does not', async () => 
   await g.apply([source('a', 'second')])
   let second = comp(await one(g, build), 'build')?.key
   assertNotEquals(second, first)
-  await g.apply([{ entity: { eid: toolEid('code') }, tool: { revision: '2' } }])
+  await g.apply([{
+    entity: { eid: toolEid('code') },
+    tool: { revision: '2' },
+  }])
   assertEquals(comp(await one(g, build), 'build')?.key, second)
 })
 
@@ -1437,7 +1447,10 @@ test('definition edits never spend; explicit outdated and rebuild select work', 
   for (let id of [a, b]) await drive(g, runner, id)
   let old = await one(g, a)
   let output = await one(g, await outOf(g, a))
-  await g.apply([{ entity: { eid: ids.builder }, content: { body: 'New $s' } }])
+  await g.apply([{
+    entity: { eid: ids.builder },
+    content: { body: 'New $s' },
+  }])
   await build(g, vocab, { builder: ids.builder }, null)
   assertEquals((await calls(g, a)).length, 1)
   assertEquals((await calls(g, b)).length, 1)

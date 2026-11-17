@@ -1,5 +1,6 @@
 // Fixture exports exercise the same graph copy and compatibility doors used by
 // a migration. No account, payment, printer, secret or customer data is loaded.
+import { whole } from '@yaks/query'
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -90,7 +91,7 @@ let destination = {
   same,
 }
 await copy(imported, destination)
-let db = { query: async (q: string) => await g.read(q) }
+let db = { query: async (q: string) => await g.read(whole(q)) }
 
 test('PrintBound import preserves payment, content, capability and legal evidence without starting a print order', async () => {
   let row = (await read(book.entity.eid))!

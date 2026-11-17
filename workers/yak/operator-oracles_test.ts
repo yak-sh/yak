@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import type { Comp } from '@yaks/graph'
@@ -64,7 +65,10 @@ let vocab = {
 let release = async (notes: string) => {
   let source = `home/.releases/${eid}/${crypto.randomUUID()}`
   let staging = staged(r2RawObjects(env.BLOBS), {}, source)
-  await staging.files.put(`${source}/${NOTES}`, new TextEncoder().encode(notes))
+  await staging.files.put(
+    `${source}/${NOTES}`,
+    new TextEncoder().encode(notes),
+  )
   await staging.finish()
   await stamp(env, { entities: [{ entity: { eid }, app: { source } }] })
   let app = (await dir.app(space, 'recipes'))!
@@ -166,8 +170,8 @@ let started = await operator.ask({ person: owner }, space, {
 })
 await drain(store)
 let root = rootOf(space.eid, owner)
-let [fork] = await store.g.read(`.spawned.parent=${root}`)
-let [oracle] = await store.g.read(`.spawned.parent=${fork.entity.eid} *`)
+let [fork] = await store.g.read(line`.spawned.parent=${root}`)
+let [oracle] = await store.g.read(line`.spawned.parent=${fork.entity.eid} *`)
 let rootAsk = asked[0]
 let forkAsk = asked.find((r) =>
   JSON.stringify(r.items).includes('fork of the')
@@ -257,7 +261,7 @@ test('an oracle can only open a topic within the current reach', async () => {
 })
 
 // Stored instruction snapshots are what the conversation displays too.
-let kept = await store.g.read(`.entry.session=${root} *`)
+let kept = await store.g.read(line`.entry.session=${root} *`)
 test('the system prompt saved beside the conversation is the one the model received', () => {
   let sending = kept.find((b) => b.ask)?.sending as Comp
   assertStringIncludes(
@@ -321,11 +325,11 @@ let projectionRead = async (person: string, q: string) => {
   return await response.json() as { entity: { eid: string }; owner?: Comp }[]
 }
 
-let rows = await store.g.read(`.operator_oracle.person=${owner}&*`)
+let rows = await store.g.read(line`.operator_oracle.person=${owner}&*`)
 let ids = rows.map((b) => b.entity.eid).join(',')
 let mine = await projectionRead(owner, `.entity.eid=${ids}&*`)
 let theirs = await projectionRead(second, `.entity.eid=${ids}&*`)
-let secondRows = await store.g.read(`.operator_oracle.person=${second}&*`)
+let secondRows = await store.g.read(line`.operator_oracle.person=${second}&*`)
 let otherRows = await projectionRead(
   owner,
   `.entity.eid=${secondRows.map((b) => b.entity.eid).join(',')}&*`,

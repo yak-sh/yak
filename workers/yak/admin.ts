@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { Head } from '@yaks/ui/parts'
 // The platform admin's directory (T-124291): every person, space and app on
 // yaks.app and what each uses, at /admin on the apex. A person's row says
@@ -777,9 +778,7 @@ let spendingRead = async (
   let dir = directoryOf(env.STORE)
   let receipts = (await Promise.all(batches.map((batch) =>
     dir.read(
-      `.entity.eid=${
-        batch.join(',')
-      }&.fields=cost.dollars,model_reservation.dollars`,
+      line`.entity.eid=${batch}&.fields=cost.dollars,model_reservation.dollars`,
     )
   ))).flat()
   return reconciled(

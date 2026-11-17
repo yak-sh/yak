@@ -6,6 +6,7 @@
 // out for itself (@yaks/member personal.ts `stored`), so nothing here says the
 // pass is done. Each set of declarations is a rule of its own, named by their
 // hash, so a deploy that changes them owes the pass again.
+import { line as ql, sub } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
 import { declarationsOf, type Personal, privacy } from '@yaks/member'
 import { given, used } from '@yaks/host/config'
@@ -39,13 +40,13 @@ export let privacyRules = (vocab: Vocab): Rule[] => {
     mark: `${PRIVACY_MARK}/${p.hash}/${i}` as Mark,
     stores: 'apps',
     live: 'apps',
-    find: `${line}&*`,
+    find: ql`${sub(line)}&*`,
     move: (row, read) => {
       if (!read) throw new Error('privacy reckoning reads its sources')
       return sync(p.reckon(
         (eids) =>
           eids.flatMap((eid) =>
-            eid == row.entity.eid ? [row] : read(`.entity.eid=${eid}&*`)
+            eid == row.entity.eid ? [row] : read(ql`.entity.eid=${eid}&*`)
           ),
         [row.entity.eid],
       ))

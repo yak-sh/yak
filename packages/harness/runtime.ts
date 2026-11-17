@@ -1,6 +1,7 @@
 /** Runtime inspection and explicit actions. Reads never wake a session; an
  * action is a write, which whoever runs the transcript reads. */
 import { type Bundle, type Comp, type Graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { dispatchStatus, swap } from '@yaks/session/admission'
 import type { Agent } from './agent.ts'
 
@@ -10,23 +11,22 @@ export let runtimeRows = async (
   session: string,
 ): Promise<Bundle[]> => {
   let [selected, children] = await Promise.all([
-    g.read('.session&.entity.eid=' + session + '&*'),
-    g.read('.session&.spawned.parent=' + session + '&*'),
+    g.read(line`.session&.entity.eid=${session}&*`),
+    g.read(line`.session&.spawned.parent=${session}&*`),
   ])
   return await Promise.all([...selected, ...children].map(async (b) => {
     let id = b.entity.eid
     let [attempt] = await g.read(
-      '.entry.session=' + id +
-        '&.attempt.state=inflight&.order=-entry.seq&.limit=1&*',
+      line`.entry.session=${id}&.attempt.state=inflight&.order=-entry.seq&.limit=1&*`,
     )
     let [tail] = await g.read(
-      '.entry.session=' + id + '&!notice&.order=-entry.seq&.limit=1&*',
+      line`.entry.session=${id}&!notice&.order=-entry.seq&.limit=1&*`,
     )
     let [call] = await g.read(
-      '.entry.session=' + id + '&.call&.order=-entry.seq&.limit=1',
+      line`.entry.session=${id}&.call&.order=-entry.seq&.limit=1`,
     )
     let waiting = call &&
-      !(await g.read('.result.call=' + call.entity.eid + '&.limit=1')).length
+      !(await g.read(line`.result.call=${call.entity.eid}&.limit=1`)).length
     // Project existing facts only; nothing is written back as duplicate status.
     return {
       ...b,
@@ -49,11 +49,11 @@ export let runtimeAction = async (
   session: string,
   action: RuntimeAction,
 ): Promise<string> => {
-  let [row] = await a.h.g.read('.session&.entity.eid=' + session)
+  let [row] = await a.h.g.read(line`.session&.entity.eid=${session}`)
   if (!row) throw new Error('Session not found')
   if (action == 'interrupt') {
     let [attempt] = await a.h.g.read(
-      '.entry.session=' + session + '&.attempt.state=inflight',
+      line`.entry.session=${session}&.attempt.state=inflight`,
     )
     if (!attempt) return 'No cancellable model request is running.'
     // The run holding the transcript sees the withdrawal and aborts the
@@ -68,7 +68,7 @@ export let runtimeAction = async (
   }
   if (action == 'cancel-queued') {
     let [row] = await a.h.g.read(
-      '.session&.entity.eid=' + session + '&*',
+      line`.session&.entity.eid=${session}&*`,
     )
     if (!row) throw new Error('Session not found')
     if (dispatchStatus(row) != 'queued') {
@@ -92,11 +92,10 @@ export let runtimeAction = async (
   }
   if (action != 'resume') throw new Error('Unknown runtime action')
   let [tail] = await a.h.g.read(
-    '.entry.session=' + session + '&!notice&.order=-entry.seq&.limit=1&*',
+    line`.entry.session=${session}&!notice&.order=-entry.seq&.limit=1&*`,
   )
   let [ask] = await a.h.g.read(
-    '.entry.session=' + session +
-      '&.ask&.order=-entry.seq&.limit=1&*',
+    line`.entry.session=${session}&.ask&.order=-entry.seq&.limit=1&*`,
   )
   let interrupted = ask?.interrupted != null &&
     !(tail?.refusal && !tail.result) && !tail?.exception

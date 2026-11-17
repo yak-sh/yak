@@ -1,6 +1,7 @@
 // The files are staged when a release arrives here. Config and account
 // capabilities are checked before any upload, so a refused resource never
 // publishes a worker with only half of its requested bindings.
+import { line } from '@yaks/query'
 import { type App, scriptOf, type Space, storeName } from './directory.ts'
 import { carried, drop, NEEDS_TOKEN, upload } from './dispatch.ts'
 import { WORKER } from '@yaks/platform/files'
@@ -31,7 +32,9 @@ export let configured = async (read: Read) => {
   let bytes = jsonc ?? json
   let parsed = parse(bytes ? new TextDecoder().decode(bytes) : '{}')
   if (jsonc && json) {
-    parsed.report.push('ignored wrangler.json: wrangler.jsonc takes precedence')
+    parsed.report.push(
+      'ignored wrangler.json: wrangler.jsonc takes precedence',
+    )
   }
   return parsed
 }
@@ -110,7 +113,9 @@ export let deployWorker = async (
   try {
     bound = await provision(env, app, store, config)
   } catch (e) {
-    if (!(await meta(env).query(`.entity.eid=${app.eid}&.app`)).length) throw e
+    if (!(await meta(env).query(line`.entity.eid=${app.eid}&.app`)).length) {
+      throw e
+    }
     caught(e, { request: 'deploy worker', app: app.slug })
     held = await bindings(env, app)
     let why = e instanceof Error ? e.message : String(e)
@@ -141,7 +146,7 @@ export let deployWorker = async (
   ) || scriptName(target)
   // An upload can finish after permanent deletion's script DELETE. Reconcile
   // that late effect while its ids are still in hand, before recording a release.
-  if (!(await meta(env).query(`.entity.eid=${app.eid}&.app`)).length) {
+  if (!(await meta(env).query(line`.entity.eid=${app.eid}&.app`)).length) {
     await drop(env, target, true)
     for (let binding of bound) await discard(env, binding)
     throw refuse(

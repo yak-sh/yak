@@ -1,3 +1,4 @@
+import type { Line } from '@yaks/query'
 import { equal, test, throws } from '@yaks/testing'
 import type { Paid, Quote } from '@yaks/host/payments'
 import { graph } from '@yaks/graph'
@@ -45,7 +46,7 @@ let who = { buyer: quote.buyer, source: quote.source, seller: quote.seller }
 let vocab = appVocab()
 let g = graph({ vocab, storage: ram(vocab) })
 let store: Meta = {
-  query: async (q) => await g.read(q),
+  query: async (q) => await g.read(q as Line),
   apply: async (bs) => await g.apply(bs, { trusted: true }),
 }
 await issueQuote(store, quote)

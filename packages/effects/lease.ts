@@ -33,7 +33,7 @@ import type { Access, Bundle, Comp, Eid } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
-import { and, eq, every, or } from '@yaks/query'
+import { and, eq, every, line, or } from '@yaks/query'
 import { finishedRun } from './cleanup.ts'
 
 /** The name of the component a lease is stored as. */
@@ -210,7 +210,7 @@ export let released = (
   holder: Eid,
 ): Bundle[] | Promise<Bundle[]> =>
   after(
-    contested(g) ? g.read(`.${LEASE}.holder=${holder}`) : [],
+    contested(g) ? g.read(line`.${LEASE}.holder=${holder}`) : [],
     (leases) =>
       after(
         g.vocab.comp('effect')

@@ -10,6 +10,7 @@
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { mint } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { joined, onVolume, placed, volumeOf } from './mod.ts'
 
 let found = async (g: Graph): Promise<Eid> => {
@@ -23,7 +24,7 @@ let found = async (g: Graph): Promise<Eid> => {
 
 let mounted = async (g: Graph): Promise<Map<string, Eid>> => {
   let machine = await here(g)
-  let rows = await g.read(`.volume.machine=${machine}`)
+  let rows = await g.read(line`.volume.machine=${machine}`)
   let mounts = new Map(
     rows.map((b) => [String((b.volume as Comp).mount), b.entity.eid]),
   )

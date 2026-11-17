@@ -38,7 +38,7 @@ import {
   platformDocs,
 } from './vocab.ts'
 import { once } from '@yaks/fp'
-import { bareLine } from '@yaks/query'
+import { type Asked, bareLine, type Line } from '@yaks/query'
 import { type Ask, type Member, reach as composition } from '@yaks/reach'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { refuse, rejected } from './tool.ts'
@@ -205,12 +205,13 @@ let membersOf = (
 
 /** The read, whole (@yaks/reach `read`): one store's own answer, or every
  * store's merged into one bundle per eid. */
-export let read = (
+export let read = <Q extends string>(
   env: Env,
   reach: Reach[],
-  line: string,
+  line: Q & Asked<Q>,
   live = false,
-): Promise<unknown> => fan().read(membersOf(env, reach).members, line, live)
+): Promise<unknown> =>
+  fan().read(membersOf(env, reach).members, line as Line, live)
 
 /** These eids, whole, out of every store that holds a piece of one. */
 export let composed = (

@@ -1,6 +1,7 @@
 // Form progress and availability over supplied rows and answers. The caller
 // loads the rows and supplies the time and registration count.
 
+import { type Built, line } from '@yaks/query'
 import { same } from '@yaks/fp'
 import { Refused } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
@@ -324,11 +325,12 @@ export let signsOf = (fields: URLSearchParams): Signs => {
 
 /** A form's accepted registrations, read only as far as its capacity, which
  * is all `open` needs of the count. */
-/// accepted('f', 0) -> '.registration.form="f"&.completed&!cancelled&!waitlisted&.limit=1'
-export let accepted = (id: string, capacity: number): string =>
-  `.registration.form=${
-    JSON.stringify(id)
-  }&.completed&!cancelled&!waitlisted&.limit=${Math.max(1, capacity)}`
+/// accepted('f', 0) -> '.registration.form=f&.completed&!cancelled&!waitlisted&.limit=1'
+/// accepted('a b', 0) -> '.registration.form="a b"&.completed&!cancelled&!waitlisted&.limit=1'
+export let accepted = (id: string, capacity: number): Built =>
+  line`.registration.form=${id}&.completed&!cancelled&!waitlisted&.limit=${
+    Math.max(1, capacity)
+  }`
 
 /** The phone row a sign-up by text makes for the texter vouched as
  * `submitter`, where no row holds their number: one row across forms, worn

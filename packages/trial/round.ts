@@ -6,6 +6,7 @@
  * @module
  */
 import type { Actor, Bundle, Eid, Graph } from '@yaks/graph'
+import { line, sub } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 import { signed } from '@yaks/graph/provenance'
 import { Refused } from '@yaks/graph/errors'
@@ -53,18 +54,20 @@ export let gather = async (
   round: Eid,
   planned = false,
 ): Promise<Bundle[]> => {
-  let r = JSON.stringify(round)
+  let r = round
   let here = (b: Bundle) => planned || !unreturned(b)
-  let attempts = (await g.read(`.writing .writing.round=${r} *`)).filter(here)
+  let attempts = (await g.read(line`.writing .writing.round=${r} *`)).filter(
+    here,
+  )
   let of = (prop: string) =>
     attempts.map((a) => attempt(a)[prop]).filter((e) => e).map(String)
   let [head, pairs, ...rest] = await Promise.all([
     g.get([round, ...new Set([...of('variant'), ...of('case')])]),
-    g.read(`.pair .pair.round=${r} *`),
-    g.read(`.preference .preference.first.writing.round=${r} *`),
-    g.read(`.preference .preference.pair.pair.round=${r} *`),
-    g.read(`.grabbed .grabbed.attempt.writing.round=${r} *`),
-    g.read(`.guess .guess.attempt.writing.round=${r} *`),
+    g.read(line`.pair .pair.round=${r} *`),
+    g.read(line`.preference .preference.first.writing.round=${r} *`),
+    g.read(line`.preference .preference.pair.pair.round=${r} *`),
+    g.read(line`.grabbed .grabbed.attempt.writing.round=${r} *`),
+    g.read(line`.guess .guess.attempt.writing.round=${r} *`),
   ])
   // The sides that are not this round's attempts, and the marks on them.
   let written = new Set(attempts.map((a) => a.entity.eid))
@@ -78,9 +81,7 @@ export let gather = async (
     ? await Promise.all([
       g.get(others),
       g.read(
-        `.grabbed .grabbed.attempt=${
-          others.map((e) => JSON.stringify(e)).join(',')
-        } *`,
+        line`.grabbed .grabbed.attempt=${others} *`,
       ),
     ])
     : [[], []]
@@ -121,7 +122,7 @@ export let keyed = async (
     all.filter((b) => b.variant || b.case).map(async (b) => {
       let start = (b.variant ? named.variant : named.case)(skill, '')
       let names = await g.read(
-        `.alias .key.of=${JSON.stringify(b.entity.eid)} .fields=key.value`,
+        line`.alias .key.of=${b.entity.eid} .fields=key.value`,
       )
       let name = names.map((n) => String((n.key as { value?: unknown })?.value))
         .find((n) => n.startsWith(start))
@@ -150,7 +151,7 @@ let titled = async (
   let name = named.skill(title)
   if (await address(g, name)) return
   let [kept] = await g.read(
-    `.skill .doc.title=${JSON.stringify(title)} .limit=1 .fields=entity.eid`,
+    line`.skill .doc.title=${title} .limit=1 .fields=entity.eid`,
   )
   if (kept) await apply([{ entity: kept.entity, alias: { name } }])
 }
@@ -208,10 +209,10 @@ export let compare = async (
     await address(g, word) ?? word
   let [kept] = await g.get([judge], ['judge'])
   if (!kept?.judge) throw new Refused(`no judge is named ${word}`)
-  let r = JSON.stringify(round), j = JSON.stringify(judge)
+  let r = round, j = judge
   let [pairs, done] = await Promise.all([
-    g.read(`.pair .pair.round=${r} *`),
-    g.read(`.preference .preference.judge=${j} *`),
+    g.read(line`.pair .pair.round=${r} *`),
+    g.read(line`.preference .preference.judge=${j} *`),
   ])
   let asks = new Map(
     pairs.map((p) => [p.entity.eid, comps(p, 'pair').question ?? '']),
@@ -261,11 +262,16 @@ export let drop = async (g: Graph, round: Eid): Promise<number> => {
   await g.apply([{ entity: { eid: round }, $delete: true }])
   let unused: Bundle[] = []
   for (let b of shared) {
-    let eid = JSON.stringify(b.entity.eid)
+    let eid = b.entity.eid
     let names = b.judge
-      ? [`.preference .preference.judge=${eid}`, `.guess .guess.judge=${eid}`]
-      : [`.writing .writing.${b.variant ? 'variant' : 'case'}=${eid}`]
-    let left = await Promise.all(names.map((q) => g.read(`${q} .limit=1`)))
+      ? [
+        line`.preference .preference.judge=${eid}`,
+        line`.guess .guess.judge=${eid}`,
+      ]
+      : [line`.writing .writing.${b.variant ? 'variant' : 'case'}=${eid}`]
+    let left = await Promise.all(
+      names.map((q) => g.read(line`${sub(q)} .limit=1`)),
+    )
     if (!left.flat().length) unused.push({ entity: b.entity, $delete: true })
   }
   if (unused.length) await g.apply(unused)

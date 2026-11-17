@@ -7,7 +7,9 @@
 // `./api/blob`; inbox.ts, a letter's attachments; library-tools.ts, a fetched
 // document), and each keeps them through here.
 
+import { type Line } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
+import type { Read } from '@yaks/blob/upload'
 import { type Accepts, prefixed } from '@yaks/blob'
 import {
   type File as Filed,
@@ -77,8 +79,8 @@ export let uploadOf = async (
 export type File = Filed & { url: string }
 
 // A store as the write half reads it.
-let reading = (graph: Pick<Meta, 'query'>) => (line: string) =>
-  graph.query(line)
+let reading = (graph: Pick<Meta, 'query'>): Read => (said) =>
+  graph.query(said as Line)
 
 /**
  * Bytes into the app's bucket, and the rows that name them there — the

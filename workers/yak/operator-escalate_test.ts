@@ -1,3 +1,4 @@
+import { line as q } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import type { Binding } from '@yaks/cloudflare-mail'
@@ -163,7 +164,7 @@ let theirs = rootOf(eid, writer), mine = rootOf(eid, person)
 let [raised] = await store.g.read('.operator_request.channel=escalated&*')
 let request = raised.operator_request as Record<string, unknown>
 let entries = (session: string) =>
-  store.g.read(`.entry.session=${session}&.order=entry.seq&*`)
+  store.g.read(q`.entry.session=${session}&.order=entry.seq&*`)
 let noteOf = async () =>
   (await entries(theirs)).find((b) =>
     (b.channel as { name?: string })?.name == 'escalation'

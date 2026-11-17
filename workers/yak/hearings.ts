@@ -10,6 +10,7 @@
 // and never held whole. A provider that fetches a URL itself (Deepgram's
 // `url`) would need a door that serves an app's bytes to whoever holds a
 // link; a stream needs none, and costs the store only the wait.
+import { line } from '@yaks/query'
 import type { Attempt } from '@yaks/effects'
 import { type Bundle, type Comp, token } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
@@ -72,7 +73,7 @@ export let asking = async (asked: Asked, address: unknown) => {
   }
   let graph = metaOf(appStore(env.STORE, space, app, env), KERNEL)
   let recording = await useOf(sha)
-  let [row] = await graph.query(`.entity.eid=${recording}&*`, {
+  let [row] = await graph.query(line`.entity.eid=${recording}&*`, {
     trusted: true,
   })
   if ((row?.attachment as Comp | undefined)?.blob != sha) {
@@ -196,7 +197,7 @@ export let hearWhole = async (
     if (final) return
     throw e
   }
-  let had = await at.graph.read(`.heard_turn.recording=${recording}`)
+  let had = await at.graph.read(line`.heard_turn.recording=${recording}`)
   let speakers = speechOf(at.env)!.provider.hear.speakers
   for (
     let batch of landed(

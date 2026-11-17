@@ -8,6 +8,7 @@
  * @module
  */
 import type { Bundle, Eid, Graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { argsOf } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
@@ -87,9 +88,7 @@ let plans = async (g: Graph) => {
 // The tallies of the days from one to another, in order.
 let tallies = async (g: Graph, from: string, to: string): Promise<Spend[]> =>
   (await g.read(
-    `.spend .spend.day>=${JSON.stringify(from)} .spend.day<=${
-      JSON.stringify(to)
-    } *`,
+    line`.spend .spend.day>=${from} .spend.day<=${to} *`,
   )).map(spendOf).filter((s): s is Spend => !!s)
     .sort((a, b) => a.day < b.day ? -1 : 1)
 
@@ -126,7 +125,7 @@ export let shared = async (
 // Each row of a kind, by eid, named.
 let names = async (g: Graph, comp: string): Promise<Map<Eid, string>> =>
   new Map(
-    (await g.read(`.${comp} *`)).map((b) => [
+    (await g.read(line`.${comp} *`)).map((b) => [
       b.entity.eid,
       String((b[comp] as { name?: unknown }).name ?? b.entity.eid),
     ]),

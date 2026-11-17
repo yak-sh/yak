@@ -1,6 +1,7 @@
 // Git acts through one explicitly connected filesystem. The transport may be
 // local, SSH or a sandbox; no failed or unknown target chooses the host disk.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import {
   absent,
   and,
@@ -173,7 +174,7 @@ export let workspaceGit = async (
         },
       })
     }
-    for (let old of await g.read('.ref.app=' + repository)) {
+    for (let old of await g.read(line`.ref.app=${repository}`)) {
       if (!found.has(old.entity.eid)) {
         bundles.push({
           entity: old.entity,
@@ -390,7 +391,9 @@ export let retained = async (g: Graph, workspace: string): Promise<boolean> => {
     beside(b) && inTree((b.workspace as Comp).root)
   ).map((b) => b.entity.eid)
   for (let name of ['process', 'home']) {
-    if (!g.vocab.prop(name, 'workspace') || !g.vocab.prop(name, 'cwd')) continue
+    if (!g.vocab.prop(name, 'workspace') || !g.vocab.prop(name, 'cwd')) {
+      continue
+    }
     let rows = await g.read(and(
       present(name),
       ...name == 'process' ? [absent('exit')] : [],

@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { outputView } from '@yaks/context'
@@ -20,11 +21,14 @@ test('large outputs snapshot transparently, survive reopen and source mutation',
     const { id: handle, revision } = JSON.parse(stub)
     assertEquals(await outputView(h.g, entry), stub)
     assertEquals((await h.g.read('.context_output&*')).length, 1)
-    await h.g.apply([{ entity: { eid: 'result' }, content: { body: 'newer' } }])
+    await h.g.apply([{
+      entity: { eid: 'result' },
+      content: { body: 'newer' },
+    }])
     h.close()
     h = await harness(path)
     const reader = async (id: string) =>
-      (await h.g.read('.entity.eid=' + JSON.stringify(id)))[0]
+      (await h.g.read(line`.entity.eid=${id}`))[0]
     const read = valueRange(reader)
     const search = valueSearch(reader)
     const args = {
@@ -178,7 +182,7 @@ test('fork projections reuse snapshots and escaped reads stay bounded', async ()
     assertEquals(snapshots.length, 1)
     assertEquals((snapshots[0].context_output as { body: string }).body, text)
     const [read] = valueTools(async (id) =>
-      (await h.g.read('.entity.eid=' + JSON.stringify(id)))[0]
+      (await h.g.read(line`.entity.eid=${id}`))[0]
     )
     await h.g.apply([{
       entity: { eid: 'escapes' },

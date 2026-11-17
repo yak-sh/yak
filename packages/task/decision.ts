@@ -2,6 +2,7 @@
 import { after } from '@yaks/fp'
 import type { Bundle, Comp, Hook } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
+import { type Built, line } from '@yaks/query'
 
 /** A label and a line saying what choosing it means. */
 export type Choice = { label: string; description: string }
@@ -17,7 +18,7 @@ export type Decision = {
 export type Shown = Map<string, string[]>
 
 /** The query for a decision's `shows` edges. */
-export let showing = (eid: string): string => `.edge.from=${eid}&.shows`
+export let showing = (eid: string): Built => line`.edge.from=${eid}&.shows`
 
 /** Each choice's shown entities, from the decision's `shows` edges. */
 export let shown = (edges: Bundle[]): Shown => {

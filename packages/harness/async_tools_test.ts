@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Item, Model, Request } from '@yaks/model'
@@ -360,7 +361,7 @@ await observed(
       content: { body: 'recover a prior execution' },
     }], { trusted: true })
     await react(recoveredHost.g, s, lend(opts))
-    let [call] = await recoveredHost.g.read(`.entry.session=${s}&.call&*`)
+    let [call] = await recoveredHost.g.read(line`.entry.session=${s}&.call&*`)
     ok(call?.tool_async)
     await recoveredHost.g.apply([{
       entity: { eid: 'async-crashed-worker' },

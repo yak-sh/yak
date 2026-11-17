@@ -1,6 +1,7 @@
 // An Operator's steps on its person's own machine: a platform admin who owns
 // a space with a tunnel is answered by the machine behind it, through a stub
 // gateway, and everyone else in the space by the hosted model.
+import { line as q } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { identityEid, mint } from '@yaks/graph'
@@ -50,7 +51,10 @@ let DISPATCH = {
 let { env } = platform('operator-machine', { DISPATCH })
 let dir = directoryOf(env.STORE)
 let jeff = mint(), bob = mint()
-let as = (person: string) => ({ 'x-yak-person': person, 'x-yak-role': 'owner' })
+let as = (person: string) => ({
+  'x-yak-person': person,
+  'x-yak-role': 'owner',
+})
 let eid = await dir.mint(jeff, 'jeffs', 'Jeff', as(jeff))
 await stamp(env, {
   entities: [{
@@ -192,7 +196,7 @@ test('a turn nobody asked for at that moment waits for the machine that is off, 
   assertEquals([t.box, t.hosted, t.cost], [[], 0, 0])
   // Its ask is owed again, for when the machine is back.
   let owed = await store.g.read(
-    `.provisional&.ask&.entry.session=${t.session}&.fields=interrupted.code`,
+    q`.provisional&.ask&.entry.session=${t.session}&.fields=interrupted.code`,
   )
   assertEquals(owed.map((b) => b.interrupted), [{ code: 'unreachable' }])
   // His own words meanwhile fall to the hosted model, as ever.

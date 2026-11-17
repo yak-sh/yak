@@ -1,5 +1,6 @@
 // Request admission follows the directory snapshot without moving behind a
 // revision this app already accepted. Hosts supply persistence and transactions.
+import { line, sub } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { type Mode, mode } from '@yaks/member'
@@ -71,12 +72,14 @@ export let servingAuthority = (host: Host) => {
     let edge = via ? visitEdge(via, app!) : null
     // A query returns only what it names, and a visitor's standing is read from
     // the app's offer and its sample (@yaks/platform/visits `visitorRole`).
-    let q = `.entity.eid=${app}&?app&?published&?demo`
-    if (person) {
-      q +=
-        `|.member.person=${person}&?member|.grant.app=${app}&.grant.person=${person}&?grant`
-    }
-    if (edge) q += `|.entity.eid=${edge}&?visit`
+    let at = app ?? ''
+    let seat = person
+      ? line`|.member.person=${person}&?member|.grant.app=${at}&.grant.person=${person}&?grant`
+      : line``
+    let visit = edge ? line`|.entity.eid=${edge}&?visit` : line``
+    let q = line`.entity.eid=${at}&?app&?published&?demo${sub(seat)}${
+      sub(visit)
+    }`
     let answer = await host.transport().fetch(
       new Request(`http://directory/query?q=${encodeURIComponent(q)}`),
     )

@@ -35,6 +35,7 @@
 // Never point it at the live graph: it writes into the file, and puts back
 // what it wrote to `doc` when done. Prints one JSON line per measurement.
 
+import { whole } from '@yaks/query'
 import { stopwatch } from '@yaks/benchmark'
 import {
   among,
@@ -660,7 +661,9 @@ for (let w of writers) {
   let unit = (es: number[], label: string) => {
     tx++
     q({ t: 'begin' })
-    for (let e of es) for (let s of w.edit(e, `${label} ${run} ${tx}`, tx)) q(s)
+    for (let e of es) {
+      for (let s of w.edit(e, `${label} ${run} ${tx}`, tx)) q(s)
+    }
     q({ t: 'commit' })
   }
   await time(
@@ -791,7 +794,11 @@ timed('off:copy-open-rows-out', [
     }),
   },
 ], big.open)
-timed('off:drop-table', [{ t: 'drop', kind: 'table', name: scratch }], big.open)
+timed(
+  'off:drop-table',
+  [{ t: 'drop', kind: 'table', name: scratch }],
+  big.open,
+)
 
 // What the file keeps: every table of versions, and the live tables of the
 // components that keep versions, which the view's layout would not have.
@@ -818,12 +825,21 @@ let h = await compose(
   { process: false },
 )
 let counted = `.${busy.comp} .count`
-await time('graph', `count:${counted}`, () => h.graph.rows(counted), true)
-await time('graph', `count:${counted}:warm`, () => h.graph.rows(counted))
+await time(
+  'graph',
+  `count:${counted}`,
+  () => h.graph.rows(whole(counted)),
+  true,
+)
+await time(
+  'graph',
+  `count:${counted}:warm`,
+  () => h.graph.rows(whole(counted)),
+)
 out({
   layout: 'graph',
   m: `answer:${counted}`,
-  rows: await h.graph.rows(counted),
+  rows: await h.graph.rows(whole(counted)),
 })
 await h.close()
 Deno.exit(0)

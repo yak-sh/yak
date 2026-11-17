@@ -1,6 +1,7 @@
 /** Model choices are graph records: a choice is one provider's offering of a
  * model, its `serves` edge. */
 import { type Bundle, type Comp, type Graph } from '@yaks/graph'
+import { line, sub } from '@yaks/query'
 import { edgeEid } from '@yaks/edge'
 import { type Model, offerFor, offers } from '@yaks/model'
 
@@ -37,9 +38,9 @@ export const selectedUsing = async (
   if (seen.has(session)) throw new Error('Cyclic session ancestry')
   seen.add(session)
   const rows = await g.read(
-    '.entry.session=' + session + '&.using&!ask' +
-      (before == null ? '' : '&.entry.seq<=' + before) +
-      '&.order=-entry.seq&.limit=1&.fields=using.model,using.provider,using.effort',
+    line`.entry.session=${session}&.using&!ask${
+      sub(before == null ? line`` : line`&.entry.seq<=${before}`)
+    }&.order=-entry.seq&.limit=1&.fields=using.model,using.provider,using.effort`,
   )
   if (rows.length) return rows[0].using as Comp
   const [owner] = await g.get([session], ['using', 'fork'])

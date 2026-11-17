@@ -2,6 +2,7 @@
 // query that selects them: neither the store's gather of those rows nor
 // personal's answer screens them again, and each row's spine is read once.
 // Read as a web's read worker reads, through the read-only graph.
+import { whole } from '@yaks/query'
 import { type Comp, graph } from '@yaks/graph'
 import { graph as readonly } from '@yaks/graph/read'
 import { storage } from '@yaks/sqlite'
@@ -51,7 +52,7 @@ let read = async (q: string, person: string) => {
   let off = channel(g).subscribe((e: Event) => {
     if (e.stage == 'start' && e.kind == 'sql' && e.sql) sql.push(e.sql)
   }, { history: false })
-  let rows = await g.read(q, { person })
+  let rows = await g.read(whole(q), { person })
   off()
   return {
     rows: rows.map((b) => [

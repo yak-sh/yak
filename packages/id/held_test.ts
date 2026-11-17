@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { type Bundle, graph } from '@yaks/graph'
+import { type Bundle, graph, type Taken } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { idKeywords } from './keywords.ts'
@@ -61,7 +61,7 @@ test('a held entity is drawn by the first series it is numbered in, and nothing 
   ] as Bundle[])
   let asked: string[] = []
   let ids = await held(vocab, {
-    read: ((q: string) => (asked.push(q), g.read(q))) as typeof g.read,
+    read: ((q: string) => (asked.push(q), g.read(q as Taken))) as typeof g.read,
   })()
   // an app declares no letter, so the project it also is numbers it
   assertEquals(['a', 'pt', 't'].map(ids), ['P-1', 'P-2', 'T-1'])
@@ -78,7 +78,7 @@ test('an eid outside the small series is read when a door names it', async () =>
   ] as Bundle[])
   let asked: string[] = []
   let ids = held(vocab, {
-    read: ((q: string) => (asked.push(q), g.read(q))) as typeof g.read,
+    read: ((q: string) => (asked.push(q), g.read(q as Taken))) as typeof g.read,
   }, { small: 3 })
   let known = await ids(['t2', 'p1', 'gone'])
   assertEquals(['t2', 'p1', 'gone', 't1'].map(known), [

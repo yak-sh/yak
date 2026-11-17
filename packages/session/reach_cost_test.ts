@@ -1,5 +1,6 @@
 // A step reads what was appended since the last, not the transcript's length:
 // on a transcript of thousands of lines it costs what it costs on a short one.
+import { line } from '@yaks/query'
 import { type Bundle, graph, identityEid } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
@@ -90,7 +91,7 @@ let read = async (session: string) => {
 let step = async (session: string) => {
   let whole = (await read(session)).steps
   let [last] = await g.rows(
-    `.entry.session=${session}&.order=-entry.seq&.limit=1&.fields=entity.eid`,
+    line`.entry.session=${session}&.order=-entry.seq&.limit=1&.fields=entity.eid`,
   )
   let [ask] = await g.apply([{
     entity: { eid: `${session}.ask` },
@@ -141,7 +142,7 @@ let tool = async (
 ) => {
   await read(session)
   let [last] = await g.rows(
-    `.entry.session=${session}&.order=-entry.seq&.limit=1&.fields=entity.eid`,
+    line`.entry.session=${session}&.order=-entry.seq&.limit=1&.fields=entity.eid`,
   )
   let [ask] = await g.apply([{
     entity: { eid: `${session}.tool-ask-${n}` },
@@ -159,7 +160,7 @@ let tool = async (
   let before = steps(), was = asked
   await run(call)
   let spent = steps() - before, reads = asked - was
-  let ran = (await g.read(`.result.call=${call}&.fields=entity.eid`)).length
+  let ran = (await g.read(line`.result.call=${call}&.fields=entity.eid`)).length
   return { ran: ran == 1, steps: spent, reads }
 }
 let deps = {

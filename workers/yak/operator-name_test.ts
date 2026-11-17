@@ -1,5 +1,6 @@
 // Every space from before Operators had names is given one, clear of the
 // names its people's other Operators go by.
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
@@ -42,8 +43,8 @@ await g.apply([
   seat('c', 'ana'),
   seat('d', 'bo'),
 ], { trusted: true, stamp: false })
-let read = (line: string) => g.read(line) as Bundle[]
-let rows = await g.read(operatorNameRule.find)
+let read = (line: string) => g.read(whole(line)) as Bundle[]
+let rows = await g.read(whole(operatorNameRule.find as string))
 let named = Object.fromEntries(
   rows.map((row) => [
     row.entity.eid,

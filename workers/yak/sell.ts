@@ -30,6 +30,7 @@
 // Nothing here may fail quietly, the same rule billing.ts keeps: a break is an
 // exception entity in the meta store, and a refusal is a sentence the person
 // reads.
+import { line } from '@yaks/query'
 import { sha256 } from '@yaks/graph/sha256'
 import { derivedEid } from '@yaks/graph/identity'
 import { moved } from './billing.ts'
@@ -509,7 +510,7 @@ export let buying = async (
       // this side of it never sees one).
       priceless = priced(
         await store.query(
-          `.entity.eid=${items.map((i) => i.product).join(',')}`,
+          line`.entity.eid=${items.map((i) => i.product)}`,
         ) as Product[],
         items,
         lent.tag,
@@ -629,7 +630,7 @@ export let refundDoor = async (
       if (!/^[0-9a-f-]{36}$/i.test(id)) {
         throw refuse('refund', 'invalid refund identity')
       }
-      let [row] = await store.query(`.entity.eid=${id}`)
+      let [row] = await store.query(line`.entity.eid=${id}`)
       if (!row?.refund_request) {
         return Response.json({ error: 'not_found' }, { status: 404 })
       }
@@ -886,12 +887,12 @@ let sold = async (env: Env, space: Space, account: string, o: Paid) => {
   if (items.length) {
     for (
       let row of await store.query(
-        `.entity.eid=${items.map((i) => i.product).join(',')}`,
+        line`.entity.eid=${items.map((i) => i.product)}`,
       ) as Product[]
     ) named.set(row.entity.eid, row.doc?.title ?? '')
   }
   let eid = orderEid(order.session)
-  let [existing] = await store.query(`.entity.eid=${eid}`)
+  let [existing] = await store.query(line`.entity.eid=${eid}`)
   if (existing?.order) return 'unchanged'
   let letter = quote
     ? {
@@ -953,7 +954,7 @@ let settled = async (
   let app = payment && await inApp(env, space, String(payment.tags.app ?? ''))
   if (!payment || !app) return 'not a sale of ours'
   let store = asApp(env, space, app)
-  let [row] = await store.query(`.order.intent=${payment.id}`) as {
+  let [row] = await store.query(line`.order.intent=${payment.id}`) as {
     entity: { eid: string }
     order?: { status?: string; refunded_cents?: number }
   }[]
@@ -965,7 +966,10 @@ let settled = async (
       payment.total,
     )
   }
-  let refunded = Math.max(row.order?.refunded_cents ?? 0, payment.refunded ?? 0)
+  let refunded = Math.max(
+    row.order?.refunded_cents ?? 0,
+    payment.refunded ?? 0,
+  )
   let refundMoved = payment.refunded != null &&
     refunded != row.order?.refunded_cents
   if (row.order?.status == 'refunded' && to == 'partially_refunded') {

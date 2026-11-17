@@ -1,3 +1,4 @@
+import { type Line, line } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -16,7 +17,7 @@ let now = '2026-11-10T01:00:00Z'
 let fixture = async (n: number) => {
   let vocab = appVocab(), g = graph({ vocab, storage: ram(vocab) })
   let store: Meta = {
-    query: async (q) => await g.read(q),
+    query: async (q) => await g.read(q as Line),
     apply: async (bs) => await g.apply(bs, { trusted: true }),
   }
   await store.apply([{
@@ -50,7 +51,7 @@ let fixture = async (n: number) => {
     },
   }
   let row = async (n: number) =>
-    (await store.query(`.entity.eid=${id(n)}`))[0] as RefundRow
+    (await store.query(line`.entity.eid=${id(n)}`))[0] as RefundRow
   return { store, provider, received, results, accounts, row }
 }
 let partial = await fixture(1)

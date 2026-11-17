@@ -1,4 +1,5 @@
 // Stored plans move once without touching subscriptions or sign-in data.
+import { line } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { assertRejects } from '@std/assert'
 import { type Comp, graph, mint, Stale } from '@yaks/graph'
@@ -48,7 +49,9 @@ test('the tier moves once, retaining billing and credentials', async () => {
   let { g, rows } = kept
   equal([await move(g), await move(g)], [1, 0])
   for (let row of rows) {
-    let [got] = await g.read(`.entity.eid=${row.entity.eid}&?plan&?credential`)
+    let [got] = await g.read(
+      line`.entity.eid=${row.entity.eid}&?plan&?credential`,
+    )
     equal(got.plan, {
       ...row.plan,
       tier: row.plan.tier == 'organization' ? 'pro' : row.plan.tier,
@@ -69,7 +72,7 @@ test('a subscription changed since the move read it is left to its writer', asyn
     async () => await g.apply(proRule.move(row), { trusted: true }),
     Stale,
   )
-  equal((await g.read(`.entity.eid=${row.entity.eid}&?plan`))[0].plan, {
+  equal((await g.read(line`.entity.eid=${row.entity.eid}&?plan`))[0].plan, {
     ...row.plan as Comp,
     tier: 'plus',
   })

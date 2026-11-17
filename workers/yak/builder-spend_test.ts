@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { assertAlmostEquals, assertEquals, assertRejects } from '@std/assert'
 import { mint } from '@yaks/graph'
 import { ModelError } from '@yaks/model'
@@ -82,7 +83,9 @@ test('builder turns use fresh provider pricing and context before granting outpu
   await turn(p.env, fresh.space, m, ask)
   assertEquals(tokens, 190)
   assertAlmostEquals(await fresh.used(), 0.2)
-  let [row] = await meta(p.env).query(`.entity.eid=${fresh.space.eid}&?trend`)
+  let [row] = await meta(p.env).query(
+    line`.entity.eid=${fresh.space.eid}&?trend`,
+  )
   let sources = (row.trend as Comp).sources as Record<
     string,
     Record<string, number>

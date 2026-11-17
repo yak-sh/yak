@@ -4,6 +4,7 @@
 // session is (@yaks/harness `skillItems`, `skillRead`). A person's connected
 // Claude is offered those of every space they write in, through @yaks/mcp's
 // skills extension, beside the guide's pages.
+import { line } from '@yaks/query'
 import type { Bundle, Graph } from '@yaks/graph'
 import type { SkillFiles } from '@yaks/mcp/skills'
 import { writes } from '@yaks/member'
@@ -208,7 +209,7 @@ export let results = async (
   skill: string,
   space: string,
 ): Promise<Measured[]> => {
-  let rounds = await g.read(`.round.skill=${JSON.stringify(skill)} ?created`)
+  let rounds = await g.read(line`.round.skill=${skill} ?created`)
   let at = (b: Bundle) => String((b.created as { at?: string })?.at ?? '')
   let ran = (b: Bundle) => (b.created as { by?: string })?.by == space
   return await Promise.all(

@@ -25,7 +25,7 @@ import { BEST, type Runs } from '@yaks/graph/tools'
 import type { Host } from '@yaks/host'
 
 import { MODEL, PROVIDER } from '@yaks/model'
-import { and, conjoin, parse, stringify } from '@yaks/query'
+import { and, conjoin, line, parse, stringify, sub } from '@yaks/query'
 import { newestOf, usingOf } from '@yaks/session'
 import { changes } from '@yaks/session/wait'
 import { begin, seed, through } from './agent.ts'
@@ -63,7 +63,7 @@ let named = async (
   if (!provider && !model) return await defaultUsing(graph)
   if (!provider) {
     let eid = identityEid(MODEL, [model!])
-    let served = await graph.read(`.serves .edge.to=${eid} .limit=1`)
+    let served = await graph.read(line`.serves .edge.to=${eid} .limit=1`)
     if (served.length) return { model: eid }
   }
   let fallback = provider && model ? undefined : await defaultUsing(graph)
@@ -238,7 +238,7 @@ let LIVE = '.session !session.ended'
 // exited. Its command line and the sizes of its context are kilobytes each, so
 // they are read from the session itself (`graph_show`), or by a query naming
 // `*`.
-let SHOWN = '?created ?spawned ?doc ?exit'
+let SHOWN = line`?created ?spawned ?doc ?exit`
 
 // One page of sessions, newest first unless the query orders them, and a last
 // row saying how to read on when more match. The page reads one row past its
@@ -248,20 +248,20 @@ let sessionList: Runs[string] = async (call, graph) => {
   let args = argsOf(call)
   let query = String(args.query ?? '').trim() || LIVE
   let size = Number(args.limit) > 0 ? Math.floor(Number(args.limit)) : BEST
-  let rows = await graph.read(
-    conjoin(
-      '.session',
-      query,
-      '.order=-created.at',
-      `.limit=${size + 1}`,
-      SHOWN,
-    ),
-  )
+  // The caller's line is parsed, never spliced: its clauses sit beside the
+  // page's own, so nothing it says can reach past `.session`.
+  let asked = parse(query)
+  let rows = await graph.read(and(
+    ...parse(line`.session`).clauses,
+    ...asked.clauses,
+    ...parse(line`.order=-created.at .limit=${size + 1} ${sub(SHOWN)}`)
+      .clauses,
+  ))
   if (rows.length <= size) return rows
   let page = rows.slice(0, size)
   // The first `.after` of a query is the one it reads from, so the next page's
   // query replaces the cursor this one arrived with.
-  let rest = parse(query).clauses.filter((c) => c.kind != 'after')
+  let rest = asked.clauses.filter((c) => c.kind != 'after')
   let next = conjoin(
     stringify(and(...rest)),
     `.after=${page[size - 1].entity.eid}`,

@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { assert, assertEquals as equal } from '@std/assert'
 import { test } from '@yaks/testing'
 import { fresh, seed, signIn } from './probe.ts'
@@ -152,7 +153,7 @@ test('failed first guest handoff keeps drafts, saved source and artifacts with t
     )
     assert(originalBrowser)
     let [claim] = await meta(env).query(
-      `.entity.eid=${originalBrowser.via}&?browser`,
+      line`.entity.eid=${originalBrowser.via}&?browser`,
     )
     equal(idOf((claim.browser as { by?: unknown }).by), alice.person)
     let before = await reply(

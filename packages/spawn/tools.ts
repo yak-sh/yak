@@ -22,6 +22,7 @@ import * as disk from '@yaks/file/io'
 // as still going and left alone; killing it is what `stop` is for.
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { argsOf, who } from '@yaks/graph/call'
 import { Stale } from '@yaks/graph/errors'
 import { signed } from '@yaks/graph/provenance'
@@ -110,8 +111,7 @@ let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
 let recent = async (graph: Graph, session: string, limit: number) =>
   ordered(
     await graph.read(
-      `.${ENTRY}.session=${JSON.stringify(session)}` +
-        `&.order=-entry.seq&.limit=${limit}&*`,
+      line`.${ENTRY}.session=${session}&.order=-entry.seq&.limit=${limit}&*`,
     ),
   )
 

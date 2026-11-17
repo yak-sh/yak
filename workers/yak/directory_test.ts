@@ -1,12 +1,13 @@
 // Directory reads through its cache and the serving app roster that must be
 // fresh and coherent across apps in one request.
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { Stale } from '@yaks/graph/errors'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { matcher } from '@yaks/match'
-import type { Bundle, Tx } from '@yaks/graph'
+import type { Bundle, Taken, Tx } from '@yaks/graph'
 import { platformVocab } from './vocab.ts'
 import { plugins } from './facets/directory-graph.ts'
 import * as dirPart from './directory.ts'
@@ -328,7 +329,7 @@ await routingGraph.apply([
   })),
 ], { trusted: true })
 let routingDir = directory(fixture({
-  query: (q) => routingGraph.read(q) as Promise<dirPart.Row[]>,
+  query: (q) => routingGraph.read(q as Taken) as Promise<dirPart.Row[]>,
   apply: () => Promise.resolve([]),
 }))
 
@@ -382,7 +383,9 @@ for (
 test('directory page: its apps answer the request again, until it writes', async () => {
   let asked = 0
   let dir = directory(fixture({
-    query: (q) => (asked++, routingGraph.read(q) as Promise<dirPart.Row[]>),
+    query: (q) => (
+      asked++, routingGraph.read(q as Taken) as Promise<dirPart.Row[]>
+    ),
     apply: () => Promise.resolve([]),
   }))
   await tallying(new Map(), async () => {
@@ -410,7 +413,7 @@ let inviting = async (before: boolean) => {
     ...before ? [invite] : [],
   ], { trusted: true })
   let dir = directory(fixture({
-    query: (q) => g.read(q) as Promise<dirPart.Row[]>,
+    query: (q) => g.read(q as Taken) as Promise<dirPart.Row[]>,
     apply: () => Promise.resolve([]),
   }))
   let asked = () => tallying(new Map(), () => dir.invite('s1', 'p1'))
@@ -445,7 +448,10 @@ test('a handle reads as the app and is the app, not its address', () => {
   // Two apps born at one address, a year apart, are two strings — which is why
   // an address can be freed at all (T-34659).
   let other = '06d952a9-b26b-4ecb-9ea7-841a96e2b1a9'
-  assertEquals(dirPart.handle(space, 'cookbook', other), 'jeff/cookbook.e2b1a9')
+  assertEquals(
+    dirPart.handle(space, 'cookbook', other),
+    'jeff/cookbook.e2b1a9',
+  )
   // And a rename is exactly the thing it does not answer to: the app moves, the
   // handle it was born with is what its store is still opened by.
   let app = { ...an, store: dirPart.handle(space, 'cookbook', eid) }
@@ -456,7 +462,10 @@ test('a handle reads as the app and is the app, not its address', () => {
   )
   // An app the backfill has not reached keeps answering to the name it already
   // had, which is what it was called before the property existed.
-  assertEquals(dirPart.storeName(space, { ...an, store: null }), 'jeff/recipes')
+  assertEquals(
+    dirPart.storeName(space, { ...an, store: null }),
+    'jeff/recipes',
+  )
 })
 
 // A meta store that keeps what it is written, so the questions `own()` asks
@@ -478,7 +487,9 @@ let held = () => {
   }
   let vocab = platformVocab()
   let answer = (search: string) =>
-    matcher(new URLSearchParams(search).get('q') ?? '', vocab)(rows as Bundle[])
+    matcher(new URLSearchParams(search).get('q') ?? '', vocab)(
+      rows as Bundle[],
+    )
   // A request the directory decides inside the write (`$own`) is decided by
   // its own hook, over these rows.
   let [decides] = plugins()
@@ -766,11 +777,14 @@ test('the directory part shares its cache, refreshes and clears it after a write
     },
   }
   let first = dirPart.part(store), second = dirPart.part(store)
-  let before = await first.query('app')
+  let before = await first.query(line`app`)
   version = 2
-  assertEquals(await second.query('app'), before)
+  assertEquals(await second.query(line`app`), before)
   assertEquals(reads, 1)
-  assertEquals(JSON.parse(await second.query('app', true))[0].app.version, 2)
+  assertEquals(
+    JSON.parse(await second.query(line`app`, true))[0].app.version,
+    2,
+  )
   await first.apply([], {
     'x-yak-person': 'person',
     'x-yak-actor': 'writer',
@@ -782,7 +796,7 @@ test('the directory part shares its cache, refreshes and clears it after a write
     'x-yak-actor': 'writer',
     'x-yak-via': 'session',
   })
-  assertEquals(JSON.parse(await second.query('app'))[0].app.version, 3)
+  assertEquals(JSON.parse(await second.query(line`app`))[0].app.version, 3)
   assertEquals(reads, 3)
 })
 
@@ -879,7 +893,7 @@ test('offers reads its apps and spaces together and screens both trash marks', a
   let dir = directory(fixture({
     query: async (q) => {
       reads++
-      return await offersGraph.read(q) as dirPart.Row[]
+      return await offersGraph.read(q as Taken) as dirPart.Row[]
     },
     apply: () => Promise.resolve([]),
   }))

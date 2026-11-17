@@ -3,6 +3,7 @@
 // alone, so a host that runs no machine (the yaks.app Worker) loads nothing
 // of the instruction files beside it.
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { type Built, line } from '@yaks/query'
 import { offer, PART, type Reads, voice, wear, wearing } from '@yaks/persona'
 import { compile, gather } from '@yaks/topic'
 
@@ -33,11 +34,11 @@ export let openedAs = async (g: Graph, session: Eid): Promise<Opened> => {
     ['filed', 'project'],
     ['home', 'cwd'],
   ].filter(([comp, prop]) => g.vocab.prop(comp, prop)).map((f) => f.join('.'))
+  if (!fields.length) return {}
+  let asked = (id: Eid): Built => line`.entity.eid=${id}&.fields=${fields}`
   let at: Eid | undefined = session
   for (let i = 0; at && i < STARTERS; i++) {
-    let [row]: Bundle[] = await g.read(
-      `.entity.eid=${at}&.fields=${fields}`,
-    )
+    let [row]: Bundle[] = await g.read(asked(at))
     let s = row?.session as Comp | undefined
     if (s?.persona || s?.topic) {
       let project = (row.filed as Comp | undefined)?.project
@@ -49,7 +50,7 @@ export let openedAs = async (g: Graph, session: Eid): Promise<Opened> => {
         ...cwd ? { cwd: String(cwd) } : {},
       }
     }
-    let parent = (row?.spawned as Comp | undefined)?.parent
+    let parent: unknown = (row?.spawned as Comp | undefined)?.parent
     at = parent ? String(parent) : undefined
   }
   return {}

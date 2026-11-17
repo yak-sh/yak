@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import type { Bundle, Graph, ReadOpts } from '@yaks/graph'
 import { draftEid } from '@yaks/draft'
 import type { Meta } from '@yaks/sqlite'
@@ -79,7 +80,7 @@ export let ownerOf = async (
   let by = row.task
     ? await sessionsIn(store, open)
     : row.tombstone
-    ? await store.g.read(`.operator_request.about=${open}`)
+    ? await store.g.read(line`.operator_request.about=${open}`)
     : []
   let owners = await Promise.all(
     by.map((b) => ownerOf(store, b.entity.eid, new Set(seen))),
@@ -93,11 +94,11 @@ export let ownerOf = async (
 
 // The sessions a task holds, by the links it keeps to them.
 let sessionsIn = async (store: Store, task: string) => {
-  let to = (await store.g.read(`.contains .edge.from=${task}`))
+  let to = (await store.g.read(line`.contains .edge.from=${task}`))
     .map((b) => String((b.edge as { to: string }).to))
   return to.length
     ? await store.g.read(
-      `.entity.eid=${to.join(',')}&.session&.fields=entity.eid`,
+      line`.entity.eid=${to}&.session&.fields=entity.eid`,
     )
     : []
 }

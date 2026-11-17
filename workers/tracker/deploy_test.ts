@@ -1,5 +1,6 @@
 // Deploy hooks prove changed-bundle activation and reporting without account
 // credentials, paid resources, or waiting for deployment propagation.
+import { line } from '@yaks/query'
 import { clock, equal, ok, test, throws } from '@yaks/testing'
 import { canary, deploy, Failed, fingerprint, type Hooks } from './deploy.ts'
 import { canary as receipt, worker } from './worker.ts'
@@ -484,7 +485,7 @@ let standing = [await read(stalledWorker, `${canaryUrl}&eid=${stalledEid}`)]
 later += 180_000
 standing.push(await read(stalledWorker, `${canaryUrl}&eid=${stalledEid}`))
 let [groupingRun] = await stalled.tracker!.graph.read(
-  `.effect.handler=error_group .effect.target=${stalledEid}`,
+  line`.effect.handler=error_group .effect.target=${stalledEid}`,
 )
 let state = (effect: Comp) =>
   stalled.tracker!.graph.apply([{ entity: groupingRun.entity, effect }], {
@@ -496,7 +497,10 @@ await state({
 })
 let retrying = await read(stalledWorker, `${canaryUrl}&eid=${stalledEid}`)
 await state({ state: 'failed', error: 'grouping failed' })
-let failedGrouping = await read(stalledWorker, `${canaryUrl}&eid=${stalledEid}`)
+let failedGrouping = await read(
+  stalledWorker,
+  `${canaryUrl}&eid=${stalledEid}`,
+)
 await state({ state: 'pending', error: null, next: null })
 let missed = await stalledWorker.fetch(
   new Request(missingUrl, { method: 'POST' }),
@@ -507,7 +511,7 @@ await stalled.ingest(reports[1])
 await stalled.alarm()
 standing.push(await read(stalledWorker, `${canaryUrl}&eid=${stalledEid}`))
 let [opened] = await stalled.tracker!.graph.read(
-  `.bug.fault="tracker-deploy|${hash}"`,
+  line`.bug.fault=${`tracker-deploy|${hash}`}`,
 )
 let filed = await stalled.tracker!.graph.read('.bug | .mail')
 let late = await stalledWorker.fetch(

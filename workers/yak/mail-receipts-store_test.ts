@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { webhook } from '../../packages/resend/testing.ts'
 import { platform } from './testing.ts'
@@ -47,10 +48,10 @@ let delivered = async (letter: string) =>
   )
 
 test('a signed receipt reaches an editor-only letter through the Store query door', async () => {
-  equal(await graph.query(`.entity.eid=${id}&*`), [])
+  equal(await graph.query(line`.entity.eid=${id}&*`), [])
   equal((await delivered(id)).status, 200)
   equal((await delivered(id)).status, 200)
-  let [row] = await graph.query(`.entity.eid=${id}&*`, { trusted: true })
+  let [row] = await graph.query(line`.entity.eid=${id}&*`, { trusted: true })
   equal(row.mail, {
     from: 'receipts@yaks.app',
     message_id: 'recorded@example.com',
@@ -59,7 +60,7 @@ test('a signed receipt reaches an editor-only letter through the Store query doo
 
 test('a signed receipt for a deleted Store letter acknowledges it without restoring it', async () => {
   equal((await delivered(deleted)).status, 200)
-  let [row] = await graph.query(`.entity.eid=${deleted}&*`, {
+  let [row] = await graph.query(line`.entity.eid=${deleted}&*`, {
     trusted: true,
     graves: true,
   })

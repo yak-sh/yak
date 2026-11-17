@@ -1,3 +1,4 @@
+import { type Built, line } from '@yaks/query'
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { type Bundle, graph } from '@yaks/graph'
@@ -76,13 +77,13 @@ test('candidate reads include replies, archived roots and open dependents; repea
     $actor: { by: 'person' },
   }], { now: at(2) })
   let who = { actor: 'person', operator: true }
-  let read = async (q: string) => q ? rows(await g.read(q)) : []
+  let read = async (q: Built) => q ? rows(await g.read(q)) : []
   let inbox = async () => {
     let first = await read(candidates(who, has))
     let chat = await read(discussion(first, has))
     let edges = await read(requirements([...first, ...chat], has))
     let tasks = await read(dependents(edges, has))
-    let subscriptions = await read('.subscription&*')
+    let subscriptions = await read(line`.subscription&*`)
     return threads(
       [...first, ...chat, ...edges, ...tasks],
       readerAt(subscriptions, 'person'),

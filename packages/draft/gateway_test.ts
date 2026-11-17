@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { assertEquals, assertRejects } from '@std/assert'
 import { test } from '@yaks/testing'
 import { graph, mint } from '@yaks/graph'
@@ -15,7 +16,7 @@ let fixture = () => {
   let g = graph({ vocab, storage: ram(vocab), plugins: [drafts()] })
   g.install()
   return {
-    query: (q: string) => Promise.resolve(g.read(q)),
+    query: (q: string) => Promise.resolve(g.read(whole(q))),
     apply: (rows: Parameters<typeof g.apply>[0]) =>
       Promise.resolve(g.apply(rows, { trusted: true, stamp: false })).then((
         bundles,

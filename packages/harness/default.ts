@@ -8,6 +8,7 @@
 // ({@link pin}), and by its own `using` only where the router can't say.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { identityEid } from '@yaks/graph/identity'
 import { type Reading, type Route, route } from '@yaks/model/route'
 import { CallError } from '@yaks/tools/errors'
@@ -30,7 +31,7 @@ export let routing = async (
   of: Eid = HARNESS,
 ): Promise<Routing[]> => {
   let at = (b: Bundle) => String(comp(b, 'created').at ?? '')
-  let links = (await g.read(`.routes .edge.from=${of} *`)).sort((a, b) =>
+  let links = (await g.read(line`.routes .edge.from=${of} *`)).sort((a, b) =>
     Number(comp(a, 'edge').ord ?? 0) - Number(comp(b, 'edge').ord ?? 0) ||
     at(a).localeCompare(at(b))
   )

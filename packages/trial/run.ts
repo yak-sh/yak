@@ -34,6 +34,7 @@
  * @module
  */
 import type { Bundle, Eid, Graph } from '@yaks/graph'
+import { type Built, line, sub } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 import { type Model, ModelError, type Price, weigh } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
@@ -263,10 +264,10 @@ export type Label = (b: Bundle) => string
 
 // A round's comparisons: those of its attempts, and those answering one of
 // its pairs, whatever their sides are.
-let comparisons = async (g: Graph, r: string, also = '*') => {
+let comparisons = async (g: Graph, r: Eid, also: Built = line`*`) => {
   let rows = (await Promise.all([
-    g.read(`.preference .preference.first.writing.round=${r} ${also}`),
-    g.read(`.preference .preference.pair.pair.round=${r} ${also}`),
+    g.read(line`.preference .preference.first.writing.round=${r} ${sub(also)}`),
+    g.read(line`.preference .preference.pair.pair.round=${r} ${sub(also)}`),
   ])).flat()
   let seen = new Set<Eid>()
   return rows.filter((b) => !seen.has(b.entity.eid) && !!seen.add(b.entity.eid))
@@ -284,11 +285,11 @@ export let owed = async (
   labelOf: Label = (b) => str(comp(b, 'doc').title),
   see?: Asking['see'],
 ): Promise<Call[]> => {
-  let r = JSON.stringify(round)
+  let r = round
   let [[head], attempts, guesses, compared] = await Promise.all([
     g.get([round]),
-    g.read(`.writing .writing.round=${r} *`),
-    g.read(`.guess .guess.attempt.writing.round=${r} *`),
+    g.read(line`.writing .writing.round=${r} *`),
+    g.read(line`.guess .guess.attempt.writing.round=${r} *`),
     comparisons(g, r),
   ])
   let waiting = guesses.filter(unreturned)
@@ -311,7 +312,7 @@ export let owed = async (
     if (!groups.has(name)) {
       groups.set(
         name,
-        await g.read(`.riddle .riddle.group=${JSON.stringify(name)} *`),
+        await g.read(line`.riddle .riddle.group=${name} *`),
       )
     }
     return groups.get(name)!
@@ -535,11 +536,11 @@ export type Asking = {
 let ended = async (g: Graph, session: Eid): Promise<Said | undefined> => {
   let [row] = await g.get([session])
   if (!row || !await over(g, row, await entryStatus(g, session))) return
-  let s = JSON.stringify(session)
+  let s = session
   let [said, paid] = await Promise.all([
     saidOf(g, session),
     g.read(
-      `.entry.session=${s} .usage .fields=usage.input_tokens,usage.output_tokens,cost.dollars,cost.reported,ask.to`,
+      line`.entry.session=${s} .usage .fields=usage.input_tokens,usage.output_tokens,cost.dollars,cost.reported,ask.to`,
     ),
   ])
   let sum = (name: string, prop: string) => {
@@ -677,9 +678,7 @@ export let asking = (
         // The row names the model that answered by its row, where one is
         // kept; the one asked otherwise.
         let [answered] = reply.model == name ? [] : await g.read(
-          `.model.name=${
-            JSON.stringify(reply.model)
-          } .limit=1 .fields=entity.eid`,
+          line`.model.name=${reply.model} .limit=1 .fields=entity.eid`,
         )
         return {
           reply: reply.items.flatMap((i) =>
@@ -796,11 +795,11 @@ export let owes = (o: Pick<Owed, 'writers' | 'judges' | 'dollars'>): string =>
 /** The dollars a round's calls have cost so far: every attempt and guess of
  * it that carries a cost. */
 export let spent = async (g: Graph, round: Eid): Promise<number> => {
-  let r = JSON.stringify(round)
+  let r = round
   let rows = (await Promise.all([
-    g.read(`.writing.round=${r} .cost .fields=cost.dollars`),
-    g.read(`.guess.attempt.writing.round=${r} .cost .fields=cost.dollars`),
-    comparisons(g, r, '.cost .fields=cost.dollars'),
+    g.read(line`.writing.round=${r} .cost .fields=cost.dollars`),
+    g.read(line`.guess.attempt.writing.round=${r} .cost .fields=cost.dollars`),
+    comparisons(g, r, line`.cost .fields=cost.dollars`),
   ])).flat()
   let n = rows.reduce((a, b) => a + (Number(comp(b, 'cost').dollars) || 0), 0)
   return Math.round(n * 1e6) / 1e6

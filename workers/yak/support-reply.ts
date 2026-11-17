@@ -19,6 +19,7 @@
 //     carries it (stream.ts `Reply`), across reconnects.
 //
 // A thread said signed out has nobody to carry it to.
+import { line } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Env } from './env.ts'
@@ -92,7 +93,7 @@ export let carry = async (
   store: Pick<Meta, 'query'>,
   eid: string,
 ): Promise<void> => {
-  let [row] = await store.query(`.entity.eid=${eid}&?comment`)
+  let [row] = await store.query(line`.entity.eid=${eid}&?comment`)
   let target = (row?.comment as Comp | undefined)?.target
   let t = await read(store, typeof target == 'string' ? target : eid)
   let what = t && carrying(t, eid)

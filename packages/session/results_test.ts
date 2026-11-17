@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { assertEquals, assertRejects } from '@std/assert'
 import { cleanup, test } from '@yaks/testing'
 import { type Bundle, type Comp, graph, identityEid } from '@yaks/graph'
@@ -113,7 +114,7 @@ let purchase = (f: Awaited<ReturnType<typeof fixture>>, saved = answer) => {
   return { served, count: () => purchases }
 }
 let requests = (f: Awaited<ReturnType<typeof fixture>>) =>
-  f.g.read(`.entry.session=${f.session}&.ask&*`)
+  f.g.read(line`.entry.session=${f.session}&.ask&*`)
 let outcomes = (f: Awaited<ReturnType<typeof fixture>>) => f.g.read('.output&*')
 let runner = (f: Awaited<ReturnType<typeof fixture>>, served: Model) =>
   running(f.g, { holder: 'holder', model: served, tools: [] })

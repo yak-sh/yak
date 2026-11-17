@@ -1,5 +1,6 @@
 // Public calendars follow anonymous read policy. A private token selects only
 // one person's accepted registrations inside its app's store.
+import { type Built, joined, line, sub } from '@yaks/query'
 import { calendar, type Entry } from '@yaks/events'
 import { type Bundle, type Comp, derivedEid, signed } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
@@ -10,11 +11,13 @@ import { KERNEL, metaOf } from './meta.ts'
 import type { Stored } from './graph.ts'
 import { recognized } from './recognized.ts'
 
-let quoted = (value: string) => JSON.stringify(value)
 let fields = (row: Bundle | undefined, name: string): Comp =>
   row?.[name] as Comp ?? {}
 
-type Feed = { entity: { eid: string }; feed: { person: string; token: string } }
+type Feed = {
+  entity: { eid: string }
+  feed: { person: string; token: string }
+}
 
 /** Stable per-person link, replaced only when its person asks. */
 export let personalFeed = async (
@@ -56,19 +59,18 @@ let response = (req: Request, rows: Entry[], privateFeed = false) =>
 export let calendarScope = async (
   at: Stored,
   person: string,
-): Promise<string> => {
+): Promise<Built> => {
   let me = await recognized(at, person)
   let ids = [...new Set([person, ...me ? [me.entity.eid] : []])]
-  return `(.registration.submitter=${quoted(person)}|${
-    ids.map((id) => `.registration.person=${quoted(id)}`).join('|')
-  })`
+  let theirs = ids.map((id) => line`.registration.person=${id}`)
+  return line`(.registration.submitter=${person}|${sub(joined(theirs, '|'))})`
 }
 
 /** Kernel-only token lookup; neither the token nor its person becomes a grant. */
 export let calendarIn = async (req: Request, at: Stored): Promise<Response> => {
   let token = new URL(req.url).searchParams.get('token') ?? ''
   let [feed] = token
-    ? await at.graph.read(`.feed.token=${quoted(token)}&.limit=1`)
+    ? await at.graph.read(line`.feed.token=${token}&.limit=1`)
     : []
   let person = fields(feed, 'feed').person
   if (typeof person != 'string') {
@@ -78,7 +80,9 @@ export let calendarIn = async (req: Request, at: Stored): Promise<Response> => {
     })
   }
   let registrations = await at.graph.read(
-    `${await calendarScope(at, person)}&.completed&!cancelled&!waitlisted`,
+    line`${
+      sub(await calendarScope(at, person))
+    }&.completed&!cancelled&!waitlisted`,
   )
   let ids = [
     ...new Set(
@@ -96,7 +100,11 @@ export let calendarIn = async (req: Request, at: Stored): Promise<Response> => {
       'cancelled',
     ])
     : []
-  return response(req, rows.filter((row) => !row.cancelled).filter(entry), true)
+  return response(
+    req,
+    rows.filter((row) => !row.cancelled).filter(entry),
+    true,
+  )
 }
 
 // An app can retain its own older event vocabulary. Only rows with the

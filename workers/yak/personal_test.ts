@@ -1,6 +1,7 @@
 // The guide's example for `personal` (docs/components.md, "Rows that belong to
 // one person"): an app's vocab.json read as the store reads it, with each
 // member's rows readable and writable by that member alone.
+import { whole } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { assertStringIncludes, assertThrows } from '@std/assert'
 import { graph, signed } from '@yaks/graph'
@@ -37,7 +38,9 @@ write('bo', 'bo', { mood: { today: 'busy' } })
 
 type Row = { note?: { text: string }; mood?: { today: string } }
 let see = (person: string, q: string) =>
-  (g.read(q, { person }) as Row[]).map((r) => r.note?.text ?? r.mood?.today)
+  (g.read(whole(q), { person }) as Row[]).map((r) =>
+    r.note?.text ?? r.mood?.today
+  )
 
 for (
   let [person, q, seen] of [

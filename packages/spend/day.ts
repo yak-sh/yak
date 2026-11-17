@@ -11,6 +11,7 @@ import { env } from '@yaks/process/env'
  * @module
  */
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { type Built, line, sub } from '@yaks/query'
 import { identityEid } from '@yaks/graph/identity'
 import { idsIn, parse } from '@yaks/id'
 import { accountEid, listPrice, type Price } from '@yaks/model'
@@ -24,7 +25,6 @@ import { type Known, type Spend, tally } from './tally.ts'
 let PAGE = 2000
 let comp = (b: Bundle | undefined, name: string) => (b?.[name] ?? {}) as Comp
 let str = (v: unknown) => v == null ? '' : String(v)
-let quoted = (s: string) => JSON.stringify(s)
 
 let provider = (name: string) => identityEid('provider', [name])
 
@@ -113,8 +113,8 @@ let requested = async (
   let out = new Map<Eid, [number, Eid][]>()
   for (let i = 0; i < sessions.length; i += 200) {
     let rows = await g.rows(
-      `.using !lines !ask .entry.session=${
-        sessions.slice(i, i + 200).join(',')
+      line`.using !lines !ask .entry.session=${
+        sessions.slice(i, i + 200)
       } .order=entry.seq .fields=entry.session,entry.seq,using.provider`,
     ) as Record<string, unknown>[]
     for (let r of rows) {
@@ -142,12 +142,14 @@ let located = async (g: Graph, rows: Bundle[]): Promise<Map<Eid, string>> => {
 }
 
 // Every row a query finds, a page at a time.
-let every = async (g: Graph, q: string): Promise<Bundle[]> => {
+let every = async (g: Graph, q: Built): Promise<Bundle[]> => {
   let out: Bundle[] = []
   let last: Eid | undefined
   for (;;) {
     let page = await g.read(
-      `${q} .order=entity.eid .limit=${PAGE}${last ? ` .after=${last}` : ''} *`,
+      line`${sub(q)} .order=entity.eid .limit=${PAGE}${
+        sub(last ? line` .after=${last}` : line``)
+      } *`,
     )
     out.push(...page)
     if (page.length < PAGE) return out
@@ -208,7 +210,7 @@ let briefed = async (
   let named = new Map<Eid, number[]>()
   for (let s of subagents) {
     let [first] = await g.rows(
-      `.entry.session=${s} .content .order=entry.seq .limit=1 .fields=content.body`,
+      line`.entry.session=${s} .content .order=entry.seq .limit=1 .fields=content.body`,
     ) as Record<string, unknown>[]
     let nums = idsIn(str(first?.['content.body']))
       .map((id) => parse(id)!.num)
@@ -218,7 +220,7 @@ let briefed = async (
   let tasks = new Map<number, Eid>()
   if (all.length) {
     let found = await g.read(
-      `.task .entity.num=${all.join(',')} .fields=entity.num`,
+      line`.task .entity.num=${all} .fields=entity.num`,
     )
     for (let b of found) tasks.set(Number(b.entity.num), b.entity.eid)
   }
@@ -235,26 +237,30 @@ let worked = async (
   day: string,
   root: (s: Eid) => Eid,
 ): Promise<Map<Eid, Eid[]>> => {
-  let from = quoted(day), to = quoted(after(day, 2))
+  let from = day, to = after(day, 2)
   let links: [Eid, Eid][] = [] // session, entity
-  let rows = async (q: string, of: string, by: string) => {
+  let rows = async (q: Built, of: string, by: string) => {
     for (let r of await g.rows(q) as Record<string, unknown>[]) {
       if (r[of] && r[by]) links.push([str(r[by]), str(r[of])])
     }
   }
-  await rows('.claim .fields=entity.eid,claim.session', 'eid', 'claim.session')
   await rows(
-    `.comment .created.at>=${from} .created.at<${to} .fields=comment.target,created.via`,
+    line`.claim .fields=entity.eid,claim.session`,
+    'eid',
+    'claim.session',
+  )
+  await rows(
+    line`.comment .created.at>=${from} .created.at<${to} .fields=comment.target,created.via`,
     'comment.target',
     'created.via',
   )
   await rows(
-    `.task .created.at>=${from} .created.at<${to} .fields=entity.eid,created.via`,
+    line`.task .created.at>=${from} .created.at<${to} .fields=entity.eid,created.via`,
     'eid',
     'created.via',
   )
   await rows(
-    `.task .completed.at>=${from} .completed.at<${to} .fields=entity.eid,completed.via`,
+    line`.task .completed.at>=${from} .completed.at<${to} .fields=entity.eid,completed.via`,
     'eid',
     'completed.via',
   )
@@ -325,7 +331,7 @@ export let known = async (
 export let requests = (g: Graph, day: string): Promise<Bundle[]> =>
   every(
     g,
-    `.ask .usage .created.at>=${quoted(day)} .created.at<${quoted(after(day))}`,
+    line`.ask .usage .created.at>=${day} .created.at<${after(day)}`,
   )
 
 /** Give each of these models its list price on its row, where the table

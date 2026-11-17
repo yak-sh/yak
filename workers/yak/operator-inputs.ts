@@ -1,5 +1,6 @@
 // An attachment is projected for the model taking this step: bytes where it
 // reads them, extracted text otherwise. Neither belongs in stored prose.
+import { line } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import { type Item, type Model, modelReads } from '@yaks/model'
 import type { Env } from './env.ts'
@@ -56,7 +57,7 @@ export let attached = (
     )
   }
   return Promise.all(ids.map(async (sha) => {
-    let rows = await store.g.read(`.attachment.artifact=${sha}&*`)
+    let rows = await store.g.read(line`.attachment.artifact=${sha}&*`)
     let owned = await Promise.all(
       rows.map(async (row) =>
         await owns(store, String(comp(row, 'attachment')?.message), {
@@ -95,7 +96,9 @@ export let fileContext = (
   let texts = new Map<string, Promise<string>>()
   let bytesOf = (file: File) => {
     let held = bytes.get(file.key) ?? env.BLOBS.get(file.key).then((kept) => {
-      if (!kept) throw new Error('Operator attachment is missing: ' + file.name)
+      if (!kept) {
+        throw new Error('Operator attachment is missing: ' + file.name)
+      }
       return kept.arrayBuffer().then((body) => new Uint8Array(body))
     })
     bytes.set(file.key, held)
@@ -109,7 +112,7 @@ export let fileContext = (
     let held = texts.get(key) ?? fileText(env, space, file).then(
       async (text) => {
         let uses = await store.g.read(
-          `.attachment.message=${message}&.attachment.artifact=${
+          line`.attachment.message=${message}&.attachment.artifact=${
             attachmentId(file)
           }&.fields=entity.eid`,
         )

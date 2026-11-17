@@ -39,7 +39,6 @@ import {
   parse,
   type Pred,
   present,
-  stringify,
 } from '@yaks/query/core'
 import { mediaTypeOf } from './image.ts'
 
@@ -178,11 +177,11 @@ export let attachmentsSeen = async (
   call: string = crypto.randomUUID(),
 ): Promise<Bundle[]> => {
   let focus = focusOf(q)
-  let seen = (await g.read(stringify(and(
+  let seen = (await g.read(and(
     present('attachment'),
     admits,
     ...focus ? [focus] : [],
-  )))).map((row) => ({ entity: row.entity, attachment: row.attachment }))
+  ))).map((row) => ({ entity: row.entity, attachment: row.attachment }))
   let addresses = seen.map((row) =>
     String((row.attachment as { artifact: string }).artifact)
   )

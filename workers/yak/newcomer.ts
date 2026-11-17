@@ -20,6 +20,7 @@
 // newcomer may only build: every tool outside BUILDING asks for one first
 // (agent.ts `platform`), since mail, texts, numbers, members, domains and
 // publishing reach people who never asked to hear from a stranger.
+import { line } from '@yaks/query'
 import { token } from '@yaks/graph'
 import type { Bundle, Comp, Tool } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
@@ -232,7 +233,7 @@ export let unveiled = async (
   row: { name: string; serves: string },
 ): Promise<Bundle[]> => {
   let store = meta(env)
-  let [served] = await store.query(`.entity.eid=${row.serves}&?space&?app`)
+  let [served] = await store.query(line`.entity.eid=${row.serves}&?space&?app`)
   let space = served?.app
     ? idOf((served.app as Comp).space as string)
     : served?.space
@@ -240,7 +241,7 @@ export let unveiled = async (
     : null
   if (!space) return []
   let rows = await store.query(
-    `(.entity.eid=${space}&.preview)|(.app.space=${space}&.preview)`,
+    line`(.entity.eid=${space}&.preview)|(.app.space=${space}&.preview)`,
   )
   return rows
     .filter((r) => claims(String((r.preview as Comp).site ?? ''), row.name))
@@ -350,7 +351,7 @@ let buildsOn = (row: Bundle | undefined, day: string) => {
  * DAILY: what the platform admin's Visitor builds page says (admin.ts). */
 export let opened = async (dir: Pick<Directory, 'read'>, now = new Date()) => {
   let day = dayOf(now)
-  return buildsOn((await dir.read(`.entity.eid=${tallyEid(day)}`))[0], day)
+  return buildsOn((await dir.read(line`.entity.eid=${tallyEid(day)}`))[0], day)
 }
 
 /**
@@ -367,7 +368,7 @@ export let counted = async (env: Env, source: string, now = new Date()) => {
       [tallyEid(day), ...source ? [tallyEid(day, source)] : []].map(
         async (eid) => ({
           eid,
-          row: (await store.query(`.entity.eid=${eid}`))[0],
+          row: (await store.query(line`.entity.eid=${eid}`))[0],
         }),
       ),
     )
@@ -437,7 +438,7 @@ export let keep = async (
 ) => {
   if (!was) return
   let [came] = await meta(env).query(
-    `.entity.eid=${was}&.newcomer&?email&?phone&?started`,
+    line`.entity.eid=${was}&.newcomer&?email&?phone&?started`,
   ) as Row[]
   if (!came) return
   if (was == person) {
@@ -458,7 +459,7 @@ export let keep = async (
   let [theirs, mine, [row], named] = await Promise.all([
     dir.seats(was, 'owner'),
     dir.seats(person, 'owner'),
-    meta(env).query(`.entity.eid=${person}&?started`),
+    meta(env).query(line`.entity.eid=${person}&?started`),
     meta(env).query(naming(was)),
   ])
   let first = !row?.started && theirs.length > 0

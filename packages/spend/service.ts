@@ -15,6 +15,7 @@
  * @module
  */
 import type { Eid, Graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { sleep } from '@yaks/fp'
 import { recompute } from './day.ts'
 import { after, dayOf } from './window.ts'
@@ -69,7 +70,7 @@ export let pass = async (
   // them by provider before each account had its own, is tallied again, so
   // its week reads in each account's shares too.
   let kept = await g.read(
-    `.spend .spend.day>=${after(today, -8)} .fields=spend.day,spend.plans`,
+    line`.spend .spend.day>=${after(today, -8)} .fields=spend.day,spend.plans`,
   )
   for (let b of kept) {
     let s = b.spend as { day: string; plans?: Record<Eid, unknown> }

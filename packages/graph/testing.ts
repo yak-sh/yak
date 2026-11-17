@@ -13,7 +13,7 @@ import type { Clause, Query as Ast } from '@yaks/query'
 import { isPromise } from '@yaks/fp'
 import type { Bundle, Comp, Eid, Entity } from './bundle.ts'
 import { comps, TOMBSTONE, tombstoned } from './bundle.ts'
-import type { Query, Row, Storage, Tx } from './storage.ts'
+import type { Query, Row, Storage, Taken, Tx } from './storage.ts'
 import { only } from './projection.ts'
 
 // A bookstore: books by publishers, reviews about books, bookmarks that only
@@ -206,9 +206,11 @@ export let memory = (): Storage => {
 
   return {
     install: () => {},
-    read: (query, opts, names) => tx.read(query, opts, names),
+    read: (query, opts, names) => tx.read(query as Taken, opts, names),
     rows: (query) =>
-      (tx.read(query) as Bundle[]).map((b) => ({ eid: b.entity.eid }) as Row),
+      (tx.read(query as Taken) as Bundle[]).map((b) =>
+        ({ eid: b.entity.eid }) as Row
+      ),
     get: (eids, names) => tx.get(eids, names),
     tx: (body) => {
       let saved = snapshot()

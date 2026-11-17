@@ -1,4 +1,5 @@
 // Chosen recordings play by sound identity, including retained creature designs.
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStrictEquals } from '@std/assert'
 import { shop } from '../../packages/builders/testing.ts'
@@ -146,7 +147,7 @@ test('the sound query projects current main outputs through qualified references
       built: { build: 'main-build', key: 'previous', artifact: 'clip' },
     },
   ], { trusted: true })
-  let rows = await g.read(SOUNDS) as Row[]
+  let rows = await g.read(whole(SOUNDS)) as Row[]
   assertEquals(rows.map((row) => row.entity.eid).toSorted(), [
     'clip',
     'main-build',
@@ -239,7 +240,7 @@ test('a creature hears its chosen design sound despite other takes sharing its n
       ),
     )
     let creature = beastOf(kindOf(spawn)!)!
-    let rows = await g.read(SOUNDS) as Row[]
+    let rows = await g.read(whole(SOUNDS)) as Row[]
     let clips = catalog(rows)
     assertEquals(catalog(rows.toReversed()), clips)
     assertEquals(clips['creature-creature-spawn-step'], undefined)

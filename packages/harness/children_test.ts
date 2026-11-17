@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 // SQLite/runner integration tests; the fast-tier runner does not collect
 // packages. Deferred fake replies exercise concurrency without network calls.
@@ -523,6 +524,6 @@ test('a child naming a model nothing knows asks the provider in force, which ser
   let [opus] = await h.g.read('.model.name=opus&*')
   assertEquals(opus.model, { name: 'opus', offered: false })
   assert(opus.pending)
-  assertEquals(await h.g.read(`.serves .edge.to=${opus.entity.eid}`), [])
+  assertEquals(await h.g.read(line`.serves .edge.to=${opus.entity.eid}`), [])
   h.close()
 })

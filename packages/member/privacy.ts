@@ -17,7 +17,16 @@
 // declarations (`stale`) is read by the declarations themselves, until a pass
 // has written them all.
 import { after } from '@yaks/fp'
-import { absent, type And, and, eq, or } from '@yaks/query/core'
+import {
+  absent,
+  type And,
+  and,
+  type Built,
+  eq,
+  line,
+  or,
+  sub,
+} from '@yaks/query/core'
 import { dead } from '@yaks/graph/bundle'
 import { token } from '@yaks/graph/sha256'
 import type { Bundle, Comp, Tracker, Tx } from '@yaks/graph'
@@ -52,7 +61,7 @@ let ref = (b: Bundle | undefined, comp: string, prop: string) => {
 let fifties = (eids: string[]) =>
   Array.from(
     { length: Math.ceil(eids.length / 50) },
-    (_, i) => eids.slice(i * 50, i * 50 + 50).join(','),
+    (_, i) => eids.slice(i * 50, i * 50 + 50),
   )
 
 /** What the declarations make of entities, and how a store keeps it. */
@@ -76,11 +85,11 @@ export type Privacy = {
     eids: string[],
   ) => Maybe<Bundle[]>
   /** The lines stale entities are found by. */
-  stale: string[]
+  stale: Built[]
   /** Whether a store holds no stale entity. */
   current: (
-    read: (line: string) => Maybe<Bundle[]>,
-    lines?: string[],
+    read: (line: Built) => Maybe<Bundle[]>,
+    lines?: Built[],
   ) => Maybe<boolean>
   /** The entities a reader may read by their privacy. */
   seen: (who: string | null | undefined, level: Level | null) => And
@@ -214,20 +223,20 @@ export let privacy = (declared: Declared): Privacy => {
    * declarations, as lines a store answers from an index each: what a pass
    * writes, and what a store must hold none of to be read by its privacy. */
   let stale = [
-    ...bearing.map((c) => `.${c}&!${PRIVACY}`),
-    `.${PRIVACY}.hash<${hash}`,
-    `.${PRIVACY}.hash>${hash}`,
+    ...bearing.map((c) => line`.${c}&!${PRIVACY}`),
+    line`.${PRIVACY}.hash<${hash}`,
+    line`.${PRIVACY}.hash>${hash}`,
   ]
 
   /** Whether a store, read through `read`, holds no entity whose privacy is
    * stale. */
   let current = (
-    read: (line: string) => Maybe<Bundle[]>,
+    read: (line: Built) => Maybe<Bundle[]>,
     lines = stale,
   ): Maybe<boolean> =>
     !lines.length ||
     after(
-      read(`${lines[0]}&.limit=1&.fields=entity.eid`),
+      read(line`${sub(lines[0])}&.limit=1&.fields=entity.eid`),
       (rows) => !rows.length && current(read, lines.slice(1)),
     )
 
@@ -253,7 +262,9 @@ export let privacy = (declared: Declared): Privacy => {
   // The entities that hang on these, by every reference they inherit through.
   let hanging = (tx: Pick<Tx, 'read'>, eids: string[]): Maybe<string[]> => {
     let lines = through.flatMap(([name, prop]) =>
-      fifties(eids).map((list) => `.${name}.${prop}=${list}&.fields=entity.eid`)
+      fifties(eids).map((list) =>
+        line`.${name}.${prop}=${list}&.fields=entity.eid`
+      )
     )
     let out: string[] = []
     let next = (i: number): Maybe<string[]> =>

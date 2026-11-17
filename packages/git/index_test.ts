@@ -1,6 +1,7 @@
 // The index: a manifest in, git's own objects out, and the rows a pack walks.
 // Constants: ./testing.ts.
 
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { edges } from '@yaks/edge'
@@ -37,7 +38,7 @@ let children = async (
   bytes: ReturnType<typeof store>,
   oid: string,
 ) => {
-  let [row] = await g.read(`.gitobj&?blob&.entity.eid=${oid}`)
+  let [row] = await g.read(line`.gitobj&?blob&.entity.eid=${oid}`)
   return treeEntries((await bytes.get(String(comp(row, 'blob').sha)))!)
 }
 
@@ -57,7 +58,7 @@ test('an object row is its type, its size and its bytes', async () => {
   let { g, git, bytes } = fixture()
   let sha = deployed(bytes)['hello.txt']
   await git.files(deployed(bytes))
-  let [row] = await g.read(`.gitobj.type=blob&.blob.sha=${sha}`)
+  let [row] = await g.read(line`.gitobj.type=blob&.blob.sha=${sha}`)
   assertEquals(row.entity.eid, HELLO_OID)
   assertEquals(comp(row, 'gitobj'), { type: 'blob', size: 6 })
 })
@@ -74,7 +75,7 @@ let indexedCommit = await indexed.git.commit({
 
 test('the SHA-256 name is a key off the SHA-1 one', async () => {
   let { g } = indexed
-  let [key] = await g.read(`.compat&.key.of=${HELLO_OID}`)
+  let [key] = await g.read(line`.compat&.key.of=${HELLO_OID}`)
   assertEquals(key.entity.eid, keyEid(COMPAT, HELLO_OID256))
   assertEquals(comp(key, 'key'), { of: HELLO_OID, value: HELLO_OID256 })
 })
@@ -209,7 +210,7 @@ test('a commit chain is the ids git takes, and a parent walk', async () => {
     message: 'deploy 2',
   })
   assertEquals(two.oid, TWO_OID)
-  let [edge] = await g.read(`.parent&.edge.from=${two.oid}`)
+  let [edge] = await g.read(line`.parent&.edge.from=${two.oid}`)
   assertEquals(comp(edge, 'edge').to, one.oid)
   assertEquals(comp(edge, 'edge').ord, 0)
 })

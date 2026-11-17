@@ -23,6 +23,7 @@
 // door does with a refusal is the door's: it answers exactly what an accepted
 // ask answers and mails nothing, because a visible refusal would say whether
 // an address had been asked for.
+import { type Line, line } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
@@ -181,7 +182,7 @@ let forget = (store: Meta, eids: string[]) =>
 // Every row ever written for an address, newest first. A row outlives the code
 // it carried: dead, it is the record that the letter went out, and that record
 // is what the ceiling counts.
-let signins = async (store: Meta, filter: string) =>
+let signins = async (store: Meta, filter: Line) =>
   ((await store.query(filter))
     .filter((r) => r.signin) as unknown as Signin[])
     .sort((a, b) => Date.parse(b.signin.expires) - Date.parse(a.signin.expires))
@@ -204,8 +205,8 @@ let recent = async (store: Meta, all: Signin[]) => {
 }
 
 /** The filter line that reads every row an address's codes left. */
-export let line = (address: string) =>
-  `.signin.${key(address)}=${JSON.stringify(canon(address))}`
+export let signinLine = (address: string) =>
+  line`.signin.${key(address)}=${canon(address)}`
 
 /**
  * What asking for a code writes, decided over every row the address holds
@@ -311,7 +312,7 @@ export let mayText = async (store: Meta, from: string) =>
   !from ||
   (await recent(
       store,
-      await signins(store, `.signin.from=${JSON.stringify(from)}`),
+      await signins(store, line`.signin.from=${from}`),
     )).length < VISITS
 
 // A code still worth typing: not expired, and not already out of guesses.
@@ -501,8 +502,9 @@ export let stamped = (
  * text naming someone else. */
 export let personLine = (typed: string) => {
   let address = canon(typed)
-  let path = texted(address) ? 'phone.number' : 'email.address'
-  return `.person&.${path}=${JSON.stringify(address)}&?doc&?signed_in`
+  return texted(address)
+    ? line`.person&.phone.number=${address}&?doc&?signed_in`
+    : line`.person&.email.address=${address}&?doc&?signed_in`
 }
 
 let personAt = async (store: Meta, typed: string) =>

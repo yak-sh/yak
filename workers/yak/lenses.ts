@@ -3,6 +3,7 @@
 import { compile, lensesIn, versions } from '@yaks/lens'
 import type { Bundle, Comp } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
+import { line } from '@yaks/query'
 import type { VocabDoc } from '@yaks/vocab'
 import {
   declaredLenses,
@@ -127,7 +128,7 @@ export let lensRule = (
         Object.values(v.props).flatMap((p) =>
           'ack' in p
             ? read?.(
-              `.${p.ack.component}&?${
+              line`.${p.ack.component}&?${
                 p.ack.order.split('.')[0]
               }&?${p.ack.mark}&*`,
             ) ?? []

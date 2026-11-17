@@ -103,6 +103,7 @@ import {
   every,
   fields,
   type Input,
+  line,
   list,
   or,
   present,
@@ -288,8 +289,7 @@ let unoperated = async (
 ): Promise<Eid[]> => {
   if (!reach.length || !graph.vocab.prop(SESSION, 'operator')) return reach
   let worn = await graph.read(
-    `.${SESSION}.operator=true&.${SESSION}.persona` +
-      `&.fields=${SESSION}.persona`,
+    line`.${SESSION}.operator=true&.${SESSION}.persona&.fields=${SESSION}.persona`,
   )
   let personas = [...new Set(worn.map((b) => str(comp(b, SESSION).persona)))]
   let homes = personas.length ? await graph.get(personas, ['persona']) : []
@@ -478,7 +478,10 @@ export let held = async (
       fields('session.ended'),
     ))
     : []
-  let gone = await ended(graph, sessions.filter((s) => s.entity.eid != session))
+  let gone = await ended(
+    graph,
+    sessions.filter((s) => s.entity.eid != session),
+  )
   let wrote = new Set(sessions.map((s) => s.entity.eid))
   let by = (b: Bundle) => writer.get(to(b)) ?? ''
   return [
@@ -726,7 +729,7 @@ export let pending = async (
     : []
   let native = !process?.process &&
     (await graph.read(
-        `.entity.eid=${session}&.entries.using&.fields=entity.eid&.limit=1`,
+        line`.entity.eid=${session}&.entries.using&.fields=entity.eid&.limit=1`,
       )).length > 0
   let addressed: Bundle[] = []
   // Restrict to unsaid human comments before inspecting the creator of each

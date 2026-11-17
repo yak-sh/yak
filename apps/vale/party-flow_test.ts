@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { test, until } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { api } from '@yaks/api'
@@ -39,7 +40,7 @@ test('two heroes invite and accept through their pages into one party', async ()
     let request = url instanceof Request ? url : new Request(url, init)
     let asked = new URL(request.url).search.slice(1).split('&')
       .map(decodeURIComponent).join('&')
-    return Response.json(listed(await store.read(asking(asked)), asked))
+    return Response.json(listed(await store.read(asking(whole(asked))), asked))
   }
   let close: (() => void)[] = []
   try {

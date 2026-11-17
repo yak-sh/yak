@@ -21,6 +21,7 @@
 // `safe` would strip the line breaks that make it a document.
 
 import type { Bundle, Eid, Graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { token } from '@yaks/graph/sha256'
 import { human } from '@yaks/id'
 import { safe } from '@yaks/text'
@@ -99,7 +100,7 @@ let above = async (g: Graph, eid: Eid): Promise<Bundle[]> => {
   let level = [eid]
   for (let i = 0; i < DEPTH && level.length; i++) {
     let edges = await g.read(
-      `.${HOLDS}&.edge.to=${level.join(',')}&?edge&.limit=${EDGES}`,
+      line`.${HOLDS}&.edge.to=${level}&?edge&.limit=${EDGES}`,
     )
     let ids = unique(edges.map((b) => end(b, 'from')))
       .filter((id) => !seen.has(id))
@@ -131,8 +132,9 @@ let outline = async (
   for (let depth = 1; depth < LEVELS && level.length; depth++) {
     let at = new Map(level.map((b) => [eidOf(b.topic), b]))
     let edges = await g.read(
-      `.${HOLDS}&.edge.from=${[...at.keys()].join(',')}&?edge` +
-        `&.order=edge.ord&.limit=${EDGES}`,
+      line`.${HOLDS}&.edge.from=${[
+        ...at.keys(),
+      ]}&?edge&.order=edge.ord&.limit=${EDGES}`,
     )
     let ends = await rows(g, unique(edges.map((b) => end(b, 'to'))))
     let next: Branch[] = []
@@ -169,7 +171,7 @@ export let gather =
     let [topic] = await g.get([eid])
     if (!topic?.[TOPIC] || topic.tombstone) return undefined
     let out = await g.read(
-      `.edge.from=${eid}&*&.order=edge.ord&.limit=${EDGES}`,
+      line`.edge.from=${eid}&*&.order=edge.ord&.limit=${EDGES}`,
     )
     let ends = await rows(g, unique(out.map((b) => end(b, 'to'))))
     let along = (rels: string[]): Bundle[] =>

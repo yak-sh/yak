@@ -4,7 +4,7 @@
 import { clock, test, until } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, sha256 } from '@yaks/graph'
-import { parse } from '@yaks/query'
+import { parse, whole } from '@yaks/query'
 import { doorOf, storeOf } from './door.ts'
 import { IDEMPOTENCY, type Namespace } from '@yaks/durable-object/door'
 import { Store, type Time } from './graph.ts'
@@ -40,7 +40,7 @@ let object = (time?: Time) => {
   let apply = (b: unknown[]) => door().apply(b as never, KERNEL)
   let writes = (state?: string) =>
     tally(db(ctx), 'yak_writes', state ? by({ state }) : undefined)
-  let query = (q: string) => door().query(q)
+  let query = (q: string) => door().query(whole(q))
   let title = async (eid: string) =>
     ((await query(`.entity.eid=${eid}`))[0]?.doc as { title?: string })?.title
   return {

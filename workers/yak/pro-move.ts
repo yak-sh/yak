@@ -1,5 +1,6 @@
 // The $49 plan keeps its subscriptions, dates and allowances while its tier
 // becomes Pro. Only the platform's plan rows move; an app's own word is its own.
+import { line } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { PLATFORM_STORE } from '@yaks/platform/names'
@@ -19,6 +20,6 @@ export let proRule: Rule = {
   stores: [PLATFORM_STORE],
   core: ['plan'],
   live: 'all',
-  find: '.plan.tier=organization&*',
+  find: line`.plan.tier=organization&*`,
   move: proMove,
 }

@@ -1,6 +1,7 @@
 // Terminal presentation of portable answers. Only the CLI loads the painter
 // and the process-backed interactive runner.
 import type { Bundle } from '@yaks/graph'
+import { whole } from '@yaks/query'
 import { prepared, type Registry, type Renderer, resolve } from '@yaks/render'
 import type { Vocab } from '@yaks/vocab/runtime'
 import type { ComponentChild } from 'preact'
@@ -186,7 +187,11 @@ export let show = async (
       ids.length ? from.lookup(ids) : [],
       Promise.all(
         [...asking].map(async (q) =>
-          [q, await Promise.resolve(from.query(q)).catch(() => [])] as const
+          // A renderer's declared query, as its author wrote it.
+          [
+            q,
+            await Promise.resolve(from.query(whole(q))).catch(() => []),
+          ] as const
         ),
       ),
     ])

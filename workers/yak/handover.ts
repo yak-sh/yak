@@ -4,6 +4,7 @@
 // conversations, requests, asks, wake-ups, drafts and Updates, so whatever
 // names a person moves with them without a list to keep. Who wrote a row
 // (`created`, `updated`) is history and stays as it was.
+import { line } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
 
 const KEPT = new Set(['entity', 'created', 'updated'])
@@ -39,4 +40,4 @@ export let handover = (rows: Bundle[], from: string, to: string): Bundle[] =>
   })
 
 /** The query reading every row that names `person`, whole. */
-export let naming = (person: string) => `.refs=${person}&*`
+export let naming = (person: string) => line`.refs=${person}&*`

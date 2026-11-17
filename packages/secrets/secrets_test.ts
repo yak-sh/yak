@@ -1,3 +1,4 @@
+import { line, whole as asWritten } from '@yaks/query'
 import { docDoc } from '@yaks/doc'
 // A secret through the graph: the value goes to the vault once the write has
 // committed, the graph keeps the handle, and nothing refused leaves anything
@@ -92,14 +93,14 @@ let transient = () =>
   Object.assign(new Error('Network connection lost.'), { retryable: true })
 
 let row = async (g: Graph, name: string) =>
-  (await g.read(`.secret.name="${name}"&*`, { native: true }))[0]?.secret as
+  (await g.read(line`.secret.name=${name}&*`, { native: true }))[0]?.secret as
     | Record<string, string>
     | undefined
 
 let none = { env: () => undefined }
 
 let whole = async (g: Graph, name: string) =>
-  (await g.read(`.secret.name="${name}"&*`, { native: true }))[0] as
+  (await g.read(line`.secret.name=${name}&*`, { native: true }))[0] as
     | Bundle
     | undefined
 
@@ -559,7 +560,7 @@ test('graph reads show only that a secret is set, including projected values', a
   for (
     let q of [`.entity.eid=${eid}`, '.secret', '.secret .fields=secret.value']
   ) {
-    let [b] = await g.read(q)
+    let [b] = await g.read(asWritten(q))
     assertEquals((b.secret as Record<string, string>).value, '[set]')
   }
   let [b] = await g.get([eid])

@@ -2,15 +2,24 @@
 // it happened, whether it is still broken, and the queries a page asks.
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { type And, and, eq, every, order, querySearch } from '@yaks/query'
+import {
+  type And,
+  and,
+  type Built,
+  eq,
+  every,
+  line,
+  order,
+  querySearch,
+} from '@yaks/query'
 import { comp, type Frame, str, title } from './model.ts'
 import { place, sha, spot } from './brief.ts'
 
 /** Worst first is historical occurrence count, not the retained sample size. */
-export let openBugs = '.bug.status=open * .order=-bug.hits'
+export let openBugs: Built = line`.bug.status=open * .order=-bug.hits`
 /** A bug's retained occurrences, newest first, as the query line a page asks. */
-export let occurrences = (eid: string): string =>
-  `.error.bug=${eid} * .order=-error.at`
+export let occurrences = (eid: string): Built =>
+  line`.error.bug=${eid} * .order=-error.at`
 /** The same occurrences as a tree, for a read that need not parse a line that
  * changes with every bug.
  *

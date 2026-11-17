@@ -4,6 +4,7 @@
 // boot. An entity made since is numbered by its write. The pass reads the
 // oldest that still have none each batch, so it needs no cursor, and a
 // second run finds nothing; the store's meta says when it is done.
+import { joined, line, sub } from '@yaks/query'
 import type { Meta } from '@yaks/sqlite'
 import type { Bundle, Graph } from '@yaks/graph'
 import { seriesOf } from '@yaks/graph/storage'
@@ -14,7 +15,7 @@ export let BATCH = 200
 
 let series = seriesOf(operatorVocab, NUMBERS)
 let comps = Object.keys(NUMBERS)
-let wearing = comps.map((c) => `.${c}`).join('|')
+let wearing = joined(comps.map((c) => line`.${c}`), '|')
 
 /** One batch of the pass: the oldest entities with a numbered kind and no
  * number, each given the next in its series. Answers whether another alarm
@@ -35,7 +36,9 @@ export let numberBackfill = async (
   if (store.lettered && !store.lettered()) return false
   if (store.waiting?.()) return true
   let page = await g.read(
-    `(${wearing})&!entity.num&.order=created.at&.limit=${BATCH}&.fields=entity.eid`,
+    line`(${
+      sub(wearing)
+    })&!entity.num&.order=created.at&.limit=${BATCH}&.fields=entity.eid`,
   )
   let rows = page.length
     ? await g.get(page.map((b) => b.entity.eid), comps)
@@ -44,7 +47,7 @@ export let numberBackfill = async (
   let high = async (prefix: string) => {
     if (!highs.has(prefix)) {
       let [last] = await g.read(
-        `.entity.prefix=${prefix}&.order=-entity.num&.limit=1&.fields=entity.num`,
+        line`.entity.prefix=${prefix}&.order=-entity.num&.limit=1&.fields=entity.num`,
       )
       highs.set(prefix, Number(last?.entity.num ?? 0))
     }

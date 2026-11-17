@@ -1,3 +1,4 @@
+import { line as ql } from '@yaks/query'
 import { base64 } from './bytes.ts'
 import { test } from '@yaks/testing'
 import {
@@ -228,7 +229,7 @@ let pending = await receive(f.store, {
   person: f.person,
   channel: 'chat',
 }, 'Continue this request')
-let [effect] = await f.store.g.read(`.effect.target=${pending}`)
+let [effect] = await f.store.g.read(ql`.effect.target=${pending}`)
 await f.store.g.apply([{
   entity: effect.entity,
   effect: { attempts: 1, state: 'pending' },

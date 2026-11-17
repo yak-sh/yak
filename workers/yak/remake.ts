@@ -19,6 +19,7 @@
 // remake's own next run until it is five minutes old (versions.ts `waiting`).
 // So a run draws its fence and keeps it on the row before taking it, and the
 // run the restart fires again (wake.ts `resumed`) lifts exactly that one.
+import { line } from '@yaks/query'
 import { derivedEid } from '@yaks/graph/identity'
 import { CallError } from '@yaks/tools/errors'
 import { copyOf } from './directory-copy.ts'
@@ -44,7 +45,7 @@ let EXPECTED = ['stale', 'conflict']
 export let ask = async (env: Env, job: Remake) => {
   let eid = rowOf(job)
   let graph = meta(env)
-  let [held] = await graph.query(`.entity.eid=${eid}&?wake&?sweep`) as {
+  let [held] = await graph.query(line`.entity.eid=${eid}&?wake&?sweep`) as {
     wake?: { at?: string | null }
     sweep?: { began?: string | null }
   }[]

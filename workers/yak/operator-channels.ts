@@ -1,3 +1,4 @@
+import { line } from '@yaks/query'
 import { addressed, type Bundle, type Comp } from '@yaks/graph'
 import { short } from '@yaks/id'
 import { cancel } from '@yaks/wake'
@@ -304,7 +305,9 @@ export let hear = async (
   let { g } = operator.store
   let id = item.entity.eid
   let files = request.files ?? []
-  if ((await g.get([inputOf(id)], ['entry']))[0]?.entry) return { fresh: false }
+  if ((await g.get([inputOf(id)], ['entry']))[0]?.entry) {
+    return { fresh: false }
+  }
   if (!text.trim() && !files.length) {
     throw refuse('arguments', 'Say what you want done or attach a document.')
   }
@@ -784,7 +787,10 @@ export let mailSend = (
     if (!subject) throw refuse('arguments', 'Give the letter a subject.')
     let me = await ctx.dir.known(ctx.person)
     if (!me) {
-      throw refuse('missing', 'The person you work for has no address to copy.')
+      throw refuse(
+        'missing',
+        'The person you work for has no address to copy.',
+      )
     }
     // A letter to the person themselves needs no copy, nor a word about one.
     let cc = me.email.toLowerCase() == to ? undefined : me.email
@@ -841,9 +847,7 @@ export let textOf = async (
 ) => {
   await phoneTexts(store.g)
   let [row] = await store.g.read(
-    `.operator_text&.text.to=${JSON.stringify(from)}&.text.from=${
-      JSON.stringify(to)
-    }&.order=-text.at&.limit=1&*`,
+    line`.operator_text&.text.to=${from}&.text.from=${to}&.order=-text.at&.limit=1&*`,
   )
   let at = Date.parse(String(part<Comp>(row, 'text')?.at ?? ''))
   return row && now - at <= REPLYING ? row : undefined
@@ -854,7 +858,7 @@ export let textOf = async (
 export let letterOf = async (store: Store, thread: string[]) => {
   for (let id of thread) {
     let [row] = await store.g.read(
-      `.operator_letter&.mail.message_id=${JSON.stringify(id)}`,
+      line`.operator_letter&.mail.message_id=${id}`,
     )
     if (row) return row
   }

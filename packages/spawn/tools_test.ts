@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -483,7 +484,7 @@ test('a peek bounds transcript reads and previews a large entry', async () => {
     if (q.includes('.entry.session=') && !q.includes('.limit=')) {
       throw new Error('unbounded transcript read')
     }
-    return read(q, ...rest as [])
+    return read(whole(q), ...rest as [])
   }) as typeof g.read
   g.get =
     (async (ids, comps) =>

@@ -1,5 +1,12 @@
 import type { ByDay } from '@yaks/ui/chart'
-import { listed as operands } from '@yaks/query'
+import {
+  type Asked,
+  type Built,
+  type Line,
+  line,
+  sub,
+  whole,
+} from '@yaks/query'
 import { after, together } from '@yaks/fp'
 import { christened, pick } from '@yaks/persona'
 import { calledOf } from './operator-name.ts'
@@ -623,16 +630,21 @@ export let ratedBy = (
  * to that eid once known (@yaks/connections `Path`): so a page's own rows are
  * asked beside the read that learns its space (`page`), and travel in its
  * trip. */
-export type Walk = { path: `.${string}`; eid: Promise<string> }
+export type Walk = { path: Built; eid: Promise<string> }
 
-let operand = (value: string | number) => operands([value])
+// Lines one after another, `by` between, each as written: the clauses a
+// read asks together keep the grouping they were built with.
+let NONE = line``
+let BY = { '': NONE, '&': line`&`, '|': line`|` }
+let chain = (all: readonly Built[], by: keyof typeof BY = ''): Built =>
+  all.reduce((a, b, i) => i ? line`${sub(a)}${sub(BY[by])}${sub(b)}` : b, NONE)
 
 /** The walk to the space at an address. A page asks its rows by it whether
  * or not it knows the eid yet, so the line it asks is the one asked ahead of
  * it (apps.ts `foresee`), answered again from that reading (hops.ts
  * `recall`). */
 export let walkTo = (slug: string, eid: string | Promise<string>): Walk => ({
-  path: `.space.slug=${operand(slug)}`,
+  path: line`.space.slug=${slug}`,
   eid: Promise.resolve(eid),
 })
 
@@ -943,8 +955,8 @@ export let seeding = (store: Meta) => sharing(seeded, store, () => seed(store))
 // most, once per isolate, on a write.
 let seed = async (store: Meta) => {
   let [[space], [admin]] = await Promise.all([
-    store.query(`.space.slug=${operand(META.space)}`),
-    store.query(`.person&.email.address=${operand(ADMIN)}`),
+    store.query(line`.space.slug=${META.space}`),
+    store.query(line`.person&.email.address=${ADMIN}`),
   ])
   let bundles: Bundle[] = []
   if (!space) {
@@ -983,9 +995,7 @@ let seed = async (store: Meta) => {
   // ever asked about when both ends already existed.
   let seat = space && admin &&
     (await store.query(
-      `.member.space=${operand(space.entity.eid)}&.member.person=${
-        operand(admin.entity.eid)
-      }`,
+      line`.member.space=${space.entity.eid}&.member.person=${admin.entity.eid}`,
     )).length
   if (!seat) {
     bundles.push({
@@ -1031,12 +1041,12 @@ let forwarded = (req: Request) =>
 /** The directory's cached read and seeded write boundary over its meta store.
  * In-process callers hold this interface; {@link over} carries it over HTTP. */
 export let part = (store: Meta) => ({
-  query: async (line: string, fresh = false): Promise<string> => {
+  query: async (asked: Line, fresh = false): Promise<string> => {
     let cache = cached(store)
-    let hit = fresh ? null : cache.get(line)
+    let hit = fresh ? null : cache.get(asked)
     if (hit && hit.at > Date.now() - TTL) return hit.body
-    let body = JSON.stringify(await store.query(line))
-    if (body != '[]') cache.set(line, { at: Date.now(), body })
+    let body = JSON.stringify(await store.query(asked))
+    if (body != '[]') cache.set(asked, { at: Date.now(), body })
     return body
   },
   apply: async (bundles: Bundle[], headers: Record<string, string> = {}) => {
@@ -1096,8 +1106,9 @@ export let over = (store: Meta) => {
     }
     if (url.pathname != '/query' || req.method != 'GET') return notFound()
     try {
+      // The line as the directory's own client wrote it (`over`), whole.
       let body = await door.query(
-        url.searchParams.get('q') ?? '',
+        whole(url.searchParams.get('q') ?? ''),
         !!req.headers.get(FRESH),
       )
       return new Response(body, {
@@ -1191,7 +1202,7 @@ export let APP_PARTS = [
   'publishing',
   'phone',
 ]
-let ABOUT = APP_PARTS.map((part) => `?${part}`).join('&')
+let ABOUT = chain(APP_PARTS.map((part) => line`?${part}`), '&')
 
 // And what every read of a space asks for, for the same reason.
 export let SPACE_PARTS = [
@@ -1218,7 +1229,7 @@ export let SPACE_PARTS = [
   'featured',
   'mail_domain',
 ]
-let SPACE_ABOUT = SPACE_PARTS.map((part) => `?${part}`).join('&')
+let SPACE_ABOUT = chain(SPACE_PARTS.map((part) => line`?${part}`), '&')
 
 // The plan as a whole row, however little of it is written: a property nobody
 // has filled reads empty, the way `meterOf` does, so nothing downstream tests
@@ -1938,10 +1949,10 @@ let paged = (
  * of says whose it is. One read, whatever a caller keeps of it
  * (`seatsOf`). */
 export let seatsLine = (person: string) => {
-  let mine = `.members_space.member.person=${operand(person)}`
-  return `(.member.person=${
-    operand(person)
-  })|(.space&${mine})|(.member.role=owner&.member.space${mine})&*`
+  let mine = line`.members_space.member.person=${person}`
+  return line`(.member.person=${person})|(.space&${
+    sub(mine)
+  })|(.member.role=owner&.member.space${sub(mine)})&*`
 }
 
 /** A person's seats among the rows `seatsLine` read: each space they sit in
@@ -2037,17 +2048,17 @@ export type Listing = {
 // `at` walks to, and their apps: each place by the row that holds it and its
 // walk to the space, and whom it names by the same walk back from them
 // (`people`, `listing`).
-let placed = (at: string) => {
+let placed = (at: Built) => {
   let places = [
-    ['member', `space${at}`],
-    ['grant', `app.app.space${at}`],
-    ['invite', `to${at}`],
-    ['invite', `to.app.space${at}`],
-  ]
+    ['member', line`space${sub(at)}`],
+    ['grant', line`app.app.space${sub(at)}`],
+    ['invite', line`to${sub(at)}`],
+    ['invite', line`to.app.space${sub(at)}`],
+  ] as const
   return [
-    ...places.map(([held, to]) => `(.${held}.${to})`),
+    ...places.map(([held, to]) => line`(.${held}.${sub(to)})`),
     ...places.map(([held, to]) =>
-      `(.${held}s_person.${held}.${to}&.email&?doc&?phone)`
+      line`(.${held}s_person.${held}.${sub(to)}&.email&?doc&?phone)`
     ),
   ]
 }
@@ -2093,9 +2104,7 @@ export let listingOf = async (
   let apps = await dir.apps(seats.map((s) => s.space))
   let owned = seats.filter((s) => s.role == 'owner').map((s) => s.space.eid)
   let [bound, { held, persons }] = await Promise.all([
-    apps.length
-      ? dir.read(`.binding.app=${operands(apps.map((a) => a.eid))}`)
-      : [],
+    apps.length ? dir.read(line`.binding.app=${apps.map((a) => a.eid)}`) : [],
     dir.people(owned),
   ])
   return { seats, apps, bound, held, persons }
@@ -2198,18 +2207,18 @@ export let inside = (tx: Tx) =>
  * promise only when a read it took was one (@yaks/fp `after`). The
  * directory's client asks them over its own reads (`directoryRows`), and a
  * write's hook over the write's (`inside`). */
-export let decisions = (read: (q: string) => Row[] | Promise<Row[]>) => {
-  let one = (q: string) => after(read(q), (rows) => rows[0])
+export let decisions = (read: (q: Line) => Row[] | Promise<Row[]>) => {
+  let one = (q: Line) => after(read(q), (rows) => rows[0])
   let self = {
     space: (slug: string) =>
       after(
-        one(`.space.slug=${operand(slug)}&${SPACE_ABOUT}`),
+        one(line`.space.slug=${slug}&${sub(SPACE_ABOUT)}`),
         (row) => row ? spaceOf(row) : null,
       ),
     // The space that left `slug` and still answers there.
     formerly: (slug: string) =>
       after(
-        read(`.former&.space&${SPACE_ABOUT}`),
+        read(line`.former&.space&${sub(SPACE_ABOUT)}`),
         (rows) =>
           rows.map(spaceOf)
             .find((s) => s.slug != slug && s.slugs.includes(slug)) ?? null,
@@ -2244,7 +2253,7 @@ export let decisions = (read: (q: string) => Row[] | Promise<Row[]>) => {
         together([
           self.claimed(slug),
           self.seats(person),
-          one(`.entity.eid=${operand(person)}&?started`),
+          one(line`.entity.eid=${person}&?started`),
         ]),
         ([claims, seats, row]) => {
           let name = christened(
@@ -2292,7 +2301,7 @@ export let decisions = (read: (q: string) => Row[] | Promise<Row[]>) => {
       after(
         together([
           self.seats(person, 'owner'),
-          as ?? one(`.entity.eid=${operand(person)}`),
+          as ?? one(line`.entity.eid=${person}`),
         ]),
         ([mine, row]) => {
           if (mine.length || !row) return []
@@ -2318,7 +2327,7 @@ export let decisions = (read: (q: string) => Row[] | Promise<Row[]>) => {
 /** Directory decisions over supplied reads and writes. The binding client
  * above owns revisions, request caching and transport recovery. */
 export let directoryRows = (rows: {
-  query: (q: string) => Promise<ReadRow[]>
+  query: (q: Line) => Promise<ReadRow[]>
   apply: (
     entities: Bundle[],
     headers: Record<string, string>,
@@ -2326,7 +2335,7 @@ export let directoryRows = (rows: {
   readonly stale?: boolean
 }) => {
   let query = rows.query
-  let one = async (q: string) => (await query(q))[0]
+  let one = async (q: Line) => (await query(q))[0]
   let decided = decisions(query)
   let held = (to: string, person: string) => {
     let invited = found()?.invited
@@ -2347,10 +2356,10 @@ export let directoryRows = (rows: {
   // of every signed-in call (mcp.ts `door`) and each read waited on in turn is
   // a round trip under every tool; the answer for a person with no row is
   // never read, and its refusal is nobody's to report.
-  let theirs = async (person: string, line: string) => {
+  let theirs = async (person: string, held: Line) => {
     if (!person) return []
-    let asked = query(line)
-    if (!(await one(`.entity.eid=${operand(person)}`))) {
+    let asked = query(held)
+    if (!(await one(line`.entity.eid=${person}`))) {
       asked.catch(() => {})
       return []
     }
@@ -2364,8 +2373,10 @@ export let directoryRows = (rows: {
     other: 'space' | 'operator',
     on: string | Walk,
   ): Promise<Reach[]> => {
-    let at = typeof on == 'string' ? `=${operand(on)}` : on.path
-    let reached = `.operator_reachs_${other}.operator_reach.${side}${at}`
+    let at = typeof on == 'string' ? line`=${on}` : on.path
+    let reached = line`.operator_reachs_${other}.operator_reach.${side}${
+      sub(at)
+    }`
     // The spaces an Operator reaches come with their apps, which is what it
     // asks of them next (grants.ts `narrowed`): this request's `apps` of
     // them is answered from this read.
@@ -2373,9 +2384,13 @@ export let directoryRows = (rows: {
     let since = wrote(META_STORE)
     let [got, eid] = await Promise.all([
       query(
-        `(.operator_reach.${side}${at})` +
-          `|(.space&${reached}&${SPACE_ABOUT})` +
-          (withApps ? `|(.app.space${reached}&${ABOUT})` : ''),
+        line`(.operator_reach.${side}${sub(at)})|(.space&${sub(reached)}&${
+          sub(SPACE_ABOUT)
+        })${
+          sub(
+            withApps ? line`|(.app.space${sub(reached)}&${sub(ABOUT)})` : NONE,
+          )
+        }`,
       ),
       typeof on == 'string' ? on : on.eid,
     ])
@@ -2420,8 +2435,10 @@ export let directoryRows = (rows: {
     // One filter line, answered as rows: a read the questions below don't
     // name (connections.ts `connectionsOf`), asked through this client so it
     // travels with whatever else this moment asks.
-    read: async (line: string): Promise<Bundle[]> =>
-      (await query(line)).map(({ policy: _, ...row }) => row as Bundle),
+    read: async <Q extends string>(asked: Q & Asked<Q>): Promise<Bundle[]> =>
+      (await query(asked as Line)).map(({ policy: _, ...row }) =>
+        row as Bundle
+      ),
     stamp: (mutation: { entities: Bundle[] }, headers = {}) =>
       write(mutation, { ...headers, 'x-yak-kernel': '1' }),
     space: async (slug: string) => await decided.space(slug),
@@ -2442,36 +2459,30 @@ export let directoryRows = (rows: {
       over = false,
       every = !app,
     ) => {
-      let at = `.app.space.space.slug=${operand(slug)}`
+      let at = line`.app.space.space.slug=${slug}`
       let which = every
         ? at
-        : `((${at}&.app.slug=${operand(app ?? '')})|(${at}&.home))`
+        : line`((${sub(at)}&.app.slug=${app ?? ''})|(${sub(at)}&.home))`
       let seat = person
-        ? `|(.member.space.space.slug=${operand(slug)}&.member.person=${
-          operand(person)
-        })` +
-          `|(.grant.app.app.space.space.slug=${operand(slug)}&.grant.person=${
-            operand(person)
-          })` +
-          `|(.invite.to.space.slug=${operand(slug)}&.invite.person=${
-            operand(person)
-          })` +
-          `|(.invite.to.app.space.space.slug=${operand(slug)}&.invite.person=${
-            operand(person)
-          })` +
-          `|(.browser.by=${operand(person)})` +
-          (over
-            ? `|(.space.slug=${operand(META.space)})` +
-              `|(.member.space.space.slug=${
-                operand(META.space)
-              }&.member.person=${operand(person)})`
-            : '')
-        : ''
+        ? chain([
+          line`|(.member.space.space.slug=${slug}&.member.person=${person})`,
+          line`|(.grant.app.app.space.space.slug=${slug}&.grant.person=${person})`,
+          line`|(.invite.to.space.slug=${slug}&.invite.person=${person})`,
+          line`|(.invite.to.app.space.space.slug=${slug}&.invite.person=${person})`,
+          line`|(.browser.by=${person})`,
+          ...over
+            ? [
+              line`|(.space.slug=${META.space})`,
+              line`|(.member.space.space.slug=${META.space}&.member.person=${person})`,
+            ]
+            : [],
+        ])
+        : NONE
       let epoch = wrote(META_STORE)
       let rows = await query(
-        `(.space.slug=${
-          operand(slug)
-        }&${SPACE_ABOUT})|(${which}&${ABOUT})${seat}`,
+        line`(.space.slug=${slug}&${sub(SPACE_ABOUT)})|(${sub(which)}&${
+          sub(ABOUT)
+        })${sub(seat)}`,
       )
       let mine = epoch != null && epoch == wrote(META_STORE)
         ? found()
@@ -2520,14 +2531,16 @@ export let directoryRows = (rows: {
     // in one read, and no apps.
     seat: async (eid: string, person: string, over = false) => {
       let rows = await query(
-        `(.entity.eid=${operand(eid)}&.space&${SPACE_ABOUT})` +
-          `|(.member.space=${operand(eid)}&.member.person=${operand(person)})` +
-          (over
-            ? `|(.space.slug=${operand(META.space)})` +
-              `|(.member.space.space.slug=${
-                operand(META.space)
-              }&.member.person=${operand(person)})`
-            : ''),
+        chain([
+          line`(.entity.eid=${eid}&.space&${sub(SPACE_ABOUT)})`,
+          line`|(.member.space=${eid}&.member.person=${person})`,
+          ...over
+            ? [
+              line`|(.space.slug=${META.space})`,
+              line`|(.member.space.space.slug=${META.space}&.member.person=${person})`,
+            ]
+            : [],
+        ]),
       )
       return paged(
         rows,
@@ -2553,18 +2566,21 @@ export let directoryRows = (rows: {
       every = false,
     ): Promise<{ holding: Space[]; page: Page | null } | null> => {
       if (!person) return { holding: [], page: null }
-      let mine = `members_space.member.person=${operand(person)}`
-      let held = `apps.app.slug=${operand(app)}`
+      let mine = line`members_space.member.person=${person}`
+      let held = line`apps.app.slug=${app}`
       let which = every
-        ? `.app.space.${mine}&.app.space.${held}`
-        : `(.app.slug=${operand(app)}&.app.space.${mine})|` +
-          `(.home&.app.space.${mine}&.app.space.${held})`
-      let rows = await query(
-        `(.space&.${mine}&.${held}&${SPACE_ABOUT})|(${which}&${ABOUT})` +
-          `|(.member.person=${operand(person)})` +
-          `|(.grant.person=${operand(person)}&.grant.app.app.space.${held})` +
-          (over ? `|(.space.slug=${operand(META.space)})` : ''),
-      )
+        ? line`.app.space.${sub(mine)}&.app.space.${sub(held)}`
+        : line`(.app.slug=${app}&.app.space.${sub(mine)})|(.home&.app.space.${
+          sub(mine)
+        }&.app.space.${sub(held)})`
+      let rows = await query(chain([
+        line`(.space&.${sub(mine)}&.${sub(held)}&${sub(SPACE_ABOUT)})|(${
+          sub(which)
+        }&${sub(ABOUT)})`,
+        line`|(.member.person=${person})`,
+        line`|(.grant.person=${person}&.grant.app.app.space.${sub(held)})`,
+        over ? line`|(.space.slug=${META.space})` : NONE,
+      ]))
       let meta = rows.find((row) => row.space?.slug == META.space)
       let apps = rows.filter((row) => row.app).map(appOf)
       let holding = rows.filter((row) =>
@@ -2611,15 +2627,15 @@ export let directoryRows = (rows: {
     // owner's".
     listing: async (person: string): Promise<Listing> => {
       if (!person) return listed([], person)
-      let mine = `members_space.member.person=${operand(person)}`
+      let mine = line`members_space.member.person=${person}`
       let rows = await query(
-        [
-          `(.member.person=${operand(person)})`,
-          `(.space&.${mine}&${SPACE_ABOUT})`,
-          `(.app.space.${mine}&${ABOUT})`,
-          `(.binding.app.app.space.${mine})`,
-          ...placed(`.${mine}`),
-        ].join('|'),
+        chain([
+          line`(.member.person=${person})`,
+          line`(.space&.${sub(mine)}&${sub(SPACE_ABOUT)})`,
+          line`(.app.space.${sub(mine)}&${sub(ABOUT)})`,
+          line`(.binding.app.app.space.${sub(mine)})`,
+          ...placed(line`.${sub(mine)}`),
+        ], '|'),
       )
       return listed(rows, person)
     },
@@ -2750,7 +2766,7 @@ export let directoryRows = (rows: {
     },
     app: async (space: Space, slug: string) => {
       let row = await one(
-        `.app.space=${operand(space.eid)}&.app.slug=${operand(slug)}&${ABOUT}`,
+        line`.app.space=${space.eid}&.app.slug=${slug}&${sub(ABOUT)}`,
       )
       return row ? appOf(row) : null
     },
@@ -2784,11 +2800,11 @@ export let directoryRows = (rows: {
     // disjunction an index narrows), never the space's roster. With no
     // address, the front page alone.
     routing: async (space: Space, slug?: string | null) => {
-      let at = `.app.space=${operand(space.eid)}`
+      let at = line`.app.space=${space.eid}`
       let which = slug
-        ? `((${at}&.app.slug=${operand(slug)})|(${at}&.home))`
-        : `${at}&.home`
-      let apps = (await query(`${which}&${ABOUT}`)).map(appOf)
+        ? line`((${sub(at)}&.app.slug=${slug})|(${sub(at)}&.home))`
+        : line`${sub(at)}&.home`
+      let apps = (await query(line`${sub(which)}&${sub(ABOUT)}`)).map(appOf)
       return {
         app: apps.find((app) => app.slug == slug) ?? null,
         home: apps.find((app) => app.home && !app.trashed) ?? null,
@@ -2811,10 +2827,13 @@ export let directoryRows = (rows: {
     // ada`, @yaks/connections `Path`) is asked before its eid is known, beside
     // whatever learns it; a walk reaching several answers each one's apps.
     apps: async (
-      space: Pick<Space, 'eid'> | Pick<Space, 'eid'>[] | { path: string },
+      space: Pick<Space, 'eid'> | Pick<Space, 'eid'>[] | { path: Built },
     ): Promise<App[]> => {
       if ('path' in space) {
-        return (await query(`.app.space${space.path}&${ABOUT}`)).map(appOf)
+        return (await query(line`.app.space${sub(space.path)}&${sub(ABOUT)}`))
+          .map(
+            appOf,
+          )
       }
       let eids = [space].flat().map((s) => s.eid)
       if (!eids.length) return []
@@ -2823,7 +2842,7 @@ export let directoryRows = (rows: {
       if (read.every((r) => r && r.at === wrote(META_STORE))) {
         return structuredClone(read.flatMap((r) => r!.apps))
       }
-      return (await query(`.app.space=${operands(eids)}&${ABOUT}`))
+      return (await query(line`.app.space=${eids}&${sub(ABOUT)}`))
         .map(appOf)
     },
     // The space that pays as this customer of the payment provider
@@ -2833,7 +2852,7 @@ export let directoryRows = (rows: {
     // or nobody.
     payer: async (customer: string) => {
       let row = await one(
-        `.plan.customer=${operand(customer)}&.space&${SPACE_ABOUT}`,
+        line`.plan.customer=${customer}&.space&${sub(SPACE_ABOUT)}`,
       )
       return row?.space ? spaceOf(row) : null
     },
@@ -2845,21 +2864,21 @@ export let directoryRows = (rows: {
     // platform, or one for a space that has since disconnected.
     seller: async (via: string, account: string) => {
       let row = await one(
-        `.seller.via=${operand(via)}&.seller.account=${
-          operand(account)
-        }&.space&${SPACE_ABOUT}`,
+        line`.seller.via=${via}&.seller.account=${account}&.space&${
+          sub(SPACE_ABOUT)
+        }`,
       )
       return row?.space ? spaceOf(row) : null
     },
     // A space by eid, which is how an app names the space it belongs to.
     at: async (eid: string) => {
-      let row = await one(`.entity.eid=${operand(eid)}`)
+      let row = await one(line`.entity.eid=${eid}`)
       return row?.space ? spaceOf(row) : null
     },
     // One app by eid, with the space it belongs to — what an installed app's
     // pin names (`installed.of`), and how an offer is read back.
     appAt: async (eid: string) => {
-      let row = await one(`.entity.eid=${operand(eid)}`)
+      let row = await one(line`.entity.eid=${eid}`)
       if (!row?.app) return null
       let app = appOf(row)
       let space = await self.at(app.space)
@@ -2874,18 +2893,16 @@ export let directoryRows = (rows: {
     // times in every deploy (T-130730).
     target: async (space: string, person: string, app?: string | null) => {
       let rows = await query(
-        [
-          `(.entity.eid=${operand(space)}&.space&${SPACE_ABOUT})`,
-          ...app ? [`(.entity.eid=${operand(app)}&.app&${ABOUT})`] : [],
+        chain([
+          line`(.entity.eid=${space}&.space&${sub(SPACE_ABOUT)})`,
+          ...app ? [line`(.entity.eid=${app}&.app&${sub(ABOUT)})`] : [],
           // Never for nobody, as `member` says.
           ...person
             ? [
-              `(.member.space=${operand(space)}&.member.person=${
-                operand(person)
-              })`,
+              line`(.member.space=${space}&.member.person=${person})`,
             ]
             : [],
-        ].join('|'),
+        ], '|'),
       )
       let found = rows.find((r) => r.space && r.entity.eid == space)
       let named = rows.find((r) =>
@@ -2913,7 +2930,7 @@ export let directoryRows = (rows: {
     // later.
     serves: async (host: string) => {
       let row = await one(
-        `.hostname.name=${operand(host)}&?verified&?mail_domain`,
+        line`.hostname.name=${host}&?verified&?mail_domain`,
       )
       if (!row?.hostname) return null
       let eid = idOf(row.hostname.serves)
@@ -2934,13 +2951,13 @@ export let directoryRows = (rows: {
         space.eid,
         ...(await self.apps(space)).map((a) => a.eid),
       ])
-      return (await query('.hostname&?verified&?mail_domain')).map(hostOf)
+      return (await query(line`.hostname&?verified&?mail_domain`)).map(hostOf)
         .filter((h) => mine.has(h.serves))
     },
     // The app offered under a platform-wide name (T-32888), with the space it
     // came from — an offer is an app, so this is one row read two ways.
     offered: async (name: string) => {
-      let row = await one(`.published.name=${operand(name)}&.app`)
+      let row = await one(line`.published.name=${name}&.app`)
       return row?.app ? await self.appAt(row.entity.eid) : null
     },
     // The skill offered under a platform-wide name, or one by its eid, with
@@ -2950,13 +2967,15 @@ export let directoryRows = (rows: {
       at: { name: string } | { eid: string },
     ): Promise<{ space: Space; skill: SkillOffer } | null> => {
       let key = 'name' in at
-        ? `.published.name=${operand(at.name)}`
+        ? line`.published.name=${at.name}`
         : EID.test(at.eid)
-        ? `.entity.eid=${operand(at.eid)}&.published`
+        ? line`.entity.eid=${at.eid}&.published`
         : null
       if (!key) return null
       let row = await one(
-        `${key}&.skill&?doc&?content&?gallery&?upstream&?code_review&?featured`,
+        line`${
+          sub(key)
+        }&.skill&?doc&?content&?gallery&?upstream&?code_review&?featured`,
       )
       let skill = row ? skillOfferOf(row) : null
       let space = skill ? await self.at(skill.space) : null
@@ -2965,7 +2984,7 @@ export let directoryRows = (rows: {
     // Every skill on offer, newest first, with its space.
     skillOffers: async (): Promise<{ space: Space; skill: SkillOffer }[]> => {
       let skills = (await query(
-        '.published&.skill&?doc&?content&?gallery&?upstream&?code_review&?featured',
+        line`.published&.skill&?doc&?content&?gallery&?upstream&?code_review&?featured`,
       ))
         .flatMap((r) => skillOfferOf(r) ?? [])
         .sort((a, b) => b.published.at.localeCompare(a.published.at))
@@ -3003,10 +3022,9 @@ export let directoryRows = (rows: {
       ]
       let spaces = new Map(ofs.map((of) => [of, new Set<string>()]))
       if (ofs.length) {
-        let list = operands(ofs)
         for (
           let r of await query(
-            `(.install.of=${list})|(.installed.of=${list}&.app)`,
+            line`(.install.of=${ofs})|(.installed.of=${ofs}&.app)`,
           )
         ) {
           let of = r.install?.of ?? r.installed?.of
@@ -3036,7 +3054,7 @@ export let directoryRows = (rows: {
       let spaces = new Map(all.map((i) => [i.name, new Set<string>()]))
       if (names.length) {
         for (
-          let r of await query(`.connection.integration=${operands(names)}`)
+          let r of await query(line`.connection.integration=${names}`)
         ) {
           let c = (r as Row & {
             connection?: { integration?: string; owner?: Id | null }
@@ -3051,7 +3069,7 @@ export let directoryRows = (rows: {
         .filter((eid) => EID.test(eid))
       let spaced = new Set(
         owners.length
-          ? (await query(`.entity.eid=${operands(owners)}&.space`))
+          ? (await query(line`.entity.eid=${owners}&.space`))
             .map((r) => r.entity.eid)
           : [],
       )
@@ -3086,7 +3104,7 @@ export let directoryRows = (rows: {
       let ofs = [...installed.keys()].filter((of) => EID.test(of))
       if (!ofs.length) return new Map()
       return ratedBy(
-        await query(`.rating.of=${operands(ofs)}&?created`),
+        await query(line`.rating.of=${ofs}&?created`),
         installed,
       )
     },
@@ -3107,7 +3125,9 @@ export let directoryRows = (rows: {
     offers: async (): Promise<OnOffer[]> =>
       offering(
         await query(
-          `(.published&.app&${ABOUT})|(.space&.apps.published&${SPACE_ABOUT})`,
+          line`(.published&.app&${sub(ABOUT)})|(.space&.apps.published&${
+            sub(SPACE_ABOUT)
+          })`,
         ),
       ),
     // One app's offer, or null: the app with the space its `app.space` names,
@@ -3116,8 +3136,9 @@ export let directoryRows = (rows: {
       EID.test(eid)
         ? offering(
           await query(
-            `(.entity.eid=${operand(eid)}&.published&.app&${ABOUT})|` +
-              `(.space&.app.space[<=1]<-${operand(eid)}&${SPACE_ABOUT})`,
+            line`(.entity.eid=${eid}&.published&.app&${
+              sub(ABOUT)
+            })|(.space&.app.space[<=1]<-${eid}&${sub(SPACE_ABOUT)})`,
           ),
         )[0] ?? null
         : null,
@@ -3125,9 +3146,10 @@ export let directoryRows = (rows: {
     // custom one its owner listed, which anyone may read, signed in or not
     // (integrations.ts).
     integrations: (words?: string): Promise<Listed[]> =>
-      listing((q) => query(String(q)) as Promise<Bundle[]>, words),
+      // `listing` asks one line of text it writes itself.
+      listing((q) => query(q as Line) as Promise<Bundle[]>, words),
     switches: async (app: App) =>
-      (await query(`.switched.app=${operand(app.eid)}`)).map((row) => ({
+      (await query(line`.switched.app=${app.eid}`)).map((row) => ({
         ...row,
         switched: row.switched && {
           ...row.switched,
@@ -3139,21 +3161,19 @@ export let directoryRows = (rows: {
     // or one draft's alone. Never cached: a write reads its own draft back.
     written: async (app: App, draft?: string) =>
       (await query(
-        `.written.app=${operand(app.eid)}${
-          draft ? `&.written.draft=${operand(draft)}` : ''
+        line`.written.app=${app.eid}${
+          sub(draft ? line`&.written.draft=${draft}` : NONE)
         }`,
       )).map(writtenOf),
     // An app's open drafts (written.ts `draftsOf`), each its `app_draft`
     // row. Never cached: a write chooses among them.
     drafts: async (app: App) =>
-      (await query(`.app_draft.app=${operand(app.eid)}`)).map(appDraftOf),
+      (await query(line`.app_draft.app=${app.eid}`)).map(appDraftOf),
     // A released draft's preview rows kept on its branch, by the draft's
     // eid (draft-merge.ts `DraftRows`); none once merged or discarded.
     draftRows: async (app: App, draft: string) => {
       let row = await one(
-        `.draft_rows.app=${operand(app.eid)}&.draft_rows.draft=${
-          operand(draft)
-        }`,
+        line`.draft_rows.app=${app.eid}&.draft_rows.draft=${draft}`,
       )
       return row?.draft_rows ? draftRowsOf(row) : null
     },
@@ -3161,13 +3181,11 @@ export let directoryRows = (rows: {
     // opens (written.ts `modifying`); none before its first.
     newestWrite: async (app: App) =>
       (await query(
-        `.written.app=${
-          operand(app.eid)
-        }&.order=-written.at&.limit=1&.written.at`,
+        line`.written.app=${app.eid}&.order=-written.at&.limit=1&.written.at`,
       ))[0]?.entity.eid ?? null,
     // One open draft by its eid, with its app's; none once it is closed.
     draftAt: async (eid: string) => {
-      let row = await one(`.entity.eid=${operand(eid)}&.app_draft`)
+      let row = await one(line`.entity.eid=${eid}&.app_draft`)
       return row?.app_draft
         ? { app: idOf(row.app_draft.app), draft: appDraftOf(row) }
         : null
@@ -3176,14 +3194,15 @@ export let directoryRows = (rows: {
     // eid is derived from the two, so this asks for one row by its eid.
     publicFile: async (app: App, path: string) => {
       let row = await one(
-        `.entity.eid=${operand(identityEid('public_file', [app.eid, path]))}` +
-          '&.public_file',
+        line`.entity.eid=${
+          identityEid('public_file', [app.eid, path])
+        }&.public_file`,
       )
       return row?.public_file ? publicFileOf(row) : null
     },
     // Every file an app published, by path.
     publicFiles: async (app: App) =>
-      (await query(`.public_file.app=${operand(app.eid)}`))
+      (await query(line`.public_file.app=${app.eid}`))
         .map(publicFileOf)
         .sort((a, b) => a.path.localeCompare(b.path)),
     // Every deploy of an app, newest first — the versions app_versions pages
@@ -3193,7 +3212,7 @@ export let directoryRows = (rows: {
     // from them (D-34942). Never cached: a deploy reads its own versions back
     // the moment it writes one.
     deploys: async (app: Pick<App, 'eid'>) =>
-      (await query(`.deploy.app=${operand(app.eid)}&?created`))
+      (await query(line`.deploy.app=${app.eid}&?created`))
         .map(deployOf)
         .sort((a, b) => b.version - a.version),
     // When each app of a space was made and last put live, and by whom
@@ -3204,28 +3223,34 @@ export let directoryRows = (rows: {
     // at once, so a page asks it beside the read that learns its space and it
     // travels in that trip (`walkTo`).
     provenance: async (space: Walk) => {
-      let apps = `app.space${space.path}`
+      let apps = line`app.space${sub(space.path)}`
       // Each stamp's writer comes back beside the row it stamps, as a bundle
       // of its own (@yaks/graph projections): their names, and for an agent
       // the person it writes for and theirs.
       let names = ['doc.title', 'email.address', 'phone.number']
       let who = (stamp: string) => [
-        `${stamp}.at`,
+        line`${stamp}.at`,
         ...[
           ...names,
           'acts_for.person',
           ...names.map((n) => `acts_for.person.${n}`),
         ]
-          .map((n) => `${stamp}.by.${n}`),
+          .map((n) => line`${stamp}.by.${n}`),
       ]
       let [made, releases] = await Promise.all([
         query(
-          `.${apps}&?created&?last_deploy` +
-            `&.fields=${[...who('created'), ...who('last_deploy')]}`,
+          line`.${sub(apps)}&?created&?last_deploy&.fields=${[
+            ...who('created'),
+            ...who('last_deploy'),
+          ]}`,
         ),
         query(
-          `.deploy.app.${apps}&!deploy.app.last_deploy&?created` +
-            `&.fields=deploy.app,${who('created')}`,
+          line`.deploy.app.${
+            sub(apps)
+          }&!deploy.app.last_deploy&?created&.fields=${[
+            'deploy.app',
+            ...who('created'),
+          ]}`,
         ),
       ])
       let of = new Map<
@@ -3265,19 +3290,17 @@ export let directoryRows = (rows: {
     writers: async (eids: string[]): Promise<Map<string, string>> => {
       let ids = [...new Set(eids)]
       if (!ids.length) return new Map()
-      let rows = await query(`.entity.eid=${operands(ids)}`)
+      let rows = await query(line`.entity.eid=${ids}`)
       let more = principals(rows).filter((p) => !ids.includes(p))
       return writers([
         ...rows,
-        ...more.length ? await query(`.entity.eid=${operands(more)}`) : [],
+        ...more.length ? await query(line`.entity.eid=${more}`) : [],
       ])
     },
     // One release of the app, by its version.
     deployAt: async (app: App, version: number) => {
       let row = await one(
-        `.deploy.app=${operand(app.eid)}&.deploy.version=${
-          operand(version)
-        }&?created`,
+        line`.deploy.app=${app.eid}&.deploy.version=${version}&?created`,
       )
       return row?.deploy ? deployOf(row) : null
     },
@@ -3286,47 +3309,52 @@ export let directoryRows = (rows: {
     // page already open may still load, as the blob sweep keeps them.
     released: async (app: App, source: string) =>
       !!(await one(
-        `(.deploy.app=${operand(app.eid)}&.deploy.source=${operand(source)})|` +
-          `(.switched.app=${operand(app.eid)}&.switched.source=${
-            operand(source)
-          })`,
+        line`(.deploy.app=${app.eid}&.deploy.source=${source})|(.switched.app=${app.eid}&.switched.source=${source})`,
       )),
     // Every time this app's store was put back to a moment, newest first
     // (recover.ts, T-34507). Never cached, for the reason `deploys` is not: a
     // restore reads its own trail back the moment it writes to it.
     restores: async (app: App) =>
-      (await query(`.restored.app=${operand(app.eid)}`))
+      (await query(line`.restored.app=${app.eid}`))
         .map(restoreOf)
         .sort((a, b) => b.at.localeCompare(a.at)),
     // Every space there is. Only the meter asks this (usage.ts): a tool
     // always works in one space, and a person only ever sees their own.
     all: async (): Promise<Space[]> =>
-      (await query(`.space&${SPACE_ABOUT}`)).map(spaceOf),
+      (await query(line`.space&${sub(SPACE_ABOUT)}`)).map(spaceOf),
     // Every person, space, app, seat and invite there is, each row whole with
     // when it was made and last used: the platform admin's directory
     // (admin.ts), and nothing else, asks this. Fresh, since the admin opens it
     // to see what is. A person says the number they text from, which space
     // their starter went to, and when they came in by the home page's box.
     census: async () => {
-      let stamps = '?created&?used'
+      let stamps = line`?created&?used`
       let [people, spaces, apps, seats, deploys, referrals, agents] =
         await Promise.all([
           query(
-            `.person&?doc&?email&?phone&?signed_in&?started&?newcomer&${stamps}`,
+            line`.person&?doc&?email&?phone&?signed_in&?started&?newcomer&${
+              sub(stamps)
+            }`,
           ),
           // A row's days ride only here: every other read of a row does
           // without.
-          query(`.space&${SPACE_ABOUT}&?trend&?visitor_build&${stamps}`),
           query(
-            `.app&${ABOUT}&?trend&${stamps}&?changed&?errored&?last_deploy`,
+            line`.space&${sub(SPACE_ABOUT)}&?trend&?visitor_build&${
+              sub(stamps)
+            }`,
           ),
-          query('.member'),
+          query(
+            line`.app&${sub(ABOUT)}&?trend&${
+              sub(stamps)
+            }&?changed&?errored&?last_deploy`,
+          ),
+          query(line`.member`),
           // Only which app, when and by whom: a release's whole row is its
           // file list.
-          query('.deploy&.fields=deploy.app,created.at,created.by'),
-          query('.referral&?rewarded&?created'),
+          query(line`.deploy&.fields=deploy.app,created.at,created.by`),
+          query(line`.referral&?rewarded&?created`),
           // The agents a stamp may name (stamps.ts `writers`).
-          query('.acts_for&?doc'),
+          query(line`.acts_for&?doc`),
         ])
       return { people, spaces, apps, seats, deploys, referrals, agents }
     },
@@ -3348,7 +3376,7 @@ export let directoryRows = (rows: {
       // answer yes and hand a stranger a seat.
       if (!person) return null
       let row = await one(
-        `.member.space=${operand(space.eid)}&.member.person=${operand(person)}`,
+        line`.member.space=${space.eid}&.member.person=${person}`,
       )
       return row?.member ? { eid: row.entity.eid, role: row.member.role } : null
     },
@@ -3362,7 +3390,7 @@ export let directoryRows = (rows: {
     grant: async (app: App, person: string) => {
       if (!person) return null
       let row = await one(
-        `.grant.app=${operand(app.eid)}&.grant.person=${operand(person)}`,
+        line`.grant.app=${app.eid}&.grant.person=${person}`,
       )
       return row?.grant
         ? { eid: row.entity.eid, access: row.grant.access }
@@ -3376,7 +3404,7 @@ export let directoryRows = (rows: {
       let known = held(to, person)
       if (known !== undefined) return known
       let row = await one(
-        `.invite.to=${operand(to)}&.invite.person=${operand(person)}`,
+        line`.invite.to=${to}&.invite.person=${person}`,
       )
       return row?.invite ? { eid: row.entity.eid, role: row.invite.role } : null
     },
@@ -3384,7 +3412,7 @@ export let directoryRows = (rows: {
     // letter, when one went. Fresh, because the click that accepts it is
     // often the second one on the same letter.
     invitation: async (eid: string) => {
-      let row = await one(`.entity.eid=${operand(eid)}`)
+      let row = await one(line`.entity.eid=${eid}`)
       return row?.invite
         ? {
           eid: row.entity.eid,
@@ -3402,40 +3430,40 @@ export let directoryRows = (rows: {
     // of the space it draws). Fresh, because the page showing it is the page
     // an invitation was just sent again from.
     people: async (
-      spaces: string[] | { path: string },
+      spaces: string[] | { path: Built },
     ): Promise<Pick<Listing, 'held' | 'persons'>> => {
       if (Array.isArray(spaces) && !spaces.length) {
         return { held: [], persons: new Map() }
       }
-      let at = 'path' in spaces ? spaces.path : `=${operands(spaces)}`
-      let rows = await query(placed(at).join('|'))
+      let at = 'path' in spaces ? spaces.path : line`=${spaces}`
+      let rows = await query(chain(placed(at), '|'))
       return { held: heldOf(rows), persons: personsOf(rows) }
     },
     // How many invitations this person has sent in the hour it names. Fresh:
     // two invitations a second apart must not both read the same count.
     inviting: async (person: string) =>
-      (await one(`.entity.eid=${operand(person)}`))?.inviting ?? null,
+      (await one(line`.entity.eid=${person}`))?.inviting ?? null,
     // The code this person's invite carries (referral.ts), or null for one
     // whose invite page never opened.
     referralCode: async (person: string) =>
-      (await one(`.entity.eid=${operand(person)}`))?.referral_code?.code ??
+      (await one(line`.entity.eid=${person}`))?.referral_code?.code ??
         null,
     // Whose invite carries this code, by person eid, or null.
     referrer: async (code: string) =>
-      (await one(`.referral_code.code=${operand(code)}`))?.entity.eid ??
+      (await one(line`.referral_code.code=${code}`))?.entity.eid ??
         null,
     // Who signed up through somebody's invite, and the month each one gave
     // once they built an app (referral.ts): those `inviter` invited, or
     // everybody's, newest first.
     referrals: async (inviter?: string): Promise<Referral[]> =>
       (await query(
-        `${
-          inviter ? `.referral.inviter=${operand(inviter)}` : '.referral'
+        line`${
+          sub(inviter ? line`.referral.inviter=${inviter}` : line`.referral`)
         }&?rewarded&?created&.order=-created.at`,
       )).flatMap(referralOf),
     // The referral that brought this person in, or null.
     referral: async (invitee: string): Promise<Referral | null> =>
-      (await query(`.referral.invitee=${operand(invitee)}&?rewarded&?created`))
+      (await query(line`.referral.invitee=${invitee}&?rewarded&?created`))
         .flatMap(referralOf)[0] ?? null,
     // Whether this person has built an app of their own: one in a space they
     // own that is not a copy of somebody else's.
@@ -3447,13 +3475,13 @@ export let directoryRows = (rows: {
     // move (declared.ts `toolsChanged`), since reaching the app is exactly
     // being in the space.
     members: async (space: Space): Promise<string[]> =>
-      (await query(`.member.space=${operand(space.eid)}`))
+      (await query(line`.member.space=${space.eid}`))
         .map((r) => r.member && idOf(r.member.person))
         .filter((p): p is string => !!p),
     // Who owns a space, by person eid: so removing a member can refuse to
     // leave it with none.
     owners: async (space: Space): Promise<string[]> =>
-      (await query(`.member.space=${operand(space.eid)}&.member.role=owner`))
+      (await query(line`.member.space=${space.eid}&.member.role=owner`))
         .map((r) => r.member && idOf(r.member.person))
         .filter((p): p is string => !!p),
     // Who is at an address, if the platform has met them. signin.ts's
@@ -3461,23 +3489,23 @@ export let directoryRows = (rows: {
     // nobody, which is how an invited person's later sign-in finds the row
     // the invite made.
     personAt: async (email: string) =>
-      (await one(`.person&.email.address=${operand(email)}`))
+      (await one(line`.person&.email.address=${email}`))
         ?.entity.eid ?? null,
     // Who has this mobile number (@yaks/phone `mobile`'s form), if anyone:
     // where a text that arrived is from.
     phoned: async (number: string) =>
-      (await one(`.person&.phone.number=${operand(number)}`))
+      (await one(line`.person&.phone.number=${number}`))
         ?.entity.eid ?? null,
     // A space's registered line, independent of the transport selected for it.
     textSpace: async (number: string) => {
       let row = await one(
-        `.space&.phone.number=${operand(number)}&${SPACE_ABOUT}`,
+        line`.space&.phone.number=${number}&${sub(SPACE_ABOUT)}`,
       )
       return row ? spaceOf(row) : null
     },
     // The numbers the platform holds for this space (numbers.ts).
     lines: async (space: Space): Promise<PhoneLine[]> =>
-      (await query(`.phone_line.space=${operand(space.eid)}`)).map((row) => {
+      (await query(line`.phone_line.space=${space.eid}`)).map((row) => {
         let r = row as unknown as Row
         let l = r.phone_line!
         return {
@@ -3494,7 +3522,7 @@ export let directoryRows = (rows: {
     // The app whose own number this is (an app row's `phone{number}`), with
     // its space: where a text that arrived at it is kept (app-texts.ts).
     lined: async (number: string) => {
-      let row = await one(`.app&.phone.number=${operand(number)}`)
+      let row = await one(line`.app&.phone.number=${number}`)
       return row ? await self.appAt(row.entity.eid) : null
     },
     // The same question the other way: where the platform writes to this
@@ -3503,7 +3531,7 @@ export let directoryRows = (rows: {
       (await self.known(person))?.email ?? null,
     // Text-only people have no email, so `known` cannot supply their number.
     phoneAt: async (person: string): Promise<string | null> =>
-      (await one(`.entity.eid=${operand(person)}&.person&.phone`))?.phone
+      (await one(line`.entity.eid=${person}&.person&.phone`))?.phone
         ?.number ??
         null,
     // The number a person agreed to be texted at, in the words they agreed
@@ -3512,8 +3540,8 @@ export let directoryRows = (rows: {
     // number and no address.
     texting: async (person: string): Promise<Texting | null> => {
       let [them, [row]] = await Promise.all([
-        one(`.entity.eid=${operand(person)}`),
-        theirs(person, `.sms_consent.person=${operand(person)}`),
+        one(line`.entity.eid=${person}`),
+        theirs(person, line`.sms_consent.person=${person}`),
       ])
       let agreed = row?.sms_consent
       let number = them?.phone?.number
@@ -3529,11 +3557,11 @@ export let directoryRows = (rows: {
     // How this person chose to be told what their Operators tell them, or
     // null when they have not chosen (operator-alerts.ts `routeOf`).
     alerts: async (person: string): Promise<Alerting | null> =>
-      (await one(`.entity.eid=${operand(person)}`))?.operator_alerts?.channel ??
+      (await one(line`.entity.eid=${person}`))?.operator_alerts?.channel ??
         null,
     // Whether this person keeps the side of their pages collapsed to icons.
     collapsed: async (person: string): Promise<boolean> =>
-      !!(await one(`.entity.eid=${operand(person)}`))?.desk_sidebar?.collapsed,
+      !!(await one(line`.entity.eid=${person}`))?.desk_sidebar?.collapsed,
     // The browsers this person allowed notifications on (@yaks/push), each
     // as its `PushSubscription` gave it, and since when.
     pushes: async (
@@ -3541,7 +3569,7 @@ export let directoryRows = (rows: {
     ): Promise<(Subscription & { since?: string })[]> =>
       (await theirs(
         person,
-        `.push_subscription.person=${operand(person)}&?created`,
+        line`.push_subscription.person=${person}&?created`,
       ))
         .flatMap(({ push_subscription: sub, created }) =>
           sub
@@ -3558,8 +3586,8 @@ export let directoryRows = (rows: {
     listings: async (person: string) => {
       let bare = ({ policy: _, ...row }: ReadRow) => row as Bundle
       let [servers, lists] = await Promise.all([
-        query(`.mcp_server.owner=${operand(person)}&*`),
-        query(`.mcp_list.server.mcp_server.owner=${operand(person)}&*`),
+        query(line`.mcp_server.owner=${person}&*`),
+        query(line`.mcp_list.server.mcp_server.owner=${person}&*`),
       ])
       return { servers: servers.map(bare), lists: lists.map(bare) }
     },
@@ -3567,8 +3595,8 @@ export let directoryRows = (rows: {
     // (grant-rows.ts), and whether those rows are whole.
     grants: async (person: string) => {
       let [them, rows] = await Promise.all([
-        one(`.entity.eid=${operand(person)}`),
-        theirs(person, `.oauth_grant.person=${operand(person)}`),
+        one(line`.entity.eid=${person}`),
+        theirs(person, line`.oauth_grant.person=${person}`),
       ])
       return {
         listed: !!them?.grants_listed,
@@ -3586,12 +3614,12 @@ export let directoryRows = (rows: {
       (await self.known(person))?.name ?? null,
     // Whether this person is a newcomer (`newcomerIs`).
     newcomer: async (person: string) =>
-      newcomerIs(await one(`.entity.eid=${operand(person)}`)),
+      newcomerIs(await one(line`.entity.eid=${person}`)),
     // Whom a funnel step this person takes away from any request is for, and
     // the campaign it counts under (funnel.ts `step`): their address, and the
     // campaign a newcomer came to the box by (identity.ts `begun`).
     stepper: async (person: string): Promise<Stepper> => {
-      let row = await one(`.entity.eid=${operand(person)}`)
+      let row = await one(line`.entity.eid=${person}`)
       return {
         who: row?.email?.address ?? null,
         campaign: row?.newcomer?.campaign ?? '',
@@ -3604,7 +3632,7 @@ export let directoryRows = (rows: {
     // The same, for many people in one read.
     persons: async (persons: string[]): Promise<Map<string, Known>> => {
       if (!persons.length) return new Map()
-      return personsOf(await query(`.entity.eid=${operands(persons)}`))
+      return personsOf(await query(line`.entity.eid=${persons}`))
     },
     // Every space this person belongs to, the meta space left out: `yak` is
     // the platform's own, and a person who owns it (the first to sign in)
@@ -3630,7 +3658,7 @@ export let directoryRows = (rows: {
     // a person's seats is the one line, asked once.
     sitting: async (person: string): Promise<Map<string, Role>> =>
       new Map(
-        (await theirs(person, `.member.person=${operand(person)}`)).flatMap((
+        (await theirs(person, line`.member.person=${person}`)).flatMap((
           m,
         ) => m.member ? [[idOf(m.member.space), m.member.role]] : []),
       ),
@@ -3641,14 +3669,14 @@ export let directoryRows = (rows: {
       person: string,
     ): Promise<{ space: Space; app: App; role: Role }[]> => {
       if (!person) return []
-      let mine = `.members_space.member.person=${operand(person)}`
+      let mine = line`.members_space.member.person=${person}`
       let since = wrote(META_STORE)
       // Each row with the parts `spaceOf` and `appOf` read, and no others:
       // an app's whole row is much more than the reach says of it.
       let rows = await query(
-        `(.member.person=${
-          operand(person)
-        })|(.space&${mine}&${SPACE_ABOUT})|(.app.space${mine}&${ABOUT})`,
+        line`(.member.person=${person})|(.space&${sub(mine)}&${
+          sub(SPACE_ABOUT)
+        })|(.app.space${sub(mine)}&${sub(ABOUT)})`,
       )
       let spaces = new Map(
         rows.filter((r) => r.space).map((r) => [r.entity.eid, spaceOf(r)]),
@@ -3677,17 +3705,17 @@ export let directoryRows = (rows: {
     // that page is often opened right after the click that accepted one.
     granted: async (person: string): Promise<Granted[]> => {
       let held = new Map<string, Role>()
-      for (let r of await theirs(person, `.grant.person=${operand(person)}`)) {
+      for (let r of await theirs(person, line`.grant.person=${person}`)) {
         if (r.grant) held.set(idOf(r.grant.app), r.grant.access)
       }
       if (!held.size) return []
       // Bare `.entity.eid=`, as in `seated`: the rows are read whole.
-      let apps = (await query(`.entity.eid=${operands(held.keys())}`))
+      let apps = (await query(line`.entity.eid=${[...held.keys()]}`))
         .filter((r) => r.app).map(appOf)
       let ids = [...new Set(apps.map((a) => a.space))]
       let spaces = new Map(
         ids.length
-          ? (await query(`.entity.eid=${operands(ids)}`))
+          ? (await query(line`.entity.eid=${ids}`))
             .filter((r) => r.space).map((r) => [r.entity.eid, spaceOf(r)])
           : [],
       )
@@ -3731,7 +3759,7 @@ export let directoryRows = (rows: {
       let mine = await self.seats(person, 'owner')
       let marked = mine.find((s) => s.own)
       if (marked) return marked.space
-      let row = await one(`.entity.eid=${operand(person)}`)
+      let row = await one(line`.entity.eid=${person}`)
       if (!row) throw erased()
       let wanted = slugOf(row)
       let found = mine.find((s) => s.space.slug == wanted) ??
@@ -3780,7 +3808,7 @@ export let directoryRows = (rows: {
       // Admission cannot use a cached vacancy: sign-in writes the first seat
       // directly to meta, and another isolate's cache would not hear even a
       // directory write. A later sign-in must not mint a second owner seat.
-      let seats = await query(`.member.space=${operand(space.eid)}&.limit=2`)
+      let seats = await query(line`.member.space=${space.eid}&.limit=2`)
       if (seats.length != 1) return !seats.length
       let seat = seats[0].member
       return !!seat && idOf(seat.person) == await self.personAt(ADMIN)

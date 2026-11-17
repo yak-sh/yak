@@ -3,6 +3,7 @@
 // the same step reached through the plugin, where a release row is what wakes
 // it. Constants: ./testing.ts.
 
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -65,11 +66,11 @@ test('a manifest lands as a commit and the branch follows it', async () => {
     landing(repo, { 'a.txt': file(bytes, X) }, 'two\n'),
   )
   assertEquals(await refAt(g, APP), two.oid)
-  let follows = await g.read(`.parent&.edge.from=${two.oid}`)
+  let follows = await g.read(line`.parent&.edge.from=${two.oid}`)
   assertEquals(follows.map((e) => String(comp(e, 'edge').to)), [one.oid])
 
   // One row per branch, patched — not a second row nobody notices is stale.
-  let [row] = await g.read(`.entity.eid=${refEid(APP, MAIN)}`)
+  let [row] = await g.read(line`.entity.eid=${refEid(APP, MAIN)}`)
   assertEquals(comp(row, 'ref').name, MAIN)
 })
 
@@ -82,7 +83,7 @@ test('what the caller says about a commit rides the same batch', async () => {
     ...landing(repo, { 'a.txt': file(bytes, HELLO) }, 'one\n'),
     beside: (oids) => [{ entity: { eid: oids.oid }, made: { release } }],
   })
-  let [row] = await g.read(`.made.release=${release}`)
+  let [row] = await g.read(line`.made.release=${release}`)
   assertEquals(row.entity.eid, made.oid)
 })
 
@@ -95,7 +96,9 @@ test('the plugin commits a release, and commits it once', async () => {
     of: async (b) => {
       seen.push(b)
       // Already committed? The host's own question, asked its own way.
-      if ((await g.read(`.made.release=${b.entity.eid}`)).length) return null
+      if ((await g.read(line`.made.release=${b.entity.eid}`)).length) {
+        return null
+      }
       return {
         ...landing({ refs: g, objects: g, bytes }, {
           'a.txt': file(bytes, HELLO),

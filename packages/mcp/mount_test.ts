@@ -3,6 +3,7 @@
 // the door and nowhere else, and every other shape of request refused in its
 // own words.
 
+import { line } from '@yaks/query'
 import { clock, test, until } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, derivedEid, graph } from '@yaks/graph'
@@ -313,7 +314,7 @@ test('an MCP connection writes through its own graph session', async () => {
   }))
   let id = first.headers.get('mcp-session-id')
   assert(id)
-  let [session] = await g.read(`.session.id=${JSON.stringify(id)}&*`)
+  let [session] = await g.read(line`.session.id=${id!}&*`)
   assertEquals(comp(session, 'session').id, id)
   assertEquals(comp(session, 'session').fallback, undefined)
 
@@ -359,7 +360,7 @@ test('authentication keeps its actor while the MCP session names the run', async
   }))
   let id = first.headers.get('mcp-session-id')
   assert(id)
-  let [session] = await g.read(`.session.id=${JSON.stringify(id)}&*`)
+  let [session] = await g.read(line`.session.id=${id!}&*`)
   assertEquals(comp(session, 'session').actor, MEMBER)
   await door(
     new Request(
@@ -404,7 +405,7 @@ test('x-via keeps its session, and a one-shot CLI call gets one', async () => {
   let cli = await door(bundles('b2'))
   let id = cli.headers.get('mcp-session-id')
   assert(id)
-  let [session] = await g.read(`.session.id=${JSON.stringify(id)}&*`)
+  let [session] = await g.read(line`.session.id=${id!}&*`)
   let made = comp((await g.get(['b2']))[0], 'created')
   assertEquals(made.by, undefined)
   assertEquals(made.via, session.entity.eid)
@@ -426,7 +427,7 @@ let unknownVia = await (async () => {
   await response.text()
   let id = response.headers.get('mcp-session-id')
   let made = comp((await g.get(['b1']))[0], 'created')
-  let [opened] = await g.read(`.session.id=${JSON.stringify(id)}&*`)
+  let [opened] = await g.read(line`.session.id=${id!}&*`)
   return { id, made, opened: comp(opened, 'session') }
 })()
 test('an unknown x-via still gets a connection instead of the serving process', () => {
@@ -513,7 +514,9 @@ let made = async (
   return [by, via]
 }
 let own = await made('b1', {})
-let viaParent = await made('b3', { agent_id: 'a3' }, { 'x-via': 'harness-run' })
+let viaParent = await made('b3', { agent_id: 'a3' }, {
+  'x-via': 'harness-run',
+})
 let child = sessionEid('a1', 'harness-run')
 let childs = await made('b2', { agent_id: 'a1' })
 

@@ -1,4 +1,5 @@
 // Hero commands resolve current names at their door and keep ownership checks.
+import { whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { graph } from '@yaks/graph'
@@ -59,7 +60,7 @@ let fixture = async (named = false) => {
         let url = new URL(path, 'https://store.test/')
         let rows = url.searchParams.has('live')
           ? []
-          : await g.read(url.searchParams.get('q')!)
+          : await g.read(whole(url.searchParams.get('q')!))
         // The public store door can spell an author as their eid and name.
         return Response.json(rows.map((row) => {
           let created = comp(row, 'created')

@@ -5,6 +5,8 @@ import {
   dead,
   detached,
   guard,
+  type Query,
+  type ReadOpts,
 } from '@yaks/graph'
 import { after, system } from '@yaks/fp'
 import { matcher } from '@yaks/match'
@@ -32,7 +34,10 @@ test('a pool rejects a window that cannot make bounded progress', async () => {
       }, { page }), /positive integer/)
   }
 })
-let plans = new WeakMap<typeof vocab, Map<string, ReturnType<typeof matcher>>>()
+let plans = new WeakMap<
+  typeof vocab,
+  Map<string, ReturnType<typeof matcher>>
+>()
 
 let worker = (
   ids = ['a1', 'b1'],
@@ -50,7 +55,7 @@ let worker = (
         },
       })
     )
-  let read: Access['read'] = (q, opts) => {
+  let read = (q: Query, opts?: ReadOpts) => {
     let held = plans.get(words)
     if (!held) plans.set(words, held = new Map())
     let key = JSON.stringify([q, opts]), match = held.get(key)
@@ -409,7 +414,10 @@ let failedStart = async (w: ReturnType<typeof worker>) => {
 await failedStart(worker([]))
 let failedStartHost = worker([])
 test('failed startup persistence starts nothing and releases capacity for retry', async () => {
-  equal(await failedStart(failedStartHost), { failed: [], retried: ['a', 'b'] })
+  equal(await failedStart(failedStartHost), {
+    failed: [],
+    retried: ['a', 'b'],
+  })
 })
 
 let emptyHost = worker([])

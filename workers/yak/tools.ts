@@ -1,3 +1,4 @@
+import { type Line, line as ql } from '@yaks/query'
 import { base64, unbase64 } from './bytes.ts'
 import { groupBy, size } from '@yaks/fp'
 import { tell } from './operator-updates.ts'
@@ -3137,16 +3138,16 @@ let HOURLY = 3
 // rather than a counter in some isolate — three per hour only means anything
 // if it holds across the isolate a call lands in. A store that cannot answer
 // counts nothing: a rate limit is never the reason feedback is lost.
-let counted = async (ctx: Ctx, line: string) => {
+let counted = async (ctx: Ctx, asked: Line) => {
   try {
-    return (await meta(ctx.env).query(line)).length
+    return (await meta(ctx.env).query(asked)).length
   } catch (e) {
     caught(e, { tool: 'feedback' })
     return 0
   }
 }
 let recently = (ctx: Ctx) =>
-  counted(ctx, `.report&.created.by=${ctx.person}&.report.at>=1-hour-ago`)
+  counted(ctx, ql`.report&.created.by=${ctx.person}&.report.at>=1-hour-ago`)
 
 // The type a view is served under: text/html with the profile the MCP Apps
 // spec requires, which is how a host tells a page it renders from a page it

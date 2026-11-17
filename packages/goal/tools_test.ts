@@ -1,6 +1,7 @@
 // Setting goals, finding them, and saying which work served them, on a graph
 // of goals, docs and edges.
 
+import { line } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
@@ -21,7 +22,7 @@ let call = async (name: string, args: Record<string, unknown>) => {
   return name == 'goal_list' ? out as Bundle[] : g.apply(out as Bundle[])
 }
 let satisfying = async (goal: string) =>
-  (await g.read(`.satisfies&.edge.to=${goal}`)).map((b) =>
+  (await g.read(line`.satisfies&.edge.to=${goal}`)).map((b) =>
     (b.edge as Comp).from
   )
 

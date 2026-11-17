@@ -1,3 +1,4 @@
+import { whole } from '@yaks/query'
 import { equal, ok, test } from '@yaks/testing'
 import { storage } from '@yaks/sqlite'
 import { stepping } from '../../packages/sqlite/testing.ts'
@@ -21,10 +22,10 @@ for (
   ]] as const
 ) {
   let line = `${q} .count`
-  await tracker.graph.rows(line)
+  await tracker.graph.rows(whole(line))
   test(`the composed tracker counts ${q} without reading its occurrences`, async () => {
     let start = meter.steps()
-    equal(await tracker.graph.rows(line), [{ value: '', n }])
+    equal(await tracker.graph.rows(whole(line)), [{ value: '', n }])
     let steps = meter.steps() - start
     ok(steps < 1000, `${steps} VM steps`)
   })

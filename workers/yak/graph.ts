@@ -283,6 +283,7 @@ import type {
   Plugin,
   ReadOpts,
   Reduced,
+  Taken,
   Tx,
 } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
@@ -319,12 +320,16 @@ import {
   and,
   eq as equals,
   fields as project,
+  type Line,
+  line,
   list,
   ne,
   parse,
   present,
   retired,
+  sub,
   want,
+  whole as wholeLine,
 } from '@yaks/query'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Anatomy, anatomy } from '@yaks/code/anatomy'
@@ -2523,7 +2528,7 @@ export class Store extends Durable {
       }
       let via = this.#directoryTransport()
       let revision: string | null = null
-      let ask = async (q: string): Promise<Bundle[]> => {
+      let ask = async (q: Line): Promise<Bundle[]> => {
         let answer = await via.fetch(
           new Request(`http://directory/query?q=${encodeURIComponent(q)}`),
         )
@@ -2537,7 +2542,7 @@ export class Store extends Durable {
         return answer.json()
       }
       let [row] = await ask(
-        `.entity.eid=${app}&.fields=app.space,app.access`,
+        line`.entity.eid=${app}&.fields=app.space,app.access`,
       )
       let definition = row?.app as Comp | undefined
       let space = typeof definition?.space == 'string'
@@ -2546,7 +2551,7 @@ export class Store extends Durable {
       if (typeof space != 'string') return false
       let rows = person
         ? await ask(
-          `.member.space=${space}&.member.person=${person}&?member|.grant.app=${app}&.grant.person=${person}&?grant`,
+          line`.member.space=${space}&.member.person=${person}&?member|.grant.app=${app}&.grant.person=${person}&?grant`,
         )
         : []
       let membership = rows.find((r) => r.member)?.member as Comp | undefined
@@ -2950,7 +2955,10 @@ export class Store extends Durable {
           ? sessionStep
           : releasedSession ?? (legacyTemplate ? 0 : sessionStep)
         let acts = {
-          query: (line: string) => Promise.resolve(g.read(line, { person })),
+          // A command's own declared line, as @yaks/platform/app-command
+          // hands it on.
+          query: (asked: string) =>
+            Promise.resolve(g.read(asked as Line, { person })),
           apply: async ({ entities }: { entities: Bundle[] }) => {
             let made = await g.apply(signed(
               sessionVersion < sessionStep
@@ -3680,7 +3688,11 @@ export class Store extends Durable {
         if (typeof query != 'string') {
           throw new Refused('a query is required')
         }
-        return json({ rows: await this.#graph.read(query, { branch }) })
+        // A branch's query door reads the caller's line whole, as their own
+        // store's query door does.
+        return json({
+          rows: await this.#graph.read(wholeLine(query), { branch }),
+        })
       }
       if (door == 'apply' && method == 'POST') {
         let { bundles } = await request.json() as { bundles?: unknown }
@@ -4031,8 +4043,8 @@ export class Store extends Durable {
         ...this.#get('app') ? { app: this.#get('app')! } : {},
         ...this.#get('space') ? { space: this.#get('space')! } : {},
       },
-      read: (q) => g.read(q, { native: true }),
-      rows: (q) => g.rows(q, { native: true }),
+      read: (q) => g.read(q as Taken, { native: true }),
+      rows: (q) => g.rows(q as Taken, { native: true }),
       speaks: (comp, prop) =>
         prop ? !!words.prop(comp, prop) : !!words.comp(comp) ||
           !!words.assoc(comp),
@@ -4946,7 +4958,8 @@ export class Store extends Durable {
             await read(
               env,
               reach,
-              url.searchParams.get('q') ?? '',
+              // A borrowed read's line, relayed whole as its asker wrote it.
+              wholeLine(url.searchParams.get('q') ?? ''),
               url.searchParams.get('live') == '1',
             ),
           )
@@ -5061,7 +5074,7 @@ export class Store extends Durable {
         let reach = reachIn(at, asker, { door, headers: speaks }, {
           [HEED]: name,
         })
-        return await read(this.#bind as Env, reach, line) as
+        return await read(this.#bind as Env, reach, line as Line) as
           | Bundle[]
           | Reduced
       },
@@ -5249,7 +5262,9 @@ export class Store extends Durable {
       }
       let mark = word == 'changed' || word == 'errored' ? String(word) : null
       let [row] = await this.#graph.read(
-        `.entity.eid=${eid} ${mark ? `?${mark}` : '?used ?person ?email'}`,
+        line`.entity.eid=${eid} ${
+          sub(mark ? line`?${mark}` : line`?used ?person ?email`)
+        }`,
       )
       if (!row) {
         return json({ error: 'NotFound', message: 'no such entity' }, 404)
@@ -5297,12 +5312,12 @@ export class Store extends Durable {
           400,
         )
       }
-      let [app] = await this.#graph.read(`.entity.eid=${eid}`)
+      let [app] = await this.#graph.read(line`.entity.eid=${eid}`)
       if (!app) {
         return json({ error: 'NotFound', message: 'no such entity' }, 404)
       }
       let row = identityEid('translated', [eid, spelling])
-      let [held] = await this.#graph.read(`.entity.eid=${row} ?translated`)
+      let [held] = await this.#graph.read(line`.entity.eid=${row} ?translated`)
       let at = useUntil()
       let previous = (held?.translated as Comp | undefined)?.at
       if (typeof previous == 'string' && previous >= at) at = previous

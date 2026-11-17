@@ -16,6 +16,7 @@
 // They are never printed, because a component is not text.
 
 import type { Bundle } from '@yaks/graph'
+import { type Built, joined as among, type Line, line, sub } from '@yaks/query'
 import { human, idOf, short } from '@yaks/id'
 import { homeOf } from '@yaks/reach'
 import {
@@ -385,18 +386,20 @@ export type Near = { links: Bundle[]; comments: Bundle[] }
 /** The one query a page asks about the entity it draws: the links it is in,
  * bar META, and the comments aimed at it — each only where this vocabulary
  * has the component, and none at all where it has neither. */
-export let nearQuery = (vocab: Vocab, eid: string): string | null => {
+export let nearQuery = (vocab: Vocab, eid: string): Built | null => {
   let arms = [
-    ...vocab.comp('edge') ? [`.edge.from=${eid}`, `.edge.to=${eid}`] : [],
-    ...vocab.comp('comment') ? [`.comment.target=${eid}`] : [],
+    ...vocab.comp('edge')
+      ? [line`.edge.from=${eid}`, line`.edge.to=${eid}`]
+      : [],
+    ...vocab.comp('comment') ? [line`.comment.target=${eid}`] : [],
   ]
   return arms.length
-    ? [
-      `(${arms.join('|')})`,
-      ...META.filter((m) => vocab.comp(m)).map((m) => `!${m}`),
-      `.limit=${ENOUGH}`,
-      '*',
-    ].join('&')
+    ? among([
+      line`(${sub(among(arms, '|'))})`,
+      ...META.filter((m) => vocab.comp(m)).map((m) => line`!${m}`),
+      line`.limit=${ENOUGH}`,
+      line`*`,
+    ], '&')
     : null
 }
 
@@ -531,7 +534,7 @@ export let printed = (
  * {@link nearQuery}. */
 export type Source = {
   lookup: (eids: string[]) => Bundle[] | Promise<Bundle[]>
-  query: (q: string) => Bundle[] | Promise<Bundle[]>
+  query: (q: Line) => Bundle[] | Promise<Bundle[]>
 }
 
 // A call's words rather than a row it wrote: said under a name of its own, or

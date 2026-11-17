@@ -2,6 +2,7 @@
 // where a key and a grant go, what an app is handed, and what a disconnect or a
 // deleted owner leaves behind.
 
+import { line, whole } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { env } from '@yaks/process/env'
 import { kernelDoc } from '@yaks/kernel'
@@ -13,6 +14,7 @@ import {
   graph,
   Refused,
   Stale,
+  type Taken,
   token,
 } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
@@ -66,6 +68,7 @@ import {
   using,
 } from './mod.ts'
 import { reply } from './graph.ts'
+import type { Read } from './integrations.ts'
 import { runs } from './tools.ts'
 import { CallError } from '@yaks/tools/errors'
 
@@ -190,7 +193,7 @@ test('a space owner can attach a connected account in place of an unmet ask', as
     }).then((b) => b?.entity.eid),
     connected,
   )
-  assertEquals(await g.read(`.entity.eid=${waiting}&.connection`), [])
+  assertEquals(await g.read(line`.entity.eid=${waiting}&.connection`), [])
   let [link] = await g.read('.edge.from=app&.uses&*')
   assertEquals(of(link, 'uses'), { binding: 'SMS' })
   assertEquals(
@@ -258,7 +261,7 @@ test('attachment does not turn a direct-key request into an implicit grant', asy
 })
 
 let at = async (g: { read: Ctx['graph']['read'] }, eid: string) =>
-  (await g.read(`.entity.eid=${eid}`))[0] as Bundle | undefined
+  (await g.read(line`.entity.eid=${eid}`))[0] as Bundle | undefined
 
 let of = (b: Bundle | undefined, name: string) => (b?.[name] ?? {}) as Comp
 
@@ -672,7 +675,10 @@ test(
     let { c, needs } = await setup([200, { key: 'sk-or' }])
     let eid = await needs({ integration: 'openrouter' })
     let { attempt } = await begin(c, eid)
-    await connect(c, eid, { attempt: attempt!, callback: `${REDIRECT}?code=C` })
+    await connect(c, eid, {
+      attempt: attempt!,
+      callback: `${REDIRECT}?code=C`,
+    })
     assertEquals(await credential(c, eid), 'sk-or')
   },
 )
@@ -1046,7 +1052,10 @@ test('attach: a copyâ€™s own key replaces its loan without deleting the lenderâ€
     connection: mine,
   })
   assertEquals(out.find((b) => b.edge)?.uses, { binding: 'SMS' })
-  assertEquals(of(out.find((b) => b.edge), 'edge'), { from: 'other', to: mine })
+  assertEquals(of(out.find((b) => b.edge), 'edge'), {
+    from: 'other',
+    to: mine,
+  })
   assert(
     out.some((b) =>
       b.entity.eid == edgeEid('other', 'uses', ownCopy.texts) && b.tombstone
@@ -1300,7 +1309,7 @@ test('signing in patches the grant without replaying read decorations, and respe
     c.graph = {
       apply: g.apply,
       read: async (q) =>
-        (await g.read(q)).map((b) =>
+        (await g.read(q as Taken)).map((b) =>
           b.connection
             ? {
               ...b,
@@ -1383,7 +1392,7 @@ test('signing in to another account preserves the held grant, and the same accou
   await finish(transient)
   assertEquals(await credential(c, first), 'C')
   assertEquals((await g.read('.connection.owner=space')).length, 2)
-  assertEquals((await g.read(`.entity.eid=${transient}`)).length, 0)
+  assertEquals((await g.read(line`.entity.eid=${transient}`)).length, 0)
 })
 
 test('pick computes the own-address default then the oldest, and only explicit ambiguous names refuse', async () => {
@@ -1399,23 +1408,24 @@ test('pick computes the own-address default then the oldest, and only explicit a
   await connect(c, newer, { key: 'B' }, 'ann@two.example')
   // Pick's read door can be remote. Give it the provenance and person's
   // email a real host's vocabulary adds to the same bundles.
-  let read = async (q: Parameters<typeof g.read>[0]) => {
+  let read: Read = async (q) => {
     if (String(q) == '.entity.eid=space&*') {
       return [{
         entity: { eid: 'space' },
         email: { address: 'ann@two.example' },
       }]
     }
-    return (await g.read(String(q).replace('&.order=created.at', ''))).map((
-      b,
-    ) => ({
-      ...b,
-      created: { at: b.entity.eid == oldest ? '2020-01-01' : '2020-02-01' },
-    })).sort((a, b) => a.created.at.localeCompare(b.created.at))
+    return (await g.read(whole(String(q).replace('&.order=created.at', ''))))
+      .map((
+        b,
+      ) => ({
+        ...b,
+        created: { at: b.entity.eid == oldest ? '2020-01-01' : '2020-02-01' },
+      })).sort((a, b) => a.created.at.localeCompare(b.created.at))
   }
   assertEquals((await pick(read, 'space', 'texts'))?.entity.eid, newer)
-  let chronological = async (q: Parameters<typeof g.read>[0]) =>
-    String(q) == '.entity.eid=space&*' ? [] : await read(q)
+  let chronological: Read = async (q) =>
+    String(q) == '.entity.eid=space&*' ? [] : await read(q as Taken)
   assertEquals(
     (await pick(chronological, 'space', 'texts'))?.entity.eid,
     oldest,

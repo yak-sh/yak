@@ -1,5 +1,6 @@
 // The form conversation keeps its progress in the registration, in the app.
 // Only the kernel brings a vouched submitter to this door.
+import { line, sub } from '@yaks/query'
 import {
   accepted,
   type Answers,
@@ -21,7 +22,6 @@ import { proved, recognized } from './recognized.ts'
 
 let comp = (row: Bundle | undefined, name: string): Comp =>
   row?.[name] as Comp ?? {}
-let quoted = (value: unknown) => JSON.stringify(value)
 let fields = (row: Comp, keys: string[]) =>
   Object.fromEntries(
     keys.filter((k) => row[k] !== undefined).map((k) => [k, row[k]]),
@@ -38,7 +38,7 @@ let definition = async (at: Stored, id: string) => {
   let form: Form = {
     form: comp(row, 'form'),
     questions: await at.graph.read(
-      `.question.form=${quoted(row.entity.eid)}`,
+      line`.question.form=${row.entity.eid}`,
     ) as unknown as Form['questions'],
   }
   return { row, form }
@@ -94,7 +94,7 @@ export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
   if (!at.app || !args.person || !args.phone) {
     return Response.json({ message: 'No sign-up identity.' }, { status: 400 })
   }
-  let mine = `.registration.submitter=${quoted(args.person)}`
+  let mine = line`.registration.submitter=${args.person}`
   try {
     if (args.op == 'forms') {
       let rows = await at.graph.read('.form&?doc&?alias')
@@ -112,7 +112,7 @@ export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
       return Response.json(shown.filter(Boolean))
     }
     if (args.op == 'mine') {
-      let rows = await at.graph.read(`${mine}&?completed&!cancelled`)
+      let rows = await at.graph.read(line`${sub(mine)}&?completed&!cancelled`)
       return Response.json(
         await Promise.all(rows.map(async (row) => {
           let { form } = await definition(
@@ -126,9 +126,9 @@ export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
     if (args.op == 'start') {
       let { row: source, form } = await definition(at, args.form ?? '')
       let [held] = await at.graph.read(
-        `${mine}&.registration.form=${
-          quoted(source.entity.eid)
-        }&!cancelled&?completed&.limit=1`,
+        line`${
+          sub(mine)
+        }&.registration.form=${source.entity.eid}&!cancelled&?completed&.limit=1`,
       )
       if (held) {
         return Response.json(await progress(at, held, form, args.person))
@@ -156,8 +156,12 @@ export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
     }
     if (args.op == 'calendar') {
       let [row] = await at.graph.read(
-        `${await calendarScope(at, args.person)}${
-          args.registration ? `&.entity.eid=${quoted(args.registration)}` : ''
+        line`${sub(await calendarScope(at, args.person))}${
+          sub(
+            args.registration
+              ? line`&.entity.eid=${args.registration}`
+              : line``,
+          )
         }&.limit=1`,
       )
       if (!row) throw new Refused('No such registration.')
@@ -166,8 +170,8 @@ export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
       })
     }
     let [row] = await at.graph.read(
-      `${mine}&.entity.eid=${
-        quoted(args.registration ?? '')
+      line`${sub(mine)}&.entity.eid=${
+        args.registration ?? ''
       }&?completed&!cancelled`,
     )
     if (!row) throw new Refused('No such registration.')
@@ -183,7 +187,7 @@ export let signupIn = async (req: Request, at: Stored): Promise<Response> => {
       (args.value === true ||
         typeof args.value == 'string' && /^yes$/i.test(args.value.trim()))
     let [texter] = agreed
-      ? await at.graph.read(`.phone.number=${quoted(args.phone)}&.limit=1`)
+      ? await at.graph.read(line`.phone.number=${args.phone}&.limit=1`)
       : []
     let person = texter?.entity.eid ?? texterEid(args.person)
     let consent: Bundle[] = agreed

@@ -1,6 +1,7 @@
 /** Explicit source inspection, independent of transcript rendering and search. */
 import { valueRange } from '@yaks/blob'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { line } from '@yaks/query'
 import { transcriptSegments } from '@yaks/session'
 
 export const SOURCE_LIMIT = 4096
@@ -34,8 +35,7 @@ export async function entrySource(
     throw new Error('SOURCE requires a session and entry')
   }
   let [position] = await g.read(
-    '.entity.eid=' + JSON.stringify(eid) +
-      '&.fields=entry.session,entry.seq&.limit=1',
+    line`.entity.eid=${eid}&.fields=entry.session,entry.seq&.limit=1`,
   )
   let entry = position?.entry as Comp | undefined
   let segments = await transcriptSegments(g, session)
@@ -46,7 +46,7 @@ export async function entrySource(
     )
   ) throw new Error('Entry is not in this transcript')
   let [stored] = await g.read(
-    '.entity.eid=' + JSON.stringify(eid) + '&.limit=1',
+    line`.entity.eid=${eid}&.limit=1`,
   )
   // A call's arguments are an object; as a source they are the JSON it spells.
   let args = (stored?.call as Comp | undefined)?.args

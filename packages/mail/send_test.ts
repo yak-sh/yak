@@ -1,6 +1,7 @@
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import type { Bundle, Comp } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { effects } from '@yaks/effects'
 import { club, clubhouse, committed, noon } from './testing.ts'
 import { message } from './send.ts'
@@ -27,8 +28,8 @@ let seeded = async (refuse?: string) => {
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
-let read = async (g: { read: (q: string) => unknown }, eid: string) =>
-  ((await g.read(`.entity.eid=${eid}`)) as Bundle[])[0]
+let read = async (g: Pick<Graph, 'read'>, eid: string) =>
+  (await g.read(line`.entity.eid=${eid}`))[0]
 
 // The club's people and a letter, asking to go as `ask` says, at the sending
 // handler's boundary: the rows committed, and the handler the mail plugin

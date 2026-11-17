@@ -1,6 +1,7 @@
 // What an Operator is told is personas in the graph (D-137704, "Layers"): the
 // platform's base persona in the directory, with the space's own worn on it,
 // then where it is. An edit to the base reaches the next turn.
+import { line } from '@yaks/query'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { Request } from '@yaks/model'
@@ -142,7 +143,7 @@ await legacy.g.apply([
 await legacy.g.apply(await spaced(legacy.g.storage, space))
 let moved = await legacy.g.get([space.eid, personaFor(space.eid), session])
 let holdings = await legacy.g.read(
-  `.contains .edge.from=${personaFor(space.eid)}`,
+  line`.contains .edge.from=${personaFor(space.eid)}`,
 )
 let again = await spaced(legacy.g.storage, space)
 
@@ -157,6 +158,9 @@ test('separating a space topic from its Operator persona preserves authored text
     personaFor(space.eid),
   )
   assert(holdings.some((b) => (b.edge as { to: string }).to == note))
-  assertEquals(await legacy.g.read(`.contains .edge.from=${space.eid}`), [])
+  assertEquals(
+    await legacy.g.read(line`.contains .edge.from=${space.eid}`),
+    [],
+  )
   assertEquals(again, [])
 })

@@ -9,6 +9,7 @@
 // host that splits the door across two processes, as yaks.app answers the
 // browser at its edge and the form in the app's store, wraps its own forward
 // in `native` and answers the rest with `door`.
+import { line } from '@yaks/query'
 import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid, mint } from '@yaks/graph/identity'
 import { Refused } from '@yaks/graph/errors'
@@ -149,8 +150,7 @@ export let door = (host: Host, options: Options = {}): Handler => {
   let post = options.post ?? ((rows: Bundle[]) => host.graph.apply(rows))
   let known = (person: string | null) =>
     person ? options.known?.(person) : undefined
-  let questions = (eid: string) =>
-    host.graph.read(`.question.form=${JSON.stringify(eid)}`)
+  let questions = (eid: string) => host.graph.read(line`.question.form=${eid}`)
 
   let shown = async (eid: string, row: Bundle, person: string | null) => {
     let form = only(row.form, SHOWN)

@@ -1,6 +1,7 @@
 // The topic tools over a graph small enough to read: one name is one topic, a
 // name holding another's words is refused, a find answers by words, and a
 // topic holds what is added to it, a project as much as any other topic.
+import { line } from '@yaks/query'
 import { equal, ok, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, graph, Refused } from '@yaks/graph'
@@ -48,7 +49,7 @@ let subjects = await topical([
 
 // What a topic holds, by the eids its edges reach.
 let holds = async (g: G, eid: string) =>
-  (await g.read(`.contains&.edge.from=${eid}&?edge`))
+  (await g.read(line`.contains&.edge.from=${eid}&?edge`))
     .map((b) => part(b, 'edge').to).sort()
 
 // What a call refuses with, or nothing.

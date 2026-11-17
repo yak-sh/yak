@@ -24,7 +24,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
 import { short } from '@yaks/id'
 import { kept, type Reads, shipped } from '@yaks/persona'
-import { stringify } from '@yaks/query'
+import { line, stringify, whole } from '@yaks/query'
 import { fill } from '@yaks/yaml'
 import { PERSONA } from './content.ts'
 import type { Space } from './directory.ts'
@@ -47,10 +47,11 @@ export let personaFor = (space: Eid) =>
 
 /** The directory, read as a persona's bases are (@yaks/persona `wear`). */
 export let bases = (env: Pick<Env, 'STORE' | 'META' | 'CLOCK'>): Reads => ({
-  read: (q) => meta(env).query(stringify(q as Parameters<typeof stringify>[0])),
+  read: (q) =>
+    meta(env).query(whole(stringify(q as Parameters<typeof stringify>[0]))),
   get: (eids) =>
     eids.length
-      ? meta(env).query(`.entity.eid=${eids.join(',')}`)
+      ? meta(env).query(line`.entity.eid=${eids}`)
       : Promise.resolve([]),
 })
 
