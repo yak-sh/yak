@@ -7,7 +7,7 @@ import { Data, Page, Yours } from './frame.tsx'
 import { attr, COPY, said, type Slots, text } from './copy.ts'
 import { Idle } from '../mascot.ts'
 import { Sky, Walk } from './sky.tsx'
-import { BUILD, type Example, HOME, SHEET } from '../demos.ts'
+import { BUILD, DEMO_AT, type Example, HOME, SHEET } from '../demos.ts'
 
 // A plan's price in dollars, as its card says it: "Free" is none.
 let dollars = (plan: string) =>
@@ -163,6 +163,132 @@ export let Sheet = () => (
   </figure>
 )
 
+// The names one level under `prefix` in the copy, in the file's order.
+let under = (prefix: string) => [
+  ...new Set(
+    keys(COPY).filter((key) => key.startsWith(`${prefix}.`))
+      .map((key) => key.slice(prefix.length + 1).split('.')[0]),
+  ),
+]
+
+/** The apps the home page walks through (walkthrough.ts), each by its
+ * address in yourname's space: every app with words under `home.walk.apps`,
+ * so an app is added by its words and its recorded conversation alone. */
+export let WALKS = under('home.walk.apps')
+
+/** The steps of an app's walkthrough, by their names under its words. */
+export let stepsOf = (app: string) => under(`home.walk.apps.${app}.steps`)
+
+// One step of a walkthrough: what it shows in words, with the button, and
+// beside them its exchange, the app as that step released it and a box to
+// ask for a change of the visitor's own. The exchange and the picture are
+// the served page's to fill (walkthrough.ts `walkedInto`), from the recorded
+// conversation, by `data-walk-talk` and `data-walk-shot`.
+let Step = ({ app, step }: { app: string; step: string }) => {
+  let at = `home.walk.apps.${app}.steps.${step}`
+  return (
+    <li class='Walk_Step' data-walk-step={step}>
+      <div class='Walk_Copy'>
+        <h4 class='Walk_Title' {...text(`${at}.title`)} />
+        <p class='Note' {...text(`${at}.body`)} />
+        <Button mod='go' href='#say' data-cta='walk' {...text(`${at}.go`)} />
+      </div>
+      <div class='Walk_Shown'>
+        <div class='Walk_Talk' data-walk-talk={`${app}/${step}`} />
+        <a
+          class='Walk_Shot'
+          href={`${DEMO_AT}${app}/`}
+          tabindex={-1}
+          aria-hidden='true'
+        >
+          <span class='Walk_Picture' data-walk-shot={`${app}/${step}`} />
+        </a>
+        <form class='Walk_Ask' method='post' action={START}>
+          <input type='hidden' name='demo' value={app} />
+          <input type='hidden' name='step' value={step} />
+          <label
+            class='Walk_Label'
+            for={`ask-${app}-${step}`}
+            {...text('home.walk.ask.label')}
+          />
+          <Field
+            class='Walk_Field'
+            id={`ask-${app}-${step}`}
+            name='say'
+            required
+            maxLength={4000}
+            {...attr('placeholder', 'home.walk.ask.hint')}
+          />
+          <Button
+            type='submit'
+            data-cta='walk-ask'
+            {...text('home.walk.ask.go')}
+          />
+        </form>
+      </div>
+    </li>
+  )
+}
+
+// The link after an app's last step to the next app's first.
+let Next = ({ app }: { app: string }) => (
+  <p class='Walk_Next' data-walk-next={app}>
+    <a
+      href={`#walk-${app}`}
+      {...text('home.walk.next', {
+        app: <span {...text(`home.walk.apps.${app}.name`)} />,
+        arrow: arrow('→'),
+      })}
+    />
+  </p>
+)
+
+/** A demo app beside the conversation that built it, one step at a time
+ * as the visitor scrolls (D-462), for each app of `WALKS`; above them a row
+ * of their names, which walk.js shows when there are several. The served
+ * page drops an app whose conversation is not recorded yet, and the whole
+ * section while none is (walkthrough.ts `walkedInto`). */
+export let Walkthrough = () => (
+  <section class='Walk' aria-labelledby='walk' data-walks=''>
+    <h2 class='Title' id='walk' {...text('home.walk.title')} />
+    <p class='Note' {...text('home.walk.note')} />
+    <nav class='Walk_Names' hidden {...attr('aria-label', 'home.walk.names')}>
+      {WALKS.map((app) => (
+        <Button
+          mod='quiet'
+          type='button'
+          data-walk-name={app}
+          {...text(`home.walk.apps.${app}.name`)}
+        />
+      ))}
+    </nav>
+    {WALKS.map((app, i) => (
+      <article class='Walk_App' id={`walk-${app}`} data-walk={app}>
+        <h3 class='Walk_Name' {...text(`home.walk.apps.${app}.name`)} />
+        <ol class='Walk_Steps'>
+          {stepsOf(app).map((step) => (
+            <Step
+              key={step}
+              app={app}
+              step={step}
+            />
+          ))}
+        </ol>
+        <p class='Note Note-small'>
+          <a
+            href={`${DEMO_AT}${app}/`}
+            {...text('home.walk.open', {
+              app: <span {...text(`home.walk.apps.${app}.name`)} />,
+              arrow: arrow('↗'),
+            })}
+          />
+        </p>
+        {WALKS.length > 1 && <Next app={WALKS[(i + 1) % WALKS.length]} />}
+      </article>
+    ))}
+  </section>
+)
+
 // A plan's card on the home page: its price, its note, its list and its
 // button, each a snippet under `home.cost.<plan>`.
 let Plan = (
@@ -305,6 +431,7 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
       head={
         <>
           <script src='carousel.js' defer />
+          <script src='walk.js' defer />
           <Walk />
           <script src='cta.js' defer />
           <Data of={data()} />
@@ -357,6 +484,7 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
         </div>
         <Sheet />
       </section>
+      <Walkthrough />
       <section class='Yours' aria-labelledby='does'>
         <h2 class='Title' id='does' {...text(key('does.title'))} />
         <dl class='Yours_List'>

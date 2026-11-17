@@ -43,6 +43,45 @@
       "title": "A potluck sign-up sheet you can type in",
       "open": "See it full size %{arrow}"
     },
+    "walk": {
+      "title": "Watch an app get built, one request at a time",
+      "note": "Below is one conversation someone had with the assistant on yaks.app, and the app it made. Scroll to follow it. Yours starts with whatever you need.",
+      "names": "Examples",
+      "ask": {
+        "label": "Ask for your own change",
+        "hint": "Like “add a guest list”",
+        "go": "Ask"
+      },
+      "open": "Open the %{app} %{arrow}",
+      "next": "Next example: %{app} %{arrow}",
+      "apps": {
+        "guestbook": {
+          "name": "Birthday Guestbook",
+          "steps": {
+            "1": {
+              "title": "Ask for what you need, in plain words",
+              "body": "“A guestbook for Mum’s 70th that anyone with the link can sign.” The assistant made this page and put it online at its own web address, ready to send to the family.",
+              "go": "Ask for your own"
+            },
+            "2": {
+              "title": "Change it by asking again",
+              "body": "“Let guests add a photo.” Now each message can carry a picture, and the guestbook keeps them all.",
+              "go": "Ask for your own"
+            },
+            "3": {
+              "title": "It can text you",
+              "body": "“Text me when someone signs.” Each new message now reaches your phone, so there is nothing to keep checking.",
+              "go": "Ask for your own"
+            },
+            "4": {
+              "title": "It can send email for you",
+              "body": "“After the party, email everyone who signed a thank-you.” Everyone who signed with their email address gets a note from you.",
+              "go": "Ask for your own"
+            }
+          }
+        }
+      }
+    },
     "examples": {
       "title": "Apps made with yaks.app",
       "previous": "Previous app",

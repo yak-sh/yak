@@ -784,6 +784,7 @@ export type Row = MeteredRow & {
     lenses?: Record<string, number>
     speaks?: Record<string, number>
     message?: string | null
+    screenshot?: string | null
   }
   restored?: {
     app: Id
@@ -1576,6 +1577,7 @@ export let deployOf = (r: Row) => ({
   source: r.deploy!.source ?? null,
   reload: r.deploy!.reload ?? null,
   message: r.deploy!.message ?? null,
+  screenshot: r.deploy!.screenshot ?? null,
   lenses: r.deploy!.lenses as Record<string, number> | undefined,
   speaks: r.deploy!.speaks as Record<string, number> | undefined,
 })

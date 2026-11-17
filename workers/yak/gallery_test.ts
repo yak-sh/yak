@@ -32,6 +32,7 @@ import {
   said,
   screenshot,
   searched,
+  shotAt,
   showcase,
   type Shown,
   ticket,
@@ -39,6 +40,7 @@ import {
 } from './gallery.ts'
 import { reputed, standing } from './gallery-row.ts'
 import { DEMOS } from './demos.ts'
+import type { Version } from '@yaks/platform/versions'
 import type { Env } from './env.ts'
 import { markup } from './html.ts'
 import { app, cards, space } from './testing.ts'
@@ -115,11 +117,19 @@ test('gallery decisions record the actor and session and clear a declined reques
   })
 })
 
-// A directory standing these offers, asked for one by its app's eid.
-let offering = (offers: { space: Space; app: App }[]) =>
+// A directory standing these offers, asked for one by its app's eid, and
+// each app's releases, each with the picture kept of it named in `kept`.
+let offering = (
+  offers: { space: Space; app: App }[],
+  kept: string[] = [],
+) =>
   ({
     offer: (eid: string) =>
       Promise.resolve(offers.find(({ app }) => app.eid == eid) ?? null),
+    deploys: () =>
+      Promise.resolve(
+        kept.map((screenshot, i) => ({ version: i + 1, screenshot })),
+      ),
   }) as unknown as Directory
 
 test('an offered app exposes only its currently selected image, a private one only while listed', async () => {
@@ -164,6 +174,24 @@ test('a private app the platform features, or whose space it features, shows its
   assertEquals(await shown({ featured: true }), 200)
   assertEquals(await shown({}, { featured: true }), 200)
   assertEquals(await shown({}), 404)
+})
+
+test("a release's kept picture is shown while its app is, and no other sha", async () => {
+  let current = app({ access: 'private', featured: true, screenshot: 'chosen' })
+  let dir = offering([{ space: space(), app: current }], ['first', 'second'])
+  let bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  let objects = { read: () => Promise.resolve(bytes) }
+  let status = (sha: string) =>
+    image(dir, objects, `${IMAGE}${current.eid}/${sha}`).then((r) => r.status)
+  assertEquals(
+    shotAt(current, { version: 1, screenshot: 'first' } as Version),
+    `https://yaks.app${IMAGE}${current.eid}/first`,
+  )
+  assertEquals(await status('first'), 200)
+  assertEquals(await status('second'), 200)
+  assertEquals(await status('other'), 404)
+  current.featured = false
+  assertEquals(await status('first'), 404)
 })
 
 // Installs counted as a directory would: none, unless the test says.

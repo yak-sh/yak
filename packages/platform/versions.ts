@@ -42,6 +42,9 @@ export type Version = {
   /** Everything the release changed and why, as whoever released it wrote it
    * (app_deploy `message`): what the next agent at the app reads first. */
   message?: string | null
+  /** The sha of a picture of this release as a browser drew it, among the
+   * app's uploads (app_preview `keep`). */
+  screenshot?: string | null
 }
 
 /** One move of an app's live pointer, as its `switched` row says it: the

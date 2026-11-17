@@ -11,6 +11,9 @@
  * and what they add goes to a store of their own (@yaks/platform/visits). */
 export let SHEET = 'https://yourname.yaks.app/potluck/'
 
+/** Where the demo space's apps are, each at its slug under it. */
+export let DEMO_AT = 'https://yourname.yaks.app/'
+
 /** One example: its address, its name, and what it is for. */
 export type Example = [slug: string, title: string, sub: string]
 

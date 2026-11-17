@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <base href="https://yaks.app/">
-    <meta name="yak-drawing" content="3df15ead5d">
+    <meta name="yak-drawing" content="2186add608">
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title
@@ -43,6 +43,7 @@
     <link rel="stylesheet" href="style.css" />
     <script src="idle.js" defer></script>
     <script src="carousel.js" defer></script>
+    <script src="walk.js" defer></script>
     <script src="wander.js" defer></script>
     <script src="sky.js" defer></script>
     <script src="cta.js" defer></script>
@@ -765,6 +766,46 @@
           <p
             class="Note Note-small"><a href="https://yourname.yaks.app/potluck/" data-cta="sheet" data-copy="home.sheet.open">See it full size <span aria-hidden="true" data-copy-slot="arrow">↗</span></a></p>
         </figure>
+      </section>
+      <section class="Walk" aria-labelledby="walk" data-walks>
+        <h2 class="Title" id="walk"
+          data-copy="home.walk.title">Watch an app get built, one request at a time</h2>
+        <p class="Note"
+          data-copy="home.walk.note">Below is one conversation someone had with the assistant on yaks.app, and the app it made. Scroll to follow it. Yours starts with whatever you need.</p>
+        <nav class="Walk_Names" hidden aria-label="Examples"
+          data-copy-aria-label="home.walk.names"><button type="button" data-walk-name="guestbook" data-copy="home.walk.apps.guestbook.name" class="Surface_Press Button Button-quiet">Birthday Guestbook</button></nav>
+        <article class="Walk_App" id="walk-guestbook" data-walk="guestbook">
+          <h3 class="Walk_Name"
+            data-copy="home.walk.apps.guestbook.name">Birthday Guestbook</h3>
+          <ol class="Walk_Steps">
+            <li class="Walk_Step" data-walk-step="1">
+              <div
+                class="Walk_Copy"><h4 class="Walk_Title" data-copy="home.walk.apps.guestbook.steps.1.title">Ask for what you need, in plain words</h4><p class="Note" data-copy="home.walk.apps.guestbook.steps.1.body">“A guestbook for Mum’s 70th that anyone with the link can sign.” The assistant made this page and put it online at its own web address, ready to send to the family.</p><a data-cta="walk" data-copy="home.walk.apps.guestbook.steps.1.go" href="#say" class="Surface_Press Button Button-go">Ask for your own</a></div>
+              <div
+                class="Walk_Shown"><div class="Walk_Talk" data-walk-talk="guestbook/1"></div><a class="Walk_Shot" href="https://yourname.yaks.app/guestbook/" tabindex="-1" aria-hidden="true"><span class="Walk_Picture" data-walk-shot="guestbook/1"></span></a><form class="Walk_Ask" method="post" action="/start"><input type="hidden" name="demo" value="guestbook"/><input type="hidden" name="step" value="1"/><label class="Walk_Label" for="ask-guestbook-1" data-copy="home.walk.ask.label">Ask for your own change</label><input id="ask-guestbook-1" name="say" required maxlength="4000" placeholder="Like “add a guest list”" data-copy-placeholder="home.walk.ask.hint" class="Surface_Well Field Walk_Field"/><button type="submit" data-cta="walk-ask" data-copy="home.walk.ask.go" class="Surface_Press Button">Ask</button></form></div>
+            </li>
+            <li class="Walk_Step" data-walk-step="2">
+              <div
+                class="Walk_Copy"><h4 class="Walk_Title" data-copy="home.walk.apps.guestbook.steps.2.title">Change it by asking again</h4><p class="Note" data-copy="home.walk.apps.guestbook.steps.2.body">“Let guests add a photo.” Now each message can carry a picture, and the guestbook keeps them all.</p><a data-cta="walk" data-copy="home.walk.apps.guestbook.steps.2.go" href="#say" class="Surface_Press Button Button-go">Ask for your own</a></div>
+              <div
+                class="Walk_Shown"><div class="Walk_Talk" data-walk-talk="guestbook/2"></div><a class="Walk_Shot" href="https://yourname.yaks.app/guestbook/" tabindex="-1" aria-hidden="true"><span class="Walk_Picture" data-walk-shot="guestbook/2"></span></a><form class="Walk_Ask" method="post" action="/start"><input type="hidden" name="demo" value="guestbook"/><input type="hidden" name="step" value="2"/><label class="Walk_Label" for="ask-guestbook-2" data-copy="home.walk.ask.label">Ask for your own change</label><input id="ask-guestbook-2" name="say" required maxlength="4000" placeholder="Like “add a guest list”" data-copy-placeholder="home.walk.ask.hint" class="Surface_Well Field Walk_Field"/><button type="submit" data-cta="walk-ask" data-copy="home.walk.ask.go" class="Surface_Press Button">Ask</button></form></div>
+            </li>
+            <li class="Walk_Step" data-walk-step="3">
+              <div
+                class="Walk_Copy"><h4 class="Walk_Title" data-copy="home.walk.apps.guestbook.steps.3.title">It can text you</h4><p class="Note" data-copy="home.walk.apps.guestbook.steps.3.body">“Text me when someone signs.” Each new message now reaches your phone, so there is nothing to keep checking.</p><a data-cta="walk" data-copy="home.walk.apps.guestbook.steps.3.go" href="#say" class="Surface_Press Button Button-go">Ask for your own</a></div>
+              <div
+                class="Walk_Shown"><div class="Walk_Talk" data-walk-talk="guestbook/3"></div><a class="Walk_Shot" href="https://yourname.yaks.app/guestbook/" tabindex="-1" aria-hidden="true"><span class="Walk_Picture" data-walk-shot="guestbook/3"></span></a><form class="Walk_Ask" method="post" action="/start"><input type="hidden" name="demo" value="guestbook"/><input type="hidden" name="step" value="3"/><label class="Walk_Label" for="ask-guestbook-3" data-copy="home.walk.ask.label">Ask for your own change</label><input id="ask-guestbook-3" name="say" required maxlength="4000" placeholder="Like “add a guest list”" data-copy-placeholder="home.walk.ask.hint" class="Surface_Well Field Walk_Field"/><button type="submit" data-cta="walk-ask" data-copy="home.walk.ask.go" class="Surface_Press Button">Ask</button></form></div>
+            </li>
+            <li class="Walk_Step" data-walk-step="4">
+              <div
+                class="Walk_Copy"><h4 class="Walk_Title" data-copy="home.walk.apps.guestbook.steps.4.title">It can send email for you</h4><p class="Note" data-copy="home.walk.apps.guestbook.steps.4.body">“After the party, email everyone who signed a thank-you.” Everyone who signed with their email address gets a note from you.</p><a data-cta="walk" data-copy="home.walk.apps.guestbook.steps.4.go" href="#say" class="Surface_Press Button Button-go">Ask for your own</a></div>
+              <div
+                class="Walk_Shown"><div class="Walk_Talk" data-walk-talk="guestbook/4"></div><a class="Walk_Shot" href="https://yourname.yaks.app/guestbook/" tabindex="-1" aria-hidden="true"><span class="Walk_Picture" data-walk-shot="guestbook/4"></span></a><form class="Walk_Ask" method="post" action="/start"><input type="hidden" name="demo" value="guestbook"/><input type="hidden" name="step" value="4"/><label class="Walk_Label" for="ask-guestbook-4" data-copy="home.walk.ask.label">Ask for your own change</label><input id="ask-guestbook-4" name="say" required maxlength="4000" placeholder="Like “add a guest list”" data-copy-placeholder="home.walk.ask.hint" class="Surface_Well Field Walk_Field"/><button type="submit" data-cta="walk-ask" data-copy="home.walk.ask.go" class="Surface_Press Button">Ask</button></form></div>
+            </li>
+          </ol>
+          <p
+            class="Note Note-small"><a href="https://yourname.yaks.app/guestbook/" data-copy="home.walk.open">Open the <span data-copy="home.walk.apps.guestbook.name" data-copy-slot="app">Birthday Guestbook</span> <span aria-hidden="true" data-copy-slot="arrow">↗</span></a></p>
+        </article>
       </section>
       <section class="Yours" aria-labelledby="does">
         <h2 class="Title" id="does"

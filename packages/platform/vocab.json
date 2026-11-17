@@ -122,6 +122,10 @@
           "type": "string",
           "description": "everything this release changed and why, as whoever released it wrote it, the way a commit message says it; agents working the app read it before changing it"
         },
+        "screenshot": {
+          "type": "string",
+          "description": "the sha of a picture of this release as a browser drew it, kept with the app's uploads (app_preview with released and keep): what the home page shows for the step of a recorded conversation that ended in this release"
+        },
         "reload": {
           "type": "string",
           "enum": [

@@ -91,6 +91,13 @@ import { browserOf } from './session.ts'
 import { caught } from './defects.ts'
 import { DEMO } from './gallery-demo.ts'
 import { DEMOS } from './demos.ts'
+import type { Version } from '@yaks/platform/versions'
+import {
+  type Shown as Walked,
+  walkedInto,
+  walking,
+  walkthroughAt,
+} from './walkthrough.ts'
 import { PICTURES } from './kept-page.ts'
 import { opens } from '@yaks/platform/visits'
 import type { Args, Ctx, Out } from './tool.ts'
@@ -339,6 +346,14 @@ export let CARD = 'card'
 export let shotOf = (space: Space, app: App, env: Host = {}) =>
   screenshot(space, app, env) || siteUrl(env, `${IMAGE}${app.eid}/${CARD}`)
 
+/** The address of the picture kept of one release of an app
+ * (deploy{screenshot}, app_preview `keep`), which `image` serves while the app
+ * is shown as its chosen screenshot is. */
+export let shotAt = (app: App, version: Version, env: Host = {}) =>
+  version.screenshot
+    ? siteUrl(env, `${IMAGE}${app.eid}/${version.screenshot}`)
+    : ''
+
 /** The listings, each with its picture's address. */
 export let pictures = (all: Shown[], env: Host = {}): Shown[] =>
   all.map((a) => ({ ...a, shot: shotOf(a.space, a.app, env) }))
@@ -361,10 +376,9 @@ export let image = async (
 ) => {
   let [eid, sha, extra] = path.slice(IMAGE.length).split('/')
   let offer = extra ? null : await dir.offer(eid)
-  let at = offer && (sha == CARD || offer.app.screenshot == sha) &&
-      showing(offer)
-    ? offer
-    : null
+  let chosen = offer && (sha == CARD || offer.app.screenshot == sha ||
+    (await dir.deploys(offer.app)).some((v) => v.screenshot == sha))
+  let at = offer && chosen && showing(offer) ? offer : null
   if (at && sha == CARD) {
     let shot = screenshot(at.space, at.app, env) ||
       await cardOf(objects, at.space, at.app, env)
@@ -1020,9 +1034,40 @@ export let showcase = (file: string, all: Shown[]) => {
     : file
 }
 
+/** The walkthroughs of the demo space's apps at these addresses
+ * (walkthrough.ts), each step with the picture of its release, for each
+ * published app whose conversation is marked; none for the rest. */
+export let walks = async (env: Env, dir: Directory, slugs: string[]) => {
+  let space = slugs.length ? await dir.space(DEMO) : null
+  if (!space) return {}
+  let apps = await dir.apps(space)
+  let each = await Promise.all(slugs.map(async (slug) => {
+    let app = apps.find((a) => a.slug == slug && !a.trashed)
+    if (!app?.published) return []
+    let [walk, versions] = await Promise.all([
+      walkthroughAt(env, space.eid, slug),
+      dir.deploys(app),
+    ])
+    if (!walk) return []
+    let at = (n: number | null) => versions.find((v) => v.version == n)
+    return [
+      [
+        slug,
+        walk.steps.map(({ html, version }) => {
+          let v = at(version)
+          return { html, shot: v ? shotAt(app, v, env) : '' }
+        }),
+      ] as const,
+    ]
+  }))
+  return Object.fromEntries(each.flat()) as Record<string, Walked[]>
+}
+
 // A home page as served: every demo its file names is its app's card, with the
-// app's chosen screenshot. The file remains the fallback when the directory
-// does not answer, and a page with no showcase is served as its file.
+// app's chosen screenshot, and every app it walks through whose conversation
+// is recorded is beside it (`walks`). The file remains the fallback when the
+// directory or the demo space's Operator does not answer, and a page with
+// neither is served as its file.
 export let made = async (env: Env, dir: Directory, file: Response) => {
   let html = sheeted(hosted(await file.text(), env), env)
   let failed = false
@@ -1036,6 +1081,11 @@ export let made = async (env: Env, dir: Directory, file: Response) => {
       caught(e, { request: 'home showcase' })
       return [] as Shown[]
     })
+  let walked = await walks(env, dir, walking(html)).catch((e) => {
+    failed = true
+    caught(e, { request: 'home walkthrough' })
+    return {}
+  })
   // The headers the assets door set, minus those that describe the bytes: the
   // body just changed length, it is no longer the file that etag names, and the
   // assets' cache did not answer this page.
@@ -1044,7 +1094,7 @@ export let made = async (env: Env, dir: Directory, file: Response) => {
   headers.delete('etag')
   headers.delete('cf-cache-status')
   if (failed) headers.set('cache-control', 'private, no-store')
-  return new Response(showcase(html, shown), {
+  return new Response(walkedInto(showcase(html, shown), walked), {
     status: file.status,
     headers,
   })

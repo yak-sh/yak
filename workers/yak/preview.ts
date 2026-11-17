@@ -53,7 +53,7 @@ import { configured } from './deploy_worker.ts'
 import { baseOf } from '@yaks/platform/woven'
 import { fileBytes, prefixOf } from './files.ts'
 import { spaceHost } from '@yaks/platform/host'
-import { r2RawObjects } from './lib/objects.ts'
+import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { COOKIE, opened, seal, sign } from './lib/token.ts'
 import { onHold } from './model-spend.ts'
 import { ModelError } from '@yaks/model'
@@ -91,6 +91,8 @@ import { type Args, type Ctx, inApp, refuse, rejected } from './tool.ts'
 import { CallError } from '@yaks/tools/errors'
 import { addressed } from '@yaks/platform/versions'
 import { digest } from '@yaks/graph/sha256'
+import { unbase64 } from './bytes.ts'
+import { blobPrefix } from './blob-key.ts'
 import {
   type AppDraft,
   type Draft,
@@ -572,6 +574,7 @@ let rendering = async (ctx: Ctx, space: Space, app: App, visit: Visit) => {
   })
   let { image, text, ...diagnostics } = rendered
   return {
+    png: image,
     cost: rendered.duration / 1000 * RATE,
     diagnostics,
     images: [{ data: image, mime_type: 'image/png' }],
@@ -608,6 +611,37 @@ let signedIn = async (
   httpOnly: true,
 })
 
+// A render of the live release kept as its picture (deploy{screenshot}):
+// the bytes among the app's uploads, as a chosen screenshot is (tools.ts
+// `app_set`), and their sha on the release's row, so a picture of each
+// version stays when the app moves on (gallery.ts `shotAt`). Choosing what
+// stands for the app is its space owner's, as its screenshot is.
+let kept = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  who: Who,
+  png: string,
+) => {
+  if (who.role != 'owner') {
+    throw refuse('access', `not the owner of ${space.slug}`)
+  }
+  let release = await ctx.dir.deployAt(app, app.version!)
+  if (!release) {
+    throw refuse(
+      'missing',
+      `${space.slug}/${app.slug} v${app.version} has no release row`,
+    )
+  }
+  let bytes = unbase64(png)
+  let sha = await digest(bytes)
+  await r2Objects(ctx.env.BLOBS).put(blobPrefix(space, app) + sha, bytes)
+  await ctx.dir.stamp({
+    entities: [{ entity: { eid: release.eid }, deploy: { screenshot: sha } }],
+  }, vouched(who))
+  return sha
+}
+
 // The released app at the address everyone is handed (directory.ts `url`),
 // over its live store: a public app as a visitor sees it, a private one as
 // the caller does.
@@ -619,6 +653,7 @@ let released = async (
   path: string,
   view: View,
   screenshot: boolean,
+  keep: boolean,
 ) => {
   if (!app.version) {
     throw refuse(
@@ -648,11 +683,12 @@ let released = async (
     : []
   let shot = await rendering(ctx, space, app, { url: at, view, cookies })
   Object.assign(value, shot.diagnostics, { cost: shot.cost })
+  if (keep) value.screenshot = await kept(ctx, space, app, who, shot.png)
   return {
     text: shot.said(
       `${where}, with its live data, as ${
         signed ? 'you see it signed in' : 'a visitor sees it'
-      }.`,
+      }.${keep ? ' Kept as the picture of this release.' : ''}`,
     ),
     space,
     value,
@@ -663,7 +699,7 @@ let released = async (
 export let preview = async (ctx: Ctx, args: Args) => {
   let view = viewport(args)
   let path = page(args.path)
-  for (let flag of ['screenshot', 'released']) {
+  for (let flag of ['screenshot', 'released', 'keep']) {
     if (args[flag] != null && typeof args[flag] != 'boolean') {
       throw refuse('arguments', `${flag}: true or false`)
     }
@@ -680,7 +716,16 @@ export let preview = async (ctx: Ctx, args: Args) => {
       'Cloudflare Browser Rendering is not configured',
     )
   }
-  if (live) return released(ctx, space, app, who, path, view, screenshot)
+  let keep = args.keep === true
+  if (keep && (!live || !screenshot)) {
+    throw refuse(
+      'arguments',
+      'keep: true keeps a picture of the release, so it needs released: true and a screenshot',
+    )
+  }
+  if (live) {
+    return released(ctx, space, app, who, path, view, screenshot, keep)
+  }
   if (args.draft != null && typeof args.draft != 'string') {
     throw refuse('arguments', "draft: the id of one of the app's drafts")
   }

@@ -49,6 +49,7 @@ import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { askEmail, connect } from './signin-pages.ts'
 import * as site from './site/mod.ts'
 import { said as copied } from './site/copy.ts'
+import { stepsOf, WALKS } from './site/home.tsx'
 import {
   ADDRESSES,
   CLOSED,
@@ -666,7 +667,10 @@ test('every public page hands a stranger sign-in, never /connect', () => {
   }
   let doors = [...parsed('index.html').querySelectorAll('a.Button-go')]
     .map((a) => a.getAttribute('href'))
+  // Each step of a walkthrough sends its reader up to the box.
+  let walked = WALKS.flatMap((app) => stepsOf(app).map(() => '#say'))
   assertEquals(doors, [
+    ...walked,
     '/login',
     GET_PLAN,
     GET_PLAN,
@@ -724,7 +728,17 @@ test('the pages beside the home page say where they live and count their buttons
   })
   assertEquals(at('build.html'), {
     canonical: 'https://yaks.app/',
-    ctas: ['start', 'examples', 'sheet', 'plus', 'pro', 'join'],
+    ctas: [
+      'start',
+      'examples',
+      'sheet',
+      ...WALKS.flatMap((app) =>
+        stepsOf(app).flatMap(() => ['walk', 'walk-ask'])
+      ),
+      'plus',
+      'pro',
+      'join',
+    ],
   })
   assertEquals(at('churches.html'), {
     canonical: 'https://yaks.app/churches',

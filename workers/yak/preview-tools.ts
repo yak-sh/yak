@@ -49,6 +49,11 @@ export let tools = [worded(
           description:
             'true opens the released app at its own address with its live data, as a visitor sees a public app and as you see a private one, instead of the draft; check a page with it after app_deploy or after writing rows',
         },
+        keep: {
+          type: 'boolean',
+          description:
+            "with released: true, keeps the screenshot as the picture of the live version, which stays that version's when the app moves on; the space owner's",
+        },
       },
       required: ['app'],
     },

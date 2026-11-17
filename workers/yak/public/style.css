@@ -1198,6 +1198,139 @@
     border: 0;
   }
 
+  /* An app beside the conversation that built it (home.tsx `Walkthrough`).
+     On a phone each step reads down: its words, its exchange, then the app,
+     with the box to ask for a change kept at the bottom of the screen while
+     the step is in view. On a wide screen the words scroll on the left while
+     the step's app and exchange stay in place on the right, until the next
+     step's take their place. */
+  .Walk {
+    display: grid;
+    gap: var(--gap);
+    min-width: 0;
+  }
+
+  .Walk_Names {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--gap) / 2);
+  }
+
+  .Walk_Names [aria-pressed='true'] {
+    font-weight: 700;
+  }
+
+  .Walk_App {
+    display: grid;
+    gap: var(--gap);
+    min-width: 0;
+  }
+
+  .Walk_Name {
+    font-size: var(--size);
+    font-weight: 700;
+  }
+
+  .Walk_Steps {
+    display: grid;
+    gap: var(--rhythm);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .Walk_Step {
+    display: grid;
+    gap: var(--gap);
+    min-width: 0;
+  }
+
+  .Walk_Copy {
+    display: grid;
+    gap: var(--gap);
+    align-content: start;
+  }
+
+  .Walk_Copy > .Button {
+    justify-self: start;
+  }
+
+  .Walk_Title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    text-wrap: balance;
+  }
+
+  .Walk_Shown {
+    display: grid;
+    gap: var(--gap);
+    min-width: 0;
+  }
+
+  .Walk_Talk {
+    min-width: 0;
+    padding: var(--gap);
+    border: var(--stroke) solid var(--graphite);
+    border-radius: var(--radius);
+    background: var(--card);
+  }
+
+  .Walk_Image {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: var(--stroke) solid var(--graphite);
+    border-radius: var(--radius);
+  }
+
+  .Walk_Ask {
+    position: sticky;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: calc(var(--gap) / 2);
+    padding: calc(var(--gap) / 2) 0;
+    background: var(--bg);
+  }
+
+  .Walk_Label {
+    grid-column: 1 / -1;
+    font-weight: 700;
+  }
+
+  @media (min-width: 60rem) {
+    .Walk_Step {
+      grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+      gap: calc(2 * var(--gap));
+      min-height: 120vh;
+    }
+
+    .Walk_Copy {
+      position: sticky;
+      top: 30vh;
+    }
+
+    .Walk_Shown {
+      position: sticky;
+      top: 1rem;
+      align-self: start;
+      max-height: calc(100vh - 2rem);
+      grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    .Walk_Shot {
+      order: -1;
+    }
+
+    .Walk_Talk {
+      overflow-y: auto;
+    }
+
+    .Walk_Ask {
+      position: static;
+    }
+  }
+
   .Demo {
     display: grid;
     gap: var(--gap);

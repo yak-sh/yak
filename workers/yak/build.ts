@@ -97,6 +97,7 @@ import { type Browsers, browsers, type Lent } from './operator-browser.ts'
 import { PROTOCOL, protocolled } from './protocol.ts'
 import { managePath } from '@yaks/platform/routes'
 import { WAKE } from './door.ts'
+import { WALKTHROUGH } from './walkthrough.ts'
 import { COPY, copying } from './store-copy.ts'
 import {
   type Frame,
@@ -741,7 +742,8 @@ export class Builder extends Durable {
           url.pathname == '/operator/replied' ||
           url.pathname == '/operator/support' ||
           url.pathname == '/operator/tell' ||
-          url.pathname == '/operator/ask'
+          url.pathname == '/operator/ask' ||
+          url.pathname == WALKTHROUGH
         ) {
           let space = request.headers.get(SPACE)
           if (request.headers.get('x-yak-kernel') != '1' || !space) {

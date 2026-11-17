@@ -57,6 +57,7 @@ export let ASSETS: Asset[] = [
     'saving.js',
     'township-dues.js',
     'carousel.js',
+    'walk.js',
     'wander.js',
     'sky.js',
     'favicon-32.png',

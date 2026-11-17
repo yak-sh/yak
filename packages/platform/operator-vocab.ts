@@ -21,6 +21,17 @@ export let operatorDoc: VocabDoc = {
         cache_retention: { type: 'number' },
       },
     },
+    walkthrough: {
+      component: true,
+      description:
+        "Marks a conversation as the recorded walkthrough of one of the space's apps: each of the person's requests in it is a step, ending in the release its last app_deploy of that app made. yaks.app's home page shows the demo space's walkthroughs beside the apps they built.",
+      properties: {
+        app: {
+          type: 'string',
+          description: 'the slug of the app the conversation built',
+        },
+      },
+    },
     operator_contact: {
       component: true,
       description:

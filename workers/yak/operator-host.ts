@@ -28,6 +28,7 @@ import { attachmentOf } from '@yaks/blob/attachment'
 import { phoneTexts } from './phone-move.ts'
 import { channeled } from './channel-move.ts'
 import type { OperatorStore } from './operator-store.ts'
+import { stepsOf, WALKTHROUGH, type Walkthrough } from './walkthrough.ts'
 import { transcript } from '@yaks/session/transcript'
 import { dispatchStatus } from '@yaks/session/admission'
 import type { Tool } from '@yaks/model'
@@ -996,6 +997,45 @@ let arriving = async (store: Store, row: Bundle, entries: Bundle[]) => {
   }).reverse()
 }
 
+/** The walkthrough of `app` marked in this store (walkthrough.ts), each
+ * step's lines drawn as the chat page draws a conversation's; none while no
+ * conversation is marked one. The newest marked wins. */
+export let walkthroughOf = async (
+  store: Store,
+  app: string,
+): Promise<Walkthrough | null> => {
+  let [row] = await store.g.read(
+    q`.walkthrough.app=${app}&?session&.order=-created.at&.limit=1&*`,
+  )
+  if (!row) return null
+  let eid = row.entity.eid
+  let entries = await transcript(store.g, eid)
+  let calls = new Set(entries.flatMap((b) => b.call ? [b.entity.eid] : []))
+  let helped = await seenOf(store, [row], entries, calls)
+  let seen = {
+    ...helped,
+    ...await namingOf(store, withHelpers(entries, helped.helpers), nameless),
+  }
+  let names = namer(seen)
+  let view = await viewOf(store, entries, false)
+  seen.helpers = await lined(store, seen.helpers, names)
+  return {
+    session: eid,
+    steps: stepsOf(entries, app).map(({ lines, version }, i) => ({
+      version,
+      html: talk(
+        { entity: { eid: `${eid}-${i + 1}` } } as Bundle,
+        lines,
+        names,
+        seen,
+        {
+          drawn: drawnLines(lines, names, seen, view),
+        },
+      ),
+    })),
+  }
+}
+
 export let conversationOf = async (
   store: Store,
   at: string,
@@ -1388,6 +1428,12 @@ export let operatorReply = async (
   if (path == '/operator/support') {
     let { heard } = await import('./support-reply.ts')
     return Response.json(await heard(store, args as unknown as Carried))
+  }
+  // A walkthrough the home page shows (walkthrough.ts).
+  if (path == WALKTHROUGH) {
+    return Response.json({
+      walkthrough: await walkthroughOf(store, String(args.app ?? '')),
+    })
   }
   if (path == '/operator/inbound') {
     let { chosen } = await import('./operator-line.ts')
