@@ -163,6 +163,7 @@ export let heldBy = async (
 }
 
 let diverted = (sender: Sender, env: Pick<Env, 'MAIL_SINK'>): Sender => ({
+  ...sender,
   send: (m) =>
     sender.send({
       ...m,
@@ -171,29 +172,56 @@ let diverted = (sender: Sender, env: Pick<Env, 'MAIL_SINK'>): Sender => ({
     }),
 })
 
+// A local run's sender (MAIL_DEV=1): each letter printed as one `yak-mail`
+// line, the shape the test kernel's Email Sending stand-in writes (probe.ts
+// `letters`). Explicitly local only: a deploy with no sender must never log
+// sign-in codes.
+let printed: Sender = {
+  send: (m) => {
+    console.log(`yak-mail ${
+      JSON.stringify({
+        to: m.to,
+        subject: m.subject,
+        body: m.text,
+        replyTo: m.replyAddress,
+        from: m.from,
+        name: m.name,
+      })
+    }`)
+    return Promise.resolve({})
+  },
+}
+
 /** The sender the deploy's MAIL_VIA selects for a kind of letter (config.ts
  * `posts`), else the one that kind defaults to, or why it cannot send yet.
  * The providers config.ts names lend the senders, read from the env, and
  * `tags` beside: what a provider's notice about the letter carries back
- * (mail-receipts.ts). */
+ * (mail-receipts.ts). Every sender it answers keeps the staging sink, and a
+ * local run (MAIL_DEV) prints its letters instead, so app letters and
+ * platform letters obey one rule. */
 export let transport = async (
   env: Delivery,
   kind: Post = posts.apps,
   tags: Record<string, string> = {},
-): Promise<Built> =>
-  post({ via: env.MAIL_VIA ?? kind.via }, {
-    senders: await (await import('./lent.ts')).lent(env, 'senders', kind, {
-      tags,
-    }),
-  })
+): Promise<Built> => {
+  let built = env.MAIL_DEV == '1' ? { sender: printed } : post(
+    { via: env.MAIL_VIA ?? kind.via },
+    {
+      senders: await (await import('./lent.ts')).lent(env, 'senders', kind, {
+        tags,
+      }),
+    },
+  )
+  return built.sender ? { sender: diverted(built.sender, env) } : built
+}
 
 /** What a transport reads: the env the providers' options name, the deploy's
- * selection and the staging sink. */
+ * selection, the staging sink and the local switch. */
 export type Delivery = Partial<Env>
 
-/** The capability lent to apps and Operators, with one selected transport,
- * the staging sink kept at its boundary. `kind` is whose letters these are:
- * the platform's own (support.ts) leave as platform letters do. */
+/** The capability lent to stores, with one selected transport. `kind` is
+ * whose letters these are: the platform's own, which only the directory
+ * sends (graph.ts `senders`), leave as platform letters do. */
 export let outgoing = (
   env: Delivery,
   tags: Record<string, string> = {},
@@ -202,7 +230,7 @@ export let outgoing = (
   send: async (m) => {
     let { sender, waiting } = await transport(env, kind, tags)
     if (!sender) throw new Unsent(waiting!, 60_000)
-    return diverted(sender, env).send(m)
+    return sender.send(m)
   },
 })
 

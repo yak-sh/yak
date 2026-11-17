@@ -5,7 +5,7 @@ import { moveContact } from './contact-move.ts'
 import type { Bundle, Comp } from '@yaks/graph'
 import { kindOf, type Tool } from '@yaks/session'
 import { mobile } from '@yaks/phone/mobile'
-import { sendable, Unsent } from '@yaks/mail'
+import { sendable } from '@yaks/mail'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { type Ctx, refuse } from './tool.ts'
@@ -14,7 +14,7 @@ import { owns } from './operator-access.ts'
 import { inputSource } from './operator-provenance.ts'
 import { canon, LIFE, mint, spend } from './signin.ts'
 import { KERNEL, meta } from './meta.ts'
-import { type Mail, mail } from './mail.ts'
+import { mail } from './mail.ts'
 import { managePath } from '@yaks/platform/routes'
 import { CONSENT } from './operator-texts.ts'
 import { provePhone } from './phone-contact.ts'
@@ -88,8 +88,10 @@ let pending = async (
     line`.operator_contact.person=${person} .operator_contact.session=${session} .operator_contact.address=${address} !cancelled ?created ?verified .order=-created.at .limit=1`,
   ))[0]
 
-let sendCode = async (send: Mail, address: string, code: string) => {
-  await send({
+// The code's letter, written into the directory, whose pool sends it and waits
+// out a mail outage: the code it carries is on its way either way.
+let sendCode = async (env: Env, address: string, code: string) => {
+  await mail(env)({
     to: address,
     subject: `${code} is your yaks.app contact code`,
     body:
@@ -177,7 +179,6 @@ export let contactAdd = (
   ctx: Ctx,
   space: Space,
   store: OperatorStore,
-  send: Mail = mail(env),
 ): Tool => ({
   name: 'contact_add',
   title: 'Add your contact',
@@ -324,17 +325,7 @@ export let contactAdd = (
         expires: new Date(Date.now() + LIFE).toISOString(),
       },
     }], { trusted: true })
-    try {
-      await sendCode(send, address, code)
-    } catch (error) {
-      if (error instanceof Unsent) {
-        await store.g.apply([{
-          entity: { eid: id },
-          operator_contact: { expires: null },
-        }], { trusted: true })
-      }
-      throw error
-    }
+    await sendCode(env, address, code)
     return JSON.stringify({
       address,
       next: 'Ask them to type the six-digit code here to confirm ownership.',

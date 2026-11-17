@@ -144,6 +144,11 @@
           "type": "string",
           "stamped": true,
           "description": "what went wrong, as the sender reported it"
+        },
+        "refused": {
+          "type": "boolean",
+          "stamped": true,
+          "description": "the provider refused an address on the letter: the address is the writer's to fix, and nothing failed"
         }
       }
     },

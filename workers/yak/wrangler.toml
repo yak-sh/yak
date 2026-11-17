@@ -578,8 +578,8 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 # each is lent to. Each is `wrangler secret put <NAME>` for
 # the deploy; locally a .dev.vars line, or `wrangler dev --var NAME:…` the way
 # the tests pass them. Unset, no session verifies and no letter sends.
-# MAIL_DEV=1 is the local override: a letter becomes an entity in the meta
-# store instead of going out. Never set it on a deploy.
+# MAIL_DEV=1 is the local override: each letter is printed on the log
+# instead of going out. Never set it on a deploy.
 # CF_ANALYTICS_TOKEN is the Account Analytics Read token for usage metrics
 # and Analytics Engine page visits. Unset, neither reader runs.
 # CF_WORKERS_TOKEN is the one an app's own worker.js is uploaded to the

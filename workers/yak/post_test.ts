@@ -1,9 +1,20 @@
 import { equal, test, throws } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import type { Env } from './env.ts'
-import { mail } from './mail.ts'
 import type { Binding } from '@yaks/cloudflare-mail'
-import { outgoing, sink } from './post.ts'
+import { posts } from './config.ts'
+import { FROM } from './mail-config.ts'
+import { outgoing, sink, transport } from './post.ts'
+
+// A platform letter as the directory's pool hands it to its sender.
+let letter = {
+  from: FROM,
+  name: 'yaks.app',
+  to: 'reader@example.com',
+  subject: 'Code or feedback',
+  text: 'The letter',
+  html: '<p>The letter</p>',
+  replyAddress: 'hello@yaks.fyi',
+}
 
 test('the app mail transport sinks recipients and keeps threading intact', async () => {
   let sent: Parameters<Binding['send']>[0][] = []
@@ -50,6 +61,8 @@ test("the sink keeps a letter only when one recipient is not the fleet's", () =>
   equal(sink({}, 'reader@example.com', 'Code').to, 'reader@example.com')
 })
 
+// The sink and a local run's printing are the transport's, so the
+// directory's pool obeys them for every platform letter.
 test('platform letters sink every recipient, including feedback copies', async () => {
   let sent: Record<string, unknown>[] = []
   let original = globalThis.fetch
@@ -59,26 +72,18 @@ test('platform letters sink every recipient, including feedback copies', async (
   }) as typeof fetch
   try {
     for (let MAIL_SINK of [undefined, 'owner@example.com']) {
-      let env = {
-        APEX: 'yaks.fyi',
+      let { sender } = await transport({
         MAIL_SINK,
         MAIL_TOKEN: 'test',
         CF_ACCOUNT: 'test',
         MAIL_API: 'https://mail.example',
-      } as Env
-      for (
-        let to of ['reader@example.com', [
-          'reader@example.com',
-          'task@example.com',
-        ]]
-      ) {
-        await mail(env)({ to, subject: 'Code or feedback', body: 'The letter' })
-        assertEquals(sent.at(-1)?.to, MAIL_SINK ? [MAIL_SINK] : [to].flat())
+      }, posts.platform)
+      for (let to of ['reader@example.com', 'task@example.com']) {
+        await sender!.send({ ...letter, to })
+        assertEquals(sent.at(-1)?.to, [MAIL_SINK ?? to])
         assertEquals(
           sent.at(-1)?.subject,
-          MAIL_SINK
-            ? `[to: ${[to].flat().join(', ')}] Code or feedback`
-            : 'Code or feedback',
+          MAIL_SINK ? `[to: ${to}] Code or feedback` : 'Code or feedback',
         )
         assertEquals(sent.at(-1)?.reply_to, 'hello@yaks.fyi')
       }
@@ -86,6 +91,32 @@ test('platform letters sink every recipient, including feedback copies', async (
   } finally {
     globalThis.fetch = original
   }
+})
+
+test('a local run prints each letter, sunk as a deploy would sink it', async () => {
+  let said: string[] = []
+  let print = console.log
+  console.log = (line: string) => void said.push(line)
+  try {
+    for (let MAIL_SINK of [undefined, 'owner@example.com']) {
+      let { sender } = await transport({ MAIL_DEV: '1', MAIL_SINK })
+      await sender!.send(letter)
+    }
+  } finally {
+    console.log = print
+  }
+  let printed = (to: string, subject = letter.subject) => ({
+    to,
+    subject,
+    body: letter.text,
+    replyTo: letter.replyAddress,
+    from: FROM,
+    name: letter.name,
+  })
+  equal(said.map((l) => JSON.parse(l.replace(/^yak-mail /, ''))), [
+    printed('reader@example.com'),
+    printed('owner@example.com', '[to: reader@example.com] Code or feedback'),
+  ])
 })
 
 // The binding names a refusal by its code: a rate limit never let the letter

@@ -20,7 +20,6 @@ import { CONSENT } from './operator-texts.ts'
 import { handleChannels, letterFor } from './operator-channels.ts'
 import { operatorPost } from './metered.ts'
 import { consentEid } from '@yaks/phone'
-import { Unsent } from '@yaks/mail'
 import { meta } from './meta.ts'
 import { mac, mint, spend } from './signin.ts'
 import { contactBackfill } from './contact-move.ts'
@@ -364,39 +363,6 @@ let borrowed = await assertRejects(() =>
 test('contact proposals and consent sources stay with their person', () => {
   assertEquals(hidden, [])
   assertStringIncludes((borrowed as Error).message, 'own conversation')
-})
-
-let retry = await setup('retry')
-let retrySource = await retry.entry('Email me at retry@example.org.')
-let failing = contactAdd(
-  retry.env,
-  retry.ctx,
-  retry.space,
-  retry.store,
-  () => Promise.reject(new Unsent('The mail transport is offline.', 0)),
-)
-await assertRejects(
-  () =>
-    Promise.resolve(
-      failing.run({ address: 'retry@example.org', source: retrySource }),
-    ),
-  Unsent,
-)
-let [unsent] = await retry.store.g.read('.operator_contact')
-let retryNote = await retry.notify('The retry job is ready.')
-await retry.invoke({ address: 'retry@example.org', source: retrySource })
-let retryCode = String(retry.letters[0].subject).match(/\d{6}/)![0]
-let retryInput = await retry.entry(retryCode)
-await retry.invoke({
-  address: 'retry@example.org',
-  code: retryCode,
-  source: retryInput,
-})
-let retryMailed = await retry.mailed(retryNote.notification)
-test('a definitely unsent verification email can be retried immediately without losing held completion', () => {
-  assertEquals((unsent.operator_contact as Comp).code, undefined)
-  assertEquals((unsent.operator_contact as Comp).expires, undefined)
-  assertEquals(retryMailed, true)
 })
 
 let two = await setup('two-chats', 'prior@example.com')

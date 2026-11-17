@@ -4,9 +4,9 @@
 // softly — and an agent walks the whole OAuth 2.1 flow, from a client that
 // registers itself to a bearer token that resolves to the same person.
 //
-// The dev mail adapter prints each letter on the Worker's log (mail.ts
-// `printed`), which is where the test reads its own code; no store anywhere
-// holds one. Nothing here knows the code before the kernel mails it. The
+// The stand-in mail provider writes each letter the directory's pool sends on
+// the Worker's log (probe.ts `letters`), which is where the test reads its own
+// code. Nothing here knows the code before the kernel mails it. The
 // directory itself is read back through the MCP graph tier as the owner of
 // `yak` — the one door into the meta store (probe.ts `meta`, T-32585).
 import {
@@ -554,12 +554,19 @@ test('a person signs in by mail, and an agent by OAuth', async () => {
     let held = (row.signin as { code: string; email: string }).code
     assertMatch(held, /^[0-9a-f]{64}$/)
     assert(!held.includes(live), 'the digits are nowhere in the row')
-    // And it is not written down as a letter: the directory keeps the
-    // platform's own letters (refusals.ts), never the one a code went out in.
-    assertEquals(
-      await dir.query(`.mail.to=${encodeURIComponent(waiting)}`),
-      [],
+    // Its letter is the directory's row, as every platform letter is
+    // (mail.ts), which its pool sent; the meta space's door is the only one
+    // into it, so no app and nobody else who signs in reads the code there.
+    let letter = `.mail.to=${encodeURIComponent(waiting)}`
+    assertEquals((await dir.query(letter)).length, 1)
+    let stranger = await signIn(k)
+    let seen = await meta(k, stranger.cookie).query(letter).then(
+      (rows) => rows?.length ?? 0,
+      () => 0,
     )
+    assertEquals(seen, 0)
+    // What the stranger's ask reported is this test's, not a later one's.
+    await k.flushReports()
 
     // The ceiling on letters (T-33020). Asking is unauthenticated, so an
     // address gets SENDS letters an hour and no more — and the ask over the
@@ -953,11 +960,12 @@ test('asking for a code waits on no store, and its letter still comes', async ()
 })
 
 // The card answers before its letter goes, so a letter that never leaves is
-// said at the card's own end, once known (M-16612), and reported. Nothing
-// above it waits: the card's code box comes before its letter has gone.
+// said at the card's own end, once known (M-16612), and reported: the
+// directory's pool, which sent it, reports the failure (@yaks/mail
+// `sending`), and the card says we were told. Nothing above it waits: the
+// card's code box comes before its letter has gone.
 test('a letter that never leaves is said on its own card, and reported', async () => {
   let k = await kernel()
-  let before = k.reported.length
   let email = `${unique('unsent')}@refused.invalid`
   let card = await form(k, '/login', { email })
   equal(card.status, 200)
@@ -965,26 +973,21 @@ test('a letter that never leaves is said on its own card, and reported', async (
   let first = (await page.read()).value!
   let rest = ''
   for (let part; !(part = await page.read()).done;) rest += part.value
-  let never = /never left: .*the destination address is not allowed/
+  let never = /never left: .*the destination address is not allowed.*told/
   equal(
     [/name="code"/.test(first), never.test(first), never.test(rest)],
     [true, false, true],
   )
   let fine = await form(k, '/login', { email: `${unique('sent')}@yaks.app` })
   ok(!/never left/.test(await fine.text()), 'a letter that left says nothing')
-  await k.flushReports()
-  ok(
-    k.reported.slice(before).some((row) =>
-      JSON.stringify(row).includes('the destination address is not allowed')
-    ),
-    'the tracker hears of it',
-  )
 })
 
 // An address no provider takes a letter for is the person's typo: the card
 // refuses it before any code is minted or letter sent, and nobody is told.
 test('an address that is not one is refused on the card, before any send', async () => {
   let k = await kernel()
+  // What earlier tests on the shared kernel reported is theirs.
+  await k.flushReports()
   let before = k.reported.length
   for (let email of ['ana@books', 'ana@@x.example', 'Ana <ana@x.example>']) {
     let card = await form(k, '/login', { email })

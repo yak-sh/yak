@@ -13,7 +13,8 @@
 // vocabulary because of the name it is given — so a letter counted against a
 // space is counted through the wire that counts it in life.
 import { line } from '@yaks/query'
-import { cloudflare } from '@yaks/cloudflare-mail'
+import type { Binding } from '@yaks/cloudflare-mail'
+import { Undeliverable } from '@yaks/mail'
 import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Frame } from '@yaks/api'
@@ -22,12 +23,19 @@ import { platform as runtime, state } from './testing.ts'
 import { storeOf } from './door.ts'
 import { type Namespace } from '@yaks/durable-object/door'
 import { PLATFORM_STORE } from '@yaks/platform/names'
-import type { Env } from './env.ts'
-import { FROM, mail, mailable, REPLY_TO, sending } from './mail.ts'
+import { bounce, FROM, mail, mailable, REPLY_TO } from './mail.ts'
+import { posts } from './config.ts'
 import { Store } from './graph.ts'
-import { KERNEL, metaOf } from './meta.ts'
+import { KERNEL, type Meta, metaOf } from './meta.ts'
 import { monthOf } from '@yaks/platform/meter'
-import { addressed, heldBy, mailedTo, outgoing, type Reads } from './post.ts'
+import {
+  addressed,
+  heldBy,
+  mailedTo,
+  outgoing,
+  type Reads,
+  transport,
+} from './post.ts'
 import { mailFrom } from '@yaks/platform/host'
 import type { App, Host, Space } from './directory.ts'
 
@@ -140,99 +148,6 @@ test('every address an app writes from is one it can be written to', async () =>
   }
 })
 
-// The platform's own letter (mail.ts), which is a different sender: one send
-// carries every reader. Whatever the list, the letter still comes FROM the bot
-// address — the only
-// domain Email Sending will sign for — and is still answered at REPLY_TO.
-test('one send carries every reader, from one address', async () => {
-  let posted: {
-    to: string[]
-    reply_to: string
-    from: { address: string }
-  }[] = []
-  let real = globalThis.fetch
-  globalThis.fetch = ((_url: string, init: RequestInit) => {
-    posted.push(JSON.parse(String(init.body)))
-    return Promise.resolve(Response.json({ success: true }))
-  }) as unknown as typeof fetch
-  try {
-    let send = sending(
-      cloudflare({
-        token: 'token',
-        account: 'account',
-        base: 'https://api.test',
-      }),
-    )
-    await send({ to: REPLY_TO, subject: 's', body: 'b' })
-    await send({ to: [REPLY_TO, 'ann@x.test'], subject: 's', body: 'b' })
-    await send({
-      to: REPLY_TO,
-      subject: 's',
-      body: 'b',
-      replyTo: 'ann@x.test',
-    })
-  } finally {
-    globalThis.fetch = real
-  }
-  assertEquals(posted.map((p) => p.to), [
-    ['hello@yaks.app'],
-    ['hello@yaks.app', 'ann@x.test'],
-    ['hello@yaks.app'],
-  ])
-  assertEquals(posted.map((p) => p.from.address), [FROM, FROM, FROM])
-  assertEquals(posted.map((p) => p.reply_to), [
-    REPLY_TO,
-    REPLY_TO,
-    'ann@x.test',
-  ])
-})
-
-// A platform letter has no row to be retried from, so one that never left (a
-// 429, or no connection) is tried again in place, waiting no longer than a
-// person waiting on a code should; anything that may have left is thrown at
-// once, never sent twice.
-test('a platform letter that never left is tried again, a few times', async () => {
-  let run = async (...statuses: number[]) => {
-    let posts = 0
-    let waits: number[] = []
-    let real = globalThis.fetch
-    globalThis.fetch = (() => {
-      let status = statuses[posts++] ?? 200
-      return Promise.resolve(
-        status == 200
-          ? Response.json({ success: true })
-          : new Response('{}', { status, headers: { 'retry-after': '30' } }),
-      )
-    }) as unknown as typeof fetch
-    try {
-      let send = sending(
-        cloudflare({
-          token: 'token',
-          account: 'account',
-          base: 'https://api.test',
-        }),
-        {},
-        (ms) => {
-          waits.push(ms)
-          return Promise.resolve()
-        },
-      )
-      let failed = await send({ to: REPLY_TO, subject: 's', body: 'b' })
-        .then(() => '', (e: Error) => e.name)
-      return { posts, waits, failed }
-    } finally {
-      globalThis.fetch = real
-    }
-  }
-  assertEquals(await run(429, 200), { posts: 2, waits: [2000], failed: '' })
-  assertEquals(await run(429, 429, 429), {
-    posts: 3,
-    waits: [2000, 2000],
-    failed: 'Unsent',
-  })
-  assertEquals(await run(500), { posts: 1, waits: [], failed: 'Error' })
-})
-
 // A deploy can send when it has the local adapter, or a token and an account;
 // the account may be the Worker's own (CF_ACCOUNT), so the token is the one
 // secret a deploy must set. Staging with only the Connect secret cannot.
@@ -243,7 +158,7 @@ test('mailable: the token is the one secret a deploy needs', async () => {
   assertEquals(await mailable({ MAIL_TOKEN: 't', CF_ACCOUNT: 'acct' }), true)
 })
 
-test('mail: the Worker account carries the send', async () => {
+test('platform mail: the Worker account carries the send', async () => {
   let urls: string[] = []
   let real = globalThis.fetch
   globalThis.fetch = ((url: string) => {
@@ -251,11 +166,18 @@ test('mail: the Worker account carries the send', async () => {
     return Promise.resolve(Response.json({ success: true }))
   }) as unknown as typeof fetch
   try {
-    await mail({
+    let { sender } = await transport({
       MAIL_TOKEN: 't',
       CF_ACCOUNT: 'acct',
       MAIL_API: 'https://api.test',
-    } as unknown as Env)({ to: 'a@b.c', subject: 's', body: 'b' })
+    }, posts.platform)
+    await sender!.send({
+      from: FROM,
+      to: 'a@b.c',
+      subject: 's',
+      text: 'b',
+      html: '<p>b</p>',
+    })
   } finally {
     globalThis.fetch = real
   }
@@ -680,17 +602,92 @@ test('platform mail uses the selected Resend sender without the Cloudflare accou
     false,
   )
   assert(await mailable(env))
-  await mail(env)({
-    to: ['jeff@example.com', 'other@example.com'],
-    subject: 's',
-    body: 'b',
-  })
-  assertEquals(sent.length, 1)
+  let { at, store } = directory(env)
+  for (let eid of await mail(at)(two)) await left(store, eid)
+  assertEquals(sent.map((m) => m.to).sort(), [['jeff@example.com'], [
+    'other@example.com',
+  ]])
   assertEquals(sent[0].from, `yaks.app <${FROM}>`)
-  assertEquals(sent[0].to, ['jeff@example.com', 'other@example.com'])
   assertEquals(sent[0].reply_to, REPLY_TO)
   assertEquals(
     await mailable({ MAIL_VIA: 'resend', MAIL_TOKEN: 'cf', CF_ACCOUNT: 'cf' }),
     false,
   )
+})
+
+// ---- the platform's own letters (mail.ts) -----------------------------------
+//
+// A platform letter is rows in the directory, a letter for each reader, which
+// the directory's pool sends from the bot address (the only one Email Sending
+// signs for), answered at REPLY_TO unless the letter says otherwise.
+
+let ANSWER = 'ann@example.com'
+let two = {
+  to: ['jeff@example.com', 'other@example.com'],
+  subject: 's',
+  body: 'b',
+}
+
+// The directory alone, sending through `bindings`; `at` is the env a caller
+// writes a platform letter from.
+let directory = (bindings: ConstructorParameters<typeof Store>[1]) => {
+  let dir = hosted(state(PLATFORM_STORE), bindings)
+  let ns: Namespace = {
+    idFromName: (name: string) => name,
+    get: () => ({ fetch: (req: Request) => dir.fetch(req) }),
+  }
+  return { at: { STORE: ns }, store: metaOf(storeOf(ns, PLATFORM_STORE)) }
+}
+
+// A letter's outcome, once the pool has written one.
+let left = (store: Meta, eid: string) =>
+  until(async () => {
+    let [row] = await store.query(
+      line`.entity.eid=${eid}&.mail ?delivered ?bounced`,
+    )
+    return row?.delivered || row?.bounced
+  })
+
+// What a binding was handed, refusing every address at `refused.example`.
+let binding = () => {
+  let sent: Parameters<Binding['send']>[0][] = []
+  return {
+    sent,
+    MAIL_VIA: 'binding',
+    MAIL: {
+      send: (m) =>
+        [m.to].flat().some((to) => to.endsWith('@refused.example'))
+          ? Promise.reject(new Undeliverable(`refused ${m.to}`))
+          : Promise.resolve(void sent.push(m)).then(() => ({})),
+    } satisfies Binding,
+  }
+}
+
+test('a platform letter is a directory row for each reader, sent by its pool', async () => {
+  let { sent, ...bindings } = binding()
+  let { at, store } = directory(bindings)
+  let eids = await mail(at)(two)
+  let [answered] = await mail(at)({ ...two, to: REPLY_TO, replyTo: ANSWER })
+  for (let eid of [...eids, answered]) await left(store, eid)
+  assertEquals(
+    sent.map((m) => [m.to, m.replyTo, m.from]),
+    [
+      ['jeff@example.com', REPLY_TO, { name: 'yaks.app', email: FROM }],
+      ['other@example.com', REPLY_TO, { name: 'yaks.app', email: FROM }],
+      [REPLY_TO, ANSWER, { name: 'yaks.app', email: FROM }],
+    ],
+  )
+})
+
+// What the sign-in door reads back: the bounce, and whether it was the
+// address's own, or nothing for a letter that left.
+test('a bounce is read back, naming a refused address', async () => {
+  let { at, store } = directory(binding())
+  let [gone] = await mail(at)({ ...two, to: 'ann@example.com' })
+  let [refused] = await mail(at)({ ...two, to: 'ann@refused.example' })
+  assertEquals(await bounce(store, gone), null)
+  assertEquals(await bounce(store, refused), {
+    reason: 'refused ann@refused.example',
+    refused: true,
+  })
 })

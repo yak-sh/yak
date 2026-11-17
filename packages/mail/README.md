@@ -127,10 +127,10 @@ sending.
 Success writes `delivered{at}`, and the Message-ID the receipt carries as
 `mail.message_id`, which is what a reply to the letter threads on. A rejected
 send writes `bounced{at, reason}`, unless it was `Unsent`. An `Undeliverable`
-rejection, a provider's refusal of an address on the letter, bounces it and ends
-the run; every other bounce also fails the run, so it reaches the host's
-reporter. Missing recipient addresses and missing sender addresses also produce
-`bounced`.
+rejection, a provider's refusal of an address on the letter, bounces it with
+`refused: true` and ends the run; every other bounce also fails the run, so it
+reaches the host's reporter. Missing recipient addresses and missing sender
+addresses also produce `bounced`.
 
 ### The transport is supplied by the caller
 

@@ -942,8 +942,9 @@ let toGallery = async (
     })
   // The letter first, the mark second: an ask nobody was told about is an app
   // waiting on a decision no one was asked to make, and it would sit there
-  // saying so on the space page forever. A letter that will not send leaves
-  // the row exactly as it was, and asking again is the whole retry.
+  // saying so on the space page forever. A letter that will not be written
+  // leaves the row exactly as it was, and asking again is the whole retry;
+  // once written, the directory's pool sends it, waiting out a mail outage.
   try {
     await mail(ctx.env)(asking)
   } catch (e) {
@@ -3581,7 +3582,7 @@ let OURS: Row[] = [
         await ticket(space, ctx.person, ctx.env.SESSION_SECRET, forever),
         ctx.env,
       )
-      // A letter that will not send is not a link to hand over (member_add
+      // A letter that will not be written is not a link to hand over (member_add
       // does that for an invitation, which is not an irreversible act): the
       // web door is said instead, and it still wants their cookie, their
       // ownership and the name typed back. That door trashes whatever was

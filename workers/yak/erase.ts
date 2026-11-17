@@ -996,7 +996,7 @@ let account = async (env: Env, named: string) => {
   let [row] = await meta(env).query(
     minted(named)
       ? line`.entity.eid=${named}&.person ?email ?phone ?newcomer`
-      : line`.email.address=${named}`,
+      : line`.person&.email.address=${named}`,
   ) as unknown as DirRow[]
   if (!row) return null
   let address = row.email?.address

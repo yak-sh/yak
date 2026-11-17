@@ -1,12 +1,23 @@
-// Platform letters at the portable Sender boundary. Sign-in codes are never
-// stored, so only a transport's definite Unsent refusal retries in this call.
+// Platform letters are rows, as every letter is (@yaks/mail): `mail` writes
+// each address its own letter into the directory (mail-config.ts
+// `toPlatform`), and the directory's pool sends it once the write commits,
+// through the platform's own sender (config.ts, graph.ts `senders`), waiting
+// out a mail outage rather than losing the letter. The commit arms the pool
+// at once, so a sign-in code leaves as soon as it is written; whoever needs
+// to know what became of it reads the letter back (`bounce`).
+//
+// The write goes through `meta`, which is the directory's own graph when the
+// caller runs inside the directory object (a job, meta.ts) and its door from
+// anywhere else, never a call to its own stub.
+import { line } from '@yaks/query'
+import { mint } from '@yaks/graph'
+import { type Clock, system } from '@yaks/fp'
+import { replyTo } from '@yaks/platform/host'
 import type { Env } from './env.ts'
-import { esc } from './html.ts'
-import { type Sender, Unsent } from '@yaks/mail'
-import { FROM } from './mail-config.ts'
-import { type Delivery, sink, transport } from './post.ts'
+import { FROM, toPlatform } from './mail-config.ts'
+import { KERNEL, type Meta, meta } from './meta.ts'
+import { type Delivery, transport } from './post.ts'
 import { posts } from './config.ts'
-import { type Host, replyTo } from '@yaks/platform/host'
 export { FROM, INTERNAL, REPLY_TO } from './mail-config.ts'
 
 export type Letter = {
@@ -17,56 +28,69 @@ export type Letter = {
   // Who the reader sees it from, where not the platform (signin.ts
   // `codeLetter`, the Operator's).
   name?: string
-}
-export type Mail = (l: Letter) => Promise<void>
-
-// Explicitly local only: a deploy with no sender must never log sign-in codes.
-export let printed = (): Mail => (l) => {
-  console.log(`yak-mail ${JSON.stringify({ from: FROM, ...l })}`)
-  return Promise.resolve()
+  /** the entity it concerns */
+  about?: string
 }
 
-let TRIES = 3
-let PAUSE = 2000
-let sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+type Posting = Pick<Env, 'STORE'> & Partial<Pick<Env, 'META' | 'APEX'>>
 
-export let sending = (
-  sender: Sender,
-  env: Host = {},
-  pause = sleep,
-): Mail =>
-async (l) => {
-  let message = {
-    from: FROM,
-    name: l.name ?? 'yaks.app',
-    to: l.to,
-    replyAddress: l.replyTo ?? replyTo(env),
-    subject: l.subject,
-    text: l.body,
-    html: `<p>${esc(l.body).replaceAll('\n\n', '</p><p>')}</p>`,
-  }
-  for (let tried = 1;; tried++) {
-    try {
-      await sender.send(message)
-      return
-    } catch (e) {
-      if (!(e instanceof Unsent) || tried >= TRIES) throw e
-      await pause(Math.min(e.retry.after, PAUSE))
+/** Whether the platform's sender can send here: the directory's pool sends
+ * through the same transport. */
+export let mailable = async (env: Delivery) =>
+  !!(await transport(env, posts.platform)).sender
+
+/** The rows a letter writes: an address and a letter for each reader, for a
+ * caller that writes them beside rows of its own, in one transaction. */
+export let letterRows = (
+  l: Letter,
+  env: Pick<Env, 'APEX'>,
+  at = new Date().toISOString(),
+) =>
+  [...new Set([l.to].flat())].flatMap((to) =>
+    toPlatform(to, mint(), {
+      subject: l.subject,
+      body: l.body,
+      about: l.about,
+      name: l.name ?? 'yaks.app',
+      reply: l.replyTo ?? replyTo(env),
+      from: FROM,
+      at,
+    })
+  )
+
+/** Write a letter, one for each address it is to; the letters' eids. */
+export let mail = (env: Posting) => async (l: Letter): Promise<string[]> => {
+  let rows = letterRows(l, env)
+  await meta(env).apply(rows, KERNEL)
+  return rows.filter((b) => b.deliver).map((b) => b.entity.eid)
+}
+
+/** Why a letter bounced, and whether the provider refused its address. */
+export type Bounce = { reason: string; refused: boolean }
+
+// How long each look back at a letter waits after the last: about six seconds
+// in all, the first at once, since the pool sends as the write commits.
+let LOOKS = [0, 25, 50, 100, 200, 400, 800, 1600, 3200]
+
+/** What became of a letter, read back for a few seconds: its bounce, or null
+ * once it left, or while it is still on its way. */
+export let bounce = async (
+  store: Meta,
+  eid: string,
+  clock: Clock = system,
+): Promise<Bounce | null> => {
+  for (let wait of LOOKS) {
+    await new Promise<void>((done) => clock.after(wait, done))
+    let [row] = await store.query(
+      line`.entity.eid=${eid}&.mail ?delivered ?bounced`,
+    ) as { delivered?: object; bounced?: Partial<Bounce> }[]
+    if (row?.bounced) {
+      return {
+        reason: String(row.bounced.reason ?? ''),
+        refused: !!row.bounced.refused,
+      }
     }
+    if (!row || row.delivered) return null
   }
-}
-
-type Posting = Delivery & Pick<Env, 'MAIL_DEV' | 'APEX' | 'LOCAL_DEV'>
-
-export let mailable = async (env: Posting) =>
-  env.MAIL_DEV == '1' || !!(await transport(env, posts.platform)).sender
-
-export let mail = (env: Posting): Mail => {
-  let send: Mail = env.MAIL_DEV == '1' ? printed() : async (letter) => {
-    let { sender, waiting } = await transport(env, posts.platform)
-    if (!sender) throw new Error(`mail is not configured: ${waiting}`)
-    return sending(sender, env)(letter)
-  }
-  return (letter) =>
-    send({ ...letter, ...sink(env, letter.to, letter.subject) })
+  return null
 }

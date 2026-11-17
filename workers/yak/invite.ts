@@ -37,7 +37,7 @@ import { reachChanged } from './declared.ts'
 import { caught } from './defects.ts'
 import type { Env } from './env.ts'
 import { type Host, spaceHost, url as hostUrl } from '@yaks/platform/host'
-import { type Mail, mail } from './mail.ts'
+import { mail } from './mail.ts'
 import { closed, lost, sentence } from './pages.ts'
 import { invited } from './signin-pages.ts'
 import { INVITE } from '@yaks/platform/names'
@@ -145,11 +145,11 @@ let quoted = (said: string) =>
  * (their name, the app's title, their note) is in the body, marked as theirs.
  * It names what it opens with the address it opens at, and who invited them
  * by name, since an address is what a letter is sent to and never what a
- * person is called (T-32654). Once it goes it counts on the space's month and
- * stamps the invitation `sent`, which is what its inviter reads back
- * (people.ts), and `by`, which is who its link says invited them (`door`).
- * True when it went; a failure to send is reported and answered as false, for
- * the caller to say.
+ * person is called (T-32654). Once it is written, for the directory's pool to
+ * send, it counts on the space's month and stamps the invitation `sent`,
+ * which is what its inviter reads back (people.ts), and `by`, which is who
+ * its link says invited them (`door`). True when it was written; a failure to
+ * write it is reported and answered as false, for the caller to say.
  */
 export let send = async (
   env: Env,
@@ -165,7 +165,6 @@ export let send = async (
     name?: string
     note?: string
   },
-  post: Mail = mail(env),
 ): Promise<boolean> => {
   let { space, app } = o.place
   let host = spaceHost(env, space.slug)
@@ -177,7 +176,7 @@ export let send = async (
     invite: o.invite,
     to: app ? app.eid : space.eid,
   }, env)
-  let sent = await post({
+  let sent = await mail(env)({
     to: o.email,
     subject: SUBJECT,
     body: (o.name ? `Hi ${o.name},\n\n` : '') +
@@ -280,7 +279,6 @@ export let again = async (
   space: Space,
   who: { person: string },
   eid: string,
-  post?: Mail,
 ): Promise<{ say: string; no: boolean } | null> => {
   let invite = await dir.invitation(eid)
   let place = invite && await placeOf(dir, invite.to)
@@ -301,7 +299,7 @@ export let again = async (
     email,
     role: invite.role,
     by: who.person,
-  }, post)
+  })
   return sent ? null : {
     say: "The letter couldn't be sent just now. Try again in a minute.",
     no: true,

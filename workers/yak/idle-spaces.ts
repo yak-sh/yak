@@ -29,6 +29,7 @@ export type Row = {
   grant?: { app: Ref; person: Ref }
   invite?: { to: Ref }
   hostname?: { serves: Ref }
+  person?: object
   email?: { address: string }
   published?: unknown
   created?: { at?: string; by?: Ref | null; via?: string | null }
@@ -97,8 +98,10 @@ export let idleAccounts = (rows: Row[], now = Date.now()): string[] => {
       return seated.every((r) => test(r.member!.person))
     }),
   )
+  // A person, not the address a platform letter was for (mail-config.ts
+  // `toPlatform`), which wears `email` alone.
   return rows.filter((r) =>
-    r.email && expendable(r.email.address) &&
+    r.person && r.email && expendable(r.email.address) &&
     quiet(r, now - IDLE) &&
     !(Date.parse(r.signed_in?.at ?? '') > now - IDLE) &&
     !seats.some((s) =>
@@ -108,4 +111,4 @@ export let idleAccounts = (rows: Row[], now = Date.now()): string[] => {
 }
 
 export let CENSUS =
-  line`(.space | .app | .member | .grant | .invite | .hostname | .email) ?created ?used ?published ?signed_in`
+  line`(.space | .app | .member | .grant | .invite | .hostname | .email) ?person ?created ?used ?published ?signed_in`

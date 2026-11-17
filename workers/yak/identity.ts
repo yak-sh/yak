@@ -147,7 +147,7 @@ import {
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { door, taken } from './invite.ts'
-import { mail, mailable } from './mail.ts'
+import { bounce, mail, mailable } from './mail.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { apart, elapsed, recall, writing } from './lib/hops.ts'
 
@@ -760,9 +760,10 @@ export let met = async (env: Env, email: string) => {
 // itself, which is the person's to fix; and answered, why it never left and
 // whether we were told, for the card that said it was sent to say
 // (signin-pages.ts `askCode`). A write that fails is reported, and nothing
-// was sent to say anything about. Answers null for a letter that left, or one
-// never sent because the address had had its letters, which the card says
-// nothing about.
+// was sent to say anything about. Answers null for a letter that left, one
+// still waiting on the mail when the card stops asking, or one never sent
+// because the address had had its letters, which the card says nothing
+// about.
 let send = async (
   env: Env,
   req: Request,
@@ -802,7 +803,7 @@ let send = async (
       })
       return null
     }
-    await mail(env)(
+    let [letter] = await mail(env)(
       codeLetter(
         address,
         ask.code,
@@ -811,7 +812,14 @@ let send = async (
         env,
       ),
     )
-    return null
+    // The directory's pool sends it as the write commits; its bounce is read
+    // back for a few seconds, which a letter that left or bounced has always
+    // had. The pool reported a bounce that was not the address's own.
+    let bounced = await bounce(meta(env), letter, env.CLOCK)
+    return bounced && {
+      why: bounced.refused ? NO_MAILBOX : bounced.reason,
+      told: !bounced.refused,
+    }
   } catch (e) {
     let yours = e instanceof Undeliverable
     let told = !yours && !(e instanceof Blocked)

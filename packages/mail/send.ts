@@ -301,7 +301,10 @@ export let sending =
                   // The provider refused an address the letter carries: the
                   // bounce is its whole outcome, and nothing failed.
                   : err instanceof Undeliverable
-                  ? settle({ reason: err.message.slice(0, 240) }, BOUNCED)
+                  ? settle(
+                    { reason: err.message.slice(0, 240), refused: true },
+                    BOUNCED,
+                  )
                   : fail(
                     String((err as Error)?.message ?? err).slice(0, 240),
                     err,

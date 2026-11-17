@@ -26,7 +26,7 @@ let storeOf = (space: string) => {
   if (!stores.has(space)) stores.set(space, operatorMemory())
   return stores.get(space)!
 }
-let { env } = platform('shared-skill', {
+let { env, settled } = platform('shared-skill', {
   MAIL_DEV: '1',
   BUILDER: {
     idFromName: (name: string) => name,
@@ -56,14 +56,17 @@ let { env } = platform('shared-skill', {
   },
 } as never)
 
-// The letters sent, as `MAIL_DEV` prints them.
+// The letters the directory's pool sent, as `MAIL_DEV` prints them.
 let sent: Letter[] = []
 let print = console.log
 console.log = (...said: unknown[]) => {
   let m = String(said[0]).match(/^yak-mail (\{.*\})$/s)
   m ? sent.push(JSON.parse(m[1])) : print(...said)
 }
-let letterTo = (to: string) => sent.findLast((l) => [l.to].flat().includes(to))
+let letterTo = async (to: string) => {
+  await settled()
+  return sent.findLast((l) => [l.to].flat().includes(to))
+}
 
 let dir = directoryOf(env.STORE)
 let as = (person: string): Ctx => ({ env, dir, person })
@@ -135,7 +138,7 @@ test('a published skill is installable only once yaks.app has reviewed it', asyn
     'published the skill pitch-copy as pitch-copy v1 from kitchen',
   )
   assertStringIncludes(
-    letterTo(INTERNAL)!.body,
+    (await letterTo(INTERNAL))!.body,
     'app_published --name pitch-copy',
   )
   await refused(taker, 'app_install', {
@@ -152,7 +155,7 @@ test('a published skill is installable only once yaks.app has reviewed it', asyn
     '    Lead with what the reader gets.',
   )
   await reviewed()
-  let letter = letterTo(replyTo(env))!
+  let letter = (await letterTo(replyTo(env)))!
   assertStringIncludes(letter.body, 'An agent reviewed it: approve.')
   assertStringIncludes(letter.body, 'Lead with what the reader gets.')
   assertStringIncludes(

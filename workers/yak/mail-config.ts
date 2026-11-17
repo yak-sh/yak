@@ -24,25 +24,58 @@ export let REPLY_TO = replyTo()
 // `mail_task`). Internal mail never goes to REPLY_TO.
 export let INTERNAL = 'hello@bot.yak.sh'
 
+/** A platform letter's words and envelope: who it reads as from (`name`,
+ * else the platform's), where an answer goes (`reply`, else nowhere but the
+ * sender), the address it leaves from (`from`, else FROM), when it was written
+ * and the entity it concerns (`about`). */
+export type Words = {
+  subject: string
+  body: string
+  about?: string
+  name?: string
+  reply?: string
+  from?: string
+  at?: string
+}
+
 /**
- * A letter to `address` (REPLY_TO or INTERNAL) as the platform store's rows:
- * the address as an entity, and the letter delivered to it, `about` the entity
- * it concerns where it is not that entity itself (a refusal report is its own
- * letter). The store's pool sends it after the write commits, through the
- * platform's own sender (config.ts), and marks it delivered only once the
- * sender took it, so a mail outage leaves it waiting. `eid` is the letter's:
- * one derived from what it is about makes writing it again owe nothing new.
+ * A letter to `address` as the directory's rows: the address as an entity,
+ * and the letter delivered to it, `about` the entity it concerns where it is
+ * not that entity itself (a refusal report is its own letter). The
+ * directory's pool sends it after the write commits, through the platform's
+ * own sender (config.ts), and marks it delivered only once the sender took
+ * it, so a mail outage leaves it waiting. `eid` is the letter's: one derived
+ * from what it is about makes writing it again owe nothing new.
+ *
+ * ```ts
+ * import { toPlatform } from './mail-config.ts'
+ * import { assertEquals } from '@std/assert'
+ * let [address, letter] = toPlatform('ann@example.com', 'l', {
+ *   subject: 'Hi',
+ *   body: 'Hello.',
+ *   name: 'yaks.app',
+ * })
+ * assertEquals(address.email, { address: 'ann@example.com' })
+ * assertEquals(letter.deliver, { to: address.entity.eid })
+ * assertEquals(letter.mail, { from: 'hello@bot.yak.sh', name: 'yaks.app' })
+ * ```
  */
 export let toPlatform = (
   address: string,
   eid: string,
-  letter: { subject: string; body: string; about?: string },
+  { subject, body, about, name, reply, from = FROM, at }: Words,
 ): Bundle[] => {
   let to = derivedEid(JSON.stringify(['platform-address', address]))
   return [{ entity: { eid: to }, email: { address } }, {
     entity: { eid },
-    doc: { title: letter.subject, body: letter.body },
-    mail: { from: FROM, ...letter.about ? { target: letter.about } : {} },
+    doc: { title: subject, body },
+    mail: {
+      from,
+      ...name ? { name } : {},
+      ...reply ? { reply_address: reply } : {},
+      ...at ? { at } : {},
+      ...about ? { target: about } : {},
+    },
     deliver: { to },
   }]
 }

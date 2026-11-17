@@ -648,7 +648,7 @@ test('an app says who may read it and who may write it', async () => {
       'a note is at most 500',
     )
     assertEquals(
-      (await meta(k).query(`.email.address=${leeEmail}`))
+      (await meta(k).query(`.person&.email.address=${leeEmail}`))
         .length,
       0,
     )
@@ -664,7 +664,7 @@ test('an app says who may read it and who may write it', async () => {
       `no app nope in ${club70}`,
     )
     let [row] = await meta(k).query(
-      `.email.address=${mayaEmail}`,
+      `.person&.email.address=${mayaEmail}`,
     )
     let maya = row.entity.eid
     let mayaIn = await signedIn(k, maya)

@@ -1,11 +1,6 @@
 // Usage warnings through their pure decision and the hourly meter door.
 import { test } from '@yaks/testing'
-import {
-  assert,
-  assertEquals,
-  assertRejects,
-  assertStringIncludes,
-} from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { type Hour, type Usage, warning } from './usage-alert.ts'
 import { API } from '@yaks/cloudflare/analytics'
 import { sweep } from './usage.ts'
@@ -126,7 +121,6 @@ test('hourly account alert is mailed once and kept on the wake row', async () =>
   await meta(p.env).query('.entity.eid=yak-meter')
   let sent: { to: string[]; text: string }[] = []
   let total = 20e9
-  let fail = true
   let was = globalThis.fetch
   globalThis.fetch = (url, init) => {
     if (url == `${API}/graphql`) {
@@ -153,38 +147,29 @@ test('hourly account alert is mailed once and kept on the wake row', async () =>
         },
       }))
     }
-    let letter = JSON.parse(String(init?.body))
-    if (fail) {
-      fail = false
-      return Promise.resolve(new Response('mail unavailable', { status: 503 }))
-    }
-    sent.push(letter)
+    sent.push(JSON.parse(String(init?.body)))
     return Promise.resolve(Response.json({ success: true }))
   }
+  // An hour's sweep, and the letter it wrote sent by the directory's pool.
+  let swept = async (hour: number) => {
+    await sweep(p.env, at(hour))
+    await p.settled()
+  }
   try {
-    await assertRejects(
-      () => sweep(p.env, at(10)),
-      Error,
-      'send failed (HTTP 503)',
-    )
-    assertEquals(
-      (await meta(p.env).query('.entity.eid=yak-meter'))[0].account_alert,
-      undefined,
-    )
-    await sweep(p.env, at(10))
-    await sweep(p.env, at(10))
+    await swept(10)
+    await swept(10)
     assertEquals(sent.length, 1)
     assertEquals(sent[0].to, ['hello@bot.yak.sh'])
     assertStringIncludes(sent[0].text, 'DO rows read')
     total = 25e9
-    await sweep(p.env, at(11))
+    await swept(11)
     assertEquals(sent.length, 2)
     let [row] = await meta(p.env).query('.entity.eid=yak-meter')
     assertEquals((row.account_alert as { rows_read: string }).rows_read, 'over')
     total = 20e9
-    await sweep(p.env, at(12))
+    await swept(12)
     total = 25e9
-    await sweep(p.env, at(13))
+    await swept(13)
     assertEquals(sent.length, 2)
     assert(
       sent.every((letter) => !letter.text.includes('Recent rate projects')),

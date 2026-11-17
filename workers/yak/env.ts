@@ -123,10 +123,10 @@ export type Env = {
   // unless it says `off`; read per request, so dropping the claim is one
   // `wrangler secret put` and no deploy of new code.
   CIMD?: string
-  // The mail seam (mail.ts). MAIL_DEV=1 files a letter in the meta store
-  // instead of sending it — local runs only. Unset credentials for the
-  // selected sender: `mailable` says no and the sign-in door answers 503 in
-  // one sentence.
+  // The mail seam (post.ts `transport`). MAIL_DEV=1 prints each letter on
+  // the log instead of sending it — local runs only. Unset credentials for
+  // the selected sender: `mailable` says no and the sign-in door answers 503
+  // in one sentence.
   MAIL_DEV?: string
   // Staging keeps every outbound letter in the owner's inbox.
   MAIL_SINK?: string

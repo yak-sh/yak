@@ -383,6 +383,10 @@ they fill Message-IDs in app and Operator mail without granting Resend account
 access to a Worker. `RESEND_API` and `MAIL_FETCH` replace only the HTTP boundary
 in probes. Staging's `MAIL_SINK` redirects every recipient and removes copies
 for either provider. Missing Resend credentials never fall back to Cloudflare.
+Every platform letter (a sign-in code, an invitation, a review request) is a
+letter row in the directory, one for each reader (`mail.ts`), which the
+directory's `mail_post` sends as an app's letter is sent; the sign-in door reads
+the letter's bounce back for a few seconds to say it on the card.
 
 Production selects Resend (`MAIL_VIA = "resend"` in wrangler.toml); staging
 leaves it unset. Both `bot.yak.sh` and `yaks.app` are verified sending domains
@@ -431,7 +435,7 @@ proved. Existing queued letters and receiving cursors are retained.
 | `OPENAI_OPERATOR_API_KEY`                                                    | optional   | A separately scoped OpenAI key for Operator text models and their native file inputs; image generation keeps using `OPENAI_API_KEY`                                                                                                                           | Operator OpenAI calls use the existing `OPENAI_API_KEY` credential and its allowed models                |
 | `OPENAI_MODELS_KEY`                                                          | models     | OpenAI key of the "yaks.app models" project, which may use only GPT-6 Luna and GPT-6.1 Terra, the models that answer the chat names `./api/ai/run` aliases (config.ts `aliases`); $300 a month limit, not yet enforced (1Password "OpenAI yaks.app models")   | those names are answered by Workers AI again                                                             |
 | `AI_GATEWAY`, `AI_GATEWAY_TOKEN`, `BUILDER_MODEL_FREE`, `BUILDER_MODEL_PAID` | optional   | the other builder provider; all unset on purpose (T-34238)                                                                                                                                                                                                    | nothing; both tiers build on Workers AI                                                                  |
-| `MAIL_DEV`                                                                   | local      | `1`                                                                                                                                                                                                                                                           | never set on a deploy: letters become entities instead of sending                                        |
+| `MAIL_DEV`                                                                   | local      | `1`                                                                                                                                                                                                                                                           | never set on a deploy: each letter is printed on the log instead of sent                                 |
 
 **Vars and account resources** — `wrangler.toml` names them; the account must
 already hold them (staging: the `[env.staging]` copies, `yak-*-staging` names).

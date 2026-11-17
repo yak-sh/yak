@@ -158,7 +158,11 @@ test('a refused recipient bounces the letter without failing the run', async () 
     sender: { send: () => Promise.reject(new Undeliverable(reason)) },
   })
   await go()
-  assertEquals(comp(await row(), 'bounced'), { at: noon(), reason })
+  assertEquals(comp(await row(), 'bounced'), {
+    at: noon(),
+    reason,
+    refused: true,
+  })
 })
 
 // A letter whose transport drops the first `drops` sends before they leave: a

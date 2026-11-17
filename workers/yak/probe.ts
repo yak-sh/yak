@@ -507,9 +507,8 @@ export let connector = (
 
 // Every letter the kernel has sent to an address, oldest first, read off its
 // log: the stand-in for Email Sending writes one line per letter
-// (`cloudflare`), so no store anywhere holds a code a read could spend.
-// A letter may be addressed to several readers at once (mail.ts `Letter`), so
-// "to this address" is membership, not equality.
+// (`cloudflare`). An app's letter may be addressed to several readers at
+// once, so "to this address" is membership, not equality.
 export type Letter = {
   from?: string
   name?: string

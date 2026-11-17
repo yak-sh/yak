@@ -89,6 +89,7 @@ test('platform and reviewer spaces survive whatever their members', () => {
 let quietly = { created: { at: at(IDLE) } }
 let person = (eid: string, address: string, over: Partial<Row> = {}): Row => ({
   entity: { eid },
+  person: {},
   email: { address },
   ...quietly,
   ...over,
@@ -109,6 +110,8 @@ test('an idle test account goes, and a person or fixture never does', () => {
       person('demo', 'yourname@bot.yak.sh'),
       person('review', 'claude-review@bot.yak.sh'),
       person('grok', 'grok-review@bot.yak.sh'),
+      // The address a platform letter was for is nobody's account.
+      { ...person('letter', 'hello@bot.yak.sh'), person: undefined },
     ),
     ['bot', 'guest'],
   )

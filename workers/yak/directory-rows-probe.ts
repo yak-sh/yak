@@ -11,6 +11,9 @@ import type { Vocab } from '@yaks/vocab'
 import { type Line, line, whole } from '@yaks/query'
 import { secrets } from '@yaks/secrets'
 import { effects, type Handlers } from '@yaks/effects'
+import { sending } from '@yaks/mail'
+import { outgoing } from './post.ts'
+import { posts } from './config.ts'
 import { cleanup } from '@yaks/testing'
 import { plugins as trash } from '@yaks/platform/trash-graph'
 import { plugins as meter } from '@yaks/platform/meter-graph'
@@ -62,16 +65,20 @@ export let rows = (
     ]
   ) g.use(plugin)
   let failures: unknown[] = []
-  let fx = handlers && effects(vocab, {
+  // The platform's letters leave as the directory's pool sends them
+  // (config.ts), through the sender the env selects, beside whatever effects
+  // a test asks for.
+  let fx = effects(vocab, {
     defer: true,
     report: (error) => void failures.push(error),
     write: (rows) => g.apply(rows, { trusted: true }),
   })
-  if (fx && handlers) {
-    g.use(fx)
-    fx.handle(handlers(g))
-    cleanup(() => fx.stop())
-  }
+  g.use(fx)
+  fx.handle({
+    mail_post: sending({ sender: outgoing(env, {}, posts.platform) }),
+    ...handlers?.(g),
+  })
+  cleanup(() => fx.stop())
   let revision = 0
   let apply = async (entities: Bundle[], req: Request, stamp = true) => {
     let v = vouchOf(req)
@@ -93,11 +100,9 @@ export let rows = (
     let out = copy
       ? await fenced(copy, write, () => revision, env.CLOCK)
       : await write()
-    if (fx) {
-      await fx.work(g)
-      await fx.idle()
-      if (failures.length) throw failures.shift()
-    }
+    await fx.work(g)
+    await fx.idle()
+    if (failures.length) throw failures.shift()
     return out
   }
   let fetch = async (req: Request): Promise<Response> => {

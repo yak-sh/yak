@@ -6,7 +6,7 @@
 //   email{address}                                     an address, as an entity
 //   deliver{to}                                        who it is for, as an entity
 //   delivered{at}                                      it left
-//   bounced{at, reason}                                it did not
+//   bounced{at, reason, refused}                       it did not
 //   notified{at, by, via}                              they were told
 //
 // The subject and the body are not here. They are `doc{title, body}`, from

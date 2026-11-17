@@ -60,7 +60,7 @@ import { bound, type Env } from './env.ts'
 import { holding, outside } from './held.ts'
 import { atStored, capLine, level } from '@yaks/platform/standing'
 import { ceilings, FILES, WARN } from '@yaks/platform/plans'
-import { INTERNAL, mail } from './mail.ts'
+import { INTERNAL, letterRows } from './mail.ts'
 import type { Host } from '@yaks/platform/host'
 import { KERNEL, meta } from './meta.ts'
 import { type Alerts, type Hour, type Usage, warning } from './usage-alert.ts'
@@ -288,15 +288,17 @@ let accountAlert = async (env: Env, usage: Usage, hour: Hour | null) => {
     hour,
     row?.account_alert ?? null,
   )
-  if (body) {
-    await mail(env)({
-      to: [INTERNAL],
+  // The letter and the mark that says it was written, in one transaction:
+  // the directory's pool sends it.
+  let letter = body
+    ? letterRows({
+      to: INTERNAL,
       replyTo: INTERNAL,
       subject: 'Cloudflare usage alert',
       body,
-    })
-  }
-  await graph.apply([{
+    }, env)
+    : []
+  await graph.apply([...letter, {
     entity: { eid: 'yak-meter' },
     account_usage: usage,
     account_alert: next,
