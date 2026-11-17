@@ -13,6 +13,7 @@ import { notificationSend, routeFor } from './operator-alerts.ts'
 import { chatPage, operatorAnswer, operatorBody } from './operator-page.ts'
 import { endpoints } from './endpoints.ts'
 import { PER_SEGMENT } from './text-spend.ts'
+import { owed as owedSend } from '@yaks/mail'
 import { vapidKey } from '@yaks/push'
 import { browser } from '@yaks/push/testing'
 
@@ -37,10 +38,15 @@ let space = (await dir.at(eid))!
 let held = { person, role: 'owner' as const, space: eid }
 
 let letters: Parameters<Binding['send']>[0][] = []
+// Whether a letter's row was still owed a send (@yaks/mail `mail_post`) while
+// the sender held it.
+let owing: boolean[] = []
 env.MAIL = {
-  send: (letter) => {
+  send: async (letter) => {
     letters.push(letter)
-    return Promise.resolve({ messageId: `sent-${letters.length}` })
+    let rows = await store.g.read('.notification&.mail&!delivered&!bounced')
+    owing.push(rows.some(owedSend))
+    return { messageId: `sent-${letters.length}` }
   },
 } satisfies Binding
 // Telnyx at its HTTP boundary, every text posted to it kept.
@@ -138,6 +144,9 @@ test('an alert to a person who chose nothing and has an address is an email from
   assertEquals(typeof envelope.at, 'string')
   assertEquals(typeof (byMail.row.delivered as { at: string }).at, 'string')
   assertEquals(byMail.row.bounced, undefined)
+})
+test('an emailed alert is never owed a second send while it is on its way', () => {
+  assertEquals([owing.length > 0, owing.includes(true)], [true, false])
 })
 test('what everyone in a space is told, or a person wrote, is sent to nobody', () => {
   assertEquals(unsent, [[], []])

@@ -274,9 +274,14 @@ let sent = async (
   let { htmlOf, postOf, signed } = await import('./operator-channels.ts')
   let { from, sender } = postOf(env, space)
   let text = `${words}\n\nYour Updates: ${updates}\n\n${signed(space)}`
+  // The notification keeps the letter it went as, handed to the sender here:
+  // `tried` says so, so @yaks/mail's `mail_post` never takes the notification
+  // for a letter still owed a send.
+  let at = new Date().toISOString()
   await store.g.apply([{
     entity: { eid: id },
-    mail: { from, to: route.to, at: new Date().toISOString() },
+    mail: { from, to: route.to, at },
+    deliver: { tried: at },
   }], { trusted: true })
   return sender.send({
     id,
