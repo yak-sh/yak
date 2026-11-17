@@ -110,8 +110,8 @@ test('the live code opens, and is spent', async () => {
 })
 
 // Who a right code signs in (T-148969), decided in the write that spends it:
-// whoever wears the address, named if nobody has; else the newcomer whose
-// browser asked; else somebody new.
+// whoever wears the address, named if nobody has; else somebody new, even on
+// a newcomer's browser.
 let signsIn = async (rows: Bundle[], newcomer?: string) => {
   let d = await held([row(ME, CODE, soon()), ...rows])
   let eid = (await spend(d.at, SECRET, ME, '123456', { newcomer }))?.person
@@ -139,20 +139,17 @@ test('a right code signs in whoever wears the address, named once', async () => 
   assertEquals((await signsIn([unnamed])).title, 'me')
 })
 
-test("a newcomer's browser takes an address new here, and only a newcomer's", async () => {
+test("a newcomer's browser never takes an address: the address is a person nobody has been", async () => {
   let newcomer = { entity: { eid: 'n1' }, person: {}, newcomer: at }
-  assertEquals(await signsIn([newcomer], 'n1'), {
-    eid: 'n1',
-    title: 'me',
-    email: ME,
-    trips: 1,
-  })
-  // Somebody with an address of their own is no newcomer: the address gets a
-  // person of its own.
-  let kept = { ...newcomer, email: { address: 'you@yaks.app' } }
-  let minted = await signsIn([kept], 'n1')
-  assert(minted.eid && minted.eid != 'n1')
-  assertEquals(minted.email, ME)
+  // Whoever started the newcomer's build holds its browser, so the address
+  // gets a person of its own (newcomer.ts `keep` hands them the build).
+  for (
+    let held of [newcomer, { ...newcomer, email: { address: 'you@yaks.app' } }]
+  ) {
+    let minted = await signsIn([held], 'n1')
+    assert(minted.eid && minted.eid != 'n1')
+    assertEquals([minted.email, minted.title, minted.trips], [ME, 'me', 1])
+  }
 })
 
 // The write that signs somebody in stamps them as signed in and says whether
