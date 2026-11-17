@@ -496,12 +496,13 @@ export let stamped = (
   before ? { at, via } : { at, via, first: at }
 
 /** The filter line that reads the person wearing an address, what they are
- * called, and when they last got in. */
+ * called, and when they last got in. The address is one operand: a local
+ * part may hold `|`, `&` or `=`, as mail allows, and bare it would be query
+ * text naming someone else. */
 export let personLine = (typed: string) => {
   let address = canon(typed)
-  return texted(address)
-    ? `.person&.phone.number=${JSON.stringify(address)}&?doc&?signed_in`
-    : `.person&.email.address=${address}&?doc&?signed_in`
+  let path = texted(address) ? 'phone.number' : 'email.address'
+  return `.person&.${path}=${JSON.stringify(address)}&?doc&?signed_in`
 }
 
 let personAt = async (store: Meta, typed: string) =>

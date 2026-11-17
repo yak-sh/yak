@@ -353,6 +353,34 @@ test('an invitation names someone unnamed, and only them', async () => {
   assertEquals(named.wrote.length, 0)
 })
 
+// A local part may hold `|`, `&`, `=` and `~`, as mail allows; an address is
+// one value, never query text that reads someone else's row.
+let VICTIM = {
+  ...person('Pastor'),
+  email: { address: 'pastor@church.example' },
+}
+let crafted = [
+  'x|.entity.eid=p1|y@evil.example',
+  'x|.email.address~=pastor|y@evil.example',
+  'x|.person|y@evil.example',
+  'x&.person|y@evil.example',
+]
+
+test('an address that reads as a query signs in nobody else', async () => {
+  for (let address of crafted) {
+    let d = await held([
+      row(address, await mac(address, '123456', SECRET), soon()),
+      VICTIM,
+    ])
+    let eid = (await spend(d.at, SECRET, address, '123456', {}))?.person
+    assert(eid && eid != 'p1', address)
+    let [who] = await d.graph.read(`.entity.eid=${eid}&?email`)
+    assertEquals((who?.email as { address?: string })?.address, canon(address))
+    assertEquals(await personOf(d.at, address), eid, address)
+    assert(await personOf(d.at, 'pastor@church.example') == 'p1')
+  }
+})
+
 // A number is an address too (T-136826): kept in E.164 form under
 // `signin{phone}`, and a person found or minted by `phone{number}`.
 let NUMBER = '+12695550142'
