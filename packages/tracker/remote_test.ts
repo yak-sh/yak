@@ -1,4 +1,5 @@
 import { freshFetch } from '@yaks/process/http'
+import { sleep } from '@yaks/fp'
 // The Worker is a fetch double whose first answers fail the way a connection
 // on a lossy path does.
 import { cleanup, clock, equal, test } from '@yaks/testing'
@@ -165,6 +166,100 @@ test('a caller stopping a request preserves its cancellation, not an outage', as
   }, go).catch((error) => error)
   equal(error, stop.signal.reason)
   equal(calls, 1)
+})
+
+let conflicting = (statuses: number[], elapsed: number[] = []) => {
+  let time = clock(), calls: number[] = []
+  let stop = new AbortController()
+  let starts = Array.from({ length: 12 }, () => Promise.withResolvers<void>())
+  let go: typeof fetch = async (_url, init) => {
+    calls.push(time.now())
+    starts[calls.length - 1].resolve()
+    let ms = elapsed.shift()
+    if (ms) await sleep(ms, init?.signal ?? undefined, time)
+    return Response.json([], { status: statuses.shift() ?? 409 })
+  }
+  let answer = request(
+    remote,
+    'bugs',
+    new URLSearchParams(),
+    {
+      signal: stop.signal,
+    },
+    go,
+    time,
+  ).then((r) => r.status, failure)
+  cleanup(async () => {
+    stop.abort()
+    await answer
+  })
+  return { time, calls, starts, stop, answer }
+}
+
+test('a tracker read recovers from a conflict on a paced new attempt', async () => {
+  let { time, calls, starts, answer } = conflicting([409, 409, 200])
+  await starts[0].promise
+  equal(calls, [0])
+  await time.advance(250)
+  equal(calls, [0, 250])
+  await time.advance(500)
+  equal(await answer, 200)
+  equal(calls, [0, 250, 750])
+  equal(time.pending(), 0)
+})
+
+test('a conflict pause never exceeds the remaining request budget', async () => {
+  let elapsed = [4900, 9900, 19900, 23450]
+  let { time, calls, starts, answer } = conflicting([], [...elapsed])
+  for (let [i, ms] of elapsed.entries()) {
+    await starts[i].promise
+    await time.advance(ms)
+    if (i < 3) await time.advance([250, 500, 1000][i])
+  }
+  equal([await answer, calls.length, time.now(), time.pending()], [
+    409,
+    4,
+    59_900,
+    0,
+  ])
+})
+
+test('a conflict that persists is returned after bounded attempts', async () => {
+  let { time, calls, starts, answer } = conflicting([])
+  for (let [i, ms] of [250, 500, 1000, ...Array(8).fill(2000)].entries()) {
+    await starts[i].promise
+    await time.advance(ms)
+  }
+  equal(await answer, 409)
+  equal(calls.length, 12)
+  equal(time.pending(), 0)
+})
+
+test('stopping during a conflict pause cancels the wait and makes no further attempt', async () => {
+  let { time, calls, starts, stop, answer } = conflicting([409, 200])
+  await starts[0].promise
+  await time.advance(0)
+  stop.abort()
+  equal(await answer, String(stop.signal.reason))
+  equal(calls, [0])
+  equal(time.pending(), 0)
+})
+
+test('a mark conflict and a refused read are answered once', async () => {
+  for (let [path, status] of [['resolve', 409], ['bugs', 400]] as const) {
+    let calls = 0
+    let response = await request(
+      remote,
+      path,
+      new URLSearchParams(),
+      {},
+      () => {
+        calls++
+        return Promise.resolve(new Response(null, { status }))
+      },
+    )
+    equal([response.status, calls], [status, 1])
+  }
 })
 
 // A delivery the tracker could not answer for now is `Unavailable`, which

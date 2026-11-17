@@ -13,7 +13,7 @@
 // attempts longer within one minute: even unchanged reads can take over five
 // seconds in the runtime. Each attempt has its own connection and takes the
 // whole answer, with a ticket a minute from expiry.
-import { type Clock, system } from '@yaks/fp'
+import { type Clock, sleep, system } from '@yaks/fp'
 import type { Bundle } from '@yaks/graph'
 import { platform } from './reading.ts'
 import { sign } from './ticket.ts'
@@ -36,13 +36,14 @@ export let late = (error: unknown) =>
   error instanceof DOMException && error.name == 'TimeoutError'
 
 /// unavailable(503) -> true
+/// unavailable(409) -> true
 /// unavailable(429) -> true
 /// unavailable(403) -> false
 /** Whether an answer's status says the tracker cannot answer for now (it timed
  * out, is busy, or failed on its side), which a later try can recover from;
  * any other refusal is its answer to what was asked. */
 export let unavailable = (status: number) =>
-  status == 408 || status == 429 || status >= 500
+  status == 408 || status == 409 || status == 429 || status >= 500
 
 /** A request the tracker could not answer for now, which a later try can
  * recover from: no attempt was answered, or it answered a status `unavailable`
@@ -145,7 +146,7 @@ export let request = async (
       () => wait.abort(new DOMException('Signal timed out.', 'TimeoutError')),
     )
     try {
-      return await attempt(go, url, {
+      let response = await attempt(go, url, {
         ...init,
         headers,
         redirect: 'manual',
@@ -153,6 +154,24 @@ export let request = async (
           ? AbortSignal.any([init.signal, wait.signal])
           : wait.signal,
       })
+      // A tracker read makes no conflicting write. A 409 on its way back
+      // is retried within this request's budget, on a fresh connection.
+      // Marks keep their own answer, even where a caller supplied a GET.
+      let reading = ['bugs', 'trace', 'traces', 'scopes'].includes(path) &&
+        (init.method ?? 'GET').toUpperCase() == 'GET'
+      let pause = Math.min(250 * 2 ** i, 2000)
+      if (
+        response.status != 409 || !reading || i == TRIES - 1 ||
+        clock.now() + pause >= until
+      ) {
+        return response
+      }
+      await response.body?.cancel()
+      // A caller's stop cuts the wait short. Repeated conflicts never
+      // become a tight request loop.
+      await sleep(pause, init.signal ?? undefined, clock)
+      init.signal?.throwIfAborted()
+      last = new Unavailable('Remote tracker refused the read (409)')
     } catch (error) {
       last = error
       // The caller's own deadline or stop ends the request; an attempt's own

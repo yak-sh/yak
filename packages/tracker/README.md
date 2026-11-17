@@ -397,7 +397,11 @@ host or a test. The signed transport starts with a five-second attempt, then
 doubles each attempt's allowance within a one-minute request budget. Every
 attempt uses a fresh connection and reads the whole body before it succeeds; a
 caller's cancellation ends the request immediately. A slow unchanged read can
-therefore finish without every attempt cancelling it after five seconds.
+therefore finish without every attempt cancelling it after five seconds. Read
+conflicts (409) retry on fresh connections with increasing pauses, from 250 ms
+to two seconds, within that same budget and twelve attempts. A conflict that
+persists is an unavailable tracker, as a 503 is; mark responses are never
+retried by status.
 
 A poll the Worker cannot answer for now (a read refused 503 or 504, see `read`'s
 statuses) is a log line, and the next poll tries again. A Worker that has not
