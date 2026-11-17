@@ -286,10 +286,13 @@ let fill = (file: string, open: string, close: string, inner: string) =>
   file.replace(`${open}>${close}`, `${open}>${inner}${close}`)
 
 /**
- * A home page as served (gallery.ts `made`, `walks`): each app its file walks through
- * whose conversation is recorded, every step of it with its exchange and the
- * picture of its release, has them filled in; an app without is cut, with its
- * name and the links to it, and the whole walkthrough while no app is left.
+ * A home page as served (gallery.ts `made`, `walks`): each app its file walks
+ * through whose conversation is recorded, every step of it with its exchange
+ * and the picture of its release, has them filled in, and its card leaves the
+ * carousel (`data-demo`), since the page already shows it; an app without is
+ * cut, with its name and the links to it, and the whole walkthrough while no
+ * app is left. The potluck sheet beside the box (`data-sheet`) stands in for a
+ * walkthrough, so it goes while any app is walked through.
  */
 export let walkedInto = (file: string, shown: Record<string, Shown[]>) => {
   let out = file
@@ -302,6 +305,7 @@ export let walkedInto = (file: string, shown: Record<string, Shown[]>) => {
       out = cut(out, 'button', ` data-walk-name="${app}"`)
       continue
     }
+    out = cut(out, 'li', ` data-demo="${app}"`)
     steps.forEach((step, i) => {
       let at = `${app}/${step}`
       out = fill(out, ` data-walk-talk="${at}"`, '</div>', had[i].html)
@@ -314,7 +318,9 @@ export let walkedInto = (file: string, shown: Record<string, Shown[]>) => {
       )
     })
   }
-  return walking(out).length ? out : cut(out, 'section', ' data-walks')
+  return walking(out).length
+    ? cut(out, 'figure', ' data-sheet')
+    : cut(out, 'section', ' data-walks')
 }
 
 let escaped = (s: string) =>

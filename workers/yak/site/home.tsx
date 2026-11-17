@@ -80,7 +80,8 @@ export let data = () => ({
 
 /** More examples, one card at a time (carousel.js): apps in yourname's space,
  * each named by its address there (`data-demo`), which the served page swaps
- * for the gallery's cards (gallery.ts `showcase`), and under them what a
+ * for the gallery's cards (gallery.ts `showcase`) after leaving out each app
+ * it walks through (walkthrough.ts `walkedInto`), and under them what a
  * visitor can do with one, the snippet at `note` with its `slots`. */
 export let Examples = (
   { note, slots, apps = HOME }: {
@@ -141,9 +142,10 @@ export let Examples = (
 /** The sheet a visitor can type in, beside the box: an app in yourname's
  * space (demos.ts `SHEET`), framed live under the words that built it. What a
  * stranger adds goes to a store of their own (@yaks/platform/visits), so the
- * next visitor finds the sheet as it was published. */
+ * next visitor finds the sheet as it was published. The served page leaves it
+ * out while it walks through any app (walkthrough.ts `walkedInto`). */
 export let Sheet = () => (
-  <figure class='Sheet'>
+  <figure class='Sheet' data-sheet=''>
     <figcaption class='Sheet_Said' {...text('home.sheet.said')} />
     <div class='Sheet_Frame'>
       <iframe

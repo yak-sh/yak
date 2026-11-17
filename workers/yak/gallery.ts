@@ -1063,14 +1063,20 @@ export let walks = async (env: Env, dir: Directory, slugs: string[]) => {
   return Object.fromEntries(each.flat()) as Record<string, Walked[]>
 }
 
-// A home page as served: every demo its file names is its app's card, with the
-// app's chosen screenshot, and every app it walks through whose conversation
-// is recorded is beside it (`walks`). The file remains the fallback when the
-// directory or the demo space's Operator does not answer, and a page with
-// neither is served as its file.
+// A home page as served: every app it walks through whose conversation is
+// recorded is beside it (`walks`), and every demo its file names that is not
+// walked through is its app's card, with the app's chosen screenshot. The file
+// remains the fallback when the directory or the demo space's Operator does
+// not answer, and a page with neither is served as its file.
 export let made = async (env: Env, dir: Directory, file: Response) => {
-  let html = sheeted(hosted(await file.text(), env), env)
   let failed = false
+  let served = sheeted(hosted(await file.text(), env), env)
+  let walked = await walks(env, dir, walking(served)).catch((e) => {
+    failed = true
+    caught(e, { request: 'home walkthrough' })
+    return {}
+  })
+  let html = walkedInto(served, walked)
   let slugs = named(html)
   let shown = await Promise.resolve(
     slugs.length ? examples(dir, env, slugs) : [],
@@ -1081,11 +1087,6 @@ export let made = async (env: Env, dir: Directory, file: Response) => {
       caught(e, { request: 'home showcase' })
       return [] as Shown[]
     })
-  let walked = await walks(env, dir, walking(html)).catch((e) => {
-    failed = true
-    caught(e, { request: 'home walkthrough' })
-    return {}
-  })
   // The headers the assets door set, minus those that describe the bytes: the
   // body just changed length, it is no longer the file that etag names, and the
   // assets' cache did not answer this page.
@@ -1094,7 +1095,7 @@ export let made = async (env: Env, dir: Directory, file: Response) => {
   headers.delete('etag')
   headers.delete('cf-cache-status')
   if (failed) headers.set('cache-control', 'private, no-store')
-  return new Response(walkedInto(showcase(html, shown), walked), {
+  return new Response(showcase(html, shown), {
     status: file.status,
     headers,
   })

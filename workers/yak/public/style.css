@@ -1432,9 +1432,13 @@
 
   @media (min-width: 60rem) {
     .Home .Hello {
-      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
       gap: clamp(2rem, 5vw, 4rem);
       padding-top: 9rem;
+    }
+
+    /* The sheet takes the hero's right side while the page shows it. */
+    .Home .Hello:has(> .Sheet) {
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
     }
 
     /* The sheet's caption starts level with the heading, clear of the

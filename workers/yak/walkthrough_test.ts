@@ -46,6 +46,14 @@ let file = renderToString(
       ),
     ),
     h('p', { id: 'after' }, 'after'),
+    h('figure', { class: 'Sheet', 'data-sheet': '' }, 'potluck'),
+    h(
+      'ul',
+      { class: 'Demo_Slides' },
+      ['menu', 'chores', 'vale'].map((app) =>
+        h('li', { 'data-demo': app }, app)
+      ),
+    ),
   ),
 )
 let shown = (app: string, n = 2): Shown[] =>
@@ -65,6 +73,8 @@ let read = (shows: Record<string, Shown[]>) => {
     shots: all('.Walk_Image', (e) => e.getAttribute('src')),
     walk: !!document.querySelector('.Walk'),
     after: !!document.querySelector('#after'),
+    sheet: !!document.querySelector('[data-sheet]'),
+    carousel: all('[data-demo]', (e) => e.getAttribute('data-demo')),
   }
 }
 
@@ -90,6 +100,13 @@ test('an app short of a step or a picture is cut, with its name and the links to
     assertEquals(got.next, [])
     assertEquals(got.said, ['menu step 1', 'menu step 2'])
   }
+})
+
+test('a walked app leaves the carousel and the sheet goes, and both stay while none is walked', () => {
+  let got = read({ menu: shown('menu'), chores: shown('chores', 1) })
+  assertEquals([got.carousel, got.sheet], [['chores', 'vale'], false])
+  let none = read({})
+  assertEquals([none.carousel, none.sheet], [['menu', 'chores', 'vale'], true])
 })
 
 test('with no app recorded the walkthrough is cut whole, and the rest stays', () => {
