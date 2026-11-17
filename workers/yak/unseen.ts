@@ -582,30 +582,28 @@ let graphAt = (env: Env, space: Space, app: App, who: Who, send?: Send) => {
   return {
     query: (asked: Line) =>
       metaOf(store, { ...vouched(who), 'x-yak-observe': '1' }).query(asked),
+    // How many the stores say they marked.
     mark: async (hits: Hit[], mark: 'notified' | 'archived') => {
       let legacy = hits.filter((h) => !h.tracked)
       let tracked = hits.filter((h) => h.tracked)
-      await Promise.all([
-        ...legacy.length
-          ? [
-            metaOf(store).apply(
-              legacy.map((h) => ({
-                entity: { eid: h.entity.eid },
-                [mark]: {},
-              })),
-              { ...vouched(who), ...KERNEL },
-            ),
-          ]
-          : [],
-        ...tracked.length
-          ? [
-            errorsAt(env, space, app, who, send).mark(
-              tracked as unknown as Bundle[],
-              mark,
-            ),
-          ]
-          : [],
+      let counts = await Promise.all([
+        legacy.length
+          ? metaOf(store).apply(
+            legacy.map((h) => ({
+              entity: { eid: h.entity.eid },
+              [mark]: {},
+            })),
+            { ...vouched(who), ...KERNEL },
+          ).then((rows) => rows.length)
+          : 0,
+        tracked.length
+          ? errorsAt(env, space, app, who, send).mark(
+            tracked as unknown as Bundle[],
+            mark,
+          )
+          : 0,
       ])
+      return counts[0] + counts[1]
     },
   }
 }
@@ -821,13 +819,6 @@ let offered = async (
   return said.map((hit) => ({ app, hit }))
 }
 
-// Closed: the mark that stops an item showing, here and in the unseen
-// section.
-let close = async (env: Env, space: Space, app: App, who: Who, hits: Hit[]) => {
-  await graphAt(env, space, app, who).mark(hits, 'archived')
-  return hits.length
-}
-
 // A day on its own, and anything that starts with one — `2026-08-14`, or the
 // whole instant a line printed. Only these are read as a moment, so a uuid or
 // an `E-84` can never be mistaken for one.
@@ -877,8 +868,10 @@ export let closing = (open: Seen['hit'][], words: string[]) => {
 }
 
 // Behind us, so it stops showing — whether the caller fixed it or is only
-// saying it is stale. Nothing matched is worth saying; a stale id is how a
-// person learns it is already archived.
+// saying it is stale: `archived`, the mark that stops a report showing here
+// and in the unseen section. Nothing matched is worth saying; a stale id is
+// how a person learns it is already archived. The count is the reports the
+// stores say they archived, never the ones asked of them.
 export let archive = async (
   env: Env,
   space: Space,
@@ -890,8 +883,7 @@ export let archive = async (
   if (!hits.length) {
     throw refuse('missing', `nothing open here by ${words.join(', ')}`)
   }
-  await close(env, space, app, who, hits)
-  return breaks(hits)
+  return await graphAt(env, space, app, who).mark(hits, 'archived')
 }
 
 // Notification records that the agent was told; only a verified fix warrants

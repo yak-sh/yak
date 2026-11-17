@@ -409,3 +409,45 @@ test('a retry through the door arms the alarm that works the run', async () => {
   equal(await answer.json(), { retried: 1 })
   equal(alarms.length, 1)
 })
+
+// A grouped occurrence read back carries its stored shape (entity.archetype);
+// marking it with that identity still stores the mark.
+test("a space's grouped occurrences close by each door that archives them", async () => {
+  let secret = 'scratch', app = '00000000-0000-4000-8000-000000000003'
+  let object = new Tracker({
+    id: { name: space },
+    storage: durable(),
+    getWebSockets: () => [],
+    acceptWebSocket: () => {},
+  }, { TRACKER_SECRET: secret })
+  let [fixed, settled] = ['fixed', 'settled'].map((why) =>
+    capture(Error(why), { sink: () => {}, during: { space, app } })
+  )
+  await object.ingest([...fixed, ...settled])
+  await object.alarm()
+  let token = await sign({
+    scope: space,
+    person: 'scratch',
+    admin: true,
+    ingest: true,
+    exp: Date.now() / 1000 + 60,
+  }, secret)
+  let ask = async (path: string, body?: unknown) =>
+    await (await object.fetch(
+      new Request(`https://tracker.internal${path}`, {
+        method: body ? 'POST' : 'GET',
+        headers: { authorization: `Bearer ${token}` },
+        ...body ? { body: JSON.stringify(body) } : {},
+      }),
+    )).json()
+  let open = async () =>
+    (await ask(`/query?q=${encodeURIComponent('.error !archived *')}`))
+      .map((b: Bundle) => b.entity.eid)
+  equal((await open()).length, 2)
+  let eids = [fixed[0].entity.eid]
+  equal(await ask('/app-errors', { app, eids, mark: 'archived' }), {
+    marked: 1,
+  })
+  equal(await object.settle([settled[0].entity.eid], 'fixed upstream'), 1)
+  equal(await open(), [])
+})

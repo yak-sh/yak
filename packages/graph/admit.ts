@@ -186,15 +186,18 @@ export let admit = (
   if (alien.size) throw new Misfit(unknownComps([...alien], teach))
   if (!trusted) unstamped(bundles, vocab)
   return bundles.flatMap((b) => {
-    // The identity's stamps are the store's (entity.archetype), and arrive
-    // only with an identity copied from a read. @yaks/id's entity{prefix,
-    // num} is no stamp: a write may state it (./storage.ts `renumbering`).
-    if (!trusted) {
-      for (let k of Object.keys(b.entity)) {
-        if (!vocab.prop('entity', k)?.stamped) continue
-        b = { ...b, entity: { ...b.entity } }
-        delete (b.entity as Comp)[k]
-      }
+    // The identity's stamps are the store's, and arrive only with an
+    // identity copied from a read. Trusted code may state one, except the
+    // archetype: the store derives it from the components, so one copied from
+    // a read is stale once the write changes them, even from trusted code
+    // marking a row it read. A replica's copy never comes here. @yaks/id's
+    // entity{prefix, num} is no stamp: a write may state it (./storage.ts
+    // `renumbering`).
+    for (let k of Object.keys(b.entity)) {
+      if (!vocab.prop('entity', k)?.stamped) continue
+      if (trusted && k != 'archetype') continue
+      b = { ...b, entity: { ...b.entity } }
+      delete (b.entity as Comp)[k]
     }
     let sent = comps(b)
     if (!sent.length) return [b]

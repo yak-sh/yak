@@ -25,7 +25,10 @@ let doc: VocabDoc = {
       component: true,
       type: 'object',
       wire: false,
-      properties: { num: { type: 'number', stamped: true } },
+      properties: {
+        num: { type: 'number', stamped: true },
+        archetype: { type: 'string', stamped: true },
+      },
     },
     doc: {
       component: true,

@@ -97,13 +97,20 @@ test('a refusal names the entity and field it is about', () => {
 })
 
 test('an identity copied from a read is the address, and its stamps are dropped', () => {
-  let sent = [{ entity: { eid: 'b1', num: 7 }, book: { pages: 3 } }]
+  let sent = [{
+    entity: { eid: 'b1', num: 7, archetype: 'read' },
+    book: { pages: 3 },
+  }]
   assertEquals(admit(sent, books), [{
     entity: { eid: 'b1' },
     book: { pages: 3 },
   }])
   assertEquals(sent[0].entity.num, 7)
-  assertEquals(admit(sent, books, true), sent)
+  // Trusted code may state a number, never the shape the store derives.
+  assertEquals(admit(sent, books, true), [{
+    entity: { eid: 'b1', num: 7 },
+    book: { pages: 3 },
+  }])
 })
 
 test('a bundle of nothing but server-owned properties is refused', () => {

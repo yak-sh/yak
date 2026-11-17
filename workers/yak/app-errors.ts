@@ -147,16 +147,24 @@ export let errorsAt = (
 ) => ({
   read: (all: boolean) =>
     opened(env, space, who, line`.during.app=${app.eid}`, all, send),
+  // How many occurrences the tracker says it marked, which is all a caller
+  // may report: never the count it asked for.
   mark: async (rows: Bundle[], mark: 'notified' | 'archived') => {
+    let marked = 0
     for (let at = 0; at < rows.length; at += 100) {
-      await request(env, space, who, '/app-errors', {
+      let said = await request(env, space, who, '/app-errors', {
         method: 'POST',
         body: JSON.stringify({
           app: app.eid,
           eids: rows.slice(at, at + 100).map((row) => row.entity.eid),
           mark,
         }),
-      }, send)
+      }, send) as { marked?: unknown }
+      if (typeof said?.marked != 'number') {
+        throw Error('tracker did not say what it marked')
+      }
+      marked += said.marked
     }
+    return marked
   },
 })
