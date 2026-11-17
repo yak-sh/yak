@@ -75,7 +75,7 @@ import {
 } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { pilled, standing } from './gallery-row.ts'
-import { buying, type Product } from './sell.ts'
+import { buying } from './sell.ts'
 import { addressed } from '@yaks/blob'
 import { declarationOf } from './declaration.ts'
 import { KERNEL, metaOf } from './meta.ts'
@@ -1474,13 +1474,16 @@ export let api = async (
   if (mine) return mine
   // Taking money (sell.ts, T-34525). A read door as far as this app is
   // concerned — it reads the products the cart names and writes nothing — so it
-  // asks `mayRead` and not `mayPost`: a public shop sells to a stranger, which
-  // is what a shop is, and a private one sells to its members. The price comes
-  // off the rows, never off the request, so what a caller can do here is buy
-  // what the seller put on the shelf at the price the seller wrote.
+  // asks `mayUse` and not a writer's level: a public shop sells to a stranger,
+  // which is what a shop is, and a private one sells to its members. It is
+  // keyed on the app like the doors above, so a visit holds no level here: the
+  // store a visit reads is a copy whose prices the visitor may have written.
+  // The price comes off the app's own rows, never off the request, so what a
+  // caller can do here is buy what the seller put on the shelf at the price
+  // the seller wrote.
   if (path == '/pay/checkout') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
-    if (!mayRead) return refused('not_a_reader')
+    if (!mayUse) return refused('not_a_reader')
     let body = await req.json().catch(() => null)
     return buying(
       env,
@@ -1488,12 +1491,11 @@ export let api = async (
         space,
         app: app.slug,
         root: urlOf(space, app),
-        buyer: who.service?.person ?? who.person,
-        via: who.via,
-        source: who.service?.app ?? app.eid,
-        merchant: who.person == app.eid,
+        buyer: caller.service?.person ?? caller.person,
+        via: caller.via,
+        source: caller.service?.app ?? app.eid,
+        merchant: caller.person == app.eid,
       },
-      async (line) => await metaOf(store, headers).query(line) as Product[],
       body,
     )
   }

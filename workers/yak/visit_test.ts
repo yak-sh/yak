@@ -157,6 +157,8 @@ let APP_DOORS: [string, RequestInit?][] = [
   ['/command'],
   ['/ai/run', { method: 'POST', body: '{}' }],
   ['/pdf?page=1', { method: 'POST', body: 'x' }],
+  // A visit's store is a copy whose prices the visitor may write (T-796).
+  ['/pay/checkout', { method: 'POST', body: '{}' }],
 ]
 let doors = (c: ReturnType<typeof client>) =>
   Promise.all(APP_DOORS.map(async ([path, init]) => {

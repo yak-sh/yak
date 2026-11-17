@@ -428,9 +428,11 @@ export let sale = (at: {
 /**
  * The door itself (apps.ts routes `/<app>/api/pay/checkout` here).
  *
- * `rows` is how the caller reads the app's store — the same read `/api/query`
- * makes, as whoever is asking, so a private app's shelf is its members' and a
- * public one's is the world's. The door adds no reading power of its own.
+ * The cart is priced from the app's own store, the one {@link sold} writes the
+ * order to ({@link asApp}), whoever asks and whichever store their request is
+ * served from: a stranger on a visit reads, and may write, a copy of the
+ * sample, and a price there is theirs, not the seller's. Whether the caller
+ * may buy at all is the app's `access`, answered by apps.ts before this.
  *
  * A space that is not ready is refused by name with the way out, because that
  * refusal is the one a page will actually meet: a seller deploys their shop
@@ -447,7 +449,6 @@ export let buying = async (
     source?: string
     merchant?: boolean
   },
-  rows: (line: string) => Promise<Product[]>,
   body: unknown,
 ) => {
   let no = (status: number, code: string, message: string) =>
@@ -473,7 +474,7 @@ export let buying = async (
   }
   let items: Item[]
   let quote: Quote | undefined
-  let quoteStore: ReturnType<typeof asApp> | undefined
+  let store: ReturnType<typeof asApp> | undefined
   let priceless: ReturnType<typeof priced> | undefined
   let success: string
   let cancel: string
@@ -483,11 +484,11 @@ export let buying = async (
       quantity?: unknown
       destination?: unknown
     } | null
+    let app = await inApp(env, at.space, at.app)
+    if (!app) throw refuse('missing', 'seller app not found')
+    store = asApp(env, at.space, app)
     if (requested?.quote != null) {
-      let app = await inApp(env, at.space, at.app)
-      if (!app) throw refuse('quote', 'seller app not found')
-      quoteStore = asApp(env, at.space, app)
-      let issued = await readQuote(quoteStore, String(requested.quote))
+      let issued = await readQuote(store, String(requested.quote))
       quote = checkedQuote(
         issued,
         {
@@ -507,7 +508,9 @@ export let buying = async (
       // is a line built for the store (@yaks/platform/page-wire `RIDERS` is the translation, and
       // this side of it never sees one).
       priceless = priced(
-        await rows(`.entity.eid=${items.map((i) => i.product).join(',')}`),
+        await store.query(
+          `.entity.eid=${items.map((i) => i.product).join(',')}`,
+        ) as Product[],
         items,
         lent.tag,
       )
@@ -532,7 +535,7 @@ export let buying = async (
       // The seller's account, which makes it their charge rather than ours.
       at.space.seller!.account,
       quote
-        ? await checkoutQuote(quoteStore!, quote, {
+        ? await checkoutQuote(store!, quote, {
           space: at.space.eid,
           app: at.app,
           bps: await feeOf(dirOf(env)),
