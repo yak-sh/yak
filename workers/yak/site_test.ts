@@ -731,7 +731,6 @@ test('the pages beside the home page say where they live and count their buttons
     ctas: [
       'start',
       'examples',
-      'sheet',
       ...WALKS.flatMap((app) =>
         stepsOf(app).flatMap(() => ['walk', 'walk-ask'])
       ),

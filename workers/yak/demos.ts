@@ -5,12 +5,6 @@
 // private one's picture (gallery.ts `featured`); an app added here is featured
 // with `gallery_feature` so its card has its picture.
 
-/** The sheet a home page frames beside its box (site/home.tsx `Sheet`): the
- * potluck sign-up sheet the demo space's Operator built from the words the
- * page quotes. It is private and published, so a stranger reads its sample
- * and what they add goes to a store of their own (@yaks/platform/visits). */
-export let SHEET = 'https://yourname.yaks.app/potluck/'
-
 /** Where the demo space's apps are, each at its slug under it. */
 export let DEMO_AT = 'https://yourname.yaks.app/'
 

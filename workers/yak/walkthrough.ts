@@ -291,8 +291,7 @@ let fill = (file: string, open: string, close: string, inner: string) =>
  * and the picture of its release, has them filled in, and its card leaves the
  * carousel (`data-demo`), since the page already shows it; an app without is
  * cut, with its name and the links to it, and the whole walkthrough while no
- * app is left. The potluck sheet beside the box (`data-sheet`) stands in for a
- * walkthrough, so it goes while any app is walked through.
+ * app is left.
  */
 export let walkedInto = (file: string, shown: Record<string, Shown[]>) => {
   let out = file
@@ -318,9 +317,7 @@ export let walkedInto = (file: string, shown: Record<string, Shown[]>) => {
       )
     })
   }
-  return walking(out).length
-    ? cut(out, 'figure', ' data-sheet')
-    : cut(out, 'section', ' data-walks')
+  return walking(out).length ? out : cut(out, 'section', ' data-walks')
 }
 
 let escaped = (s: string) =>

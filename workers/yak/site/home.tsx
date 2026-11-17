@@ -7,7 +7,7 @@ import { Data, Page, Yours } from './frame.tsx'
 import { attr, COPY, said, type Slots, text } from './copy.ts'
 import { Idle } from '../mascot.ts'
 import { Sky, Walk } from './sky.tsx'
-import { BUILD, DEMO_AT, type Example, HOME, SHEET } from '../demos.ts'
+import { BUILD, DEMO_AT, type Example, HOME } from '../demos.ts'
 
 // A plan's price in dollars, as its card says it: "Free" is none.
 let dollars = (plan: string) =>
@@ -137,32 +137,6 @@ export let Examples = (
     </div>
     <p class='Note Note-small' {...text(note, slots)} />
   </section>
-)
-
-/** The sheet a visitor can type in, beside the box: an app in yourname's
- * space (demos.ts `SHEET`), framed live under the words that built it. What a
- * stranger adds goes to a store of their own (@yaks/platform/visits), so the
- * next visitor finds the sheet as it was published. The served page leaves it
- * out while it walks through any app (walkthrough.ts `walkedInto`). */
-export let Sheet = () => (
-  <figure class='Sheet' data-sheet=''>
-    <figcaption class='Sheet_Said' {...text('home.sheet.said')} />
-    <div class='Sheet_Frame'>
-      <iframe
-        class='Sheet_Page'
-        src={SHEET}
-        loading='lazy'
-        {...attr('title', 'home.sheet.title')}
-      />
-    </div>
-    <p class='Note Note-small'>
-      <a
-        href={SHEET}
-        data-cta='sheet'
-        {...text('home.sheet.open', { arrow: arrow('↗') })}
-      />
-    </p>
-  </figure>
 )
 
 // The names one level under `prefix` in the copy, in the file's order.
@@ -484,7 +458,6 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
             })}
           />
         </div>
-        <Sheet />
       </section>
       <Walkthrough />
       <section class='Yours' aria-labelledby='does'>

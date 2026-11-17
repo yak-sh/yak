@@ -107,7 +107,6 @@ export let STAGES = [
 export let CTAS = [
   { name: 'start', say: 'Start free, the code or Build it, in the hero' },
   { name: 'examples', say: 'See examples' },
-  { name: 'sheet', say: 'Open the sheet in a window of its own' },
   { name: 'walk', say: "Start free, beside a demo's walkthrough" },
   { name: 'walk-ask', say: "Ask for your own change to a demo's step" },
   { name: 'plus', say: "The Plus plan's Get Started" },

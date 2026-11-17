@@ -38,11 +38,6 @@
       "price": "$9 a month",
       "examples": "See examples %{arrow}"
     },
-    "sheet": {
-      "said": "Someone typed “a potluck sign-up sheet” and got this page. Try it: add a dish.",
-      "title": "A potluck sign-up sheet you can type in",
-      "open": "See it full size %{arrow}"
-    },
     "walk": {
       "title": "Watch an app get built, one request at a time",
       "note": "Below is one conversation someone had with the assistant on yaks.app, and the app it made. Scroll to follow it. Yours starts with whatever you need.",
