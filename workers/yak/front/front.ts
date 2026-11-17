@@ -48,6 +48,7 @@ import {
 import type { Clock } from '@yaks/fp'
 import { overdue, watch } from '../lib/watch.ts'
 import { VERSION } from '@yaks/workerd/worker'
+import { resending } from '@yaks/workerd/fetch'
 
 /** The header the front's own deploy is said in, beside the kernel's. */
 export let FRONT_VERSION = 'x-yak-front-version'
@@ -294,7 +295,7 @@ let serving = async (
     report(error, env, ctx, 'front fetch', req)
   }
   waiting('kernel_wait')
-  let res = await env.KERNEL.fetch(req)
+  let res = await resending(env.KERNEL, req, env.CLOCK)
   if (new URL(req.url).pathname == VERSION) {
     let out = new Response(res.body, res)
     out.headers.set(FRONT_VERSION, env.CF_VERSION_METADATA?.id ?? '')

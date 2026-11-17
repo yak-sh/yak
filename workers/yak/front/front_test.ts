@@ -600,3 +600,19 @@ test('the public deployment response names its stateless kernel and front withou
   assertEquals(res.headers.get('cache-control'), 'no-store')
   assertEquals([f.asked, f.used, f.warmed], [[], [], []])
 })
+
+test('an unanswered MCP read reaches a fresh kernel hop before its caller gives up', async () => {
+  let time = clock(), lost = Promise.withResolvers<Response>(), calls = 0
+  let f = front(
+    () => page(),
+    () => ++calls == 1 ? lost.promise : new Response(null, { status: 401 }),
+  )
+  f.env.CLOCK = time
+  let result = f.go('https://yaks.app/mcp')
+  await time.advance(5000)
+  await time.advance(0)
+  assertEquals(calls, 2)
+  assertEquals((await result).status, 401)
+  assertEquals(f.errors, [])
+  lost.reject(new DOMException('aborted', 'AbortError'))
+})
