@@ -289,7 +289,7 @@ export let readThread = (
   // CPU, looks again when it could pass it. A second either way is close
   // enough.
   let check = (lane: Lane, job: Job, due: number, looked = false) => () => {
-    if (lane.job !== job) return
+    if (lane.job !== job || lane.activity.completed(job.id)) return
     let at = now()
     let again = (ms: number) =>
       void (lane.long = timer(check(lane, job, at + ms, true), ms))
@@ -313,7 +313,7 @@ export let readThread = (
   // A read its caller left that still runs `grace` ms on ends its worker.
   let overdue = (lane: Lane, job: Job) =>
     void (lane.overdue = timer(() => {
-      if (lane.job !== job) return
+      if (lane.job !== job || lane.activity.completed(job.id)) return
       stop(lane)
       drain()
     }, grace))

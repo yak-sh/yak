@@ -121,6 +121,7 @@ let fakes = ({ starting = false } = {}) => {
       comps?: string[]
       observed?: boolean
     }[] = []
+    activity?: ReturnType<typeof readActivity>
     ended = false
     constructor() {
       workers.push(this)
@@ -134,7 +135,8 @@ let fakes = ({ starting = false } = {}) => {
       },
     ) {
       if (data.activity) {
-        readActivity(data.activity, () => 0).say('waiting in a read operation')
+        this.activity = readActivity(data.activity, () => 0)
+        this.activity.say('waiting in a read operation')
         if (!starting) this.start()
       }
       if (data.id) this.jobs.push({ ...data, id: data.id })
@@ -150,6 +152,9 @@ let fakes = ({ starting = false } = {}) => {
     answer() {
       let job = this.jobs.at(-1)!
       this.onmessage?.({ data: { id: job.id, value: [] } })
+    }
+    posted() {
+      this.activity!.done(this.jobs.at(-1)!.id)
     }
   }
   let Original = globalThis.Worker
@@ -278,6 +283,15 @@ let watching = async (
         workers[0].start()
         continue
       }
+      if (step == 'posted') {
+        workers[0].posted()
+        continue
+      }
+      if (step == 'next') {
+        long = Promise.resolve(reader.read('.memory.scope="secret"'))
+        long.catch(() => {})
+        continue
+      }
       let [ms, cpu, wait] = step.split(' ').map(Number)
       clock = ms
       if (wait != null) spent = { cpu: cpu * 1000, wait: wait * 1000 }
@@ -341,6 +355,44 @@ test('a read is timed from its worker starting', async () => {
       'and was off one 1.7 s; worker operation: waiting in a read operation, for 22.0 s; its worker had not answered a read yet)',
     ],
   )
+})
+
+test('a posted read reply awaiting delivery is no longer a running read', async () => {
+  assertEquals(
+    await watched('10000 0.1 0', 'posted', '11000 0.1 0', 'answer'),
+    [],
+  )
+})
+
+test('a previous posted reply does not hide a later read still running', async () => {
+  assertEquals(
+    (await watched('posted', 'answer', 'next', '10000 9 0', '11000 9.5 0'))
+      .length,
+    1,
+  )
+})
+
+test('a cancelled read whose reply was posted keeps its worker', async () => {
+  let { workers, restore } = fakes()
+  let timers: (() => void)[] = []
+  let reader = readThread('unused.json', {
+    timer: (fn) => {
+      timers.push(fn)
+      return () => {}
+    },
+  })
+  try {
+    let read = abandoned(reader, '.completed')
+    workers[0].posted()
+    read.abort()
+    await read.refused
+    for (let timer of [...timers]) timer()
+    assertEquals(workers[0].ended, false)
+    workers[0].answer()
+  } finally {
+    await reader.close()
+    restore()
+  }
 })
 
 // A slow read names who asked it, as its door said where the read began: the

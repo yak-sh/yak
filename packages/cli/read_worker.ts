@@ -13,7 +13,10 @@ import { statements } from '@yaks/sql'
 
 let host: Promise<Served> | undefined
 let activity: ReturnType<typeof readActivity> | undefined
-let tell = (heard: Heard) => self.postMessage(heard)
+let tell = (heard: Heard) => {
+  self.postMessage(heard)
+  if ('id' in heard) activity?.done(heard.id)
+}
 // Where this thread is, so the reader can see how long a read here waited
 // for a CPU while it runs.
 let place = thread()

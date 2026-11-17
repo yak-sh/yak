@@ -6,15 +6,19 @@ import { channel, type Event } from '@yaks/trace'
 /** A worker's current operation and when it entered it, by `clock` (ms since
  * the epoch, the one clock both threads share). */
 export let readActivity = (
-  buffer = new SharedArrayBuffer(16_400),
+  buffer = new SharedArrayBuffer(16_408),
   clock = Date.now,
 ) => {
   let head = new Int32Array(buffer, 0, 2)
   let since = new Float64Array(buffer, 8, 1)
-  let bytes = new Uint8Array(buffer, 16)
+  let posted = new Int32Array(buffer, 16, 1)
+  let bytes = new Uint8Array(buffer, 24)
   let encoder = new TextEncoder(), decoder = new TextDecoder()
   return {
     buffer,
+    /** The reply posted for this job, even while its message awaits delivery. */
+    done: (id: number) => void Atomics.store(posted, 0, id),
+    completed: (id: number) => Atomics.load(posted, 0) == id,
     say: (text: string) => {
       Atomics.add(head, 0, 1)
       let { written } = encoder.encodeInto(text, bytes)

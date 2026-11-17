@@ -4,7 +4,7 @@ import { readActivity, readOperations } from './read_activity.ts'
 
 test('a worker operation is visible through its shared buffer and stays bounded', () => {
   let at = 1000, clock = () => at
-  let writer = readActivity(new SharedArrayBuffer(40), clock)
+  let writer = readActivity(new SharedArrayBuffer(48), clock)
   let reader = readActivity(writer.buffer, clock)
   writer.say('sqlite is stepping')
   at = 3500
@@ -13,6 +13,17 @@ test('a worker operation is visible through its shared buffer and stays bounded'
   equal(reader.read(), { text: 'x'.repeat(24), ms: 0 })
   writer.say('idle')
   equal(reader.read()?.text, 'idle')
+})
+
+test('a posted reply names its job independently of the current operation', () => {
+  let writer = readActivity(), reader = readActivity(writer.buffer)
+  equal(reader.completed(1), false)
+  writer.done(1)
+  writer.say('reading the next job')
+  equal(reader.completed(1), true)
+  equal(reader.completed(2), false)
+  writer.done(2)
+  equal(reader.completed(2), true)
 })
 
 test('a read exposes its open SQL call until that call returns', () => {
