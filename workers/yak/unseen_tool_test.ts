@@ -116,7 +116,11 @@ let tracker = (rows: unknown[] = []) => {
   let asked: { path: string; init: RequestInit }[] = []
   let send: Send = (path, init) => {
     asked.push({ path, init })
-    return Promise.resolve(init.method == 'POST' ? {} : rows)
+    return Promise.resolve(
+      init.method == 'POST'
+        ? { marked: JSON.parse(String(init.body)).eids.length }
+        : rows,
+    )
   }
   return { env: {} as Env, asked, send }
 }
