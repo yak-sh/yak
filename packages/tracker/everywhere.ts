@@ -24,7 +24,7 @@ export let everywhere = async (
   // the list is still on its way, never escaping as a rejection nobody holds.
   let [rows, theirs] = await Promise.all([
     each('platform'),
-    spaces(options.remote ?? {}, go).then(
+    spaces(options.remote ?? {}, go, true).then(
       (scopes) =>
         Promise.all(scopes.map((scope) =>
           each(scope).then(

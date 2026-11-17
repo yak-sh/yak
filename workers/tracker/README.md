@@ -91,19 +91,24 @@ occurrence to reopen without changing its report or delivery history.
 space tracker the Worker has routed to, which the platform tracker keeps. A
 space's tracker joins it the first time it takes intake or answers a door, once
 an isolate and behind the answer. On-demand bug doors (`bug_list`,
-`admin_errors`) read each space's bugs beside the platform's.
+`admin_errors`) read each space's bugs beside the platform's. They request
+`/scopes?bugs=true`, which leaves out trackers known to have no bugs. Unknown
+trackers are included until their first ordinary wake publishes whether they
+hold any bug, open or closed. A changed tag from an older publisher without the
+flag becomes unknown again.
 
 `GET /changes?scope=platform` answers an admin `{scopes: [{scope, tag}, …]}`
 with an `ETag`. Sending that tag as `If-None-Match` returns only scopes that
 moved since, or 304 if none did. An absent, unknown or future tag returns every
 scope, the platform included. The durable `scope-changes` index retains the last
 revision of every scope, and initializes from the existing `scopes` list.
-Concurrent publications are serialized; an unchanged bug tag writes nothing. A
-space's alarm publishes its bug tag after draining writes, and keeps the
-acknowledged tag in `server_meta`. Failed publication leaves it owed for the
-alarm's next attempt, including after hibernation. The platform includes its own
-current bug tag as it answers the feed. Thus the heal follower asks one object
-every 30 seconds, then reads only the trackers whose bugs moved.
+Concurrent publications are serialized; an unchanged tag and presence flag write
+nothing. A space's alarm publishes its bug tag and whether it holds any bugs
+after draining writes, and keeps the acknowledged tag in `server_meta`. Failed
+publication leaves it owed for the alarm's next attempt, including after
+hibernation. The platform includes its own current bug tag as it answers the
+feed. Thus the heal follower asks one object every 30 seconds, then reads only
+the trackers whose bugs moved.
 
 `GET /bugs?query=<bug-query>&limit=50&app=<global-eid>` returns bug bundles,
 filtered and ordered before its 1–100 limit. Without `query` it includes all bug

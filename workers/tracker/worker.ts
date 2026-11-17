@@ -35,7 +35,7 @@ export type Stub = {
     said?: Explanation,
   ) => Promise<number>
   enroll: (scope: string) => Promise<void>
-  changed: (scope: string, tag: string) => Promise<void>
+  changed: (scope: string, tag: string, populated?: boolean) => Promise<void>
 }
 export type Env = Omit<Settings, 'TRACKERS'> & {
   BUNDLE_HASH?: string

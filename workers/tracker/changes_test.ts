@@ -4,6 +4,7 @@ import { type State, Tracker } from './object.ts'
 import { platform } from './core.ts'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { sign } from './auth.ts'
+import { everywhere } from '@yaks/tracker/everywhere'
 
 let secret = 'scratch', scope = '00000000-0000-4000-8000-000000000001'
 let state = (name: string): State => {
@@ -29,11 +30,11 @@ let env = {
     getByName: () => ({
       ingestTrace: () => Promise.resolve(false),
       settle: () => Promise.resolve(0),
-      changed: (scope: string, tag: string) => {
+      changed: (scope: string, tag: string, populated?: boolean) => {
         changed.push(tag)
         return fail
           ? Promise.reject(Error('publication unavailable'))
-          : authority.changed(scope, tag)
+          : authority.changed(scope, tag, populated)
       },
     }),
   },
@@ -45,9 +46,9 @@ await tracker.graph.apply([{
   bug: { fault: 'broken' },
   doc: { title: 'Broken' },
 }], { trusted: true })
-let ask = async (tag?: string, admin = true) =>
+let ask = async (tag?: string, admin = true, path = '/changes') =>
   authority.fetch(
-    new Request('https://tracker/changes', {
+    new Request(`https://tracker${path}`, {
       headers: {
         authorization: `Bearer ${await sign({
           scope: platform,
@@ -60,6 +61,29 @@ let ask = async (tag?: string, admin = true) =>
     }),
   )
 
+let emptyScope = '00000000-0000-4000-8000-000000000002'
+let empty = new Tracker(state(emptyScope), env)
+await empty.boot()
+
+test('bug listings skip known empty trackers and include unknown or changed old publishers', async () => {
+  let list = async () =>
+    (await (await ask(undefined, true, '/scopes?bugs=true')).json()).scopes
+  await authority.enroll(emptyScope)
+  equal((await list()).includes(emptyScope), true)
+  await empty.alarm()
+  equal((await list()).includes(emptyScope), false)
+  let read: string[] = []
+  await everywhere({ remote: { url: 'https://tracker', secret } }, (scope) => {
+    read.push(scope)
+    return Promise.resolve([])
+  }, (input, init) => authority.fetch(new Request(input, init)))
+  equal(read.includes(emptyScope), false)
+  let all = await (await ask(undefined, true, '/scopes')).json()
+  equal(all.scopes.includes(emptyScope), true)
+  await authority.changed(emptyScope, 'later')
+  equal((await list()).includes(emptyScope), true)
+})
+
 test('the signed change feed hears alarm writes and retries unacknowledged publication after hibernation', async () => {
   let first = await ask(), tag = first.headers.get('etag')!
   equal((await ask(tag)).status, 304)
@@ -69,10 +93,10 @@ test('the signed change feed hears alarm writes and retries unacknowledged publi
   equal((await answer.json()).scopes.map((s: { scope: string }) => s.scope), [
     scope,
   ])
-  equal(changed.length, 1)
+  let published = changed.length
   target = new Tracker(targetState, env)
   await target.alarm()
-  equal(changed.length, 1)
+  equal(changed.length, published)
   let held = answer.headers.get('etag')!
   equal((await ask(held)).status, 304)
   await (await target.boot()).graph.apply([{
@@ -86,7 +110,7 @@ test('the signed change feed hears alarm writes and retries unacknowledged publi
   target = new Tracker(targetState, env)
   await target.alarm()
   equal((await ask(held)).status, 200)
-  equal(changed.length, 3)
+  equal(changed.length, published + 2)
 })
 
 test('scope changes resume from old tags and survive duplicates and unknown eras', () => {

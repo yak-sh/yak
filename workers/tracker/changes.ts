@@ -3,7 +3,7 @@
 export type Index = {
   era: string
   count: number
-  scopes: Record<string, { count: number; tag?: string }>
+  scopes: Record<string, { count: number; tag?: string; populated?: boolean }>
 }
 
 export let index = (scopes: string[]): Index => ({
@@ -12,14 +12,23 @@ export let index = (scopes: string[]): Index => ({
   scopes: Object.fromEntries(scopes.map((scope) => [scope, { count: 0 }])),
 })
 
-export let moved = (held: Index, scope: string, tag?: string): Index => {
+export let moved = (
+  held: Index,
+  scope: string,
+  tag?: string,
+  populated?: boolean,
+): Index => {
   let was = held.scopes[scope]
-  if (was && (!tag || was.tag == tag)) return held
+  if (
+    was &&
+    (!tag ||
+      was.tag == tag && (populated == null || was.populated == populated))
+  ) return held
   let count = held.count + 1
   return {
     ...held,
     count,
-    scopes: { ...held.scopes, [scope]: { count, tag } },
+    scopes: { ...held.scopes, [scope]: { count, tag, populated } },
   }
 }
 
@@ -35,7 +44,11 @@ export let changes = (held: Index, since?: string | null) => {
     tag,
     scopes: Object.entries(held.scopes)
       .filter(([, scope]) => scope.count > after)
-      .map(([scope, { count }]) => ({ scope, tag: `${held.era}.${count}` })),
+      .map(([scope, { count, populated }]) => ({
+        scope,
+        tag: `${held.era}.${count}`,
+        populated,
+      })),
   }
 }
 
@@ -65,9 +78,9 @@ export let directory = (kept: Kept, scopes: () => Promise<string[]>) => {
   }
   return {
     read: (since?: string | null) => serial((held) => changes(held, since)),
-    move: (scope: string, tag?: string) =>
+    move: (scope: string, tag?: string, populated?: boolean) =>
       serial(async (was) => {
-        let next = moved(was, scope, tag)
+        let next = moved(was, scope, tag, populated)
         if (next == was) return
         await kept.put('scope-changes', next)
         held = next

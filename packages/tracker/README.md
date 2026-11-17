@@ -393,22 +393,24 @@ only after reading its bugs successfully. Idle spaces make no bug requests;
 first reads and failed reads still fetch the answer. The feed retains its tag
 and each scope's version in memory; a restarted follower reads them afresh.
 Reads by id remember which bugs a scope does not hold until its version changes,
-so work about another tracker's bug causes no repeated empty reads. Its signed
-reads and marks run on a dedicated worker event loop, not alongside the host's
-synchronous graph/effect work: signing, fetch, whole-body reads and attempt
-deadlines stay together even when the host is CPU-bound. The worker opens no
-graph or duties; closing the service terminates its shared worker and rejects
-outstanding calls. An unexpected worker failure rejects those calls and the next
-poll starts a replacement. `PollOpts.doors` still overrides the transport for an
-embedding host or a test. The signed transport starts with a five-second
-attempt, then doubles each attempt's allowance within a one-minute request
-budget. Every attempt uses a fresh connection and reads the whole body before it
-succeeds; a caller's cancellation ends the request immediately. A slow unchanged
-read can therefore finish without every attempt cancelling it after five
-seconds. Read conflicts (409) retry on fresh connections with increasing pauses,
-from 250 ms to two seconds, within that same budget and twelve attempts. A
-conflict that persists is an unavailable tracker, as a 503 is; mark responses
-are never retried by status.
+so work about another tracker's bug causes no repeated empty reads. On-demand
+bug lists skip trackers known to have no bugs, open or closed, using
+`/scopes?bugs=true`; unknown trackers are still read. Its signed reads and marks
+run on a dedicated worker event loop, not alongside the host's synchronous
+graph/effect work: signing, fetch, whole-body reads and attempt deadlines stay
+together even when the host is CPU-bound. The worker opens no graph or duties;
+closing the service terminates its shared worker and rejects outstanding calls.
+An unexpected worker failure rejects those calls and the next poll starts a
+replacement. `PollOpts.doors` still overrides the transport for an embedding
+host or a test. The signed transport starts with a five-second attempt, then
+doubles each attempt's allowance within a one-minute request budget. Every
+attempt uses a fresh connection and reads the whole body before it succeeds; a
+caller's cancellation ends the request immediately. A slow unchanged read can
+therefore finish without every attempt cancelling it after five seconds. Read
+conflicts (409) retry on fresh connections with increasing pauses, from 250 ms
+to two seconds, within that same budget and twelve attempts. A conflict that
+persists is an unavailable tracker, as a 503 is; mark responses are never
+retried by status.
 
 A poll the Worker cannot answer for now (a read refused 503 or 504, see `read`'s
 statuses) is a log line, and the next poll tries again. A Worker that has not

@@ -82,7 +82,11 @@ export type Settings = {
         reason?: string,
         said?: Explanation,
       ) => Promise<number>
-      changed: (scope: string, tag: string) => Promise<void>
+      changed: (
+        scope: string,
+        tag: string,
+        populated?: boolean,
+      ) => Promise<void>
     }
   }
   TRACKER_SECRET?: string
@@ -331,6 +335,10 @@ export class Tracker extends Durable {
     this.#upkeep = saved.upkeep
     if (install) await this.#mail()
     if (this.#upkeep(false) != null) await this.#arm()
+    if (
+      install && this.scope != platform && this.env.TRACKERS &&
+      this.#traceMeta().get('scope-populated') == null
+    ) await this.#owe()
     return tracker
   }
   #mail = async () => {
@@ -438,9 +446,16 @@ export class Tracker extends Durable {
       return null
     }
     let tag = this.tracker.tag(), kept = this.#traceMeta()
-    if (kept.get('scope-published') == tag) return null
+    if (
+      kept.get('scope-published') == tag && kept.get('scope-populated') != null
+    ) return null
+    let populated = (await this.tracker.bugs(undefined, '.bug', 1)).length > 0
     try {
-      await this.env.TRACKERS.getByName(platform).changed(this.scope, tag)
+      await this.env.TRACKERS.getByName(platform).changed(
+        this.scope,
+        tag,
+        populated,
+      )
     } catch (error) {
       // Worker and object versions converge independently during a deploy.
       if (/does not implement the method/.test(String(error))) {
@@ -454,13 +469,14 @@ export class Tracker extends Durable {
     }
     this.ceiling.free(() => {
       kept.set('scope-published', tag)
+      kept.set('scope-populated', populated ? '1' : '0')
       if (kept.get('scope-publish-failed')) kept.set('scope-publish-failed', '')
     })
     return this.tracker.tag() == tag ? null : this.now() + 1000
   }
-  changed = (scope: string, tag: string): Promise<void> =>
+  changed = (scope: string, tag: string, populated?: boolean): Promise<void> =>
     this.scope == platform
-      ? this.#changes().move(scope, tag)
+      ? this.#changes().move(scope, tag, populated)
       : Promise.resolve()
   // Reached only by the Worker, never HTTP: a space tracker it routed to
   // joins the platform's list of them (`/scopes`), once.
@@ -669,6 +685,9 @@ export class Tracker extends Durable {
           return json({ error: 'platform only' }, 403)
         }
         let { scopes } = await this.#changes().read()
+        if (new URL(request.url).searchParams.get('bugs') == 'true') {
+          scopes = scopes.filter((s) => s.populated !== false)
+        }
         return json({
           scopes: scopes.map((s) => s.scope).filter((s) => s != platform),
         })

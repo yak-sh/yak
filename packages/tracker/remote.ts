@@ -282,11 +282,15 @@ export let mark = async (
 export let spaces = async (
   remote: Remote,
   go: typeof fetch = fetch,
+  populated = false,
 ): Promise<string[]> => {
   let response = await request(
     remote,
     'scopes',
-    new URLSearchParams({ scope: 'platform' }),
+    new URLSearchParams({
+      scope: 'platform',
+      ...populated ? { bugs: 'true' } : {},
+    }),
     {},
     go,
   ).catch((error) => {
