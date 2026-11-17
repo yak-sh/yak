@@ -164,6 +164,42 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     copy: copyOf(env),
     time: env.CLOCK,
   })
+  let page: ReturnType<typeof dir.page> | undefined
+  let ahead = (person: string) => {
+    let reads = req.method == 'GET' || req.method == 'HEAD'
+    if ('space' in at) {
+      page = dir.page(
+        at.space,
+        null,
+        person,
+        at.view == 'operator' || at.view == 'updates' || at.view == 'matches',
+      )
+      page.catch(() => {})
+      if (reads && !at.door) {
+        let drawn = !at.open && !at.logo && !at.manifest
+        foresee(
+          dir,
+          person,
+          at.view,
+          drawn
+            ? {
+              env,
+              slug: at.space,
+              space: page.then((p) => p.space, () => null),
+              add: url.searchParams.get('detail'),
+            }
+            : undefined,
+          !!at.open && !url.searchParams.has('attachment'),
+        )
+      }
+    } else if ('account' in at && reads) {
+      foresee(dir, person, at.account)
+      if (at.account == 'profile') {
+        void dir.browserSessions(person).catch(() => {})
+      }
+    }
+    return Promise.resolve(null)
+  }
   // A browser's socket the person lends their Operator comes from an
   // extension, which holds no cookie of ours: it bears the token it signed in
   // for (asking.ts `bearerIn`). Only that door accepts its bearer; every
@@ -177,7 +213,7 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     ? { person: caller.person, until: caller.until }
     : socket
     ? { person: null, until: undefined }
-    : await whoIs(req, env, () => Promise.resolve(null))
+    : await whoIs(req, env, ahead, null, dir)
   if (!person && socket) return json(401, 'signed_out', 'Sign in again.')
   if (!person) return redirect(signInAt(sentFrom(req, env).href, env), 303)
   if (url.searchParams.has('settings-draft')) {
@@ -214,13 +250,13 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     return mine(req, env, dir, { person, role: null, until }, at.account)
   }
   let view = at.view
-  let paged = dir.page(
+  let paged = page ?? dir.page(
     at.space,
     null,
     person,
     view == 'operator' || view == 'updates' || view == 'matches',
   )
-  if ((req.method == 'GET' || req.method == 'HEAD') && !at.door) {
+  if (!page && (req.method == 'GET' || req.method == 'HEAD') && !at.door) {
     // The page drawn on the dashboard, not a conversation in the chat app
     // or one of the space's files.
     let drawn = !at.open && !at.logo && !at.manifest

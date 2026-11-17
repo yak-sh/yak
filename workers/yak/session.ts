@@ -20,7 +20,7 @@
 // mint one (identity.ts) and the router the renewal hangs off (index.ts) are
 // elsewhere; what a session is belongs beside who is asking.
 import { COOKIE, cookie, opened, seal, sign, verify } from './lib/token.ts'
-import type { Role } from './directory.ts'
+import type { Directory, Role } from './directory.ts'
 import type { Env } from './env.ts'
 import { apex, type Host } from '@yaks/platform/host'
 import { hostOf } from '@yaks/platform/routes'
@@ -103,6 +103,7 @@ export let nobody: Who = { person: null, role: null }
 export let sessionReading = async (
   req: Request,
   env: Env,
+  dir?: Directory,
 ) => {
   let secret = env.SESSION_SECRET
   let token = sessionCookie(req, env)
@@ -110,7 +111,7 @@ export let sessionReading = async (
   let claims = await verify(token, secret)
   if (!claims) return null
   let via = claims.via ?? `session:${sha256(token)}`
-  return await browsers.held(env, claims.person, via, claims.session)
+  return await browsers.held(env, claims.person, via, claims.session, dir)
     ? { ...claims, via }
     : null
 }
@@ -121,8 +122,9 @@ export let sessionAt = async (
   req: Request,
   env: Env,
   space: string | null = null,
+  dir?: Directory,
 ) => {
-  let claims = await sessionReading(req, env)
+  let claims = await sessionReading(req, env, dir)
   return claims && (!claims.space || claims.space == space) ? claims : null
 }
 
@@ -144,13 +146,14 @@ export let whoIs = async (
   env: Env,
   roleOf: (person: string) => Promise<Role | null>,
   space: string | null = null,
+  dir?: Directory,
 ): Promise<Who> => {
   let secret = env.SESSION_SECRET
   let token = sessionCookie(req, env)
   if (!token || !secret) return nobody
   let offered = await verify(token, secret)
   let [claims, role] = await Promise.all([
-    sessionAt(req, env, space),
+    sessionAt(req, env, space, dir),
     offered && (!offered.space || offered.space == space)
       ? roleOf(offered.person)
       : null,

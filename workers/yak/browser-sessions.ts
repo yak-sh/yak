@@ -1,6 +1,7 @@
 import { identityEid } from '@yaks/graph/identity'
 import { instrumentEid } from '@yaks/platform/instrument'
-import { directory } from './directory.ts'
+import { type Directory, directory } from './directory.ts'
+import { copyOf } from './directory-copy.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import type { Claims } from './lib/token.ts'
@@ -26,7 +27,10 @@ export let sessionRow = (seed: SessionSeed, person: string): Bundle => ({
 })
 
 export let sessions = (env: Env) =>
-  directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  directory(bound(env.DIRECTORY, dirPart.fetch, env), {
+    copy: copyOf(env),
+    time: env.CLOCK,
+  })
 
 /** Old cookies and page tokens find the same session before they name a row. */
 export let prior = (person: string, via: string) =>
@@ -40,8 +44,9 @@ export let held = async (
   person: string,
   via: string,
   session?: string,
+  dir: Directory = sessions(env),
 ) => {
-  let { cancelled, ended, present, session: kept } = await sessions(env)
+  let { cancelled, ended, present, session: kept } = await dir
     .browserSession(
       session ?? prior(person, via),
       person,

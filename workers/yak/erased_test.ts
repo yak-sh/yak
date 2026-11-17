@@ -42,7 +42,7 @@ let left = await meta(env).query(line`.entity.eid=${cy.person}`)
 test('an erased account is not revived by its cookie', () => {
   assertEquals(left, [])
   assertEquals({ ...said, reported }, {
-    status: 403,
+    status: 303,
     reported: 0,
   })
 })

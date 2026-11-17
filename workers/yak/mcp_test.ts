@@ -50,6 +50,7 @@ test(
     let k = await kernel()
     try {
       let person = crypto.randomUUID()
+      await meta(k).apply([{ entity: { eid: person }, person: {} }])
       let agent = connector(k, await signedIn(k, person))
       for (let auth of ['', await signedIn(k, person)]) {
         let call = (
@@ -85,7 +86,7 @@ test(
           if (auth) {
             assertStringIncludes(
               res.headers.get('server-timing')!,
-              'hops;dur=0',
+              'hops;dur=1',
             )
           }
           let text = await res.text()

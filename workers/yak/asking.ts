@@ -7,7 +7,8 @@
 import { type Host, url as hostUrl } from '@yaks/platform/host'
 import { verify } from './lib/token.ts'
 import { sessionCookie } from './browser-cookie.ts'
-import { directory, type Role } from './directory.ts'
+import { type Directory, directory, type Role } from './directory.ts'
+import { copyOf } from './directory-copy.ts'
 import * as dirPart from './directory.ts'
 import { CLI_GRANT, GRANT, held, ledger } from './grants.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
@@ -20,7 +21,11 @@ import { carried } from './protocol.ts'
 
 export type { Caller }
 
-let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
+let dirOf = (env: Env) =>
+  directory(bound(env.DIRECTORY, dirPart.fetch, env), {
+    copy: copyOf(env),
+    time: env.CLOCK,
+  })
 
 /** The token a request bears: its `Authorization: Bearer`, else on a
  * WebSocket upgrade its `bearer.` subprotocol. A door that takes a token on
@@ -40,7 +45,14 @@ export let bearerIn = (req: Request): string | null =>
 export let asking = async (
   env: Env,
   req: Request,
+  ahead?: (who: Caller) => void,
+  dir: Directory = dirOf(env),
 ): Promise<{ who: Caller | null; tried: boolean }> => {
+  let person = async (who: Caller | null) => {
+    if (!who) return null
+    ahead?.(who)
+    return await dir.hasPerson(who.person) ? who : null
+  }
   let said = req.headers.get('authorization') ?? ''
   let cookied = sessionCookie(req, env)
   // An `Authorization` header we cannot even parse is still a credential
@@ -57,43 +69,55 @@ export let asking = async (
         ? await held(token, env.SESSION_SECRET, ledger(env.OAUTH_KV))
         : null
       return {
-        who: g && await dirOf(env).hasPerson(g.person)
-          ? {
-            person: g.person,
-            via: 'grant',
-            until: g.exp,
-            grant: g.id,
-            space: g.space,
-            ...g.spaceEid ? { spaceEid: g.spaceEid } : {},
-            instrument: instrumentEid(`${CLI_GRANT}:${g.person}:${g.id}`),
-          }
-          : null,
+        who: await person(
+          g
+            ? {
+              person: g.person,
+              via: 'grant',
+              until: g.exp,
+              grant: g.id,
+              space: g.space,
+              ...g.spaceEid ? { spaceEid: g.spaceEid } : {},
+              instrument: instrumentEid(`${CLI_GRANT}:${g.person}:${g.id}`),
+            }
+            : null,
+        ),
         tried,
       }
     }
     // Only an agent's token needs the provider, which loads with the sign-in
     // door it belongs to (identity.ts).
-    let { person, until } = await (await import('./identity.ts')).unwrapped(
+    let { person: id, until } = await (await import('./identity.ts')).unwrapped(
       env,
       token,
     )
     return {
-      who: person && await dirOf(env).hasPerson(person)
-        ? {
-          person,
-          via: 'oauth',
-          until,
-          instrument: instrumentEid(`oauth:${sha256(token)}`),
-        }
-        : null,
+      who: await person(
+        id
+          ? {
+            person: id,
+            via: 'oauth',
+            until,
+            instrument: instrumentEid(`oauth:${sha256(token)}`),
+          }
+          : null,
+      ),
       tried,
     }
   }
   if (!cookied || !env.SESSION_SECRET) return { who: null, tried }
   let offered = await verify(cookied, env.SESSION_SECRET)
+  if (offered) {
+    ahead?.({
+      person: offered.person,
+      via: 'session',
+      until: offered.exp,
+      ...offered.space ? { spaceEid: offered.space } : {},
+    })
+  }
   let [claims, space] = await Promise.all([
-    offered ? sessionAt(req, env, offered.space) : null,
-    offered?.space ? dirOf(env).at(offered.space) : null,
+    offered ? sessionAt(req, env, offered.space, dir) : null,
+    offered?.space ? dir.at(offered.space) : null,
   ])
   if (claims?.space && !space) return { who: null, tried }
   return {

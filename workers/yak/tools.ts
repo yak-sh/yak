@@ -543,6 +543,7 @@ let OPS = [
 
 // The ops that need a writer, which is every one that changes a byte.
 let WRITES = ['write', 'patch', 'fetch', 'delete', 'restore', 'discard']
+export let writesFiles = (op: unknown) => WRITES.includes(String(op))
 // The ops that may take the conversation's latest draft when it holds several
 // and names none (written.ts `guessed`): none replaces a file it has not read.
 let GUESSES = ['list', 'read', 'history', 'patch']
@@ -3947,7 +3948,7 @@ let OURS: Row[] = [
       let c = ctx.clock ?? clock()
       // Reading is the platform admin's in every space, the way the graph
       // tier is: a gallery code review reads a stranger's files (gallery.ts).
-      let write = WRITES.includes(op)
+      let write = writesFiles(op)
       let { space, app, who } = await c.time(
         'inApp',
         () => inApp(ctx, args, write, !write),

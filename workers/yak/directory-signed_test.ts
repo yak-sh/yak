@@ -1,5 +1,7 @@
 // Signed serving uses the real Apps/MCP doors and directory Store. Only the
 // transport's stall, independent copy RPC and remote worker are fixtures.
+import { sign } from './lib/token.ts'
+import { SECRET } from './serving-data-probe.ts'
 import type { Clock } from '@yaks/fp'
 import { clock, equal, ok, test, tick } from '@yaks/testing'
 import { fetch as appFetch } from './apps.ts'
@@ -23,7 +25,7 @@ import {
   type ServingCopyState,
   ServingCopyUnavailable,
 } from './serving-copy.ts'
-import { ADA_OWNS, as, platform, seeded, visit } from './serving-probe.ts'
+import { ADA_OWNS, platform, seeded, visit } from './serving-probe.ts'
 
 let flush = async () => {
   // A turn apart: gathered reads leave on the next one (directory-copy.ts).
@@ -395,7 +397,12 @@ let fixture = async (kind: 'grant' | 'member') => {
       },
     ],
   }, ADA_OWNS)
-  let cookie = await as(person)
+  let cookie = `yak_session=${await sign({
+    person,
+    space: null,
+    via: crypto.randomUUID(),
+    exp: Math.floor(Date.now() / 1000) + 90 * 24 * 60 * 60,
+  }, SECRET)}`
   let calls: string[] = []
   let bearers: string[] = []
   ;(p.env as { DISPATCH?: unknown }).DISPATCH = {

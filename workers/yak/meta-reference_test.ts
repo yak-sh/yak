@@ -1,3 +1,4 @@
+import { parseHTML } from 'linkedom'
 import { whole } from '@yaks/query'
 import { assert, assertEquals as equal } from '@std/assert'
 import { test } from '@yaks/testing'
@@ -74,7 +75,25 @@ test('internal graph reads retain canonical references while public named reads 
       },
     )
     equal(response.status, 200, await response.clone().text())
-    let connection = (await response.json()).connection
+    let pending = await response.json()
+    let connection = pending.connection
+    let consent = await k.at(
+      k.host,
+      new URL(pending.url).pathname + new URL(pending.url).search,
+      { headers: { cookie: owner.cookie } },
+    )
+    let document = parseHTML(await consent.text()).document
+    let fields = Object.fromEntries([...document.querySelectorAll('input')]
+      .map((input) => [input.name, input.value]))
+    let approved = await k.at(k.host, '/connect/service', {
+      method: 'POST',
+      headers: {
+        cookie: owner.cookie,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams(fields),
+    })
+    equal(approved.status, 303)
     let query = `.entity.eid=${connection}&.connection`
     let [row] = await graph.query(whole(query))
     equal((row.connection as Comp).owner, owner.person)

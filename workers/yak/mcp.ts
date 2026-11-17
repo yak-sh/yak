@@ -81,7 +81,7 @@ import { directory, url } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { ledger } from './ledger.ts'
 import { instructions, pageFor } from './guide.ts'
-import { asking, challenge, unauthorized } from './asking.ts'
+import { asking, type Caller, challenge, unauthorized } from './asking.ts'
 import { narrowed } from './grants.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
 import { inReach, listViews, readView } from './declared.ts'
@@ -92,7 +92,7 @@ import { says } from '@yaks/platform/routes'
 import { connector } from './seo.ts'
 import { VERSION } from './running.ts'
 import { prompted, type Standing, standing } from './standing.ts'
-import { type Ctx, VIEW_MIME } from './tools.ts'
+import { type Ctx, VIEW_MIME, writesFiles } from './tools.ts'
 import { type Asked, listen, rostered, said } from './stream.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { background, caught, failing, reporter } from './defects.ts'
@@ -366,22 +366,56 @@ let needsReach = (
 // It returns the handler and the tool list it is about to serve (T-34277): the
 // tool names, and the version naming them, which `initialize` records for this
 // session and every later call is compared against.
+let scopeFor = (rpc: Rpc) => {
+  let args = rpc.params?.arguments as Record<string, unknown> | undefined
+  return rpc.method == 'tools/call' && rpc.params?.name == 'graph_query' &&
+      typeof args?.q == 'string'
+    ? queryScope(
+      [args.q, ...(Array.isArray(args.filters) ? args.filters : [])].join('&'),
+    ).said
+    : undefined
+}
+
+// These are reads only. Authentication still finishes before any tool runs.
+let ahead = async (
+  base: ReturnType<typeof directory>,
+  who: Caller,
+  rpc: Rpc,
+) => {
+  let dir = who.space || who.spaceEid
+    ? narrowed(base, who.space ?? undefined, who.spaceEid)
+    : base
+  let name = String(rpc.params?.name ?? '')
+  let args = rpc.params?.arguments
+  let input = args && typeof args == 'object' && !Array.isArray(args)
+    ? heard(name, args as Record<string, unknown>, true)
+    : {}
+  let call = { ...rpc, params: { ...rpc.params, arguments: input } }
+  let scope = scopeFor(call)
+  let [space, app] = scope?.split('/') ?? []
+  if (scope) {
+    await (app
+      ? dir.page(space, app, who.person, true, true)
+      : dir.reachable(who.person))
+  } else if (needsReach(call)) {
+    await dir.reachable(who.person)
+  } else if (name == 'app_list') {
+    await dir.listing(who.person)
+  } else if (typeof input.app == 'string') {
+    let over = name == 'app_files' && !writesFiles(input.op)
+    await (typeof input.space == 'string'
+      ? dir.page(input.space, input.app, who.person, over, true)
+      : dir.holding(input.app, who.person, over, true))
+  }
+}
+
 let door = async (ctx: Ctx, session: string, rpc: Rpc) => {
   // Each read made before any tool runs is a named stage on the call's
   // `Server-Timing` (timing.ts): this runs on every call, so what it costs is
   // the floor under every write (T-34986). The reach is a fixed number of
   // directory reads however many spaces and apps it holds (T-35479).
   let c = ctx.clock ?? clock()
-  let args = rpc.params?.arguments as Record<string, unknown> | undefined
-  let selected =
-    rpc.method == 'tools/call' && rpc.params?.name == 'graph_query' &&
-      typeof args?.q == 'string'
-      ? queryScope(
-        [args.q, ...(Array.isArray(args.filters) ? args.filters : [])].join(
-          '&',
-        ),
-      ).said
-      : undefined
+  let selected = scopeFor(rpc)
   let reach = selected
     ? [await c.time('reach', () => named(ctx, selected))]
     : needsReach(rpc)
@@ -664,7 +698,22 @@ let answered = async (
   }
   // Mixed auth is opt-in; every other value keeps discovery protected.
   let strict = url.searchParams.get('auth') != 'mixed'
-  let { who: auth, tried } = await c.time('asking', () => asking(env, req))
+  let said = req.method == 'POST' ? await req.text() : ''
+  let preview: Rpc | null = null
+  try {
+    preview = JSON.parse(said)
+  } catch { /* The protocol answers below. */ }
+  let base = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
+    copy: copyOf(env),
+    time: env.CLOCK,
+  })
+  let { who: auth, tried } = await c.time(
+    'asking',
+    () =>
+      asking(env, req, (who) => {
+        if (preview?.method) void ahead(base, who, preview).catch(() => {})
+      }, base),
+  )
   // A credential that did not verify is NOT an anonymous caller: an expired or
   // revoked token, or one minted for something else, is refused here with the
   // 401 and the challenge, before the pre-auth surface can answer it. The spec
@@ -698,10 +747,7 @@ let answered = async (
   // hand over, and anything that was not a request at all. So a body that does
   // not parse, and a JSON-RPC batch (an array of requests), which are refusals
   // every caller gets, are still the 401 for an anonymous one.
-  // The body is read here and passed on as text: who is answered is decided
-  // before the protocol handler sees anything, and a request body is read
-  // once.
-  let said = await req.text()
+  // Authentication finishes before the protocol handler sees the body.
   let body: unknown
   try {
     body = JSON.parse(said)
@@ -804,7 +850,9 @@ let answered = async (
     })
     return auth.space ? narrowed(dir, auth.space, auth.spaceEid) : dir
   }
-  let dir = reopen()
+  let dir = auth.space || auth.spaceEid
+    ? narrowed(base, auth.space ?? undefined, auth.spaceEid)
+    : base
   // The person is active whatever the call does: an assistant's tool calls
   // are theirs (the directory's "last active", used.ts).
   let ctx: Ctx = {

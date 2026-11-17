@@ -800,12 +800,13 @@ export let editing = async (
 ) => {
   let person = await sessionPerson(req, env)
   if (!person) return false
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), {
+    copy: copyOf(env),
+    time: env.CLOCK,
+  })
   let [{ space, app, role }] = await Promise.all([
-    directory(
-      bound(env.DIRECTORY, dirPart.fetch, env),
-      { copy: copyOf(env), time: env.CLOCK },
-    ).page(at.space.slug, at.app.slug, person),
-    sessionReading(req, env),
+    dir.page(at.space.slug, at.app.slug, person),
+    sessionReading(req, env, dir),
   ])
   if (!space || !app) return false
   let who = await whoIs(
@@ -813,6 +814,7 @@ export let editing = async (
     env,
     () => Promise.resolve(role ?? null),
     space.eid,
+    dir,
   )
   return !!editOf(space, app, env, who)
 }
@@ -1841,8 +1843,9 @@ export let index = async (
   space: Space,
   apps: App[],
   seatOf: (person: string) => Promise<Role | null>,
+  dir?: Directory,
 ): Promise<{ page: Response; alone: Alone | null }> => {
-  let who = await whoIs(req, env, seatOf, space.eid)
+  let who = await whoIs(req, env, seatOf, space.eid, dir)
   let { all, mine } = shelf(apps, space, who)
   let owner = who.role == 'owner'
   let alone = aloneOf(who)
@@ -1897,6 +1900,7 @@ export let closed = async (
     env,
     (p) => dir.role(space, p),
     space.eid,
+    dir,
   )
   if (who.role != 'owner' || !who.person) return nothingHere(env)
   if (req.method != 'POST') {
@@ -2108,7 +2112,7 @@ let served = async (
     page: async (space, app) => {
       let { person } = await identity()
       let read = c.time('route', () => dir.page(space, app, person))
-      let credential = sessionReading(req, env)
+      let credential = sessionReading(req, env, dir)
       // The name `/who` tells a person beside their standing (api `/who`, and
       // `/me`, its shipped name), asked with the route so a page's first
       // question waits on that one trip.
@@ -2155,7 +2159,7 @@ let served = async (
     }
     let who = await c.time(
       'who',
-      () => whoIs(req, env, seatOf, space.eid),
+      () => whoIs(req, env, seatOf, space.eid, dir),
     )
     if (!who.person) {
       return json(401, 'not_a_writer', NOBODY, signInAt(url.href, env))
@@ -2173,7 +2177,7 @@ let served = async (
   if (step.to == 'binned') {
     let who = await c.time(
       'who',
-      () => whoIs(req, env, seatOf, space.eid),
+      () => whoIs(req, env, seatOf, space.eid, dir),
     )
     return who.role == 'owner'
       ? binned({
@@ -2189,7 +2193,14 @@ let served = async (
     // them, and a person is never answered it (kept-page.ts `asked`): one
     // with no seat here is answered their own, kept at their session's key,
     // and a member's is never kept.
-    let { page, alone } = await index(req, env, space, routing.roster!, seatOf)
+    let { page, alone } = await index(
+      req,
+      env,
+      space,
+      routing.roster!,
+      seatOf,
+      dir,
+    )
     if (!edge) return page
     return alone ? marked(keep(page, space, null, [200], alone)) : passed()
   }
@@ -2283,7 +2294,7 @@ let served = async (
         req,
         walls
           ? { person: null, role: null }
-          : await whoIs(req, env, seatOf, space!.eid),
+          : await whoIs(req, env, seatOf, space!.eid, dir),
       ))
     if (own && own.status != 404) return own
     await own?.body?.cancel()
@@ -2415,8 +2426,8 @@ let served = async (
       'who',
       () =>
         walls
-          ? presented(req, env, seatOf, space!, store, paper?.token, path)
-          : whoIs(req, env, seatOf, space!.eid),
+          ? presented(req, env, seatOf, space!, store, paper?.token, path, dir)
+          : whoIs(req, env, seatOf, space!.eid, dir),
     )
   if (path.startsWith('/api/') && !itsApp(who, app)) {
     // The route read the cookie's person's claims; any other caller asks.
@@ -2777,7 +2788,7 @@ let served = async (
       ? passed()
       : word == 'robots'
       ? await robotsOf(env)
-      : (await index(req, env, space, routing.roster!, seatOf)).page
+      : (await index(req, env, space, routing.roster!, seatOf, dir)).page
   }
   // Site's page is counted by the gateway that sends it (page-cache.ts). A
   // member's is never kept: it is woven for them (`wearing`).
@@ -2813,15 +2824,16 @@ let presented = async (
   store: string,
   token: string | undefined,
   path: string,
+  dir?: Directory,
 ): Promise<Who> => {
   let sent = token ?? bearerOf(req)
   if (!sent) {
     return path.startsWith('/api/')
       ? nobody
-      : whoIs(req, env, roleOf, space.eid)
+      : whoIs(req, env, roleOf, space.eid, dir)
   }
   let p = env.SESSION_SECRET ? await paged(sent, env, store) : null
-  if (!p) return whoIs(req, env, roleOf, space.eid)
+  if (!p) return whoIs(req, env, roleOf, space.eid, dir)
   if (!p.person) {
     return {
       ...nobody,
