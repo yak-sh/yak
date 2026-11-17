@@ -35,13 +35,13 @@ previous `exit` in the same transaction. An unsupervised process retains its
 same entity.
 
 The graph stores process state, never output. What a process prints stays in its
-stdout and stderr files: `tail(eid, n)` reads their last lines, and `clean(eid)`
-removes a finished run's files once its reader is done with them, and
-`sweep(age, opts, store)` cleans files with a launch marker and a complete exit
-code older than `age` milliseconds. With a store, it preserves sessions,
-services and processes whose exit is not recorded. Machines pass their store and
-share one sweep per process-file directory at most once an hour, with no
-overlapping sweeps. A service's output files are its log, appended to across
+stdout and stderr files: `await tail(eid, n)` reads their last lines, and
+`await clean(eid)` removes a finished run's files once its reader is done with
+them, and `sweep(age, opts, store)` cleans files with a launch marker and a
+complete exit code older than `age` milliseconds. With a store, it preserves
+sessions, services and processes whose exit is not recorded. Machines pass their
+store and share one sweep per process-file directory at most once an hour, with
+no overlapping sweeps. A service's output files are its log, appended to across
 attempts. Supervisor files are stored under `opts.dir`, then `$PROCESS_DIR`,
 then `$TASKS_HOME/processes`, then `~/.tasks/processes`. For tests, set
 `TASKS_HOME` instead of changing `HOME` so Deno can reuse its module cache. This

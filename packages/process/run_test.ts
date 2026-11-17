@@ -10,6 +10,8 @@ import {
   clean,
   gone,
   launch,
+  runs,
+  signal,
   sweep,
   tail,
   vanished,
@@ -21,17 +23,17 @@ let dir = () => Deno.makeTempDirSync({ prefix: 'yaks-process-' })
 let comp = (b: Bundle | undefined, name: string) =>
   (b?.[name] ?? undefined) as Comp | undefined
 
-test('output stays until its caller cleans the finished run', () => {
+test('output stays until its caller cleans the finished run', async () => {
   let at = dir()
   Deno.writeTextFileSync(`${at}/finished.out`, 'kept\n')
   Deno.writeTextFileSync(`${at}/finished.code`, '0\n')
-  assertEquals(tail('finished', 1, { dir: at }), ['kept'])
-  clean('finished', { dir: at })
-  assertEquals(tail('finished', 1, { dir: at }), [])
+  assertEquals(await tail('finished', 1, { dir: at }), ['kept'])
+  await clean('finished', { dir: at })
+  assertEquals(await tail('finished', 1, { dir: at }), [])
   assertEquals([...Deno.readDirSync(at)], [])
 })
 
-test('a tail answers the last whole lines, however long they are', () => {
+test('a tail answers the last whole lines, however long they are', async () => {
   let at = dir()
   let read = (body: string) => {
     Deno.writeTextFileSync(`${at}/p.out`, body)
@@ -41,11 +43,11 @@ test('a tail answers the last whole lines, however long they are', () => {
     Array.from({ length: 20_000 }, (_, i) => `line ${i + 1}\n`).join('') +
       '\nlast',
   )
-  assertEquals(many(3), ['line 20000', '', 'last'])
-  assertEquals(many(0), [])
+  assertEquals(await many(3), ['line 20000', '', 'last'])
+  assertEquals(await many(0), [])
   let wide = read('a\n' + 'x'.repeat(200_000) + '\nend\n')
-  assertEquals(wide(2), ['x'.repeat(200_000), 'end'])
-  assertEquals(wide(9), ['a', 'x'.repeat(200_000), 'end'])
+  assertEquals(await wide(2), ['x'.repeat(200_000), 'end'])
+  assertEquals(await wide(9), ['a', 'x'.repeat(200_000), 'end'])
 })
 
 test('a sweep cleans only the runs that ended longer ago than its age', async () => {
@@ -58,8 +60,8 @@ test('a sweep cleans only the runs that ended longer ago than its age', async ()
   }
   Deno.utimeSync(`${at}/old.code`, past, past)
   assertEquals(await sweep(30_000, { dir: at }), 1)
-  assertEquals(tail('old', 1, { dir: at }), [])
-  assertEquals(tail('fresh', 1, { dir: at }), ['fresh'])
+  assertEquals(await tail('old', 1, { dir: at }), [])
+  assertEquals(await tail('fresh', 1, { dir: at }), ['fresh'])
   assertEquals(await sweep(30_000, { dir: dir() + '/none' }), 0)
 })
 
@@ -229,4 +231,57 @@ test("an ending records the memory limit's kills the wrapper counted beside its 
   assertEquals(await ended('1 0\n'), [1, { code: 1 }])
   assertEquals(await ended('0 \n'), [0, { code: 0 }])
   assertEquals(await ended('3\n'), [3, { code: 3 }])
+})
+
+test('cleanup yields to its caller while removal is outstanding', async () => {
+  let at = dir()
+  Deno.writeTextFileSync(`${at}/finished.out`, 'kept')
+  let finished = false
+  let removing = clean('finished', { dir: at }).then(() => {
+    finished = true
+  })
+  await Promise.resolve()
+  assertEquals(finished, false)
+  await removing
+  assertEquals([...Deno.readDirSync(at)], [])
+})
+
+test('cleanup delivers removal errors through its completion', async () => {
+  let at = dir()
+  Deno.mkdirSync(`${at}/finished.out`)
+  Deno.writeTextFileSync(`${at}/finished.out/kept`, 'keep')
+  await assertRejects(() => clean('finished', { dir: at }))
+})
+
+for (let recovering of [true, false]) {
+  test(`a ${recovering ? 'recovered' : 'adopted'} run retains its final elapsed time after cleanup`, async () => {
+    let at = dir()
+    let start = new Date('2026-11-17T00:00:00Z')
+    let end = new Date(start.getTime() + 1234)
+    Deno.writeTextFileSync(`${at}/finished.started`, String(start.getTime()))
+    let g = tracked()
+    let options = {
+      dir: at,
+      mint: () => 'finished',
+      running: () => {
+        Deno.writeTextFileSync(`${at}/finished.code`, '0\n')
+        Deno.utimeSync(`${at}/finished.code`, end, end)
+        return Promise.resolve(false)
+      },
+    }
+    let run
+    if (recovering) {
+      await g.apply([{ entity: { eid: 'finished' }, process: { pid: 7002 } }])
+      ;[run] = await watch(store(g), options)
+    } else run = await adopt(store(g), 7002, options)
+    await run.done
+    await clean('finished', { dir: at })
+    assertEquals(run.elapsed(), 1234)
+  })
+}
+
+test('native liveness probes and signal zero reach an adopted pid', async () => {
+  assertEquals(await runs(Deno.pid), true)
+  assertEquals(await runs(2147483647), false)
+  assertEquals(await signal('self', Deno.pid, '0', { dir: dir() }), true)
 })

@@ -24,7 +24,7 @@
  * // let processes = store(graph)
  * // let run = await launch(processes, { command: 'sh', args: ['-c', 'echo hi'] })
  * // await run.done            // 0
- * // tail(run.eid, 40)         // ['hi']
+ * // await tail(run.eid, 40)         // ['hi']
  * // await watch(processes)    // at start-up: pick the unfinished ones back up
  * // let pass = supervise(processes)   // then drive it from your own timer
  * ```

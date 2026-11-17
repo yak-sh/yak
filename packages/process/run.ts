@@ -1,7 +1,6 @@
-import * as disk from 'node:fs'
-import { readdir } from 'node:fs/promises'
+import * as disk from 'node:fs/promises'
 import * as system from './system.ts'
-import { command as processCommand } from './command.ts'
+import { detached } from './detached.ts'
 // The supervisor: start a process, adopt one that is already running, pick
 // every unfinished one back up at start-up, and keep the wanted ones running.
 // Four entry points over one loop — watch the pid, write what the process
@@ -33,7 +32,7 @@ import { command as processCommand } from './command.ts'
 //
 // Only the detaching differs from one machine to the next, and `platforms`
 // below is the whole difference, as data. Everything else here is POSIX: sh,
-// kill(1), and files.
+// signals, and files.
 //
 // What a process prints stays in those two files, never in the graph: output
 // is a log, and the graph records the process, not its log. A caller reads the
@@ -77,7 +76,7 @@ export type Opts = {
    * as having never started (ms, default 10_000) */
   birth?: number
   /** how often the pid and the output files are read (ms, default 1000) —
-   * every pass is a `kill -0`, and noticing an exit within a second is
+   * every pass probes the pid, and noticing an exit within a second is
    * plenty */
   poll?: number
   /** mint the process entity's eid (default a uuid) */
@@ -274,7 +273,7 @@ let platformOf = (o: Opts): Platform => {
   return platform
 }
 
-let spawn = (
+let spawn = async (
   eid: string,
   argv: string[],
   cwd: string,
@@ -289,9 +288,9 @@ let spawn = (
   // `sh wrapper.sh` opened in between ran an empty script, so its child never
   // started. A rename replaces the file whole, and a shell already reading the
   // old one keeps reading all of it.
-  disk.writeFileSync(`${script}.${eid}`, wrapper(p.count ?? ''))
-  disk.renameSync(`${script}.${eid}`, script)
-  let child = processCommand('sh', {
+  await disk.writeFile(`${script}.${eid}`, wrapper(p.count ?? ''))
+  await disk.rename(`${script}.${eid}`, script)
+  await detached('sh', {
     args: [
       '-c',
       LAUNCHER,
@@ -309,19 +308,13 @@ let spawn = (
       TASKS_PID: f.pid,
       TASKS_CODE: f.code,
     },
-    stdin: 'null',
-    stdout: 'null',
-    stderr: 'null',
-  }).spawn()
-  // The launcher exits immediately and tells us nothing, so don't hold the
-  // event loop open waiting for it.
-  child.unref()
+  })
 }
 
 // The pidfile holds two numbers: the process group, then the child's pid.
-let pids = (path: string) => {
+let pids = async (path: string) => {
   try {
-    return disk.readFileSync(path, 'utf8').trim().split(/\s+/)
+    return (await disk.readFile(path, 'utf8')).trim().split(/\s+/)
       .map(Number).filter((n) => n > 0)
   } catch {
     return []
@@ -329,21 +322,21 @@ let pids = (path: string) => {
 }
 
 // The child is the pid to test for liveness.
-let pidOf = (path: string) => pids(path).at(-1) ?? 0
+let pidOf = async (path: string) => (await pids(path)).at(-1) ?? 0
 
 // The wrapper is what a signal should be sent to: setsid made it the process
 // group leader, so signalling the negated group id reaches the wrapper, the
 // child and anything the child started — nothing is left holding a port. A
 // process we only adopted has no pidfile, and then the pid we were given is
 // all there is.
-let groupOf = (path: string) => {
-  let ns = pids(path)
+let groupOf = async (path: string) => {
+  let ns = await pids(path)
   return ns.length > 1 ? ns[0] : 0
 }
 
-let textOf = (path: string) => {
+let textOf = async (path: string) => {
   try {
-    return disk.readFileSync(path, 'utf8')
+    return await disk.readFile(path, 'utf8')
   } catch {
     return '' // not written yet
   }
@@ -356,7 +349,7 @@ let numberIn = (text: string) => {
   return text.trim() && Number.isFinite(n) ? n : null
 }
 
-let codeOf = (path: string) => numberIn(textOf(path))
+let codeOf = async (path: string) => numberIn(await textOf(path))
 
 // How the run ended, once the wrapper has written all of it: the exit code,
 // then the memory limit's kills where the platform counts them. Its `echo …
@@ -364,18 +357,18 @@ let codeOf = (path: string) => numberIn(textOf(path))
 // that stretches that moment let a read see the empty file and stamp a clean
 // exit on a child that exited 3 (T-38290). echo ends the line with a newline,
 // so a complete write is one that ends with one.
-let endingIn = (path: string): Exit | null => {
-  let text = textOf(path)
+let endingIn = async (path: string): Promise<Exit | null> => {
+  let text = await textOf(path)
   if (!text.endsWith('\n')) return null
   let [code, oom] = text.trim().split(/\s+/).map(numberIn)
   return code == null ? null : { code, ...oom ? { oom } : {} }
 }
 
-let exitIn = (path: string) => endingIn(path)?.code ?? null
+let exitIn = async (path: string) => (await endingIn(path))?.code ?? null
 
-let mtimeOf = (path: string) => {
+let mtimeOf = async (path: string) => {
   try {
-    return disk.statSync(path).mtime?.getTime() ?? null
+    return (await disk.stat(path)).mtime?.getTime() ?? null
   } catch {
     return null // not written yet
   }
@@ -384,29 +377,42 @@ let mtimeOf = (path: string) => {
 // The start and end times are kept in files, so a process picked back up
 // after a restart reports its whole running time and not just the last wait.
 // The end is when the wrapper wrote the exit code.
-let elapsedOf = (dir: string, eid: string) => {
+let elapsedOf = async (dir: string, eid: string) => {
   let f = files(dir, eid)
-  let start = codeOf(f.started) ?? Date.now()
-  let end = mtimeOf(f.code)
-  return () => {
-    end ??= mtimeOf(f.code)
-    return Math.max(0, (end ?? Date.now()) - start)
+  let start = await codeOf(f.started) ?? Date.now()
+  let end = await mtimeOf(f.code)
+  return {
+    elapsed: () => Math.max(0, (end ?? Date.now()) - start),
+    finish: async () => {
+      end ??= await mtimeOf(f.code)
+    },
   }
 }
 
-// The process we track is never our direct child, so waitpid is unavailable
-// from the first moment: kill(1) is the only handle there is — `-0` to test
-// that it is still alive, and a signal to stop it. A negative target is a
-// process group.
-let kill = async (target: number, sig: string) =>
-  (await processCommand('kill', {
-    args: [`-${sig}`, String(target)],
-    stdout: 'null',
-    stderr: 'null',
-  }).output()).success
+// A native signal needs no child process or executable read. Spawning kill(1)
+// for every liveness probe could itself sleep in kernel_clone on the main thread.
+let kill = (target: number, sig: string | number) => {
+  try {
+    system.kill(
+      target,
+      typeof sig == 'number'
+        ? sig
+        : sig == '0'
+        ? 0
+        : (sig.startsWith('SIG') ? sig : `SIG${sig}`) as system.Signal,
+    )
+    return true
+  } catch (e) {
+    if (['ESRCH', 'EPERM'].includes((e as NodeJS.ErrnoException).code ?? '')) {
+      return false
+    }
+    throw e
+  }
+}
 
-/** Whether a pid runs on this computer, asked with `kill -0`. */
-export let runs = (pid: number): Promise<boolean> => kill(pid, '0')
+/** Whether a pid runs on this computer, asked with signal 0. */
+export let runs = (pid: number): Promise<boolean> =>
+  Promise.resolve(kill(pid, 0))
 
 // Whether a pid runs, asked the way the caller looks.
 let alive = (o: Opts) => o.running ?? runs
@@ -425,21 +431,21 @@ let alive = (o: Opts) => o.running ?? runs
  * Nothing waits here: the exit code is written by the code watching the pid,
  * in this case as in every other.
  */
-export let signal = (
+export let signal = async (
   eid: string,
   pid: number,
   sig: string,
   o: Opts = {},
 ): Promise<boolean> => {
-  let group = groupOf(paths(eid, o).pid)
+  let group = await groupOf(paths(eid, o).pid)
   return kill(group ? -group : pid, sig)
 }
 
 // Delete a file the previous attempt left behind, so this attempt is not
 // handed the previous attempt's result.
-let clear = (path: string) => {
+let clear = async (path: string) => {
   try {
-    disk.unlinkSync(path)
+    await disk.unlink(path)
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code != 'ENOENT') throw e
   }
@@ -451,13 +457,13 @@ let clear = (path: string) => {
  * Whoever reads the output cleans once it is done with it, and nothing else
  * does: a service's output files are its log, appended to across attempts.
  */
-export let clean = (eid: string, o: Opts = {}): void => {
-  for (let path of Object.values(files(dirOf(o), eid))) clear(path)
+export let clean = async (eid: string, o: Opts = {}): Promise<void> => {
+  for (let path of Object.values(files(dirOf(o), eid))) await clear(path)
 }
 
-let fileInfo = (path: string) => {
+let fileInfo = async (path: string) => {
   try {
-    return disk.lstatSync(path)
+    return await disk.lstat(path)
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code != 'ENOENT') throw e
     return undefined
@@ -498,28 +504,28 @@ export let sweep = async (
       // An old .code alone is not ours to remove. Require the launch marker
       // and the wrapper's complete ending, and recheck after the graph read:
       // a service or managed session may already be on its next attempt.
-      let code = fileInfo(f.code)
-      let started = fileInfo(f.started)
-      let start = codeOf(f.started)
+      let code = await fileInfo(f.code)
+      let started = await fileInfo(f.started)
+      let start = await codeOf(f.started)
       let end = code?.mtime?.getTime()
-      let exit = exitIn(f.code)
+      let exit = await exitIn(f.code)
       if (
         !code?.isFile() || !started?.isFile() || start == null || start <= 0 ||
         end == null || end >= before || start > end ||
         exit == null || !Number.isInteger(exit) || exit < 0 || exit > 255
       ) continue
-      clean(eid, o)
+      await clean(eid, o)
       n++
     }
     candidates = []
   }
   try {
-    for (let e of await readdir(dir, { withFileTypes: true })) {
+    for (let e of await disk.readdir(dir, { withFileTypes: true })) {
       if (!e.isFile() || !e.name.endsWith('.code')) continue
-      if ((mtimeOf(`${dir}/${e.name}`) ?? before) >= before) continue
+      if ((await mtimeOf(`${dir}/${e.name}`) ?? before) >= before) continue
       let eid = e.name.slice(0, -'.code'.length)
       // No launch marker means another package's file, not a finished run.
-      if (mtimeOf(files(dir, eid).started) == null) continue
+      if (await mtimeOf(files(dir, eid).started) == null) continue
       candidates.push(eid)
       if (candidates.length == 128) await remove()
     }
@@ -536,21 +542,26 @@ export let sweep = async (
 // lines. The bytes are joined before they are decoded, so only that dropped
 // line can hold a character split at a block's edge.
 let BLOCK = 64 * 1024
-let ending = (path: string, n: number): string[] => {
+let ending = async (path: string, n: number): Promise<string[]> => {
   let f
   try {
-    f = disk.openSync(path, 'r')
+    f = await disk.open(path, 'r')
   } catch {
     return [] // the file does not exist yet: nothing has been printed
   }
   try {
-    let at = disk.fstatSync(f).size
+    let at = (await f.stat()).size
     let blocks: Uint8Array[] = []
     for (let breaks = 0; at > 0 && breaks <= n;) {
       let from = Math.max(0, at - BLOCK)
       let buf = new Uint8Array(at - from)
       for (let got = 0; got < buf.length;) {
-        let k = disk.readSync(f, buf, got, buf.length - got, from + got)
+        let { bytesRead: k } = await f.read(
+          buf,
+          got,
+          buf.length - got,
+          from + got,
+        )
         if (!k) break
         got += k
       }
@@ -561,7 +572,7 @@ let ending = (path: string, n: number): string[] => {
     let all = lines(new TextDecoder().decode(join(blocks)))
     return (at > 0 ? all.slice(1) : all).slice(-n)
   } finally {
-    disk.closeSync(f)
+    await f.close()
   }
 }
 
@@ -585,13 +596,17 @@ let lines = (text: string) => {
  * ```ts
  * import { tail } from '@yaks/process'
  *
- * // tail(run.eid, 40)   // ['hi']
+ * // await tail(run.eid, 40)   // ['hi']
  * ```
  */
-export let tail = (eid: string, n: number, o: Opts = {}): string[] => {
+export let tail = async (
+  eid: string,
+  n: number,
+  o: Opts = {},
+): Promise<string[]> => {
   if (n <= 0) return []
   let f = files(dirOf(o), eid)
-  return [...ending(f.out, n), ...ending(f.err, n)].slice(-n)
+  return [...await ending(f.out, n), ...await ending(f.err, n)].slice(-n)
 }
 
 // The wrapper writes the exit-code file just after the child it waited on is
@@ -604,12 +619,14 @@ export let tail = (eid: string, n: number, o: Opts = {}): string[] => {
 // reads that once, with no delay to wait out.
 let WRITE = 10_000
 let reported = (f: ReturnType<typeof files>, o: Opts) => async () => {
-  let wrapper = groupOf(f.pid)
+  let wrapper = await groupOf(f.pid)
   for (let i = 0, end = Date.now() + WRITE;; i++) {
-    let ending = endingIn(f.code)
+    let ending = await endingIn(f.code)
     if (ending) return ending
     let over = wrapper ? !(await alive(o)(wrapper)) : i >= 20
-    if (over || Date.now() >= end) return endingIn(f.code) ?? { code: null }
+    if (over || Date.now() >= end) {
+      return await endingIn(f.code) ?? { code: null }
+    }
     await sleep(beat(o))
   }
 }
@@ -651,7 +668,7 @@ export let launch = async (
   let platform = platformOf(o)
   let eid = o.eid ?? (o.mint ?? uuid)()
   let dir = dirOf(o)
-  disk.mkdirSync(dir, { recursive: true })
+  await disk.mkdir(dir, { recursive: true })
   let f = files(dir, eid)
   let argv = [spec.command, ...(spec.args ?? [])]
   let cwd = spec.cwd ?? system.cwd()
@@ -659,13 +676,13 @@ export let launch = async (
   // one starts: the pidfile and exit-code file are deleted — read as if they
   // belonged to this attempt, they would report the previous process both
   // alive and already finished. The output files are appended to.
-  clear(f.pid)
-  clear(f.code)
-  disk.writeFileSync(f.started, String(Date.now()))
-  spawn(eid, argv, cwd, spec.env ?? {}, dir, platform)
+  await clear(f.pid)
+  await clear(f.code)
+  await disk.writeFile(f.started, String(Date.now()))
+  await spawn(eid, argv, cwd, spec.env ?? {}, dir, platform)
   let pid = 0
   for (let end = Date.now() + (o.birth ?? 10_000); !pid && Date.now() < end;) {
-    pid = pidOf(f.pid)
+    pid = await pidOf(f.pid)
     if (!pid) await sleep(beat(o))
   }
   await store.apply([{
@@ -675,14 +692,14 @@ export let launch = async (
     // transaction, so no reader ever sees the new pid beside it.
     ...(o.eid ? { [EXIT]: null } : {}),
   }])
-  let elapsed = elapsedOf(dir, eid)
-  let done = follow(store, eid, pid, reported(f, o), o).then((code) => {
+  let timing = await elapsedOf(dir, eid)
+  let done = follow(store, eid, pid, reported(f, o), o).then(async (code) => {
     // Cache the ending before a caller cleans its file away, so a held Run
     // keeps reporting the whole elapsed time after cleanup.
-    elapsed()
+    await timing.finish()
     return code
   })
-  return { eid, pid, done, elapsed }
+  return { eid, pid, done, elapsed: timing.elapsed }
 }
 
 /**
@@ -705,11 +722,17 @@ export let adopt = async (
     entity: { eid },
     [PROCESS]: { pid, command: o.command ?? null, cwd: o.cwd ?? null },
   }])
+  let timing = await elapsedOf(dirOf(o), eid)
   return {
     eid,
     pid,
-    elapsed: elapsedOf(dirOf(o), eid),
-    done: follow(store, eid, pid, () => ({ code: o.code?.() ?? null }), o),
+    elapsed: timing.elapsed,
+    done: follow(store, eid, pid, () => ({ code: o.code?.() ?? null }), o).then(
+      async (code) => {
+        await timing.finish()
+        return code
+      },
+    ),
   }
 }
 
@@ -736,12 +759,16 @@ export let watch = async (store: Store, o: Opts = {}): Promise<Run[]> => {
     let f = files(dir, eid)
     // The pidfile wins: it is where the wrapper wrote its own pid, and it is
     // current even for a row whose pid was never written.
-    let pid = pidOf(f.pid) || Number((b[PROCESS] as Process)?.pid ?? 0)
+    let pid = await pidOf(f.pid) || Number((b[PROCESS] as Process)?.pid ?? 0)
+    let timing = await elapsedOf(dir, eid)
     runs.push({
       eid,
       pid,
-      elapsed: elapsedOf(dir, eid),
-      done: follow(store, eid, pid, reported(f, o), o),
+      elapsed: timing.elapsed,
+      done: follow(store, eid, pid, reported(f, o), o).then(async (code) => {
+        await timing.finish()
+        return code
+      }),
     })
   }
   return runs
@@ -805,7 +832,9 @@ let dead = async (b: Bundle, o: Asking): Promise<boolean> => {
   if ((b[PROCESS] as Process)?.workspace) return false
   let eid = b.entity.eid
   let pid = Number((b[PROCESS] as Process)?.pid ?? 0)
-  if (eid == o.me || !pid || mtimeOf(files(dirOf(o), eid).started) != null) {
+  if (
+    eid == o.me || !pid || await mtimeOf(files(dirOf(o), eid).started) != null
+  ) {
     return false
   }
   return !await alive(o)(pid)

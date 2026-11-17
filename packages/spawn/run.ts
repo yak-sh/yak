@@ -784,7 +784,7 @@ let onward = async (
   if (!well || !await parked(g, session)) {
     if (o.worktrees) await taken(g, checkoutOf(session, o.worktrees))
     await disk.remove(emptyOf(session, o), { recursive: true }).catch(absent)
-    clean(session, o)
+    await clean(session, o)
   }
   if (well && await requested(g, session)) await start(g, session, o)
 }
@@ -1181,7 +1181,7 @@ export let recounted = async (
     let session = b.entity.eid
     let copy = copies.get(String(comp(b, SESSION)?.id ?? session))
     let log = copy ?? await own(g, session, o)
-    if (!log || (mtime(log.path) ?? 0) < after) continue
+    if (!log || (await mtime(log.path) ?? 0) < after) continue
     wrote += await recount(g, log.path, log.read, {
       session,
       signal: o.signal,
@@ -1190,9 +1190,9 @@ export let recounted = async (
   return wrote
 }
 
-let mtime = (path: string) => {
+let mtime = async (path: string) => {
   try {
-    return disk.statSync(path).mtime?.getTime()
+    return (await disk.stat(path)).mtime?.getTime()
   } catch {
     return undefined
   }
@@ -1201,7 +1201,7 @@ let mtime = (path: string) => {
 // A run's own log and how its provider's lines read, while it is kept.
 let own = async (g: Graph, session: string, o: Opts) => {
   let path = paths(session, o).out
-  if (mtime(path) == null) return null
+  if (await mtime(path) == null) return null
   let job = await asked(g, session).catch(() => null)
   let adapter = adapterOf(job, o)
   return adapter ? { path, read: adapter.read } : null
