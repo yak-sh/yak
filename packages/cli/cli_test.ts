@@ -7,6 +7,8 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { Unauthorized as Refuse } from '@yaks/api'
 import { mcp } from '@yaks/mcp'
+import type { Bundle } from '@yaks/graph'
+import { valueIn } from '@yaks/tools/value'
 import { shopGraph } from '../mcp/testing.ts'
 import { argsFor, type Reads } from './args.ts'
 import { doorUrl, initialize, rpc, Unauthorized } from './rpc.ts'
@@ -81,8 +83,10 @@ test('the tool list is the subcommand list', async () => {
   assertEquals(names, [
     'graph_apply',
     'graph_query',
+    'graph_restore',
     'graph_schema',
     'graph_show',
+    'graph_trash',
   ])
 })
 
@@ -116,6 +120,53 @@ test('a command line goes through the published schema and answers', async () =>
   })
   let { text } = saidBy(said)
   assertEquals(JSON.parse(text)[0].entity.eid, 'b1')
+})
+
+let recovery = shopGraph()
+await recovery.apply([{
+  entity: { eid: 'saved-book' },
+  doc: { title: 'Saved book' },
+  book: { price: 12 },
+}])
+await recovery.apply([{ entity: { eid: 'saved-book' }, $delete: true }])
+let recoveryDoor = mcp({ graph: recovery })
+let recoveryAsk = rpc({
+  url: doorUrl('shop.test'),
+  fetch: (request) => recoveryDoor(request),
+})
+await initialize(recoveryAsk)
+let recoveryTools = (await recoveryAsk('tools/list')).tools as Tool[]
+
+test('trash and restore command lines use their published schemas', async () => {
+  let trash = recoveryTools.find((t) => t.name == 'graph_trash')!
+  let restore = recoveryTools.find((t) => t.name == 'graph_restore')!
+  assertEquals(
+    [trash, restore].map((tool) => {
+      let { noun, verb } = spelling(tool)
+      return [noun, verb]
+    }),
+    [['graph', 'trash'], ['graph', 'restore']],
+  )
+  let saved = await recoveryAsk('tools/call', {
+    name: trash.name,
+    arguments: await argsFor(
+      trash,
+      ['--ids', '["saved-book"]', '--limit', '1'],
+      reads,
+    ),
+  })
+  assertEquals(saved.isError, undefined)
+  let result = saved.structuredContent as { result: Bundle[] }
+  let groups = valueIn(result.result) as unknown as { id: string }[]
+  assertEquals(groups.length, 1)
+  let restored = await recoveryAsk('tools/call', {
+    name: restore.name,
+    arguments: await argsFor(restore, ['--id', groups[0].id], reads),
+  })
+  assertEquals(restored.isError, undefined)
+  assertEquals((await recovery.get(['saved-book']))[0].doc, {
+    title: 'Saved book',
+  })
 })
 
 test('a tool that refused says so, and the words are what is printed', async () => {
