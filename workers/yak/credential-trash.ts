@@ -76,6 +76,13 @@ export let restoreCredential = async (
   one: Credential,
   who: Who,
 ) => {
+  let saved = await vaultOf(env).past(one.id)
+  if (!saved) {
+    throw refuse(
+      'conflict',
+      'This saved credential is no longer available. Choose another saved version.',
+    )
+  }
   await dir.apply({
     entities: [{
       entity: { eid: one.eid },
@@ -83,17 +90,12 @@ export let restoreCredential = async (
         ...one.deleted ? one.row.connection as Comp : {},
         status: 'connected',
       },
-      secret: { ...comp(one.row, 'secret'), value: one.handle },
+      secret: {
+        ...comp(one.row, 'secret'),
+        value: saved.value ?? saved.op ?? '',
+      },
     }],
   }, vouched(who))
-  let vault = vaultOf(env)
-  await vault.restore(one.id)
-  if ((await vault.read(one.eid))?.handle != one.handle) {
-    throw refuse(
-      'conflict',
-      'This saved credential is no longer available. Choose another saved version.',
-    )
-  }
   return `${one.integration}'s saved credential is restored. Its connection is available on this page; choose which apps use it.`
 }
 

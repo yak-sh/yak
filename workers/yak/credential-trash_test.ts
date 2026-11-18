@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { d1 } from '../../packages/d1/testing.ts'
 import type { Directory, Space } from './directory.ts'
@@ -11,7 +11,7 @@ import {
 } from './credential-trash.ts'
 import { vaultOf } from './vault.ts'
 
-let setup = async () => {
+let setup = async (refused = false) => {
   let env = {
     VAULT: d1(),
     VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(42))),
@@ -41,13 +41,18 @@ let setup = async () => {
       }]),
     apply: ({ entities }: { entities: Bundle[] }) => {
       writes.push(...entities)
-      return Promise.resolve(entities)
+      return refused
+        ? Promise.reject(new Error('write refused'))
+        : Promise.resolve(entities)
     },
   } as unknown as Directory
   return { env, dir, space, vault, writes }
 }
 
-let own = await setup(), restored = await setup(), erased = await setup()
+let own = await setup(),
+  restored = await setup(),
+  erased = await setup(),
+  failed = await setup(true)
 
 test('credential trash follows current ownership and private archived ownership', async () => {
   let { env, dir, space } = own
@@ -63,15 +68,18 @@ test('credential trash follows current ownership and private archived ownership'
   )
 })
 
-test('restoring a retained credential brings its connection and chosen value back', async () => {
+test('restoring a retained credential uses the graph sealing door and keeps its saved version', async () => {
   let { env, dir, space, vault, writes } = restored
   let one = (await retainedCredentials(env, dir, space, 'person')).find((c) =>
     c.eid == 'gone'
   )!
   await restoreCredential(env, dir, one, { person: 'person', role: 'owner' })
-  assertEquals((await vault.read('gone'))?.value, 'gone-old')
   assertEquals(writes[0].connection, one.row.connection)
-  assertEquals(writes[0].secret, one.row.secret)
+  assertEquals(writes[0].secret, {
+    ...(one.row.secret as object),
+    value: 'gone-old',
+  })
+  assert((await vault.trash()).some((c) => c.id == one.id))
 })
 
 test('permanent credential purge removes only the selected saved version', async () => {
@@ -87,4 +95,18 @@ test('permanent credential purge removes only the selected saved version', async
   assert(!(await vault.trash()).some((c) => c.id == one.id))
   assertEquals((await vault.read('live'))?.value, 'live-new')
   assertEquals((await vault.trash()).length, 3)
+})
+
+test('a refused restoration keeps its saved credential and current value', async () => {
+  let { env, dir, space, vault } = failed
+  let one = (await retainedCredentials(env, dir, space, 'person')).find((c) =>
+    c.eid == 'live'
+  )!
+  await assertRejects(
+    () => restoreCredential(env, dir, one, { person: 'person', role: 'owner' }),
+    Error,
+    'write refused',
+  )
+  assert((await vault.trash()).some((c) => c.id == one.id))
+  assertEquals((await vault.read('live'))?.value, 'live-new')
 })

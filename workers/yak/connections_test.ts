@@ -1282,6 +1282,11 @@ test('the Connections page restores a chosen old key after its connection was re
     },
   )
   assertEquals((await vaultOf(s.p.env).read(recoveredEid))?.value, 'sk-before')
+  assert(
+    (await vaultOf(s.p.env).trash()).some((one) =>
+      one.id == recoveredVersion.id
+    ),
+  )
   assertEquals(
     (await s.shown()).list.find((one) => one.eid == recoveredEid)?.status,
     'connected',
