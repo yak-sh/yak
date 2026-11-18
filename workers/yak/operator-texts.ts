@@ -184,7 +184,7 @@ export let phonedIn = async (env: Env, number: string) => {
 }
 
 // A text's pictures, kept as an email's attachments are.
-let pictures = async (env: Env, space: Space, arrival: Arrival) => {
+export let pictures = async (env: Env, space: Space, arrival: Arrival) => {
   let { keepFile } = await import('./operator-channels.ts')
   let files = []
   for (let [i, m] of arrival.media.entries()) {

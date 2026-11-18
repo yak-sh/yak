@@ -775,6 +775,8 @@ export let lineArrived = async (
       return { space, fresh: false }
     }
     if (stopped) return { space, fresh: false }
+    let { pictures } = await import('./operator-texts.ts')
+    let files = await pictures(env, space, arrival)
     let response = await asked(space, '/operator/replied', {
       say: arrival.text,
       request: {
@@ -782,7 +784,7 @@ export let lineArrived = async (
         address: arrival.from,
         reply_to: arrival.to,
         via: arrival.via,
-        files: [],
+        files,
       },
       options: {
         id: requestId(space.eid, `${arrival.via}:${arrival.id}`),
