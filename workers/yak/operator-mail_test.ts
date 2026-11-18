@@ -210,11 +210,12 @@ test("a reply to the letter is answered in its writer's own conversation and in 
   assertStringIncludes(root.html, 'Tuesday at 3 works for us.')
   assertEquals(root.html.includes('Thank you; I will tell Jeff.'), false)
   // The letter, its reply, the answer, and Jeff's alert of the reply.
-  assertEquals(
-    letters.filter((l) => l.to == 'jeff@example.com')
-      .some((l) => l.text?.includes('replied to the letter you sent them')),
-    true,
+  let alert = letters.find((l) =>
+    l.to == 'jeff@example.com' &&
+    l.subject == 'alvarez@clinic.example replied to the letter you sent them'
   )
+  assert(alert)
+  assertStringIncludes(alert.text!, 'Tuesday at 3 works for us.')
   assertEquals(meter, 4)
 })
 
