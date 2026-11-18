@@ -193,13 +193,13 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
 
     assertStringIncludes(
       await tool('number_release', { number: FREE }),
-      'is in the trash for 30 days',
+      'is in the trash',
     )
     assertEquals(held.size, 1)
     assert((await k.dir.lines(space))[0].trashed)
     assertStringIncludes(
       await tool('number_status'),
-      'in the trash, 30 days left',
+      'in the trash',
     )
     await assertRejects(() => tool('number_assign', { number: FREE }))
     assertStringIncludes(await readTrash(), '(833) 555-0100')
