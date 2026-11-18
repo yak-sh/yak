@@ -23,6 +23,7 @@ import {
   worktreeEid,
 } from './host.ts'
 import { refEid } from './comp.ts'
+import { cache } from './cache.ts'
 
 /** Resolve the stable filesystem, never a convenience directory. */
 export let filesystem = async (
@@ -309,6 +310,16 @@ fi`)
     }
     // Dirty work is always kept, independent of process visibility.
     if ((await at(path, ['status', '--porcelain'])).trim()) return 'dirty'
+    let ignored = await at(path, [
+      'ls-files',
+      '--others',
+      '--ignored',
+      '--exclude-standard',
+      '--directory',
+      '-z',
+    ])
+    if (ignored.split('\0').some((file) => file && !cache(file))) return 'dirty'
+
     // Same-user processes outside the graph keep their cwd and open files.
     // An unreadable live process refuses collection rather than proving absence.
     let used = await exec(`

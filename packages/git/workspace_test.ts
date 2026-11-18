@@ -266,3 +266,39 @@ let ancestor = await retained(watched, 'boxed')
 test('a process launched at its sandbox root keeps a checkout by cwd', () => {
   equal(ancestor, true)
 })
+
+let unique = fixture().g
+await unique.apply([
+  { entity: { eid: 'computer' }, machine: { address: 'ssh://box' } },
+  {
+    entity: { eid: 'tree' },
+    workspace: { machine: 'computer', root: '/repo' },
+  },
+])
+let filesystemOf = await filesystem(unique, 'tree')
+let repository = repositoryEid('/repo/.git', filesystemOf.entity.eid)
+await unique.apply([
+  {
+    entity: { eid: repository },
+    repository: { workspace: filesystemOf.entity.eid, common: '/repo/.git' },
+  },
+  {
+    entity: { eid: 'tree' },
+    worktree: {
+      repository,
+      gitdir: '/repo/.git/worktrees/task',
+      managed: true,
+    },
+  },
+])
+test('remote reclamation keeps ignored unique files without removing the checkout', async () => {
+  let removed = false
+  let git = await workspaceGit(unique, 'tree', {
+    execute: (script) => {
+      if (script.includes('worktree remove')) removed = true
+      return Promise.resolve(script.includes('ls-files') ? 'notes.txt\0' : '')
+    },
+  })
+  equal(await git.reclaim('tree'), 'dirty')
+  equal(removed, false)
+})

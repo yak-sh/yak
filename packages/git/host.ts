@@ -21,6 +21,7 @@ import { refEid } from './comp.ts'
 import { localFilesystem } from './placement.ts'
 import { checkoutBase } from './checkout.ts'
 import { spares } from './spare.ts'
+import { cache } from './cache.ts'
 export { filesystemEid, localFilesystem } from './placement.ts'
 
 export { checkoutDoc } from './checkout_vocab.ts'
@@ -852,11 +853,7 @@ let keepIgnored = async (path: string) => {
     '-z',
   ])
   for (let file of files!.split('\0').filter(Boolean)) {
-    if (
-      file.split('/').some((p) =>
-        ['node_modules', '.scratch', '.types', 'target'].includes(p)
-      )
-    ) continue
+    if (cache(file)) continue
     await trash(`${path}/${file}`)
   }
 }
