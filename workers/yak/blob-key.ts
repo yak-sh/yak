@@ -28,6 +28,6 @@ export let receiptPrefix = (app: { eid: string }) =>
 
 /** Where the ledger of an app's uploads in parts is kept (@yaks/blob
  * `parts`): outside every space's prefix, so it never counts against one, and
- * by the app's eid, so a rename leaves it in place. The bucket's lifecycle
- * rule expires what nobody finished (README.md). */
+ * by the app's eid, so a rename leaves it in place. Unfinished accepted parts
+ * and their receipts stay here until a person purges them (README.md). */
 export let uploadPrefix = (app: { eid: string }) => `.uploads/${app.eid}/`

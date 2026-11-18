@@ -28,7 +28,7 @@ let setup = async (file: Uint8Array, sha?: string) => {
   let { bucket, held } = memoryBucket()
   let objects = bucketObjects(bucket)
   // Each upload the bucket begins, so a test can abort one behind the
-  // ledger's back, as R2 does a week on.
+  // ledger's back, as a provider failure might.
   let begun: string[] = []
   let inMemory = memoryMultipart(bucket.put)
   let multipart = {
@@ -57,8 +57,25 @@ let setup = async (file: Uint8Array, sha?: string) => {
     let from = fold(START, bytes.slice(0, (n - 1) * 64))
     return up.put(n, stream(part), part.length, from)
   }
-  let ledger = () => [...held.keys()].filter((k) => k.startsWith('ledger/'))
-  return { up, reopen, send, held, key, ledger, multipart, begun, bucket }
+  let ledger = () =>
+    [...held.keys()].filter((k) =>
+      k.startsWith('ledger/') && !k.includes('/retained/') &&
+      !k.includes('/missing/')
+    )
+  let retained = () =>
+    [...held.entries()].filter(([k]) => k.includes('/retained/'))
+  return {
+    up,
+    reopen,
+    send,
+    held,
+    key,
+    ledger,
+    multipart,
+    begun,
+    bucket,
+    retained,
+  }
 }
 
 let file = new Uint8Array(150).map((_, i) => (i * 7) & 0xff)
@@ -110,13 +127,20 @@ test('bytes already kept need no parts', async () => {
   equal((await up.post(file.length)).whole, { bytes: 150, head: file })
 })
 
-test('parts that do not hash to their name are not kept', async () => {
-  let { up, send, held, key, ledger } = await setup(file, 'f'.repeat(64))
+test('parts that do not hash to their name remain privately recoverable', async () => {
+  let { up, send, held, key, ledger, retained } = await setup(
+    file,
+    'f'.repeat(64),
+  )
   await up.post(file.length)
   for (let n of all) await send(n)
   await assertRejects(() => up.post(file.length), Wrong)
   equal(held.has(key), false)
-  equal(ledger(), [])
+  equal(ledger().length, 4)
+  equal(
+    retained().map(([, bytes]) => [...bytes]),
+    all.map((n) => [...file.slice((n - 1) * 64, n * 64)]),
+  )
 })
 
 test('a part sent from a state its bytes before it do not leave breaks the chain', async () => {
@@ -137,11 +161,13 @@ test('a part of the wrong size, or past the last, is refused', async () => {
 })
 
 test('an upload the bucket forgot begins again', async () => {
-  let { up, send, multipart, key, begun } = await setup(file)
+  let { up, send, multipart, key, begun, retained, ledger } = await setup(file)
   await up.post(file.length)
   await send(1)
   await multipart.resumeMultipartUpload(key, begun[0]).abort()
   await assertRejects(() => send(2), Gone)
+  equal(retained().map(([, bytes]) => bytes), [file.slice(0, 64)])
+  equal(ledger().length, 2)
   equal((await up.post(file.length)).need, all)
   for (let n of all) await send(n)
   equal((await up.post(file.length)).whole?.bytes, 150)
@@ -201,34 +227,17 @@ test('a lasting R2 failure keeps uploaded parts for a later completion', async (
   equal(fixture.ledger().length, 4)
 })
 
-let abortingAfter = await (async () => {
-  let fixture = await setup(file, 'f'.repeat(64))
-  await fixture.up.post(file.length)
-  for (let n of all) await fixture.send(n)
-  let calls = 0
-  let resume = fixture.multipart.resumeMultipartUpload
-  fixture.multipart.resumeMultipartUpload = (key, id) => ({
-    ...resume(key, id),
-    abort: async () => {
-      if (++calls == 1) {
-        await resume(key, id).abort()
-        throw new Error(
-          'abort: We encountered an internal error. Please try again. (10001)',
-        )
-      }
-      throw new Error(
-        'abort: The specified multipart upload does not exist. (10024)',
-      )
-    },
-  })
-  return { ...fixture, calls: () => calls }
-})()
-
-test('an abort whose acknowledgment failed accepts the binding saying already absent', async () => {
-  let fixture = abortingAfter
-  await assertRejects(() => fixture.up.post(file.length), Wrong)
-  equal(fixture.calls(), 2)
-  equal(fixture.ledger(), [])
+test('correcting a broken chain retains the replaced bytes after verified completion', async () => {
+  let fixture = await setup(file)
+  let { up, send, retained } = fixture
+  await up.post(file.length)
+  let other = file.map((b) => b ^ 1)
+  for (let n of all) await send(n, n == 2 ? other : file)
+  await assertRejects(() => up.post(file.length), Wrong)
+  equal(retained().length, 3)
+  await send(2)
+  equal((await up.post(file.length)).whole?.head, file)
+  equal(retained().map(([, bytes]) => bytes), [other.slice(64, 128)])
 })
 
 let completionDefect = await (async () => {

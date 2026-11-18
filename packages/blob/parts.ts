@@ -15,10 +15,10 @@
 // from SHA-256's start to the address, so the bytes under a key are always
 // the bytes its name says, with nothing read back to check.
 //
-// An upload nobody finishes is the bucket's to forget: R2 aborts one after
-// seven days, and a lifecycle rule on the ledger's prefix expires its entries
-// (workers/yak/README.md). Its parts are never objects, so no listing of a
-// prefix counts them.
+// Accepted parts also have private immutable recovery objects beside their
+// receipts. Nothing expires an unfinished upload or its ledger. Only after a
+// verified whole exists are its duplicate parts and active receipts removed;
+// other attempts stay recoverable until a person purges them.
 
 import { bucketCode, busy, type Objects, patient } from './object.ts'
 import { sleep } from '@yaks/fp'
@@ -141,6 +141,10 @@ export let parts = (
     `${begun}${t.bytes}.${t.part}.${encodeURIComponent(t.id)}`
   let landed = (t: Ticket) => `${ledger}${sha}/${encodeURIComponent(t.id)}/`
   let count = (t: Ticket) => Math.ceil(t.bytes / t.part)
+  let missing = (t: Ticket) =>
+    `${ledger}${sha}/missing/${encodeURIComponent(t.id)}`
+  let retained = (t: Ticket) =>
+    `${ledger}${sha}/retained/${t.bytes}.${t.part}/${encodeURIComponent(t.id)}/`
 
   // The uploads begun for these bytes, newest first: two tabs may begin one
   // each, and whoever comes next carries on the newer.
@@ -154,7 +158,7 @@ export let parts = (
           part: +part,
         }
         return { ...t, at }
-      }).sort((a, b) => b.at - a.at)
+      }).filter((t) => !(missing(t) in held)).sort((a, b) => b.at - a.at)
 
   // Each part's states and tag, the newest where a part was sent again: the
   // bucket keeps the last part sent under a number.
@@ -175,10 +179,15 @@ export let parts = (
   // Everything the ledger says of these bytes, in one listing.
   let book = () => objects.uploaded(`${ledger}${sha}`)
 
-  let drop = (held: Record<string, number>, t: Ticket) =>
+  let drop = (held: Record<string, number>, t: Ticket, chain: Receipt[]) =>
     objects.delete([
       ticket(t),
-      ...Object.keys(held).filter((k) => k.startsWith(landed(t))),
+      ...Object.keys(held).filter((k) =>
+        k.startsWith(landed(t)) ||
+        chain.some((r, i) =>
+          k.startsWith(`${retained(t)}${i + 1}.${r.from}.${r.to}.`)
+        )
+      ),
     ])
 
   let whole = async (): Promise<Whole | null> => {
@@ -203,8 +212,6 @@ export let parts = (
       chain.some((r, i) => r.from != (i ? chain[i - 1].to : START)) ||
       chain[chain.length - 1].to != sha
     ) {
-      await patient(() => up.abort().catch(lost), pause)
-      await drop(held, t)
       throw new Wrong(`the parts sent do not hash to ${sha}`)
     }
     try {
@@ -231,13 +238,12 @@ export let parts = (
       if (bucketCode(e) != NO_UPLOAD) throw e
       let done = await whole()
       if (done) return done
-      await patient(() => up.abort().catch(lost), pause)
-      await drop(held, t)
+      await objects.put(missing(t), new Uint8Array())
       throw new Gone(`the parts of ${sha} could not be assembled: ${e}`)
     }
     let done = await whole()
     if (!done) throw new Error(`no object at ${key} once assembled`)
-    await drop(held, t)
+    await drop(held, t, chain)
     return { ...done, made: true }
   }
 
@@ -267,7 +273,7 @@ export let parts = (
       length: number,
       from = START,
     ): Promise<void> => {
-      let held = await objects.uploaded(begun)
+      let held = await book()
       let [t] = tickets(held)
       if (!t) throw new Gone(`no upload of ${sha} is under way`)
       let last = count(t)
@@ -285,10 +291,15 @@ export let parts = (
       // stream the bucket reads through JavaScript, hashing as it passes,
       // sends a part at a third of the speed (T-124790).
       let hash = hasher(from)
+      let recovery = new Uint8Array(length), offset = 0
       let [kept, read] = body.tee()
       let reader = read.getReader()
       let hashed = (async () => {
-        for (let got; !(got = await reader.read()).done;) hash.add(got.value)
+        for (let got; !(got = await reader.read()).done;) {
+          hash.add(got.value)
+          recovery.set(got.value, offset)
+          offset += got.value.byteLength
+        }
       })()
       hashed.catch(() => {})
       let upload = fixed(kept, length)
@@ -301,10 +312,17 @@ export let parts = (
       } catch (e) {
         await Promise.allSettled([reader.cancel(e), upload.cancel(e)])
         lost(e)
-        await drop(await book(), t)
+        await objects.put(missing(t), new Uint8Array())
         throw new Gone(`the upload of ${sha} has expired`)
       }
       let to = hash.end(n == last ? t.bytes : undefined)
+      // A native multipart part cannot be read back. Keep accepted bytes in
+      // ordinary private objects too, including attempts another part replaces.
+      // Its key carries enough to recover without the sender or resume token.
+      await objects.put(
+        `${retained(t)}${n}.${from}.${to}.${crypto.randomUUID()}`,
+        recovery,
+      )
       let etag = encodeURIComponent(sent.etag)
       await objects.put(
         `${landed(t)}${n}.${from}.${to}.${etag}`,

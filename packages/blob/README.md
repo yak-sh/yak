@@ -317,11 +317,20 @@ when that `post` assembled it rather than finding it kept already.
 
 `put(n, body, length, from)` keeps part `n`, hashing it as it passes on from
 `from`, the SHA-256 **state** the bytes before it leave (`START` for the first).
-The ledger keeps each part's state before and after, and the parts are assembled
-only when those chain from `START` to `sha`, so nothing is read back to check
-the whole. A broken chain, or a part of the wrong length, throws `Wrong`. `Gone`
-says the upload is not under way, so it is begun again. `memoryMultipart(put)`
-holds the parts in memory for a bucket with no multipart of its own.
+The ledger keeps each part's state before and after. Accepted bytes also have
+private immutable recovery objects under `<ledger>/<sha>/retained/`, with upload
+id, total size, part size, part number and hash states in the key. A provider
+losing its multipart id leaves those objects and its old receipts recoverable; a
+new upload can begin. A broken chain never aborts or discards accepted parts.
+Disable lifecycle expiry and multipart abort rules on the bucket.
+
+The parts are assembled only when those chain from `START` to `sha`, so nothing
+is read back to check the whole. A broken chain, or a part of the wrong length,
+throws `Wrong`. `Gone` says the upload is not under way, so it is begun again.
+`memoryMultipart(put)` holds the parts in memory for a bucket with no multipart
+of its own. A verified whole removes its active receipts and recovery copies of
+the same valid parts. Other accepted attempts remain private until a person
+chooses permanent purge.
 
 The complete three-part bucket example runs in
 [`multipart_example_test.ts`](./multipart_example_test.ts): a third part lands,

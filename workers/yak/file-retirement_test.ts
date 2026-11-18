@@ -288,3 +288,22 @@ test('the app sweep leaves immutable workbench snapshots outside its namespaces'
   equal(candidates, [])
   equal(await Promise.all(keys.map((key) => blobs.has(key))), [true, true])
 })
+
+// Both apps' immutable release manifests name the same global content object.
+test('purging one owner keeps content shared by another live or trashed owner', async () => {
+  let g = ledger(), blobs = bucketObjects(memoryBucket().bucket)
+  let first = 'ada/.apps/first/', second = 'ada/.apps/second/'
+  let shared = 'sha/' + 'a'.repeat(64)
+  for (let prefix of [first, second]) {
+    await blobs.put(prefix + '.manifest', new TextEncoder().encode(shared))
+  }
+  await blobs.put(shared, bytes)
+  await retiring(g, [shared, first + '.manifest'], now)
+  await purgedPrefix(g, blobs, first)
+  equal(await blobs.has(first + '.manifest'), false)
+  equal(await blobs.has(second + '.manifest'), true)
+  equal(await blobs.get(shared), bytes)
+  // Even an overbroad prefix cannot turn owner erasure into shared-byte loss.
+  equal(await purgedPrefix(g, blobs, 'sha/'), [])
+  equal(await blobs.get(shared), bytes)
+})

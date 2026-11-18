@@ -81,13 +81,14 @@ export let retired = (
   _now = Date.now(),
 ): Promise<void> => Promise.resolve()
 
-/** Purge a prefix after a person confirms permanent erasure from the trash. */
+/** Purge owner-private keys after a person confirms permanent erasure.
+ * Shared content addresses outlive every owner and are never a prefix purge. */
 export let purgedPrefix = async (
   graph: Ledger,
   blobs: Objects,
   prefix: string,
 ) => {
-  let keys = await blobs.list(prefix)
+  let keys = (await blobs.list(prefix)).filter((key) => !key.startsWith('sha/'))
   await blobs.delete(keys)
   await reclaimed(graph, keys)
   return keys
