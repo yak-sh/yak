@@ -9,7 +9,8 @@ let k = await kernel()
 let space = unique('refusing')
 let them = await seed(k, [{ slug: space, apps: ['notes'] }])
 let agent = connector(k, them.cookie)
-let nobody = unique('no_such_tool')
+// Its digit makes it a token whatever hex `unique` draws (refusals.ts VALUES).
+let nobody = unique('no_such_tool_0')
 // A tool nobody offers, and one admitted to the space that refuses there.
 await agent.call('tools/call', { name: nobody, arguments: {} })
   .catch(() => {})
