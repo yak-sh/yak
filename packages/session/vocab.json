@@ -12,7 +12,6 @@
       "journal": false,
       "wire": false,
       "embed": false,
-      "expire": ".announced .created.at<=\"1d ago\"",
       "type": "object",
       "description": "A harness hook's pairing of an MCP tool call with the session making it, shared by every serving process until the result is reported.",
       "properties": {
@@ -83,7 +82,6 @@
       "journal": false,
       "wire": false,
       "embed": false,
-      "expire": ".context_parts .created.at<=\"30d ago\"",
       "type": "object",
       "description": "where one model request's tokens went, beside its `usage`: each part of its context, and each large entry in it, with its tokens as they were paid (read from the provider cache, written to it, sent fresh, generated). The totals are the provider's; the split across parts is estimated from their sizes. The fixed part every request carries is one part, `fixed`, whose pieces are the session's `fixed`",
       "properties": {

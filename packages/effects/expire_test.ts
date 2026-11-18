@@ -246,8 +246,8 @@ test('expiration rejects nonfilter declarations and aborts before removing rows'
   ok((await cancelled.get(['one']))[0].effect)
 })
 
-// A tombstone outlives its delete by the retention, then goes, unless
-// something still names it.
+// An elapsed retention never purges identities or trash without a person
+// choosing it.
 let mournedVocab = loadVocab({
   $defs: {
     item: { component: true },
@@ -268,10 +268,10 @@ await mourned.apply([
   { entity: { eid: 'named' }, $delete: true },
 ])
 
-test('expire prunes a tombstone once its retention passes, unless something names it', async () => {
+test('expiration retains old tombstones and their trash', async () => {
   equal(await expire(mourned, { now: Date.now() }), 0)
   ok((await mourned.get(['gone']))[0].tombstone)
-  equal(await expire(mourned, { now: Date.now() + TOMBSTONES + DAY }), 1)
-  equal(await mourned.get(['gone']), [])
+  equal(await expire(mourned, { now: Date.now() + TOMBSTONES + DAY }), 0)
+  ok((await mourned.get(['gone']))[0].tombstone)
   ok((await mourned.get(['named']))[0].tombstone)
 })

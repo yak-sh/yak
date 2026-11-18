@@ -1,9 +1,6 @@
-// One sweep over the composed vocabulary's expire declarations, then over the
-// tombstones old enough that no write racing their delete can still arrive.
-// Removal goes through apply, so references, provenance-only deaths, journal
-// and subscribers see the same transaction as an ordinary component removal;
-// a tombstone goes as a `$prune` (@yaks/graph prune.ts), which erases an
-// identity only while nothing refers to it.
+// One sweep over the composed vocabulary's regenerable cache declarations.
+// Removal goes through apply so references, journal and subscribers see the
+// ordinary component edit. Trash and its identities never expire.
 import { expireOf } from '@yaks/vocab'
 import {
   after as past,
@@ -16,7 +13,7 @@ import {
 } from '@yaks/query'
 import type { Access, Bundle, Comp } from '@yaks/graph'
 import { comps } from '@yaks/graph/bundle'
-import { Refused, Stale } from '@yaks/graph/errors'
+import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { HOLD, LEASE, leaseEid, sleep, take } from './lease.ts'
 
@@ -24,14 +21,13 @@ import { HOLD, LEASE, leaseEid, sleep, take } from './lease.ts'
 export let EXPIRE = '@yaks/effects/expire'
 /** A day in milliseconds between successful expiration passes. */
 export let DAY = 86_400_000
-/** How long a tombstone outlives its delete: a write that raced the delete
- * has arrived long before, and after it nothing reads the tombstone. */
+/** The former tombstone retention, retained for callers that display it.
+ * Tombstones and their trash no longer expire. */
 export let TOMBSTONES = 30 * DAY
 
-/** Remove matching component rows in bounded transactions, then prune the
- * tombstones older than `tombstones` milliseconds. The returned count is
- * component rows and pruned identities, not entities: another component keeps
- * its owner alive. Query grammar is checked here, with no free-text terms.
+/** Remove matching regenerable component rows in bounded transactions.
+ * The returned count is component rows, not entities: another component keeps
+ * its owner alive. Trash is retained until a person chooses to purge it.
  * Each declaration is constrained to its own component even when its query
  * contains an OR. */
 export let expire = async (
@@ -41,6 +37,7 @@ export let expire = async (
     now?: number
     page?: number
     signal?: AbortSignal
+    /** Ignored: retained trash has no automatic expiration. */
     tombstones?: number
   } = {},
 ): Promise<number> => {
@@ -91,12 +88,7 @@ export let expire = async (
       }
     }
   }
-  return removed + await bury(g, paced, {
-    batch,
-    before: new Date((opts.now ?? Date.now()) - (opts.tombstones ?? TOMBSTONES))
-      .toISOString(),
-    signal: opts.signal,
-  })
+  return removed
 }
 
 // A row's removal, guarded by the values the selection read, not just the age
@@ -171,42 +163,6 @@ let pacer = (signal?: AbortSignal) => {
       held = performance.now() - since
     }
   }
-}
-
-// Prune the tombstones deleted before `before`, a page at a time in the
-// store's order. A page may hold none to prune and still lead on. A page
-// refused because something reached a grave between reading and pruning is
-// passed over until the next pass. A store that keeps no deletion time offers
-// no graves.
-let bury = async (
-  g: Access,
-  paced: ReturnType<typeof pacer>,
-  opts: { batch: number; before: string; signal?: AbortSignal },
-): Promise<number> => {
-  let pruned = 0
-  let after: string | undefined
-  while (!opts.signal?.aborted && g.outside.buried) {
-    let read = g.outside.buried
-    let page = await paced(() =>
-      read(opts.before, { after, limit: opts.batch })
-    )
-    if (page.eids.length) {
-      try {
-        let applied = await paced(() =>
-          g.apply(
-            page.eids.map((eid) => ({ entity: { eid }, $prune: true })),
-            { trusted: true },
-          )
-        )
-        pruned += applied.length
-      } catch (err) {
-        if (!(err instanceof Stale || err instanceof Refused)) throw err
-      }
-    }
-    if (page.next == null) break
-    after = page.next
-  }
-  return pruned
 }
 
 /** One due daily pass, contended by the workers' existing lease mechanism.

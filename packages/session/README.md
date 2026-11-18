@@ -845,7 +845,7 @@ session and subagent making it, and the call itself carries that id in its
 then, spawned by its session, and so is one the harness's `SubagentStart` hook
 reports. The hook stores `announced{call, session}` in the graph, so the MCP
 request keeps its caller across serving processes and restarts. The result's
-hook removes the pairing; abandoned pairings expire after a day. Applications
+hook removes the pairing; abandoned pairings stay until removed. Applications
 enforce access separately.
 
 <a id="appending-entries"></a>
