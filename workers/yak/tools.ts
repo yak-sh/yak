@@ -184,6 +184,7 @@ import {
   letter,
   naming,
   nobodys,
+  numberGrace,
   refused,
   ticket,
   trash,
@@ -3643,6 +3644,7 @@ let OURS: Row[] = [
         )
       }
       let d = await doomed(ctx.dir, space)
+      forever &&= !numberGrace(d)
       // Nobody's space has no letter to write, so it goes straight to the
       // trash, `forever` or not: no agent erases a space, and its thirty
       // days running out do.

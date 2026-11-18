@@ -152,6 +152,17 @@ test('a ticket carries whether it erases or trashes', async () => {
   assertEquals(final?.forever, true)
 })
 
+test('a space erase letter keeps a held number through the space trash grace', () => {
+  let sent = letter(
+    doomed({ lines: [line] }),
+    'https://example.org/confirm',
+    true,
+  )
+  assertStringIncludes(sent.body, 'puts the space in the trash for 30 days')
+  assertStringIncludes(sent.body, 'costs $1.50 a month until it is erased')
+  assert(!sent.body.includes('It cannot be undone'))
+})
+
 test('what a delete would destroy is named, not counted', () => {
   let lines = naming(doomed({
     apps: [app(), app({ eid: 'b', slug: 'notes', title: 'Notes' })],

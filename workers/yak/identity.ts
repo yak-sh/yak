@@ -124,6 +124,7 @@ import {
   keeping,
   kept,
   naming,
+  numberGrace,
   refused,
   ticketed,
   trashedApp,
@@ -490,7 +491,7 @@ let closing = async (
   let held = req.method == 'POST' ? form.token : url.searchParams.get('t') ?? ''
   let ok = held ? await ticketed(held, secret(env)) : null
   let mine = !!ok && ok.space == space.eid && ok.person == person
-  let forever = mine && !!ok?.forever
+  let forever = mine && !!ok?.forever && !numberGrace(d)
   let lines = forever ? naming(d, env) : keeping(d, env)
   let stop = await refused(space, env) ||
     // Already there, and this visit is not the one that erases it: trashing

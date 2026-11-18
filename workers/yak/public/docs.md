@@ -375,6 +375,23 @@ Deeper: <https://yaks.app/docs/domains.md> — the records to add and where to
 type it at each registrar, the apex, moving DNS to Cloudflare, and what each
 pending state means.
 
+## Phone Numbers
+
+A space can hold a phone number of its own: `number_find` lists numbers and
+their prices, `number_buy` buys the one the person chooses from the space's
+budget, and `number_assign` puts it on the space or one of its apps. A toll-free
+number needs carrier approval before it texts: `number_verify` files the
+verification and `number_status` reads where it stands.
+
+`number_release` puts the number in the space's trash for 30 days. It stops
+taking calls and texts, and the space keeps paying its monthly price. Restore it
+beside deleted apps on the manage page's Trash tab to bring back its assignment.
+After 30 days the sweep returns it to the phone company. Calling
+`number_release` again for a trashed number emails the owner a confirmation link
+to return it sooner; the owner's press on that page completes the return. A
+space with held numbers waits out its trash grace before permanent erasure. A
+number returned to the phone company may never be available to buy again.
+
 ## Query Syntax
 
 Every read uses one query syntax: `.doc` selects rows that have a component,

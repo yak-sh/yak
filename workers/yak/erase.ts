@@ -232,6 +232,11 @@ export type Doomed = {
   members: { person: string; name: string | null }[]
 }
 
+/** Whether held numbers still need their own or their space's grace. */
+export let numberGrace = (d: Doomed, now = Date.now()) =>
+  d.lines.some((l) => !l.trashed || !due(l.trashed, now)) &&
+  !(d.space.trashed && due(d.space.trashed, now))
+
 export let doomed = async (
   dir: Directory,
   space: Space,
@@ -362,7 +367,7 @@ works for the next hour:
 ${link}
 
 ${
-    forever
+    forever && !numberGrace(d)
       ? `It cannot be undone. It destroys:
 
 ${naming(d, env).map((l) => `  - ${l}`).join('\n')}`
@@ -464,10 +469,7 @@ export let erase = async (
   if (no) throw refuse('access', no)
   // A number stays recoverable for its own grace or the space's grace.
   // Keep the space too: its ownership and budget still belong to these lines.
-  if (
-    d.lines.some((l) => !l.trashed || !due(l.trashed, now)) &&
-    !(d.space.trashed && due(d.space.trashed, now))
-  ) {
+  if (numberGrace(d, now)) {
     if (!d.space.trashed) await trashSpace(env, dir, d.space, who)
     return { files: 0, apps: 0, hosts: 0, trashed: true }
   }
