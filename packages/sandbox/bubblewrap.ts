@@ -25,9 +25,13 @@ export type SandboxLimits = {
   tasksMax: number
 }
 
+/** A host tree a sandbox reads and never writes, bound read-only at `target`
+ * in the guest (inside /workspace, say). */
+export type Layer = { source: string; target: string }
+
 /** Provider data plus the host's optional commit preparation and grants.
  * The default filesystem is the host's read-only /usr, /bin, /lib and /lib64,
- * and the read-only `binds`.
+ * the read-only `binds`, and the `layers` the host made of the commit.
  * Network access is opt-in; no host home, /etc, runtime sockets or environment
  * is inherited. image is refused: this provider does not boot images. */
 export type SandboxProviderOpts = {
@@ -37,6 +41,10 @@ export type SandboxProviderOpts = {
   /** More host paths commands read, each bound read-only at the same path
    * (a toolchain's prefix, its download cache) */
   binds?: string[]
+  /** What the host made of commit `from` that the sandbox shares rather than
+   * copies (a dependency tree, say), asked once as the sandbox is made, before
+   * `prepare` */
+  layers?: (from: string) => Promise<Layer[]>
   env?: (session?: string) => Record<string, string>
   prepare?: (from: string, workspace: Workspace, cwd: string) => Promise<void>
   birth?: number
@@ -402,6 +410,17 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
               '--bind',
               workspace,
               '/workspace',
+            )
+            let layers = request.from != null && o.layers
+              ? await o.layers(request.from)
+              : []
+            for (let { source, target } of layers) {
+              if (!target.startsWith('/')) {
+                throw new Error('sandbox: a layer target must be absolute')
+              }
+              bwrap.push('--ro-bind', resolve(source), resolve(target))
+            }
+            bwrap.push(
               '--clearenv',
               '--setenv',
               'PATH',

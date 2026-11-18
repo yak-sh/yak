@@ -7,7 +7,7 @@ import type { Proc, Workspace } from '@yaks/machine'
 import type { SandboxProvider, SandboxRequest } from '@yaks/sandbox'
 import type { Runner, Tool } from '@yaks/session'
 import { line } from '@yaks/query'
-import { exposed, isolate } from './isolated.ts'
+import { exposed, isolate, layerKey } from './isolated.ts'
 import { at } from './testing.ts'
 
 let BUG = '55555555-5555-4555-8555-555555555555'
@@ -171,4 +171,24 @@ test('submit_patch hands the patch and the task’s claim to a lander; a sandbox
   } finally {
     await o.host.close()
   }
+})
+
+// One `git ls-tree -r -z` entry for each path, its blob named by `blob`.
+let tree = (files: Record<string, string>) =>
+  Object.entries(files).map(([path, blob]) => `100644 blob ${blob}\t${path}`)
+    .join('\0')
+
+test('commits share a dependency layer until a manifest or the setup changes', () => {
+  let base = { 'deno.lock': 'a', 'packages/x/package.json': 'b', 'x.ts': 'c' }
+  let key = layerKey('deno install', tree(base))
+  equal(layerKey('deno install', tree({ ...base, 'x.ts': 'd' })), key)
+  ok(layerKey('deno install', tree({ ...base, 'deno.lock': 'e' })) != key)
+  ok(
+    layerKey(
+      'deno install',
+      tree({ ...base, 'packages/x/package.json': 'f' }),
+    ) !=
+      key,
+  )
+  ok(layerKey('pnpm install', tree(base)) != key)
 })

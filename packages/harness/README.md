@@ -260,10 +260,23 @@ on where it works. An exposed fixer gets no host checkout. The plugin's
 
 `dir`, `limits`, `binds` and `env` are the bubblewrap provider's
 ([@yaks/sandbox](../sandbox/README.md#bubblewrap-sandboxes)); `binds` are
-read-only. `setup` runs in the sandbox after the snapshot is in place. Without
-`dir`, `limits` and `source`, an exposed session has the named host tools alone.
-A sandbox that cannot be built is reported, and exposed sessions keep those
-tools; no other session is affected.
+read-only. A sandbox is ready in a few seconds and holds little more than the
+checked-out source ([`isolated.ts`](./isolated.ts) `snapshot`). Its layers are
+made on the host under `dir`'s `.layers`, and every sandbox shares them
+read-only:
+
+- the commit's objects, fetched at depth one, once for each commit; the
+  workspace is a repository of that commit borrowing them;
+- what `setup` made of the commit, run with `env` once for each set of manifests
+  (`deno.json`, `package.json`, `deno.lock`), each `node_modules` it made bound
+  at its place in the workspace. On the host's disk an install hardlinks its
+  cache.
+
+The commit is the host's own code, and nothing a sandbox writes reaches the
+host. A layer no sandbox was made from for a day is removed. Without `dir`,
+`limits` and `source`, an exposed session has the named host tools alone. A
+sandbox that cannot be built is reported, and exposed sessions keep those tools;
+no other session is affected.
 
 A graph-only model opening needs no workspace and does not borrow the server's
 current directory or filesystem. The local `yak session new` command defaults to

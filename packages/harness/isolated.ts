@@ -13,13 +13,15 @@
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { token } from '@yaks/graph/sha256'
+import { sha256, token } from '@yaks/graph/sha256'
+import * as io from '@yaks/file/io'
 import { human } from '@yaks/id'
 import { type Machine, settle, type Workspace } from '@yaks/machine'
 import { machineTools } from '@yaks/machine/tools'
 import { command } from '@yaks/process/command'
 import { line } from '@yaks/query'
 import type { SandboxProvider, SandboxRequest } from '@yaks/sandbox'
+import type { Layer } from '@yaks/sandbox/bubblewrap'
 import type { Runner, Tool } from '@yaks/session'
 
 /** The host tools an exposed session is offered where the isolation names
@@ -34,7 +36,7 @@ export let READS = [
 ]
 
 /** What the host gives an exposed session: a sandbox provider whose
- * `request` prepares `from: 'HEAD'` (see {@link snapshot}), and the host tools
+ * `request` makes `from: 'HEAD'` (see {@link snapshot}), and the host tools
  * it is offered by name ({@link READS} where absent). Without a sandbox the
  * session has no machine, only those tools. */
 export type Isolation = {
@@ -72,43 +74,214 @@ let run = async (machine: Workspace, script: string) => {
 
 let git = 'git -c core.hooksPath=/dev/null'
 
-// The bytes one write carries into a sandbox, before base64.
-let CHUNK = 4 * 1024 * 1024
+// The environment a command runs in on the host.
+let BARE = { PATH: '/usr/bin:/bin', HOME: '/nonexistent' }
 
-/** A sandbox `prepare` that copies the committed HEAD of the checkout at
- * `source` into the workspace as a fresh repository, then runs `setup` there
- * (an offline `deno install`, say). Only `git archive` runs on the host, with
- * a cleared environment; nothing from the snapshot does. */
-export let snapshot =
-  (source: string, setup?: string) =>
-  async (from: string, machine: Workspace): Promise<void> => {
-    let archive = await command('git', {
-      args: ['archive', '--format=tar', from],
-      cwd: source,
-      clearEnv: true,
-      env: { PATH: '/usr/bin:/bin', HOME: '/nonexistent' },
-    }).output()
-    if (!archive.success) throw new Error('Cannot snapshot ' + source)
-    let parts = 0
-    for (let at = 0; at < archive.stdout.length; at += CHUNK, parts++) {
-      await machine.write(
-        `.snapshot/${String(parts).padStart(5, '0')}`,
-        archive.stdout.subarray(at, at + CHUNK).toBase64(),
-      )
-    }
-    await run(
-      machine,
-      [
-        'set -e',
-        'cat .snapshot/* | base64 -d | tar -xf -',
-        'rm -rf .snapshot',
-        ...setup ? [setup] : [],
-        'git init -q',
-        `${git} add -A`,
-        `${git} -c user.name=snapshot -c user.email=snapshot@localhost commit -qm snapshot`,
-      ].join('\n'),
+// The files whose content says what `setup` makes: the manifests and the
+// lockfile a `deno install` reads.
+let MANIFESTS = new Set([
+  'deno.json',
+  'deno.jsonc',
+  'package.json',
+  'deno.lock',
+  '.npmrc',
+])
+
+// What `setup` makes that every sandbox shares, read-only, in place.
+let SHARED = 'node_modules'
+
+// Where a sandbox finds the commit's objects.
+let STORE = '/snapshot.git'
+
+// A layer no sandbox was made from for this long is removed. A sandbox lasts
+// one run.
+let IDLE = 24 * 60 * 60 * 1000
+
+/** The name of the layer `setup` makes of a commit whose `git ls-tree -r -z`
+ * says `tree`: commits that differ only outside their manifests share one. */
+export let layerKey = (setup: string, tree: string): string =>
+  sha256(
+    [
+      setup,
+      ...tree.split('\0').filter((entry) => {
+        let path = entry.split('\t')[1] ?? ''
+        return MANIFESTS.has(path.slice(path.lastIndexOf('/') + 1))
+      }),
+    ].join('\0'),
+  )
+
+let host = async (
+  program: string,
+  args: string[],
+  o: { cwd: string; env?: Record<string, string>; input?: Uint8Array },
+) => {
+  let child = command(program, {
+    args,
+    cwd: o.cwd,
+    clearEnv: true,
+    env: o.env ?? BARE,
+    stdin: o.input ? 'piped' : 'null',
+    stdout: 'piped',
+    stderr: 'piped',
+  }).spawn()
+  if (o.input) {
+    let writer = child.stdin.getWriter()
+    await writer.write(o.input)
+    await writer.close()
+  }
+  let out = await child.output()
+  if (!out.success) {
+    throw new Error(
+      `${program} ${args.join(' ')}: ${new TextDecoder().decode(out.stderr)}`,
     )
   }
+  return new TextDecoder().decode(out.stdout).trim()
+}
+
+let exists = (path: string) => io.stat(path).then(() => true, () => false)
+
+// Every SHARED directory under `root`, as paths relative to it.
+let shared = async (root: string, at = ''): Promise<string[]> => {
+  let found: string[][] = []
+  for await (let entry of io.readDir(`${root}/${at}`)) {
+    if (!entry.isDirectory || entry.name == '.git') continue
+    let path = at ? `${at}/${entry.name}` : entry.name
+    found.push(entry.name == SHARED ? [path] : await shared(root, path))
+  }
+  return found.flat()
+}
+
+/** What an exposed session's sandbox is made of, for the bubblewrap provider:
+ * the committed `from` of the checkout at `source`, checked out in the
+ * workspace (`prepare`) over layers the host makes of it once and every
+ * sandbox shares read-only (`layers`):
+ *
+ * - the commit's objects, fetched at depth one into a store of their own;
+ * - what `setup` (an offline `deno install`, say) made of the commit, run with
+ *   `env` once for every set of manifests, each SHARED directory bound at its
+ *   place in the workspace.
+ *
+ * Both are made on the host, under `dir`: the commit is the host's own code,
+ * and on the host's disk an install hardlinks its cache, which a sandbox's
+ * cannot. Nothing a sandbox writes reaches the host. */
+export let snapshot = (
+  source: string,
+  o: { setup?: string; env?: Record<string, string>; dir: string },
+) => {
+  let ask = (args: string[]) => host('git', args, { cwd: source })
+  // Makes `path` once: built in a staging directory beside it and renamed
+  // into place, since another host process may be making the same one.
+  let made = async (path: string, build: (at: string) => Promise<void>) => {
+    if (!await exists(path)) {
+      let name = path.slice(path.lastIndexOf('/') + 1)
+      let staging = await io.makeTempDir({ dir: o.dir, prefix: `.${name}-` })
+      try {
+        await build(staging)
+        await io.rename(staging, path).catch(async (e) => {
+          if (!await exists(path)) throw e
+        })
+      } finally {
+        await io.remove(staging, { recursive: true, force: true })
+      }
+    }
+    await io.writeTextFile(`${path}/.used`, '')
+  }
+  // Removes every layer but those `kept` no sandbox was made from lately, and
+  // any staging a crashed build left.
+  let prune = async (kept: string[]) => {
+    for await (let entry of io.readDir(o.dir)) {
+      let path = `${o.dir}/${entry.name}`
+      if (kept.includes(path)) continue
+      // Another host process may be pruning too.
+      let used = await io.stat(`${path}/.used`)
+        .catch(() => io.stat(path))
+        .catch(() => undefined)
+      if (used && Date.now() - used.mtime.getTime() > IDLE) {
+        await io.remove(path, { recursive: true, force: true })
+      }
+    }
+  }
+  let store = async (commit: string, kept: string[]): Promise<Layer[]> => {
+    let path = `${o.dir}/${commit}.git`
+    kept.push(path)
+    await made(path, async (at) => {
+      await host('git', ['init', '-q', '--bare'], { cwd: at })
+      await host('git', [
+        'fetch',
+        '-q',
+        '--depth=1',
+        '--no-tags',
+        io.pathToFileURL(source).href,
+        commit,
+      ], { cwd: at })
+      await host('git', ['update-ref', 'HEAD', commit], { cwd: at })
+    })
+    return [{ source: path, target: STORE }]
+  }
+  let installed = async (commit: string, kept: string[]): Promise<Layer[]> => {
+    if (!o.setup) return []
+    let key = layerKey(o.setup, await ask(['ls-tree', '-r', '-z', commit]))
+    let path = `${o.dir}/${key}`
+    kept.push(path)
+    await made(path, async (at) => {
+      let archive = await command('git', {
+        args: ['archive', '--format=tar', commit],
+        cwd: source,
+        clearEnv: true,
+        env: BARE,
+      }).output()
+      if (!archive.success) throw new Error('Cannot snapshot ' + source)
+      await host('tar', ['-xf', '-'], { cwd: at, input: archive.stdout })
+      await host('/bin/sh', ['-c', o.setup!], {
+        cwd: at,
+        env: { ...BARE, ...o.env, HOME: at },
+      })
+      await io.writeTextFile(
+        `${at}/.shared.json`,
+        JSON.stringify(await shared(at)),
+      )
+    })
+    let paths: string[] = JSON.parse(
+      await io.readTextFile(`${path}/.shared.json`),
+    )
+    return paths.map((shared) => ({
+      source: `${path}/${shared}`,
+      target: `/workspace/${shared}`,
+    }))
+  }
+  return {
+    layers: async (from: string): Promise<Layer[]> => {
+      await io.mkdir(o.dir, { recursive: true, mode: 0o700 })
+      let commit = await ask(['rev-parse', '--verify', `${from}^{commit}`])
+        .catch(() => {
+          throw new Error(`Cannot snapshot ${from} of ${source}`)
+        })
+      let kept: string[] = []
+      let layers = [
+        ...await store(commit, kept),
+        ...await installed(commit, kept),
+      ]
+      await prune(kept)
+      return layers
+    },
+    // The commit is the store's, so the workspace and the layers agree.
+    prepare: async (_from: string, machine: Workspace): Promise<void> => {
+      await run(
+        machine,
+        [
+          'set -e',
+          `at=$(git --git-dir=${STORE} rev-parse HEAD)`,
+          'git init -q',
+          `echo ${STORE}/objects > .git/objects/info/alternates`,
+          'echo "$at" > .git/shallow',
+          `${git} read-tree "$at"`,
+          `${git} checkout-index -a -u`,
+          `${git} update-ref HEAD "$at"`,
+        ].join('\n'),
+      )
+    },
+  }
+}
 
 /** The sandbox `session` works in: one per run it is asked for (each input
  * carrying `using`, as heal's and a helper's do), let go when the transcript

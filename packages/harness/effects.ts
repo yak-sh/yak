@@ -29,8 +29,9 @@ import { exposed, isolate, type Isolation, snapshot } from './isolated.ts'
 
 /** What config says an exposed session's sandbox is (./isolated.ts): a
  * bubblewrap sandbox under `dir` with `limits`, the read-only `binds` and
- * the command `env`, holding the committed HEAD of `source` after `setup`
- * ran in it; and the host `tools` it is offered by name. */
+ * the command `env`, holding the committed HEAD of `source` over what `setup`
+ * made of it, shared read-only (kept under `dir`'s `.layers`); and the host
+ * `tools` it is offered by name. */
 export type IsolationConfig = {
   dir?: string
   limits?: { cpuQuota: number; memoryMax: number; tasksMax: number }
@@ -54,7 +55,11 @@ let isolation = async (config: IsolationConfig = {}): Promise<Isolation> => {
       limits,
       binds: config.binds,
       env: () => ({ ...config.env }),
-      prepare: snapshot(source, config.setup),
+      ...snapshot(source, {
+        setup: config.setup,
+        env: config.env,
+        dir: `${dir}/.layers`,
+      }),
     }),
   }
 }
