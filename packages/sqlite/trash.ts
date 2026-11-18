@@ -8,12 +8,15 @@ import {
   type Delete,
   desc,
   type Driver,
+  each,
   eq,
   exists,
+  fn,
+  from,
   type Insert,
+  join,
   lit,
   lt,
-  oneOf,
   or,
   type Row,
   type Select,
@@ -31,17 +34,23 @@ export let TRASH = '_yaks_trash'
 
 /** Save each row once per destructive transaction. */
 export let retainSql = (id: string, at: string, bundles: Bundle[]): Insert[] =>
-  bundles.map((b) => ({
+  !bundles.length ? [] : [{
     t: 'insert',
     or: 'ignore',
     into: TRASH,
     cols: ['batch', 'entity', 'at', 'body'],
     q: select({
-      cols: [val(id), col('id'), val(at), val(stringify(b))],
-      from: table('entity'),
-      where: oneOf(col('eid'), [b.entity.eid]),
+      cols: [val(id), col('id', 'e'), val(at), col('value', '__trash')],
+      from: from(each(bundles.map((b) => stringify(b))), '__trash'),
+      joins: [join(
+        table('entity', 'e'),
+        eq(
+          col('eid', 'e'),
+          fn('json_extract', col('value', '__trash'), val('$.entity.eid')),
+        ),
+      )],
     }),
-  }))
+  }]
 
 /** Select every snapshot in a retained transaction touching these identities. */
 export let trashSql = (eids?: string[], page: TrashPage = {}): Select => {

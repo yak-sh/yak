@@ -165,7 +165,10 @@ export type Store = {
   get: (eids: Eid[], comps?: string[], opts?: ReadOpts) => Bundle[]
   /** tombstones laid before `before` that nothing refers to, oldest first,
    * resuming at `after` */
-  buried: (before: string, page: { after?: string; limit: number }) => Graves
+  buried: (
+    before: string,
+    page: { after?: string; limit: number; referenced?: boolean },
+  ) => Graves
   /** run `body` in a transaction: commit on return, roll back on throw */
   tx: <R>(body: (tx: Tx) => R) => R
 }
@@ -980,7 +983,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   // the place once that grave is pruned.
   let graves = (
     before: string,
-    page: { after?: string; limit: number },
+    page: { after?: string; limit: number; referenced?: boolean },
   ): Graves => {
     let refs = vocab.refProps().filter(([c, p]) => !vocab.prop(c, p)?.computed)
     let named = (eid: Eid) =>
@@ -994,7 +997,9 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       return at != null && at < before ? [mark(at, eid)] : []
     }).sort().filter((m) => page.after == null || m > page.after)
     let seen = found.slice(0, page.limit)
-    let eids = seen.map((m) => JSON.parse(m)[1] as Eid).filter((e) => !named(e))
+    let eids = seen.map((m) => JSON.parse(m)[1] as Eid).filter((e) =>
+      page.referenced || !named(e)
+    )
     return seen.length < page.limit ? { eids } : { eids, next: seen.at(-1) }
   }
 

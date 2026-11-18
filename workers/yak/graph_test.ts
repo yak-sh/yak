@@ -2098,8 +2098,12 @@ test("an app store's writes journal nothing", () => {
   equal(journaled.journal, [journaled.before, [], []])
 })
 
-test("an app store's next boot drops an old journal and serves what it holds", () => {
-  equal(journaled.standing, [])
+test("an app store's next boot keeps an old journal and serves what it holds", () => {
+  equal(journaled.standing.sort(), [
+    'journal_change',
+    'journal_field',
+    'journal_tx',
+  ])
   equal((journaled.cake.recipe as Comp).serves, 7)
   equal(journaled.wrote, 200)
   equal(journaled.pages, [])

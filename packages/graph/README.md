@@ -290,7 +290,8 @@ Pruning runs after transaction hooks, and is recorded by its caller rather than
 the component journal. A store that keeps deletion times offers the graves a
 sweep may prune through `outside.buried(before, page)`: up to `page.limit`
 tombstones laid before `before` that nothing names, resuming the walk at
-`page.after`, the `next` the page before answered.
+`page.after`, the `next` the page before answered. A non-destructive death
+notification walk uses `referenced: true` to include retained graves too.
 
 A store that keeps a file of pages says what it keeps through
 `storage.measure(signal)`: the file's bytes, its free bytes and each table's

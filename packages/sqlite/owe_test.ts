@@ -524,7 +524,9 @@ let [swapped, swap] = stage((db) => work(db), copied)
 let [rebuilt] = stage(drain, swapped)
 
 let aside = (db: Driver) =>
-  catalogue(db).filter((o) => o.name.startsWith('_yaks_')).map((o) => o.name)
+  catalogue(db).filter((o) => /^_yaks_(refit|old)_/.test(o.name)).map((o) =>
+    o.name
+  )
 let tally = (db: Driver, from: string) =>
   db.query(select({
     cols: [col('x'), as(count(), 'n')],

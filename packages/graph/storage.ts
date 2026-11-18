@@ -195,10 +195,11 @@ export type Tx = {
    * graves still named costs pages of bounded work, not one long read. A walk
    * goes in the store's own order, resuming at `after`, the `next` the page
    * before it answered; a page that ends the walk answers none. A store that
-   * keeps no deletion time leaves it out. */
+   * keeps no deletion time leaves it out. `referenced: true` includes graves
+   * still held by history or references, for non-destructive death notification. */
   buried?: (
     before: string,
-    page: { after?: string; limit: number },
+    page: { after?: string; limit: number; referenced?: boolean },
   ) => Graves | Promise<Graves>
 }
 
@@ -329,7 +330,7 @@ export type Storage = {
    * transaction ({@link Tx.buried}) */
   buried?: (
     before: string,
-    page: { after?: string; limit: number },
+    page: { after?: string; limit: number; referenced?: boolean },
   ) => Graves | Promise<Graves>
   /** Evaluate matches against committed data without opening a write unit. */
   bindings?: Tx['bindings']

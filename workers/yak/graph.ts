@@ -4094,7 +4094,7 @@ export class Store extends Durable {
       let began = new Date(this.#now()).toISOString()
       let after: string | undefined
       do {
-        let page = await buried(began, { after, limit: 100 })
+        let page = await buried(began, { after, limit: 100, referenced: true })
         await mourned({ ...this.#bind, STORE }, app, page.eids)
         after = page.next
       } while (after)

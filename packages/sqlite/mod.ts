@@ -338,7 +338,10 @@ export type Tx = {
   /** bring these tombstoned entities back: tombstone gone, identity kept */
   revive: (eids: string[]) => void
   /** the graves a retention sweep may prune (./buried.ts) */
-  buried: (before: string, page: { after?: string; limit: number }) => Graves
+  buried: (
+    before: string,
+    page: { after?: string; limit: number; referenced?: boolean },
+  ) => Graves
 }
 
 /**
@@ -422,7 +425,10 @@ export type Store = {
   /** the graves a retention sweep may prune: tombstones laid before `before`
    * that nothing in the file names (./buried.ts), a page of them from `after`,
    * read as one snapshot */
-  buried: (before: string, page: { after?: string; limit: number }) => Graves
+  buried: (
+    before: string,
+    page: { after?: string; limit: number; referenced?: boolean },
+  ) => Graves
   /** The host database's absolute path, absent for memory and hosted stores. */
   readonly file?: string
   /** what the file keeps, measured off the caller's thread (./measure.ts) */

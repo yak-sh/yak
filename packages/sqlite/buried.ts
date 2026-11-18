@@ -105,14 +105,16 @@ export let burying = (driver: Driver, vocab: Vocab) => {
   let held: { at: number; refs: Referrer[] } | undefined
   return (
     before: string,
-    page: { after?: string; limit: number },
+    page: { after?: string; limit: number; referenced?: boolean },
   ): Graves => {
     let at = revision(driver, 'schema')
     if (held?.at != at) held = { at, refs: referrers(driver, vocab) }
-    let found = driver.query(buriedSql(held.refs, before, {
-      after: page.after == null ? undefined : Number(page.after),
-      limit: page.limit,
-    }))
+    let found = driver.query(
+      buriedSql(page.referenced ? [] : held.refs, before, {
+        after: page.after == null ? undefined : Number(page.after),
+        limit: page.limit,
+      }),
+    )
     let eids = found.filter((r) => r.free).map((r) => String(r.eid))
     let last = found.at(-1)
     return found.length < page.limit || !last
