@@ -230,6 +230,15 @@ test('a store outside the window refuses, and a client never asks at all', async
   assertEquals(outside.status, 404)
 })
 
+test('a moment before a store was first written is refused in plain words', async () => {
+  let ctx = state()
+  ctx.storage.getBookmarkForTime = () =>
+    Promise.reject(new Error('This database has no history.'))
+  let no = await at(new Store(ctx), '/restore?at=2026-11-18T19:11:00Z')
+  assertEquals(no.ok, false)
+  assertStringIncludes(await no.text(), 'nothing had been written')
+})
+
 test('mark reads the bookmark off a store', async () => {
   let store = new Store(state())
   let there = await mark(doorOf((req) => store.fetch(req), 'ada/cookbook'))

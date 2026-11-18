@@ -801,6 +801,12 @@ let NO_PITR =
   "this store's back end does not offer point-in-time recovery — it is a " +
   'Cloudflare production Durable Object that does, and local development does ' +
   'not'
+// What Cloudflare's "This database has no history." means for a moment asked
+// of `getBookmarkForTime`: nothing had been written to the store by then.
+let UNWRITTEN = (at: string) =>
+  `nothing had been written to this store by ${at} (Cloudflare: "This ` +
+  'database has no history."), so there is no earlier state to put it back ' +
+  'to; a moment after its first write can be restored'
 
 // Request paths become profile labels only for known Store doors. An arbitrary
 // caller path or method must not create a new label.
@@ -6119,7 +6125,14 @@ export class Store extends Durable {
         let at = new URL(request.url).searchParams.get('at')
         if (!at) return Response.json({ from, to: '' })
         if (!s.getBookmarkForTime) throw new Refused(NO_PITR)
-        let to = await s.getBookmarkForTime(new Date(at))
+        // A moment before the store's first write is the caller asking for
+        // nothing to go back to, not a failure.
+        let to = await s.getBookmarkForTime(new Date(at)).catch((e) => {
+          if (e instanceof Error && /has no history/.test(e.message)) {
+            throw new Refused(UNWRITTEN(at))
+          }
+          throw e
+        })
         return Response.json({ from, to })
       }
       let said = JSON.parse(await readBody(request)) as { bookmark?: string }
