@@ -165,7 +165,8 @@ test('a request the API refuses reaches the tracker, never shown as its error', 
   let out = await ask('Do another thing')
   assertEquals(
     out.text,
-    "I couldn't finish this: the model refused the request." + TOLD,
+    "I couldn't finish this: something in yaks.app failed while working on it." +
+      TOLD,
   )
   assertStringIncludes(out.reports, 'Operator could not finish: request')
   assertStringIncludes(out.reports, 'messages: bad')

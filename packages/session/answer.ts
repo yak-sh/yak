@@ -106,9 +106,9 @@ export let turnOf = (entries: Bundle[]): Bundle[] =>
   entries.slice(Math.max(0, entries.findLastIndex(given)))
 
 // What a model's refusal tells the person, by its code (@yaks/model
-// `ModelError`); any other is a refused request. A ceiling (`LIMIT`) is said
-// in its own sentence. The host's own credit with the provider spent
-// (@yaks/anthropic `credit`) is no ceiling of the person's.
+// `ModelError`); any other code is the host's own failure, never the model's.
+// A ceiling (`LIMIT`) is said in its own sentence. The host's own credit with
+// the provider spent (@yaks/anthropic `credit`) is no ceiling of the person's.
 let REFUSED: Record<string, (name: string) => string> = {
   refusal: () => 'the model declined to do this',
   busy: () => 'the model is too busy to answer right now',
@@ -143,8 +143,8 @@ export type Naming = { host?: string; name?: string }
  *   output: { source: 'a' }, refusal: { code: 'request' },
  *   content: { body: '400 tools.26: input_schema does not support oneOf' },
  * })], { host: 'yaks.app' }), {
- *   text: "I couldn't finish this: the model refused the request." +
- *     ' The people who run yaks.app have been told.',
+ *   text: "I couldn't finish this: something in yaks.app failed while" +
+ *     ' working on it. The people who run yaks.app have been told.',
  *   fault: 'request: 400 tools.26: input_schema does not support oneOf',
  * })
  * equal(replyOf([line(3, {
@@ -185,7 +185,7 @@ export let replyOf = (
     : String(comp(end, 'failed')?.reason ?? '') || text ||
       'ended without an answer'
   let why = kind == 'refusal'
-    ? couldnt(REFUSED[code]?.(name) ?? 'the model refused the request')
+    ? REFUSED[code] ? couldnt(REFUSED[code](name)) : broke
     : end
     ? broke
     : 'This ended without an answer.'
