@@ -497,6 +497,22 @@ export let destroyedAll = async (env: Bound, space: Space) => {
   return true
 }
 
+/** A person's workbench and retained snapshots, purged after their space's
+ * owner confirms permanent deletion through the shared confirmation page. */
+export let purgedAll = async (env: Bound, space: Space) => {
+  let store = lendingOf(env)
+  let ns = env.WORKBENCH
+  if (!ns || !store) return false
+  for (let { to } of await lending(store, space.eid)) {
+    let name = named(space.eid, to)
+    await retrying(env)(() =>
+      (ns.get(ns.idFromName(name)) as Box & { purge(): Promise<void> }).purge()
+    )
+    await bared(env, space, idOf(ns, name))
+  }
+  return true
+}
+
 /**
  * What has been spent so far, counted and the clock started over. The count
  * is meter.ts's `countedSandbox`, passed in rather than imported: both stay in the host, not in the provider.

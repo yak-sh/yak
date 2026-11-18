@@ -64,6 +64,13 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
       }
       return Promise.resolve()
     },
+    purge: () => {
+      retained.delete(name)
+      alive.delete(name)
+      states.get(name)?.files.clear()
+      states.get(name)?.processes.clear()
+      return Promise.resolve()
+    },
     getState: () =>
       Promise.resolve({ status: alive.has(name) ? 'healthy' : 'stopped' }),
     exec: (cmd: string, opts?: Opts) => {

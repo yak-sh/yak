@@ -20,7 +20,7 @@ def scan():
             entry = os.lstat(path(name))
         except FileNotFoundError:
             return
-        if stat.S_ISSOCK(entry.st_mode) or stat.S_ISFIFO(entry.st_mode):
+        if stat.S_ISSOCK(entry.st_mode):
             return
         found[name] = [entry.st_mode, entry.st_size, entry.st_mtime_ns,
                        entry.st_ctime_ns, entry.st_uid, entry.st_gid]

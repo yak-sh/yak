@@ -68,6 +68,13 @@ export class Workbench extends sdk.Sandbox<Env> {
   override async destroy() {
     await this.files.stop(() => super.destroy())
   }
+  purge() {
+    return this.files.purge(() => super.destroy())
+  }
+  override async onStop(...args: Parameters<sdk.Sandbox<Env>['onStop']>) {
+    this.files.reset()
+    await super.onStop(...args)
+  }
   override async onActivityExpired() {
     try {
       await this.files.stop(() => super.onActivityExpired())

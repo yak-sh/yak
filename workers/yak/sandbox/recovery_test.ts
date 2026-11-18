@@ -45,6 +45,10 @@ let fixture = () => {
       state.set(key, value)
       return Promise.resolve()
     },
+    delete: (key) => {
+      state.delete(key)
+      return Promise.resolve()
+    },
   }, {
     createMultipartUpload: (key) => {
       let parts: Uint8Array[] = []
@@ -70,6 +74,16 @@ let fixture = () => {
       ),
     put: (key, content) => {
       objects.set(key, new TextEncoder().encode(content))
+      return Promise.resolve()
+    },
+    list: ({ prefix }) =>
+      Promise.resolve({
+        objects: [...objects.keys()].filter((key) => key.startsWith(prefix))
+          .map((key) => ({ key })),
+        truncated: false,
+      }),
+    delete: (keys) => {
+      for (let key of keys) objects.delete(key)
       return Promise.resolve()
     },
   }, 'person-space')
@@ -169,4 +183,20 @@ test('a workspace call arriving during shutdown restores before reading', async 
   resume.resolve()
   await stopping
   equal(await reading, 'unique')
+})
+
+test('confirmed purge removes snapshots and receipt after stopping the workbench', async () => {
+  let bench = fixture()
+  await bench.prepare()
+  bench.files.set('/workspace/report', 'unique')
+  await bench.save()
+  bench.objects.set('workbench/another-person/keep', new Uint8Array([1]))
+  await bench.purge(() => {
+    bench.stop()
+    return Promise.resolve()
+  })
+  equal([...bench.objects.keys()], ['workbench/another-person/keep'])
+  equal(bench.state.size, 0)
+  await bench.prepare()
+  equal(bench.files.size, 0)
 })

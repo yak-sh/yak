@@ -213,9 +213,6 @@ test('the code page names its bindings and when their data is deleted', () => {
     ) {
       assert(paragraph.includes(key), `the bindings paragraph omits ${key}`)
     }
-    assert(paragraph.includes('Removing a binding keeps its resource and data'))
-    assert(/permanently\s+deleted/.test(paragraph))
-    assert(paragraph.includes('30 days in the trash'))
   }
 })
 

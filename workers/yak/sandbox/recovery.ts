@@ -4,6 +4,7 @@ type Head = { key: string; size: number; at: string }
 type State = {
   get<T>(key: string): Promise<T | undefined>
   put(key: string, value: unknown): Promise<unknown>
+  delete(key: string): Promise<unknown>
 }
 type Archive = {
   createMultipartUpload(key: string): Promise<{
@@ -20,6 +21,12 @@ type Archive = {
     { arrayBuffer(): Promise<ArrayBuffer> } | null
   >
   put(key: string, content: string): Promise<unknown>
+  list(options: { prefix: string; cursor?: string }): Promise<{
+    objects: { key: string }[]
+    truncated: boolean
+    cursor?: string
+  }>
+  delete(keys: string[]): Promise<unknown>
 }
 type Box = {
   getState(): Promise<{ status: string }>
@@ -133,6 +140,22 @@ export let recovery = (
         let result = await act()
         prepared = undefined
         return result
+      }),
+    // The caller reaches this only after the person confirms their purge.
+    // Stop first so no command can create unarchived state during removal.
+    purge: (stop: () => Promise<unknown>) =>
+      locked(async () => {
+        await stop()
+        let cursor: string | undefined
+        do {
+          let page = await bucket.list({ prefix: `workbench/${id}/`, cursor })
+          if (page.objects.length) {
+            await bucket.delete(page.objects.map(({ key }) => key))
+          }
+          cursor = page.truncated ? page.cursor : undefined
+        } while (cursor)
+        await state.delete(HEAD)
+        prepared = undefined
       }),
     reset: () => {
       prepared = undefined

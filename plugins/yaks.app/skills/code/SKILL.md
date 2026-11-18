@@ -466,8 +466,8 @@ D1 databases, R2 buckets and Vectorize indexes belong to that app; yaks.app
 creates them at deploy and reuses them. A new Vectorize index also names its
 `dimensions` and `metric`, or a `preset`. `app_deploy` reports unsupported
 settings and names the bindings, and so does `app_list(app)`. Removing a binding
-keeps its resource and data until the app is permanently deleted, including
-during the app's 30 days in the trash. A declared binding keeps its name,
+keeps its resource and data while the app is in the trash. Only the person's
+confirmed permanent purge removes them. A declared binding keeps its name,
 including `STORE`, `FILES` or `APP`; otherwise those names are the bindings
 described above.
 
