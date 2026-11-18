@@ -1,3 +1,4 @@
+import { trashDoor } from './graph-trash.ts'
 import { formatted } from './query-text.ts'
 export { formatted } from './query-text.ts'
 import { servingAuthority, told } from './app-serving-authority.ts'
@@ -809,6 +810,9 @@ let routes = new Set([
   '/move',
   '/call',
   '/recover',
+  '/trash',
+  '/trash/restore',
+  '/trash/purge',
   '/ws',
   '/apply',
   '/query',
@@ -5231,6 +5235,14 @@ export class Store extends Durable {
     if (branch != null && !path.startsWith('/branches')) {
       if (!/^\d+$/.test(branch)) throw new Refused(`no branch ${branch}`)
       return await this.#onBranch(request, path, Number(branch))
+    }
+    if (['/trash', '/trash/restore', '/trash/purge'].includes(path)) {
+      if (!kernel) await this.#auth(request)
+      return trashDoor(
+        request,
+        this.#kernelGraph(this.#graph),
+        this.#get('name') == PLATFORM_STORE,
+      )
     }
     if (path == '/signup' && kernel) {
       return signupIn(request, this.#stored(this.#graph))

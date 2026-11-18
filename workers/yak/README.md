@@ -1402,3 +1402,19 @@ million is $1.4680064. Unknown bounds refuse before generation. MiniMax music's
 fixed per-track tariff is bounded; speech with post-generation-only pricing and
 ElevenLabs' measured output-duration tariff require a verified bound before a
 new call can be bought. Existing paid receipts remain recoverable.
+
+## Graph trash
+
+An app’s owner or editor can read retained removals with
+`GET /api/trash?eid=<entity-eid>` (repeat `eid` for several entities). The
+answer is a list of `{id, at, bundles}` transactions, newest first. Omit `eid`
+to read the twenty newest transactions. `POST /api/trash/restore` with
+`{id, eids: [<entity-eid>]}` restores one transaction, preserving later values
+on rows that survived the removal. Restoring keeps the archive.
+
+Directory code uses `Directory.trash(eids)` and
+`Directory.restoreTrash(id, eids, headers)` through the same Store boundary.
+Directory archives are kernel-only because they can retain credentials and
+private rows. `Directory.purgeTrash(id, eids)` is reserved for a person’s
+explicit choice through the shared confirmation page. Public app clients cannot
+purge retained transactions.

@@ -54,7 +54,14 @@ import { clock } from './timing.ts'
 import { letters } from './letters.ts'
 import { packageTools } from './package-tools.ts'
 import { PUBLISHED, sending } from './published.ts'
-import { composed, type Reach, read, vocabAt, written } from './reach.ts'
+import {
+  composed,
+  type Reach,
+  read,
+  trashed,
+  vocabAt,
+  written,
+} from './reach.ts'
 import { narrowed } from './lexicon.ts'
 import { queried } from './page-graph.ts'
 import { META, META_STORE } from './directory.ts'
@@ -484,6 +491,7 @@ let held = (
     revive: nope('transaction'),
   }
   self = {
+    trash: (eids) => fresh(() => trashed(ctx.env, reach, eids)),
     install: () => {},
     read: bundles,
     rows,

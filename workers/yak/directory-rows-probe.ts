@@ -1,3 +1,4 @@
+import { trashDoor } from './graph-trash.ts'
 // Directory decisions over rows in memory. App Stores stay behind their own
 // namespace, so a test of a route need not install the platform's Store.
 import {
@@ -109,6 +110,9 @@ export let rows = (
     let url = new URL(req.url)
     let headers = { [EPOCH]: String(revision) }
     try {
+      if (url.pathname == '/trash' || url.pathname.startsWith('/trash/')) {
+        return trashDoor(req, g, true)
+      }
       if (url.pathname == '/used') {
         assertEquals(req.method, 'POST')
         assertEquals(req.headers.get('x-yak-kernel'), '1')
@@ -170,6 +174,10 @@ export let rows = (
         opts.stamp !== false,
       ),
   }
+  let retained = metaOf(meta.door!)
+  meta.trash = retained.trash
+  meta.restoreTrash = retained.restoreTrash
+  meta.purgeTrash = retained.purgeTrash
   let local = part(meta)
   let dir = directoryRows({
     query: async (q) =>
@@ -178,6 +186,9 @@ export let rows = (
         policy: { revision },
       })),
     apply: local.apply,
+    trash: local.trash,
+    restoreTrash: local.restoreTrash,
+    purgeTrash: local.purgeTrash,
   })
   return {
     graph: g,

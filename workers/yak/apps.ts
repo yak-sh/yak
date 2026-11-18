@@ -1516,6 +1516,23 @@ export let api = async (
     if ('failed' in r) return r.failed
     return Response.json({ ...r.read, person: who.person, role: who.role })
   }
+  if (path == '/trash' || path == '/trash/restore') {
+    if (!who.person || !['owner', 'editor'].includes(who.role ?? '')) {
+      return refused('not_a_writer')
+    }
+    let read = path == '/trash'
+    if (req.method != (read ? 'GET' : 'POST')) {
+      return json(405, 'method_not_allowed')
+    }
+    return store(
+      path + new URL(req.url).search,
+      read ? {} : {
+        method: 'POST',
+        body: req.body,
+      },
+      headers,
+    )
+  }
   // The vocabulary a page's local graph loads: this store's words and the
   // borrowed words its own manifest uses, from their component homes, as
   // documents (`vocab.json`) or with the keywords they are written in.

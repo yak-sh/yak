@@ -8,6 +8,7 @@
 // owns which stores are in reach.
 import { listed, names, type Row, STAMPS } from '@yaks/platform/listing'
 import type { Bundle } from '@yaks/graph'
+import type { Trash } from '@yaks/graph/trash'
 import { requested } from '@yaks/graph/bundle'
 import { sha256 } from '@yaks/graph'
 import { type Door, IDEMPOTENCY } from '@yaks/durable-object/door'
@@ -114,6 +115,32 @@ let fan = once(() =>
 
 let doorAt = (env: Env, r: Reach): Door =>
   r.door ?? appStore(env.STORE, r.space, r.app, env)
+
+/** Retained app removals visible to named editors in this reach. The directory
+ * retains credentials and private rows, and has its own recovery interface. */
+export let trashed = async (
+  env: Env,
+  reach: Reach[],
+  eids?: string[],
+): Promise<Trash[]> => {
+  if (eids && !eids.length) return []
+  let stores = reach.filter((r) =>
+    storeName(r.space, r.app) != META_STORE && r.who.person &&
+    ['owner', 'editor'].includes(r.who.role ?? '')
+  )
+  let groups = await Promise.all(stores.map((r) =>
+    doorAt(env, r).consume(
+      `/trash?${new URLSearchParams((eids ?? []).map((eid) => ['eid', eid]))}`,
+      async (res) => {
+        if (!res.ok) throw await answered(res)
+        return await res.json() as Trash[]
+      },
+      {},
+      { ...vouched(r.who), ...r.headers },
+    )
+  ))
+  return groups.flat().sort((a, b) => b.at.localeCompare(a.at)).slice(0, 20)
+}
 
 // One store as a member: its /query and /apply doors, vouched, and its words.
 //
