@@ -32,7 +32,11 @@ export let options = <T extends BindOpts & { deferred?: boolean }>(
   // raised a table for yet.
   let bound = (seen: Omit<Survey, 'unlogged'>, unwritten: string[]): T => {
     let lacks = lacked(vocab, seen)
-    let missingIndexes = seen.unindexed
+    // The file's are owed beside those the base never reads (a mode's tables
+    // are relations no index stands on), never in place of them.
+    let missingIndexes = seen.unindexed.length && base.missingIndexes?.length
+      ? [...new Set([...base.missingIndexes, ...seen.unindexed])]
+      : seen.unindexed
     // The registry stays the one every store of the vocabulary shares, so
     // what is compiled through it is too; only the tags are this store's.
     let e = base.backed && meta(driver).get(EPOCH)
