@@ -861,7 +861,6 @@ test('sandbox_shell names what is in the image, and where the rest comes from', 
   // And the other half of the promise: the image is a floor, not a ceiling,
   // and nothing a command adds outlives the container.
   assertStringIncludes(said, 'apt-get install')
-  assertStringIncludes(said, 'files are temporary')
 })
 
 // The guide's page and the limits page, read once, as read rather than as

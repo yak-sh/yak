@@ -343,7 +343,9 @@ export let cloudflareProvider = (
       if (!options.trash) {
         throw new Error('cloudflare: recoverable trash storage is required')
       }
-      let trash = () => options.trash!(ref, boxOf(ref, true, true))
+      boxOf(ref)
+      let trash = () =>
+        retry(() => options.trash!(ref, ns.get(ns.idFromName(ref.id))))
       if (options.ephemeral) {
         await trash()
         return
@@ -361,7 +363,7 @@ export let cloudflareProvider = (
       }
       await lifecycle(ref, async (receipt) => {
         if (receipt.state == 'ready') return
-        await options.restore!(ref, boxOf(ref, true, true))
+        await retry(() => options.restore!(ref, ns.get(ns.idFromName(ref.id))))
         await receipt.save('ready')
       })
     },

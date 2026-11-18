@@ -54,7 +54,8 @@ way from C to a WebAssembly module a browser instantiates with no glue code; the
 same flags, with `-fno-exceptions`.
 
 Commands run as root, so `apt-get install -y <package>`, `cargo`, `pip`, `npm`
-and `go get` all work, and nothing installed outlives the container.
+and `go get` all work. Files and installed tools are restored when the sandbox
+wakes.
 
 ## Document files
 
@@ -102,9 +103,13 @@ Fonts and layout can differ from the application that created the original.
 
 ## Files
 
-A sandbox's files are temporary. It goes to sleep five minutes after its last
-command, and a managed build destroys it when the build ends, with everything in
-it. Only the files `sandbox_ship` copied into the app are kept.
+A sandbox sleeps five minutes after its last command, and a managed build stops
+it when the build ends. Before either shutdown, the platform retains a snapshot
+of its changed files and restores them when the sandbox wakes. Older snapshots
+are retained without an automatic purge. Processes stop at shutdown.
+
+`sandbox_ship` copies files into an app independently, so the app serves them
+without waking the sandbox.
 
 ## Copying files into an app with `sandbox_ship`
 

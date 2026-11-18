@@ -12,16 +12,69 @@
 import { env } from 'cloudflare:workers'
 import * as sdk from '@cloudflare/sandbox'
 import { apex, type Host } from '@yaks/platform/host'
+import { filesystem, recovery } from './recovery.ts'
 
 type Env = Host & {
-  KERNEL: { send(req: Request, container: string): Promise<Response> }
+  KERNEL: {
+    send(req: Request, container: string): Promise<Response>
+    fault(message: string, container: string): Promise<void>
+  }
+  BLOBS: Parameters<typeof recovery>[2]
 }
 
 export class Workbench extends sdk.Sandbox<Env> {
   override interceptHttps = true
+  private files = recovery(
+    filesystem({
+      getState: () => super.getState(),
+      exec: (command) => super.exec(command, { timeout: 240_000 }),
+    }),
+    this.ctx.storage,
+    this.env.BLOBS,
+    String(this.ctx.id),
+  )
   constructor(...made: ConstructorParameters<typeof sdk.Sandbox<Env>>) {
     super(...made)
     Object.assign(this, { allowedHostsOverride: undefined })
+  }
+  static {
+    // Prototype methods remain RPC methods. Every workspace operation and
+    // shutdown shares one queue, including a call arriving during idle stop.
+    for (
+      let method of [
+        'exec',
+        'startProcess',
+        'getProcess',
+        'killProcess',
+        'getProcessLogs',
+        'mkdir',
+        'writeFile',
+        'readFile',
+      ]
+    ) {
+      let invoke = Reflect.get(sdk.Sandbox.prototype, method) as (
+        ...args: unknown[]
+      ) => Promise<unknown>
+      Object.defineProperty(this.prototype, method, {
+        value: function (this: Workbench, ...args: unknown[]) {
+          return this.files.use(() => invoke.apply(this, args))
+        },
+      })
+    }
+  }
+  prepare() {
+    return this.files.use(() => Promise.resolve())
+  }
+  override async destroy() {
+    await this.files.stop(() => super.destroy())
+  }
+  override async onActivityExpired() {
+    try {
+      await this.files.stop(() => super.onActivityExpired())
+    } catch (error) {
+      await this.env.KERNEL.fault(String(error), String(this.ctx.id))
+      throw error
+    }
   }
 }
 

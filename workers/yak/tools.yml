@@ -243,8 +243,8 @@ sandbox_shell:
     image's Node and Bun. Read, edit and write PDF, DOCX, XLSX, PPTX, CSV
     and images with these tools. sandbox_write with an attachment id copies
     the original file into the sandbox. The command runs as root, so
-    `apt-get install -y <pkg>`, cargo, pip, npm and go get install anything until the container
-    goes. Its network reaches the whole internet, so git clone, npm create
+    `apt-get install -y <pkg>`, cargo, pip, npm and go get install anything;
+    changes are retained with the sandbox files. Its network reaches the whole internet, so git clone, npm create
     and any API work. sandbox_write puts a file in, sandbox_read reads one
     out, and sandbox_ship copies files into an app. It is signed in as the
     person: `yak` is installed with $YAKS_TOKEN and $YAKS_HOST set, so `yak
@@ -255,13 +255,15 @@ sandbox_shell:
     charged to the space: {{budget}} seconds per managed build or per call
     outside one, and the space's monthly allowance. One sandbox awake in a
     space at a time on the free tier, two on the Plus plan. A managed build
-    destroys the container when it ends; separate MCP calls reuse it until
-    five idle minutes put it to sleep, and its files are temporary. A
+    stops the container when it ends; separate MCP calls reuse it until
+    five idle minutes put it to sleep. Changed files are snapshotted before
+    either shutdown and restored when it wakes; older snapshots are retained
+    without automatic purge. Processes end at shutdown. A
     command ending within timeout milliseconds returns its exit code and
     output, stdout then stderr;
     one still running keeps running for at most 240 seconds, and the answer
     gives its process id for sandbox_wait and sandbox_stop. What a command
-    did through these tools to apps is not undone by discarding the
+    did through these tools to apps is not undone by stopping the
     container. Documentation: https://yaks.app/docs/sandbox.
 sandbox_wait:
   title: Wait for a sandbox command
@@ -307,8 +309,8 @@ sandbox_write:
   description: >-
     Write one file inside the person's sandbox in this space: a script, a
     data file, a Cargo.toml, whatever a command will read. These are not
-    the app's files: nothing here is served, and files are temporary, not
-    durable app storage. app_files stages what app_deploy will serve;
+    the app's files: nothing here is served. Sandbox files are retained across
+    shutdowns; use app storage for data an app reads. app_files stages what app_deploy will serve;
     sandbox_ship copies files from the sandbox into the app. Waking the
     sandbox is metered by the second, as with sandbox_shell. Pass a sandbox
     path and nonempty text, or in place of the text an attachment id from
@@ -350,7 +352,7 @@ sandbox_ship:
     its root, and replace: true makes that folder hold exactly what this
     call copies, deleting each file an earlier copy left there (kept in its
     history). Two different files landing on one path are refused. The app
-    keeps the files independently of the temporary sandbox. This call does
+    keeps the files independently of the sandbox. This call does
     not itself destroy the sandbox. Binary files are copied as bytes, so a
     .wasm arrives intact. Waking the sandbox is metered by the second, as
     with sandbox_shell. To undo: these are written through app_files, so

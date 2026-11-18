@@ -18,7 +18,7 @@
 // those, because an image is disk, disk is money, and every megabyte of it is
 // pulled before the first command runs; a build that wants something else
 // installs it for the session with apt or a registry, and the container it
-// installed into is destroyed at the end of that build (T-34516).
+// installed into is stopped at build end after retaining its changed files.
 //
 // The binding is typed, never imported, the way every other binding in this
 // kernel is (env.ts). @cloudflare/sandbox is a Worker package: it imports
@@ -40,10 +40,11 @@
 // because a model call and a container-second are billed separately and one
 // number made of both is a number nobody can add up.
 //
-// What keeps it from running forever: the build destroys it when it ends, and
+// What keeps it from running forever: the build stops it when it ends, and
 // @yaks/sandbox/cloudflare `SLEEP` is the backstop for a build that never says so — the container
 // sleeps on its own after that long idle, which is where the billing stops.
-// Idle shutdown ends its processes and temporary files; ship artifacts before it sleeps.
+// Idle and build shutdown retain changed files in R2; the next call restores them.
+// Processes end at shutdown. Snapshots have no expiry or automatic purge.
 //
 // Its network is the whole internet. It is the person's box: whatever runs in
 // it runs because they or their agent asked, and an agent a prompt has turned
@@ -68,6 +69,7 @@
 // env and is never exported into a shell.
 import { type Line } from '@yaks/query'
 import {
+  type Box,
   cloudflareProvider,
   hold,
   type Lending,
@@ -253,6 +255,15 @@ type Bound = Keys & {
 let retrying = (env: Bound) => <T>(send: () => T | Promise<T>) =>
   retried(send, true, evicted, jittered(env.CLOCK))
 
+// Workbench owns persistence across idle shutdowns as well as disposal. Its
+// prepare RPC restores a cold filesystem before any command reaches it.
+let prepared = (_ref: unknown, box: Box) =>
+  (box as Box & { prepare(): Promise<void> }).prepare()
+let retained = async (ref: unknown, box: Box) => {
+  await prepared(ref, box)
+  await box.destroy()
+}
+
 // Whether a grant has enough life left to hand to a command. One command may
 // run for {@link TIMEOUT}, so a grant with less than that left is one that
 // would die under the command holding it — mint a fresh one instead.
@@ -417,6 +428,8 @@ export let workbench = async (
   let ref = { id: named(space.eid, person) }
   let provider = cloudflareProvider(ns, {
     ephemeral: true,
+    prepare: prepared,
+    trash: retained,
     retry: retrying(env),
     env: () => spend.signing ??= signed(env, idOf(ns, ref.id), space, person),
     sleepError: (e) =>
@@ -458,6 +471,7 @@ export let destroyed = async (
   try {
     await cloudflareProvider(env.WORKBENCH, {
       ephemeral: true,
+      trash: retained,
       retry: retrying(env),
     }).dispose({ id: named(space.eid, person) })
   } catch (e) {

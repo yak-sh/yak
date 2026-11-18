@@ -24,6 +24,7 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
   let env: Record<string, string>[] = []
   let files = new Map<string, string>()
   let alive = new Set<string>()
+  let retained = new Map<string, Map<string, string>>()
   let states = new Map<
     string,
     { files: Map<string, string>; processes: typeof processes }
@@ -57,6 +58,12 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
     return answer(cmd) ?? {}
   }
   let box = (name: string) => ({
+    prepare: () => {
+      if (!alive.has(name) && retained.has(name)) {
+        state(name).files = new Map(retained.get(name))
+      }
+      return Promise.resolve()
+    },
     getState: () =>
       Promise.resolve({ status: alive.has(name) ? 'healthy' : 'stopped' }),
     exec: (cmd: string, opts?: Opts) => {
@@ -127,6 +134,7 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
       })
     },
     destroy: () => {
+      retained.set(name, new Map(state(name).files))
       alive.delete(name)
       states.get(name)?.files.clear()
       states.get(name)?.processes.clear()

@@ -355,6 +355,9 @@ for (let { method, args, result } of methods) {
           }
           let provider = cloudflareProvider(ns, {
             ephemeral: true,
+            trash: async (_ref, box) => {
+              await box.destroy()
+            },
             retry: (send) => retried(send, true, evicted, pause),
           })
           let ref = { id: named(space.eid, who.person!) }

@@ -297,12 +297,23 @@ export let classes: Record<string, Deferred> = {
   // A sandbox container's calls to this platform and its spaces, handed here
   // by yak-sandbox (sandbox/index.ts), which holds the container but not the
   // secret its placeholder is swapped with (sandbox.ts `swapped`).
-  SandboxOutbound: entered(WorkerEntrypoint, ['send'], async (_ctx, env) => {
-    let { swapped } = await import('../sandbox.ts')
-    return {
-      send: (req: Request, container: string) => swapped(env, container, req),
-    }
-  }),
+  SandboxOutbound: entered(
+    WorkerEntrypoint,
+    ['send', 'fault'],
+    async (_ctx, env) => {
+      let { swapped } = await import('../sandbox.ts')
+      let { caught } = await import('../defects.ts')
+      return {
+        send: (req: Request, container: string) => swapped(env, container, req),
+        fault: (message: string, container: string) => {
+          caught(new Error(message), {
+            request: 'workbench snapshot',
+            container,
+          })
+        },
+      }
+    },
+  ),
   // The platform tracker, handing back the Operator runs a bug it resolved
   // had stopped (operator-rerun.ts, @yaks/tracker/effects `settle`). Only
   // its KERNEL binding reaches this entrypoint.

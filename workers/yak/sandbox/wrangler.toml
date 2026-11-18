@@ -25,6 +25,11 @@ minify = true
 [vars]
 APEX = "yaks.app"
 
+# Immutable workbench filesystem snapshots, retained until a person purges them.
+[[r2_buckets]]
+binding = "BLOBS"
+bucket_name = "yak-blobs"
+
 [observability.logs]
 enabled = true
 invocation_logs = true
@@ -73,6 +78,10 @@ preview_urls = false
 
 [env.staging.vars]
 APEX = "yaks.fyi"
+
+[[env.staging.r2_buckets]]
+binding = "BLOBS"
+bucket_name = "yak-blobs-staging"
 
 [env.staging.observability.logs]
 enabled = true
