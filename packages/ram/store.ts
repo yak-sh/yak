@@ -5,7 +5,6 @@ import {
   trashOrder,
   type TrashPage,
 } from '@yaks/graph/trash'
-import { Refused } from '@yaks/graph/errors'
 // A graph in a Map. This is @yaks/graph's `Storage` with nothing underneath it
 // — one record per entity, keyed by eid, held in a plain Map — so a graph can
 // run in a page, in a worker, or in a test with no database to install, no
@@ -956,16 +955,11 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       }
     },
     prune: (eids) => {
-      if (
-        [...trash.values()].some((r) =>
-          r.bundles.some((b) => eids.includes(b.entity.eid))
-        )
-      ) {
-        throw new Refused(
-          'trash retains this identity; purge requires a person’s explicit choice',
-        )
-      }
+      let retained = new Set(
+        [...trash.values()].flatMap((r) => r.bundles.map((b) => b.entity.eid)),
+      )
       for (let eid of eids) {
+        if (retained.has(eid)) continue
         save(eid)
         cold.delete(eid)
         put(eid, undefined)

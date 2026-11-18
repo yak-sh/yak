@@ -102,6 +102,23 @@ for (let [name, make] of Object.entries(makers)) {
     equal(await rolled.trash!(['kept']), [])
     equal((await dry.get(['kept']))[0].note, { title: 'Keep' })
   })
+  let cleaning = make(), clean = graph({ storage: cleaning, vocab })
+  await clean.apply([{
+    entity: { eid: 'cleanup' },
+    note: { title: 'Recover me' },
+  }])
+  test(`${name} delete and prune housekeeping succeed while trash holds its identity`, async () => {
+    await clean.apply([{ entity: { eid: 'cleanup' }, $delete: true }, {
+      entity: { eid: 'cleanup' },
+      $prune: true,
+    }], { trusted: true })
+    await cleaning.tx((tx) => tx.prune!(['cleanup']))
+    equal((await clean.get(['cleanup']))[0].tombstone, {})
+    let [entry] = await cleaning.trash!(['cleanup'])
+    await restoreTrash(clean, entry)
+    equal((await clean.get(['cleanup']))[0].note, { title: 'Recover me' })
+  })
+
   let pages = make(), paged = graph({ storage: pages, vocab })
   await paged.apply(
     ['a', 'b', 'c'].map((eid) => ({ entity: { eid }, note: { title: eid } })),

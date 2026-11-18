@@ -4,6 +4,7 @@ import {
   retainSql,
   trashRows,
   trashSql,
+  trashTargetsSql,
 } from '@yaks/sqlite/trash'
 // The store, bound: @yaks/graph's `Storage` over a D1 binding. Reads and DDL
 // are ordinary; the transaction is where D1's shape has to be faced squarely,
@@ -326,6 +327,7 @@ export let storage = <S extends Prepared<S>>(
   // what this transaction has written. See the header for what that buys.
   let open = () => {
     let pending: Stmt[] = []
+    let retained = new Set<string>()
     // Entities this transaction wrote, as they will be once the batch lands.
     let dirty = new Map<Eid, Bundle>()
     // Entities it merely read, faithful to the database. Kept apart from the
@@ -554,7 +556,12 @@ export let storage = <S extends Prepared<S>>(
         }
         pending.push(...removeSql([...vocab.all], found, now))
       },
-      prune: (eids) => {
+      prune: async (eids) => {
+        if (!eids.length) return
+        let saved = await one(trashTargetsSql(eids))
+        for (let row of saved) retained.add(String(row.eid))
+        eids = eids.filter((eid) => !retained.has(eid))
+        if (!eids.length) return
         moved = true
         pending.push(
           ...pointSql(shapes(eids.flatMap((eid) => dirty.get(eid) ?? []))),
@@ -571,6 +578,7 @@ export let storage = <S extends Prepared<S>>(
 
     return {
       tx: preserving(tx, vocab, (id, at, rows) => {
+        for (let row of rows) retained.add(row.entity.eid)
         pending.push(...retainSql(id, at, rows))
       }),
       flush,

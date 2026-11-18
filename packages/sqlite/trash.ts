@@ -9,7 +9,9 @@ import {
   desc,
   type Driver,
   eq,
+  exists,
   type Insert,
+  lit,
   lt,
   oneOf,
   or,
@@ -128,3 +130,18 @@ export let purgeTrashSql = (id: string | string[]): Delete => ({
     }),
   ),
 })
+
+/** Cleanup candidates still held by retained before-images. */
+export let trashTargetsSql = (eids: string[]): Select =>
+  select({
+    cols: [col('eid')],
+    from: table('entity'),
+    where: and(
+      among(col('eid'), array(eids)),
+      exists(select({
+        cols: [lit(1)],
+        from: table(TRASH),
+        where: eq(col('entity'), col('id', 'entity')),
+      })),
+    ),
+  })

@@ -276,17 +276,17 @@ its identity plus `tombstone: {}`.
 reference names it. It repairs a malformed **orphan identity**, one whose eid
 was not generated, using the exact stored eid, including an empty string. It can
 also remove an unreferenced tombstone after its retained data was explicitly
-purged. Retained snapshots hold a reference to their identities, so neither
-`$prune` nor direct storage pruning can erase recoverable data. A generated eid
-is pruned only from its tombstone and only by a trusted write; held components
-and inbound references refuse the batch. No background expiration purges trash.
-The request carries no component edits; its returned tombstone lets subscribers
-remove the identity from their caches. Pruning runs after transaction hooks, and
-is recorded by its caller rather than the component journal. A store that keeps
-deletion times offers the graves a sweep may prune through
-`outside.buried(before, page)`: up to `page.limit` tombstones laid before
-`before` that nothing names, resuming the walk at `page.after`, the `next` the
-page before answered.
+purged. Retained snapshots hold a reference to their identities, so `$prune` and
+direct storage pruning leave those identities standing while the rest of the
+cleanup succeeds. A generated eid is pruned only from its tombstone and only by
+a trusted write; held components and inbound references refuse the batch. No
+background expiration purges trash. The request carries no component edits; its
+returned tombstone lets subscribers remove the identity from their caches.
+Pruning runs after transaction hooks, and is recorded by its caller rather than
+the component journal. A store that keeps deletion times offers the graves a
+sweep may prune through `outside.buried(before, page)`: up to `page.limit`
+tombstones laid before `before` that nothing names, resuming the walk at
+`page.after`, the `next` the page before answered.
 
 A store that keeps a file of pages says what it keeps through
 `storage.measure(signal)`: the file's bytes, its free bytes and each table's

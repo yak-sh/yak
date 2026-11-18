@@ -29,3 +29,24 @@ test('D1 saves destructive writes in their atomic batch and restores binary data
   await s.purgeTrash(entry.id)
   equal(await s.trash(['note']), [])
 })
+
+let cleanupStore = await store(vocab),
+  cleanup = graph({ storage: cleanupStore, vocab })
+await cleanup.apply([{
+  entity: { eid: 'cleanup' },
+  note: { text: 'Recover me', bytes },
+}])
+test('D1 delete and prune housekeeping keep archived identities without refusing the write', async () => {
+  await cleanup.apply([{ entity: { eid: 'cleanup' }, $delete: true }, {
+    entity: { eid: 'cleanup' },
+    $prune: true,
+  }], { trusted: true })
+  let during = await cleanupStore.tx(async (tx) => {
+    await tx.prune!(['cleanup'])
+    return await tx.get(['cleanup'])
+  })
+  equal(during[0].tombstone, {})
+  let [entry] = await cleanupStore.trash(['cleanup'])
+  await restoreTrash(cleanup, entry)
+  equal((await cleanup.get(['cleanup']))[0].note, { text: 'Recover me', bytes })
+})

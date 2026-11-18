@@ -93,6 +93,7 @@ import {
   type Write,
 } from '@yaks/sql'
 import { tables } from './layout.ts'
+import { TRASH } from './trash.ts'
 import { required } from './physical.ts'
 import { heldBy } from './archetype.ts'
 import { classed, spined } from './memo.ts'
@@ -628,6 +629,8 @@ export let pruneSql = (
       from: table(name, '__r'),
       where: eq(col(prop, '__r'), col('id', 'entity')),
     }))
+  // Housekeeping leaves identities held by recoverable before-images standing.
+  let eligible = and(named, not(holds(TRASH, 'entity')))
   let stands = new Set(held)
   let empty = and(
     exists(select({
@@ -652,15 +655,15 @@ export let pruneSql = (
       from: TOMBSTONE,
       where: among(
         col('entity'),
-        select({ cols: [col('id')], from: table('entity'), where: named }),
+        select({ cols: [col('id')], from: table('entity'), where: eligible }),
       ),
     },
-    { t: 'delete', from: 'entity', where: and(named, empty) },
+    { t: 'delete', from: 'entity', where: and(eligible, empty) },
     {
       t: 'insert',
       into: 'entity',
       cols: ['eid'],
-      q: select({ cols: [lit(null)], from: table('entity'), where: named }),
+      q: select({ cols: [lit(null)], from: table('entity'), where: eligible }),
     },
   ]
 }
