@@ -6,7 +6,7 @@ import type { Incoming, MailSource } from '@yaks/host/senders'
 type Part = { name: string; type: string; base64: string }
 
 /** A complete delivery: the neutral envelope and original provider bytes. */
-export type Capture = {
+export type Capture<File = Part> = {
   from: string
   to: string
   name?: string
@@ -15,8 +15,8 @@ export type Capture = {
   html?: string
   verified?: boolean
   vouched?: boolean
-  attachments: Part[]
-  sources: Part[]
+  attachments: File[]
+  sources: File[]
 }
 
 let part = ({ bytes, ...file }: MailSource): Part => ({
@@ -24,15 +24,19 @@ let part = ({ bytes, ...file }: MailSource): Part => ({
   base64: toBase64(bytes),
 })
 
-/** Keep all bytes before projecting a delivery into a letter or an upload. */
-export let capture = (
+/** Describe a delivery with its files encoded by the caller, such as private byte references. */
+export let capturing = <File>(
   { headers, attachments, sources, ...mail }: Incoming,
-): Capture => ({
+  file: (source: MailSource) => File,
+): Capture<File> => ({
   ...mail,
   headers: [...headers.entries?.() ?? []],
-  attachments: attachments.map(part),
-  sources: (sources ?? []).map(part),
+  attachments: attachments.map(file),
+  sources: (sources ?? []).map(file),
 })
+
+/** Keep all bytes before projecting a delivery into a letter or an upload. */
+export let capture = (mail: Incoming): Capture => capturing(mail, part)
 
 /** Read original files from a capture, including ones an app could not take. */
 export let captured = (parts: Part[]): MailSource[] =>

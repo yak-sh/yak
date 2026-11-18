@@ -647,7 +647,9 @@ conversation, and a verified reply to one of its letters answers in that thread.
 `capture(incoming)` produces a JSON-safe copy of an inbound delivery, including
 its envelope, text, HTML, attachment bytes and original `sources` supplied by
 the provider. `captured(capture.sources)` and `captured(capture.attachments)`
-read those original files back. Keep the capture in private storage before
+read those original files back. `capturing(incoming, file)` instead maps each
+original file to the reference the caller supplies, for keeping large originals
+in separate byte objects. Keep those bytes and their manifest before
 acknowledging intake: an app's parsed letter and accepted uploads are
 projections of it and may not include everything the sender supplied.
 

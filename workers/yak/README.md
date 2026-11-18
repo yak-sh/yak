@@ -371,7 +371,8 @@ it. Values never appear here or in the repo.
 Inbound mail is captured before routing or acknowledgement in private R2 keys
 `mail-source/<encoded-recipient>/<sha256>.json`. Administrators can list a
 recipient's prefix and read a capture directly from the `BLOBS` bucket;
-`captured()` from `@yaks/mail` decodes its source files and attachments. Email
+`sources` and `attachments` in the manifest name private
+`mail-source/bytes/<sha256>` keys holding the exact original bytes. Email
 Routing captures the original MIME and transport envelope. Resend captures the
 signed webhook body, complete receiving API responses and attachment bytes. The
 captures remain even when an app cannot accept an attachment, a mailbox refuses

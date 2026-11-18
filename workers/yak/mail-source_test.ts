@@ -1,10 +1,9 @@
 // Preserved inbound originals use a private namespace, outside published files.
 import { equal, test, throws } from '@yaks/testing'
 import { memoryBucket } from '../../packages/blob/testing.ts'
-import { type Capture, captured } from '@yaks/mail'
 import type { Incoming } from '@yaks/host/senders'
 import type { Env } from './env.ts'
-import { keepMail } from './mail-source.ts'
+import { keepMail, type MailCapture } from './mail-source.ts'
 
 let mail: Incoming = {
   from: 'relay@example.com',
@@ -28,9 +27,14 @@ test('original mail and unsupported attachments remain recoverable without publi
   let saved = new TextDecoder().decode(
     await (await BLOBS.get(key))!.arrayBuffer(),
   )
-  let source = JSON.parse(saved) as Capture
+  let source = JSON.parse(saved) as MailCapture
   equal(source.html, mail.html)
-  equal(captured(source.attachments), mail.attachments)
+  equal(
+    new Uint8Array(
+      await (await BLOBS.get(source.attachments[0].key))!.arrayBuffer(),
+    ),
+    mail.attachments[0].bytes,
+  )
 })
 
 test('a source storage failure rejects intake instead of acknowledging lost data', async () => {
@@ -57,12 +61,12 @@ test('the email door preserves the complete source even when its mailbox refuses
       raw,
     })
     equal(reply.status, 400)
-    let [key] = [...sources.held.keys()]
+    let key = [...sources.held.keys()].find((key) => key.endsWith('.json'))!
     equal(key.startsWith('mail-source/absent%40yaks.app/'), true)
     let saved = JSON.parse(
       new TextDecoder().decode(sources.held.get(key)),
-    ) as Capture
-    equal(new TextDecoder().decode(captured(saved.sources)[0].bytes), raw)
+    ) as MailCapture
+    equal(new TextDecoder().decode(sources.held.get(saved.sources[0].key)), raw)
     equal(saved.html?.trim(), '<p>Original HTML</p>')
   } finally {
     await k.stop()
