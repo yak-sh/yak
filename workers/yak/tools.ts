@@ -3552,7 +3552,8 @@ let OURS: Row[] = [
           description:
             'true to email a link that erases the space at once instead ' +
             'of trashing it: its apps, everything they saved, their files ' +
-            'and its address, all gone, with no restore',
+            'and its address, all gone, with no restore. Only when the ' +
+            'person asked for exactly that',
         },
       },
       required: ['space'],
@@ -3573,8 +3574,7 @@ let OURS: Row[] = [
           'conflict',
           `${space.slug} is already in the trash, ${
             daysLeft(space.trashed)
-          } days left — space_restore(space: '${space.slug}') brings it back, ` +
-            'or space_delete(forever: true) mails a link that erases it now',
+          } days left — space_restore(space: '${space.slug}') brings it back`,
         )
       }
       let d = await doomed(ctx.dir, space)

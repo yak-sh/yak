@@ -26,7 +26,10 @@ that opens a door, a poll that wakes every store on the platform.
 Nothing an agent does erases a person's app or space, the demo space and test
 accounts included. A delete goes to the trash, and only its 30 days running out
 or the owner's own confirmation from a letter erase it. A trash full of old apps
-is fine to leave there.
+is fine to leave there. A bot account's letters (`yourname@bot.yak.sh` and the
+other `@bot.yak.sh` owners) land where an agent can read them, and an erase link
+in one is still a person's to press, never an agent's. When a reply or a recording
+mentions the trash, the words are what to fix, never the trash.
 
 workers/yak/README.md is the reference for bindings, the Worker's own secrets
 and setup; this is the map and the feel.

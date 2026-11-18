@@ -85,7 +85,9 @@ space_delete:
     that link would stop. The confirmation is the owner's to give by opening
     that link; nothing else completes the deletion. Only the space owner may
     ask. app_delete trashes one app instead. With forever: true the link
-    erases the space at once instead, with nothing kept and no undo. To undo
+    erases the space at once instead, with nothing kept and no undo: use it
+    only when the person asked for exactly that; a space left in the trash
+    costs nothing to keep. To undo
     a delete: space_restore, any time in those 30 days. Documentation:
     https://yaks.app/docs/errors.
 space_restore:
