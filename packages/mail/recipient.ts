@@ -8,20 +8,18 @@
 
 import { type Bundle, type Eid, hook, merged, type Plugin } from '@yaks/graph'
 import { comps } from '@yaks/graph/bundle'
+import { PROVENANCE } from '@yaks/graph/provenance'
 import type { Tx } from '@yaks/graph/storage'
 import { after, each } from '@yaks/fp'
 import { and, eq } from '@yaks/query'
 import { DELIVER, EMAIL, RECIPIENT } from './comp.ts'
-
-// What the graph itself puts on a row, which is not the app's.
-let STAMPS = ['created', 'updated']
 
 /** Whether a row is only an address: it wears `email` and nothing of an app's
  * own. */
 export let bare = (row: Bundle): boolean => {
   let names = comps(row).filter(([, c]) => c != null).map(([n]) => n)
   return names.includes(EMAIL) &&
-    names.every((n) => n == EMAIL || n == RECIPIENT || STAMPS.includes(n))
+    names.every((n) => n == EMAIL || n == RECIPIENT || PROVENANCE.includes(n))
 }
 
 let pointing = (tx: Tx, eid: Eid) =>

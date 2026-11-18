@@ -13,6 +13,7 @@ import {
   hook,
   type Plugin,
 } from '@yaks/graph'
+import { PROVENANCE } from '@yaks/graph/provenance'
 import { e164 } from '@yaks/phone/mobile'
 import { line } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
@@ -43,7 +44,7 @@ let home = (registration: string, path: (string | number)[]) =>
 // may have added directory details or notes while the sign-up was unfinished.
 let only = (row: Bundle, names: string[]) =>
   Object.keys(row).every((name) =>
-    [...names, 'entity', 'form_guest', 'created', 'updated'].includes(name)
+    [...names, 'entity', 'form_guest', ...PROVENANCE].includes(name)
   )
 let captured = (
   row: Bundle,

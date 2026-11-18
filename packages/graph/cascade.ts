@@ -33,6 +33,7 @@ import { comps, dead, tombstoned } from './bundle.ts'
 import type { Doom, Gone, Loose, ReadTx, Tx } from './storage.ts'
 import type { State } from './state.ts'
 import { about, gather, holding } from './gather.ts'
+import { PROVENANCE } from './stamp.ts'
 
 // The components holding a reference declared with one of these death
 // behaviors — exactly what an `about` read has to look through, and nothing
@@ -256,17 +257,18 @@ export let cascade = (
   vocab: Vocab,
   st: State,
 ): Bundle[] | Promise<Bundle[]> => {
-  // Provenance records writes, not a reason for an entity to exist. Marks
-  // such as completed/archived do record an act and remain substantive.
+  // Provenance records writes, not a reason for an entity to exist: its stamps
+  // and the writers of its values (@yaks/provenance). Marks such as
+  // completed/archived do record an act and remain substantive.
+  let provenance = (c: string) => PROVENANCE.includes(c)
   let empty = (changed: Bundle[]): Eid[] | Promise<Eid[]> => {
-    if (!vocab.comp('created') && !vocab.comp('updated')) return []
+    if (![...PROVENANCE].some((c) => vocab.comp(c))) return []
     let eids = [
       ...new Set(
         changed.filter((b) =>
           !dead(b) && (
-            !comps(b).length || comps(b).some(([c, v]) =>
-              v == null || c == 'created' || c == 'updated'
-            )
+            !comps(b).length ||
+            comps(b).some(([c, v]) => v == null || provenance(c))
           )
         )
           .map((b) => b.entity.eid),
@@ -278,12 +280,8 @@ export let cascade = (
       (rows) =>
         rows.filter((b) =>
           !dead(b) &&
-          comps(b).some(([c, v]) =>
-            v != null && (c == 'created' || c == 'updated')
-          ) &&
-          !comps(b).some(([c, v]) =>
-            v != null && c != 'created' && c != 'updated'
-          )
+          comps(b).some(([c, v]) => v != null && provenance(c)) &&
+          !comps(b).some(([c, v]) => v != null && !provenance(c))
         ).map((b) => b.entity.eid),
     )
   }

@@ -3,6 +3,7 @@
 
 import type { Bundle, Comp, Plugin, Storage } from '@yaks/graph'
 import { graph } from '@yaks/graph'
+import { PROVENANCE } from '@yaks/graph/provenance'
 import { loadVocab } from '@yaks/vocab'
 import { CallError } from '@yaks/tools/errors'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
@@ -89,7 +90,7 @@ let tools = {
   archived: 'bug_archive',
   reopened: 'bug_reopen',
 } as const
-let STAMPS = new Set(['entity', 'created', 'updated'])
+let STAMPS = new Set(['entity', ...PROVENANCE])
 // A deploy's probe moves no bug, arriving, grouped or cleared away.
 let BOOKKEEPING = new Set([
   'effect',

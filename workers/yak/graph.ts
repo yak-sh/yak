@@ -298,7 +298,7 @@ import {
   identityEid,
   REQUESTS,
 } from '@yaks/graph'
-import { actorOf as writerOf } from '@yaks/graph/provenance'
+import { actorOf as writerOf, PROVENANCE } from '@yaks/graph/provenance'
 import { misfit, Refused, status } from '@yaks/graph/errors'
 import { DELIVER, MAIL } from '@yaks/mail'
 import { subscription } from './notices.ts'
@@ -876,7 +876,7 @@ installContext({
 // (facets/directory-graph.ts) whenever it is asked, so it fences from the
 // start.
 let UNNAMED = new Set(['signin', 'effect'])
-let STAMPS = new Set(['created', 'updated'])
+let STAMPS = new Set(PROVENANCE)
 let UNFENCED = new Set([
   ...RECEIPTS,
   'signed_in',

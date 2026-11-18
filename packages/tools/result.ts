@@ -4,6 +4,7 @@ import { identityEid } from '@yaks/graph/identity'
 import { namedTool } from '@yaks/graph/call'
 import { asked, emitted, ready } from '@yaks/graph/declared'
 import { token } from '@yaks/graph/sha256'
+import { PROVENANCE } from '@yaks/graph/provenance'
 import { effectsIn, type Vocab } from '@yaks/vocab'
 import { toolsDoc } from './vocab.ts'
 import { executionState } from './state.ts'
@@ -174,15 +175,16 @@ let hitLine = (b: Bundle, hit: Comp): string => {
   }${target ? ` on ${target}` : ''}${source}${snippet ? ` — ${snippet}` : ''}`
 }
 
-// What a tool's text answer carries: the spine every row has (@yaks/kernel),
-// its words, the call it answers, and a fault's `refusal` or `exception`. An
-// entity carrying more (a transcript entry, a comment, a memory, a row a tool
-// made) is data, and its words alone would drop which one it is and who wrote
-// it.
+// The spine every written row has: its entity and the provenance the graph
+// keeps about its writes.
+let SPINE = new Set(['entity', ...PROVENANCE])
+
+// What a tool's text answer carries: the spine, its words, the call it
+// answers, and a fault's `refusal` or `exception`. An entity carrying more (a
+// transcript entry, a comment, a memory, a row a tool made) is data, and its
+// words alone would drop which one it is and who wrote it.
 let SPOKEN = new Set([
-  'entity',
-  'created',
-  'updated',
+  ...SPINE,
   'content',
   'output',
   'refusal',
@@ -330,8 +332,7 @@ export let structured = (
   (tool.outputSchema ? valueIn(answer) : undefined) ?? { result: answer }
 
 // A bundle that says nothing once its value and images are taken out: the
-// spine every row has, and the call it was aimed at.
-let SPINE = new Set(['entity', 'created', 'updated'])
+// spine, and the call it was aimed at.
 let bare = (b: Bundle): boolean =>
   Object.entries(b).every(([k, c]) =>
     SPINE.has(k) || k[0] == '$' || c === undefined ||

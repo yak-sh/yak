@@ -3,6 +3,7 @@
 import { line } from '@yaks/query'
 import type { Access, Bundle, Comp } from '@yaks/graph'
 import { comps } from '@yaks/graph/bundle'
+import { PROVENANCE } from '@yaks/graph/provenance'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 
@@ -19,7 +20,7 @@ export let finishedRun = (row: Bundle): Bundle[] => {
       .map(([p, v]) => [p, token(v ?? null)]),
   )
   let other = comps(row).some(([name]) =>
-    !['effect', 'created', 'updated'].includes(name)
+    !['effect', ...PROVENANCE].includes(name)
   )
   return [{
     entity: row.entity,

@@ -1173,8 +1173,15 @@ export let graph = (opts: Options): Graph => {
             trackers.push(tracker)
             tx = tracker.tx
           }
+          // Each tracker wraps the ones before it, and a flush writes through
+          // the transaction it was given: the outermost flushes first, so the
+          // trackers it writes through see its derived writes before they
+          // flush their own.
           let flush: Step = (b) =>
-            timed('flush', () => each(trackers, b, (out, t) => t.flush(out)))
+            timed(
+              'flush',
+              () => each(trackers.toReversed(), b, (out, t) => t.flush(out)),
+            )
           let held = holding(tx, vocab, snap)
           // What the graph holds for one entity, with every patch this batch
           // has made already folded in — what a rule is evaluated against

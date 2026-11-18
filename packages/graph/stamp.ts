@@ -32,6 +32,11 @@ import { comps } from './bundle.ts'
 import type { State } from './state.ts'
 import type { Bound, Patch, Rule } from './rules.ts'
 
+/** What the graph keeps about a row's writes rather than a part of the row:
+ * its stamps, and `authorship`, the writers of the values it still holds
+ * (@yaks/provenance). A row holding nothing else holds nothing of its own. */
+export let PROVENANCE: readonly string[] = ['created', 'updated', 'authorship']
+
 /**
  * Sign a whole batch as one actor's. Whatever `$actor` the bundles already
  * carried is removed: who is writing is decided by the code that received the

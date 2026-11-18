@@ -5,7 +5,7 @@ import { line } from '@yaks/query'
 import type { Actor, Comp, Graph, Hook, Plugin } from '@yaks/graph'
 import { comps, dead } from '@yaks/graph/bundle'
 import { Refused } from '@yaks/graph/errors'
-import { signed } from '@yaks/graph/provenance'
+import { PROVENANCE, signed } from '@yaks/graph/provenance'
 import { after } from '@yaks/fp'
 import { CallError } from '@yaks/tools/errors'
 import { changing, type Here } from './change.ts'
@@ -62,7 +62,7 @@ export let choices = (here: Here = {}): Plugin => ({
         context?.admission && bundles.every((b) =>
           !dead(b) &&
           comps(b).every(([name]) =>
-            ['created', 'updated'].includes(name) ||
+            PROVENANCE.includes(name) ||
             syncOf(vocab, name) == 'peers'
           )
         )

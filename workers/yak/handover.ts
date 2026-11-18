@@ -3,11 +3,12 @@
 // moves its seats and browsers this way, and a space's Operator store its
 // conversations, requests, asks, wake-ups, drafts and Updates, so whatever
 // names a person moves with them without a list to keep. Who wrote a row
-// (`created`, `updated`) is history and stays as it was.
+// (its provenance) is history and stays as it was.
 import { line } from '@yaks/query'
 import type { Bundle } from '@yaks/graph'
+import { PROVENANCE } from '@yaks/graph/provenance'
 
-const KEPT = new Set(['entity', 'created', 'updated'])
+const KEPT = new Set(['entity', ...PROVENANCE])
 
 // A reference reads back as its eid, or as `{eid, name}` where its target
 // has a name.

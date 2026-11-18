@@ -40,8 +40,12 @@ export let authorship = (vocab: Vocab): Plugin => ({
         let eids = [...before.keys()].filter((eid) => !deleted.has(eid))
         if (!eids.length) return bundles
         return after(tx.get(eids), (rows) => {
+          // Attribution is this facet's own bookkeeping: quiet, so it rides on
+          // an entity the write already returns and never adds one to the
+          // answer (@yaks/graph `composed`).
           let patches = rows.map((row): Bundle => ({
             entity: row.entity,
+            $quiet: true,
             authorship: {
               fields: retained(
                 before.get(row.entity.eid),
