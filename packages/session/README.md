@@ -75,7 +75,7 @@ JSON object. The components beside `entry` determine its type:
 | `content{body}` with `output{source}` | model output                               |
 | `call{to, name, id, args, source}`    | a tool call requested by a model           |
 | `result{call}` with `content`         | a tool result                              |
-| `heard` beside a result               | what it brought, a stranger wrote          |
+| `heard` beside a result or report     | what it brought, a stranger wrote          |
 | `using{provider, model, effort, …}`   | model selection on an input or ask         |
 | `usage` and `cost` beside an ask      | what the request used and cost             |
 | `questions{asked}`                    | typed questions for the next ask           |
@@ -194,7 +194,10 @@ immediately. The return value is the quiet deadline the host should wake at, or
 `undefined`. The receipt's `delivery{child, outcome, through}` records its last
 covered entry. Delivery marks the child `completed{}`; a host clears that mark
 when accepting another input and schedules only children without it. Continuing
-the child refreshes that same notice after it closes again.
+the child refreshes that same notice after it closes again. A child that heard a
+stranger (an entry of its own carries `heard`) reports `heard`, by receipt,
+notice or `wait`, so its parent's host narrows the turn that reads it as it
+would its own.
 
 Helpers spawned by a passive child inherit `spawned.notice`, report to their
 immediate parent, and their reports are included in that parent's closing

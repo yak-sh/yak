@@ -15,6 +15,17 @@ export let noticeParent = async (g: Graph, child: string): Promise<string> => {
     : child
 }
 
+/** Whether a tool brought `child` words someone its session does not work
+ * for wrote (`heard`): its report brings them to its parent, so the report
+ * is `heard` there too. */
+export let overheard = async (
+  g: Pick<Graph, 'read'>,
+  child: string,
+): Promise<boolean> =>
+  (await g.read(
+    line`.entry.session=${child}&.heard&.limit=1&.fields=entity.eid`,
+  )).length > 0
+
 /** Raise exceptional work without starting a turn in the main thread. */
 export let raiseNotice = async (
   g: Graph,
@@ -96,6 +107,7 @@ export let childNotice = async (
       notice: { child },
       delivery: { child, outcome: status, through: last.entity.eid },
       content: { body },
+      ...entries.some((b) => b.heard) ? { heard: {} } : {},
     },
     ...status == 'failed' && await noticeParent(g, child) != link.parent
       ? await raiseNotice(

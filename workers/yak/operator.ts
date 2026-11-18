@@ -124,6 +124,7 @@ import {
 } from './operator-escalate.ts'
 import { rootAt, spaceOf } from './operator-root.ts'
 import { textSend } from './operator-texts.ts'
+import { strangerWrote } from './operator-heard.ts'
 import { confirmTextContact, contactAdd } from './operator-contacts.ts'
 import { SIGNUP, signupTools } from './operator-signup.ts'
 import { notificationSend } from './operator-alerts.ts'
@@ -489,56 +490,65 @@ export let operatorRoster = async (
   )
   // What the model reads of an answer from the Operator's own store is drawn
   // (operator-store.ts `readable`): an eid in its prose as the entity's id.
-  let run =
-    (t: NamedTool, host: Graph, target: Graph, own = false): Tool['run'] =>
-    async (args, context) => {
-      let call = context!.call
-      let fault: unknown
-      let out = await invoke(
-        {
-          ...call,
-          call: {
-            ...comp(call, 'call'),
-            args,
-            actor: { by: ctx.who!.actor!, via: context!.session },
-          },
-          $actor: {
-            by: ctx.who!.actor!,
-            via: context!.session,
-          },
+  // A read of the apps whose rows a stranger wrote is `heard`
+  // (operator-heard.ts), which leaves the rest of the turn its reads.
+  let run = (
+    t: NamedTool,
+    host: Graph,
+    target: Graph,
+    from: 'own' | 'apps' | 'remote',
+  ): Tool['run'] =>
+  async (args, context) => {
+    let call = context!.call
+    let fault: unknown
+    let out = await invoke(
+      {
+        ...call,
+        call: {
+          ...comp(call, 'call'),
+          args,
+          actor: { by: ctx.who!.actor!, via: context!.session },
         },
-        t,
-        target,
-        {
-          host,
-          report: (e) => {
-            fault = e
-            caught(e, { request: 'operator tool', tool: t.name })
-          },
+        $actor: {
+          by: ctx.who!.actor!,
+          via: context!.session,
         },
-        (answer, state, keeps) =>
-          !t.readOnly && !t.applied && state == 'done' && keeps !== false
-            ? target.apply(answer)
-            : answer,
+      },
+      t,
+      target,
+      {
+        host,
+        report: (e) => {
+          fault = e
+          caught(e, { request: 'operator tool', tool: t.name })
+        },
+      },
+      (answer, state, keeps) =>
+        !t.readOnly && !t.applied && state == 'done' && keeps !== false
+          ? target.apply(answer)
+          : answer,
+    )
+    let refusal = out.find((b) => b.refusal)
+    if (refusal) {
+      throw new CallError(
+        String(comp(refusal, 'refusal')?.code),
+        String(comp(refusal, 'content')?.body),
       )
-      let refusal = out.find((b) => b.refusal)
-      if (refusal) {
-        throw new CallError(
-          String(comp(refusal, 'refusal')?.code),
-          String(comp(refusal, 'content')?.body),
-        )
-      }
-      if (fault) throw fault
-      let said = own ? await work.readable(out) : out
-      // Applied tools already wrote through their own store; generic writes
-      // return patches and use the same graph application as the connector.
-      return {
-        text: worded(said, Infinity) || JSON.stringify(said),
-        with: {
-          output: { source: call.entity.eid, value: resultValue(out, t) },
-        },
-      }
     }
+    if (fault) throw fault
+    let said = from == 'own' ? await work.readable(out) : out
+    let heard = from == 'apps' && t.readOnly &&
+      await strangerWrote(g, ctx.dir, reach, ctx.person, out)
+    // Applied tools already wrote through their own store; generic writes
+    // return patches and use the same graph application as the connector.
+    return {
+      text: worded(said, Infinity) || JSON.stringify(said),
+      with: {
+        output: { source: call.entity.eid, value: resultValue(out, t) },
+        ...heard ? { heard: {} } : {},
+      },
+    }
+  }
   let shaped = (t: NamedTool) => ({
     name: t.name,
     ...t.title ? { title: t.title } : {},
@@ -566,7 +576,7 @@ export let operatorRoster = async (
   return [
     ...remote.map(namedTool).map((t): Tool => ({
       ...shaped(t),
-      run: run(t, g, landing),
+      run: run(t, g, landing, 'remote'),
     })),
     // Their own words, sent on to their machine as theirs: only someone who
     // writes in the space, as the rest of what changes anything is.
@@ -575,9 +585,9 @@ export let operatorRoster = async (
       : [],
     ...apps.map((t): Tool => {
       let ours = own.get(t.name)
-      let there = run(t, g, landing)
+      let there = run(t, g, landing, 'apps')
       if (!ours) return { ...shaped(t), run: there }
-      let here = run(ours, self, self, true)
+      let here = run(ours, self, self, 'own')
       let tool = shaped(t)
       return {
         ...tool,
@@ -599,7 +609,7 @@ export let operatorRoster = async (
     ...[...own.values()]
       .filter((t) => mine.has(t.name) || workNames.has(t.name))
       .map((t) => {
-        let tool = { ...shaped(t), run: run(t, self, self, true) }
+        let tool = { ...shaped(t), run: run(t, self, self, 'own') }
         if (tasked && t.name == 'task_update') {
           return { ...tool, description: t.description + ON_TASK }
         }

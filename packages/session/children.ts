@@ -25,7 +25,7 @@ import { entryStatus, newestOf, openOf, usingOf } from './reach.ts'
 import { live, newestAsk, textOf, usingBefore } from './state.ts'
 import { type Clock, system } from '@yaks/fp'
 import { changes } from './wait.ts'
-import { childNotice } from './child-notice.ts'
+import { childNotice, overheard } from './child-notice.ts'
 
 export type ChildLimits = {
   /** Defaults for user-created tasks, resolved before durable queue admission. */
@@ -521,7 +521,7 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
           } else {
             let states = await Promise.all(ids.map(child))
             if (states.every(ended) || over) {
-              return JSON.stringify(
+              let text = JSON.stringify(
                 await Promise.all(ids.map(async (session, n) => {
                   let last = await newestOf(g, session)
                   return {
@@ -531,6 +531,10 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
                   }
                 })),
               )
+              // A child's output is its report, `heard` as it is anywhere.
+              let heard = (await Promise.all(ids.map((c) => overheard(g, c))))
+                .some(Boolean)
+              return heard ? { text, with: { heard: {} } } : text
             }
           }
         }
@@ -730,5 +734,6 @@ export let deliverChild = async (
     delivery: { child, outcome: status },
     ...open ? { result: { call: link.call } } : {},
     ...using ? { using } : {},
+    ...await overheard(g, child) ? { heard: {} } : {},
   }], { trusted: true })
 }
