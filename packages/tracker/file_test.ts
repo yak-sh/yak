@@ -17,7 +17,8 @@ let record = (eid: string) =>
     actor: { by: person, via: session },
   })
 let left = async (dir: string) =>
-  (await Array.fromAsync(Deno.readDir(dir))).map((e) => e.name)
+  (await Array.fromAsync(Deno.readDir(dir)))
+    .filter((e) => e.isFile).map((e) => e.name)
 
 // Reopen and drain the concurrent spool once, then inspect the admitted rows
 // and acknowledgement outcome without repeating durable writes per assertion.
@@ -106,6 +107,10 @@ for await (let entry of files(receipts).source()) await entry.admit?.()
 let reopened = await Array.fromAsync(files(receipts).source())
 for (let entry of reopened) await entry.ack()
 let acked = await left(receipts)
+let archives = await Array.fromAsync(Deno.readDir(`${receipts}/.trash`))
+let archive = `${receipts}/.trash/${archives[0].name}`
+let original = JSON.parse(await Deno.readTextFile(`${archive}/data`))
+let source = JSON.parse(await Deno.readTextFile(`${archive}/source.json`))
 await Deno.remove(receipts, { recursive: true })
 test('an admitted record stays admitted across reopening until acknowledged', () => {
   equal(
@@ -113,6 +118,8 @@ test('an admitted record stays admitted across reopening until acknowledged', ()
     [['kept', true]],
   )
   equal(acked, [])
+  equal(original[0].entity.eid, 'kept')
+  ok(source.path.endsWith('.local.jsonl'))
 })
 
 // Prepare the spool's partial and complete segments once, then inspect the

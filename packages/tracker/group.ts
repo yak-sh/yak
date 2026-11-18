@@ -1,6 +1,6 @@
 // Grouping decides patches from records; graph admission commits them together.
 // The occurrence link is the receipt: resends and retried effects never count
-// twice. A flood past what its bug keeps is counted at intake (`counted`).
+// twice. Retention moves older occurrences into recoverable graph trash.
 
 import { type ByDay, kept } from '@yaks/ui/chart'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -8,17 +8,7 @@ import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { after, same } from '@yaks/fp'
-import {
-  absent,
-  and,
-  eq,
-  fields,
-  limit,
-  lt,
-  order,
-  present,
-  want,
-} from '@yaks/query'
+import { absent, and, eq, fields, limit, lt, present, want } from '@yaks/query'
 import { faultOf, rerunOf, stablePlace } from './fault.ts'
 import { enrichFrames } from './frames.ts'
 import { comp, type Desk, type Frame, str, title } from './model.ts'
@@ -266,83 +256,6 @@ let sharing = (g: Desk, bug: string, row: Bundle) => {
 
 /** How many occurrences a bug keeps, besides the first of each release. */
 export let RETAIN = 100
-// Past what its bug keeps, an occurrence nearer than this to the newest kept
-// is counted and not kept, so a flood still keeps one a minute.
-let SAMPLE = 60_000
-let at = (row: Bundle) => str(comp(row, 'error').at)
-
-/** Intake's new rows, split into those it keeps and the counts of those it
- * only counts. An occurrence is only counted when its bug is open and already
- * keeps its `count` (`trim`), its release is one the bug keeps, and it is
- * less than a minute after the newest the bug keeps: a flood of one fault
- * then writes its count, not each occurrence to group and trim away. Every
- * other occurrence is kept and grouped, and so is every one naming stopped
- * work (`rerunOf`). A resend of a counted occurrence
- * counts again, since nothing of it is kept to know it by. */
-export let counted = async (
-  g: Desk,
-  rows: Bundle[],
-  count = RETAIN,
-): Promise<{ kept: Bundle[]; counts: Bundle[] }> => {
-  let kept: Bundle[] = [], faults = new Map<string, Bundle[]>()
-  for (let row of rows) {
-    if (
-      !row.error || row.refusal || row.probe || comp(row, 'error').bug ||
-      imported(row) || rerunOf(row)
-    ) {
-      kept.push(row)
-      continue
-    }
-    let key = JSON.stringify([str(comp(row, 'during').app), faultOf(row)])
-    faults.set(key, [...faults.get(key) ?? [], row])
-  }
-  let tallies: Bundle[] = []
-  for (let [key, group] of faults) {
-    let [app, fault] = JSON.parse(key) as [string, string]
-    let bug = await joined(g, group[0], fault, app)
-    let held = bug && !bug.resolved
-      ? await g.read(and(
-        eq('error.bug', bug.entity.eid),
-        fields('error.at', 'error.commit', 'error.version'),
-        order('-error.at'),
-        limit(count),
-      ))
-      : []
-    if (!bug || held.length < count) {
-      kept.push(...group)
-      continue
-    }
-    let releases = new Set(held.map(release))
-    let newest = Date.parse(at(held[0]))
-    let old = comp(bug, 'bug'), sum: Comp = old, more = 0
-    for (let row of group.toSorted((a, b) => at(a).localeCompare(at(b)))) {
-      let r = release(row)
-      if (!releases.has(r)) {
-        releases.add(r)
-        if (!(await sharing(g, bug.entity.eid, row)).length) {
-          kept.push(row)
-          continue
-        }
-      }
-      if (!(Date.parse(at(row)) - newest < SAMPLE)) {
-        kept.push(row)
-        newest = Date.parse(at(row))
-        continue
-      }
-      sum = counts(sum, comp(row, 'error'))
-      more++
-    }
-    if (more) {
-      tallies.push({
-        entity: { eid: bug.entity.eid },
-        $was: { bug: { hits: token(old.hits) } },
-        bug: sum,
-      })
-    }
-  }
-  return { kept, counts: tallies }
-}
-
 // How long a probe's receipt is kept for its sender to read.
 let PROBE_KEPT = 60 * 60 * 1000
 /** The deletes of the probes whose receipts their senders have had an hour to

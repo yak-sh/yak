@@ -1,6 +1,7 @@
 import * as io from '@yaks/file/io'
+import { trash } from '@yaks/process/trash'
 // A file spool appends immutable JSONL segments. The newline publishes one
-// complete record; only committed intake removes it. Writers share no offsets.
+// complete record; committed intake moves it to trash. Writers share no offsets.
 
 import type { Bundle } from '@yaks/graph'
 import type { Source } from './service.ts'
@@ -83,11 +84,7 @@ export let files = (dir: string): {
           await sync(dir)
         },
         ack: async () => {
-          try {
-            await io.remove(path)
-          } catch (error) {
-            if (!io.isNotFound(error)) throw error
-          }
+          await trash(path, `${dir}/.trash`)
           await sync(dir)
         },
       }

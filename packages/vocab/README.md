@@ -622,17 +622,18 @@ A relay without `save` only hands values on.
 
 ### Expiration
 
-**expire** is a component's query selecting its rows to remove. A component that
-declares none expires nothing. The [effects worker](../effects/README.md) sweeps
-every declaration in the composed vocabulary on startup and daily. It walks the
-component's rows a page at a time in storage order, tests each page against the
-query, and removes the matches in batches through `apply()`, so no read of the
-sweep costs more than a page however large the table. Other components on the
-entity remain; the graph deletes an entity left with only `created` and
-`updated` provenance stamps. An expired value is kept for no one: a body's bytes
-go with it unless another row names them
-([@yaks/blob](../blob/README.md#expiring-bodies)), while the journal keeps its
-record of the write, an address in a body's case.
+**expire** is a regenerable cache component's query selecting its rows to
+remove. A component that declares none expires nothing. Unique records,
+transcripts and person-authored content have no expiration declaration. The
+[effects worker](../effects/README.md) sweeps every declaration in the composed
+vocabulary on startup and daily. It walks the component's rows a page at a time
+in storage order, tests each page against the query, and removes the matches in
+batches through `apply()`, so no read of the sweep costs more than a page
+however large the table. Other components on the entity remain; the graph
+deletes an entity left with only `created` and `updated` provenance stamps. An
+expired value is kept for no one: a body's bytes go with it unless another row
+names them ([@yaks/blob](../blob/README.md#expiring-bodies)), while the journal
+keeps its record of the write, an address in a body's case.
 
 ```ts
 import { expireOf, loadVocab } from '@yaks/vocab'

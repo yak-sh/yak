@@ -159,17 +159,14 @@ only after their occasion's letter has its `delivered` mark; an earlier
 occasion's delivery cannot mark a later regression notified. Space replies own
 their own notified mark. Archived bugs still count but never notify. Retention
 keeps the newest hundred plus the first occurrence of each commit (or version
-without a commit). Past that, intake counts a flood instead of keeping it: an
-occurrence of an open bug that already keeps its hundred, of a release the bug
-keeps, and less than a minute after the newest it keeps adds its hits to the bug
-and is never stored, so a flood of one fault keeps one occurrence a minute and
-writes its count, not each occurrence to group and trim away. A resend of a
-counted occurrence counts again, since nothing of it is kept to know it by.
-Grouping and retention read only what they decide by: grouping reads its bug's
-counters, and an earlier occurrence only after a resolution, to ask whether one
-shares its release; trimming reads each occurrence's time and release, and none
-while the bug's hits are within the newest it keeps. Reframing writes a bug's
-culprit or spot only where it moved.
+without a commit) in the active graph. Every admitted occurrence is stored with
+its stack and tags before retention moves older ones into graph trash. Its
+identity remains, so redelivery never recounts an occurrence in trash. Bugs,
+letters and their lifecycle remain readable. Grouping reads its bug's counters,
+and an earlier occurrence only after a resolution, to ask whether one shares its
+release; trimming reads each occurrence's time and release, and none while the
+bug's hits are within the newest it keeps. Reframing writes a bug's culprit or
+spot only where it moved.
 
 An occurrence regresses a resolved bug when its `error.at` is later than
 `resolved.at`, unless its commit (or version without a commit) was already seen
@@ -339,14 +336,15 @@ configured, local admission atomically renames an error segment to
 `.local.jsonl` and fsyncs the spool directory. That durable receipt survives
 restarts and local occurrence retention without recounting. Remote delivery
 reads only admitted error records and their request companions through the
-Worker's signed platform intake; acknowledgement removes the segment only after
-success. Delivery combines admitted records into batches of at most 100 bundles,
-so a flood does not open one TLS connection per occurrence. Each loop retries on
-its own clock, so even a stalled remote connection cannot delay local admission.
-Sources supplied by a host must support independent replayable scans; file
-sources supply `admitted` and `admit` receipts. A failed delivery leaves its
-original record for retry and never adds a delivery error to the same outbox.
-Immutable global eids make interrupted and repeated delivery safe.
+Worker's signed platform intake; acknowledgement moves the segment into
+filesystem trash only after success. Delivery combines admitted records into
+batches of at most 100 bundles, so a flood does not open one TLS connection per
+occurrence. Each loop retries on its own clock, so even a stalled remote
+connection cannot delay local admission. Sources supplied by a host must support
+independent replayable scans; file sources supply `admitted` and `admit`
+receipts. A failed delivery leaves its original record for retry and never adds
+a delivery error to the same outbox. Immutable global eids make interrupted and
+repeated delivery safe.
 
 The delivery and standing syncs decide what a failed pass is as the poll below
 does (`./outage.ts`): a pass the Worker could not answer for now (`Unavailable`
@@ -594,11 +592,16 @@ renaming it back without repair repeats the refusal.
 With remote delivery configured, successful local admission renames `.jsonl` to
 `.local.jsonl`. This is the durable local receipt: retries do not re-admit a
 record even if local retention has removed its occurrence. Remote delivery may
-remove the segment only after that receipt and a successful remote response. A
+trash the segment only after that receipt and a successful remote response. A
 remote failure keeps the receipt and does not block local intake. Immutable
 occurrence ids make remote redelivery idempotent if acknowledgement fails. Each
 pass reports failures after visiting the remaining records; it is not a backlog
 size limit. A live stop finishes the record in hand and leaves the rest.
+
+Acknowledged segments remain under the spool's `.trash` directory. Each entry
+holds the original bytes in `data` and the original path in `source.json`.
+Sampling and grouping never erase that source record. Recovery copies `data`
+back to its original segment path; trash has no automatic purge.
 
 For a bounded recovery check, copy at most the selected complete segments into
 an isolated spool and use a scratch graph and transport. Do not rename, delete,
