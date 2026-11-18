@@ -142,3 +142,5 @@ export let restoreTrash = async (
   let patches = await restoring(graph, entry, { notice })
   return patches.length ? await graph.apply(patches, apply) : []
 }
+
+export { readTrash } from './trash-read.ts'

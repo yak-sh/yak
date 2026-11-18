@@ -13,7 +13,8 @@ import { ram } from '@yaks/ram'
 import { comp, connect, result, shop, shopGraph, text } from './testing.ts'
 import { roster } from './server.ts'
 import { core, inputSchemaOf, translated } from './tools.ts'
-import { toolCheck } from '@yaks/vocab/tools'
+import { toolCheck, toolsSaid } from '@yaks/vocab/tools'
+import { graphDoc } from '@yaks/graph/vocab'
 import { rosterLine, rosterVersion } from './roster.ts'
 
 let MEMBER = derivedEid('fixture:m1')
@@ -55,12 +56,11 @@ let called = async (
 test('the generic tier is what it lists', async () => {
   let client = await connect()
   let names = (await listed(client)).sort()
-  assertEquals(names, [
-    'graph_apply',
-    'graph_query',
-    'graph_schema',
-    'graph_show',
-  ])
+  assertEquals(
+    names,
+    toolsSaid(graphDoc)
+      .filter((t) => t.name != 'search').map((t) => t.name).sort(),
+  )
   await client.close()
 })
 
@@ -76,12 +76,11 @@ test('a read-only door lists no write, and its reads take its scope', async () =
     name: string
     inputSchema: { properties: Record<string, unknown>; required?: string[] }
   }[]
-  assertEquals(tools.map((t) => t.name).sort(), [
-    'graph_query',
-    'graph_schema',
-    'graph_show',
-    'search',
-  ])
+  assertEquals(
+    tools.map((t) => t.name).sort(),
+    toolsSaid(graphDoc)
+      .filter((t) => t.readOnly).map((t) => t.name).sort(),
+  )
   // Every read says what to name it by, beside its own arguments — and the
   // tool never looks at it: the door read it off the call and built the graph
   // it names before this server saw the request.

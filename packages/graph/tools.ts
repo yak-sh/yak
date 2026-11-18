@@ -62,6 +62,7 @@ import { Refused } from './errors.ts'
 import { type Guide, proseOf, schemaOf } from './schema.ts'
 import { type Edit, edited } from './changes.ts'
 import { type Link, linked } from './links.ts'
+import { readTrash } from './trash-read.ts'
 export { type Edit, edited, type TextEdit, textEdited } from './changes.ts'
 export { type Link, linked } from './links.ts'
 
@@ -393,6 +394,15 @@ export let runs = (seams: Seams = {}): Runs => {
           } shown`,
         },
         output: { source: call.entity.eid },
+      }]
+    },
+    graph_trash: async (call, graph) => {
+      let args = argsOf(call)
+      let ids = args.ids === undefined ? undefined : strings(args.ids)
+      let value = await readTrash(graph, ids)
+      return [{
+        entity: { eid: '$said' },
+        output: { source: call.entity.eid, value },
       }]
     },
     graph_schema: (call, graph) => {

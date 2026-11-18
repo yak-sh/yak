@@ -1037,10 +1037,16 @@ noun is unrelated to any graph component name.
 ### Built-in tool declarations
 
 `@yaks/graph/vocab` contains the declarations for `graph apply`, `graph query`,
-`graph show`, `graph schema`, and `search`. Their implementations live in
-`@yaks/graph/tools`; [@yaks/mcp](../mcp/README.md) exposes them through its
-`core` helper. `search` is included only when a ranked search function is
+`graph show`, `graph trash`, `graph schema`, and `search`. Their implementations
+live in `@yaks/graph/tools`; [@yaks/mcp](../mcp/README.md) exposes them through
+its `core` helper. `search` is included only when a ranked search function is
 supplied. These declarations add no components to the graph.
+
+`graph trash` lists the newest saved deletion groups, including each group's id,
+deletion time and saved bundles. Pass `ids` to select groups containing those
+deleted entity eids. Snapshots follow the graph's read visibility and answer
+policies. Permanent purging is not an agent tool; a person's confirmation page
+owns that action.
 
 ```ts
 import { argsOf, namedTool, offered, who } from '@yaks/graph'
