@@ -411,8 +411,9 @@ use of those apps, and adds no activity hop to those reads.
 - **App stores keep no journal until their first branch** (T-65227). They don't
   load @yaks/journal, and declaring journal names in an app manifest doesn't
   turn it on; their inspector reads schema and entities without history. A store
-  still holding the journal's tables from that window drops them in its next
-  schema pass (migrate.ts `unjournaled`, T-131164). A store's first branch (the
+  holding journal tables from that window retains them even when its current
+  vocabulary no longer writes history. Changing a declaration never purges
+  stored journal data. A store's first branch (the
   kernel-only `/branches` doors, graph.ts `#branching`) records @yaks/journal as
   required, and from then on it composes config.ts `appVersionsConfig`: versions
   on, attribution and feed off. Its live rows become their first versions a page
