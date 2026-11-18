@@ -8,7 +8,7 @@ import doc from './vocab.json' with { type: 'json' }
 import manifest from './package.json' with { type: 'json' }
 
 /** `created{at, by, via}` and `updated{at, by, via}`, in the form `loadVocab`
- * accepts. */
+ * accepts, alongside the optional `authorship{fields}` value attribution. */
 export let provenanceDoc: VocabDoc = doc as VocabDoc
 
 /** What this package is: its manifest's description, the one place it is

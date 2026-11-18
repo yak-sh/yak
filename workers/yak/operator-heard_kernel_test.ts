@@ -10,6 +10,8 @@ import type { Env } from './env.ts'
 import { client, connector, fresh, signIn } from './probe.ts'
 import { directoryOf } from './directory.ts'
 import { compiler } from './testing.ts'
+import { KERNEL, meta } from './meta.ts'
+import { idOf } from '@yaks/platform/listing'
 import { operatorContext, operatorRoster } from './operator.ts'
 import { operatorMemory } from './operator-testing.ts'
 
@@ -38,7 +40,7 @@ for (
     ['index.html', '<h1>Notes</h1>'],
     [
       'vocab.json',
-      '{"$defs":{"note":{"properties":{"by":{"type":"string"}}}}}',
+      '{"$defs":{"note":{"properties":{"by":{"type":"string"},"body":{"type":"string"},"heading":{"type":"string"}}}}}',
     ],
   ]
 ) await agent.tool('app_files', { app, op: 'write', path, content })
@@ -49,6 +51,61 @@ await agent.tool('graph_apply', { app, entities: note('owner') })
 await client(k, host, app, colleague.cookie).applied(note('colleague'))
 await client(k, host, app, stranger.cookie).applied(note('stranger'))
 await client(k, host, app).applied(note('visitor'))
+
+let stored = (await dir.app(space, app))!
+await dir.apply({
+  entities: [{
+    entity: { eid: mint() },
+    grant: { app: stored.eid, person: stranger.person, access: 'editor' },
+  }],
+}, { 'x-yak-person': owner.person, 'x-yak-role': 'owner' })
+let mixed = mint(), cleared = mint(), appended = mint()
+await agent.tool('graph_apply', {
+  app,
+  entities: [mixed, cleared, appended].map((eid, i) => ({
+    entity: { eid },
+    note: {
+      by: ['mixed', 'cleared', 'appended'][i],
+      heading: 'Member heading',
+    },
+  })),
+})
+
+let claimed = client(k, host, app)
+await claimed.applied(note('claimed'))
+let [guest] = await claimed.get('.note.by=claimed&?created')
+let via = idOf((guest.created as { via: string | { eid: string } }).via)
+await meta(env).apply([{
+  entity: { eid: via },
+  browser: { by: owner.person },
+}], KERNEL)
+await agent.tool('graph_apply', {
+  app,
+  entities: [{
+    entity: guest.entity,
+    note: { heading: 'Member heading' },
+  }],
+})
+await client(k, host, app, stranger.cookie).applied(
+  [mixed, cleared, appended].map((eid) => ({
+    entity: { eid },
+    note: { body: 'Stranger instructions' },
+  })),
+)
+await agent.tool('graph_apply', {
+  app,
+  entities: [
+    { entity: { eid: mixed }, note: { heading: 'Revised heading' } },
+    {
+      entity: { eid: cleared },
+      note: { body: 'Completely different wording' },
+    },
+    {
+      entity: { eid: appended },
+      note: { body: 'Stranger instructions plus member text' },
+    },
+  ],
+})
 
 let ctx = await operatorContext(env, { person: owner.person }, space, () => dir)
 let tools = await operatorRoster(ctx, operatorMemory(), { space: space.eid })
@@ -81,4 +138,23 @@ test("a code_mode script's read is heard as a direct one is", async () => {
     )),
     [false, false, true, true],
   )
+})
+
+test('an intermediate stranger stays heard after member edits, until their words are replaced', async () => {
+  equal(
+    await Promise.all(
+      ['mixed', 'cleared', 'appended'].map((by) =>
+        heard('graph_query', { app, q: `.note.by=${by}` })
+      ),
+    ),
+    [
+      true,
+      false,
+      true,
+    ],
+  )
+})
+
+test('claimed guest words belong to the verified member even after later edits', async () => {
+  equal(await heard('graph_query', { app, q: '.note.by=claimed' }), false)
 })

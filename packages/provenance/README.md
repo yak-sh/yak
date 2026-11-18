@@ -9,6 +9,23 @@ composed without this package keeps neither.
 - `created{at, by, via}` is set once, when the entity is made.
 - `updated{at, by, via}` records the last write after that, and is absent until
   the first one.
+- `authorship{fields}` retains the writers of the words and primitive values
+  still held by the row, when the graph facet is composed. `fields` maps
+  JSON-encoded component/property/leaf paths to ranges with
+  `{from, to, by,
+  via}`. String ranges use UTF-16 offsets; other values use
+  `[0, 1]`.
+
+The graph facet matches meaningful words across the whole row, so edits,
+property moves and array shifts keep their writers. Equal repeated words keep
+all their known writers conservatively. Removing their final occurrence removes
+that contribution; whitespace and punctuation alone retain none. Consecutive
+words with the same writers share a range, so an ordinary long field holds one
+range per writer. Nested JSON values are attributed independently.
+
+Old rows without `authorship` use both `created` and `updated`. Their first edit
+seeds surviving content conservatively from those two stamps. Writers lost
+before tracking began cannot be recovered from a graph without history.
 
 Every property is stamped: clients read them and never write them. The
 [stamp phase](../graph/README.md#stamps-and-actors) of @yaks/graph fills them
@@ -17,7 +34,12 @@ in, `at` from the write's clock and `by` and `via` from its
 
 The root import exports `provenanceDoc`, a vocabulary document.
 `@yaks/provenance/vocab` also exports `docs: [provenanceDoc]` and `description`
-for plugin loaders. This package has no storage, tools or effects.
+for plugin loaders. `@yaks/provenance/graph` exports `plugins(host)` and
+`authorship(vocab)` to retain value attribution transactionally through the
+storage interface. Compose it after other storage trackers such as archetypes.
+`@yaks/provenance/authorship` exports `authors(row)` to read the current writers
+and `retained(old, next, actor, vocab)` to compute their ranges. The package has
+no storage, tools or effects.
 
 ## Example
 
@@ -50,5 +72,5 @@ equal(book.updated, { at: '2026-01-02T00:00:00.000Z', by: ada.by })
 
 ## Compatibility
 
-Deno, Node and browsers. The package exports JSON declarations and makes no
+Deno, Node and browsers. Its declarations and pure attribution logic make no
 runtime calls.

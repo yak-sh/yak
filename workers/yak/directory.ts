@@ -3684,6 +3684,17 @@ export let directoryRows = (rows: {
       if (!persons.length) return new Map()
       return personsOf(await query(line`.entity.eid=${persons}`))
     },
+    // The verified people who claimed these browsers' earlier guest words.
+    // Live authorship may retain a browser after both row stamps changed.
+    browserOwners: async (vias: string[]): Promise<Map<string, string>> => {
+      if (!vias.length) return new Map()
+      let rows = await query(line`.entity.eid=${vias}&.fields=browser.by`)
+      return new Map(
+        rows.flatMap((r) =>
+          r.browser?.by ? [[r.entity.eid, idOf(r.browser.by)]] : []
+        ),
+      )
+    },
     // Every space this person belongs to, the meta space left out: `yak` is
     // the platform's own, and a person who owns it (the first to sign in)
     // still means their own space when they name none. Name a role and the

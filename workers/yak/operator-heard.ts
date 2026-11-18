@@ -1,26 +1,27 @@
 // Whether an answer from the apps an Operator reaches carries words someone
 // it does not work for wrote (T-1064): a row a person outside every space it
-// reaches wrote or last changed, such as a grantee or a signed-in visitor to an
+// reaches wrote, such as a grantee or a signed-in visitor to an
 // open app, or one a visitor who never signed in wrote (a stamp that names
 // where it came from, `via`, and nobody, `by`). The space's own people, its
 // Operator and the rules a write fires (stamped with that write's writer) are
 // never strangers, so a member's ordinary reads keep every tool.
 import type { Bundle, Graph } from '@yaks/graph'
 import { line } from '@yaks/query'
+import { authors } from '@yaks/provenance/authorship'
 import { idOf } from '@yaks/platform/listing'
 import type { Directory } from './directory.ts'
 import type { Reach } from './reach.ts'
 
 type Stamp = { by?: string | { eid: string } | null; via?: string | null }
 
-/** Who wrote these rows: each `created` and `updated` writer, and whether a
- * visitor who never signed in wrote any of them. */
+/** The writers whose words survive, and the browsers of signed-out writers.
+ * Older rows carry only their two surviving provenance stamps. */
 export let writersOf = (rows: (Bundle | undefined)[]) => {
-  let stamps = rows.flatMap((b) =>
-    [b?.created, b?.updated].filter(Boolean) as Stamp[]
-  )
+  let stamps = rows.flatMap(authors) as Stamp[]
   return {
-    anonymous: stamps.some((s) => s.via && !s.by),
+    anonymous: [
+      ...new Set(stamps.flatMap((s) => s.via && !s.by ? [s.via] : [])),
+    ],
     by: new Set(stamps.flatMap((s) => s.by ? [idOf(s.by)] : [])),
   }
 }
@@ -32,7 +33,7 @@ export let writersOf = (rows: (Bundle | undefined)[]) => {
  * (then) one of those spaces' members. */
 export let strangerWrote = async (
   g: Pick<Graph, 'read'>,
-  dir: Pick<Directory, 'members' | 'persons'>,
+  dir: Pick<Directory, 'members' | 'persons' | 'browserOwners'>,
   reach: Reach[],
   person: string,
   out: Bundle[],
@@ -40,9 +41,13 @@ export let strangerWrote = async (
   let eids = [...new Set(out.map((b) => b.entity.eid))]
   if (!eids.length) return false
   let { anonymous, by } = writersOf(
-    await g.read(line`.entity.eid=${eids}&.fields=created,updated`),
+    await g.read(line`.entity.eid=${eids}&.fields=created,updated,authorship`),
   )
-  if (anonymous) return true
+  if (anonymous.length) {
+    let owners = await dir.browserOwners(anonymous)
+    if (anonymous.some((via) => !owners.has(via))) return true
+    for (let p of owners.values()) by.add(p)
+  }
   let spaces = new Map(reach.map((r) => [r.space.eid, r.space]))
   let others = [...by].filter((p) => p != person && !spaces.has(p))
   if (!others.length) return false

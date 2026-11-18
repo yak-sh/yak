@@ -55,6 +55,40 @@
         }
       },
       "description": "who last changed it, when, and through what"
+    },
+    "authorship": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "journal": false,
+      "description": "the writers of the primitive values and text spans the entity still holds",
+      "properties": {
+        "fields": {
+          "type": "object",
+          "stamped": true,
+          "description": "by JSON-encoded component/property/leaf path, its writer spans; from and to are UTF-16 offsets for strings, otherwise 0 and 1",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "integer"
+                },
+                "to": {
+                  "type": "integer"
+                },
+                "by": {
+                  "type": "string"
+                },
+                "via": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

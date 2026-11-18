@@ -829,9 +829,9 @@ The complete list of reserved names:
 
     _change _pace _privacy _tx about access account_alert account_usage
     acts_for admin_action alias answer app app_draft archetype archived
-    artifact ask attachment attempt attribute_writes belief binding blob
-    bounced browser browser_session budget build build_of builder
-    builder_answer builder_dep builder_edit builder_model_answer
+    artifact ask attachment attempt attribute_writes authorship belief
+    binding blob bounced browser browser_session budget build build_of
+    builder builder_answer builder_dep builder_edit builder_model_answer
     builder_open builder_ring built call call_ready call_woken called calls
     cancel cancelled checkout chosen cites code_review comment commit comp
     compat completed connection contains content conversation cost counted

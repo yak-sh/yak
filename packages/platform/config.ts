@@ -89,8 +89,8 @@ export let appConfig: Config = {
         'favorite',
       ],
     },
-    provenance,
     ...machine(),
+    { ...provenance, facets: ['vocab', 'graph'] },
     // Apps have no numbers, but every store accepts human ids on input.
     { use: '@yaks/id', words: [] },
     ...addressed,
