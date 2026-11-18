@@ -60,9 +60,8 @@ export type Written = {
  * How long a path's history keeps a write: thirty days, and never fewer than
  * the newest {@link KEEP}, so a file rewritten twenty times in an afternoon
  * still remembers all twenty a month later, and a file written once a year
- * still remembers the write before this one. The same thirty days the trash
- * keeps a deleted app (erase.ts `GRACE`) and Cloudflare keeps a store
- * (recover.ts `WINDOW`): three promises that happen to agree.
+ * still remembers the write before this one. Older file bytes retire into
+ * recoverable trash, so pruning these history pointers does not erase them.
  */
 export let AGE = 30 * 24 * 60 * 60_000
 

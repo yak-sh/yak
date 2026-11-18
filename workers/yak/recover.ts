@@ -22,9 +22,8 @@ import { refuse, rejected } from './tool.ts'
 
 /**
  * How far back a store can be put. Cloudflare's own window on a Durable
- * Object's SQLite — a fact about the runtime, which is why it is stated here
- * and not shared with erase.ts `GRACE`, the thirty days our trash keeps. The
- * two agree today and are not the same promise.
+ * Object's SQLite — a fact about the runtime. This history window is
+ * independent of trash, which remains recoverable until its owner purges it.
  */
 export let WINDOW = 30 * 24 * 60 * 60_000
 

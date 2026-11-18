@@ -73,10 +73,8 @@ export let kernelDoc: VocabDoc = {
         source: text,
       },
     },
-    // Deleting an upload's content row deletes its bytes 30 days on (app-effects.ts),
-    // unless a row the app keeps still names them (apps.ts `naming`). So the
-    // row is the one door for deleting an upload, and whoever may delete the
-    // row (@yaks/member) is who may delete the file.
+    // Removing an upload's content row retains both the row in graph trash
+    // and its bytes for recovery. A permanent purge needs its owner's choice.
     document_page: {
       component: true,
       type: 'object',

@@ -276,7 +276,7 @@ export type Space = Metered & {
   // wears, on the row above it. Null for every space that is not, which is
   // almost all of them. While it is worn every hostname of the space answers
   // nothing, its apps leave every roster, its mail bounces and its slug is
-  // held; nothing it holds is touched until the thirty days run out.
+  // held; its data stays until its owner confirms a purge.
   trashed: Trashed | null
   // Every subdomain this space has answered at, oldest first — the same word
   // an app wears for the same reason (T-34658). Empty for a space that has
@@ -385,7 +385,7 @@ export type AppInfo = {
   // In the trash, and since when (erase.ts, T-34430). Null for every app that
   // is not — which is almost all of them — and every reader of an app asks
   // it: a trashed app serves nothing, declares nothing, is nobody's front
-  // page and takes no mail, while its bytes and store stay for thirty days.
+  // page and takes no mail, while its bytes and store stay recoverable.
   // Its slug is free immediately; former keeps the address to restore at.
   trashed: Trashed | null
   // The colours this app's owner set for its installed chrome (apps.ts
@@ -507,29 +507,20 @@ export type SkillOffer = Shared & {
 // release that put it there (seed.ts, T-34327).
 export type Sowed = { at: string; version: number }
 
-// When an app or a space was thrown away and by whom (erase.ts, T-34430,
-// T-34431). `at` is what the thirty days are counted from, and `by` is the
-// person the sweep erases it as, since they are the one who asked for it gone.
+// When an app or space entered trash and who requested it. Neither field
+// grants permission for an automatic purge.
 export type Trashed = { at: string; by: string }
 
-// How long the trash keeps it. Thirty days is the owner's number, and it is
-// the same number `/privacy` says out loud.
+// Legacy date arithmetic; only daysLeft remains in old view payloads. No
+// purge consumes these functions. Recovery lasts until the owner's purge.
 export let GRACE = 30 * 24 * 60 * 60_000
 
-// Days left before the sweep takes it, never below zero — what a person is
-// told, in the unit they would ask in. Trashed a moment ago is thirty.
 export let daysLeft = (t: Trashed, now = Date.now()) =>
   Math.max(0, Math.ceil((Date.parse(t.at) + GRACE - now) / 86_400_000))
 
-// Whether the trash has run out. A mark with no readable `at` is due —
-// something nothing can count the days of cannot be kept forever on a null.
 export let due = (t: Trashed, now = Date.now()) =>
   !(Date.parse(t.at) + GRACE > now)
 
-// What the sweep takes: the rows in the trash whose days have run out, and
-// nothing else. Apps or spaces, since both wear the one word — the whole of
-// the selection, as one pure answer, because what a sweep deletes is the part
-// worth holding to a test.
 export let overdue = <T extends { trashed: Trashed | null }>(
   rows: T[],
   now = Date.now(),

@@ -518,7 +518,8 @@ export let went = (
 // ---- the trash: deleted, and brought back (T-34430, T-34431) ----
 //
 // Jeff, 2026-09-05: "can deleted apps be brought back if done by mistake?" —
-// "there should be a grace period. like a 30 day trash". So `app_delete`
+// "there should be a grace period. like a 30 day trash". His 2026-11-18
+// direction keeps trash until the owner chooses to purge it. `app_delete`
 // keeps everything and writes one word on the app row (vocab.ts `trashed`),
 // and every reader of an app asks it: the web serves nothing, the roster
 // drops its tools and views, the front page is not it, its mail bounces, and

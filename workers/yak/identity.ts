@@ -442,7 +442,7 @@ let browser = async (env: Env, req: Request) => {
 // ever reaches it.
 //
 // Two acts, one door (T-34431). By default it puts the space in the trash:
-// nothing is erased, everything is kept for thirty days, and the owner takes
+// nothing is erased, everything remains recoverable, and the owner takes
 // it back from the space's own address. `forever` is the other one, and the
 // only way to ask for it is a ticket the letter carried, because the kernel
 // signs the ticket and nobody else can mint one — so a person who came
@@ -497,8 +497,8 @@ let closing = async (
   let lines = forever ? naming(d, env) : keeping(d, env)
   let stop = await refused(space, env) ||
     // Already there, and this visit is not the one that erases it: trashing
-    // again would start the thirty days over on a space the person is only
-    // looking at, so nothing happens and they are told both ways out.
+    // again would change its original trash mark for no reason, so nothing
+    // happens and they are told both ways out.
     (space.trashed && !forever
       ? `${slug} is already in the trash. Restore it at https://${slug}.${
         apex(env)
