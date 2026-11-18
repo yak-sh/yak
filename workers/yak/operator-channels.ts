@@ -931,15 +931,16 @@ export let UNASKED = new Set(['machine', 'app', 'wake', 'subscription'])
 
 /** The channels whose words carry no authority of anyone in the space,
  * because someone outside it can choose them: the rows a subscription saw
- * change (what visitors wrote) and a break (whose message a visitor's request
- * or an app's code can shape). The turn they start holds what cannot take the
- * space's data past the person it works for (operator.ts `roster`): its
- * reads, telling that person, and for a break, changing and releasing the
- * app that broke. The person's own words next give the turn after them all
- * of their tools again. What a stranger's conversation raised (`escalated`)
- * is not among them: it carries on work the person asked for, deciding with
- * their permissions (T-151880). */
-export let HEARSAY = new Set(['subscription', 'error'])
+ * change (what visitors wrote), a break (whose message a visitor's request or
+ * an app's code can shape) and what a stranger's conversation raised. The
+ * turn they start holds what cannot take the space's data past the person it
+ * works for (operator.ts `roster`): its reads, telling that person, for a
+ * break changing and releasing the app that broke, and for what was raised
+ * the person's calendar and mail to read, the answer to the conversation
+ * that raised it and a reply on the writer's own thread, to the writer alone
+ * (T-151880). The person's own words next give the turn after them all of
+ * their tools again, as they do after a tool's answer that was `heard`. */
+export let HEARSAY = new Set(['subscription', 'error', 'escalated'])
 
 export let handleChannels = (
   operator: Operator,

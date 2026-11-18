@@ -468,6 +468,12 @@
       "properties": {},
       "description": "on an input: words the platform wrote into the transcript, such as a recovery after an interrupted response or an error to fix, never a person's. The model reads it as any input, labeled as from the system; a conversation draws it as the system's"
     },
+    "heard": {
+      "component": true,
+      "type": "object",
+      "properties": {},
+      "description": "on a tool's result: what it brought was written by someone the session does not work for, such as a stranger's letter or rows a visitor wrote. A host offers the rest of that turn only tools that keep its person's data with them, until the person speaks again"
+    },
     "notice": {
       "component": true,
       "journal": false,

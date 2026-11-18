@@ -85,8 +85,10 @@ let service = operatorService(
       })
       : /Raised from your own conversation/.test(words)
       ? since == 0
+        // Steered elsewhere by the writer's words, it still answers only
+        // her, on her thread.
         ? call('mail_send', {
-          to: 'alvarez@clinic.example',
+          to: 'eve@elsewhere.example',
           name: 'Dr Alvarez',
           text: 'Tuesday at 3 works; see you then.',
           answering: named(words, /\(letter (\S+)\)/),
@@ -220,6 +222,23 @@ test("the person's side acts with the person's permissions: it writes back on th
   assertEquals(threaded.subject, 'Re: Checkup')
   assertEquals(threaded.headers?.['In-Reply-To'], '<alvarez-1>')
   assertEquals(threaded.cc, 'jeff@example.com')
+})
+
+test("the person's side holds their reads, the answer, and a reply to the writer alone, never a door past them", () => {
+  let tools = raisedAsks[0].tools ?? []
+  let names = tools.flatMap((t) => [
+    t.name,
+    ...[...t.description.matchAll(/^- (\w+):/gm)].map((m) => m[1]),
+  ])
+  for (let kept of ['escalation_answer', 'mail_send', 'notification_send']) {
+    assertEquals(names.includes(kept), true, kept)
+  }
+  for (
+    let door of ['phone_send', 'graph_apply', 'code_mode', 'fork', 'wake_set']
+  ) {
+    assertEquals(names.includes(door), false, door)
+  }
+  assertEquals(letters.some((l) => l.to == 'eve@elsewhere.example'), false)
 })
 
 test("the writer's side gets back only what the person's side chose to say, which starts no turn", async () => {

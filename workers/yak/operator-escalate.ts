@@ -171,3 +171,46 @@ export let escalationAnswer = (
     return JSON.stringify({ told: request.from })
   },
 })
+
+/**
+ * The writer's own thread, for a turn that decides what their conversation
+ * raised: the reply it came with, what kind it was and the address it came
+ * from. Only that writer is answered there (operator.ts `roster`).
+ */
+export let threadOf = async (store: Store, raised?: Request) => {
+  if (raised?.channel != 'escalated' || !raised.about || !raised.address) {
+    return undefined
+  }
+  let { request } = await named(store, raised.about)
+  return request && REPLIES.includes(request.channel)
+    ? { kind: kindOf(request), address: raised.address, reply: raised.about }
+    : undefined
+}
+
+/**
+ * A tool with some of its arguments given: they leave its parameters, and
+ * every call runs with them over whatever it passes. Its description opens
+ * with `say`.
+ */
+export let given = (
+  tool: Tool,
+  args: Record<string, unknown>,
+  say: string,
+): Tool => {
+  let { properties = {}, required = [], ...rest } = tool.parameters as {
+    properties?: Record<string, unknown>
+    required?: string[]
+  }
+  return {
+    ...tool,
+    description: `${say} ${tool.description}`,
+    parameters: {
+      ...rest,
+      properties: Object.fromEntries(
+        Object.entries(properties).filter(([k]) => !(k in args)),
+      ),
+      required: required.filter((k) => !(k in args)),
+    },
+    run: (asked, context) => tool.run({ ...asked, ...args }, context),
+  }
+}

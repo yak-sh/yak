@@ -110,11 +110,18 @@ import {
   messageReference,
   OWN,
   replyRows,
+  type Request as Requested,
   TAKING,
   UNASKED,
 } from './operator-channels.ts'
 import { attachedOf, type File } from './operator-files.ts'
-import { escalate, escalationAnswer, REPLIES } from './operator-escalate.ts'
+import {
+  escalate,
+  escalationAnswer,
+  given,
+  REPLIES,
+  threadOf,
+} from './operator-escalate.ts'
 import { rootAt, spaceOf } from './operator-root.ts'
 import { textSend } from './operator-texts.ts'
 import { confirmTextContact, contactAdd } from './operator-contacts.ts'
@@ -764,13 +771,28 @@ let workingOf = async ({ g }: Store, session: string) => {
   return comp(row, 'operator_session') as Working | undefined
 }
 // Pre-change sessions keep the source on their request rather than the session.
-let channelAt = async (store: Store, session: string, work?: Working) => {
-  if (work?.channel) return work.channel
+let channelAt = async (store: Store, session: string, work?: Working) =>
+  work?.channel ??
+    String((await requestAt(store, session))?.request?.channel ?? '')
+// The newest request of a session's conversation, and when it came.
+let requestAt = async (store: Store, session: string) => {
   let top = await topOf(store.g, session)
-  let [request] = await store.g.read(
-    q`.operator_request.session=${top} .order=-created.at .limit=1 .fields=operator_request.channel`,
+  let [row] = await store.g.read(
+    q`.operator_request.session=${top} .order=-created.at .limit=1 .fields=operator_request,created.at`,
   )
-  return String(comp(request, 'operator_request')?.channel ?? '')
+  return row && {
+    request: comp(row, 'operator_request') as Requested | undefined,
+    at: String(comp(row, 'created')?.at ?? ''),
+  }
+}
+// Whether a tool answered this session with words someone outside the space
+// wrote (`heard`) since its conversation's newest request: the person's own
+// words, which give the turn after them every tool again.
+let overheard = async (store: Store, session: string, since = '') => {
+  let [answer] = await store.g.read(
+    q`.entry.session=${session} .heard .order=-created.at .limit=1 .fields=created.at`,
+  )
+  return !!answer && String(comp(answer, 'created')?.at ?? '') > since
 }
 // Whether a conversation has begun: its row is a session. Presence is
 // counted, so its computed status is never read.
@@ -1499,11 +1521,14 @@ export let operating = (
     // The person's servers need only them and the space's eid, so they are
     // asked beside the reach and the space.
     let work = await workingOf(store, session)
-    let channel = await channelAt(store, session, work)
-    // Words nobody in the space wrote start a turn that holds only what
-    // keeps the space's data with its person (operator-channels.ts
-    // `HEARSAY`), whoever's conversation it is in.
-    let heard = HEARSAY.has(channel)
+    let newest = await requestAt(store, session)
+    let channel = work?.channel ?? String(newest?.request?.channel ?? '')
+    // Words nobody in the space wrote, whether they started the turn
+    // (operator-channels.ts `HEARSAY`) or a tool brought them since, leave it
+    // holding only what keeps the space's data with its person, whoever's
+    // conversation it is in.
+    let heard = HEARSAY.has(channel) ||
+      await overheard(store, session, newest?.at)
     let remote = !work?.signup && !ANSWERING.has(channel) && !heard
     let connecting = remote
       ? connectedTools(here, operatorAsking(store, eid, session))
@@ -1524,6 +1549,21 @@ export let operating = (
     let whole = (options.directory ?? opening(env))()
     let member = writes(ctx.role)
     let acts = member && !heard
+    // A reply on a writer's thread goes back to them, and only there.
+    let onThread = (
+      t: NonNullable<Awaited<ReturnType<typeof threadOf>>>,
+    ) =>
+      t.kind == 'letter'
+        ? given(
+          mailSend(env, ctx, space, store),
+          { to: t.address, answering: t.reply },
+          `Here it writes back to ${t.address} on their own thread, and to nobody else.`,
+        )
+        : given(
+          phoneSend(env, ctx, space, store),
+          { to: t.address },
+          `Here it texts ${t.address} back, and nobody else.`,
+        )
     // Someone who replied to what was sent for a person raises with that
     // person's conversation what needs them (operator-escalate.ts).
     let replied = g.read(
@@ -1551,6 +1591,9 @@ export let operating = (
       ),
     ])
     if (heard) {
+      let thread = member && channel == 'escalated'
+        ? await threadOf(store, newest?.request)
+        : undefined
       return deferred([
         ...roster.filter((t) =>
           t.readOnly || (channel == 'error' && RELEASING.has(t.name))
@@ -1560,8 +1603,16 @@ export let operating = (
             platformBug(ctx, space),
             textSend(env, ctx, space),
             notificationSend(ctx, space, store),
+            ...(await accounts).filter((t) => t.readOnly),
           ]
           : [],
+        // What a writer's conversation raised is decided with the person's
+        // reads, and answered to that conversation and on the writer's own
+        // thread, to them alone (T-151880).
+        ...member && channel == 'escalated'
+          ? [escalationAnswer(store, ctx, space)]
+          : [],
+        ...thread ? [onThread(thread)] : [],
         ...(options.tools?.(ctx, files) ?? []).filter((t) => t.readOnly),
       ])
     }
