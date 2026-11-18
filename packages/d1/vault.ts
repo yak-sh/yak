@@ -59,6 +59,7 @@ export type D1Vault = {
   seal: (eid: string, sealed: Sealed) => Promise<void>
   drop: (eid: string) => Promise<void>
   trash: () => Promise<Trashed[]>
+  past: (id: string) => Promise<Sealed | undefined>
   restore: (id: string) => Promise<boolean>
   purge: (id: string) => Promise<void>
   all: () => Promise<[string, Sealed][]>
@@ -311,6 +312,14 @@ export let d1Vault = <S extends Prepared<S>>(
           ...sealed.name ? { name: sealed.name } : {},
         }
       }))
+    },
+    past: async (id) => {
+      let [row] = await run(select({
+        cols: [col('eid'), col('v')],
+        from: table(TRASH),
+        where: eq(col('k'), val(id)),
+      }))
+      return row ? JSON.parse(await open(row.eid, row.v)) as Sealed : undefined
     },
     restore: async (id) => {
       let [row] = await run(select({

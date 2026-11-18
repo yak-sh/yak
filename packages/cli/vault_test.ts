@@ -100,6 +100,10 @@ test('vault trash retains removed and rotated secrets', async () => {
     let expected = JSON.parse(
       Deno.readTextFileSync(`${dir}/secrets/trash/${eid}.${saved[0].id}.json`),
     )
+    assertEquals(vault.past(saved[0].id), expected.sealed)
+    assertEquals(vault.past(crypto.randomUUID()), undefined)
+    assertEquals(vault.read(eid), undefined)
+    assertEquals(vault.trash(), saved)
     assertEquals(vault.restore(saved[0].id), true)
     assertEquals(vault.read(eid), expected.sealed)
     assertEquals(vault.restore(crypto.randomUUID()), false)

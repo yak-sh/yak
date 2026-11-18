@@ -373,7 +373,7 @@ let sealing = (
     if (!held) {
       if (typeof h != 'string' || !isHandle(h)) return
       return after(vault.read(eid), (active) => {
-        if (active) return
+        if (active?.handle == h) return
         return after(vault.trash(), (trash) => {
           let found = trash.find((v) => v.eid == eid && v.handle == h)
           return found ? tried(() => vault.restore(found.id), clock) : undefined

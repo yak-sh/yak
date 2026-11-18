@@ -30,6 +30,10 @@ test('removed credentials stop resolving, while each retained version remains re
   let trash = vault.trash().reverse()
   equal(trash.length, 2)
   equal(trash.every((v) => !('value' in v)), true)
+  equal(vault.past(trash[0].id)?.value, 'first')
+  equal(vault.past('unknown'), undefined)
+  equal(vault.read(eid), undefined)
+  equal(vault.trash(), [...trash].reverse())
   equal(vault.restore(trash[0].id), true)
   equal(vault.read(eid)?.value, 'first')
   equal(vault.restore(trash[1].id), true)
@@ -64,4 +68,33 @@ test('restoring a graph secret by its old handle restores its retained credentia
   }])
   equal(await reveal(restoredVault, 'restored-secret'), 'latest')
   equal(restoredVault.trash().length, 1)
+})
+
+let historyVault = ramVault()
+let history = graph({
+  storage: ram(vocab),
+  vocab,
+  plugins: [
+    secrets(historyVault, (b) => history.apply(b, { trusted: true }), vocab),
+  ],
+})
+await history.apply([sealed('history-secret', 'original')])
+let historyEid = secretEid('history-secret')
+let originalHandle = historyVault.read(historyEid)!.handle
+await history.apply([unsealed('history-secret')])
+await history.apply([sealed('history-secret', 'recovered')])
+let replacementHandle = historyVault.read(historyEid)!.handle
+
+test('restoring an older graph handle retains the newer credential and restores its matching version', async () => {
+  equal(originalHandle == replacementHandle, false)
+  await history.apply([{
+    entity: { eid: historyEid },
+    secret: { name: 'history-secret', value: originalHandle },
+  }])
+  equal(historyVault.read(historyEid)?.handle, originalHandle)
+  equal(await reveal(historyVault, 'history-secret'), 'original')
+  let retained = historyVault.trash().find((v) =>
+    v.handle == replacementHandle
+  )!
+  equal(historyVault.past(retained.id)?.value, 'recovered')
 })

@@ -27,6 +27,7 @@ let shut: Vault = {
   all: no,
   drop: () => {},
   trash: () => [],
+  past: () => undefined,
   restore: () => false,
   purge: () => {},
   lock: (_, fn) => fn(),
@@ -60,6 +61,7 @@ let timed = (vault: D1Vault): D1Vault => {
     drop: waiting(vault.drop),
     all: waiting(vault.all),
     trash: waiting(vault.trash),
+    past: waiting(vault.past),
     restore: waiting(vault.restore),
     purge: waiting(vault.purge),
   }

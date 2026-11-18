@@ -48,6 +48,8 @@ export type Vault = {
   drop: (eid: Eid) => Maybe<void>
   /** Retained versions, newest first, with no credential values. */
   trash: () => Maybe<Trashed[]>
+  /** Read a retained version privately, without changing active values or trash. */
+  past: (id: string) => Maybe<Sealed | undefined>
   /** Restore a retained version, preserving any displaced active value. */
   restore: (id: string) => Maybe<boolean>
   /** Permanently remove one retained version after a person's choice. */
@@ -63,11 +65,12 @@ export type Vault = {
 /** A vault that answers at once: what a config read on the spot needs
  * (./reveal.ts `peek`). A box's files and memory are both this. */
 export type Local =
-  & Omit<Vault, 'read' | 'all' | 'trash' | 'restore' | 'purge'>
+  & Omit<Vault, 'read' | 'all' | 'trash' | 'past' | 'restore' | 'purge'>
   & {
     read: (eid: Eid) => Sealed | undefined
     all: () => [Eid, Sealed][]
     trash: () => Trashed[]
+    past: (id: string) => Sealed | undefined
     restore: (id: string) => boolean
     purge: (id: string) => void
   }
@@ -115,6 +118,7 @@ export let ramVault = (): Local => {
         ...sealed.name ? { name: sealed.name } : {},
         at,
       })),
+    past: (id) => trash.get(id)?.sealed,
     restore: (id) => {
       let found = trash.get(id)
       if (!found) return false

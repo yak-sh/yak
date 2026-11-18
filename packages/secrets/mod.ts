@@ -45,7 +45,11 @@
  *
  * Rotations and removals retain previous values in the vault's trash. Active
  * reads and sentinels cannot use trashed values. `vault.trash()` lists metadata
- * without values; `restore(id)` recovers a version, retaining any displaced
+ * without values. Trusted code reads a retained value with `past(id)` without
+ * changing it or activating it; it can write that value through the ordinary
+ * graph sealing path while keeping the retained version for old snapshots.
+ * `restore(id)`
+ * recovers a version, retaining any displaced
  * active value, and `purge(id)` permanently removes only that trashed version.
  * Hosts expose purging through a person's explicit confirmation. Restoring a
  * graph secret with its retained handle also restores its most recent value

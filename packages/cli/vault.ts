@@ -172,6 +172,10 @@ export let fileVault = (dir: string): Local => {
       return out
     },
     trash,
+    past: (id) => {
+      let saved = archived(id)
+      return saved ? version(saved.path).sealed : undefined
+    },
     restore: (id) => {
       let saved = archived(id)
       if (!saved) return false
