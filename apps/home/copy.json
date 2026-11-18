@@ -154,6 +154,31 @@
               "go": "Ask for your own"
             }
           }
+        },
+        "trip": {
+          "name": "Travel Planner",
+          "steps": {
+            "1": {
+              "title": "Ask for what you need, in plain words",
+              "body": "“A trip planner where we can plan each day, see who’s coming, and keep a packing list.” The assistant made a planner for five days in Lisbon, with a card for each day, the five travellers and a packing list to tick off.",
+              "go": "Ask for your own"
+            },
+            "2": {
+              "title": "Plan it together",
+              "body": "“Let everyone coming add places they want to go.” Each friend gets an emailed invitation, and a new Places tab lets anyone suggest a place and drop it into a day.",
+              "go": "Ask for your own"
+            },
+            "3": {
+              "title": "Ask for ideas",
+              "body": "“Suggest things to do near where we’re staying, and sketch out the days.” The assistant adds sixteen places near the apartment and puts most of them on a day, with a note saying which details to check before booking.",
+              "go": "Ask for your own"
+            },
+            "4": {
+              "title": "Take it with you",
+              "body": "“Put the itinerary on everyone’s calendar.” Each person taps one button to add the trip’s plans to their phone’s calendar, and taps it again after the plans change.",
+              "go": "Ask for your own"
+            }
+          }
         }
       }
     },
