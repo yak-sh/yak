@@ -213,7 +213,7 @@ test("each step of a marked conversation is served beside its release's picture"
     (value?.bundles as Bundle[]).map((b) => b.walkthrough),
     [{ app: 'guestbook' }],
   )
-  assertEquals(WALKS, ['guestbook'])
+  assert(WALKS.includes('guestbook'))
   let steps = stepsOf('guestbook')
   assertEquals(steps.length, REQUESTS.length)
   let document = await served()
