@@ -134,10 +134,10 @@ test('a page view where nothing is published asks the directory nothing more', (
   assertEquals(publishedHops, unpublishedHops)
 })
 
-test('replacing a file lets go of bytes no published file names', async () => {
+test('replacing a published file retains its old bytes for recovery', async () => {
   assertEquals(shared, 2)
   await publish('b', 'two')
-  assertEquals(kept() - unique, 1)
+  assertEquals(kept() - unique, 2)
 })
 
 test("publishing is the app's writers' alone", async () => {

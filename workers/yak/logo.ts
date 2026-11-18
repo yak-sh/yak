@@ -5,7 +5,8 @@
 //
 // The bytes are kept in the bucket under the space's handle, content-addressed,
 // so a rename moves none of them and deleting the space sweeps them with the
-// rest (erase.ts `swept`); the bytes the row stops naming are deleted.
+// rest (erase.ts `swept`). Replaced originals remain recoverable with the
+// directory history until a person explicitly purges the space.
 import { broken, mediaTypeOf } from '@yaks/blob'
 import { base64 } from './bytes.ts'
 import type { directory, Space } from './directory.ts'
@@ -51,11 +52,7 @@ export let logoed = async (
     logo = { sha: await digest(bytes), type }
     await blobs.put(keyOf(space, logo.sha), bytes)
   }
-  let had = space.logo?.sha
   await dir.badge(space, logo, headers)
-  if (had && had != logo?.sha) {
-    await blobs.delete([keyOf(space, had), iconOf(space, had)])
-  }
 }
 
 /** The bytes of the logo the space wears at `sha`, or none. */

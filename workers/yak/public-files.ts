@@ -180,7 +180,6 @@ let published = async (ask: Ask, path: string) => {
   if (stopped) return no(413, 'space_full', stopped)
   let blobs = r2Objects(env.BLOBS)
   if (!(await blobs.has(key))) await blobs.put(key, bytes)
-  let was = await dir.publicFile(app, path)
   let file = {
     app: app.eid,
     path,
@@ -194,7 +193,6 @@ let published = async (ask: Ask, path: string) => {
   await dir.stamp({
     entities: [{ entity: { eid: publicEid(app, path) }, public_file: file }],
   })
-  if (was && was.sha != sha) await released(ask, was.sha)
   return Response.json(said({ eid: publicEid(app, path), ...file }, ask))
 }
 
@@ -205,15 +203,11 @@ let unpublished = async (ask: Ask, path: string) => {
   // Taking the path off the app's row purges its kept pages, as publishing
   // does.
   await dir.stamp({ entities: [{ entity: { eid: was.eid }, $delete: true }] })
-  await released(ask, was.sha)
   return Response.json(said(was, ask))
 }
 
-// Bytes no published file of the app names any more go.
-let released = async ({ env, dir, space, app }: Ask, sha: string) => {
-  if ((await dir.publicFiles(app)).some((f) => f.sha == sha)) return
-  await r2Objects(env.BLOBS).delete(publicPrefix(space, app) + sha)
-}
+// Replaced and unpublished bytes remain recoverable with their directory history.
+// Only a person-confirmed purge of the app removes its owned bytes.
 
 /// listed(['notes/week-1'], 'notes/week-1', false) -> true
 /// listed(['notes/week-1'], 'about', false) -> false
