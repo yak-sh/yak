@@ -1515,6 +1515,27 @@ test('a stranger is refused on an app made private after it was written', async 
   assertEquals((await write({ app: APP }, 1)).status, 401)
 })
 
+test('a store vouched for a new app with the same mode serves it in that mode', async () => {
+  // An erased app's store, recovered under a new app row: the directory now
+  // says the store serves NEXT, public as before (c0bb0b35).
+  let NEXT = 'a0000000-0000-4000-8000-000000000009'
+  let read = (s: Store, app: string) =>
+    get(s, '/query?q=.recipe', { app, access: 'public' })
+  let served = async () => {
+    let ctx = state()
+    let store = await cookbook(ctx, SCHEMA, { ...owner, access: 'public' })
+    assertEquals((await read(store, APP)).status, 200)
+    return { ctx, store }
+  }
+  // Told by a request to the live object, or by the one that wakes it.
+  let live = await served()
+  using _live = live.ctx.storage
+  assertEquals((await read(live.store, NEXT)).status, 200)
+  let cold = await served()
+  using _cold = cold.ctx.storage
+  assertEquals((await read(new Store(cold.ctx), NEXT)).status, 200)
+})
+
 test('an open app is written by nobody', async () => {
   let open: Vouch = { app: APP, access: 'open' }
   let store = await cookbook(state(), SCHEMA, open)

@@ -24,6 +24,21 @@ type Host = {
   mode(value: Mode): void
 }
 
+// The access row follows the pair it belongs to: the app this store serves
+// and that app's mode. A new app with the mode it already held (an erased
+// app's store recovered under a new app row) is news for the row too, or the
+// row stays on the app the store no longer serves and @yaks/member, reading
+// the served app, finds none.
+export let told = (
+  news: Map<Word, string>,
+  host: Pick<Host, 'read' | 'mode'>,
+) => {
+  let access = host.read('access')
+  if (access && (news.has('app') || news.has('access'))) {
+    host.mode(mode(access))
+  }
+}
+
 export let servingAuthority = (host: Host) => {
   let learn = async (req: Request) => {
     let revision = policy(req)
@@ -203,8 +218,7 @@ export let servingAuthority = (host: Host) => {
     // holds is what its guard asks about. Either is one rebuild, however many
     // of them a request said.
     if (news.has('name') || news.has('app')) host.bind()
-    let access = news.get('access')
-    if (access) host.mode(mode(access))
+    told(news, host)
   }
   return { learn, heard, recheck }
 }

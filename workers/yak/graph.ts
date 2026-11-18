@@ -1,6 +1,6 @@
 import { formatted } from './query-text.ts'
 export { formatted } from './query-text.ts'
-import { servingAuthority } from './app-serving-authority.ts'
+import { servingAuthority, told } from './app-serving-authority.ts'
 import {
   contract,
   fitOf,
@@ -1344,8 +1344,7 @@ export class Store extends Durable {
       let heard = new Map(request ? this.#heard(request) : [])
       for (let [key, value] of heard) this.#put(key, value)
       this.#build()
-      let access = heard.get('access')
-      if (access) this.#mode(mode(access))
+      told(heard, { read: (k) => this.#get(k), mode: (m) => this.#mode(m) })
     })
     if (!this.#refused && this.#get('copied') != null) await this.#forgiven()
     if (!this.#refused && !this.#dormant) {
