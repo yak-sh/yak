@@ -24,7 +24,6 @@ import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { caught } from './defects.ts'
 import { builderOf, SPACE } from './build-door.ts'
-import { toldMoved } from './told-move.ts'
 
 type Store = OperatorStore
 let comp = (b: Bundle | undefined, name: string) =>
@@ -175,7 +174,6 @@ let shownOf = async (store: Store, rows: (Bundle | undefined)[]) => {
 let WITHIN = ['task', 'decision', 'notification']
 
 let threadsOf = async (store: Store, person: string, space: string) => {
-  await toldMoved(store)
   return (await readInbox(
     store.g,
     store.vocab,

@@ -10,7 +10,6 @@ import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { type Ctx, refuse } from './tool.ts'
 import type { OperatorStore } from './operator-store.ts'
-import { toldMoved } from './told-move.ts'
 import { owns } from './operator-access.ts'
 import { inputSource } from './operator-provenance.ts'
 import { canon, LIFE, mint, spend } from './signin.ts'
@@ -157,7 +156,6 @@ let confirmed = async (
     comp(request, 'created')?.at ?? comp(row, 'created')?.at ??
       new Date().toISOString(),
   )
-  await toldMoved(store)
   let owed = await store.g.read(
     line`.notification.to=${ctx.person} !delivered !bounced .created.by=${space.eid} .created.at>=${since}`,
   )
