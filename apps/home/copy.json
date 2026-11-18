@@ -234,6 +234,31 @@
               "go": "Ask for your own"
             }
           }
+        },
+        "garden-diary": {
+          "name": "Garden Diary",
+          "steps": {
+            "1": {
+              "title": "Ask for what you need, in plain words",
+              "body": "“A diary of what I planted, with photos, so I can see how things grew over the year.” The assistant made a private diary with a card for each planting and a month-by-month view of the whole plot.",
+              "go": "Ask for your own"
+            },
+            "2": {
+              "title": "It can text you",
+              "body": "“Text me every third day in July, around 7 in the evening, to water.” The assistant asks for your mobile number first. You confirm it with a code, and only then does it set the reminders. Each text comes out of your space’s monthly AI budget, which every plan includes.",
+              "go": "Ask for your own"
+            },
+            "3": {
+              "title": "Ask what to do next",
+              "body": "“Can the diary tell me what I could sow this month, for where I am?” A new tab lists what to sow outdoors and indoors each month for your area, opening on this month.",
+              "go": "Ask for your own"
+            },
+            "4": {
+              "title": "It can email you on a schedule",
+              "body": "“At the start of each month, email me a summary of the month before.” On the first of each month you get what you planted, harvested and noted, with a link to each photo. Each email counts toward your plan’s emails for the month.",
+              "go": "Ask for your own"
+            }
+          }
         }
       }
     },

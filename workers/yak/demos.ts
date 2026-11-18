@@ -38,7 +38,7 @@ export let HOME: Example[] = [
     'Housebook',
     'Your home’s manual: appliances, upkeep, paint colors and papers.',
   ],
-  ['garden', 'Garden Diary', 'Note what you planted and how it grew.'],
+  ['garden-diary', 'Garden Diary', 'Note what you planted and how it grew.'],
   [
     'sound-lab',
     'Sound Lab',
