@@ -428,3 +428,36 @@ test('a request nobody listens to is answered whole', async () => {
   assertEquals('stream' in (asked[0].input as object), false)
   assertEquals(first, 1)
 })
+
+test('a reply stopped at its output limit is cut, streamed or whole, its last call as far as written', async () => {
+  let sse = (...events: unknown[]) =>
+    new Response(
+      events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('') +
+        'data: [DONE]\n\n',
+    ).body!
+  let asked = (answer: unknown) =>
+    binding(answer).model(
+      ask([{ kind: 'user', text: 'hi' }], { onText: () => {} }),
+    )
+  // GLM-5.3 thinking through its whole limit, as Workers AI streams it.
+  let thought = await asked(sse(
+    { choices: [{ delta: { reasoning: 'hm' }, finish_reason: null }] },
+    { choices: [{ delta: { reasoning: '.' }, finish_reason: 'length' }] },
+    { choices: [], usage: { completion_tokens: 0 } },
+    { response: '', usage: { completion_tokens: 4096 } },
+  ))
+  assertEquals([thought.cut, thought.items], [true, []])
+  let whole = await asked({
+    choices: [{
+      message: {
+        content: '',
+        tool_calls: [{ id: 'k', function: { name: 'f', arguments: '{"a' } }],
+      },
+      finish_reason: 'length',
+    }],
+  })
+  assertEquals([whole.cut, whole.items], [true, [
+    { kind: 'call', id: 'k', name: 'f', args: '{"a' },
+  ]])
+  assertEquals((await asked(stream())).cut, undefined)
+})

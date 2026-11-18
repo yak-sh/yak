@@ -470,15 +470,19 @@ export type StreamedCall = {
 /** A streamed answer, in the shape a whole OpenAI-style answer has. */
 export type Streamed = {
   id: string
-  choices: { message: { content: string; tool_calls?: StreamedCall[] } }[]
+  choices: {
+    message: { content: string; tool_calls?: StreamedCall[] }
+    finish_reason?: string
+  }[]
   usage: unknown
 }
 
 /**
  * A streamed answer (`stream: true`) read as its server-sent events, into the
  * object a whole answer is: each chunk's output text is told as it arrives
- * (`onText`; never its reasoning), tool calls are joined by their index, and
- * the closing summary's usage, which counts the whole request, is the
+ * (`onText`; never its reasoning), tool calls are joined by their index, the
+ * reason the last choice gives for stopping is the answer's `finish_reason`,
+ * and the closing summary's usage, which counts the whole request, is the
  * answer's. A withdrawn request stops reading.
  *
  * ```ts
@@ -507,10 +511,11 @@ export let streamed = async (
   body: ReadableStream<Uint8Array>,
   req: Request,
 ): Promise<Streamed> => {
-  let text = '', id = '', usage: unknown, last: unknown
+  let text = '', id = '', finish = '', usage: unknown, last: unknown
   let tools: StreamedCall[] = []
   let take = (chunk: unknown) => {
     id ||= str(at(chunk, 'id'))
+    finish = str(at(chunk, 'choices', 0, 'finish_reason')) || finish
     let delta = at(chunk, 'choices', 0, 'delta')
     let piece = str(at(delta, 'content') ?? at(chunk, 'response'))
     let said = at(delta, 'tool_calls') ?? at(chunk, 'tool_calls')
@@ -575,6 +580,7 @@ export let streamed = async (
         content: text,
         ...tools.length ? { tool_calls: tools.filter(Boolean) } : {},
       },
+      ...finish ? { finish_reason: finish } : {},
     }],
     usage: usage ?? last,
   }
@@ -720,6 +726,9 @@ export let workersAi = (
       req.onText?.({ index: 0, text })
     }
     let words: Item[] = text ? [{ kind: 'assistant', text }] : []
+    // An OpenAI-shaped answer stopped at `max_tokens`, its reasoning counted,
+    // finishes for `length` (@yaks/model `Reply.cut`).
+    let cut = at(out, 'choices', 0, 'finish_reason') == 'length'
     return {
       id,
       model: req.model,
@@ -727,6 +736,7 @@ export let workersAi = (
         ...words,
         ...calls(at(out, 'tool_calls') ?? at(chat, 'tool_calls'), id),
       ],
+      ...cut ? { cut } : {},
       ...counted,
     }
   }, {
