@@ -59,11 +59,13 @@ CLI the provider speaks (`provider.api`, else its `name`), select the matching
 `claude` or `codex` adapter, validate the requested effort against the model,
 and start the command: the adapter's own program, or the one the row names in
 `provider.command`. A request that names a provider alone runs the model in the
-provider's own `using{model}`, so the command is told its model and the run's
-asks name it; Codex's JSON output never says which model answered, so a run left
-to its CLI's default could not be priced. Providers handled over HTTP have no
-command adapter and remain the responsibility of the in-process `@yaks/session`
-daemon.
+provider's own `using{model}`. Configure Claude's default with the `opus` model
+row, retaining the alias so the CLI resolves its current release. The selected
+model is recorded on the request before launch and passed explicitly to the CLI,
+including on resumed runs. Claude's transcript also records the release that
+answered; Codex's JSON output never says which model answered. Providers handled
+over HTTP have no command adapter and remain the responsibility of the
+in-process `@yaks/session` daemon.
 
 The process is stored on the session entity. It runs through `@yaks/process` in
 a detached systemd user scope, so it can outlive the process that opened the

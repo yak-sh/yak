@@ -22,7 +22,7 @@
         "model": {
           "type": "string",
           "ref": "model",
-          "description": "id or registered name of the model the run uses; optional, by default the model in the provider's using{model}",
+          "description": "id or registered name of the model the run uses; optional, by default the model row in the provider's using{model} (the opus alias for Claude). The resolved choice is recorded on the session before launch and passed explicitly to the CLI",
           "short": "m"
         },
         "persona": {

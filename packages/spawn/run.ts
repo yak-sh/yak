@@ -336,6 +336,7 @@ export let asked = async (
   if (!using.provider) return null
   let [provider] = await g.get([String(using.provider)])
   let row = comp(provider, 'provider')
+  if (row?.transport == 'http' || row?.transport == 'machine') return null
   let name = String(row?.name ?? '')
   if (!name) return null
   let chosen = String(using.model ?? comp(provider, 'using')?.model ?? '')
@@ -344,8 +345,11 @@ export let asked = async (
   let spelled = served
     ? await spelling(g, String(using.provider), chosen)
     : undefined
-  if (served && spelled == null) {
-    throw new Error(`${name} does not serve ${String(served.name)}`)
+  if (!served || spelled == null) {
+    throw new Error(
+      `${name} has no served model: ` +
+        (chosen || 'configure its default using{model}'),
+    )
   }
   let effort = String(using.effort ?? served?.effort ?? '')
   let admits = levels(served?.efforts)
@@ -372,7 +376,7 @@ export let asked = async (
     ...Array.isArray(tools) && !tools.length ? { bare: true } : {},
     instruction: String(said?.body ?? ''),
     ask: {
-      ...served ? { to: chosen } : {},
+      to: chosen,
       through: request.entity.eid,
     },
   }
@@ -609,6 +613,10 @@ export let start = async (
   if (!job) return null
   let adapter = adapterOf(job, o)
   if (!adapter) return null
+  let selection = {
+    entity: { eid: String(job.ask.through) },
+    using: { model: String(job.ask.to) },
+  }
   if (row?.[PROCESS]) {
     // A session that ran before carries on its provider's thread, given what
     // it was told since. One whose start was cut off before its provider
@@ -633,6 +641,9 @@ export let start = async (
   let run: Run
   let t: Tail
   try {
+    // Keep the resolved choice on the request before launch, including requests
+    // written directly by helpers. A later provider default cannot change it.
+    await g.apply([selection])
     let cwd = job.bare
       ? await emptied(session, o)
       : o.worktrees

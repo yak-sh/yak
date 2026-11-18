@@ -39,7 +39,7 @@ export type Job = {
    * provider is asked to give its own thread */
   session: string
   /** the model, by the name its provider knows it by */
-  model?: string
+  model: string
   /** how hard to think, where the provider accepts such a setting */
   effort?: string
   /** what it was asked to do */
@@ -166,7 +166,8 @@ export let claude: Adapter = {
     '--output-format',
     'stream-json',
     '--verbose', // stream-json in print mode requires it
-    ...(j.model ? ['--model', j.model] : []),
+    '--model',
+    j.model,
     ...(j.effort ? ['--effort', j.effort] : []),
     ...(j.persona ? ['--append-system-prompt', j.persona] : []),
     ...working(j),
@@ -246,7 +247,8 @@ export let codex: Adapter = {
       // No approvals and no sandbox: a headless exec has nobody to approve, and
       // the run's worktree is its blast radius (the fleet's posture, 2026-07-17).
       '--dangerously-bypass-approvals-and-sandbox',
-      ...(j.model ? ['-m', j.model] : []),
+      '-m',
+      j.model,
       ...(j.effort ? ['-c', `model_reasoning_effort=${j.effort}`] : []),
       '-c',
       `project_doc_max_bytes=${WHOLE}`,

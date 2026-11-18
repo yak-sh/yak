@@ -3,6 +3,7 @@ import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, type Graph, graph } from '@yaks/graph'
 import { accountEid } from '@yaks/model'
 import { identityEid } from '@yaks/graph/identity'
+import { link } from '@yaks/edge'
 import { processes } from '@yaks/process'
 import { onDisk } from '@yaks/file/local'
 import { sessionDerived, sessions } from '@yaks/session'
@@ -77,6 +78,79 @@ test('a request naming the provider alone runs and asks its default model', asyn
     to: FAKE.model,
     through: 'E1',
   }])
+})
+
+for (let resumed of [false, true]) {
+  test(`a ${resumed ? 'continued' : 'first'} provider-only launch keeps its recorded alias`, async () => {
+    let { g } = tracked()
+    let opus = identityEid('model', ['opus'])
+    let sonnet = identityEid('model', ['sonnet'])
+    await g.apply([
+      ...asking('S1', 'E1', 'fix it', { model: undefined }),
+      { entity: { eid: FAKE.provider }, using: { model: opus } },
+      { entity: { eid: opus }, model: { name: 'opus' } },
+      { entity: { eid: sonnet }, model: { name: 'sonnet' } },
+      { ...link(FAKE.provider, 'serves', opus), serves: { name: 'opus' } },
+      { ...link(FAKE.provider, 'serves', sonnet), serves: { name: 'sonnet' } },
+    ])
+    if (resumed) {
+      await g.apply([
+        {
+          entity: { eid: 'S1' },
+          session: { id: 'provider-thread' },
+          process: { pid: 1, command: 'fake' },
+          exit: { code: 0 },
+        },
+        {
+          entity: { eid: 'E3' },
+          entry: { session: 'S1' },
+          content: { body: 'continue' },
+          using: { provider: FAKE.provider },
+        },
+      ])
+    }
+    await g.apply(asking('S2', 'E2', 'choose another', { model: FAKE.model }))
+    assertEquals((await asked(g, 'S2'))?.model, 'fake-1')
+    let dir = Deno.makeTempDirSync({ prefix: 'spawn-' })
+    let launched = launching()
+    try {
+      await start(g, 'S1', {
+        dir,
+        cwd: dir,
+        adapters: { fake: claude },
+        launch: launched.launch,
+        signal: AbortSignal.abort(),
+      })
+      let argv = launched.started[0]
+      assertEquals(argv[argv.indexOf('--model') + 1], 'opus')
+      let [request] = await g.get(['E1'])
+      assertEquals(comp(request, 'using').model, opus)
+      await g.apply([{
+        entity: { eid: FAKE.provider },
+        using: { model: sonnet },
+      }])
+      assertEquals((await asked(g, 'S1'))?.model, 'opus')
+      assertEquals((await asked(g, 'S1'))?.ask.to, opus)
+    } finally {
+      Deno.removeSync(dir, { recursive: true })
+    }
+  })
+}
+
+test('a provider-only HTTP request belongs to the native runner', async () => {
+  let { g } = tracked()
+  await g.apply([
+    ...asking('S1', 'E1', 'fix it', { model: undefined }),
+    { entity: { eid: FAKE.provider }, provider: { transport: 'http' } },
+  ])
+  assertEquals(
+    await start(g, 'S1', {
+      launch: () => {
+        throw new Error('unexpected CLI launch')
+      },
+    }),
+    null,
+  )
 })
 
 test('an effort the model does not serve is refused, not launched', async () => {
