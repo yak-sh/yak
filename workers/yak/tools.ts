@@ -151,7 +151,15 @@ import {
 } from './declared.ts'
 // A whole store put back to a moment (T-34507) — the data half of what
 // app_rollback does for an app's files.
-import { mark, moment, oldest, putBack, recorded } from './recover.ts'
+import {
+  mark,
+  moment,
+  oldest,
+  putBack,
+  recorded,
+  type Restorable,
+} from './recover.ts'
+import { operatorRecovery } from './build-door.ts'
 import {
   inspect as inspectWrites,
   retry as retryWrite,
@@ -708,6 +716,33 @@ let color = (v: unknown, what: string) => {
 // A yes or a no. Models send a JSON boolean where the schema says one and
 // the word where they are typing prose, so both are read rather than
 // teaching an agent to guess again (`list` above takes the same line).
+// What store_restore puts back, and how its answers name it: an app's store,
+// put back by whoever may write it, or with `operator` the space's Operator,
+// which is the whole space's work, so only its owner puts it back.
+let restorable = async (ctx: Ctx, args: Args, operator: boolean) => {
+  if (operator) {
+    let { space } = await owns(ctx, args)
+    return {
+      space,
+      of: space as App | Space,
+      name: `${space.slug}'s Operator`,
+      store: operatorRecovery(ctx.env, space.eid) as Restorable,
+      again: 'store_restore(operator: true',
+    }
+  }
+  if (args.app == null) {
+    throw refuse('arguments', 'app: the app whose store to put back')
+  }
+  let { space, app, store } = await inApp(ctx, args, true)
+  return {
+    space,
+    of: app as App | Space,
+    name: `${space.slug}/${app.slug}'s store`,
+    store: store as Restorable,
+    again: `store_restore(app: '${app.slug}'`,
+  }
+}
+
 let flag = (v: unknown, what: string) => {
   if (typeof v == 'boolean') return v
   if (v === 'true') return true
@@ -5119,17 +5154,29 @@ let OURS: Row[] = [
       properties: {
         space: SPACE,
         app: APP,
+        operator: {
+          type: 'boolean',
+          description:
+            "true to put back the space's Operator instead of an app's " +
+            'store: its tasks, comments, conversations and their lines, ' +
+            'wake-ups, and whatever operator_remove removed. Only the ' +
+            "space's owner may",
+        },
         at: str(
           'the moment to put the store back to, within the last 30 days, ' +
             'e.g. 2026-09-06T14:20:00Z. Left out, this reports the window ' +
             'and the restores already made instead of restoring anything',
         ),
       },
-      required: ['app'],
     },
     run: async (ctx, args) => {
-      let { space, app, store } = await inApp(ctx, args, true)
-      let past = await ctx.dir.restores(app)
+      let operator = args.operator != null && flag(args.operator, 'operator')
+      let { space, of, name, store, again } = await restorable(
+        ctx,
+        args,
+        operator,
+      )
+      let past = await ctx.dir.restores(of, operator)
       // What has been done to this store already, newest first — read before
       // and said after, so the answer to "what happened here" is the same
       // whether or not this call is the thing that happens.
@@ -5144,10 +5191,10 @@ let OURS: Row[] = [
         // store that cannot do it has been told a comfortable lie.
         await mark(store)
         return {
-          text: `${space.slug}/${app.slug}'s store can be put back to any ` +
-            `moment since ${oldest().toISOString()} — the last 30 days. ` +
-            `store_restore(app: '${app.slug}', at: '<moment>') does it, and ` +
-            'nothing moves until you name one.' + story,
+          text: `${name} can be put back to any moment since ` +
+            `${oldest().toISOString()} — the last 30 days. ${again}, at: ` +
+            `'<moment>') does it, and nothing moves until you name one.` +
+            story,
           space,
         }
       }
@@ -5155,19 +5202,23 @@ let OURS: Row[] = [
       let done = await putBack(
         store,
         async (r) => {
-          await stamp(ctx.env, { entities: recorded(app.eid, r) })
+          await stamp(ctx.env, {
+            entities: recorded(
+              operator ? { space: of.eid } : { app: of.eid },
+              r,
+            ),
+          })
         },
         at,
         ctx.person,
       )
       let when = at.toISOString()
       return {
-        text: `${space.slug}/${app.slug}'s store is being put back to ` +
-          `${when}. The app restarts to pick it up, so give it a moment ` +
-          `before you read it. Everything written after ${when} is gone from ` +
-          `it — to undo this restore, store_restore(app: '${app.slug}', at: ` +
-          `'${done.at}'), which is the moment just before it happened.` +
-          story,
+        text: `${name} is being put back to ${when}. It restarts to pick ` +
+          'it up, so give it a moment before you read it. Everything ' +
+          `written after ${when} is gone from it — to undo this restore, ` +
+          `${again}, at: '${done.at}'), which is the moment just before it ` +
+          'happened.' + story,
         space,
       }
     },

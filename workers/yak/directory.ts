@@ -3358,8 +3358,14 @@ export let directoryRows = (rows: {
     // Every time this app's store was put back to a moment, newest first
     // (recover.ts, T-34507). Never cached, for the reason `deploys` is not: a
     // restore reads its own trail back the moment it writes to it.
-    restores: async (app: App) =>
-      (await query(line`.restored.app=${app.eid}`))
+    // Each restore of an app's store, or with `operator` of a space's
+    // Operator, newest first.
+    restores: async (of: App | Space, operator = false) =>
+      (await query(
+        operator
+          ? line`.restored.space=${of.eid}`
+          : line`.restored.app=${of.eid}`,
+      ))
         .map(restoreOf)
         .sort((a, b) => b.at.localeCompare(a.at)),
     // Every space there is. Only the meter asks this (usage.ts): a tool

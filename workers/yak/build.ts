@@ -100,6 +100,7 @@ import { managePath } from '@yaks/platform/routes'
 import { WAKE } from './door.ts'
 import { WALKTHROUGH } from './walkthrough.ts'
 import { COPY, copying } from './store-copy.ts'
+import { type Bookmarked, bookmarks, RESTORING } from './bookmarks.ts'
 import {
   type Frame,
   HELD,
@@ -684,6 +685,24 @@ export class Builder extends Durable {
         Response.json({ ok: true }),
         () => restart(this.#ctx, WIPED),
       )
+    }
+    // Where the Operator's storage is, and putting it back there
+    // (bookmarks.ts, recover.ts): store_restore with `operator`. The kernel's
+    // alone, as an app store's is.
+    if (url.pathname == '/restore') {
+      if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
+      return bookmarks(
+        this.#ctx.storage as Bookmarked,
+        request,
+        `operator ${request.headers.get(SPACE) ?? ''}`,
+      )
+    }
+    // The restart that wakes a restored object at its bookmark: this request
+    // is failed by it, and the caller reads that as done (recover.ts).
+    if (url.pathname == '/restart' && request.method == 'POST') {
+      if (request.headers.get('x-yak-kernel') != '1') return no(403, NOBODY)
+      restart(this.#ctx, RESTORING)
+      return Response.json({ ok: true })
     }
     if (url.pathname == COPY) {
       // The platform's admin's, through the kernel (sweep.ts): a read of the

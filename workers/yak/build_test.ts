@@ -694,6 +694,32 @@ test('a wiped Builder drops its alarm and restarts, and the next incarnation fin
   assertEquals(new Builder(o.ctx, o.env).said(), [])
 })
 
+// A space's Operator is put back to a moment as an app's store is
+// (bookmarks.ts, recover.ts): the kernel's alone, the bookmark it is told to
+// wake at, and the restart that wakes it there.
+test("a space's Operator is put back at the kernel's word alone", async () => {
+  let o = await seeded()
+  let at = (path: string, init: RequestInit = {}, kernel = true) =>
+    o.object.fetch(
+      new Request(`https://builder${path}`, {
+        ...init,
+        headers: kernel ? { 'x-yak-kernel': '1' } : {},
+      }),
+    )
+  assertEquals((await at('/restore', {}, false)).status, 403)
+  let { from, to } = await (await at('/restore?at=' + new Date().toISOString()))
+    .json()
+  assert(from && to, 'no bookmarks')
+  let put = await at('/restore', {
+    method: 'POST',
+    body: JSON.stringify({ bookmark: to }),
+  })
+  assertEquals(await put.json(), { undo: `undo-${to}` })
+  assertEquals(o.ctx.pitr.restore, to)
+  await (await at('/restart', { method: 'POST' })).body?.cancel()
+  assertEquals(o.ctx.pitr.aborts, 1)
+})
+
 test('a new incarnation says it owes work in its answers, and takes the work up on a wake', async () => {
   let o = await seeded()
   let read = await posted(o, '/operator/conversation')

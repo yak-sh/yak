@@ -120,7 +120,7 @@ test('nothing is written down when the store cannot be read', async () => {
 
 test('the record is one entity per restore, about the app', () => {
   assertEquals(
-    recorded('app-1', {
+    recorded({ app: 'app-1' }, {
       at: '2026-09-06T14:20:00.000Z',
       to: '2026-09-01T00:00:00.000Z',
       by: 'ada',

@@ -1,8 +1,9 @@
-// A whole app store put back to a moment (T-34507). Cloudflare keeps a SQLite
+// A whole app store, or a space's Operator, put back to a moment (T-34507). Cloudflare keeps a SQLite
 // Durable Object recoverable for thirty days: `getBookmarkForTime` names a
 // point in that history, `onNextSessionRestoreBookmark` says which point the
 // object wakes at next, and restarting it is what makes that happen now. The
-// doors onto them are the store's own `/restore` (graph.ts `#recovery`) and
+// doors onto them are the object's own `/restore` (bookmarks.ts, answered by
+// graph.ts for an app's store and build.ts for a space's Operator) and
 // `/restart`; what is here is the order, the window, and the record.
 //
 // The order is the whole of it. Where the store stands right now is read and
@@ -82,7 +83,11 @@ export let moment = (said: string, now = Date.now()): Date => {
 // The kernel flag rides on every one of these: `/restore` is not a route a
 // client is answered at (graph.ts), and door.ts strips the flag off anything
 // it is handed, so this is the only way it can ever be set.
-let asked = (store: Door, path: string, init?: RequestInit) => {
+/** What a restore asks an object through: its door, or the Operator's
+ * (build-door.ts `operatorRecovery`). */
+export type Restorable = Pick<Door, 'consume'>
+
+let asked = (store: Restorable, path: string, init?: RequestInit) => {
   return store.consume(
     path,
     async (r) => {
@@ -106,7 +111,7 @@ let asked = (store: Door, path: string, init?: RequestInit) => {
 
 /** Where a store stands right now: the bookmark that is its way back. Asking
  * is also the one question that proves the back end offers recovery at all. */
-export let mark = (store: Door) => asked(store, '/restore')
+export let mark = (store: Restorable) => asked(store, '/restore')
 
 /**
  * One restore, in the order that leaves a way out of it: read where the store
@@ -118,7 +123,7 @@ export let mark = (store: Door) => asked(store, '/restore')
  * directory is somebody else's business (tools.ts stamps it).
  */
 export let putBack = async (
-  store: Door,
+  store: Restorable,
   write: (r: Restore) => Promise<void>,
   at: Date,
   by: string,
@@ -150,7 +155,7 @@ export let putBack = async (
  * asking for it, so that request failing with the runtime's reset is the
  * answer; any other failure is one.
  */
-let restarted = async (store: Door) => {
+let restarted = async (store: Restorable) => {
   try {
     await asked(store, '/restart', { method: 'POST' })
   } catch (e) {
@@ -164,8 +169,12 @@ let reset = (e: unknown) =>
   (e as Error & { durableObjectReset?: boolean }).durableObjectReset === true
 
 /** The record as the directory holds it: one entity per restore, about the
- * app, so a second restore never overwrites the first one's way back. */
-export let recorded = (app: string, r: Restore): Bundle[] => [{
+ * app or the space whose Operator it put back, so a second restore never
+ * overwrites the first one's way back. */
+export let recorded = (
+  of: { app: string } | { space: string },
+  r: Restore,
+): Bundle[] => [{
   entity: { eid: '$restore' },
-  restored: { app, at: r.at, to: r.to, by: r.by, from_bookmark: r.from },
+  restored: { ...of, at: r.at, to: r.to, by: r.by, from_bookmark: r.from },
 }]

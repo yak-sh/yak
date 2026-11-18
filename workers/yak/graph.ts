@@ -84,6 +84,7 @@ import { jobs } from './jobs.ts'
 import { statements } from '@yaks/sqlite'
 import type { Context as Reported } from '@yaks/tracker/report'
 import { planting, recovering } from './models.ts'
+import { bookmarks, RESTORING } from './bookmarks.ts'
 import { hits as documentHits } from './document-search.ts'
 import { metered as meteredModel } from './metered.ts'
 import { attributed } from './attribution.ts'
@@ -790,23 +791,6 @@ let entries = (manifest: string): [string, Record<string, unknown>][] => {
 let viewed = (manifest: string): string =>
   [...new Set(entries(manifest).map(([, t]) => t?.view).filter(Boolean))]
     .map(String).sort().join('\n')
-
-// What a back-end with no point-in-time recovery says. Local workerd offers
-// `getCurrentBookmark` and refuses the other two in very nearly these words, so
-// one sentence covers both the method that is missing and the method that
-// throws — and a person is told the truth about their data either way.
-// What `/restart` resets the object with: the reason the runtime logs.
-let RESTORING = 'restarting to wake at a restored bookmark'
-let NO_PITR =
-  "this store's back end does not offer point-in-time recovery — it is a " +
-  'Cloudflare production Durable Object that does, and local development does ' +
-  'not'
-// What Cloudflare's "This database has no history." means for a moment asked
-// of `getBookmarkForTime`: nothing had been written to the store by then.
-let UNWRITTEN = (at: string) =>
-  `nothing had been written to this store by ${at} (Cloudflare: "This ` +
-  'database has no history."), so there is no earlier state to put it back ' +
-  'to; a moment after its first write can be restored'
 
 // Request paths become profile labels only for known Store doors. An arbitrary
 // caller path or method must not create a new label.
@@ -6094,67 +6078,27 @@ export class Store extends Durable {
     })
   }
 
-  /**
-   * Where this object's storage IS, and putting it back there (Cloudflare's
-   * point-in-time recovery, T-34507).
-   *
-   * A GET reads bookmarks and changes nothing: `from` is where the object
-   * stands right now — which is the way back from any restore, and therefore
-   * the thing the caller writes down before asking for one — and `to`, when a
-   * moment was named, is the bookmark for that moment.
-   *
-   * A POST restores: `onNextSessionRestoreBookmark` is written down by the
-   * runtime, so the recovery happens whenever this object next starts, and
-   * the POST answers the way back. It restarts nothing, because `abort` fails
-   * every in-flight request, and an answer still on its way to the caller is
-   * one of them. The restart is a request of its own, `/restart`, which the
-   * caller sends once it holds that answer and whose reset is its success
-   * (recover.ts `putBack`).
-   */
-  async #recovery(request: Request): Promise<Response> {
+  // Where this object's storage is, and putting it back there
+  // (bookmarks.ts): never the directory's through the app door, and the
+  // lexicon forgotten first, since the rows a restore brings back may hold
+  // words it never had, so the store is asked until its next write finds it
+  // gone (`#telling`).
+  #recovery(request: Request): Promise<Response> {
     if (request.method != 'GET' && this.#get('name') == PLATFORM_STORE) {
-      throw new Refused(
-        'The directory cannot be restored through the app door',
-      )
+      return Promise.resolve(refuse(
+        new Refused('The directory cannot be restored through the app door'),
+      ))
     }
-    let s = this.#ctx.storage
-    try {
-      if (request.method != 'POST') {
-        if (!s.getCurrentBookmark) throw new Refused(NO_PITR)
-        let from = await s.getCurrentBookmark()
-        let at = new URL(request.url).searchParams.get('at')
-        if (!at) return Response.json({ from, to: '' })
-        if (!s.getBookmarkForTime) throw new Refused(NO_PITR)
-        // A moment before the store's first write is the caller asking for
-        // nothing to go back to, not a failure.
-        let to = await s.getBookmarkForTime(new Date(at)).catch((e) => {
-          if (e instanceof Error && /has no history/.test(e.message)) {
-            throw new Refused(UNWRITTEN(at))
-          }
-          throw e
-        })
-        return Response.json({ from, to })
-      }
-      let said = JSON.parse(await readBody(request)) as { bookmark?: string }
-      if (!said?.bookmark) throw new Refused('/restore takes a bookmark')
-      if (!s.onNextSessionRestoreBookmark) throw new Refused(NO_PITR)
-      // The rows a restore brings back may hold words this store's lexicon
-      // never had, so the Lexicon forgets it and the store is asked until
-      // its next write finds it gone (`#telling`).
-      if (this.#lexis) {
-        await lexiconOf(this.#bind.LEXICON!).forget(this.#name() ?? '')
-      }
-      let undo = await s.onNextSessionRestoreBookmark(said.bookmark)
-      return Response.json({ undo })
-    } catch (e) {
-      // A runtime that offers none of this throws its own sentence, which is
-      // handed on as a refusal rather than a 500: nothing broke, the back end
-      // simply cannot do it. Where it can, a throw is ours, and the tracker hears.
-      if (!(e instanceof Refused)) {
-        caught(e, { request: 'restore', store: this.#get('name') })
-      }
-      return refuse(e instanceof Refused ? e : new Refused(String(e)))
-    }
+    return bookmarks(
+      this.#ctx.storage,
+      request,
+      this.#get('name') ?? '',
+      async () => {
+        if (this.#lexis) {
+          await lexiconOf(this.#bind.LEXICON!).forget(this.#name() ?? '')
+        }
+      },
+    )
   }
 
   // The platform's providers, stood up before a seed is checked or applied.

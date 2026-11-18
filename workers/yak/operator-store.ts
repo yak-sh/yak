@@ -1,4 +1,5 @@
-// The space's private work stays beside its builder, outside app restores.
+// The space's private work stays beside its builder, put back apart from any
+// app's store (store_restore with `operator`, build.ts `/restore`).
 // Its store is composed from its config (config.ts `operatorConfig`) through
 // @yaks/host's assembly, as the Store object composes each kind it serves.
 import { line } from '@yaks/query'

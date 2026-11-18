@@ -277,9 +277,10 @@ export let directoryDoc: VocabDoc = {
         size: owned(num),
       },
     },
-    // One time this app's store was put back to a moment (recover.ts,
-    // T-34507): when it was asked for, the moment asked for, who asked, and
-    // the bookmark the store stood at before it moved.
+    // One time this app's store, or this space's Operator (`space`), was put
+    // back to a moment (recover.ts, T-34507): when it was asked for, the
+    // moment asked for, who asked, and the bookmark the store stood at before
+    // it moved.
     //
     // An entity of its own per restore, like `deploy`, and not a word on the
     // app row — because the record exists so that a restore can itself be
@@ -295,6 +296,7 @@ export let directoryDoc: VocabDoc = {
       before: ['doc'],
       properties: {
         app: ref('cascade'),
+        space: ref('cascade'),
         at: owned(time),
         to: owned(time),
         by: owned(ref('keep')),

@@ -9,7 +9,7 @@ import { type Settings, worn } from './operator-persona.ts'
 import type { Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { answered } from './meta.ts'
-import type { Call } from '@yaks/durable-object/door'
+import type { Call, Door } from '@yaks/durable-object/door'
 
 /** What a socket remembers about itself across a hibernation: who is on the
  * other end, and which space they opened it in. The attachment is the only
@@ -225,6 +225,25 @@ export let wiped = async (env: Env, space: string) => {
   if (!r.ok) throw new Error(await r.text())
   await r.body?.cancel()
 }
+
+/**
+ * The space's Operator as a restore asks it (recover.ts `putBack`): its own
+ * `/restore` and `/restart` (build.ts), with the kernel's word on each and
+ * nothing of any client's. Never sent twice: a restart's reset is its answer.
+ */
+export let operatorRecovery = (
+  env: Env,
+  space: string,
+): Pick<Door, 'consume'> => ({
+  consume: async (path, read, init, headers) =>
+    read(
+      await builderOf(env, space)(() =>
+        new Request('http://builder' + path, {
+          ...init as RequestInit,
+          headers: { ...headers, 'x-yak-kernel': '1', [SPACE]: space },
+        }), { replayable: false }),
+    ),
+})
 
 /**
  * The other door on the same address (T-34242): a plain form POST, from a

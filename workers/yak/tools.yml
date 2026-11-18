@@ -520,7 +520,9 @@ store_restore:
     named moment is lost, so the latest moment that will do costs the least.
     The app is briefly restarted to pick up the restored store. The app's
     files are not part of this; app_rollback and app_files op: restore put
-    those back. To undo: another store_restore, to the moment just before
+    those back. With operator: true instead of app, the space's owner puts
+    the space's Operator back the same way: its tasks, comments,
+    conversations and whatever operator_remove removed. To undo: another store_restore, to the moment just before
     this one, which the response names. Documentation:
     https://yaks.app/docs/files.
 store_trace:
@@ -1416,6 +1418,8 @@ operator_remove:
     conversation's session with its own lines, a line, or a wake-up or
     subscription with the turns it fired and what they told in Updates. You
     remove your own; the platform's admin anyone's. Answers the eids removed.
+    To undo: the space's owner puts the Operator back to a moment before it
+    with store_restore(operator: true), within 30 days.
 library_add:
   title: Add documents to an app's library
   step:

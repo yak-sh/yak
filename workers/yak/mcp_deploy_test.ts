@@ -384,6 +384,12 @@ test('a deploy is a version, and one word puts it back', async () => {
       )).message,
       'outside the 30-day window',
     )
+    // The space's Operator is put back the same way, apart from any app
+    // (build_test.ts holds its door's half).
+    assertStringIncludes(
+      await agent.tool('store_restore', { space, operator: true }),
+      `${space}'s Operator can be put back`,
+    )
   } finally {
     await k.stop()
   }
