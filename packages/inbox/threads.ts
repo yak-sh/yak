@@ -23,6 +23,9 @@ export type Thread<R extends Row = Row> = {
   blocking: boolean
   at: string
   unread: boolean
+  /** Its reader put it away, and nothing has happened on it since; only a
+   * read of every thread (`Search.all`) holds it. */
+  archived: boolean
 }
 
 let str = (v: unknown): string => String(v ?? '')
@@ -260,6 +263,7 @@ export let threads = <R extends Row>(
       blocking,
       at,
       unread: at > attention,
+      archived,
     })
   }
   return out.sort((a, b) =>

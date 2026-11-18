@@ -82,9 +82,15 @@ env.BUILDER = service.binding
 let { store } = service
 let ctx = await operatorContext(env, held, space, () => dir)
 let notify = notificationSend(ctx, space, store)
-let told = async (text: string, about?: string) => {
+let told = async (text: string, about?: string, subject?: string) => {
   let said = JSON.parse(
-    String(await notify.run({ text, ...about ? { about } : {} })),
+    String(
+      await notify.run({
+        text,
+        ...about ? { about } : {},
+        ...subject ? { subject } : {},
+      }),
+    ),
   ) as {
     notification: string
     reaches: string
@@ -116,7 +122,11 @@ let page = async (view: string, fields: Record<string, string> | object) => {
 let take = <T>(list: T[]) => list.splice(0)
 
 // Not chosen, with only an address: by email.
-let byMail = await told('The build finished.\nOpen it from your Updates.')
+let byMail = await told(
+  'Open it from your Updates.',
+  undefined,
+  'Notes: the build finished',
+)
 let mailed = take(letters)
 // What everyone in the space is told, and what a person writes, stay in
 // Updates.
@@ -132,7 +142,7 @@ test('an alert to a person who chose nothing and has an address is an email from
   assertEquals(mailed.length, 1)
   let [letter] = mailed
   assertEquals(letter.to, ADDRESS)
-  assertEquals(letter.subject, 'The build finished.')
+  assertEquals(letter.subject, 'Notes: the build finished')
   assertStringIncludes(String(letter.text), 'Open it from your Updates.')
   assertStringIncludes(String(letter.text), '/manage/ana/updates')
   // The letter is a row of its own, carrying the notification, and keeps
@@ -156,14 +166,14 @@ let code = take(texted).at(-1)!.text.match(/\d{6}/)![0]
 await page('texts', { number: ANA, agreed: 'yes', code })
 take(texted)
 let before = (await dir.at(eid))!.meter?.texts ?? 0
-let byText = await told('Your report is ready.')
+let byText = await told('Open it from your Updates.', undefined, 'Report ready')
 let textedAlert = take(texted)
 let spent = (await dir.at(eid))!.meter!.texts! - before
 test('an alert to a person who agreed to texts is a text to their number, signed and paid for', () => {
   assertEquals(byText.reaches, 'text')
   assertEquals(textedAlert, [{
     to: ANA,
-    text: `Your report is ready.\n\n${textSigned(space)}`,
+    text: `Report ready\n\nOpen it from your Updates.\n\n${textSigned(space)}`,
   }])
   assertEquals(spent, PER_SEGMENT)
 })
@@ -187,7 +197,8 @@ test('a person chooses how they are alerted on the Operator page', () => {
   assertEquals(quiet.row.delivered, undefined)
 })
 
-// A wake-up's outcome is told the way they chose.
+// A wake-up's last words stay in its chat: only what it sends with
+// notification_send reaches them.
 await page('alerts', { channel: 'text' })
 await receive(
   store,
@@ -196,10 +207,8 @@ await receive(
 )
 await service.drain()
 let woke = take(texted)
-test("a wake-up's outcome reaches the person the way they chose", () => {
-  assertEquals(woke.map((t) => t.text), [
-    `Your weekly report is ready.\n\n${textSigned(space)}`,
-  ])
+test("a wake-up's own words reach nobody", () => {
+  assertEquals(woke, [])
 })
 
 // A browser notification, on each browser the person allowed (T-147488):

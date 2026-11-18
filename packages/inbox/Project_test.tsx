@@ -116,6 +116,7 @@ test('a knock names and opens its target, with its own id beside', async () => {
     blocking: false,
     at: at(1),
     unread: true,
+    archived: false,
   }
   let h = host({
     read: (l) =>

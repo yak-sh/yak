@@ -116,8 +116,10 @@ let REFUSED: Record<string, (name: string) => string> = {
 }
 let couldnt = (why: string) => `I couldn't finish this: ${why}.`
 
-/** What a turn ended with in plain words, and what went wrong where it did. */
-export type Reply = { text: string; fault?: string }
+/** What a turn ended with in plain words, what went wrong where it did, and
+ * whether the host broke it (`broke`): the work stopped before it could
+ * finish, on the host's side. */
+export type Reply = { text: string; fault?: string; broke?: true }
 
 /** Who a reply's words name: the `host` at fault where something failed,
  * and the assistant answering (`name`). */
@@ -129,7 +131,9 @@ export type Naming = { host?: string; name?: string }
  * wrong, for the host's tracker: a refusal, a failure, or an end with no
  * reply. A person's stop is no fault, nor a ceiling met (a spent budget says
  * so in its own words), and a step that threw was reported where it threw
- * (./run.ts `report`).
+ * (./run.ts `report`). Every end the host is at fault for `broke` it, the
+ * step that threw too; a model that declined, was busy or is unavailable
+ * did not.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -146,6 +150,7 @@ export type Naming = { host?: string; name?: string }
  *   text: "I couldn't finish this: something in yaks.app failed while" +
  *     ' working on it. The people who run yaks.app have been told.',
  *   fault: 'request: 400 tools.26: input_schema does not support oneOf',
+ *   broke: true,
  * })
  * equal(replyOf([line(3, {
  *   output: { source: 'a' }, refusal: { code: 'limit' },
@@ -178,18 +183,19 @@ export let replyOf = (
   if (kind == 'output' && !end!.notice && text) return { text }
   let told = ` The people who run ${host} have been told.`
   let broke = couldnt(`something in ${host} failed while working on it`)
-  if (kind == 'exception') return { text: broke + told }
+  if (kind == 'exception') return { text: broke + told, broke: true }
   let code = String(comp(end, 'refusal')?.code)
   let fault = kind == 'refusal'
     ? `${code}: ${text}`
     : String(comp(end, 'failed')?.reason ?? '') || text ||
       'ended without an answer'
-  let why = kind == 'refusal'
-    ? REFUSED[code] ? couldnt(REFUSED[code](name)) : broke
+  let declined = kind == 'refusal' && !!REFUSED[code]
+  let why = declined
+    ? couldnt(REFUSED[code](name))
     : end
     ? broke
     : 'This ended without an answer.'
-  return { text: why + told, fault }
+  return { text: why + told, fault, ...declined ? {} : { broke: true } }
 }
 
 /** A transcript's answer as its turn ends: the {@link Reply}, the newest

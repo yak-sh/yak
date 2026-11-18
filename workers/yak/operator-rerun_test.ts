@@ -66,7 +66,7 @@ let made = await run(async () => {
   await drain(store)
   return made
 })
-let told = await store.g.read(q`.notification.to=${owner} .fields=doc.body`)
+let told = await store.g.read(q`.notification.to=${owner} .fields=doc`)
 let stuck = await store.g.read(q`.effect.state=failed .fields=effect.handler`)
 
 test("a conversation's report names its space, and the conversation keeps the fault it was filed under", () => {
@@ -85,10 +85,10 @@ test('a fixed bug takes the conversation up again, telling the model what went w
   assertStringIncludes(heard.at(-1)!, said.cause)
 })
 
-test('its person is told once that yaks.app failed and it ran again, with what came of it', () => {
-  assertEquals(told.map((b) => (b.doc as Comp).body), [
-    'This stopped because of a problem in yaks.app. That problem is fixed now, so it ran again:\n\nYour app is built.',
-  ])
+test('its person is told once, in plain words, that yaks.app failed and it started again; what came of it stays in its chat', () => {
+  assertEquals(told.length, 1)
+  assertStringIncludes(String((told[0].doc as Comp).body), 'started again')
+  assertEquals(JSON.stringify(told).includes('Your app is built.'), false)
 })
 
 test('the same fix handed back again asks nothing more', async () => {
@@ -115,10 +115,9 @@ test("a break's task a bug stopped is taken up in its own conversation, and its 
   })
   let task = derivedEid('operator-task|' + fix)
   let notes = await store.g.read(
-    q`.notification.about=${task}&.notification.to=${owner} .fields=doc.body`,
+    q`.notification.about=${task}&.notification.to=${owner} .fields=doc`,
   )
-  assertEquals(notes.map((b) => (b.doc as Comp).body), [
-    'This stopped because of a problem in yaks.app. That problem is fixed now, so it ran again:\n\nYour app is built.',
-  ])
+  assertEquals(notes.length, 1)
+  assertStringIncludes(String((notes[0].doc as Comp).body), 'started again')
   assertEquals((await store.g.read(q`.contains .edge.from=${task}`)).length, 1)
 })

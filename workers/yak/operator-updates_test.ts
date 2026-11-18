@@ -51,6 +51,8 @@ let script: Item[][] = [
 let asked: string[] = []
 // The tools each ask was offered, those deferred named in tool_load's list.
 let tooled: string[][] = []
+// Set, the next ask fails as a provider's outage does.
+let failing = false
 let service = operatorService(
   p.env,
   { person: ada, role: 'owner', space: eid },
@@ -60,6 +62,10 @@ let service = operatorService(
       t.name,
       ...[...t.description.matchAll(/^- (\w+):/gm)].map((m) => m[1]),
     ]))
+    if (failing) {
+      failing = false
+      return Promise.reject(new Error('provider: 529 overloaded'))
+    }
     return Promise.resolve({
       id: crypto.randomUUID(),
       model: req.model,
@@ -165,8 +171,14 @@ let FIXING = {
   memory_save: false,
 }
 
-test('a fixed break tells the space what the Operator did', async () => {
-  script.push(said('Recipe box prints again.'))
+test('a fixed break tells its person only what the Operator wrote them, linked to its chat', async () => {
+  script.push(
+    call('notification_send', {
+      subject: 'Recipes: printing works again',
+      text: 'The print button stopped working. I fixed it; nothing to do.',
+    }),
+    said('Fixed print.ts; app_deploy answered 200.'),
+  )
   await receive(store, {
     space: eid,
     person: ada,
@@ -180,11 +192,12 @@ test('a fixed break tells the space what the Operator did', async () => {
   for (let [tool, held] of Object.entries(FIXING)) {
     assertEquals(offered.includes(tool), held, tool)
   }
-  for (let person of [ada, bo]) {
-    let fixed = (await read(person)).updates
-      .find((u) => u.words == 'Recipe box prints again.')
-    assertEquals(typeof fixed?.about, 'string')
-  }
+  let all = (await read(ada)).updates
+  let fixed = all.find((u) => u.subject == 'Recipes: printing works again')!
+  let [ran] = await store.g.get([fixed.chat!])
+  assertEquals(!!ran.session, true)
+  assertEquals(all.some((u) => u.words.includes('print.ts')), false)
+  assertEquals(await words(bo), [[false, 'Just for Bo.', true]])
 })
 
 test('the Updates page shows what needs the person, a new chat counts it in the side, and a button opens the chat', async () => {
@@ -310,4 +323,105 @@ test('a choice shows a picture, prose or a draft, and only its asker reads the p
   assertEquals((await get(`shown=${cover.eid}&eid=plan`))!.status, 404)
   assertEquals((await get(`draft=${app}`))!.status, 404)
   assertEquals(await get('other=1'), undefined)
+})
+
+// The page's notices, as each card draws them.
+let cards = async (dismissed = false) => {
+  let space = (await directoryOf(p.env.STORE).at(eid))!
+  let who = { person: ada, role: 'owner' as const, space: eid }
+  let d = parseHTML(
+    await (await updatesPage(p.env, space, who, {}, dismissed)).text(),
+  ).document
+  return [...d.querySelectorAll('.Update:not(.Update-needs)')].map((c) => ({
+    subject: c.querySelector('.Update_Subject')?.textContent,
+    words: c.querySelector('.Update_Words')?.textContent?.trim(),
+    links: [...c.querySelectorAll('.Update_Meta a')].map((a) => a.textContent),
+    dismiss: !!c.querySelector('input[name=dismiss]'),
+  }))
+}
+
+test('Updates hold only what was written to the person: no task state and no run report', async () => {
+  let report = await receive(
+    store,
+    { space: eid, person: ada, channel: 'wake' },
+    'Check the club',
+  )
+  await service.drain()
+  await store.g.apply([
+    {
+      entity: { eid: crypto.randomUUID() },
+      task: {},
+      doc: { title: 'Rename the club' },
+      filed: { project: eid },
+      completed: { at: new Date().toISOString() },
+    },
+    // A run's last words, as they were once written into Updates.
+    notification({ to: ada, words: 'Ran graph_query; 3 rows.', id: report }),
+  ], { trusted: true })
+  // A scheduled run's outcome, as it was once written into Updates.
+  let ran = crypto.randomUUID()
+  await store.g.apply([
+    { entity: { eid: ran }, occurrence: { at: new Date().toISOString() } },
+    notification({ to: ada, words: 'graph_query: 3 rows', about: ran }),
+  ], { trusted: true })
+  let all = (await read(ada)).updates.map((u) => u.words)
+  assertEquals(all.some((w) => /Rename|graph_query|Done/.test(w)), false)
+})
+
+test("every notice links to the conversation it came from, the person's own where it names none", async () => {
+  let all = await cards()
+  assertEquals(all.length > 0, true)
+  for (let card of all) {
+    assertEquals(card.links.includes('See the chat'), true, card.words)
+  }
+})
+
+test('a dismissed notice leaves the page and its count, shows under what was dismissed, and a question cannot be', async () => {
+  let notice = (await read(ada)).updates
+    .find((u) => u.subject == 'Recipes: printing works again')!
+  let before = (await read(ada)).waiting
+  await updating(store, as(ada), { dismiss: notice.eid })
+  let after = await read(ada)
+  assertEquals(after.updates.some((u) => u.eid == notice.eid), false)
+  assertEquals(after.waiting, before - +notice.unread)
+  let put = await updating(store, as(ada), { dismissed: true }) as {
+    updates: Update[]
+  }
+  assertEquals(put.updates.map((u) => [u.eid, u.dismissed]), [
+    [notice.eid, true],
+  ])
+  assertEquals((await cards(true)).map((c) => [c.subject, c.dismiss]), [
+    ['Recipes: printing works again', false],
+  ])
+  assertEquals((await cards()).every((c) => c.dismiss), true)
+  await store.g.apply([{
+    entity: { eid: 'ask-later' },
+    task: {},
+    decision: { question: 'Keep it?', choices: [] },
+    filed: { project: eid, assignee: ada },
+  }], { trusted: true })
+  await assertRejects(
+    () => updating(store, as(ada), { dismiss: 'ask-later' }),
+    'leaves once you answer',
+  )
+  await assertRejects(
+    () => updating(store, as(bo), { dismiss: notice.eid }),
+    'not in your Updates',
+  )
+})
+
+test('a run nobody watches that fails on yaks.app tells its person so, plainly, once', async () => {
+  failing = true
+  await receive(
+    store,
+    { space: eid, person: ada, channel: 'wake' },
+    'Send the weekly digest',
+  )
+  await service.drain()
+  let stopped = (await read(ada)).updates.filter((u) =>
+    u.subject?.includes("couldn't finish")
+  )
+  assertEquals(stopped.length, 1)
+  assertStringIncludes(stopped[0].words, "on yaks.app's side")
+  assertEquals(typeof stopped[0].chat, 'string')
 })

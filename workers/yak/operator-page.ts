@@ -93,7 +93,14 @@ import { DOCUMENTS } from '@yaks/platform/documents'
 import { provePhone } from './phone-contact.ts'
 import { phoneAt } from './phones.ts'
 import { icons } from './icons.ts'
-import { type Updates, updates, updatesOf, visitsOf } from './updates.ts'
+import {
+  dismissedOf,
+  dismissedUpdates,
+  type Updates,
+  updates,
+  updatesOf,
+  visitsOf,
+} from './updates.ts'
 import {
   answered,
   type Listed,
@@ -2083,22 +2090,41 @@ export let chatPage = async (
   })
 }
 
-/** Updates from the Operator (updates.ts), beside the chat app's side. */
+/** Updates from the Operator (updates.ts), beside the chat app's side, or
+ * with `dismissed` the notices the person dismissed. */
 export let updatesPage = async (
   env: Env,
   space: Space,
   who: Who,
   beside: Beside = {},
+  dismissed = false,
 ) => {
   // Opening them reads them, and the count beside them goes with it. The
   // rows of their servers' lists that wait on them are here too, before
   // their Updates.
   let lists = reading(env, space, who)
-  let [news, views] = await Promise.all([
-    updatesOf(env, space, who, true),
+  let [news, views, , put] = await Promise.all([
+    updatesOf(env, space, who, !dismissed),
     visitsOf(env, beside.apps ?? []),
     lists.listing,
+    dismissed ? dismissedOf(env, space, who) : undefined,
   ])
+  if (put) {
+    return talkPage(env, space, who, beside, {
+      title: `Dismissed updates from ${space.operator}`,
+      status: 200,
+      waiting: news.updates.filter((u) => u.needs).length,
+      listed: await lists.drawn(),
+      current: ['updates'],
+      here: managePath('updates', space.slug) + '?dismissed',
+      skip: ['#content', 'Skip to content'],
+      main: h(
+        'div',
+        { class: 'Talk_Column Updates' },
+        dismissedUpdates(env, space, put, beside.apps),
+      ),
+    })
+  }
   let listed = await lists.drawn()
   let here = managePath('updates', space.slug)
   let at = managePath('operator', space.slug)

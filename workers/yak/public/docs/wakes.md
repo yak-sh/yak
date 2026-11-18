@@ -278,9 +278,10 @@ mail every morning at 9". Its tools are `wake_set` (words to act on, and `at`, a
 time or a delay such as `10m`, and/or `every`, written as `wake.every` is),
 `wake_list` and `wake_cancel`. Each is a `wake` row in the Operator's own store,
 so it outlasts restarts and deploys. When it fires, its words are a turn in the
-person's conversation, run as that person and paid from the space's budget, and
-the Operator's answer reaches them in their Updates. An app's schedules stay
-`wake` rows in the app, as above.
+person's conversation, run as that person and paid from the space's budget. The
+Operator's answer stays in that conversation; it tells them what they should
+hear with `notification_send`, which lands in their Updates. An app's schedules
+stay `wake` rows in the app, as above.
 
 `wake_set` also accepts `tool` and `args`: the same tool name and arguments as
 an immediate Operator call. Each occurrence records its own call and result and
@@ -311,8 +312,9 @@ the Operator's own store that also carries the query and the rows it saw last.
 Each time it fires, the query is read again as the person who set it; when its
 rows differ (a row arrives, changes or leaves the answer), the change is a turn
 in their conversation with what changed after the words, paid from the space's
-budget, and the Operator's answer reaches them in their Updates. A look that
-finds nothing new costs no turn. It watches at most 200 rows.
+budget, and the Operator tells them what they should hear with
+`notification_send`. A look that finds nothing new costs no turn. It watches at
+most 200 rows.
 
 ## An app telling the Operator
 

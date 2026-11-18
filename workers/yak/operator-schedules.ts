@@ -29,7 +29,6 @@ import { run } from '@yaks/wake/run'
 import { type Runner, toolEid } from '@yaks/tools'
 import { defect } from './defects.ts'
 import { type Ask, fire, receive } from './operator-channels.ts'
-import { notification } from './operator-updates.ts'
 import type { OperatorStore } from './operator-store.ts'
 import { whoseOf } from './operator-root.ts'
 import { refuse } from './tool.ts'
@@ -235,7 +234,7 @@ export let subscriptionTools = (
     title: 'Subscribe to a query',
     step: { doing: 'Subscribing…', done: 'Subscribed' },
     description:
-      `Be woken when something changes for the person you work for: a query you watch, read again every so often, and each time its rows change (a row arrives, changes, or leaves the answer) the words you give in say arrive in your conversation with them, with what changed, and what you answer reaches them in their Updates and the way they chose to be alerted. Over the space, as they read it with graph_query: new rows of a kind, one row changing, a build finishing (its built row), what a webhook wrote. An app's errors need none: each break already comes to you to fix. With mine, over your own store instead: a helper's session ending, a reply to a text or letter you sent (a helper's answer and a reply already come back to you on their own; subscribe only to act on them differently). It looks again on every and costs nothing while nothing changes; each change is a turn run as them and paid from the space's budget. It watches at most ${ROWS} rows, so ask for what you need.`,
+      `Be woken when something changes for the person you work for: a query you watch, read again every so often, and each time its rows change (a row arrives, changes, or leaves the answer) the words you give in say arrive in your conversation with them, with what changed, and what you answer stays in that chat: tell them with notification_send when they should hear of it. Over the space, as they read it with graph_query: new rows of a kind, one row changing, a build finishing (its built row), what a webhook wrote. An app's errors need none: each break already comes to you to fix. With mine, over your own store instead: a helper's session ending, a reply to a text or letter you sent (a helper's answer and a reply already come back to you on their own; subscribe only to act on them differently). It looks again on every and costs nothing while nothing changes; each change is a turn run as them and paid from the space's budget. It watches at most ${ROWS} rows, so ask for what you need.`,
     parameters: {
       type: 'object',
       properties: {
@@ -371,10 +370,10 @@ let failed = async (
   )
 }
 
-/** Finish an occurrence once, keeping its outcome on it, and in the person's
- * Updates unless a helper ran in it: a helper tells them itself with
- * notification_send when they should hear, so a run with nothing to say
- * tells nobody. A failed one also asks their Operator to recover it. */
+/** Finish an occurrence once, keeping its outcome on it, in its own chat:
+ * what it did reaches the person only as a helper or the tool it ran tells
+ * them (notification_send), so a run with nothing to say tells nobody. A
+ * failed one also asks their Operator to recover it. */
 export let finished = async (
   store: OperatorStore,
   row: Bundle,
@@ -384,10 +383,8 @@ export let finished = async (
   let { g } = store
   let [current] = await g.get([row.entity.eid])
   if (!current?.occurrence || current.completed || current.failed) return
-  let ask = current.operator_session as Ask
   error ??= (current.occurrence as { error?: string }).error
   if (error) await failed(store, current, text, error)
-  let [helped] = await g.get([helperInput(row.entity.eid)])
   await g.apply([
     {
       entity: row.entity,
@@ -399,13 +396,6 @@ export let finished = async (
       content: { body: text },
       notice: {},
     },
-    ...helped ? [] : [notification({
-      to: ask.person,
-      by: ask.space,
-      words: text,
-      about: row.entity.eid,
-      id: row.entity.eid,
-    })],
   ], { trusted: true })
 }
 

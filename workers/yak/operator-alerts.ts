@@ -211,7 +211,8 @@ export let alert = async (
   let route = await routeFor(dir, to, written)
   if (!route) return
   let about = String(part(row, 'notification')?.about ?? '') || undefined
-  let note = { words, id: eid, about, at: written }
+  let subject = String(part(row, 'doc')?.title ?? '').trim() || undefined
+  let note = { words, subject, id: eid, about, at: written }
   let outcome: Bundle[]
   try {
     let letter = await sent(env, store, dir, space, to, route, note)
@@ -236,9 +237,15 @@ export let alert = async (
   await store.g.apply(outcome, { trusted: true })
 }
 
-// One alert: its words, its notification's eid, what it is about and when
-// it was written.
-type Note = { words: string; id: string; about?: string; at?: string }
+// One alert: its words and subject, its notification's eid, what it is
+// about and when it was written.
+type Note = {
+  words: string
+  subject?: string
+  id: string
+  about?: string
+  at?: string
+}
 
 // An alert on its way: a notification on each browser allowed, a text, or a
 // letter with a link to their Updates, given back as the rows that write it
@@ -253,12 +260,12 @@ let sent = async (
   route: Route,
   note: Note,
 ): Promise<Bundle[] | undefined> => {
-  let { words, id } = note
+  let { words, subject, id } = note
   let updates = url(env, managePath('updates', space.slug))
   if (route.by == 'push') {
     let open = openAt(url(env, chatPath(space.slug)), updates, note.about)
     let count = await waitingOn(env, store, person, space.eid)
-    let told = { words, open, id, count }
+    let told = { words: subject ?? words, open, id, count }
     let refused: Unpushed | undefined
     try {
       if (await pushed(env, dir, route.to, space, told)) return undefined
@@ -273,7 +280,12 @@ let sent = async (
   }
   if (route.by == 'text') {
     let { textPerson } = await import('./operator-texts.ts')
-    await textPerson(env, space, route.to, words)
+    await textPerson(
+      env,
+      space,
+      route.to,
+      subject ? `${subject}\n\n${words}` : words,
+    )
     return undefined
   }
   let { letterFor, letterRows, signed } = await import(
@@ -282,7 +294,7 @@ let sent = async (
   return letterRows(env, space, {
     eid: letterFor(id),
     to: route.to,
-    title: subjectOf(words),
+    title: subjectOf(subject ?? words),
     body: `${words}\n\nYour Updates: ${updates}\n\n${signed(space)}`,
     target: id,
   })
@@ -364,29 +376,40 @@ export let notificationSend = (ctx: Ctx, space: Space, store: Store): Tool => ({
   title: 'Notify them',
   step: { doing: 'Notifying them…', done: 'Notified them' },
   description:
-    'Tell the person you work for something when they are not in this conversation: when work they are waiting on finishes, when something needs them, or when they asked to be told. It lands in their Updates and reaches them the way they chose to be alerted on the Operator page: a notification on the browsers they allowed, a text, an email, or Updates alone. Say it in a line or two that stand on their own. Answers with how it reaches them. A text is paid from the space’s budget, an email counts against its mail.',
+    'Tell the person you work for something when they are not in this conversation: when work they are waiting on finishes, when something needs them, or when they asked to be told. Nothing else you do outside a conversation with them reaches them; your last words in a run stay in its chat. A notice is shown alone on their Updates page, apart from any conversation, read later by someone who has not seen this one and may not be a programmer, so it must stand on its own: no file names, tool names, ids or error messages, which stay in this chat it links to. It reaches them the way they chose to be alerted on the Operator page: a notification on the browsers they allowed, a text, an email, or Updates alone. Answers with how it reaches them. A text is paid from the space’s budget, an email counts against its mail.',
   parameters: {
     type: 'object',
     properties: {
-      text: { type: 'string', description: 'What to tell them.' },
+      subject: {
+        type: 'string',
+        description:
+          'One line naming the app and what happened, in plain words, as "Recipe box: the print button works again".',
+      },
+      text: {
+        type: 'string',
+        description:
+          'Two or three plain sentences to them, standing on their own: what happened, what you did, and what (if anything) they need to do.',
+      },
       about: {
         type: 'string',
         description: 'The eid of the app or task it is about, if one.',
       },
     },
-    required: ['text'],
+    required: ['subject', 'text'],
   },
   run: async (args, context) => {
     let words = String(args.text ?? '').trim()
+    let subject = String(args.subject ?? '').trim()
     if (!words) throw refuse('arguments', 'Say what to tell them.')
     let { notification } = await import('./operator-updates.ts')
     let row = notification({
       to: ctx.person,
       words,
+      ...subject ? { subject } : {},
       by: space.eid,
+      ...context?.session ? { via: context.session } : {},
       ...args.about ? { about: String(args.about) } : {},
     })
-    if (context?.session) row.$actor = { by: space.eid, via: context.session }
     await store.g.apply([row], { trusted: true })
     let [kept] = await store.g.get([row.entity.eid])
     let { waitingContact } = await import('./operator-contacts.ts')

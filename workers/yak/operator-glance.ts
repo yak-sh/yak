@@ -95,7 +95,7 @@ export let updatesText = async (g: Glance, most = 8) => {
     ? updates.map((u) =>
       `- ${u.needs ? 'Needs them' : u.unread ? 'Unread' : 'Seen'}, ${
         moment(u.at)
-      }: ${cut(u.words, 240)}${
+      }: ${u.subject ? `${u.subject}. ` : ''}${cut(u.words, 240)}${
         u.choices?.length
           ? ` (choices: ${u.choices.map((c) => c.label).join(', ')})`
           : ''

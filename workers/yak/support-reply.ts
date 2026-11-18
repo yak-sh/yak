@@ -157,7 +157,9 @@ export let heard = async (
   let session = c.session
     ? await conversation(store, c.session, c.person)
     : null
-  let rows: Bundle[] = [notification(c.update)]
+  let rows: Bundle[] = [
+    notification({ ...c.update, ...session ? { via: session } : {} }),
+  ]
   if (session) {
     rows.push({
       entity: { eid: derivedEid(`support-note|${c.note.eid}`) },

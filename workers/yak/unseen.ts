@@ -500,7 +500,10 @@ let fix = async (env: Env, space: Space, app: App, hit: Hit) => {
           `If the app's own files are wrong, fix them, deploy, and say in a ` +
           `line or two what you changed. If yaks.app itself is at fault, ` +
           `report it with platform_bug, giving error ${idOf(hit)}, and ` +
-          `leave the app as it is.`,
+          `leave the app as it is. What you say here stays in this chat; ` +
+          `then tell the person what came of it with notification_send, ` +
+          `about the app, in plain words for someone who is not a ` +
+          `programmer and has not read this chat.`,
         request: { channel: 'error', app: app.eid },
         options: { id },
       }),

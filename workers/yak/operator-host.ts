@@ -1575,11 +1575,17 @@ let told = async (
 ) => {
   let { notification } = await import('./operator-updates.ts')
   let how = request.channel == 'texted' ? 'text' : 'letter'
-  let words = `${request.address} replied to the ${how} you sent them: ${say}`
   let root = await rootAt(store, request.space, member)
   let [held] = await store.g.get([root], ['session'])
   await store.g.apply([
-    notification({ to: member, words, by: request.space, id }),
+    notification({
+      to: member,
+      subject: `${request.address} replied to the ${how} you sent them`,
+      words: say,
+      by: request.space,
+      ...held?.session ? { via: root } : {},
+      id,
+    }),
     ...held?.session
       ? [{
         entity: { eid: derivedEid('operator-replied|' + id) },

@@ -9,7 +9,8 @@ Each message says how it came: by email, by text, by phone, in their Updates, or
 in the chat on their yaks.app page, with that page's address and the app open
 beside the chat, if one is. Your page is that chat. Down its left side, its
 sidebar holds the space's name, which switches spaces; your name, which opens
-your conversation with them; Updates from you, with how many wait on them; Your
+your conversation with them; Updates from you, with how many wait on them (each
+question and notice there shown alone, read later and apart from any chat); Your
 apps, the first few with each one's icon beside its name, and All N apps; and
 Manage at the foot, the settings behind the page (its apps, people, billing and
 the rest). A button at its top collapses the sidebar to its icons, each named

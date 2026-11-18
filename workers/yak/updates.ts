@@ -42,24 +42,34 @@ export let updatesOf = (
     Updates
   >
 
+/** The notices a person dismissed in a space, newest first. */
+export let dismissedOf = (
+  env: Env,
+  space: Space,
+  who: Who,
+): Promise<Updates> =>
+  operatorDoor(env, space, who, 'updates', { dismissed: true }) as Promise<
+    Updates
+  >
+
 /** The apps an update can be about, by eid, where they open. */
 export type Apps = { eid: string; slug: string; title: string }[]
 
-// Where an update leads: the chat its work was done in, or the app it is
-// about.
+// Where an update leads: the chat it came from (the person's own
+// conversation where it names none), and the app it is about.
 let leads = (env: Env, space: Space, u: Update, apps: Apps) => {
-  if (u.work) {
-    return h('a', { href: chatPath(space.slug, u.work) }, 'See the chat')
-  }
+  let chat = h('a', { href: chatPath(space.slug, u.chat) }, 'See the chat')
   let app = apps.find((a) => a.eid == u.about)
-  return app
-    ? h('a', {
-      href: `https://${spaceHost(env, space.slug)}/${app.slug}/`,
-      target: '_blank',
-      rel: 'noopener',
-    }, `Open ${app.title || app.slug}`)
-    : null
+  return [chat, ...app ? [' · ', opening(env, space, app)] : []]
 }
+
+// A link opening one of the space's apps.
+let opening = (env: Env, space: Space, app: Apps[number]) =>
+  h('a', {
+    href: `https://${spaceHost(env, space.slug)}/${app.slug}/`,
+    target: '_blank',
+    rel: 'noopener',
+  }, `Open ${app.title || app.slug}`)
 
 // Every form here goes to the Updates page as a new request to the
 // Operator, whose id it carries so sending twice sends once.
@@ -166,11 +176,23 @@ let needsCard = (space: Space, u: Update) => {
   let choices = [...u.choices ?? []].sort((a, b) =>
     +(b.label == u.recommended) - +(a.label == u.recommended)
   )
+  let head = h(
+    Card.Head,
+    null,
+    h(State, { mod: 'negative' }, 'Needs you'),
+    h(
+      'span',
+      { class: 'Update_When' },
+      stamp(u),
+      ' · ',
+      h('a', { href: chatPath(space.slug, u.chat) }, 'See the chat'),
+    ),
+  )
   if (u.shown?.length) {
     return h(
       Card,
       { class: 'Update Update-needs', id: `u-${u.eid}` },
-      h(Card.Head, null, h(State, { mod: 'negative' }, 'Needs you'), stamp(u)),
+      head,
       words(u.words),
       shownChoices(space, u, choices),
       replying(space, u),
@@ -179,7 +201,7 @@ let needsCard = (space: Space, u: Update) => {
   return h(
     Card,
     { class: 'Update Update-needs', id: `u-${u.eid}` },
-    h(Card.Head, null, h(State, { mod: 'negative' }, 'Needs you'), stamp(u)),
+    head,
     words(u.words),
     choices.length
       ? h(
@@ -237,23 +259,66 @@ let replying = (space: Space, u: Update) =>
     ),
   )
 
+// A notice put away: it leaves their Updates until something happens on it.
+let dismissing = (space: Space, u: Update) =>
+  form(
+    space,
+    [['dismiss', u.eid]],
+    h(Button, { mod: 'quiet', type: 'submit' }, 'Dismiss'),
+  )
+
+// A notice: its subject and a way to put it away, its words, when it came
+// and where it came from, and a way to ask about it.
 let card = (env: Env, space: Space, u: Update, apps: Apps) => {
   if (u.needs) return needsCard(space, u)
-  let lead = leads(env, space, u, apps)
+  let away = u.dismissed ? null : h(Card.Actions, null, dismissing(space, u))
   return h(
     Card,
     { class: u.unread ? 'Update Update-new' : 'Update', id: `u-${u.eid}` },
+    u.subject || away
+      ? h(
+        Card.Head,
+        null,
+        u.subject
+          ? h(Card.Title, { class: 'Update_Subject' }, u.subject)
+          : null,
+        away,
+      )
+      : null,
     words(u.words),
     h(
       'p',
       { class: 'Update_Meta' },
       stamp(u),
-      lead ? [' · ', lead] : null,
+      ' · ',
+      leads(env, space, u, apps),
       u.unread ? [' · ', h(State, { mod: 'positive' }, 'New')] : null,
     ),
     replying(space, u),
   )
 }
+
+/** The notices a person dismissed, newest first, and the way back to the
+ * rest. */
+export let dismissedUpdates = (
+  env: Env,
+  space: Space,
+  { updates }: Updates,
+  apps: Apps = [],
+) =>
+  h(
+    Fragment,
+    null,
+    h(
+      'p',
+      { class: 'Note Update_About' },
+      'What you dismissed. Each comes back to your Updates when something new happens on it. ',
+      h('a', { href: managePath('updates', space.slug) }, 'Back to Updates'),
+    ),
+    updates.length
+      ? updates.map((u) => card(env, space, u, apps))
+      : h('p', { class: 'Update_Meta' }, 'Nothing dismissed.'),
+  )
 
 /** How long the Updates page waits on the last day's visits before it is
  * drawn without them: they are a curiosity, never worth a slow page. */
@@ -351,12 +416,22 @@ export let updates = (
         `When ${space.operator} finishes something, fixes an app, or someone joins, it shows here.`,
       ),
     ),
+    h(
+      'p',
+      { class: 'Update_Meta' },
+      h(
+        'a',
+        { href: managePath('updates', space.slug) + '?dismissed' },
+        'See what you dismissed',
+      ),
+    ),
   )
 }
 
-/** What a person sends from their Updates: a choice, or words about one.
- * Either goes into their conversation with the Operator, and the chat it
- * went to opens. */
+/** What a person sends from their Updates: a choice, or words about one,
+ * either of which goes into their conversation with the Operator, and the
+ * chat it went to opens; or a notice dismissed, which leaves them on their
+ * Updates without it. */
 export let updatesAnswer = async (
   req: Request,
   env: Env,
@@ -365,6 +440,15 @@ export let updatesAnswer = async (
 ) => {
   let form = await req.formData()
   let field = (name: string) => String(form.get(name) ?? '')
+  if (form.has('dismiss')) {
+    await operatorDoor(env, space, who, 'updates', {
+      dismiss: field('dismiss'),
+    })
+    return new Response(null, {
+      status: 303,
+      headers: { location: managePath('updates', space.slug) },
+    })
+  }
   let { request } = await operatorDoor(
     env,
     space,

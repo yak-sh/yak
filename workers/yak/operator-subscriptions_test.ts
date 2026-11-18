@@ -106,7 +106,10 @@ let service = operatorService(env, held, {
     let items = last?.kind == 'result'
       ? (results.push(last.output), reply('Done.'))
       : words.includes('Tell them which meetings changed.')
-      ? reply('The budget hearing is new.')
+      ? call('notification_send', {
+        subject: 'Notices: a budget hearing was added',
+        text: 'The budget hearing is new.',
+      })
       : cancel
       ? call('subscription_cancel', { subscription: cancel })
       : planned
@@ -171,7 +174,7 @@ test('subscription_set reads the query as the person, and what it answers now is
   assertEquals(quiet, 0)
 })
 
-test("a change in the query's rows is one turn with what changed, answered in their Updates", () => {
+test("a change in the query's rows is one turn with what changed, which tells them in their Updates", () => {
   let asking = request.operator_request as Record<string, unknown>
   assertEquals(asking.person, person)
   assertEquals(asking.about, sub.entity.eid)

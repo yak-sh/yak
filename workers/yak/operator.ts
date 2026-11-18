@@ -312,7 +312,7 @@ let ON_TASK =
 // What every session is told where it is given the tool that asks the person
 // it works for to choose (operator-updates.ts).
 let ASKING =
-  ' Ask the person you work for: the question reaches them in their Updates under Needs you, with a button for each choice, and what they choose comes back to you in your conversation with them. When they are not in this conversation, tell them it waits with notification_send. Use it for a choice that is theirs to make (spending money, sending to people, deleting, or a direction their taste settles), not to confirm routine work. A choice can show what it means beside it, by an id in its shows: an image’s attachment id (from image_new, or a file sent in the conversation), a doc’s id for prose, or a draft’s id (from app_files) to show that draft of an app as it stands, each on its own preview, so several directions can be chosen between; an app’s eid shows their own draft of it.'
+  ' Ask the person you work for: the question reaches them in their Updates under Needs you, with a button for each choice, and what they choose comes back to you in your conversation with them. It is shown alone there, read later and apart from this conversation, so its question says in plain words, to them, what it is about and what choosing does. When they are not in this conversation, tell them it waits with notification_send. Use it for a choice that is theirs to make (spending money, sending to people, deleting, or a direction their taste settles), not to confirm routine work. A choice can show what it means beside it, by an id in its shows: an image’s attachment id (from image_new, or a file sent in the conversation), a doc’s id for prose, or a draft’s id (from app_files) to show that draft of an app as it stands, each on its own preview, so several directions can be chosen between; an app’s eid shows their own draft of it.'
 
 // What the Operator is told of the spaces it reaches beyond its own.
 let told = (
@@ -941,10 +941,14 @@ let taskOf = async (store: Store, session: string) => {
   return String(comp(link, 'edge')?.from ?? '')
 }
 
-// What a person is told before the answer of a conversation a fixed yaks.app
-// bug had stopped and that was run again.
-let RERAN =
-  'This stopped because of a problem in yaks.app. That problem is fixed now, so it ran again:'
+// What a person is told of a conversation a fixed yaks.app bug had stopped
+// and that was run again; what came of it is in its chat, and whatever it
+// means them to read it tells them itself (notification_send).
+let RERAN = {
+  subject: 'Work that stopped has started again',
+  words:
+    "Something you asked for stopped because of a problem in yaks.app. That problem is fixed now, so the work started again from where it stopped. You don't need to do anything.",
+}
 
 // The way a request is answered: its channel, and whom it reaches by it.
 let routeOf = (request?: Comp) =>
@@ -961,6 +965,16 @@ let HOSTED =
 // The failures of a machine's step that say its tunnel did not reach it, and
 // how long a turn waits after its machine's providers refused it (ms).
 let REACHES = new Set(['unreachable', 'stalled'])
+
+// The channels whose run nobody watches as it goes, by what the run was
+// doing, said to its person: none of it reaches them unless the run tells
+// them (notification_send), or could not finish (`stoppedNotice`).
+let UNWATCHED: Record<string, (app: string) => string> = {
+  error: (app) => `fixing an error in ${app}`,
+  wake: () => 'doing something you set it to do later',
+  subscription: () => 'looking into a change it watches for you',
+  escalated: () => 'handling a reply someone sent you',
+}
 let SPENT = 60 * 60_000
 
 /**
@@ -1396,6 +1410,29 @@ export let operating = (
   // channel they came by: a quick word when the conversation forks, and the
   // outcome when the fork comes back. A helper's end is told to the session
   // that started it, not to the person.
+  // The one notice a run nobody watches gets when it could not finish: what
+  // it was doing, that yaks.app stopped it, and that nothing waits on them.
+  let stoppedNotice = async (r: Bundle, space: string, session: string) => {
+    let asked = comp(r, 'operator_request')!
+    let [at, held] = await Promise.all([
+      dir().at(space),
+      asked.app ? dir().appAt(String(asked.app)) : null,
+    ])
+    if (!at) return []
+    let doing = UNWATCHED[String(asked.channel)](
+      held?.app.title || held?.app.slug || 'one of your apps',
+    )
+    return [notification({
+      to: String(asked.person),
+      subject: `${at.operator} couldn't finish ${doing}`,
+      words:
+        `${at.operator} was ${doing} when something went wrong on yaks.app's side, so it stopped before finishing. The people who run yaks.app have been told. You don't need to do anything.`,
+      ...asked.app ? { about: String(asked.app) } : {},
+      by: space,
+      via: session,
+      id: 'stopped|' + r.entity.eid,
+    })]
+  }
   let answered = async (session: string) => {
     let [row] = await g.get([session], ['spawned', 'occurrence'])
     let reply = await answerOf(g, session, NAMING)
@@ -1477,20 +1514,18 @@ export let operating = (
       await unfinished(session, reply.fault, 'operator conversation')
     }
     if (kept) return
-    // A break's fix nobody asked for: what came of it is told to everyone
-    // in the space, in their Updates (operator-updates.ts).
-    let fixes = space && task
-      ? requests.filter((r) => comp(r, 'operator_request')?.channel == 'error')
-      : []
-    // A wake-up that fired, a subscription that saw a change, what an app
-    // told, or what another conversation raised, is told to the person it is
-    // for, in their Updates, as what came of it: the quick word when the
-    // conversation forks, and the outcome in its place when the fork comes
-    // back.
-    let woken = requests.filter((r) =>
-      ['wake', 'subscription', 'app', 'escalated'].includes(
-        String(comp(r, 'operator_request')?.channel),
+    // A run nobody watches (a break's fix, a wake-up that fired, a
+    // subscription that saw a change, what another conversation raised)
+    // tells its person what it means them to read itself, with
+    // notification_send; its last words stay in its chat. One that could
+    // not finish is told for it, in plain words.
+    let unwatched = reply.broke && space
+      ? requests.filter((r) =>
+        UNWATCHED[String(comp(r, 'operator_request')?.channel)]
       )
+      : []
+    let stopped = await Promise.all(
+      unwatched.map((r) => stoppedNotice(r, space!, session)),
     )
     // A conversation a yaks.app bug had stopped, taken up again once it was
     // fixed (operator-rerun.ts): its person is told so once, with what came
@@ -1503,29 +1538,15 @@ export let operating = (
         let asked = comp(r, 'operator_request')!
         return notification({
           to: String(asked.person),
-          words: `${RERAN}\n\n${reply.text}`,
+          subject: RERAN.subject,
+          words: RERAN.words,
           about: task || String(asked.about ?? session),
           by: space,
-          id: r.entity.eid,
+          via: session,
+          id: 'reran|' + r.entity.eid,
         })
       }),
-      ...fixes.map((r) =>
-        notification({
-          to: space!,
-          words: reply.text,
-          about: task,
-          by: space,
-          id: r.entity.eid,
-        })
-      ),
-      ...woken.map((r) =>
-        notification({
-          to: String(comp(r, 'operator_request')!.person),
-          words: reply.text,
-          by: space,
-          id: r.entity.eid,
-        })
-      ),
+      ...stopped.flat(),
       ...comment
         ? [{
           entity: { eid: comment },

@@ -325,7 +325,13 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
     let shown = await shownAnswer(req, env, space, who)
     if (shown) return shown
     let { updatesPage } = await import('./operator-page.ts')
-    return updatesPage(env, space, who, await beside(dir, space, who))
+    return updatesPage(
+      env,
+      space,
+      who,
+      await beside(dir, space, who),
+      new URL(req.url).searchParams.has('dismissed'),
+    )
   }
   // Its Matches are its members' to pick in (matches.ts).
   if (view == 'matches' && writes(who.role) && !space.trashed) {

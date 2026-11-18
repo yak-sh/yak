@@ -258,11 +258,11 @@ test("the writer's side gets back only what the person's side chose to say, whic
   assertEquals(seen.includes(PRIVATE), false)
   assertEquals(seen.includes('it was free, so I confirmed it'), false)
   assertEquals(seen.includes('Jeff confirmed Tuesday'), false)
-  // The answer told in the person's Updates.
+  // The answer stays in its chat: only notification_send tells the person.
   let [told] = await store.g.get([
     derivedEid('operator-told|' + raised.entity.eid),
   ])
-  assertEquals((told.notification as { to: string }).to, person)
+  assertEquals(told, undefined)
 })
 
 test('a conversation raises only on a reply of its own, and answers only what was raised with it', async () => {

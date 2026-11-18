@@ -237,9 +237,8 @@ let told = async (run: Bundle) =>
 let scriptTold = await told(scriptRun)
 let helperTold = await told(helperRun)
 
-test('a call run tells the person its outcome; a helper run tells only through notification_send', () => {
-  equal(scriptTold, 1)
-  equal(helperTold, 0)
+test('a run keeps its outcome in its own chat, and tells the person only through notification_send', () => {
+  equal([scriptTold, helperTold], [0, 0])
 })
 
 test('a weekly code_mode call keeps its outcome without asking a model', () => {

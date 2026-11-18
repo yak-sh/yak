@@ -64,7 +64,10 @@ let service = operatorService(
     let items = last?.kind == 'result'
       ? (results.push(last.output), reply('Done.'))
       : words.includes('Remind them to call Mom.')
-      ? reply('Time to call Mom.')
+      ? call('notification_send', {
+        subject: 'Reminder: call Mom',
+        text: 'Time to call Mom.',
+      })
       : cancel
       ? call('wake_cancel', { wake: cancel })
       : planned
@@ -126,7 +129,7 @@ test('wake_set keeps a one-shot in ten minutes, as the person, and the alarm com
   assertEquals(next, Date.parse(wake.at))
 })
 
-test("a firing is the wake-up's words in the person's conversation, and its answer is in their Updates", () => {
+test("a firing is the wake-up's words in the person's conversation, and it tells them in their Updates", () => {
   let asking = request.operator_request as Record<string, unknown>
   assertEquals(asking.person, person)
   assertEquals(asking.about, set.entity.eid)

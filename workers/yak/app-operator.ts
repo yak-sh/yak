@@ -33,6 +33,7 @@ export let told = async (
       words,
       about: request.app,
       by: request.space,
+      ...held?.session ? { via: root } : {},
       id,
     }),
     ...held?.session
