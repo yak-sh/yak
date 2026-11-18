@@ -3,8 +3,9 @@ import { ownedPrefix } from './file-root.ts'
 // Deletion first keeps a recoverable trash mark. Only an owner's confirmed
 // purge removes app stores, files or shared names; the daily sweep never does.
 import { r2RawObjects } from './lib/objects.ts'
+import { purgeParts } from '@yaks/blob'
 import { blobPrefix, receiptPrefix, uploadPrefix } from './blob-key.ts'
-import { type Bundle, minted } from '@yaks/graph'
+import { type Bundle, dead, minted } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { declarationOf, keepDeclaration } from './declaration.ts'
 import { sandboxed } from '@yaks/platform/installs'
@@ -51,7 +52,7 @@ import { unmail } from './domain-mail.ts'
 import { unmailSpace } from './space-mail.ts'
 import { bound, type Env } from './env.ts'
 import { apex, type Host as HostEnv } from '@yaks/platform/host'
-import { destroyedAll } from './sandbox.ts'
+import { purgedAll } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
 import { cleared } from './sample.ts'
@@ -60,7 +61,7 @@ import { plans } from './payments.ts'
 import { type Pinner, versions } from './versions.ts'
 import { own } from '@yaks/platform/versions'
 import { holding, pruned } from './written.ts'
-import { retiring, retiringPrefix } from './file-retirement.ts'
+import { purgedPrefix, retiring, retiringPrefix } from './file-retirement.ts'
 import { refuse } from './tool.ts'
 import { dollars, released } from './numbers.ts'
 import { shown } from '@yaks/phone'
@@ -317,48 +318,60 @@ It stays recoverable until you choose to erase it from the trash.`
 If you did not ask for this, ignore this letter and nothing happens at all.`,
 })
 
-// Explicit erasure retires bytes; they outlive the store's restore window.
-let swept = (env: Env, prefix: string, owner: string) =>
-  retiringPrefix(
-    {
-      read: (query) => meta(env).query(query),
-      apply: (entities) => meta(env).apply(entities, KERNEL),
-    },
-    r2RawObjects(env.BLOBS),
-    prefix,
-    owner,
-  )
+// Ordinary cleanup retains bytes. Only a person's confirmed purge removes them.
+let swept = (env: Env, prefix: string, owner: string, purge = false) => {
+  let ledger = {
+    read: (query: Parameters<ReturnType<typeof meta>['query']>[0]) =>
+      meta(env).query(query),
+    apply: (entities: Bundle[]) => meta(env).apply(entities, KERNEL),
+  }
+  let blobs = r2RawObjects(env.BLOBS)
+  return purge
+    ? purgedPrefix(ledger, blobs, prefix)
+    : retiringPrefix(ledger, blobs, prefix, owner)
+}
 
 // App-owned bytes stay beneath the space's handle across address changes.
 let under = (space: Space, app?: App) =>
   app ? `${ownedPrefix(space, app)}/` : `${space.store}/`
 
 // A visitor's store gone (@yaks/platform/visits): what it saved, its uploads,
-// and the record on its browser's edge that sent them there, last, so an erase
-// that dies halfway is found again by the next sweep. Their next write at the
-// app starts a store afresh from its sample.
-export let unvisited = async (env: Env, { eid, visit }: Given) => {
+// and the record on its browser's edge that sent them there, last, so a purge
+// that dies halfway remains available for an explicit retry. Their next write
+// at the app starts a store afresh from its sample.
+export let unvisited = async (
+  env: Env,
+  { eid, visit }: Given,
+  purge = false,
+) => {
   await cleared(env, visit.store)
   // Only ever a visitor's own prefix: an empty one would be the whole bucket.
   if (visit.blobs.startsWith(VISITS) && visit.blobs != VISITS) {
-    await swept(env, visit.blobs, eid)
+    await swept(env, visit.blobs, eid, purge)
   }
   await meta(env).apply([{ entity: { eid }, visit: null }], KERNEL)
 }
 
 // One app's storage emptied — its bytes, the worker script that answers for
 // it, and the store that holds what it saved. Everything but the row, which
-// is the caller's to bury: app_delete tombstones the app, and a space's death
-// cascades to it. Answers the file paths the editor saw before erasure, so
+// is the caller's to bury after confirmed purge; a space's death cascades to
+// it. Answers the file paths the editor saw before erasure, so
 // the caller can say how many files a person wrote.
 export let emptied = async (
   env: Env,
   space: Space,
   app: App,
   who: Who,
+  purge = false,
 ) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let files = own(await holding(r2RawObjects(env.BLOBS), dir, app))
+  if (purge) {
+    await purgeParts(r2RawObjects(env.BLOBS), env.BLOBS, {
+      prefix: blobPrefix(space, app),
+      ledger: uploadPrefix(app),
+    })
+  }
   // The app's own code, which is not in the bucket: a script left in the
   // dispatch namespace would still answer at an address nothing stands at.
   if (env.CF_WORKERS_TOKEN) {
@@ -370,16 +383,16 @@ export let emptied = async (
     await drop(env, `app-${app.eid}-r-${(app.version ?? 0) + 1}`, true)
   }
   await deleteBindings(env, app)
-  await swept(env, under(space, app), app.eid)
+  await swept(env, under(space, app), app.eid, purge)
   // Uploads beside its files went with them; a store it was given at
   // adoption keeps its uploads where the store was born.
   if (!blobPrefix(space, app).startsWith(under(space, app))) {
-    await swept(env, blobPrefix(space, app), app.eid)
+    await swept(env, blobPrefix(space, app), app.eid, purge)
   }
-  await swept(env, `${space.store}/.releases/${app.eid}/`, app.eid)
-  await swept(env, `${space.store}/.declarations/${app.eid}/`, app.eid)
-  await swept(env, receiptPrefix(app), app.eid)
-  await swept(env, uploadPrefix(app), app.eid)
+  await swept(env, `${space.store}/.releases/${app.eid}/`, app.eid, purge)
+  await swept(env, `${space.store}/.declarations/${app.eid}/`, app.eid, purge)
+  await swept(env, receiptPrefix(app), app.eid, purge)
+  await swept(env, uploadPrefix(app), app.eid, purge)
   // The store is named for where the app was born (directory.ts storeName),
   // so emptying it is what keeps a later app at the same address from waking
   // up in this one's graph.
@@ -390,10 +403,19 @@ export let emptied = async (
   await r.body?.cancel()
   if (app.demo) await cleared(env, app.demo.store)
   for (let given of await visits(ledgerOf(env), { app: app.eid })) {
-    await unvisited(env, given)
+    await unvisited(env, given, purge)
   }
   return files
 }
+
+// A confirmed purge also removes recoverable copies of the rows it buried.
+let purgedRows = (dir: Directory, rows: Bundle[], eids: string[] = []) =>
+  dir.purgeTrashEntities([
+    ...new Set([
+      ...eids,
+      ...rows.filter(dead).map((b) => b.entity.eid),
+    ]),
+  ])
 
 // The act. Everything outside the directory first, the space row last; what
 // it answers is what the person is told went.
@@ -428,13 +450,13 @@ export let erase = async (
   await unmailSpace(env, dir, d.space)
   let files = 0
   for (let app of d.apps) {
-    files += (await emptied(env, d.space, app, who)).length
+    files += (await emptied(env, d.space, app, who, true)).length
   }
   // And whatever else stands under the space's own name — bytes an app that
   // was deleted before this tool existed left behind, or a delete that died
   // halfway and is being finished now. The slug is about to be somebody
-  // else's; the former owner's bytes stay recoverable for thirty more days.
-  await swept(env, under(d.space), d.space.eid)
+  // else's; this is the owner's confirmed permanent purge.
+  await swept(env, under(d.space), d.space.eid, true)
   // What the space kept outside the graph, and therefore outside the cascade
   // below: the builder's conversation, in an object of its own keyed by the
   // eid (build.ts), and the container that conversation compiled things in
@@ -443,15 +465,21 @@ export let erase = async (
   // named, and asking again finishes it, where the other order would leave a
   // transcript nothing points at and nobody can ask about again.
   await wiped(env, d.space.eid)
-  await destroyedAll(env, d.space)
+  await purgedAll(env, d.space)
   // The row that says the space exists. Its death cascades in the store to
   // every app, deploy, hostname and membership that named it (the platform
   // contract's `death = "cascade"`), so this one tombstone buries the
   // directory's whole record of the space — and frees the slug, which is
   // unique across the platform and now belongs to nobody.
-  await dir.apply({
+  let gone = await dir.apply({
     entities: [{ entity: { eid: d.space.eid }, tombstone: {} }],
   }, vouched(who))
+  await purgedRows(dir, gone, [
+    d.space.eid,
+    ...d.apps.map((a) => a.eid),
+    ...d.hosts.map((h) => h.eid),
+    ...d.lines.map((l) => l.eid),
+  ])
   // Everyone who was in it just lost every view its apps declared
   // (declared.ts, T-33004) — the same move being removed from a space makes.
   // A newcomer who was in it now holds nothing, and goes with it.
@@ -805,10 +833,11 @@ export let erased = async (
   if (declarations.length) {
     await dir.stamp({ entities: declarations }, vouched(who))
   }
-  let files = await emptied(env, space, app, who)
-  await dir.apply({
+  let files = await emptied(env, space, app, who, true)
+  let gone = await dir.apply({
     entities: [{ entity: { eid: app.eid }, tombstone: {} }],
   }, vouched(who))
+  await purgedRows(dir, gone, [app.eid])
   return files.length
 }
 
@@ -919,7 +948,7 @@ export let collected = async (
 export type Closing = {
   person: string
   trashed: boolean
-  /** Its last space is still waiting out a held number's trash grace. */
+  /** The account remains in trash until its owner confirms a purge. */
   pending?: boolean
   /** The account as it was named: its address, or its eid. */
   address: string
@@ -933,12 +962,17 @@ export type Closing = {
 // person a credential wrote back after their erase is a bare `person{}`
 // (T-147822). Such a row is nobody who signs in, so it is as expendable as a
 // test account, unless it has a number or is a newcomer still building.
-let account = async (env: Env, named: string) => {
+let accountRow = async (env: Env, named: string) => {
   let [row] = await meta(env).query(
     minted(named)
       ? line`.entity.eid=${named}&.person ?email ?phone ?newcomer ?trashed`
       : line`.person&.email.address=${named} ?trashed`,
   ) as unknown as DirRow[]
+  return row ?? null
+}
+
+let account = async (env: Env, named: string) => {
+  let row = await accountRow(env, named)
   if (!row) return null
   let address = row.email?.address
   let spent = address ? expendable(address) : !row.phone && !row.newcomer
@@ -956,7 +990,7 @@ export let closing = async (
   dir: Directory,
   address: string,
 ): Promise<Closing | null> => {
-  let row = await account(env, address)
+  let row = await accountRow(env, address)
   if (!row) return null
   let person = row.entity.eid
   let out: Closing = {
@@ -1002,8 +1036,8 @@ export let closed = async (
   address: string,
   who: Who,
 ) => {
-  let c = await closing(env, dir, address)
-  if (!c) return null
+  if (!await account(env, address)) return null
+  let c = (await closing(env, dir, address))!
   for (let space of c.spaces) {
     if (!space.trashed) await trashSpace(env, dir, space, who)
   }
@@ -1018,7 +1052,9 @@ export let untrashAccount = (dir: Directory, person: string, who: Who) =>
 export let trashedAccount: Kind<Closing> = {
   kind: 'account',
   find: async (dir, space, target, env) =>
-    space.slug == META.space ? await closing(env, dir, target) : null,
+    space.slug == META.space && await account(env, target)
+      ? await closing(env, dir, target)
+      : null,
   typed: (c) => c.address,
   title: (c) => `Erase ${c.address} from the trash?`,
   until: () =>
@@ -1057,13 +1093,17 @@ export let trashedAccount: Kind<Closing> = {
 // grant and invite naming them, then the stores their browsers were given
 // and they never installed, which nobody else can reach.
 let buried = async (env: Env, dir: Directory, person: string, who: Who) => {
+  let held = await dir.read(
+    line`(.browser_session.person=${person} | .oauth_grant.person=${person} | .grant.person=${person})`,
+  )
   let { unheld } = await import('./identity.ts')
   await unheld(env, person)
-  await dir.stamp({
+  let gone = await dir.stamp({
     entities: [{ entity: { eid: person }, tombstone: {} }],
   }, vouched(who))
+  await purgedRows(dir, gone, [person, ...held.map((b) => b.entity.eid)])
   for (let given of await visits(ledgerOf(env), { by: person })) {
-    await unvisited(env, given)
+    await unvisited(env, given, true)
   }
 }
 

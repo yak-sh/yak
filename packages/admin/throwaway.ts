@@ -9,9 +9,10 @@ import { person } from '@yaks/cli/config'
 import { AccountError, authorize, pick } from '@yaks/connections'
 import { authorizeCLI } from '@yaks/connections/authorize-cli'
 import { yaksApp } from '@yaks/connections/yaks-app'
-import { BOT } from '@yaks/platform/bots'
+import { ADMIN, BOT } from '@yaks/platform/bots'
 import { account } from './account.ts'
-import { erase, forget } from './erase.ts'
+import { erase } from './erase.ts'
+import { closeAccount } from './api.ts'
 import { Refused } from './refusal.ts'
 
 type Host = Parameters<CliCommand['run']>[1]
@@ -44,15 +45,13 @@ let held = async (host: Host, owner: string, address: string) => {
   }
 }
 
-// The account ends with its command, and its connection with it. One that
-// can't is left to the platform's daily sweep, and the command's own answer
-// stands; its connection ends all the same.
+// A temporary account enters recoverable trash when its command ends.
+// A failed cleanup keeps its credentials available for recovery.
 let erased = async (host: Host, address: string) => {
   try {
     await erase(host, (await account(host)(address)).bearer, address)
   } catch (error) {
-    console.error(`${address} stays until the daily sweep: ${error}`)
-    await forget(host, address)
+    console.error(`${address} and its credentials are retained: ${error}`)
   }
 }
 
@@ -69,6 +68,12 @@ export let temporary = async <T>(
   let address = `${name}${BOT}`
   let kept = await held(host, owner, address)
   try {
+    if (kept && address != ADMIN) {
+      let admin = await account(host)(ADMIN)
+      if ((await closeAccount(admin.bearer, address, true)).trashed) {
+        await closeAccount(admin.bearer, address, false, true)
+      }
+    }
     if (!kept) await enter(host, owner, address)
     return await run(address)
   } finally {

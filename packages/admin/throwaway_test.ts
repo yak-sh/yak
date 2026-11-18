@@ -55,6 +55,8 @@ let box = async () => {
       .account
   let signIns: string[] = []
   let erased: string[] = []
+  let restored: string[] = []
+  let remoteTrash = new Set<string>()
   // yaks.app's account door: it erases the account the request names, or
   // answers `status` without erasing it.
   let go = async (
@@ -62,18 +64,34 @@ let box = async () => {
     args: Record<string, unknown>,
     status = 200,
     failSignIn = false,
+    retain = false,
   ) => {
     let was = globalThis.fetch
-    globalThis.fetch = ((url: string) => {
+    globalThis.fetch = ((url: string, init?: RequestInit) => {
       let address = new URL(url).searchParams.get('address')!
       if (status != 200) {
         return Promise.resolve(
           Response.json({ error: { message: 'down' } }, { status }),
         )
       }
-      erased.push(address)
+      let method = init?.method ?? 'GET'
+      if (method == 'DELETE') {
+        erased.push(address)
+        remoteTrash.add(address)
+      }
+      if (method == 'POST') {
+        restored.push(address)
+        remoteTrash.delete(address)
+      }
       return Promise.resolve(
-        Response.json({ address, erased: true, spaces: [], seats: [] }),
+        Response.json({
+          address,
+          erased: !retain && method == 'DELETE',
+          trashed: retain && remoteTrash.has(address),
+          restored: method == 'POST',
+          spaces: [],
+          seats: [],
+        }),
       )
     }) as typeof fetch
     try {
@@ -90,7 +108,7 @@ let box = async () => {
       globalThis.fetch = was
     }
   }
-  return { host, kept, accounts, chosen, signIns, erased, go }
+  return { host, kept, accounts, chosen, signIns, erased, restored, go }
 }
 
 test('the command runs as the account, whose connection ends with it', async () => {
@@ -156,6 +174,7 @@ test('an account signed in before the command outlives it', async () => {
   let { host, kept, erased, go } = await box()
   try {
     await kept('reviewer@bot.yak.sh')
+    await kept('admin@bot.yak.sh')
     await go(() => Promise.resolve(0), { name: 'reviewer' })
     equal(erased, [])
   } finally {
@@ -163,12 +182,38 @@ test('an account signed in before the command outlives it', async () => {
   }
 })
 
-test('an account the platform could not erase still loses its connection', async () => {
+test('a repeated named throwaway restores its retained account before running', async () => {
+  let { host, kept, restored, go } = await box()
+  try {
+    await kept('admin@bot.yak.sh')
+    await go(() => Promise.resolve(0), { name: 'reviewer' }, 200, false, true)
+    let ran = false
+    await go(
+      () => {
+        equal(restored, ['reviewer@bot.yak.sh'])
+        ran = true
+        return Promise.resolve(0)
+      },
+      { name: 'reviewer' },
+      200,
+      false,
+      true,
+    )
+    equal(ran, true)
+  } finally {
+    await host.close()
+  }
+})
+
+test('an account the platform could not trash keeps its connection', async () => {
   let { host, accounts, erased, go } = await box()
   try {
     equal(await go(() => Promise.resolve(0), { name: 'reviewer' }, 503), 0)
     equal(erased, [])
-    equal(await accounts(), ['own@example.com'])
+    equal(
+      (await accounts()).sort(),
+      ['own@example.com', 'reviewer@bot.yak.sh'].sort(),
+    )
   } finally {
     await host.close()
   }

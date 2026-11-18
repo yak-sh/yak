@@ -363,6 +363,7 @@ test('only the admin, or the account itself, erases it; never a person or fixtur
   }
   assertEquals((await ask(PROBE, 'probe@bot.yak.sh', 'GET')).status, 403)
   for (let address of ['ada@example.com', 'yourname@bot.yak.sh']) {
+    assertEquals((await ask(JEFF, address, 'GET')).status, 200)
     let no = await ask(JEFF, address).catch((why) => why)
     assertEquals(no.code ?? no.body?.error?.code, 'access')
   }

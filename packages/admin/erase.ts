@@ -4,9 +4,7 @@ import { type Ctx, disconnect, toAccount } from '@yaks/connections'
 import { CallError } from '@yaks/tools/errors'
 import { closeAccount, type Closed } from './api.ts'
 
-/** What erasing took: the account's, and how many of this box's connections
- * to it ended. `gone` is an account the platform had already erased, as its
- * daily sweep does. */
+/** The account's state and local connections retained or removed. */
 export type Erased = Closed & { gone: boolean; connections: number }
 
 /** End this box's yaks.app connections to an account, answering how many. */
@@ -16,9 +14,8 @@ export let forget = async (c: Ctx, address: string): Promise<number> => {
   return kept.length
 }
 
-/** Erase a test account as `bearer`, and end this box's connections to it,
- * also when the account was gone already. A check changes nothing, and counts
- * the connections that would end. */
+/** Trash or restore the account, keeping its local credentials. A confirmed
+ * permanent purge or an already absent account can drop its connections. */
 export let erase = async (
   c: Ctx,
   bearer: string,

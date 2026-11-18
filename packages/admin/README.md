@@ -129,8 +129,8 @@ yak admin funnel 24h --as admin
 OAuth authorization as `yak auth`, runs the command with `YAK_AS` naming the
 account, and removes the connection when the command ends. Its sign-in code
 arrives in this graph's mail. It answers the command's exit code. Nothing
-outside that command's process tree runs as the account. The account is erased
-on yaks.app when the command ends, with what it made.
+outside that command's process tree runs as the account. The account enters
+recoverable trash on yaks.app when the command ends, retaining what it made.
 
 ```sh
 yak admin throwaway 'yak admin query reviewer/notes .doc' --name reviewer
@@ -138,9 +138,10 @@ yak admin throwaway 'yak admin query reviewer/notes .doc' --name reviewer
 
 A name that already has a connection uses it and leaves it in place. A process
 killed before it ends can leave its connection behind, which selects nothing
-without `--as`, and its account until the platform's daily sweep. A test account
-to keep across commands is an ordinary sign-in, and the sweep erases it after
-seven days without use; `erase` then ends the connection the box still keeps:
+without `--as`. Its account and credentials stay available for recovery; no
+sweep permanently erases either. Restore a trashed test account with
+`yak admin erase <address> --restore --as admin@bot.yak.sh`. A test account to
+keep across commands is an ordinary sign-in:
 
 ```sh
 yak auth yaks.app --as reviewer@bot.yak.sh

@@ -510,7 +510,7 @@ test('a deleted space takes its conversation and its workbench', async () => {
   assertEquals([...box.alive], [])
 })
 
-test('a live space enters trash before any permanent erase can happen', async () => {
+test('a space enters trash before a separate permanent purge', async () => {
   await using p = platform('trash first')
   let { dir, space } = await owned(p.env)
   let bytes = r2Objects(p.env.BLOBS)
@@ -522,6 +522,13 @@ test('a live space enters trash before any permanent erase can happen', async ()
   assert(out.trashed)
   assert((await dir.space('ada'))?.trashed)
   assert(await bytes.has('ada/precious'))
+  let retained = (await dir.space('ada'))!
+  await erase(p.env, dir, await census(dir, retained), {
+    person: ADA,
+    role: 'owner',
+  })
+  assertEquals(await dir.space('ada'), null)
+  assertEquals(await bytes.has('ada/precious'), false)
 })
 
 // The daily sweep (the `yak-trash` wake row, fired by the directory's alarm):

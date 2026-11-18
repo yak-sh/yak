@@ -600,12 +600,13 @@ vocabulary and seed rows are set up again only when a write changed them. From
 the first time its link is asked for (`app_draft.previewed`), each write to the
 draft, and its release, is told to the link's pages over that Store's socket
 (`{"draft":…}`), and public/release.js swaps a stylesheet in place or reloads.
-The Store's expiry alarm, thirty days after the draft's last change, removes its
-test data and script. Browser screenshots are `yak-browser`'s, the sibling
-behind the `BROWSER` service binding, which holds Cloudflare's browser in
-production and staging; no Browser Run REST token or local browser is needed.
-Browser time spends the account's existing budget at $0.09/hour, including
-failed captures. See
+The Store's expiry alarm, thirty days after the draft's last change, suspends it
+in recoverable trash. Its data, script and private files remain; the kernel's
+`/revive` door restores it without rearming expiry. Browser screenshots are
+`yak-browser`'s, the sibling behind the `BROWSER` service binding, which holds
+Cloudflare's browser in production and staging; no Browser Run REST token or
+local browser is needed. Browser time spends the account's existing budget at
+$0.09/hour, including failed captures. See
 [Cloudflare Browser Run](https://developers.cloudflare.com/browser-run/).
 
 The connector's image content accompanies structured console messages,
