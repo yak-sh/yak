@@ -102,7 +102,13 @@ export let collect = async (
     if (!seen || await retained(g, seen.entity.eid)) continue
     if (inUse(real, await processes())) continue
     let failed = () => 'failed' as Held
-    let held = await reclaim(path, 'refs/heads/main').catch(failed)
+    // A checkout still at the commit it was cut from holds no work of its own.
+    let base = (seen.checkout as Comp | undefined)?.base
+    let held = await reclaim(
+      path,
+      'refs/heads/main',
+      typeof base == 'string' ? base : undefined,
+    ).catch(failed)
     // Work left this long is no agent's in progress: it moves onto its
     // branch, where it costs no disk, and the checkout goes.
     if (held && held != 'failed' && quiet >= stale) {
