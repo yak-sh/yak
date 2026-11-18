@@ -17,6 +17,9 @@ import {
 } from '@yaks/sandbox/cloudflare'
 import { backoff, evicted, retried } from '@yaks/durable-object'
 import { listen, rostered, said, told } from './stream.ts'
+import { asked, WALKED, WALKTHROUGH } from './walkthrough.ts'
+import { fetchOf } from './door.ts'
+import { namespace } from '../../packages/durable-object/testing.ts'
 
 let space: Space = spaceOf({
   eid: 'space-eid',
@@ -190,6 +193,69 @@ let retrying = async (errors: Error[]) => {
 test('retried: every eviction is sent again after a pause, once per pause', async () => {
   for (let failure of failures) await retrying([failure()])
   for (let errors of runs(flagged)) await retrying(errors)
+})
+
+let deployed = () =>
+  Object.assign(
+    new Error('Durable Object reset because a newer deploy reached it: b'),
+    { durableObjectReset: true, remote: true },
+  )
+let interrupted = () =>
+  new Response(
+    new ReadableStream({
+      start(out) {
+        out.enqueue(new TextEncoder().encode('{"partial":'))
+        out.error(deployed())
+      },
+    }),
+  )
+
+test('walkthrough POST reads receive their whole answer across a deploy reset', async () => {
+  for (let path of [WALKTHROUGH, WALKED]) {
+    for (
+      let failure of [
+        deployed(),
+        interrupted(),
+        Response.json({
+          message: deployed().message,
+        }, { status: 500 }),
+      ]
+    ) {
+      let ns = namespace([failure, Response.json({ kept: true })])
+      let { env } = platform('test', { CLOCK: time, BUILDER: ns })
+      assertEquals(
+        await settled(asked(env, space.eid, path, { app: 'club', step: 0 })),
+        { kept: true },
+      )
+      assertEquals(ns.sent.map((s) => s.body), [
+        '{"app":"club","step":0}',
+        '{"app":"club","step":0}',
+      ])
+      assertEquals(ns.gets.length, 2)
+    }
+  }
+})
+
+test('a POST without replay permission hands its interrupted answer on once', async () => {
+  let ns = namespace([interrupted(), Response.json({ kept: true })])
+  let fetch = fetchOf(ns, space.eid, pause)
+  let answer = await fetch(() =>
+    new Request('http://builder/say', { method: 'POST', body: 'say once' })
+  )
+  await assertRejects(() => answer.text(), Error, 'newer deploy')
+  assertEquals(ns.sent.length, 1)
+})
+
+test('an object event stream remains live rather than waiting for its whole body', async () => {
+  let response = new Response(new ReadableStream({}), {
+    headers: { 'content-type': 'text/event-stream' },
+  })
+  let ns = namespace([response])
+  let answer = await fetchOf(ns, space.eid, pause)(() =>
+    new Request('http://wire/open')
+  )
+  assertEquals(answer, response)
+  await answer.body?.cancel()
 })
 
 for (let caller of callers) {

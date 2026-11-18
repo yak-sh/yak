@@ -20,8 +20,11 @@ test('a submission whose answer a restart cuts off is sent again and filed once'
             let submit = new URL(req.url).pathname.startsWith(FORM) &&
               req.method == 'POST'
             if (submit && cut++ == 0) {
-              throw new Error(
-                'Durable Object reset because a newer deploy reached it: b',
+              throw Object.assign(
+                new Error(
+                  'Durable Object reset because a newer deploy reached it: b',
+                ),
+                { durableObjectReset: true, remote: true },
               )
             }
             return answer

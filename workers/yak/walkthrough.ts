@@ -219,16 +219,19 @@ export let asked = async <T>(
   path: string,
   body: object,
 ) => {
-  let answer = await builderOf(env, space)(() =>
-    new Request(`https://builder${path}`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-yak-kernel': '1',
-        [SPACE]: space,
-      },
-      body: JSON.stringify(body),
-    })
+  let answer = await builderOf(env, space)(
+    () =>
+      new Request(`https://builder${path}`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-yak-kernel': '1',
+          [SPACE]: space,
+        },
+        body: JSON.stringify(body),
+      }),
+    // These POST doors only read the recorded conversation.
+    { replayable: true },
   )
   if (!answer.ok) {
     throw new Error(`${path} was not answered (${answer.status})`)

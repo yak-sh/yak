@@ -20,13 +20,16 @@ import { stamp } from './running.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { retried } from '@yaks/durable-object/resets'
 import {
+  type Call,
   type Door,
   doorOf as opened,
   IDEMPOTENCY,
   type Namespace,
+  received,
   resending,
   type Stub,
   stubOf,
+  thrown,
 } from '@yaks/durable-object/door'
 
 // A store reports the statements it ran for this fetch, including any store
@@ -285,18 +288,28 @@ export let doorOf = (
  * Each carries the caller's deploy, so an object still on older code restarts
  * onto it rather than answering for it (running.ts `behind`). Named an
  * `as`, each round trip is counted and timed under it, with the costs its
- * answer reports (`metered`). */
+ * answer reports (`metered`). Finite read answers are received inside the
+ * retry; a POST that reads or is idempotent opts in with `replayable: true`.
+ * Other POST bodies stay with their caller, since receiving their headers
+ * already says their work may have applied. */
 export let fetchOf = (
   ns: Namespace,
   name: string,
   wait?: (ms: number) => Promise<void>,
   as?: string,
 ) =>
-(make: () => Request): Promise<Response> => {
+(make: () => Request, options: Call = {}): Promise<Response> => {
   let send = () =>
     retried(
-      () => stubOf(ns, objectOf(name)).fetch(stamped(make())),
-      true,
+      async () => {
+        let req = stamped(make())
+        let answer = await stubOf(ns, objectOf(name)).fetch(req)
+        let read = req.method == 'GET' || req.method == 'HEAD'
+        return (options.replayable ?? read)
+          ? received(await thrown(answer))
+          : answer
+      },
+      options.replayable !== false,
       undefined,
       wait,
     )

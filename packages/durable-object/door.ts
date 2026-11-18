@@ -246,11 +246,10 @@ export let thrown = async (r: Response): Promise<Response> => {
   return r
 }
 
-// An answer a resend could replace, read whole inside the retry that sent it:
-// a restart that cuts off its body is sent again instead of reaching whoever
-// reads it later. A stream (an ndjson pour, a socket) is handed on as it comes,
-// since its reader is the one reading it live.
-let held = async (r: Response): Promise<Response> =>
+/** Read a finite answer whole inside the retry that sent it, so a restart
+ * cutting off its body is sent again. A live stream (ndjson, SSE or a socket)
+ * is handed on as it comes, since its reader owns its lifetime. */
+export let received = async (r: Response): Promise<Response> =>
   !r.body || r.status == 101 ||
     /ndjson|event-stream/.test(r.headers.get('content-type') ?? '')
     ? r
@@ -307,7 +306,7 @@ export let resending = (door: Door, o: Resend = {}): Door => {
     let safe = method == 'GET' || method == 'HEAD'
     let replayable = rebuildable(init) && options.replayable !== false
     let take = read ??
-      ((r: Response) => (replayable ? held(r) : r) as T | Promise<T>)
+      ((r: Response) => (replayable ? received(r) : r) as T | Promise<T>)
     return retried(
       async () => {
         try {

@@ -17,6 +17,8 @@ import {
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { retry as retryWrite } from './write-log.ts'
 import { counts, tallying } from './lib/hops.ts'
+import { directory } from './directory.ts'
+import { EPOCH } from './directory-copy.ts'
 
 // Every store door here sends again without pausing.
 let storeOf = (answers: Answer[], name = 'jeff') => {
@@ -55,6 +57,34 @@ test('every object is created beside the kernel, on a fresh stub per send', asyn
     ['ada/cookbook.1f7c3e', hint],
     [PLATFORM_OBJECT, hint],
   ])
+})
+
+test('a directory revision read receives its whole answer across a deploy reset', async () => {
+  let broken = new Response(
+    new ReadableStream({
+      start(out) {
+        out.error(Object.assign(
+          new Error(
+            'Durable Object reset because a newer deploy reached it: b',
+          ),
+          { durableObjectReset: true, remote: true },
+        ))
+      },
+    }),
+    { headers: { [EPOCH]: '1' } },
+  )
+  let { ns, store } = storeOf([
+    broken,
+    Response.json([], { headers: { [EPOCH]: '1' } }),
+  ], PLATFORM_STORE)
+  let dir = directory({
+    fetch: (req) => {
+      let url = new URL(req.url)
+      return store(url.pathname + url.search, req)
+    },
+  })
+  assertEquals(await dir.space('missing'), null)
+  assertEquals(ns.gets.length, 2)
 })
 
 test('an interrupted recovery command is not silently sent again', async () => {

@@ -107,6 +107,7 @@ export {
   doorOf,
   IDEMPOTENCY,
   type Namespace,
+  received,
   type Resend,
   resending,
   reset,

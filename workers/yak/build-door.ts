@@ -9,6 +9,7 @@ import { type Settings, worn } from './operator-persona.ts'
 import type { Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { answered } from './meta.ts'
+import type { Call } from '@yaks/durable-object/door'
 
 /** What a socket remembers about itself across a hibernation: who is on the
  * other end, and which space they opened it in. The attachment is the only
@@ -155,8 +156,8 @@ export let OWED = 'x-yak-owed'
  * as it is answered. */
 export let builderOf = (env: Env, space: string) => {
   let ask = fetchOf(env.BUILDER, space, jittered(env.CLOCK), 'operator_wait')
-  return async (make: () => Request): Promise<Response> => {
-    let answer = await ask(make)
+  return async (make: () => Request, options?: Call): Promise<Response> => {
+    let answer = await ask(make, options)
     if (!answer.headers.has(OWED)) return answer
     let had = !answer.body || answer.status == 101 ||
         /ndjson|event-stream/.test(answer.headers.get('content-type') ?? '')
