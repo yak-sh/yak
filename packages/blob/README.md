@@ -366,6 +366,12 @@ supplied holding columns names them. It is a storage primitive, so callers must
 also account for retained history and trash before requesting a release. Stores
 without `drop` keep everything.
 
+After a person's confirmed history purge, the plugin releases pooled bytes only
+when no live row, retained version, trash snapshot or plugin history still names
+them. It recognizes retired properties' stored addresses too. Storage without
+retained-value accounting and stores using custom integer references keep their
+bytes.
+
 ```ts
 import { equal } from '@yaks/testing'
 import { address, blobSchema, encode, sqliteBlobs } from '@yaks/blob'

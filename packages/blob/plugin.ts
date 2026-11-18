@@ -14,8 +14,9 @@ import type { Bundle, Comp } from '@yaks/graph/bundle'
 import { hook, type Plugin } from '@yaks/graph/plugin'
 import { after, each } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
-import { bodies, type Body } from './props.ts'
+import { bodies, type Body, holders } from './props.ts'
 import { address, type Blobs, encode } from './store.ts'
+import { purged } from './purge.ts'
 
 let STASH = '$blob'
 type Stored = { value: string; ref: string | number }
@@ -161,6 +162,7 @@ export let blobs = (
   }
   return {
     name: '@yaks/blob',
+    purged: opts.reference ? undefined : purged(store, holders(vocab)),
     // Preparing a body may retain external bytes or mint a local reference.
     admission: (bundles) => bundles.every((b) => !written(b, props).length),
     hooks: {
