@@ -36,16 +36,24 @@ same entity.
 
 The graph stores process state, never output. What a process prints stays in its
 stdout and stderr files: `await tail(eid, n)` reads their last lines, and
-`await clean(eid)` removes a finished run's files once its reader is done with
-them, and `sweep(age, opts, store)` cleans files with a launch marker and a
-complete exit code older than `age` milliseconds. With a store, it preserves
-sessions, services and processes whose exit is not recorded. Machines pass their
-store and share one sweep per process-file directory at most once an hour, with
-no overlapping sweeps. A service's output files are its log, appended to across
-attempts. Supervisor files are stored under `opts.dir`, then `$PROCESS_DIR`,
-then `$TASKS_HOME/processes`, then `~/.tasks/processes`. For tests, set
-`TASKS_HOME` instead of changing `HOME` so Deno can reuse its module cache. This
-changes supervisor file locations, not the child environment.
+`await clean(eid)` moves a finished run's files into private `.trash/` beside
+them once its reader is done with them, and `sweep(age, opts, store)` cleans
+files with a launch marker and a complete exit code older than `age`
+milliseconds. With a store, it preserves sessions, services and processes whose
+exit is not recorded. Machines pass their store and share one sweep per
+process-file directory at most once an hour, with no overlapping sweeps. A
+service's output files are its log, appended to across attempts. Supervisor
+files are stored under `opts.dir`, then `$PROCESS_DIR`, then
+`$TASKS_HOME/processes`, then `~/.tasks/processes`. For tests, set `TASKS_HOME`
+instead of changing `HOME` so Deno can reuse its module cache. This changes
+supervisor file locations, not the child environment.
+
+`@yaks/process/trash` supplies the host filesystem's shared `trash(path, root?)`
+and `restore(record)` operations. Each private record retains `source.json` with
+its original path and time plus `data` with the original bytes. The default root
+is `~/.yak/trash/files`, including files made in temporary directories.
+`restore` returns the restored path; a taken path receives a free name. No
+background job purges this trash.
 
 ## Launching and adopting processes
 

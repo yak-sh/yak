@@ -1,3 +1,4 @@
+import { trash } from '@yaks/process/trash'
 import * as disk from '@yaks/file/io'
 import * as system from '@yaks/process/system'
 // A managed session: the provider run as a detached command, its stdout read
@@ -509,13 +510,9 @@ export let emptyOf = (session: string, o: Opts = {}): string =>
 // A bare run's directory, made empty.
 let emptied = async (session: string, o: Opts): Promise<string> => {
   let dir = emptyOf(session, o)
-  await disk.remove(dir, { recursive: true }).catch(absent)
+  await trash(dir)
   await disk.mkdir(dir, { recursive: true })
   return dir
-}
-
-let absent = (e: unknown) => {
-  if (!(e instanceof disk.errors.NotFound)) throw e
 }
 
 // A run's own checkout, cut from main on a branch named
@@ -795,7 +792,7 @@ let onward = async (
 ): Promise<void> => {
   if (!well || !await parked(g, session)) {
     if (o.worktrees) await taken(g, checkoutOf(session, o.worktrees))
-    await disk.remove(emptyOf(session, o), { recursive: true }).catch(absent)
+    await trash(emptyOf(session, o))
     await clean(session, o)
   }
   if (well && await requested(g, session)) await start(g, session, o)
@@ -1119,10 +1116,11 @@ let taken = async (g: Graph, path: string): Promise<void> => {
   } catch {
     return
   }
-  // A directory without its checkout is a removal cut off part way, its
-  // process killed: Git removes only a clean checkout, so what is left is
-  // files nothing tracks, and the removal is finished.
-  if (!await locate(path)) return await disk.remove(path, { recursive: true })
+  // Lost Git metadata cannot establish that a directory holds no unique work.
+  if (!await locate(path)) {
+    await trash(path)
+    return
+  }
   let tree = await discover(g, path)
   if (comp(tree, 'worktree')?.managed && !await retained(g, tree.entity.eid)) {
     let base = comp(tree, 'checkout')?.base

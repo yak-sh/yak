@@ -1,3 +1,4 @@
+import { trash } from '@yaks/process/trash'
 import * as io from '@yaks/file/io'
 import { command as processCommand } from '@yaks/process/command'
 import { claudeDoc } from './vocab.ts'
@@ -293,7 +294,7 @@ let start = async (opts: Options, model: string, effort?: string) => {
   }
   child.status.then(ended, ended)
   await child.started.catch(async (error) => {
-    await io.remove(cwd, { recursive: true })
+    await trash(cwd)
     throw error
   })
   // A process waiting for its step never holds its host open; it ends when
@@ -307,7 +308,7 @@ let end = async (proc: Proc) => {
   proc.child.ref()
   proc.child.kill('SIGKILL')
   await proc.child.status.catch(() => {})
-  await io.remove(proc.cwd, { recursive: true })
+  await trash(proc.cwd)
 }
 
 let lines = (stream: ReadableStream<Uint8Array<ArrayBuffer>>) => {

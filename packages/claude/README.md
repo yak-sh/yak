@@ -46,7 +46,7 @@ the prompt cache and what was written to it, a write kept an hour counted apart
 since it lists at more. The reply names the release its alias resolved to, and
 the request is weighed at that release's price (@yaks/session `ask.served`).
 Claude's displayed dollar estimate is not a subscription charge and is not
-recorded as a paid API bill. Cancellation kills the child and removes its
+recorded as a paid API bill. Cancellation kills the child and trashes its
 directory.
 
 ## A process started before its step

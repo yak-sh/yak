@@ -36,7 +36,9 @@ waits on its background agents after its last turn, with no time limit, so they
 finish and report; a run stopped or crashed still takes them down, so the report
 names each subagent whose transcript never settled, whatever the run's last
 words said. Dirty or unlanded work is kept; landed checkouts and their branches
-are removed after the run ends.
+are removed after the run ends. A run directory whose Git metadata was lost
+moves to private filesystem trash, keeping its original path and bytes
+recoverable. Bare run directories move to trash when replaced or ended.
 
 Write a session and its first input in one transaction. A **bundle** is one
 entity's components as a JSON object, and a **batch** is a list of bundles

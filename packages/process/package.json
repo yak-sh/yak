@@ -17,7 +17,8 @@
     "./command": "./command.ts",
     "./modules": "./modules.ts",
     "./socket": "./socket.ts",
-    "./clock": "./clock.ts"
+    "./clock": "./clock.ts",
+    "./trash": "./trash.ts"
   },
   "license": "Apache-2.0",
   "description": "Starts, adopts and supervises operating-system processes, recording each one as a graph entity with its pid and exit code.",

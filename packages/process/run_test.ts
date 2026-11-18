@@ -31,7 +31,14 @@ test('output stays until its caller cleans the finished run', async () => {
   assertEquals(await tail('finished', 1, { dir: at }), ['kept'])
   await clean('finished', { dir: at })
   assertEquals(await tail('finished', 1, { dir: at }), [])
-  assertEquals([...Deno.readDirSync(at)], [])
+  assertEquals([...Deno.readDirSync(at)].map((e) => e.name), ['.trash'])
+  let kept = [...Deno.readDirSync(`${at}/.trash`)].map((e) =>
+    `${at}/.trash/${e.name}`
+  )
+  assertEquals(
+    kept.some((p) => Deno.readTextFileSync(`${p}/data`).startsWith('kept')),
+    true,
+  )
 })
 
 test('a tail answers the last whole lines, however long they are', async () => {
@@ -244,7 +251,14 @@ test('cleanup yields to its caller while removal is outstanding', async () => {
   await Promise.resolve()
   assertEquals(finished, false)
   await removing
-  assertEquals([...Deno.readDirSync(at)], [])
+  assertEquals([...Deno.readDirSync(at)].map((e) => e.name), ['.trash'])
+  let kept = [...Deno.readDirSync(`${at}/.trash`)].map((e) =>
+    `${at}/.trash/${e.name}`
+  )
+  assertEquals(
+    kept.some((p) => Deno.readTextFileSync(`${p}/data`).startsWith('kept')),
+    true,
+  )
 })
 
 test('cleanup delivers removal errors through its completion', async () => {

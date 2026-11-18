@@ -221,9 +221,13 @@ an empty object. Option keys belong to the plugin.
 
 The vault is where [@yaks/secrets](../secrets) keeps what is written through the
 graph: one private file per secret in a `secrets` directory beside the database
-(`~/.yak/secrets` for `~/.yak/yak.db`), or memory for a graph in memory.
-`fileVault` and `vaultOf` ([vault.ts](./vault.ts)) are exported for code that
-opens a graph without `compose`.
+(`~/.yak/secrets` for `~/.yak/yak.db`), or memory for a graph in memory. Removed
+and replaced file values are retained in the private `secrets/trash/` directory.
+Active reads exclude trash; `vault.trash()` lists archive metadata and
+`vault.restore(id)` recovers a saved version, retaining any displaced value. No
+background job purges this trash. `fileVault` and `vaultOf`
+([vault.ts](./vault.ts)) are exported for code that opens a graph without
+`compose`.
 
 At any depth in `with`, an object containing only `{ "secret": "NAME" }` reads
 that secret when the property is accessed: the local value in the vault, or else
@@ -881,7 +885,10 @@ stdout and stderr to the cron log, and retains only the last 8 KiB of stderr in
 the error. The report has `during.kind=backup` and `job`/`exit_code` tags;
 intake groups it into a bug like other box errors. A successful backup writes no
 report. Reporting failure never changes the backup's exit code. A restore
-(`bin/backup restore`) is a person's: it runs unbounded and reports nothing.
+(`bin/backup restore`) is a person's: it runs unbounded and reports nothing. The
+newest seven completed nights stay in `snapshots/`; older and incomplete nights
+move to `trash/snapshots/`, which is never automatically purged.
+`bin/backup restore <new dir> trash/<night>` restores a completed trashed night.
 
 The existing cron command invoking `bin/backup` needs no change. It reads the
 box config (`$YAK_CONFIG`, otherwise `$HOME/.yak/yak.json`) only for reporting,

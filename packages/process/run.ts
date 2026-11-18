@@ -1,6 +1,7 @@
 import * as disk from 'node:fs/promises'
 import * as system from './system.ts'
 import { detached } from './detached.ts'
+import { trash } from './trash.ts'
 // The supervisor: start a process, adopt one that is already running, pick
 // every unfinished one back up at start-up, and keep the wanted ones running.
 // Four entry points over one loop — watch the pid, write what the process
@@ -36,7 +37,7 @@ import { detached } from './detached.ts'
 //
 // What a process prints stays in those two files, never in the graph: output
 // is a log, and the graph records the process, not its log. A caller reads the
-// end of it with `tail`, and cleans the files once it is done with them.
+// end of it with `tail`, and moves the files into trash once it is done with them.
 
 import { bus, service } from './isolate.ts'
 import type { Bundle } from '@yaks/graph'
@@ -468,13 +469,20 @@ let clear = async (path: string) => {
 }
 
 /**
- * Remove a finished run's files: its output, and the supervisor's own.
+ * Trash a finished run's files: its output, and the supervisor's own.
  *
  * Whoever reads the output cleans once it is done with it, and nothing else
  * does: a service's output files are its log, appended to across attempts.
  */
 export let clean = async (eid: string, o: Opts = {}): Promise<void> => {
-  for (let path of Object.values(files(dirOf(o), eid))) await clear(path)
+  let dir = dirOf(o)
+  for (let path of Object.values(files(dir, eid))) {
+    let info = await fileInfo(path)
+    if (info?.isDirectory()) {
+      throw new Error(`A process file is a directory: ${path}`)
+    }
+    if (info) await trash(path, `${dir}/.trash`)
+  }
 }
 
 let fileInfo = async (path: string) => {
