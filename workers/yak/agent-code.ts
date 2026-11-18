@@ -1,6 +1,6 @@
 import { listing, type Options } from '@yaks/mcp'
 import { registry, runner } from '@yaks/tools'
-import { tool as codeMode } from '@yaks/code-mode'
+import { type Options as Coding, tool as codeMode } from '@yaks/code-mode'
 import { reaching, searching } from './agent.ts'
 import { inReach } from './declared.ts'
 import { stripping } from './esbuild.ts'
@@ -11,8 +11,10 @@ import { type ResultHost, resultStore, resultTools } from './result-tools.ts'
 import type { Tool } from '@yaks/graph'
 // Both agent doors offer short executions over the connector's tools. Each
 // nested call reads the caller's reach anew, including apps just deployed.
+// A host that narrows a turn once it read a stranger's words says which
+// nested answers brought them (`strangerWrote`), as it does for a direct call.
 export let coded = <T extends Options>(
-  opts: T,
+  opts: T & Pick<Coding, 'strangerWrote'>,
   ctx: Ctx,
   local?: ResultHost,
   remote: Tool[] | (() => Promise<Tool[]>) = [],
@@ -73,6 +75,7 @@ export let coded = <T extends Options>(
           })
         },
         kept: resultStore(ctx, args, local),
+        strangerWrote: opts.strangerWrote,
       },
     )
   let base = offered()

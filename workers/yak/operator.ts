@@ -492,6 +492,8 @@ export let operatorRoster = async (
   // (operator-store.ts `readable`): an eid in its prose as the entity's id.
   // A read of the apps whose rows a stranger wrote is `heard`
   // (operator-heard.ts), which leaves the rest of the turn its reads.
+  let stranger = async (t: { readOnly?: boolean }, out: Bundle[]) =>
+    !!t.readOnly && await strangerWrote(g, ctx.dir, reach, ctx.person, out)
   let run = (
     t: NamedTool,
     host: Graph,
@@ -537,8 +539,10 @@ export let operatorRoster = async (
     }
     if (fault) throw fault
     let said = from == 'own' ? await work.readable(out) : out
-    let heard = from == 'apps' && t.readOnly &&
-      await strangerWrote(g, ctx.dir, reach, ctx.person, out)
+    // A code_mode script's reads are checked as it makes them, and its
+    // answer is `heard` when one of them was.
+    let heard = out.some((b) => b.heard) ||
+      from == 'apps' && await stranger(t, out)
     // Applied tools already wrote through their own store; generic writes
     // return patches and use the same graph application as the connector.
     return {
@@ -567,6 +571,7 @@ export let operatorRoster = async (
       calls: ledger(g, session ? recorded(work.g, session, space) : work.g),
       report: (e) => caught(e, { request: 'operator code mode' }),
       refused: hearing(ctx.env, () => ({ space, session })),
+      strangerWrote: stranger,
     },
     ctx,
     { graph: work.g, person: ctx.person, space },

@@ -1,17 +1,22 @@
 // A member's Operator reading their app's rows (T-1064): an answer is `heard`
 // when a stranger wrote a row in it, a person outside the space or a visitor
-// who never signed in, and stays ordinary for the space's own people.
+// who never signed in, and stays ordinary for the space's own people. A
+// code_mode script's reads are heard the same way (T-1066).
 import { equal, test } from '@yaks/testing'
 import { mint } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
+import { evaluate } from '../../packages/code-mode/testing.ts'
 import type { Env } from './env.ts'
 import { client, connector, fresh, signIn } from './probe.ts'
 import { directoryOf } from './directory.ts'
+import { compiler } from './testing.ts'
 import { operatorContext, operatorRoster } from './operator.ts'
 import { operatorMemory } from './operator-testing.ts'
 
 let env!: Env
-let k = await fresh({}, (e) => (env = e))
+let k = await fresh({}, (e) => {
+  env = Object.assign(e, { CODE_MODE: evaluate, ESBUILD: compiler() })
+})
 let [owner, colleague, stranger] = [
   await signIn(k),
   await signIn(k),
@@ -47,19 +52,33 @@ await client(k, host, app).applied(note('visitor'))
 
 let ctx = await operatorContext(env, { person: owner.person }, space, () => dir)
 let tools = await operatorRoster(ctx, operatorMemory(), { space: space.eid })
-let heard = async (by: string) => {
-  let args = { app, q: `.note.by=${by}` }
-  let out = await tools.find((t) => t.name == 'graph_query')!.run(args, {
+let heard = async (name: string, args: Record<string, unknown>) => {
+  let out = await tools.find((t) => t.name == name)!.run(args, {
     session: mint(),
-    call: { entity: { eid: mint() }, call: { to: toolEid('graph_query') } },
+    call: { entity: { eid: mint() }, call: { to: toolEid(name) } },
     entries: [],
   })
   return typeof out == 'object' && !!out.with?.heard
 }
+let writers = ['owner', 'colleague', 'stranger', 'visitor']
 
 test("an Operator's read is heard when a stranger wrote a row of it, and not when its space's people did", async () => {
   equal(
-    await Promise.all(['owner', 'colleague', 'stranger', 'visitor'].map(heard)),
+    await Promise.all(
+      writers.map((by) => heard('graph_query', { app, q: `.note.by=${by}` })),
+    ),
+    [false, false, true, true],
+  )
+})
+
+test("a code_mode script's read is heard as a direct one is", async () => {
+  equal(
+    await Promise.all(writers.map((by) =>
+      heard('code_mode', {
+        script: `await tools.yaks.graph_query({app:'${app}',q:'.note.by=${by}'})
+          return 'read'`,
+      })
+    )),
     [false, false, true, true],
   )
 })

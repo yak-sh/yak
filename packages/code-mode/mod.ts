@@ -43,6 +43,9 @@ export type Receipt = {
   isError?: boolean
   error?: string
   pending?: boolean
+  /** its answer brought words someone the caller does not work for wrote
+   * (`Options.strangerWrote`) */
+  heard?: true
 }
 export type Answer = { value: unknown; calls: Receipt[]; error?: string }
 /** The host admits reads of results kept by its model-facing harness. */
@@ -91,6 +94,10 @@ export type Options = Pick<Opts, 'clock' | 'report' | 'refused'> & {
   current?: () => Promise<Runner>
   /** the results the host's harness kept, read by `results.read` */
   kept?: Kept
+  /** whether a nested call's answer brought words someone the caller does
+   * not work for wrote: its receipt says `heard`, and so does the
+   * execution's answer, as a direct call's result would */
+  strangerWrote?: (tool: Tool, answer: Bundle[]) => Promise<boolean>
 }
 let said = (r: Result) => r.content.map((c) => c.text).join('\n').slice(0, 1024)
 
@@ -223,6 +230,9 @@ export let execute = async (
           throw new CallError('limit', TOO.system)
         }
         if (failed) Object.assign(made, { isError: true, error: said(result) })
+        else if (await opts.strangerWrote?.(admitted.tool, answer)) {
+          made.heard = true
+        }
         return result
       })()
       pending.add(work)
@@ -340,9 +350,11 @@ export let tool = (
     if (bytes(value) > LIMITS.systemBytes) {
       throw new CallError('limit', TOO.system)
     }
+    let heard = 'calls' in value && value.calls.some((c) => c.heard)
     return [{
       entity: { eid: mint() },
       output: { source: asked.entity.eid, value },
+      ...heard ? { heard: {} } : {},
     }]
   },
 })
