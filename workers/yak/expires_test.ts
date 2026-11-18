@@ -4,9 +4,8 @@ import { durable } from './testing.ts'
 import type { Env } from './env.ts'
 import { driver } from '@yaks/durable-object'
 import { col, eq, lit, select, table } from '@yaks/sql'
-import { within } from './defects.ts'
 
-let fixture = (name = `preview/${crypto.randomUUID()}`, remove = () => {}) => {
+let fixture = (name = `preview/${crypto.randomUUID()}`) => {
   let time = clock(1_000)
   let storage = durable()
   let removed: string[] = []
@@ -15,7 +14,6 @@ let fixture = (name = `preview/${crypto.randomUUID()}`, remove = () => {}) => {
   let env = {
     BLOBS: {
       delete: (key: string) => {
-        remove()
         removed.push(...[key].flat())
         return Promise.resolve()
       },
@@ -47,6 +45,7 @@ let at = 61_000
 let source = 'ada.123456/.releases/app-id/release-id'
 pending.privateFiles.push(source + '/private/generated.png')
 let scheduled = await pending.post('/expires', { at, source })
+await pending.storage.put('saved-input', 'a person wrote this')
 await pending.storage.deleteAlarm()
 await pending.store.alarm()
 let alarm = await pending.storage.getAlarm()
@@ -68,11 +67,13 @@ test('a temporary store keeps its expiry alarm across an earlier wake and evicti
   equal(alarm, at)
 })
 
-test('expiry removes the private snapshot and store data and leaves it dormant', () => {
-  equal(pending.removed, [source + '.json', source + '/private/generated.png'])
+test('expiry keeps the private snapshot and saved data in dormant trash', async () => {
+  equal(pending.removed, [])
+  equal(await pending.storage.get('saved-input'), 'a person wrote this')
+  equal(await pending.storage.get('trashed'), { at, source })
   equal(after, undefined)
   equal(dormant, true)
-  equal(tables, [])
+  equal(tables.length > 0, true)
   equal(closed.status, 404)
 })
 
@@ -92,36 +93,11 @@ test('only the kernel can expire a temporary store, and malformed deadlines sche
   equal(await malformed.storage.get('expires'), undefined)
 })
 
-let unavailable = true
-let retry = fixture(undefined, () => {
-  if (unavailable) throw new Error('bucket unavailable')
-})
-await retry.post('/expires', { at, source })
-await retry.time.advance(at - retry.time.now())
-let failures = 0
-await within(
-  {
-    ERRORS: {
-      send: () => {
-        failures++
-        return Promise.resolve()
-      },
-    },
-  },
-  {},
-  () => retry.open().alarm(),
-  retry.time,
-)
-let kept = await retry.storage.get('expires')
-let again = await retry.storage.getAlarm()
-unavailable = false
-await retry.time.advance(Store.RETRY)
-await retry.open().alarm()
+let restored = await pending.post('/revive', {})
 
-test('failed expiry is reported and retried with the cleanup receipt intact', async () => {
-  equal(failures, 1)
-  equal(kept, { at, source })
-  equal(again, at + Store.RETRY)
-  equal(retry.removed, [source + '.json'])
-  equal(await retry.storage.get('expires'), undefined)
+test('reviving temporary trash keeps its data and does not rearm expiry', async () => {
+  equal(restored.status, 200)
+  equal(await pending.storage.get('dormant'), false)
+  equal(await pending.storage.get('saved-input'), 'a person wrote this')
+  equal(await pending.storage.get('expires'), undefined)
 })

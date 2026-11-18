@@ -1,11 +1,7 @@
-// A temporary store owns its deadline and the resources that leave with it.
-// The alarm keeps this receipt until every external deletion has succeeded.
-import { drop } from './dispatch.ts'
-import type { Env } from './env.ts'
-import { META } from './release_index.ts'
+// Expiry suspends temporary stores with their original receipt and bytes.
+// Time passing never authorizes a permanent purge.
 import { Refused } from '@yaks/graph/errors'
 import type { App, Space } from './directory.ts'
-import { r2RawObjects } from './lib/objects.ts'
 
 export type Context = { app: App; space: Space }
 export type Expiry = {
@@ -35,14 +31,11 @@ export let expiring = (value: unknown): Expiry => {
   }
 }
 
-export let expired = async (env: Partial<Env>, value: Expiry) => {
-  if (value.script) await drop(env as Env, value.script, true)
-  if (value.source) {
-    if (!env.BLOBS) throw new Error('temporary store has no file bucket')
-    let files = r2RawObjects(env.BLOBS)
-    await files.delete([
-      value.source + META,
-      ...await files.list(`${value.source}/private/`),
-    ])
-  }
+/** Move an expiry receipt into retained trash before removing its alarm work. */
+export let expired = async (storage: {
+  put?(key: string, value: unknown): Promise<void>
+  delete?(key: string): Promise<unknown>
+}, value: Expiry) => {
+  await storage.put?.('trashed', value)
+  await storage.delete?.('expires')
 }

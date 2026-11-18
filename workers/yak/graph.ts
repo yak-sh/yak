@@ -3372,7 +3372,7 @@ export class Store extends Durable {
 
   // What the alarm works, in this order.
   #works: Record<string, Work> = {
-    // A temporary store (`/expires`) is emptied at its instant, and sleeps:
+    // A temporary store (`/expires`) enters retained trash at its instant:
     // every work after this one finds it dormant.
     expiry: async () => {
       let expires = await this.#ctx.storage.get<Expiry>?.('expires')
@@ -3444,17 +3444,15 @@ export class Store extends Durable {
     })
   }
 
-  // Emptied, once it sleeps: one that fails is the alarm's to report and
+  // Trashed, once it sleeps: one that fails is the alarm's to report and
   // try again, still asleep.
   async #expiring(expires: Expiry) {
     await this.#sleep()
     await Promise.all([this.#effectWork, this.#vectorWork])
     let leave = await this.#enter(true)
     try {
-      await expired(this.#bind, expires)
-      await this.#ctx.storage.deleteAll()
-      this.#kv.clear()
-      await this.#ctx.storage.put?.('dormant', true)
+      await expired(this.#ctx.storage, expires)
+      this.#expires = undefined
     } finally {
       leave()
     }
