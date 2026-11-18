@@ -77,17 +77,28 @@ export let preserving = <T extends Tx>(
   } as T
 }
 
+/** Report changes made while choosing where retained data can return. */
+export type RestoreOpts = { notice?: (text: string) => void }
+
 /** Restore a retained transaction without replacing later values on survivors.
  * The caller supplies the same authority it uses for ordinary graph writes. */
 export let restoring = async (
   graph: Graph,
   entry: Trash,
+  opts: RestoreOpts = {},
 ): Promise<Bundle[]> => {
+  let bundles = entry.bundles
+  for (let plugin of graph.plugins) {
+    if (!plugin.restore) continue
+    let restored = await plugin.restore(graph, bundles)
+    bundles = restored.bundles
+    for (let notice of restored.notices ?? []) opts.notice?.(notice)
+  }
   let current = new Map(
-    (await graph.get(entry.bundles.map((b) => b.entity.eid)))
+    (await graph.get(bundles.map((b) => b.entity.eid)))
       .map((b) => [b.entity.eid, b]),
   )
-  let patches = entry.bundles.flatMap((saved): Bundle[] => {
+  let patches = bundles.flatMap((saved): Bundle[] => {
     let now = current.get(saved.entity.eid)
     if (!now || dead(now)) {
       return [{
@@ -125,8 +136,9 @@ export let restoring = async (
 export let restoreTrash = async (
   graph: Graph,
   entry: Trash,
-  opts: ApplyOpts = {},
+  opts: ApplyOpts & RestoreOpts = {},
 ): Promise<Bundle[]> => {
-  let patches = await restoring(graph, entry)
-  return patches.length ? await graph.apply(patches, opts) : []
+  let { notice, ...apply } = opts
+  let patches = await restoring(graph, entry, { notice })
+  return patches.length ? await graph.apply(patches, apply) : []
 }

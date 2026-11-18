@@ -66,6 +66,10 @@ Instead the plugin creates a separate key entity holding `key{of, value}` with
 an `alias` component beside it. That key entity's id is derived from its value,
 which is what makes a name unique; one entity can have several names. Deleting
 the named entity releases its names, through the key's reference rules.
+Restoring it with `restoreTrash` from `@yaks/graph/trash` brings each name back
+when free. A name somebody took receives a free numbered suffix (`-2`, `-3`, …),
+keeping the new owner's name intact. Pass a `notice` callback to `restoreTrash`
+or `restoring` to tell the person which names changed.
 
 Names can be used as bundle eids and as reference values. `g.address(names)`
 also resolves them explicitly. A live eid (one with components and no tombstone)

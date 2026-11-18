@@ -317,7 +317,15 @@ export type ReadView = {
  * same shape an application uses to add its own components — nothing in this
  * family gets privileged access; it is all plugins.
  */
+export type Restored = { bundles: Bundle[]; notices?: string[] }
+
 export type Plugin = {
+  /** Prepare retained snapshots for restoration, for example allocating names
+   * another entity took while these snapshots were in the trash. */
+  restore?: (
+    graph: Graph,
+    bundles: Bundle[],
+  ) => Restored | Promise<Restored>
   /** Constrain storage's visible relations, including native reads. */
   scope?: (ctx: ReadContext) => Visibility | undefined
   /** Certify that this batch's admission can run without lasting state. Its

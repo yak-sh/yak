@@ -10,6 +10,7 @@ import { hook, type Plugin } from '@yaks/graph/plugin'
 import { ALIAS, aliasDoc } from './comp.ts'
 import { split } from './sugar.ts'
 import { addressed } from './refs.ts'
+import { restored } from './restore.ts'
 
 /**
  * The alias plugin:
@@ -35,5 +36,6 @@ export let aliases = (): Plugin => ({
   name: '@yaks/alias',
   vocab: [aliasDoc],
   address: addressed,
+  restore: restored,
   hooks: { normalize: hook([ALIAS], split()) },
 })

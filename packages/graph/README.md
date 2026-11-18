@@ -249,9 +249,12 @@ transaction:
   `restoreTrash(graph, entry, options)` from `@yaks/graph/trash` restores
   deleted rows and fills removed values on surviving rows while preserving their
   later values. Ordinary restore authority is supplied through `options`; a
-  server restoring stamped values uses its trusted write context. The archive
-  remains until a person explicitly purges it with `storage.purgeTrash(id)`
-  through the host's confirmation page.
+  server restoring stamped values uses its trusted write context. Plugins
+  prepare snapshots through `restore` before the helper fills missing values;
+  aliases whose names were reused receive free numbered names. `options.notice`
+  reports such changes to the caller. The archive remains until a person
+  explicitly purges it with `storage.purgeTrash(id)` through the host's
+  confirmation page.
 - `$delete: true` deletes the entity, subject to the vocabulary's
   [death keyword](../vocab/README.md#routing-and-references). A **tombstone** is
   the `tombstone: {}` component that records a deleted entity, keeping its eid
