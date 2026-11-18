@@ -30,6 +30,7 @@ import { Pending, said } from '@yaks/api/log'
 import { background, reported } from './defects.ts'
 import { FILED } from '@yaks/api/refuse'
 import { setImmediate } from 'node:timers'
+import { waiting } from './lib/waits.ts'
 import type { Asked } from '@yaks/query'
 
 /** The meta store, in the graph's own wire. */
@@ -197,7 +198,12 @@ export let meta = (
         return (url.pathname == '/query' || url.pathname == '/reads') &&
           !url.searchParams.has('mend')
       },
-      { hold: background, turn: setImmediate },
+      {
+        hold: background,
+        turn: setImmediate,
+        clock: env.CLOCK,
+        wait: (seated) => waiting('directory_wait', seated),
+      },
     )
     doors.set(ns, held = metaOf(door))
   }

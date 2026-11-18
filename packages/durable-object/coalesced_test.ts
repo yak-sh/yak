@@ -1,22 +1,27 @@
-import { equal, test } from '@yaks/testing'
+import { clock, equal, test } from '@yaks/testing'
 import { coalesced, doorOf, IDEMPOTENCY, resending } from './door.ts'
 
 let fixture = () => {
   let calls: Request[] = [], held: Promise<void>[] = []
   let answers: ((r: Response) => void)[] = []
   let queued: (() => void)[] = []
+  let time = clock()
   let door = coalesced(
     doorOf((r) => {
       calls.push(r)
       return new Promise<Response>((answer) => answers.push(answer))
     }),
     (r) => new URL(r.url).pathname == '/query',
-    { hold: (work) => held.push(work), turn: (send) => queued.push(send) },
+    {
+      hold: (work) => held.push(work),
+      turn: (send) => queued.push(send),
+      clock: time,
+    },
   )
   let answer = (n: number, body: string) =>
     answers[n](new Response(body, { headers: { 'x-revision': body } }))
   let flush = () => queued.splice(0).forEach((send) => send())
-  return { door, calls, held, answer, answers, flush }
+  return { door, calls, held, answer, answers, flush, queued, time }
 }
 
 test('queued reads share one trip and each gets its own bytes', async () => {
@@ -202,4 +207,45 @@ test('a shared read keeps call headers the inner door scrubs from its init', asy
   )
   await door.consume('/query?q=x', (r) => r.text(), {}, { 'x-static': '1' })
   equal(seen, ['1'])
+})
+
+test('callers behind a read whose sender ended board again once patience runs out', async () => {
+  let f = fixture()
+  let first = f.door('/query')
+  f.flush()
+  await f.time.advance(1_000)
+  let behind = [f.door('/query'), f.door('/query')]
+  f.flush()
+  equal(f.calls.length, 1)
+  await f.time.advance(14_000)
+  f.flush()
+  equal(f.calls.length, 2)
+  f.answer(1, 'again')
+  equal(
+    await Promise.all([first, ...behind].map(async (r) => (await r).text())),
+    [
+      'again',
+      'again',
+      'again',
+    ],
+  )
+  let next = f.door('/query')
+  f.flush()
+  f.answer(2, 'healed')
+  equal(await (await next).text(), 'healed')
+})
+
+test('callers in a batch its opener never sent board again once patience runs out', async () => {
+  let f = fixture()
+  let reads = [f.door('/query'), f.door('/query')]
+  await Promise.resolve()
+  f.queued.splice(0)
+  await f.time.advance(15_000)
+  f.flush()
+  equal(f.calls.length, 1)
+  f.answer(0, 'sent')
+  equal(await Promise.all(reads.map(async (r) => (await r).text())), [
+    'sent',
+    'sent',
+  ])
 })

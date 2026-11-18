@@ -11,7 +11,7 @@
 // the object is for.
 
 import { IDEMPOTENCY } from '@yaks/api/log'
-import type { Hold } from '@yaks/fp'
+import { type Clock, heard, type Hold, system } from '@yaks/fp'
 import { evicted, killed, opaque, retried, starved } from './resets.ts'
 
 /** A Durable Object stub: one object, reachable by fetch. */
@@ -121,6 +121,11 @@ let copied = async (response: Response): Promise<() => Response> => {
   return () => new Response(body?.slice(0), init)
 }
 
+// How long a caller waits on a batch another request sends before presuming
+// that request ended (`coalesced`): far past a read's round trip, and well
+// inside the minute after which a request that has not answered is a defect.
+let PATIENCE = 15_000
+
 // A caller waiting in a batch: its own promise's ends.
 type Seat = {
   resolve: (answer: () => Response) => void
@@ -149,13 +154,30 @@ type Batch = {
  * is failed (workerd's `handle_cross_request_promise_resolution`). So no
  * caller awaits a promise another made. Each waits on its own seat, settled
  * from the trip, and a batch is sent from the request that opened it, woken
- * there when the read ahead lands. */
+ * there when the read ahead lands.
+ *
+ * What runs in another request is dropped, without a word, once that request
+ * ends: a batch whose opener ended before sending it, or whose sender ended
+ * before it landed, would answer nobody, and every later caller would board
+ * behind it. So a seat unanswered for `patience` ms (`heard` on `clock`)
+ * presumes its batch lost: the door forgets the batch, and the caller boards
+ * again from its own request. `wait` wraps each caller's wait on its seat, so
+ * a host can name it. */
 export let coalesced = (
   door: Door,
   reads: (request: Request) => boolean,
-  { hold, turn = queueMicrotask }: {
+  {
+    hold,
+    turn = queueMicrotask,
+    patience = PATIENCE,
+    clock = system,
+    wait = (seated) => seated(),
+  }: {
     hold?: Hold
     turn?: (send: () => void) => void
+    patience?: number
+    clock?: Clock
+    wait?: <T>(seated: () => Promise<T>) => Promise<T>
   } = {},
 ): Door => {
   // The batch still boarding for each read, and the one travelling.
@@ -211,6 +233,38 @@ export let coalesced = (
     hold?.(done)
     return batch
   }
+  // A batch nobody answered in time, and the read ahead it waited on if it
+  // was never sent: nobody boards behind either again.
+  let lost = (key: string, batch: Batch) => {
+    if (boarding.get(key) == batch) {
+      boarding.delete(key)
+      moving.delete(key)
+    }
+    if (moving.get(key) == batch) {
+      moving.delete(key)
+      boarding.get(key)?.go()
+    }
+  }
+  // This caller's seat in the batch boarding for `key`, boarding again when
+  // its batch is lost.
+  let ride = async (
+    key: string,
+    trip: Batch['trip'],
+  ): Promise<Response> => {
+    let batch = boarding.get(key) ?? board(key, trip)
+    let answer = await wait(() =>
+      new Promise<(() => Response) | null>((resolve, reject) => {
+        let cancel = heard(patience, () => resolve(null), clock)
+        batch.seats.push({
+          resolve: (answer) => (cancel(), resolve(answer)),
+          reject: (error) => (cancel(), reject(error)),
+        })
+      })
+    )
+    if (answer) return answer()
+    lost(key, batch)
+    return await ride(key, trip)
+  }
   let ask = async (
     path: string,
     init: RequestInit | Request = {},
@@ -231,14 +285,10 @@ export let coalesced = (
       ])
       // The call's own headers are set again past the inner door's scrub, as
       // an uncoalesced call sets them.
-      let batch = boarding.get(key) ?? board(
+      return await ride(
         key,
         () => door.consume(path, copied, request, headers, options),
       )
-      let seat = new Promise<() => Response>((resolve, reject) =>
-        batch.seats.push({ resolve, reject })
-      )
-      return (await seat)()
     })(path, init, headers)
   }
   return Object.assign(ask, {
