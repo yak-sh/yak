@@ -1837,7 +1837,8 @@ export class Store extends Durable {
         if (!kept) return undefined
         return {
           make: async () => await kept.make(),
-          list: async () => await kept.list(),
+          list: async (trash) => await kept.list(trash),
+          restore: async (id) => await kept.restore(id),
           changes: async (id) => await kept.changes(id),
           drop: async (id) => {
             forks.delete(id)
@@ -3638,8 +3639,9 @@ export class Store extends Durable {
   }
 
   // An app store's branches (@yaks/sqlite `branches`), for the kernel alone:
-  // `/branches` lists them (GET) and makes one (POST); `/branches/<id>` drops
-  // one (DELETE); and under it, `changes` (GET) is what it changed since its
+  // `/branches` lists them (GET, `?trash=true` for trash) and makes one
+  // (POST); `/branches/<id>` trashes one (DELETE), `restore` returns it
+  // (POST); and under it, `changes` (GET) is what it changed since its
   // fork, `query` (POST `{query}`) reads on it, `apply` (POST `{bundles}`)
   // writes on it, as the kernel's own writes are, and `merge` (POST
   // `{picks}`) writes what it changed to main (`#merging`). A store's
@@ -3655,7 +3657,11 @@ export class Store extends Durable {
     try {
       if (branch == null && !door) {
         if (method == 'GET') {
-          return json({ branches: await this.#graph.branches?.list() ?? [] })
+          return json({
+            branches: await this.#graph.branches?.list(
+              new URL(request.url).searchParams.get('trash') == 'true',
+            ) ?? [],
+          })
         }
         if (method != 'POST') return missing()
         await this.#versionsOn()
@@ -3671,6 +3677,12 @@ export class Store extends Durable {
       if (!door && method == 'DELETE') {
         await branches.drop(branch)
         return new Response(null, { status: 204 })
+      }
+      if (door == 'restore' && method == 'POST') {
+        await branches.restore(branch)
+        return json({
+          branch: (await branches.list()).find((b) => b.id == branch),
+        })
       }
       if (door == 'changes' && method == 'GET') {
         return json({ changes: await branches.changes(branch) })
@@ -3889,26 +3901,12 @@ export class Store extends Durable {
     }
   }
 
-  // What a dropped branch leaves behind in this object: its words, its
-  // pages' storage and their sockets.
+  // A trashed branch keeps its words and pages' storage for restore; only
+  // its open doors and sockets close.
   #unbranch(id: number) {
     this.#branchDoors.delete(id)
-    let mine = (k: string) =>
-      k == tagOf(id) || (k.startsWith('storage:') && k.endsWith(`@${id}`))
-    let keys = this.#sql.query(
-      select({ cols: [col('k')], from: table(KV.name) }),
-    )
-      .map((r) => String(r.k)).filter(mine)
-    for (let k of keys) {
-      this.#sql.query({
-        t: 'delete',
-        from: KV.name,
-        where: eq(col('k'), val(k)),
-      })
-      this.#kv.set(k as Word, null)
-    }
     for (let ws of this.#ctx.getWebSockets(tagOf(id))) {
-      ws.close?.(1000, 'branch dropped')
+      ws.close?.(1000, 'branch trashed')
     }
   }
 

@@ -69,7 +69,8 @@ let g = graph({
   vocab,
   branches: {
     make: async () => await store.branches!.make(),
-    list: async () => await store.branches!.list(),
+    list: async (trash) => await store.branches!.list(trash),
+    restore: async (id) => await store.branches!.restore(id),
     drop: async (id) => await store.branches!.drop(id),
     changes: async (id) => await store.branches!.changes(id),
     on: (id) => {
@@ -324,15 +325,28 @@ test('a branch is made, written, deleted on and read through the graph’s optio
     pointed: true,
   }))
 
-test('a dropped branch is gone, and so is what was written on it', async () => {
-  equal((await g.branches!.list()).map((b) => b.id), [fork.branch])
-  await throws(() => g.get(['d1'], undefined, on3))
-  equal(
+let trashed = (await g.branches!.list(true)).find((b) => b.id == made.id)
+let hidden = await Promise.resolve().then(() => g.get(['d1'], undefined, on3))
+  .then(() => false, () => true)
+store.install()
+await g.branches!.restore(made.id)
+let restored = {
+  row: (await g.branches!.list()).find((b) => b.id == made.id),
+  held: (await g.get(['d1', 'd2', 'd3'], undefined, on3))
+    .map((b) => b.page ?? Object.keys(b)),
+}
+await g.branches!.drop(made.id)
+
+test('a trashed branch is hidden until restored with every write intact', () => {
+  ok(trashed?.trashed)
+  equal(hidden, true)
+  equal(restored.row, made)
+  equal(restored.held, doors.get)
+  ok(
     d.query(select({
       from: table('page$versions'),
       where: eq(col('$branch'), val(made.id)),
-    })),
-    [],
+    })).length > 0,
   )
 })
 

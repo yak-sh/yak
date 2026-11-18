@@ -20,6 +20,7 @@ let branches: GraphBranches = {
   make: () => Promise.resolve({ id: 1, fork: 0, at: '' }),
   list: () => Promise.resolve([]),
   drop: () => Promise.resolve(),
+  restore: () => Promise.resolve(),
   changes: () => Promise.resolve([]),
   on: (id) =>
     id == 1 ? Promise.resolve(fork) : Promise.reject(new Error('none')),

@@ -230,7 +230,7 @@ export type News = { applied: Bundle[][]; missed: boolean }
 
 /** A branch of a store's graph (D-395): its id, local to the store, the
  * transaction of main it forked at, and when it was made. */
-export type Branch = { id: number; fork: number; at: string }
+export type Branch = { id: number; fork: number; at: string; trashed?: string }
 
 /**
  * A store's branches: forks of its whole graph, each reading main as it stood
@@ -242,10 +242,12 @@ export type Branch = { id: number; fork: number; at: string }
 export type Branches = {
   /** fork main at its newest transaction; nothing is copied */
   make: () => Branch | Promise<Branch>
-  /** every branch, oldest first */
-  list: () => Branch[] | Promise<Branch[]>
-  /** forget a branch and everything written on it */
+  /** active branches, or trash when true, oldest first */
+  list: (trash?: boolean) => Branch[] | Promise<Branch[]>
+  /** trash a branch, keeping everything written on it for restore */
   drop: (id: number) => void | Promise<void>
+  /** return a branch and all its writes from trash */
+  restore: (id: number) => void | Promise<void>
   /** what branch `id` changed since its fork: every entity's component it
    * wrote, as it stood at the fork, as the branch holds it and as main holds
    * it now */

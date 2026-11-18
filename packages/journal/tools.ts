@@ -2,7 +2,7 @@
 // the `history` declaration in ./vocab.json, because the log answers one
 // question people actually ask: what happened to this, and who did it. And
 // the graph's branches, which its versions make possible (D-395): made,
-// listed, merged and deleted here, read and written through the graph's own
+// listed, merged, trashed and restored here, read and written through the graph's own
 // tools. A merge with a conflict left writes nothing and answers the
 // conflicts, each side by side, for a person to pick (./merge.ts).
 //
@@ -61,8 +61,12 @@ let told = (call: Bundle, value: unknown): Bundle[] => [{
 }]
 
 // The branch `id`, or the refusal that names it.
-let known = async (all: GraphBranches, id: number): Promise<Branch> => {
-  let b = (await all.list()).find((b) => b.id == id)
+let known = async (
+  all: GraphBranches,
+  id: number,
+  trash = false,
+): Promise<Branch> => {
+  let b = (await all.list(trash)).find((b) => b.id == id)
   if (!b) throw new Refused(`no branch ${id}`)
   return b
 }
@@ -82,13 +86,20 @@ export let runs = (host: Bound): Runs => {
     },
     branch_new: async (call, graph) => told(call, await branches(graph).make()),
     branch_list: async (call, graph) =>
-      told(call, await branches(graph).list()),
+      told(call, await branches(graph).list(!!argsOf(call).trash)),
     branch_delete: async (call, graph) => {
       let id = Number(argsOf(call).id)
       let all = branches(graph)
       let gone = await known(all, id)
       await all.drop(id)
-      return told(call, gone)
+      return told(call, (await all.list(true)).find((b) => b.id == gone.id))
+    },
+    branch_restore: async (call, graph) => {
+      let id = Number(argsOf(call).id)
+      let all = branches(graph)
+      await known(all, id, true)
+      await all.restore(id)
+      return told(call, await known(all, id))
     },
     branch_merge: async (call, graph) => {
       let args = argsOf(call)

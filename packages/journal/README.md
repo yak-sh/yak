@@ -221,16 +221,21 @@ set false:
   `journal_tx` row's id. A store keeping versions requires the journal from then
   on (`required`), and can be read as of a transaction or on a branch:
   `YAK_AT=<id>` or `YAK_BRANCH=<id>` opens a `yak` command's graph that way.
-  `branch_new`, `branch_list` and `branch_delete` make, list and delete
-  branches, and `graph_query`, `graph_show` and `graph_apply` read and write on
-  one given its `branch`, which main never sees and no effect reaches:
+  `branch_new`, `branch_list` and `branch_delete` make, list and trash branches,
+  and `graph_query`, `graph_show` and `graph_apply` read and write on one given
+  its `branch`, which main never sees and no effect reaches:
 
   ```sh
   yak branch new
   yak graph apply --branch 1 --bundles '[{"entity":{"eid":"$d"},"doc":{"title":"draft"}}]'
   yak graph query .doc.title=draft --branch 1
   yak branch delete 1
+  yak branch list --trash
+  yak branch restore 1
   ```
+
+  Trashing retains every version indefinitely. `branch_list --trash` finds
+  trashed branches and `branch_restore` returns them with their writes intact.
 
   `branch_merge` writes what a branch changed since its fork to main as one
   batch (./merge.ts). Each property merges against its value at the fork: one

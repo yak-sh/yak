@@ -86,6 +86,9 @@ export type { Mode } from '@yaks/sql'
 /** The table of branches. */
 export let BRANCHES = '$branch'
 
+/** Branches held in trash, with every version still in place. */
+export let BRANCH_TRASH = '$branch$trash'
+
 /** Whether main keeps a component's versions: every component table but those
  * declared `journal: false`. */
 export let keeps = (vocab: Vocab, comp: string): boolean =>
@@ -201,6 +204,15 @@ export let historySchema = (vocab: Vocab, typed?: Typed): Stmt[] => [
   ...besideDdl(vocab, typed),
   ...shapeDdl,
   BRANCH_DDL,
+  {
+    t: 'create table',
+    name: BRANCH_TRASH,
+    ifNot: true,
+    cols: [
+      { name: 'id', type: 'integer', pk: true },
+      { name: 'at', type: 'text', notNull: true },
+    ],
+  },
 ]
 
 /** The versions of what main holds as history begins: each live row of every

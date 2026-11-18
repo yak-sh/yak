@@ -741,7 +741,8 @@ let composed = async (
         if (!kept || mode || path == ':memory:') return undefined
         return {
           make: async () => await kept.make(),
-          list: async () => await kept.list(),
+          list: async (trash) => await kept.list(trash),
+          restore: async (id) => await kept.restore(id),
           changes: async (id) => await kept.changes(id),
           drop: async (id) => {
             await unfork(id)

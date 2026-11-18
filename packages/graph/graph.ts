@@ -457,9 +457,11 @@ export type Graph = {
  * graph that runs on each. */
 export type GraphBranches = {
   make: () => Promise<Branch>
-  list: () => Promise<Branch[]>
-  /** forget a branch, its writes, and its graph */
+  list: (trash?: boolean) => Promise<Branch[]>
+  /** trash a branch, keeping its writes; close its graph */
   drop: (id: number) => Promise<void>
+  /** return a branch and all its writes from trash */
+  restore: (id: number) => Promise<void>
   /** what a branch changed since its fork, as its storage reads it */
   changes: (id: number) => Promise<Change[]>
   /** Branch `id`'s graph: this one's words, plugins and rules over the

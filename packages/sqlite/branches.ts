@@ -1,7 +1,7 @@
 // A store's branches (D-395): rows of its branch table. Making one writes a
 // row and copies nothing; a branch's rows live beside the live tables, in
 // `<comp>$versions` and the archetypes' versions, under its id, and dropping
-// it deletes them. Reading and writing on one is a driver of its own
+// it keeps them in trash. Reading and writing on one is a driver of its own
 // (./mode.ts), which its host opens.
 //
 // What a branch changed is read on main's own connection, from those rows:
@@ -11,12 +11,15 @@
 
 import {
   and,
+  as,
   col,
   type Driver,
   eq,
   type Expr,
   isNull,
+  left,
   lit,
+  not,
   oneOf,
   op,
   or,
@@ -30,9 +33,9 @@ import type { Vocab } from '@yaks/vocab'
 import { eidOf } from '@yaks/archetype/sets'
 import type { Branch, Branches, Change } from '@yaks/graph/storage'
 import {
-  BESIDE,
   beside,
   BRANCH,
+  BRANCH_TRASH,
   BRANCHES,
   covered,
   FROM,
@@ -42,7 +45,6 @@ import {
   SEEDING,
   TO,
 } from './history.ts'
-import { tables } from './physical.ts'
 import { described } from './archetype.ts'
 import { rowsOf } from './read.ts'
 import { unraised } from './raise.ts'
@@ -67,17 +69,27 @@ export class Unseeded extends Refused {
   }
 }
 
-// The branch table's rows `where` matches, oldest first, as branches.
-let rows = (driver: Driver, where?: Expr): Branch[] =>
+// The branch table's rows, oldest first; trashed ones stay beside them.
+let rows = (driver: Driver, where?: Expr, trash = false): Branch[] =>
   driver.query(select({
-    cols: [col('id'), col('fork'), col('at')],
-    from: { t: 'table', name: BRANCHES },
-    ...where ? { where } : {},
-    order: [col('id')],
+    cols: [
+      col('id', 'b'),
+      col('fork', 'b'),
+      col('at', 'b'),
+      as(col('at', 't'), 'trashed'),
+    ],
+    from: table(BRANCHES, 'b'),
+    joins: [left(table(BRANCH_TRASH, 't'), eq(col('id', 'b'), col('id', 't')))],
+    where: and(
+      trash ? not(isNull(col('at', 't'))) : isNull(col('at', 't')),
+      ...(where ? [where] : []),
+    ),
+    order: [col('id', 'b')],
   })).map((row) => ({
     id: Number(row.id),
     fork: Number(row.fork),
     at: String(row.at),
+    ...(row.trashed == null ? {} : { trashed: String(row.trashed) }),
   }))
 
 /** Make a branch of main at its newest transaction: one row, nothing copied.
@@ -99,7 +111,7 @@ export let branch = (
 
 /** The branch `id`, as a mode: where it forked. Undefined for none. */
 export let branchOf = (driver: Driver, id: number): Mode | undefined => {
-  let [b] = rows(driver, eq(col('id'), val(id)))
+  let [b] = rows(driver, eq(col('id', 'b'), val(id)))
   return b ? { branch: id, fork: b.fork } : undefined
 }
 
@@ -192,18 +204,34 @@ export let branching = (
   make: () => {
     if (seeding(driver)) throw new Unseeded()
     described(driver, [])
-    return rows(driver, eq(col('id'), val(branch(driver, history).branch)))[0]
+    return rows(
+      driver,
+      eq(col('id', 'b'), val(branch(driver, history).branch)),
+    )[0]
   },
-  list: () => rows(driver),
+  list: (trash) => rows(driver, undefined, trash),
   drop: (id) => {
-    let mine = eq(col(BRANCH), val(id))
-    for (let name of tables(driver).filter((n) => n.endsWith(BESIDE))) {
-      driver.query({ t: 'delete', from: name, where: mine })
-    }
-    driver.query({ t: 'delete', from: BRANCHES, where: eq(col('id'), val(id)) })
+    driver.query({
+      t: 'insert',
+      into: BRANCH_TRASH,
+      cols: ['id', 'at'],
+      q: select({
+        cols: [col('id'), val(new Date().toISOString())],
+        from: table(BRANCHES),
+        where: eq(col('id'), val(id)),
+      }),
+      or: 'ignore',
+    })
+  },
+  restore: (id) => {
+    driver.query({
+      t: 'delete',
+      from: BRANCH_TRASH,
+      where: eq(col('id'), val(id)),
+    })
   },
   changes: (id) => {
-    let [b] = rows(driver, eq(col('id'), val(id)))
+    let [b] = rows(driver, eq(col('id', 'b'), val(id)))
     if (!b) throw new Error(`no branch ${id}`)
     return changes(driver, vocab, b, opts())
   },

@@ -123,6 +123,9 @@ await within(
 )
 let dropped = await send(main, `/branches/${id}`, { method: 'DELETE' })
 let gone = await send(branch, '/query?q=.card')
+await post(main, `/branches/${id}/restore`, {})
+let restoredNotes = await send(branch, '/query?q=.note')
+let restoredKept = await branch('/storage', {}, person).then((r) => r.json())
 
 test('a branch takes words main never declared, and main keeps its own', () => {
   equal(grown.status, 200, JSON.stringify(grown.body))
@@ -160,4 +163,12 @@ test('a closed socket on a branch closes and broadcasts without a report', () =>
 test('a dropped branch answers nothing', () => {
   equal(dropped.status, 204)
   ok(gone.status >= 400, String(gone.status))
+})
+
+test('restore returns branch words and pages’ storage with its records', () => {
+  equal(restoredNotes.status, 200, JSON.stringify(restoredNotes.body))
+  equal(restoredNotes.body.map((r: { note: unknown }) => r.note), [{
+    text: 'only here',
+  }])
+  equal(restoredKept, { theme: 'dark' })
 })

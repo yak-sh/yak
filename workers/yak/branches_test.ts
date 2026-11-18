@@ -71,6 +71,10 @@ let reread = await again.fetch(
 let rereadRows = await reread.json()
 let dropped = await send(`/branches/${id}`, { method: 'DELETE' })
 let after = await send('/branches')
+let trash = await send('/branches?trash=true')
+let restored = await post(`/branches/${id}/restore`, {})
+let recovered = await post(`/branches/${id}/query`, { query: '.doc' })
+await send(`/branches/${id}`, { method: 'DELETE' })
 
 test('a store keeps no versions until its first branch, and then requires the journal', () => {
   equal(before.includes('@yaks/journal'), false)
@@ -96,9 +100,14 @@ test('a later incarnation composes the versions its data requires', () => {
   equal(titles(rereadRows.rows), ['drafted', 'new'])
 })
 
-test('a dropped branch is gone', () => {
+test('a trashed branch is hidden and returns with its writes on restore', () => {
   equal(dropped.status, 204)
   equal(after.body, { branches: [] })
+  equal(trash.body.branches.map((b: { id: number }) => b.id), [id])
+  ok(trash.body.branches[0].trashed)
+  equal(restored.status, 200)
+  equal(restored.body.branch.id, id)
+  equal(titles(recovered.body.rows), ['drafted', 'new'])
 })
 
 test('a branch door is the kernel’s alone', async () => {
