@@ -11,7 +11,7 @@ import { receive } from './operator-channels.ts'
 import { notification, type Update, updating } from './operator-updates.ts'
 import { parseHTML } from 'linkedom'
 import { chatPage, updatesPage } from './operator-page.ts'
-import { shownAnswer, updatesAnswer } from './updates.ts'
+import { chatAt, shownAnswer, updatesAnswer } from './updates.ts'
 import { attachmentKey } from './attachments.ts'
 import { chatPath, managePath } from '@yaks/platform/routes'
 
@@ -194,8 +194,12 @@ test('a fixed break tells its person only what the Operator wrote them, linked t
   }
   let all = (await read(ada)).updates
   let fixed = all.find((u) => u.subject == 'Recipes: printing works again')!
-  let [ran] = await store.g.get([fixed.chat!])
+  // It opens its run's chat at the call that wrote it, and that call is a
+  // line there the address scrolls to.
+  let [ran, wrote] = await store.g.get([fixed.from!.chat, fixed.from!.entry!])
   assertEquals(!!ran.session, true)
+  assertEquals((wrote.call as { name: string }).name, 'notification_send')
+  assertEquals(await lands(fixed), true)
   assertEquals(all.some((u) => u.words.includes('print.ts')), false)
   assertEquals(await words(bo), [[false, 'Just for Bo.', true]])
 })
@@ -325,6 +329,28 @@ test('a choice shows a picture, prose or a draft, and only its asker reads the p
   assertEquals(await get('other=1'), undefined)
 })
 
+// Whether an update's "See the chat" opens a page holding the line its
+// address names.
+let lands = async (u: Update) => {
+  let space = (await directoryOf(p.env.STORE).at(eid))!
+  let who = { person: ada, role: 'owner' as const, space: eid }
+  let href = new URL(chatAt(space, u), 'https://yaks.app')
+  let open = href.pathname.split('/').at(-1)!
+  let from = href.searchParams.get('from')
+  let d = parseHTML(
+    await (await chatPage(
+      p.env,
+      space,
+      who,
+      open,
+      {},
+      null,
+      from == null ? undefined : Number(from),
+    )).text(),
+  ).document
+  return !!d.getElementById(href.hash.slice(1))
+}
+
 // The page's notices, as each card draws them.
 let cards = async (dismissed = false) => {
   let space = (await directoryOf(p.env.STORE).at(eid))!
@@ -366,6 +392,28 @@ test('Updates hold only what was written to the person: no task state and no run
   ], { trusted: true })
   let all = (await read(ada)).updates.map((u) => u.words)
   assertEquals(all.some((w) => /Rename|graph_query|Done/.test(w)), false)
+})
+
+test('an old notice with only its run opens that run at the entry written last before it', async () => {
+  let fixed = (await read(ada)).updates
+    .find((u) => u.subject == 'Recipes: printing works again')!
+  let [row] = await store.g.get([fixed.eid])
+  let old = crypto.randomUUID()
+  await store.g.apply([{
+    entity: { eid: old },
+    notification: { to: ada },
+    doc: { body: 'Recipes prints again.' },
+    $actor: { by: eid, via: fixed.from!.chat },
+  }], { trusted: true })
+  let [kept] = await store.g.get([old])
+  assertEquals(
+    (kept.created as { at: string }).at >= (row.created as { at: string }).at,
+    true,
+  )
+  let told = (await read(ada)).updates.find((u) => u.eid == old)!
+  assertEquals(told.from?.chat, fixed.from!.chat)
+  assertEquals(typeof told.from?.entry, 'string')
+  assertEquals(await lands(told), true)
 })
 
 test("every notice links to the conversation it came from, the person's own where it names none", async () => {
@@ -423,5 +471,5 @@ test('a run nobody watches that fails on yaks.app tells its person so, plainly, 
   )
   assertEquals(stopped.length, 1)
   assertStringIncludes(stopped[0].words, "on yaks.app's side")
-  assertEquals(typeof stopped[0].chat, 'string')
+  assertEquals(await lands(stopped[0]), true)
 })

@@ -1945,7 +1945,9 @@ let reading = (env: Env, space: Space, who: Who) => {
  * of those the person may open, and no other. With none named, the app the
  * conversation is making opens there by itself (`following`). A new chat
  * about an app asks what should change in it, and the words sent say which
- * page and app are open (operator-view.ts `onPage`).
+ * page and app are open (operator-view.ts `onPage`). With `from`, it draws
+ * its entries past that seq too, so a link to an old entry (`#row-<entry>`,
+ * updates.ts `chatAt`) finds it on the page.
  */
 export let chatPage = async (
   env: Env,
@@ -1954,6 +1956,7 @@ export let chatPage = async (
   open: string,
   beside: Beside = {},
   chosen?: string | null,
+  from?: number,
 ) => {
   let at = managePath('operator', space.slug)
   // The space's address opens the person's one conversation, and a new chat
@@ -1966,6 +1969,7 @@ export let chatPage = async (
       conversationOf(env, space, who, at, open == 'new' ? '' : open, {
         updates: true,
         mentions: l.mentions ?? null,
+        ...from != null && Number.isFinite(from) ? { from } : {},
       })
     ),
     who.person ? directoryOf(env.STORE).newcomer(who.person) : false,

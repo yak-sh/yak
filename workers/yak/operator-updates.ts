@@ -50,8 +50,9 @@ export type Update = {
   subject?: string
   /** What it tells of: an app, the space, or a task of the Operator's. */
   about?: string
-  /** The conversation it came from, opened in the chat. */
-  chat?: string
+  /** Where it came from: its conversation, opened in the chat at the entry
+   * it was written from. */
+  from?: Place
   /** They dismissed it, and nothing has happened on it since. */
   dismissed: boolean
   choices?: Choice[]
@@ -73,7 +74,8 @@ export type Shown = {
 /** Something to tell a space's people, shown alone in their Updates and
  * read later, out of any conversation. `to` is a person, or the space for
  * everyone in it; `subject` names the app and what happened; `words` say it
- * plainly to them; `via` is the conversation it came from; `by` is whoever
+ * plainly to them; `via` is the conversation it came from and `from` the
+ * entry there it was written from; `by` is whoever
  * did what it tells, who is not told it; `id` names the event, so telling it
  * twice tells it once. */
 export type Telling = {
@@ -83,17 +85,22 @@ export type Telling = {
   about?: string
   by?: string
   via?: string
+  from?: string
   id?: string
 }
 
 /** A notification's row. */
 export let notification = (
-  { to, words, subject, about, by, via, id }: Telling,
+  { to, words, subject, about, by, via, from, id }: Telling,
 ): Bundle => ({
   entity: {
     eid: id ? derivedEid('operator-told|' + id) : crypto.randomUUID(),
   },
-  notification: about ? { to, about } : { to },
+  notification: {
+    to,
+    ...about ? { about } : {},
+    ...from ? { from } : {},
+  },
   doc: subject ? { title: subject, body: words } : { body: words },
   ...by || via
     ? { $actor: { ...by ? { by } : {}, ...via ? { via } : {} } }
@@ -104,7 +111,7 @@ let updateOf = (
   t: Thread,
   row: Bundle | undefined,
   shown: Shown[] = [],
-  chat?: string,
+  from?: Place,
 ): Update => {
   let decision = comp(row, 'decision')
   let note = comp(row, 'notification')
@@ -118,7 +125,7 @@ let updateOf = (
     words: String(decision ? decision.question : doc?.body ?? ''),
     ...!decision && doc?.title ? { subject: String(doc.title) } : {},
     ...note?.about ? { about: String(note.about) } : {},
-    ...chat ? { chat } : {},
+    ...from ? { from } : {},
     ...decision
       ? {
         choices: decision.choices as Choice[],
@@ -256,16 +263,79 @@ let aboutsOf = async (store: Store, rows: (Bundle | undefined)[]) => {
   return new Map(held.flatMap((b) => b ? [[b.entity.eid, b]] : []))
 }
 
-// The conversation each of `rows` came from: the run that wrote it, else
-// the work it tells of where that is a session or a task. None opens the
-// person's own conversation.
-let chatsOf = (rows: (Bundle | undefined)[], abouts: Map<string, Bundle>) =>
-  rows.map((b) => {
+/** Where an update came from: the conversation it opens, the entry there
+ * the page scrolls to, and that entry's place in it. */
+export type Place = { chat: string; entry?: string; seq?: number }
+
+// An entry's place: its session and seq, standing for the call it answers
+// where it is a result, which the chat draws as that call's line.
+let placed = async (store: Store, b: Bundle | undefined) => {
+  let call = comp(b, 'result')?.call
+  if (call) [b] = await store.g.get([String(call)])
+  let entry = comp(b, 'entry')
+  return entry
+    ? {
+      chat: String(entry.session),
+      entry: b!.entity.eid,
+      seq: Number(entry.seq),
+    }
+    : undefined
+}
+
+// The newest entry of `session` at or before `seq`, by its (session, seq)
+// index, one row read.
+let before = async (store: Store, session: string, seq: number) =>
+  (await store.g.read(
+    line`.entry.session=${session}&.entry.seq<=${seq}&.order=-entry.seq&.limit=1&*`,
+  ))[0] as Bundle | undefined
+
+// The entry of `session` written last at or before `at`: a search by seq,
+// whose order is its entries' time, so a long conversation costs a few
+// dozen one-row reads rather than reading it through.
+let entryAt = async (store: Store, session: string, at: string) => {
+  let last = await before(store, session, Number.MAX_SAFE_INTEGER)
+  let when = (b?: Bundle) => String(comp(b, 'created')?.at ?? '')
+  if (!last || when(last) <= at) return last
+  let [lo, hi] = [0, Number(comp(last, 'entry')!.seq)]
+  let found: Bundle | undefined
+  while (lo <= hi) {
+    let mid = Math.floor((lo + hi) / 2)
+    let b = await before(store, session, mid)
+    if (b && when(b) <= at) {
+      found = b
+      lo = Number(comp(b, 'entry')!.seq) + 1
+    } else hi = mid - 1
+  }
+  return found
+}
+
+// Where each of `rows` came from: the entry a notice was written from, else
+// the entry written last before it in the run that wrote it, else the work
+// it tells of where that is a session or a task. None opens the person's
+// own conversation.
+let placesOf = (
+  store: Store,
+  rows: (Bundle | undefined)[],
+  abouts: Map<string, Bundle>,
+): Promise<(Place | undefined)[]> =>
+  Promise.all(rows.map(async (b) => {
+    let from = comp(b, 'notification')?.from
     let via = comp(b, 'created')?.via
-    if (via) return String(via)
+    if (from) {
+      let [said] = await store.g.get([String(from)])
+      let at = await placed(store, said)
+      if (at) return at
+    }
+    if (via) {
+      let at = String(comp(b, 'created')?.at ?? '')
+      return await placed(store, await entryAt(store, String(via), at)) ??
+        { chat: String(via) }
+    }
     let about = abouts.get(String(comp(b, 'notification')?.about))
-    return about?.session || about?.task ? about.entity.eid : undefined
-  })
+    return about?.session || about?.task
+      ? { chat: about.entity.eid }
+      : undefined
+  }))
 
 /** A person's Updates in a space, newest first with what needs them ahead,
  * at most `most` of them, and how many wait on them: what needs them, and
@@ -291,11 +361,13 @@ export let updatesOf = async (
   )
   let shown = kept.slice(0, most)
   let held = shown.map((s) => s.row)
-  let shows = await shownOf(store, held)
-  let chats = chatsOf(held, abouts)
+  let [shows, places] = await Promise.all([
+    shownOf(store, held),
+    placesOf(store, held, abouts),
+  ])
   return {
     updates: shown.map(({ t, row }, i) =>
-      updateOf(t, row, shows.get(t.eid), chats[i])
+      updateOf(t, row, shows.get(t.eid), places[i])
     ),
     waiting: dismissed
       ? 0

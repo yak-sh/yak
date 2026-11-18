@@ -14,11 +14,12 @@ on that record.
   [@yaks/doc](../doc) on the same record. `from` names whose act or words it
   tells, where it tells someone's: the actor who finished a task, the person who
   sent a text. A knock its writer says for itself leaves it out.
-- `notification{to, about}` records words emitted, not said, telling `to` what
-  happened to `about` (either may live in another graph). `to` is a person, or a
-  space or project for everyone standing in it. Its words are its `doc{body}`.
-  It is a thread of its own; @yaks/inbox lanes it as Updates. It is not a
-  letter, so it carries no [@yaks/mail](../mail) `deliver`.
+- `notification{to, about, from}` records words emitted, not said, telling `to`
+  what happened to `about` (either may live in another graph). `to` is a person,
+  or a space or project for everyone standing in it. `from` is the entry it was
+  written from, where its reader opens the conversation it came from. Its words
+  are its `doc{body}`. It is a thread of its own; @yaks/inbox lanes it as
+  Updates. It is not a letter, so it carries no [@yaks/mail](../mail) `deliver`.
 - `subscription{actor, target, mode}` records whether an actor watches (`watch`)
   or mutes (`mute`) a target. The actor is the entity identifying the recipient.
   An absent mode neither watches nor mutes. Personal `opened{at, by, via}` and

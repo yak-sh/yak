@@ -408,6 +408,7 @@ export let notificationSend = (ctx: Ctx, space: Space, store: Store): Tool => ({
       ...subject ? { subject } : {},
       by: space.eid,
       ...context?.session ? { via: context.session } : {},
+      ...context?.call ? { from: context.call.entity.eid } : {},
       ...args.about ? { about: String(args.about) } : {},
     })
     await store.g.apply([row], { trusted: true })

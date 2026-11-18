@@ -58,10 +58,24 @@ export type Apps = { eid: string; slug: string; title: string }[]
 // Where an update leads: the chat it came from (the person's own
 // conversation where it names none), and the app it is about.
 let leads = (env: Env, space: Space, u: Update, apps: Apps) => {
-  let chat = h('a', { href: chatPath(space.slug, u.chat) }, 'See the chat')
+  let chat = seeing(space, u)
   let app = apps.find((a) => a.eid == u.about)
   return [chat, ...app ? [' · ', opening(env, space, app)] : []]
 }
+
+/** Where an update opens its chat: the conversation it came from, at the
+ * entry it was written from, drawn from just before that entry so an old
+ * one is on the page (operator-page.ts `chatPage`, `from`), and named in the
+ * address the page scrolls to and marks (`row-<entry>`). */
+export let chatAt = (space: Space, u: Update) => {
+  let at = chatPath(space.slug, u.from?.chat)
+  let { entry, seq } = u.from ?? {}
+  return entry ? `${at}${seq ? `?from=${seq - 1}` : ''}#row-${entry}` : at
+}
+
+// The link to the chat an update came from.
+let seeing = (space: Space, u: Update) =>
+  h('a', { href: chatAt(space, u) }, 'See the chat')
 
 // A link opening one of the space's apps.
 let opening = (env: Env, space: Space, app: Apps[number]) =>
@@ -185,7 +199,7 @@ let needsCard = (space: Space, u: Update) => {
       { class: 'Update_When' },
       stamp(u),
       ' · ',
-      h('a', { href: chatPath(space.slug, u.chat) }, 'See the chat'),
+      seeing(space, u),
     ),
   )
   if (u.shown?.length) {

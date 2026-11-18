@@ -69,6 +69,12 @@
           "ref": "entity",
           "death": "keep",
           "description": "what it tells of, which may live in another graph"
+        },
+        "from": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the entry it was written from, where its reader opens the conversation it came from"
         }
       },
       "description": "words emitted, not said, telling whoever its `to` names (a person, or a space or project for everyone standing in it) what happened; doc{body} holds them, and it is a thread of its own"

@@ -357,6 +357,9 @@ export let manage = async (req: Request, env: Env): Promise<Response> => {
           at.open,
           await beside(dir, space, who),
           url.searchParams.get('app'),
+          url.searchParams.has('from')
+            ? Number(url.searchParams.get('from'))
+            : undefined,
         )
         : nothingHere(env)
     }
