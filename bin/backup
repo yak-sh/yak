@@ -1,6 +1,6 @@
 #!/bin/sh
 # Back up the yak data dir (~/.yak or $YAK_DATA) to R2, keeping the newest
-# seven nights there and nothing on the box.
+# seven nights active there and older nights in trash, with nothing on the box.
 #
 # A **night** is one run's prefix in the bucket, snapshots/<UTC time>/:
 #   yak.db.zst, tracker.db.zst  each database page for page, as one read
@@ -14,7 +14,7 @@
 # changes, and the one mirror serves every night.
 #
 # Restore into a NEW directory, then point a config's `db` at it:
-#   bin/backup restore <dir> [night]
+#   bin/backup restore <dir> [night | trash/night]
 # It takes the newest complete night unless named, decompresses it, copies the
 # images, and compares each database's row counts with `counts`. Away from the
 # box, export YAK_BACKUP_R2_ACCESS_KEY_ID and YAK_BACKUP_R2_SECRET_ACCESS_KEY
@@ -103,7 +103,7 @@ esac
 # sort as they happened. Called as `x=$(completed)`, a failed listing fails the
 # run: an empty answer must never read as "no nights".
 completed() {
-  found=$(rclone lsf -R --files-only --include '/*/counts' "$remote/snapshots")
+  found=$(rclone lsf -R --files-only --include '/*/counts' "${1:-$remote/snapshots}")
   printf '%s\n' "$found" | sed -n 's#/counts$##p' | sort
 }
 
@@ -172,10 +172,15 @@ snapshot() {
 }
 
 restore() {
-  [ $# -ge 1 ] || die "usage: bin/backup restore <new dir> [night]"
+  [ $# -ge 1 ] || die "usage: bin/backup restore <new dir> [night | trash/night]"
   into=$1
-  nights=$(completed)
-  night=${2:-$(printf '%s\n' "$nights" | tail -n 1)}
+  from="$remote/snapshots"
+  choice=${2:-}
+  case "$choice" in
+    trash/*) from="$remote/trash/snapshots"; choice=${choice#trash/} ;;
+  esac
+  nights=$(completed "$from")
+  night=${choice:-$(printf '%s\n' "$nights" | tail -n 1)}
   printf '%s\n' "$nights" | grep -qxF "$night" ||
     die "no complete night ${2:-at all} in $remote"
   if [ -e "$into" ] && [ -n "$(ls -A "$into")" ]; then
@@ -184,7 +189,7 @@ restore() {
   started=$(date +%s)
   say "restoring $night into $into"
   mkdir -p "$into"
-  rclone copy "$remote/snapshots/$night" "$into"
+  rclone copy "$from/$night" "$into"
   for db in $databases; do zstd -dq --rm "$into/$db.zst"; done
   if [ -f "$into/files.tar.zst" ]; then
     tar -C "$into" --zstd -xf "$into/files.tar.zst"
@@ -269,21 +274,20 @@ backup() {
     rclone copy --ignore-existing "$data/images" "$remote/images"
   rclone copyto "$work/counts" "$remote/snapshots/$night/counts"
 
-  # Only now, with tonight complete, does an old night go: a run that fails
-  # leaves every night before it. Anything not among the newest complete
-  # nights goes, including what a failed run left half uploaded.
+  # Only a complete night moves older and partial nights into trash. The
+  # trash is never purged by a backup; restore accepts trash/<night>.
   nights=$(completed)
   kept=$(printf '%s\n' "$nights" | tail -n "$keep")
   printf '%s\n' "$kept" | grep -qxF "$night" ||
     die "$night is not listed complete; every night is kept"
-  # One filtered walk removes old and partial nights together. Keeping each
-  # complete night's whole prefix protects every file in it, while --rmdirs
-  # also removes the empty directories a local remote leaves behind.
+  # Keep each active night's whole prefix. Moving copies successfully before
+  # releasing the source, so an interrupted move leaves recoverable bytes.
   set --
   for n in $kept; do
     set -- "$@" --exclude "/$n/**"
   done
-  rclone delete --rmdirs "$remote/snapshots" "$@"
+  rclone move --delete-empty-src-dirs "$remote/snapshots" \
+    "$remote/trash/snapshots" "$@"
 
   n=$(awk -F "$tab" '$1 == "yak.db" && $2 == "entity" { print $3 }' \
     "$work/counts")
@@ -297,7 +301,7 @@ main() {
       restore "$@"
       ;;
     '') backup ;;
-    *) die "usage: bin/backup [restore <new dir> [night]]" ;;
+    *) die "usage: bin/backup [restore <new dir> [night | trash/night]]" ;;
   esac
 }
 

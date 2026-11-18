@@ -617,11 +617,10 @@ stands behind that test; it returns what kept it, `failed` included. Pass a full
 local branch ref as the second argument to `holds` or `reclaim` to require
 landing there: `reclaim(path, "refs/heads/main")`. The branch reflog must also
 prove the branch committed work still contained in HEAD; a fresh branch, a
-branch only fast-forwarded from main, or missing evidence keeps the checkout.
-This also keeps a worktree whose gitdir Git has lost (`lost(path)`), because
-neither its cleanliness nor its landing can be proved. Without a required
-landing, lost worktrees are deleted outright. `restore(g, row)` creates a
-worktree again at the path, branch and commit its row recorded, so run
+branch only fast-forwarded from main, or missing evidence keeps the checkout. A
+worktree whose gitdir Git has lost (`lost(path)`) is always kept, because
+neither its cleanliness nor its landing can be proved. `restore(g, row)` creates
+a worktree again at the path, branch and commit its row recorded, so run
 `discover` on it before taking it back. `linked(common)` names a repository's
 linked worktrees, and `idleFor(path)` says how long since Git last moved one's
 HEAD, read from its reflog's last entry rather than the file's mtime, which

@@ -840,7 +840,8 @@ export let holds = async (
 
 /** Remove one worktree — the directory and the branch it was created on —
  * unless it still holds something. Returns what kept it, or nothing. A worktree
- * Git has lost is deleted outright. Nothing here passes `--force`, so Git's own
+ * Git has lost is kept: its unique contents cannot be proved absent. Nothing
+ * here passes `--force`, so Git's own
  * refusal is a second guard behind `holds`. */
 export let reclaim = async (
   path: string,
@@ -849,9 +850,7 @@ export let reclaim = async (
 ): Promise<Held | undefined> => {
   if (await lost(path)) {
     // Without Git's index and HEAD, cleanliness and landing cannot be proved.
-    if (landed) return 'unlanded'
-    return await io.remove(path, { recursive: true })
-      .then(() => undefined, () => 'failed' as Held)
+    return 'unlanded'
   }
   let { held, branch } = await holding(path, landed, base)
   if (held) return held
