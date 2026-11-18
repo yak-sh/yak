@@ -512,6 +512,8 @@ export type SpaceTunnel = {
   space: string
   tunnel: { id: string; service: string; adopted: boolean } | null
   token?: string
+  trashed?: string
+  message?: string
 }
 
 export let TUNNEL = '/api/tunnel'
@@ -523,7 +525,7 @@ export let tunnelNow = (
 ): Promise<SpaceTunnel> =>
   said(sent(apex(`${TUNNEL}?space=${encodeURIComponent(space)}`), session))
 
-/** A change to it: `do` is connect, rotate, disconnect or adopt. */
+/** Connect, rotate, trash, restore, ask to purge, or adopt a tunnel. */
 export let setTunnel = (
   session: string,
   fields: Record<string, string>,

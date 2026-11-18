@@ -647,3 +647,34 @@ test('private upload binds its customer and never falls through to a public blob
     Deno.removeSync(dir, { recursive: true })
   }
 })
+
+test('tunnel answers keep trash recovery and its owner confirmation request visible', async () => {
+  let { host, kept, ask } = await box()
+  try {
+    await kept('own@example.com', 'own-bearer')
+    let at = '2026-11-18T23:00:00Z'
+    await answering((_url, init) => {
+      let act = new URLSearchParams(init?.body as string).get('do')
+      return Response.json({
+        space: 'ada',
+        tunnel: null,
+        trashed: at,
+        ...act == 'purge'
+          ? { message: 'Check your email to confirm permanent removal.' }
+          : {},
+      })
+    }, async () => {
+      equal(
+        body(await ask('admin_tunnel', { space: 'ada', act: 'disconnect' })),
+        `ada  tunnel in the trash since ${at}; names held; restore it with act=restore`,
+      )
+      equal(
+        body(await ask('admin_tunnel', { space: 'ada', act: 'purge' })),
+        `ada  tunnel in the trash since ${at}; names held; restore it with act=restore\n` +
+          'Check your email to confirm permanent removal.',
+      )
+    })
+  } finally {
+    await host.close()
+  }
+})

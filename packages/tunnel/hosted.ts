@@ -444,7 +444,10 @@ let changed = async (
         'disconnect the tunnel into the trash first',
       )
     }
-    return shown(space, null, { message: await host.purge(space) })
+    return shown(space, null, {
+      trashed: space.tunnelTrashed,
+      message: await host.purge(space),
+    })
   }
   if (space.tunnelTrashed && act == 'rotate') {
     return refused(409, 'trashed', 'restore the tunnel from the trash first')

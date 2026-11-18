@@ -473,7 +473,10 @@ export let runs = (
             ? `${got.space}  tunnel ${t.id}  service ${t.service}${
               t.adopted ? '  (adopted)' : ''
             }`
+            : got.trashed
+            ? `${got.space}  tunnel in the trash since ${got.trashed}; names held; restore it with act=restore`
             : `${got.space}  no tunnel`,
+          ...got.message ? [got.message] : [],
           ...got.token
             ? [`token     kept in the vault as ${TUNNEL_TOKEN}`]
             : [],

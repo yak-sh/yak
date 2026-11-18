@@ -334,7 +334,7 @@
       "noun": "admin",
       "verb": "tunnel",
       "title": "A space's tunnel to a machine",
-      "description": "The tunnel a space has to a machine, whose server the space's apps reach through the tunnel's gateway (a vpc_services door in their config), at the paths its @yaks/tunnel config opens. With no act, what the tunnel is. connect makes a tunnel, its service to the port given, and the gateway; rotate puts the gateway again, and gives the tunnel a new token where the platform made it; adopt records a tunnel and service made elsewhere with a gateway in front, and is the platform's act. A token answered is kept in this graph's vault as TUNNEL_TOKEN without printing it, where @yaks/tunnel's service reads it. disconnect removes the tunnel.\n\n  yak admin tunnel yak --as admin@bot.yak.sh\n  yak admin tunnel yak adopt --tunnel <id> --service <id> --as admin@bot.yak.sh\n  yak admin tunnel ada connect --port 5173",
+      "description": "The tunnel a space has to a machine, whose server the space's apps reach through the tunnel's gateway (a vpc_services door in their config), at the paths its @yaks/tunnel config opens. With no act, what the tunnel is. connect makes a tunnel, its service to the port given, and the gateway; rotate puts the gateway again, and gives the tunnel a new token where the platform made it; adopt records a tunnel and service made elsewhere with a gateway in front, and is the platform's act. A token answered is kept in this graph's vault as TUNNEL_TOKEN without printing it, where @yaks/tunnel's service reads it. disconnect keeps the tunnel and service in the trash with their shared names held; restore reconnects that same pair. purge asks its owner by email to confirm permanent removal on the shared confirmation page; an agent cannot purge it.\n\n  yak admin tunnel yak --as admin@bot.yak.sh\n  yak admin tunnel yak adopt --tunnel <id> --service <id> --as admin@bot.yak.sh\n  yak admin tunnel ada connect --port 5173",
       "input": {
         "space": {
           "type": "string",
@@ -346,6 +346,8 @@
             "connect",
             "rotate",
             "disconnect",
+            "restore",
+            "purge",
             "adopt"
           ],
           "description": "what to change; nothing reads the tunnel"
