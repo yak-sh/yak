@@ -1,3 +1,4 @@
+import { type Restored, restoreFields } from './trash.ts'
 // A graph: a vocabulary, a storage adapter, and the plugins that extend what
 // `apply()` does. This file is the assembly — the phase list, the core's own
 // work at each phase, and the transaction the middle of the list runs inside.
@@ -884,6 +885,7 @@ export let graph = (opts: Options): Graph => {
     let current = tracing?.parent
     let checking = false
     let st = state()
+    let restored: Restored | undefined
     // The apply's moment, read off the clock once as it begins unless the
     // batch names its own: what every stamp is written with and every rule
     // reads relative times against. A host's clock may read context that
@@ -1558,9 +1560,16 @@ export let graph = (opts: Options): Graph => {
     // `apply()` passes through, the commit and a dry run's rollback alike.
     return each(
       [
+        (b: Bundle[]) =>
+          b.some((row) => row.$restore !== undefined)
+            ? after(restoreFields(storage, b), (allowed) => {
+              restored = allowed
+              return b
+            })
+            : b,
         // Normalization may rewrite server-owned fields; it cannot hide that
         // an untrusted caller explicitly asked to write one.
-        (b: Bundle[]) => o.trusted ? b : unstamped(b, vocab),
+        (b: Bundle[]) => o.trusted ? b : unstamped(b, vocab, restored),
         actors,
         // Every id the batch names — a bundle's own, a reference's —
         // resolved the way a read and a tool's arguments resolve theirs, so a
@@ -1612,6 +1621,7 @@ export let graph = (opts: Options): Graph => {
                   o.trusted,
                   opts.teach,
                   o.replica,
+                  restored,
                 ),
                 (b) => referring(b, outside, [], true),
               ),

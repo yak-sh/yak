@@ -1,4 +1,4 @@
-import { preserving, type Trash } from '@yaks/graph/trash'
+import { preserving, type Trash, type TrashPage } from '@yaks/graph/trash'
 import {
   purgeTrashSql,
   retainSql,
@@ -132,9 +132,9 @@ export type { Query }
  */
 export type Store = {
   /** Destructive transactions retained for recovery. */
-  trash: (eids?: Eid[]) => Promise<Trash[]>
+  trash: (eids?: Eid[], page?: TrashPage) => Promise<Trash[]>
   /** Purge one retained transaction after a person explicitly chooses it. */
-  purgeTrash: (id: string) => Promise<void>
+  purgeTrash: (id: string | string[]) => Promise<void>
 
   /** Whether a value this store reads for the property means its entity
    * wears the component (@yaks/sql `worn`). */
@@ -627,8 +627,10 @@ export let storage = <S extends Prepared<S>>(
     purgeTrash: async (id) => {
       await one(purgeTrashSql(id))
     },
-    trash: async (eids) =>
-      eids?.length === 0 ? [] : trashRows(vocab, await one(trashSql(eids))),
+    trash: async (eids, page) =>
+      eids?.length === 0
+        ? []
+        : trashRows(vocab, await one(trashSql(eids, page))),
     tx: run,
   }
 }

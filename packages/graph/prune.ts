@@ -1,11 +1,8 @@
-// An identity is erased, not tombstoned, in two cases, both asked for with
-// `$prune` and both only once it holds nothing and nothing points at it. A
-// malformed identity row an older writer left behind is repaired away. A
-// tombstone whose delete is long past is collected: it exists to swallow a
-// write that raced the delete (./mutate.ts), and a retention sweep
-// (@yaks/effects `expire`) prunes it once no such write can still arrive. A
-// generated identity is pruned only from its tombstone, and only by trusted
-// server code, so ordinary deletion keeps its identity.
+// An explicit orphan repair can erase an identity only once it holds nothing
+// and nothing points at it. Retained trash points at its identities, so this
+// cannot discard recoverable data. Only a deliberate purge may let go of that
+// archive; background expiration never does. Generated identities additionally
+// require a trusted write and an existing tombstone.
 
 import { after } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'

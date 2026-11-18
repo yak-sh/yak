@@ -2,21 +2,26 @@
 // foreign key keeps a trashed identity out of background orphan collection.
 import {
   among,
+  and,
+  array,
   col,
   type Delete,
   desc,
   type Driver,
   eq,
   type Insert,
+  lt,
   oneOf,
+  or,
   type Row,
   type Select,
   select,
+  sub,
   table,
   val,
 } from '@yaks/sql'
 import type { Bundle } from '@yaks/graph'
-import type { Trash } from '@yaks/graph/trash'
+import { type Trash, trashLimit, type TrashPage } from '@yaks/graph/trash'
 import type { Vocab } from '@yaks/vocab'
 import { decode, stringify } from '@yaks/vocab/wire'
 
@@ -37,31 +42,55 @@ export let retainSql = (id: string, at: string, bundles: Bundle[]): Insert[] =>
   }))
 
 /** Select every snapshot in a retained transaction touching these identities. */
-export let trashSql = (eids?: string[]): Select => {
+export let trashSql = (eids?: string[], page: TrashPage = {}): Select => {
+  let before = page.before ? val(page.before.at) : page.after
+    ? sub(
+      select({
+        cols: [col('at')],
+        from: table(TRASH),
+        where: eq(col('batch'), val(page.after)),
+        limit: val(1),
+      }),
+    )
+    : undefined
   let batches = select({
     cols: [col('batch')],
     from: table(TRASH),
     distinct: true,
-    order: [desc(col('at'))],
-    limit: val(20),
-    ...eids
-      ? {
-        where: among(
-          col('entity'),
-          select({
-            cols: [col('id')],
-            from: table('entity'),
-            where: oneOf(col('eid'), eids),
-          }),
-        ),
-      }
-      : {},
+    order: [desc(col('at')), desc(col('batch'))],
+    limit: val(trashLimit(page)),
+    where: and(
+      ...eids
+        ? [
+          among(
+            col('entity'),
+            select({
+              cols: [col('id')],
+              from: table('entity'),
+              where: among(col('eid'), array(eids)),
+            }),
+          ),
+        ]
+        : [],
+      ...page.id ? [eq(col('batch'), val(page.id))] : [],
+      ...before
+        ? [
+          or(
+            lt(col('at'), before),
+            and(
+              eq(col('at'), before),
+              lt(col('batch'), val(page.before?.id ?? page.after!)),
+            ),
+          ),
+        ]
+        : [],
+    ),
   })
   return select({
     cols: [col('batch'), col('at'), col('body')],
     from: table(TRASH),
     where: among(col('batch'), batches),
-    order: [desc(col('at'))],
+    order: [desc(col('at')), desc(col('batch'))],
   })
 }
 
@@ -78,12 +107,24 @@ export let trashRows = (vocab: Vocab, rows: Row[]): Trash[] => {
 }
 
 /** Retained transactions touching an identity, newest first. */
-export let trashed = (driver: Driver, vocab: Vocab, eids?: string[]): Trash[] =>
-  eids?.length === 0 ? [] : trashRows(vocab, driver.query(trashSql(eids)))
+export let trashed = (
+  driver: Driver,
+  vocab: Vocab,
+  eids?: string[],
+  page?: TrashPage,
+): Trash[] =>
+  eids?.length === 0 ? [] : trashRows(vocab, driver.query(trashSql(eids, page)))
 
 /** Erase one retained transaction, called only for a deliberate trash purge. */
-export let purgeTrashSql = (id: string): Delete => ({
+export let purgeTrashSql = (id: string | string[]): Delete => ({
   t: 'delete',
   from: TRASH,
-  where: eq(col('batch'), val(id)),
+  where: typeof id == 'string' ? eq(col('batch'), val(id)) : among(
+    col('entity'),
+    select({
+      cols: [col('id')],
+      from: table('entity'),
+      where: among(col('eid'), array(id)),
+    }),
+  ),
 })

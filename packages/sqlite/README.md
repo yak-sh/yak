@@ -1564,8 +1564,15 @@ components or property values, including direct `tx.remove()` calls. The
 reference to the identity prevents orphan collection from erasing recoverable
 rows. The snapshots use the graph's JSON wire format, including binary values.
 
-`store.trash(eids)` reads complete retained transactions as `{id, at, bundles}`;
-`restoreTrash(graph, entry, options)` from `@yaks/graph/trash` restores them
-through ordinary graph writes. `store.purgeTrash(id)` removes one archive only
-after the person explicitly chooses to purge it through the confirmation page.
-Neither restoring a row nor its age purges its archive.
+`store.trash(eids, {after, id, limit})` reads complete retained transactions as
+`{id, at, bundles}`; `restoreTrash(graph, entry, options)` from
+`@yaks/graph/trash` restores them through ordinary graph writes.
+`store.purgeTrash(id)` removes one archive only after the person explicitly
+chooses to purge it through the confirmation page. Neither restoring a row nor
+its age purges its archive.
+
+An exact `id` reads a retained transaction without an age limit. Discovery
+continues from the previous page's last id through `after`. A composed host can
+page several stores against the same `before: {at, id}` boundary. Passing entity
+eids to `store.purgeTrash(eids)` purges only their snapshots, preserving
+unrelated members of a retained transaction.

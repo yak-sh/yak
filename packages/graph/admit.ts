@@ -1,3 +1,4 @@
+import type { Restored } from './trash.ts'
 // Admission: what a batch is allowed to contain. Three rules, and each is a
 // deliberate choice about which mistakes are loud and which are silent.
 //
@@ -52,7 +53,11 @@ let named = (b: Bundle) => b.$alias ?? b.entity.eid
  * replace it. The identity is not checked: it is the row's address, which no
  * client writes (`wire: false`), so a stamp it carries (`entity.archetype`) is
  * the read identity sent back whole, and {@link admit} drops it. */
-export let unstamped = (bundles: Bundle[], vocab: Vocab): Bundle[] => {
+export let unstamped = (
+  bundles: Bundle[],
+  vocab: Vocab,
+  restored?: Restored,
+): Bundle[] => {
   for (let b of bundles) {
     if (b.$at !== undefined) {
       throw new Refused(
@@ -61,7 +66,7 @@ export let unstamped = (bundles: Bundle[], vocab: Vocab): Bundle[] => {
     }
     for (let [name, patch] of comps(b)) {
       for (let k of Object.keys(patch ?? {})) {
-        if (vocab.prop(name, k)?.stamped) {
+        if (vocab.prop(name, k)?.stamped && !restored?.(b, name, k)) {
           serverOwned({ eid: named(b), comp: name, prop: k })
         }
       }
@@ -93,6 +98,7 @@ let admitComp = (
   patch: Comp,
   trusted: boolean,
   replica: boolean,
+  restored?: (property: string) => boolean,
 ): Comp | undefined => {
   let alien: string[] = []
   let kept: Comp = {}
@@ -107,7 +113,7 @@ let admitComp = (
       alien.push(k)
       continue
     }
-    if (p.stamped && !trusted) {
+    if (p.stamped && !trusted && !restored?.(k)) {
       ignored = true
       continue
     }
@@ -131,11 +137,13 @@ let admitComp = (
   }
   if (ignored && !Object.keys(kept).length) return undefined
   let cut = cast(v, name, kept)
-  let errs = v.check(name, cut, { stamped: trusted })
+  let authoritative = trusted ||
+    Object.keys(cut).some((p) => v.prop(name, p)?.stamped && restored?.(p))
+  let errs = v.check(name, cut, { stamped: authoritative })
   if (errs.length) {
     // Which property is at fault, asked one at a time only once refused.
     let prop = Object.keys(cut).find((k) =>
-      v.check(name, { [k]: cut[k] }, { stamped: trusted }).length
+      v.check(name, { [k]: cut[k] }, { stamped: authoritative }).length
     )
     throw new Misfit(errs.join('; '), { eid, comp: name, prop })
   }
@@ -176,6 +184,7 @@ export let admit = (
   trusted = false,
   teach?: string,
   replica = false,
+  restored?: Restored,
 ): Bundle[] => {
   let alien = new Set<string>()
   for (let b of bundles) {
@@ -184,7 +193,7 @@ export let admit = (
     }
   }
   if (alien.size) throw new Misfit(unknownComps([...alien], teach))
-  if (!trusted) unstamped(bundles, vocab)
+  if (!trusted) unstamped(bundles, vocab, restored)
   return bundles.flatMap((b) => {
     // The identity's stamps are the store's, and arrive only with an
     // identity copied from a read. Trusted code may state one, except the
@@ -208,7 +217,7 @@ export let admit = (
       let info = vocab.comp(name)!
       // A component marked `wire: false` — the `entity` identity component,
       // for one — is not writable by a client.
-      if (!info.wire && !trusted) continue
+      if (!info.wire && !trusted && !restored?.(b, name)) continue
       if (patch == null) {
         out[name] = null // removing a component needs no properties
         kept++
@@ -221,6 +230,7 @@ export let admit = (
         patch,
         trusted,
         replica && trusted,
+        restored ? (p) => restored(b, name, p) : undefined,
       )
       if (!admitted) continue
       out[name] = admitted

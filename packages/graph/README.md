@@ -248,13 +248,13 @@ transaction:
   eids, newest first, as `{id, at, bundles}`.
   `restoreTrash(graph, entry, options)` from `@yaks/graph/trash` restores
   deleted rows and fills removed values on surviving rows while preserving their
-  later values. Ordinary restore authority is supplied through `options`; a
-  server restoring stamped values uses its trusted write context. Plugins
-  prepare snapshots through `restore` before the helper fills missing values;
-  aliases whose names were reused receive free numbered names. `options.notice`
-  reports such changes to the caller. The archive remains until a person
-  explicitly purges it with `storage.purgeTrash(id)` through the host's
-  confirmation page.
+  later values under the caller's ordinary write authority. Matching
+  server-owned values are verified against the archive; original creation
+  metadata returns while `updated` records the restore. Plugins prepare
+  snapshots through `restore` before the helper fills missing values; aliases
+  whose names were reused receive free numbered names. `options.notice` reports
+  such changes to the caller. The archive remains until a person explicitly
+  purges it with `storage.purgeTrash(id)` through the host's confirmation page.
 - `$delete: true` deletes the entity, subject to the vocabulary's
   [death keyword](../vocab/README.md#routing-and-references). A **tombstone** is
   the `tombstone: {}` component that records a deleted entity, keeping its eid
@@ -274,18 +274,19 @@ its identity plus `tombstone: {}`.
 
 `$prune: true` removes an identity itself, once it holds no components and no
 reference names it. It repairs a malformed **orphan identity**, one whose eid
-was not generated, using the exact stored eid, including an empty string. It
-also collects an old tombstone: a tombstone exists to swallow a write that raced
-its delete, and once none can still arrive, trusted server code (the daily
-expiration in [@yaks/effects](../effects/README.md#expiration)) prunes it. A
-generated eid is pruned only from its tombstone and only by a trusted write;
-held components and inbound references refuse the batch. The request carries no
-component edits; its returned tombstone lets subscribers remove the identity
-from their caches. Pruning runs after transaction hooks, and is recorded by its
-caller rather than the component journal. A store that keeps deletion times
-offers the graves a sweep may prune through `outside.buried(before, page)`: up
-to `page.limit` tombstones laid before `before` that nothing names, resuming the
-walk at `page.after`, the `next` the page before answered.
+was not generated, using the exact stored eid, including an empty string. It can
+also remove an unreferenced tombstone after its retained data was explicitly
+purged. Retained snapshots hold a reference to their identities, so neither
+`$prune` nor direct storage pruning can erase recoverable data. A generated eid
+is pruned only from its tombstone and only by a trusted write; held components
+and inbound references refuse the batch. No background expiration purges trash.
+The request carries no component edits; its returned tombstone lets subscribers
+remove the identity from their caches. Pruning runs after transaction hooks, and
+is recorded by its caller rather than the component journal. A store that keeps
+deletion times offers the graves a sweep may prune through
+`outside.buried(before, page)`: up to `page.limit` tombstones laid before
+`before` that nothing names, resuming the walk at `page.after`, the `next` the
+page before answered.
 
 A store that keeps a file of pages says what it keeps through
 `storage.measure(signal)`: the file's bytes, its free bytes and each table's
@@ -1702,3 +1703,11 @@ A `$was` component may use the empty property name to guard the complete stored
 component, including presence: `{tombstone: {'': token({})}}` guards an explicit
 restore against a concurrent revival. `{note: {'': null}}` requires that the
 `note` component is absent.
+
+Trash reads take a second argument `{after, id, limit}`. `after` is the last
+transaction id returned by the previous page; `id` selects one exact retained
+transaction, including one older than a discovery page. `before: {at, id}` lets
+a host use the same cursor across several stores. Read windows hold at most 100
+transactions. A confirmed entity purge may pass exact entity eids to
+`storage.purgeTrash(eids)`; this removes their before-images across all history
+while preserving unrelated rows retained in the same transactions.

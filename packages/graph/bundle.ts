@@ -83,6 +83,8 @@ export type Bundle =
     /** remove an exact malformed identity only when it holds nothing and no
      * references point at it; generated identities cannot be pruned */
     $prune?: boolean
+    /** restore verified server-owned values from this retained transaction */
+    $restore?: string
     /** a per-property precondition that must still hold */
     $was?: Was
     /** who is writing this entity: an entity whose bundles name nobody is
@@ -415,6 +417,7 @@ export let formed = (
 export let REQUESTS: string[] = [
   '$delete',
   '$prune',
+  '$restore',
   '$was',
   '$actor',
   '$at',

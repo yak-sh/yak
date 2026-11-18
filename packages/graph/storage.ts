@@ -1,4 +1,4 @@
-import type { Trash } from './trash.ts'
+import type { Trash, TrashPage } from './trash.ts'
 // The storage interface: the one thing this package does not implement. A
 // `Storage` holds the data — it turns a vocabulary into a schema, answers
 // queries as bundles, and opens transactions. `apply()` never writes a row
@@ -279,9 +279,9 @@ export type Change = {
  */
 export type Storage = {
   /** Retained destructive transactions that touched these identities. */
-  trash?: (eids?: Eid[]) => Trash[] | Promise<Trash[]>
+  trash?: (eids?: Eid[], page?: TrashPage) => Trash[] | Promise<Trash[]>
   /** Purge a retained transaction only after the person explicitly chose it. */
-  purgeTrash?: (id: string) => void | Promise<void>
+  purgeTrash?: (id: string | string[]) => void | Promise<void>
 
   /** the store's branches, where it keeps any */
   branches?: Branches

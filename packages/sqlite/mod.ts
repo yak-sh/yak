@@ -1,4 +1,4 @@
-import { preserving, type Trash } from '@yaks/graph/trash'
+import { preserving, type Trash, type TrashPage } from '@yaks/graph/trash'
 import { purgeTrashSql, retainSql, trashed } from './trash.ts'
 import { cardinality, population } from './population.ts'
 // @yaks/sqlite — a storage adapter that turns the yaks query/vocabulary/SQL
@@ -354,9 +354,9 @@ export type Tx = {
 // wanted.
 export type Store = {
   /** Destructive transactions retained for recovery. */
-  trash: (eids?: Eid[]) => Trash[]
+  trash: (eids?: Eid[], page?: TrashPage) => Trash[]
   /** Purge one retained transaction after a person explicitly chooses it. */
-  purgeTrash: (id: string) => void
+  purgeTrash: (id: string | string[]) => void
 
   /** its branches, where it keeps history (./branches.ts) */
   branches?: Branches
@@ -1575,7 +1575,8 @@ export let storage = (
       unit(driver, () => {
         driver.query(purgeTrashSql(id))
       }),
-    trash: (eids) => unit(driver, () => trashed(driver, vocab, eids), 'read'),
+    trash: (eids, page) =>
+      unit(driver, () => trashed(driver, vocab, eids, page), 'read'),
     tx: <R>(
       body: (tx: Tx) => R,
       { wait }: { admission?: boolean; wait?: boolean } = {},

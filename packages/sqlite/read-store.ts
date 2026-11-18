@@ -34,7 +34,8 @@ export let storage = (
   }
   return {
     ...reader(driver, vocab, base),
-    trash: (eids) => unit(driver, () => trashed(driver, vocab, eids), 'read'),
+    trash: (eids, page) =>
+      unit(driver, () => trashed(driver, vocab, eids, page), 'read'),
     // Listed here; made and dropped by a writer.
     ...base.history
       ? { branches: branching(driver, vocab, base.history, opts) }

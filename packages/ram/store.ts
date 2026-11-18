@@ -1,4 +1,10 @@
-import { preserving, type Trash } from '@yaks/graph/trash'
+import {
+  preserving,
+  type Trash,
+  trashLimit,
+  trashOrder,
+  type TrashPage,
+} from '@yaks/graph/trash'
 import { Refused } from '@yaks/graph/errors'
 // A graph in a Map. This is @yaks/graph's `Storage` with nothing underneath it
 // — one record per entity, keyed by eid, held in a plain Map — so a graph can
@@ -140,9 +146,9 @@ export type Tx = {
  */
 export type Store = {
   /** Destructive transactions retained for recovery. */
-  trash: (eids?: Eid[]) => Trash[]
+  trash: (eids?: Eid[], page?: TrashPage) => Trash[]
   /** Purge one retained transaction after a person explicitly chooses it. */
-  purgeTrash: (id: string) => void
+  purgeTrash: (id: string | string[]) => void
 
   /** Adopt an additive vocabulary without replacing rows or their indexes. */
   extend: (next: Vocab) => boolean
@@ -1024,12 +1030,28 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     get,
     buried: graves,
     purgeTrash: (id) => {
-      trash.delete(id)
+      for (let [key, entry] of trash) {
+        let bundles = typeof id == 'string'
+          ? key == id ? [] : entry.bundles
+          : entry.bundles.filter((b) => !id.includes(b.entity.eid))
+        if (bundles.length == entry.bundles.length) continue
+        if (depth) trashLog.push([key, entry])
+        if (bundles.length) trash.set(key, { ...entry, bundles })
+        else trash.delete(key)
+      }
     },
-    trash: (eids) =>
-      [...trash.values()].filter((r) =>
-        !eids || r.bundles.some((b) => eids.includes(b.entity.eid))
-      ).toReversed().slice(0, 20),
+    trash: (eids, page = {}) => {
+      let cursor = page.before ??
+        (page.after ? trash.get(page.after) : undefined)
+      if (page.after && !cursor) return []
+      return structuredClone(
+        [...trash.values()].filter((r) =>
+          (!eids || r.bundles.some((b) => eids.includes(b.entity.eid))) &&
+          (!page.id || r.id == page.id) &&
+          (!cursor || trashOrder(r, cursor) > 0)
+        ).sort(trashOrder).slice(0, trashLimit(page)),
+      )
+    },
     tx: (body) => {
       // A nested transaction is a savepoint: it rolls back to where it opened,
       // and its entries stay in the log for the outer one to undo in its turn.
