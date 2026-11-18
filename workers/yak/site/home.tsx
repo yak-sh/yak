@@ -407,7 +407,6 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
       head={
         <>
           <script src='carousel.js' defer />
-          <script src='walk.js' defer />
           <Walk />
           <script src='cta.js' defer />
           <Data of={data()} />
@@ -459,7 +458,6 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
           />
         </div>
       </section>
-      <Walkthrough />
       <section class='Yours' aria-labelledby='does'>
         <h2 class='Title' id='does' {...text(key('does.title'))} />
         <dl class='Yours_List'>
