@@ -5,12 +5,16 @@
 // a 128th of his slot; --x and --feet, the middle of his figure and the line
 // he sits on, on the page (<.Sky data-sink> of his units above the bottom of
 // his hooves); --rule and --rule2, the pencil lines above and below the
-// section after the hero. A sixth, --scroll, is how far the page has
-// scrolled, in his units, set on the hills: the farther a range, the more of
-// it sinks behind the line as the page goes up. The night sky behind them,
-// its stars, moon and shooting stars, is farther still, and hardly moves at
-// all: --held, set on it, sinks it by all but a twentieth of the scroll, so
-// in the window it stays nearly where it is while the hills go up past it.
+// section after the hero.
+//
+// As the page scrolls, each layer of the scene goes up the window, by less
+// the farther back it is: a layer's <data-depth> is the share of the scroll
+// it sinks by (sky.tsx `DEPTH`), set on it as --sink, in his units. So the
+// hills go up a little slower than the line he sits on, the dusk sky and its
+// sun slower still, and the hills rise over the sun; the night sky hardly
+// moves at all. --dusk, set on the sky, goes from 0 at the top of the page to
+// 1 once the line he sits on reaches the top of the window, and the dusk
+// turns from blue to orange with it.
 //
 // At dusk, birds fly by now and then (<.Sky data-birds="most lo hi low
 // high">: how many in a flock at most, the seconds between flocks, and how
@@ -42,23 +46,26 @@
   let often = (f, lo, hi, wait = between(lo, hi)) =>
     setTimeout(() => (f(), often(f, lo, hi)), wait * 1000)
 
-  // how much of the scroll the night sky sinks by, to stay in the window
-  const HOLD = .95
-  let hills = sky?.querySelector('.Sky_Hills')
+  let layers = [...(sky?.querySelectorAll('[data-depth]') ?? [])]
   let deep = sky?.querySelector('.Sky_Deep')
-  let u = 1, held = 0
+  let u = 1, feet = 1
+  // how far the layer `el` is in has sunk, in his units
+  let sunk = (el) =>
+    calm.matches
+      ? 0
+      : Number(el.closest('[data-depth]')?.dataset.depth ?? 0) * scrollY / u
   let scroll = () => {
-    held = calm.matches ? 0 : HOLD * scrollY / u
-    hills.style.setProperty('--scroll', n1(scrollY / u) + 'px')
-    deep?.style.setProperty('--held', n1(held) + 'px')
+    for (let el of layers) el.style.setProperty('--sink', n1(sunk(el)))
+    sky.style.setProperty('--dusk', Math.min(1, scrollY / feet).toFixed(3))
   }
   let place = () => {
     let r = slot.getBoundingClientRect(), n = after.getBoundingClientRect()
     let set = (name, px) => sky.style.setProperty(name, px.toFixed(2) + 'px')
     u = r.width / 128
+    feet = Math.max(1, r.top + scrollY + r.height * .89 - sink * u)
     set('--u', u)
     set('--x', r.left + scrollX + r.width * .52)
-    set('--feet', r.top + scrollY + r.height * .89 - sink * u)
+    set('--feet', feet)
     set('--rule', n.top + scrollY + 1)
     set('--rule2', n.bottom + scrollY - .5)
     scroll()
@@ -260,13 +267,10 @@
     if (sign) delete sign.dataset.out, delete sign.dataset.away
   }, true)
 
-  // where a circle of the sky's is in the window, the night sky's as far
-  // down as it is held
+  // where a circle of the sky's is in the window, as far down as its layer
+  // has sunk
   let circle = (el) =>
-    at(
-      Number(el.getAttribute('cx')),
-      Number(el.getAttribute('cy')) + (el.closest('.Sky_Deep') ? held : 0),
-    )
+    at(Number(el.getAttribute('cx')), Number(el.getAttribute('cy')) + sunk(el))
 
   // what a touch at (px, py) lands on: the sun, the moon, or the sky; a
   // touch within a finger's width of either counts
@@ -320,8 +324,8 @@
     let ease = { duration: 7000, easing: 'ease-in-out' }
     setting = sun.animate([
       { translate: '0 0' },
-      { translate: '0 64px', offset: .4 },
-      { translate: '0 64px', offset: .55 },
+      { translate: '0 94px', offset: .4 },
+      { translate: '0 94px', offset: .55 },
       { translate: '0 0' },
     ], ease)
     sky.querySelector('.Sky_Glow').animate([
@@ -335,9 +339,10 @@
 
   // A shooting star from one point to another, in his units: its head runs
   // the way, its tail growing behind it and drawn back in as it burns out.
-  // It is drawn into the night sky, so as far up as the sky is held down.
+  // It is drawn into the night sky, so as far up as the sky has sunk.
   let shoot = ([x, y], [x2, y2], size = 1) => {
-    y -= held, y2 -= held
+    let down = sunk(deep)
+    y -= down, y2 -= down
     let way = Math.hypot(x2 - x, y2 - y) / size
     let turn = Math.atan2(y2 - y, x2 - x) * 180 / Math.PI
     let star = draw('g', {

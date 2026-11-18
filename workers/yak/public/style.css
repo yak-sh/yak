@@ -723,7 +723,8 @@
   }
 
   .Sky {
-    --air: linear-gradient(#cdd2ea 0%, #e1d3e3 42%, #f4d8cc 74%, #fbe0bf 100%);
+    --air: linear-gradient(#c3cfee 0%, #d9d6ea 42%, #eed9d3 74%, #f8dfc4 100%);
+    --set: linear-gradient(#e3c6cf 0%, #f1c4b4 40%, #f7b78e 74%, #fbc387 100%);
     position: absolute;
     z-index: -1;
     top: 0;
@@ -743,13 +744,29 @@
     vector-effect: non-scaling-stroke;
   }
 
-  /* The air, from the top of the page to just under the line. */
+  /* The air, from the top of the page to just under the line. At dusk it
+     starts blue and turns orange as the page scrolls (sky.js --dusk). */
   .Sky_Air {
     top: 0;
     left: 0;
     width: 100%;
     height: calc(var(--feet) + 40 * var(--u));
     background: var(--air);
+    translate: 0 calc(var(--sink, 0) * var(--u));
+  }
+  .Sky_Air::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--set);
+    opacity: var(--dusk, 0);
+  }
+
+  /* Each layer of the far scene sinks by its share of the scroll (sky.js
+     --sink, in his units), so it goes up the window by less the farther
+     back it is. */
+  .Sky_Far [data-depth] {
+    translate: 0 calc(var(--sink, 0) * 1px);
   }
 
   /* What stands in the sky and on the horizon, drawn in his units around
@@ -763,11 +780,13 @@
 
   /* The line and the grass under it (viewBox -3000 -60 6000 300), which
      fades into the page. */
+  /* Under the turf it is the page, over whatever has sunk below the line. */
   .Sky_Grass {
     left: 0;
     width: 100%;
     top: calc(var(--feet) - 60 * var(--u));
     bottom: 0;
+    background: linear-gradient(transparent calc(299 * var(--u)), var(--bg) 0);
   }
 
   .Sky_Turf {
@@ -814,11 +833,6 @@
   .Sky_Star {
     fill: #f1e6d8;
   }
-  /* The night sky stays nearly still in the window as the page scrolls
-     (sky.js --held, in his units), and the hills go up past it. */
-  .Sky_Deep {
-    translate: 0 var(--held, 0px);
-  }
   .Sky_Fly {
     opacity: 0;
   }
@@ -863,6 +877,7 @@
   @media (prefers-color-scheme: dark) {
     .Sky {
       --air: linear-gradient(#151a2c 0%, #1c2340 50%, #2a2e4d 85%, #35345a 100%);
+      --set: none;
     }
   }
   @media not (prefers-color-scheme: dark) {
@@ -929,17 +944,6 @@
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    /* the farther a range of hills, the more of it sinks behind the line as
-       the page scrolls (sky.js --scroll, in his units) */
-    .Sky_Farthest {
-      translate: 0 calc(var(--scroll, 0px) * 0.12);
-    }
-    .Sky_Farther {
-      translate: 0 calc(var(--scroll, 0px) * 0.08);
-    }
-    .Sky_Near {
-      translate: 0 calc(var(--scroll, 0px) * 0.04);
-    }
     .Sky_Drift {
       animation: Sky-drift 200s ease-in-out infinite alternate;
     }

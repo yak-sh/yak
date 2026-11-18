@@ -8,7 +8,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { page as home } from './site/mod.ts'
-import { MOON, moon, PHASES, SINK, SUN } from './site/sky.tsx'
+import { DEPTH, HILLS, MOON, moon, PHASES, SINK, SUN } from './site/sky.tsx'
 
 // The page Site keeps a home page's path in (site.ts `HOME`).
 let file = (path: string) =>
@@ -164,31 +164,81 @@ test('birds cross the dusk now and then, and a shooting star the night', () => {
   assertEquals(night.all('.Sky_Shoot').length, 1)
 })
 
-test('the hills are told how far the page has scrolled, in his units', () => {
-  let { el, on, scope } = sky()
-  let hills = el('.Sky_Hills') as HTMLElement
-  assertEquals(hills.style.getPropertyValue('--scroll'), '0.0px')
-  scope.scrollY = 300
+// How far each layer has sunk after a scroll of `y`, in his units (one to a
+// pixel here), by its class.
+let sinks = (y: number, calm = false) => {
+  let { all, on, scope } = sky({ calm })
+  scope.scrollY = y
   on.scroll({})
-  assertEquals(hills.style.getPropertyValue('--scroll'), '300.0px')
+  return Object.fromEntries(
+    all('[data-depth]').map((el) => [
+      el.getAttribute('class')!.split(' ').at(-1)!,
+      Number((el as HTMLElement).style.getPropertyValue('--sink')),
+    ]),
+  )
+}
+
+test('as the page scrolls every layer goes up, the farther back the less', () => {
+  for (let y of [0, 50, 150, 300, 600]) {
+    let s = sinks(y)
+    let up = (k: string) => y - s[k]
+    let order = [
+      'Sky_Deep',
+      'Sky_Air',
+      'Sky_Farthest',
+      'Sky_Farther',
+      'Sky_Near',
+    ]
+    assertEquals(s.Sky_Air, s.Sky_Day, `${y}`)
+    order.forEach((k, i) => {
+      assert(up(k) >= 0, `${k} goes down at ${y}`)
+      let next = order[i + 1]
+      if (y && next) assert(up(k) < up(next), `${k} outruns ${next} at ${y}`)
+    })
+    // the line he sits on goes up with the page, faster than any hill
+    assert(!y || up('Sky_Near') < y)
+  }
 })
 
-test('the night sky hardly moves in the window as the page scrolls', () => {
-  let { el, on, scope, touch } = sky({ dark: true })
-  scope.scrollY = 300
-  on.scroll({})
-  let deep = el('.Sky_Deep') as HTMLElement
-  assertEquals(deep.style.getPropertyValue('--held'), '285.0px')
-  // the moon answers a touch where it now shows, held down with the stars
-  touch(MOON.x, MOON.y + 285)
-  assertEquals(el('.Sky_Moon').getAttribute('d'), moon(PHASES[1]))
-  let calm = sky({ dark: true, calm: true })
-  calm.scope.scrollY = 300
-  calm.on.scroll({})
-  assertEquals(
-    (calm.el('.Sky_Deep') as HTMLElement).style.getPropertyValue('--held'),
-    '0.0px',
-  )
+test('the hills rise over the sun as the page scrolls', () => {
+  let hill = HILLS[0][1](SUN.x)
+  let shows = (y: number) => {
+    let s = sinks(y)
+    let top = SUN.y - SUN.r + s.Sky_Day, over = hill + s.Sky_Farthest
+    return Math.max(0, Math.min(2 * SUN.r, over - top)) / (2 * SUN.r)
+  }
+  let seen = [0, 30, 60, 100, 200].map(shows)
+  assert(seen[0] > .6, `only ${seen[0]} of the sun shows at the top`)
+  seen.slice(1).forEach((s, i) => assert(s < seen[i], `${seen}`))
+  assertEquals(seen.at(-1), 0)
+})
+
+test('the dusk turns from blue to orange until the line reaches the top', () => {
+  let feet = 150 + 128 * .89 - SINK
+  let dusk = (y: number) => {
+    let { el, on, scope } = sky()
+    scope.scrollY = y
+    on.scroll({})
+    return Number((el('.Sky') as HTMLElement).style.getPropertyValue('--dusk'))
+  }
+  assertEquals([0, feet / 2, feet, 2 * feet].map(dusk), [0, .5, 1, 1])
+})
+
+test('the sun and the moon answer a touch where they now show', () => {
+  let day = sky()
+  day.scope.scrollY = 100
+  day.on.scroll({})
+  day.touch(SUN.x, SUN.y + 100 * DEPTH.dusk)
+  assertEquals(day.moved, ['Sky_Sun', 'Sky_Glow'])
+  let night = sky({ dark: true })
+  night.scope.scrollY = 300
+  night.on.scroll({})
+  night.touch(MOON.x, MOON.y + 300 * DEPTH.night)
+  assertEquals(night.el('.Sky_Moon').getAttribute('d'), moon(PHASES[1]))
+})
+
+test('for less motion no layer sinks as the page scrolls', () => {
+  assert(Object.values(sinks(300, true)).every((s) => s == 0))
 })
 
 test('for less motion nothing in the sky moves, and the moon still turns', () => {

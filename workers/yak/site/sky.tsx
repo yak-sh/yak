@@ -8,9 +8,9 @@
 // far scene is drawn in viewBox -3000 -800 6000 860 and the turf in
 // -3000 -60 6000 300; public/sky.js measures where he sits and lays both out
 // around him (style.css `.Sky`), draws and flies the birds, sends the
-// shooting stars, sinks the hills as the page scrolls, holds the night sky
-// nearly still in the window behind them, and answers a touch on
-// the sun, the moon and the stars.
+// shooting stars, moves each layer up the window by less the farther back it
+// is as the page scrolls (DEPTH), and answers a touch on the sun, the moon
+// and the stars.
 import type { JSX } from 'preact'
 
 /** How far the line he sits on is above the bottom of his hooves, in his
@@ -116,12 +116,25 @@ export let moon = (edge: number) => {
 export const PHASES = [-10, 0, 12, 24, 12, 0]
 
 /** Where each thing a touch answers stands, in his units. */
-export const SUN = { x: 455, y: -70, r: 42 }
+export const SUN = { x: 455, y: -100, r: 42 }
 export const MOON = { x: 520, y: -188, r: 24 }
+
+/** How far back each layer of the scene is: the share of the scroll it
+ * sinks by (sky.js), so it goes up the window by the rest. The line he sits
+ * on and the grass go up with the page; the hills a little less, the farther
+ * the less, so they rise over the dusk sky and its sun; and the night sky
+ * hardly moves at all. */
+export const DEPTH = {
+  night: .95,
+  dusk: .5,
+  Farthest: .15,
+  Farther: .1,
+  Near: .05,
+}
 
 // the line he sits on, and the three ranges of hills behind it
 let G = roll({ seed: 13, amp: 10, lens: [2300, 1200, 700], lean: 1, pin: true })
-let HILLS = [
+export const HILLS = [
   ['Farthest', roll({ seed: 51, base: -104, amp: 26, lens: [1900, 900, 480] })],
   ['Farther', roll({ seed: 53, base: -62, amp: 22, lens: [1700, 820, 430] })],
   ['Near', roll({ seed: 57, base: -27, amp: 13, lens: [1500, 700] })],
@@ -189,7 +202,7 @@ export let Sky = () => {
       data-shoot={SHOOT}
       data-phases={PHASES.map(moon).join('|')}
     >
-      <div class='Sky_Air' />
+      <div class='Sky_Air' data-depth={DEPTH.dusk} />
       <svg class='Sky_Far' viewBox='-3000 -800 6000 860' focusable='false'>
         <defs>
           <radialGradient id='Sky-glow'>
@@ -211,7 +224,7 @@ export let Sky = () => {
             <stop offset='1' class='Sky_Fly2' />
           </radialGradient>
         </defs>
-        <g class='Sky_Day'>
+        <g class='Sky_Day' data-depth={DEPTH.dusk}>
           <circle
             class='Sky_Glow'
             fill='url(#Sky-glow)'
@@ -228,7 +241,7 @@ export let Sky = () => {
           </g>
           <circle class='Sky_Sun' cx={SUN.x} cy={SUN.y} r={SUN.r} />
         </g>
-        <g class='Sky_Night Sky_Deep'>
+        <g class='Sky_Night Sky_Deep' data-depth={DEPTH.night}>
           <g class='Sky_Stars'>{stars}</g>
           <circle
             class='Sky_Halo'
@@ -243,7 +256,11 @@ export let Sky = () => {
         </g>
         <g class='Sky_Hills'>
           {HILLS.map(([name, f]) => (
-            <path class={`Sky_${name}`} d={under(f, 60)} />
+            <path
+              class={`Sky_${name}`}
+              data-depth={DEPTH[name]}
+              d={under(f, 60)}
+            />
           ))}
         </g>
         <g class='Sky_Night'>{flies}</g>
