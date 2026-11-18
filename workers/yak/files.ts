@@ -5,7 +5,7 @@ import { type Clock, clock, timed } from './timing.ts'
 // whether the app's rows still name an upload's bytes. This part knows an
 // app's eid, the R2 prefix its bytes live under, its store, and their address.
 // It does not know who is asking, and that is the whole point — Cloudflare's
-// cache sits in front of this entrypoint (@yaks/platform/kept), so anything
+// cache wraps this entrypoint (@yaks/platform/kept), so anything
 // this part could learn about a person would end up shared with strangers.
 //
 // The access decision stays in apps.ts `served()`, in front, on the uncached
@@ -171,11 +171,12 @@ export let servesSaid = (dir?: string) =>
       'files outside it are source only, not on the web'
     : ''
 
-// The gateway's way in: the `FILES` binding, so Cloudflare's cache answers
-// what it holds, or this module in-process where there is no binding or the
-// runtime refuses or fails the hop (@yaks/workerd/cache `through`). Inside an
-// app worker's own call to the kernel (its KERNEL binding, dispatch.ts) that
-// refusal is the answer: the same bytes, read in-process, uncached. A cache
+// The gateway's way in: the `FILES` binding, whose entrypoint reads the local
+// Cache API before this module, or this module in-process where there is no
+// binding or the runtime refuses or fails the hop (@yaks/workerd/cache
+// `through`). Inside an app worker's own call to the kernel (its KERNEL
+// binding, dispatch.ts) that refusal is the answer: the same bytes, read
+// in-process, uncached. A cache
 // that answered for want of an answer is reported, and the bytes are read
 // in-process the same way, so a person's image still loads.
 //
@@ -214,16 +215,15 @@ let held = (req: Request, ms: number) =>
   })
 
 // An app file's bytes, through the cache (@yaks/platform/kept `fileAt`):
-// `Files` is a second entrypoint with Cloudflare's cache in front of it,
+// `Files` is a second entrypoint backed by the local Cache API,
 // addressed by the app's
 // eid, this path and its release, so a warm edge answers without the bucket
 // being touched. It is the same call for a private app as for a public one —
 // what is cached is the file, and whether this person may have it was decided
 // by the gateway before it asked.
 //
-// Workers Caching strips Range on a miss and requires a full 200 response.
 // A seek or HEAD goes to the same file door without that cache; ordinary
-// GETs still fill and read the shared full-file cache.
+// GETs fill and read the shared full-file cache.
 export let fileBytes = (
   env: Env,
   eid: string,
@@ -330,8 +330,8 @@ export let warm = async (
 }
 
 // The gateway calls this only after checking access and resolving the blob's
-// metadata. Range stays a request header: Workers Caching removes it on a
-// miss, keeps the full 200 response, and slices a 206 from that one entry.
+// metadata. Range stays a request header: the Cache API slices a 206 from a
+// cached full response, and on a miss the bucket answers the bounded range.
 export let blobBytes = (
   env: Env,
   app: { eid: string },

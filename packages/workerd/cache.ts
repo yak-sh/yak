@@ -1,6 +1,6 @@
 /**
- * `@yaks/workerd/cache` — an entrypoint behind Cloudflare's cache, as the
- * runtime offers one.
+ * `@yaks/workerd/cache` — local response storage and entrypoints behind
+ * Cloudflare's Workers Cache.
  *
  * `[cache]` in wrangler.toml puts a two-tier cache in front of a Worker
  * entrypoint, and on a hit the entrypoint never runs. The cache key is the
@@ -11,6 +11,8 @@
  * names the tenant. What may be kept there, and under which address, is the
  * host's to say; this is the runtime's side of it:
  *
+ * - {@link stored} reads and fills a local Cache API store, without tier
+ *   routing or a cache-fill lock. A miss draws its own answer immediately.
  * - {@link through} asks the inner entrypoint through its binding, and where
  *   the runtime can't take that hop, or the cache fails, answers in-process.
  * - {@link hit} says whether an answer came from the cache.
@@ -45,6 +47,67 @@ export let hit = (res: Response): boolean =>
 
 /** A service binding to an entrypoint. */
 export type Bound = { fetch(req: Request): Promise<Response> }
+
+/** A local response cache. A miss never starts an origin request or waits
+ * for another request's fill. Cloudflare's Cache API supplies this boundary. */
+export type Stored = {
+  match(req: Request): Promise<Response | undefined>
+  put(req: Request, res: Response): Promise<unknown>
+}
+
+/** Read a local cache, drawing a miss immediately and retaining its fill
+ * behind the answer. Only explicitly public, whole GET responses are stored;
+ * HEAD and Range can read an existing entry without replacing it. */
+export let stored = async (
+  cache: Stored | (() => Promise<Stored>),
+  req: Request,
+  draw: (req: Request) => Promise<Response>,
+  { hold, failed }: {
+    hold: (work: Promise<void>) => void
+    failed: (error: unknown) => void
+  },
+): Promise<Response> => {
+  let read = ['GET', 'HEAD'].includes(req.method) &&
+    !req.headers.has('authorization') && req.cache != 'no-store'
+  if (!read) return draw(req)
+  let key = new Request(req, { method: 'GET' })
+  let shelf: Stored | undefined
+  try {
+    shelf = typeof cache == 'function' ? await cache() : cache
+    let found = await shelf.match(key)
+    if (found) {
+      let headers = new Headers(found.headers)
+      headers.set('cf-cache-status', 'HIT')
+      if (req.method == 'HEAD') await found.body?.cancel()
+      return new Response(req.method == 'HEAD' ? null : found.body, {
+        status: found.status,
+        headers,
+      })
+    }
+  } catch (error) {
+    failed(error)
+  }
+  let answer = await draw(req)
+  if (shelf && req.method == 'GET' && cacheable(answer)) {
+    let copy = answer.clone()
+    let opened = shelf
+    hold(
+      Promise.resolve().then(() => opened.put(key, copy)).then(
+        () => {},
+        failed,
+      ),
+    )
+  }
+  return answer
+}
+
+let cacheable = (res: Response) => {
+  let control = res.headers.get('cache-control') ?? ''
+  return [200, 301, 302, 307, 308, 404, 410].includes(res.status) &&
+    /\bpublic\b/i.test(control) &&
+    !/\b(private|no-store|no-cache)\b/i.test(control) &&
+    !res.headers.has('set-cookie') && res.headers.get('vary') != '*'
+}
 
 // How long a read waits on the cache before it is answered in-process. A miss
 // goes the long way round in most of a second; a cache that holds an answer

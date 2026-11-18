@@ -442,19 +442,11 @@ bucket_name = "yak-blobs"
 binding = "MODEL_RECEIPTS"
 bucket_name = "yak-model-receipts"
 
-# Cloudflare's cache, in front of the Files and Site entrypoints. The default
-# gateway remains uncached: on its own this line would cache every route,
-# including tenant and authenticated responses.
-#
-# Shared across Worker versions (T-124006): every commit on main is a version,
-# and a cache keyed by version was emptied for every app by each of them, so
-# the next view of every file paid a full miss (two tiers, the Worker, the
-# bucket: about 600 ms). What Files answers under one address never changes
-# (a release's bytes are immutable), and @yaks/platform/kept's generation
-# of Files' keys is how a change to the answer itself moves to new addresses.
-# Site keeps a page 30 seconds and then answers it once more while asking
-# again; a directory write that changes an app's pages purges them before it
-# answers (page-cache.ts).
+# Workers Cache holds Site's public pages across versions. Directory writes
+# purge those pages by tag. Files uses the separate local Cache API inside its
+# entrypoint: a miss reaches Files immediately, with no tier routing or fill
+# lock holding another request's answer (T-1116). Its tenant-keyed entries also
+# survive versions; @yaks/platform/kept's generation moves changed answers.
 [cache]
 enabled = true
 cross_version_cache = true
@@ -495,7 +487,7 @@ type = "worker"
 type = "worker"
 
   [exports.Files.cache]
-  enabled = true
+  enabled = false
 
 [exports.Site]
 type = "worker"
@@ -503,8 +495,8 @@ type = "worker"
   [exports.Site.cache]
   enabled = true
 
-# The gateway's binding to the cached entrypoint — this same Worker, named. The
-# hop is what puts Cloudflare's cache between the gateway and the bucket, so a
+# The gateway's binding to the file entrypoint — this same Worker, named. Its
+# local Cache API stands between the gateway and the bucket, so a
 # warm edge answers an app's file without R2 being touched. Absent under
 # `wrangler dev` and the workerd probes, where env.ts `bound` calls files.ts
 # in-process and nothing is cached.
@@ -848,7 +840,7 @@ enabled = false
 type = "worker"
 
 [env.staging.exports.Files.cache]
-enabled = true
+enabled = false
 
 [env.staging.exports.Site]
 type = "worker"

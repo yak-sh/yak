@@ -335,7 +335,7 @@ export type Env = {
   APPS?: Fetcher
   // The one binding that is not a part waiting to be split out: `Files` is a
   // second entrypoint of this same Worker (facets/kernel-worker.ts), bound
-  // here so that Cloudflare's cache sits between the gateway and the bucket
+  // here so that its local Cache API sits between the gateway and the bucket
   // (@yaks/platform/kept, T-33197). Absent in a test run; there, and wherever
   // Cloudflare refuses the hop, files.ts `door` reads the module in-process
   // and nothing is cached.

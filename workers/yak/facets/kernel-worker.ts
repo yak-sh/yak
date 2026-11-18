@@ -225,16 +225,25 @@ export let classes: Record<string, Deferred> = {
     async (ctx: never, env) =>
       new (await import('../lexicon.ts')).LexiconStore(ctx, env),
   ),
-  // The kernel's cached file entrypoint (wrangler.toml `[exports.Files]`).
+  // Files uses the local Cache API: a miss reaches its handler immediately,
+  // without Workers Cache's tier routing or per-key fill lock (T-1116).
   // The default entrypoint is the gateway: it runs on every request, because
   // the cache key does not include the hostname and every space is a
   // hostname. This one is addressed by the app's eid and answers bytes, so it
   // is safe to share and worth caching (@yaks/platform/kept). It is reached
   // only through the `FILES` service binding (env.ts).
-  Files: entered(WorkerEntrypoint, ['fetch'], (_ctx, env) => ({
-    fetch: async (req: Request) =>
-      (await import('../files.ts')).fetch(req, env),
-  })),
+  Files: entered(WorkerEntrypoint, ['fetch'], async (_ctx, env) => {
+    let { stored } = await import('@yaks/workerd/cache')
+    let { fetch } = await import('../files.ts')
+    let { failing } = await import('../defects.ts')
+    return {
+      fetch: (req: Request) =>
+        stored(() => caches.open('Files'), req, (req) => fetch(req, env), {
+          hold: waitUntil,
+          failed: failing('Files cache'),
+        }),
+    }
+  }),
   // Only the gateway reaches this entrypoint, and only with canonical apex
   // paths and no caller credentials. Its cache holds the public listing
   // pages. `purge` is how a page leaves that cache (@yaks/workerd/purge): an

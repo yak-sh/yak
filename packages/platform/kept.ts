@@ -84,15 +84,11 @@ export let immutable: { 'cache-control': string } = {
  * answer for a person. */
 export let browserImmutable: string = `private, max-age=${YEAR}, immutable`
 
-// What Files answers outlives the deploy that answered it (wrangler.toml
-// `cross_version_cache`), so a deploy of the platform leaves every app's
-// cached bytes in place. An address's answer is a release's immutable bytes,
+// Files' local Cache API entries survive deploys, so a deploy of the platform
+// leaves every app's cached bytes in place. An address's answer is a release's immutable bytes,
 // but how Files frames them (a type, a header, a compiled script) is code: a
 // change to that for addresses already answered bumps this number, which
 // moves every address to a new key and lets the old entries expire unread.
-// The same namespace replacement repairs provider state a path purge cannot
-// clear: T-152885's old key kept answering 520 while an equivalent key
-// reached Files and returned 404.
 let FILES = 4
 let generation = (address: string) =>
   `${address}${address.includes('?') ? '&' : '?'}g=${FILES}`
