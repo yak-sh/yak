@@ -66,6 +66,8 @@ let call = (name: string, args: unknown): Item[] => [{
   args: JSON.stringify(args),
 }]
 let results: string[] = []
+// The tools each turn was offered, by the words that began it.
+let offered = new Map<string, string[]>()
 let script: Record<string, [string, unknown]> = {
   'Tell me about meetings': ['subscription_set', {
     say: 'Tell them which meetings changed.',
@@ -92,6 +94,14 @@ let service = operatorService(env, held, {
     let said = req.items.findLast((i) => i.kind == 'user')
     let words = said?.kind == 'user' ? said.text : ''
     let planned = Object.entries(script).find(([w]) => words.includes(w))?.[1]
+    // Those deferred are named in tool_load's list.
+    offered.set(
+      words,
+      (req.tools ?? []).flatMap((t) => [
+        t.name,
+        ...[...t.description.matchAll(/^- (\w+):/gm)].map((m) => m[1]),
+      ]),
+    )
     let cancel = words.match(/Cancel (\S+)/)?.[1]
     let items = last?.kind == 'result'
       ? (results.push(last.output), reply('Done.'))
@@ -175,6 +185,32 @@ test("a change in the query's rows is one turn with what changed, answered in th
     'The budget hearing is new.',
   )
   assertEquals(after, 1)
+})
+
+test("a subscription's turn holds its reads and the person's own alerts, never a door that takes the rows past them", () => {
+  let by = (said: string) => [...offered].find(([w]) => w.includes(said))![1]
+  let asked = by('Tell me about meetings'), seen = by('Budget hearing')
+  for (
+    let door of [
+      'mail_send',
+      'phone_send',
+      'graph_apply',
+      'app_deploy',
+      'code_mode',
+      'memory_save',
+      'subscription_set',
+      'fork',
+    ]
+  ) {
+    assertEquals(
+      [asked.includes(door), seen.includes(door)],
+      [true, false],
+      door,
+    )
+  }
+  for (let kept of ['notification_send', 'text_send', 'graph_query']) {
+    assertEquals(seen.includes(kept), true, kept)
+  }
 })
 
 test('subscription_list shows each subscription, wake_list leaves them out, and subscription_cancel ends one', () => {

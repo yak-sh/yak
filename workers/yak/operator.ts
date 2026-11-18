@@ -105,6 +105,7 @@ import {
 import type { OperatorStore } from './operator-store.ts'
 import {
   ANSWERING,
+  HEARSAY,
   mailSend,
   messageReference,
   OWN,
@@ -401,6 +402,10 @@ let CORE = new Set([
   'notification_send',
   'escalate',
 ])
+// What a break's turn changes beyond its reads: the files of the app that
+// broke, checked and released (unseen.ts `fix`).
+let RELEASING = new Set(['app_files', 'app_preview', 'app_deploy'])
+
 // A tool that says whether it is deferred keeps its word.
 let deferred = (tools: Tool[]): Tool[] =>
   tools.map((t) =>
@@ -1494,8 +1499,12 @@ export let operating = (
     // The person's servers need only them and the space's eid, so they are
     // asked beside the reach and the space.
     let work = await workingOf(store, session)
-    let remote = !work?.signup &&
-      !ANSWERING.has(await channelAt(store, session, work))
+    let channel = await channelAt(store, session, work)
+    // Words nobody in the space wrote start a turn that holds only what
+    // keeps the space's data with its person (operator-channels.ts
+    // `HEARSAY`), whoever's conversation it is in.
+    let heard = HEARSAY.has(channel)
+    let remote = !work?.signup && !ANSWERING.has(channel) && !heard
     let connecting = remote
       ? connectedTools(here, operatorAsking(store, eid, session))
       : Promise.resolve([])
@@ -1514,6 +1523,7 @@ export let operating = (
     // read through the whole directory, which the Operator's is not.
     let whole = (options.directory ?? opening(env))()
     let member = writes(ctx.role)
+    let acts = member && !heard
     // Someone who replied to what was sent for a person raises with that
     // person's conversation what needs them (operator-escalate.ts).
     let replied = g.read(
@@ -1530,8 +1540,8 @@ export let operating = (
         trials,
       })
         .then((r) => reached('roster', r)),
-      member ? accounts.then((t) => reached('google', t)) : [],
-      admin({ dir: whole, person: ctx.person! }),
+      acts ? accounts.then((t) => reached('google', t)) : [],
+      !heard && admin({ dir: whole, person: ctx.person! }),
       replied,
       member ? [] : g.read(
         q`.operator_request.session=${await topOf(
@@ -1540,6 +1550,21 @@ export let operating = (
         )} .operator_request.channel=text,texted .order=-created.at .limit=1 .fields=operator_request.address`,
       ),
     ])
+    if (heard) {
+      return deferred([
+        ...roster.filter((t) =>
+          t.readOnly || (channel == 'error' && RELEASING.has(t.name))
+        ),
+        ...member
+          ? [
+            platformBug(ctx, space),
+            textSend(env, ctx, space),
+            notificationSend(ctx, space, store),
+          ]
+          : [],
+        ...(options.tools?.(ctx, files) ?? []).filter((t) => t.readOnly),
+      ])
+    }
     return deferred([
       ...sessionTools(g).filter((t) => t.name == 'fork'),
       // A conversation and its forks hand coding and careful reasoning

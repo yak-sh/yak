@@ -49,11 +49,17 @@ let script: Item[][] = [
   said('I asked you in your Updates.'),
 ]
 let asked: string[] = []
+// The tools each ask was offered, those deferred named in tool_load's list.
+let tooled: string[][] = []
 let service = operatorService(
   p.env,
   { person: ada, role: 'owner', space: eid },
   operatorModel((req) => {
     asked.push(JSON.stringify(req.items))
+    tooled.push((req.tools ?? []).flatMap((t) => [
+      t.name,
+      ...[...t.description.matchAll(/^- (\w+):/gm)].map((m) => m[1]),
+    ]))
     return Promise.resolve({
       id: crypto.randomUUID(),
       model: req.model,
@@ -149,6 +155,16 @@ test('words sent about an update reach the Operator with it', async () => {
   )
 })
 
+let FIXING = {
+  app_files: true,
+  app_deploy: true,
+  notification_send: true,
+  mail_send: false,
+  graph_apply: false,
+  code_mode: false,
+  memory_save: false,
+}
+
 test('a fixed break tells the space what the Operator did', async () => {
   script.push(said('Recipe box prints again.'))
   await receive(store, {
@@ -158,6 +174,12 @@ test('a fixed break tells the space what the Operator did', async () => {
     app: 'recipes',
   }, 'Fix this error in recipes')
   await service.drain()
+  // Its words may be a visitor's: it changes and releases the app that
+  // broke, and nothing that takes the space's data past its person.
+  let offered = tooled[asked.findLastIndex((a) => a.includes('Fix this'))]
+  for (let [tool, held] of Object.entries(FIXING)) {
+    assertEquals(offered.includes(tool), held, tool)
+  }
   for (let person of [ada, bo]) {
     let fixed = (await read(person)).updates
       .find((u) => u.words == 'Recipe box prints again.')
