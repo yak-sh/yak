@@ -35,12 +35,13 @@ export type Kind<T> = {
   kind: string
   /** Whether this press keeps the target recoverable in the trash. */
   reversible?: boolean
-  /** The target, if this space still holds it. */
+  /** The target, if this space or its authenticated owner still holds it. */
   find: (
     dir: Directory,
     space: Space,
     target: string,
     env: Env,
+    person?: string,
   ) => Promise<T | null>
   /** What the person types back when they came without the ticket. */
   typed: (t: T) => string

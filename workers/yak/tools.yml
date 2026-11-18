@@ -929,13 +929,13 @@ number_release:
     doing: 'Releasing %{number}…'
     done: 'Released %{number}'
   description: >-
-    Move a number to the space's trash for 30 days. It stops taking calls and
-    texts, and the space keeps paying its monthly price. Restore it on the
-    manage page to bring back its assignment.
-    After 30 days the sweep returns it to the provider. Calling this again
-    for a trashed number emails the owner a confirmation link, valid for one
-    hour, to return it sooner; only their press on that page returns it.
-    A returned number may never be bought back. Only the space owner may release.
+    Move a number to the space's trash. It stops taking calls and texts, and
+    the space keeps paying its monthly price so the shared number stays held.
+    Restore it on the manage page to bring back its assignment. There is no
+    automatic purge. Calling this again for a trashed number emails the owner
+    a confirmation link, valid for one hour; only their confirmation returns
+    it to the provider. A returned number may never be bought back. Only the
+    space owner may release.
 number_verify:
   title: Verify a toll-free number
   step:
@@ -1257,7 +1257,9 @@ app_secret_set:
     Give the app's worker a key it reads as env.NAME. The value becomes a
     connection the app uses directly (connection_list shows it), kept in the
     vault, and no tool reads it back. Setting a name again replaces its
-    value. New work uses connection_need, where the person pastes the key on
+    value and keeps the previous one in private vault trash. Its owner can
+    restore it on their Connections page, or erase that saved version through
+    the confirmation page. New work uses connection_need, where the person pastes the key on
     their connections page rather than in this chat. Returns the name and a
     confirmation, never the value. Documentation: https://yaks.app/docs/code.
 app_secret_list:

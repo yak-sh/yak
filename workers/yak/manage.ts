@@ -694,6 +694,7 @@ let desk = async (
         add: q.get('detail') ?? undefined,
         find: q.get('q') ?? undefined,
         open: q.get('detail') ?? undefined,
+        trash: q.has('trash'),
       })
       : undefined,
     // Every space this person may work in, which the side's selector offers.

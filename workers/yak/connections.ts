@@ -1,3 +1,8 @@
+import {
+  credentialAt,
+  restoreCredential,
+  retainedCredentials,
+} from './credential-trash.ts'
 import { type Built, line, sub } from '@yaks/query'
 import { decodedPath } from './request-path.ts'
 // Connections on yaks.app (D-38019): what the dashboard's connections page
@@ -312,6 +317,7 @@ export let SHOWN = 48
 
 /** What the connections page is drawn from. */
 export type Connections = {
+  trash?: { id: string; integration: string; at: number }[]
   /** whether this deploy can keep a key at all */
   on: boolean
   list: Shown[]
@@ -594,6 +600,7 @@ export let enabled = (req: Request): string[] =>
 
 /** Who is asking for a space's connections, and about what. */
 type Asked = {
+  trash?: boolean
   /** whether it is the person's own space; still being read, what they
    * connected is asked beside the rest and kept only if it is */
   own?: boolean | Promise<boolean>
@@ -861,6 +868,13 @@ export let connectionsOf = async (
     : undefined
   return {
     on: vaulted(env),
+    ...at.trash
+      ? {
+        trash: (await retainedCredentials(env, dir, here, person)).map((
+          { id, integration, at },
+        ) => ({ id, integration, at })),
+      }
+      : {},
     list: shown.sort((a, b) => a.integration.localeCompare(b.integration)),
     services: own ? await at.services ?? [] : [],
     borrowed: await Promise.all(
@@ -1196,6 +1210,18 @@ export let connecting = async (
     return no("Keys can't be saved here yet.")
   }
   try {
+    if (act == 'restore-credential') {
+      let dir = dirOf(env)
+      let one = await credentialAt(
+        env,
+        dir,
+        space,
+        who.person ?? '',
+        field('retained'),
+      )
+      if (!one) return no('That saved credential is no longer available here.')
+      return { say: await restoreCredential(env, dir, one, who), no: false }
+    }
     let eid = field('connection')
     if (act == 'add') {
       let name = field('integration').slice(0, 60)

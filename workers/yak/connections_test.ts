@@ -1254,3 +1254,36 @@ test('the catalog offers what its broker lists, a search finds it, and Connect m
     globalThis.fetch = real
   }
 })
+
+let recoverable = await setup()
+await recoverable.post({
+  do: 'add',
+  integration: 'Weather',
+  hosts: 'api.weather.test',
+  key: 'sk-before',
+})
+let recoveredEid = (await recoverable.shown()).list[0].eid
+await recoverable.post({ do: 'key', connection: recoveredEid, key: 'sk-after' })
+await recoverable.post({ do: 'disconnect', connection: recoveredEid })
+let recoveredVersion = (await vaultOf(recoverable.p.env).trash()).findLast((
+  one,
+) => one.eid == recoveredEid)!
+
+test('the Connections page restores a chosen old key after its connection was removed', async () => {
+  let s = recoverable
+  let rows = await connectionsOf(s.p.env, s.space, s.person, { trash: true })
+  assert(rows.trash!.some((one) => one.id == recoveredVersion.id))
+  assertEquals(
+    await s.post({ do: 'restore-credential', retained: recoveredVersion.id }),
+    {
+      say:
+        "Weather's saved credential is restored. Its connection is available on this page; choose which apps use it.",
+      no: false,
+    },
+  )
+  assertEquals((await vaultOf(s.p.env).read(recoveredEid))?.value, 'sk-before')
+  assertEquals(
+    (await s.shown()).list.find((one) => one.eid == recoveredEid)?.status,
+    'connected',
+  )
+})

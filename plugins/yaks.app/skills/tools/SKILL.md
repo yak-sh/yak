@@ -677,3 +677,12 @@ generates for the `jog` component. The deploy reports all five:
 
 The whole guide, covering everything else an app can do, is at
 <https://yaks.app/docs.md>.
+
+## Restoring credentials
+
+Removing a connection or replacing its key keeps the old credential in private
+vault trash. Open the space's Connections page and click **Saved credentials in
+the trash**. **Restore credential** makes that saved version available again;
+choose which apps use the restored connection. No key is printed or sent to an
+agent. **Erase saved credential…** opens the owner's confirmation page and
+erases only that saved version. There is no automatic purge.

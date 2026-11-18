@@ -500,6 +500,37 @@ let buttons = async (
   }
 }
 
+test('connections: retained credentials offer restore and a separate confirmation page', async () => {
+  let html = await desk({
+    ...page,
+    view: 'connections',
+    connections: {
+      on: true,
+      list: [],
+      borrowed: [],
+      services: [],
+      built: [],
+      trash: [{ id: 'saved', integration: 'Weather', at: 1 }],
+    },
+  }, env).text()
+  let document = parseHTML(html).document
+  let restore = document.querySelector('button[value="restore-credential"]')!
+  assertEquals(
+    restore.closest('form')?.getAttribute('action'),
+    '/manage/ada/connections?trash=1',
+  )
+  assertEquals(
+    restore.closest('form')?.querySelector('input[name="retained"]')
+      ?.getAttribute('value'),
+    'saved',
+  )
+  assertEquals(
+    document.querySelector('a[href*="/confirm/credentialerase/"]')
+      ?.getAttribute('href'),
+    '/space/ada/confirm/credentialerase/saved',
+  )
+})
+
 test('connections: a lent connection names each copy borrowing it, recalls one, and changes or stops the lend', async () => {
   let { text, pressed } = await buttons('data-connection=', {
     list: [{

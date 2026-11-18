@@ -1380,6 +1380,7 @@ let connections = (at: DeskPage, env: Host) => {
     'https://page.invalid',
   )
   if (c.catalog?.q) context.searchParams.set('q', c.catalog.q)
+  if (c.trash) context.searchParams.set('trash', '1')
   let action = `${context.pathname}${context.search}`
   // The service the page was opened to add: a key to paste, or a sign-in to
   // start, and which space it goes to.
@@ -1723,6 +1724,49 @@ let connections = (at: DeskPage, env: Host) => {
           'This server has nowhere safe to keep a key, so connecting is switched off.',
         ),
       ),
+      c.trash
+        ? h(
+          More,
+          { open: true },
+          h(More.Summary, null, 'Saved credentials in the trash'),
+          h(
+            More.Body,
+            null,
+            c.trash.length
+              ? c.trash.map((one) =>
+                h(
+                  Card,
+                  { as: 'form', method: 'post', action },
+                  h(Card.Title, null, one.integration),
+                  h(
+                    Card.Sub,
+                    null,
+                    'Saved ',
+                    h(Time, { at: new Date(one.at).toISOString() }),
+                    '. Kept privately until restored or permanently erased.',
+                  ),
+                  held('retained', one.id),
+                  h(
+                    Form.Actions,
+                    null,
+                    press('restore-credential', 'Restore credential', false),
+                    h(Button, {
+                      href:
+                        `/space/${at.space}/confirm/credentialerase/${one.id}`,
+                      mod: 'quiet',
+                    }, 'Erase saved credential…'),
+                  ),
+                )
+              )
+              : h(Card.Sub, null, 'No saved credentials in the trash.'),
+          ),
+        )
+        : c.on
+        ? h(Button, {
+          href: `${action}${action.includes('?') ? '&' : '?'}trash=1`,
+          mod: 'quiet',
+        }, 'Saved credentials in the trash')
+        : null,
       group('Requested by agents', grid(asks.map(shown))),
       group('Yours', grid(yours)),
       group(yours.length ? `Connected for ${host}` : 'Connected', grid(here)),

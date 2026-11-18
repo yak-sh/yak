@@ -240,8 +240,8 @@ let ROWS: Row[] = [
   },
   // The name's link goes, and only the link: the key stays the space's
   // connection, for app_secret_set or connection_attach to hand back, and a
-  // person forgets it themselves on their connections page. An agent never
-  // forgets a key, because nothing brings one back.
+  // person moves it to private trash on their Connections page. Retained
+  // versions can be restored there, or purged through their confirmation page.
   {
     name: 'app_secret_remove',
     destructive: false,

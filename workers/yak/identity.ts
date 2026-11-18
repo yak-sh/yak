@@ -1,3 +1,4 @@
+import { trashedCredential } from './credential-trash.ts'
 import { trashedDomain } from './domain-trash.ts'
 import { linked } from './preview-route.ts'
 // The identity part (D-32318 §Auth): one sign-in for the whole platform, at
@@ -561,6 +562,7 @@ let KINDS = Object.fromEntries(
     heldNumber,
     trashedNumber,
     trashedDomain,
+    trashedCredential,
     retiredStorage,
     trashedTunnel,
   ].map((
@@ -594,7 +596,7 @@ let confirming = async (
   if (!k || !space || (await dir.role(space, person)) != 'owner') {
     return lost(env)
   }
-  let t = await k.find(dir, space, target, env)
+  let t = await k.find(dir, space, target, env, person)
   if (!t) return lost(env)
   let held = req.method == 'POST' ? form.token : url.searchParams.get('t') ?? ''
   let ok = held ? await confirmed(held, secret(env)) : null
