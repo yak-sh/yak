@@ -1088,7 +1088,13 @@ that copy. Failed or interrupted submissions restore editable text rather than
 automatically resending it.
 
 Local unencrypted recovery files use private permissions under `~/.yak/drafts`.
-Set `HARNESS_FRONTEND` for a stable named profile and `HARNESS_DRAFT_DIR` to
+Removed local draft components and cleared profiles keep their previous bytes in
+that profile's private `.trash` directory, without automatic expiry.
+`draftVault(directory).trash()` lists snapshots and `restore(id)` restores
+missing fields without overwriting newer draft edits. Reopen the frontend to
+load restored values. Acknowledged submissions already live in their session;
+active drafts and recovery copies never pass through the backend worker. Set
+`HARNESS_FRONTEND` for a stable named profile and `HARNESS_DRAFT_DIR` to
 relocate storage. See [frontend state](FRONTEND.md#local-draft-recovery) for
 isolation, retention, and crash-recovery limits.
 

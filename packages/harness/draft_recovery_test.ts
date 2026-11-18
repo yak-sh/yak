@@ -51,7 +51,7 @@ test('acknowledgement clears only submitted draft, failures and newer edits stay
   ui.close()
 })
 
-test('disk vault restores private text and clear removes saved records', async () => {
+test('disk vault restores private text and clear keeps recoverable private trash', async () => {
   const directory = await Deno.makeTempDir()
   try {
     const vault = await draftVault(directory)
@@ -72,6 +72,20 @@ test('disk vault restores private text and clear removes saved records', async (
     }
     await vault.clear()
     assertEquals(await vault.load(), [])
+    let next = await draftVault(directory)
+    let entries = await next.trash!()
+    assertEquals(
+      entries.some((entry) =>
+        (entry.row.comps.savedDraft as { text?: string })?.text ===
+          'private draft'
+      ),
+      true,
+    )
+    for (let entry of entries) await next.restore!(entry.id)
+    const recovered = frontend(next)
+    await recovered.ready
+    assertEquals(text(recovered), { text: 'private draft', at: 8 })
+    recovered.close()
   } finally {
     await Deno.remove(directory, { recursive: true })
   }

@@ -94,3 +94,5 @@ export { wireStash, type WireVault } from './wire-vault.ts'
 
 export { ANSWER_BYTES, type SavedAnswer } from './answers.ts'
 export { WriteRefused, WriteUnknown } from '@yaks/sync'
+
+export { recover, removed, type Trashed } from './vault-trash.ts'

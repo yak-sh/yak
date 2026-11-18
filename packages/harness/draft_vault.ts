@@ -2,7 +2,14 @@
 
 import * as fs from '@yaks/file/io'
 import * as systemProcess from '@yaks/process/system'
-import type { Saved, Vault } from '@yaks/client'
+import {
+  recover,
+  removed,
+  type Saved,
+  type Trashed,
+  type Vault,
+} from '@yaks/client'
+import { trash } from '@yaks/process/trash'
 import { join } from 'node:path'
 import { resolve } from 'node:path'
 import { frontend } from './frontend.ts'
@@ -24,7 +31,57 @@ export let draftVault = async (directory: string): Promise<Vault> => {
         .join('') + '.json',
     )
   }
+  let trashDirectory = join(directory, '.trash')
+  let read = async (target: string): Promise<Saved | undefined> => {
+    try {
+      return JSON.parse(await fs.readTextFile(target)) as Saved
+    } catch (error) {
+      if (fs.isNotFound(error)) return undefined
+      throw error
+    }
+  }
+  let save = async (rows: Saved[]) => {
+    for (const row of rows) {
+      const target = await path(row.eid)
+      const temporary = target + '.' + crypto.randomUUID() + '.tmp'
+      await fs.writeTextFile(temporary, JSON.stringify(row), {
+        mode: 0o600,
+        createNew: true,
+      })
+      let before = await read(target)
+      if (before && removed(before.comps, row.comps)) {
+        await trash(target, trashDirectory)
+      }
+      await fs.rename(temporary, target)
+    }
+  }
   return {
+    trash: async () => {
+      let rows: Trashed[] = []
+      try {
+        for await (let file of fs.readDir(trashDirectory)) {
+          if (!file.isDirectory) continue
+          let record = join(trashDirectory, file.name)
+          let row = await read(join(record, 'data'))
+          let source = JSON.parse(
+            await fs.readTextFile(join(record, 'source.json')),
+          )
+          if (row) rows.push({ id: file.name, at: source.at, row })
+        }
+      } catch (error) {
+        if (!fs.isNotFound(error)) throw error
+      }
+      return rows
+    },
+    restore: async (id) => {
+      // The record id is a basename, never a path into another profile.
+      if (!/^[a-f0-9-]{36}$/.test(id)) return undefined
+      let row = await read(join(trashDirectory, id, 'data'))
+      if (!row) return undefined
+      let restored = recover(row, await read(await path(row.eid)))
+      await save([restored])
+      return restored
+    },
     load: async () => {
       const rows: Saved[] = []
       for await (const file of fs.readDir(directory)) {
@@ -39,30 +96,14 @@ export let draftVault = async (directory: string): Promise<Vault> => {
       }
       return rows
     },
-    save: async (rows) => {
-      for (const row of rows) {
-        const target = await path(row.eid)
-        const temporary = target + '.' + crypto.randomUUID() + '.tmp'
-        await fs.writeTextFile(temporary, JSON.stringify(row), {
-          mode: 0o600,
-          createNew: true,
-        })
-        await fs.rename(temporary, target)
-      }
-    },
+    save,
     drop: async (ids) => {
-      for (const id of ids) {
-        try {
-          await fs.remove(await path(id))
-        } catch (e) {
-          if (!fs.isNotFound(e)) throw e
-        }
-      }
+      for (const id of ids) await trash(await path(id), trashDirectory)
     },
     clear: async () => {
       for await (const file of fs.readDir(directory)) {
         if (file.name.endsWith('.json')) {
-          await fs.remove(join(directory, file.name))
+          await trash(join(directory, file.name), trashDirectory)
         }
       }
     },

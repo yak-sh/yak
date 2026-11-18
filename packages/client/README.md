@@ -387,8 +387,15 @@ Use an application-specific name with `vault: idb({ name: 'recipes-local' })` in
 `vault: false` disables local persistence. `stash()` provides the same interface
 in memory for tests or an application-selected fallback; it does not survive a
 process restart. Custom `Vault` implementations provide `load`, `save`, `drop`,
-and `clear`. The vault only persists component values; queries run against the
-RAM store.
+and `clear`; their removals must retain a recoverable snapshot. Built-in vaults
+also provide `trash()` and `restore(id)`. Removed components and properties,
+entity deletion, and `clear()` move previous values into private trash that
+survives a reload in IndexedDB. Trash is separate from `load()`, so sign-out or
+an unreadable old build never silently reintroduces old drafts. It has no
+automatic expiry. `restore(id)` restores missing values while preserving edits
+made since removal; reopen the client to load restored rows into its graph.
+Custom vaults should provide the same recovery operations. The vault only
+persists component values; queries run against the RAM store.
 
 A **saved entity** carries the persistence shape (`Saved`), such as
 `{ eid: 'n', comps: { draft: { text: 'hello' } } }`. Both vault interfaces use
@@ -397,9 +404,12 @@ server components.
 
 `idb()` and `stash()` also implement the optional `take(saved)` operation for
 moving saved entities to another store. After the destination acknowledges the
-write, `take` deletes exactly those source snapshots in one transaction and
-returns source rows changed meanwhile. Import those changes before trying again.
-A custom vault without `take` must keep its migration sources.
+write, `take` deletes exactly those acknowledged source snapshots in one
+transaction and returns source rows changed meanwhile. Import those changes
+before trying again. The destination now owns those bytes, so this transfer does
+not need a second trash copy. A custom vault without `take` must keep its
+migration sources. Wire-vault rows and query answers are regenerable server
+caches and may be evicted.
 
 ```ts
 import { stash } from '@yaks/client'
@@ -448,6 +458,9 @@ const memory = stash(saved)
 equal(await memory.load(), saved)
 await memory.drop(['n'])
 equal(await memory.load(), [])
+const [discarded] = await memory.trash!()
+await memory.restore!(discarded.id)
+equal(await memory.load(), saved)
 await vault.clear()
 equal(await vault.load(), [])
 ```

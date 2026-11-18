@@ -14,7 +14,7 @@ import { stringify } from '@yaks/vocab/wire'
 // A vault is not a `Storage`. A Storage evaluates queries, and queries here
 // are evaluated against the map @yaks/ram already holds; what is missing is
 // durability, so the interface is the three things durability needs — load
-// everything at start-up, write an entity through after a commit, and forget
+// everything at start-up, write an entity through after a commit, and trash
 // one that was deleted. It stays small on purpose, and it stays in this
 // package until a second implementation of it makes a package of its own
 // worth publishing.
@@ -29,6 +29,7 @@ import { stringify } from '@yaks/vocab/wire'
 import type { Bundle, Comp, Eid, Graph, Plugin } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { comps, dead } from '@yaks/graph/bundle'
+import { recover, removed, type Trashed } from './vault-trash.ts'
 import type { Vocab } from '@yaks/vocab'
 import { ECHO, local, replicate } from '@yaks/sync'
 
@@ -60,10 +61,14 @@ export type Vault = {
   load: () => Promise<Saved[]>
   /** write these entities through, replacing what was kept for each */
   save: (recs: Saved[]) => Promise<void>
-  /** forget these entities entirely */
+  /** Move these entities into recoverable trash. */
   drop: (eids: Eid[]) => Promise<void>
-  /** forget everything — a sign-out, or data this build cannot read */
+  /** Move everything into recoverable trash, including unreadable old data. */
   clear: () => Promise<void>
+  /** Removed local snapshots, kept apart from active drafts and never expired. */
+  trash?: () => Promise<Trashed[]>
+  /** Restore missing values without overwriting edits made since removal. */
+  restore?: (id: string) => Promise<Saved | undefined>
   /** Drain exact snapshots atomically; return source rows changed meanwhile.
    * An older implementation can omit this and must retain migration sources. */
   take?: (rows: Saved[]) => Promise<Saved[]>
@@ -90,17 +95,39 @@ let KEPT = '$kept'
  * process, but it behaves the same in every other way. */
 export let stash = (seed: Saved[] = []): Vault => {
   let held = new Map<Eid, Saved>(seed.map((r) => [r.eid, r]))
+  let discarded = new Map<string, Trashed>()
+  let retain = (row: Saved) => {
+    let id = crypto.randomUUID()
+    discarded.set(id, { id, at: Date.now(), row: structuredClone(row) })
+  }
   return {
+    trash: () => Promise.resolve([...discarded.values()]),
+    restore: (id) => {
+      let row = discarded.get(id)?.row
+      if (!row) return Promise.resolve(undefined)
+      let restored = recover(row, held.get(row.eid))
+      held.set(row.eid, restored)
+      return Promise.resolve(restored)
+    },
     load: () => Promise.resolve([...held.values()]),
     save: (recs) => {
-      for (let r of recs) held.set(r.eid, r)
+      for (let r of recs) {
+        let before = held.get(r.eid)
+        if (before && removed(before.comps, r.comps)) retain(before)
+        held.set(r.eid, r)
+      }
       return Promise.resolve()
     },
     drop: (eids) => {
-      for (let eid of eids) held.delete(eid)
+      for (let eid of eids) {
+        let row = held.get(eid)
+        if (row) retain(row)
+        held.delete(eid)
+      }
       return Promise.resolve()
     },
     clear: () => {
+      for (let row of held.values()) retain(row)
       held.clear()
       return Promise.resolve()
     },

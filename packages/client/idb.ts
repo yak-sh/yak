@@ -17,6 +17,7 @@ import { stringify } from '@yaks/vocab/wire'
 import { answerCache } from './answers.ts'
 import type { Eid } from '@yaks/graph'
 import type { Saved, Vault } from './vault.ts'
+import { recover, removed, type Trashed } from './vault-trash.ts'
 
 /** How an IndexedDB vault is addressed. */
 export type IdbOpts = {
@@ -58,6 +59,7 @@ let done = (tx: IDBTransaction): Promise<void> =>
 export let idb = (opts: IdbOpts = {}): Vault => {
   let name = opts.name ?? 'yaks'
   let store = opts.store ?? 'local'
+  let trash = store + '-trash'
   let factory = () => {
     let f = opts.indexedDB ?? globalThis.indexedDB
     if (!f) throw new Error('@yaks/client — no indexedDB in this environment')
@@ -67,40 +69,93 @@ export let idb = (opts: IdbOpts = {}): Vault => {
   let held: Promise<IDBDatabase> | undefined
   let db = () =>
     held ??= new Promise<IDBDatabase>((ok, no) => {
-      let req = factory().open(name, 1)
+      let req = factory().open(name, 2)
       req.onupgradeneeded = () => {
         if (!req.result.objectStoreNames.contains(store)) {
           req.result.createObjectStore(store, { keyPath: 'eid' })
         }
+        if (!req.result.objectStoreNames.contains(trash)) {
+          req.result.createObjectStore(trash, { keyPath: 'id' })
+        }
       }
-      req.onsuccess = () => ok(req.result)
+      req.onsuccess = () => {
+        req.result.onversionchange = () => req.result.close()
+        ok(req.result)
+      }
+      req.onblocked = () =>
+        no(new Error('Close older tabs to upgrade the draft vault'))
       req.onerror = () => no(req.error)
     })
 
-  // One readwrite transaction, its body run against the object store, awaited
-  // to completion — which is the point at which the data is durable.
-  let write = async (body: (s: IDBObjectStore) => void) => {
-    let tx = (await db()).transaction(store, 'readwrite')
-    body(tx.objectStore(store))
-    await done(tx)
+  // Capture and remove share one transaction: no tab can update a source
+  // between its last recoverable snapshot and its removal.
+  let write = async (body: (s: IDBObjectStore, t: IDBObjectStore) => void) => {
+    let tx = (await db()).transaction([store, trash], 'readwrite')
+    let completed = done(tx)
+    body(tx.objectStore(store), tx.objectStore(trash))
+    await completed
   }
+  let retain = (t: IDBObjectStore, row: Saved) =>
+    t.put({ id: crypto.randomUUID(), at: Date.now(), row } satisfies Trashed)
 
   return {
     load: async () => {
       let tx = (await db()).transaction(store, 'readonly')
-      return await ask<Saved[]>(
-        tx.objectStore(store).getAll() as IDBRequest<Saved[]>,
-      )
+      return await ask<Saved[]>(tx.objectStore(store).getAll())
+    },
+    trash: async () => {
+      let tx = (await db()).transaction(trash, 'readonly')
+      return await ask<Trashed[]>(tx.objectStore(trash).getAll())
+    },
+    restore: async (id) => {
+      let restored: Saved | undefined
+      await write((s, t) => {
+        let req = t.get(id) as IDBRequest<Trashed | undefined>
+        req.onsuccess = () => {
+          if (!req.result) return
+          let row = req.result.row
+          let current = s.get(row.eid) as IDBRequest<Saved | undefined>
+          current.onsuccess = () => {
+            restored = recover(row, current.result)
+            s.put(restored)
+          }
+        }
+      })
+      return restored
     },
     save: (recs: Saved[]) =>
-      write((s) => {
-        for (let r of recs) s.put(r)
+      write((s, t) => {
+        for (let row of recs) {
+          let req = s.get(row.eid) as IDBRequest<Saved | undefined>
+          req.onsuccess = () => {
+            if (req.result && removed(req.result.comps, row.comps)) {
+              retain(t, req.result)
+            }
+            s.put(row)
+          }
+        }
       }),
     drop: (eids: Eid[]) =>
-      write((s) => {
-        for (let eid of eids) s.delete(eid)
+      write((s, t) => {
+        for (let eid of eids) {
+          let req = s.get(eid) as IDBRequest<Saved | undefined>
+          req.onsuccess = () => {
+            if (req.result) retain(t, req.result)
+            s.delete(eid)
+          }
+        }
       }),
-    clear: () => write((s) => s.clear()),
+    clear: () =>
+      write((s, t) => {
+        let req = s.openCursor()
+        req.onsuccess = () => {
+          let cursor = req.result
+          if (!cursor) return
+          retain(t, cursor.value)
+          cursor.delete()
+          cursor.continue()
+        }
+      }),
     take: async (rows) => {
       let changed: Saved[] = []
       let tx = (await db()).transaction(store, 'readwrite')

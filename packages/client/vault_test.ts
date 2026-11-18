@@ -125,3 +125,57 @@ test('draining a vault only deletes the source snapshot the destination took', a
   assertEquals(await vault.take!([newer]), [])
   assertEquals(await vault.load(), [])
 })
+
+for (
+  let [name, make] of [
+    ['memory', () => stash()],
+    ['IndexedDB', () => fakeIdb(fakeDb())],
+  ] as const
+) {
+  test(
+    name +
+      ' keeps removed values across reopen and restores around newer edits',
+    async () => {
+      let vault = make()
+      let original = {
+        eid: 'draft',
+        comps: {
+          draft: { text: 'keep me', at: 2 },
+          note: { text: 'also mine' },
+        },
+      }
+      await vault.save([original])
+      await vault.save([{ eid: 'draft', comps: { draft: { text: 'newer' } } }])
+      let [entry] = await vault.trash!()
+      assertEquals(entry.row, original)
+      assertEquals(await vault.restore!(entry.id), {
+        eid: 'draft',
+        comps: { draft: { text: 'newer', at: 2 }, note: { text: 'also mine' } },
+      })
+      await vault.drop(['draft'])
+      assertEquals(await vault.load(), [])
+      assertEquals((await vault.trash!()).length, 2)
+      await vault.save([{
+        eid: 'another',
+        comps: { draft: { text: 'private' } },
+      }])
+      await vault.clear()
+      assertEquals(await vault.load(), [])
+      assertEquals((await vault.trash!()).length, 3)
+    },
+  )
+}
+
+test('IndexedDB trash survives opening the same database again', async () => {
+  let db = fakeDb(), first = fakeIdb(db)
+  await remember(first)
+  await first.clear()
+  let next = fakeIdb(db)
+  let [entry] = await next.trash!()
+  assertEquals(await next.load(), [])
+  await next.restore!(entry.id)
+  let page = boxClient(undefined, { vault: next })
+  await page.ready
+  assertEquals(comp(page.ent('r1'), 'draft').text, 'more cumin?')
+  page.close()
+})
