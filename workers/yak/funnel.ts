@@ -24,11 +24,27 @@ import {
   KEPT_DAYS,
   ran,
   SLUG,
-  table,
   TOP,
   VARIANT,
   whole,
 } from './views.ts'
+import {
+  among,
+  and,
+  as,
+  col,
+  desc,
+  eq,
+  type Expr,
+  fn,
+  ge,
+  lit,
+  ne,
+  not,
+  op,
+  select,
+  table,
+} from '@yaks/sql/core'
 
 /** When the funnel's steps became people's: the release after 965f3dbbc, by
  * which a step written by the CLI's own fetch (e70d31490), a test account or an
@@ -188,7 +204,6 @@ export let clicked = async (
 // payment provider and names neither, and a first app is made by an Operator
 // or an assistant, away from the browser that holds them.
 let PER = ['home', 'click', 'started', 'signup', 'checkout'] as const
-let per = PER.map((s) => `'${s}'`).join(', ')
 
 let DAY = 86_400_000
 
@@ -224,36 +239,79 @@ export let start = (window: number | Date, now = Date.now()) =>
 // though a browser, or a script saying it is one, took it. A person's step is
 // one a browser took, or one taken away from any request; a crawler's, an
 // agent's or a test account's is counted apart (`apart`).
-let WHO = `if(${CAMPAIGN} LIKE '${CHECK}/%', 'test', ${CLIENT})`
-let PEOPLE = `${WHO} IN ('browser', '')`
+let WHO = fn(
+  'if',
+  op('like', col(CAMPAIGN), lit(`${CHECK}/%`)),
+  lit('test'),
+  col(CLIENT),
+)
+let PEOPLE = among(WHO, [lit('browser'), lit('')])
 
-let over = (since: Date, dataset: string, who = PEOPLE) =>
-  `FROM ${table(dataset)} WHERE index1 = '${FUNNEL}' AND ${who} AND ` +
-  `timestamp >= toDateTime(${Math.floor(since.getTime() / 1000)})`
+let STEP = col(SLUG)
+let N = as(COUNT, 'n')
+let busiest = [desc(col('n'))]
+let said = (blob: string) => ne(col(blob), lit(''))
+
+let over = (
+  since: Date,
+  dataset: string,
+  who = PEOPLE,
+  ...more: Expr[]
+) => ({
+  from: table(dataset),
+  where: and(
+    eq(col('index1'), lit(FUNNEL)),
+    who,
+    ge(
+      col('timestamp'),
+      fn('toDateTime', lit(Math.floor(since.getTime() / 1000))),
+    ),
+    ...more,
+  ),
+})
+
+// People's steps from `since` that are `step` and say something in `blob`.
+let stepped = (since: Date, dataset: string, step: string, blob: string) =>
+  over(since, dataset, PEOPLE, eq(STEP, lit(step)), said(blob))
 
 /** How many times people took each step from `since`. */
 export let counts = (since: Date, dataset = DATASET) =>
-  `SELECT ${SLUG} AS step, ${COUNT} AS n ${over(since, dataset)} GROUP BY step`
+  select({
+    cols: [as(STEP, 'step'), N],
+    ...over(since, dataset),
+    group: [col('step')],
+  })
 
 /** How many times each step was taken by somebody other than a person: a
  * crawler, an agent's script or a test account, by which. */
 export let apart = (since: Date, dataset = DATASET) =>
-  `SELECT ${WHO} AS client, ${SLUG} AS step, ${COUNT} AS n ` +
-  `${over(since, dataset, `NOT ${PEOPLE}`)} GROUP BY client, step ` +
-  `ORDER BY n DESC`
+  select({
+    cols: [as(WHO, 'client'), as(STEP, 'step'), N],
+    ...over(since, dataset, not(PEOPLE)),
+    group: [col('client'), col('step')],
+    order: busiest,
+  })
 
 /** The sites that sent people to the home page, busiest first. */
 export let sources = (since: Date, dataset = DATASET) =>
-  `SELECT ${FROM} AS site, ${COUNT} AS n ${over(since, dataset)} AND ` +
-  `${SLUG} = 'home' AND ${FROM} != '' ` +
-  `GROUP BY site ORDER BY n DESC LIMIT ${TOP}`
+  select({
+    cols: [as(col(FROM), 'site'), N],
+    ...stepped(since, dataset, 'home', FROM),
+    group: [col('site')],
+    order: busiest,
+    limit: lit(TOP),
+  })
 
 // The home page's visits, clicks, builds begun, sign-ups and checkouts by what
-// a step says in `column`, busiest first.
-let by = (column: string) => (since: Date, dataset = DATASET) =>
-  `SELECT ${column} AS key, ${SLUG} AS step, ${COUNT} AS n ` +
-  `${over(since, dataset)} AND ${SLUG} IN (${per}) AND ${column} != '' ` +
-  `GROUP BY key, step ORDER BY n DESC LIMIT ${TOP * PER.length}`
+// a step says in `blob`, busiest first.
+let by = (blob: string) => (since: Date, dataset = DATASET) =>
+  select({
+    cols: [as(col(blob), 'key'), as(STEP, 'step'), N],
+    ...over(since, dataset, PEOPLE, among(STEP, PER.map(lit)), said(blob)),
+    group: [col('key'), col('step')],
+    order: busiest,
+    limit: lit(TOP * PER.length),
+  })
 
 /** The campaigns that brought people to the home page, and how many of them
  * clicked a call to action, began a build, signed up and started a checkout
@@ -266,8 +324,12 @@ export let variants = by(VARIANT)
 
 /** How many times each call to action was clicked, busiest first. */
 export let buttons = (since: Date, dataset = DATASET) =>
-  `SELECT ${BUTTON} AS button, ${COUNT} AS n ${over(since, dataset)} AND ` +
-  `${SLUG} = 'click' AND ${BUTTON} != '' GROUP BY button ORDER BY n DESC`
+  select({
+    cols: [as(col(BUTTON), 'button'), N],
+    ...stepped(since, dataset, 'click', BUTTON),
+    group: [col('button')],
+    order: busiest,
+  })
 
 let split = (rows: Record<string, unknown>[]): FunnelSplit[] =>
   [...Map.groupBy(rows, (r) => String(r.key))].map(([name, rows]) => {

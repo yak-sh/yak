@@ -35,6 +35,23 @@
 // exactly the factor that made it busy, and nothing would say so.
 import type { Env } from './env.ts'
 import { api } from '@yaks/cloudflare/analytics'
+import { analytics, interval } from '@yaks/sql/analytics'
+import {
+  among,
+  and,
+  as,
+  col,
+  desc,
+  type Expr,
+  fn,
+  ge,
+  lit,
+  ne,
+  op,
+  type Select,
+  select,
+  table,
+} from '@yaks/sql/core'
 import type { Answer } from './apps.ts'
 import { background, caught } from './defects.ts'
 import { elapsed } from './lib/hops.ts'
@@ -156,9 +173,8 @@ export let FRESH = 5 * 60_000
 export let sqlAt = (env: Env) =>
   `${api(env)}/accounts/${env.CF_ACCOUNT}/analytics_engine/sql`
 
-// There are no bound parameters in the SQL API — a query is a string of text —
-// so the shapes are the guard. An eid comes out of our own directory and a day
-// count off a tool argument, and neither is spliced in on trust.
+// An app is an eid, and one in a cache key's path is checked as one, so a key
+// names an app or nothing.
 let eid = (app: string) => {
   if (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(app)) {
     throw new Error(`not an app: ${app}`)
@@ -169,25 +185,32 @@ let eid = (app: string) => {
 export let whole = (n: number, most: number) =>
   Math.max(1, Math.min(most, Math.floor(n) || 1))
 
-export let table = (name: string) => {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
-    throw new Error(`not a dataset: ${name}`)
-  }
-  return name
-}
-
 /** What a count is, everywhere here: sampled rows, each standing for many. */
-export let COUNT = 'sum(_sample_interval)'
+export let COUNT = fn('sum', col('_sample_interval'))
 
-// Some apps, one window — the FROM and where every query below shares. A
+let APP = col('index1')
+let TIMESTAMP = col('timestamp')
+
+// Some apps, one window — the source and where every query below shares. A
 // query asks about every app a page shows and groups by the app, because the
 // page waits on its slowest round trip: four queries an app had a space of ten
 // apps' visits tab waiting 10 to 11 s live, and the same forty took the SQL
 // API 5 to 20 s from the box, where these four take half a second (T-132744).
-let over = (apps: string[], days: number, dataset: string) =>
-  `FROM ${table(dataset)} WHERE index1 IN (${
-    apps.map((a) => `'${eid(a)}'`).join(', ')
-  }) AND timestamp >= NOW() - INTERVAL '${whole(days, KEPT_DAYS)}' DAY`
+// The SQL API binds no parameters, so each eid is written as a literal by
+// @yaks/sql/analytics, which refuses one that could end it.
+let over = (
+  apps: string[],
+  days: number,
+  dataset: string,
+  ...more: Expr[]
+) => ({
+  from: table(dataset),
+  where: and(
+    among(APP, apps.map(lit)),
+    ge(TIMESTAMP, op('-', fn('NOW'), interval(whole(days, KEPT_DAYS), 'DAY'))),
+    ...more,
+  ),
+})
 
 /**
  * Views per app per day, oldest first: the bars. A day nobody came is absent
@@ -195,25 +218,38 @@ let over = (apps: string[], days: number, dataset: string) =>
  * a quiet day and not a missing one.
  */
 export let perDay = (apps: string[], days = DAYS, dataset = DATASET) =>
-  `SELECT index1 AS app, toStartOfInterval(timestamp, INTERVAL '1' DAY) AS ` +
-  `day, ${COUNT} AS views ${over(apps, days, dataset)} ` +
-  'GROUP BY app, day ORDER BY day'
+  select({
+    cols: [
+      as(APP, 'app'),
+      as(fn('toStartOfInterval', TIMESTAMP, interval(1, 'DAY')), 'day'),
+      as(COUNT, 'views'),
+    ],
+    ...over(apps, days, dataset),
+    group: [col('app'), col('day')],
+    order: [col('day')],
+  })
 
 /** Each app's views over the window, one row an app that had any. */
 export let totals = (apps: string[], days = DAYS, dataset = DATASET) =>
-  `SELECT index1 AS app, ${COUNT} AS views ${over(apps, days, dataset)} ` +
-  'GROUP BY app'
+  select({
+    cols: [as(APP, 'app'), as(COUNT, 'views')],
+    ...over(apps, days, dataset),
+    group: [col('app')],
+  })
 
 // The three "top" lists are one query with a different column, so they are one
 // function. `skip` drops the rows that never had the fact: a direct visit has
 // no referring site, and an unknown country is not a country.
 let top =
-  (col: string, as: string, skip: boolean) =>
+  (blob: string, name: string, skip: boolean) =>
   (apps: string[], days = DAYS, limit = TOP, dataset = DATASET) =>
-    `SELECT index1 AS app, ${col} AS ${as}, ${COUNT} AS views ${
-      over(apps, days, dataset)
-    }${skip ? ` AND ${col} != ''` : ''} ` +
-    `GROUP BY app, ${as} ORDER BY views DESC LIMIT ${whole(limit, ROWS)}`
+    select({
+      cols: [as(APP, 'app'), as(col(blob), name), as(COUNT, 'views')],
+      ...over(apps, days, dataset, ...skip ? [ne(col(blob), lit(''))] : []),
+      group: [col('app'), col(name)],
+      order: [desc(col('views'))],
+      limit: lit(whole(limit, ROWS)),
+    })
 
 /** The most-visited pages. Every view has a path, so none is skipped. */
 export let topPages = top(PATH, 'path', false)
@@ -252,8 +288,10 @@ export let HEDGE = 1500
  * (@yaks/cloudflare/api `resent`), and one that stalls is asked again past HEDGE (`hedged`), so
  * neither holds up a page.
  */
-export let ran = (env: Env, sql: string): Promise<Rows> =>
-  elapsed('analytics_wait', () => hedged(() => asking(env, sql), HEDGE))
+export let ran = (env: Env, query: Select): Promise<Rows> => {
+  let sql = analytics(query)
+  return elapsed('analytics_wait', () => hedged(() => asking(env, sql), HEDGE))
+}
 
 let asking = async (env: Env, sql: string): Promise<Rows> => {
   let res = await resent(sqlAt(env), {

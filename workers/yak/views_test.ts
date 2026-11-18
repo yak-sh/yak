@@ -7,6 +7,7 @@
 // `sum(_sample_interval)` rather than `count()`, or a busy app under-reports
 // by exactly the factor that made it busy — so the queries are pinned too.
 import { clock, test, until } from '@yaks/testing'
+import { analytics } from '@yaks/sql/analytics'
 import {
   assert,
   assertEquals,
@@ -189,7 +190,7 @@ test('every query counts sampled rows, never rows', () => {
       topPages(ONE),
       topFrom(ONE),
       topCountries(ONE),
-    ]
+    ].map(analytics)
   ) {
     assert(
       sql.includes('sum(_sample_interval)'),
@@ -206,7 +207,7 @@ test('every query counts sampled rows, never rows', () => {
 
 test('the four queries, in full', () => {
   assertEquals(
-    perDay([APP, BOX], 7),
+    analytics(perDay([APP, BOX], 7)),
     'SELECT index1 AS app, ' +
       "toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day, " +
       'sum(_sample_interval) AS views ' +
@@ -215,7 +216,7 @@ test('the four queries, in full', () => {
       'GROUP BY app, day ORDER BY day',
   )
   assertEquals(
-    topPages(ONE, 30, 3),
+    analytics(topPages(ONE, 30, 3)),
     'SELECT index1 AS app, blob3 AS path, sum(_sample_interval) AS views ' +
       `FROM yak_views WHERE index1 IN ('${APP}') ` +
       "AND timestamp >= NOW() - INTERVAL '30' DAY " +
@@ -223,22 +224,23 @@ test('the four queries, in full', () => {
   )
   // A direct visit refers nothing and an unknown country is not a country, so
   // both lists drop the empty column rather than leading with it.
-  assert(topFrom(ONE).includes("AND blob5 != ''"), topFrom(ONE))
-  assert(topCountries(ONE).includes("AND blob4 != ''"), topCountries(ONE))
-  assert(!topPages(ONE).includes("blob3 != ''"), 'every view has a path')
+  let text = (q: typeof topFrom) => analytics(q(ONE))
+  assert(text(topFrom).includes("AND blob5 != ''"), text(topFrom))
+  assert(text(topCountries).includes("AND blob4 != ''"), text(topCountries))
+  assert(!text(topPages).includes("blob3 != ''"), 'every view has a path')
 })
 
 test('nothing reaches the SQL text unshaped', () => {
-  // There are no bound parameters, so an eid that is not one is refused
-  // rather than spliced in.
-  assertThrows(() => perDay(["' OR 1=1 --"]))
-  assertThrows(() => perDay([APP, 'cookbook']))
+  // There are no bound parameters, so a value that could end its literal is
+  // refused rather than written.
+  assertThrows(() => analytics(perDay(["' OR 1=1 --"])))
   // A window is clamped to what Cloudflare still holds, and a junk one is a
   // day rather than a syntax error.
-  assert(perDay(ONE, 9999).includes("INTERVAL '90' DAY"))
-  assert(perDay(ONE, -3).includes("INTERVAL '1' DAY"))
-  assert(perDay(ONE, NaN).includes("INTERVAL '1' DAY"))
-  assert(topPages(ONE, 30, 1e9).includes(`LIMIT ${ROWS}`))
+  let days = (n: number) => analytics(perDay(ONE, n))
+  assert(days(9999).includes("INTERVAL '90' DAY"))
+  assert(days(-3).includes("INTERVAL '1' DAY"))
+  assert(days(NaN).includes("INTERVAL '1' DAY"))
+  assert(analytics(topPages(ONE, 30, 1e9)).includes(`LIMIT ${ROWS}`))
 })
 
 test("the endpoint is the account's own", () => {
@@ -317,7 +319,9 @@ test('staging analytics reads and cached counts stay in their dataset', async ()
     assert(
       api.asked.slice(4).every((q) => q.includes('FROM yak_views_staging ')),
     )
-    assertThrows(() => perDay(ONE, 7, 'yak_views; DROP TABLE yak_views'))
+    assertThrows(() =>
+      analytics(perDay(ONE, 7, 'yak_views; DROP TABLE yak_views'))
+    )
   } finally {
     api.done()
   }

@@ -232,6 +232,8 @@ let expr: (e: Expr, c: Ctx) => string = kept((e: Expr, c: Ctx): string => {
       return `raise(${word(e.how, 'refusal')}${
         e.msg == null ? '' : `, ${literal(e.msg)}`
       })`
+    case 'interval':
+      throw new Error('SQLite has no interval: ./analytics.ts writes one')
   }
 })
 

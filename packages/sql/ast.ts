@@ -101,6 +101,11 @@ export type Expr =
   | { t: 'desc'; e: Expr }
   | { t: 'over'; fn: Expr; partition?: Expr[]; order?: Expr[] }
   | { t: 'raise'; how: Refusal; msg?: string }
+  | { t: 'interval'; n: number; unit: Unit }
+
+/** A span of time an `interval` counts in. SQLite has none; Analytics Engine
+ * SQL writes one as `INTERVAL '7' DAY` (./analytics.ts). */
+export type Unit = 'YEAR' | 'MONTH' | 'DAY' | 'HOUR' | 'MINUTE' | 'SECOND'
 
 /** How a trigger's `raise` ends the statement that fired it. */
 export type Refusal = 'ignore' | 'rollback' | 'abort' | 'fail'
@@ -492,6 +497,13 @@ export let over = (
   partition?: Expr[],
   order?: Expr[],
 ): Expr => ({ t: 'over', fn: f, partition, order })
+
+/** `n` of a unit of time: `interval(7, 'DAY')`. */
+export let interval = (n: number, unit: Unit): Expr => ({
+  t: 'interval',
+  n,
+  unit,
+})
 
 /** A trigger's refusal: `raise(abort, 'why')`. `ignore` carries no message. */
 export let raise = (how: Refusal, msg?: string): Expr => ({

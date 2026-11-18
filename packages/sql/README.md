@@ -55,9 +55,11 @@ no writer has caught up: each reads as an empty relation of its columns, so a
 query about it answers what it would before anyone wrote a row.
 
 `@yaks/sql/core` provides SQL statements as data, rendering, and the driver
-interface without loading query binding. `@yaks/sql/query` adds query binding
-and compilation. The root export also includes rule matching, death cascades,
-and statement batching.
+interface without loading query binding. `@yaks/sql/analytics` writes a select
+as Cloudflare Analytics Engine SQL, which binds no parameters: every value is a
+literal, and one holding a quote, a backslash or a control character is refused.
+`@yaks/sql/query` adds query binding and compilation. The root export also
+includes rule matching, death cascades, and statement batching.
 
 ## Exports
 
