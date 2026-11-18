@@ -51,6 +51,8 @@ export type Metric = {
   /** what the subject did, before its amount */
   did: string
   unit: string
+  /** how many of what analytics counts make one `unit`, where they differ */
+  per?: number
   floor: number
 }
 
@@ -73,6 +75,7 @@ export let METRICS: Record<string, Metric> = {
     name: 'cpuTimeUs',
     did: 'spent',
     unit: 'CPU seconds',
+    per: 1e6,
     floor: 600e6,
   },
 }
@@ -280,11 +283,13 @@ export class UsageJump extends Error {
   override name = 'UsageJump'
 }
 
+/// report({ subject: 'worker w', metric: METRICS.cpuTimeUs, hour: 0, value: 1.3e9, normal: 126.5e6, running: 3 }).error.message.split(' in the hour')[0] -> 'worker w spent 1,300 CPU seconds'
 /** A jump as the tracker files it: the error, and the context that groups
  * every hour of one subject's metric on one bug, an hour's report landing
  * once however often it is sent. */
 export let report = (jump: Jump, who?: Who) => {
   let { subject, metric, hour, value, normal, running } = jump
+  let said = (n: number) => count(n / (metric.per ?? 1))
   let fault = `usage jump|${subject}|${metric.name}`
   let at = new Date(hour).toISOString()
   let times = normal ? `, ${+(value / normal).toFixed(1)} times` : ''
@@ -296,8 +301,8 @@ export let report = (jump: Jump, who?: Who) => {
     : ''
   return {
     error: new UsageJump(
-      `${who?.said ?? subject} ${metric.did} ${count(value)} ${metric.unit} ` +
-        `in the hour from ${at}${times} its normal of ${count(normal)} an ` +
+      `${who?.said ?? subject} ${metric.did} ${said(value)} ${metric.unit} ` +
+        `in the hour from ${at}${times} its normal of ${said(normal)} an ` +
         `hour, the median of the ${BEFORE} before (Cloudflare's analytics).` +
         stayed + entries,
     ),
