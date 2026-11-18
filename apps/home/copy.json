@@ -55,7 +55,7 @@
           "steps": {
             "1": {
               "title": "Ask for what you need, in plain words",
-              "body": "“A guestbook for Mum’s 70th that anyone with the link can sign.” The assistant made this page and put it online at its own web address, ready to send to the family.",
+              "body": "“A guestbook for Mom’s 70th that anyone with the link can sign.” The assistant made this page and put it online at its own web address, ready to send to the family.",
               "go": "Ask for your own"
             },
             "2": {
@@ -160,7 +160,7 @@
           "steps": {
             "1": {
               "title": "Ask for what you need, in plain words",
-              "body": "“A trip planner where we can plan each day, see who’s coming, and keep a packing list.” The assistant made a planner for five days in Lisbon, with a card for each day, the five travellers and a packing list to tick off.",
+              "body": "“A trip planner where we can plan each day, see who’s coming, and keep a packing list.” The assistant made a planner for five days in Lisbon, with a card for each day, the five travelers and a packing list to tick off.",
               "go": "Ask for your own"
             },
             "2": {
