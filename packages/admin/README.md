@@ -322,12 +322,15 @@ money by the hour, and nothing fails while it does. The **usage watch**, the
 same service's other look, reads the account's usage from Cloudflare's GraphQL
 Analytics API ten minutes after each hour ends: each Worker's requests and CPU
 time, and each Durable Object's requests, rows read, rows written and duration.
-An hour is **past its normal** when it is at least twice its subject's normal,
-the median of the 48 hours before, and past it by the metric's floor, about a
-cent an hour (`METRICS` in usage.ts). A **jump** is an hour past its normal
-whose run of hours past it has lasted three hours, so the rise stays, or is past
-its normal by 24 floors in all, so it is worth a look even once. An hour of work
-that finished is neither, and is not reported. A jump is reported to the box's
+Request volume alone is traffic and never files a bug. Worker CPU normals scale
+up with increased request volume: more visitors doing the same work are not a
+failure. CPU reports convert Cloudflare's microseconds to seconds. An hour is
+**past its normal** when it is at least twice its subject's normal, the median
+of the 48 hours before, and past it by the metric's floor, about a cent an hour
+(`METRICS` in usage.ts). A **jump** is an hour past its normal whose run of
+hours past it has lasted three hours, so the rise stays, or is past its normal
+by 24 floors in all, so it is worth a look even once. An hour of work that
+finished is neither, and is not reported. A jump is reported to the box's
 tracker as a bug, one per subject and metric, saying the amount, the normal, how
 long it has run, the Worker, the object and, for an object, its entry points
 that hour (fetch, alarm, RPC):

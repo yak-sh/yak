@@ -1,5 +1,5 @@
 import { equal, match, test } from '@yaks/testing'
-import { type Answer, HOUR, jumps, readings, report } from './usage.ts'
+import { type Answer, HOUR, jumps, METRICS, readings, report } from './usage.ts'
 import { analytics, look } from './service.ts'
 
 let at = Date.parse('2026-10-17T12:00:00Z')
@@ -114,4 +114,52 @@ test('a look with no token to read analytics with passes its hour quietly', asyn
   let usage = analytics({ account: 'a', analytics: undefined })!
   equal(await look(usage, (error) => void sent.push(error), at), [])
   equal(sent, [])
+})
+
+let worker = (requests: number[], cpu: number[]) => ({
+  viewer: {
+    accounts: [{
+      workers: hours.map((datetimeHour, i) => ({
+        dimensions: { scriptName: 'yak', datetimeHour },
+        sum: { requests: requests[i], cpuTimeUs: cpu[i] },
+      })),
+    }],
+  },
+})
+
+test('traffic growth at the same CPU per request is no failure', () => {
+  equal(
+    jumped(
+      worker(
+        run(10_000, 100_000, 200_000, 365_000),
+        run(126e6, 600e6, 1e9, 1.287e9),
+      ),
+    ),
+    [],
+  )
+})
+
+test('CPU rising faster than traffic still reports, in CPU seconds', () => {
+  let [jump, ...rest] = jumped(
+    worker(run(10_000, 20_000, 20_000, 20_000), run(100e6, 1e9, 1e9, 1e9)),
+  )
+  equal(rest, [])
+  equal(jump.context.tags.metric, 'cpuTimeUs')
+  match(jump.error.message, /spent 1,000 CPU seconds.*normal of 200 an hour/)
+})
+
+test('request volume without CPU usage is not a bug', () => {
+  equal(
+    jumps([{
+      subject: 'worker front',
+      metric: METRICS.requests,
+      hours: new Map(
+        run(8_000, 130_000, 130_000, 130_000).map((
+          v,
+          i,
+        ) => [at - (48 - i) * HOUR, v]),
+      ),
+    }], at),
+    [],
+  )
 })

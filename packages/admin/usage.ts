@@ -23,6 +23,10 @@
 //   month as the floor does staying. Counting the run, not its last hour, gives
 //   the same answer wherever an hour's end cuts the work.
 //
+// Request volume alone is traffic, not a failure. Worker CPU is compared with
+// its ordinary hourly CPU scaled up by the rise in requests, so more visitors
+// doing the same work do not file a bug. Storage and duration keep their raw
+// cost comparison, including work that loops without any request traffic.
 // Anything else is quiet. yak-trash's daily sweep wrote 74,519 rows in the
 // yak/platform object in seven minutes of 2026-10-28's 04:00Z hour, under four
 // floors (7 cents), and the next hour was back to normal: work that finished.
@@ -267,14 +271,37 @@ export type Jump = {
 /** The jumps of the hour at `hour` (ms, on the hour). */
 export let jumps = (series: Series[], hour: number): Jump[] =>
   series.flatMap(({ subject, metric, hours }) => {
+    if (metric.name == 'requests') return []
     let at = (i: number) => hours.get(hour - i * HOUR) ?? 0
-    let normal = median(Array.from({ length: BEFORE }, (_, i) => at(i + 1)))
-    let past = (v: number) => v >= RISE * normal && v - normal >= metric.floor
+    let before = (read: (i: number) => number) =>
+      median(Array.from({ length: BEFORE }, (_, i) => read(i + 1)))
+    let ordinary = before(at)
+    let requests = metric.name == 'cpuTimeUs'
+      ? series.find((s) => s.subject == subject && s.metric.name == 'requests')
+        ?.hours
+      : undefined
+    let calls = (i: number) => requests?.get(hour - i * HOUR) ?? 0
+    let traffic = before(calls)
+    let normalAt = (i: number) =>
+      metric.name == 'cpuTimeUs' && traffic
+        ? ordinary * Math.max(1, calls(i) / traffic)
+        : ordinary
     let run: number[] = []
-    for (let i = 0; i <= BEFORE && past(at(i)); i++) run.push(at(i) - normal)
+    for (let i = 0; i <= BEFORE; i++) {
+      let normal = normalAt(i), value = at(i)
+      if (value < RISE * normal || value - normal < metric.floor) break
+      run.push(value - normal)
+    }
     let over = run.reduce((a, b) => a + b, 0)
     return run.length >= STAYS || over >= ONCE * metric.floor
-      ? [{ subject, metric, hour, value: at(0), normal, running: run.length }]
+      ? [{
+        subject,
+        metric,
+        hour,
+        value: at(0),
+        normal: normalAt(0),
+        running: run.length,
+      }]
       : []
   })
 
@@ -304,6 +331,9 @@ export let report = (jump: Jump, who?: Who) => {
       `${who?.said ?? subject} ${metric.did} ${said(value)} ${metric.unit} ` +
         `in the hour from ${at}${times} its normal of ${said(normal)} an ` +
         `hour, the median of the ${BEFORE} before (Cloudflare's analytics).` +
+        (metric.name == 'cpuTimeUs'
+          ? ' Its normal allows for increased request volume.'
+          : '') +
         stayed + entries,
     ),
     context: {
