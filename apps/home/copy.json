@@ -75,7 +75,7 @@
             }
           }
         },
-        "directory": {
+        "church-directory": {
           "name": "Church Directory",
           "steps": {
             "1": {
@@ -90,7 +90,7 @@
             },
             "3": {
               "title": "Let people keep their own entry",
-              "body": "“Can each family keep their own entry up to date?” Each family gets a link of its own. Once they open it signed in, they can change their phone, address, photo and birthdays, and nobody else’s.",
+              "body": "“Can each family keep their own entry up to date?” The assistant emails each family a link of its own. Once they open it signed in, they can change their phone, address, photo and birthdays, and nobody else’s.",
               "go": "Ask for your own"
             },
             "4": {

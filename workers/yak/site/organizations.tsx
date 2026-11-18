@@ -152,7 +152,7 @@ export let Organizations = () => (
           },
           directory: {
             sample: sample(
-              'directory',
+              'church-directory',
               'organizations.missing.directory.sample',
             ),
           },

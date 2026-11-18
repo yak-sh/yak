@@ -20,7 +20,7 @@ export let HOME: Example[] = [
     'A market stall’s menu with prices, marked sold out from a phone.',
   ],
   [
-    'directory',
+    'church-directory',
     'Church Directory',
     'A members-only directory with families, photos and birthdays.',
   ],
@@ -60,7 +60,7 @@ export let BUILD: Example[] = [
     'A market stall’s menu with prices, marked sold out from a phone.',
   ],
   [
-    'directory',
+    'church-directory',
     'Church Directory',
     'A members-only directory with families, photos and birthdays.',
   ],
