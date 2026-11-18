@@ -14,10 +14,17 @@ export let turn = async (
 ): Promise<Answer> => {
   let info = await model.info?.()
   let price = info?.price ?? model.price
-  let input = info?.context ?? model.context
+  let context = info?.context ?? model.context
+  let input = context == null
+    ? undefined
+    : promptBound([ask.system, ask.said], context, ask.fns)
   let request: Ask = {
     ...ask,
-    tokens: outputTokens({ output: info?.output ?? model.output }, ask.tokens),
+    tokens: outputTokens(
+      { output: info?.output ?? model.output, context },
+      ask.tokens,
+      input,
+    ),
   }
   let hold = await reserved(
     env,
@@ -28,7 +35,7 @@ export let turn = async (
         : price && input != null
         ? affordable(
           price,
-          promptBound([ask.system, ask.said], input, ask.fns),
+          input,
           remaining,
           request.tokens,
         )

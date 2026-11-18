@@ -48,6 +48,7 @@ let info = () =>
   Promise.resolve({
     name: 'bounded',
     context: 1000,
+    output: 2000,
     price: { input: 1, output: 1 },
   })
 let withModel = (space: typeof boundary.space, raw: Model) =>
@@ -61,7 +62,7 @@ for (
     [32_000, 8000, 8000],
     [2048, 8000, 2048],
     [128_000, 200_000, 65_536],
-    [undefined, undefined, 4096],
+    [undefined, undefined, 1000],
   ]
 ) {
   let { space } = await fixture()
@@ -264,6 +265,7 @@ test('a model that searches reserves its tools’ most and is charged each searc
       Promise.resolve({
         name: 'bounded',
         context: 1000,
+        output: 2000,
         price: { input: 1, output: 1, web_search: 0.01 },
       }),
     hosted: { searches: 4, input: 1000 },
@@ -289,6 +291,7 @@ test('a request holds the hour cache write tariff only when it asks to keep its 
       Promise.resolve({
         name: 'bounded',
         context: 1000,
+        output: 2000,
         price: { input: 1, output: 1, cache_write: 2, cache_write_1h: 4 },
       }),
   })

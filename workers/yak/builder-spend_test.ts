@@ -78,6 +78,7 @@ test('builder turns use fresh provider pricing and context before granting outpu
     Promise.resolve({
       name: m.id,
       context: 10,
+      output: 4096,
       price: { input: 1000, output: 1000 },
     })
   await turn(p.env, fresh.space, m, ask)

@@ -296,12 +296,15 @@ export let accounted = (
         space,
         (remaining) => {
           if (own) return model.quote!(req, remaining) ?? null
-          let output = req.questions ? window : outputTokens(info, req.tokens)
           // What the provider's own tools may add is reserved beside it.
           let extra = model.hosted
+          let input = requestBound(req, window!) + (extra?.input ?? 0)
+          let output = req.questions
+            ? window
+            : outputTokens(info, req.tokens, input)
           let quote = affordable(
             tariff!,
-            requestBound(req, window!) + (extra?.input ?? 0),
+            input,
             remaining,
             output,
             extra?.searches,
