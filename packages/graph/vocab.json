@@ -14,7 +14,7 @@
         "doing": "Changing the data…",
         "done": "Changed the data"
       },
-      "description": "Create, edit, link or delete entities atomically via edits/links, q, bundles, or id/text (path defaults to doc.body). Ids accept eids, human ids and names; $name creates an entity reusable within this call. Omitted fields stay; null clears properties/components. Text edits replace literal find (one match unless all), then prepend/append; reads are guarded automatically, with optional was tokens. links add relations; drop removes them. q patches one entity: T-12 .doc.title=\"New title\" !blocked; $new .task creates one. bundles use [{entity:{eid},component:{fields}}], $was guards and $delete deletes. Returns applied bundles with resolved ids, $alias and stamps. check previews then rolls back; reuse $names, since preview ids are temporary. graph_schema lists fields. https://yaks.app/docs/store",
+      "description": "Create, edit, link or delete entities atomically via edits/links, q, bundles, or id/text (path defaults to doc.body). Ids accept eids, human ids and names; $name creates an entity reusable within this call. Omitted fields stay; null clears properties/components. Text edits replace literal find (one match unless all), then prepend/append; reads are guarded automatically, with optional was tokens. links add relations; drop removes them. q patches one entity: T-12 .doc.title=\"New title\" !blocked; $new .task creates one. The array argument is bundles (not entities): [{entity:{eid},component:{fields}}], $was guards and $delete deletes. Returns applied bundles with resolved ids, $alias and stamps. check previews then rolls back; reuse $names, since preview ids are temporary. graph_schema lists fields. https://yaks.app/docs/store",
       "input": {
         "q": {
           "type": "string",
@@ -35,7 +35,7 @@
               }
             }
           },
-          "description": "Atomic bundles: entity:{eid} plus components. eid accepts existing id/name or new $name; edges derive theirs from ends."
+          "description": "Atomic array of entity bundles (argument name bundles, not entities): [{\"entity\":{\"eid\":\"$new\"},\"doc\":{\"title\":\"…\"}}]. eid accepts existing id/name or new $name; edges derive theirs from ends."
         },
         "check": {
           "type": "boolean",

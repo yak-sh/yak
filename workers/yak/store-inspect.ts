@@ -7,6 +7,8 @@ import type {
   Identity,
   StoreSize,
 } from '@yaks/sqlite'
+import { deletions, identity, inspect as size } from '@yaks/sqlite'
+import type { Driver } from '@yaks/sql'
 import type { Event } from '@yaks/trace'
 import type { Door } from '@yaks/durable-object/door'
 import type { Version } from './running.ts'
@@ -27,6 +29,26 @@ export type Inspection = {
     ms: number
     phases: Record<string, number>
   }
+}
+
+/** Physical inspection needs no graph boot, including while an app is in
+ * the trash. A seq asks for graph execution and is handled by the active Store. */
+export let physical = (
+  db: Driver,
+  at: URLSearchParams,
+): Inspection | undefined => {
+  if (at.has('since') || at.has('until')) {
+    return {
+      deletions: deletions(db, {
+        since: at.get('since') ?? '',
+        until: at.get('until') ?? '',
+        after: at.has('after') ? Number(at.get('after')) : undefined,
+      }),
+    }
+  }
+  let eid = at.get('eid')
+  if (eid) return { identity: identity(db, eid) }
+  if (!at.has('seq')) return { physical: size(db) }
 }
 
 // Pipeline totals include their plugin hooks already; audit and effect spans

@@ -227,7 +227,13 @@ let listed = (names: string[]) => [...names].sort().join(', ')
 export let notMember = async (
   ctx: Pick<Ctx, 'dir' | 'person'>,
   space: Space,
-) => refuse('access', `not a member of ${space.slug} — ${await yours(ctx)}`)
+) =>
+  refuse(
+    'access',
+    `not a member of ${space.slug} — ${await yours(ctx)}. ` +
+      `Send space: '<one of your spaces>', or connect with an account that ` +
+      `belongs to ${space.slug} before naming it. app_list() lists your apps.`,
+  )
 
 // The spaces the caller holds a seat in, as a refusal names the next call's
 // choice from them.
@@ -255,7 +261,10 @@ export let noApp = async (
       held.length
         ? `its apps are ${listed(held)}`
         : 'it has no apps yet; app_new makes one'
-    }`,
+    }. Send space: '${space.slug}' and app: '<app slug from app_list>'. ` +
+      `app_list(space: '${space.slug}') lists active apps and the trash; ` +
+      'store_inspect and store_writes also accept the trash eid listed there. ' +
+      'Use an active app slug or a trash eid, not a store handle.',
   )
 }
 
@@ -484,10 +493,14 @@ let named = async (ctx: Ctx, slug: string) => {
   if (moved) {
     throw refuse(
       'missing',
-      `no space ${slug} — it moved to ${moved.slug}; name it that`,
+      `no space ${slug} — it moved to ${moved.slug}; send space: '${moved.slug}'`,
     )
   }
-  throw refuse('missing', `no space ${slug} — ${await yours(ctx)}`)
+  throw refuse(
+    'missing',
+    `no space ${slug} — ${await yours(ctx)}. ` +
+      "Send space: '<one of your spaces>'; app_list() lists their app slugs.",
+  )
 }
 
 // The caller in the space: a member reads, an owner or editor writes.
@@ -638,7 +651,11 @@ export let inSpace = (ctx: Ctx, args: Args, write = false, over = false) =>
 /** The caller, refused unless they own the space. */
 export let owner = <T extends { space: Space; who: Who }>(it: T) => {
   if (it.who.role != 'owner') {
-    throw refuse('access', `not the owner of ${it.space.slug}`)
+    throw refuse(
+      'access',
+      `not the owner of ${it.space.slug} — connect with that space owner's ` +
+        `account and retry with space: '${it.space.slug}'`,
+    )
   }
   return it
 }
@@ -668,6 +685,11 @@ export let seatIn = async (ctx: Ctx, slug: string) => {
 // but its own (`awake`).
 export let inApp = (ctx: Ctx, args: Args, write = false, over = false) =>
   reached(ctx, args, write, over, false)
+
+/** Read a retained app's store without restoring it. The caller still needs
+ * a seat; the diagnostic tools additionally require ownership. */
+export let retainedApp = (ctx: Ctx, args: Args) =>
+  reached(ctx, args, false, false, true)
 
 /** The app a call names wherever it is, its own trash included: the trash's
  * own doors, app_delete and app_restore. A space in the trash is still

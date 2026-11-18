@@ -70,7 +70,7 @@ import {
 import { ceiling, serve, unseenBlock } from './unseen.ts'
 import { appVocab, packagesOf } from './vocab.ts'
 import { lined } from '@yaks/platform/page-wire'
-import { scope, unasked } from './query-line.ts'
+import { queryRefusal, scope, unasked } from './query-line.ts'
 import { apex, type Host, hosted } from '@yaks/platform/host'
 import { refuse, unavailable } from './tool.ts'
 import { inReach } from './declared.ts'
@@ -442,18 +442,24 @@ let held = (
     // translation for every door a person's own line arrives at (@yaks/platform/page-wire).
     let one = await byName(self, typeof q == 'string' ? lined(line) : line)
     let at = where.length == 1 ? where[0] : undefined
-    let answer = at
-      ? await queried(
-        ctx.env,
-        at.space,
-        at.app,
-        at.who,
-        one,
-        false,
-        at.headers,
-      )
-      : await read(ctx.env, where, whole(one))
-    return { answer, reduced: !!aggregate(parse(one)) }
+    try {
+      let answer = at
+        ? await queried(
+          ctx.env,
+          at.space,
+          at.app,
+          at.who,
+          one,
+          false,
+          at.headers,
+        )
+        : await read(ctx.env, where, whole(one))
+      return { answer, reduced: !!aggregate(parse(one)) }
+    } catch (e) {
+      let said = queryRefusal(e, at && `${at.space.slug}/${at.app.slug}`)
+      if (said) throw refuse('arguments', said)
+      throw e
+    }
   }
   let rows = async (q: Query): Promise<Row[]> => {
     let { answer, reduced } = await fresh(() => asked(q))

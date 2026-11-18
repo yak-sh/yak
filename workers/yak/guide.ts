@@ -461,8 +461,8 @@ export let INSTRUCTIONS = instructions()
  */
 export let UNDO =
   'Nothing deleted here is lost by a simple mistake. To undo: ' +
-  'store_restore puts everything this store holds back to any moment in the ' +
-  'last 30 days, and called with no time it reports the window and every ' +
+  'store_restore puts everything this store holds back to a moment after its ' +
+  'first write in the last 30 days, and called with no time it reports the window and every ' +
   'restore already made.'
 
 // How a read here narrows to one app: the platform's `.in=` clause (agent.ts
@@ -471,7 +471,12 @@ export let UNDO =
 export let NARROW =
   'Signed in, a read answers every app you can reach at once. To read one ' +
   "app, add .in=<app> to the query ('.recipe&.in=recipes'), or " +
-  '.in=<space>/<app> where two of your spaces have an app by that name.'
+  '.in=<space>/<app> where two of your spaces have an app by that name. ' +
+  "App trash is listed by app_list(space: '<space slug>'), including ids " +
+  'for app_restore. Platform admins can query the directory with ' +
+  "'.app .trashed ?doc ?former .in=yak/platform'; trashed{at, by} is a " +
+  'separate component, not app.trashed or .tombstone. To check a deleted ' +
+  'data row, use store_inspect(space, app, eid); graph_query reads live rows.'
 
 export let whole = (env: Host = {}) => url(env, '/docs.md')
 export let WHOLE = whole()

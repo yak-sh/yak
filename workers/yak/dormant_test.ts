@@ -93,6 +93,31 @@ test('trash makes a store dormant across every wake and restore keeps its data',
     await incarnation.webSocketError(ws, new Error('gone'))
   }
   equal(statements, 0)
+  for (let incarnation of [store, new Store(ctx, p.env)]) {
+    let inspect = await incarnation.fetch(
+      new Request(
+        `http://store/inspect?eid=${eid}`,
+        { headers: KERNEL },
+      ),
+    )
+    equal(inspect.status, 200)
+    equal((await inspect.json()).identity.tables.includes('doc'), true)
+    let history = await incarnation.fetch(
+      new Request(
+        'http://store/writes?recent=1',
+        { headers: KERNEL },
+      ),
+    )
+    equal(history.status, 200)
+    equal((await history.json()).length > 0, true)
+    equal(await ctx.storage.get<boolean>('dormant'), true)
+    equal(await ctx.storage.getAlarm(), null)
+    equal(
+      (await incarnation.fetch(new Request('http://store/query?q=.doc')))
+        .status,
+      404,
+    )
+  }
   await untrash(p.env, dir, space, app, who)
   await until(async () => await ctx.storage.get<boolean>('dormant') == false, {
     label: 'restore delivered',

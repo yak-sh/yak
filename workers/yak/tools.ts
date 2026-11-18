@@ -57,6 +57,7 @@ import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { filesAt, staged, viewOf } from './release.ts'
 import { fullFiles } from './usage.ts'
 import { TOOLS_EXAMPLE, viewsOf } from '@yaks/tools/declared'
+import { CallError } from '@yaks/tools'
 import type { Actor, Bundle } from '@yaks/graph'
 import { VERSION } from './running.ts'
 import { unlike } from '@yaks/people'
@@ -411,6 +412,7 @@ import {
   refuse,
   rejected,
   renew,
+  retainedApp,
   seatIn,
   type Shape,
   SPACE,
@@ -916,6 +918,26 @@ let titled = (v: unknown) => {
 // only an ask that skips gallery review uses (`skipping`).
 let ownsApp = async (ctx: Ctx, args: Args, over = false) =>
   owner(await inApp(ctx, args, true, over))
+
+let inspectsApp = async (ctx: Ctx, args: Args) => {
+  try {
+    return owner(await retainedApp(ctx, args))
+  } catch (e) {
+    if (e instanceof CallError && e.code == 'access') {
+      throw refuse(
+        'access',
+        e.message + ' Store inspection requires the space owner: connect ' +
+          "with that owner's account, then retry with space and app from app_list().",
+      )
+    }
+    throw e
+  }
+}
+
+let STORED_APP = str(
+  'the active app slug, or the trash eid from app_list(space) to inspect ' +
+    'the retained store without restoring it',
+)
 
 // Asking for the gallery (gallery.ts, T-34476), from either door that takes
 // the word — `app_publish(gallery: true)` and `app_set(gallery: true)`. The
@@ -5191,9 +5213,10 @@ let OURS: Row[] = [
         // store that cannot do it has been told a comfortable lie.
         await mark(store)
         return {
-          text: `${name} can be put back to any moment since ` +
-            `${oldest().toISOString()} — the last 30 days. ${again}, at: ` +
-            `'<moment>') does it, and nothing moves until you name one.` +
+          text: `${name} can be put back to a moment after its first write ` +
+            `since ${oldest().toISOString()} — the last 30 days. ` +
+            'A moment before its first write has no history. ' +
+            `${again}, at: '<moment>') does it, and nothing moves until you name one.` +
             story,
           space,
         }
@@ -5268,7 +5291,7 @@ let OURS: Row[] = [
       type: 'object',
       properties: {
         space: SPACE,
-        app: APP,
+        app: STORED_APP,
         seq: { type: 'integer', minimum: 1 },
         eid: { type: 'string', minLength: 1, maxLength: 256 },
         since: { type: 'string', format: 'date-time' },
@@ -5278,7 +5301,7 @@ let OURS: Row[] = [
       required: ['app'],
     },
     run: async (ctx, args) => {
-      let { space, store } = await ownsApp(ctx, args)
+      let { space, store } = await inspectsApp(ctx, args)
       let seq = args.seq == null ? undefined : Number(args.seq)
       if (seq != null && (!Number.isSafeInteger(seq) || seq < 1)) {
         throw refuse('arguments', 'seq must be a positive integer')
@@ -5306,14 +5329,14 @@ let OURS: Row[] = [
       type: 'object',
       properties: {
         space: SPACE,
-        app: APP,
+        app: STORED_APP,
         seq: { type: 'integer', minimum: 1 },
         recent: { type: 'boolean' },
       },
       required: ['app'],
     },
     run: async (ctx, args) => {
-      let { space, app, store } = await ownsApp(ctx, args)
+      let { space, app, store } = await inspectsApp(ctx, args)
       let seq = args.seq == null ? undefined : Number(args.seq)
       if (seq != null && (!Number.isSafeInteger(seq) || seq < 1)) {
         throw refuse('arguments', 'seq must be a positive integer')

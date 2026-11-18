@@ -243,7 +243,12 @@ export let runs = (seams: Seams = {}): Runs => {
       }
       if (q === undefined) {
         if (bundles === undefined) {
-          throw new Refused('graph_apply needs q or bundles')
+          throw new Refused(
+            'graph_apply needs q or bundles: send bundles: ' +
+              '[{"entity":{"eid":"$new"},"doc":{"title":"…"}}] ' +
+              '(the argument is bundles, not entities), or ' +
+              'q: \'<eid> .doc.title="…"\' to patch one entity',
+          )
         }
         let derives = deriving(graph.vocab, graph.plugins)
         return formed(bundles, (name) => name in derives)
@@ -279,7 +284,13 @@ export let runs = (seams: Seams = {}): Runs => {
         })
         if (targets != 1) {
           throw new Refused(
-            'graph_apply needs exactly one entity.eid; use bundles for several entities',
+            'graph_apply q patches one entity by id, not a selection: ' +
+              "send q: '<eid> .component.property=value' to update it, or " +
+              "q: '$new .component.property=value' to create one. " +
+              'For several entities, send bundles: ' +
+              '[{"entity":{"eid":"<eid>"},"component":{"property":"value"}}]. ' +
+              'The array argument is bundles, not entities. ' +
+              'To change query matches, graph_query first, then send a bundle per returned eid.',
           )
         }
         let patch = adopt(ast, graph.vocab, { strict: true })

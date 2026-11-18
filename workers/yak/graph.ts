@@ -205,8 +205,6 @@ import {
 } from '@yaks/sql'
 import {
   branchOf,
-  deletions as inspectDeletions,
-  identity as inspectIdentity,
   inspect as inspectStorage,
   moded,
   printed,
@@ -267,7 +265,7 @@ import {
   shareChannel,
 } from '@yaks/trace'
 import { type RequestState, sampleRequest, selectRequest } from '@yaks/timing'
-import { phases } from './store-inspect.ts'
+import { phases, physical as inspected } from './store-inspect.ts'
 import { MOURN, MOURNED, mourned } from './deaths.ts'
 import { broadcast, drafted, released as releaseNotice } from './page-notice.ts'
 import { kinded, naming } from '@yaks/platform/app-subs'
@@ -4761,6 +4759,31 @@ export class Store extends Durable {
     }
 
     if (!await this.#awake()) {
+      // The owner can inspect retained data without restoring the app or
+      // booting its graph, replaying writes, or starting its effects.
+      if (
+        kernel && request.method == 'GET' &&
+        ['/inspect', '/writes'].includes(path)
+      ) {
+        let sql = driver(this.#ctx.storage, undefined, this.#measure)
+        let at = new URL(request.url).searchParams
+        if (path == '/writes') {
+          let seq = at.has('seq') ? Number(at.get('seq')) : undefined
+          return Response.json(writes(sql, seq, at.get('recent') == '1'))
+        }
+        try {
+          let shown = inspected(sql, at)
+          return shown ? Response.json(shown) : refuse(
+            new Refused(
+              'a dry run needs the app running; omit seq for physical inspection, ' +
+                'or app_restore with the trash eid from app_list before a dry run',
+            ),
+          )
+        } catch (e) {
+          if (e instanceof RangeError) return refuse(new Refused(e.message))
+          throw e
+        }
+      }
       if (kernel && path == '/move' && request.method == 'POST') {
         await this.#ensureStarted(request)
         if (this.#refused) return this.#stalled()
@@ -5458,34 +5481,26 @@ export class Store extends Durable {
         return json({ error: 'NotFound', message: 'no route' }, 404)
       }
       let at = new URL(request.url).searchParams
-      if (at.has('since') || at.has('until')) {
-        try {
+      try {
+        let shown = inspected(this.#sql, at)
+        if (shown) {
           return Response.json({
-            deletions: inspectDeletions(this.#sql, {
-              since: at.get('since') ?? '',
-              until: at.get('until') ?? '',
-              after: at.has('after') ? Number(at.get('after')) : undefined,
-            }),
+            ...shown,
+            ...(shown.physical
+              ? {
+                running: await ran(
+                  this.#bind.CF_VERSION_METADATA,
+                  this.#ctx.storage,
+                ),
+              }
+              : {}),
           })
-        } catch (e) {
-          if (e instanceof RangeError) return refuse(new Refused(e.message))
-          throw e
         }
-      }
-      let eid = at.get('eid')
-      if (eid) {
-        return Response.json({ identity: inspectIdentity(this.#sql, eid) })
+      } catch (e) {
+        if (e instanceof RangeError) return refuse(new Refused(e.message))
+        throw e
       }
       let seq = at.get('seq')
-      if (seq == null) {
-        return Response.json({
-          physical: inspectStorage(this.#sql),
-          // The Worker version this incarnation runs, and the last deploy it
-          // restarted for (running.ts `behind`): after a deploy, "live at 100%"
-          // says where the Worker is, and only the object can say where it is.
-          running: await ran(this.#bind.CF_VERSION_METADATA, this.#ctx.storage),
-        })
-      }
       let n = Number(seq)
       if (!Number.isSafeInteger(n) || n < 1) {
         return refuse(new Refused('/inspect needs a positive seq'))

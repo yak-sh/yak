@@ -105,9 +105,9 @@ test('a space that is not there is refused with the spaces the caller has', asyn
       said(dir(spaces), 'old'),
     ]),
     [
-      'no space nottawa — your spaces are nottawatownship, peterson',
-      'no space nottawa — you are a member of no space yet',
-      'no space old — it moved to peterson; name it that',
+      "no space nottawa — your spaces are nottawatownship, peterson. Send space: '<one of your spaces>'; app_list() lists their app slugs.",
+      "no space nottawa — you are a member of no space yet. Send space: '<one of your spaces>'; app_list() lists their app slugs.",
+      "no space old — it moved to peterson; send space: 'peterson'",
     ],
   )
 })

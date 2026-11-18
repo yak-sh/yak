@@ -511,8 +511,10 @@ store_restore:
     whole store, every row of it, as of that time. For a write that went
     wrong: a bad import, rows deleted by mistake, a change that turned out
     to be wrong. Cloudflare keeps the last 30 days of the store, so any
-    moment in those 30 days can be restored; at is that moment, as a
-    timestamp (2026-09-06T14:20:00Z). Called with no at, it reports the
+    moment after the store's first write in those 30 days can be restored;
+    at is that moment, as a timestamp (2026-09-06T14:20:00Z). A moment before
+    its first write has no history: choose a later moment after a successful
+    graph_apply or store_load. Called with no at, it reports the
     oldest moment still available and every restore already made. It is
     reversible: where the store stood before is recorded before anything
     moves, so a restore is undone by restoring again to a moment just before
@@ -544,7 +546,11 @@ store_inspect:
     returned next as after until next is null, adding the page counts.
     Name seq to dry-run one held write and
     report phase durations and bundle count. Only
-    the space owner can inspect it. The dry run rolls back every graph batch;
+    the space owner can inspect it; connect with that owner's account.
+    Send the space slug and active app slug from app_list(), or a trash eid
+    from app_list(space)'s trash list to inspect a retained store without
+    restoring it. A store handle is not an app id. A dry run with seq needs
+    the app running; omit seq to inspect it while trashed. The dry run rolls back every graph batch;
     this tool never retries or applies the write.
 store_writes:
   title: Inspect kept store writes
@@ -553,7 +559,10 @@ store_writes:
     writes that a storage reset stopped. Name seq to inspect one write's
     original body and final outcome. Set recent to list the newest 100 writes,
     including applied writes, with a kernel flag but never request headers.
-    Only the space owner can inspect these private writes. Nothing is retried.
+    Only the space owner can inspect these private writes; connect with that
+    owner's account. Send the space slug and active app slug from app_list(),
+    or a trash eid from app_list(space)'s trash list to inspect retained writes
+    without restoring the app. A store handle is not an app id. Nothing is retried.
 store_retry:
   title: Retry an interrupted store write
   description: >-
