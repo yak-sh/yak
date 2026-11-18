@@ -1519,3 +1519,39 @@ The store also offers `checks`, bound diagnostics used by `@yaks/sqlite/tools`,
 and `migrations`, its cooperative migration control. Hosts lend only the
 migration monitor to portable plugins; operators use the adapter's migration
 control with a dedicated connection.
+
+## Cache budgets
+
+`@yaks/sqlite/service` maintains rebuildable database caches without unlinking
+an inode another process may still use. Configure its `caches` option with
+absolute database paths, byte budgets, and each rebuildable table's file-URL
+column:
+
+```json
+{
+  "use": "@yaks/sqlite",
+  "with": {
+    "caches": {
+      "/home/me/.cache/deno/v8_code_cache_v2": {
+        "most": 2000000000,
+        "tables": { "codecache": "specifier" }
+      },
+      "/home/me/.cache/deno/dep_analysis_cache_v2": {
+        "most": 1000000000,
+        "tables": { "moduleinfocache": "specifier" }
+      }
+    }
+  }
+}
+```
+
+Every hour (or `every` milliseconds), a cache over budget loses entries whose
+local source files are gone, then runs `VACUUM` and a truncating WAL checkpoint.
+If it remains over budget, its declared rebuildable tables are cleared and
+compacted. Other tables, including version metadata, remain intact. A missing
+cache stays absent. Processes with open connections continue using the same
+file. Failures reach the host's telemetry and are retried on the next pass.
+
+`@yaks/sqlite/cache` exposes `trim(path, cache)` for a single pass, `held(path)`
+for its database and WAL bytes, and `prune(driver, tables, gone?)` for deleting
+missing sources through an existing connection.
