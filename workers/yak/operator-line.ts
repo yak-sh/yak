@@ -776,9 +776,9 @@ export let lineArrived = async (
     }
     if (stopped) return { space, fresh: false }
     let { pictures } = await import('./operator-texts.ts')
-    let files = await pictures(env, space, arrival)
+    let { files, say } = await pictures(env, space, arrival)
     let response = await asked(space, '/operator/replied', {
-      say: arrival.text,
+      say,
       request: {
         channel: 'texted',
         address: arrival.from,

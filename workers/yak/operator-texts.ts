@@ -183,24 +183,35 @@ export let phonedIn = async (env: Env, number: string) => {
   return person
 }
 
-// A text's pictures, kept as an email's attachments are.
+// A missing picture never takes the words or the other pictures with it.
 export let pictures = async (env: Env, space: Space, arrival: Arrival) => {
   let { keepFile } = await import('./operator-channels.ts')
-  let files = []
+  let files = [], missing = []
   for (let [i, m] of arrival.media.entries()) {
-    let got = await fetch(m.url)
-    if (!got.ok) throw new Error(`Text media answered ${got.status}`)
-    files.push(
-      await keepFile(
-        env,
-        space,
-        `text-${i + 1}.${m.type.split('/')[1] ?? 'bin'}`,
-        m.type || 'application/octet-stream',
-        new Uint8Array(await got.arrayBuffer()),
-      ),
-    )
+    let name = `text-${i + 1}.${m.type.split('/')[1] ?? 'bin'}`
+    try {
+      let got = await fetch(m.url)
+      if (!got.ok) throw new Error(`Text media answered ${got.status}`)
+      files.push(
+        await keepFile(
+          env,
+          space,
+          name,
+          m.type || 'application/octet-stream',
+          new Uint8Array(await got.arrayBuffer()),
+        ),
+      )
+    } catch (error) {
+      defect(error, {
+        request: 'operator-texts.pictures',
+        space: space.eid,
+        file: name,
+      })
+      let reason = error instanceof Error ? error.message : String(error)
+      missing.push(`Attachment ${name} did not come through: ${reason}`)
+    }
   }
-  return files
+  return { files, say: [arrival.text, ...missing].filter(Boolean).join('\n\n') }
 }
 
 // A stranger's text to the platform's number (D-136811) is the whole of
@@ -310,7 +321,7 @@ export let textedOperator = async (
 ) => {
   let { requestId } = await import('./operator-channels.ts')
   let { builderOf, SPACE } = await import('./build-door.ts')
-  let files = await pictures(env, space, arrival)
+  let { files, say } = await pictures(env, space, arrival)
   let response = await builderOf(env, space.eid)(() =>
     new Request('https://builder/operator/receive', {
       method: 'POST',
@@ -320,7 +331,7 @@ export let textedOperator = async (
         [SPACE]: space.eid,
       },
       body: JSON.stringify({
-        say: arrival.text,
+        say,
         request: {
           channel: arrival.rcs ? 'rcs' : 'text',
           address: arrival.from,

@@ -1,4 +1,4 @@
-import { equal, test } from '@yaks/testing'
+import { equal, ok, test } from '@yaks/testing'
 import type { Arrival } from '@yaks/phone'
 import { lineArrived } from './operator-line.ts'
 import { bucket } from './binding-probe.ts'
@@ -99,4 +99,18 @@ test('an unmatched or opted-out connected-line reply stores no media and asks no
     equal(f.replies, [])
     equal(f.blobs.held.size, 0)
   }
+})
+
+let damaged = fixture()
+await lineArrived(damaged.env, [mine], {
+  ...arrival,
+  id: 'reply-with-missing-file',
+  media: [{ type: 'image/png', url: 'data:bad' }, media[1]],
+}, sender)
+test('a connected-line reply keeps the words and later files when one media fetch fails', () => {
+  let [reply] = damaged.replies
+  ok(reply.say.startsWith(arrival.text + '\n\n'))
+  ok(reply.say.includes('Attachment text-1.png did not come through:'))
+  equal(reply.files.map((file) => file.name), ['text-2.plain'])
+  equal(damaged.blobs.held.size, 1)
 })
