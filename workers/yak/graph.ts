@@ -795,6 +795,8 @@ let viewed = (manifest: string): string =>
 // `getCurrentBookmark` and refuses the other two in very nearly these words, so
 // one sentence covers both the method that is missing and the method that
 // throws — and a person is told the truth about their data either way.
+// What `/restart` resets the object with: the reason the runtime logs.
+let RESTORING = 'restarting to wake at a restored bookmark'
 let NO_PITR =
   "this store's back end does not offer point-in-time recovery — it is a " +
   'Cloudflare production Durable Object that does, and local development does ' +
@@ -5624,6 +5626,13 @@ export class Store extends Durable {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
       return this.#recovery(request)
     }
+    // The restart that wakes a restored object at its bookmark: this request
+    // is failed by it, and the caller reads that as done (recover.ts).
+    if (path == '/restart' && request.method == 'POST') {
+      if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
+      this.#ctx.abort?.(RESTORING)
+      return json({ ok: true })
+    }
     // Come back now for whatever the wakes are owed (`tick`): what a restore
     // says to an app out of the trash (erase.ts `untrash`), which armed
     // nothing while it sat there. Kernel only, like the erase.
@@ -6088,12 +6097,13 @@ export class Store extends Durable {
    * the thing the caller writes down before asking for one — and `to`, when a
    * moment was named, is the bookmark for that moment.
    *
-   * A POST restores. The restart is a hurry and not the mechanism:
-   * `onNextSessionRestoreBookmark` is written down by the runtime, so the
-   * recovery happens whenever this object next starts even if the abort never
-   * lands. Which is why the answer goes out first — `abort` fails every
-   * in-flight request, including the one asking for this — and the restart
-   * rides a turn of the loop behind it.
+   * A POST restores: `onNextSessionRestoreBookmark` is written down by the
+   * runtime, so the recovery happens whenever this object next starts, and
+   * the POST answers the way back. It restarts nothing, because `abort` fails
+   * every in-flight request, and an answer still on its way to the caller is
+   * one of them. The restart is a request of its own, `/restart`, which the
+   * caller sends once it holds that answer and whose reset is its success
+   * (recover.ts `putBack`).
    */
   async #recovery(request: Request): Promise<Response> {
     if (request.method != 'GET' && this.#get('name') == PLATFORM_STORE) {
@@ -6122,8 +6132,6 @@ export class Store extends Durable {
         await lexiconOf(this.#bind.LEXICON!).forget(this.#name() ?? '')
       }
       let undo = await s.onNextSessionRestoreBookmark(said.bookmark)
-      let ctx = this.#ctx
-      if (ctx.abort) setTimeout(() => ctx.abort?.('restoring'), 0)
       return Response.json({ undo })
     } catch (e) {
       // A runtime that offers none of this throws its own sentence, which is

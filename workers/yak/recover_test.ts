@@ -91,6 +91,7 @@ test('a restore writes down the way back before it moves anything', async () => 
   assertEquals(d.asked, [
     'GET /restore?at=2026-09-01T00%3A00%3A00.000Z',
     'POST /restore',
+    'POST /restart',
   ])
   assertEquals(wrote, [
     '2026-09-06T14:20:00.000Z 2026-09-01T00:00:00.000Z ada at-now',
@@ -172,11 +173,45 @@ test('the store answers where it stands, and wakes where it is told', async () =
   })
   assertEquals(await done.json(), { undo: `undo-at-${then}` })
   assertEquals(ctx.pitr.restore, `at-${then}`)
-  // The restart is asked for after the answer went out — `abort` fails every
-  // in-flight request, this one included — so it lands a turn later.
-  assertEquals(ctx.pitr.aborts, 0)
+  // The answer restarts nothing: `abort` would fail it on its way out. The
+  // restart is its own request.
   await new Promise((go) => setTimeout(go, 0))
+  assertEquals(ctx.pitr.aborts, 0)
+  await at(store, '/restart', { method: 'POST' })
   assertEquals(ctx.pitr.aborts, 1)
+})
+
+test('a restart that resets the object under its own request is done', async () => {
+  let reset = Object.assign(new Error('restarting'), {
+    durableObjectReset: true,
+  })
+  let asked: string[] = []
+  let store = doorOf((req) => {
+    let path = new URL(req.url).pathname
+    asked.push(`${req.method} ${path}`)
+    if (path == '/restart') return Promise.reject(reset)
+    return Promise.resolve(
+      Response.json(
+        req.method == 'POST' ? { undo: 'u' } : { from: 'f', to: 't' },
+      ),
+    )
+  }, 'ada/cookbook')
+  let done = await putBack(store, () => Promise.resolve(), new Date(NOW), 'ada')
+  assertEquals(done.undo, 'u')
+  assertEquals(asked.at(-1), 'POST /restart')
+  // Any other failure of the restart is one.
+  let broken = doorOf(
+    (req) =>
+      new URL(req.url).pathname == '/restart'
+        ? Promise.reject(new Error('boot failed'))
+        : Promise.resolve(Response.json({ from: 'f', to: 't', undo: 'u' })),
+    'ada/cookbook',
+  )
+  await assertRejects(
+    () => putBack(broken, () => Promise.resolve(), new Date(NOW), 'ada'),
+    Error,
+    'boot failed',
+  )
 })
 
 test('a store outside the window refuses, and a client never asks at all', async () => {

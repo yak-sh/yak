@@ -2,8 +2,8 @@
 // Durable Object recoverable for thirty days: `getBookmarkForTime` names a
 // point in that history, `onNextSessionRestoreBookmark` says which point the
 // object wakes at next, and restarting it is what makes that happen now. The
-// door onto all three is the store's own `/restore` (graph.ts `#recovery`);
-// what is here is the order, the window, and the record.
+// doors onto them are the store's own `/restore` (graph.ts `#recovery`) and
+// `/restart`; what is here is the order, the window, and the record.
 //
 // The order is the whole of it. Where the store stands right now is read and
 // written down before anything moves, in the directory — a different object,
@@ -140,8 +140,28 @@ export let putBack = async (
     body: JSON.stringify({ bookmark: to }),
     headers: { 'content-type': 'application/json' },
   })
+  await restarted(store)
   return { ...record, undo }
 }
+
+/**
+ * The object restarted, so it wakes at the bookmark it was told now rather
+ * than whenever it is next evicted. The restart resets it under the request
+ * asking for it, so that request failing with the runtime's reset is the
+ * answer; any other failure is one.
+ */
+let restarted = async (store: Door) => {
+  try {
+    await asked(store, '/restart', { method: 'POST' })
+  } catch (e) {
+    if (!reset(e)) throw e
+  }
+}
+
+/** The runtime's error for an object reset under a request. */
+let reset = (e: unknown) =>
+  e instanceof Error &&
+  (e as Error & { durableObjectReset?: boolean }).durableObjectReset === true
 
 /** The record as the directory holds it: one entity per restore, about the
  * app, so a second restore never overwrites the first one's way back. */
