@@ -177,9 +177,11 @@ let reading = async (
 ) => {
   let offset = range?.from ?? 0, end = range?.to ?? head.size - 1
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
+  let cancelled = false, reason: unknown
   let next = () =>
     patient(
       async () => {
+        if (cancelled) return { done: true, value: undefined } as const
         try {
           if (!reader) {
             let object = await bucket.get(
@@ -188,6 +190,10 @@ let reading = async (
                 ? { range: { offset, length: end - offset + 1 } }
                 : undefined,
             )
+            if (cancelled) {
+              await object?.body.cancel(reason)
+              return { done: true, value: undefined } as const
+            }
             if (!object) throw new Error(`no object at ${key}`)
             if (object.etag != head.etag) {
               await object.body.cancel().catch(() => {})
@@ -209,6 +215,7 @@ let reading = async (
     controller: ReadableStreamDefaultController<Uint8Array>,
     chunk: ReadableStreamReadResult<Uint8Array>,
   ) => {
+    if (cancelled) return
     if (chunk.done) return controller.close()
     offset += chunk.value.byteLength
     controller.enqueue(chunk.value)
@@ -220,7 +227,11 @@ let reading = async (
   return new ReadableStream<Uint8Array>({
     start: (controller) => send(controller, first),
     pull: async (controller) => send(controller, await next()),
-    cancel: (reason) => reader?.cancel(reason),
+    cancel: (why) => {
+      cancelled = true
+      reason = why
+      return reader?.cancel(why)
+    },
   })
 }
 

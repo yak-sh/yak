@@ -1,4 +1,4 @@
-import { test } from '@yaks/testing'
+import { test, tick } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { decode, encode } from './store.ts'
 import {
@@ -285,3 +285,56 @@ test('a resumed stream refuses bytes from a different object version', async () 
   )
   assertEquals(gets, 2)
 })
+
+let cancelling = async (during: 'retry' | 'get') => {
+  let bucket = fake(), gets = 0
+  let reached = Promise.withResolvers<void>()
+  let resume = Promise.withResolvers<void>()
+  let cancelled: unknown[] = []
+  await bucket.put('abc', encode('saved'))
+  let wait = () => {
+    reached.resolve()
+    return resume.promise
+  }
+  bucket.get = async () => {
+    let first = ++gets == 1
+    if (!first && during == 'get') await wait()
+    return {
+      etag: '5',
+      body: new ReadableStream<Uint8Array>({
+        start: (c) => {
+          if (first) c.enqueue(encode('sa'))
+        },
+        pull: (c) => {
+          if (first) c.error(internal)
+        },
+        cancel: (why) => {
+          cancelled.push(why)
+        },
+      }, { highWaterMark: 0 }),
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+    }
+  }
+  let objects = bucketObjects(bucket, during == 'retry' ? wait : immediate)
+  let object = (await objects.open('abc'))!
+  return {
+    body: (await object.read()).getReader(),
+    reached: reached.promise,
+    resume: resume.resolve,
+    gets: () => gets,
+    cancelled,
+  }
+}
+
+for (let during of ['retry', 'get'] as const) {
+  let fixture = await cancelling(during)
+  test(`cancelling a bucket stream during ${during} stops resumed reads`, async () => {
+    assertEquals(decode((await fixture.body.read()).value!), 'sa')
+    await fixture.reached
+    await fixture.body.cancel('client left')
+    fixture.resume()
+    await tick()
+    assertEquals(fixture.gets(), during == 'retry' ? 1 : 2)
+    assertEquals(fixture.cancelled, during == 'retry' ? [] : ['client left'])
+  })
+}

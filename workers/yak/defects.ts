@@ -185,10 +185,12 @@ export let streaming = (
 ): ReadableStream<Uint8Array> => {
   let invocation = context.getStore()
   let reader = source.getReader()
+  let cancelled = false
   return new ReadableStream<Uint8Array>({
     pull: async (controller) => {
       try {
         let chunk = await reader.read()
+        if (cancelled) return
         if (chunk.done) controller.close()
         else controller.enqueue(chunk.value)
       } catch (error) {
@@ -196,7 +198,10 @@ export let streaming = (
         controller.error(error)
       }
     },
-    cancel: (reason) => reader.cancel(reason),
+    cancel: (reason) => {
+      cancelled = true
+      return reader.cancel(reason)
+    },
   })
 }
 

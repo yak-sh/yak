@@ -2,16 +2,22 @@
 // that stream locked when it rejects, so cleanup acts on our reader directly.
 let owned = (source: ReadableStream<Uint8Array>) => {
   let reader = source.getReader()
+  let cancelled = false
+  let cancel = (reason?: unknown) => {
+    cancelled = true
+    return reader.cancel(reason)
+  }
   return {
     body: new ReadableStream<Uint8Array>({
       pull: async (controller) => {
         let got = await reader.read()
+        if (cancelled) return
         if (got.done) controller.close()
         else controller.enqueue(got.value)
       },
-      cancel: (reason) => reader.cancel(reason),
+      cancel,
     }),
-    cancel: (reason?: unknown) => reader.cancel(reason),
+    cancel,
   }
 }
 

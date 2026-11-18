@@ -13,6 +13,7 @@ import {
   redone,
   refusing,
   responding,
+  streaming,
   within,
 } from './defects.ts'
 import { Pending } from '@yaks/api/log'
@@ -293,6 +294,50 @@ test('an internal buffered response keeps native cache clone cancellation', asyn
   let cached = answer.clone()
   await answer.body!.cancel()
   equal(await cached.text(), 'not found')
+})
+
+for (let queued of [false, true]) {
+  test(`cancelling a storage read reports no failure with a chunk ${queued ? 'queued' : 'pending'}`, async () => {
+    let { rows, time, env } = recorded()
+    let reading = Promise.withResolvers<void>()
+    let into!: ReadableStreamDefaultController<Uint8Array>
+    let reason: unknown
+    let source = new ReadableStream<Uint8Array>({
+      start: (controller) => into = controller,
+      pull: () => reading.resolve(),
+      cancel: (why) => {
+        reason = why
+      },
+    }, { highWaterMark: 0 })
+    let body = within(
+      env,
+      { request: 'Files fetch' },
+      () => streaming(source),
+      time,
+    )
+    await reading.promise
+    if (queued) into.enqueue(new Uint8Array([1]))
+    await body.cancel('client left')
+    equal(reason, 'client left')
+    equal(rows, [])
+  })
+}
+
+test('a storage stream failure still reaches the tracker and its reader', async () => {
+  let { rows, time, env } = recorded()
+  let error = said(new Error('storage failed'))
+  let source = new ReadableStream<Uint8Array>({
+    pull: (controller) => controller.error(error),
+  }, { highWaterMark: 0 })
+  let body = within(
+    env,
+    { request: 'Files fetch' },
+    () => streaming(source),
+    time,
+  )
+  equal(await body.getReader().read().catch((why) => why), error)
+  equal(rows.length, 1)
+  equal((rows[0][0].exception as { value: string }).value, 'storage failed')
 })
 
 test('a reset out of retries is one fault per wording, whichever caller and deploy it names', async () => {
