@@ -3,10 +3,7 @@
 let owned = (source: ReadableStream<Uint8Array>) => {
   let reader = source.getReader()
   let cancelled = false
-  let cancel = (reason?: unknown) => {
-    cancelled = true
-    return reader.cancel(reason)
-  }
+  let cancel = (reason?: unknown) => reader.cancel(reason)
   return {
     body: new ReadableStream<Uint8Array>({
       pull: async (controller) => {
@@ -15,7 +12,10 @@ let owned = (source: ReadableStream<Uint8Array>) => {
         if (got.done) controller.close()
         else controller.enqueue(got.value)
       },
-      cancel,
+      cancel: (reason) => {
+        cancelled = true
+        return cancel(reason)
+      },
     }),
     cancel,
   }
