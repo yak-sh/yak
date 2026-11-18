@@ -137,10 +137,10 @@ app_new:
     allowed to write can change data. Returns the app's entity id, URL and
     access setting. The URL serves nothing until app_deploy releases a
     version, so hand the person the link app_deploy answers, not this one.
-    A slug that already holds an app makes nothing: the answer names that app
+    A slug that already holds a live app makes nothing: the answer names that app
     and a free slug beside it, and the new app is built there. Never delete,
-    move or replace an existing app to take its slug, even to remake it; a
-    remake goes under a new slug.
+    trash, move or replace an existing app to rebuild it. An app already in
+    the trash releases its slug immediately, so a new app may use that slug.
     Write the new app's copy, the words its pages show, in a copy.json
     beside index.html and mark each element with data-copy, so the person
     can edit the words on the page (https://yaks.app/docs/copy).
@@ -613,8 +613,8 @@ app_set:
     Rename an app, move it to another address, or change who may use it. The
     title is its name; the slug is its address, so a new slug moves the app,
     files and data included, to <space>.yaks.app/<new>/, and the old address
-    redirects there until another app takes it. A slug another app holds is
-    refused with that app and a free slug to use. access is app_new's choice:
+    redirects there until another app takes it. A trashed app releases its
+    slug immediately. A slug another live app holds is refused with that app and a free slug to use. access is app_new's choice:
     'public' (the default: anyone reads, members with write permission change
     data), 'open' (everyone with the link writes) or 'private' (members only).
     home makes this app the space's front page, what <space>.yaks.app/ opens; no

@@ -175,6 +175,10 @@ test('restore chooses a numbered address and leaves the replacement independent'
   assertEquals(totals.apps.get(replacement.eid)?.files, 7)
   let restored = await call(ctx, 'app_restore', { space: slug, app: app.eid })
   assertStringIncludes(restored.text, '/notes-2/')
+  assertStringIncludes(
+    restored.text,
+    'Its previous address was /notes/; it is now /notes-2/.',
+  )
   assertEquals((await dir.app(space, 'notes-2'))!.eid, app.eid)
   assertEquals((await dir.app(space, 'notes'))!.eid, replacement.eid)
   assertEquals(await dir.former(space, 'notes'), null)

@@ -286,12 +286,18 @@ test('a deleted app comes back from the Trash', async () => {
     await (await get(trash)).text(),
     `name="restore" value="${discarded}"`,
   )
+  await agent.tool('app_new', { space: slug, slug: 'discarded', title: 'New' })
   let restored = await post(trash, { restore: discarded })
   assertEquals(restored.status, 303)
-  assertEquals(restored.headers.get('location'), to(trash))
+  let back = new URL(restored.headers.get('location')!)
+  assertEquals(back.pathname, trash)
+  assertStringIncludes(
+    await (await get(back.pathname + back.search)).text(),
+    'Its previous address was /discarded/; it is now /discarded-2/.',
+  )
   assertStringIncludes(
     await (await get(apps)).text(),
-    `href="https://${host}/discarded/"`,
+    `href="https://${host}/discarded-2/"`,
   )
 })
 

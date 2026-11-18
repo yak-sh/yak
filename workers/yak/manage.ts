@@ -51,7 +51,7 @@ import { LOGO, logoBytes, logoed } from './logo.ts'
 import { again } from './invite.ts'
 import { peopleIn } from './people.ts'
 import { CallError } from '@yaks/tools/errors'
-import { untrash, untrashNumber } from './erase.ts'
+import { restoredAddress, untrash, untrashNumber } from './erase.ts'
 import { dollars } from './numbers.ts'
 import { shown } from '@yaks/phone'
 import {
@@ -134,7 +134,15 @@ let visits = async (env: Env, apps: App[]): Promise<Visits[] | null> => {
 // finished or not (connections.ts `callback`), or an agent was disconnected
 // (identity.ts).
 let returned = (q: URLSearchParams) =>
-  q.has('saved') ? { say: 'Saved.', no: false } : q.has('invoiced')
+  q.has('restored')
+    ? {
+      say: `Restored at /${q.get('restored')}/.` +
+        restoredAddress(q.get('previous') ?? '', q.get('restored') ?? ''),
+      no: false,
+    }
+    : q.has('saved')
+    ? { say: 'Saved.', no: false }
+    : q.has('invoiced')
     ? {
       say: 'The invoice reaches the address you gave within the hour. ' +
         'The Pro plan starts when it is paid.',
@@ -1129,8 +1137,13 @@ let saved = async (
   let back = String(form.get('restore') ?? '').trim()
   if (back) {
     let app = await dir.binned(space, back)
-    if (app?.trashed) await untrash(env, dir, space, app, who)
-    return redirect(sentFrom(req, env).href, 303)
+    let to = sentFrom(req, env)
+    if (app?.trashed) {
+      let restored = await untrash(env, dir, space, app, who)
+      to.searchParams.set('restored', restored.slug)
+      to.searchParams.set('previous', app.slug)
+    }
+    return redirect(to.href, 303)
   }
   let number = String(form.get('restore_number') ?? '').trim()
   if (number) {

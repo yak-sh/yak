@@ -188,6 +188,7 @@ import {
   nobodys,
   numberGrace,
   refused,
+  restoredAddress,
   ticket,
   trash,
   trashedApp,
@@ -5844,6 +5845,7 @@ let OURS: Row[] = [
           }`,
         )
       }
+      let previous = app.slug
       app = await untrash(
         ctx.env,
         ctx.dir,
@@ -5858,7 +5860,7 @@ let OURS: Row[] = [
             url(space, app, ctx.env)
           } serves ` +
           'again and its tools are yours again. Everything it saved is ' +
-          'where it was.',
+          'where it was.' + restoredAddress(previous, app.slug),
         space,
       }
     },

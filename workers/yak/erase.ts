@@ -721,6 +721,12 @@ export let untrash = async (
   return restored
 }
 
+/** A restore tells the person when its address changed. */
+export let restoredAddress = (previous: string, slug: string) =>
+  previous == slug
+    ? ''
+    : ` Its previous address was /${previous}/; it is now /${slug}/.`
+
 // A restore answers once its stores are awake. The mark alone leaves each one
 // asleep until the directory's effect delivers it (trash.ts `delivered`), and
 // meanwhile the directory names the app while its store answers a page or a
