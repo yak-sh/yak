@@ -205,7 +205,7 @@ test('a run holds the alarm a minute out while it is in flight', async () => {
           await held
         }
         return Response.json([], {
-          headers: { 'x-yak-directory-revision': '0' },
+          headers: { [EPOCH]: '0' },
         })
       },
     }),
