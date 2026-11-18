@@ -1752,6 +1752,7 @@ export class Store extends Durable {
             ...opened,
             number: numbered(words.vocab),
             derived: words.derived,
+            over: () => words.over,
             history: history!,
           }, mode),
         effects: () => quiet,
@@ -4026,6 +4027,7 @@ export class Store extends Durable {
           report: (error) =>
             defect(error, { request: 'store', store: this.#get('name') }),
           schemaReady: () => true,
+          over: () => this.#fitted(this.#shape()).over,
           derived,
           number: numbered(vocab),
         }),

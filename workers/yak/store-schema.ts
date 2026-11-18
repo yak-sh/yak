@@ -370,6 +370,12 @@ export let fitSchema = (
   if (stands(read('fitted'), fitted())) return []
   let { left, stamp } = passed(driver, shape, held)
   if (stamp) write('schema', stamp)
+  // A draft written by an older runtime could raise a component without its
+  // search objects while retaining the schema stamp. Fit the standing text
+  // indexes once this version, including terms for rows already written.
+  if (!left.length && !stamp) {
+    adopt(driver, indexed(shape.vocab), blobRead(shape.vocab), { heal: false })
+  }
   let fit = fitted()
   if (!left.length && fit) write('fitted', fit)
   if (report) {
