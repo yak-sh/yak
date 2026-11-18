@@ -3336,7 +3336,8 @@ let indexedRelation = (
   let s = rel(from, o)
   if (
     (!root || root.pred && ['<', '<=', '>', '>='].includes(opOf(root.pred))) &&
-    !ctx.candidates && !ctx.correlated && s.where
+    (!ctx.candidates || ctx.shapeCandidates && !ctx.candidates.keyed) &&
+    !ctx.correlated && s.where
   ) {
     let selected = conjunctsOf(s.where).flatMap((test) => {
       let q = selection(ctx, test)
@@ -3344,6 +3345,10 @@ let indexedRelation = (
     })
     if (selected.length) {
       root = undefined
+      // A shape bounds eligible owners, not text hits. Let mandatory owner
+      // selections drive and test the shape on those keys, so an empty
+      // search never walks every eligible owner before finding no hits.
+      ctx.shapeCandidates = false
       ctx.candidates = {
         ...render(intersection(selected.map((s) => s.q))),
         test: and(...selected.map((s) => s.test)),
