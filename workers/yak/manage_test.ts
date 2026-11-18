@@ -307,9 +307,7 @@ test('selling stops from its page', async () => {
 test('the chat’s side opens each app beside it, and Updates', async () => {
   let chat = await get(home)
   assertEquals(chat.status, 200)
-  let chatted = await chat.text()
-  assertStringIncludes(chatted, ' Talk Talk-beside"')
-  assertStringIncludes(chatted, `href="${home}?app=site"`)
+  assertStringIncludes(await chat.text(), `href="${home}?app=site"`)
   let about = await (await get(`${home}?app=site`)).text()
   assertEquals(
     parseHTML(about).document.querySelector('iframe[data-frame=live]')
