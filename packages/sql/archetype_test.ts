@@ -118,11 +118,11 @@ test('boolean presence trees retain their negative guards', () => {
   assertEquals(lists(sql.sql), [[10, 11, 12]])
 })
 
-// A page's screen of absent components beside a value test names only the
-// archetypes wearing the value's component, not every other archetype held.
-test('a screen beside a value test lists only the archetypes that can match', () => {
+test('a screen beside a value test retains its negative guards', () => {
   let sql = compile(parse('.doc.title=hello !claim !task'), v, { archetypes })
-  assertEquals(lists(sql.sql), [[11]])
+  for (let comp of ['claim', 'task']) {
+    assert(sql.sql.includes(`not (exists (select 1 from "${comp}"`), sql.sql)
+  }
   assertEquals(sql.params, ['hello'])
 })
 

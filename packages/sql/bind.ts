@@ -1649,6 +1649,12 @@ let presence = (ctx: Ctx, cs: Clause[]): string | undefined => {
       : aimed(ctx, c)?.[0]
     if (root?.prop && spined(ctx, root.comp)) return root.comp
   }
+  // A mandatory scalar value names its component too. Driving from its
+  // owners keeps their physical order, so a page stops when it fills instead
+  // of sorting the entire component through the joined entity's identity.
+  return flat.map((c) => needOf(ctx, c)).find((comp) =>
+    comp != null && spined(ctx, comp)
+  )
 }
 
 // An OR compiles to a UNION of selections, never to a disjunction in the WHERE
