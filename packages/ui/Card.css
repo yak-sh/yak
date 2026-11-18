@@ -4,9 +4,10 @@
    off under it: what it is on the left, its actions on the right. */
 .Card {
   --card-pad: var(--gap);
+  --card-gap: var(--half-gap);
   display: grid;
   align-content: start;
-  gap: var(--half-gap);
+  gap: var(--card-gap);
   min-width: 0;
   padding: var(--card-pad);
   border: 1px solid transparent;

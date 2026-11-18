@@ -1540,9 +1540,10 @@
     margin-inline: calc(-1 * var(--pad-inline));
   }
 
-  /* Under the card's head, the picture touches its rule. */
+  /* Under the card's head, the picture touches its rule: it takes back
+     the gap the card puts between what it holds. */
   .Card > .Card_Head + .Make_Shot {
-    margin-top: calc(-1 * var(--half-gap));
+    margin-top: calc(-1 * var(--card-gap));
   }
 
   .Card > .Make_Shot:last-child {
