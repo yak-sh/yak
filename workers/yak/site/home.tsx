@@ -451,12 +451,19 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
                 <a
                   href='#examples'
                   data-cta='examples'
-                  {...text(key('hello.examples'), { arrow: arrow('↓') })}
+                  {...text(key('hello.examples'))}
                 />
               ),
             })}
           />
         </div>
+        <Examples
+          apps={pitch.apps}
+          note={key('examples.note')}
+          slots={{
+            gallery: <a href='/gallery' {...text(key('examples.gallery'))} />,
+          }}
+        />
       </section>
       <section class='Yours' aria-labelledby='does'>
         <h2 class='Title' id='does' {...text(key('does.title'))} />
@@ -483,25 +490,7 @@ export let Home = ({ pitch }: { pitch: Pitch }) => {
             </div>
           ))}
         </dl>
-        <p
-          class='Note Note-small'
-          {...text('home.work.asked', {
-            office: (
-              <a
-                href='/organizations'
-                {...text('home.work.office', { arrow: arrow('→') })}
-              />
-            ),
-          })}
-        />
       </section>
-      <Examples
-        apps={pitch.apps}
-        note={key('examples.note')}
-        slots={{
-          gallery: <a href='/gallery' {...text(key('examples.gallery'))} />,
-        }}
-      />
       <section class='How' aria-labelledby='how'>
         <h2 class='Title' id='how' {...text(key('how.title'))} />
         <ol class='Steps'>

@@ -268,6 +268,15 @@ Readers who run an office or sit on a board (T-156917) stopped at more:
 - They asked for a named person, a phone number and how fast support
   answers. Promise only what exists.
 
+**Every change ends with a stranger's read of the whole served page.** Jeff,
+verbatim: "please, any time you change the marketing site. check it for
+coherence from a stranger's perspective. i should never have to point this
+stuff out". After the change is live, read the served page top to bottom as
+someone who has never heard of the product, and fix every line left over from
+an earlier version, that refers to something no longer on the page, or that
+wouldn't make sense to them, so the page reads as one: rewrite it, move it, or
+remove it where that is the fix.
+
 **Plain beats clever.** Mannered prose (M-33081) is a heading or a line
 arranged for effect: a metaphor, a pun, a pair of short punchy fragments. On a
 marketing page it costs the most, because the visitor won't stay to decode it.

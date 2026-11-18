@@ -559,8 +559,8 @@
   }
 
   /* The home page's hero stands on the grass under its sky (.Sky): it
-     starts well down the page, and the sheet beside it starts level with
-     its heading. */
+     starts well down the page, and its examples start level with the
+     kicker. */
   .Home .Hello {
     gap: 2.5rem;
     align-items: start;
@@ -1408,8 +1408,13 @@
 
   @media (min-width: 60rem) {
     .Home .Hello {
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
       gap: clamp(2rem, 5vw, 4rem);
       padding-top: 9rem;
+    }
+
+    .Home .Hello > .Demo {
+      margin-top: 9.25rem;
     }
 
     .Hello_Copy {

@@ -34,9 +34,9 @@
       "title": "Build your ideas by asking.",
       "hint": "Type what you need, like “a potluck sign-up sheet”",
       "go": "Build it",
-      "note": "Free to start, with no card. An AI assistant builds what you ask for while you watch. Your first 5 are free, and %{price} covers as many as you like. %{examples}",
+      "note": "Free to start, with no card. An AI assistant builds what you ask for while you watch. Your first 5 apps are free, and %{price} covers as many as you like. %{examples}",
       "price": "$9 a month",
-      "examples": "See examples %{arrow}"
+      "examples": "See examples"
     },
     "walk": {
       "title": "Watch an app get built, one request at a time",
@@ -287,7 +287,7 @@
     },
     "work": {
       "title": "Your app does the follow-up for you",
-      "note": "A form by itself only collects answers, and the rest is left to you. Say what should happen next, and your app does it each time.",
+      "note": "Say what should happen after someone uses your app, and it does it each time.",
       "signup": {
         "term": "Someone signs up, and you both get an email",
         "detail": "They get a confirmation. You get their name and what they wrote, a few seconds later."
@@ -303,9 +303,7 @@
       "minutes": {
         "term": "Email it, and the page is updated",
         "detail": "Send the meeting minutes to your app's email address. They are posted on its page seconds later, and the people who asked to be told get an email."
-      },
-      "asked": "Each of these was asked for in a few sentences. %{office}",
-      "office": "See what it does for an office %{arrow}"
+      }
     },
     "how": {
       "title": "How yaks.app works",
