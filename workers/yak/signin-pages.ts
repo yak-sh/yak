@@ -371,6 +371,76 @@ export let askDelete = (at: {
   )
 }
 
+// Erasing one app from the trash (identity.ts `erasing`): the page the
+// letter's link opens. One button with the ticket, the app's slug typed back
+// without one, and no form at all when it cannot happen (`stop`).
+export let askErase = (at: {
+  slug: string
+  app: string
+  name: string
+  lines: string[]
+  token?: string | null
+  stop?: string
+  why?: string
+  status?: number
+}, env: Host = {}) =>
+  page(
+    env,
+    {
+      title: `Erase ${at.name} for good?`,
+      lead: at.stop ?? at.why ??
+        'This cannot be undone, and nothing is kept. Until you press the ' +
+          'button it stays in the trash, where it can be restored.',
+      status: at.status ?? 200,
+    },
+    at.lines.length
+      ? h(
+        Card,
+        null,
+        heading('What goes, for good'),
+        h(
+          'ol',
+          { class: 'Card_List' },
+          at.lines.map((l) => h('li', { class: 'Card_Item' }, l)),
+        ),
+      )
+      : null,
+    at.stop ? null : [
+      h(
+        'form',
+        {
+          class: 'Page_Form',
+          method: 'post',
+          action: `/space/${at.slug}/apps/${at.app}/erase`,
+        },
+        held('t', at.token),
+        at.token ? null : [
+          h(
+            Form.Label,
+            { for: 'confirm' },
+            'Type ',
+            h('b', null, at.name),
+            ' to confirm',
+          ),
+          h(Field, {
+            id: 'confirm',
+            name: 'confirm',
+            autocomplete: 'off',
+            spellcheck: 'false',
+            autofocus: true,
+          }),
+        ],
+        send(`Erase ${at.name} forever`),
+      ),
+      h(
+        'p',
+        { class: 'Note' },
+        'Changed your mind? Close this page — nothing has happened.',
+      ),
+    ],
+    home(env),
+  )
+
 // And after: what went, and the one thing worth knowing next — the address
 // belongs to nobody now, theirs to take again or somebody else's to take
 // later. A space that went to the trash has the opposite next thing: the

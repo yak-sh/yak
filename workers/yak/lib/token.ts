@@ -68,6 +68,7 @@ export type Use =
   | 'handoff-consent' // a person's click to sign in on a custom domain
   | 'consent' // the OAuth consent form (identity.ts)
   | 'erase' // a space's deletion ticket (erase.ts)
+  | 'erase-app' // a trashed app's erasure ticket (erase.ts `appTicket`)
   | 'review' // a gallery review ticket (gallery.ts)
   | 'invite' // an invitation's accept link (workers/yak/invite.ts)
   | 'page' // a sandboxed app's page speaking to its own API (page-token.ts)

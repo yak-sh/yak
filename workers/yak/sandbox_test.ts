@@ -50,6 +50,7 @@ import {
 } from './sandbox.ts'
 import { SENTINEL } from '@yaks/secrets'
 import { HELD, named } from '@yaks/sandbox/cloudflare'
+import { doomed, erase } from './erase.ts'
 import { meta } from './meta.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { PUBLISHED } from './published.ts'
@@ -955,9 +956,13 @@ test('a free space holds one sandbox awake, and each space counts its own', asyn
   await awake(env, space, ADA, now + (HELD + 1) * 1000)
   await awake(env, other, BOB, now)
 
-  // Permanent deletion gives back every place in the space at once, Ada's
-  // included, and takes every member's container with it.
-  await tool('space_delete').run(ada, { space: 'ada', forever: true })
+  // Erasing the space gives back every place in it at once, Ada's included,
+  // and takes every member's container with it.
+  let gone = (await ada.dir.space('ada'))!
+  await erase(env, ada.dir, await doomed(ada.dir, gone), {
+    person: ADA,
+    role: 'owner',
+  })
   assertEquals(await ada.dir.space('ada'), null)
   assert(![...box.alive].some((n) => n.includes(space.eid)))
   assertEquals(await meta(env).query(line`.lent.within=${space.eid}`), [])

@@ -590,6 +590,11 @@ export let WORDS: Record<string, Words> = {
     'description':
       'Bring back an app that was deleted. It serves again at its old address if free, or a free numbered address otherwise; pass slug to choose another address. Its tools and pages come back, and everything it saved is exactly as it was; nothing is touched while an app sits in the trash. A platform admin may restore any app. Works within 30 days of app_delete; after that it has been erased and there is nothing to bring back. app_list shows what is in the trash and how long each app has left. Pass the deleted app eid from app_delete or app_list (and its space). Its old slug also works while no live app owns it. Returns its restored URL and a confirmation. Documentation: https://yaks.app/docs/errors.',
   },
+  'app_erase': {
+    'title': 'Ask to erase an app from the trash',
+    'description':
+      "Ask for an app in the trash to be erased now rather than when its 30 days run out. This tool erases nothing: it emails the space's owner a link, valid for one hour, and only their press on that page erases it, with no undo. Use it only when the person asked for exactly that; an app left in the trash costs nothing to keep. Only the space owner may ask, and only for an app already in the trash (app_delete puts it there). Pass the deleted app eid from app_delete or app_list. Until they press it, app_restore still brings the app back. Documentation: https://yaks.app/docs/errors.",
+  },
   'app_errors': {
     'title': 'List open errors',
     'step': {

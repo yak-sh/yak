@@ -167,9 +167,11 @@ import { appEntry, commandLine, tooLong } from './standing.ts'
 import { listable } from './shelf.ts'
 import { meta } from './meta.ts'
 import {
+  appDoor,
+  appLetter,
+  appTicket,
   doomed,
   door,
-  erase,
   keeping,
   kept as inTrash,
   letter,
@@ -179,9 +181,9 @@ import {
   ticket,
   trash,
   trashSpace,
+  unmade,
   untrash,
   untrashSpace,
-  went,
 } from './erase.ts'
 import {
   apex,
@@ -3576,11 +3578,10 @@ let OURS: Row[] = [
         )
       }
       let d = await doomed(ctx.dir, space)
+      // Nobody's space has no letter to write, so it goes straight to the
+      // trash, `forever` or not: no agent erases a space, and its thirty
+      // days running out do.
       if (await nobodys(ctx.dir, d)) {
-        if (forever) {
-          let out = await erase(ctx.env, ctx.dir, d, who)
-          return { text: went(d, out, ctx.env) }
-        }
         await trashSpace(ctx.env, ctx.dir, space, who)
         // The answer's unseen rider must see the committed trash mark rather
         // than ask a store that the notification just made dormant.
@@ -5741,6 +5742,53 @@ let OURS: Row[] = [
           } serves ` +
           'again and its tools are yours again. Everything it saved is ' +
           'where it was.',
+        space,
+      }
+    },
+  },
+  {
+    // The second of the two steps that erase an app before its thirty days
+    // are up, and an agent's part in it is only to ask: the space's owner is
+    // mailed a link, and the erase is their press on that page (erase.ts
+    // `appTicket`, identity.ts `erasing`).
+    name: 'app_erase',
+    destructive: false,
+    input: {
+      type: 'object',
+      properties: { space: SPACE, app: APP },
+      required: ['app'],
+    },
+    run: async (ctx, args) => {
+      let { space, app } = owner(await inBin(ctx, args))
+      if (!app.trashed) {
+        throw refuse(
+          'conflict',
+          `${space.slug}/${app.slug} is not in the trash — an app is erased ` +
+            'only from the trash: app_delete puts it there first',
+        )
+      }
+      if (!ctx.env.SESSION_SECRET) {
+        throw new Error('the platform cannot sign a confirmation link here')
+      }
+      // The owner's own address, never one the agent named.
+      let to = await ctx.dir.emailAt(ctx.person)
+      if (!to) throw refuse('missing', 'we have no address to write to you at')
+      let link = appDoor(
+        space.slug,
+        app.eid,
+        await appTicket(space, app, ctx.person, ctx.env.SESSION_SECRET),
+        ctx.env,
+      )
+      await mail(ctx.env)({ to, ...appLetter(space, app, link, ctx.env) })
+      return {
+        text: `nothing is erased. ${space.slug}/${app.slug} is still in the ` +
+          `trash, ${daysLeft(app.trashed)} days left, and app_restore(app: ` +
+          `'${app.eid}') still brings it back. An assistant cannot erase an ` +
+          'app: a letter is on its way to the address they sign in with, ' +
+          'carrying a link that does it. It lasts an hour, and opening it ' +
+          'asks them once more. Tell them to check their email. What it ' +
+          'would destroy:\n' +
+          unmade(space, app, ctx.env).map((l) => `  - ${l}`).join('\n'),
         space,
       }
     },

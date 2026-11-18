@@ -122,14 +122,17 @@ import {
 } from './directory.ts'
 import { type Book, listing, through } from './grant-rows.ts'
 import {
+  appTicketed,
   doomed,
   erase,
+  erased,
   keeping,
   kept,
   naming,
   refused,
   ticketed,
   trashSpace,
+  unmade,
   went,
 } from './erase.ts'
 import { ledger, revoke as revokeGrants } from './grants.ts'
@@ -173,6 +176,7 @@ import {
   askCode,
   askDelete,
   askEmail,
+  askErase,
   askHandoff,
   askLink,
   connect,
@@ -540,6 +544,86 @@ let closing = async (
       slug,
       lines,
       forever,
+      why: `That did not finish: ${e instanceof Error ? e.message : String(e)}`,
+      status: 502,
+    }, env)
+  }
+}
+
+// Erasing one app from the trash (erase.ts `appTicket`):
+// `/space/<slug>/apps/<eid>/erase`, the only door an app is erased at before
+// its thirty days are up. The same rules as `closing`: signed in on the web
+// as the space's owner, the GET only draws, and the POST erases, with the
+// letter's ticket or the app's slug typed back. Anyone else is answered as
+// if there were no such space.
+let erasing = async (
+  req: Request,
+  env: Env,
+  slug: string,
+  eid: string,
+  form: { confirm: string; token: string },
+) => {
+  let url = new URL(req.url)
+  let person = await browser(env, req)
+  if (!person) {
+    return redirect(
+      `/login?return=${encodeURIComponent(url.pathname + url.search)}`,
+    )
+  }
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let space = await dir.space(slug)
+  if (!space || (await dir.role(space, person)) != 'owner') return lost(env)
+  let app = await dir.binned(space, eid)
+  if (!app || app.space != space.eid) return lost(env)
+  let held = req.method == 'POST' ? form.token : url.searchParams.get('t') ?? ''
+  let ok = held ? await appTicketed(held, secret(env)) : null
+  let mine = !!ok && ok.space == space.eid && ok.app == app.eid &&
+    ok.person == person
+  let at = {
+    slug,
+    app: app.eid,
+    name: app.slug,
+    lines: unmade(space, app, env),
+  }
+  if (!app.trashed) {
+    return askErase({
+      ...at,
+      stop: `${app.slug} is not in the trash. An app is erased only from ` +
+        'the trash: delete it first, and it waits there for 30 days.',
+      status: 409,
+    }, env)
+  }
+  if (req.method != 'POST') {
+    return askErase({
+      ...at,
+      token: mine ? held : null,
+      why: held && !mine
+        ? 'That link has expired or was for something else. You can still ' +
+          'erase this app by typing its name.'
+        : undefined,
+    }, env)
+  }
+  if (!mine && form.confirm.trim() != app.slug) {
+    return askErase({
+      ...at,
+      why: `Type ${app.slug} exactly, and it is erased.`,
+      status: 400,
+    }, env)
+  }
+  try {
+    let who = { person, role: 'owner' as const }
+    let files = await erased(env, dir, space, app, who)
+    return deleted(
+      `${app.slug} is erased from ${slug}'s trash: ${files} ${
+        files == 1 ? 'file' : 'files'
+      } and everything it saved.`,
+      true,
+      env,
+    )
+  } catch (e) {
+    caught(e, { request: 'POST /space/apps/erase', space: slug })
+    return askErase({
+      ...at,
       why: `That did not finish: ${e instanceof Error ? e.message : String(e)}`,
       status: 502,
     }, env)
@@ -1481,6 +1565,14 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
 
   // Closing a space: a page and a form like the rest of this file, and the
   // only door that destroys anything (index.ts routes `/space/` here).
+  let unmake = /^\/space\/([a-z0-9-]+)\/apps\/([0-9a-f-]{36})\/erase$/
+    .exec(path)
+  if (unmake && (req.method == 'GET' || req.method == 'POST')) {
+    return erasing(req, env, unmake[1], unmake[2], {
+      confirm: field('confirm'),
+      token: field('t'),
+    })
+  }
   let close = /^\/space\/([a-z0-9-]+)\/delete$/.exec(path)
   if (close && (req.method == 'GET' || req.method == 'POST')) {
     return closing(req, env, close[1], {

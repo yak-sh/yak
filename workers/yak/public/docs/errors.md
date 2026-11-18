@@ -372,7 +372,14 @@ restored app keeps its files, store and deploys; the new app at its old address
 keeps its own data.
 
 Nothing an assistant does erases an app. Every `app_delete` goes to the trash,
-and only the 30 days running out erase it.
+and only the 30 days running out erase it, or the owner's own press. When the
+person asks for an app in the trash to be erased now, `app_erase(app)` mails
+them a link, good for an hour; opening it and pressing the button erases the
+app, with no undo. Until then `app_restore` still brings it back.
+
+    app_erase(app: '<eid from app_list>')
+    → nothing is erased. yourname/scratch is still in the trash… a letter is
+      on its way…
 
 ## space_delete and space_restore
 

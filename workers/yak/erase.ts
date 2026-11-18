@@ -86,6 +86,7 @@ import {
   type App,
   appStore,
   clamped,
+  daysLeft,
   type Directory,
   directory,
   draftStore,
@@ -186,6 +187,92 @@ export let ticketed = async (
 export let door = (slug: string, token?: string, env: HostEnv = {}) =>
   `https://${apex(env)}/space/${slug}/delete` +
   (token ? `?t=${encodeURIComponent(token)}` : '')
+
+// Erasing one app from the trash before its thirty days are up. Two steps,
+// and an agent takes at most the first: app_delete puts it in the trash, and
+// app_erase mails the space's owner a letter whose link opens the page that
+// erases it, signed in, on their press (identity.ts `erasing`). The ticket
+// names the app by eid, because a trashed app's slug may already be another
+// app's.
+export type AppTicket = {
+  space: string
+  app: string
+  person: string
+  exp: number
+}
+
+export let appTicket = (
+  space: Space,
+  app: App,
+  person: string,
+  secret: string,
+) =>
+  seal(
+    'erase-app',
+    {
+      space: space.eid,
+      app: app.eid,
+      person,
+      exp: Math.floor((Date.now() + LIFE) / 1000),
+    } satisfies AppTicket,
+    secret,
+  )
+
+export let appTicketed = async (
+  token: string,
+  secret: string,
+  now = Date.now(),
+): Promise<AppTicket | null> => {
+  let t = await opened<AppTicket>('erase-app', token, secret)
+  return t && typeof t.space == 'string' && typeof t.app == 'string' &&
+      typeof t.person == 'string' && typeof t.exp == 'number' &&
+      t.exp * 1000 > now
+    ? { space: t.space, app: t.app, person: t.person, exp: t.exp }
+    : null
+}
+
+export let appDoor = (
+  slug: string,
+  app: string,
+  token?: string,
+  env: HostEnv = {},
+) =>
+  `https://${apex(env)}/space/${slug}/apps/${app}/erase` +
+  (token ? `?t=${encodeURIComponent(token)}` : '')
+
+// What erasing a trashed app destroys, in the words the letter and the page
+// both say.
+export let unmade = (space: Space, app: App, env: HostEnv = {}) => [
+  `${app.title || app.slug} (${app.slug}), from ${space.slug}.${
+    apex(env)
+  }'s trash`,
+  'its files, its versions and everything it saved',
+]
+
+export let appLetter = (
+  space: Space,
+  app: App,
+  link: string,
+  env: HostEnv = {},
+) => ({
+  subject: `Erase ${app.title || app.slug} for good?`,
+  body: `Your assistant asked to erase ${
+    app.title || app.slug
+  } from ${space.slug}.${apex(env)}'s trash for good.
+
+Nothing has happened yet. It is in the trash, where it stays for ${
+    app.trashed ? daysLeft(app.trashed) : 30
+  } more days and can be restored. Nothing is erased unless you open this
+link, and it only works for the next hour:
+
+${link}
+
+It cannot be undone. It destroys:
+
+${unmade(space, app, env).map((l) => `  - ${l}`).join('\n')}
+
+If you did not ask for this, ignore this letter and nothing happens at all.`,
+})
 
 // Everything one space's death takes with it, read before anything moves —
 // the census the letter and the page both name, and the list the act itself

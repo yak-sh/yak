@@ -749,6 +749,17 @@ app_restore:
     app_delete or app_list (and its space). Its old slug also works while no
     live app owns it. Returns its restored URL and a confirmation.
     Documentation: https://yaks.app/docs/errors.
+app_erase:
+  title: Ask to erase an app from the trash
+  description: >-
+    Ask for an app in the trash to be erased now rather than when its 30 days
+    run out. This tool erases nothing: it emails the space's owner a link,
+    valid for one hour, and only their press on that page erases it, with no
+    undo. Use it only when the person asked for exactly that; an app left in
+    the trash costs nothing to keep. Only the space owner may ask, and only for
+    an app already in the trash (app_delete puts it there). Pass the deleted
+    app eid from app_delete or app_list. Until they press it, app_restore still
+    brings the app back. Documentation: https://yaks.app/docs/errors.
 app_errors:
   title: List open errors
   step:
