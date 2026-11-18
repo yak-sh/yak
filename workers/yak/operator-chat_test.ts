@@ -216,6 +216,8 @@ test('a conversation opens in the chat app: its words, each step in plain words,
       'The context the Operator was given',
       'Read the schema',
       'Tried listing the files of notices',
+      // app_files, called, is sent from then on
+      'The context the Operator was given changed here',
       'Tried texting Jeff',
       // text_send, called, is sent from then on
       'The context the Operator was given changed here',
@@ -229,7 +231,7 @@ test('a conversation opens in the chat app: its words, each step in plain words,
   // Every entry keeps its action beside its own time, including steps.
   assertEquals(
     text('.Transcript_Lines .Transcript_When'),
-    Array(7).fill('just now'),
+    Array(8).fill('just now'),
   )
   // A step opens on what it asked for in words; what its error said shows
   // only inside its closed Details, and what the model was told only in its
