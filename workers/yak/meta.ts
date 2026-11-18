@@ -20,7 +20,8 @@ import { stringify } from '@yaks/vocab/wire'
 // the ordinary door. It is never forwarded from anywhere a client can reach
 // (directory.ts vouch), so it cannot arrive from outside.
 import type { Bundle } from '@yaks/graph'
-import type { Trash } from '@yaks/graph/trash'
+import type { Trash, TrashPage } from '@yaks/graph/trash'
+import { type Restored, trashSearch } from './trash-wire.ts'
 import { knownOptions, Stale } from '@yaks/graph/errors'
 import { storeOf } from './door.ts'
 import { coalesced, type Door, type Namespace } from '@yaks/durable-object/door'
@@ -38,13 +39,14 @@ import type { Asked } from '@yaks/query'
 export type Meta = {
   /** The same transport for reads whose response carries serving metadata. */
   door?: Door
-  trash?: (eids?: string[]) => Promise<Trash[]>
+  trash?: (eids?: string[], page?: TrashPage) => Promise<Trash[]>
   restoreTrash?: (
     id: string,
     eids: string[],
     headers?: Record<string, string>,
-  ) => Promise<Bundle[]>
+  ) => Promise<Restored>
   purgeTrash?: (id: string, eids: string[]) => Promise<void>
+  purgeTrashEntities?: (eids: string[]) => Promise<void>
   /** A filter line → the entities it selects, with canonical reference ids.
    * Public page adapters request names explicitly. A listing asks the Store
    * to screen platform bookkeeping using its authoritative vocabulary. */
@@ -133,6 +135,12 @@ export let written = async (r: Response): Promise<Bundle[]> => {
   return await r.json() as Bundle[]
 }
 
+/** A restoration keeps applied patches beside any names it changed. */
+export let restored = async (r: Response): Promise<Restored> => {
+  if (!r.ok) throw await answered(r)
+  return await r.json() as Restored
+}
+
 /**
  * The graph's own doors over a store: `POST /apply` takes the bundles as they
  * are and answers the batch as applied, `GET /query?q=` takes the whole filter
@@ -145,9 +153,9 @@ export let metaOf = (
   base: Record<string, string> = {},
 ): Meta => ({
   door: store,
-  trash: (eids) =>
+  trash: (eids, page) =>
     eids && !eids.length ? Promise.resolve([]) : store.consume(
-      `/trash?${new URLSearchParams((eids ?? []).map((eid) => ['eid', eid]))}`,
+      `/trash?${trashSearch(eids, page)}`,
       async (r) => {
         if (!r.ok) throw await answered(r)
         return await r.json() as Trash[]
@@ -158,7 +166,7 @@ export let metaOf = (
   restoreTrash: (id, eids, headers = {}) =>
     store.consume(
       '/trash/restore',
-      written,
+      restored,
       { method: 'POST', body: JSON.stringify({ id, eids }) },
       { ...base, ...headers, ...KERNEL },
     ),
@@ -169,6 +177,15 @@ export let metaOf = (
         if (!r.ok) throw await answered(r)
       },
       { method: 'POST', body: JSON.stringify({ id, eids }) },
+      { ...base, ...KERNEL },
+    ),
+  purgeTrashEntities: (eids) =>
+    !eids.length ? Promise.resolve() : store.consume(
+      '/trash/purge-entities',
+      async (r) => {
+        if (!r.ok) throw await answered(r)
+      },
+      { method: 'POST', body: JSON.stringify({ eids }) },
       { ...base, ...KERNEL },
     ),
   query: (line, opts) => {

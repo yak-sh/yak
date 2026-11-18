@@ -8,12 +8,12 @@
 // owns which stores are in reach.
 import { listed, names, type Row, STAMPS } from '@yaks/platform/listing'
 import type { Bundle } from '@yaks/graph'
-import type { Trash } from '@yaks/graph/trash'
+import { type Trash, trashOrder, type TrashPage } from '@yaks/graph/trash'
 import { requested } from '@yaks/graph/bundle'
 import { sha256 } from '@yaks/graph'
 import { type Door, IDEMPOTENCY } from '@yaks/durable-object/door'
 import { durable, INTENT } from '@yaks/api/log'
-import { misfit } from '@yaks/graph/errors'
+import { misfit, Refused } from '@yaks/graph/errors'
 import {
   type App,
   appStore,
@@ -47,6 +47,7 @@ import { caught } from './defects.ts'
 import { said as told } from '@yaks/api/log'
 import { answered } from './meta.ts'
 import { sandboxed } from '@yaks/platform/installs'
+import { trashSearch } from './trash-wire.ts'
 
 export type { Ask }
 
@@ -122,24 +123,36 @@ export let trashed = async (
   env: Env,
   reach: Reach[],
   eids?: string[],
+  page: TrashPage = {},
 ): Promise<Trash[]> => {
   if (eids && !eids.length) return []
   let stores = reach.filter((r) =>
     storeName(r.space, r.app) != META_STORE && r.who.person &&
     ['owner', 'editor'].includes(r.who.role ?? '')
   )
-  let groups = await Promise.all(stores.map((r) =>
-    doorAt(env, r).consume(
-      `/trash?${new URLSearchParams((eids ?? []).map((eid) => ['eid', eid]))}`,
-      async (res) => {
-        if (!res.ok) throw await answered(res)
-        return await res.json() as Trash[]
-      },
-      {},
-      { ...vouched(r.who), ...r.headers },
-    )
-  ))
-  return groups.flat().sort((a, b) => b.at.localeCompare(a.at)).slice(0, 20)
+  let read = async (page: TrashPage): Promise<Trash[]> =>
+    (await Promise.all(stores.map((r) =>
+      doorAt(env, r).consume(
+        `/trash?${trashSearch(eids, page)}`,
+        async (res) => {
+          if (!res.ok) throw await answered(res)
+          return await res.json() as Trash[]
+        },
+        {},
+        { ...vouched(r.who), ...r.headers },
+      )
+    ))).flat()
+  let before = page.before ??
+    (page.after ? (await read({ id: page.after, limit: 1 }))[0] : undefined)
+  if (page.after && !before) {
+    throw new Refused('the trash cursor is no longer available')
+  }
+  let groups = await read({
+    ...page,
+    after: undefined,
+    ...before ? { before } : {},
+  })
+  return groups.sort(trashOrder).slice(0, page.limit ?? 20)
 }
 
 // One store as a member: its /query and /apply doors, vouched, and its words.

@@ -43,7 +43,8 @@ import {
 // written as bundles through the store's /apply, so the directory can describe
 // its own store.
 import { knownOptions, Refused } from '@yaks/graph/errors'
-import type { Trash } from '@yaks/graph/trash'
+import type { Trash, TrashPage } from '@yaks/graph/trash'
+import { type Restored, trashPage, trashSearch } from './trash-wire.ts'
 import type { Reload } from '@yaks/platform'
 import type { Comp } from '@yaks/platform/comp'
 import {
@@ -82,6 +83,7 @@ import {
   KERNEL,
   type Meta,
   meta as metaStore,
+  restored,
   written,
 } from './meta.ts'
 import { caught, refusing } from './defects.ts'
@@ -1059,9 +1061,9 @@ let forwarded = (req: Request) =>
 /** The directory's cached read and seeded write boundary over its meta store.
  * In-process callers hold this interface; {@link over} carries it over HTTP. */
 export let part = (store: Meta) => ({
-  trash: (eids?: string[]): Promise<Trash[]> => {
+  trash: (eids?: string[], page?: TrashPage): Promise<Trash[]> => {
     if (!store.trash) throw new Refused('this directory has no retained trash')
-    return store.trash(eids)
+    return store.trash(eids, page)
   },
   restoreTrash: async (
     id: string,
@@ -1080,6 +1082,12 @@ export let part = (store: Meta) => ({
       throw new Refused('this directory cannot purge trash')
     }
     await store.purgeTrash(id, eids)
+  },
+  purgeTrashEntities: async (eids: string[]) => {
+    if (!store.purgeTrashEntities) {
+      throw new Refused('this directory cannot purge trash')
+    }
+    await store.purgeTrashEntities(eids)
   },
   query: async (asked: Line, fresh = false): Promise<string> => {
     let cache = cached(store)
@@ -1132,7 +1140,10 @@ export let over = (store: Meta) => {
         ...req.headers.has(STATIC_QUERY) ? { [STATIC_QUERY]: '1' } : {},
       })
     }
-    if (['/trash', '/trash/restore', '/trash/purge'].includes(url.pathname)) {
+    if (
+      ['/trash', '/trash/restore', '/trash/purge', '/trash/purge-entities']
+        .includes(url.pathname)
+    ) {
       if (req.headers.get('x-yak-kernel') != '1') return notFound()
       try {
         if (url.pathname == '/trash' && req.method == 'GET') {
@@ -1141,11 +1152,16 @@ export let over = (store: Meta) => {
               url.searchParams.has('eid')
                 ? url.searchParams.getAll('eid')
                 : undefined,
+              trashPage(url),
             ),
           )
         }
         if (req.method != 'POST') return notFound()
         let { id, eids } = await req.json() as { id: string; eids: string[] }
+        if (url.pathname == '/trash/purge-entities') {
+          await door.purgeTrashEntities(eids)
+          return Response.json({ ok: true })
+        }
         if (url.pathname == '/trash/restore') {
           return Response.json(
             await door.restoreTrash(id, eids, forwarded(req)),
@@ -1940,13 +1956,11 @@ export let kept = (
 export type Directory = ReturnType<typeof directory>
 
 let remote = (via: Fetcher) => ({
-  trash: async (eids?: string[]): Promise<Trash[]> => {
+  trash: async (eids?: string[], page?: TrashPage): Promise<Trash[]> => {
     if (eids && !eids.length) return []
     let r = await via.fetch(
       new Request(
-        `http://directory/trash?${new URLSearchParams(
-          (eids ?? []).map((eid) => ['eid', eid]),
-        )}`,
+        `http://directory/trash?${trashSearch(eids, page)}`,
         { headers: KERNEL },
       ),
     )
@@ -1958,7 +1972,7 @@ let remote = (via: Fetcher) => ({
     eids: string[],
     headers: Record<string, string> = {},
   ) =>
-    written(
+    restored(
       await via.fetch(
         new Request('http://directory/trash/restore', {
           method: 'POST',
@@ -1972,6 +1986,17 @@ let remote = (via: Fetcher) => ({
       new Request('http://directory/trash/purge', {
         method: 'POST',
         body: JSON.stringify({ id, eids }),
+        headers: KERNEL,
+      }),
+    )
+    if (!r.ok) throw await answered(r)
+  },
+  purgeTrashEntities: async (eids: string[]): Promise<void> => {
+    if (!eids.length) return
+    let r = await via.fetch(
+      new Request('http://directory/trash/purge-entities', {
+        method: 'POST',
+        body: JSON.stringify({ eids }),
         headers: KERNEL,
       }),
     )
@@ -2269,6 +2294,7 @@ export let directory = (
     trash: door.trash,
     restoreTrash: door.restoreTrash,
     purgeTrash: door.purgeTrash,
+    purgeTrashEntities: door.purgeTrashEntities,
     get stale() {
       return serving.stale
     },
@@ -2452,13 +2478,14 @@ export let decisions = (read: (q: Line) => Row[] | Promise<Row[]>) => {
 /** Directory decisions over supplied reads and writes. The binding client
  * above owns revisions, request caching and transport recovery. */
 export let directoryRows = (rows: {
-  trash?: (eids?: string[]) => Promise<Trash[]>
+  trash?: (eids?: string[], page?: TrashPage) => Promise<Trash[]>
   restoreTrash?: (
     id: string,
     eids: string[],
     headers: Record<string, string>,
-  ) => Promise<Bundle[]>
+  ) => Promise<Restored>
   purgeTrash?: (id: string, eids: string[]) => Promise<void>
+  purgeTrashEntities?: (eids: string[]) => Promise<void>
   query: (q: Line) => Promise<ReadRow[]>
   apply: (
     entities: Bundle[],
@@ -2564,15 +2591,15 @@ export let directoryRows = (rows: {
     // A write that changes the directory: a batch of bundles, each minting at
     // an eid its author chose (T-32455), answered as applied.
     apply: write,
-    trash: (eids?: string[]): Promise<Trash[]> => {
+    trash: (eids?: string[], page?: TrashPage): Promise<Trash[]> => {
       if (!rows.trash) throw new Refused('this directory has no retained trash')
-      return rows.trash(eids)
+      return rows.trash(eids, page)
     },
     restoreTrash: (
       id: string,
       eids: string[],
       headers: Record<string, string> = {},
-    ): Promise<Bundle[]> => {
+    ): Promise<Restored> => {
       if (!rows.restoreTrash) {
         throw new Refused('this directory cannot restore trash')
       }
@@ -2583,6 +2610,12 @@ export let directoryRows = (rows: {
         throw new Refused('this directory cannot purge trash')
       }
       return rows.purgeTrash(id, eids)
+    },
+    purgeTrashEntities: (eids: string[]): Promise<void> => {
+      if (!rows.purgeTrashEntities) {
+        throw new Refused('this directory cannot purge trash')
+      }
+      return rows.purgeTrashEntities(eids)
     },
     // One filter line, answered as rows: a read the questions below don't
     // name (connections.ts `connectionsOf`), asked through this client so it

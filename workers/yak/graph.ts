@@ -813,6 +813,7 @@ let routes = new Set([
   '/trash',
   '/trash/restore',
   '/trash/purge',
+  '/trash/purge-entities',
   '/ws',
   '/apply',
   '/query',
@@ -5234,11 +5235,14 @@ export class Store extends Durable {
       if (!/^\d+$/.test(branch)) throw new Refused(`no branch ${branch}`)
       return await this.#onBranch(request, path, Number(branch))
     }
-    if (['/trash', '/trash/restore', '/trash/purge'].includes(path)) {
+    if (
+      ['/trash', '/trash/restore', '/trash/purge', '/trash/purge-entities']
+        .includes(path)
+    ) {
       if (!kernel) await this.#auth(request)
       return trashDoor(
         request,
-        this.#kernelGraph(this.#graph),
+        kernel ? this.#kernelGraph(this.#graph) : this.#graph,
         this.#get('name') == PLATFORM_STORE,
       )
     }

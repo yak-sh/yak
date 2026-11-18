@@ -3,9 +3,11 @@
 // including in apps whose ordinary writes are open to visitors.
 import { type Graph, signed } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
-import { restoreTrash } from '@yaks/graph/trash'
+import { restoring } from '@yaks/graph/trash'
 import { json } from '@yaks/api'
 import { vouchOf, writer } from '@yaks/platform/app-authority'
+
+import { type Restored, trashPage } from './trash-wire.ts'
 
 let eidsOf = (value: unknown): string[] => {
   if (
@@ -31,12 +33,16 @@ export let trashDoor = async (
   if (!read) throw new Refused('this store has no retained trash')
   if (url.pathname == '/trash' && request.method == 'GET') {
     let eids = url.searchParams.getAll('eid')
-    return json(await read(eids.length ? eidsOf(eids) : undefined))
+    return json(
+      await read(eids.length ? eidsOf(eids) : undefined, trashPage(url)),
+    )
   }
   if (
     request.method != 'POST' ||
-    !['/trash/restore', '/trash/purge'].includes(url.pathname) ||
-    (url.pathname == '/trash/purge' && !kernel)
+    !['/trash/restore', '/trash/purge', '/trash/purge-entities'].includes(
+      url.pathname,
+    ) ||
+    (url.pathname.startsWith('/trash/purge') && !kernel)
   ) return json({ error: 'NotFound', message: 'no such door' }, 404)
   let body = await request.json().catch(() => {
     throw new Refused('trash takes a JSON object with id and eids')
@@ -45,10 +51,17 @@ export let trashDoor = async (
     throw new Refused('trash takes a JSON object with id and eids')
   }
   let { id, eids } = body as { id?: unknown; eids?: unknown }
+  if (url.pathname == '/trash/purge-entities') {
+    if (!graph.storage.purgeTrash) {
+      throw new Refused('this store cannot purge trash')
+    }
+    await graph.storage.purgeTrash(eidsOf(eids))
+    return json({ ok: true })
+  }
   if (typeof id != 'string' || !id) {
     throw new Refused('a retained transaction id is required')
   }
-  let entry = (await read(eidsOf(eids))).find((entry) => entry.id == id)
+  let entry = (await read(eidsOf(eids), { id }))[0]
   if (!entry) {
     throw new Refused('no such retained transaction for these entities')
   }
@@ -59,10 +72,15 @@ export let trashDoor = async (
     await graph.storage.purgeTrash(id)
     return json({ ok: true })
   }
-  return json(
-    await restoreTrash(graph, {
-      ...entry,
-      bundles: signed(entry.bundles, writer(request)),
-    }, { trusted: true, stamp: false }),
-  )
+  let notices: string[] = []
+  let patches = await restoring(graph, entry, {
+    notice: (text) => notices.push(text),
+  })
+  let bundles = patches.length
+    ? await graph.apply(
+      signed(patches, writer(request)),
+      kernel ? { trusted: true, stamp: false } : {},
+    )
+    : []
+  return json({ bundles, notices } satisfies Restored)
 }

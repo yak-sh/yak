@@ -178,6 +178,7 @@ export let rows = (
   meta.trash = retained.trash
   meta.restoreTrash = retained.restoreTrash
   meta.purgeTrash = retained.purgeTrash
+  meta.purgeTrashEntities = retained.purgeTrashEntities
   let local = part(meta)
   let dir = directoryRows({
     query: async (q) =>
@@ -189,6 +190,7 @@ export let rows = (
     trash: local.trash,
     restoreTrash: local.restoreTrash,
     purgeTrash: local.purgeTrash,
+    purgeTrashEntities: local.purgeTrashEntities,
   })
   return {
     graph: g,

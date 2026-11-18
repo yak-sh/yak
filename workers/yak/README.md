@@ -1408,9 +1408,13 @@ new call can be bought. Existing paid receipts remain recoverable.
 An app’s owner or editor can read retained removals with
 `GET /api/trash?eid=<entity-eid>` (repeat `eid` for several entities). The
 answer is a list of `{id, at, bundles}` transactions, newest first. Omit `eid`
-to read the twenty newest transactions. `POST /api/trash/restore` with
-`{id, eids: [<entity-eid>]}` restores one transaction, preserving later values
-on rows that survived the removal. Restoring keeps the archive.
+to read the twenty newest transactions. `limit` selects up to 100 transactions
+and `after=<transaction-id>` continues the list. `id=<transaction-id>` selects
+an exact transaction, including one older than the first page.
+`POST /api/trash/restore` with `{id, eids: [<entity-eid>]}` restores one
+transaction, preserving later values on rows that survived the removal. The
+response is `{bundles, notices}`: applied patches and any names changed to avoid
+a collision. Restoring keeps the archive.
 
 Directory code uses `Directory.trash(eids)` and
 `Directory.restoreTrash(id, eids, headers)` through the same Store boundary.
@@ -1418,3 +1422,9 @@ Directory archives are kernel-only because they can retain credentials and
 private rows. `Directory.purgeTrash(id, eids)` is reserved for a person’s
 explicit choice through the shared confirmation page. Public app clients cannot
 purge retained transactions.
+
+After a confirmed purge removes the live entities,
+`Directory.purgeTrashEntities(eids)` discards their retained before-images from
+every transaction while keeping other entities in those transactions. This runs
+after the last destructive write so that the purge itself does not leave another
+recoverable copy.

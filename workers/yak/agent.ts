@@ -491,7 +491,7 @@ let held = (
     revive: nope('transaction'),
   }
   self = {
-    trash: (eids) => fresh(() => trashed(ctx.env, reach, eids)),
+    trash: (eids, page) => fresh(() => trashed(ctx.env, reach, eids, page)),
     install: () => {},
     read: bundles,
     rows,
