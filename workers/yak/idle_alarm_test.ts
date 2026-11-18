@@ -5,6 +5,8 @@ import { test, tick, until } from '@yaks/testing'
 import { Store } from './graph.ts'
 import { bucket, platform, state } from './testing.ts'
 import type { Env } from './env.ts'
+import { WINDOW } from './recover.ts'
+import { EPOCH } from './directory-copy.ts'
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
 
 const headers = {
@@ -190,19 +192,21 @@ test('a new incarnation re-arms the alarm its pending effects owe', async () => 
 })
 
 test('a run holds the alarm a minute out while it is in flight', async () => {
-  // An upload's deletion asks the directory where the app lives, and the
-  // directory answers once the test lets it.
+  // An upload's deletion, past its thirty-day retention, asks the directory
+  // where the app lives. The directory answers once the test lets it.
   let asked = false, blocked = false, answer = () => {}
   let held = new Promise<void>((r) => answer = r)
   let STORE = {
     idFromName: (name: string) => name,
     get: () => ({
       fetch: async (req: Request) => {
-        if (blocked && new URL(req.url).pathname == '/reads') {
+        if (blocked && new URL(req.url).pathname == '/query') {
           asked = true
           await held
         }
-        return Response.json(null)
+        return Response.json([], {
+          headers: { 'x-yak-directory-revision': '0' },
+        })
       },
     }),
   }
@@ -212,7 +216,7 @@ test('a run holds the alarm a minute out while it is in flight', async () => {
   let store = p.register('ada/idle', ctx, () => new Store(ctx, bind, []))
   let sha = '1'.repeat(64)
   assertEquals(
-    (await kernel(store, [{ entity: { eid: sha }, blob: { bytes: 3 } }]))
+    (await kernel(store, []))
       .status,
     200,
   )
@@ -221,7 +225,17 @@ test('a run holds the alarm a minute out while it is in flight', async () => {
   blocked = true
   await ctx.storage.deleteAlarm()
   assertEquals(
-    (await kernel(store, [{ entity: { eid: sha }, $delete: true }])).status,
+    (await kernel(store, [{
+      entity: { eid: crypto.randomUUID() },
+      effect: {
+        handler: 'delete_upload',
+        target: sha,
+        kind: 'removed',
+        comp: 'blob',
+        state: 'pending',
+        at: new Date(before - WINDOW).toISOString(),
+      },
+    }])).status,
     200,
   )
   try {
