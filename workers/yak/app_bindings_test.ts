@@ -11,6 +11,7 @@ import { provision, resourceName, SCOPES } from './bindings.ts'
 import { configured, deployWorker } from './deploy_worker.ts'
 import { stamp, storeName } from './directory.ts'
 import { platform } from './deploy-probe.ts'
+import { erased } from './erase.ts'
 import { meta } from './meta.ts'
 import { call, type Ctx, type Listed } from './tools.ts'
 import { connect, envOf, need } from '@yaks/connections'
@@ -237,6 +238,13 @@ let fixture = async (vault = false) => {
     dir,
     app,
     tool,
+    // The erase the trash's thirty days end in (erase.ts `erased`); no tool
+    // reaches it.
+    erase: async () => {
+      let space = (await dir.space('ada'))!
+      let app = (await dir.app(space, 'cookbook'))!
+      return erased(env, dir, space, app, { person: PERSON, role: 'owner' })
+    },
     // The app's bindings, as app_list answers them as data.
     bound: async () =>
       ((await call(ctx, 'app_list', {})).value as { spaces: Listed[] })
@@ -299,7 +307,7 @@ test('app bindings survive redeploy, removal and trash until permanent deletion'
     await k.write(configuration)
     await k.tool('app_deploy')
     assertEquals(creates().length, 3)
-    await k.tool('app_delete', { forever: true })
+    await k.erase()
     let deleted = k.calls.filter((c) => c.method == 'DELETE')
     for (
       let path of ['/d1/database/', '/r2/buckets/', '/vectorize/v2/indexes/']
@@ -467,7 +475,7 @@ for (let phase of ['beforeCreate', 'beforeUploadReply'] as const) {
   test(`permanent deletion cleans a late ${phase == 'beforeCreate' ? 'resource creation' : 'worker upload'}`, async () => {
     let k = await fixture()
     try {
-      k.state[phase] = () => k.tool('app_delete', { forever: true })
+      k.state[phase] = () => k.erase()
       await assertRejects(() => k.worker(sources(configuration)))
       assertEquals(await k.rows(`.entity.eid=${k.app.eid}&.app`), [])
       assertEquals(await k.rows('.binding'), [])
@@ -659,7 +667,7 @@ test('permanent deletion empties R2 and keeps ownership through a failed retry',
     k.state.objects.add('first.txt').add('folder/second file.txt')
     k.state.fail = '/objects/folder/second%20file.txt'
     await assertRejects(
-      () => k.tool('app_delete', { forever: true }),
+      () => k.erase(),
       Error,
       'R2 Edit',
     )
@@ -670,7 +678,7 @@ test('permanent deletion empties R2 and keeps ownership through a failed retry',
       1,
     )
     k.state.fail = ''
-    await k.tool('app_delete', { forever: true })
+    await k.erase()
     assertEquals(k.state.objects.size, 0)
     assertEquals((await k.rows('.binding')).length, 0)
     assertEquals(

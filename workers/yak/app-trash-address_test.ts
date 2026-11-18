@@ -163,7 +163,7 @@ test('restore chooses a numbered address and leaves the replacement independent'
   assertEquals((await dir.app(space, 'notes-2'))!.eid, app.eid)
   assertEquals((await dir.app(space, 'notes'))!.eid, replacement.eid)
   assertEquals(await dir.former(space, 'notes'), null)
-  await call(ctx, 'app_delete', { space: slug, app: app.eid, forever: true })
+  await call(ctx, 'app_delete', { space: slug, app: app.eid })
   assertEquals((await dir.app(space, 'notes'))!.eid, replacement.eid)
 })
 

@@ -134,7 +134,8 @@ it rather than doing it: space_delete emails the owner a confirmation link,
 space_sell returns the payment provider's onboarding link, domain_attach returns the DNS
 record to add at their registrar, app_set and space_set return the new
 address, grant returns the one line to paste. Hand those over as they come
-back. Erasing with forever, forgetting an old address, submitting an app to
+back. Every app_delete goes to the trash, and you erase nothing: only its
+30 days running out do. Forgetting an old address, submitting an app to
 the gallery, and sending an email from an app are the person's decisions;
 read an email back to them before it goes, since nothing recalls it. A
 key comes from the person, on their connections page after

@@ -329,7 +329,7 @@ version names, so the oldest rollback an app still offers always has its files.
 
 ## app_delete and app_restore
 
-    app_delete(app, space?, forever?)
+    app_delete(app, space?)
     app_restore(app, space?, slug?)
 
 A rollback undoes a deploy; a restore undoes a **delete**. `app_delete` does not
@@ -361,8 +361,8 @@ address when free; otherwise it picks the first free numbered address, such as
 restored app keeps its files, store and deploys; the new app at its old address
 keeps its own data.
 
-`forever: true` skips the trash: files and data gone with no undo. Use it only
-when the person has said they mean exactly that.
+Nothing an assistant does erases an app. Every `app_delete` goes to the trash,
+and only the 30 days running out erase it.
 
 ## space_delete and space_restore
 
@@ -416,9 +416,9 @@ every write. When the person hesitates ("will I lose everything?"), tell them
 which of these covers them. Usually the risk they are worried about does not
 exist.
 
-Only what somebody explicitly asked to erase cannot be undone:
-`app_delete(forever: true)` skips the trash, and disconnecting a connection
-deletes its key, so the person has to connect it again.
+Only a few things cannot be undone: a space its owner erased from the link in
+the letter, and a disconnected connection, whose key is deleted, so the person
+has to connect it again.
 
 ## feedback
 

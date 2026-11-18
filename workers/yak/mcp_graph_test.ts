@@ -1350,7 +1350,6 @@ test('a page queries a borrowed word at its home', async () => {
     await agent.tool('app_delete', {
       space: flame74,
       app: 'vale',
-      forever: true,
     })
     let remaining = await page('query?.fire', 'hill')
     assertEquals(remaining.status, 200)

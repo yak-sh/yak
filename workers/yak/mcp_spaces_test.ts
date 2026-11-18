@@ -406,12 +406,7 @@ test('the platform admin trashes and restores an app without a seat', async () =
     )
     assertEquals((await row()).trashed, undefined)
 
-    // The admin's wider standing never permits permanent app or space erasure.
-    await assertRejects(
-      () => admin.tool('app_delete', { ...at, forever: true }),
-      Error,
-      'not a member',
-    )
+    // The admin's wider standing never permits space erasure.
     for (let forever of [false, true]) {
       await assertRejects(
         () => admin.tool('space_delete', { space, forever }),
@@ -438,12 +433,6 @@ test('the platform admin trashes and restores an app without a seat', async () =
       Error,
       'not a member',
     )
-    await assertRejects(
-      () => admin.tool('app_delete', { ...at, forever: true }),
-      Error,
-      'not a member',
-    )
-
     assertStringIncludes(await admin.tool('app_restore', at), 'is back')
     assertEquals((await page()).status, 200)
     assertEquals((await row()).trashed, undefined)
@@ -452,23 +441,15 @@ test('the platform admin trashes and restores an app without a seat', async () =
       k.owner.person,
     )
 
-    let guest = await signIn(k)
-    await owner.tool('member_add', {
-      space,
-      email: guest.email,
-      role: 'editor',
-    })
-    await accepted(k, guest.email, guest.cookie)
-    let editor = connector(k, guest.cookie)
-    await assertRejects(
-      () => editor.tool('app_delete', { ...at, forever: true }),
-      Error,
-      'not the owner',
+    // Nobody erases an app through the tool, its owner included: the
+    // retired `forever` is not read, and the app goes to the trash.
+    assertStringIncludes(
+      await owner.tool('app_delete', { ...at, forever: true }),
+      'is in the trash',
     )
-
-    // The actual owner still may erase permanently.
-    await owner.tool('app_delete', { ...at, forever: true })
     assertEquals((await page()).status, 404)
+    assertStringIncludes(await owner.tool('app_restore', at), 'is back')
+    assertEquals((await page()).status, 200)
   } finally {
     await k.stop()
   }
@@ -525,17 +506,25 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
         .map(({ slug, title, days }) => ({ slug, title, days })),
       [{ slug: 'notes', title: 'Notes', days: 30 }],
     )
-    // A replacement takes the address immediately; erasing that replacement
-    // leaves the retained app ready to return to its original address.
+    let kept = (saying.value as { spaces: Listed[] }).spaces[0].trash[0].eid
+    // A replacement takes the address immediately; trashing that replacement
+    // too, even with the retired `forever`, leaves the first app ready to
+    // return to its original address.
     await agent.tool('app_new', {
       space: binlab49,
       slug: 'notes',
       title: 'Notes again',
     })
-    await agent.tool('app_delete', { ...at, forever: true })
+    assertStringIncludes(
+      await agent.tool('app_delete', { ...at, forever: true }),
+      'is in the trash',
+    )
     // Deleting it again is not a second delete; it says where the app is.
     assertStringIncludes(
-      (await assertRejects(() => agent.tool('app_delete', at), Error)).message,
+      (await assertRejects(
+        () => agent.tool('app_delete', { space: binlab49, app: kept }),
+        Error,
+      )).message,
       'is already in the trash',
     )
     // Ordinary doors see the freed address as missing and write nothing:
@@ -557,7 +546,7 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
     // Out, and every one of those answers is the old answer again — including
     // the row nothing touched while it sat there.
     assertStringIncludes(
-      await agent.tool('app_restore', at),
+      await agent.tool('app_restore', { space: binlab49, app: kept }),
       `${binlab49}/notes is back`,
     )
     assertEquals((await page()).status, 200)
@@ -581,9 +570,9 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
       false,
     )
 
-    // And `forever` is the other word: no trash, nothing kept, and the
-    // address free for the next app, which wakes up in an empty store.
-    await agent.tool('app_delete', { ...at, forever: true })
+    // Trashed again, the address is free for the next app, which wakes up
+    // in an empty store of its own.
+    await agent.tool('app_delete', at)
     assertEquals((await page()).status, 404)
     await agent.tool('app_new', {
       space: binlab49,

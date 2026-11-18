@@ -583,7 +583,7 @@ export let WORDS: Record<string, Words> = {
   'app_delete': {
     'title': 'Delete an app',
     'description':
-      'Delete an app: it goes to the trash for 30 days. Its address stops answering, its tools and pages disappear from your tools, and it stops being the front page, but its files and everything it saved are kept while its slug is free immediately, and app_restore brings the whole app back within those 30 days. After that the platform erases it for good. app_files op: delete removes one file, and app_set moves an app rather than replacing it. A platform admin may trash any app. Only the space owner may use forever: true, which skips the trash and erases it now; nothing is kept and there is no undo. To undo a delete: app_restore, any time in those 30 days. Returns what was trashed or erased and, for a trash operation, how to restore it. Documentation: https://yaks.app/docs/errors.',
+      'Delete an app: it goes to the trash for 30 days. Its address stops answering, its tools and pages disappear from your tools, and it stops being the front page, but its files and everything it saved are kept while its slug is free immediately, and app_restore brings the whole app back within those 30 days. After that the platform erases it for good. app_files op: delete removes one file, and app_set moves an app rather than replacing it. A platform admin may trash any app. Nothing an agent does erases an app: every delete goes to the trash, and only the 30 days running out erase it. To undo a delete: app_restore, any time in those 30 days. Returns what was trashed and how to restore it. Documentation: https://yaks.app/docs/errors.',
   },
   'app_restore': {
     'title': 'Restore a deleted app',

@@ -93,7 +93,7 @@ test('kept deploys speak timestamp suffixes through HTTP and code rollback', asy
       'Cake again',
     )
   } finally {
-    await agent.tool('app_delete', { ...at, forever: true })
+    await agent.tool('app_delete', at)
     await agent.tool('space_delete', { space: slug, forever: true })
   }
 })

@@ -106,8 +106,8 @@ test('kept pages load their vocabulary and compose old reads and writes through 
       equal(rows[0].book.pages, 14)
     }
   } finally {
-    await agent.tool('app_delete', { ...at, forever: true })
-    await agent.tool('app_delete', { space: slug, app: 'shelf', forever: true })
+    await agent.tool('app_delete', at)
+    await agent.tool('app_delete', { space: slug, app: 'shelf' })
     await agent.tool('space_delete', { space: slug, forever: true })
   }
 })

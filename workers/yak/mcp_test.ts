@@ -1444,7 +1444,6 @@ test(
       await agent.tool('app_delete', {
         space: jeff54,
         app: 'recipes',
-        forever: true,
       })
       // …and back, so the rest of this reads of the cookbook. An address the
       // app returns to is its own again, never a redirect to itself.
@@ -1546,17 +1545,16 @@ test(
       })
       await agent.tool('app_deploy', scratch)
       assertEquals((await k.at(`${jeff54}.yaks.app`, '/scratch/')).status, 200)
-      assertMatch(
+      // The retired `forever` is not read: the app goes to the trash.
+      assertStringIncludes(
         await agent.tool('app_delete', { ...scratch, forever: true }),
-        new RegExp(
-          `deleted ${jeff54}\\/scratch: 1 file, everything it saved.*all gone`,
-        ),
+        `${jeff54}/scratch is in the trash`,
       )
       assertEquals((await k.at(`${jeff54}.yaks.app`, '/scratch/')).status, 404)
       await assertRejects(
         () => agent.tool('app_delete', scratch),
         Error,
-        `no app scratch in ${jeff54}`,
+        'is already in the trash',
       )
       // Any other door's refusal names the apps the space does hold.
       assertMatch(
@@ -1567,7 +1565,9 @@ test(
         new RegExp(`^no app scratch in ${jeff54} — its apps are \\w`),
       )
       assertEquals(
-        (await agent.tool('app_list', { space: jeff54 })).includes('scratch'),
+        (await agent.tool('app_list', { space: jeff54 })).includes(
+          `https://${jeff54}.yaks.app/scratch/`,
+        ),
         false,
       )
       await agent.tool('app_new', {
@@ -1579,15 +1579,15 @@ test(
         paths(await agent.tool('app_files', { ...scratch, op: 'list' })),
         '(no files)',
       )
-      // The generic tier reads every app at once, so what proves the store
-      // was emptied is that what it held is gone — not that the reach is.
+      // The generic tier reads every app at once, and the trashed one is out
+      // of reach: the new app at its address has a store of its own.
       assertEquals(
         JSON.parse(
           await agent.tool('graph_query', { q: '.doc.title~=secret' }),
         ),
         [],
       )
-      await agent.tool('app_delete', { ...scratch, forever: true })
+      await agent.tool('app_delete', scratch)
 
       // A stranger belongs to no space of ours: every tool refuses him by
       // name, and he may make his own.

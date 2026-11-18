@@ -928,8 +928,8 @@ upload, so deleting it deletes it for everyone who sent it.
 
 Deleting the app (`app_delete`) puts it in the trash and keeps every byte of it
 for 30 days, so `app_restore` brings the uploads back with everything else.
-After that — or immediately, with `forever: true` — the bytes are deleted: every
-object under the app's own prefix, uploads included, and there is no undo.
+After that the bytes are deleted: every object under the app's own prefix,
+uploads included, and there is no undo.
 
 ## Size and type limits, and downscaling images
 

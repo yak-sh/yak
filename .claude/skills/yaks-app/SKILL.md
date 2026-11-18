@@ -23,6 +23,11 @@ costs nothing while nobody is in it, a deploy nobody notices, a rename a client
 never feels. What makes us wince is a deploy that signs everyone out, a default
 that opens a door, a poll that wakes every store on the platform.
 
+Nothing an agent does erases a person's app or space, the demo space and test
+accounts included. A delete goes to the trash, and only its 30 days running out
+or the owner's own confirmation from a letter erase it. A trash full of old apps
+is fine to leave there.
+
 workers/yak/README.md is the reference for bindings, the Worker's own secrets
 and setup; this is the map and the feel.
 
@@ -95,37 +100,36 @@ and setup; this is the map and the feel.
   (`page-script.ts`): the reporter, the release listener, and on the free plan
   the "Made with yaks.app" badge (`public/badge.js`). Each is filled with its
   app's copy first (`page-copy.ts`): an element marked `data-copy` shows its
-  snippet from the copy.json of the release it came from, or a preview's
-  draft, and an app with none is served as written. A platform page's parts
-  are `ui-building`'s.
+  snippet from the copy.json of the release it came from, or a preview's draft,
+  and an app with none is served as written. A platform page's parts are
+  `ui-building`'s.
 - **yaks.app's own pages**: the home page, its variants, pricing, help and the
   legal pages are the `home` app in the `yak` space (apps/home), drawn from
   `site/*.tsx` by `deno task content` and released with `yak admin push`. Site
   asks that app for each page as a custom domain's root is asked (site.ts
   `HOME`, `aim` with the mount `/`), keeps it tagged with the app so a release
   purges it, and answers the Worker's own copy in `public/` where the app has
-  none to give. The variant split, the funnel and the front run before Site
-  and are unchanged by it. A person signed in who may write the app is served
-  its page as themselves, wearing the pencil and never kept (site.ts
-  `forward`, apps.ts `editing`). The pencil's doors and every open tab's
-  release check are the app's own `api/` at the apex's `/home/api/` (site.ts
-  `HOME_API`, the tags' `data-yak-api`), since `/api/` there is the apex's. A
-  release check sets no cookie (apps.ts `checking`), so it leaves a stranger a
-  stranger at `/login`.
+  none to give. The variant split, the funnel and the front run before Site and
+  are unchanged by it. A person signed in who may write the app is served its
+  page as themselves, wearing the pencil and never kept (site.ts `forward`,
+  apps.ts `editing`). The pencil's doors and every open tab's release check are
+  the app's own `api/` at the apex's `/home/api/` (site.ts `HOME_API`, the tags'
+  `data-yak-api`), since `/api/` there is the apex's. A release check sets no
+  cookie (apps.ts `checking`), so it leaves a stranger a stranger at `/login`.
 - **The connector**: `mcp.ts` and `tools.ts`, the tools Claude and ChatGPT call;
   `prompts/` and `public/docs/` are what those assistants read.
 - **Spending**: `models.ts` and `meter.ts`, one model and voice budget per space
   (D-398), spent against @yaks/platform's `plans`, `meter` and `standing`. A
   spend names its source (a provider, `voice`, `texts`, `browser`;
-  @yaks/platform/meter `SOURCES`), which the space's `trend` keeps by the day beside what a
-  paying plan covered; /admin/spending (admin-spending.ts) reads those and each
-  Operator's ask rows (operator-spending.ts). A new thing that costs money names
-  its source too. An app's builders are `builders-and-builds`.
+  @yaks/platform/meter `SOURCES`), which the space's `trend` keeps by the day
+  beside what a paying plan covered; /admin/spending (admin-spending.ts) reads
+  those and each Operator's ask rows (operator-spending.ts). A new thing that
+  costs money names its source too. An app's builders are `builders-and-builds`.
 - **A person's machine**: a space's tunnel (`tunnel.ts`) reaches its owner's
   machine. The Operator of a platform admin who owns one asks that machine for
-  its model steps (operator.ts `machineFor`, the provider `machine`), charged
-  to nobody, and falls to the hosted model a step at a time when the machine
-  can't answer (operator-machine.ts). Everyone else's turn there stays hosted.
+  its model steps (operator.ts `machineFor`, the provider `machine`), charged to
+  nobody, and falls to the hosted model a step at a time when the machine can't
+  answer (operator-machine.ts). Everyone else's turn there stays hosted.
 - **Drawing**: yak-raster (`raster/`), the Worker behind RASTER, draws an app's
   icon.svg as the icon.png a home screen reads (`raster.ts`). It is its own
   Worker because resvg is 2.4 MB of WebAssembly, which every isolate of the
@@ -206,10 +210,10 @@ occurrence carries the version it ran (`commit`); one from the previous version
 in that window is the lag, not the change. Keep a Worker-to-store call working
 against the previous store code. A restart can cut off an answer already being
 read, so the store door (door.ts `storeOf`) reads every answer it may send again
-whole inside its retry, and a caller never handles a reset. It can send a call again
-only when its body is bytes, so a caller hands it a visitor's body read whole,
-never the request's stream, and a store's write answers a resend's idempotency
-key without applying it twice (forms.ts `formIn`). A lost connection
+whole inside its retry, and a caller never handles a reset. It can send a call
+again only when its body is bytes, so a caller hands it a visitor's body read
+whole, never the request's stream, and a store's write answers a resend's
+idempotency key without applying it twice (forms.ts `formIn`). A lost connection
 ("Network connection lost.") is a reset too (@yaks/durable-object `moved`): a
 call cut off is sent again, and an instance whose own storage lost its
 connection reports nothing it meets, since its replacement redoes the work
@@ -307,37 +311,37 @@ A query that works on the box can be refused in a store.
 - **A scan is a bug the moment it runs.** Every object's driver counts its
   statements (@yaks/durable-object `bounded`, wired for every class in
   defects-runtime.ts `instrument` and in the tracker's constructor). One
-  statement that reads 100,000 rows or more and a hundred times what it
-  returned files a `Scan` bug, one for each statement shape, tagged with the
-  shape and the object. An object past 50 million rows read or 100,000 written
-  in a minute (200 million and 500,000 in an hour) files a `Runaway` bug for
-  that object with its costliest shapes. Cloudflare has no spend cap and its
-  budget alerts arrive a day late, so these are how a cost is seen. No
-  statement's condition goes without an index (the owner, verbatim: "no
-  scanning tables. and no scanning *all* tables"): the fix for a `Scan` bug is
-  an index or a different read, never a higher threshold.
+  statement that reads 100,000 rows or more and a hundred times what it returned
+  files a `Scan` bug, one for each statement shape, tagged with the shape and
+  the object. An object past 50 million rows read or 100,000 written in a minute
+  (200 million and 500,000 in an hour) files a `Runaway` bug for that object
+  with its costliest shapes. Cloudflare has no spend cap and its budget alerts
+  arrive a day late, so these are how a cost is seen. No statement's condition
+  goes without an index (the owner, verbatim: "no scanning tables. and no
+  scanning _all_ tables"): the fix for a `Scan` bug is an index or a different
+  read, never a higher threshold.
 - **A runaway object stops until its window ends.** Every yaks.app object
   refuses past a window (`instrument`), so a miss costs at most its window's
   rows. A stopped Store answers a read 429 with `retry-after` and
-  `{error: 'Stopped', message, retry}`, and keeps a person's write in its log
-  as `pending` (graph.ts `#kept`, in the ceiling's `free`), answered 202 with
+  `{error: 'Stopped', message, retry}`, and keeps a person's write in its log as
+  `pending` (graph.ts `#kept`, in the ceiling's `free`), answered 202 with
   `retry-after`; its alarm, armed for the window's end, replays it. Past its
   written rows only, it still reads. Its alarm, `tick`, effects, embedding,
   moves, lexicon and statistics wait for the window's end and mark nothing
   failed: `defect` hears no `Stopped`, a boot that meets one runs again
   (`#failed`), an effect that meets one runs again as the same attempt
   (@yaks/effects `deferral`), and the pool writes how a run ended inside the
-  ceiling's `free` (@yaks/effects `PoolOpts.free`), so a run that finished
-  never runs again. A Builder answers 429 the same way and its alarm
-  comes back then; a chat line said to it is kept in its own write log and
-  taken up as a turn once the window ends (build.ts `#hold`, `#replay`). The directory is spared (`#start`): every door reads it.
-  A relocation runs on `freely` drivers: it never stops half way, nor leaves
-  either end stopped. A page's
-  outbox and socket wait as long as `retry-after` says (client.js). The
-  tracker's objects refuse too: a report that meets a stop goes back on
-  `yak-errors` delayed until the window ends, a new message that spends no
-  delivery (workers/tracker/README.md). A stop thrown across a stub arrives
-  without its class, so a caller asks @yaks/durable-object `stopped`, never
+  ceiling's `free` (@yaks/effects `PoolOpts.free`), so a run that finished never
+  runs again. A Builder answers 429 the same way and its alarm comes back then;
+  a chat line said to it is kept in its own write log and taken up as a turn
+  once the window ends (build.ts `#hold`, `#replay`). The directory is spared
+  (`#start`): every door reads it. A relocation runs on `freely` drivers: it
+  never stops half way, nor leaves either end stopped. A page's outbox and
+  socket wait as long as `retry-after` says (client.js). The tracker's objects
+  refuse too: a report that meets a stop goes back on `yak-errors` delayed until
+  the window ends, a new message that spends no delivery
+  (workers/tracker/README.md). A stop thrown across a stub arrives without its
+  class, so a caller asks @yaks/durable-object `stopped`, never
   `instanceof Stopped`.
 - **A boot is all or nothing.** It runs in one transaction. A schema that won't
   stand unwinds, and the store answers every request 503 with the reason
@@ -399,20 +403,20 @@ use of those apps, and adds no activity hop to those reads.
   request after a deploy that changed a store's words still inspects its
   standing schema (the catalogue and a pragma a table): rows in proportion to
   its vocabulary, never to what it holds.
-- **App stores keep no journal until their first branch** (T-65227). They
-  don't load @yaks/journal, and declaring journal names in an app manifest
-  doesn't turn it on; their inspector reads schema and entities without
-  history. A store still holding the journal's tables from that window drops
-  them in its next schema pass (migrate.ts `unjournaled`, T-131164). A store's
-  first branch (the kernel-only `/branches` doors, graph.ts `#branching`)
-  records @yaks/journal as required, and from then on it composes
-  config.ts `appVersionsConfig`: versions on, attribution and feed off. Its
-  live rows become their first versions a page at a time from its alarm
-  (`#seeding`, @yaks/sqlite `paced`), under the mover's share of its windows;
-  until the last page it makes no branch and answers 503 with `retry-after`.
-  Each branch reads and writes through a graph of its own over a driver of its
-  own (@yaks/sqlite `moded`), running no effect. The versions sit in the
-  store's file, so the bytes it tells the directory count them.
+- **App stores keep no journal until their first branch** (T-65227). They don't
+  load @yaks/journal, and declaring journal names in an app manifest doesn't
+  turn it on; their inspector reads schema and entities without history. A store
+  still holding the journal's tables from that window drops them in its next
+  schema pass (migrate.ts `unjournaled`, T-131164). A store's first branch (the
+  kernel-only `/branches` doors, graph.ts `#branching`) records @yaks/journal as
+  required, and from then on it composes config.ts `appVersionsConfig`: versions
+  on, attribution and feed off. Its live rows become their first versions a page
+  at a time from its alarm (`#seeding`, @yaks/sqlite `paced`), under the mover's
+  share of its windows; until the last page it makes no branch and answers 503
+  with `retry-after`. Each branch reads and writes through a graph of its own
+  over a driver of its own (@yaks/sqlite `moded`), running no effect. The
+  versions sit in the store's file, so the bytes it tells the directory count
+  them.
 - **A trashed store sleeps.** Trashing or restoring an app or its space commits
   a `notify_trash` effect in the directory beside the mark (`trash.ts`). It
   tells every affected store, retries until acknowledged, and reads the present
@@ -454,8 +458,8 @@ an app never leaves that app's space (`routed`).
 So the platform taking a word reaches into everyone's apps, and a collision
 breaks that app's store and every door that reads it. `deno task app-grep`
 searches every app's live files and kept versions; it is how you find out
-whether a word is free before you take it. Namespacing (D-338) is designed,
-not built. Shaping the word is `vocabulary`'s ground.
+whether a word is free before you take it. Namespacing (D-338) is designed, not
+built. Shaping the word is `vocabulary`'s ground.
 
 An app's `"platform"` dependencies (its package.json) add their packages' words
 on top (`vocab.ts` `lent`), as their code reaches its pages: the declaration a
@@ -558,9 +562,8 @@ through the connector's graph tier (tool.ts `roleIn`). A live check (an app, a
 subscription, the Operator) runs in `checks`, the agents' own space,
 `--as checks`, never through the session's yaks.app MCP tools, which are Jeff's
 (end-to-end-checks has the recipe). `operator_chat --space checks --as checks`
-reaches its Operator. `checks` is
-in idle-spaces.ts `PROTECTED`, so the sweep never takes it. Nothing an agent
-tests runs in `jeff` or another person's space.
+reaches its Operator. `checks` is in idle-spaces.ts `PROTECTED`, so the sweep
+never takes it. Nothing an agent tests runs in `jeff` or another person's space.
 
 A call to the Operator is checked the same way, from a number of our own:
 `scripts/test-call.ts` beside this skill dials the platform's number from the
@@ -569,11 +572,11 @@ idle Telnyx number the `checks` account is known by (its person's
 and writes the call's two-channel recording. The call reaches the `checks`
 Operator, whose `operator{voice, voice_model}` says how it is answered: ask it
 through `operator_chat` to set them for the path you are checking (a Deepgram
-voice, `gpt-realtime-2.1-mini`, `gpt-live-1`) and to put them back. What it
-said and heard is in its conversation (`yak admin copy checks`, the
-`operator_call` rows), and @yaks/speech `hear` reads the recording. A talking
-model's opening is checked without a phone by `talk()` against OpenAI with
-μ-law clips at real time, which is how T-161675 measured 80 of them.
+voice, `gpt-realtime-2.1-mini`, `gpt-live-1`) and to put them back. What it said
+and heard is in its conversation (`yak admin copy checks`, the `operator_call`
+rows), and @yaks/speech `hear` reads the recording. A talking model's opening is
+checked without a phone by `talk()` against OpenAI with μ-law clips at real
+time, which is how T-161675 measured 80 of them.
 
 - `yak admin query <space>/<app> <query>` reads a store, and
   `yak admin apply <space>/<app> <bundles>` patches, adds or deletes its rows
@@ -605,11 +608,11 @@ model's opening is checked without a phone by `talk()` against OpenAI with
   as the record; the same firing deletes the occurrences a delivered one counted
   once they are 30 days old (`forgotten`).
 - hello@yaks.app is the public address: what people write to the platform, its
-  replies to them, and what a person said that the platform relays (the
-  feedback tool). Its owner gets a copy of every letter there. Internal mail
-  never goes there: whatever the platform writes for its agents, with no person
-  writing (the refusal report, the usage alert, the gallery's code review), goes
-  to mail-config.ts `INTERNAL`, hello@bot.yak.sh, the yaks.app project's own
+  replies to them, and what a person said that the platform relays (the feedback
+  tool). Its owner gets a copy of every letter there. Internal mail never goes
+  there: whatever the platform writes for its agents, with no person writing
+  (the refusal report, the usage alert, the gallery's code review), goes to
+  mail-config.ts `INTERNAL`, hello@bot.yak.sh, the yaks.app project's own
   address. Only the box pulls it (yak.sh's Email Routing catch-all to
   holdco-inbox, no owner copy), and @yaks/mail `mail_task` files each letter on
   the project's board.

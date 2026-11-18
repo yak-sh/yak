@@ -147,7 +147,6 @@ import {
   reachable as reachableApps,
   reachChanged,
   runCommand,
-  toolsOf,
   viewsMoved,
 } from './declared.ts'
 // A whole store put back to a moment (T-34507) — the data half of what
@@ -171,7 +170,6 @@ import {
   doomed,
   door,
   erase,
-  erased,
   keeping,
   kept as inTrash,
   letter,
@@ -5659,26 +5657,16 @@ let OURS: Row[] = [
   {
     name: 'app_delete',
     destructive: true,
+    // Every delete is the trash; this door erases nothing. A client that
+    // still sends the retired `forever` is answered like any other call
+    // (M-37853): the argument is simply not read.
     input: {
       type: 'object',
-      properties: {
-        space: SPACE,
-        app: APP,
-        forever: {
-          type: 'boolean',
-          description:
-            'true to erase the app now instead of trashing it: its files, ' +
-            'everything it saved and its address, all gone, with no restore',
-        },
-      },
+      properties: { space: SPACE, app: APP },
       required: ['app'],
     },
     run: async (ctx, args) => {
-      let forever = args.forever != null && flag(args.forever, 'forever')
-      // Admin standing covers reversible trash, never permanent erasure.
-      let { space, app, who } = forever
-        ? owner(await inBin(ctx, args))
-        : await inBin(ctx, args, true)
+      let { space, app, who } = await inBin(ctx, args, true)
       // The directory lives in the meta space's own app: deleting it would
       // take every space, app and membership with it, so it is not an app to
       // throw away, whoever owns `yak`.
@@ -5688,42 +5676,27 @@ let OURS: Row[] = [
           `${META.space}/${META.app} is the platform itself`,
         )
       }
-      if (!forever) {
-        if (app.trashed) {
-          throw refuse(
-            'conflict',
-            `${space.slug}/${app.slug} is already in the trash, ${
-              daysLeft(app.trashed)
-            } days left — app_restore brings it back, or ` +
-              'app_delete(forever: true) erases it now',
-          )
-        }
-        // The mark, and the tool and view lists of everyone in the space
-        // moving with it (erase.ts `trash`, T-33004). Nothing else: the
-        // whole point is that a restore is exact.
-        await trash(ctx.env, ctx.dir, space, app, who)
-        return {
-          text: `${space.slug}/${app.slug} is in the trash. ` +
-            `${
-              url(space, app, ctx.env)
-            } stops answering and its commands have gone ` +
-            'with it; ' +
-            'its slug is free immediately. Nothing it saved was touched. app_restore(app: ' +
-            `'${app.eid}') brings it back whole, any time in the next 30 ` +
-            'days — after that it is erased for good.',
-          space,
-        }
+      if (app.trashed) {
+        throw refuse(
+          'conflict',
+          `${space.slug}/${app.slug} is already in the trash, ${
+            daysLeft(app.trashed)
+          } days left — app_restore brings it back`,
+        )
       }
-      // Erased. What this app declared is asked before its store is emptied,
-      // because after that there is nothing to ask — unless it is in the
-      // trash already, where it left every list the day it went in.
-      let had = app.trashed ? {} : await toolsOf(ctx.env, space, app)
-      let wrote = await erased(ctx.env, ctx.dir, space, app, who)
-      if (Object.values(had).some((t) => t.view)) await viewsMoved(ctx, space)
+      // The mark, and the tool and view lists of everyone in the space
+      // moving with it (erase.ts `trash`, T-33004). Nothing else: the
+      // whole point is that a restore is exact.
+      await trash(ctx.env, ctx.dir, space, app, who)
       return {
-        text: `deleted ${space.slug}/${app.slug}: ${wrote} ${
-          wrote == 1 ? 'file' : 'files'
-        }, everything it saved, and ${url(space, app, ctx.env)} — all gone`,
+        text: `${space.slug}/${app.slug} is in the trash. ` +
+          `${
+            url(space, app, ctx.env)
+          } stops answering and its commands have gone ` +
+          'with it; ' +
+          'its slug is free immediately. Nothing it saved was touched. app_restore(app: ' +
+          `'${app.eid}') brings it back whole, any time in the next 30 ` +
+          'days — after that it is erased for good.',
         space,
       }
     },
