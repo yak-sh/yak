@@ -3570,8 +3570,13 @@ export let directoryRows = (rows: {
       return row ? spaceOf(row) : null
     },
     // The numbers the platform holds for this space (numbers.ts).
-    lines: async (space: Space): Promise<PhoneLine[]> =>
-      (await query(line`.phone_line.space=${space.eid} ?trashed`)).map(lineOf),
+    lines: async (
+      space: Pick<Space, 'eid'> | { path: Built },
+    ): Promise<PhoneLine[]> => {
+      let at = 'path' in space ? space.path : line`=${space.eid}`
+      return (await query(line`.phone_line.space${sub(at)} ?trashed`))
+        .map(lineOf)
+    },
     // A held number, including its trash state, wherever it was assigned.
     heldLine: async (
       number: string,

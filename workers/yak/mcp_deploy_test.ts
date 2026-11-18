@@ -372,7 +372,7 @@ test('a deploy is a version, and one word puts it back', async () => {
     // moves SQLite backwards (testing.ts `Pitr`).
     let window = await agent.tool('store_restore', app)
     assertStringIncludes(window, `${space}/recipes's store can be put back`)
-    assertMatch(window, /any moment since 20\d\d-\d\d-\d\dT/)
+    assertMatch(window, /since 20\d\d-\d\d-\d\dT.*the last 30 days/)
     assertStringIncludes(window, "store_restore(app: 'recipes', at:")
     // A moment outside the thirty days is refused before the store is asked
     // anything, and the refusal names the window rather than saying no.

@@ -429,7 +429,12 @@ let foresee = (
     // The chat draws the lists their servers offer (operator-lists.ts), once
     // it knows the conversation is their landing.
     ...view == 'operator' && chat ? [dir.listings(person)] : [],
-    ...here ? rowsAhead(dir, person, view, seats, here) : [],
+    ...here
+      ? [
+        dir.lines(walkTo(here.slug, here.space.then((s) => s?.eid ?? ''))),
+        ...rowsAhead(dir, person, view, seats, here),
+      ]
+      : [],
   ])
 }
 
@@ -710,7 +715,7 @@ let desk = async (
       : undefined,
     // How the person keeps the side (`desk_sidebar{collapsed}`).
     dir.collapsed(owner),
-    dir.lines(space),
+    dir.lines(walkTo(space.slug, space.eid)),
   ])
   let known = await inHand(agents)
   let page = deskPage({
