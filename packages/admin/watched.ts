@@ -6,6 +6,8 @@ export let WATCHED = [
   'workers/yak',
   'packages',
   'src',
+  // The site's words, which the Worker bundles (workers/yak/site/copy.ts).
+  'apps/home/copy.json',
   'deno.json',
   'deno.lock',
   'package.json',
