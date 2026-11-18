@@ -1,6 +1,6 @@
 import { meta } from './meta.ts'
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertStringIncludes } from '@std/assert'
 import { mint } from '@yaks/graph'
 import { CALLER, HEADER, WITH } from '@yaks/tunnel'
 import { derivedEid } from '@yaks/graph/identity'
@@ -13,6 +13,7 @@ import { sign } from './lib/token.ts'
 import type { Who } from './session.ts'
 import { platform } from './testing.ts'
 import * as tunnel from './tunnel.ts'
+import * as identity from './identity.ts'
 
 let SECRET = 'a probe secret'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -163,12 +164,58 @@ test('connect makes a pair and its gateway, answering the token once', async () 
     `PATCH /cfd_tunnel/${T}`,
     `PUT ${gateway}`,
     `DELETE ${gateway}`,
-    `DELETE /connectivity/directory/services/${S}`,
-    `DELETE /cfd_tunnel/${T}`,
   ])
 })
 
 // ── The door an app's worker reaches the machine through ────────────────────
+
+test('a disconnected tunnel keeps its identities until its owner confirms a purge', async () => {
+  using cf = await scene()
+  let { scenario, door, gateway } = cf
+  await using _ = scenario
+  await door(ADA, { space: 'ada', do: 'connect', port: '5173' })
+  await door(ADA, { space: 'ada', do: 'disconnect' })
+  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, scenario.env) })
+  let space = (await dir.space('ada'))!
+  assertEquals(space.tunnel, { id: T, service: S, adopted: false })
+  assertEquals(typeof space.tunnelTrashed, 'string')
+  let page = `https://yaks.app/space/ada/confirm/tunnel/${space.eid}`
+  let post = async (person: string | null, confirm: string) => {
+    let r = await identity.fetch(
+      new Request(page, {
+        method: 'POST',
+        headers: { cookie: person ? await as(person) : '' },
+        body: new URLSearchParams({ confirm }),
+      }),
+      scenario.env,
+    )
+    let text = await r.text()
+    return { status: r.status, text }
+  }
+  cf.made.length = 0
+  assertEquals((await post(null, T)).status, 302)
+  assertEquals((await post(JEFF, T)).status, 404)
+  assertEquals((await post(ADA, 'nope')).status, 400)
+  let preview = await identity.fetch(
+    new Request(page, {
+      headers: { cookie: await as(ADA) },
+    }),
+    scenario.env,
+  )
+  assertEquals(preview.status, 200)
+  await preview.body?.cancel()
+  assertEquals(cf.made, [])
+  let purged = await post(ADA, T)
+  assertEquals(purged.status, 200)
+  assertStringIncludes(purged.text, 'permanently purged')
+  assertEquals(cf.made, [
+    `DELETE ${gateway}`,
+    `DELETE /connectivity/directory/services/${S}`,
+    `DELETE /cfd_tunnel/${T}`,
+  ])
+  assertEquals((await dir.space('ada'))!.tunnel, null)
+  assertEquals((await dir.space('ada'))!.tunnelTrashed, null)
+})
 
 let tunneled: Space = {
   eid: 's1',

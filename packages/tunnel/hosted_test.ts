@@ -67,6 +67,9 @@ let platform = (over: { account?: boolean; gateways?: boolean } = {}) => {
       ),
     write: (_: string, row: Tunnel | null) =>
       Promise.resolve(void (space.tunnel = row)),
+    trash: (_: string, at: string | null) =>
+      Promise.resolve(void (space.tunnelTrashed = at)),
+    purge: () => Promise.resolve('A confirmation letter was sent.'),
     tell: (person: string, told: Told) => {
       heard.push([person, told])
       return Promise.resolve(
@@ -150,9 +153,45 @@ test('connect makes a pair and its gateway, answering the token once', async () 
     `PATCH /cfd_tunnel/${T}`,
     `put tunnel-e1 ${S}`,
     'remove tunnel-e1',
-    `DELETE /connectivity/directory/services/${S}`,
-    `DELETE /cfd_tunnel/${T}`,
   ])
+})
+
+test('disconnect retains the pair and names, blocks access, and restores the same pair', async () => {
+  let { ask, made, space } = platform()
+  await ask(ADA, connect)
+  made.length = 0
+  await ask(ADA, { space: 'ada', do: 'disconnect' })
+  assertEquals(space.tunnel, { id: T, service: S, adopted: false })
+  assertEquals(typeof space.tunnelTrashed, 'string')
+  assertEquals(barred(space, { slug: 'app' })?.code, 'no_tunnel')
+  assertEquals((await ask(ADA, connect)).code, 'has_tunnel')
+  assertEquals((await ask(JEFF, adopt)).code, 'has_tunnel')
+  assertEquals((await ask(ADA, { space: 'ada', do: 'rotate' })).code, 'trashed')
+  assertEquals((await ask(ADA, { space: 'ada' })).body.tunnel, null)
+  assertEquals(
+    (await ask(ADA, { space: 'ada', do: 'restore' })).body.tunnel,
+    space.tunnel,
+  )
+  assertEquals(space.tunnelTrashed, null)
+  assertEquals(barred(space, { slug: 'app' }), null)
+  assertEquals(made, ['remove tunnel-e1', `put tunnel-e1 ${S}`])
+})
+
+test('purge only asks its person to confirm a tunnel already in the trash', async () => {
+  let { ask, made, space } = platform()
+  await ask(ADA, connect)
+  assertEquals(
+    (await ask(ADA, { space: 'ada', do: 'purge' })).code,
+    'not_trashed',
+  )
+  await ask(ADA, { space: 'ada', do: 'disconnect' })
+  made.length = 0
+  assertEquals(
+    (await ask(ADA, { space: 'ada', do: 'purge' })).body.message,
+    'A confirmation letter was sent.',
+  )
+  assertEquals(made, [])
+  assertEquals(space.tunnel?.id, T)
 })
 
 test('a pair whose gateway cannot be put is taken down again', async () => {
@@ -174,7 +213,7 @@ test('an adopted pair rotates only its gateway, and disconnecting leaves the tun
     service: S,
     adopted: true,
   })
-  assertEquals((await ask(JEFF, adopt)).status, 200)
+  assertEquals((await ask(JEFF, adopt)).status, 409)
   assertEquals(
     (await ask(ADA, { space: 'ada', do: 'rotate' })).body.token,
     undefined,
@@ -184,7 +223,6 @@ test('an adopted pair rotates only its gateway, and disconnecting leaves the tun
     null,
   )
   assertEquals(made, [
-    `put tunnel-e1 ${S}`,
     `put tunnel-e1 ${S}`,
     `put tunnel-e1 ${S}`,
     'remove tunnel-e1',

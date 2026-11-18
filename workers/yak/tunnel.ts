@@ -61,7 +61,7 @@ let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 // The account the platform makes tunnels in (CF_TUNNEL_TOKEN), or null until
 // its token is set. Its calls, and the gateways' below, go through the fetch
 // every Cloudflare call does (@yaks/cloudflare/api).
-let account = (env: Env): Api | null =>
+export let account = (env: Env): Api | null =>
   env.CF_TUNNEL_TOKEN && env.CF_ACCOUNT
     ? { account: env.CF_ACCOUNT, token: env.CF_TUNNEL_TOKEN, fetch: resent }
     : null
@@ -69,7 +69,7 @@ let account = (env: Env): Api | null =>
 // The gateways, in the namespace the apps' workers live in and uploaded with
 // the token that uploads those (CF_WORKERS_TOKEN, dispatch.ts), or null until
 // it is set.
-let front = (env: Env) =>
+export let front = (env: Env) =>
   env.CF_WORKERS_TOKEN && env.CF_ACCOUNT
     ? gateways(
       { account: env.CF_ACCOUNT, token: env.CF_WORKERS_TOKEN, fetch: resent },
@@ -103,6 +103,7 @@ let keeping = (env: Env, req: Request): Keeping => {
         eid: space.eid,
         slug: space.slug,
         tunnel: space.tunnel,
+        tunnelTrashed: space.tunnelTrashed,
         owner: role == 'owner',
         platform: chief == 'owner',
       }
@@ -112,6 +113,26 @@ let keeping = (env: Env, req: Request): Keeping => {
       return stamp(env, { entities: [{ entity: { eid }, tunnel }] }, {
         actor: { by: who.actor ?? who.person!, via: who.via },
       })
+    },
+    trash: async (eid, at) => {
+      let who = await caller
+      return stamp(env, {
+        entities: [{ entity: { eid }, tunnel_trashed: at ? { at } : null }],
+      }, { actor: { by: who.actor ?? who.person!, via: who.via } })
+    },
+    purge: async (space) => {
+      let who = await caller
+      let { requested } = await import('./confirm.ts')
+      let { trashedTunnel } = await import('./tunnel-trash.ts')
+      return requested(
+        env,
+        dir,
+        (await dir.at(space.eid))!,
+        who.person!,
+        trashedTunnel,
+        space.eid,
+        space.tunnel!,
+      )
     },
     tell: (person, told) => tell(env, person, told),
   }
@@ -140,7 +161,9 @@ let tell = async (
   let owned = [...await dir.sitting(person)]
     .filter(([, role]) => role == 'owner').map(([eid]) => eid)
   let spaces = (await Promise.all(owned.map((eid) => dir.at(eid))))
-    .filter((s): s is Space => !!s && !s.trashed && !!s.tunnel)
+    .filter((s): s is Space =>
+      !!s && !s.trashed && !!s.tunnel && !s.tunnelTrashed
+    )
   let { builderOf, SPACE } = await import('./build-door.ts')
   let asked = (at: Space, path: string, args: object) =>
     builderOf(env, at.eid)(() =>

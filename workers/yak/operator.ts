@@ -745,12 +745,12 @@ export let operatorChoice = (env: Env, machine = false) => {
  */
 export let machineFor = async (
   env: Env,
-  space: Pick<Space, 'eid' | 'tunnel'>,
+  space: Pick<Space, 'eid' | 'tunnel' | 'tunnelTrashed'>,
   person: string,
   open: () => Directory = opening(env),
   via?: Calling['via'],
 ): Promise<typeof fetch | null> => {
-  if (!space.tunnel || !person) return null
+  if (!space.tunnel || space.tunnelTrashed || !person) return null
   // Whether they are the admin and whether the tunnel is theirs are asked at
   // once: neither needs the other's answer.
   let [chief, fetch] = await Promise.all([

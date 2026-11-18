@@ -284,6 +284,7 @@ export type Space = Metered & {
   // worker reaches through a `vpc_services` door (tunnel.ts `reach`). Null for
   // a space with no tunnel, which is almost all of them.
   tunnel: Tunnel | null
+  tunnelTrashed?: string | null
 }
 export type App = AppInfo & { policy: number }
 /** A site rebuilt from its web address, and when the box was given it. */
@@ -877,6 +878,7 @@ export type Row = MeteredRow & {
     paid?: ByDay
   }
   notified?: Record<string, unknown> | null
+  tunnel_trashed?: { at?: string | null }
   tunnel?: {
     id?: string | null
     service?: string | null
@@ -1233,6 +1235,7 @@ export let SPACE_PARTS = [
   'visitor_share',
   'former',
   'tunnel',
+  'tunnel_trashed',
   'operator',
   'sender',
   'phone',
@@ -1373,6 +1376,7 @@ export let spaceOf = (r: Row): Space => ({
   trashed: trashedOf(r),
   slugs: slugsOf(r.former),
   tunnel: tunnelOf(r),
+  tunnelTrashed: r.tunnel_trashed?.at ?? null,
 })
 
 // A space row with no handle: nothing writes one (every space has worn one

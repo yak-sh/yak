@@ -48,7 +48,8 @@ Entry points:
   writes as, and the tools it is offered.
 - `@yaks/tunnel/service`: the connector, which keeps `cloudflared` running for
   as long as its role runs.
-- `@yaks/tunnel/vocab`: the `tunnel` component alone.
+- `@yaks/tunnel/vocab`: `tunnel{id, service, adopted}` and its
+  `tunnel_trashed{at}` mark.
 
 ## Making a tunnel
 
@@ -111,9 +112,11 @@ await box('http://machine/mcp')
   yaks.app). A GET answers the space's tunnel to its owner. A POST changes it:
   `connect` with the machine's `port` makes the pair and its gateway and answers
   the token once, `rotate` puts the gateway again with a new token for a pair
-  the platform made, `disconnect` removes what the platform made and forgets the
-  record, and `adopt` records a pair made elsewhere. The space's owner does the
-  first three; adopting names the platform's own resources, so only the
+  the platform made. `disconnect` puts the pair in the trash with its names
+  held, removing only the generated gateway. `restore` reconnects that pair, and
+  `purge` asks its owner to permanently remove it through the shared
+  confirmation page. `adopt` records a pair made elsewhere. The space’s owner
+  changes it; adopting names the platform's own resources, so only the
   platform's owner does it. `tell` is the machine telling its owner what changed
   there (`@yaks/tunnel/effects`, the `tunnel_tell` effect), by their own
   connection to the platform: it names the conversation it is news for and the
@@ -309,7 +312,9 @@ and the service ends at once. Ending the role stops the connector.
 
 `tunnel{id, service, adopted}` on an entity says which tunnel it reaches a
 machine by and which VPC Service its gateway is bound to. `adopted` marks a pair
-made elsewhere and only recorded here: removing it forgets the ids and leaves
-the resources alone. All three are written by the server, never by a client
+made elsewhere and only recorded here: purging it forgets the ids and leaves the
+resources alone. `tunnel_trashed{at}` keeps the pair and its shared names while
+disabling reach. It stays recoverable until restored or its owner confirms a
+permanent purge. All three are written by the server, never by a client
 (`stamped`, `wire: false`). A hosting platform keeps one on each space that has
 a tunnel, and puts that space's gateway in front of its service.

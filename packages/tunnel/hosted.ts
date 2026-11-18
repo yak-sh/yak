@@ -11,8 +11,9 @@
 //                                      token once
 //   POST space=ada do=rotate           the gateway put again, and a new token
 //                                      for a tunnel the platform made, once
-//   POST space=ada do=disconnect       the tunnel gone, and what the platform
-//                                      made
+//   POST space=ada do=disconnect       keep the tunnel in the trash
+//   POST space=ada do=restore          restore the same tunnel
+//   POST space=ada do=purge            ask its owner to confirm a permanent purge
 //   POST space=ada do=adopt tunnel=… service=…   record a pair made elsewhere,
 //                                      with a gateway in front
 //   POST do=tell conversation=… key=… text=… [about=…]   the machine telling
@@ -22,9 +23,10 @@
 // The space's owner connects, rotates and disconnects. Adopting is the
 // platform owner's alone: the ids name resources in the platform's account,
 // and a space that could write any service id could reach somebody else's
-// machine. An adopted pair is only recorded, so disconnecting it forgets the
-// ids, and rotating it only puts its gateway again; whoever made the tunnel
-// rotates and removes it. A tunnel's token is answered once and never kept.
+// machine. Disconnecting keeps the pair and its names in the trash and
+// removes only its regenerable gateway. Restoring puts the gateway again.
+// Purging an adopted pair forgets its ids; whoever made it removes it.
+// A tunnel’s token is answered once and never kept.
 //
 // A request reaches a machine two ways: an app's own worker asking for it
 // (`reach`), built in the space and never an installed copy, and the space's
@@ -55,7 +57,11 @@ import { BY, CALLER, WITH } from './gateway.ts'
 export type Tunnel = { id: string; service: string; adopted: boolean }
 
 /** A space as this module reads it: its slug, and its tunnel or none. */
-export type Held = { slug: string; tunnel: Tunnel | null }
+export type Held = {
+  slug: string
+  tunnel: Tunnel | null
+  tunnelTrashed?: string | null
+}
 
 /** Who is asking a machine, as the platform tells it (`CALLER`): an `app`'s
  * own worker; the owner's `operator`, in a conversation or a run of its own;
@@ -184,7 +190,7 @@ export let barred = (space: Held, app: Reaching): Ending | null =>
       message:
         `${app.slug} is an installed copy, and only an app built in ${space.slug} reaches the machine its tunnel goes to`,
     }
-    : !space.tunnel
+    : !space.tunnel || space.tunnelTrashed
     ? NO_TUNNEL(space)
     : null
 
@@ -236,7 +242,7 @@ export let machine = (
   relay: Relay,
 ): typeof fetch =>
 async (input, init) => {
-  if (!space.tunnel) return ending(NO_TUNNEL(space))
+  if (!space.tunnel || space.tunnelTrashed) return ending(NO_TUNNEL(space))
   let req = new Request(input, init)
   let { pathname, search } = new URL(req.url)
   let out = onward(pathname + search, req, asking.caller, {
@@ -265,6 +271,10 @@ export type Keeping = {
   find: (slug: string, person: string | null) => Promise<Kept | null>
   /** the tunnel recorded on the space `eid`, or none */
   write: (eid: string, row: Tunnel | null) => Promise<unknown>
+  /** keep the tunnel and its shared names in the trash, or restore it */
+  trash: (eid: string, at: string | null) => Promise<unknown>
+  /** ask its person to purge a trashed tunnel through their confirmation page */
+  purge: (space: Kept) => Promise<string>
   /** what the machine tells its owner `person`, taken in by the host: what
    * it answers, or null where none of their spaces with a tunnel holds the
    * conversation */
@@ -305,7 +315,11 @@ export let door = async (req: Request, host: Keeping): Promise<Response> => {
   if (!space.owner && !space.platform) {
     return refused(403, 'not_owner', `${space.slug}'s machine is its owner's`)
   }
-  if (req.method == 'GET') return shown(space, space.tunnel)
+  if (req.method == 'GET') {
+    return shown(space, space.tunnelTrashed ? null : space.tunnel, {
+      ...space.tunnelTrashed ? { trashed: space.tunnelTrashed } : {},
+    })
+  }
   return await changed(host, space, said)
 }
 
@@ -370,12 +384,12 @@ let changed = async (
         "adopting names the platform's own resources, so the platform's owner does it",
       )
     }
-    // A pair the platform made would be left running with nothing naming it.
-    if (held && !held.adopted) {
+    // Replacing either kind of pair would lose its saved identifiers.
+    if (held) {
       return refused(
         409,
         'has_tunnel',
-        `${space.slug} has a tunnel; disconnect it first`,
+        `${space.slug} has a tunnel; restore it or confirm its purge before adopting another`,
       )
     }
     let [id, service] = [said('tunnel'), said('service')]
@@ -414,17 +428,37 @@ let changed = async (
     }
     return shown(space, row, { token: made.token })
   }
-  if (act != 'rotate' && act != 'disconnect') {
+  if (!['rotate', 'disconnect', 'restore', 'purge'].includes(act)) {
     return refused(
       400,
       'bad_do',
-      'do is connect, rotate, disconnect, adopt or tell',
+      'do is connect, rotate, disconnect, restore, purge, adopt or tell',
     )
   }
   if (!held) return refused(404, 'no_tunnel', `${space.slug} has no tunnel`)
+  if (act == 'purge') {
+    if (!space.tunnelTrashed) {
+      return refused(
+        409,
+        'not_trashed',
+        'disconnect the tunnel into the trash first',
+      )
+    }
+    return shown(space, null, { message: await host.purge(space) })
+  }
+  if (space.tunnelTrashed && act == 'rotate') {
+    return refused(409, 'trashed', 'restore the tunnel from the trash first')
+  }
   let { account, gateways } = host
   if (!gateways) return refused(503, 'no_token', NO_UPLOAD)
-  if (!held.adopted && !account) return refused(503, 'no_token', NO_ACCOUNT)
+  if (act == 'rotate' && !held.adopted && !account) {
+    return refused(503, 'no_token', NO_ACCOUNT)
+  }
+  if (act == 'restore') {
+    await gateways.put(gateway, held.service)
+    await host.trash(space.eid, null)
+    return shown(space, held)
+  }
   if (act == 'rotate') {
     // An adopted tunnel is rotated where it was made; its gateway is ours.
     let token = account && !held.adopted
@@ -433,10 +467,8 @@ let changed = async (
     await gateways.put(gateway, held.service)
     return shown(space, held, { token })
   }
+  let at = space.tunnelTrashed ?? new Date().toISOString()
+  await host.trash(space.eid, at)
   await gateways.remove(gateway)
-  if (account && !held.adopted) {
-    await disconnect(account, { tunnel: held.id, service: held.service })
-  }
-  await host.write(space.eid, null)
-  return shown(space, null)
+  return shown(space, null, { trashed: at })
 }

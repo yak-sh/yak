@@ -133,6 +133,7 @@ import {
 } from './erase.ts'
 import { type Kind, ticketed as confirmed } from './confirm.ts'
 import { heldNumber, trashedNumber } from './numbers.ts'
+import { trashedTunnel } from './tunnel-trash.ts'
 import { retiredStorage } from './durable-retirement.ts'
 import { ledger, revoke as revokeGrants } from './grants.ts'
 import {
@@ -554,7 +555,7 @@ let closing = async (
 // Every act only a person may confirm, by the name its door carries
 // (confirm.ts): one door, and the kinds as data.
 let KINDS = Object.fromEntries(
-  [trashedApp, heldNumber, trashedNumber, retiredStorage].map((
+  [trashedApp, heldNumber, trashedNumber, retiredStorage, trashedTunnel].map((
     k,
   ) => [k.kind, k as Kind<unknown>]),
 )
