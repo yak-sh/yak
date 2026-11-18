@@ -665,6 +665,11 @@ STRIPE_PRICE_PRO_YEAR = "price_1UbMvcRMiIEYfSxgdOMn1GUf"
 # Staging's platform letters leave through the MAIL binding, which needs no
 # Email Sending token (post.ts `transport`, T-34980).
 MAIL_VIA = "binding"
+# Staging's phone is Telnyx, as production's is. It holds no Telnyx secrets,
+# so it texts nobody and its webhook door answers 404. A check puts
+# TELNYX_API (a stand-in's URL), TELNYX_API_KEY and TELNYX_PUBLIC_KEY (a key
+# it signs replays with), and deletes them afterwards.
+PHONE_SENDER = { via = "telnyx" }
 
 [env.staging.observability.logs]
 enabled = true
