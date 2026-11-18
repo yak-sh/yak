@@ -88,8 +88,8 @@ let lentRow = (within: string, to: string, until: number | null): Bundle => ({
   },
 })
 
-/** Every sandbox the group has lent, awake or asleep: what its erasure
- * destroys, members who have since left included. */
+/** Every sandbox the group has lent, awake or asleep: whose editable files
+ * must survive group trash, members who have since left included. */
 export let lending = async (
   store: Lending,
   within: string,
@@ -130,7 +130,7 @@ export let hold = async (
   return { held: true }
 }
 
-/** `to`'s sandbox in the group, asleep: a container destroyed gives its place
+/** `to`'s sandbox in the group, asleep: a stopped container gives its place
  * back at once rather than when its nap would. */
 export let slept = async (
   store: Lending,

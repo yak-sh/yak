@@ -146,7 +146,8 @@ configured native fixer's worktree independently of sandbox provisioning.
 
 A session's `home{workspace, cwd}` is a default target, not a permission grant.
 Changing it, stopping a session or closing a host does not dispose its
-workspace. Only explicit sandbox disposal destroys a resource. See
+workspace. Explicit sandbox disposal stops execution and retains writable files
+in recoverable trash; `sandbox_restore` returns the retained resource. See
 [@yaks/machine](../machine/README.md) for execution and
 [@yaks/sandbox](../sandbox/README.md) for lifecycle and adapter configuration.
 

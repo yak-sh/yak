@@ -177,9 +177,10 @@ per member of a space) names it `named(group, person)` and keeps who has one as
 `HELD` seconds, the longest command and then the nap, unless `allowed` others
 already are; it answers how many and writes nothing then. It rewrites the row
 only once half the hold is spent. `slept` gives the place back when the host
-destroys the container. `lending(store, group)` is every sandbox the group has
-lent, asleep ones included, which is what the group's erasure destroys. A row
-dies with its group.
+stops the container after preserving its files. `lending(store, group)` is every
+sandbox the group has lent, asleep ones included, so the host can preserve their
+files when a group is trashed. A row stays discoverable with its group in the
+trash.
 
 ```ts
 import { equal } from '@yaks/testing'
