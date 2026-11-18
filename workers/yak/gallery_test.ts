@@ -451,10 +451,10 @@ test('the homepage paints every chosen screenshot', async () => {
         slugs.map((s) => `<li data-demo="${s}">fallback</li>`).join('')
       }</ul>`,
     )
-  let two = await (await made({} as Env, dir, naming(['trip', 'garden'])))
-    .text()
+  let [first, last] = [DEMOS[0], DEMOS.at(-1)!]
+  let two = await (await made({} as Env, dir, naming([last, first]))).text()
   assertEquals(cards(two), 2)
-  assert(two.indexOf('trip-image') < two.indexOf('garden-image'))
+  assert(two.indexOf(`${last}-image`) < two.indexOf(`${first}-image`))
   // A page that names none is served as its file.
   let none = await (await made(
     {} as Env,
