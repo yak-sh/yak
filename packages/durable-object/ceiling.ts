@@ -76,6 +76,10 @@ export let FAR = 100
 // A statement costing fewer rows than this is counted and never named: its
 // shape is not rendered for the tally.
 let NAMED = 1_000
+// How much of a scan's shape its report keeps: the whole of what a reader's
+// screen puts before the statement's own condition and order. Cut at 240, a
+// screened page's report named only its screen (bug 766b671e).
+let SHOWN = 12_000
 let HOUR = 3_600_000
 
 type Kind = 'read' | 'written'
@@ -488,7 +492,7 @@ export let ceiling = (
           {
             fault: `scan|${key}`,
             tags: {
-              statement: named.slice(0, 240),
+              statement: named.slice(0, SHOWN),
               rows: String(rowsRead),
               returned: String(returned),
               ...matched != null ? { matched: String(matched) } : {},

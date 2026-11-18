@@ -2514,8 +2514,19 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   // A paged seek is narrower still: the newest of a session's entries
   // wearing the shape is read from that session's index, not chosen among
   // every owner the shape has in the graph.
+  //
+  // Absences alone are a shape too, read the same way when its archetypes
+  // are few enough to merge in id order (SPREAD). Tested as a filter on the
+  // entity spine, a page walked every entity newest first: Mossvale's
+  // `!character` beside the platform's screen read 236,947 rows of its
+  // store's 78,292, whose newest two weeks were all platform rows, to answer
+  // 50 (bug 766b671e).
+  let absences = !!shape && !ctx.present && !all.length && !wearing.length &&
+    !ctx.owner && !ctx.correlated && !ctx.v.prop('entity', 'num') &&
+    (ctx.archetypes?.({ all: [], none })?.length ?? Infinity) <= SPREAD
   if (
-    shape && ctx.present && none.length && !ctx.bounded && !ctx.spine &&
+    shape && (ctx.present || absences) && none.length && !ctx.bounded &&
+    !ctx.spine &&
     !ctx.candidates && !shapes.size && ctx.d.archetypeSource && !ctx.paged &&
     !ctx.archetypes?.pending
   ) {
@@ -2575,7 +2586,8 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
       keyed: !!few,
       // Each arm would list the owners again; the shape's owners among them
       // are few enough to sort.
-      arms: !found && ids && ids.length > 1 && ids.length <= MERGED
+      arms: !found && ids && ids.length > 1 &&
+          ids.length <= (absences ? SPREAD : MERGED)
         ? ids.map((id) => reading({ sql: `${key} = ?`, params: [id] }))
         : undefined,
     }
@@ -2800,6 +2812,10 @@ let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>
 // The most archetypes a page merges. Each costs a seek before the page
 // starts; past this many, sorting their owners is the likelier cheaper read.
 let MERGED = 64
+// The most archetypes a page of absences alone merges. No presence bounds its
+// owners, which can be most of the table, so sorting them is never the
+// cheaper read: each arm costs one seek and its text in the statement.
+let SPREAD = 256
 
 // The archetypes wearing `comp`, where the catalog names them and a page may
 // read each one's owners from the entity table's number index: the unscoped

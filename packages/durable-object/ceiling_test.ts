@@ -43,6 +43,22 @@ test('a statement that reads far more than it returns is told once an hour', () 
   equal(told.length, 2)
 })
 
+test("a scan's report keeps its statement past a reader's screen", () => {
+  let told: (string | undefined)[] = []
+  let c = ceiling({
+    now: () => 0,
+    report: (_, { tags }) => told.push(tags.statement),
+  })
+  let screened = `select "eid" from (${'screen '.repeat(100)}) order by "id"`
+  c.count({
+    shape: () => screened,
+    rowsRead: 200_000,
+    rowsWritten: 0,
+    returned: 1,
+  })
+  equal(told, [screened])
+})
+
 let vocab = loadVocab({
   $defs: {
     effect: {
