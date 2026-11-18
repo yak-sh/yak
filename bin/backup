@@ -1,6 +1,9 @@
 #!/bin/sh
 # Back up the yak data dir (~/.yak or $YAK_DATA) to R2, keeping the newest
-# seven nights active there and older nights in trash, with nothing on the box.
+# seven nights active there and older nights in trash.
+# Bucket lifecycle expiry and multipart abort rules must be disabled: an old
+# snapshot cannot be regenerated from the changing live graph. Accepted parts
+# remain available for recovery after an interrupted transfer.
 #
 # A **night** is one run's prefix in the bucket, snapshots/<UTC time>/:
 #   yak.db.zst, tracker.db.zst  each database page for page, as one read
@@ -88,6 +91,7 @@ export RCLONE_CONFIG=/dev/null RCLONE_TRANSFERS=32 RCLONE_CONFIG_R2_TYPE=s3 \
   RCLONE_CONFIG_R2_PROVIDER=Cloudflare \
   RCLONE_CONFIG_R2_ENDPOINT=https://0f9613dfd3f0451df0bd0f12a1372ea3.r2.cloudflarestorage.com \
   RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true RCLONE_CONFIG_R2_CHUNK_SIZE=64M \
+  RCLONE_CONFIG_R2_LEAVE_PARTS_ON_ERROR=true \
   RCLONE_CONFIG_R2_ACCESS_KEY_ID="${YAK_BACKUP_R2_ACCESS_KEY_ID:-}" \
   RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="${YAK_BACKUP_R2_SECRET_ACCESS_KEY:-}"
 case "$remote" in
