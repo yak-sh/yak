@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
+import { type Trash, trashOrder, type TrashPage } from '@yaks/graph/trash'
 import { d1 } from '../../packages/d1/testing.ts'
 import type { Directory, Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -128,4 +129,72 @@ test('purging a deleted credential’s final saved version removes its retained 
     role: 'owner',
   })
   assertEquals(purges, [['gone']])
+})
+
+let paged = await setup()
+await paged.vault.seal('missing-history', {
+  handle: 'secret:missing',
+  value: 'private',
+})
+await paged.vault.drop('missing-history')
+let past: Trash[] = Array.from({ length: 25 }, (_, n) => ({
+  id: `saved-${n}`,
+  at: new Date(Date.UTC(2026, 10, 18, 0, 0, 25 - n)).toISOString(),
+  bundles: [{ entity: { eid: 'gone' }, secret: { name: `older-${n}` } }],
+}))
+past.push({
+  id: 'connection',
+  at: new Date(Date.UTC(2026, 10, 17)).toISOString(),
+  bundles: [
+    {
+      entity: { eid: 'gone' },
+      connection: { owner: 'space', integration: 'Newest' },
+    },
+    {
+      entity: { eid: 'personal' },
+      connection: { owner: 'person', integration: 'Personal' },
+    },
+    {
+      entity: { eid: 'moved' },
+      connection: { owner: 'space', integration: 'Moved' },
+    },
+  ],
+}, {
+  id: 'older-owner',
+  at: new Date(Date.UTC(2026, 10, 16)).toISOString(),
+  bundles: [{
+    entity: { eid: 'gone' },
+    connection: { owner: 'other', integration: 'Older' },
+  }],
+})
+let pages: { eids: string[]; page: TrashPage }[] = []
+let pagedDir = {
+  ...paged.dir,
+  trash: (eids: string[], page: TrashPage = {}) => {
+    pages.push({ eids, page })
+    return Promise.resolve(
+      past.filter((entry) =>
+        (!page.before || trashOrder(entry, page.before) > 0) &&
+        entry.bundles.some((b) => eids.includes(b.entity.eid))
+      ).slice(0, page.limit ?? 20),
+    )
+  },
+} as unknown as Directory
+
+test('credential ownership is recovered beyond the first twenty archived transactions', async () => {
+  let found = await retainedCredentials(
+    paged.env,
+    pagedDir,
+    paged.space,
+    'person',
+  )
+  assertEquals(found.map((one) => one.eid).sort(), ['gone', 'live', 'personal'])
+  assertEquals(found.find((one) => one.eid == 'gone')?.integration, 'Newest')
+  assertEquals(pages.length, 3)
+  assert(
+    pages.every(({ eids, page }) =>
+      !eids.includes('live') && !eids.includes('moved') && page.limit == 20
+    ),
+  )
+  assertEquals(pages[1].page.before, { id: past[19].id, at: past[19].at })
 })

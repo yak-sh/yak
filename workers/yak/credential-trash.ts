@@ -1,6 +1,7 @@
 // A retained credential is private vault data; the graph says whose it is.
 // Only its owner sees its metadata, restores it, or confirms a permanent purge.
 import type { Bundle, Comp } from '@yaks/graph'
+import type { TrashPage } from '@yaks/graph/trash'
 import type { Trashed } from '@yaks/secrets'
 import { line } from '@yaks/query'
 import type { Kind } from './confirm.ts'
@@ -30,18 +31,23 @@ export let retainedCredentials = async (
   let saved = await vaultOf(env).trash()
   let eids = [...new Set(saved.map((s) => s.eid))]
   if (!eids.length) return []
-  let [live, history] = await Promise.all([
-    dir.read(line`.entity.eid=${eids}&.connection&?secret`),
-    dir.trash(eids),
-  ])
+  let live = await dir.read(line`.entity.eid=${eids}&.connection&?secret`)
   let current = new Map(live.map((b) => [b.entity.eid, b]))
+  let missing = new Set(eids.filter((eid) => !current.has(eid)))
   let previous = new Map<string, Bundle>()
-  for (let entry of history) {
-    for (let b of entry.bundles) {
-      if (b.connection && !previous.has(b.entity.eid)) {
+  let before: TrashPage['before']
+  while (missing.size) {
+    let history = await dir.trash([...missing], { limit: 20, before })
+    if (!history.length) break
+    for (let entry of history) {
+      for (let b of entry.bundles) {
+        if (!b.connection || !missing.delete(b.entity.eid)) continue
         previous.set(b.entity.eid, b)
       }
     }
+    let last = history.at(-1)!
+    if (last.id == before?.id) break
+    before = { id: last.id, at: last.at }
   }
   return saved.flatMap((one) => {
     let row = current.get(one.eid) ?? previous.get(one.eid)
