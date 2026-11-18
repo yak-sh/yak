@@ -17,7 +17,14 @@ import {
 import { next } from '@yaks/wake'
 import { connector, fresh, letters, seed, unique } from './probe.ts'
 import { endpoints } from './endpoints.ts'
-import { doomed, erase } from './erase.ts'
+import { collected, doomed, erase, untrashSpace } from './erase.ts'
+import { GRACE } from './directory.ts'
+import { door, ticket } from './confirm.ts'
+import { managePath } from '@yaks/platform/routes'
+import { arrived } from './operator-texts.ts'
+import { appTexter } from './app-texts.ts'
+import { phoneOf } from './phones.ts'
+import { rang } from './operator-calls.ts'
 import { monthly } from './numbers.ts'
 import type { Env } from './env.ts'
 
@@ -32,6 +39,9 @@ let telnyx = endpoints(globalThis).open(async (req) => {
   let body = req.method == 'GET' || req.method == 'DELETE'
     ? {}
     : await req.json()
+  if (path == '/calls/retired/actions/reject') {
+    return Response.json({ data: {} })
+  }
   if (path == '/messaging_profiles') {
     return Response.json({ data: [{ id: 'profile-1' }] })
   }
@@ -106,7 +116,7 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
   let k = await fresh({}, (e) => {
     env = e
     Object.assign(e, {
-      PHONE_SENDER: { via: 'telnyx' },
+      PHONE_SENDER: { via: 'telnyx', number: '+18005550199' },
       TELNYX_API: telnyx.url,
       TELNYX_API_KEY: 'a-key',
     })
@@ -159,18 +169,106 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
       `texts for ${slug}/members`,
     )
 
-    // An agent only asks; the owner's press on the letter's page releases.
+    let space = (await k.dir.space(slug))!
+    let [owned] = await k.dir.lines(space)
+    let oldLink = door(
+      slug,
+      'number',
+      owned.eid,
+      await ticket('number', space, owned.eid, person, env.SESSION_SECRET!),
+    )
+    let post = (path: string, values: Record<string, string>) =>
+      k.at('yaks.app', path, {
+        method: 'POST',
+        headers: {
+          cookie,
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(values).toString(),
+      })
+    let trash = managePath('trash', slug)
+    let readTrash = async () =>
+      await (await k.at('yaks.app', trash, { headers: { cookie } })).text()
+    let cached = appTexter(env, () => FREE, () => space.eid)
+
+    assertStringIncludes(
+      await tool('number_release', { number: FREE }),
+      'is in the trash for 30 days',
+    )
+    assertEquals(held.size, 1)
+    assert((await k.dir.lines(space))[0].trashed)
+    assertStringIncludes(
+      await tool('number_status'),
+      'in the trash, 30 days left',
+    )
+    await assertRejects(() => tool('number_assign', { number: FREE }))
+    assertStringIncludes(await readTrash(), '(833) 555-0100')
+    assertStringIncludes(await readTrash(), '$1.00 a month')
+    await assertRejects(
+      () => cached.send({ to: '+12695550142', text: 'Queued before release' }),
+      Error,
+      'This phone number is in the trash.',
+    )
+    let phone = await phoneOf(env, { via: 'telnyx', number: FREE })
+    await assertRejects(
+      () => phone.send({ to: '+12695550142', text: 'Still held' }),
+      Error,
+      'This phone number is in the trash.',
+    )
+    let before = calls.length
+    for (let text of ['hello', 'STOP', 'HELP', 'START']) {
+      await arrived(env, {
+        via: 'telnyx',
+        rcs: false,
+        id: crypto.randomUUID(),
+        from: '+12695550142',
+        to: FREE,
+        text,
+        media: [],
+        at: new Date().toISOString(),
+      })
+    }
+    assertEquals(calls.length, before)
+    await rang(env, 'telnyx', {
+      id: 'retired',
+      from: '+12695550142',
+      to: FREE,
+      at: new Date().toISOString(),
+    })
+    assertEquals(calls.at(-1), 'POST /calls/retired/actions/reject')
+
+    // Restore keeps the number, assignment, verification and billing clock.
+    await post(trash, { restore_number: owned.eid })
+    assertEquals((await k.dir.lines(space))[0], owned)
+    assertEquals((await k.dir.lined(FREE))?.app.slug, 'members')
+    assertStringIncludes(await readTrash(), 'Trash is empty')
+    let early = `/space/${slug}/confirm/numbererase/${owned.eid}`
+    assertEquals((await post(early, { confirm: FREE })).status, 409)
+    assertEquals(held.size, 1)
+
+    // Links already in an inbox still trash rather than returning it early.
+    let old = new URL(oldLink)
+    assertStringIncludes(
+      await (await k.at('yaks.app', old.pathname + old.search, {
+        headers: { cookie },
+      })).text(),
+      'What stops until restored',
+    )
+    await post(old.pathname, { t: old.searchParams.get('t')! })
+    assert((await k.dir.lines(space))[0].trashed)
+    assertEquals(held.size, 1)
+
+    // Asking again mails the irreversible act, and only its press returns it.
     assertStringIncludes(
       await tool('number_release', { number: FREE }),
       'nothing has happened yet',
     )
-    assertEquals(held.size, 1)
     let mail = await until(
-      () => letters(k, email).findLast((l) => l.subject.includes('Release')),
-      { label: 'the release letter' },
+      () => letters(k, email).findLast((l) => l.subject.includes('Return')),
+      { label: 'the return letter' },
     )
     let page =
-      /https:\/\/yaks\.app(\/space\/\S+\/confirm\/number\/\S+)\?t=(\S+)/
+      /https:\/\/yaks\.app(\/space\/\S+\/confirm\/numbererase\/\S+)\?t=(\S+)/
         .exec(mail!.body)!
     assertStringIncludes(
       await (await k.at('yaks.app', page[1] + '?t=' + page[2], {
@@ -179,17 +277,26 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
       'What goes, for good',
     )
     assertEquals(held.size, 1)
-    let pressed = await k.at('yaks.app', page[1], {
-      method: 'POST',
-      headers: {
-        cookie,
-        'content-type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({ t: decodeURIComponent(page[2]) }).toString(),
-    })
+    assertEquals((await post(page[1], { confirm: 'wrong' })).status, 400)
+    let pressed = await post(page[1], { t: decodeURIComponent(page[2]) })
     assertStringIncludes(await pressed.text(), 'it costs nothing from now on')
     assertEquals(held.size, 0)
     assertEquals(await k.dir.lined(FREE), null)
+    await assertRejects(
+      () => cached.send({ to: '+12695550142', text: 'Returned' }),
+      Error,
+      'no longer assigned',
+    )
+    await arrived(env, {
+      via: 'telnyx',
+      rcs: false,
+      id: crypto.randomUUID(),
+      from: '+12695550142',
+      to: FREE,
+      text: 'HELP',
+      media: [],
+      at: new Date().toISOString(),
+    })
     assertStringIncludes(await tool('number_status'), 'holds no number')
     assertEquals(calls.filter((c) => !c.includes('messaging_profiles')), [
       'GET /available_phone_numbers',
@@ -200,6 +307,7 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
       'POST /messaging_tollfree/verification/requests',
       'GET /messaging_tollfree/verification/requests/tfv-1',
       'GET /messaging_tollfree/verification/requests/tfv-1',
+      'POST /calls/retired/actions/reject',
       'GET /phone_numbers',
       'DELETE /phone_numbers/number-1',
     ])
@@ -211,6 +319,7 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
     let wake = line.wake as { every: string; at: string }
     assertEquals(wake.every, monthly(new Date(bought)))
     assert(Date.parse(wake.at) - bought > 27 * 86_400_000)
+    await tool('number_release', { number: FREE })
     await k.dir.stamp({
       entities: [{
         entity: line.entity,
@@ -226,15 +335,55 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
       next(wake.every, Date.now()),
     )
 
-    // Erasing the space gives the number back, and its row goes with it.
-    let space = (await k.dir.space(slug))!
+    let mark = (await k.dir.lines(space))[0].trashed!
+    let trashed = Date.parse(mark.at)
+    await collected(env, new Date(trashed + GRACE - 1))
+    assertEquals(held.size, 1)
+    await collected(env, new Date(trashed + GRACE))
+    assertEquals(held.size, 0)
+    assertEquals(await k.dir.lines(space), [])
+
+    // Space erasure also honors grace, preserving its ownership and budget.
+    await tool('number_buy', { number: FREE })
+    await tool('number_assign', { number: FREE })
+    space = (await k.dir.space(slug))!
+    let out = await erase(env, k.dir, await doomed(k.dir, space), {
+      person,
+      role: 'owner',
+    })
+    assert(out.trashed)
+    assertEquals(held.size, 1)
+    space = (await k.dir.space(slug))!
+    assert(space.trashed)
+    let count = calls.length
+    await arrived(env, {
+      via: 'telnyx',
+      rcs: false,
+      id: crypto.randomUUID(),
+      from: '+12695550142',
+      to: FREE,
+      text: 'HELP',
+      media: [],
+      at: new Date().toISOString(),
+    })
+    assertEquals(calls.length, count)
+    // A space restore recovers its still held line as well.
+    await untrashSpace(env, k.dir, space, { person, role: 'owner' })
+    assertEquals((await k.dir.textSpace(FREE))?.eid, space.eid)
+    space = (await k.dir.space(slug))!
     await erase(env, k.dir, await doomed(k.dir, space), {
       person,
       role: 'owner',
     })
+    space = (await k.dir.space(slug))!
+    let deadline = Date.parse(space.trashed!.at) + GRACE
+    await collected(env, new Date(deadline - 1))
+    assertEquals(held.size, 1)
+    await collected(env, new Date(deadline))
     assertEquals(held.size, 0)
     assertEquals(calls.at(-1), 'DELETE /phone_numbers/number-1')
     assertEquals(await k.dir.read(q`.phone_line.number=${FREE}`), [])
+    assertEquals(await k.dir.at(space.eid), null)
   } finally {
     await k.stop()
     await telnyx.stop()

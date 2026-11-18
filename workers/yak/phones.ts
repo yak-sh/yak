@@ -4,7 +4,8 @@
 // Worker's environment at its use. Nothing here names a provider: the
 // Operator's texts and calls, an app's texts and the sign-up texts all go
 // through the phone a name selects.
-import type { Transport } from '@yaks/phone'
+import { Blocked, type Transport } from '@yaks/phone'
+import { directoryOf } from './directory.ts'
 import type { Phone } from '@yaks/phone/plugin'
 import { phoneConfig } from './config.ts'
 import type { Env } from './env.ts'
@@ -50,8 +51,34 @@ export let phoneAt = async (
   let phone = via ? await phoneNamed(env, via) : undefined
   if (!phone) return undefined
   let { via: _, ...more } = { ...base?.via == via ? base : {}, ...chosen }
-  return phone.over(more)
+  return guarded(
+    env,
+    phone.over(more),
+    phone.over(base && base.via == via ? base : {}),
+  )
 }
+
+// Every outgoing text, including queued work with an old assignment, asks
+// the present trash state at the generic phone boundary.
+let guarded = (env: Env, phone: Phone, platform: Phone): Phone => ({
+  ...phone,
+  over: (more) => guarded(env, phone.over(more), platform),
+  send: async (text) => {
+    let number = text.from ?? await phone.from()
+    let dir = directoryOf(env.STORE)
+    let held = number ? await dir.heldLine(number) : null
+    if (held?.line.trashed || held?.space.trashed) {
+      throw new Blocked('This phone number is in the trash.')
+    }
+    if (
+      number && !held && number != await platform.from() &&
+      !await dir.textSpace(number) && !await dir.lined(number)
+    ) {
+      throw new Blocked('This phone number is no longer assigned.')
+    }
+    return await phone.send(text)
+  },
+})
 
 /** {@link phoneAt}, which a text cannot go without. */
 export let phoneOf = async (env: Env, chosen?: Transport): Promise<Phone> => {

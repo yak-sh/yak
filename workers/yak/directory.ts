@@ -552,6 +552,7 @@ export type PhoneLine = {
   monthly: number
   at: string
   verification: string | null
+  trashed: Trashed | null
 }
 
 export type Host = {
@@ -1267,6 +1268,21 @@ let trashedOf = (r: Row) =>
   r.trashed
     ? { at: r.trashed.at ?? '', by: r.trashed.by ? idOf(r.trashed.by) : '' }
     : null
+
+let lineOf = (r: Row): PhoneLine => {
+  let l = r.phone_line!
+  return {
+    eid: r.entity.eid,
+    number: l.number,
+    via: l.via,
+    space: idOf(l.space),
+    upfront: l.upfront ?? 0,
+    monthly: l.monthly ?? 0,
+    at: l.at ?? '',
+    verification: l.verification ?? null,
+    trashed: trashedOf(r),
+  }
+}
 
 /** One person who signed up through another's invite (referral.ts): who
  * invited whom and when, and the month it gave once they built an app. */
@@ -3555,20 +3571,17 @@ export let directoryRows = (rows: {
     },
     // The numbers the platform holds for this space (numbers.ts).
     lines: async (space: Space): Promise<PhoneLine[]> =>
-      (await query(line`.phone_line.space=${space.eid}`)).map((row) => {
-        let r = row as unknown as Row
-        let l = r.phone_line!
-        return {
-          eid: r.entity.eid,
-          number: l.number,
-          via: l.via,
-          space: idOf(l.space),
-          upfront: l.upfront ?? 0,
-          monthly: l.monthly ?? 0,
-          at: l.at ?? '',
-          verification: l.verification ?? null,
-        }
-      }),
+      (await query(line`.phone_line.space=${space.eid} ?trashed`)).map(lineOf),
+    // A held number, including its trash state, wherever it was assigned.
+    heldLine: async (
+      number: string,
+    ): Promise<{ space: Space; line: PhoneLine } | null> => {
+      let row = await one(line`.phone_line.number=${number} ?trashed`)
+      if (!row?.phone_line) return null
+      let held = lineOf(row)
+      let space = await self.at(held.space)
+      return space ? { space, line: held } : null
+    },
     // The app whose own number this is (an app row's `phone{number}`), with
     // its space: where a text that arrived at it is kept (app-texts.ts).
     lined: async (number: string) => {

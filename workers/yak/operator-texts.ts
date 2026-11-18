@@ -249,6 +249,8 @@ export let arrived = async (
 ) => {
   if (echo(arrival)) return
   let dir = directoryOf(env.STORE)
+  let held = arrival.rcs ? null : await dir.heldLine(arrival.to)
+  if (held && (held.line.trashed || held.space.trashed)) return
   let line = arrival.rcs ? null : await dir.lined(arrival.to)
   if (line) {
     let { appArrived } = await import('./app-texts.ts')
@@ -259,6 +261,8 @@ export let arrived = async (
     let { spaceArrived } = await import('./operator-signup.ts')
     return await spaceArrived(env, own, arrival)
   }
+  // An unassigned or returned number is not the platform's inbox.
+  if (!arrival.rcs && arrival.to != await (await phoneOf(env)).from()) return
   let person: string | null = await dir.phoned(arrival.from)
   let word = keyword(arrival.text)
   let as = (person: string) => ({ 'x-yak-person': person })

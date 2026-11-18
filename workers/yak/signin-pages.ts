@@ -377,6 +377,7 @@ export let askConfirm = (at: {
   until: string
   typed: string
   press: string
+  reversible?: boolean
   lines: string[]
   token?: string | null
   stop?: string
@@ -388,7 +389,11 @@ export let askConfirm = (at: {
     {
       title: at.title,
       lead: at.stop ?? at.why ??
-        `This cannot be undone. ${at.until} Nothing changes until you press ` +
+        `${
+            at.reversible
+              ? 'It can be restored from the trash within 30 days.'
+              : 'This cannot be undone.'
+          } ${at.until} Nothing changes until you press ` +
           'the button.',
       status: at.status ?? 200,
     },
@@ -396,7 +401,9 @@ export let askConfirm = (at: {
       ? h(
         Card,
         null,
-        heading('What goes, for good'),
+        heading(
+          at.reversible ? 'What stops until restored' : 'What goes, for good',
+        ),
         h(
           'ol',
           { class: 'Card_List' },

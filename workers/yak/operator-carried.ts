@@ -22,7 +22,7 @@
 import { ours, refusal } from '@yaks/hook'
 import { mobile } from '@yaks/phone/mobile'
 import { accept, hangup, type Provider, reject, talk } from '@yaks/speech'
-import type { Space } from './directory.ts'
+import { directoryOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { defect } from './defects.ts'
 import { phoneAt } from './phones.ts'
@@ -92,6 +92,12 @@ export let carriedDoor = async (
   }
   let rang = lined(provider)!.calls!.rang(JSON.parse(raw))
   if (!rang) return new Response(null, { status: 204 })
+  let to = numberIn(rang.headers.to)
+  let held = to ? await directoryOf(env.STORE).heldLine(to) : null
+  if (held?.line.trashed || held?.space.trashed) {
+    await reject({ ...speech, call: rang.id })
+    return new Response(null, { status: 204 })
+  }
   let from = numberIn(rang.headers.from)
   let who = from ? await reached(env, { from }, provider) : null
   let phone = await phoneAt(env)

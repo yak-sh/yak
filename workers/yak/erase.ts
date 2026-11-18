@@ -301,9 +301,9 @@ export let naming = (d: Doomed, env: HostEnv = {}): string[] => [
   ),
   ...d.hosts.map((h) => `${h.name} stops serving and is given back`),
   ...d.lines.map((l) =>
-    `${shown(l.number)} is released and stops costing ${
+    `${shown(l.number)} stops taking calls and texts; it costs ${
       dollars(l.monthly)
-    } a month`
+    } a month until its 30-day trash grace ends, then returns to the phone company`
   ),
   ...(d.members.length > 1
     ? [
@@ -458,9 +458,19 @@ export let erase = async (
   dir: Directory,
   d: Doomed,
   who: Who,
+  now = Date.now(),
 ) => {
   let no = await refused(d.space, env)
   if (no) throw refuse('access', no)
+  // A number stays recoverable for its own grace or the space's grace.
+  // Keep the space too: its ownership and budget still belong to these lines.
+  if (
+    d.lines.some((l) => !l.trashed || !due(l.trashed, now)) &&
+    !(d.space.trashed && due(d.space.trashed, now))
+  ) {
+    if (!d.space.trashed) await trashSpace(env, dir, d.space, who)
+    return { files: 0, apps: 0, hosts: 0, trashed: true }
+  }
   // Cloudflare before anything else, and only if it can be reached: a domain
   // whose row we buried and whose custom hostname we did not is a billable
   // hostname nothing here remembers (T-33038 domain_detach holds the same
@@ -516,17 +526,19 @@ export let erase = async (
 // both say back.
 export let went = (
   d: Doomed,
-  out: { files: number; apps: number; hosts: number },
+  out: { files: number; apps: number; hosts: number; trashed?: boolean },
   env: HostEnv = {},
 ) =>
-  `${d.space.slug}.${apex(env)} is gone: ${out.apps} ${
-    out.apps == 1 ? 'app' : 'apps'
-  }, ${out.files} ${out.files == 1 ? 'file' : 'files'}, everything they ` +
-  `saved${
-    out.hosts
-      ? `, ${out.hosts} ${out.hosts == 1 ? 'domain' : 'domains'} given back`
-      : ''
-  }. The address is free for somebody else to take.`
+  out.trashed
+    ? kept(d, env)
+    : `${d.space.slug}.${apex(env)} is gone: ${out.apps} ${
+      out.apps == 1 ? 'app' : 'apps'
+    }, ${out.files} ${out.files == 1 ? 'file' : 'files'}, everything they ` +
+      `saved${
+        out.hosts
+          ? `, ${out.hosts} ${out.hosts == 1 ? 'domain' : 'domains'} given back`
+          : ''
+      }. The address is free for somebody else to take.`
 
 // ---- the trash: deleted, and brought back (T-34430, T-34431) ----
 //
@@ -587,6 +599,17 @@ let mark = (
   dir.stamp({
     entities: [{ entity: { eid }, trashed }, ...declarations],
   }, vouched(who))
+
+/** A released number uses the same trash mark and sweep as apps. */
+export let trashNumber = (
+  dir: Directory,
+  line: PhoneLine,
+  who: Who,
+) => line.trashed ? Promise.resolve() : mark(dir, line.eid, who, {})
+
+/** Restore the held number at its retained assignment. */
+export let untrashNumber = (dir: Directory, line: PhoneLine, who: Who) =>
+  mark(dir, line.eid, who, null)
 
 // A use must outlive its home. Prepare replacement declarations before the
 // home leaves reach, then select them beside the delete in one directory
@@ -934,21 +957,28 @@ export let collected = async (
         !await refused(space, env) && await nobodys(dir, d) &&
         !d.apps.some((a) => a.published)
       ) {
-        await erase(env, dir, d, {
+        let out = await erase(env, dir, d, {
           person: d.members[0]?.person ?? null,
           role: 'owner',
-        })
-        gone++
-        continue
+        }, now.getTime())
+        if (!out.trashed) {
+          gone++
+          continue
+        }
       }
     }
     if (sweepable && space.trashed && due(space.trashed, now.getTime())) {
       await erase(env, dir, await doomed(dir, space), {
         person: space.trashed.by,
         role: 'owner',
-      })
+      }, now.getTime())
       gone++
       continue
+    }
+    for (let line of overdue(await dir.lines(space), now.getTime())) {
+      if (spent()) return more()
+      await released(env, line)
+      gone++
     }
     let apps = await dir.apps(space)
     await retitled(dir, [space, ...apps])
@@ -1013,6 +1043,8 @@ export let collected = async (
 // seat. A person's own account is never closed here, and neither is a fixture.
 export type Closing = {
   person: string
+  /** Its last space is still waiting out a held number's trash grace. */
+  pending?: boolean
   /** The account as it was named: its address, or its eid. */
   address: string
   spaces: Space[]
@@ -1089,9 +1121,14 @@ export let closed = async (
 ) => {
   let c = await closing(env, dir, address)
   if (!c) return null
+  let keeping = false
   for (let space of c.spaces) {
-    await erase(env, dir, await doomed(dir, space), who)
+    let out = await erase(env, dir, await doomed(dir, space), who)
+    keeping ||= !!out.trashed
   }
+  // A held line's grace keeps its last owner's way back into the space.
+  // The account sweep finishes closing once those spaces are erased.
+  if (keeping) return { ...c, pending: true }
   if (c.heirs.length) {
     await dir.stamp({
       entities: c.heirs.map(({ seat }) => ({

@@ -51,7 +51,9 @@ import { LOGO, logoBytes, logoed } from './logo.ts'
 import { again } from './invite.ts'
 import { peopleIn } from './people.ts'
 import { CallError } from '@yaks/tools/errors'
-import { untrash } from './erase.ts'
+import { untrash, untrashNumber } from './erase.ts'
+import { dollars } from './numbers.ts'
+import { shown } from '@yaks/phone'
 import {
   type AccountView,
   accountView,
@@ -632,6 +634,7 @@ let desk = async (
     provider,
     made,
     collapsed,
+    lines,
   ] = await Promise.all([
     shelved,
     // What is broken in each app (unseen.ts `brokenIn`), read only for the
@@ -707,6 +710,7 @@ let desk = async (
       : undefined,
     // How the person keeps the side (`desk_sidebar{collapsed}`).
     dir.collapsed(owner),
+    dir.lines(space),
   ])
   let known = await inHand(agents)
   let page = deskPage({
@@ -733,6 +737,12 @@ let desk = async (
       slug: a.slug,
       title: a.title,
       days: daysLeft(a.trashed!),
+    })),
+    numbers: lines.filter((l) => l.trashed).map((l) => ({
+      eid: l.eid,
+      number: shown(l.number),
+      monthly: dollars(l.monthly),
+      days: daysLeft(l.trashed!),
     })),
     // Where the space stands with selling (sell.ts, T-34524), and only where
     // the platform's payment provider can be asked at all, since a button
@@ -1115,6 +1125,13 @@ let saved = async (
   if (back) {
     let app = await dir.binned(space, back)
     if (app?.trashed) await untrash(env, dir, space, app, who)
+    return redirect(sentFrom(req, env).href, 303)
+  }
+  let number = String(form.get('restore_number') ?? '').trim()
+  if (number) {
+    if (who.role != 'owner') return nothingHere(env)
+    let line = (await dir.lines(space)).find((l) => l.eid == number)
+    if (line?.trashed) await untrashNumber(dir, line, who)
     return redirect(sentFrom(req, env).href, 303)
   }
   // The selling block's button (sell.ts, T-34524). Its own form and its own

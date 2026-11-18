@@ -771,52 +771,83 @@ let selling = (at: DeskPage, env: Host) => {
   ]
 }
 
-let trash = (at: DeskPage) =>
-  at.trash?.length
-    ? h(
-      Card,
-      null,
-      heading('Deleted apps'),
-      h(
-        Card.Sub,
-        null,
-        'Each is kept for 30 days, then erased for good. Restoring one brings back everything it held, at its old address if free or a numbered address otherwise.',
-      ),
-      h(
-        Rows,
-        { as: 'ul' },
-        at.trash.map((a) =>
-          h(
-            Rows.Item,
-            { as: 'li' },
-            h(
-              Rows.Main,
-              null,
-              h(Rows.Name, { as: 'span' }, a.title || a.slug),
-              h(
-                Rows.Meta,
-                null,
-                `${a.days} ${a.days == 1 ? 'day' : 'days'} left`,
-              ),
-            ),
-            h(
-              Rows.Actions,
-              {
-                as: 'form',
-                method: 'post',
-                action: managePath('trash', at.space),
-              },
-              held('restore', a.eid),
-              h(Button, { type: 'submit' }, 'Restore'),
-            ),
-          )
-        ),
-      ),
-    )
-    : empty(
+let trash = (at: DeskPage, env: Host) => {
+  let apps = at.trash ?? []
+  let numbers = at.numbers ?? []
+  if (!apps.length && !numbers.length) {
+    return empty(
       'Trash is empty',
-      h('p', null, 'A deleted app waits here for 30 days.'),
+      h(
+        'p',
+        null,
+        'Deleted apps and released phone numbers wait here for 30 days.',
+      ),
     )
+  }
+  return h(
+    Card,
+    null,
+    heading('Trash'),
+    h(
+      Card.Sub,
+      null,
+      'Apps and phone numbers are kept for 30 days. Numbers stop taking calls and texts, and still cost their monthly price until returned to the phone company. Restoring a number brings back its assignment.',
+    ),
+    h(
+      Rows,
+      { as: 'ul' },
+      ...apps.map((a) =>
+        trashRow(at, a.eid, a.title || a.slug, a.days, 'restore')
+      ),
+      ...numbers.map((l) =>
+        trashRow(
+          at,
+          l.eid,
+          l.number,
+          l.days,
+          'restore_number',
+          `${l.monthly} a month`,
+          `https://${apex(env)}/space/${at.space}/confirm/numbererase/${l.eid}`,
+        )
+      ),
+    ),
+  )
+}
+
+let trashRow = (
+  at: DeskPage,
+  eid: string,
+  name: string,
+  days: number,
+  field: string,
+  price = '',
+  erase?: string,
+) =>
+  h(
+    Rows.Item,
+    { as: 'li' },
+    h(
+      Rows.Main,
+      null,
+      h(Rows.Name, { as: 'span' }, name),
+      h(
+        Rows.Meta,
+        null,
+        `${days} ${days == 1 ? 'day' : 'days'} left${
+          price ? ` · ${price}` : ''
+        }`,
+      ),
+    ),
+    h(
+      Rows.Actions,
+      { as: 'form', method: 'post', action: managePath('trash', at.space) },
+      held(field, eid),
+      h(Button, { type: 'submit' }, 'Restore'),
+      erase
+        ? h(Button, { as: 'a', href: erase, quiet: true }, 'Return forever…')
+        : null,
+    ),
+  )
 
 // How a connection stands, as its head says it.
 let STATUS = {
@@ -2030,7 +2061,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
       billing(),
     ]
   }
-  if (view == 'trash') body = trash(at)
+  if (view == 'trash') body = trash(at, env)
   if (view == 'connections') body = connections(at, env)
   if (view == 'people') body = people(at)
   // The Operator's page is drawn by operator-page.ts, as markup.

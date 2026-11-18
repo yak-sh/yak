@@ -116,10 +116,13 @@ let account = async (
   if (!at) {
     return json(404, 'no_account', `no account is ${address || '(nothing)'}`)
   }
-  if (req.method == 'DELETE') await closed(env, dir, address, who)
+  let result = req.method == 'DELETE'
+    ? await closed(env, dir, address, who)
+    : null
   return Response.json({
     address,
-    erased: req.method == 'DELETE',
+    erased: req.method == 'DELETE' && !result?.pending,
+    ...(result?.pending ? { pending: true } : {}),
     spaces: at.spaces.map((s) => s.slug),
     seats: at.seats.map((s) => s.slug),
   }, { headers: { 'cache-control': 'private, no-store' } })

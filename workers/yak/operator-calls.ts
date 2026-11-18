@@ -208,6 +208,11 @@ export let opening = (
  * Operator's, and is left to ring.
  */
 export let rang = async (env: Env, via: string, ring: Ring) => {
+  let held = await directoryOf(env.STORE).heldLine(ring.to)
+  if (held?.line.trashed || held?.space.trashed) {
+    let phone = await phoneAt(env, { via })
+    return await phone?.caller?.().reject(ring.id)
+  }
   let phone = await phoneAt(env)
   let options = phone?.transport()
   if (options?.via != via || !phone?.caller) return

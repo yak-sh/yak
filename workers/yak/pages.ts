@@ -845,6 +845,7 @@ export type DeskPage = {
   /** what each writer those stamps name is called (stamps.ts `writers`) */
   writers?: Writers
   trash?: { eid: string; slug: string; title: string; days: number }[]
+  numbers?: { eid: string; number: string; monthly: string; days: number }[]
   name?: string
   email?: string
   sessions?: import('./browser-sessions.ts').BrowserSession[]

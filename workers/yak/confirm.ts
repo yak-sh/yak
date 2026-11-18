@@ -33,6 +33,8 @@ export let LIFE = 60 * 60_000
 export type Kind<T> = {
   /** The name its door and ticket carry. */
   kind: string
+  /** Whether this press keeps the target recoverable in the trash. */
+  reversible?: boolean
   /** The target, if this space still holds it. */
   find: (dir: Directory, space: Space, target: string) => Promise<T | null>
   /** What the person types back when they came without the ticket. */
@@ -135,7 +137,11 @@ link, and it only works for the next hour:
 
 ${link}
 
-It cannot be undone. It destroys:
+${
+    k.reversible
+      ? 'It can be restored from the trash within 30 days. What stops:'
+      : 'It cannot be undone. It destroys:'
+  }
 
 ${bullets(k.lines(space, t, env))}
 

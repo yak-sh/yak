@@ -1,0 +1,69 @@
+// The phone number's two confirmation acts: recoverable release, including
+// links already mailed, and the owner's early return to the phone company.
+// Marks, restore and expiry are the shared app/space trash in erase.ts.
+import { shown } from '@yaks/phone'
+import { type Kind } from './confirm.ts'
+import { daysLeft, type Directory, type PhoneLine } from './directory.ts'
+import { trashNumber } from './erase.ts'
+import { dollars, released } from './numbers.ts'
+import type { Who } from './session.ts'
+
+/** Keep its assignment for an exact restore; phone boundaries read the mark. */
+export let binnedNumber = async (
+  dir: Directory,
+  line: PhoneLine,
+  who: Who,
+) => {
+  await trashNumber(dir, line, who)
+  return `${shown(line.number)} is in the trash for 30 days. It stops taking ` +
+    `calls and texts and still costs ${dollars(line.monthly)} a month. ` +
+    'Restore it on the manage page to bring its assignment back. ' +
+    'After 30 days it returns to the phone company.'
+}
+
+// Keep the number door carried by existing letters: its press puts a number
+// in the trash. Returning one early is a separate act on the same page.
+export let heldNumber: Kind<PhoneLine> = {
+  kind: 'number',
+  reversible: true,
+  find: async (dir, space, eid) =>
+    (await dir.lines(space)).find((l) => l.eid == eid) ?? null,
+  typed: (l) => l.number,
+  title: (l) => `Release ${shown(l.number)} to the trash?`,
+  until: () => 'The number is still held by the space.',
+  lines: (_space, l) => [
+    `${
+      shown(l.number)
+    } stops taking calls and texts and waits in the trash for 30 days`,
+    `it still costs ${
+      dollars(l.monthly)
+    } a month until returned to the phone company`,
+  ],
+  press: (l) => `Move ${shown(l.number)} to trash`,
+  act: async (_env, dir, _space, l, who) => await binnedNumber(dir, l, who),
+}
+
+export let trashedNumber: Kind<PhoneLine> = {
+  ...heldNumber,
+  kind: 'numbererase',
+  reversible: false,
+  title: (l) => `Return ${shown(l.number)} for good?`,
+  until: (l) =>
+    `It is in the trash, with ${
+      l.trashed ? daysLeft(l.trashed) : 30
+    } days left to restore it. It still costs ${dollars(l.monthly)} a month.`,
+  stop: (l) => l.trashed ? '' : 'Release the number to the trash first.',
+  lines: (_space, l) => [
+    `${
+      shown(l.number)
+    }, given back to the phone company, which may never sell it to you again`,
+    'the chance to restore it from the trash',
+  ],
+  press: (l) => `Return ${shown(l.number)} forever`,
+  act: async (env, _dir, _space, l) => {
+    await released(env, l)
+    return `${
+      shown(l.number)
+    } is returned to the phone company: it costs nothing from now on.`
+  },
+}

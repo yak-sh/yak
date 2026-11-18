@@ -265,6 +265,32 @@ let accounts = async () => {
   return { scenario, env, dir, ask, PROBE, GUEST }
 }
 
+test('closing a test account keeps its ownership while a number waits in the trash', async () => {
+  let { scenario, env, dir, ask, PROBE } = await accounts()
+  await using _ = scenario
+  let space = (await dir.space('probe'))!
+  await stamp(env, {
+    entities: [{
+      entity: { eid: crypto.randomUUID() },
+      phone_line: {
+        number: '+18335550100',
+        via: 'telnyx',
+        space: space.eid,
+        monthly: 1,
+      },
+    }],
+  })
+  let answer = await ask(JEFF, 'probe@bot.yak.sh')
+  assertEquals(answer.body.erased, false)
+  assertEquals(answer.body.pending, true)
+  assertEquals(await dir.emailAt(PROBE), 'probe@bot.yak.sh')
+  assertEquals(await dir.owners(space), [PROBE])
+  let marked = (await dir.at(space.eid))!.trashed
+  assertEquals(!!marked, true)
+  await ask(JEFF, 'probe@bot.yak.sh')
+  assertEquals((await dir.at(space.eid))!.trashed, marked)
+})
+
 test('erasing a test account takes its spaces, seats and grants, and keeps the rest', async () => {
   let { scenario, dir, ask, PROBE, GUEST } = await accounts()
   await using _ = scenario

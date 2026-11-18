@@ -15,9 +15,16 @@
 import { type Numbers, shown, type TollFree } from '@yaks/phone'
 import { ModelError } from '@yaks/model'
 import { next } from '@yaks/wake'
-import type { App, Directory, PhoneLine, Space } from './directory.ts'
-import { type Kind, requested } from './confirm.ts'
-import { stamp } from './directory.ts'
+import {
+  type App,
+  daysLeft,
+  type Directory,
+  directoryOf,
+  type PhoneLine,
+  type Space,
+  stamp,
+} from './directory.ts'
+import { requested } from './confirm.ts'
 import type { Env } from './env.ts'
 import { onHold } from './model-spend.ts'
 import { phoneAt } from './phones.ts'
@@ -34,6 +41,8 @@ import {
   text,
 } from './tool.ts'
 import { type Row } from './tool-words.ts'
+import { binnedNumber, trashedNumber } from './number-trash.ts'
+export { heldNumber, trashedNumber } from './number-trash.ts'
 
 /** Who files a space's toll-free verification for it: the platform, as the
  * reseller carriers ask about. */
@@ -74,17 +83,24 @@ let numbersOf = async (
  * buried: it costs nothing from then on. */
 export let released = async (env: Env, line: PhoneLine) => {
   await (await numbersOf(env, { via: line.via })).numbers.release(line.number)
+  await unworn(env, directoryOf(env.STORE), line.number)
   await stamp(env, { entities: [{ entity: { eid: line.eid }, tombstone: {} }] })
 }
 
 // A number the space holds, by the number the call names.
-let heldBy = async (ctx: Ctx, space: Space, args: Args) => {
+let heldBy = async (ctx: Ctx, space: Space, args: Args, trash = false) => {
   let number = text(args.number, 'number')
   let line = (await ctx.dir.lines(space)).find((l) => l.number == number)
   if (!line) {
     throw refuse(
       'missing',
       `${space.slug} holds no number ${number}; number_status lists the ones it does`,
+    )
+  }
+  if (line.trashed && !trash) {
+    throw refuse(
+      'conflict',
+      `${number} is in the trash; restore it on the manage page first`,
     )
   }
   return line
@@ -101,31 +117,6 @@ let unworn = async (env: Env, dir: Directory, number: string) => {
       entities: [{ entity: { eid: on.eid }, phone: null }],
     })
   }
-}
-
-// Releasing a number, as its space's owner confirms it (confirm.ts): the
-// provider may never sell it back, so number_release only asks.
-export let heldNumber: Kind<PhoneLine> = {
-  kind: 'number',
-  find: async (dir, space, eid) =>
-    (await dir.lines(space)).find((l) => l.eid == eid) ?? null,
-  typed: (l) => l.number,
-  title: (l) => `Release ${shown(l.number)}?`,
-  until: () =>
-    'The number is still yours: texts to it still arrive, and it costs ' +
-    'what it did.',
-  lines: (_space, l) => [
-    `${shown(l.number)}, given back to the phone company, which may never ` +
-    'sell it to you again',
-    'every text sent to it from then on',
-  ],
-  press: (l) => `Release ${shown(l.number)}`,
-  act: async (env, dir, _space, l) => {
-    await unworn(env, dir, l.number)
-    await released(env, l)
-    return `${shown(l.number)} is released: it costs nothing from now on, ` +
-      'and texts to it no longer arrive.'
-  },
 }
 
 let where = (space: Space, apps: App[], number: string) => {
@@ -378,8 +369,7 @@ export let numberTools: Row[] = [
     },
   },
   {
-    // The provider may never sell a released number back, so the agent
-    // only asks, and the owner's press releases it (`heldNumber`).
+    // Reversible release first; only a person's confirmation returns it early.
     name: 'number_release',
     destructive: false,
     input: {
@@ -388,18 +378,20 @@ export let numberTools: Row[] = [
       required: ['number'],
     },
     run: async (ctx, args) => {
-      let { space } = await owns(ctx, args)
-      let line = await heldBy(ctx, space, args)
+      let { space, who } = await owns(ctx, args)
+      let line = await heldBy(ctx, space, args, true)
       return {
-        text: await requested(
-          ctx.env,
-          ctx.dir,
-          space,
-          ctx.person,
-          heldNumber,
-          line.eid,
-          line,
-        ),
+        text: line.trashed
+          ? await requested(
+            ctx.env,
+            ctx.dir,
+            space,
+            ctx.person,
+            trashedNumber,
+            line.eid,
+            line,
+          )
+          : await binnedNumber(ctx.dir, line, who),
         space,
       }
     },
@@ -520,7 +512,7 @@ export let numberTools: Row[] = [
       let { space } = await inSpace(ctx, args)
       let lines = args.number == null
         ? await ctx.dir.lines(space)
-        : [await heldBy(ctx, space, args)]
+        : [await heldBy(ctx, space, args, true)]
       if (!lines.length) {
         return {
           text: `${space.slug} holds no number of its own; number_find lists ` +
@@ -531,6 +523,16 @@ export let numberTools: Row[] = [
       let apps = await ctx.dir.apps(space)
       let said = []
       for (let line of lines) {
+        if (line.trashed) {
+          said.push(
+            `${shown(line.number)} — in the trash, ${
+              daysLeft(line.trashed)
+            } days left; ${
+              dollars(line.monthly)
+            } a month; restore it on the manage page`,
+          )
+          continue
+        }
         let state = 'no toll-free verification filed'
         if (line.verification) {
           let v = await (await numbersOf(ctx.env, space.sender)).numbers

@@ -674,7 +674,7 @@ export let WORDS: Record<string, Words> = {
       'done': 'Bought %{number}',
     },
     'description':
-      "Buy a number number_find offered, for the space to hold. Its price up front and its first month are spent from the space's monthly budget at once, and each later month its monthly price is spent on the day of the month it was bought, until number_release gives it back or the space is erased. Only the space owner may buy; tell the person both prices before buying. A bought number texts nothing until number_assign puts it on the space or one of its apps, and a toll-free number reaches people only once its toll-free verification (number_verify) is approved.",
+      "Buy a number number_find offered, for the space to hold. Its price up front and its first month are spent from the space's monthly budget at once, and each later month its monthly price is spent on the day of the month it was bought, including its 30 days in the trash, until it is returned to the provider. Only the space owner may buy; tell the person both prices before buying. A bought number texts nothing until number_assign puts it on the space or one of its apps, and a toll-free number reaches people only once its toll-free verification (number_verify) is approved.",
   },
   'number_assign': {
     'title': 'Assign a phone number',
@@ -686,13 +686,13 @@ export let WORDS: Record<string, Words> = {
       "Put a number the space holds on the space, so its Operator texts from it and texts to it reach the Operator, or on one of its apps (app), so the app's texts go from it and replies reach the app's store. It moves off wherever it was before. Texts still go only to people who agreed to them. Only the space owner may assign.",
   },
   'number_release': {
-    'title': 'Ask to release a phone number',
+    'title': 'Release a phone number',
     'step': {
-      'doing': 'Asking to release %{number}…',
-      'done': 'Asked to release %{number}',
+      'doing': 'Releasing %{number}…',
+      'done': 'Released %{number}',
     },
     'description':
-      "Ask for a number to be given back to the provider. This tool releases nothing: it emails the space's owner a link, valid for one hour, and only their press on that page releases it. Then it stops costing anything, texts to it stop arriving, whatever texted from it goes back to texting from yaks.app's number, and it may never be bought back. Use it only when the person asked for exactly that. Until they press it, the number is theirs and works as before. Only the space owner may ask.",
+      "Move a number to the space's trash for 30 days. It stops taking calls and texts, and the space keeps paying its monthly price. Restore it on the manage page to bring back its assignment. After 30 days the sweep returns it to the provider. Calling this again for a trashed number emails the owner a confirmation link, valid for one hour, to return it sooner; only their press on that page returns it. A returned number may never be bought back. Only the space owner may release.",
   },
   'number_verify': {
     'title': 'Verify a toll-free number',

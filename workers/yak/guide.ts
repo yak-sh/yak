@@ -427,6 +427,14 @@ same way: app_delete puts it in the trash for 30 days, keeping everything,
 and app_restore takes it back out — and a whole space the same, with
 space_restore.
 
+Phone numbers use the same 30-day trash: number_release stops calls and texts,
+but the space keeps paying the monthly price until the sweep returns the
+number to the phone company. Restore it beside deleted apps on the manage
+page's Trash tab to bring back its assignment.
+Calling number_release for an already trashed number asks the owner by email
+to confirm returning it sooner, on the same confirmation page. A space with
+held numbers waits in the trash before its permanent erasure too.
+
 Nothing here is lost by a simple mistake: every file write keeps what it
 replaced (app_files op history and op restore), every deploy can be rolled
 back, everything the app has saved can be put back to any moment in the last

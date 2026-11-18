@@ -131,7 +131,7 @@ import {
   went,
 } from './erase.ts'
 import { type Kind, ticketed as confirmed } from './confirm.ts'
-import { heldNumber } from './numbers.ts'
+import { heldNumber, trashedNumber } from './numbers.ts'
 import { ledger, revoke as revokeGrants } from './grants.ts'
 import {
   links,
@@ -531,7 +531,8 @@ let closing = async (
       await trashSpace(env, dir, space, who)
       return deleted(kept(d, env), false, env)
     }
-    return deleted(went(d, await erase(env, dir, d, who), env), true, env)
+    let out = await erase(env, dir, d, who)
+    return deleted(went(d, out, env), !out.trashed, env)
   } catch (e) {
     // What could not be finished is said on the page rather than swallowed
     // behind the soft error page: a domain Cloudflare would not give back is
@@ -551,7 +552,9 @@ let closing = async (
 // Every act only a person may confirm, by the name its door carries
 // (confirm.ts): one door, and the kinds as data.
 let KINDS = Object.fromEntries(
-  [trashedApp, heldNumber].map((k) => [k.kind, k as Kind<unknown>]),
+  [trashedApp, heldNumber, trashedNumber].map((
+    k,
+  ) => [k.kind, k as Kind<unknown>]),
 )
 
 // `/space/<slug>/confirm/<kind>/<target>`, the only door an act that cannot
@@ -589,6 +592,7 @@ let confirming = async (
   let at = {
     action: `/space/${slug}/confirm/${kind}/${target}`,
     title: k.title(t),
+    reversible: k.reversible,
     until: k.until(t),
     typed: k.typed(t),
     press: k.press(t),

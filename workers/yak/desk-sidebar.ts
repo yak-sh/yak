@@ -39,7 +39,9 @@ export let deskSide = (at: DeskPage, view: ManageView, env: Host) => {
     label,
     icon: icons[key],
     current: view == key || (view == 'new' && key == 'apps'),
-    count: key == 'trash' ? at.trash?.length || undefined : undefined,
+    count: key == 'trash'
+      ? ((at.trash?.length ?? 0) + (at.numbers?.length ?? 0)) || undefined
+      : undefined,
   })
   let host = spaceHost(env, at.space)
   return h(Sidebar, {
