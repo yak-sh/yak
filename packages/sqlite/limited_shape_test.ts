@@ -34,7 +34,7 @@ let rows = (n: number, name: string, comps: (i: number) => object) =>
 
 // A store holding `bundles`, and a read of `q` that answers its eids and the
 // VM instructions its statement took.
-let store = (bundles: Bundle[]) => {
+let store = (bundles: Bundle[], dead: string[] = []) => {
   let db = new Database(':memory:'), sql = driver(db)
   // Workerd's SQLite takes five terms in a compound SELECT
   // (SQLITE_LIMIT_COMPOUND_SELECT is 4).
@@ -42,7 +42,11 @@ let store = (bundles: Bundle[]) => {
   let s = storage(sql, vocab)
   s.install()
   s.raise()
-  graph({ storage: s, vocab, plugins: [archetypes()] }).apply(bundles)
+  let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+  g.apply(bundles)
+  if (dead.length) {
+    g.apply(dead.map((eid) => ({ entity: { eid }, tombstone: {} })))
+  }
   cleanup(() => db.close())
   return (q: string, visibility?: BindOpts['visibility']) => {
     let { sql: text, params } = render(compile(parse(q), vocab, {
@@ -114,5 +118,24 @@ test('a limited read over several archetypes does not grow with the store', () =
   ok(
     large.vm < small.vm * 1.2,
     `${small.vm} instructions for 50 owners, ${large.vm} for 400`,
+  )
+})
+
+// Every grave wears the tombstone set alone, which a shape of absences alone
+// would name too: a page of it walked each grave newer than its rows before
+// the live test dropped them (127,567 rows read for a page of 50).
+test('a page of absences passes no grave', () => {
+  let read = (n: number) => {
+    let jobs = rows(n, 'job', () => ({ other: {} }))
+    return store([
+      ...rows(10, 'kept', (i) => ({ doc: {}, [spreads[i % 3]]: {} })),
+      ...jobs,
+    ], jobs.map((b) => b.entity.eid))('!other !archetype .limit=5')
+  }
+  let few = read(50), many = read(600)
+  equal(many.eids, [9, 8, 7, 6, 5].map((i) => `kept-${i}`))
+  ok(
+    many.vm < few.vm * 1.2,
+    `${few.vm} instructions beside 50 graves, ${many.vm} beside 600`,
   )
 })

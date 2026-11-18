@@ -417,6 +417,8 @@ type Ctx = {
   references?: BindOpts['references']
   visibility?: BindOpts['visibility']
   archetypes?: ArchetypeSet
+  /** whether the statement keeps the deleted too (`BindOpts.graves`) */
+  graves?: boolean
   /** whether a page of a component's owners walks the EID index (`walks`) */
   walks?: Walks
   /** whether a tested page in an indexed order sorts a component's owners
@@ -433,6 +435,17 @@ type Ctx = {
   spine?: string
 }
 
+// The shape the archetypes of `owner` are chosen by. A grave wears the
+// tombstone set alone, so a shape of absences alone names it, and a read of
+// the statement's own rows by that shape walks every grave before its live
+// test drops them: a page of 50 read 127,567 rows of a store holding 50,512
+// graves. Those rows are never graves unless the read asks for them; a
+// referent is tested as it is.
+let living = (ctx: Ctx, p: Presence, owner = ctx.owner): Presence =>
+  owner == null && !ctx.graves && !p.all?.length
+    ? { ...p, none: [...p.none ?? [], 'tombstone'] }
+    : p
+
 // Presence means the component row EXISTS, never that one of its columns is
 // non-null. Matching an archetype needs no join to any of the component tables
 // the test names.
@@ -446,7 +459,7 @@ let byArchetype = (
   // Bounded owner selections test their named components by key; a cold
   // catalog need not read unrelated descriptors for those predicates.
   if ((ctx.bounded || ctx.candidates) && !ctx.archetypes.held) return null
-  let ids = ctx.archetypes(predicate)
+  let ids = ctx.archetypes(living(ctx, predicate, owner))
   if (!ids) return null
   let key = ctx.d.archetype(owner)
   // An absent leaf usually admits most shapes. Its positive complement names
@@ -2401,10 +2414,10 @@ let shapeOr = (
       if (arms.some((arm) => arm.some((f) => !f))) continue
       let sets = arms.map((arm) => {
         let facets = [...required, ...arm.flatMap((f) => f ? [f] : [])]
-        return ctx.archetypes!({
+        return ctx.archetypes!(living(ctx, {
           all: facets.filter((f) => f.present).map((f) => f.comp),
           none: facets.filter((f) => !f.present).map((f) => f.comp),
-        })
+        }))
       })
       if (sets.some((ids) => !ids)) continue
       let ids = [...new Set(sets.flatMap((ids) => ids ?? []))]
@@ -2575,7 +2588,7 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
     let ids = ctx.v.prop('entity', 'num') ? undefined : ctx.archetypes!(
       admitting && admitted
         ? admitting
-        : { all: [...new Set([...all, ...wearing])], none },
+        : living(ctx, { all: [...new Set([...all, ...wearing])], none }),
     )
     let key = ctx.d.archetype!(ctx.owner)
     ctx.shapeCandidates = true
@@ -3907,6 +3920,7 @@ export let prepared = (
     shared: new Map(),
     identities: new WeakMap(),
     archetypes: spine ? undefined : heard.archetypes,
+    graves: opts.graves,
     walks: heard.walks ??
       (opts.census && ((comp, page) => walks(opts.census, comp, page))),
     sorts: heard.sorts ??
