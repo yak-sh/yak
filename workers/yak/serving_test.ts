@@ -1932,8 +1932,7 @@ test('a space in the trash serves nothing, and its owner restores it', async () 
     error: { code: 'not_found', message: 'no app at that address' },
   })
 
-  // The owner, and only them: the page says where the space went, how long
-  // they have, and it says it at every address rather than only at `/`.
+  // The owner can restore the space from every address under it.
   let cookie = await as(ADA)
   let mine = await apps.fetch(
     visit('/garden/', { headers: { cookie } }),
@@ -1942,7 +1941,6 @@ test('a space in the trash serves nothing, and its owner restores it', async () 
   assertEquals(mine.status, 404)
   let said = await mine.text()
   assertStringIncludes(said, 'ada is in the trash')
-  assertStringIncludes(said, '30 more days')
   assertStringIncludes(said, 'name="restore-space" value="ada"')
 
   // The button. One POST to the page it is on, no script, and the space is

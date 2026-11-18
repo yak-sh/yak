@@ -63,6 +63,7 @@ import { type Guide, proseOf, schemaOf } from './schema.ts'
 import { type Edit, edited } from './changes.ts'
 import { type Link, linked } from './links.ts'
 import { readTrash } from './trash-read.ts'
+import { restoring, type Trash } from './trash.ts'
 export { type Edit, edited, type TextEdit, textEdited } from './changes.ts'
 export { type Link, linked } from './links.ts'
 
@@ -399,11 +400,43 @@ export let runs = (seams: Seams = {}): Runs => {
     graph_trash: async (call, graph) => {
       let args = argsOf(call)
       let ids = args.ids === undefined ? undefined : strings(args.ids)
-      let value = await readTrash(graph, ids)
+      let value = await readTrash(graph, ids, undefined, {
+        id: str(args.id) || undefined,
+        after: str(args.after) || undefined,
+        limit: num(args.limit),
+      })
       return [{
         entity: { eid: '$said' },
         output: { source: call.entity.eid, value },
       }]
+    },
+    graph_restore: async (call, graph) => {
+      let args = argsOf(call)
+      let ids = strings(args.ids), id = str(args.id)
+      if (!id && !ids.length) throw new Refused('graph_restore needs id or ids')
+      if (id && ids.length) throw new Refused('graph_restore takes id or ids')
+      let entries = await readTrash(
+        graph,
+        id ? undefined : ids,
+        undefined,
+        id ? { id } : undefined,
+      )
+      let newest = ids.map((eid) =>
+        entries.find((entry) => entry.bundles.some((b) => b.entity.eid == eid))
+      ).filter((entry): entry is Trash => !!entry)
+      let chosen = id ? entries : [...new Set(newest)]
+      if (!chosen.length) throw new Refused('no matching graph trash')
+      let notices: string[] = []
+      let patches = await restoring(graph, chosen, {
+        notice: (text) => notices.push(text),
+      })
+      return notices.length
+        ? [...patches, {
+          entity: { eid: '$said' },
+          content: { body: notices.join('\n') },
+          output: { source: call.entity.eid },
+        }]
+        : patches
     },
     graph_schema: (call, graph) => {
       let args = argsOf(call)

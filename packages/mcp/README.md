@@ -179,14 +179,15 @@ The generic tools are declared and implemented in `@yaks/graph`. `core()` adapts
 their input schemas to the graph vocabulary and this server's options. The
 generic tools are listed by default; `search` requires a callback.
 
-| Tool           | Purpose                                                         |
-| -------------- | --------------------------------------------------------------- |
-| `graph_apply`  | Apply bundles and return their applied bundles                  |
-| `graph_query`  | Read entities selected by a query                               |
-| `graph_show`   | Read named entities, each whole                                 |
-| `graph_trash`  | Read saved deletion groups under the caller's read visibility   |
-| `graph_schema` | Describe components, properties, and kinds                      |
-| `search`       | Return ranked text matches using the supplied `search` callback |
+| Tool            | Purpose                                                              |
+| --------------- | -------------------------------------------------------------------- |
+| `graph_apply`   | Apply bundles and return their applied bundles                       |
+| `graph_query`   | Read entities selected by a query                                    |
+| `graph_show`    | Read named entities, each whole                                      |
+| `graph_trash`   | Read saved deletion groups under the caller's read visibility        |
+| `graph_restore` | Restore saved deletion groups through the caller's write permissions |
+| `graph_schema`  | Describe components, properties, and kinds                           |
+| `search`        | Return ranked text matches using the supplied `search` callback      |
 
 For the vocabulary in the in-memory example:
 
@@ -204,6 +205,9 @@ For the vocabulary in the in-memory example:
 { "ids": ["b1"] }
 
 // graph_trash
+{ "ids": ["b1"] }
+
+// graph_restore
 { "ids": ["b1"] }
 
 // graph_schema

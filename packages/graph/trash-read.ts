@@ -6,7 +6,7 @@ import type { Bundle, Eid } from './bundle.ts'
 import { Refused } from './errors.ts'
 import type { Graph } from './graph.ts'
 import type { Query, ReadOpts } from './storage.ts'
-import type { Trash } from './trash.ts'
+import type { Trash, TrashPage } from './trash.ts'
 
 class Missing extends Error {
   constructor(readonly eid: Eid) {
@@ -69,10 +69,11 @@ export let readTrash = async (
   graph: Graph,
   eids?: Eid[],
   opts?: ReadOpts,
+  page?: TrashPage,
 ): Promise<Trash[]> => {
   if (!graph.storage.trash) throw new Refused('this graph keeps no trash')
   let scoped = graph.scope(opts)
-  let entries = await graph.storage.trash(eids)
+  let entries = await graph.storage.trash(eids, page)
   let out: Trash[] = []
   for (let entry of entries) {
     let bundles = await screened(graph, entry, scoped)
