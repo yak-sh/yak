@@ -8,6 +8,7 @@ import {
   Gone,
   memoryMultipart,
   parts,
+  purgeParts,
   START,
   Wrong,
 } from './mod.ts'
@@ -319,4 +320,54 @@ test('fixed-length upload cleanup stops both owned branches before its output is
   )
   await Promise.all([hash.cancel(), upload.cancel()])
   equal(cancelled, true)
+})
+
+test('person-confirmed multipart purge aborts native uploads while retaining recovery until prefix purge', async () => {
+  let fixture = await setup(file)
+  let { up, send, multipart, key, begun, held, retained, ledger } = fixture
+  await up.post(file.length)
+  await send(1)
+  let objects = bucketObjects(fixture.bucket)
+  await purgeParts(objects, multipart, {
+    prefix: 'app/blobs/',
+    ledger: 'ledger/',
+  })
+  await assertRejects(() =>
+    multipart.resumeMultipartUpload(key, begun[0]).uploadPart(
+      2,
+      stream(file.slice(64, 128)),
+    )
+  )
+  equal(retained().map(([, bytes]) => bytes), [file.slice(0, 64)])
+  equal(ledger().length, 2)
+  // Retrying an interrupted permanent purge reaches the retained prefix step.
+  await purgeParts(objects, multipart, {
+    prefix: 'app/blobs/',
+    ledger: 'ledger/',
+  })
+  await objects.delete(await objects.list('ledger/'))
+  equal([...held.keys()], [])
+})
+
+test('a failed native purge leaves receipts and accepted bytes recoverable', async () => {
+  let fixture = await setup(file)
+  let { up, send, retained, ledger } = fixture
+  await up.post(file.length)
+  await send(1)
+  let multipart = {
+    ...fixture.multipart,
+    resumeMultipartUpload: () => ({
+      uploadPart: () => Promise.reject(new Error('unused')),
+      complete: () => Promise.reject(new Error('unused')),
+      abort: () => Promise.reject(r2Failure),
+    }),
+  }
+  await assertRejects(() =>
+    purgeParts(bucketObjects(fixture.bucket), multipart, {
+      prefix: 'app/blobs/',
+      ledger: 'ledger/',
+    }, () => Promise.resolve())
+  )
+  equal(ledger().length, 2)
+  equal(retained().map(([, bytes]) => bytes), [file.slice(0, 64)])
 })

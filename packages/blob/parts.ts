@@ -332,6 +332,36 @@ export let parts = (
   }
 }
 
+/** Abort ticketed native uploads only for a person's confirmed permanent purge.
+ * Keep recovery objects and receipts until the caller removes that private
+ * ledger prefix after every abort succeeds. A retry tolerates uploads already
+ * completed or purged; ordinary upload cleanup never calls this. */
+export let purgeParts = async (
+  objects: Objects,
+  bucket: Multipart,
+  at: { prefix: string; ledger: string },
+  pause: (ms: number) => Promise<void> = sleep,
+): Promise<void> => {
+  for (let key of await objects.list(at.ledger)) {
+    let ticket = /^([0-9a-f]{64})\.(\d+)\.(\d+)\.(.+)$/.exec(
+      key.slice(at.ledger.length),
+    )
+    if (!ticket) continue
+    let [, sha, , , id] = ticket
+    let up = bucket.resumeMultipartUpload(
+      at.prefix + sha,
+      decodeURIComponent(id),
+    )
+    await patient(async () => {
+      try {
+        await up.abort()
+      } catch (error) {
+        lost(error)
+      }
+    }, pause)
+  }
+}
+
 /**
  * Multipart for a bucket that has none, its parts held in this process's
  * memory and the whole written through `put`: a host's memory bucket, or a
