@@ -90,7 +90,7 @@
             },
             "3": {
               "title": "Let people keep their own entry",
-              "body": "“Can each family keep their own entry up to date?” The assistant emails each family a link of its own. Once they open it signed in, they can change their phone, address, photo and birthdays, and nobody else’s.",
+              "body": "“Can each family keep their own entry up to date?” The assistant emails each family a private link to its own entry, where they can change their phone, address, photo and birthdays, and nobody else’s.",
               "go": "Ask for your own"
             },
             "4": {
@@ -240,7 +240,7 @@
           "steps": {
             "1": {
               "title": "Ask for what you need, in plain words",
-              "body": "“A diary of what I planted, with photos, so I can see how things grew over the year.” The assistant made a private diary with a card for each planting and a month-by-month view of the whole plot.",
+              "body": "“A diary of what I planted, with photos, so I can see how things grew over the year.” The assistant made a private diary with a card for each planting, where dated photos and notes show how it grew.",
               "go": "Ask for your own"
             },
             "2": {
@@ -250,7 +250,7 @@
             },
             "3": {
               "title": "Ask what to do next",
-              "body": "“Can the diary tell me what I could sow this month, for where I am?” A new tab lists what to sow outdoors and indoors each month for your area, opening on this month.",
+              "body": "“Can the diary tell me what I could sow this month, for where I am?” A new section lists what to sow outdoors and indoors each month for your area, opening on this month.",
               "go": "Ask for your own"
             },
             "4": {

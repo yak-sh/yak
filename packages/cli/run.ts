@@ -367,7 +367,9 @@ export let globals = (
     else if (a == '--tui') tui = true
     else if (a == '--no-duties') duties = false
     else if (a == '--help' || a == '-h') help = true
-    else if (a == '--version') version = true
+    // After a command's name, --version is one of its arguments
+    // (`app_rollback --version 3`), not a question about this program.
+    else if (a == '--version' && !rest.length) version = true
     else if (a == '--timing') timing = true
     else if (a == '--as') as = argv[++i] ?? as
     else if (a.startsWith('--as=')) as = a.slice(5)

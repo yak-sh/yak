@@ -215,6 +215,17 @@ test('the timing flag is the program’s, and off unless asked', () => {
   assert(globals(['app_list', '--timing']).timing)
 })
 
+test('--version is the program’s only before a command names its own', () => {
+  assert(globals(['--version']).version)
+  let { version, rest } = globals(['command', 'app_rollback', '--version', '3'])
+  assertEquals([version, rest], [false, [
+    'command',
+    'app_rollback',
+    '--version',
+    '3',
+  ]])
+})
+
 test('duties run unless the command line turns them off', () => {
   assert(globals(['serve']).duties)
   assertEquals(globals(['--no-duties', 'serve']).duties, false)
