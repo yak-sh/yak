@@ -2,6 +2,7 @@
 // is old enough. The index is installed over an existing populated store.
 import { equal, ok, test } from '@yaks/testing'
 import { type Graph, graph, mint } from '@yaks/graph'
+import { readTrash, restoreTrash } from '@yaks/graph/trash'
 import { storage } from '@yaks/sqlite'
 import { stepping } from '../../packages/sqlite/testing.ts'
 import { loadVocab } from '@yaks/vocab'
@@ -85,7 +86,7 @@ test('a retention query with no old refusals reads no recent history', async () 
   )
 })
 
-test('retention reads old refusals and keeps recent, uncounted and undelivered ones', async () => {
+test('retention trashes old refusals recoverably and keeps recent, uncounted and undelivered ones', async () => {
   let results = await Promise.all(
     [small, large].map((w) => w.forget('2026-11-11T00:00:00.000Z')),
   )
@@ -97,11 +98,22 @@ test('retention reads old refusals and keeps recent, uncounted and undelivered o
     } VM steps for 64, 2048 recent refusals`,
   )
   for (let w of [small, large]) {
-    equal(await w.g.get([w.aged.entity.eid]), [])
+    equal((await w.g.get([w.aged.entity.eid]))[0].tombstone, {})
+    let [saved] = await readTrash(w.g, [w.aged.entity.eid])
+    equal(
+      saved.bundles.find((b) => b.entity.eid == w.aged.entity.eid)
+        ?.tool_refusal,
+      w.aged.tool_refusal,
+    )
     equal((await w.g.read('.tool_refusal')).length, w.n + 2)
     equal(
       (await w.g.get([w.pending.entity.eid, w.uncounted.entity.eid])).length,
       2,
+    )
+    await restoreTrash(w.g, saved, { trusted: true })
+    equal(
+      (await w.g.get([w.aged.entity.eid]))[0].tool_refusal,
+      w.aged.tool_refusal,
     )
   }
 })

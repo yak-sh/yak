@@ -1,12 +1,11 @@
 // The clock settles the initial lens mover, then leaves a schedule-free app
 // asleep across alarms and evictions. No live object or store is contacted.
-import { assert, assertEquals } from '@std/assert'
+import { assertEquals } from '@std/assert'
 import { test, tick, until } from '@yaks/testing'
 import { Store } from './graph.ts'
-import { bucket, platform, state } from './testing.ts'
-import type { Env } from './env.ts'
-import { WINDOW } from './recover.ts'
-import { EPOCH } from './directory-copy.ts'
+import { platform, state } from './testing.ts'
+import type { Load } from '@yaks/host'
+import { load } from './load.ts'
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
 
 const headers = {
@@ -192,62 +191,55 @@ test('a new incarnation re-arms the alarm its pending effects owe', async () => 
 })
 
 test('a run holds the alarm a minute out while it is in flight', async () => {
-  // An upload's deletion, past its thirty-day retention, asks the directory
-  // where the app lives. The directory answers once the test lets it.
-  let asked = false, blocked = false, answer = () => {}
-  let held = new Promise<void>((r) => answer = r)
-  let STORE = {
-    idFromName: (name: string) => name,
-    get: () => ({
-      fetch: async (req: Request) => {
-        if (blocked && new URL(req.url).pathname == '/query') {
-          asked = true
-          await held
-        }
-        return Response.json([], {
-          headers: { [EPOCH]: '0' },
-        })
-      },
-    }),
-  }
-  let bind = { STORE, BLOBS: bucket().r2 } as unknown as Env
-  await using p = platform('running-effect-alarm', bind)
+  let answer = () => {}, began = () => {}
+  let held = new Promise<void>((resolve) => answer = resolve)
+  let started = new Promise<void>((resolve) => began = resolve)
+  // Hold a handler at the generic effects facet, independently of the work
+  // a real handler does. Legacy upload deletion is deliberately a no-op.
+  let controlled = (async (plugin, facet) => {
+    if (plugin == 'yak/app' && facet == 'effects') {
+      return {
+        effects: () => ({
+          delete_upload: async () => {
+            began()
+            await held
+          },
+        }),
+      }
+    }
+    return await load(plugin, facet)
+  }) as Load
+  await using p = platform('running-effect-alarm')
   let ctx = state()
-  let store = p.register('ada/idle', ctx, () => new Store(ctx, bind, []))
-  let sha = '1'.repeat(64)
-  assertEquals(
-    (await kernel(store, []))
-      .status,
-    200,
+  let now = Date.now()
+  let store = p.register(
+    'ada/idle',
+    ctx,
+    () => new Store(ctx, {}, [], { now: () => now }, controlled),
   )
+  assertEquals((await kernel(store, [])).status, 200)
   await p.settled()
-  let before = Date.now()
-  blocked = true
   await ctx.storage.deleteAlarm()
   assertEquals(
     (await kernel(store, [{
       entity: { eid: crypto.randomUUID() },
       effect: {
         handler: 'delete_upload',
-        target: sha,
         kind: 'removed',
         comp: 'blob',
         state: 'pending',
-        at: new Date(before - WINDOW).toISOString(),
+        at: new Date(now).toISOString(),
       },
     }])).status,
     200,
   )
   try {
-    await until(() => asked)
-    // Let the runtime consume any alarm armed before the run occupied its
-    // slot. Its next delivery leaves the live run to its recovery alarm.
-    await until(async () =>
-      (await ctx.storage.getAlarm() ?? 0) >= before + 60_000
-    )
-    await ctx.storage.deleteAlarm()
     await alarm(store)
-    assert((await ctx.storage.getAlarm() ?? 0) >= before + 60_000)
+    await started
+    await ctx.storage.deleteAlarm()
+    now += 1000
+    await alarm(store)
+    assertEquals(await ctx.storage.getAlarm(), now + Store.RETRY)
   } finally {
     answer()
   }
