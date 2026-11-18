@@ -28,6 +28,7 @@ import type { OperatorStore } from './operator-store.ts'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { caught } from './defects.ts'
+import { rootAt } from './operator-root.ts'
 import { builderOf, SPACE } from './build-door.ts'
 
 type Store = OperatorStore
@@ -301,39 +302,45 @@ let entryAt = async (store: Store, session: string, at: string) => {
   while (lo <= hi) {
     let mid = Math.floor((lo + hi) / 2)
     let b = await before(store, session, mid)
-    if (b && when(b) <= at) {
+    // None at or before `mid`: its first entry is past it.
+    if (!b) lo = mid + 1
+    else if (when(b) <= at) {
       found = b
       lo = Number(comp(b, 'entry')!.seq) + 1
-    } else hi = mid - 1
+    } else hi = Number(comp(b, 'entry')!.seq) - 1
   }
   return found
 }
 
 // Where each of `rows` came from: the entry a notice was written from, else
 // the entry written last before it in the run that wrote it, else the work
-// it tells of where that is a session or a task. None opens the person's
-// own conversation.
+// it tells of where that is a session or a task, else the entry written
+// beside it in the person's own conversation (`root`) where one was, as an
+// app's word is. None opens their own conversation.
 let placesOf = (
   store: Store,
   rows: (Bundle | undefined)[],
   abouts: Map<string, Bundle>,
+  root: string,
 ): Promise<(Place | undefined)[]> =>
   Promise.all(rows.map(async (b) => {
     let from = comp(b, 'notification')?.from
     let via = comp(b, 'created')?.via
+    let at = String(comp(b, 'created')?.at ?? '')
     if (from) {
       let [said] = await store.g.get([String(from)])
-      let at = await placed(store, said)
-      if (at) return at
+      let place = await placed(store, said)
+      if (place) return place
     }
     if (via) {
-      let at = String(comp(b, 'created')?.at ?? '')
       return await placed(store, await entryAt(store, String(via), at)) ??
         { chat: String(via) }
     }
     let about = abouts.get(String(comp(b, 'notification')?.about))
-    return about?.session || about?.task
-      ? { chat: about.entity.eid }
+    if (about?.session || about?.task) return { chat: about.entity.eid }
+    let beside = at ? await entryAt(store, root, at) : undefined
+    return comp(beside, 'created')?.at == at
+      ? await placed(store, beside)
       : undefined
   }))
 
@@ -363,7 +370,9 @@ export let updatesOf = async (
   let held = shown.map((s) => s.row)
   let [shows, places] = await Promise.all([
     shownOf(store, held),
-    placesOf(store, held, abouts),
+    rootAt(store, space, person).then((root) =>
+      placesOf(store, held, abouts, root)
+    ),
   ])
   return {
     updates: shown.map(({ t, row }, i) =>

@@ -8,6 +8,8 @@ import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
+import { rootOf } from './operator-root.ts'
+import { line } from '@yaks/query'
 import { notification, type Update, updating } from './operator-updates.ts'
 import { parseHTML } from 'linkedom'
 import { chatPage, updatesPage } from './operator-page.ts'
@@ -414,6 +416,57 @@ test('an old notice with only its run opens that run at the entry written last b
   assertEquals(told.from?.chat, fixed.from!.chat)
   assertEquals(typeof told.from?.entry, 'string')
   assertEquals(await lands(told), true)
+})
+
+test("an old app's word, which names no run, opens the person's conversation at the line written beside it", async () => {
+  let root = rootOf(eid, ada)
+  let [last] = await store.g.read(
+    line`.entry.session=${root}&.order=-entry.seq&.limit=1&*`,
+  )
+  let seq = Number((last.entry as { seq: number }).seq) + 1
+  let words = 'The app club says: dues are due.'
+  // As app-operator.ts once wrote one: the notice and its line in one write.
+  await store.g.apply([
+    notification({ to: ada, words, by: eid, id: crypto.randomUUID() }),
+    {
+      entity: { eid: crypto.randomUUID() },
+      entry: { session: root, seq },
+      content: { body: `An app's code reported this: ${words}` },
+      notice: {},
+      system: {},
+      $actor: { by: eid, via: root },
+    },
+  ], { trusted: true })
+  let word = (await read(ada)).updates.find((u) => u.words == words)!
+  assertEquals(word.from?.chat, root)
+  assertEquals(await lands(word), true)
+})
+
+test('a run whose entries start far along is searched to the entry before its notice', async () => {
+  let run = crypto.randomUUID()
+  let tick = () => new Promise((r) => setTimeout(r, 2))
+  let line = (seq: number) => ({
+    entity: { eid: crypto.randomUUID() },
+    entry: { session: run, seq },
+    content: { body: `line ${seq}` },
+    notice: {},
+    $actor: { by: eid, via: run },
+  })
+  let lines = [line(250), line(251), line(252)]
+  let words = 'Line 251 done.'
+  for (
+    let rows of [
+      [{ entity: { eid: run }, session: {} }, lines[0]],
+      [lines[1]],
+      [notification({ to: ada, words, by: eid, via: run })],
+      [lines[2]],
+    ]
+  ) {
+    await store.g.apply(rows, { trusted: true })
+    await tick()
+  }
+  let told = (await read(ada)).updates.find((u) => u.words == words)!
+  assertEquals(told.from?.entry, lines[1].entity.eid)
 })
 
 test("every notice links to the conversation it came from, the person's own where it names none", async () => {
