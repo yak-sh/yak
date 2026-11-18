@@ -209,6 +209,31 @@
               "go": "Ask for your own"
             }
           }
+        },
+        "recipes": {
+          "name": "Recipe Box",
+          "steps": {
+            "1": {
+              "title": "Ask for what you need, in plain words",
+              "body": "“One place to keep my recipes, with ingredients and steps.” The assistant made the recipe box with your first three in it, and a search that finds a recipe by name or ingredient.",
+              "go": "Ask for your own"
+            },
+            "2": {
+              "title": "Share it with family",
+              "body": "“Can my sister add hers to the box?” She gets an emailed invitation that signs her in, and each recipe now says who added it.",
+              "go": "Ask for your own"
+            },
+            "3": {
+              "title": "Ask what’s for dinner",
+              "body": "“What could I make with what I have in?” The assistant suggests three dinners for tonight, and adds a box where you type what’s in the kitchen and get ideas any time. Each ask uses a little of your space’s monthly AI budget.",
+              "go": "Ask for your own"
+            },
+            "4": {
+              "title": "Share the app itself",
+              "body": "“Publish it so friends can get their own copy, empty and ready for their recipes.” Anyone can now get their own copy at their own address, starting empty, and your recipes stay yours.",
+              "go": "Ask for your own"
+            }
+          }
         }
       }
     },
