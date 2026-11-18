@@ -25,7 +25,7 @@ import { arrived } from './operator-texts.ts'
 import { appTexter } from './app-texts.ts'
 import { phoneOf } from './phones.ts'
 import { rang } from './operator-calls.ts'
-import { monthly } from './numbers.ts'
+import { monthly, released } from './numbers.ts'
 import type { Env } from './env.ts'
 
 let FREE = '+18335550100'
@@ -340,7 +340,10 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
     await collected(env, new Date(trashed + GRACE - 1))
     assertEquals(held.size, 1)
     await collected(env, new Date(trashed + GRACE))
-    assertEquals(held.size, 0)
+    assertEquals(held.size, 1)
+    assert((await k.dir.lines(space))[0].trashed)
+    // Only the confirmed purge releases the shared number.
+    await released(env, (await k.dir.lines(space))[0])
     assertEquals(await k.dir.lines(space), [])
 
     // Space erasure also honors grace, preserving its ownership and budget.
@@ -380,10 +383,9 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
     await collected(env, new Date(deadline - 1))
     assertEquals(held.size, 1)
     await collected(env, new Date(deadline))
-    assertEquals(held.size, 0)
-    assertEquals(calls.at(-1), 'DELETE /phone_numbers/number-1')
-    assertEquals(await k.dir.read(q`.phone_line.number=${FREE}`), [])
-    assertEquals(await k.dir.at(space.eid), null)
+    assertEquals(held.size, 1)
+    assertEquals((await k.dir.read(q`.phone_line.number=${FREE}`)).length, 1)
+    assert((await k.dir.space(slug))?.trashed)
   } finally {
     await k.stop()
     await telnyx.stop()

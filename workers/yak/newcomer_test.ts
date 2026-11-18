@@ -426,15 +426,14 @@ test("keeping into an account takes the newcomer's browser, and their row goes",
   assertEquals(keptNewcomer, [])
 })
 
-test("erasing an unkept newcomer's space erases its newcomer", () => {
+test('an unkept newcomer and their trashed space survive time passing', () => {
   assertEquals(leaverBefore.length, 1)
-  assertEquals(leaverAfter, [])
+  assertEquals(leaverAfter.length, 1)
 })
 
-test("an erased newcomer's browser builds as a newcomer anew", async () => {
+test('a retained newcomer can build again with their existing identity', async () => {
   assertEquals(anew.status, 303)
-  assert(anew.headers.get('set-cookie'), 'signed in again')
-  assert(anewOwner != leaver)
+  assertEquals(anewOwner, leaver)
   assert(await k.dir.newcomer(anewOwner))
   assertEquals(anewSpace.budget, PER_BUILD)
 })

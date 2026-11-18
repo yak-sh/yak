@@ -46,8 +46,8 @@ let uses = await appStore(p.env.STORE, found.space, found.app).consume(
   async (r) => ({ status: r.status, body: await r.json() }),
 )
 
-test('the trash alarm carries directory policy when it checks a component home’s peers', () => {
-  equal(erased, 1)
+test('the trash alarm retains an old component home without waking peers', () => {
+  equal(erased, 0)
   ok(Number.isSafeInteger(found.app.policy))
   equal(uses, { status: 200, body: {} })
 })

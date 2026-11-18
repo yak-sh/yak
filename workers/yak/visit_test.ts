@@ -495,9 +495,9 @@ test('a closed account takes the store its browser was given', () => {
   assertEquals(afterClosing, 2)
 })
 
-test('a store nobody claimed is erased after 90 days unused, and a claimed one kept', () => {
+test('unused visitor stores survive the sweep with their saved data', () => {
   assertEquals([soon, lapsing], [0, 1])
-  assertEquals(afterSweep, 1)
+  assertEquals(afterSweep, afterClosing)
   assertEquals(adaAgain, ['Sample'])
 })
 

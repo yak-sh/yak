@@ -1,65 +1,7 @@
 import { planSettings } from '@yaks/platform/routes'
 import { ownedPrefix } from './file-root.ts'
-// Deleting, and taking it back. An app and a space go to the same 30-day
-// trash (T-34430, T-34431, the bottom of this file) and are erased by the
-// same daily sweep; a space still dies behind a link in a letter (T-33166,
-// everything above it), because it is the owner's act and never an agent's,
-// and `forever` is what skips the trash at that door. An app in the trash is
-// erased sooner only by its owner's press at the door every such act shares
-// (confirm.ts, `trashedApp` below). One file because there
-// is one erase — `emptied` empties an app's storage, and whether it is called
-// by the space's death, by the sweep, or by a person who said `forever`, it
-// is the same act.
-//
-// Closing a space (T-33166): what deleting one destroys, the act itself, and
-// the ticket that stands between an agent and it. `/privacy` promises a
-// person their account can be closed, and until this there was no mechanism
-// behind that sentence — nor any way to give a slug back, which a space made
-// by mistake took out of circulation for good.
-//
-// Who may. Two callers reach a space, and they are not the same (T-33070).
-// A person signed in on the web deletes directly: the door reads the platform
-// session cookie only (identity.ts `/space/<slug>/delete`, the shape
-// billing.ts's checkout established), so an agent holding a bearer token
-// cannot reach it at all, and the person types the slug back before anything
-// happens. An agent deletes nothing: `space_delete` (tools.ts) mails the
-// owner a link to that same door and answers saying so. The letter is the
-// second channel an agent has no way into, and it names what is about to go —
-// the apps, the domains, the people — because whoever reads it may not be
-// whoever asked.
-// A space whose people are all test accounts is the one exception: nobody's
-// work is in it, so there is nobody to write to (`nobodys`).
-//
-// The ticket the letter carries is a `seal` (lib/token.ts): the space, the
-// person, and the hour it dies, signed under the session secret, kept nowhere.
-// Single-use is what it authorizes rather than a row somewhere: the one act
-// it opens can happen once, and a second visit finds a space that is gone. It
-// also carries which act — the trash, or `forever` — so the page a person
-// reads and the thing the button does are the one the agent asked for.
-//
-// The slug comes back. Owner, 2026-09-03: "i'd release the names." So the
-// space row goes and its slug is free the moment it does — no cooling-off
-// period, deliberately. A held name is a name nobody may have, including the
-// person who deleted by mistake and wants it straight back; and a hold only
-// delays the cost it is meant to prevent, since a link someone was given
-// resolves to a stranger's space after the hold exactly as it would without
-// one. What makes reuse safe is that nothing survives the name: an app's
-// store is named for the address it was born at (directory.ts `storeName`)
-// and its files live under that address in the bucket, so both are emptied
-// here — the next space at this slug wakes up in an empty graph with an empty
-// prefix, never in the last one's.
-//
-// The thirty days a trashed space holds its name are not a cooling-off period
-// against that: space restoration returns it to its original address.
-//
-// Order: everything outside the directory first — the numbers at the phone
-// provider, the custom hostnames at Cloudflare, the app scripts in the dispatch namespace, the stores, the
-// bytes, the builder's conversation and the workbench it ran commands in
-// (T-34371) — and the row that says the space exists last, because that row is
-// the only record we keep that any of it was ours. A delete that dies halfway
-// leaves a space still named but emptied, which asking again finishes; the
-// other order would leave a billable custom hostname and a bucket full of
-// bytes with nothing left pointing at them.
+// Deletion first keeps a recoverable trash mark. Only an owner's confirmed
+// purge removes app stores, files or shared names; the daily sweep never does.
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { blobPrefix, receiptPrefix, uploadPrefix } from './blob-key.ts'
 import { type Bundle, minted } from '@yaks/graph'
@@ -71,7 +13,6 @@ import { isTestAddress } from '@yaks/platform/bots'
 import {
   CENSUS,
   expendable,
-  idleAccounts,
   idleSpaces,
   inactive,
   PROTECTED,
@@ -79,7 +20,7 @@ import {
 } from './idle-spaces.ts'
 import { KERNEL, meta } from './meta.ts'
 import { MORE } from './wake.ts'
-import { type Given, lapsed, VISITS, visits } from '@yaks/platform/visits'
+import { type Given, VISITS, visits } from '@yaks/platform/visits'
 import { ledgerOf } from './visit.ts'
 import { opened, seal } from './lib/token.ts'
 import { type Kind, LIFE } from './confirm.ts'
@@ -97,7 +38,6 @@ import {
   due,
   type Host,
   META,
-  overdue,
   type PhoneLine,
   type Row as DirRow,
   type Space,
@@ -875,22 +815,9 @@ export let erased = async (
 // Kept at this public seam for callers that describe the trash schedule.
 export { DAILY } from './trash.ts'
 
-// The daily sweep (trash.ts's wake and effect rule): every newcomer's space
-// nobody kept in its week, put in the trash as its newcomer, and every app and
-// every space whose thirty days have run out, erased. It walks the platform
-// because the promise is the platform's, not a space's — and it erases as the
-// person who threw the thing away, since the delete is what it is finishing.
-//
-// A space out of days takes its apps with it and is not walked for them: the
-// one erase buries every app in it whatever each app's own mark says, which
-// is the same cascade a person confirming `forever` sets off.
-//
-// Nothing is told about a roster here: what went left everyone's lists the day
-// it went into the trash, and this is only the storage catching up.
-// Every title from before the one-line rule (T-37885), written over in the
-// shape a write allows now (directory.ts `clamped`). One batch per space, and
-// nothing at all where every title already fits, which is every day after the
-// first.
+// The daily sweep only puts abandoned spaces in the trash. Time passing is
+// never permission to purge: apps, spaces, held numbers, visitor stores and
+// test accounts stay recoverable until their owner chooses permanent erasure.
 let retitled = async (
   dir: Directory,
   rows: { eid: string; title: string }[],
@@ -900,10 +827,8 @@ let retitled = async (
   if (entities.length) await dir.apply({ entities })
 }
 
-/** Erase what is due and let go of what nothing holds: the trash sweep's
- * run, answering how many it erased, or `MORE` (wake.ts) once `spent` says
- * the run has gone long enough, stopping between one piece of work and the
- * next. What it did stays done, so the next run goes on from there. */
+/** Trash abandoned spaces, retaining every existing trash entry and its
+ * shared names. Answers how many spaces moved, or `MORE` between pieces. */
 export let collected = async (
   env: Env,
   now = new Date(),
@@ -912,7 +837,7 @@ export let collected = async (
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let gone = 0
   let more = () => {
-    if (gone) console.log(`yak-trash: ${gone} erased, and more to do`)
+    if (gone) console.log(`yak-trash: ${gone} trashed, and more to do`)
     return MORE
   }
   // A newcomer's budget is a month's (newcomer.ts `KEEPING`): trashed, the
@@ -922,26 +847,15 @@ export let collected = async (
   for (let { person, spaces } of await unkept(env, dir, now)) {
     if (spent()) return more()
     let who = { person, role: 'owner' as const }
-    if (!spaces.length) {
-      await vacated(env, dir, person, who)
-        .catch((why) => caught(why, { request: 'erase a vacant newcomer' }))
-    }
     for (let space of spaces.filter((s) => !s.trashed)) {
       if (spent()) return more()
       await trashSpace(env, dir, space, who)
+        .then(() => gone++)
         .catch((why) => caught(why, { request: 'trash an unkept space' }))
     }
   }
   let idle = new Set(await abandoned(env, now))
-  // Every app left standing when the erasures are done, which is exactly the
-  // set of things that can name a pinned blob. It is collected rather than
-  // acted on app by app because the pins are one key space for the whole bucket
-  // now (written.ts `pruned`, D-34942): an object one app stopped naming may
-  // be a file another app serves. A trashed app inside its thirty days is in
-  // the list on purpose — the erasure above is what frees its bytes, not its
-  // mark — and so is the platform's own space, which is skipped for erasure and
-  // holds pins like any other. A run that stops before the walk is done has
-  // not seen them all, so it lets go of nothing.
+  // Trashed apps retain their files and versions alongside active apps.
   let standing: Pinner[] = []
   for (let space of await dir.all()) {
     if (spent()) return more()
@@ -950,7 +864,7 @@ export let collected = async (
     // above and tools.ts app_delete hold the same line at the doors).
     let sweepable = !PROTECTED.has(space.slug)
     // Other requests can write while an external read yields. Read the
-    // present again before starting the same irreversible erase as the tool.
+    // present again before moving an abandoned space to the trash.
     if (
       sweepable && idle.has(space.eid) &&
       (await abandoned(env, now, space.eid)).includes(space.eid)
@@ -960,49 +874,18 @@ export let collected = async (
         !await refused(space, env) && await nobodys(dir, d) &&
         !d.apps.some((a) => a.published)
       ) {
-        let out = await erase(env, dir, d, {
-          person: d.members[0]?.person ?? null,
-          role: 'owner',
-        }, now.getTime())
-        if (!out.trashed) {
+        if (!space.trashed) {
+          await trashSpace(env, dir, space, {
+            person: d.members[0]?.person ?? null,
+            role: 'owner',
+          })
           gone++
-          continue
         }
       }
     }
-    if (sweepable && space.trashed && due(space.trashed, now.getTime())) {
-      await erase(env, dir, await doomed(dir, space), {
-        person: space.trashed.by,
-        role: 'owner',
-      }, now.getTime())
-      gone++
-      continue
-    }
-    for (let line of overdue(await dir.lines(space), now.getTime())) {
-      if (spent()) return more()
-      await released(env, line)
-      gone++
-    }
     let apps = await dir.apps(space)
     await retitled(dir, [space, ...apps])
-    let went = new Set<string>()
-    // A trashed app's thirty days hold in a fixture too, or a reviewer reads
-    // "0 days left" for good; only the platform's own apps never go.
-    if (space.slug != META.space) {
-      for (let app of overdue(apps, now.getTime())) {
-        await erased(env, dir, space, app, {
-          person: app.trashed!.by,
-          role: 'owner',
-        })
-        went.add(app.eid)
-        gone++
-      }
-    }
-    for (let app of apps) {
-      if (!went.has(app.eid)) {
-        standing.push({ prefix: under(space, app), app })
-      }
-    }
+    for (let app of apps) standing.push({ prefix: under(space, app), app })
   }
   // And then what those apps are still holding on to: the bytes a write or a
   // deploy pinned that nothing names any more (written.ts `pruned`, T-34508).
@@ -1024,22 +907,7 @@ export let collected = async (
         now.getTime(),
       ),
   )
-  // The visitors' stores nobody can reach any more (@yaks/platform/visits
-  // `lapsed`), each on its own, so one that will not empty holds up none of the
-  // rest.
-  for (let given of await lapsed(ledgerOf(env), now)) {
-    if (spent()) return more()
-    await unvisited(env, given)
-      .catch((why) => caught(why, { request: 'erase a visitor store' }))
-  }
-  let rows = await meta(env).query(CENSUS) as unknown as Row[]
-  for (let eid of idleAccounts(rows, now.getTime())) {
-    if (spent()) return more()
-    let address = rows.find((r) => r.entity.eid == eid)!.email!.address
-    await closed(env, dir, address, { person: eid, role: 'owner' })
-      .catch((why) => caught(why, { request: 'erase an idle test account' }))
-  }
-  if (gone) console.log(`yak-trash: ${gone} erased at ${now.toISOString()}`)
+  if (gone) console.log(`yak-trash: ${gone} trashed at ${now.toISOString()}`)
   if (unpinned) console.log(`yak-trash: ${unpinned} pinned blobs let go`)
   return gone
 }

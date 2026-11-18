@@ -506,7 +506,7 @@ test('a deleted space takes its conversation and its workbench', async () => {
 // its thirty days is a person's app that they can still have back, and a sweep
 // that took one early would be the bug this whole feature exists to prevent.
 test(
-  'the sweep erases the trash that is out of days, and only that',
+  'the sweep retains old trash and every app byte',
   async () => {
     let { env } = platform('a probe secret')
     let { dir, space } = await owned(env)
@@ -558,17 +558,24 @@ test(
     // for the run after (wake.ts `STEP`).
     assertEquals(await collected(env, new Date(), () => true), MORE)
     assertEquals((await dir.apps(space)).length, 3)
-    assertEquals(await collected(env), 1)
+    assertEquals(await collected(env), 0)
     assertEquals(
       (await dir.app(space, 'live'))!.title,
       `Live ## Heading ${'x'.repeat(64)}`,
     )
-    assertEquals((await dir.apps(space)).map((a) => a.slug), ['live', 'fresh'])
+    assertEquals((await dir.apps(space)).map((a) => a.slug), [
+      'live',
+      'fresh',
+      'old',
+    ])
     // The bytes went with the row, and only that app's.
     let keys = await r2Objects(env.BLOBS).list('ada/')
-    assertEquals(keys.some((k) => k.startsWith('ada/old/')), false)
+    assertEquals(keys.some((k) => k.startsWith('ada/old/')), true)
     assertEquals(keys.some((k) => k.startsWith('ada/fresh/')), true)
-    assertEquals(await r2Objects(env.BLOBS).list(receiptPrefix(old)), [])
+    assertEquals(
+      await r2Objects(env.BLOBS).has(receiptPrefix(old) + 'recording'),
+      true,
+    )
     assertEquals(
       await r2Objects(env.BLOBS).has(receiptPrefix(fresh) + 'recording'),
       true,
@@ -582,12 +589,16 @@ test(
     assertEquals(await collected(env), 0)
     // Until its own day comes: the clock is the argument, so the sweep can be
     // asked what it would do a month from now.
-    assertEquals(await collected(env, new Date(Date.now() + 2 * day)), 1)
-    assertEquals((await dir.apps(space)).map((a) => a.slug), ['live'])
+    assertEquals(await collected(env, new Date(Date.now() + 2 * day)), 0)
+    assertEquals((await dir.apps(space)).map((a) => a.slug), [
+      'live',
+      'fresh',
+      'old',
+    ])
   },
 )
 
-test('the sweep keeps a reviewer space and empties its trash', async () => {
+test('the sweep keeps a reviewer space and its trash', async () => {
   let { env } = platform('a probe secret')
   let { dir } = await owned(env)
   let old = {
@@ -614,14 +625,17 @@ test('the sweep keeps a reviewer space and empties its trash', async () => {
   }
   await collected(env, new Date(Date.now() + 400 * day))
   assert(await dir.space('claude-review'))
-  assertEquals((await dir.apps(space)).map((a) => a.slug), ['recipes'])
+  assertEquals((await dir.apps(space)).map((a) => a.slug), [
+    'recipes',
+    'garden',
+  ])
 })
 
 // And the same sweep on the row above (T-34431): a space out of days goes
 // whole, taking its apps and their bytes with it, while a space still inside
 // its thirty days is a space its person can still have back.
 test(
-  'the sweep erases a space out of days, and leaves one in them',
+  'the sweep keeps old space trash and trashes idle test spaces',
   async () => {
     let { env } = platform('a probe secret')
     let { dir } = await owned(env)
@@ -651,20 +665,20 @@ test(
     await app(await makes(dir, 'fresh', ago(29)), 'notes')
     await app(await makes(dir, 'old', ago(31)), 'notes')
 
-    assertEquals(await collected(env), 1)
-    assertEquals(await dir.space('old'), null)
+    assertEquals(await collected(env), 0)
+    assert((await dir.space('old'))?.trashed)
     assert(await dir.space('fresh'))
     assert(await dir.space('ada'))
     // The app in it went with it, and so did its bytes — one erase, the same
     // one a person confirming `forever` runs.
     let keys = await r2Objects(env.BLOBS).list('')
-    assertEquals(keys.some((k) => k.startsWith('old/')), false)
+    assertEquals(keys.some((k) => k.startsWith('old/')), true)
     assertEquals(keys.some((k) => k.startsWith('fresh/')), true)
     // A second run has nothing to do, and the space still in its days waits
     // for its own day: the clock is the argument.
     assertEquals(await collected(env), 0)
-    assertEquals(await collected(env, new Date(Date.now() + 2 * day)), 1)
-    assertEquals(await dir.space('fresh'), null)
+    assertEquals(await collected(env, new Date(Date.now() + 2 * day)), 0)
+    assert((await dir.space('fresh'))?.trashed)
     assert(await dir.space('ada'))
     // An idle test space goes through the same permanent erase, including
     // its app files. Today's writes keep it until seven full days pass.
@@ -721,15 +735,15 @@ test(
       KERNEL,
     )
     await collected(env, after)
-    assertEquals(await dir.space('idle-probe'), null)
+    assert((await dir.space('idle-probe'))?.trashed)
     assertEquals(
       (await r2Objects(env.BLOBS).list('idle-probe/')).length,
-      0,
+      1,
     )
   },
 )
 
-test('the sweep erases a test account left idle, and leaves a person', async () => {
+test('the sweep retains idle test accounts and people', async () => {
   let scenario = platform('a probe secret')
   await using _ = scenario
   let { env } = scenario
@@ -753,11 +767,11 @@ test('the sweep erases a test account left idle, and leaves a person', async () 
   await collected(env)
   assertEquals(await dir.emailAt(bot), 'gone@bot.yak.sh')
   await collected(env, new Date(Date.now() + 8 * 86_400_000))
-  assertEquals(await dir.emailAt(bot), null)
+  assertEquals(await dir.emailAt(bot), 'gone@bot.yak.sh')
   assertEquals(await dir.emailAt(human), 'kept@example.com')
 })
 
-test('the sweep erases an idle space nobody is seated in', async () => {
+test('the sweep trashes an idle space nobody is seated in', async () => {
   let scenario = platform('a probe secret')
   await using _ = scenario
   let { env } = scenario
@@ -769,5 +783,5 @@ test('the sweep erases an idle space nobody is seated in', async () => {
   await collected(env)
   assert(await dir.space('seatless'))
   await collected(env, new Date(Date.now() + 8 * day))
-  assertEquals(await dir.space('seatless'), null)
+  assert((await dir.space('seatless'))?.trashed)
 })
