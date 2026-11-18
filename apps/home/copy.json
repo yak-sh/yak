@@ -129,6 +129,31 @@
               "go": "Ask for your own"
             }
           }
+        },
+        "menu": {
+          "name": "Wren’s Bakery",
+          "steps": {
+            "1": {
+              "title": "Ask for what you need, in plain words",
+              "body": "“A menu page with prices that customers can pull up on their phones.” The assistant made the menu for a market stall and put it online at its own web address.",
+              "go": "Ask for your own"
+            },
+            "2": {
+              "title": "Change it from your phone",
+              "body": "“Can I mark something as sold out from my phone while I’m at the stall?” Signed in, you tap an item to mark it sold out, and customers looking at the menu see it crossed out without reloading.",
+              "go": "Ask for your own"
+            },
+            "3": {
+              "title": "Take orders",
+              "body": "“Could people order a box of six ahead of time to pick up on Saturday?” The menu gets an order form for name, phone and pastries, and a list of orders only you can open.",
+              "go": "Ask for your own"
+            },
+            "4": {
+              "title": "It can text you",
+              "body": "“Text me each time an order comes in.” The assistant sets an alert for each new order, and asks for your mobile number before it texts you. You confirm the number with a code, and from then on each order reaches your phone. Each text comes out of your space’s monthly AI budget, which every plan includes.",
+              "go": "Ask for your own"
+            }
+          }
         }
       }
     },

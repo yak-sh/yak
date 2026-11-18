@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <base href="https://yaks.app/">
-    <meta name="yak-drawing" content="920bf2442e">
+    <meta name="yak-drawing" content="88f8264755">
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title
@@ -760,7 +760,7 @@
         <p class="Note"
           data-copy="home.walk.note">Below is one conversation someone had with the assistant on yaks.app, and the app it made. Scroll to follow it. Yours starts with whatever you need.</p>
         <nav class="Walk_Names" hidden aria-label="Examples"
-          data-copy-aria-label="home.walk.names"><button type="button" data-walk-name="guestbook" data-copy="home.walk.apps.guestbook.name" class="Surface_Press Button Button-quiet">Birthday Guestbook</button><button type="button" data-walk-name="directory" data-copy="home.walk.apps.directory.name" class="Surface_Press Button Button-quiet">Church Directory</button><button type="button" data-walk-name="chores" data-copy="home.walk.apps.chores.name" class="Surface_Press Button Button-quiet">Chore Chart</button></nav>
+          data-copy-aria-label="home.walk.names"><button type="button" data-walk-name="guestbook" data-copy="home.walk.apps.guestbook.name" class="Surface_Press Button Button-quiet">Birthday Guestbook</button><button type="button" data-walk-name="directory" data-copy="home.walk.apps.directory.name" class="Surface_Press Button Button-quiet">Church Directory</button><button type="button" data-walk-name="chores" data-copy="home.walk.apps.chores.name" class="Surface_Press Button Button-quiet">Chore Chart</button><button type="button" data-walk-name="menu" data-copy="home.walk.apps.menu.name" class="Surface_Press Button Button-quiet">Wren’s Bakery</button></nav>
         <article class="Walk_App" id="walk-guestbook" data-walk="guestbook">
           <h3 class="Walk_Name"
             data-copy="home.walk.apps.guestbook.name">Birthday Guestbook</h3>
@@ -866,6 +866,40 @@
           </ol>
           <p
             class="Note Note-small"><a href="https://yourname.yaks.app/chores/" data-copy="home.walk.open">Open the <span data-copy="home.walk.apps.chores.name" data-copy-slot="app">Chore Chart</span> <span aria-hidden="true" data-copy-slot="arrow">↗</span></a></p>
+          <p class="Walk_Next"
+            data-walk-next="menu"><a href="#walk-menu" data-copy="home.walk.next">Next example: <span data-copy="home.walk.apps.menu.name" data-copy-slot="app">Wren’s Bakery</span> <span aria-hidden="true" data-copy-slot="arrow">→</span></a></p>
+        </article>
+        <article class="Walk_App" id="walk-menu" data-walk="menu">
+          <h3 class="Walk_Name"
+            data-copy="home.walk.apps.menu.name">Wren’s Bakery</h3>
+          <ol class="Walk_Steps">
+            <li class="Walk_Step" data-walk-step="1">
+              <div
+                class="Walk_Copy"><h4 class="Walk_Title" data-copy="home.walk.apps.menu.steps.1.title">Ask for what you need, in plain words</h4><p class="Note" data-copy="home.walk.apps.menu.steps.1.body">“A menu page with prices that customers can pull up on their phones.” The assistant made the menu for a market stall and put it online at its own web address.</p><a data-cta="walk" data-copy="home.walk.apps.menu.steps.1.go" href="#say" class="Surface_Press Button Button-go">Ask for your own</a></div>
+              <div
+                class="Walk_Shown"><div class="Walk_Talk" data-walk-talk="menu/1"></div><a class="Walk_Shot" href="https://yourname.yaks.app/menu/" tabindex="-1" aria-hidden="true"><span class="Walk_Picture" data-walk-shot="menu/1"></span></a><form class="Walk_Ask" method="post" action="/start"><input type="hidden" name="demo" value="menu"/><input type="hidden" name="step" value="1"/><label class="Walk_Label" for="ask-menu-1" data-copy="home.walk.ask.label">Ask for your own change</label><input id="ask-menu-1" name="say" required maxlength="4000" placeholder="Like “add a guest list”" data-copy-placeholder="home.walk.ask.hint" class="Surface_Well Field Walk_Field"/><button type="submit" data-cta="walk-ask" data-copy="home.walk.ask.go" class="Surface_Press Button">Ask</button></form></div>
+            </li>
+            <li class="Walk_Step" data-walk-step="2">
+              <div
+                class="Walk_Copy"><h4 class="Walk_Title" data-copy="home.walk.apps.menu.steps.2.title">Change it from your phone</h4><p class="Note" data-copy="home.walk.apps.menu.steps.2.body">“Can I mark something as sold out from my phone while I’m at the stall?” Signed in, you tap an item to mark it sold out, and customers looking at the menu see it crossed out without reloading.</p><a data-cta="walk" data-copy="home.walk.apps.menu.steps.2.go" href="#say" class="Surface_Press Button Button-go">Ask for your own</a></div>
+              <div
+                class="Walk_Shown"><div class="Walk_Talk" data-walk-talk="menu/2"></div><a class="Walk_Shot" href="https://yourname.yaks.app/menu/" tabindex="-1" aria-hidden="true"><span class="Walk_Picture" data-walk-shot="menu/2"></span></a><form class="Walk_Ask" method="post" action="/start"><input type="hidden" name="demo" value="menu"/><input type="hidden" name="step" value="2"/><label class="Walk_Label" for="ask-menu-2" data-copy="home.walk.ask.label">Ask for your own change</label><input id="ask-menu-2" name="say" required maxlength="4000" placeholder="Like “add a guest list”" data-copy-placeholder="home.walk.ask.hint" class="Surface_Well Field Walk_Field"/><button type="submit" data-cta="walk-ask" data-copy="home.walk.ask.go" class="Surface_Press Button">Ask</button></form></div>
+            </li>
+            <li class="Walk_Step" data-walk-step="3">
+              <div
+                class="Walk_Copy"><h4 class="Walk_Title" data-copy="home.walk.apps.menu.steps.3.title">Take orders</h4><p class="Note" data-copy="home.walk.apps.menu.steps.3.body">“Could people order a box of six ahead of time to pick up on Saturday?” The menu gets an order form for name, phone and pastries, and a list of orders only you can open.</p><a data-cta="walk" data-copy="home.walk.apps.menu.steps.3.go" href="#say" class="Surface_Press Button Button-go">Ask for your own</a></div>
+              <div
+                class="Walk_Shown"><div class="Walk_Talk" data-walk-talk="menu/3"></div><a class="Walk_Shot" href="https://yourname.yaks.app/menu/" tabindex="-1" aria-hidden="true"><span class="Walk_Picture" data-walk-shot="menu/3"></span></a><form class="Walk_Ask" method="post" action="/start"><input type="hidden" name="demo" value="menu"/><input type="hidden" name="step" value="3"/><label class="Walk_Label" for="ask-menu-3" data-copy="home.walk.ask.label">Ask for your own change</label><input id="ask-menu-3" name="say" required maxlength="4000" placeholder="Like “add a guest list”" data-copy-placeholder="home.walk.ask.hint" class="Surface_Well Field Walk_Field"/><button type="submit" data-cta="walk-ask" data-copy="home.walk.ask.go" class="Surface_Press Button">Ask</button></form></div>
+            </li>
+            <li class="Walk_Step" data-walk-step="4">
+              <div
+                class="Walk_Copy"><h4 class="Walk_Title" data-copy="home.walk.apps.menu.steps.4.title">It can text you</h4><p class="Note" data-copy="home.walk.apps.menu.steps.4.body">“Text me each time an order comes in.” The assistant sets an alert for each new order, and asks for your mobile number before it texts you. You confirm the number with a code, and from then on each order reaches your phone. Each text comes out of your space’s monthly AI budget, which every plan includes.</p><a data-cta="walk" data-copy="home.walk.apps.menu.steps.4.go" href="#say" class="Surface_Press Button Button-go">Ask for your own</a></div>
+              <div
+                class="Walk_Shown"><div class="Walk_Talk" data-walk-talk="menu/4"></div><a class="Walk_Shot" href="https://yourname.yaks.app/menu/" tabindex="-1" aria-hidden="true"><span class="Walk_Picture" data-walk-shot="menu/4"></span></a><form class="Walk_Ask" method="post" action="/start"><input type="hidden" name="demo" value="menu"/><input type="hidden" name="step" value="4"/><label class="Walk_Label" for="ask-menu-4" data-copy="home.walk.ask.label">Ask for your own change</label><input id="ask-menu-4" name="say" required maxlength="4000" placeholder="Like “add a guest list”" data-copy-placeholder="home.walk.ask.hint" class="Surface_Well Field Walk_Field"/><button type="submit" data-cta="walk-ask" data-copy="home.walk.ask.go" class="Surface_Press Button">Ask</button></form></div>
+            </li>
+          </ol>
+          <p
+            class="Note Note-small"><a href="https://yourname.yaks.app/menu/" data-copy="home.walk.open">Open the <span data-copy="home.walk.apps.menu.name" data-copy-slot="app">Wren’s Bakery</span> <span aria-hidden="true" data-copy-slot="arrow">↗</span></a></p>
           <p class="Walk_Next"
             data-walk-next="guestbook"><a href="#walk-guestbook" data-copy="home.walk.next">Next example: <span data-copy="home.walk.apps.guestbook.name" data-copy-slot="app">Birthday Guestbook</span> <span aria-hidden="true" data-copy-slot="arrow">→</span></a></p>
         </article>
