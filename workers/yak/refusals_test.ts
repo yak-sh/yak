@@ -198,10 +198,16 @@ await reported(kept, '2026-11-05T12:00:00.000Z')
 await kept.apply([uncounted], { trusted: true })
 let forgot = await forgotten(kept, '2026-11-10T12:00:00.000Z')
 
-test('a month after it was refused, an occurrence a delivered letter counted is forgotten', async () => {
+test('a month after it was refused, an occurrence a delivered letter counted is trashed', async () => {
   equal(forgot, 1)
   let eids = (b: { entity: { eid: string } }[]) => b.map((r) => r.entity.eid)
-  equal(await kept.get([aged.entity.eid]), [])
+  equal((await kept.get([aged.entity.eid]))[0].tombstone, {})
+  equal(
+    (await kept.storage.trash!([aged.entity.eid]))[0].bundles.some((b) =>
+      b.entity.eid == aged.entity.eid
+    ),
+    true,
+  )
   equal(
     eids(await kept.read('.tool_refusal')).sort(),
     eids([recent, waiting, uncounted]).sort(),

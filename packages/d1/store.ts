@@ -1,3 +1,10 @@
+import { preserving, type Trash } from '@yaks/graph/trash'
+import {
+  purgeTrashSql,
+  retainSql,
+  trashRows,
+  trashSql,
+} from '@yaks/sqlite/trash'
 // The store, bound: @yaks/graph's `Storage` over a D1 binding. Reads and DDL
 // are ordinary; the transaction is where D1's shape has to be faced squarely,
 // so what it does and does not promise is written out here rather than implied.
@@ -124,6 +131,11 @@ export type { Query }
  * promise, and it resolves only once the write batch has committed.
  */
 export type Store = {
+  /** Destructive transactions retained for recovery. */
+  trash: (eids?: Eid[]) => Promise<Trash[]>
+  /** Purge one retained transaction after a person explicitly chooses it. */
+  purgeTrash: (id: string) => Promise<void>
+
   /** Whether a value this store reads for the property means its entity
    * wears the component (@yaks/sql `worn`). */
   worn: (comp: string, prop: string) => boolean
@@ -557,7 +569,12 @@ export let storage = <S extends Prepared<S>>(
       },
     }
 
-    return { tx, flush }
+    return {
+      tx: preserving(tx, vocab, (id, at, rows) => {
+        pending.push(...retainSql(id, at, rows))
+      }),
+      flush,
+    }
   }
 
   let run = async <R>(body: (tx: Tx) => R): Promise<Awaited<R>> => {
@@ -607,6 +624,11 @@ export let storage = <S extends Prepared<S>>(
     read,
     rows,
     get: (eids, names) => gather(eids, base, names),
+    purgeTrash: async (id) => {
+      await one(purgeTrashSql(id))
+    },
+    trash: async (eids) =>
+      eids?.length === 0 ? [] : trashRows(vocab, await one(trashSql(eids))),
     tx: run,
   }
 }

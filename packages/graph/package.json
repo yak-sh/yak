@@ -15,6 +15,7 @@
     "./identity": "./identity.ts",
     "./provenance": "./stamp.ts",
     "./storage": "./storage.ts",
+    "./trash": "./trash.ts",
     "./call": "./tool.ts",
     "./declared": "./declared.ts",
     "./guard": "./guard.ts",

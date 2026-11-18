@@ -1,3 +1,4 @@
+import { trashed } from './trash.ts'
 // The capabilities an installed store lends a read-only host.
 import { type BindOpts, type Driver, revision, worn } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
@@ -33,6 +34,7 @@ export let storage = (
   }
   return {
     ...reader(driver, vocab, base),
+    trash: (eids) => unit(driver, () => trashed(driver, vocab, eids), 'read'),
     // Listed here; made and dropped by a writer.
     ...base.history
       ? { branches: branching(driver, vocab, base.history, opts) }
@@ -66,6 +68,7 @@ export let storage = (
       ),
     buried: (before, page) => unit(driver, () => graves(before, page), 'read'),
     measure: (signal) => measure(driver, signal),
+    purgeTrash: refuse,
     install: refuse,
     maintain: refuse,
     raise: refuse,

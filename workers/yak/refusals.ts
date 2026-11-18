@@ -255,12 +255,8 @@ export let reported = async (
   return report
 }
 
-/** Forget the occurrences, at most `most`, that a delivered letter counted
- * and that were refused `KEPT` before `at`. Each is deleted and pruned in one
- * transaction, leaving no tombstone: a tombstone swallows a write racing its
- * delete, and none can race this one, since only the same call heard again
- * writes its eid and only an uncounted occurrence is marked counted. Answers
- * how many went. */
+/** Move delivered occurrences older than `KEPT` into recoverable graph trash.
+ * The grouped report stays live; the individual evidence remains restorable. */
 export let forgotten = async (
   g: Pick<Graph, 'read' | 'apply'>,
   at: string,
@@ -272,10 +268,7 @@ export let forgotten = async (
   )
   if (!rows.length) return 0
   await g.apply(
-    rows.flatMap(({ entity: { eid } }) => [
-      { entity: { eid }, $delete: true as const },
-      { entity: { eid }, $prune: true as const },
-    ]),
+    rows.map(({ entity: { eid } }) => ({ entity: { eid }, $delete: true })),
     { trusted: true },
   )
   return rows.length

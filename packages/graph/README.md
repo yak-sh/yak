@@ -240,6 +240,18 @@ transaction:
   never-set properties; an explicit scalar projection answers `null` for an
   absent property.
 - A component set to `null` is removed.
+- Before a durable store removes an entity, a component, or a property's value,
+  it saves the entity's stored values in its trash, in the same transaction.
+  This also covers rows detached or released by a delete cascade, and components
+  excluded from optional edit history. `storage.trash(eids)` (`undefined` lists
+  the newest 20 transactions) reads the retained transactions touching those
+  eids, newest first, as `{id, at, bundles}`.
+  `restoreTrash(graph, entry, options)` from `@yaks/graph/trash` restores
+  deleted rows and fills removed values on surviving rows while preserving their
+  later values. Ordinary restore authority is supplied through `options`; a
+  server restoring stamped values uses its trusted write context. The archive
+  remains until a person explicitly purges it with `storage.purgeTrash(id)`
+  through the host's confirmation page.
 - `$delete: true` deletes the entity, subject to the vocabulary's
   [death keyword](../vocab/README.md#routing-and-references). A **tombstone** is
   the `tombstone: {}` component that records a deleted entity, keeping its eid
@@ -1676,3 +1688,8 @@ authentication or authorization. Compose it with:
 
 The core uses Web APIs available in browsers, workers, and server runtimes.
 Storage and plugins may have narrower runtime requirements.
+
+A `$was` component may use the empty property name to guard the complete stored
+component, including presence: `{tombstone: {'': token({})}}` guards an explicit
+restore against a concurrent revival. `{note: {'': null}}` requires that the
+`note` component is absent.

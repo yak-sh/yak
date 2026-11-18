@@ -1,3 +1,5 @@
+import { preserving, type Trash } from '@yaks/graph/trash'
+import { Refused } from '@yaks/graph/errors'
 // A graph in a Map. This is @yaks/graph's `Storage` with nothing underneath it
 // — one record per entity, keyed by eid, held in a plain Map — so a graph can
 // run in a page, in a worker, or in a test with no database to install, no
@@ -137,6 +139,11 @@ export type Tx = {
  * a row.
  */
 export type Store = {
+  /** Destructive transactions retained for recovery. */
+  trash: (eids?: Eid[]) => Trash[]
+  /** Purge one retained transaction after a person explicitly chooses it. */
+  purgeTrash: (id: string) => void
+
   /** Adopt an additive vocabulary without replacing rows or their indexes. */
   extend: (next: Vocab) => boolean
   /** Whether a value this store reads for the property means its entity
@@ -306,6 +313,8 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   // The undo log: for each entity a transaction is about to change, the record
   // it held first. Replayed backwards, it is the rollback.
   let log: [Eid, Bundle | undefined, Entity | undefined][] = []
+  let trash = new Map<string, Trash>()
+  let trashLog: [string, Trash | undefined][] = []
   let depth = 0
   let save = (eid: Eid) => log.push([eid, rows.get(eid), cold.get(eid)])
   // Back to where the log stood at `mark`, and the numbering with it.
@@ -941,6 +950,15 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       }
     },
     prune: (eids) => {
+      if (
+        [...trash.values()].some((r) =>
+          r.bundles.some((b) => eids.includes(b.entity.eid))
+        )
+      ) {
+        throw new Refused(
+          'trash retains this identity; purge requires a person’s explicit choice',
+        )
+      }
       for (let eid of eids) {
         save(eid)
         cold.delete(eid)
@@ -966,6 +984,9 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   ): Graves => {
     let refs = vocab.refProps().filter(([c, p]) => !vocab.prop(c, p)?.computed)
     let named = (eid: Eid) =>
+      [...trash.values()].some((r) =>
+        r.bundles.some((b) => b.entity.eid == eid)
+      ) ||
       refs.some(([c, p]) => worn.has(c) && !!keys(c, p).get(keyOf(eid)!)?.size)
     let mark = (at: string, eid: Eid) => JSON.stringify([at, eid])
     let found = [...rows].flatMap(([eid, b]) => {
@@ -1002,23 +1023,44 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     rows: raw,
     get,
     buried: graves,
+    purgeTrash: (id) => {
+      trash.delete(id)
+    },
+    trash: (eids) =>
+      [...trash.values()].filter((r) =>
+        !eids || r.bundles.some((b) => eids.includes(b.entity.eid))
+      ).toReversed().slice(0, 20),
     tx: (body) => {
       // A nested transaction is a savepoint: it rolls back to where it opened,
       // and its entries stay in the log for the outer one to undo in its turn.
+      let trashMark = trashLog.length
       let mark = log.length
       let minted = counted()
       depth++
       let undo = (e: unknown): never => {
+        while (trashLog.length > trashMark) {
+          let [id, entry] = trashLog.pop()!
+          if (entry) trash.set(id, entry)
+          else trash.delete(id)
+        }
         rewind(mark, minted)
         depth--
         throw e
       }
       let done = <R>(out: R): R => {
-        if (--depth == 0) log.length = 0
+        if (--depth == 0) log.length = trashLog.length = 0
         return out
       }
       try {
-        let out = body(tx)
+        let out = body(preserving(tx, vocab, (id, at, bundles) => {
+          let before = trash.get(id)
+          trashLog.push([id, before])
+          trash.set(id, {
+            id,
+            at,
+            bundles: [...before?.bundles ?? [], ...bundles],
+          })
+        }))
         return (isPromise(out) ? out.then(done, undo) : done(out)) as typeof out
       } catch (e) {
         return undo(e)

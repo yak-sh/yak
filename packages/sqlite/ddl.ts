@@ -81,6 +81,7 @@ import {
   stood,
 } from './physical.ts'
 import { unit } from './unit.ts'
+import { TRASH } from './trash.ts'
 import { clocked, versioned } from './versions.ts'
 import { telling, writtenDdl } from './written.ts'
 import { tallying } from './population.ts'
@@ -167,6 +168,25 @@ let SPINE: Stmt[] = [
       { name: 'entity', type: 'integer', pk: true, ref: ENTITY },
       { name: 'deleted_at', type: 'text', notNull: true },
     ],
+  },
+  {
+    t: 'create table',
+    name: TRASH,
+    ifNot: true,
+    cols: [
+      { name: 'batch', type: 'text', notNull: true },
+      { name: 'entity', type: 'integer', notNull: true, ref: ENTITY },
+      { name: 'at', type: 'text', notNull: true },
+      { name: 'body', type: 'text', notNull: true },
+    ],
+    keys: [{ pk: ['batch', 'entity'] }],
+  },
+  {
+    t: 'create index',
+    name: '_yaks_trash_entity',
+    on: TRASH,
+    ifNot: true,
+    cols: [col('entity')],
   },
   // Keyed by `k`, valued by `v`, and nothing else: whatever an application
   // keeps here it keeps as text under a name it chose (./meta.ts).

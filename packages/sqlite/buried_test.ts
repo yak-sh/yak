@@ -56,7 +56,7 @@ for (
       }),
     })
   }
-  let named = name == 'sqlite' ? ['g2', 'g4'] : ['g2']
+  let named = dead
   // Prepare the statements outside the cases.
   store.buried(later, { limit: 2 })
   store.tx((tx) => tx.prune(['absent']))

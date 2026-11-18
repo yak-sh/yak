@@ -1555,3 +1555,17 @@ file. Failures reach the host's telemetry and are retried on the next pass.
 `@yaks/sqlite/cache` exposes `trim(path, cache)` for a single pass, `held(path)`
 for its database and WAL bytes, and `prune(driver, tables, gone?)` for deleting
 missing sources through an existing connection.
+
+### Trash
+
+Every storage transaction retains before-images when it removes entities,
+components or property values, including direct `tx.remove()` calls. The
+`_yaks_trash` table keeps these independently of the optional journal. Its
+reference to the identity prevents orphan collection from erasing recoverable
+rows. The snapshots use the graph's JSON wire format, including binary values.
+
+`store.trash(eids)` reads complete retained transactions as `{id, at, bundles}`;
+`restoreTrash(graph, entry, options)` from `@yaks/graph/trash` restores them
+through ordinary graph writes. `store.purgeTrash(id)` removes one archive only
+after the person explicitly chooses to purge it through the confirmation page.
+Neither restoring a row nor its age purges its archive.

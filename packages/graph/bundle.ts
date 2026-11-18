@@ -188,8 +188,8 @@ export let alive = (b: Bundle | undefined): b is Bundle =>
  * ```
  */
 export let raced = (b: Bundle): boolean =>
-  Object.values(b.$was ?? {}).some((props) =>
-    Object.values(props).some((t) => t != null)
+  Object.entries(b.$was ?? {}).some(([comp, props]) =>
+    comp != TOMBSTONE && Object.values(props).some((t) => t != null)
   )
 
 /** A bundle reporting that an entity was deleted: what `apply()` generates for

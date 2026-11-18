@@ -1,3 +1,5 @@
+import { preserving, type Trash } from '@yaks/graph/trash'
+import { purgeTrashSql, retainSql, trashed } from './trash.ts'
 import { cardinality, population } from './population.ts'
 // @yaks/sqlite — a storage adapter that turns the yaks query/vocabulary/SQL
 // stack into a working SQLite-backed store. It composes three sibling packages:
@@ -351,6 +353,11 @@ export type Tx = {
 // signature still satisfies `Storage` wherever the generic contract is what is
 // wanted.
 export type Store = {
+  /** Destructive transactions retained for recovery. */
+  trash: (eids?: Eid[]) => Trash[]
+  /** Purge one retained transaction after a person explicitly chooses it. */
+  purgeTrash: (id: string) => void
+
   /** its branches, where it keeps history (./branches.ts) */
   branches?: Branches
   /** Matches evaluated against committed rows without a write transaction. */
@@ -1564,6 +1571,11 @@ export let storage = (
         { what: gotten(eids) },
       )
     },
+    purgeTrash: (id) =>
+      unit(driver, () => {
+        driver.query(purgeTrashSql(id))
+      }),
+    trash: (eids) => unit(driver, () => trashed(driver, vocab, eids), 'read'),
     tx: <R>(
       body: (tx: Tx) => R,
       { wait }: { admission?: boolean; wait?: boolean } = {},
@@ -1586,13 +1598,17 @@ export let storage = (
                   get: (eids, comps) => kept(t.get, eids, comps),
                   ...base.history ? { clock } : {},
                 })
-                if (!book) return body(cached(tx))
+                let retaining = (t: Tx): Tx =>
+                  preserving(t, vocab, (id, at, rows) => {
+                    for (let stmt of retainSql(id, at, rows)) driver.query(stmt)
+                  })
+                if (!book) return body(retaining(cached(tx)))
                 let { tx: t, settle } = tracked(book)
                 let tracing = context()
                 // An async body settles what it owes before the unit closes, as the
                 // unit waits for it (./unit.ts).
                 return after(
-                  body(base.history ? { ...t, clock } : t),
+                  body(retaining(base.history ? { ...t, clock } : t)),
                   (out) => {
                     if (tracing) scope(tracing, settle)
                     else settle()
