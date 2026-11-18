@@ -1,7 +1,7 @@
 // Only filesystem effects live here. The image's unchanged bytes are
 // regenerable; every changed file and original-file deletion is retained.
 export let script = String.raw`
-import base64, io, json, os, stat, sys, tarfile
+import io, json, os, shutil, stat, sys, tarfile
 
 root = sys.argv[2] if len(sys.argv) > 2 else '/'
 held = os.path.join(root, '.yak-recovery')
@@ -83,11 +83,8 @@ elif mode == 'restore':
             elif entry.isdir() and os.path.lexists(target) and not os.path.isdir(target):
                 os.unlink(target)
             source.extract(entry, root, filter='fully_trusted')
-elif mode == 'read':
-    with open(archive, 'rb') as source:
-        source.seek(int(sys.argv[3]))
-        print(base64.b64encode(source.read(int(sys.argv[4]))).decode())
 elif mode == 'write':
     with open(archive, 'ab' if sys.argv[3] != '0' else 'wb') as out:
-        out.write(base64.b64decode(sys.argv[4]))
+        with open(os.path.join(held, 'part'), 'rb') as source:
+            shutil.copyfileobj(source, out)
 `

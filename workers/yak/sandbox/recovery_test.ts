@@ -1,5 +1,5 @@
 import { equal, test, throws } from '@yaks/testing'
-import { recovery } from './recovery.ts'
+import { chunks, filesystem, recovery } from './recovery.ts'
 
 let fixture = () => {
   let state = new Map<string, unknown>()
@@ -13,7 +13,17 @@ let fixture = () => {
   let writeFailure = false
   let box = {
     live: () => Promise.resolve(awake),
-    run: (mode: string, ...args: string[]) => {
+    read: async function* () {
+      yield archive
+    },
+    write: (offset: number, content: Uint8Array) => {
+      let next = new Uint8Array(offset + content.length)
+      next.set(archive.subarray(0, offset))
+      next.set(content, offset)
+      archive = next
+      return Promise.resolve()
+    },
+    run: (mode: string) => {
       awake = true
       if (mode == 'fresh' || mode == 'existing') {
         baseline = true
@@ -24,13 +34,6 @@ let fixture = () => {
         archive = new TextEncoder().encode(JSON.stringify([...files]))
         return Promise.resolve(String(archive.length))
       }
-      if (mode == 'read') {
-        return Promise.resolve(
-          archive.subarray(Number(args[0]), Number(args[0]) + Number(args[1]))
-            .toBase64(),
-        )
-      }
-      if (mode == 'write') archive = Uint8Array.fromBase64(args[1])
       if (mode == 'restore') {
         if (restoreFailure) return Promise.reject(new Error('restore failed'))
         files = new Map(JSON.parse(new TextDecoder().decode(archive)))
@@ -199,4 +202,37 @@ test('confirmed purge removes snapshots and receipt after stopping the workbench
   equal(bench.state.size, 0)
   await bench.prepare()
   equal(bench.files.size, 0)
+})
+
+test('archive byte chunks are rebatched intact across file and multipart boundaries', async () => {
+  let source = async function* () {
+    yield new Uint8Array([0, 1])
+    yield new Uint8Array([2, 3, 4, 5, 6, 7, 8])
+    yield new Uint8Array([9])
+  }
+  let result = []
+  for await (let part of chunks(source(), 4)) result.push([...part])
+  equal(result, [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9]])
+})
+
+let large = new Uint8Array(196_608).fill(255)
+test('restoring large archive bytes uses the file API and a bounded command', async () => {
+  let calls: string[] = []
+  let written: Uint8Array | undefined
+  let box = filesystem({
+    getState: () => Promise.resolve({ status: 'healthy' }),
+    exec: (command) => {
+      calls.push(command)
+      return Promise.resolve({ exitCode: 0, stdout: '', stderr: '' })
+    },
+    writeFile: (_path, content) => {
+      written = Uint8Array.fromBase64(content)
+      return Promise.resolve()
+    },
+  }, async function* () {})
+  await box.write(0, large)
+  equal(written?.length, large.length)
+  equal(written?.[large.length - 1], 255)
+  equal(calls.length, 1)
+  equal(calls[0].length < 8_192, true)
 })

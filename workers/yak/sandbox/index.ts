@@ -22,13 +22,22 @@ type Env = Host & {
   BLOBS: Parameters<typeof recovery>[2]
 }
 
+let archive = '/.yak-recovery/snapshot.tar.gz'
+let streamed = async function* (stream: Promise<ReadableStream<Uint8Array>>) {
+  for await (let chunk of sdk.streamFile(await stream)) {
+    yield typeof chunk == 'string' ? new TextEncoder().encode(chunk) : chunk
+  }
+}
+
 export class Workbench extends sdk.Sandbox<Env> {
   override interceptHttps = true
   private files = recovery(
     filesystem({
       getState: () => super.getState(),
       exec: (command) => super.exec(command, { timeout: 240_000 }),
-    }),
+      writeFile: (path, content, options) =>
+        super.writeFile(path, content, options),
+    }, () => streamed(super.readFileStream(archive))),
     this.ctx.storage,
     this.env.BLOBS,
     String(this.ctx.id),

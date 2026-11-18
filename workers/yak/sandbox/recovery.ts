@@ -35,16 +35,23 @@ type Box = {
     stdout: string
     stderr: string
   }>
+  writeFile(
+    path: string,
+    content: string,
+    options: { encoding: 'base64' },
+  ): unknown
 }
 
 let quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
-let bytes = (base64: string) => Uint8Array.fromBase64(base64.trim())
-let encoded = (value: Uint8Array) => value.toBase64()
 let live = (status: string) => status == 'running' || status == 'healthy'
 let PART = 5 * 1024 * 1024
 let HEAD = 'workbench:head'
 
-export let filesystem = (box: Box, root = '/') => {
+export let filesystem = (
+  box: Box,
+  read: () => AsyncIterable<Uint8Array>,
+  root = '/',
+) => {
   let run = async (mode: string, ...args: string[]) => {
     let result = await box.exec(
       `python3 -c ${quote(script)} ${
@@ -54,7 +61,42 @@ export let filesystem = (box: Box, root = '/') => {
     if (result.exitCode) throw new Error(`workbench snapshot: ${result.stderr}`)
     return result.stdout.trim()
   }
-  return { live: async () => live((await box.getState()).status), run }
+  return {
+    live: async () => live((await box.getState()).status),
+    run,
+    read,
+    write: async (offset: number, content: Uint8Array) => {
+      await box.writeFile(
+        `${root == '/' ? '' : root}/.yak-recovery/part`,
+        content.toBase64(),
+        { encoding: 'base64' },
+      )
+      await run('write', String(offset))
+    },
+  }
+}
+
+/** Rebatch byte streams for multipart storage without buffering an archive. */
+export let chunks = async function* (
+  source: AsyncIterable<Uint8Array>,
+  size: number,
+) {
+  let buffer = new Uint8Array(size)
+  let used = 0
+  for await (let chunk of source) {
+    for (let offset = 0; offset < chunk.length;) {
+      let length = Math.min(size - used, chunk.length - offset)
+      buffer.set(chunk.subarray(offset, offset + length), used)
+      offset += length
+      used += length
+      if (used == size) {
+        yield buffer
+        buffer = new Uint8Array(size)
+        used = 0
+      }
+    }
+  }
+  if (used) yield buffer.subarray(0, used)
 }
 
 /** Recoverable workbench files, independent of the container SDK. Immutable
@@ -85,11 +127,7 @@ export let recovery = (
           range: { offset, length: Math.min(PART, head.size - offset) },
         })
         if (!object) throw new Error(`workbench snapshot missing: ${head.key}`)
-        await run(
-          'write',
-          String(offset),
-          encoded(new Uint8Array(await object.arrayBuffer())),
-        )
+        await box.write(offset, new Uint8Array(await object.arrayBuffer()))
       }
       if (head) await run('restore')
       await run('ready')
@@ -110,15 +148,12 @@ export let recovery = (
       let key = `workbench/${id}/${crypto.randomUUID()}`
       let upload = await bucket.createMultipartUpload(key + '.tar.gz')
       let parts = []
-      for (let offset = 0; offset < size; offset += PART) {
-        let content = bytes(await run('read', String(offset), String(PART)))
-        if (content.length != Math.min(PART, size - offset)) {
-          throw new Error(
-            'workbench snapshot is incomplete',
-          )
-        }
+      let received = 0
+      for await (let content of chunks(box.read(), PART)) {
+        received += content.length
         parts.push(await upload.uploadPart(parts.length + 1, content))
       }
+      if (received != size) throw new Error('workbench snapshot is incomplete')
       await upload.complete(parts)
       let head = { key: key + '.tar.gz', size, at: new Date().toISOString() }
       await bucket.put(key + '.json', JSON.stringify(head))
