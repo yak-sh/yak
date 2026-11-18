@@ -1162,9 +1162,12 @@ export let graph = (opts: Options): Graph => {
         return after(gathering(tx, bundles), (snap) => {
           if (checking) tx = rehearsing(tx, vocab, snap)
           let trackers: Tracker[] = []
-          for (let p of plugins) {
-            if (!p.track) continue
-            let tracker = p.track(tx, (eid) => snap.got.get(eid), {
+          let tracking = [
+            ...plugins.filter((p) => p.track && p.classifies),
+            ...plugins.filter((p) => p.track && !p.classifies),
+          ]
+          for (let p of tracking) {
+            let tracker = p.track!(tx, (eid) => snap.got.get(eid), {
               graph: g,
               trusted: o.trusted,
               admission: checking,
@@ -1176,7 +1179,8 @@ export let graph = (opts: Options): Graph => {
           // Each tracker wraps the ones before it, and a flush writes through
           // the transaction it was given: the outermost flushes first, so the
           // trackers it writes through see its derived writes before they
-          // flush their own.
+          // flush their own. A classifier sits beneath them all, so nothing
+          // any of them writes escapes it.
           let flush: Step = (b) =>
             timed(
               'flush',

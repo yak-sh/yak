@@ -361,6 +361,11 @@ export type Plugin = {
     found: (eid: Eid) => Bundle | null | undefined,
     context?: HookContext,
   ) => Tracker
+  /** Its tracker classifies every write the transaction makes, other
+   * trackers' derived writes included. The graph wraps storage with it first,
+   * beneath every other tracker whatever the plugin order, so each of their
+   * flushes writes through it, and it flushes after them. */
+  classifies?: boolean
   /** Ordered write policy. The factory sees the storage-ready bundles once;
    * the hook it returns checks or rewrites each live operation against the
    * operations already written before it. Opting in makes mutate and cascade

@@ -10,7 +10,9 @@ type Held = { set: Archetype; assigned?: string; dead: boolean }
  * Assign archetypes on create/add/remove using the graph's gathered pre-image.
  * Load archetypeDoc into both graph and storage. All state about pending writes
  * is transaction-local; the supplied cache contains only immutable table sets.
- * Stamps, cascades and journal writes use the same tracker as ordinary patches.
+ * Stamps, cascades, journal writes and other trackers' derived writes use the
+ * same tracker as ordinary patches: it classifies, so the graph places it
+ * beneath them whatever the plugin order.
  */
 export function archetypes(cache: Archetypes = new Archetypes()): Plugin {
   let empty = cache.intern([])
@@ -81,6 +83,7 @@ export function archetypes(cache: Archetypes = new Archetypes()): Plugin {
           }
         }),
     },
+    classifies: true,
     track: (tx, found) =>
       tracking(tx, found, cache, empty, meta, initial, needed),
   }

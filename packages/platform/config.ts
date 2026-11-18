@@ -91,7 +91,7 @@ export let appConfig: Config = {
     },
     provenance,
     ...machine(),
-    // Who wrote the words a row still holds, after archetypes classify it.
+    // Who wrote the words a row still holds.
     { use: 'yak/authorship', facets: ['graph'] },
     // Apps have no numbers, but every store accepts human ids on input.
     { use: '@yaks/id', words: [] },

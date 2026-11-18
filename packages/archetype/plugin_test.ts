@@ -1,6 +1,14 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
-import { type Bundle, graph, Refused, type Storage, type Tx } from '@yaks/graph'
+import {
+  type Bundle,
+  graph,
+  type Plugin,
+  Refused,
+  type Storage,
+  type Tx,
+} from '@yaks/graph'
+import { after } from '@yaks/fp'
 import { ram } from '@yaks/ram'
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import { archetypeDoc, archetypes, eidOf } from './mod.ts'
@@ -280,6 +288,44 @@ for (let async of [false, true]) {
     assertEquals(
       store.tx((tx) => tx.get(['a']))[0].entity.archetype,
       eidOf(['tombstone']),
+    )
+  })
+}
+
+// A tracker deriving `other` on every note it sees written.
+let deriving = (): Plugin => ({
+  name: 'deriving',
+  track: (tx) => {
+    let seen = new Set<string>()
+    return {
+      tx: {
+        ...tx,
+        patch: (bundles) => {
+          for (let b of bundles) if (b.note) seen.add(b.entity.eid)
+          return tx.patch(bundles)
+        },
+      },
+      flush: (bundles) => {
+        if (!seen.size) return bundles
+        let patches = [...seen].map((eid) => ({ entity: { eid }, other: {} }))
+        seen.clear()
+        return after(tx.patch(patches), () => [...bundles, ...patches])
+      },
+    }
+  },
+})
+
+for (let first of [true, false]) {
+  test(`a tracker's writes are classified whether it comes ${first ? 'before' : 'after'} archetypes`, () => {
+    let vocab = notes(false)
+    let plugins = first
+      ? [deriving(), archetypes()]
+      : [archetypes(), deriving()]
+    let g = graph({ vocab, storage: ram(vocab), plugins })
+    g.apply([{ entity: { eid: 'n' }, note: { text: 'hi' } }])
+    assertEquals(
+      (g.get(['n']) as Bundle[])[0].entity.archetype,
+      eidOf(['note', 'other']),
     )
   })
 }
