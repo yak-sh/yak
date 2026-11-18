@@ -1,7 +1,7 @@
 // Storage keeps a recoverable copy before a destructive write, in the same
 // transaction. One batch holds each entity as it first stood, including the
 // rows a death cascade detaches or releases.
-import { after } from '@yaks/fp'
+import { after, each } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
 import { type Bundle, comps, dead } from './bundle.ts'
 import { mint } from './mint.ts'
@@ -243,32 +243,45 @@ export { readTrash } from './trash-read.ts'
 /** Erase exact entities' saved copies after a person chose permanent purge,
  * or for an intentional security redaction. Ordinary deletion never calls it.
  * Unrelated rows in a shared transaction or trash group remain recoverable. */
-export let purgeEntities = async (
+export let purgeEntities = (
   graph: Graph,
   eids: string[],
-): Promise<void> => {
+): void | Promise<void> => {
   let targets = new Set(eids)
   if (!targets.size) return
-  await graph.storage.tx(async () => {
-    let removed = await graph.storage.get(eids)
-    if (graph.storage.trash) {
-      let after: string | undefined
-      while (true) {
-        let page = await graph.storage.trash(eids, { limit: 100, after })
+  let removed: Bundle[] = []
+  let saved = (cursor?: string): void | Promise<void> => {
+    if (!graph.storage.trash) return
+    return after(
+      graph.storage.trash(eids, { limit: 100, after: cursor }),
+      (page) => {
         removed.push(
           ...page.flatMap((t) =>
             t.bundles.filter((b) => targets.has(b.entity.eid))
           ),
         )
-        if (page.length < 100) break
-        after = page.at(-1)!.id
-      }
-    }
-    removed.push(...await graph.storage.purgeHistory?.(eids) ?? [])
-    for (let plugin of graph.plugins) {
-      removed.push(...await plugin.purge?.(graph, eids) ?? [])
-    }
-    await graph.storage.purgeTrash?.(eids)
-    for (let plugin of graph.plugins) await plugin.purged?.(graph, removed)
-  })
+        if (page.length == 100) {
+          return saved(page.at(-1)!.id)
+        }
+      },
+    )
+  }
+  let append = (values: Bundle[] | void): void => {
+    removed.push(...values ?? [])
+  }
+  return graph.storage.tx(() =>
+    after(graph.storage.get(eids), (live) => {
+      removed.push(...live)
+      let steps: (() => void | Promise<void>)[] = [
+        () => saved(),
+        () => after(graph.storage.purgeHistory?.(eids), append),
+        ...graph.plugins.map((plugin) => () =>
+          after(plugin.purge?.(graph, eids), append)
+        ),
+        () => graph.storage.purgeTrash?.(eids),
+        ...graph.plugins.map((plugin) => () => plugin.purged?.(graph, removed)),
+      ]
+      return each(steps, undefined as void, (_v, step) => step())
+    })
+  )
 }

@@ -6,7 +6,8 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
-import { type Bundle, match, reads } from '@yaks/graph'
+import { type Bundle, graph, match, reads } from '@yaks/graph'
+import { purgeEntities } from '@yaks/graph/trash'
 import { blobKeywords, blobRead, blobSchema } from '@yaks/blob'
 import { by, insert, scan } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
@@ -292,5 +293,41 @@ test("the graves a sweep may prune are found past Cloudflare's own tables", asyn
   )
   await s.tx((tx) => tx.remove([{ eid: 'p1' }]))
   let later = new Date(Date.now() + 60_000).toISOString()
+  assertEquals(s.buried(later, { limit: 9 }), { eids: [] })
+  s.purgeTrash(['p1'])
   assertEquals(s.buried(later, { limit: 9 }), { eids: ['p1'] })
+})
+
+test('confirmed purge stays inside the object synchronous transaction and rolls back failures', () => {
+  using db = durable()
+  let told: string[] = []
+  let s = storage(db, shop, { report: (e) => void told.push(e.name) })
+  s.install()
+  s.tx((tx) =>
+    tx.patch([{
+      entity: { eid: 'precious' },
+      doc: { title: 'kept until purge' },
+    }])
+  )
+  s.tx((tx) => tx.remove([{ eid: 'precious' }]))
+  let g = graph({
+    storage: s,
+    vocab: shop,
+    plugins: [{
+      name: 'failed resource purge',
+      purged: () => {
+        throw new Error('retry resource purge')
+      },
+    }],
+  })
+  assertThrows(
+    () => purgeEntities(g, ['precious']),
+    Error,
+    'retry resource purge',
+  )
+  assertEquals(s.trash(['precious']).length, 1)
+  g.plugins.length = 0
+  assertEquals(purgeEntities(g, ['precious']), undefined)
+  assertEquals(s.trash(['precious']), [])
+  assertEquals(told, [])
 })
