@@ -6,12 +6,28 @@ import { sweepDoc } from '@yaks/platform/sweep-vocab'
 import { bucketObjects } from '@yaks/blob'
 import { memoryBucket } from '../../packages/blob/testing.ts'
 import type { Directory } from './directory.ts'
-import { reclaimed, referenced, retired, retiring } from './file-retirement.ts'
+import {
+  reclaimed,
+  referenced,
+  retired,
+  retiring,
+  retiringPrefix,
+} from './file-retirement.ts'
 import { pruned } from './written.ts'
+import { spineDoc } from '@yaks/kernel/vocab'
 import { reclaimFiles } from './file-retirement-graph.ts'
 import { WINDOW } from './recover.ts'
 
-let vocab = loadVocab([pick(sweepDoc, ['file_retirement'])])
+let vocab = loadVocab([
+  spineDoc,
+  pick(sweepDoc, ['file_retirement']),
+  {
+    $defs: Object.fromEntries(['app', 'space', 'visit'].map((name) => [name, {
+      component: true,
+      properties: { name: { type: 'string' } },
+    }])),
+  },
+])
 let ledger = () => graph({ vocab, storage: ram(vocab) })
 let now = Date.parse('2026-11-18T00:00:00Z')
 let key = 'sha/' + 'a'.repeat(64)
@@ -79,9 +95,11 @@ test('an orphan goes only after its restore window', async () => {
 
 // Cancellation runs inside the referrer's write, before any effect can run.
 let ruleVocab = loadVocab([
+  spineDoc,
   pick(sweepDoc, ['file_retirement']),
   {
     $defs: {
+      app: { component: true, properties: { name: { type: 'string' } } },
       written: {
         component: true,
         properties: {
@@ -113,4 +131,137 @@ let afterRemoval = await atomic.read('.file_retirement')
 test('reference and removal cancel old retirement in their own commits', () => {
   equal(afterReference, [])
   equal(afterRemoval, [])
+})
+
+let erased = ledger(), erasedBlobs = bucketObjects(memoryBucket().bucket)
+let owner = crypto.randomUUID(), photo = 'ada/.apps/old/blobs/photo'
+await erased.apply([{ entity: { eid: owner }, app: { name: 'old app' } }], {
+  trusted: true,
+})
+await erasedBlobs.put(photo, bytes)
+await retiringPrefix(erased, erasedBlobs, 'ada/.apps/old/', owner)
+let [owned] = await erased.read('.file_retirement')
+let waits: number[] = []
+let defer = {
+  defer: (delay: number) => {
+    waits.push(delay)
+    return Promise.resolve()
+  },
+}
+await retired(erased, dir, erasedBlobs, owned.entity.eid, defer, now)
+let whileNamed = await erasedBlobs.has(photo)
+await erased.apply([{ entity: { eid: owner }, app: null }], { trusted: true })
+await retired(erased, dir, erasedBlobs, owned.entity.eid, defer, now + 1)
+await retired(erased, dir, erasedBlobs, owned.entity.eid, defer, now + WINDOW)
+let beforeWindow = await erasedBlobs.has(photo)
+await retired(
+  erased,
+  dir,
+  erasedBlobs,
+  owned.entity.eid,
+  defer,
+  now + WINDOW + 1,
+)
+let afterWindow = await erasedBlobs.has(photo)
+let eraseWaits = [...waits]
+
+test('explicit erase preserves prefix bytes for a full window after the owner disappears', () => {
+  equal(whileNamed, true)
+  equal(beforeWindow, true)
+  equal(afterWindow, false)
+  equal(eraseWaits, [WINDOW, WINDOW, 1])
+})
+
+let restored = ledger(), restoredBlobs = bucketObjects(memoryBucket().bucket)
+await restoredBlobs.put(photo, bytes)
+await retiringPrefix(restored, restoredBlobs, 'ada/.apps/old/', owner)
+let [restoreRun] = await restored.read('.file_retirement')
+await retired(restored, dir, restoredBlobs, restoreRun.entity.eid, defer, now)
+await restored.apply([{
+  entity: { eid: owner },
+  app: { name: 'restored app' },
+}], { trusted: true })
+await retired(
+  restored,
+  dir,
+  restoredBlobs,
+  restoreRun.entity.eid,
+  defer,
+  now + WINDOW,
+)
+
+test('a restored app keeps its queued prefix bytes', async () => {
+  equal(await restoredBlobs.has(photo), true)
+})
+
+let reused = ledger(), reusedBlobs = bucketObjects(memoryBucket().bucket)
+await reusedBlobs.put(photo, bytes)
+await retiringPrefix(reused, reusedBlobs, 'ada/.apps/old/', owner)
+let [reuseRun] = await reused.read('.file_retirement')
+await retired(reused, dir, reusedBlobs, reuseRun.entity.eid, defer, now)
+let reuseDir = {
+  all: () => Promise.resolve([{ store: 'ada' }]),
+  apps: () =>
+    Promise.resolve([{ eid: crypto.randomUUID(), files: 'ada/.apps/old' }]),
+} as unknown as Directory
+await retired(
+  reused,
+  reuseDir,
+  reusedBlobs,
+  reuseRun.entity.eid,
+  defer,
+  now + WINDOW,
+)
+
+test('a new app reusing a legacy prefix keeps its files from the former owner retirement', async () => {
+  equal(await reusedBlobs.has(photo), true)
+})
+
+let racing = ledger(), raceBlobs = bucketObjects(memoryBucket().bucket)
+await raceBlobs.put(photo, bytes)
+await retiringPrefix(racing, raceBlobs, 'ada/.apps/old/', owner)
+let [raceRun] = await racing.read('.file_retirement')
+await retired(racing, dir, raceBlobs, raceRun.entity.eid, defer, now)
+let raceDir = {
+  all: async () => {
+    // A restore and another erase reset the clock while the census yields.
+    await racing.apply([{
+      entity: raceRun.entity,
+      file_retirement: { at: null },
+    }], { trusted: true })
+    return []
+  },
+} as unknown as Directory
+let raceWaits: number[] = []
+await retired(racing, raceDir, raceBlobs, raceRun.entity.eid, {
+  defer: (delay) => {
+    raceWaits.push(delay)
+    return Promise.resolve()
+  },
+}, now + WINDOW)
+
+test('a clock reset during the census defers deletion again', async () => {
+  equal(await raceBlobs.has(photo), true)
+  equal(raceWaits, [WINDOW])
+  equal((await racing.read('.file_retirement')).length, 1)
+})
+
+let clockOwner = crypto.randomUUID()
+await atomic.apply(
+  [{ entity: { eid: clockOwner }, app: { name: 'restored' } }],
+  { trusted: true },
+)
+await retiring(atomic, [photo], now, clockOwner)
+let [clockRun] = await atomic.read('.file_retirement')
+await atomic.apply([{
+  entity: clockRun.entity,
+  file_retirement: { at: new Date(now).toISOString() },
+}], { trusted: true })
+await atomic.apply([{ entity: { eid: clockOwner }, app: null }], {
+  trusted: true,
+})
+let [resetClock] = await atomic.read('.file_retirement')
+
+test('removing the owner component resets its prefix clock transactionally', () => {
+  equal((resetClock.file_retirement as { at?: string | null }).at ?? null, null)
 })

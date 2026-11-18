@@ -11,7 +11,19 @@ export let sweepDoc: VocabDoc = {
         'Unreferenced bucket keys, kept for thirty days after discovery before deletion.',
       properties: {
         keys: { type: 'array', items: { type: 'string' } },
-        at: { type: 'string', format: 'date-time' },
+        at: {
+          type: 'string',
+          format: 'date-time',
+          description:
+            'When these keys were first observed unreferenced; absent while an erased owner still stands.',
+        },
+        owner: {
+          type: 'string',
+          ref: 'entity',
+          death: 'keep',
+          description:
+            'The app, space or visit whose explicit erasure retires these keys.',
+        },
       },
     },
     delete_retired_files: {

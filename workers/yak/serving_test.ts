@@ -1274,9 +1274,9 @@ test('DELETE / empties the app store and bears it again', async () => {
 
   await emptied(env, space, app, { person: ADA, role: 'owner' })
 
-  // The bytes went with it, and the store is a planted, empty graph — not one
+  // The bytes remain recoverable, and the store is a planted, empty graph — not one
   // with no tables at all, which is what an app made later here would wake in.
-  assertEquals(files.held.size, 0)
+  assertEquals(files.held.has('ada/cookbook/index.html'), true)
   assertEquals((await page.query('.doc')).length, 0)
   assertEquals(
     (await object(storeName(space, app)).fetch(

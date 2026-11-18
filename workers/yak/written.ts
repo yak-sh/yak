@@ -893,8 +893,8 @@ export let kept = (
  *
  * The key space is the whole bucket's, so the mark set is too: an object one
  * app stopped naming may be the very file another app serves. The caller
- * hands every app still standing (a trashed one inside its thirty days and
- * the platform's own space included), and the sweep marks from all of them
+ * hands every app still standing (including trash and the platform's own
+ * space), and the sweep marks from all of them
  * before it retires anything. Erasure starts a further thirty-day window.
  *
  * {@link GRACE} is the other half of "only what nothing names": a write puts

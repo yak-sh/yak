@@ -2,7 +2,7 @@ import { planSettings } from '@yaks/platform/routes'
 import { ownedPrefix } from './file-root.ts'
 // Deletion first keeps a recoverable trash mark. Only an owner's confirmed
 // purge removes app stores, files or shared names; the daily sweep never does.
-import { r2Objects, r2RawObjects } from './lib/objects.ts'
+import { r2RawObjects } from './lib/objects.ts'
 import { blobPrefix, receiptPrefix, uploadPrefix } from './blob-key.ts'
 import { type Bundle, minted } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
@@ -61,7 +61,7 @@ import { plans } from './payments.ts'
 import { type Pinner, versions } from './versions.ts'
 import { own } from '@yaks/platform/versions'
 import { holding, pruned } from './written.ts'
-import { retiring } from './file-retirement.ts'
+import { retiring, retiringPrefix } from './file-retirement.ts'
 import { refuse } from './tool.ts'
 import { dollars, released } from './numbers.ts'
 import { shown } from '@yaks/phone'
@@ -323,13 +323,17 @@ After 30 days we erase it, and then it is gone for good.`
 If you did not ask for this, ignore this letter and nothing happens at all.`,
 })
 
-// The bytes under a prefix, gone. Answers the keys it removed.
-let swept = async (env: Env, prefix: string) => {
-  let blobs = r2Objects(env.BLOBS)
-  let keys = await blobs.list(prefix)
-  await blobs.delete(keys)
-  return keys
-}
+// Explicit erasure retires bytes; they outlive the store's restore window.
+let swept = (env: Env, prefix: string, owner: string) =>
+  retiringPrefix(
+    {
+      read: (query) => meta(env).query(query),
+      apply: (entities) => meta(env).apply(entities, KERNEL),
+    },
+    r2RawObjects(env.BLOBS),
+    prefix,
+    owner,
+  )
 
 // App-owned bytes stay beneath the space's handle across address changes.
 let under = (space: Space, app?: App) =>
@@ -343,7 +347,7 @@ export let unvisited = async (env: Env, { eid, visit }: Given) => {
   await cleared(env, visit.store)
   // Only ever a visitor's own prefix: an empty one would be the whole bucket.
   if (visit.blobs.startsWith(VISITS) && visit.blobs != VISITS) {
-    await swept(env, visit.blobs)
+    await swept(env, visit.blobs, eid)
   }
   await meta(env).apply([{ entity: { eid }, visit: null }], KERNEL)
 }
@@ -372,16 +376,16 @@ export let emptied = async (
     await drop(env, `app-${app.eid}-r-${(app.version ?? 0) + 1}`, true)
   }
   await deleteBindings(env, app)
-  await swept(env, under(space, app))
+  await swept(env, under(space, app), app.eid)
   // Uploads beside its files went with them; a store it was given at
   // adoption keeps its uploads where the store was born.
   if (!blobPrefix(space, app).startsWith(under(space, app))) {
-    await swept(env, blobPrefix(space, app))
+    await swept(env, blobPrefix(space, app), app.eid)
   }
-  await swept(env, `${space.store}/.releases/${app.eid}/`)
-  await swept(env, `${space.store}/.declarations/${app.eid}/`)
-  await swept(env, receiptPrefix(app))
-  await swept(env, uploadPrefix(app))
+  await swept(env, `${space.store}/.releases/${app.eid}/`, app.eid)
+  await swept(env, `${space.store}/.declarations/${app.eid}/`, app.eid)
+  await swept(env, receiptPrefix(app), app.eid)
+  await swept(env, uploadPrefix(app), app.eid)
   // The store is named for where the app was born (directory.ts storeName),
   // so emptying it is what keeps a later app at the same address from waking
   // up in this one's graph.
@@ -436,8 +440,8 @@ export let erase = async (
   // And whatever else stands under the space's own name — bytes an app that
   // was deleted before this tool existed left behind, or a delete that died
   // halfway and is being finished now. The slug is about to be somebody
-  // else's; nothing under it may outlive this.
-  await swept(env, under(d.space))
+  // else's; the former owner's bytes stay recoverable for thirty more days.
+  await swept(env, under(d.space), d.space.eid)
   // What the space kept outside the graph, and therefore outside the cascade
   // below: the builder's conversation, in an object of its own keyed by the
   // eid (build.ts), and the container that conversation compiled things in
