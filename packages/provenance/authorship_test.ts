@@ -3,7 +3,7 @@ import { type Bundle, type Comp, graph, signed } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { authors, retained } from './authorship.ts'
-import { authorship } from './graph.ts'
+import { authorship } from './tracker.ts'
 import { provenanceDoc } from './vocab.ts'
 
 let vocab = loadVocab([provenanceDoc, {

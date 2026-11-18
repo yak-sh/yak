@@ -10,18 +10,18 @@ composed without this package keeps neither.
 - `updated{at, by, via}` records the last write after that, and is absent until
   the first one.
 - `authorship{fields}` retains the writers of the words and primitive values
-  still held by the row, when the graph facet is composed. `fields` maps
+  still held by the row, where a store composes the tracker. `fields` maps
   JSON-encoded component/property/leaf paths to ranges with
   `{from, to, by,
   via}`. String ranges use UTF-16 offsets; other values use
   `[0, 1]`.
 
-The graph facet matches meaningful words across the whole row, so edits,
-property moves and array shifts keep their writers. Equal repeated words keep
-all their known writers conservatively. Removing their final occurrence removes
-that contribution; whitespace and punctuation alone retain none. Consecutive
-words with the same writers share a range, so an ordinary long field holds one
-range per writer. Nested JSON values are attributed independently.
+The tracker matches meaningful words across the whole row, so edits, property
+moves and array shifts keep their writers. Equal repeated words keep all their
+known writers conservatively. Removing their final occurrence removes that
+contribution; whitespace and punctuation alone retain none. Consecutive words
+with the same writers share a range, so an ordinary long field holds one range
+per writer. Nested JSON values are attributed independently.
 
 Old rows without `authorship` use both `created` and `updated`. Their first edit
 seeds surviving content conservatively from those two stamps. Writers lost
@@ -34,12 +34,14 @@ in, `at` from the write's clock and `by` and `via` from its
 
 The root import exports `provenanceDoc`, a vocabulary document.
 `@yaks/provenance/vocab` also exports `docs: [provenanceDoc]` and `description`
-for plugin loaders. `@yaks/provenance/graph` exports `plugins(host)` and
-`authorship(vocab)` to retain value attribution transactionally through the
-storage interface. Compose it after other storage trackers such as archetypes.
-`@yaks/provenance/authorship` exports `authors(row)` to read the current writers
-and `retained(old, next, actor, vocab)` to compute their ranges. The package has
-no storage, tools or effects.
+for plugin loaders. `@yaks/provenance/tracker` exports `authorship(vocab)`, the
+plugin that retains value attribution transactionally through the storage
+interface. It is not a facet, so a graph listing this package keeps only the
+stamps; a store opts in by composing it after other storage trackers such as
+archetypes, as yaks.app's app stores do through @yaks/platform's
+`yak/authorship`. `@yaks/provenance/authorship` exports `authors(row)` to read
+the current writers and `retained(old, next, actor, vocab)` to compute their
+ranges. The package has no storage, tools or effects.
 
 ## Example
 

@@ -4347,6 +4347,7 @@
             "npm:@yaks/mail@0.2.23",
             "npm:@yaks/member@0.2.25",
             "npm:@yaks/model@0.2.32",
+            "npm:@yaks/provenance@0.2.28",
             "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/session@0.2.33",

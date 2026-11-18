@@ -1,4 +1,6 @@
-// Live value attribution is opt-in; the ordinary stamps need only vocabulary.
+// Live value attribution, opt-in: a store that wants it composes this tracker
+// (@yaks/platform's `yak/authorship` for app stores). It is not a facet, so a
+// graph that lists this package gets the stamps alone.
 import { after } from '@yaks/fp'
 import type { Bundle, Plugin, Tracker, Tx } from '@yaks/graph'
 import { writers } from '@yaks/graph/provenance'
@@ -62,8 +64,3 @@ export let authorship = (vocab: Vocab): Plugin => ({
     }
   },
 })
-
-/** The value-attribution graph facet, specialized by its vocabulary. */
-export let plugins = (
-  host: { vocab: Vocab },
-): Plugin[] => [authorship(host.vocab)]
