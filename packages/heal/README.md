@@ -152,7 +152,9 @@ so a replay, a restart, a second tracker holding the same bug or a moved stamp
 sends no second knock; a regression after the next completion sends a new one. A
 reopening's knock names the hit that reopened it, from
 `regressed{message,
-commit}`.
+commit}`. Its last line says what heal did about the bug:
+that a fixer starts on it, or which gate holds one back (fixers off, at cap,
+cooling down), so whoever hears the knock knows whether the work waits for them.
 
 The follower writes each mark through the same client's `/apply` door, with
 `optimistic: false` to await tracker admission. Its task and `about` edge are

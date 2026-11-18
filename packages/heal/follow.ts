@@ -307,26 +307,20 @@ export let follow = (
             opening: str(comp(bug, 'regressed')?.at),
             open: true,
             last: last(evidence, url, scope),
-            writes: [
-              ...reopen
-                ? [{
-                  entity: task.entity,
-                  completed: null,
-                  $was: {
-                    completed: { at: token(comp(task, 'completed')?.at) },
-                    cancelled: { at: token(comp(task, 'cancelled')?.at) },
-                  },
-                }]
-                : [],
-              ...reopen
-                ? (await news(
-                  bug,
-                  await whose(bug),
-                  comp(task, 'completed')?.at,
-                ))
-                  .knocks
-                : [],
-            ],
+            writes: reopen
+              ? [{
+                entity: task.entity,
+                completed: null,
+                $was: {
+                  completed: { at: token(comp(task, 'completed')?.at) },
+                  cancelled: { at: token(comp(task, 'cancelled')?.at) },
+                },
+              }]
+              : [],
+            knocks: reopen
+              ? (await news(bug, await whose(bug), comp(task, 'completed')?.at))
+                .knocks
+              : [],
           }
         }
         if (bug.resolved || bug.archived) return
@@ -353,11 +347,8 @@ export let follow = (
           task,
           bug: evidence,
           last: last(evidence, url, scope),
-          writes: [
-            task,
-            link(eid, 'about', evidence),
-            ...knocks,
-          ],
+          writes: [task, link(eid, 'about', evidence)],
+          knocks,
         }
       }) || closed
     }

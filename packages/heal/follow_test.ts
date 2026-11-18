@@ -281,6 +281,7 @@ test('the tracker follower files task, evidence edge and fixer atomically', asyn
   let knock = written.find((row) => row.knock)!
   equal(comp(knock, 'knock').target, project)
   ok(String(comp(knock, 'doc').body).includes('TypeError: missing row'))
+  ok(String(comp(knock, 'doc').body).endsWith('\n\nA fixer starts on it.'))
   fresh.close()
 })
 
@@ -325,7 +326,12 @@ test('a second follower and a replay leave the box untouched', async () => {
   replayed.close()
 })
 
-for (let gate of ['nofix', 'cap', 'cooldown']) {
+// The knock tells whoever hears it whether a fixer is coming.
+let says = {
+  nofix: 'No fixer starts: automatic fixers are off.',
+  cap: 'Its fixer starts when one of the 0 running ends.',
+}
+for (let gate of ['nofix', 'cap', 'cooldown'] as const) {
   let f = await fixture(gate == 'cap' ? { cap: 0 } : {})
   if (gate == 'nofix') {
     await put(f.g, [{ entity: { eid: project }, nofix: {} }])
@@ -347,6 +353,10 @@ for (let gate of ['nofix', 'cap', 'cooldown']) {
     equal(await count(f.g, 'entry'), 0)
     let [task] = await rows(f.g, 'task')
     ok(!task.claim)
+    let [knock] = await rows(f.g, 'knock')
+    if (gate != 'cooldown') {
+      ok(String(comp(knock, 'doc').body).endsWith(`\n\n${says[gate]}`))
+    }
     f.close()
   })
 }
@@ -859,6 +869,13 @@ test('cooldown leaves regressed work open and announces it', async () => {
   equal(cooled.commits.length, 1)
   ok(!(await cooled.g.get([taskEid(bug)]))[0].completed)
   equal(await count(cooled.g, 'knock'), 2)
+  ok(
+    (await rows(cooled.g, 'knock')).some((k) =>
+      String(comp(k, 'doc').body).endsWith(
+        '\n\nIts fixer starts once the last one for it has cooled down.',
+      )
+    ),
+  )
   cooled.close()
 })
 

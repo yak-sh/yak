@@ -74,6 +74,9 @@ export type Work = {
   task: Bundle
   bug: string
   writes?: Bundle[]
+  /** The knocks telling of this opening, which also tell whether a fixer
+   * starts on it, so whoever hears one knows whether the work waits for them. */
+  knocks?: Bundle[]
   reopen?: boolean
   /** The tracker opening a new fixer belongs to. */
   opening?: string
@@ -81,6 +84,18 @@ export type Work = {
   open?: boolean
   last?: string
 }
+
+// A knock with what heal did about its bug as its last line.
+let told = (knock: Bundle, said?: string): Bundle =>
+  said
+    ? {
+      ...knock,
+      doc: {
+        ...comp(knock, 'doc'),
+        body: `${comp(knock, 'doc')?.body}\n\n${said}`,
+      },
+    }
+    : knock
 
 /** Whether a fixer still holds a slot.
  * Native work lives in its transcript, not a process that eventually exits.
@@ -169,22 +184,36 @@ export let fixing = (g: Graph, options: Options = {}) => {
     )
   }
   let unexited = and(present('fixer'), absent('exit'))
+  // The gate that holds a fixer back, as a line for the bug's knock.
   let blocked = async ({ task }: Work, history: Bundle[], pass: Pass) => {
     let project = str(comp(task, 'filed')?.project)
-    for (let p of new Set([await pass.home(), project])) {
-      if (p && await pass.muted(p)) return true
+    let home = await pass.home()
+    for (let p of new Set([home, project])) {
+      if (p && await pass.muted(p)) {
+        return p == home
+          ? 'No fixer starts: automatic fixers are off.'
+          : 'No fixer starts: fixers are off for its project.'
+      }
     }
     let now = Date.now()
     if (history.some((f) => young(f, options.cooldown ?? 30 * 60_000, now))) {
-      return true
+      return 'Its fixer starts once the last one for it has cooled down.'
     }
+    let cap = options.cap ?? 2
     let running = (await pass.unexited()).filter((f) => active(f, now))
-    return running.length >= (options.cap ?? 2)
+    if (running.length >= cap) {
+      return `Its fixer starts when one of the ${cap} running ends.`
+    }
   }
 
-  let request = async (work: Work, pass: Pass): Promise<Bundle[]> => {
+  // The fixer request for a bug's work, and what its knock says of it.
+  let request = async (
+    work: Work,
+    pass: Pass,
+  ): Promise<{ asked: Bundle[]; said?: string }> => {
+    let none = { asked: [] }
     let { task, bug, reopen, opening, open, last } = work
-    if (task.cancelled || (!reopen && !open && task.completed)) return []
+    if (task.cancelled || (!reopen && !open && task.completed)) return none
     let history = await pass.fixers(bug)
     let latest =
       history.toSorted((a, b) =>
@@ -198,9 +227,9 @@ export let fixing = (g: Graph, options: Options = {}) => {
     // sessions are held conservatively, including a managed start in flight.
     if (holder && holder != latest?.entity.eid) {
       let owner = await one(g, str(holder))
-      if (!owner || live(owner)) return []
+      if (!owner || live(owner)) return none
     }
-    if (history.some((f) => active(f))) return []
+    if (history.some((f) => active(f))) return none
     let continuing = !reopen &&
       (!opening || str(comp(latest, 'created')?.at) >= opening) &&
       latest?.native && !latest.exit &&
@@ -210,13 +239,14 @@ export let fixing = (g: Graph, options: Options = {}) => {
     if (!continuing && !reopen) {
       // History is a receipt, not a permanent veto. Terminal native sessions
       // get a fresh request after cooldown; their stopped transcript stays put.
-      if (!open && (history.length || task.claim)) return []
+      if (!open && (history.length || task.claim)) return none
     }
-    if (await blocked(work, continuing ? [] : history, pass)) return []
+    let held = await blocked(work, continuing ? [] : history, pass)
+    if (held) return { asked: [], said: held }
     let using = await defaultUsing(g)
     let session = continuing ? latest.entity.eid : uuid()
     let title = str(comp(task, 'doc')?.title)
-    return [
+    let asked = [
       ...continuing ? [] : [{
         entity: { eid: session },
         session: { operator: false },
@@ -252,6 +282,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
         },
       },
     ]
+    return { asked, said: continuing ? undefined : 'A fixer starts on it.' }
   }
 
   /** A pass over some tracker bugs. Its decisions share what they read: the
@@ -300,12 +331,16 @@ export let fixing = (g: Graph, options: Options = {}) => {
       serial(async () => {
         let work = await read()
         if (!work) return false
-        let asked = await request(work, pass)
+        let { asked, said } = await request(work, pass)
         if (asked.length) {
           held.delete(work.bug)
           running = undefined
         }
-        let rows = [...(work.writes ?? []), ...asked]
+        let rows = [
+          ...(work.writes ?? []),
+          ...(work.knocks ?? []).map((k) => told(k, said)),
+          ...asked,
+        ]
         if (rows.length) await g.apply(rows, { trusted: true })
         return rows.length > 0
       })
