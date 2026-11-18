@@ -7,8 +7,8 @@
 //
 // The door (apps.ts) asks `visiting` right after it knows who is asking, and
 // a birth (`born`) is bounded there: a source makes at most BIRTH_RATE stores
-// a minute, and an app's strangers hold at most `CAP`. The daily sweep erases
-// what nobody can reach any more (erase.ts `unvisited`). The app's own
+// a minute, and an app's strangers hold at most `CAP`. Visitor data remains
+// recoverable until its owner confirms a purge (erase.ts `unvisited`). The app's own
 // schedule runs in each store as it does in the app's, and stops with it.
 //
 // Installing with `visit` (tools.ts app_install) makes the store an app of the

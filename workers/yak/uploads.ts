@@ -270,7 +270,7 @@ export let blobDoor = async (
     // Only an upload is held to what the app takes.
     accepts: writing ? await acceptsOf(env, space, app) : undefined,
     at,
-    parts: { objects, bucket: env.BLOBS, prefix, ledger: uploadPrefix(app) },
+    parts: { objects, bucket: env.BLOBS, prefix, ledger: uploadPrefix(prefix) },
     served: (sha, eid) =>
       servedTo(env, space, app, reader, sha, eid, req.cache),
     bytes: (seek, sha) =>

@@ -1,4 +1,5 @@
 import { ownedPrefix } from './file-root.ts'
+import { sha256 } from '@yaks/graph/sha256'
 /** Where an app keeps its uploads: the prefix its row was born with
  * (`app.blobs`), which stays with its store, so a store adopted from a visit
  * still finds the bytes its rows name. A row the mover has not reached yet
@@ -26,8 +27,9 @@ export let blobPrefix = (
 export let receiptPrefix = (app: { eid: string }) =>
   `.model-receipts/${app.eid}/`
 
-/** Where the ledger of an app's uploads in parts is kept (@yaks/blob
- * `parts`): outside every space's prefix, so it never counts against one, and
- * by the app's eid, so a rename leaves it in place. Unfinished accepted parts
- * and their receipts stay here until a person purges them (README.md). */
-export let uploadPrefix = (app: { eid: string }) => `.uploads/${app.eid}/`
+/** Each immutable blob prefix owns its multipart ledger. A visitor's store
+ * has a prefix of its own even while it is served under the source app's eid;
+ * adopting that store keeps the prefix and resumes the same uploads. Legacy
+ * `.uploads/<app eid>/` ledgers are retained because their owners were mixed. */
+export let uploadPrefix = (prefix: string) =>
+  `.uploads/by-prefix/${sha256(prefix)}/`

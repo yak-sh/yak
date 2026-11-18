@@ -8,7 +8,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parse } from 'smol-toml'
 import { next } from '@yaks/wake'
 import { r2Objects } from './lib/objects.ts'
-import { receiptPrefix } from './blob-key.ts'
+import { blobPrefix, receiptPrefix, uploadPrefix } from './blob-key.ts'
 import type { Wire } from '@yaks/durable-object'
 import type { Held } from './build-door.ts'
 import {
@@ -513,8 +513,22 @@ test('a deleted space takes its conversation and its workbench', async () => {
 test('a space enters trash before a separate permanent purge', async () => {
   await using p = platform('trash first')
   let { dir, space } = await owned(p.env)
+  await dir.apply({
+    entities: [{
+      entity: { eid: '$source' },
+      doc: { title: 'source' },
+      app: { slug: 'source', space: space.eid, version: 1, access: 'public' },
+    }],
+  }, by)
+  let source = (await dir.app(space, 'source'))!
+  await declared(p.env, space, source)
   let bytes = r2Objects(p.env.BLOBS)
-  await bytes.put('ada/precious', new TextEncoder().encode('saved work'))
+  let own = uploadPrefix(blobPrefix(space, source)) + 'recovery'
+  let adopted = uploadPrefix('.visits/adopted/blobs/') + 'recovery'
+  let legacy = `.uploads/${source.eid}/recovery`
+  for (let key of ['ada/precious', own, adopted, legacy]) {
+    await bytes.put(key, new TextEncoder().encode('saved work'))
+  }
   let out = await erase(p.env, dir, await census(dir, space), {
     person: ADA,
     role: 'owner',
@@ -529,6 +543,9 @@ test('a space enters trash before a separate permanent purge', async () => {
   })
   assertEquals(await dir.space('ada'), null)
   assertEquals(await bytes.has('ada/precious'), false)
+  assertEquals(await bytes.has(own), false)
+  assertEquals(await bytes.has(adopted), true)
+  assertEquals(await bytes.has(legacy), true)
 })
 
 // The daily sweep (the `yak-trash` wake row, fired by the directory's alarm):

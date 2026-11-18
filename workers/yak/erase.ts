@@ -344,10 +344,17 @@ export let unvisited = async (
   { eid, visit }: Given,
   purge = false,
 ) => {
+  if (purge) {
+    await purgeParts(r2RawObjects(env.BLOBS), env.BLOBS, {
+      prefix: visit.blobs,
+      ledger: uploadPrefix(visit.blobs),
+    })
+  }
   await cleared(env, visit.store)
   // Only ever a visitor's own prefix: an empty one would be the whole bucket.
   if (visit.blobs.startsWith(VISITS) && visit.blobs != VISITS) {
     await swept(env, visit.blobs, eid, purge)
+    await swept(env, uploadPrefix(visit.blobs), eid, purge)
   }
   await meta(env).apply([{ entity: { eid }, visit: null }], KERNEL)
 }
@@ -369,7 +376,7 @@ export let emptied = async (
   if (purge) {
     await purgeParts(r2RawObjects(env.BLOBS), env.BLOBS, {
       prefix: blobPrefix(space, app),
-      ledger: uploadPrefix(app),
+      ledger: uploadPrefix(blobPrefix(space, app)),
     })
   }
   // The app's own code, which is not in the bucket: a script left in the
@@ -392,7 +399,7 @@ export let emptied = async (
   await swept(env, `${space.store}/.releases/${app.eid}/`, app.eid, purge)
   await swept(env, `${space.store}/.declarations/${app.eid}/`, app.eid, purge)
   await swept(env, receiptPrefix(app), app.eid, purge)
-  await swept(env, uploadPrefix(app), app.eid, purge)
+  await swept(env, uploadPrefix(blobPrefix(space, app)), app.eid, purge)
   // The store is named for where the app was born (directory.ts storeName),
   // so emptying it is what keeps a later app at the same address from waking
   // up in this one's graph.
