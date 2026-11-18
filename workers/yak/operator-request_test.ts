@@ -36,7 +36,7 @@ let operator = operating(
       id: crypto.randomUUID(),
       model: req.model,
       items: asked.length == 1
-        ? call('tool_load', { names: ['number_find'] })
+        ? call('tool_load', { names: ['number_find', 'app_files'] })
         : [{ kind: 'assistant', text: 'Found one.' }],
       cost: 0.001,
     })
@@ -48,7 +48,7 @@ await receive(store, {
   person,
   channel: 'text',
   address: '+12695550143',
-}, 'Find me a phone number.')
+}, 'Find me a phone number and add it to my app.')
 await drain(store)
 
 let tokens = (req: Ask) =>
@@ -62,14 +62,16 @@ test(`an Operator ask carries under ${CEILING} tokens before the person's words`
   ok(tokens(first) < CEILING, `${tokens(first)} tokens`)
 })
 
-test('the Operator is sent a tool it loads with the next ask, and lists the rest', () => {
+test('the Operator is sent tools it loads with the next ask, and lists the rest', () => {
   let [first, next] = asked
-  ok(!names(first).includes('number_find'))
-  ok(names(next).includes('number_find'))
+  for (let name of ['number_find', 'app_files']) {
+    ok(!names(first).includes(name))
+    ok(names(next).includes(name))
+  }
   let load = first.tools.find((t) => t.name == 'tool_load')!
   ok(load.description.includes('- number_find: Find a phone number'))
   equal(
     names(next).filter((n) => !names(first).includes(n)),
-    ['number_find'],
+    ['app_files', 'number_find'],
   )
 })
