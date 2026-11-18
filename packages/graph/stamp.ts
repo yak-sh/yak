@@ -217,9 +217,7 @@ export let marked = (vocab: Vocab, comp: string): boolean =>
 export let editing = (bundles: Bundle[], vocab: Vocab): Set<Eid> =>
   new Set(
     bundles.filter((b) =>
-      comps(b).some(([c]) =>
-        c != 'created' && c != 'updated' && !marked(vocab, c)
-      )
+      comps(b).some(([c]) => !PROVENANCE.includes(c) && !marked(vocab, c))
     ).map((b) => b.entity.eid),
   )
 

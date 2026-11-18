@@ -1,4 +1,5 @@
 import { equal, test } from '@yaks/testing'
+import { editing } from './stamp.ts'
 import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import { books, memory, slow } from './testing.ts'
@@ -74,3 +75,28 @@ for (let async of [false, true]) {
     equal(rows[3].sold, { at: edited, by: author })
   })
 }
+
+test('provenance and mark patches leave the last content edit alone', () => {
+  for (let comp of ['created', 'updated', 'authorship', 'sold']) {
+    for (let value of [{}, null]) {
+      equal(
+        editing([{ entity: { eid: 'b1' }, [comp]: value }], books),
+        new Set(),
+      )
+    }
+  }
+})
+
+test('content patches count as edits alongside provenance and marks', () => {
+  for (let doc of [{ title: 'Dune' }, null]) {
+    equal(
+      editing([{
+        entity: { eid: 'b1' },
+        doc,
+        authorship: {},
+        sold: {},
+      }], books),
+      new Set(['b1']),
+    )
+  }
+})
