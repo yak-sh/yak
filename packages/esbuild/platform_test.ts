@@ -324,3 +324,26 @@ test('package resources refuse paths escaping their namespace', () => {
     )
   }
 })
+
+test('a page reaching a Node built-in is refused, naming what imports it', async () => {
+  let kit = pkg()
+  kit.files['mod.ts'] = "import { readFileSync } from 'node:fs'\n" +
+    'export let n = readFileSync'
+  let refused = async (main: string) =>
+    (await compile({
+      files: { ...files({ '@yaks/kit': 'platform' }), 'main.ts': main },
+      pages: ['main.ts'],
+    }, { '@yaks/kit': kit })).errors
+  let says = (node: string, from: string) =>
+    `main.ts: imports ${node} through ${from}, and no browser has it: ` +
+    'a module the page loads is written for a server'
+  assertEquals(
+    await refused("import { n } from '@yaks/kit'\nconsole.log(n)"),
+    [says('node:fs', '@yaks/kit')],
+  )
+  assertEquals(
+    await refused("import { cpus } from 'node:os'\nconsole.log(cpus)"),
+    [says('node:os', 'main.ts')],
+  )
+  assertEquals(await refused("console.log(import('node:os'))"), [])
+})

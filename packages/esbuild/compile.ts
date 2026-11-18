@@ -135,6 +135,51 @@ let unlinked = (ask: Ask, main: string) => (spec: string) => {
 let unfetched = (ask: Ask, entry: string) => (spec: string) =>
   relative(spec) ? twin(ask, resolved(entry, spec), spec) : null
 
+/// browserless('import"node:fs";import"https://o/a.js";import("node:os")') -> ['node:fs']
+/** The modules a page imports statically that no browser has: Node's
+ * built-ins, which a module written for the toolkit's other hosts can reach.
+ * A browser links a page's whole static graph before it runs a line of it, so
+ * one such import anywhere in the graph stops the page (yak.sh v50, whose
+ * @yaks/cli/terminal reached node:fs). `code` is the page as served, with
+ * every shared module it reaches named ({@link flat}); a dynamic import is
+ * fetched only when it runs, so the code that asks for it decides. */
+export let browserless = (code: string): string[] => [
+  ...new Set(
+    parse(code)[0].flatMap((i) =>
+      i.d == -1 && i.n?.startsWith('node:') ? [i.n] : []
+    ),
+  ),
+]
+
+// Why a page will not link in a browser for a Node built-in it reaches, naming
+// the page or the shared modules (by the specifier the page imports them by)
+// that import it; empty when it reaches none.
+let nodeOnly = (
+  entry: string,
+  code: string,
+  page: string,
+  shared: Record<string, string> = {},
+  urls: Record<string, string>,
+  origin: string,
+): string[] => {
+  let node = browserless(page)
+  if (!node.length) return []
+  let names = new Map(Object.entries(urls).map(([spec, url]) => [url, spec]))
+  let reached = new Set(parse(page)[0].map((i) => i.n))
+  let from = [
+    ...browserless(code).length ? [entry] : [],
+    ...Object.entries(shared)
+      .filter(([path, text]) =>
+        reached.has(`${origin}/${path}`) && browserless(text).length
+      )
+      .map(([path]) => names.get(`${origin}/${path}`) ?? path),
+  ]
+  return [
+    `imports ${node.join(', ')} through ${from.join(', ')}, and no browser ` +
+    'has it: a module the page loads is written for a server',
+  ]
+}
+
 let checked = (
   entry: string,
   code: string,
@@ -279,9 +324,11 @@ export let compile = async (
       }, unfetched(ask, entry))
       if (code == null) continue
       let missing = unexported(code, answer.shared ?? {}, origin, urls)
+      let page = flat(code, answer.shared ?? {}, origin)
+      missing.push(...nodeOnly(entry, code, page, answer.shared, urls, origin))
       if (missing.length) {
         answer.errors.push(...missing.map((line) => `${entry}: ${line}`))
-      } else answer.pages[entry] = flat(code, answer.shared ?? {}, origin)
+      } else answer.pages[entry] = page
     }
     Object.assign(tarballs, home.tarballs)
   } finally {
