@@ -81,8 +81,9 @@ import { ARRIVAL } from './config.ts'
 import { lent } from './lent.ts'
 import { copyOf } from './directory-copy.ts'
 import { mail as post } from './mail.ts'
+import { keepMail } from './mail-source.ts'
 
-/** A letter refused at the door: the sender is told, and nothing is written. */
+/** A letter refused at the door: the sender is told; its private source stays kept. */
 export class Refused extends Error {}
 
 // The mailbox an address names, or a refusal saying which half is missing. A
@@ -180,7 +181,7 @@ let carried = async (
   for (let a of mail.attachments) {
     let bytes = a.bytes
     if (!bytes.byteLength) continue
-    // An attachment the app does not take is left off; the letter still lands.
+    // An attachment the app does not take remains in the private source capture.
     let file = await filed(
       env,
       space,
@@ -208,6 +209,7 @@ let carried = async (
  * told; anything else thrown is ours, and the provider will try again.
  */
 export let arrived = async (mail: Incoming, env: Env): Promise<string> => {
+  await keepMail(env, mail)
   let requested = await signingUp(mail, env) ?? await operatorMail(mail, env)
   if (requested) return requested
   let { space, app } = await opened(env, mail.to)

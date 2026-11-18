@@ -46,6 +46,7 @@ test('Email Routing decodes the author and subject without losing transport head
     headers: new Headers({ 'Authentication-Results': 'mx.example; dkim=pass' }),
     raw: new Response(raw).body!,
   })
+  equal(new TextDecoder().decode(mail.sources?.[0].bytes), raw)
   equal(mail.name, 'Ann')
   equal(mail.from, 'bounce@example.com')
   equal(mail.headers.get('from'), 'ann@example.com')

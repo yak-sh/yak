@@ -87,6 +87,8 @@ test('receiving preserves all recipients and attachment bytes without forwarding
             cc: ['two@books.example', 'three@books.example'],
             message_id: '<inbound@example.com>',
             subject: 'Note',
+            provider_extra: { unselected: 'kept' },
+            html: '<p>See attached</p>',
             text: 'See attached',
             headers: { 'In-Reply-To': '<prior@example.com>' },
             attachments: [{}],
@@ -94,6 +96,11 @@ test('receiving preserves all recipients and attachment bytes without forwarding
       ))
     },
   }, 'provider-id')
+  equal(
+    JSON.parse(new TextDecoder().decode(letters[0].sources?.[0].bytes))
+      .provider_extra,
+    { unselected: 'kept' },
+  )
   equal(calls.length, 3)
   equal(letters.map((m) => m.to), [
     'one@books.example',
@@ -161,6 +168,12 @@ test('a received event is read in full only where the host takes mail in', async
     receiving,
   )
   equal(letters?.map((m) => [m.to, m.text]), [['reader@example.com', 'Hello.']])
+  equal(
+    new TextDecoder().decode(
+      letters?.[0].sources?.find((s) => s.name == 'event.json')?.bytes,
+    ),
+    raw,
+  )
   await throws(
     async () =>
       notification(await signed(raw, now()), secret, {

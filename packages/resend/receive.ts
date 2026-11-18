@@ -1,6 +1,11 @@
 // Resend's signed events and receiving API. Provider ids remain in this file;
 // callers receive a neutral letter, or a correlation id and RFC Message-ID.
-import { type Incoming, type Notice, Unsigned } from '@yaks/host/senders'
+import {
+  type Incoming,
+  type MailSource,
+  type Notice,
+  Unsigned,
+} from '@yaks/host/senders'
 import { type Fetch, root } from './api.ts'
 
 export { Unsigned }
@@ -118,12 +123,19 @@ export let received = async (
 ): Promise<Incoming[]> => {
   if (!options.token) throw new Error('Resend receiving key is not configured')
   let go = options.fetch ?? fetch
+  let sources: MailSource[] = []
   let get = async (path: string) => {
     let res = await go(`${root(options.base)}${path}`, {
       headers: { authorization: `Bearer ${options.token}` },
     })
     if (!res.ok) throw new Error(`Resend receive failed (HTTP ${res.status})`)
-    return await res.json() as ReceivedEmail
+    let bytes = new Uint8Array(await res.arrayBuffer())
+    sources.push({
+      name: path.endsWith('/attachments') ? 'attachments.json' : 'message.json',
+      type: 'application/json',
+      bytes,
+    })
+    return JSON.parse(new TextDecoder().decode(bytes)) as ReceivedEmail
   }
   let mail = await get(`/emails/receiving/${encodeURIComponent(email)}`)
   let attached = mail.attachments?.length
@@ -171,6 +183,7 @@ export let received = async (
     ...checked ? { verified: checked.dkim == 'pass' } : {},
     vouched: checked?.dmarc == 'pass',
     attachments,
+    sources,
   }))
 }
 
@@ -183,11 +196,29 @@ export let notification = async (
   receiving?: Receiving,
 ): Promise<Notice> => {
   if (!secret) throw new Error('Resend webhook secret is not configured')
+  let original = request.clone()
   let arrived = await event(request, secret)
   if (arrived.type == 'email.received') {
     let email = arrived.data.email_id
     if (!receiving || !email) return {}
-    return { letters: await received(receiving, email) }
+    let letters = await received(receiving, email)
+    let bytes = new Uint8Array(await original.arrayBuffer())
+    for (let mail of letters) {
+      mail.sources = [...mail.sources ?? [], {
+        name: 'event.json',
+        type: 'application/json',
+        bytes,
+      }, {
+        name: 'event-envelope.json',
+        type: 'application/json',
+        bytes: text.encode(JSON.stringify({
+          url: original.url,
+          method: original.method,
+          headers: [...original.headers],
+        })),
+      }]
+    }
+    return { letters }
   }
   let found = receipt(arrived)
   if (

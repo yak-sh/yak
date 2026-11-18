@@ -641,3 +641,28 @@ equal(letter.doc, { title: 'URGENT', body: 'Read me first.' })
 [@yaks/inbox](../inbox/README.md)'s email door is one: with the inbox
 configured, a verified letter from its person to its address starts a
 conversation, and a verified reply to one of its letters answers in that thread.
+
+## Original deliveries
+
+`capture(incoming)` produces a JSON-safe copy of an inbound delivery, including
+its envelope, text, HTML, attachment bytes and original `sources` supplied by
+the provider. `captured(capture.sources)` and `captured(capture.attachments)`
+read those original files back. Keep the capture in private storage before
+acknowledging intake: an app's parsed letter and accepted uploads are
+projections of it and may not include everything the sender supplied.
+
+```ts
+import { capture, captured } from '@yaks/mail'
+import { equal } from '@yaks/testing'
+
+let original = new TextEncoder().encode('From: a@example.com\r\n\r\nHello')
+let saved = JSON.stringify(capture({
+  from: 'a@example.com',
+  to: 'b@example.com',
+  headers: new Headers(),
+  text: 'Hello',
+  attachments: [],
+  sources: [{ name: 'message.eml', type: 'message/rfc822', bytes: original }],
+}))
+equal(captured(JSON.parse(saved).sources)[0].bytes, original)
+```

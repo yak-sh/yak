@@ -368,6 +368,16 @@ configuration a person does by hand, production and staging alike, is one of
 these three tables; each row says where it is set and what is missing without
 it. Values never appear here or in the repo.
 
+Inbound mail is captured before routing or acknowledgement in private R2 keys
+`mail-source/<encoded-recipient>/<sha256>.json`. Administrators can list a
+recipient's prefix and read a capture directly from the `BLOBS` bucket;
+`captured()` from `@yaks/mail` decodes its source files and attachments. Email
+Routing captures the original MIME and transport envelope. Resend captures the
+signed webhook body, complete receiving API responses and attachment bytes. The
+captures remain even when an app cannot accept an attachment, a mailbox refuses
+delivery, or the Operator handles the message. They have no public file route
+and no automatic expiry; app trash or deletion does not remove them.
+
 Mail uses the portable `@yaks/mail` sender selected by `MAIL_VIA`, from those
 the mail providers `config.ts` names (`posts`) lend: `@yaks/cloudflare-mail` and
 `@yaks/resend`, each a plugin whose options name the Worker's secrets and

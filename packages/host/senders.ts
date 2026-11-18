@@ -132,6 +132,13 @@ export class Undeliverable extends Error {
   }
 }
 
+/** An original part of a delivery, retained without interpreting its bytes. */
+export type MailSource = {
+  name: string
+  type: string
+  bytes: Uint8Array<ArrayBuffer>
+}
+
 /** An incoming letter at the portable mail boundary. Authentication is a
  * provider's verdict, never inferred from a stranger's supplied headers. */
 export type Incoming = {
@@ -139,7 +146,10 @@ export type Incoming = {
   name?: string
   from: string
   to: string
-  headers: { get(name: string): string | null }
+  headers: {
+    get(name: string): string | null
+    entries?(): IterableIterator<[string, string]>
+  }
   text: string
   html?: string
   /** the receiving server's DKIM verdict; unset where nobody checked */
@@ -147,7 +157,9 @@ export type Incoming = {
   /** the receiving server's DMARC pass, aligned with the From domain: that
    * domain vouches its author wrote the letter */
   vouched?: boolean
-  attachments: { name: string; type: string; bytes: Uint8Array<ArrayBuffer> }[]
+  attachments: MailSource[]
+  /** Original MIME or provider responses, before decoding or selecting fields. */
+  sources?: MailSource[]
 }
 
 /** A provider's signed word on a letter it carried: the receipt @yaks/mail's

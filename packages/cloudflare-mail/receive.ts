@@ -5,7 +5,10 @@ import type { Incoming } from '@yaks/host/senders'
 export type Inbound = {
   from: string
   to: string
-  headers: { get(name: string): string | null }
+  headers: {
+    get(name: string): string | null
+    entries?(): IterableIterator<[string, string]>
+  }
   raw: ReadableStream<Uint8Array>
 }
 
@@ -31,7 +34,8 @@ export let vouched = (header: string | null, from: string): boolean => {
 
 /** Decode one Email Worker delivery without writing or interpreting it. */
 export let received = async (message: Inbound): Promise<Incoming> => {
-  let mail = await PostalMime.parse(message.raw)
+  let raw = new Uint8Array(await new Response(message.raw).arrayBuffer())
+  let mail = await PostalMime.parse(raw)
   let decoded: Record<string, string | undefined> = {
     from: mail.from?.address,
     subject: mail.subject,
@@ -39,6 +43,18 @@ export let received = async (message: Inbound): Promise<Incoming> => {
   }
   let checked = message.headers.get('authentication-results')
   return {
+    sources: [
+      { name: 'message.eml', type: 'message/rfc822', bytes: raw },
+      {
+        name: 'envelope.json',
+        type: 'application/json',
+        bytes: new TextEncoder().encode(JSON.stringify({
+          from: message.from,
+          to: message.to,
+          headers: [...message.headers.entries?.() ?? []],
+        })),
+      },
+    ],
     name: mail.from?.name,
     from: message.from,
     to: message.to,
