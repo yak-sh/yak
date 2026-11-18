@@ -72,15 +72,17 @@ existing `.yaks.app` address in the meantime.
   attached to that app; without it, to the space. With `to`, another domain
   already attached to the same place, this one sends every visitor there instead
   of serving the place itself. Attaching an attached domain again sets `to`,
-  finishes its mail if that could not be set up before, and changes nothing
-  else. Only the space owner may attach a domain.
+  finishes its mail if that could not be set up before, and restores an
+  attachment from the trash. Only the space owner may attach a domain.
 - `domain_status(hostname?)` — reports what each domain points at, how far
   provisioning has progressed, as the four steps that can be outstanding
   (described below), and which of its mail records have arrived. Omit `hostname`
   to list every domain in the space.
-- `domain_detach(hostname)` — releases the hostname and removes its mail domain.
-  What it served is unchanged: same data, same files, same `<space>.yaks.app`
-  address.
+- `domain_detach(hostname)` — moves the attachment to the trash. The shared
+  hostname, certificate and mail domain stay held. The app keeps its data, files
+  and `<space>.yaks.app` address. `domain_attach` restores the attachment.
+  `domain_detach(hostname, purge: true)` asks the owner to release it for good
+  through the confirmation page.
 
 A domain points at one space or app, and a hostname can be attached to only one
 place on the whole platform. `www.example.com` and `example.com` are two
@@ -281,12 +283,13 @@ than changing anything.
 
 ## Detaching a domain
 
-`domain_detach(hostname)` releases the hostname and leaves the app unchanged,
-still served at `<space>.yaks.app`. It does not change the person's DNS: those
-records are theirs, in their registrar. Tell them to delete the CNAME and
-ownership TXT record for the detached hostname, and the mail records at its mail
-domain. Mail to its addresses stops arriving.
+`domain_detach(hostname)` puts the attachment in the trash and stops serving its
+app or space there. The hostname, certificate and mail domain remain held until
+the owner chooses to purge it. Keep its DNS records if it may be restored:
+`domain_attach` with the same hostname restores the attachment.
 
-Detach before attaching a domain somewhere else. A hostname belongs to one app
-on the whole platform, and `domain_attach` refuses a hostname that is already
-attached rather than moving it away from whoever holds it.
+To release the shared name permanently, call `domain_detach` with `purge: true`
+for an attachment already in the trash. It emails the owner a confirmation page.
+Only their confirmation releases the hostname and removes its mail domain. After
+that, remove its CNAME, ownership TXT and mail records wherever its DNS is
+managed. The app and its data remain at `<space>.yaks.app`.

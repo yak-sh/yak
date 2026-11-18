@@ -1,9 +1,9 @@
 // The phone number's two confirmation acts: recoverable release, including
 // links already mailed, and the owner's early return to the phone company.
-// Marks, restore and expiry are the shared app/space trash in erase.ts.
+// Marks and restore are the shared app/space trash in erase.ts.
 import { shown } from '@yaks/phone'
 import { type Kind } from './confirm.ts'
-import { daysLeft, type Directory, type PhoneLine } from './directory.ts'
+import { type Directory, type PhoneLine } from './directory.ts'
 import { trashNumber } from './erase.ts'
 import { dollars, released } from './numbers.ts'
 import type { Who } from './session.ts'
@@ -15,10 +15,10 @@ export let binnedNumber = async (
   who: Who,
 ) => {
   await trashNumber(dir, line, who)
-  return `${shown(line.number)} is in the trash for 30 days. It stops taking ` +
+  return `${shown(line.number)} is in the trash. It stops taking ` +
     `calls and texts and still costs ${dollars(line.monthly)} a month. ` +
     'Restore it on the manage page to bring its assignment back. ' +
-    'After 30 days it returns to the phone company.'
+    'Only your confirmation returns it to the phone company.'
 }
 
 // Keep the number door carried by existing letters: its press puts a number
@@ -34,7 +34,7 @@ export let heldNumber: Kind<PhoneLine> = {
   lines: (_space, l) => [
     `${
       shown(l.number)
-    } stops taking calls and texts and waits in the trash for 30 days`,
+    } stops taking calls and texts and waits in the trash until you restore or permanently return it`,
     `it still costs ${
       dollars(l.monthly)
     } a month until returned to the phone company`,
@@ -49,9 +49,9 @@ export let trashedNumber: Kind<PhoneLine> = {
   reversible: false,
   title: (l) => `Return ${shown(l.number)} for good?`,
   until: (l) =>
-    `It is in the trash, with ${
-      l.trashed ? daysLeft(l.trashed) : 30
-    } days left to restore it. It still costs ${dollars(l.monthly)} a month.`,
+    `It is in the trash and can be restored. It still costs ${
+      dollars(l.monthly)
+    } a month.`,
   stop: (l) => l.trashed ? '' : 'Release the number to the trash first.',
   lines: (_space, l) => [
     `${

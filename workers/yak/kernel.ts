@@ -180,6 +180,12 @@ let settling = async (env: Env, host: string): Promise<Response | null> => {
   if (!foreign(host, env)) return null
   let served = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
     .serves(host)
+  if (served?.host.trashed) {
+    return new Response(
+      'This domain is in the trash. Its owner can restore it.',
+      { status: 410 },
+    )
+  }
   if (ready(served)) return null
   let how: Step[] | null = null
   let stage: 'pending' | 'active' | 'error' = served?.host.stage == 'error'

@@ -17,7 +17,6 @@ import { ModelError } from '@yaks/model'
 import { next } from '@yaks/wake'
 import {
   type App,
-  daysLeft,
   type Directory,
   directoryOf,
   type PhoneLine,
@@ -525,9 +524,7 @@ export let numberTools: Row[] = [
       for (let line of lines) {
         if (line.trashed) {
           said.push(
-            `${shown(line.number)} — in the trash, ${
-              daysLeft(line.trashed)
-            } days left; ${
+            `${shown(line.number)} — in the trash until restored or purged; ${
               dollars(line.monthly)
             } a month; restore it on the manage page`,
           )

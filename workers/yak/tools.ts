@@ -1,3 +1,4 @@
+import { binnedDomain, trashedDomain } from './domain-trash.ts'
 import { permit } from './newcomer.ts'
 import { type Line, line as ql } from '@yaks/query'
 import { base64, unbase64 } from './bytes.ts'
@@ -202,16 +203,8 @@ import {
   reachable,
   reading,
   refresh,
-  release,
 } from './domains.ts'
-import {
-  type Mail,
-  placed,
-  readMail,
-  ready,
-  setUp,
-  unmail,
-} from './domain-mail.ts'
+import { type Mail, placed, readMail, ready, setUp } from './domain-mail.ts'
 import { subdomainBox, subdomainMail } from './space-mail.ts'
 import type { DomainRecord } from '@yaks/host/senders'
 import { bound, type Env } from './env.ts'
@@ -6365,7 +6358,7 @@ let OURS: Row[] = [
         if (to == host) {
           throw refuse('arguments', `${host} cannot send visitors to itself`)
         }
-        if (!sibling || sibling.serves != aim) {
+        if (!sibling || sibling.trashed || sibling.serves != aim) {
           throw refuse(
             'arguments',
             `${to} is not a domain of ${place(space, app)} — domain_attach ` +
@@ -6384,7 +6377,8 @@ let OURS: Row[] = [
       // caller's to learn. Attached here already, to this place, attaching it
       // again says where it sends its visitors, and nothing else changes.
       let taken = await ctx.dir.serves(host)
-      let mine = taken && rows.find((h) => h.name == host && h.serves == aim)
+      let mine = taken &&
+        rows.find((h) => h.name == host && (h.serves == aim || h.trashed))
       // A domain attached before it took mail is given mail now, and one
       // whose mail could not be set up then is set up now.
       if (mine) {
@@ -6392,7 +6386,8 @@ let OURS: Row[] = [
         await ctx.dir.apply({
           entities: [{
             entity: { eid: mine.eid },
-            hostname: { to },
+            hostname: { to, serves: aim },
+            ...mine.trashed ? { trashed: null } : {},
             ...mine.mail ? {} : { mail_domain: mail },
           }],
         }, vouched(who))
@@ -6551,6 +6546,13 @@ let OURS: Row[] = [
       }
       let lines = []
       for (let row of rows) {
+        if (row.trashed) {
+          lines.push(
+            `${row.name} — in the trash. Its hostname and mail domain stay held. ` +
+              'domain_attach with the same hostname restores it; domain_detach with purge: true asks the owner to release it for good.',
+          )
+          continue
+        }
         // What this domain points at. `hosts` answered only the rows aimed
         // into this space, so no app here is the space's own form and never a
         // row we cannot read.
@@ -6584,7 +6586,15 @@ let OURS: Row[] = [
     openWorld: true,
     input: {
       type: 'object',
-      properties: { space: SPACE, hostname: HOSTNAME },
+      properties: {
+        space: SPACE,
+        hostname: HOSTNAME,
+        purge: {
+          type: 'boolean',
+          description:
+            'ask the owner to permanently release a domain already in the trash',
+        },
+      },
       required: ['hostname'],
     },
     run: async (ctx, args) => {
@@ -6598,53 +6608,24 @@ let OURS: Row[] = [
             'domains it has',
         )
       }
-      reachable(ctx.env)
-      // Cloudflare first, the row last. The row is the only record we keep
-      // that the hostname exists, so a detach that dies between the two
-      // leaves a row pointing at a hostname already given back — which the
-      // next call finds and finishes. The other order leaves a billable
-      // custom hostname nothing here remembers.
-      // A domain that sent its visitors here serves its place again, since
-      // here is gone.
-      let had = await release(ctx.env, host)
-      // Its mail domain too, before the row that names it: a provider that
-      // refuses leaves the row for the next detach to finish.
-      let unreached = await unmail(ctx.env, row.mail)
-      let senders = (await ctx.dir.hosts(space)).filter((h) => h.to == host)
-      await ctx.dir.apply({
-        entities: [
-          { entity: { eid: row.eid }, tombstone: {} },
-          ...senders.map((h) => ({
-            entity: { eid: h.eid },
-            hostname: { to: null },
-          })),
-        ],
-      }, vouched(who))
-      // What it was serving keeps the address it always had: an app its own,
-      // a space its bare hostname, which is where the domain was carrying the
-      // request all along.
-      let app = (await ctx.dir.apps(space)).find((a) => a.eid == row.serves) ??
-        null
-      let back = app
-        ? url(space, app, ctx.env)
-        : `https://${spaceHost(ctx.env, space.slug)}/`
-      return {
-        text: `${host} is detached from ${place(space, app)}` +
-          (had ? '' : ' (Cloudflare had already given it back)') +
-          `. It still answers at ${back}.` +
-          (row.mail
-            ? `\n\nIts mail at ${row.mail.name} is removed` +
-              (unreached
-                ? `, but ${row.mail.via} could not be reached to remove it ` +
-                  `(${unreached})`
-                : '') +
-              '.'
-            : '') +
-          `\n\nRemove the CNAME and ownership TXT record for ${host}` +
-          (row.mail ? `, and the mail records at ${row.mail.name},` : '') +
-          ' wherever its DNS is managed; this attachment no longer uses them.',
-        space,
+      if (args.purge === true) {
+        if (!row.trashed) {
+          throw refuse('arguments', 'Move the domain to the trash first.')
+        }
+        return {
+          text: await requested(
+            ctx.env,
+            ctx.dir,
+            space,
+            ctx.person,
+            trashedDomain,
+            row.eid,
+            row,
+          ),
+          space,
+        }
       }
+      return { text: await binnedDomain(ctx.dir, row, who), space }
     },
   },
   {

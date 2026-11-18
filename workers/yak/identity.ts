@@ -1,3 +1,4 @@
+import { trashedDomain } from './domain-trash.ts'
 import { linked } from './preview-route.ts'
 // The identity part (D-32318 §Auth): one sign-in for the whole platform, at
 // the apex, and the OAuth 2.1 door agents come through. Two ways in, one
@@ -555,7 +556,14 @@ let closing = async (
 // Every act only a person may confirm, by the name its door carries
 // (confirm.ts): one door, and the kinds as data.
 let KINDS = Object.fromEntries(
-  [trashedApp, heldNumber, trashedNumber, retiredStorage, trashedTunnel].map((
+  [
+    trashedApp,
+    heldNumber,
+    trashedNumber,
+    trashedDomain,
+    retiredStorage,
+    trashedTunnel,
+  ].map((
     k,
   ) => [k.kind, k as Kind<unknown>]),
 )

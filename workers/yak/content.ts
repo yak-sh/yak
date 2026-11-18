@@ -656,7 +656,7 @@ export let WORDS: Record<string, Words> = {
       'done': 'Detached %{hostname}',
     },
     'description':
-      "Stop serving at a domain, whether it served a space or one app. The hostname is released back to Cloudflare and what it served is untouched: it still answers at its <space>.yaks.app address, and its data and files are not involved. The person's DNS record is theirs to remove wherever their domain is managed; until they do, it points at nothing. Only the space owner may detach. To undo: domain_attach with the same hostname, which starts the certificate again. Returns the detached hostname, the original yaks.app URL and a reminder to remove the DNS record. Documentation: https://yaks.app/docs/domains.",
+      "Move a domain attachment to the trash. Its hostname, certificate and mail domain stay held, and it stops serving the app or space. The app's data, files and yaks.app address remain. domain_attach with the same hostname restores it without reclaiming its certificate. With purge: true, asks the owner by email to permanently release an attachment already in the trash. Only the owner's confirmation page releases its shared name and removes the mail domain. Do not remove DNS records for a recoverable detach. Documentation: https://yaks.app/docs/domains.",
   },
   'number_find': {
     'title': 'Find a phone number',

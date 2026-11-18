@@ -578,41 +578,36 @@ test(
       })
       assertStringIncludes(
         gone,
-        `${ourbookclub104} is detached from ${jeff12}.`,
+        `${ourbookclub104} is in the trash.`,
       )
       assertStringIncludes(
         gone,
-        `It still answers at https://${jeff12}.yaks.app/.`,
+        'Its hostname, certificate and mail domain stay held',
       )
       let left = await agent.tool('domain_status', { space: jeff12 })
-      assert(!left.includes(ourbookclub104), left)
+      assertStringIncludes(left, `${ourbookclub104} — in the trash`)
       assertStringIncludes(left, `${herbusiness104} → ${jeff12}/recipes`)
-      // The hostname went back to Cloudflare with it.
-      assert(!await attached(k, ourbookclub104))
+      // The shared name and certificate remain reserved for restoration.
+      assert(await attached(k, ourbookclub104))
+      assertEquals((await k.at(ourbookclub104, '/')).status, 410)
       assert(await attached(k, herbusiness104))
-      // Reattaching is a new claim. A token left by the old attachment may
-      // not grant the new attachment authority over the hostname.
+      // Restoring retains the same certificate and ownership claim.
       await dnsTxt(k, appRecord.name, appRecord.value)
       await agent.tool('domain_detach', {
         space: jeff12,
         hostname: herbusiness104,
       })
-      // What sent its visitors there serves the app again.
-      assertEquals(
-        (await k.at(legacy, '/', { redirect: 'manual' })).status,
-        200,
-      )
+      // Redirects remain recoverable too, while the trashed target serves nothing.
+      assertEquals((await k.at(herbusiness104, '/')).status, 410)
       let again = await agent.tool('domain_attach', {
         space: jeff12,
         app: 'recipes',
         hostname: herbusiness104,
       })
       let fresh = (await domainState(k, herbusiness104)).ownership_verification!
-      assert(fresh.value != appRecord.value)
-      assertStringIncludes(again, fresh.value)
+      assertEquals(fresh.value, appRecord.value)
+      assertStringIncludes(again, 'is attached')
       await agent.tool('domain_status', { space: jeff12 })
-      await pending(herbusiness104)
-      await dnsTxt(k, fresh.name, fresh.value)
       assertEquals((await k.at(herbusiness104, '/')).status, 200)
     } finally {
       await k.stop()

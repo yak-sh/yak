@@ -557,6 +557,7 @@ export type PhoneLine = {
 }
 
 export type Host = {
+  trashed?: Trashed | null
   eid: string
   name: string
   serves: string
@@ -1569,6 +1570,7 @@ let EID = /^[\w-]+$/
 
 let hostOf = (r: Row): Host => ({
   eid: r.entity.eid,
+  trashed: trashedOf(r),
   name: r.hostname!.name,
   serves: idOf(r.hostname!.serves),
   stage: r.hostname!.stage ?? null,
@@ -2994,7 +2996,7 @@ export let directoryRows = (rows: {
     // later.
     serves: async (host: string) => {
       let row = await one(
-        line`.hostname.name=${host}&?verified&?mail_domain`,
+        line`.hostname.name=${host}&?verified&?mail_domain&?trashed`,
       )
       if (!row?.hostname) return null
       let eid = idOf(row.hostname.serves)
@@ -3015,7 +3017,9 @@ export let directoryRows = (rows: {
         space.eid,
         ...(await self.apps(space)).map((a) => a.eid),
       ])
-      return (await query(line`.hostname&?verified&?mail_domain`)).map(hostOf)
+      return (await query(line`.hostname&?verified&?mail_domain&?trashed`)).map(
+        hostOf,
+      )
         .filter((h) => mine.has(h.serves))
     },
     // The app offered under a platform-wide name (T-32888), with the space it
