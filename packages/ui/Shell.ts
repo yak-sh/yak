@@ -12,7 +12,8 @@
  * A phone-width window folds the sidebar away: `Menu` shows, and `Shell-open`
  * slides the sidebar over the page with a `Shade` behind it that a press on
  * closes. A terminal lays the sidebar beside the page always, by its sheet,
- * and has no menu.
+ * and has no menu. `Shell-sheet` lays the page on a sheet rather than the
+ * floor; the paper the page lies on is `--floor` either way.
  *
  * @module
  */
@@ -42,7 +43,6 @@ export let Shell:
     | 'Title'
     | 'Tools'
     | 'Body'
-    | 'Sheet'
     | 'Content',
     Part
   > = block('div', 'Shell', {
@@ -61,7 +61,6 @@ export let Shell:
     Title: 'div',
     Tools: 'div',
     Body: 'div',
-    Sheet: 'div',
     Content: 'div',
   })
 
@@ -110,7 +109,7 @@ export let specimens = (): Specimen[] => [
     'Shell, variants',
     h(
       Shell,
-      { mod: 'open', style: 'height:10rem' },
+      { mod: ['open', 'sheet'], style: 'height:10rem' },
       h(Shell.Shade, { 'aria-label': 'Close navigation' }),
       h(
         Shell.Main,
@@ -122,7 +121,7 @@ export let specimens = (): Specimen[] => [
           h(Shell.Title, {}, 'Overview'),
           h(Shell.Tools, {}, 'Actions'),
         ),
-        h(Shell.Sheet, {}, h(Shell.Content, {}, 'The page content.')),
+        h(Shell.Body, {}, h(Shell.Content, {}, 'The page content.')),
       ),
     ),
   ],

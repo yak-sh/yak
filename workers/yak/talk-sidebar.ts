@@ -52,7 +52,6 @@ export let talkSide = (
     })
   }
   return h(Sidebar, {
-    surface: 'textured',
     base: url(env),
     home: chatPath(space.slug),
     label: 'Menu',

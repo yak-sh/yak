@@ -222,8 +222,9 @@ export let deskFrame = (
     title: at.title,
     sub: at.sub,
     headed: true,
+    sheet: true,
     content: h(
-      Shell.Sheet,
+      'div',
       { class: 'Desk_Body' },
       h('header', { class: 'Desk_Head' }, at.head),
       h(Shell.Content, {

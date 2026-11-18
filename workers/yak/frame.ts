@@ -6,7 +6,7 @@
 // side where the window has no room for it; a page that names itself in a
 // head of its own (`headed`) shows the bar only there.
 //
-// What differs between pages is handed in: the side's surface, title and Back
+// What differs between pages is handed in: the side's title and Back
 // are its own (sidebar.ts `Sidebar`), and the panes beside are the page's.
 import { type ComponentChildren as Kids, h } from 'preact'
 import { Button, Icon, Shell, Skip, Toolbar } from '@yaks/ui/parts'
@@ -33,6 +33,8 @@ export let frame = (at: {
   tools?: Kids
   // the page names itself in its own head, so the bar shows only on a phone
   headed?: boolean
+  // the page lies on a sheet, a card, rather than the floor
+  sheet?: boolean
   // under the bar, held with it
   under?: Kids
   content: Kids
@@ -49,6 +51,7 @@ export let frame = (at: {
     h(
       Shell,
       {
+        mod: at.sheet && 'sheet',
         class: ['Frame', at.headed && 'Frame-headed', at.class]
           .filter(Boolean).join(' '),
       },

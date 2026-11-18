@@ -1262,9 +1262,9 @@
       width: 15rem;
     }
     /* The current tab opens into the page beside the side, so it is
-       filled with the page's own paper. */
+       filled with the paper the frame lays the page on (Shell.css). */
     .Sidebar_Nav {
-      --nav-panel: var(--bg);
+      --nav-panel: var(--floor);
     }
     .Sidebar-rail {
       --sidebar-padding: .5rem;

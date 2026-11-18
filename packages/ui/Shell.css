@@ -5,12 +5,19 @@
    its title in the text's ink then the page's tools; the body under it
    scrolls on its own.
    Narrower than a tablet, the sidebar folds away behind the bar's menu and
-   slides over the page when opened, a shade behind it. */
+   slides over the page when opened, a shade behind it.
+   --floor is the paper the page lies on, the floor itself or, in
+   Shell-sheet, a sheet on it. The frame paints it, and a sidebar's tab that
+   opens into the page fills with it, so the two are the one paper. */
 .Shell {
+  --floor: var(--bg);
   display: flex;
   height: 100dvh;
   min-height: 0;
-  background: var(--bg);
+  background: var(--floor);
+}
+.Shell-sheet {
+  --floor: var(--card);
 }
 
 .Shell_Side {
@@ -187,9 +194,6 @@
   }
 }
 
-.Shell_Sheet {
-  background: var(--card);
-}
 .Shell_Content {
   font-size: var(--small);
 }
