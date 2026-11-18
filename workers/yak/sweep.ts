@@ -148,7 +148,7 @@ let relocating = async (
       return json(409, 'wrong_colo', `this Worker is in ${colo}`)
     }
     let r = await storeOf(env.STORE, where)(WHERE, {}, KERNEL)
-    return Response.json({ worker: colo, ...await r.json() }, {
+    return Response.json({ worker: colo, ...await r.json() as object }, {
       status: r.status,
     })
   }
@@ -176,7 +176,11 @@ let relocating = async (
   )
   let forgot = await leave([['forget', '1']])
   if (!forgot.ok) return forgot
-  return Response.json({ ...await r.json(), app: app.eid, forgot: true })
+  return Response.json({
+    ...await r.json() as object,
+    app: app.eid,
+    forgot: true,
+  })
 }
 
 // Whether a copy's ask is its store's plan, the one ask that reads the

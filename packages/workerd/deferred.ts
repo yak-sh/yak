@@ -25,7 +25,7 @@ type Answering = Record<string, (...args: unknown[]) => unknown>
  * A load that fails is tried again by the next call, and so is a factory
  * that throws. `around`, when given, runs each call. */
 export let deferred = (
-  Base: new (...args: never[]) => object,
+  Base: abstract new (...args: never[]) => object,
   load: () => Promise<Made>,
   methods: readonly string[],
   around?: Around,

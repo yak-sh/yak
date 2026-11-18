@@ -137,7 +137,7 @@ export let LEXICON = ['admit', 'grow', 'put', 'forget', ...DURABLE] as const
 // An entrypoint or object whose every call enters the tracker's boundary as
 // `<Name> <method>`, answered by what `make` returns from its context and env.
 let entered = (
-  base: Class,
+  base: Deferred['base'],
   methods: readonly string[],
   make: (ctx: never, env: Env) => object | Promise<object>,
 ): Deferred => ({

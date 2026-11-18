@@ -19,7 +19,9 @@ export let recovery = async (
     return json({ error: 'method not allowed' }, 405)
   }
   if (!access.mark) return json({ error: 'mark capability required' }, 403)
-  let body = await request.json().catch(() => null)
+  let body = await request.json().catch(() => null) as
+    | { reason?: unknown }
+    | null
   let reason = body?.reason
   if (typeof reason != 'string' || !reason.trim()) {
     return json({ error: 'recovery reason required' }, 400)

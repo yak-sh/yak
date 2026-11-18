@@ -389,9 +389,20 @@ export let hostEntries = (
     ? entries
     : entries.filter((entry) => s.reaches([entry], changed, false, false))
 
+/** Of a change's `roots`, those a host's `entries` load. The host's program
+ * checks them too, under its globals: a native program reports only its
+ * roots, and `--all` reports every file its entries load, so a scoped run
+ * that checked the entries alone passed what main's then failed. */
+export let hostRoots = (s: Survey, entries: string[], roots: string[]) =>
+  entries.length
+    ? roots.filter((r) =>
+      !entries.includes(r) && s.reaches(entries, [r], false, false)
+    )
+    : []
+
 /** The modules a change reaches: those changed, the rest of their package
  * that imports one, each module importing one, and each host's entries
- * reaching one. */
+ * reaching one, with the modules among those that the entries load. */
 let reached = async (
   changed: string[],
   on: Host[],
@@ -408,10 +419,10 @@ let reached = async (
     )
   }
   let roots = scope(s, all, changed)
-  let hosted = on.map((h) => ({
-    ...h,
-    entries: hostEntries(s, h.entries, changed, h.platform.name),
-  }))
+  let hosted = on.map((h) => {
+    let entries = hostEntries(s, h.entries, changed, h.platform.name)
+    return { ...h, entries: [...entries, ...hostRoots(s, entries, roots)] }
+  })
   return { roots, hosted, survey: s }
 }
 

@@ -42,7 +42,7 @@ export type Deferred = {
   /** the runtime's class it extends: `DurableObject` or `WorkerEntrypoint`
    * from `cloudflare:workers`, or `Object` for one called only by `fetch`
    * and the runtime's own callbacks */
-  base: new (...args: never[]) => object
+  base: abstract new (...args: never[]) => object
   /** the methods it answers; each is the loaded object's own */
   methods: readonly string[]
   /** what makes the object, from the runtime's arguments: its state or

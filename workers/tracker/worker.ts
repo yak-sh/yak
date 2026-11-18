@@ -110,7 +110,7 @@ let lagging = async (
     return 'its Tracker object runs a release from before /bundle'
   }
   if (!bundle.ok) return
-  let held = (await bundle.json()).hash
+  let held = (await bundle.json() as { hash?: string }).hash
   return held != hash && `its Tracker object runs bundle ${held}`
 }
 // Read from the platform object's graph, never waited for: grouping is the

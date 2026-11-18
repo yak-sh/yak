@@ -63,7 +63,9 @@ export let wire = (
       },
       body: JSON.stringify(body),
     })
-    let said = await response.json().catch(() => null)
+    let said = await response.json().catch(() => null) as
+      | { message?: string; error?: string; count?: number }
+      | null
     // A refusal of what was asked is the box's own answer; any other failure
     // names where it failed.
     let why = said?.message ?? said?.error
@@ -98,7 +100,9 @@ export let wire = (
         })),
       ),
     count: async (q) => Number((await send('/query', stringify(q)))?.count),
-    mark: (bundles) => send('/apply', bundles),
+    mark: async (bundles) => {
+      await send('/apply', bundles)
+    },
   }
 }
 

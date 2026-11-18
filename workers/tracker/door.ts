@@ -98,7 +98,12 @@ async (request: Request): Promise<Response> => {
     if (!access.admin || access.ingest !== true) {
       return json({ error: 'tracker marks denied' }, 403)
     }
-    let body
+    let body: {
+      app?: unknown
+      eids?: unknown
+      mark?: unknown
+      remove?: unknown
+    } | null
     try {
       body = await request.json()
     } catch {
@@ -112,7 +117,7 @@ async (request: Request): Promise<Response> => {
       body.eids.some((eid: unknown) =>
         typeof eid != 'string' || !minted(eid)
       ) ||
-      !['notified', 'archived'].includes(body.mark) ||
+      !(body.mark === 'notified' || body.mark === 'archived') ||
       (body.remove !== undefined && typeof body.remove != 'boolean')
     ) {
       return json({
@@ -236,7 +241,9 @@ async (request: Request): Promise<Response> => {
     if (access.mark !== true) {
       return json({ error: 'tracker retry denied' }, 403)
     }
-    let body = await request.json().catch(() => null)
+    let body = await request.json().catch(() => null) as
+      | { of?: unknown }
+      | null
     let of = body?.of
     if (typeof of != 'string' || !of || of.length > 200) {
       return json(
@@ -253,7 +260,9 @@ async (request: Request): Promise<Response> => {
     if (access.mark !== true) {
       return json({ error: 'tracker settle denied' }, 403)
     }
-    let body = await request.json().catch(() => null)
+    let body = await request.json().catch(() => null) as
+      | { eids?: unknown; reason?: unknown }
+      | null
     let { eids, reason } = body ?? {}
     if (
       !Array.isArray(eids) || !eids.length || eids.length > 100 ||
@@ -275,7 +284,7 @@ async (request: Request): Promise<Response> => {
     if (access.mark !== true) {
       return json({ error: 'tracker bug marks denied' }, 403)
     }
-    let body
+    let body: unknown
     try {
       body = await request.json()
     } catch {
@@ -292,7 +301,8 @@ async (request: Request): Promise<Response> => {
       : {}
     let wrong = refusal(body, said)
     if (wrong) return json({ error: wrong }, 400)
-    let { bug, ...rest } = body
+    // What refusal admits: the bug, and each field it takes as a string.
+    let { bug, ...rest } = body as { bug: string } & Record<string, string>
     try {
       await tracker.mark(bug, name, rest)
     } catch (error) {

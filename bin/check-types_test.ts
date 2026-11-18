@@ -4,6 +4,7 @@ import {
   beside,
   generate,
   hostEntries,
+  hostRoots,
   MADE,
   programs,
   proofs,
@@ -186,6 +187,16 @@ test('host boundaries follow transitive imports through platform composition and
     ], 'workers'),
     ['app/far.ts', 'pkg/apart.ts'].map(at),
   )
+})
+
+test("a host program checks the change's modules its entries load", () => {
+  let { s, all, at } = scoped
+  let roots = scope(s, all, [at('pkg/lock.ts')])
+  equal(
+    hostRoots(s, ['app/far.ts', 'pkg/typed.ts'].map(at), roots),
+    ['pkg/lock.ts', 'pkg/host.ts'].map(at),
+  )
+  equal(hostRoots(s, [], roots), [])
 })
 
 // A program: each module of the checkout by path, and what it imports.
