@@ -1656,11 +1656,10 @@ test('a brokered sign-in is settled at its broker, and its token is the brokerâ€
   }], { trusted: true })
   token = 'T3'
   assertEquals(await refresh(c, eid, 'T2'), 'T3')
+  let before = nango.asked.length
   await disconnect(c, eid)
-  assertEquals(
-    nango.asked.at(-1),
-    'DELETE /connections/n1?provider_config_key=google-mail',
-  )
+  assertEquals(nango.asked.length, before)
+  assert((await c.vault.trash()).some((v) => v.eid == eid))
 })
 
 test('a connection its broker no longer holds is broken', async () => {

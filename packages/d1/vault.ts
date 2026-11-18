@@ -24,6 +24,7 @@ import {
   and,
   col,
   type CreateTable,
+  desc,
   eq,
   lt,
   ne,
@@ -42,12 +43,24 @@ export type Sealed = {
   op?: string
 }
 
+/** Metadata of a retained version, without its credential value. */
+export type Trashed = {
+  id: string
+  eid: string
+  handle: string
+  name?: string
+  at: number
+}
+
 /** A vault in D1, answering with promises. */
 export type D1Vault = {
   salt: () => Promise<Uint8Array>
   read: (eid: string) => Promise<Sealed | undefined>
   seal: (eid: string, sealed: Sealed) => Promise<void>
   drop: (eid: string) => Promise<void>
+  trash: () => Promise<Trashed[]>
+  restore: (id: string) => Promise<boolean>
+  purge: (id: string) => Promise<void>
   all: () => Promise<[string, Sealed][]>
   lock: <T>(eid: string, fn: () => Promise<T>) => Promise<T>
 }
@@ -60,6 +73,7 @@ let LEASE = 30_000
 
 let VAULT = 'yak_vault'
 let LOCK = 'yak_vault_lock'
+let TRASH = 'yak_vault_trash'
 
 let key = { name: 'k', type: 'text', pk: true }
 let SCHEMA: CreateTable[] = [
@@ -68,6 +82,16 @@ let SCHEMA: CreateTable[] = [
     name: VAULT,
     ifNot: true,
     cols: [key, { name: 'v', type: 'text', notNull: true }],
+  },
+  {
+    t: 'create table',
+    name: TRASH,
+    ifNot: true,
+    cols: [key, { name: 'eid', type: 'text', notNull: true }, {
+      name: 'at',
+      type: 'integer',
+      notNull: true,
+    }, { name: 'v', type: 'text', notNull: true }],
   },
   {
     t: 'create table',
@@ -110,6 +134,24 @@ let put = (k: string, v: string, replace: boolean): Stmt => ({
 
 let get = (k: string): Stmt =>
   select({ cols: [col('v')], from: table(VAULT), where: eq(col('k'), val(k)) })
+
+// Keep the existing ciphertext under its original associated entity id. The
+// archive and the change following it commit in the same D1 batch.
+let archived = (eid: string): Stmt => ({
+  t: 'insert',
+  into: TRASH,
+  cols: ['k', 'eid', 'at', 'v'],
+  q: select({
+    cols: [val(crypto.randomUUID()), col('k'), val(Date.now()), col('v')],
+    from: table(VAULT),
+    where: eq(col('k'), val(eid)),
+  }),
+})
+let removed = (from: string, id: string): Stmt => ({
+  t: 'delete',
+  from,
+  where: eq(col('k'), val(id)),
+})
 
 // The D1 errors whose recommended action is "Retry the operation", from the
 // List of D1_ERRORs in Cloudflare's docs
@@ -166,7 +208,7 @@ let queue = () => {
 /**
  * The vault in a D1 database, every value encrypted under `key` (AES-GCM),
  * which may still be on its way — a key imported from a Worker secret is. Its
- * two tables are created on first use.
+ * tables are created on first use.
  *
  * ```ts
  * import { d1Vault } from '@yaks/d1'
@@ -183,11 +225,15 @@ export let d1Vault = <S extends Prepared<S>>(
   // can leave its promise pending forever; another invocation must not wait
   // on that work. Concurrent setup is safe: both tables use ifNot.
   let ready = false
-  let run = async (s: Stmt) => {
+  let run = async (s: Stmt | Stmt[]) => {
     try {
       if (!ready) {
         await db.batch(SCHEMA.map((s) => prepare(db, s)))
         ready = true
+      }
+      if (Array.isArray(s)) {
+        await db.batch(s.map((one) => prepare(db, one)))
+        return []
       }
       return (await prepare(db, s).all<Record<string, string>>()).results
     } catch (e) {
@@ -241,10 +287,57 @@ export let d1Vault = <S extends Prepared<S>>(
       return row ? JSON.parse(await open(eid, row.v)) as Sealed : undefined
     },
     seal: async (eid, sealed) => {
-      await run(put(eid, await seal(eid, JSON.stringify(sealed)), true))
+      await run([
+        archived(eid),
+        put(eid, await seal(eid, JSON.stringify(sealed)), true),
+      ])
     },
     drop: async (eid) => {
-      await run({ t: 'delete', from: VAULT, where: eq(col('k'), val(eid)) })
+      await run([archived(eid), removed(VAULT, eid)])
+    },
+    trash: async () => {
+      let rows = await run(select({
+        cols: [col('k'), col('eid'), col('at'), col('v')],
+        from: table(TRASH),
+        order: [desc(col('rowid'))],
+      }))
+      return Promise.all(rows.map(async (r) => {
+        let sealed = JSON.parse(await open(r.eid, r.v)) as Sealed
+        return {
+          id: r.k,
+          eid: r.eid,
+          at: Number(r.at),
+          handle: sealed.handle,
+          ...sealed.name ? { name: sealed.name } : {},
+        }
+      }))
+    },
+    restore: async (id) => {
+      let [row] = await run(select({
+        cols: [col('eid')],
+        from: table(TRASH),
+        where: eq(col('k'), val(id)),
+      }))
+      if (!row) return false
+      await run([
+        archived(row.eid),
+        {
+          t: 'insert',
+          into: VAULT,
+          cols: ['k', 'v'],
+          q: select({
+            cols: [col('eid'), col('v')],
+            from: table(TRASH),
+            where: eq(col('k'), val(id)),
+          }),
+          upsert: [{ on: [col('k')], set: { v: col('v', 'excluded') } }],
+        },
+        removed(TRASH, id),
+      ])
+      return true
+    },
+    purge: async (id) => {
+      await run(removed(TRASH, id))
     },
     all: async () => {
       let rows = await run(select({

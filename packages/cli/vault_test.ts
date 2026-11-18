@@ -67,3 +67,46 @@ test('a graph keeps its secrets beside its database, or in memory', async () => 
     await Deno.remove(dir, { recursive: true })
   }
 })
+
+// Removed and replaced values remain private and recoverable without being active.
+test('vault trash retains removed and rotated secrets', async () => {
+  let dir = await Deno.makeTempDir()
+  let vault = fileVault(`${dir}/secrets`)
+  let eid = secretEid('A')
+  let values = () =>
+    [...Deno.readDirSync(`${dir}/secrets/trash`)].map((entry) =>
+      JSON.parse(Deno.readTextFileSync(`${dir}/secrets/trash/${entry.name}`))
+        .sealed
+    )
+  try {
+    vault.seal(eid, { handle: 'h', value: 'one' })
+    vault.seal(eid, { handle: 'h', value: 'two' })
+    assertEquals(vault.read(eid)?.value, 'two')
+    assertEquals(values(), [{ handle: 'h', value: 'one' }])
+    vault.drop(eid)
+    assertEquals(vault.read(eid), undefined)
+    assertEquals(vault.all(), [])
+    assertEquals(values().map((v) => v.value).sort(), ['one', 'two'])
+    assertEquals(Deno.statSync(`${dir}/secrets/trash`).mode! & 0o777, 0o700)
+    for (let entry of Deno.readDirSync(`${dir}/secrets/trash`)) {
+      assertEquals(
+        Deno.statSync(`${dir}/secrets/trash/${entry.name}`).mode! & 0o777,
+        0o600,
+      )
+    }
+    let saved = vault.trash()
+    assertEquals(saved.length, 2)
+    assertEquals(saved.every((v) => v.eid == eid && v.handle == 'h'), true)
+    let expected = JSON.parse(
+      Deno.readTextFileSync(`${dir}/secrets/trash/${eid}.${saved[0].id}.json`),
+    )
+    assertEquals(vault.restore(saved[0].id), true)
+    assertEquals(vault.read(eid), expected.sealed)
+    assertEquals(vault.restore(crypto.randomUUID()), false)
+    let left = vault.trash()[0]
+    vault.purge(left.id)
+    assertEquals(vault.trash(), [])
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
+})

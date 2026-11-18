@@ -43,6 +43,14 @@
  * (@yaks/effects). A failed seal leaves `failed{reason}` (@yaks/kernel).
  * Hosts compose these vocabularies to record sealing's progress and outcome.
  *
+ * Rotations and removals retain previous values in the vault's trash. Active
+ * reads and sentinels cannot use trashed values. `vault.trash()` lists metadata
+ * without values; `restore(id)` recovers a version, retaining any displaced
+ * active value, and `purge(id)` permanently removes only that trashed version.
+ * Hosts expose purging through a person's explicit confirmation. Restoring a
+ * graph secret with its retained handle also restores its most recent value
+ * when no active value exists.
+ *
  * @module
  */
 
@@ -62,6 +70,7 @@ export {
   queue,
   ramVault,
   type Sealed,
+  type Trashed,
   type Vault,
 } from './vault.ts'
 export { isOpRef } from './ref.ts'

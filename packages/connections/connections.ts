@@ -1170,7 +1170,7 @@ let reasked = async (b: Bundle, was: Bundle[], owners?: Owners) => {
   return out
 }
 
-/** End a connection, and forget its credential. The apps that shared it each
+/** Trash a connection, retaining its credential and broker grant for restoration. The apps that shared it each
  * need a connection again, and are linked to a new one; a copy that borrowed
  * it is linked to one in its own space, which `owners` says. A person's own,
  * for an app that asks each person, is not replaced: the app still asks
@@ -1183,19 +1183,10 @@ export let disconnect = async (
   let b = await held(c.graph.read, connection)
   let was = (await links(c.graph.read, 'to', connection))
     .filter((l) => !comp(l, USES).each)
-  let brokered = comp(b, CONNECTION).broker ? await keptBy(c, b) : undefined
   let out = await c.graph.apply([
     { entity: { eid: connection }, tombstone: {} },
     ...await reasked(b, was, owners),
   ])
-  // The broker's own connection ends too, after ours: a broker that fails
-  // here leaves one behind for its sweep, never a person still connected.
-  let { broker, integration, id } = brokered ?? {}
-  if (broker && integration && id) {
-    await brokerOf(c.vault, broker, c.fetch)
-      .then((at) => at?.forget(integration, id))
-      .catch((e) => c.report?.(e))
-  }
   return out
 }
 
@@ -1321,10 +1312,6 @@ let keptGrant = (
   access_token: g.access_token,
   ...g.expires_at ? { expires_at: g.expires_at } : {},
 })
-
-// A brokered connection's record, as the vault keeps it.
-let keptBy = (c: Ctx, b: Bundle) =>
-  records<Tokens & Kept>(c.graph, c.vault, '').read(nameOf(b))
 
 // A brokered connection's access token: the one kept while it is good for a
 // minute more, else the broker's, which the broker refreshes when it is due;

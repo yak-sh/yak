@@ -230,10 +230,11 @@ its vault, and the redirect):
   goes from here straight to the vault. An OAuth sign-in names its account from
   the exchanged `id_token` email or `integration.userinfo`. Another account
   makes another connection; the same account renews behind its held handle.
-- `disconnect(ctx, connection)` deletes the connection, which drops its
-  credential from the vault. Each app that shared it is linked to a new `needed`
-  connection in the same batch, by the same name, as directly and as openly; a
-  person's own is not replaced, since the app still asks them.
+- `disconnect(ctx, connection)` trashes the connection and retains its
+  credential in the vault’s trash for restoration. Each app that shared it is
+  linked to a new `needed` connection in the same batch, by the same name, as
+  directly and as openly; a person's own is not replaced, since the app still
+  asks them.
 - `resolve(ctx, app, integration, person?)` returns the connected connection an
   app uses through an integration for that person, its `uses` link and the
   sentinel for each field of its credential by name (`key` for one key or a
@@ -294,8 +295,8 @@ require a Nango webhook URL.
 - `credential` answers the kept token while it is good for a minute more, and
   otherwise the broker's. `refresh` asks the broker for a new one. A broker that
   says the grant is gone marks the connection `broken`.
-- `disconnect` ends the broker's connection after ours. A failure there goes to
-  `ctx.report`.
+- `disconnect` retains the broker’s grant so the trashed connection can be
+  restored. It no longer authorizes calls through the trashed connection.
 - `signsInWith(vault, read, i)` is what `connectable` is asked with: the broker
   once its key is kept, else the OAuth client.
 

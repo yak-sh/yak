@@ -21,8 +21,7 @@
 //
 // The other half is the same plugin's `effect` hook (`sealing` below). After
 // the batch commits it seals each waiting value into the vault under the
-// secret's entity id and removes the mark; a deleted secret is dropped from the
-// vault the same way. It is not an effect another process could run: the value
+// secret's entity id and removes the mark; a deleted secret is moved to the vault’s trash the same way. It is not an effect another process could run: the value
 // is in this process's memory and nowhere else, which is the point, so the
 // process that wrote it seals it. `apply()` waits for its effect hooks, so
 // whoever wrote the value gets their answer once it is sealed and never sees
@@ -31,7 +30,7 @@
 // `failed{reason}` when sealing was given up on.
 //
 // A secret a batch deletes, itself or by a cascade, or takes the component
-// from, is dropped from the vault after the commit too, and nothing else is:
+// from, moves to the vault’s trash after the commit too, and nothing else is:
 // which of those entities hold a secret is read inside the transaction while
 // their rows still stand (`noting`), since after it a deleted entity is only a
 // tombstone. Every other delete (an effect row the pool finished, a page, a
@@ -371,7 +370,17 @@ let sealing = (
   let seal = (eid: Eid, comp: Record<string, unknown>, tx: Tx) => {
     let h = comp.value
     let held = typeof h == 'string' ? waiting.get(h) : undefined
-    if (!held || held.eid && held.eid != eid) return
+    if (!held) {
+      if (typeof h != 'string' || !isHandle(h)) return
+      return after(vault.read(eid), (active) => {
+        if (active) return
+        return after(vault.trash(), (trash) => {
+          let found = trash.find((v) => v.eid == eid && v.handle == h)
+          return found ? tried(() => vault.restore(found.id), clock) : undefined
+        })
+      })
+    }
+    if (held.eid && held.eid != eid) return
     waiting.delete(h as string)
     minted.delete(eid)
     let kept = isOpRef(held.value) ? { op: held.value } : { value: held.value }

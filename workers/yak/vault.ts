@@ -26,6 +26,9 @@ let shut: Vault = {
   seal: no,
   all: no,
   drop: () => {},
+  trash: () => [],
+  restore: () => false,
+  purge: () => {},
   lock: (_, fn) => fn(),
 }
 
@@ -56,6 +59,9 @@ let timed = (vault: D1Vault): D1Vault => {
     seal: waiting(vault.seal),
     drop: waiting(vault.drop),
     all: waiting(vault.all),
+    trash: waiting(vault.trash),
+    restore: waiting(vault.restore),
+    purge: waiting(vault.purge),
   }
 }
 

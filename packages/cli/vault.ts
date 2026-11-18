@@ -18,11 +18,18 @@ import * as disk from '@yaks/file/io'
 //
 // One file per secret, rather than one file of all of them, so two processes
 // sealing two secrets never write the same file, and deleting a secret is
-// deleting its file. Deleting cannot promise the bytes are gone from the disk,
-// a snapshot or a host backup; it promises nothing here names them.
+// moving its file into private trash. A replacement keeps the previous file
+// there too. Trash is never purged automatically and is excluded from active
+// reads; recovery seals its saved value again through the same vault.
 
 import type { Eid } from '@yaks/graph'
-import { type Local, queue, ramVault, type Sealed } from '@yaks/secrets'
+import {
+  type Local,
+  queue,
+  ramVault,
+  type Sealed,
+  type Trashed,
+} from '@yaks/secrets'
 
 // A secret's id is derived from its name, so it is always a uuid. Anything
 // else never came from this vault, and is never turned into a path.
@@ -85,6 +92,49 @@ let hex = (bytes: Uint8Array) =>
 export let fileVault = (dir: string): Local => {
   let file = (eid: Eid) => `${dir}/${eid}.json`
   let held = queue()
+  let version = (path: string): { sealed: Sealed; at: number } => {
+    let data = JSON.parse(readIn(path)!)
+    return data.sealed
+      ? data
+      : { sealed: data, at: lstat(path)!.mtime!.getTime() }
+  }
+  let trash = (): Trashed[] => {
+    if (!lstat(`${dir}/trash`)) return []
+    own(`${dir}/trash`)
+    let out: Trashed[] = []
+    for (let entry of disk.readDirSync(`${dir}/trash`)) {
+      let [eid, id, ext] = entry.name.split('.')
+      if (ext != 'json' || !OURS.test(eid) || !OURS.test(id)) continue
+      let path = `${dir}/trash/${entry.name}`
+      let { sealed, at } = version(path)
+      out.push({
+        id,
+        eid,
+        handle: sealed.handle,
+        name: sealed.name,
+        at,
+      })
+    }
+    return out.sort((a, b) => b.at - a.at)
+  }
+  let archive = (eid: Eid, move = true) => {
+    let path = file(eid)
+    let text = readIn(path)
+    if (text === undefined) return
+    let at = Math.max(Date.now(), ...trash().map((entry) => entry.at + 1))
+    let to = `${dir}/trash/${eid}.${crypto.randomUUID()}.json`
+    writeIn(
+      `${dir}/trash`,
+      to,
+      JSON.stringify({ sealed: JSON.parse(text), at }) + '\n',
+    )
+    if (move) disk.removeSync(path)
+  }
+  let archived = (id: string) => {
+    let saved = trash().find((entry) => entry.id == id)
+    return saved &&
+      { ...saved, path: `${dir}/trash/${saved.eid}.${saved.id}.json` }
+  }
   let salt: Uint8Array | undefined
   return {
     salt: () => {
@@ -102,11 +152,13 @@ export let fileVault = (dir: string): Local => {
     },
     seal: (eid, sealed) => {
       if (!OURS.test(eid)) throw new Error(`not a secret's id: ${eid}`)
-      writeIn(dir, file(eid), JSON.stringify(sealed) + '\n')
+      let text = JSON.stringify(sealed) + '\n'
+      if (readIn(file(eid)) == text) return
+      archive(eid, false)
+      writeIn(dir, file(eid), text)
     },
     drop: (eid) => {
-      if (!OURS.test(eid) || !lstat(file(eid))) return
-      disk.removeSync(file(eid))
+      if (OURS.test(eid)) archive(eid)
     },
     all: () => {
       if (!lstat(dir)) return []
@@ -118,6 +170,23 @@ export let fileVault = (dir: string): Local => {
         if (text) out.push([eid, JSON.parse(text)])
       }
       return out
+    },
+    trash,
+    restore: (id) => {
+      let saved = archived(id)
+      if (!saved) return false
+      archive(saved.eid, false)
+      writeIn(
+        dir,
+        file(saved.eid),
+        JSON.stringify(version(saved.path).sealed) + '\n',
+      )
+      disk.removeSync(saved.path)
+      return true
+    },
+    purge: (id) => {
+      let saved = archived(id)
+      if (saved) disk.removeSync(saved.path)
     },
     // The other writers in this process wait in the queue; the other
     // processes on the box wait on the lock file.
