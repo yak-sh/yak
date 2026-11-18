@@ -104,6 +104,31 @@
               "go": "Ask for your own"
             }
           }
+        },
+        "chores": {
+          "name": "Chore Chart",
+          "steps": {
+            "1": {
+              "title": "Ask for what you need, in plain words",
+              "body": "“A chore chart for the four of us, rotating each week so it’s fair, and the kids get the easier ones.” The assistant made the chart with each person’s jobs for the week, and a tap ticks a job off for everyone.",
+              "go": "Ask for your own"
+            },
+            "2": {
+              "title": "Choose who can open it",
+              "body": "“Only the four of us can open it.” The chart is now private, and each of the family gets an emailed invitation that signs them in with one click.",
+              "go": "Ask for your own"
+            },
+            "3": {
+              "title": "Put it on everyone’s calendar",
+              "body": "“Could the chores show up on our phones’ calendars?” Each person gets a calendar link of their own that a phone or Google Calendar subscribes to, and it follows the rota as it changes.",
+              "go": "Ask for your own"
+            },
+            "4": {
+              "title": "It can email everyone on a schedule",
+              "body": "“Every Sunday at 6 in the evening, email each of us our chores for the coming week.” Each of the four gets their own jobs for the week, with everyone else’s below them. Each email counts toward your plan’s emails for the month.",
+              "go": "Ask for your own"
+            }
+          }
         }
       }
     },
