@@ -525,6 +525,7 @@ export let yak = async (
           text: words,
           reply: asked.entity.eid,
           verified: true,
+          vouched: true,
         }),
       )
       return {

@@ -251,12 +251,12 @@ further replies as comments. Unverified or unknown senders are kept as mail
 only, never attributed to the recipient.
 
 A conversation starts when a letter has no `In-Reply-To` or `References`, is
-addressed to `from`, and has a verified author resolving to `person`. The
-received entity keeps its `mail` envelope and Message-ID, gains
-`conversation{}`, and carries the person's full text in `doc.body` with its
-first line as `doc.title`. Its `created.by` is the sender, never the mailbox's
-operator. Empty text, unverified senders, unknown senders and other people
-remain mail only, and a repeated Message-ID creates nothing.
+addressed to `from`, and has an author the edge vouched for (`vouched`)
+resolving to `person`. The received entity keeps its `mail` envelope and
+Message-ID, gains `conversation{}`, and carries the person's full text in
+`doc.body` with its first line as `doc.title`. Its `created.by` is the sender,
+never the mailbox's operator. Empty text, unverified senders, unknown senders
+and other people remain mail only, and a repeated Message-ID creates nothing.
 
 Provenance is checked first, independently of the person: a known session,
 effect, call, output or transcript entry as sender, the inbox address as sender,
@@ -297,7 +297,11 @@ await g.apply(
       From: 'Ana <ana@example.com>',
       'Message-ID': '<hello@example.com>',
     }),
-  }, { text: 'Can we plan dinner?\nTomorrow would work.', verified: true }),
+  }, {
+    text: 'Can we plan dinner?\nTomorrow would work.',
+    verified: true,
+    vouched: true,
+  }),
 )
 let [conversation] = await g.read('.conversation *')
 equal(conversation.created?.by, 'ana')
