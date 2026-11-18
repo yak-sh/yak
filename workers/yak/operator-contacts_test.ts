@@ -459,7 +459,10 @@ let parallelOperator = operating(parallel.store, parallel.env, {
             kind: 'call',
             id: crypto.randomUUID(),
             name: 'notification_send',
-            args: JSON.stringify({ text: 'The simultaneous report is ready.' }),
+            args: JSON.stringify({
+              subject: 'Report finished',
+              text: 'The simultaneous report is ready.',
+            }),
           },
         ]
         : [{
@@ -537,6 +540,7 @@ let failureOperator = operating(failedParallel.store, failedParallel.env, {
             id: crypto.randomUUID(),
             name: 'notification_send',
             args: JSON.stringify({
+              subject: 'Check finished',
               text: 'The job with a refused contact is done.',
             }),
           },
