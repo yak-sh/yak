@@ -179,6 +179,36 @@
               "go": "Ask for your own"
             }
           }
+        },
+        "bookclub": {
+          "name": "Book Club",
+          "steps": {
+            "1": {
+              "title": "Ask for what you need, in plain words",
+              "body": "“A page with the book we’re reading, the date of the next meeting and who’s hosting.” The assistant made the club’s page, and anyone signed in can change the book, date or host with the pencil in its corner.",
+              "go": "Ask for your own"
+            },
+            "2": {
+              "title": "Let everyone have a say",
+              "body": "“Can members vote on the next book?” Members suggest books and each has one vote, the page shows which is winning, and each friend gets an emailed invitation so they can sign in and vote.",
+              "go": "Ask for your own"
+            },
+            "3": {
+              "title": "It can email everyone on a schedule",
+              "body": "“Email everyone a reminder two days before each meeting.” The assistant asks for your own address and your time zone before it builds anything.",
+              "go": "Ask for your own"
+            },
+            "4": {
+              "title": "Answer, and it’s done",
+              "body": "“Mine is this, and we’re in UK time. Around 9 in the morning.” Two days before each meeting, everyone gets an email with the book, the time and whose house it’s at. Each email counts toward your plan’s emails for the month.",
+              "go": "Ask for your own"
+            },
+            "5": {
+              "title": "It can text you",
+              "body": "“Text me the day before each meeting.” The assistant asks for your mobile number, what time to send it, and your OK, since each text comes out of your space’s monthly AI budget.",
+              "go": "Ask for your own"
+            }
+          }
         }
       }
     },
