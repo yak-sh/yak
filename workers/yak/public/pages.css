@@ -1280,7 +1280,8 @@
     .Sidebar-rail .Sidebar_Unshut {
       display: inline-block;
     }
-    .Sidebar-rail .Sidebar_Label {
+    /* A plain count goes with the words; what waits stays, on the icon. */
+    .Sidebar-rail :is(.Sidebar_Label, .Sidebar_Count.Badge-quiet) {
       position: absolute;
       width: 1px;
       height: 1px;
@@ -1288,7 +1289,7 @@
       clip-path: inset(50%);
       white-space: nowrap;
     }
-    .Sidebar-rail .Sidebar_Count {
+    .Sidebar-rail .Sidebar_Count:not(.Badge-quiet) {
       position: absolute;
       top: .1rem;
       right: .1rem;

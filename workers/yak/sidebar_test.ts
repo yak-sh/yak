@@ -9,6 +9,7 @@ import { type Item, Sidebar } from './sidebar.ts'
 let items: Item[] = [
   { href: '/first', label: 'First', icon: 'bot' },
   { href: '/second', label: 'Second', icon: 'bell', count: 2 },
+  { href: '/third', label: 'Third', icon: 'bell', waiting: 5 },
 ]
 let drawn = (selected: string, collapsed = false) =>
   parseHTML(renderToString(h(Sidebar, {
@@ -70,4 +71,12 @@ test('sidebar scrolls the brand, navigation and account actions together', () =>
   ) assert(item.closest('.Sidebar_Scroll') === scroll)
   assert(document.querySelector('.Sidebar_Foot .SideNav_Rule'))
   assertEquals(document.querySelector('.Sidebar_Count')?.textContent, '2')
+})
+
+test('a plain count is quiet; only what waits is on the red badge', () => {
+  let counts = [...drawn('/first').querySelectorAll('.Sidebar_Count')]
+  assertEquals(
+    counts.map((c) => [c.textContent, c.classList.contains('Badge-quiet')]),
+    [['2', true], ['5', false]],
+  )
 })

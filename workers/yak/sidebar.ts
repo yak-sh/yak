@@ -12,7 +12,10 @@ export type Item = {
   icon: IconName
   image?: string
   current?: boolean
+  /** How many there are, a plain number. */
   count?: number
+  /** How many are new or wait on the person, on the red badge. */
+  waiting?: number
   more?: boolean
   submit?: boolean
   external?: boolean
@@ -99,7 +102,11 @@ let link = (at: Item) => {
       })
       : glyph(at.icon),
     h(SideNav.Label, null, at.label),
-    at.count != null ? h(Badge, { class: 'Sidebar_Count' }, at.count) : null,
+    at.waiting
+      ? h(Badge, { class: 'Sidebar_Count' }, at.waiting)
+      : at.count != null
+      ? h(Badge, { mod: 'quiet', class: 'Sidebar_Count' }, at.count)
+      : null,
   )
   return at.submit
     ? h(

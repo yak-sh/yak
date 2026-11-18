@@ -80,7 +80,7 @@ export let talkSide = (
             current: at.current.includes('updates'),
             icon: 'bell',
             label: `Updates from ${space.operator}`,
-            count: at.waiting || undefined,
+            waiting: at.waiting,
           },
         ],
       },
