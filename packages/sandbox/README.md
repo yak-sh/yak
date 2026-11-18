@@ -120,11 +120,12 @@ The namespace in this example is a stand-in for the deployed binding:
 import { equal } from '@yaks/testing'
 import { type Box, cloudflareProvider } from '@yaks/sandbox/cloudflare'
 
-let destroyed = 0
+let destroyed = 0, retained = ''
 let provider = cloudflareProvider({
   idFromName: (name) => name,
   get: () =>
     ({
+      readFile: async () => ({ content: 'unfinished draft' }),
       destroy: async () => {
         destroyed++
       },
@@ -132,12 +133,18 @@ let provider = cloudflareProvider({
 }, {
   // In production this callback runs under a distributed lock and save commits
   // to durable storage outside the container. This example only disposes once.
+  trash: async (_ref, box) => {
+    // This example has one file. A host archives every editable directory.
+    retained = (await box.readFile('/workspace/draft')).content
+    await box.destroy()
+  },
   lifecycle: {
     locked: async (_id, act) => await act({ save: async () => {} }),
   },
 })
 await provider.dispose({ id: 'build-example' })
 equal(destroyed, 1)
+equal(retained, 'unfinished draft')
 ```
 
 Cloudflare placement is unknown: the connection supplies a `Workspace` and
@@ -145,9 +152,16 @@ Cloudflare placement is unknown: the connection supplies a `Workspace` and
 `CloudflareOptions.lifecycle.locked`, backed by storage outside the container
 and distributed serialization. The callback's `save` must commit before it
 returns. `connect` refuses stopped/missing storage instead of recreating it;
-`dispose` keeps a durable tombstone. A deployed Cloudflare Container's disk does
-not outlive its nap, so a host that lends them as they are passes
-`ephemeral: true`: connect wakes a fresh container and no receipts are kept.
+`dispose` requires `trash(ref, box)`, which preserves recoverable writable
+storage before it stops the container, then keeps a durable trash receipt.
+`restore(ref, box)` restores that storage when requested explicitly. No callback
+means disposal fails before touching storage.
+
+A deployed Cloudflare Container's disk does not outlive its nap. A host using
+`ephemeral: true` supplies `prepare(ref, box)` to restore retained files before
+every public workspace RPC, and preserves them before idle shutdown as well as
+explicit disposal. The host owns this storage boundary; an initial image is
+never a backup of edits.
 
 Unlike the common relative-only export contract, Cloudflare also accepts
 absolute export paths for the hosted `sandbox_ship` published API. SDK process

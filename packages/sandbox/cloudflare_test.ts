@@ -64,6 +64,9 @@ test('Cloudflare lifecycle refuses missing storage and never recreates disposed 
   } as unknown as Box
   let ns = { idFromName: (id: string) => id, get: () => box }
   let provider = cloudflareProvider(ns, {
+    trash: async (_ref, box) => {
+      await box.destroy()
+    },
     lifecycle: {
       locked: async (_id, act) =>
         await act({
@@ -141,4 +144,43 @@ test('a hold is written again only once half of it is spent', async () => {
   equal(writes, 1)
   await hold(counted, GROUP, ADA, 1, now + HELD / 2 * 1000)
   equal(writes, 2)
+})
+
+test('Cloudflare disposal without recoverable trash leaves the writable container intact', async () => {
+  let destroyed = false
+  let ns = {
+    idFromName: (id: string) => id,
+    get: () => ({
+      destroy: () => {
+        destroyed = true
+        return Promise.resolve()
+      },
+    } as unknown as Box),
+  }
+  await throws(
+    () => cloudflareProvider(ns, { ephemeral: true }).dispose({ id: 'draft' }),
+    'recoverable trash',
+  )
+  equal(destroyed, false)
+})
+
+test('Cloudflare prepares retained storage before the first workspace read', async () => {
+  let files = new Map<string, string>()
+  let box = {
+    readFile: (path: string) => Promise.resolve({ content: files.get(path) }),
+  } as unknown as Box
+  let provider = cloudflareProvider(
+    { idFromName: (id) => id, get: () => box },
+    {
+      ephemeral: true,
+      prepare: () => {
+        files.set('draft', 'retained edit')
+        return Promise.resolve()
+      },
+    },
+  )
+  equal(
+    await (await provider.connect({ id: 'draft' })).workspace.read('draft'),
+    'retained edit',
+  )
 })

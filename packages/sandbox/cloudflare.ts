@@ -161,6 +161,14 @@ export type CloudflareOptions = {
    * fresh one from the deployed image and keeps no lifecycle receipts, as a
    * deployed Cloudflare Container does. */
   ephemeral?: boolean
+  /** Prepare existing writable storage before each public workspace RPC,
+   * including restoration after an ephemeral container wakes. */
+  prepare?: (ref: SandboxRef, box: Box) => Promise<void>
+  /** Preserve recoverable writable storage, then stop the container. This
+   * boundary owns teardown; disposal never calls destroy on its own. */
+  trash?: (ref: SandboxRef, box: Box) => Promise<void>
+  /** Explicitly restore a durable resource retained by trash. */
+  restore?: (ref: SandboxRef, box: Box) => Promise<void>
   env?: () => Promise<Record<string, string>>
   retry?: <T>(send: () => T | Promise<T>) => Promise<T>
   sleepError?: (error: unknown) => void
@@ -206,7 +214,9 @@ export let cloudflareProvider = (
     let call = <T>(send: (box: Box) => T | Promise<T>) =>
       retry(async () => {
         if (options.ephemeral || internal) {
-          return await send(ns.get(ns.idFromName(ref.id)))
+          let box = ns.get(ns.idFromName(ref.id))
+          if (!internal) await options.prepare?.(ref, box)
+          return await send(box)
         }
         if (!options.lifecycle) {
           throw new Error('cloudflare: durable lifecycle storage is required')
@@ -224,6 +234,7 @@ export let cloudflareProvider = (
           }
           // Hold the lifecycle lock through RPC completion: disposal cannot
           // race a stale workspace handle into recreating destroyed storage.
+          await options.prepare?.(ref, box)
           return await send(box)
         })
       })
@@ -329,15 +340,29 @@ export let cloudflareProvider = (
       })
     },
     dispose: async (ref) => {
+      if (!options.trash) {
+        throw new Error('cloudflare: recoverable trash storage is required')
+      }
+      let trash = () => options.trash!(ref, boxOf(ref, true, true))
       if (options.ephemeral) {
-        await boxOf(ref, true, true).destroy()
+        await trash()
         return
       }
       await lifecycle(ref, async (receipt) => {
         if (receipt.state == 'released') return
         await receipt.save('disposing')
-        await boxOf(ref, true, true).destroy()
+        await trash()
         await receipt.save('released')
+      })
+    },
+    restore: async (ref) => {
+      if (!options.restore) {
+        throw new Error('cloudflare: restore is not configured')
+      }
+      await lifecycle(ref, async (receipt) => {
+        if (receipt.state == 'ready') return
+        await options.restore!(ref, boxOf(ref, true, true))
+        await receipt.save('ready')
       })
     },
     exec: (ref, command) => boxOf(ref).exec(command, { cwd: CWD }),
