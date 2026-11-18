@@ -1,3 +1,4 @@
+import { trash } from '@yaks/process/trash'
 import * as io from '@yaks/file/io'
 import { line } from '@yaks/query'
 import * as system from '@yaks/process/system'
@@ -838,6 +839,28 @@ export let holds = async (
   base?: string,
 ): Promise<Held | undefined> => (await holding(path, landed, base)).held
 
+// Git silently discards ignored files on worktree removal. Dependency/build
+// caches and declared scratch are reproducible; every other ignored path is
+// kept separately before the checkout goes.
+let keepIgnored = async (path: string) => {
+  let files = await git(path, [
+    'ls-files',
+    '--others',
+    '--ignored',
+    '--exclude-standard',
+    '--directory',
+    '-z',
+  ])
+  for (let file of files!.split('\0').filter(Boolean)) {
+    if (
+      file.split('/').some((p) =>
+        ['node_modules', '.scratch', '.types', 'target'].includes(p)
+      )
+    ) continue
+    await trash(`${path}/${file}`)
+  }
+}
+
 /** Remove one worktree — the directory and the branch it was created on —
  * unless it still holds something. Returns what kept it, or nothing. A worktree
  * Git has lost is kept: its unique contents cannot be proved absent. Nothing
@@ -859,6 +882,7 @@ export let reclaim = async (
     '--path-format=absolute',
     '--git-common-dir',
   ])
+  await keepIgnored(path)
   if (await quiet(path, ['worktree', 'remove', path]) == null) return 'failed'
   // The branch outlives its worktree, and only the repository can delete it.
   // `-D` is safe here: the commits were proved to exist on another branch.
@@ -916,6 +940,7 @@ export let shelve = async (
     }
   }
   await onBranch()
+  await keepIgnored(path)
   return await quiet(path, ['worktree', 'remove', path]) == null
     ? 'failed'
     : undefined

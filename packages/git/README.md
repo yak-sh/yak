@@ -613,14 +613,17 @@ worktree still holds: `dirty` for uncommitted files, `unlanded` when its HEAD is
 on no branch but its own (a path that is not a checkout counts as that too), or
 nothing. `reclaim(path)` removes a worktree and the branch it was created on
 only when it holds nothing, and never with `--force`, so Git's own refusal
-stands behind that test; it returns what kept it, `failed` included. Pass a full
-local branch ref as the second argument to `holds` or `reclaim` to require
-landing there: `reclaim(path, "refs/heads/main")`. The branch reflog must also
-prove the branch committed work still contained in HEAD; a fresh branch, a
-branch only fast-forwarded from main, or missing evidence keeps the checkout. A
-worktree whose gitdir Git has lost (`lost(path)`) is always kept, because
-neither its cleanliness nor its landing can be proved. `restore(g, row)` creates
-a worktree again at the path, branch and commit its row recorded, so run
+stands behind that test; it returns what kept it, `failed` included. Ignored
+files other than dependency/build caches and declared scratch move to private
+filesystem trash before a checkout is removed, including `.env` files. Their
+records retain the original path for restoration with `@yaks/process/trash`.
+Pass a full local branch ref as the second argument to `holds` or `reclaim` to
+require landing there: `reclaim(path, "refs/heads/main")`. The branch reflog
+must also prove the branch committed work still contained in HEAD; a fresh
+branch, a branch only fast-forwarded from main, or missing evidence keeps the
+checkout. A worktree whose gitdir Git has lost (`lost(path)`) is always kept,
+because neither its cleanliness nor its landing can be proved. `restore(g, row)`
+creates a worktree again at the path, branch and commit its row recorded, so run
 `discover` on it before taking it back. `linked(common)` names a repository's
 linked worktrees, and `idleFor(path)` says how long since Git last moved one's
 HEAD, read from its reflog's last entry rather than the file's mtime, which

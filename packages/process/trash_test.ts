@@ -22,3 +22,18 @@ test('trash restores a directory under a free name when its path was reused', as
   assertEquals(restored.startsWith(`${file}.restored-`), true)
   assertEquals(await trash(`${dir}/absent`, root), undefined)
 })
+
+let shared = `${dir}/shared.txt`
+Deno.writeTextFileSync(shared, 'one')
+let first = (await trash(shared, root))!
+Deno.writeTextFileSync(shared, 'two')
+let second = (await trash(shared, root))!
+let recovered = await Promise.all([restore(first), restore(second)])
+
+test('concurrent restorations never overwrite a destination another restore claimed', () => {
+  assertEquals(new Set(recovered).size, 2)
+  assertEquals(recovered.map((p) => Deno.readTextFileSync(p)).sort(), [
+    'one',
+    'two',
+  ])
+})
