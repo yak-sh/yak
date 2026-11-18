@@ -40,7 +40,8 @@ import { Pending } from '@yaks/api/log'
 // Where an app's uploaded bytes live: the prefix its row was born with
 // (blob-key.ts `blobPrefix`), which no rename moves and erasing the app
 // empties (erase.ts `emptied`). Deleting the upload's content row deletes
-// them sooner (facets/app-effects.ts `delete_upload`).
+// them sooner, once the store's thirty days have passed
+// (facets/app-effects.ts `delete_upload`).
 export let blobKey = (space: Space, app: App, sha: string) =>
   blobPrefix(space, app) + sha
 

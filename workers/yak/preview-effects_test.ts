@@ -9,6 +9,7 @@ import { ADA_OWNS, platform, seeded } from './serving-probe.ts'
 import { effects } from './facets/app-effects.ts'
 import type { Stored } from './graph.ts'
 import { lending } from './inference.ts'
+import { WINDOW } from './recover.ts'
 import { blobPrefix } from './blob-key.ts'
 import { appVocab } from './vocab.ts'
 
@@ -119,13 +120,26 @@ p.env.BLOBS.delete = (keys) => {
   deleted.push(...[keys].flat())
   return Promise.resolve()
 }
+let waited: number[] = []
 await effects({} as never, { store: at }).delete_upload!(
-  { entity: { eid: sha } } as never,
+  { entity: { eid: sha }, at: new Date().toISOString() } as never,
+  {} as never,
+  {} as never,
+  { defer: (ms: number) => (waited.push(ms), Promise.resolve()) } as never,
+)
+await effects({} as never, { store: at }).delete_upload!(
+  // Past the thirty days its bytes wait (blob-key.ts `waiting`).
+  { entity: { eid: sha }, at: '2000-01-01T00:00:00Z' } as never,
   {} as never,
   {} as never,
 )
 p.env.BLOBS.delete = remove
 let executor = await lending(at, 'openrouter')
+
+test("a deleted upload's bytes wait out the store's thirty days", () => {
+  equal(waited.length, 1)
+  equal(waited[0] > WINDOW - 60_000, true)
+})
 
 test('deleting an upload from a preview touches only its private blob prefix', () => {
   equal(deleted, [blobPrefix(space, candidate) + sha])

@@ -912,11 +912,12 @@ points at it by `blob`. From that write on, `./api/blob/<eid>` and every
 app anyone may read (`public` or `open`): the platform caches its check that a
 `file.url` may be served for 30 seconds, so that URL can go on serving the bytes
 for up to 30 seconds after the delete, and a browser that already loaded a
-`file.url` keeps its own copy, because that response is cached as immutable.
-After the write commits, the platform deletes the bytes from the app's storage.
-There is no undo. A page listing `.attachment` deletes `f.attachment.blob`, not
-the attachment row's own eid: deleting the attachment row alone removes the name
-and keeps the bytes.
+`file.url` keeps its own copy, because that response is cached as immutable. The
+bytes stay in the app's storage for 30 days after the write, so `store_restore`
+to a moment before the delete brings the upload back whole; after the 30 days
+the platform deletes them. A page listing `.attachment` deletes
+`f.attachment.blob`, not the attachment row's own eid: deleting the attachment
+row alone removes the name and keeps the bytes.
 
 Delete your own row that points at the upload in the same batch, so the page
 never draws a picture that is gone:
@@ -933,11 +934,11 @@ keeps them: your own properties holding the eid are text, and the platform does
 not read your files for `./api/blob/` addresses, so delete or change what still
 uses an upload before you delete it.
 
-Deleted bytes stop counting toward the space's storage limit for photos and
-files. An app that replaces its uploads (a video rendered again, a photo
-cropped) deletes the ones it no longer uses the same way: list `.blob`, keep the
-eids its files and rows still use, and delete the rest, from a page with `apply`
-or from the assistant with `graph_apply`.
+Deleted bytes count toward the space's storage limit for photos and files until
+the platform deletes them, 30 days on. An app that replaces its uploads (a video
+rendered again, a photo cropped) deletes the ones it no longer uses the same
+way: list `.blob`, keep the eids its files and rows still use, and delete the
+rest, from a page with `apply` or from the assistant with `graph_apply`.
 
 Whoever may delete an upload's row may delete the upload: an owner or editor any
 upload, and on an `open` app, anyone else only what they uploaded. A refused

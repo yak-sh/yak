@@ -1,6 +1,6 @@
 // Deleting an upload: the row at the upload's eid goes, and the bytes leave the
-// app's bucket with it (facets/app-effects.ts `delete_upload`), unless a row
-// the app keeps still names them. Who may delete that row is the app's write
+// app's bucket 30 days later (facets/app-effects.ts `delete_upload`, blob-key.ts
+// `waiting`), unless a row the app keeps still names them. Who may delete that row is the app's write
 // guard (graph.ts `appGuard`), whether bytes are still served is
 // @yaks/blob/upload `servable`, and whether they leave the bucket is
 // `released`: each checks its own seam over the rows an upload writes

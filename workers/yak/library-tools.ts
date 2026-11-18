@@ -674,10 +674,13 @@ export let libraryTools: Row[] = [
         throw refusal(e)
       })
       return {
-        text: `removed ${
-          rows.map((r) => `${(r.attachment as Comp).name} (${r.entity.eid})`)
-            .join(', ')
-        } from ${space.slug}/${app.slug}, its file and its extracted text`,
+        text:
+          `removed ${
+            rows.map((r) => `${(r.attachment as Comp).name} (${r.entity.eid})`)
+              .join(', ')
+          } from ${space.slug}/${app.slug}, with its extracted text. Its ` +
+          'file is kept 30 days: store_restore to a moment before now ' +
+          'brings it back',
         space,
         value: { removed: eids },
       }

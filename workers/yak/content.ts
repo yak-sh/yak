@@ -955,7 +955,7 @@ export let WORDS: Record<string, Words> = {
       'done': 'Removed documents from %{app}',
     },
     'description':
-      "Remove documents from an app's library by their eids, from library_list: each one's file, its row and its extracted text are deleted, so search and answers no longer cite it. To replace a document with a newer copy, library_add with replaces instead.",
+      "Remove documents from an app's library by their eids, from library_list: each one's row and its extracted text are deleted, so search and answers no longer cite it. Its file stays in the app's storage for 30 days, and store_restore to a moment before the removal brings the document back whole. To replace a document with a newer copy, library_add with replaces instead.",
   },
   'operator_stop': {
     'title': 'Stop an operator conversation',
