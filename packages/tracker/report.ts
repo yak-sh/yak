@@ -4,7 +4,7 @@
 import type { Actor, Bundle } from '@yaks/graph'
 import { status } from '@yaks/graph/errors'
 import { comp, type Crumb, type Level, str } from './model.ts'
-import { faultOf } from './fault.ts'
+import { faultOf, rerunOf } from './fault.ts'
 export { faultOf, normalize } from './fault.ts'
 
 export type Sink = (rows: Bundle[]) => void | Promise<void>
@@ -769,7 +769,11 @@ export let coalesce = (
   return Object.assign((rows: Bundle[]): Promise<void> => {
     let row = rows[0]
     if (closed || !row?.error) return send(rows)
-    let key = JSON.stringify([str(comp(row, 'during').app), faultOf(row)])
+    let key = JSON.stringify([
+      str(comp(row, 'during').app),
+      faultOf(row),
+      rerunOf(row),
+    ])
     let window = windows.get(key)
     // A delayed timer must not hold the next window's first occurrence.
     if (window && time.now() >= window.until) {

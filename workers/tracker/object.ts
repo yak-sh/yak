@@ -90,6 +90,16 @@ export type Settings = {
       ) => Promise<void>
     }
   }
+  /** yak's `Reruns` entrypoint: the kernel, which hands an Operator run a
+   * resolved bug stopped back to its space to run again (`rerun`). */
+  KERNEL?: {
+    rerun: (
+      space: string,
+      faults: string[],
+      bug: string,
+      said?: Explanation,
+    ) => Promise<unknown>
+  }
   TRACKER_SECRET?: string
   ERRORS?: {
     send: (rows: Bundle[], options?: { delaySeconds?: number }) => Promise<void>
@@ -116,24 +126,35 @@ let metaDdl = ddl.find((stmt) =>
   stmt.t == 'create table' && stmt.name == 'server_meta'
 )!
 
-// The platform's call archiving a space's reports (`bug_settle`). During a
-// deploy the space's object can still run the release before `settle`, and the
-// runtime answers that it "does not implement the method": the call asks to be
-// tried again once the object restarts on this release (@yaks/effects `retry`),
-// and only a receiver still without it after every try is reported.
+// A call of `bug_settle`'s on a receiver that may still run the release
+// before it: the runtime answers that it "does not implement the method", and
+// the call asks to be tried again once the receiver restarts on this release
+// (@yaks/effects `retry`); only a receiver still without it after every try is
+// reported.
+let behind = async <T>(call: () => Promise<T>): Promise<T> => {
+  try {
+    return await call()
+  } catch (error) {
+    if (!/does not implement the method/.test(String(error))) throw error
+    throw Object.assign(Error(String(error), { cause: error }), {
+      retry: { after: BEHIND },
+    })
+  }
+}
+let BEHIND = 60_000
+
+// The platform's call archiving a space's reports (`bug_settle`).
 export let settling =
   (trackers: NonNullable<Settings['TRACKERS']>) =>
-  async (scope: string, eids: string[], reason: string, said?: Explanation) => {
-    try {
-      return await trackers.getByName(scope).settle(eids, reason, said)
-    } catch (error) {
-      if (!/does not implement the method/.test(String(error))) throw error
-      throw Object.assign(Error(String(error), { cause: error }), {
-        retry: { after: BEHIND },
-      })
-    }
-  }
-let BEHIND = 60_000
+  (scope: string, eids: string[], reason: string, said?: Explanation) =>
+    behind(() => trackers.getByName(scope).settle(eids, reason, said))
+
+// The platform's call running again the Operator runs a fixed bug stopped
+// (`bug_settle`), through the kernel.
+export let rerunning =
+  (kernel: NonNullable<Settings['KERNEL']>) =>
+  (space: string, faults: string[], bug: string, said?: Explanation) =>
+    behind(() => kernel.rerun(space, faults, bug, said))
 // The ceiling's lanes (@yaks/durable-object `lane`): intake's deliveries and
 // the alarm's drain each spend a share of every window of their own.
 export let INTAKE = 'intake', DRAIN = 'drain'
@@ -202,6 +223,11 @@ export class Tracker extends Durable {
       // space's tracker archives its own record of them.
       ...this.scope == platform && env.TRACKERS
         ? { settle: settling(env.TRACKERS) }
+        : {},
+      // and hands back to its space each Operator run a bug it resolved
+      // stopped, which runs it again.
+      ...this.scope == platform && env.KERNEL
+        ? { rerun: rerunning(env.KERNEL) }
         : {},
     }
     // Its ceiling is named before any driver: trace intake opens storage

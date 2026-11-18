@@ -57,13 +57,13 @@ let rig = () => {
     }),
     { window: 100, clock: ticks.time },
   )
-  let report = (error = broken, context = 'call') =>
+  let report = (error = broken, context = 'call', rerun?: string) =>
     sink(capture(error, {
       sink,
       eid: `sample-${ticks.time.now()}-${context}`,
       at: new Date(ticks.time.now()).toISOString(),
       during: { kind: 'call', entity: context, process: 'worker' },
-      tags: { handler: 'query' },
+      tags: { handler: 'query', ...rerun ? { rerun } : {} },
       commit: 'sha',
     }))
   return {
@@ -238,4 +238,12 @@ test('a flood keeps what grouping decides by: a new release, and any after a res
   await s.send([20, 21], 'c')
   let [again] = await s.g.read('.bug *')
   equal([!!again.regressed, !!again.resolved], [true, false])
+})
+
+test("each owner's stopped work is a report of its own, never folded into another's", async () => {
+  let r = rig()
+  for (let owner of ['ada', 'bo', 'ada', 'cy']) {
+    await r.report(broken, 'call', owner)
+  }
+  equal(r.records.length, 3)
 })

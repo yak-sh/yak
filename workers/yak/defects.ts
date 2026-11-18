@@ -256,7 +256,14 @@ refused (`stopped`). The same words met by a live object, or by
  * the Worker, are a call that ran out of retries, and are reported, one bug
  * for each wording: the deploy it names and the caller it reached are the
  * occurrence's, not the failure's. */
-export let defect = (
+export let defect = (...args: Parameters<typeof filed>): void => {
+  filed(...args)
+}
+
+/** {@link defect}, answering the occurrence it sent, whose fault
+ * (@yaks/tracker `faultOf`) is the one its bug is filed under, or nothing
+ * where it sent none. */
+export let filed = (
   error: unknown,
   tags: Tags,
   details: {
@@ -266,7 +273,7 @@ export let defect = (
     // How a page's reporter met it, and what the page did before (./page-report.ts).
     page?: Pick<Break, 'mechanism' | 'breadcrumbs'>
   } = {},
-) => {
+): Bundle | undefined => {
   let invocation = context.getStore()
   if (
     !invocation?.env.ERRORS || redone(error, invocation.replaced) ||
@@ -307,6 +314,7 @@ export let defect = (
   invocation.retain?.(pending)
   invocation.pending.add(pending)
   void pending.then(() => invocation.pending.delete(pending))
+  return rows.find((row) => row.error)
 }
 
 let aimedAt = (args: unknown): { space?: string; app?: string } => {

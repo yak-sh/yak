@@ -1241,6 +1241,17 @@ completions start no model turn in either thread.
 as itself, once its cause is fixed: its failure and the answer that told of it
 are dropped, and its intake runs anew.
 
+A conversation that could not finish because yaks.app failed is taken up again
+on its own once that bug is fixed (operator-rerun.ts). Its report names the
+space as whose stopped work it is (the tag `rerun`), and the conversation keeps
+the fault the report was filed under (`stalled{fault}`). The platform tracker's
+resolution of the bug (`bug_settle`) hands the space those faults through the
+kernel's `Reruns` entrypoint, and the space's Operator says to each conversation
+stalled on one again, on the `fixed` channel, in the task or conversation it
+stopped in, once for each bug. Its person is told in their Updates that it
+stopped on a yaks.app problem that is now fixed and ran again, with what came of
+it.
+
 The Operator runs on the first of config.ts `agents.operator` whose provider the
 Worker holds every credential of: `claude-sonnet-5-5` on Anthropic when
 `ANTHROPIC_API_KEY` is set, and otherwise `@cf/zai-org/glm-5.3` on Workers AI;

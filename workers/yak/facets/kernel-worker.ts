@@ -23,6 +23,7 @@ import type { Lent } from '../kernel.ts'
 import type { EntryCache } from '@yaks/workerd/cache'
 import type { Conversion } from '../arrival.ts'
 import type { builds } from '../builds.ts'
+import type { Explanation } from '@yaks/tracker/resolution'
 
 // Agent entrypoints share the same isolated code evaluator, loaded with the
 // first of them.
@@ -300,6 +301,20 @@ export let classes: Record<string, Deferred> = {
     let { swapped } = await import('../sandbox.ts')
     return {
       send: (req: Request, container: string) => swapped(env, container, req),
+    }
+  }),
+  // The platform tracker, handing back the Operator runs a bug it resolved
+  // had stopped (operator-rerun.ts, @yaks/tracker/effects `settle`). Only
+  // its KERNEL binding reaches this entrypoint.
+  Reruns: entered(WorkerEntrypoint, ['rerun'], async (_ctx, env) => {
+    let { reruns } = await import('../operator-rerun.ts')
+    return {
+      rerun: (
+        space: string,
+        faults: string[],
+        bug: string,
+        said?: Explanation,
+      ) => reruns(env, space, { faults, bug, said }),
     }
   }),
   // No public route reaches this entrypoint. Each executor callback is

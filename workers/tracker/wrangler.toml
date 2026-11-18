@@ -16,6 +16,14 @@ redact_query_string = true
 enabled = true
 invocation_logs = true
 
+# The kernel's `Reruns` entrypoint (workers/yak): a bug the platform tracker
+# resolves hands each Operator run it stopped back to its space to run again
+# (@yaks/tracker/effects `settle`).
+[[services]]
+binding = "KERNEL"
+service = "yak"
+entrypoint = "Reruns"
+
 [[durable_objects.bindings]]
 name = "TRACKERS"
 class_name = "Tracker"

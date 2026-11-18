@@ -54,6 +54,15 @@ export type Options = {
     reason: string,
     said?: Explanation,
   ) => Promise<unknown>
+  /** Run again the work a resolved bug `bug` stopped for `owner` (a space,
+   * whose Operator keeps it), named by the faults its occurrences tagged
+   * `rerun` with the owner were reported under ({@link settle}). */
+  rerun?: (
+    owner: string,
+    faults: string[],
+    bug: string,
+    said?: Explanation,
+  ) => Promise<unknown>
 }
 
 let openedAt = (row: Bundle) =>
@@ -247,29 +256,41 @@ export let follow = async (
  * that tracker, so the app's owner and their Operator stop hearing of a break
  * yaks.app fixed; the reason is the resolution's cause. The resolution's
  * explanation goes with them, and resolves the space's bug they leave with no
- * open occurrence, so one fix never leaves a second copy open. Only
- * occurrences from before the resolution are closed; a later one is the bug
- * back, open in both. Archiving again changes nothing, so a retry is safe.
+ * open occurrence, so one fix never leaves a second copy open. An occurrence
+ * tagged `rerun` stopped work its owner (a space) keeps under the
+ * occurrence's fault, and each owner is handed the faults, so it runs that
+ * work again now it can finish (the tracker keeps one such occurrence of each
+ * owner, `retained`). Only occurrences from before the resolution are closed
+ * or run again; a later one is the bug back, open in both. Archiving again
+ * changes nothing, and an owner runs its work once for each bug, so a retry
+ * is safe.
  *
  * ```ts
  * import { settle } from './effects.ts'
  * import { equal } from '@yaks/testing'
  * let at = (eid: string, t: string, tags = {}) =>
- *   ({ entity: { eid }, error: { at: t, bug: 'b', tags } })
+ *   ({ entity: { eid }, error: { at: t, bug: 'b', fault: 'f', tags } })
  * let rows = [
  *   { entity: { eid: 'b' }, bug: {}, resolved: { at: '2026-10-18T16:00Z', cause: 'a leak', recur: 'no' } },
  *   at('e1', '2026-10-18T15:49Z', { scope: 's', occurrence: 'o1' }),
  *   at('e2', '2026-10-18T15:50Z', { scope: 's', occurrence: 'o2' }),
  *   at('e3', '2026-10-18T15:51Z'),
  *   at('e4', '2026-10-19T09:00Z', { scope: 's', occurrence: 'o4' }),
+ *   at('e5', '2026-10-18T15:52Z', { rerun: 'ada' }),
+ *   at('e6', '2026-10-19T09:01Z', { rerun: 'bo' }),
  * ]
  * let g = {
  *   get: (eids: string[]) => Promise.resolve(rows.filter((r) => eids.includes(r.entity.eid))),
  *   read: () => Promise.resolve(rows.filter((r) => 'error' in r)),
  * }
- * let sent: unknown[][] = []
- * await settle(g as never, 'b', { settle: (...a) => Promise.resolve(sent.push(a)) })
- * equal(sent, [['s', ['o1', 'o2'], 'Fixed by yaks.app: a leak', { cause: 'a leak', recur: 'no' }]])
+ * let sent: unknown[][] = [], ran: unknown[][] = []
+ * await settle(g as never, 'b', {
+ *   settle: (...a) => Promise.resolve(sent.push(a)),
+ *   rerun: (...a) => Promise.resolve(ran.push(a)),
+ * })
+ * let said = { cause: 'a leak', recur: 'no' }
+ * equal(sent, [['s', ['o1', 'o2'], 'Fixed by yaks.app: a leak', said]])
+ * equal(ran, [['ada', ['f'], 'b', said]])
  * ```
  */
 export let settle = async (
@@ -277,7 +298,7 @@ export let settle = async (
   eid: string,
   options: Options,
 ): Promise<void> => {
-  if (!options.settle) return
+  if (!options.settle && !options.rerun) return
   let [row] = await g.get([eid])
   if (!row?.bug || !row.resolved) return
   let resolved = comp(row, 'resolved')
@@ -288,14 +309,25 @@ export let settle = async (
   let said = unexplained(resolved).length
     ? undefined
     : explanation(resolved) as Explanation
-  let by = new Map<string, string[]>()
+  let by = new Map<string, string[]>(), runs = new Map<string, Set<string>>()
   for (let b of await g.read(occurring(eid))) {
-    if (str(comp(b, 'error').at) > until) continue
-    let { scope, occurrence } = Object.fromEntries(tags(b))
+    let error = comp(b, 'error')
+    if (str(error.at) > until) continue
+    let { scope, occurrence, rerun } = Object.fromEntries(tags(b))
     if (scope && occurrence) by.set(scope, [...by.get(scope) ?? [], occurrence])
+    if (rerun && error.fault) {
+      runs.set(rerun, (runs.get(rerun) ?? new Set()).add(str(error.fault)))
+    }
   }
-  for (let [scope, eids] of by) {
-    await options.settle(scope, eids, reason, said)
+  if (options.settle) {
+    for (let [scope, eids] of by) {
+      await options.settle(scope, eids, reason, said)
+    }
+  }
+  if (options.rerun) {
+    for (let [owner, faults] of runs) {
+      await options.rerun(owner, [...faults], eid, said)
+    }
   }
 }
 

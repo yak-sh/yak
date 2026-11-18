@@ -165,6 +165,18 @@ export let operatorDoc: VocabDoc = {
         subject: { type: 'string', ref: 'entity', death: 'keep' },
       },
     },
+    stalled: {
+      component: true,
+      description:
+        'An Operator conversation a yaks.app bug stopped before it finished, until the bug is fixed and it is taken up again (workers/yak/operator-rerun.ts).',
+      properties: {
+        fault: {
+          type: 'string',
+          description:
+            "The fault its report was filed under (@yaks/tracker `faultOf`), which the bug's resolution names.",
+        },
+      },
+    },
     operator_session: {
       component: true,
       description:

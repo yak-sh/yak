@@ -90,7 +90,7 @@ import { platformFault } from './unseen.ts'
 import { bound, type Env } from './env.ts'
 import type { Held } from './build-door.ts'
 import { accounted, resultOf } from './meter.ts'
-import { caught, defect } from './defects.ts'
+import { caught, defect, filed } from './defects.ts'
 import { hearing } from './refusals.ts'
 import {
   ambient,
@@ -941,6 +941,11 @@ let taskOf = async (store: Store, session: string) => {
   return String(comp(link, 'edge')?.from ?? '')
 }
 
+// What a person is told before the answer of a conversation a fixed yaks.app
+// bug had stopped and that was run again.
+let RERAN =
+  'This stopped because of a problem in yaks.app. That problem is fixed now, so it ran again:'
+
 // The way a request is answered: its channel, and whom it reaches by it.
 let routeOf = (request?: Comp) =>
   JSON.stringify(
@@ -1362,6 +1367,28 @@ export let operating = (
       caught(e, { request: 'operator base persona' })
     })
 
+  // A conversation's report names its space as whose stopped work it is
+  // (`rerun`), and the conversation keeps the fault it was filed under, so
+  // the bug's resolution takes it up again (operator-rerun.ts); a fork's
+  // ends in the session that started it.
+  let unfinished = async (session: string, fault: string, request: string) => {
+    let space = (await workingOf(store, session))?.space
+    let rerun = !!space && request == 'operator conversation'
+    let sent = filed(Error(`Operator could not finish: ${fault}`), {
+      request,
+      session,
+      space: space ? (await dir().at(space))?.slug : null,
+      ...rerun ? { rerun: space } : {},
+    })
+    if (!rerun || !sent) return
+    let { faultOf } = await import('@yaks/tracker')
+    await g.apply([{
+      entity: { eid: session },
+      stalled: { fault: faultOf(sent) },
+    }], {
+      trusted: true,
+    })
+  }
   // The session's answer, once its turn ends: an answer to each request the
   // turn answers, which its channel delivers (operator_deliver), and on a
   // task's session a comment on its task. A request's words, and a helper's
@@ -1369,14 +1396,6 @@ export let operating = (
   // channel they came by: a quick word when the conversation forks, and the
   // outcome when the fork comes back. A helper's end is told to the session
   // that started it, not to the person.
-  let unfinished = async (session: string, fault: string, request: string) => {
-    let space = (await workingOf(store, session))?.space
-    defect(Error(`Operator could not finish: ${fault}`), {
-      request,
-      session,
-      space: space ? (await dir().at(space))?.slug : null,
-    })
-  }
   let answered = async (session: string) => {
     let [row] = await g.get([session], ['spawned', 'occurrence'])
     let reply = await answerOf(g, session, NAMING)
@@ -1473,7 +1492,23 @@ export let operating = (
         String(comp(r, 'operator_request')?.channel),
       )
     )
+    // A conversation a yaks.app bug had stopped, taken up again once it was
+    // fixed (operator-rerun.ts): its person is told so once, with what came
+    // of it, about the task or conversation it carried on.
+    let reran = requests.filter((r) =>
+      comp(r, 'operator_request')?.channel == 'fixed'
+    )
     await g.apply([
+      ...reran.map((r) => {
+        let asked = comp(r, 'operator_request')!
+        return notification({
+          to: String(asked.person),
+          words: `${RERAN}\n\n${reply.text}`,
+          about: task || String(asked.about ?? session),
+          by: space,
+          id: r.entity.eid,
+        })
+      }),
       ...fixes.map((r) =>
         notification({
           to: space!,

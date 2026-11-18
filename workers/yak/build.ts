@@ -744,6 +744,7 @@ export class Builder extends Durable {
           url.pathname == '/operator/support' ||
           url.pathname == '/operator/tell' ||
           url.pathname == '/operator/ask' ||
+          url.pathname == '/operator/rerun' ||
           url.pathname == WALKTHROUGH
         ) {
           let space = request.headers.get(SPACE)
@@ -759,6 +760,15 @@ export class Builder extends Durable {
               trusted: true,
             })
             return Response.json({ ok: true })
+          }
+          // A conversation a fixed yaks.app bug stopped, taken up again
+          // (operator-rerun.ts).
+          if (url.pathname == '/operator/rerun') {
+            let { rerun } = await import('./operator-rerun.ts')
+            let { store } = await this.#stored()
+            let requests = await rerun(store, space, await request.json())
+            await this.#arming
+            return Response.json({ requests })
           }
           // What a released draft's merge asks its person (draft-merge.ts
           // `ask`).

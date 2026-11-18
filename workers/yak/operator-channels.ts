@@ -65,7 +65,8 @@ export type Request = {
   reply_to?: string
   via?: string
   // The task a request carried on, before every person's words went to
-  // their one conversation (`rootOf`); kept on old rows.
+  // their one conversation (`rootOf`); kept on old rows. On the `fixed`
+  // channel, the task whose conversation a fixed bug had stopped.
   task?: string
   files?: File[]
   administrative?: boolean
@@ -94,7 +95,8 @@ export type Request = {
   // (operator-updates.ts); the wake-up that fired, on the `wake` channel;
   // the letter or text of the Operator's that they reply to, on the `letter`
   // and `texted` channels; that reply, on the `escalated` channel; the eid
-  // on their machine of what it told of, on the `machine` channel.
+  // on their machine of what it told of, on the `machine` channel; the
+  // conversation a fixed bug had stopped, on the `fixed` channel.
   about?: string
   // The conversation whose words they are, on the `escalated` channel: the
   // one with the reply's writer, which raised them (operator-escalate.ts).
@@ -277,6 +279,7 @@ let FROM: Record<string, (request: Request) => string | undefined> = {
   wake: () => 'the system (your wake-up)',
   subscription: () => 'the system (your subscription)',
   error: () => 'the system',
+  fixed: () => 'the system',
   machine: () => 'the system (their machine)',
   app: () => 'the system (an app in the space)',
   escalated: (r) => `your conversation with ${r.address ?? 'the writer'}`,
@@ -599,6 +602,7 @@ let BY: Record<
         ? `, about ${request.about} (its eid there, so the alert opens at its row)`
         : ''
     }; otherwise tell them nothing. What you answer here stays in this conversation and alerts nobody: `,
+  fixed: () => FIXED,
   update: (_, __, about) => {
     let asked = part<Comp>(about, 'decision')?.question
     return asked
@@ -610,6 +614,11 @@ let BY: Record<
       }” (${about ? short(about.entity.eid) : 'gone'}): `
   },
 }
+
+// A conversation a yaks.app bug stopped, taken up again once the bug is fixed
+// (operator-rerun.ts), with what went wrong after these words.
+let FIXED =
+  'yaks.app had a problem that stopped this conversation before it finished, and that problem is now fixed. Carry on from where it stopped: check what already happened before you repeat anything, then finish what was asked. What you answer is told to them in their Updates, beside a line saying yaks.app had a problem that is now fixed. What went wrong, for you alone: '
 
 // Someone answering what the Operator sent them for a person is talked with
 // in their own conversation, with only their permissions (D-151808); the
@@ -695,6 +704,9 @@ export let channels = (env: Env): Record<string, Channel> => {
     machine: () => Promise.resolve({}),
     // What an app told is told in their Updates, as a wake-up's is.
     app: () => Promise.resolve({}),
+    // And so is a conversation a fixed yaks.app bug had stopped, taken up
+    // again (operator-rerun.ts).
+    fixed: () => Promise.resolve({}),
     // Someone replying to the Operator's text is answered from the number
     // they texted, signed as it was (operator-line.ts `phoneSend`).
     texted: async (request, answer, _, sent) => {
@@ -919,8 +931,9 @@ export let ANSWERING = new Set(['letter', 'texted', 'signup'])
 /** The channels whose words are the Operator's or the platform's own, never
  * those of the person they are said for: a break to fix, what another
  * conversation raised (operator.ts `given`), what their machine told
- * (tunnel.ts `tell`) and what an app's worker told (app-operator.ts). */
-export let OWN = new Set(['error', 'escalated', 'machine', 'app'])
+ * (tunnel.ts `tell`), what an app's worker told (app-operator.ts) and a
+ * conversation a fixed yaks.app bug had stopped (operator-rerun.ts). */
+export let OWN = new Set(['error', 'escalated', 'machine', 'app', 'fixed'])
 
 /** The channels whose words bring routine news nobody asked for at that
  * moment, so their turn waits for the person's machine: what the machine told,
@@ -1014,10 +1027,13 @@ export let handleChannels = (
         request.administrative === true,
       )
       let role = access.administrative ? 'owner' as const : access.role ?? null
-      // A break is a task the Operator starts itself; a person's words go to
-      // their conversation with it.
+      // A break is a task the Operator starts itself, and a fixed bug takes
+      // up the task it stopped; a person's words go to their conversation
+      // with it.
       let task = request.channel == 'error'
         ? derivedEid('operator-task|' + row.entity.eid)
+        : request.channel == 'fixed'
+        ? request.task
         : undefined
       try {
         if (!role && !ANSWERING.has(request.channel)) {

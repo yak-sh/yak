@@ -292,6 +292,14 @@ test('retention preserves the first per commit and historical hit count', async 
   equal(retained(rows, 2).size, 4)
 })
 
+test('retention keeps the newest occurrence of each owner whose stopped work it names', () => {
+  let rows = ['ada', 'bo', 'ada', '', '', ''].map((rerun, i) => ({
+    entity: { eid: String(i) },
+    error: { at: `2026-10-02T00:00:0${i}Z`, tags: rerun ? { rerun } : {} },
+  }))
+  equal([...retained(rows, 2)].sort(), ['1', '2', '4', '5'])
+})
+
 test('bug tools mark resolve/archive and show retained occurrences', async () => {
   let g = fixture()
   await put(g, occurrence('1'))

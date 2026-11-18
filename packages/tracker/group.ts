@@ -19,7 +19,7 @@ import {
   present,
   want,
 } from '@yaks/query'
-import { faultOf, stablePlace } from './fault.ts'
+import { faultOf, rerunOf, stablePlace } from './fault.ts'
 import { enrichFrames } from './frames.ts'
 import { comp, type Desk, type Frame, str, title } from './model.ts'
 
@@ -276,7 +276,8 @@ let at = (row: Bundle) => str(comp(row, 'error').at)
  * keeps its `count` (`trim`), its release is one the bug keeps, and it is
  * less than a minute after the newest the bug keeps: a flood of one fault
  * then writes its count, not each occurrence to group and trim away. Every
- * other occurrence is kept and grouped. A resend of a counted occurrence
+ * other occurrence is kept and grouped, and so is every one naming stopped
+ * work (`rerunOf`). A resend of a counted occurrence
  * counts again, since nothing of it is kept to know it by. */
 export let counted = async (
   g: Desk,
@@ -287,7 +288,7 @@ export let counted = async (
   for (let row of rows) {
     if (
       !row.error || row.refusal || row.probe || comp(row, 'error').bug ||
-      imported(row)
+      imported(row) || rerunOf(row)
     ) {
       kept.push(row)
       continue
@@ -403,7 +404,9 @@ export let group = async (
   }
 }
 
-/** Newest hundred, plus the first occurrence of each release. */
+/** Newest hundred, plus the first occurrence of each release and the newest
+ * of each owner whose stopped work it names (`rerunOf`), which its bug's
+ * resolution hands back (./effects.ts `settle`). */
 export let retained = (rows: Bundle[], count = RETAIN): Set<string> => {
   let sorted = [...rows].sort((a, b) =>
     str(comp(a, 'error').at).localeCompare(str(comp(b, 'error').at)) ||
@@ -417,6 +420,12 @@ export let retained = (rows: Bundle[], count = RETAIN): Set<string> => {
     seen.add(key)
     keep.add(row.entity.eid)
   }
+  let owners = new Map<string, string>()
+  for (let row of sorted) {
+    let owner = rerunOf(row)
+    if (owner) owners.set(owner, row.entity.eid)
+  }
+  for (let eid of owners.values()) keep.add(eid)
   return keep
 }
 
@@ -435,7 +444,7 @@ export let trim = async (
   if (typeof hits == 'number' && hits <= count) return
   let rows = await g.read(and(
     eq('error.bug', bug),
-    fields('error.at', 'error.commit', 'error.version'),
+    fields('error.at', 'error.commit', 'error.version', 'error.tags'),
   ))
   let keep = retained(rows, count)
   let gone = rows.filter((b) => !keep.has(b.entity.eid))

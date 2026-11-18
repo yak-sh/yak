@@ -90,3 +90,10 @@ export let faultOf = (row: Bundle): string =>
     title(row),
     str(comp(row, 'exception').stack),
   )
+
+/** Whose stopped work an occurrence is, where its reporter tagged it `rerun`
+ * (an Operator conversation's space), or ''. Each owner's is its own report,
+ * never folded into another's or counted away, so a fix reaches every owner
+ * it stopped (./effects.ts `settle`). */
+export let rerunOf = (row: Bundle): string =>
+  str((comp(row, 'error').tags as Record<string, unknown> | undefined)?.rerun)
