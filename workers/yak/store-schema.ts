@@ -44,7 +44,6 @@ import {
   lifecycleColumns,
   respelled,
   unholed,
-  unjournaled,
   unworded,
 } from './migrate.ts'
 import { appDerived, appWords, numbered, storeWords } from './vocab.ts'
@@ -291,7 +290,6 @@ export let install = (
       ...blobSchema(),
       ...(history || vocab.comp('_tx') ? journalDdl() : []),
     ]),
-    ...unjournaled(d, vocab, !!history),
     // What it leaves undone is answered here, for the caller to report once.
     // Versions a store begins to keep are seeded a page at a time, by its
     // alarm (graph.ts `#seeding`), so no install writes a row per row held.

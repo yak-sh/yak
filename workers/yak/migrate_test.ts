@@ -967,11 +967,15 @@ let unjournaled = await (async () => {
       n.startsWith('journal_')
     ),
     note,
+    history: scan(d, 'journal_change').map((r) => ({
+      component: r.component,
+      operation: r.operation,
+    })),
   }
 })()
 
-test('an app wake drops the journal its store kept and keeps what its words declare', () => {
-  equal(unjournaled.journal, ['journal_field'])
+test('an app wake preserves the history its store no longer writes', () => {
+  equal(unjournaled.history, [{ component: 'note', operation: 'upsert' }])
   equal(unjournaled.note.note, { text: 'kept' })
   equal(unjournaled.note.journal_field, { text: 'mine' })
 })

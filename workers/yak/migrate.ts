@@ -1,22 +1,12 @@
 // What an older release left in a Store that the code a deploy takes now no
-// longer reads, moved out of the way at each wake: a journal its words no
-// longer keep ({@link unjournaled}), a column a finished contract emptied
+// longer reads, moved out of the way at each wake: a column a finished contract emptied
 // ({@link lifecycleColumns}), and each slot the object remembers rewritten
 // into the one shape a deploy takes now ({@link documented}, {@link unholed},
 // {@link unworded}, {@link respelled}). The schema its words compose is
 // store-schema.ts's. {@link BOUNDARIES} names the stored shapes this code
 // reads, for `yak admin deploys`.
 import { type Line, line, sub } from '@yaks/query'
-import { dropDdl as journalDrop } from '@yaks/journal'
-import {
-  catalogue,
-  col,
-  type Driver,
-  lit,
-  notNull,
-  select,
-  table,
-} from '@yaks/sql'
+import { col, type Driver, lit, notNull, select, table } from '@yaks/sql'
 import { columns, unseat } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 
@@ -380,29 +370,4 @@ export let lifecycleColumns = (d: Driver, vocab: Vocab) => {
     })).length
   )
   unseat(d, emptied.map((name) => [name, 'state'] as const))
-}
-
-/** The journal's tables dropped from a store whose words keep no journal:
- * every app store raised them from cac5e3065 to T-65227, and nothing has read
- * them since (T-131164). A table its words declare as a component stays, and
- * one the store does not hold is not dropped again: any DDL moves the schema's
- * revision, and with it everything read of the schema. A drop that fails comes
- * back for the caller to report, and the store serves what it holds. */
-export let unjournaled = (
-  d: Driver,
-  vocab: Vocab,
-  versioned = false,
-): Error[] => {
-  if (versioned || vocab.comp('_tx')) return []
-  let held = new Set(catalogue(d).map((o) => o.name))
-  return journalDrop()
-    .filter((s) => !vocab.comp(s.name) && held.has(s.name))
-    .flatMap((s) => {
-      try {
-        d.query(s)
-        return []
-      } catch (e) {
-        return [e as Error]
-      }
-    })
 }
