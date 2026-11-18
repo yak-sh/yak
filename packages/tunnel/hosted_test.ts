@@ -213,7 +213,8 @@ test('an adopted pair rotates only its gateway, and disconnecting leaves the tun
     service: S,
     adopted: true,
   })
-  assertEquals((await ask(JEFF, adopt)).status, 409)
+  assertEquals((await ask(JEFF, adopt)).status, 200)
+  assertEquals((await ask(JEFF, { ...adopt, tunnel: S })).code, 'has_tunnel')
   assertEquals(
     (await ask(ADA, { space: 'ada', do: 'rotate' })).body.token,
     undefined,
@@ -223,6 +224,7 @@ test('an adopted pair rotates only its gateway, and disconnecting leaves the tun
     null,
   )
   assertEquals(made, [
+    `put tunnel-e1 ${S}`,
     `put tunnel-e1 ${S}`,
     `put tunnel-e1 ${S}`,
     'remove tunnel-e1',

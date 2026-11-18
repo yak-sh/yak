@@ -385,7 +385,10 @@ let changed = async (
       )
     }
     // Replacing either kind of pair would lose its saved identifiers.
-    if (held) {
+    if (
+      held && (!held.adopted || space.tunnelTrashed ||
+        held.id != said('tunnel') || held.service != said('service'))
+    ) {
       return refused(
         409,
         'has_tunnel',
