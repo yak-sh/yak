@@ -484,7 +484,7 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
     assert((await listed()).includes('log_note'))
 
     // In. Everything that names the app stops naming it: the web, the tool
-    // list, and the listing — where it is under Trash instead, with its days.
+    // list, and the listing — where it is recoverable under Trash instead.
     assertStringIncludes(
       await agent.tool('app_delete', at),
       `${binlab49}/notes is in the trash`,
@@ -494,7 +494,7 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
     let saying = await agent.answer('app_list', { space: binlab49 })
     assertStringIncludes(
       saying.text,
-      'In the trash: Notes (notes), 30 days left',
+      'In the trash: Notes (notes), kept until restored or purged',
     )
     assertStringIncludes(saying.text, 'app_restore brings one back')
     assertEquals(
@@ -503,8 +503,8 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
     )
     assertEquals(
       (saying.value as { spaces: Listed[] }).spaces[0].trash
-        .map(({ slug, title, days }) => ({ slug, title, days })),
-      [{ slug: 'notes', title: 'Notes', days: 30 }],
+        .map(({ slug, title }) => ({ slug, title })),
+      [{ slug: 'notes', title: 'Notes' }],
     )
     let kept = (saying.value as { spaces: Listed[] }).spaces[0].trash[0].eid
     // A replacement takes the address immediately; trashing that replacement
@@ -543,8 +543,11 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
       )
     }
 
-    // Out, and every one of those answers is the old answer again — including
-    // the row nothing touched while it sat there.
+    // Old trash remains restorable, including the app's original saved row.
+    await meta(k).apply([{
+      entity: { eid: kept },
+      trashed: { at: '2000-01-01T00:00:00.000Z' },
+    }])
     assertStringIncludes(
       await agent.tool('app_restore', { space: binlab49, app: kept }),
       `${binlab49}/notes is back`,
@@ -637,7 +640,7 @@ test(
       )
       assertStringIncludes(
         mail!.body,
-        'puts the space in the trash for 30 days',
+        'It puts the space in the trash. Nothing is erased',
       )
       let link = new RegExp(
         `https://yaks\\.app(/space/${binspace50}/delete\\?t=[^\\s]+)`,
@@ -707,7 +710,7 @@ test(
       )
       // Every door that writes in it, or names an app of it, says where it
       // is and the way back, its apps' own app_restore included.
-      let binned = `${binspace50} is in the trash, 30 days left — ` +
+      let binned = `${binspace50} is in the trash — ` +
         `space_restore(space: '${binspace50}') brings it back`
       for (
         let [name, args] of [
@@ -726,6 +729,11 @@ test(
 
       // Out, and every one of those answers is the old answer again — the rows
       // in its apps' stores included, since nothing ever touched them.
+      let [retained] = await meta(k).query(`.space.slug=${binspace50}`)
+      await meta(k).apply([{
+        entity: { eid: retained.entity.eid },
+        trashed: { at: '2000-01-01T00:00:00.000Z' },
+      }])
       assertStringIncludes(
         await agent.tool('space_restore', { space: binspace50 }),
         `${binspace50} is back`,

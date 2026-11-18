@@ -1509,14 +1509,13 @@ test(
       )
       assertStringIncludes(all, `https://${jeff54}.yaks.app/garden/`)
       // Its garden went to the trash a moment ago, so the space has no apps
-      // and one thing in the trash — with the days it has to change its mind
-      // (erase.ts, T-34430).
+      // and one recoverable thing in the trash (erase.ts, T-34430).
       assertEquals(
         (await agent.tool('app_list', { space: jeff_work54 })).split('\n'),
         [
           `${jeff_work54} — https://${jeff_work54}.yaks.app/ — you are the owner`,
           '- no apps yet',
-          'In the trash: Work garden (garden), 30 days left — app_restore ' +
+          'In the trash: Work garden (garden), kept until restored or purged — app_restore ' +
           'brings one back',
         ],
       )

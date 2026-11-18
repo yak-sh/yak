@@ -1189,12 +1189,15 @@ test(
       )
       let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
 
-      // And that page says where their space went, with the days it has left.
+      // That page identifies the retained space and offers its restore form.
       let there = await k.at(`${slug}.yaks.app`, '/', { headers: { cookie } })
       assertEquals(there.status, 404)
       let said = await there.text()
       assertStringIncludes(said, `${slug} is in the trash`)
-      assertStringIncludes(said, '30 more days')
+      let { document } = parseHTML(said)
+      let restore = document.querySelector('input[name=restore-space]')
+      assertEquals(restore?.getAttribute('value'), slug)
+      assertEquals(restore?.closest('form')?.getAttribute('method'), 'post')
 
       // One POST off that page and it is theirs again — no assistant, no script.
       let back = await k.at(`${slug}.yaks.app`, '/', {
