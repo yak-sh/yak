@@ -9,7 +9,6 @@ import type { Handlers } from '@yaks/effects'
 import { comp, type Desk, str } from './model.ts'
 import { type Enrich, group, reframe, trim } from './group.ts'
 import { enrichFrames } from './frames.ts'
-import { sourceFrames, type SourceOptions } from '@yaks/code/source'
 import { followUp, letter, type Mark } from './letter.ts'
 import { occurring, remoteBug } from './reading.ts'
 import { type Explanation, explanation, unexplained } from './resolution.ts'
@@ -18,7 +17,6 @@ import { human } from '@yaks/id'
 
 export type Options = {
   enrich?: Enrich
-  code?: SourceOptions
   /** Platform/box delivery target, resolved by the host to a person's eid. */
   to?: string
   from?: string
@@ -305,8 +303,7 @@ export let effects = (
   host: { graph: Graph; config?: { port?: number } },
   options: Options = {},
 ): Handlers => {
-  let enrich = options.enrich ??
-    enrichFrames(options.code ? sourceFrames(options.code) : undefined)
+  let enrich = options.enrich ?? enrichFrames()
   let followSince = options.since ??
     (options.remote ? new Date().toISOString() : undefined)
   let url = options.url ??

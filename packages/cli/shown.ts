@@ -1,6 +1,5 @@
 // What a command line shows: an answer drawn with its config's plugin views
-// (terminal.ts `show`). Apart from terminal.ts, which a browser page loads
-// too, because finding a plugin's views reads the disk (./config.ts).
+// (tty.ts `show`). Finding a plugin's views reads the disk (./config.ts).
 
 import type { Bundle } from '@yaks/graph'
 import type { Registry } from '@yaks/render'
@@ -8,7 +7,7 @@ import type { Vocab } from '@yaks/vocab/runtime'
 import type { AnatomyObserver } from '@yaks/code/anatomy'
 import { type Drawn, type Source, terminal, type Tty } from './answer.ts'
 import { pluginTui, pluginViews } from './config.ts'
-import { show } from './terminal.ts'
+import { show } from './tty.ts'
 
 /** An answer drawn as a command line shows one, with the views of `plugins`
  * ({@link show}): held or painted in their terminal components where `c`

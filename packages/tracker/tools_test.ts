@@ -536,12 +536,13 @@ for (let source of ['box', 'yaks.app']) {
 
 // The box's default yak names yaks.app its source: its bugs are the Worker's, marked with no source named, and a commit
 // it names by a short sha is read as Git reads one.
-let head = new TextDecoder().decode(
-  (await new Deno.Command('git', { args: ['rev-parse', 'HEAD'] }).output())
-    .stdout,
-).trim()
+let head = '1234567890abcdef1234567890abcdef12345678'
 let platformHome = await marking(
-  { ...config, source: 'yaks.app', code: { cwd: '.' } },
+  {
+    ...config,
+    source: 'yaks.app',
+    commits: (sha) => Promise.resolve(head.startsWith(sha) ? [head] : []),
+  },
   undefined,
   false,
 )

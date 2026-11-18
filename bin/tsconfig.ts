@@ -28,6 +28,7 @@
 /** A dependency of a module, as `deno info --json` reports it. */
 export type Dep = {
   specifier: string
+  isDynamic?: boolean
   code?: { specifier?: string }
   type?: { specifier?: string }
 }
@@ -189,8 +190,8 @@ export let npmFiles = (
  * The project at `dir` checking `roots`, files under `checkout`: Deno's
  * resolution of their graph (`info`), the manifest of each npm package by id,
  * the compiler options Deno is configured with, the files of `dir`
- * declaring the platform's globals, and whether those declare the modules
- * Deno leaves to its host.
+ * declaring the platform's globals, whether those declare the modules Deno
+ * leaves to its host, and whether Node's ambient types belong to the platform.
  */
 export let project = (
   info: Info,
@@ -201,6 +202,7 @@ export let project = (
   options: Record<string, unknown> = {},
   globals: string[] = [],
   hosted = false,
+  nodes = true,
 ): Project => {
   let base = `file://${checkout}/`
   let modules = new Map(info.modules.map((m) => [m.specifier, m]))
@@ -219,8 +221,9 @@ export let project = (
   let external = new Set<string>()
   let node = false
   if (!placed.size) links['node_modules'] = `${checkout}/node_modules`
-  else {links['node_modules/@types/node'] =
-      `${checkout}/node_modules/@types/node`}
+  else if (nodes) {
+    links['node_modules/@types/node'] = `${checkout}/node_modules/@types/node`
+  }
 
   // The files tsc may read, in turn, for a module Deno resolved.
   let candidates = (url: string): string[] => {
@@ -312,7 +315,7 @@ export let project = (
         skipLibCheck: true,
         strict: true,
         noImplicitOverride: true,
-        types: node ? ['node'] : [],
+        types: nodes && node ? ['node'] : [],
         typeRoots: [
           `${checkout}/node_modules/@types`,
           './node_modules/@types',

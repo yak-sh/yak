@@ -2,7 +2,7 @@
 // The graph, queue consumer and authenticated doors also run in RAM fixtures.
 import { DurableObject, env, waitUntil } from 'cloudflare:workers'
 import { faults } from '@yaks/api'
-import { type State, Tracker as ObjectStore } from './object.ts'
+import { Tracker as ObjectStore } from './object.ts'
 import { type Env, reporting, type Stub, worker } from './worker.ts'
 import { sign } from './auth.ts'
 import { system } from '@yaks/fp'
@@ -20,11 +20,11 @@ faults((error, where) => waitUntil(reporting(env as Env)(error, where)))
 // forwarded here, or the runtime answers that it "does not implement" it.
 export class Tracker extends DurableObject<Env> implements Stub {
   tracker: ObjectStore
-  constructor(ctx: State, env: Env) {
+  constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
     this.tracker = new ObjectStore(ctx, env)
   }
-  fetch(request: Request) {
+  override fetch(request: Request) {
     return this.tracker.fetch(request)
   }
   ingest(rows: Bundle[]) {
@@ -60,13 +60,13 @@ export class Tracker extends DurableObject<Env> implements Stub {
   monitor() {
     return this.tracker.monitor()
   }
-  alarm() {
+  override alarm() {
     return this.tracker.alarm()
   }
-  webSocketMessage(ws: Wire, data: string | ArrayBuffer) {
+  override webSocketMessage(ws: Wire, data: string | ArrayBuffer) {
     return this.tracker.webSocketMessage(ws, data)
   }
-  webSocketClose(ws: Wire) {
+  override webSocketClose(ws: Wire) {
     return this.tracker.webSocketClose(ws)
   }
 }

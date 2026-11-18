@@ -89,7 +89,7 @@ export default class extends WorkerEntrypoint {
   // The runtime sets this; `declare` names its type without a field.
   declare env: Env
 
-  fetch(req: Request): Promise<Response> {
+  override fetch(req: Request): Promise<Response> {
     return forwarded(req, (job) => getContainer(this.env.COMPILER).fetch(job))
   }
 

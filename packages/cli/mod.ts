@@ -40,7 +40,7 @@ export {
 } from './args.ts'
 export { bundlesIn, CHUNK, chunks } from './apply.ts'
 export { registry, type Source, type Views } from './answer.ts'
-export { show } from './terminal.ts'
+export { show } from './tty.ts'
 export { complete, type Lookup } from './complete.ts'
 export {
   type Door,

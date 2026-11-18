@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "esnext"
+    ],
+    "strict": true
+  },
+  "entries": [
+    "index.ts"
+  ],
+  "nodeModules": [
+    "node:async_hooks",
+    "node:process"
+  ],
+  "_": "nodejs_compat supplies async context and process metadata."
+}

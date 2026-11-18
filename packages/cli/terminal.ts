@@ -1,18 +1,12 @@
-// Terminal presentation of portable answers. Only the CLI loads the painter
-// and the process-backed interactive runner.
+// Portable answer preparation and text output. The CLI supplies its terminal
+// presentation from ./tty.ts.
 import type { Bundle } from '@yaks/graph'
 import { whole } from '@yaks/query'
-import { prepared, type Registry, type Renderer, resolve } from '@yaks/render'
+import { prepared, type Registry, type Renderer } from '@yaks/render'
 import type { Vocab } from '@yaks/vocab/runtime'
-import type { ComponentChild } from 'preact'
-import type { Sheet } from '@yaks/tui/theme'
-import { sheet } from '@yaks/render/views'
 import {
   type Drawn,
-  drawn,
-  freshness,
   type Held,
-  joined,
   type Near,
   nearOf,
   nearQuery,
@@ -27,96 +21,21 @@ import {
   viewOf,
 } from './answer.ts'
 
-// What an answer wears in a terminal: @yaks/ui's components and these views'
-// own classes, in its default theme. Loaded with the painter, so a printed
-// answer never pays for it.
-let dressed = async (): Promise<Sheet> => {
-  let { composition, sheet: kit } = await import('@yaks/ui')
-  return { ...kit(composition), ...sheet(composition.theme.colors) }
-}
-
-/** The same answer painted for a terminal `columns` wide: the same views,
- * mounted in @yaks/tui's document and laid out, styled and colored by its
- * painter, once. Loaded only for a terminal, so a printed answer never pays
- * for the painter. */
-export let painted = async (
-  views: Held,
-  vocab: Vocab,
+/** A prepared answer, handed to the caller's presentation boundary. */
+export type Presentation = (
+  views: Registry,
   answer: Bundle[],
   named: Bundle[],
-  columns: number,
-  page?: Near,
-  answers?: ReadonlyMap<string, Bundle[]>,
-): Promise<string> => {
-  let [{ render: mount }, { print }, dress] = await Promise.all([
-    import('@yaks/preact'),
-    import('@yaks/tui/print'),
-    dressed(),
-  ])
-  let groups = drawn<ComponentChild>(
-    vocab,
-    answer,
-    named,
-    page,
-    (b, v, c) => mount(views, b, v, vocab, { ...c, readOnly: true }),
-    { answers },
-  )
-  return joined([
-    ...groups.map((g) => g.map((n) => print(n, columns, dress))),
-    [freshness(answer, page)],
-  ])
-}
-
-/** An answer held in the terminal (@yaks/tui) until Ctrl-C, drawn as a
- * printout draws it ({@link painted}). Loaded only when asked for, so a
- * printed answer never pays for a terminal app. `config` is the config file
- * naming the graph the answer came from, for a view that keeps reading it. A
- * lone answer whose page is a component of its own (a plugin's `./tui`) is an
- * app, and has the whole terminal, whether or not the answer was drawn as a
- * `page`; anything else scrolls. */
-export let hold = async (
-  views: Held,
-  vocab: Vocab,
-  answer: Bundle[],
-  config?: string,
-  named: Bundle[] = [],
-  page?: Near,
-  answers?: ReadonlyMap<string, Bundle[]>,
-): Promise<void> => {
-  let [{ h }, { render: mount }, { run, Scroll }, dress] = await Promise.all([
-    import('preact'),
-    import('@yaks/preact'),
-    import('@yaks/tui'),
-    dressed(),
-  ])
-  let [lone] = answer
-  let app = answer.length == 1 && 'Render' in
-      (resolve(views, lone, 'Page', vocab, { config }) ?? {})
-  await run(() => {
-    let nodes = drawn<ComponentChild>(
-      vocab,
-      answer,
-      named,
-      app ? page ?? nothing : page,
-      (b, v, c) => mount(views, b, v, vocab, { ...c, config }),
-      { answers },
-    ).flat()
-    return app ? nodes[0] : h(
-      Scroll,
-      { id: 'answer', grow: '1' },
-      nodes.map((n) => h('div', null, n)),
-    )
-  }, { sheet: dress })
-}
+  page: Near | undefined,
+  answers: ReadonlyMap<string, Bundle[]>,
+) => void | Promise<void>
 
 let none: Source = { lookup: () => [], query: () => [] }
 
-/** An answer shown the way the command asked — held in the terminal under
- * `--tui`, drawn by `held` where the command has terminal views and a config
- * to read (answer.ts `terminal`), painted where stdout is a terminal, and printed
- * otherwise — and the way its `tool` was declared ({@link Drawn}): the answer
- * of one that wrote is drawn {@link standing}, and a page tool's lone entity
- * whole, beside the links and comments its page asks for. */
+/** Prepare an answer's views and the references and queries they read, then
+ * present it through `present`, or print its portable text. A tool that wrote
+ * draws its answer as it now stands, and a page draws a lone entity whole,
+ * beside the links and comments its page asks for. */
 export let show = async (
   c: { tui: boolean; tty?: Tty; out: (line: string) => void },
   views: Registry,
@@ -125,6 +44,7 @@ export let show = async (
   held: { views?: Held; config?: string } = {},
   from: Source = none,
   tool: Drawn = { readOnly: true },
+  present?: Presentation,
 ): Promise<void> => {
   let answer = tool.readOnly ? said : await standing(said, from)
   // A read that found nothing says so: a blank answer reads as a command
@@ -200,32 +120,9 @@ export let show = async (
     found.forEach((b) => known.add(b.entity.eid))
     said.forEach(([q, rows]) => answers.set(q, rows))
   }
-  if (!painting) {
-    if (text) c.out(text)
-    return
-  }
-  if (c.tui) {
-    return await hold(
-      held.views ?? views,
-      vocab,
-      answer,
-      held.config,
-      named,
-      page,
-      answers,
-    )
-  }
-  if (c.tty) {
-    let text = await painted(
-      held.views ?? views,
-      vocab,
-      answer,
-      named,
-      c.tty.columns,
-      page,
-      answers,
-    )
-    if (text) c.tty.write(text)
-    return
+  if (present) return await present(views, answer, named, page, answers)
+  if (text) {
+    if (c.tty) c.tty.write(text)
+    else c.out(text)
   }
 }

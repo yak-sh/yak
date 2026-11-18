@@ -118,57 +118,58 @@ segment per record and removes it only on acknowledgement. An incomplete tail
 stays on disk while complete records continue. Segments use independent names,
 so concurrent processes never share an append offset.
 
-`effects({graph}, options)` accepts `code: {cwd, url, origins}` for box frame
-resolution through the fleet catalog, an `enrich` function for another host, a
+`effects({graph}, options)` accepts an `enrich` function for frame resolution, a
 space `notify` stream callback, or a platform/box mail `to`, `from` and global
-tracker `store` eid. `forwarded` names capture sources another tracker writes
-the letters for: a bug whose kept occurrences all carry one of those
-`error.tags.source` values is marked seen without a letter, so a bug the box
-forwards to the platform tracker sends one letter, the box's. Each bug opening
-and each regression gets its own letter immediately. `side` names the side of
-the tracker web a store's bugs open on when they are not in its own graph: the
-platform tracker's letters (`side: 'yaks.app'`) name a bug by global eid and
-link to `/?.bug&side=yaks.app&bug=<eid>`, where the box's tracker web reads it
-through `/tracker/bugs` and draws it with the same pages. A space's tracker
-holds its own bugs, so its letters add its `scope` (`&scope=<space eid>`), which
-the page and `bug_show` read the bug from, and `bug_resolve`, `bug_archive` and
-`bug_reopen` mark it in. Its identity derives from the store, recipient, bug
-eid, opening or regression mark, and full `created.at` or `regressed.at`, so a
-replayed effect keeps the same letter. A letter is read alone by someone
-deciding whether it is urgent, so `letter.ts` writes from the bug and its
-retained occurrences all the tracker holds: the subject names where it ran (box
-or yaks.app, the space and app, and "test account" when only test accounts were
-reached) and the headline, never the bug's id; the body carries the whole
-message, where it ran (process or worker, app version, operation), whom it
-reached, how often and in the last hour, the failing request, the code, the
-commit, the top of the stack, the breadcrumbs before it, every other tag, and a
-link naming the bug. Reporters supply what it reads: the box tags its `command`
-and host `roles`, yaks.app its `space` and `app` slugs and whose space it is
-(`account`). A later letter takes the opening's subject after `Re:` and names
-the opening in `mail.reply_to`, which @yaks/mail sends as In-Reply-To and
-References: those headers make the thread. A regression's letter answers the
-opening's thread, and `bug_follow` adds one reply there when a bug is resolved
-or archived, and one when a fixer takes it (`taken{at, by, via, task}`, once per
-opening); a bug that opened without a letter stays quiet. The resolved reply
-says how long the bug was open, whom it reached and the resolution's
-explanation, its commits linked into the `repo` option's web pages
-(`"repo": "https://github.com/yak-sh/yak"`); a resolution without an explanation
-sends nothing until one is written. Bugs become notified only after their
-occasion's letter has its `delivered` mark; an earlier occasion's delivery
-cannot mark a later regression notified. Space replies own their own notified
-mark. Archived bugs still count but never notify. Retention keeps the newest
-hundred plus the first occurrence of each commit (or version without a commit).
-Past that, intake counts a flood instead of keeping it: an occurrence of an open
-bug that already keeps its hundred, of a release the bug keeps, and less than a
-minute after the newest it keeps adds its hits to the bug and is never stored,
-so a flood of one fault keeps one occurrence a minute and writes its count, not
-each occurrence to group and trim away. A resend of a counted occurrence counts
-again, since nothing of it is kept to know it by. Grouping and retention read
-only what they decide by: grouping reads its bug's counters, and an earlier
-occurrence only after a resolution, to ask whether one shares its release;
-trimming reads each occurrence's time and release, and none while the bug's hits
-are within the newest it keeps. Reframing writes a bug's culprit or spot only
-where it moved.
+tracker `store` eid. Local CLI composition turns the configured
+`code: {cwd, url, origins}` into frame enrichment through the fleet catalog and
+a commit resolver for the bug tools. `forwarded` names capture sources another
+tracker writes the letters for: a bug whose kept occurrences all carry one of
+those `error.tags.source` values is marked seen without a letter, so a bug the
+box forwards to the platform tracker sends one letter, the box's. Each bug
+opening and each regression gets its own letter immediately. `side` names the
+side of the tracker web a store's bugs open on when they are not in its own
+graph: the platform tracker's letters (`side: 'yaks.app'`) name a bug by global
+eid and link to `/?.bug&side=yaks.app&bug=<eid>`, where the box's tracker web
+reads it through `/tracker/bugs` and draws it with the same pages. A space's
+tracker holds its own bugs, so its letters add its `scope`
+(`&scope=<space eid>`), which the page and `bug_show` read the bug from, and
+`bug_resolve`, `bug_archive` and `bug_reopen` mark it in. Its identity derives
+from the store, recipient, bug eid, opening or regression mark, and full
+`created.at` or `regressed.at`, so a replayed effect keeps the same letter. A
+letter is read alone by someone deciding whether it is urgent, so `letter.ts`
+writes from the bug and its retained occurrences all the tracker holds: the
+subject names where it ran (box or yaks.app, the space and app, and "test
+account" when only test accounts were reached) and the headline, never the bug's
+id; the body carries the whole message, where it ran (process or worker, app
+version, operation), whom it reached, how often and in the last hour, the
+failing request, the code, the commit, the top of the stack, the breadcrumbs
+before it, every other tag, and a link naming the bug. Reporters supply what it
+reads: the box tags its `command` and host `roles`, yaks.app its `space` and
+`app` slugs and whose space it is (`account`). A later letter takes the
+opening's subject after `Re:` and names the opening in `mail.reply_to`, which
+@yaks/mail sends as In-Reply-To and References: those headers make the thread. A
+regression's letter answers the opening's thread, and `bug_follow` adds one
+reply there when a bug is resolved or archived, and one when a fixer takes it
+(`taken{at, by, via, task}`, once per opening); a bug that opened without a
+letter stays quiet. The resolved reply says how long the bug was open, whom it
+reached and the resolution's explanation, its commits linked into the `repo`
+option's web pages (`"repo": "https://github.com/yak-sh/yak"`); a resolution
+without an explanation sends nothing until one is written. Bugs become notified
+only after their occasion's letter has its `delivered` mark; an earlier
+occasion's delivery cannot mark a later regression notified. Space replies own
+their own notified mark. Archived bugs still count but never notify. Retention
+keeps the newest hundred plus the first occurrence of each commit (or version
+without a commit). Past that, intake counts a flood instead of keeping it: an
+occurrence of an open bug that already keeps its hundred, of a release the bug
+keeps, and less than a minute after the newest it keeps adds its hits to the bug
+and is never stored, so a flood of one fault keeps one occurrence a minute and
+writes its count, not each occurrence to group and trim away. A resend of a
+counted occurrence counts again, since nothing of it is kept to know it by.
+Grouping and retention read only what they decide by: grouping reads its bug's
+counters, and an earlier occurrence only after a resolution, to ask whether one
+shares its release; trimming reads each occurrence's time and release, and none
+while the bug's hits are within the newest it keeps. Reframing writes a bug's
+culprit or spot only where it moved.
 
 An occurrence regresses a resolved bug when its `error.at` is later than
 `resolved.at`, unless its commit (or version without a commit) was already seen

@@ -7,6 +7,7 @@ import { workspaceCapabilities } from './workspaces.ts'
 import { overdue } from '@yaks/machine/targets'
 import { resolveHome } from './machines.ts'
 import { sandboxCapabilities } from './sandboxes.ts'
+import { trackerOptions } from './tracker.ts'
 /**
  * The graph a config file names, opened by a process for the roles it serves.
  *
@@ -729,7 +730,10 @@ let composed = async (
     }
     let unforked = () => Promise.all([...forks.keys()].map(unfork))
     let built = plan.bind({
-      options: opts.options,
+      options: (plugin, options) => {
+        let lent = opts.options?.(plugin, options) ?? options
+        return plugin == '@yaks/tracker' ? trackerOptions(lent) : lent
+      },
       // A database in memory is its connection's alone, so no branch's host
       // could open it.
       branches: (h) => {

@@ -80,3 +80,19 @@ test('externals declare the modules Deno leaves to its host, never a file the ch
     'declare module "cloudflare:workers"\n',
   )
 })
+
+test('a browser project never opts into ambient Node types when resolution finds a Node module', () => {
+  let info: Info = {
+    redirects: {},
+    npmPackages: {},
+    modules: [{
+      specifier: 'file:///app/page.ts',
+      dependencies: [{ specifier: 'node:fs', code: { specifier: 'node:fs' } }],
+    }, { specifier: 'node:fs', kind: 'node' }],
+  }
+  let compiler = (nodes: boolean) =>
+    project(info, '/app', '/app/.types', ['page.ts'], {}, {}, [], false, nodes)
+      .config.compilerOptions
+  assertEquals(compiler(true).types, ['node'])
+  assertEquals(compiler(false).types, [])
+})

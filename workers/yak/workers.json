@@ -1,9 +1,21 @@
 {
-  "_": "Worker entrypoints checked with Cloudflare globals alone, no DOM, by deno task check:types. Resolution comes from the npm workspace.",
+  "_": "Workers types and runtime imports. nodejs_compat supplies the listed Node modules. The MCP skill loader opens skills-host.ts only with a local cwd; the Worker supplies skill bytes instead (as in bundle.ts).",
   "compilerOptions": {
     "lib": [
       "esnext"
     ],
     "strict": true
-  }
+  },
+  "entries": [
+    "conform.ts",
+    "index.ts"
+  ],
+  "nodeModules": [
+    "node:async_hooks",
+    "node:process",
+    "node:timers"
+  ],
+  "hostOnly": [
+    "../../packages/mcp/skills-host.ts"
+  ]
 }

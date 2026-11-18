@@ -17,9 +17,13 @@ import { fileURLToPath } from 'node:url'
 export type Config = {
   compilerOptions: { lib: string[]; [key: string]: unknown }
   imports?: Record<string, string>
-  /** which of the package's exports this program checks (default `["."]`);
-   * `./vocab` and `./views` are added whenever the package exports them */
+  /** Browser exports (default `["."]`, plus web facets), or Worker source
+   * files (default `["conform.ts"]`). */
   entries?: string[]
+  /** Node modules this Worker's deployed runtime supplies; browsers have none. */
+  nodeModules?: string[]
+  /** Modules loaded dynamically only by a local host, never by this Worker. */
+  hostOnly?: string[]
   /** package-relative resource globs consumed by the browser compiler catalog;
    * they do not introduce TypeScript entrypoints or compiler options */
   resources?: string[]
@@ -48,12 +52,26 @@ export function mergeConfigs(
   for (let { url, config } of configs) {
     for (let key of Object.keys(config)) {
       if (
-        !['_', 'compilerOptions', 'imports', 'entries', 'resources'].includes(
+        ![
+          '_',
+          'compilerOptions',
+          'imports',
+          'entries',
+          'resources',
+          'nodeModules',
+          'hostOnly',
+        ].includes(
           key,
         )
       ) {
         throw new Error(`${url}: unsupported platform config field ${key}`)
       }
+    }
+    if (
+      platform == 'browser' &&
+      (config.nodeModules?.length || config.hostOnly?.length)
+    ) {
+      throw new Error(`${url}: browser programs have no host modules`)
     }
     let { lib, ...rest } = config.compilerOptions
     let sorted = Object.fromEntries(Object.entries(rest).sort())
@@ -151,10 +169,15 @@ export async function platformConfig(root: URL, platform: string) {
   }
   let configs: { url: URL; config: Config }[] = []
   let entries: string[] = []
+  let boundaries: Boundary[] = []
   for (let parent of ['packages', 'workers']) {
-    for await (let dir of Deno.readDir(new URL(`${parent}/`, root))) {
-      if (!dir.isDirectory) continue
-      let url = new URL(`${parent}/${dir.name}/${platform}.json`, root)
+    for (
+      let directory of await directories(
+        new URL(`${parent}/`, root),
+        parent == 'workers',
+      )
+    ) {
+      let url = new URL(`${platform}.json`, directory)
       let text: string
       try {
         text = await Deno.readTextFile(url)
@@ -164,17 +187,48 @@ export async function platformConfig(root: URL, platform: string) {
       }
       let config = JSON.parse(text) as Config
       configs.push({ url, config })
-      if (platform !== 'browser') {
-        entries.push(new URL('conform.ts', url).href)
-        continue
-      }
-      for (let file of browserEntries(config, new URL('package.json', url))) {
-        entries.push(new URL(file, url).href)
-      }
+      let own = (platform == 'browser'
+        ? browserEntries(config, new URL('package.json', url))
+        : config.entries ?? ['conform.ts']).map((file) =>
+          new URL(file, url).href
+        )
+      entries.push(...own)
+      boundaries.push({
+        entries: own.sort(),
+        nodeModules: (config.nodeModules ?? []).toSorted(),
+        hostOnly: (config.hostOnly ?? []).map((file) =>
+          new URL(file, url).href
+        ).sort(),
+      })
     }
   }
   configs.sort((a, b) => a.url.href.localeCompare(b.url.href))
   let config = mergeConfigs(configs, platform)
   config.imports = { ...packageImports(root, platform), ...config.imports }
-  return { config, entries: entries.sort() }
+  boundaries.sort((a, b) =>
+    a.entries.join('\n').localeCompare(b.entries.join('\n'))
+  )
+  return { config, entries: entries.sort(), boundaries }
+}
+
+/** Each config's runtime imports stay separate even when its compiler options
+ * share a program with another Worker's. */
+export type Boundary = {
+  entries: string[]
+  nodeModules: string[]
+  hostOnly: string[]
+}
+
+let directories = async (root: URL, recursive: boolean): Promise<URL[]> => {
+  let found: URL[] = []
+  for await (let dir of Deno.readDir(root)) {
+    if (
+      !dir.isDirectory || dir.name.startsWith('.') ||
+      ['node_modules', 'public'].includes(dir.name)
+    ) continue
+    let at = new URL(`${dir.name}/`, root)
+    found.push(at)
+    if (recursive) found.push(...await directories(at, true))
+  }
+  return found
 }

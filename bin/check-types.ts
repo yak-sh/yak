@@ -33,9 +33,10 @@ import { stores } from '@yaks/testing/kept'
 import { exported, fences, typed } from '@yaks/testing/examples'
 import { changes, git, member } from './test-changes.ts'
 import { type Info, type Project, project, relative } from './tsconfig.ts'
-import { platformConfig } from './check-platform.ts'
+import { type Boundary, platformConfig } from './check-platform.ts'
 import { incremental } from './check-incremental.ts'
 import { compiler } from './check-compiler.ts'
+import { diagnostic, unavailable } from './check-imports.ts'
 
 /** Where the checked modules live. */
 export const DIRS = ['apps', 'bench', 'bin', 'packages', 'plugins', 'workers']
@@ -257,6 +258,7 @@ type Platform = {
   globals: () => Promise<Record<string, string>>
   hosted: boolean
   examples: boolean
+  boundaries?: Boundary[]
 }
 
 /// namespace('/// <reference no-default-lib="true" />\ndeclare namespace Deno { a }\n/// <reference no-default-lib="true" />\ninterface Console {}\n/// <reference no-default-lib="true" />\n/// <reference lib="deno.ns" />\ndeclare namespace Deno { b }\n') -> '/// <reference no-default-lib="true" />\ndeclare namespace Deno { a }\n'
@@ -302,14 +304,13 @@ let deno = (): Platform => {
   }
 }
 
-/** A host's program, and the modules it checks. Its globals arrive by its
- * libs and each entry's `/// <reference types>`; only the Workers types declare
- * the modules Deno leaves to the host. */
+/** A host's program and entries. Workers globals are supplied for every entry,
+ * including shipped entries without a conformance file's type reference. */
 type Host = { platform: Platform; entries: string[] }
 
 let host = (name: 'workers' | 'browser') =>
   once(async (): Promise<Host> => {
-    let { config, entries } = await platformConfig(
+    let { config, entries, boundaries } = await platformConfig(
       new URL(`file://${CHECKOUT}/`),
       name,
     )
@@ -321,9 +322,22 @@ let host = (name: 'workers' | 'browser') =>
         dir,
         config: `${dir}/config.json`,
         options: config.compilerOptions,
-        globals: () => Promise.resolve({}),
+        globals: async (): Promise<Record<string, string>> =>
+          name == 'workers'
+            ? {
+              'workers.d.ts': await Deno.readTextFile(
+                `${CHECKOUT}/node_modules/@cloudflare/workers-types/index.d.ts`,
+              ),
+              'wasm.d.ts': `declare module '*.wasm' {
+  const module: WebAssembly.Module
+  export default module
+}
+`,
+            }
+            : {},
         hosted: name == 'workers',
         examples: false,
+        boundaries,
       },
       entries: entries.map((e) => e.slice(`file://${CHECKOUT}/`.length)),
     }
@@ -363,6 +377,18 @@ export let scope = (
   )
 }
 
+/** A host boundary covers the whole import chain, even past a package or
+ * platform composition where checking source bodies deliberately stops. */
+export let hostEntries = (
+  s: Survey,
+  entries: string[],
+  changed: string[],
+  platform?: string,
+) =>
+  changed.some((p) => p.endsWith(`/${platform}.json`))
+    ? entries
+    : entries.filter((entry) => s.reaches([entry], changed, false, false))
+
 /** The modules a change reaches: those changed, the rest of their package
  * that imports one, each module importing one, and each host's entries
  * reaching one. */
@@ -384,7 +410,7 @@ let reached = async (
   let roots = scope(s, all, changed)
   let hosted = on.map((h) => ({
     ...h,
-    entries: scope(s, h.entries, changed),
+    entries: hostEntries(s, h.entries, changed, h.platform.name),
   }))
   return { roots, hosted, survey: s }
 }
@@ -631,11 +657,56 @@ let program = async (
     ])
     if (!found) throw new Error('Cannot resolve source types')
     let graphed = { ...found, npmPackages: found.npmPackages ?? {} } as Info
+    if (on.boundaries) {
+      let base = `file://${CHECKOUT}/`
+      let selected = new Set(roots.map((r) => new URL(r, base).href))
+      let missing = on.boundaries.flatMap((boundary) =>
+        unavailable(
+          graphed,
+          boundary.entries.filter((e) => selected.has(e)),
+          (s) =>
+            s.startsWith('node:') && !boundary.nodeModules.includes(s) ||
+            on.name == 'browser' && /(?:^|\/)@types\/node(?:@|\/|$)/.test(s),
+          base,
+          new Set(boundary.hostOnly),
+          on.name == 'workers',
+        )
+      )
+      if (missing.length) {
+        let unique = new Map<string, typeof missing[number]>()
+        for (let m of missing) {
+          let key = `${m.file}\n${m.specifier}`
+          if ((unique.get(key)?.chain.length ?? Infinity) > m.chain.length) {
+            unique.set(key, m)
+          }
+        }
+        let sources = new Map(
+          graphed.modules.map((m) => [m.specifier, m.local]),
+        )
+        console.error(
+          (await Promise.all([...unique.values()].map((m) =>
+            diagnostic(
+              m,
+              on.name,
+              (s) => Deno.readTextFileSync(sources.get(s) ?? new URL(s)),
+              base,
+            )
+          ))).join('\n'),
+        )
+        return false
+      }
+    }
     let platform = hex(JSON.stringify([
       TSC,
       Deno.version.deno,
       on.options,
       on.hosted,
+      on.name != 'browser',
+      on.boundaries &&
+      JSON.stringify(on.boundaries).replaceAll(
+        `file://${CHECKOUT}/`,
+        '<checkout>/',
+      ),
       Object.entries(globals).map(([name, text]) => [name, hex(text)]),
     ]))
     let proven = await proofs(
@@ -663,6 +734,7 @@ let program = async (
       on.options,
       Object.keys(globals),
       on.hosted,
+      on.name != 'browser',
     )
     lay(p, on.dir)
     for (let [name, text] of Object.entries(globals)) {
@@ -800,7 +872,11 @@ export let types = async (
 ) => {
   let on = await hosts()
   let entry = (p: string) => on.some((h) => h.entries.includes(p))
-  if (!changed.some((p) => checked(p) || entry(p))) return true
+  if (
+    !changed.some((p) =>
+      checked(p) || entry(p) || /\/(browser|workers)\.json$/.test(p)
+    )
+  ) return true
   let { roots, hosted, survey } = await reached(changed, on, snapshot)
   return await check(roots, hosted, run, prepared, survey)
 }
@@ -809,22 +885,15 @@ if (import.meta.main) {
   let all = Deno.args.includes('--all')
   let paths = Deno.args.filter((a) => !a.startsWith('--'))
   let on = await hosts()
-  let ok = all || paths.length
+  let ok = all
     ? await check(
-      all
-        ? await every()
-        : paths.filter((p) =>
-          checked(p) || !on.some((h) => h.entries.includes(p))
-        ),
-      on.map((h) => ({
-        ...h,
-        entries: all ? h.entries : h.entries.filter((e) => paths.includes(e)),
-      })),
+      await every(),
+      on,
       spawn,
       [],
       undefined,
       all,
     )
-    : await types(await changes())
+    : await types(paths.length ? paths : await changes())
   if (!ok) Deno.exit(1)
 }

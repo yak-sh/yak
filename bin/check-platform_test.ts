@@ -96,45 +96,81 @@ test('platform merging refuses conflicts, hidden options and runtime libs', () =
   )
 })
 
-test('platform entrypoints cover every standalone config and the tail Worker', async () => {
-  let root = new URL('../', import.meta.url)
-  for (let platform of ['browser', 'workers']) {
-    let { config, entries } = await platformConfig(root, platform)
-    let expected: string[] = []
-    for (let parent of ['packages', 'workers']) {
-      for await (let dir of Deno.readDir(new URL(`${parent}/`, root))) {
-        if (!dir.isDirectory) continue
-        let base = new URL(`${parent}/${dir.name}/`, root)
-        let files = [...Deno.readDirSync(base)].map((file) => file.name)
-        if (!files.includes(`${platform}.json`)) continue
-        if (platform !== 'browser') {
-          expected.push(new URL('conform.ts', base).href)
-          continue
-        }
-        // The browser program checks a package's browser-facing exports: what
-        // its browser.json names (default `.`), plus `./vocab`, `./views`
-        // and `./ui` whenever exported — the web door imports these facets
-        // of every package and must reach nothing server-side through them.
-        let said = JSON.parse(
-          Deno.readTextFileSync(new URL('browser.json', base)),
-        ).entries as string[] | undefined
-        let exports = JSON.parse(
-          Deno.readTextFileSync(new URL('package.json', base)),
-        ).exports as string | Record<string, string>
-        let map = typeof exports === 'string' ? { '.': exports } : exports
-        for (
-          let key of new Set([...(said ?? ['.']), './vocab', './views', './ui'])
-        ) {
-          if (key in map) expected.push(new URL(map[key], base).href)
-        }
-      }
-    }
-    assertEquals(entries, expected.sort())
-    for (let entry of entries) await Deno.stat(new URL(entry))
-    assertEquals(config.compilerOptions.strict, true)
-    assertEquals(config.compilerOptions.lib.includes('deno.ns'), false)
-    if (platform === 'browser') {
-      assertEquals(config.imports?.['@cloudflare/workers-types'], undefined)
-    }
-  }
+let fixture = Deno.makeTempDirSync({ prefix: 'yaks-platform-' })
+let files: Record<string, unknown> = {
+  'packages/a/browser.json': config(),
+  'packages/a/package.json': {
+    exports: {
+      '.': './mod.ts',
+      './vocab': './vocab.ts',
+      './views': './views.ts',
+    },
+  },
+  'packages/a/workers.json': {
+    ...config({}, ['esnext']),
+    nodeModules: ['node:async_hooks'],
+  },
+  'workers/edge/workers.json': {
+    ...config({}, ['esnext']),
+    entries: ['conform.ts', 'index.ts'],
+    nodeModules: ['node:crypto'],
+    hostOnly: ['host.ts'],
+  },
+  'workers/edge/front/workers.json': {
+    ...config({}, ['esnext']),
+    entries: ['index.ts'],
+  },
+  'workers/edge/public/copied/workers.json': {
+    compilerOptions: { lib: ['invalid'] },
+  },
+}
+for (let [path, contents] of Object.entries(files)) {
+  let target = `${fixture}/${path}`
+  Deno.mkdirSync(target.replace(/\/[^/]+$/, ''), { recursive: true })
+  Deno.writeTextFileSync(target, JSON.stringify(contents))
+}
+let root = new URL(`file://${fixture}/`)
+let browser = await platformConfig(root, 'browser')
+let workers = await platformConfig(root, 'workers')
+Deno.removeSync(fixture, { recursive: true })
+
+test('platform entrypoints cover browser facets and nested shipped Workers with separate capabilities', () => {
+  assertEquals(
+    browser.entries,
+    ['packages/a/mod.ts', 'packages/a/views.ts', 'packages/a/vocab.ts'].map((
+      p,
+    ) => new URL(p, root).href),
+  )
+  assertEquals(
+    workers.entries,
+    [
+      'packages/a/conform.ts',
+      'workers/edge/conform.ts',
+      'workers/edge/front/index.ts',
+      'workers/edge/index.ts',
+    ].map((p) => new URL(p, root).href),
+  )
+  let capabilities = Object.fromEntries(
+    workers.boundaries.flatMap((boundary) =>
+      boundary.entries.map((
+        entry,
+      ) => [entry.slice(root.href.length), {
+        nodeModules: boundary.nodeModules,
+        hostOnly: boundary.hostOnly,
+      }])
+    ),
+  )
+  assertEquals(capabilities['packages/a/conform.ts'], {
+    nodeModules: ['node:async_hooks'],
+    hostOnly: [],
+  })
+  assertEquals(capabilities['workers/edge/index.ts'], {
+    nodeModules: ['node:crypto'],
+    hostOnly: [new URL('workers/edge/host.ts', root).href],
+  })
+  assertEquals(capabilities['workers/edge/front/index.ts'], {
+    nodeModules: [],
+    hostOnly: [],
+  })
+  assertEquals(browser.config.imports?.['@cloudflare/workers-types'], undefined)
 })

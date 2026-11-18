@@ -23,7 +23,6 @@ import {
 } from '@yaks/query'
 import { CallError } from '@yaks/tools/errors'
 import { valued } from '@yaks/tools/value'
-import { commitsOf } from '@yaks/git/source'
 import { comp, str } from './model.ts'
 import { type Options, read } from './routes.ts'
 import { mark as upstream, retry } from './remote.ts'
@@ -180,13 +179,13 @@ let answer = (
 /** The tools' options: the tracker's remote, the store a call naming no
  * source reads and marks (`box` unless said), the box tracker's graph where
  * this one holds no bugs, and the checkout whose commits a resolution names,
- * where a short sha is read as Git reads one. */
+ * where a short sha is resolved through the host's `commits` function. */
 export type ToolOptions = Options & {
   source?: 'box' | 'yaks.app'
   /** the base URL of the box tracker's graph, such as
    * `http://127.0.0.1:5175`; without it the box is this graph */
   box?: string
-  code?: { cwd?: string }
+  commits?: (sha: string) => Promise<string[]>
 }
 
 export let runs = (
@@ -201,22 +200,23 @@ export let runs = (
   // marks a tool answers.
   let box = (g: Graph, call?: Bundle): Store =>
     options.box ? wire(options.box, g.vocab, go, call && who(call)?.via) : g
-  let cwd = options.code?.cwd
   // A resolution's commits by their full shas, a short one read as Git reads
   // it: 7 or more characters that start one commit in the checkout. One that
   // starts none or several is refused, saying which; a full sha is taken as
-  // said. Without a checkout the commits stay as said, for the graph to read.
+  // said. Without a resolver the commits stay as said, for the graph to read.
   let full = async (said: Partial<Explanation>) => {
     for (let k of ['since', 'fix'] as const) {
       let sha = said[k]
-      if (!sha || !cwd || /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(sha)) continue
+      if (
+        !sha || !options.commits || /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(sha)
+      ) continue
       if (!/^[0-9a-f]{7,63}$/.test(sha)) {
         throw new CallError(
           k,
           `${k} ${sha} is not 7 or more hex characters of a sha`,
         )
       }
-      let named = await commitsOf(cwd, sha)
+      let named = await options.commits(sha)
       if (named.length > 1) {
         throw new CallError(
           k,

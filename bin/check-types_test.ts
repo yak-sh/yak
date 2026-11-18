@@ -3,6 +3,7 @@ import { type Info, survey, WIDE } from '@yaks/testing/deps'
 import {
   beside,
   generate,
+  hostEntries,
   MADE,
   programs,
   proofs,
@@ -166,6 +167,24 @@ test('a source change checks consumers and types within its package, stopping at
       'pkg/host.ts',
       'app/direct.ts',
     ],
+  )
+})
+
+test('host boundaries follow transitive imports through platform composition and across packages', () => {
+  let { s, at } = scoped
+  equal(
+    hostEntries(
+      s,
+      ['app/far.ts', 'pkg/typed.ts', 'app/typed.ts', 'pkg/apart.ts'].map(at),
+      [at('pkg/lock.ts')],
+    ),
+    ['app/far.ts', 'pkg/typed.ts', 'app/typed.ts'].map(at),
+  )
+  equal(
+    hostEntries(s, ['app/far.ts', 'pkg/apart.ts'].map(at), [
+      'packages/a/workers.json',
+    ], 'workers'),
+    ['app/far.ts', 'pkg/apart.ts'].map(at),
   )
 })
 
