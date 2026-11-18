@@ -6,8 +6,10 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import {
+  attached,
   connector,
   dnsMx,
+  domainState,
   kernel,
   meta,
   onPlus,
@@ -77,6 +79,27 @@ test('a domain takes mail at itself, or at mail.<domain> when it already takes m
     assertStringIncludes(await status(legacy), '… mail: none yet')
     assertStringIncludes(await attach(legacy), `Mail is at ${legacy}`)
     assertEquals(held(), [bare, `mail.${taken}`, `mail.${www}`, legacy].sort())
+
+    // A lost provider attachment is repaired without releasing its shared name.
+    let space = (await k.dir.space(ada))!
+    let original = (await k.dir.hosts(space)).find((h) => h.name == bare)!
+    let custom = await domainState(k, bare)
+    await (await fetch(`${k.cloudflare}/${custom.id}`, { method: 'DELETE' }))
+      .body?.cancel()
+    assert(!await attached(k, bare))
+    assertStringIncludes(
+      await status(bare),
+      'domain_attach with this hostname repairs',
+    )
+    let repaired = await attach(bare)
+    assert(await attached(k, bare))
+    assertStringIncludes(repaired, `  CNAME  ${bare}  →`)
+    assertStringIncludes(repaired, '  TXT  ')
+    assertEquals(
+      (await k.dir.hosts(space)).find((h) => h.name == bare)!.eid,
+      original.eid,
+    )
+    assert(held().includes(bare))
 
     // Detached, its shared mail domain stays held for recovery.
     let gone = await agent.tool('domain_detach', { space: ada, hostname: bare })

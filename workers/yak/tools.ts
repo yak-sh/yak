@@ -202,6 +202,7 @@ import {
   provision,
   reachable,
   reading,
+  records as domainRecords,
   refresh,
 } from './domains.ts'
 import { type Mail, placed, readMail, ready, setUp } from './domain-mail.ts'
@@ -6361,23 +6362,42 @@ let OURS: Row[] = [
       // One hostname is one place. Whose it is stays out of the refusal
       // unless it is this space's: another space's app names are not this
       // caller's to learn. Attached here already, to this place, attaching it
-      // again says where it sends its visitors, and nothing else changes.
+      // again updates its destination and repairs a missing provider attachment.
       let taken = await ctx.dir.serves(host)
       let mine = taken &&
         rows.find((h) => h.name == host && (h.serves == aim || h.trashed))
       // A domain attached before it took mail is given mail now, and one
       // whose mail could not be set up then is set up now.
       if (mine) {
+        let custom = (mine.stage == 'error' || mine.trashed) &&
+            !await customOf(ctx.env, host)
+          ? await provision(ctx.env, host)
+          : null
+        let verification = custom?.ownership_verification ?? {}
         let mail = mine.mail ?? await placed(ctx.env, host)
         await ctx.dir.apply({
           entities: [{
             entity: { eid: mine.eid },
-            hostname: { to, serves: aim },
+            hostname: {
+              to,
+              serves: aim,
+              ...custom
+                ? {
+                  verification,
+                  stage: 'pending',
+                  at: new Date().toISOString(),
+                }
+                : {},
+            },
             ...mine.trashed ? { trashed: null } : {},
             ...mine.mail ? {} : { mail_domain: mail },
           }],
         }, vouched(who))
         let m = await setUp(ctx.env, mail)
+        let recs = [
+          ...custom ? domainRecords(host, ctx.env, verification) : [],
+          ...m.records,
+        ]
         return {
           text:
             `${host} is attached to ${place(space, app)}. ${
@@ -6391,9 +6411,9 @@ let OURS: Row[] = [
                 ctx.env,
               )
             }\n\n` +
-            (m.records.length
+            (recs.length
               ? `Its records, where ${host}'s DNS is managed:\n\n` +
-                m.records.map(recordLine).join('\n')
+                recs.map(recordLine).join('\n')
               : unready(host, mail.name, m)),
           space,
         }
@@ -6406,7 +6426,7 @@ let OURS: Row[] = [
               'domain_detach it first to move it'
             : `${host} is attached to another space on this platform. If it ` +
               "is the person's domain, whoever attached it has to " +
-              'domain_detach it first',
+              'release it through domain_detach with purge: true and the owner’s confirmation page first',
         )
       }
       reachable(ctx.env)
@@ -6556,8 +6576,8 @@ let OURS: Row[] = [
             '\n' +
             (how
               ? reading(how)
-              : '✗ Cloudflare no longer has this hostname — domain_detach ' +
-                'it and domain_attach it again') +
+              : '✗ Cloudflare no longer has this hostname — domain_attach ' +
+                'with this hostname repairs its attachment') +
             (stage == 'active' ? '' : '\n' + recs.map(recordLine).join('\n')) +
             '\n' + await mailStatus(row.name, row.mail, app),
         )
