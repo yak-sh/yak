@@ -74,6 +74,36 @@
               "go": "Ask for your own"
             }
           }
+        },
+        "directory": {
+          "name": "Church Directory",
+          "steps": {
+            "1": {
+              "title": "Ask for what you need, in plain words",
+              "body": "“A members-only directory: each family with their names, phone, address, a family photo, and everyone’s birthdays.” The assistant made it private, so only the people you invite can open it.",
+              "go": "Ask for your own"
+            },
+            "2": {
+              "title": "Hand it a list",
+              "body": "“Here’s our list. Please add these families and invite everyone on it.” The assistant fills in every family and emails each one an invitation that lets them see the directory and nothing else in your space.",
+              "go": "Ask for your own"
+            },
+            "3": {
+              "title": "Let people keep their own entry",
+              "body": "“Can each family keep their own entry up to date?” Each family gets a link of its own. Once they open it signed in, they can change their phone, address, photo and birthdays, and nobody else’s.",
+              "go": "Ask for your own"
+            },
+            "4": {
+              "title": "It can email you on a schedule",
+              "body": "“Every Monday morning, email me the birthdays coming up that week.” The assistant asks where to send it and what time you mean before it sets anything up.",
+              "go": "Ask for your own"
+            },
+            "5": {
+              "title": "Answer, and it’s done",
+              "body": "“Send it to me, 7 a.m. Eastern on Mondays.” The assistant sets the weekly email, sends one now as a test, and lists each birthday with the family’s phone and address for the cards. Each email counts toward your plan’s emails for the month.",
+              "go": "Ask for your own"
+            }
+          }
         }
       }
     },
