@@ -1,6 +1,7 @@
 // The Operator's store: its drain works a slice an alarm and keeps its
-// vocabulary's retention, and a wake fits its file once a schema.
+// vocabulary's cache expiry without aging out records, and a wake fits its file once a schema.
 import { whole } from '@yaks/query'
+import { identityEid } from '@yaks/graph'
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import {
@@ -37,20 +38,25 @@ test('a drain past its slice starts nothing and answers now; the next works on',
   assertEquals(ran, ['1', '2', '3'])
 })
 
-// The store keeps its vocabulary's retention, as a local host's daily duty
-// does: a row past its declared expiry goes on the next wake.
-test('a drain expires what the vocabulary declares expired', async () => {
-  let store = operatorMemory()
-  let row = (at: string) => ({
-    announced: { call: crypto.randomUUID() },
+// A hook's call pairing can outlive a day before its result is reported.
+// Working the daily cache pass must retain it alongside recent pairings.
+let retained = operatorMemory()
+let paired = (at: string) => {
+  let call = crypto.randomUUID()
+  return {
+    entity: { eid: identityEid('announced', [call]) },
+    announced: { call },
     created: { at },
-  })
-  let old = row(new Date(Date.now() - 2 * 86_400_000).toISOString())
-  let fresh = row(new Date().toISOString())
-  await store.g.apply([old, fresh] as never, { trusted: true, stamp: false })
-  await drain(store)
-  let left = await store.g.read('.announced')
-  assertEquals(left.map((b) => b.announced), [fresh.announced])
+  }
+}
+let old = paired(new Date(Date.now() - 2 * 86_400_000).toISOString())
+let fresh = paired(new Date().toISOString())
+await retained.g.apply([old, fresh], { trusted: true, stamp: false })
+
+test('a drain retains aged and recent hook call pairings', async () => {
+  await drain(retained)
+  let left = await retained.g.read('.announced')
+  assertEquals(left.map((b) => b.announced), [old.announced, fresh.announced])
 })
 
 // What a wake asks of its file beyond reading it: the schema's DDL and every

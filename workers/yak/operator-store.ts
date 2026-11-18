@@ -372,10 +372,10 @@ let holder: string | undefined
 
 /**
  * The store's daily retention pass (@yaks/effects `expireDaily`) in what the
- * slice leaves: what the vocabulary declares expired goes (a session's
- * context parts and tool results after thirty days), and the graves every
- * finished run leaves are pruned thirty days after it. A pass the slice cuts
- * off goes on at the next wake, which holds it as the same process.
+ * slice leaves: only regenerable cache declarations expire. Session records,
+ * tool results, hook pairings and trash remain until explicitly removed.
+ * A pass the slice cuts off goes on at the next wake, which holds it as the
+ * same process.
  */
 let expiring = async (g: Graph, until: number) => {
   let left = until - Date.now()
