@@ -177,8 +177,8 @@ verbatim: "btw, i think these abstract drawings of the conversations and stuff
 is a lot less compelling than actual screenshots". A conversation, a letter or
 a screen on the page is a capture of the live thing, or the live part itself
 filled from the venture's demo content. An email exchange is shown as mail and
-a chat as the chat's own screen, and each is an exchange that took place, not
-words written for the page. A capture holds demo content only, never a
+a chat as the chat's own screen; the words in one may be written for the
+page. A capture holds demo content only, never a
 customer's, and is never committed to git: it is served from where the product
 keeps bytes, and the page's source says how it is taken again.
 
