@@ -63,9 +63,8 @@ export type Transport = {
 export type Door = {
   /** the path it answers on (default `/mail/inbound`) */
   path?: string
-  /** the bearer token a caller must present. Set none and the endpoint is as
-   * open as the `/apply` beside it — right for a server behind a perimeter,
-   * wrong for anything reachable from the internet. */
+  /** the bearer token the mail edge presents. Set none and the endpoint
+   * takes no letter. */
   secret?: string
 }
 

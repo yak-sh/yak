@@ -19,9 +19,11 @@
 // The operator's own:
 //
 // - a person's act or words: `knock.from` (@yaks/notify), else whoever wrote
-//   the knock, wears `person`; a letter's `mail.from` is a person's address.
-//   A watcher's knock telling of the owner's comment or answer, his text and
-//   his mail all name him so.
+//   the knock or the letter, wears `person`. @yaks/mail names a letter's
+//   writer only where its edge vouched for the From address, so a letter
+//   that merely says it is from a person is routine. A watcher's knock
+//   telling of the owner's comment or answer, his text and his mail all name
+//   him so.
 // - a hand-up: the knock was written through a session wearing `helping`, or
 //   through one opened on a topic (@yaks/topic's `session.topic`, read by
 //   name). The session that stays on a topic is no helper, and a hand-up is
@@ -32,11 +34,9 @@
 // `session_help` is owed by the commit that wrote it.
 
 import type { Bundle, Comp, Eid } from '@yaks/graph/bundle'
-import { hook, type HookContext } from '@yaks/graph/plugin'
+import { hook } from '@yaks/graph/plugin'
 import type { Tx } from '@yaks/graph'
 import { writers } from '@yaks/graph'
-import { and, eq, fields, list, present } from '@yaks/query'
-import type { Vocab } from '@yaks/vocab'
 import { SESSION } from './comp.ts'
 
 /** On a project: its operator's routine goes to a helper. */
@@ -128,22 +128,6 @@ let helped = async (tx: Tx, targets: Eid[]): Promise<Map<Eid, Eid>> => {
   )
 }
 
-// The addresses among these that a person wears.
-let personal = async (
-  tx: Tx,
-  vocab: Vocab | undefined,
-  addresses: string[],
-): Promise<Set<string>> =>
-  new Set(
-    addresses.length && vocab?.comp('person') && vocab.comp('email')
-      ? (await tx.read(and(
-        present('person'),
-        eq('email.address', list(...addresses)),
-        fields('email.address'),
-      ))).map((b) => str(comp(b, 'email').address))
-      : [],
-  )
-
 // The letters among these that answer one another session wrote and may
 // still hear the answer to: that session's, not the project's. A session a
 // person opened is the operator the letter is addressed to already.
@@ -165,12 +149,7 @@ let answering = async (tx: Tx, letters: Bundle[]): Promise<Set<Bundle>> => {
   return new Set(letters.filter((b) => open.has(writer.get(to(b)) ?? '')))
 }
 
-let routed = async (
-  bundles: Bundle[],
-  items: Bundle[],
-  tx: Tx,
-  vocab?: Vocab,
-) => {
+let routed = async (bundles: Bundle[], items: Bundle[], tx: Tx) => {
   let project = await helped(tx, unique(items.map(target)))
   let mine = items.filter((b) => project.has(target(b)))
   if (!mine.length) return bundles
@@ -180,14 +159,12 @@ let routed = async (
   let from = (b: Bundle) =>
     str(comp(b, 'knock').from) || str(writer(b.entity.eid).by)
   let via = (b: Bundle) => str(writer(b.entity.eid).via)
-  let sender = (b: Bundle) => str(comp(b, 'mail').from).toLowerCase()
-  let people = await wearing(tx, unique(knocks.map(from)), 'person')
+  let people = await wearing(tx, unique(mine.map(from)), 'person')
   let up = await handing(tx, unique(knocks.map(via)))
-  let persons = await personal(tx, vocab, unique(letters.map(sender)))
   let theirs = await answering(tx, letters)
   let routine = new Set([
     ...knocks.filter((b) => !people.has(from(b)) && !up.has(via(b))),
-    ...letters.filter((b) => !persons.has(sender(b)) && !theirs.has(b)),
+    ...letters.filter((b) => !people.has(from(b)) && !theirs.has(b)),
   ])
   return bundles.map((b) =>
     routine.has(b)
@@ -199,9 +176,8 @@ let routed = async (
 /** The write hook that marks a routine knock or letter `routine{project}`. */
 export let routing = hook(
   ['knock', 'mail'],
-  (bundles, tx, _err, context?: HookContext) => {
+  (bundles, tx) => {
     let items = bundles.filter((b) => target(b) && !(ROUTINE in b))
-    let vocab = (context?.graph as { vocab?: Vocab } | undefined)?.vocab
-    return items.length ? routed(bundles, items, tx, vocab) : bundles
+    return items.length ? routed(bundles, items, tx) : bundles
   },
 )

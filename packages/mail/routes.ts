@@ -10,9 +10,11 @@
 // copies of one fact is how they come to disagree.
 //
 // Who may post is this plugin's option, not a server-wide setting: which
-// senders a mailbox trusts is a fact about the mailbox. Set no secret and the
-// route is as open as the `/apply` beside it, which is right for a server
-// behind a perimeter and wrong for anything else.
+// edge a mailbox trusts is a fact about the mailbox. The edge presents the
+// bearer token `door.secret` names, and its word on who wrote a letter
+// (`vouched`) is taken because only it can present that token. With no secret
+// configured the door takes no letter: a letter's caller would otherwise say
+// who wrote it.
 //
 // Nothing here decides what a letter means. It records one, as the configured
 // packages read it (./readings.ts), responds with its id, and the effects
@@ -45,6 +47,8 @@ export type Posted = {
   /** whether the sending domain signed for it, where the receiving MTA told
    * the caller and left no `Authentication-Results` header to read */
   verified?: boolean
+  /** whether the edge authenticated the From address (`Arrival.vouched`) */
+  vouched?: boolean
 }
 
 // Headers as a plain object, read the way a `Headers` is read. A caller sends
@@ -92,10 +96,12 @@ export let routes = (
     path,
     handle: async (request) => {
       try {
-        if (secret && !same(secret, bearer(request))) {
+        if (!secret || !same(secret, bearer(request))) {
           throw new Unauthorized('the arrival endpoint needs a bearer token')
         }
-        let { from, to, headers, text, verified } = said(await request.json())
+        let { from, to, headers, text, verified, vouched } = said(
+          await request.json(),
+        )
         let receive = arrived({
           graph: host.graph,
           domain: options.domain,
@@ -105,6 +111,7 @@ export let routes = (
         let bundles = await receive({ from, to, headers: head(headers) }, {
           text,
           ...(verified == null ? {} : { verified }),
+          vouched: vouched === true,
         })
         // No bundles: this Message-ID is already here. A caller that cannot
         // tell "recorded" from "recorded earlier" would post it again.

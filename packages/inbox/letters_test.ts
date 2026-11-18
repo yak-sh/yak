@@ -39,7 +39,13 @@ let inbox = {
 let domain = 'books.example'
 let readings = [reading(inbox)!]
 let config = { plugins: [{ use: '@yaks/inbox', with: inbox }] }
-let options = { domain, sender: { via: 'stash' as const } }
+let options = {
+  domain,
+  sender: { via: 'stash' as const },
+  door: { secret: 'edge' },
+}
+// How the mail edge posts to the door.
+let EDGE = { authorization: 'Bearer edge' }
 let decision = {
   question: 'Which route?',
   choices: [
@@ -374,10 +380,12 @@ test('the inbox reader queues a letter, transports via stash, and accepts a veri
   let request = () =>
     new Request('http://box/mail/inbound', {
       method: 'POST',
+      headers: EDGE,
       body: JSON.stringify({
         from: 'ana@books.example',
         to: inbox.from,
         verified: true,
+        vouched: true,
         headers: {
           From: 'Ana <ana@books.example>',
           'Message-ID': '<reply@box>',
@@ -440,7 +448,12 @@ test('digest thread addresses route comments and custom answers; the digest itse
       from: 'ana@books.example',
       to: 'comment@books.example',
       headers: new Headers({ 'Message-ID': 'custom@box' }),
-    }, { target: 'comment', text: 'Walk together', verified: true }),
+    }, {
+      target: 'comment',
+      text: 'Walk together',
+      verified: true,
+      vouched: true,
+    }),
   )
   let [answered] = await g.get(['ask'])
   assertEquals(comp(answered, 'decided').choice, 'Walk together')
@@ -450,7 +463,7 @@ test('digest thread addresses route comments and custom answers; the digest itse
     from: 'ana@books.example',
     to: inbox.from,
     headers: new Headers({ 'Message-ID': 'again@box' }),
-  }, { target: 'ask', text: '1', verified: true })
+  }, { target: 'ask', text: '1', verified: true, vouched: true })
   await g.apply(again)
   assertEquals(
     comp((await g.get(['ask']))[0], 'decided').choice,
@@ -501,7 +514,7 @@ test('replying to a digest keeps the words without choosing its first decision',
       'Message-ID': 'digest-reply@box',
       'In-Reply-To': 'digest@box',
     }),
-  }, { text: '2', verified: true })
+  }, { text: '2', verified: true, vouched: true })
   await g.apply(bundles)
   assertEquals(bundles[0].comment, undefined)
   assertEquals((await g.get(['ask']))[0].decided, undefined)
@@ -514,7 +527,7 @@ test('invalid choice numbers keep a comment without completing the decision', as
     from: 'ana@books.example',
     to: 'ask@books.example',
     headers: new Headers({ 'Message-ID': 'invalid@box' }),
-  }, { target: 'ask', text: '9', verified: true })
+  }, { target: 'ask', text: '9', verified: true, vouched: true })
   await g.apply(bundles)
   assertEquals(comp(bundles[0], 'comment').target, 'ask')
   assertEquals((await g.get(['ask']))[0].decided, undefined)
@@ -532,12 +545,14 @@ let freshLetter = (extra: Record<string, unknown> = {}) => ({
   },
   text: 'Can we plan dinner?\nMy own words, in full.',
   verified: true,
+  vouched: true,
   ...extra,
 })
 let postFresh = (g: ReturnType<typeof graph>, extra = {}) =>
   routes({ graph: g, config }, options)[0].handle(
     new Request('http://box/mail/inbound', {
       method: 'POST',
+      headers: EDGE,
       body: JSON.stringify(freshLetter(extra)),
     }),
   )
@@ -604,7 +619,12 @@ test('a verified new inbox letter is a caller-attributed conversation, once, and
     from: 'ana@books.example',
     to: `${eid}@books.example`,
     headers: new Headers({ 'Message-ID': 'direct@box' }),
-  }, { target: eid, verified: true, text: 'Direct thread reply' })
+  }, {
+    target: eid,
+    verified: true,
+    vouched: true,
+    text: 'Direct thread reply',
+  })
   await g.apply(idReply)
   assertEquals(idReply[0].conversation, undefined)
   assertEquals(comp(idReply[0], 'comment').target, eid)
@@ -646,9 +666,13 @@ await otherSender.apply([{
   email: { address: 'other@books.example' },
 }])
 let otherReceipt = arrived({ graph: otherSender, domain, readings })
-let inactiveDoor = routes({ graph: otherSender }, { domain })[0]
+let inactiveDoor = routes({ graph: otherSender }, {
+  domain,
+  door: options.door,
+})[0]
 let inactiveLetter = new Request('http://box/mail/inbound', {
   method: 'POST',
+  headers: EDGE,
   body: JSON.stringify(freshLetter()),
 })
 let inactiveResponse = await inactiveDoor.handle(inactiveLetter)
@@ -661,7 +685,7 @@ test('a different known sender and an inactive inbox cannot start conversations'
     from: 'other@books.example',
     to: inbox.from,
     headers: new Headers(),
-  }, { verified: true, text: 'Hello' })
+  }, { verified: true, vouched: true, text: 'Hello' })
   await g.apply(kept)
   assertEquals(kept[0].conversation, undefined)
   assertEquals(
@@ -734,6 +758,7 @@ test('system-generated inbound echoes cannot become conversations or comments, i
       }, {
         text: 'System prose',
         verified: true,
+        vouched: true,
         ...(target ? { target } : {}),
       })
       assertEquals(out[0].conversation, undefined)
@@ -758,7 +783,12 @@ test('an automatic echo of the configured person fails closed without a system i
       from: 'ana@books.example',
       to: inbox.from,
       headers: new Headers({ 'Auto-Submitted': 'auto-generated' }),
-    }, { verified: true, text: 'Effect prose', ...(target ? { target } : {}) })
+    }, {
+      verified: true,
+      vouched: true,
+      text: 'Effect prose',
+      ...(target ? { target } : {}),
+    })
     assertEquals(out[0].conversation, undefined)
     assertEquals(out[0].comment, undefined)
   }

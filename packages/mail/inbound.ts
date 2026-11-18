@@ -58,6 +58,10 @@ export type Arrival = {
    * recorded and never a reason to drop the letter (see {@link verdict}).
    */
   verified?: boolean
+  /** the receiving edge authenticated the From address itself: DMARC, or
+   * DKIM by the From domain, aligned with it. Only this names the letter's
+   * author (./arrive.ts); a From header alone is anyone's to write. */
+  vouched?: boolean
 }
 
 /**

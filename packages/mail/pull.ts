@@ -68,7 +68,9 @@ export type EdgeMessage = {
   subject?: string | null
   /** the body as text */
   text?: string | null
-  /** whether the sending domain signed for it (DKIM) */
+  /** whether the edge authenticated the From address: an aligned DMARC or
+   * DKIM pass, as the fleet's inbox worker grades it, so it also vouches for
+   * the author (`Arrival.vouched`) */
   verified?: boolean | null
   /** the `In-Reply-To:` header */
   in_reply_to?: string | null
@@ -239,6 +241,7 @@ export let received = (m: EdgeMessage): [Received, Arrival] => {
       at,
       ...(m.text == null ? {} : { text: m.text }),
       ...(m.verified == null ? {} : { verified: m.verified }),
+      vouched: m.verified === true,
     },
   ]
 }

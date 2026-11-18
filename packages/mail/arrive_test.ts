@@ -109,7 +109,7 @@ test('arrived: a letter, with both lookups answered', async () => {
       date: '2026-09-05T12:00:00.000Z',
       'authentication-results': 'mx.example; dkim=pass',
     }, 'ana@books.example'),
-    { text: 'there is soup' },
+    { text: 'there is soup', vouched: true },
   )
   assertEquals(bundles.length, 1)
   let mail = comp(bundles[0], 'mail')
@@ -141,25 +141,34 @@ let receiveOwned = arrived({
   triage: pile,
 })
 for (
-  let [from, by, name] of [
+  let [from, vouched, by, name] of [
     [
       'Ana <ana@books.example>',
+      true,
       ana,
       'arrived: a letter is written by its sender, never by the graph owner',
     ],
     [
       'S-31@books.example',
+      true,
       sender,
       'arrived: an id-addressed sender owns its letter',
     ],
     [
       'bo@elsewhere.com',
+      true,
       undefined,
       'arrived: a stranger’s letter has no writer, despite the graph owner',
     ],
-  ]
+    [
+      'Ana <ana@books.example>',
+      false,
+      undefined,
+      'arrived: a letter its edge did not vouch for has no writer, whatever its From says',
+    ],
+  ] as const
 ) {
-  let received = await receiveOwned(got({ from: from!, subject: from! }))
+  let received = await receiveOwned(got({ from, subject: from }), { vouched })
   test(name!, async () => {
     let landed = await owned.apply(received.map((b) => ({
       ...b,

@@ -154,7 +154,8 @@ export type Arrivals = {
  * twice would be the error, not the second delivery.
  *
  * The letter is written by its author, found as a recipient is (`routed`),
- * and by nobody where nobody here has that address: its `$actor` is then
+ * where the edge vouched for its From address (`Arrival.vouched`), and by
+ * nobody where it did not or nobody here has that address: its `$actor` is then
  * empty, so the graph does not sign it as its owner's. An unattributed write
  * is the truth about a stranger's letter, and far better than the mailbox's
  * owner appearing to have written it.
@@ -172,7 +173,7 @@ async (m, arrival = {}) => {
   let answers = m.headers.get('in-reply-to')
   let reply = arrival.reply ??
     (answers ? await known(graph, answers.replace(/[<>]/g, '').trim()) : null)
-  let by = await routed(graph, author(m), domain)
+  let by = arrival.vouched ? await routed(graph, author(m), domain) : null
   let bundles = inbound(m, {
     ...arrival,
     verified: arrival.verified ?? verdict(m.headers) ?? undefined,

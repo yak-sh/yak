@@ -296,11 +296,13 @@ before the caller writes, not a uniqueness constraint covering concurrent
 arrivals. Messages without a Message-ID cannot be deduplicated this way.
 
 The author is found as a recipient is (`routed()`), and writes the letter:
-`$actor.by`. An unknown sender's letter carries an empty `$actor`, so it stays
-unattributed rather than being signed as the graph's owner. `arrived()` also
-reads the DKIM result from `Authentication-Results` unless the caller supplies
-`verified`. A failed result is recorded as `false`, not grounds for discarding
-the message.
+`$actor.by`, but only when the receiving edge vouched for the From address
+(`Arrival.vouched`: DMARC, or DKIM by the From domain, aligned with it). A From
+header alone is anyone's to write, so an unvouched letter, like an unknown
+sender's, carries an empty `$actor` and stays unattributed rather than being
+signed as someone here. `arrived()` also reads the DKIM result from
+`Authentication-Results` unless the caller supplies `verified`. A failed result
+is recorded as `false`, not grounds for discarding the message.
 
 ## The arrival endpoint
 
@@ -319,9 +321,10 @@ curl -X POST http://localhost:8000/mail/inbound \
 ```
 
 `verified` is an optional top-level boolean when the receiving system supplies a
-DKIM result separately. Configure `door.secret` to require a bearer token. If it
-is absent, this route performs no token check itself; enclosing server
-authentication, if any, still applies. `door.path` changes the path, and the
+DKIM result separately, and `vouched` says the edge authenticated the From
+address. The edge presents the bearer token `door.secret` names; without one
+configured the route answers 401 and records nothing, since a caller who could
+post would also say who wrote the letter. `door.path` changes the path, and the
 top-level `triage` sets the fallback recipient entity.
 
 A plugin entry in a `yak serve` configuration can be, beside
