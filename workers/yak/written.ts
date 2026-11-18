@@ -879,9 +879,9 @@ export let kept = (
   )
 
 /**
- * Every stored blob nothing names any more, gone — the one place bytes at a
- * content address are ever deleted, run on the daily sweep (erase.ts
- * `collected`) and nowhere else.
+ * Find stored files nothing names any more and retire them on the daily
+ * sweep (erase.ts `collected`). file-retirement.ts defers their deletion
+ * for the store restore window and checks this live set again when due.
  *
  * Mark and sweep, not reference counts (D-34942). The live set is recomputed
  * from the referrers on every run: a count kept beside each write and delete
@@ -895,7 +895,7 @@ export let kept = (
  * app stopped naming may be the very file another app serves. The caller
  * hands every app still standing (a trashed one inside its thirty days and
  * the platform's own space included), and the sweep marks from all of them
- * before it deletes anything. What frees an app's bytes is its erasure.
+ * before it retires anything. Erasure starts a further thirty-day window.
  *
  * {@link GRACE} is the other half of "only what nothing names": a write puts
  * its bytes before the row that names them, so an object minutes old may be
@@ -908,9 +908,11 @@ export let pruned = async (
   dir: Directory,
   blobs: Objects,
   apps: Pinner[],
-  now = Date.now(),
+  now: number,
+  retire: (keys: string[]) => Promise<void>,
 ) => {
   let named = new Set<string>()
+  let unindexed: string[] = []
   for (let { prefix, app } of apps) {
     let space = `${prefix.split('/')[0]}/`
     let stage = `${space}.releases/${app.eid}/`
@@ -945,11 +947,11 @@ export let pruned = async (
     })
     if (erased) continue
     // A stage holds nothing but the index of each release, so any other key
-    // there, or the index of a release nothing names, goes once a day old.
+    // there, or the index of a release nothing names, can retire once a day old.
     let indexes = new Set([...sources].map((source) => source + META))
-    await blobs.delete(
-      Object.entries(await blobs.uploaded(stage)).filter(([key, landed]) =>
-        !indexes.has(key) && now - landed >= GRACE
+    unindexed.push(
+      ...Object.entries(await blobs.uploaded(stage)).filter(
+        ([key, landed]) => !indexes.has(key) && now - landed >= GRACE,
       ).map(([key]) => key),
     )
     let paths = new Map<string, Written[]>()
@@ -984,6 +986,7 @@ export let pruned = async (
     [key, landed],
   ) => !named.has(key.slice(SHA.length)) && now - landed >= GRACE)
     .map(([key]) => key)
-  await blobs.delete(unnamed)
-  return unnamed.length
+  let keys = [...unindexed, ...unnamed]
+  await retire(keys)
+  return keys.length
 }

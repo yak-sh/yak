@@ -2,6 +2,24 @@
 import type { VocabDoc } from '@yaks/vocab'
 export let sweepDoc: VocabDoc = {
   $defs: {
+    file_retirement: {
+      component: true,
+      type: 'object',
+      wire: false,
+      journal: false,
+      description:
+        'Unreferenced bucket keys, kept for thirty days after discovery before deletion.',
+      properties: {
+        keys: { type: 'array', items: { type: 'string' } },
+        at: { type: 'string', format: 'date-time' },
+      },
+    },
+    delete_retired_files: {
+      effect: true,
+      created: ['file_retirement'],
+      description:
+        'Defer orphaned files for the store restore window, then check references before deleting.',
+    },
     release_remake: {
       component: true,
       type: 'object',

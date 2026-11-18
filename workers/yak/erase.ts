@@ -121,6 +121,7 @@ import { plans } from './payments.ts'
 import { type Pinner, versions } from './versions.ts'
 import { own } from '@yaks/platform/versions'
 import { holding, pruned } from './written.ts'
+import { retiring } from './file-retirement.ts'
 import { refuse } from './tool.ts'
 import { dollars, released } from './numbers.ts'
 import { shown } from '@yaks/phone'
@@ -1013,6 +1014,15 @@ export let collected = async (
     r2RawObjects(env.BLOBS),
     standing,
     now.getTime(),
+    (keys) =>
+      retiring(
+        {
+          read: (query) => meta(env).query(query),
+          apply: (entities) => meta(env).apply(entities, KERNEL),
+        },
+        keys,
+        now.getTime(),
+      ),
   )
   // The visitors' stores nobody can reach any more (@yaks/platform/visits
   // `lapsed`), each on its own, so one that will not empty holds up none of the

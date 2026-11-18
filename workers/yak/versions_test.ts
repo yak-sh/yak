@@ -29,7 +29,16 @@ import {
   type Version,
 } from '@yaks/platform/versions'
 import { digest } from '@yaks/graph/sha256'
-import { newest, pruned, type Written } from './written.ts'
+import { newest, pruned as unreferenced, type Written } from './written.ts'
+
+// Existing mark-set cases exercise candidate selection; deletion is a separate
+// deferred effect, checked in file-retirement_test.ts.
+let pruned = (
+  dir: Directory,
+  blobs: Objects,
+  apps: Pinner[],
+  now = Date.now(),
+) => unreferenced(dir, blobs, apps, now, (keys) => blobs.delete(keys))
 
 let PREFIX = 'jeff/recipes/'
 let WHO: Who = { person: 'p1', role: 'owner' }
@@ -347,7 +356,7 @@ test('published releases keep versioned bytes after newer deploys', async () => 
       prefix: PREFIX,
       app: { ...APP, source: current },
     }]),
-    1,
+    2,
   )
   assertEquals(
     new TextDecoder().decode(

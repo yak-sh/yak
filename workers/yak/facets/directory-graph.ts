@@ -15,6 +15,7 @@ import { hook } from '@yaks/graph/plugin'
 import { Refused } from '@yaks/graph/errors'
 import { after, each } from '@yaks/fp'
 import { inside } from '../directory.ts'
+import { reclaimFiles } from '../file-retirement-graph.ts'
 
 type Own = { person: string; want?: string }
 
@@ -39,4 +40,4 @@ export let plugins = (): Plugin[] => [{
       },
     )
   }),
-}]
+}, reclaimFiles()]

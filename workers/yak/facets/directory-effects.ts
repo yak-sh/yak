@@ -19,6 +19,8 @@ import { rewarding } from '../reward.ts'
 import { plans } from '../payments.ts'
 import { carry } from '../support-reply.ts'
 import type { Env } from '../env.ts'
+import { retired } from '../file-retirement.ts'
+import { r2RawObjects } from '../lib/objects.ts'
 
 /** What the directory is born holding: a schedule for each sweep. */
 export let schedules: Wake[] = [{
@@ -66,6 +68,16 @@ export let effects = (_host: unknown, options: Options): Handlers => {
         await at.graph.apply(entities, { trusted: true }),
     })
   return {
+    delete_retired_files: async (event, _tx, _write, attempt) => {
+      if (!at.env.BLOBS) return
+      await retired(
+        at.graph,
+        dir(),
+        r2RawObjects(at.env.BLOBS),
+        event.entity.eid,
+        attempt,
+      )
+    },
     sweep_install: async () => {
       let now = Date.now()
       await seeded(at.graph, schedules, now)
