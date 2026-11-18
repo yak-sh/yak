@@ -359,8 +359,8 @@ test('the file door: a page uploads bytes and gets an address', async () => {
       'this app takes files of at most 4 KB',
     )
     assertEquals((await store.upload(new File([jpg], 'ok.jpg'))).eid, shot.eid)
-    // In parts too: too big when it begins, and the wrong type once whole,
-    // when the bytes it made are deleted again, so it begins anew.
+    // In parts too: too big when it begins, and the wrong type once whole.
+    // Completed bytes remain private and recoverable after admission refuses them.
     let parts = (sha: string, init: RequestInit) =>
       k.at(`${jeff5}.yaks.app`, `/pictures/api/blob/${sha}`, {
         ...init,
@@ -381,7 +381,29 @@ test('the file door: a page uploads bytes and gets an address', async () => {
     })
     assertEquals(sent.status, 200, await sent.text())
     assertEquals((await begin(sha, page.length)).status, 415)
-    assertEquals((await (await begin(sha, page.length)).json()).need, [1])
+    assertEquals((await begin(sha, page.length)).status, 415)
+    assertEquals((await parts(sha, { method: 'GET' })).status, 404)
+
+    // When the app takes that type, retrying admits the retained whole without
+    // asking the sender to produce its bytes again.
+    let agent = connector(k, them.cookie)
+    await agent.tool('app_files', {
+      space: jeff5,
+      app: 'pictures',
+      files: [{
+        path: 'vocab.json',
+        content: JSON.stringify({ blob: { maxLength: 4096 } }),
+      }],
+    })
+    await agent.tool('app_deploy', { space: jeff5, app: 'pictures' })
+    let recovered = await begin(sha, page.length)
+    assertEquals(recovered.status, 200)
+    let kept = await recovered.json() as File
+    let body = await k.at(`${jeff5}.yaks.app`, kept.url, {
+      headers: { cookie: them.cookie },
+    })
+    assertEquals(body.status, 200)
+    assertEquals(new Uint8Array(await body.arrayBuffer()), page)
   } finally {
     await mine.stop()
     await anyone.stop()
