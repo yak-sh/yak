@@ -130,18 +130,22 @@ test('a step that released nothing leaves the app at the release before it, and 
       result: { call: `e${seq}`, value: { deployed: true, version } },
     }),
   ]
-  let steps = stepsOf([
-    ask('Text me when someone signs'),
-    at({ call: { name: 'subscription_set', args: {} } }),
-    ask('A guestbook'),
-    // A background call's Pending line is no request of the person's.
-    at({ tool_progress: { call: 'e3' }, content: { body: 'Pending' } }),
-    ...deploy(1),
-    ask('Text me when someone signs'),
-    at({ call: { name: 'subscription_set', args: {} } }),
-    ask('Add photos'),
-    ...deploy(2),
-  ], 'guestbook')
+  let steps = stepsOf(
+    [
+      ask('Text me when someone signs'),
+      at({ call: { name: 'subscription_set', args: {} } }),
+      ask('A guestbook'),
+      // A background call's Pending line is no request of the person's.
+      at({ tool_progress: { call: 'e3' }, content: { body: 'Pending' } }),
+      ...deploy(1),
+      ask('Text me when someone signs'),
+      at({ call: { name: 'subscription_set', args: {} } }),
+      ask('Add photos'),
+      ...deploy(2),
+    ],
+    'guestbook',
+    's',
+  )
   assertEquals(
     steps.map((s) => [
       s.lines.map((b) => (b.content as { body: string }).body),

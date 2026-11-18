@@ -1031,7 +1031,10 @@ let markedOf = async (store: Store, app: string) => {
   )
   if (!row) return null
   let session = row.entity.eid
-  return { session, steps: stepsOf(await transcript(store.g, session), app) }
+  return {
+    session,
+    steps: stepsOf(await transcript(store.g, session), app, session),
+  }
 }
 
 /** The walkthrough of `app` marked in this store (walkthrough.ts), what was

@@ -142,7 +142,10 @@ export let said = (lines: Bundle[]): Bundle[] => {
 /**
  * The steps of a conversation's entries, in order, each as it leaves the
  * demo space (`said`): each begins at a request of the person's and ends
- * before the next. Lines before the first request are no step's. A step's
+ * before the next. Lines before the first request are no step's, and nor
+ * are those of the conversation `session` forked from, which its transcript
+ * begins with: its person's earlier chats and what their subscriptions told
+ * them. A step's
  * version is its last release of the app, or the step before's when it
  * released nothing, and none until a step has.
  *
@@ -154,23 +157,29 @@ export let said = (lines: Bundle[]): Bundle[] => {
  *   entity: { eid: `e${seq}` }, entry: { session: 's', seq }, ...rest,
  * })
  * let steps = stepsOf([
+ *   { ...at(0, { content: { body: 'A guestbook signed' } }), entry: { session: 'root', seq: 0 } },
  *   at(1, { content: { body: 'A guestbook' } }),
  *   at(2, { call: { to: toolEid('app_deploy'), name: 'app_deploy', args: { app: 'guestbook' } } }),
  *   at(3, { result: { call: 'e2', value: { deployed: true, version: 1 } } }),
  *   at(4, { output: {}, content: { body: 'Done.' } }),
  *   at(5, { content: { body: 'Text me when someone signs' } }),
  *   at(6, { call: { name: 'subscription_set', args: {} } }),
- * ], 'guestbook')
+ * ], 'guestbook', 's')
  * assertEquals(
  *   steps.map((s) => [s.lines.length, s.called, s.version]),
  *   [[2, ['app_deploy'], 1], [1, ['subscription_set'], 1]],
  * )
  * ```
  */
-export let stepsOf = (entries: Bundle[], app: string): Step[] => {
-  let ordered = [...entries].sort((a, b) =>
-    Number(comp(a, 'entry')?.seq ?? 0) - Number(comp(b, 'entry')?.seq ?? 0)
-  )
+export let stepsOf = (
+  entries: Bundle[],
+  app: string,
+  session: string,
+): Step[] => {
+  let ordered = entries.filter((b) => comp(b, 'entry')?.session == session)
+    .sort((a, b) =>
+      Number(comp(a, 'entry')?.seq ?? 0) - Number(comp(b, 'entry')?.seq ?? 0)
+    )
   let released = new Map<string, number>()
   for (let b of ordered) {
     let r = comp(b, 'result')
