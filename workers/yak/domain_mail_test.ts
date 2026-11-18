@@ -115,6 +115,7 @@ test('a domain takes mail at itself, or at mail.<domain> when it already takes m
     assertEquals(purged.status, 200)
     assertStringIncludes(await purged.text(), 'permanently released')
     assert(!held().includes(bare))
+    assertEquals(await k.dir.trash([host.eid]), [])
   } finally {
     await k.stop()
   }

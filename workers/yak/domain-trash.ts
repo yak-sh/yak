@@ -50,6 +50,7 @@ export let trashedDomain: Kind<Host> = {
         })),
       ],
     }, vouched(who))
+    await dir.purgeTrashEntities([h.eid])
     return `${h.name} is permanently released. Remove its DNS records wherever its DNS is managed.`
   },
 }

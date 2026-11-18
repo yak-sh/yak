@@ -31,6 +31,7 @@ let setup = async (refused = false) => {
   }
   await vault.seal('live', { handle: 'secret:live', value: 'live-new' })
   let writes: Bundle[] = []
+  let purges: string[][] = []
   let dir = {
     read: () => Promise.resolve(live),
     trash: () =>
@@ -39,6 +40,10 @@ let setup = async (refused = false) => {
         at: new Date().toISOString(),
         bundles: former,
       }]),
+    purgeTrashEntities: (eids: string[]) => {
+      purges.push(eids)
+      return Promise.resolve()
+    },
     apply: ({ entities }: { entities: Bundle[] }) => {
       writes.push(...entities)
       return refused
@@ -46,13 +51,14 @@ let setup = async (refused = false) => {
         : Promise.resolve(entities)
     },
   } as unknown as Directory
-  return { env, dir, space, vault, writes }
+  return { env, dir, space, vault, writes, purges }
 }
 
 let own = await setup(),
   restored = await setup(),
   erased = await setup(),
-  failed = await setup(true)
+  failed = await setup(true),
+  last = await setup()
 
 test('credential trash follows current ownership and private archived ownership', async () => {
   let { env, dir, space } = own
@@ -83,7 +89,7 @@ test('restoring a retained credential uses the graph sealing door and keeps its 
 })
 
 test('permanent credential purge removes only the selected saved version', async () => {
-  let { env, dir, space, vault } = erased
+  let { env, dir, space, vault, purges } = erased
   let one = (await retainedCredentials(env, dir, space, 'person')).find((c) =>
     c.eid == 'live'
   )!
@@ -95,6 +101,7 @@ test('permanent credential purge removes only the selected saved version', async
   assert(!(await vault.trash()).some((c) => c.id == one.id))
   assertEquals((await vault.read('live'))?.value, 'live-new')
   assertEquals((await vault.trash()).length, 3)
+  assertEquals(purges, [])
 })
 
 test('a refused restoration keeps its saved credential and current value', async () => {
@@ -109,4 +116,16 @@ test('a refused restoration keeps its saved credential and current value', async
   )
   assert((await vault.trash()).some((c) => c.id == one.id))
   assertEquals((await vault.read('live'))?.value, 'live-new')
+})
+
+test('purging a deleted credential’s final saved version removes its retained graph history', async () => {
+  let { env, dir, space, purges } = last
+  let one = (await retainedCredentials(env, dir, space, 'person')).find((c) =>
+    c.eid == 'gone'
+  )!
+  await trashedCredential.act(env, dir, space, one, {
+    person: 'person',
+    role: 'owner',
+  })
+  assertEquals(purges, [['gone']])
 })

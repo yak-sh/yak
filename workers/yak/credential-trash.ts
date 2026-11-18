@@ -114,8 +114,16 @@ export let trashedCredential: Kind<Credential> = {
     'the chance to restore this saved version; its current connection and other saved versions remain',
   ],
   press: () => 'Erase this saved credential forever',
-  act: async (env, _dir, _space, one) => {
-    await vaultOf(env).purge(one.id)
+  act: async (env, dir, _space, one) => {
+    let vault = vaultOf(env)
+    await vault.purge(one.id)
+    let [active, saved] = await Promise.all([
+      vault.read(one.eid),
+      vault.trash(),
+    ])
+    if (!active && !saved.some((s) => s.eid == one.eid)) {
+      await dir.purgeTrashEntities([one.eid])
+    }
     return `The saved ${one.integration} credential version is permanently erased.`
   },
 }

@@ -60,8 +60,9 @@ export let trashedNumber: Kind<PhoneLine> = {
     'the chance to restore it from the trash',
   ],
   press: (l) => `Return ${shown(l.number)} forever`,
-  act: async (env, _dir, _space, l) => {
+  act: async (env, dir, _space, l) => {
     await released(env, l)
+    await dir.purgeTrashEntities([l.eid])
     return `${
       shown(l.number)
     } is returned to the phone company: it costs nothing from now on.`

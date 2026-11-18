@@ -282,6 +282,7 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
     assertStringIncludes(await pressed.text(), 'it costs nothing from now on')
     assertEquals(held.size, 0)
     assertEquals(await k.dir.lined(FREE), null)
+    assertEquals(await k.dir.trash([owned.eid]), [])
     await assertRejects(
       () => cached.send({ to: '+12695550142', text: 'Returned' }),
       Error,
