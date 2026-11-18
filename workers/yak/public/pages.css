@@ -660,8 +660,8 @@
   }
   /* The Operator's chat app (operator-page.ts `chatPage`), in the frame
      (frame.ts): one conversation filling the column, read down it with the
-     box to write in held at the foot of the window, and at its right what
-     waits on the person (talk-beside.ts). Each pane scrolls within the
+     box to write in held at the foot of the window, and at its right the
+     person's lists that do not wait on them (talk-beside.ts). Each pane scrolls within the
      window; the whole side scrolls together (`.Sidebar_Scroll`). */
   /* The app is a window onto another site. Keep the page's grain below
      its column, including when that column fills the screen on a phone,
@@ -674,14 +674,18 @@
 
   .Talk_Back,
   .Talk_Show,
-  .Talk_Waits,
+  .Talk_BesideOpen,
   .Talk_Close {
     display: none;
   }
-  /* What waits on the person, at the right of the conversation, held in
-     place while it scrolls: the lists, each under its own title and count,
-     scrolling within the window. Its bar holds only Close, so it shows only
-     where the column is opened over the conversation. */
+  /* The person's lists, at the right of the conversation, held in place
+     while it scrolls: each under its own title, scrolling within the
+     window. Its bar holds only Close, so it shows only where the column is
+     opened over the conversation. It stands hidden until a list has
+     something in it (operator-page.ts `lateScript`). */
+  .Talk:not(.Talk-beside) .Talk_Beside {
+    display: none;
+  }
   .Talk_Beside {
     display: flex;
     flex: 0 0 22rem;
@@ -936,8 +940,8 @@
       min-width: 20rem;
     }
   }
-  /* Beside an app, what waits keeps its column where the window holds all
-     three; narrower, it is behind the bar's button, as on a phone. */
+  /* Beside an app, the lists keep their column where the window holds all
+     three; narrower, they are behind the bar's button, as on a phone. */
   @media (min-width: 1400px) {
     .Talk-app .Talk_Beside {
       flex-basis: 20rem;
@@ -1021,17 +1025,16 @@
   }
 
   /* Where the conversation needs the whole width, and beside an app short
-     of the widest windows, what waits is one press away: the bar's button
-     with its count opens it over the conversation, and Close goes back. */
-  .Talk_Waits {
-    gap: .35rem;
+     of the widest windows, the lists are one press away: the bar's button
+     opens them over the conversation, and Close goes back. */
+  .Talk_BesideOpen {
     margin-left: auto;
   }
-  :is(.Talk_Aside, .Talk_Show) ~ .Talk_Waits {
+  :is(.Talk_Aside, .Talk_Show) ~ .Talk_BesideOpen {
     margin-left: 0;
   }
   @media (max-width: 1399px) {
-    .Talk-app .Talk_Waits {
+    .Talk-app.Talk-beside .Talk_BesideOpen {
       display: inline-flex;
     }
     .Talk-app .Talk_Beside:not(:target, :has(:target)) {
@@ -1054,7 +1057,7 @@
     }
   }
   @media (max-width: 1099px) {
-    .Talk-beside .Talk_Waits {
+    .Talk-beside .Talk_BesideOpen {
       display: inline-flex;
     }
     .Talk_Beside:not(:target, :has(:target)) {

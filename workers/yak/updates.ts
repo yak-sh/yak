@@ -20,7 +20,6 @@ import type { Shown, Update } from './operator-updates.ts'
 import { lastDay } from './views.ts'
 import { markdown, PICTURES } from '@yaks/session/conversation'
 import { caught } from './defects.ts'
-import type { List } from './talk-beside.ts'
 import type { Choice } from '@yaks/task'
 import { attachmentKey } from './attachments.ts'
 import { directoryOf } from './directory.ts'
@@ -214,16 +213,6 @@ let needsCard = (space: Space, u: Update) => {
   )
 }
 
-/** What needs the person among their Updates, newest first, as the list
- * beside their conversation (talk-beside.ts), each answered where it is. */
-export let needsList = (space: Space, { updates }: Updates): List => {
-  let needs = updates.filter((u) => u.needs)
-  return {
-    count: needs.length,
-    node: needs.length ? needs.map((u) => needsCard(space, u)) : null,
-  }
-}
-
 // A way to send the Operator words about an update, opened in place.
 let replying = (space: Space, u: Update) =>
   h(
@@ -294,16 +283,14 @@ export let visitsOf = async (
 }
 
 let COUNT = new Intl.NumberFormat('en')
-let SMALL = ['No', 'One', 'Two', 'Three', 'Four', 'Five']
 
 /** The Operator's word on the last day, said when the page is drawn: the
  * visits across the apps and the busiest of them, when there are any to
- * count, and what needs the person. The server knows no one's clock, so it
- * is the last day and not today. */
+ * count. How many things need the person is the side's bell to say. The
+ * server knows no one's clock, so it is the last day and not today. */
 export let lastDayLine = (
   apps: Apps,
   views: Map<string, number> | undefined,
-  needs: number,
 ) => {
   let said: string[] = []
   if (views && apps.length) {
@@ -321,25 +308,22 @@ export let lastDayLine = (
       said.push(`${counted[0].a.title || counted[0].a.slug} was the busiest.`)
     }
   }
-  said.push(
-    needs
-      ? `${SMALL[needs] ?? COUNT.format(needs)} thing${
-        needs == 1 ? ' needs' : 's need'
-      } you.`
-      : 'Nothing needs you.',
-  )
   return said.join(' ')
 }
 
-/** What the Updates page shows under its bar. */
+/** What the Updates page shows under its bar: the day, then what waits on
+ * the person, the rows of their servers' `lists` that wait before the
+ * Updates that need them, then what happened. */
 export let updates = (
   env: Env,
   space: Space,
   { updates }: Updates,
+  lists: ComponentChildren = null,
   apps: Apps = [],
   views?: Map<string, number>,
-) =>
-  h(
+) => {
+  let day = lastDayLine(apps, views)
+  return h(
     Fragment,
     null,
     h(
@@ -347,15 +331,16 @@ export let updates = (
       { class: 'Note Update_About' },
       `${space.operator} writes here when something happens in your apps, and asks here when something needs you. Ask about any of it, and the chat opens.`,
     ),
-    h(
-      Card,
-      { class: 'Update Update-day' },
-      h(
-        'p',
-        { class: 'Update_Words' },
-        lastDayLine(apps, views, updates.filter((u) => u.needs).length),
-      ),
-    ),
+    day
+      ? h(
+        Card,
+        { class: 'Update Update-day' },
+        h('p', {
+          class: 'Update_Words',
+        }, day),
+      )
+      : null,
+    lists,
     updates.length ? updates.map((u) => card(env, space, u, apps)) : h(
       'div',
       { class: 'Talk_Hello' },
@@ -367,6 +352,7 @@ export let updates = (
       ),
     ),
   )
+}
 
 /** What a person sends from their Updates: a choice, or words about one.
  * Either goes into their conversation with the Operator, and the chat it

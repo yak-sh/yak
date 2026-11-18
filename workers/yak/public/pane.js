@@ -1,5 +1,5 @@
 // The layers a page opens over itself by its address (`#menu`, `#app`,
-// `#needs`, each shown by `:target` in pages.css), opened and closed without
+// `#beside`, each shown by `:target` in pages.css), opened and closed without
 // a history entry: a link marked `data-pane` replaces the address's fragment
 // instead of following it, so Back leaves the page as in any chat app and
 // never opens a layer. Coming back to a page whose address still names a

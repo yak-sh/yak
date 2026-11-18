@@ -13,6 +13,9 @@
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+.Badge[hidden] {
+  display: none;
+}
 /* How many there are: the number alone, in the muted colour, no pill. */
 .Badge-quiet {
   background: none;

@@ -11,17 +11,21 @@
 import { type ComponentChildren as Kids, h } from 'preact'
 import { Button, Icon, Shell, Skip, Toolbar } from '@yaks/ui/parts'
 import { icons } from './icons.ts'
+import { waitingBadge } from './sidebar.ts'
 
 /** The layout (pages.ts `shell`) of a page drawn in the frame. */
 export let FRAMED = 'Framed'
 
-/** What opens the side where it is folded away: a phone's Menu. */
-let menu = () =>
+/** What opens the side where it is folded away: a phone's Menu, wearing
+ * what waits in the side where it has a count, since the side's own is out
+ * of sight behind it. */
+let menu = (waiting?: number) =>
   h(
     Button,
     { class: 'Frame_Menu', href: '#menu', 'data-pane': '' },
     h(Icon, { of: icons.menu }),
     'Menu',
+    waiting != null ? waitingBadge(waiting) : null,
   )
 
 export let frame = (at: {
@@ -29,6 +33,8 @@ export let frame = (at: {
   title: Kids
   // whose it is, under the title
   sub: Kids
+  // how many wait in the side, which Menu wears where the side is behind it
+  waiting?: number
   // the bar's tools, after its title
   tools?: Kids
   // the page names itself in its own head, so the bar shows only on a phone
@@ -62,7 +68,7 @@ export let frame = (at: {
         h(
           Toolbar,
           { class: 'Frame_Bar' },
-          menu(),
+          menu(at.waiting),
           h(
             Toolbar.Text,
             {},

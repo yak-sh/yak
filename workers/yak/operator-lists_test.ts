@@ -1,6 +1,6 @@
 // The lists a person's machine offers, read through their space's tunnel and
-// drawn beside their conversation with their Operator: both ends in one
-// process.
+// drawn in their Updates and beside their conversation with their Operator:
+// both ends in one process.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Comp, mint } from '@yaks/graph'
@@ -9,9 +9,15 @@ import { Fragment, h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { mcpConnect } from './connected-mcp.ts'
 import { machineOf } from './machine-testing.ts'
-import { answered, type Listed, listOf, listsOf } from './operator-lists.ts'
+import {
+  answered,
+  type Listed,
+  listOf,
+  listsOf,
+  waitsOf,
+} from './operator-lists.ts'
 import { operatorContext } from './operator.ts'
-import { chatPage, operatorAnswer } from './operator-page.ts'
+import { chatPage, operatorAnswer, updatesPage } from './operator-page.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 
 let { box, env, dir, space, ada, bob, person } = await machineOf(
@@ -65,14 +71,15 @@ let listed = async (e = env, at = space.eid) =>
 let one = async () => (await listed())[0]
 
 // The list drawn, as the person reads it: each row's lines and buttons, and
-// how many it counts.
+// how many of them the bell counts.
 let drawn = (listed: Listed) => {
-  let list = listOf(listed, '/a', '/manage/here')
   let { document } = parseHTML(
-    `<div>${renderToString(h(Fragment, null, list.node))}</div>`,
+    `<div>${
+      renderToString(h(Fragment, null, listOf(listed, '/a', '/manage/here')))
+    }</div>`,
   )
   return {
-    count: list.count,
+    count: waitsOf([listed]),
     back: document.querySelector('[name=back]')?.getAttribute('value'),
     rows: [...document.querySelectorAll('.Asks_Item')].map((r) =>
       [...r.querySelectorAll('.Rows_Name, .Rows_Meta, button')].map((e) =>
@@ -225,7 +232,7 @@ test('a server’s lists are read on one connection, each call sent without list
   )
 })
 
-test('the page draws without lists its machine has not answered, and they fill in after', async () => {
+test('pages draw without lists their machine has not answered, saying nothing while they are read, and they fill in after', async () => {
   await connect([needs])
   let held = { person: ada, role: 'owner' as const, space: space.eid }
   let { binding } = operatorService(
@@ -246,22 +253,39 @@ test('the page draws without lists its machine has not answered, and they fill i
       }),
     },
   } as typeof env
-  let page = await chatPage(slow, space, held, 'new')
-  let { document } = parseHTML(await page.text())
-  let slot = document.querySelector('[data-later=waits]')!
-  assertEquals(slot.textContent, 'Reading your lists…')
+  let page = async (drawing: Promise<Response>) => {
+    let text = await (await drawing).text()
+    return {
+      document: parseHTML(text).document,
+      from: text.match(/fetch\("([^"]+lists=1[^"]*)"\)/)?.[1],
+    }
+  }
+  // Beside the conversation the column stands hidden around its slot.
+  let chat = (await page(chatPage(slow, space, held, 'new'))).document
+  assertEquals(
+    chat.querySelector('.Talk_Beside [data-later=other]')?.textContent,
+    '',
+  )
+  assertEquals(chat.querySelector('.Talk-beside'), null)
+  // What waits on the person comes into their Updates.
+  let { document, from } = await page(updatesPage(slow, space, held))
+  let slot = document.querySelector('.Updates [data-later=waits]')!
+  assertEquals(slot.textContent, '')
   assertEquals(document.querySelector('.Asks_Item'), null)
   open()
-  let from = `https://yaks.app${slot.getAttribute('data-from')}&had=2`
-  let got = await (await operatorAnswer(new Request(from), slow, space, held))!
-    .json()
+  let got = await (await operatorAnswer(
+    new Request(`https://yaks.app${from}`),
+    slow,
+    space,
+    held,
+  ))!.json()
   let asks = (await one()).asks.length
   let rows = parseHTML(`<div>${got.waits}</div>`).document
   assertEquals(rows.querySelectorAll('.Asks_Item').length, asks)
-  assertEquals([got.count, got.other], [asks + 2, ''])
+  assertEquals([got.waiting, got.other], [asks, ''])
+  // a choice there comes back to the Updates
   assertEquals(
-    parseHTML(`<div>${got.bar}</div>`).document.querySelector('.Talk_Waits')
-      ?.getAttribute('data-count'),
-    String(asks + 2),
+    new URL(from!, 'https://yaks.app').searchParams.get('back'),
+    `/manage/${space.slug}/updates`,
   )
 })

@@ -159,19 +159,20 @@ let lineOf = (words: string, most: number) => {
 let subjectOf = (words: string) => lineOf(words, 60)
 
 /**
- * Where pressing an alert opens: the person's conversation, at what it is
- * about where it names something (the row of What needs you with that id,
- * operator-lists.ts `askAnchor`).
+ * Where pressing an alert opens: the person's conversation, or their Updates
+ * at what it is about where it names something (the row waiting there with
+ * that id, operator-lists.ts `askAnchor`).
  *
  * ```ts
  * import { equal } from '@yaks/testing'
  * import { openAt } from './operator-alerts.ts'
- * equal(openAt('https://yaks.app/manage/ana', 'e1'), 'https://yaks.app/manage/ana#ask-e1')
- * equal(openAt('https://yaks.app/manage/ana'), 'https://yaks.app/manage/ana')
+ * let [chat, updates] = ['https://yaks.app/ana', 'https://yaks.app/manage/ana/updates']
+ * equal(openAt(chat, updates, 'e1'), `${updates}#ask-e1`)
+ * equal(openAt(chat, updates), chat)
  * ```
  */
-export let openAt = (conversation: string, about?: string) =>
-  about ? `${conversation}#${askAnchor(about)}` : conversation
+export let openAt = (conversation: string, updates: string, about?: string) =>
+  about ? `${updates}#${askAnchor(about)}` : conversation
 
 let part = (row: Bundle, name: string) => row[name] as Comp | undefined
 
@@ -255,7 +256,7 @@ let sent = async (
   let { words, id } = note
   let updates = url(env, managePath('updates', space.slug))
   if (route.by == 'push') {
-    let open = openAt(url(env, chatPath(space.slug)), note.about)
+    let open = openAt(url(env, chatPath(space.slug)), updates, note.about)
     let count = await waitingOn(env, store, person, space.eid)
     let told = { words, open, id, count }
     let refused: Unpushed | undefined

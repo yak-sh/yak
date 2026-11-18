@@ -1,6 +1,6 @@
-// The lists the MCP servers a person connected offer, drawn beside their
-// conversation with their Operator with no model turn (D-153799, The chair;
-// talk-beside.ts). Each is a row on the directory (`doc{title}` +
+// The lists the MCP servers a person connected offer, drawn with no model
+// turn (D-153799, The chair): those that wait on them in their Updates from
+// the Operator, the others beside their conversation (talk-beside.ts). Each is a row on the directory (`doc{title}` +
 // `mcp_list{server, tool, args, waits, ord}`, directory-vocab.ts, set by
 // `mcp_connect`'s `lists`), and is read by one call each time the page is
 // drawn, all at once. The page knows nothing of what the rows are beyond the
@@ -19,7 +19,6 @@ import { caught } from './defects.ts'
 import { directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
 import { answerAsTheirs } from './operator-relay.ts'
-import type { List } from './talk-beside.ts'
 import { CallError } from '@yaks/tools/errors'
 import { type Ctx, refuse } from './tool.ts'
 
@@ -280,14 +279,19 @@ export let listsOf = async (
   return { lists: await read(wait), ...mentions ? { mentions } : {} }
 }
 
-/** The id of an ask's row on the page, which an alert about it opens at
- * (operator-alerts.ts `openAt`). */
+/** The id of an ask's row on the Updates page, which an alert about it
+ * opens at (operator-alerts.ts `openAt`). */
 export let askAnchor = (eid: string) => `ask-${eid}`
 
+/** How many rows of `lists` wait on the person: those of the lists that
+ * wait, on the side's one bell beside their Updates. */
+export let waitsOf = (lists: Listed[]) =>
+  lists.reduce((n, l) => n + (l.waits ? l.asks.length : 0), 0)
+
 /**
- * How many things need the person, as the bar beside their conversation
- * counts them (talk-beside.ts `counted`): the rows of the lists that wait on
- * them, then their Updates that ask them something.
+ * How many things need the person, as the installed page's icon counts
+ * them: the rows of the lists that wait on them, then their Updates that ask
+ * them something.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -303,9 +307,7 @@ export let askAnchor = (eid: string) => `ask-${eid}`
 export let needCount = (
   lists: Listed[],
   updates: { needs: boolean }[],
-) =>
-  lists.reduce((n, l) => n + (l.waits ? l.asks.length : 0), 0) +
-  updates.filter((u) => u.needs).length
+) => waitsOf(lists) + updates.filter((u) => u.needs).length
 
 /** The person's press of a choice beside a row on `space`'s Operator page:
  * their answer, as theirs. */
@@ -374,12 +376,12 @@ let row = (
   )
 
 /**
- * One list beside the conversation under its title: the first `SHOWN` rows,
- * the rest folded under one line that says how many, or the lines it said,
- * or that their machine did not answer; nothing where it holds nothing.
- * `action` is where a choice is sent, and `back` the page it returns to.
+ * One list under its title: the first `SHOWN` rows, the rest folded under
+ * one line that says how many, or the lines it said, or that their machine
+ * did not answer; null where it holds nothing. `action` is where a choice is
+ * sent, and `back` the page it returns to.
  */
-export let listOf = (listed: Listed, action: string, back: string): List => {
+export let listOf = (listed: Listed, action: string, back: string): Node => {
   let { asks, lines, off, server, title, waits } = listed
   let more = asks.length - SHOWN
   let rows = (some: Ask[]) =>
@@ -396,45 +398,43 @@ export let listOf = (listed: Listed, action: string, back: string): List => {
         Card.Head,
         {},
         h(Card.Title, { as: 'h3' }, title),
-        waits ? h(Badge, null, asks.length) : null,
+        // a plain count: the side's bell is what says they wait
+        waits ? h(Badge, { mod: 'quiet' }, asks.length) : null,
       ),
       ...body,
     )
-  return {
-    count: waits ? asks.length : 0,
-    node: off
-      ? h(
-        Empty,
-        { class: 'Talk_List' },
-        h('p', null, `Your machine is off, so ${title} can’t be read now.`),
-        h('p', { class: 'Talk_List_Why' }, off),
-      )
-      : asks.length
-      ? card(
-        rows(asks.slice(0, SHOWN)),
-        more > 0
-          ? h(
-            More,
-            null,
-            h(More.Summary, null, `${more} more`),
-            h(More.Body, null, rows(asks.slice(SHOWN))),
+  return off
+    ? h(
+      Empty,
+      { class: 'Talk_List' },
+      h('p', null, `Your machine is off, so ${title} can’t be read now.`),
+      h('p', { class: 'Talk_List_Why' }, off),
+    )
+    : asks.length
+    ? card(
+      rows(asks.slice(0, SHOWN)),
+      more > 0
+        ? h(
+          More,
+          null,
+          h(More.Summary, null, `${more} more`),
+          h(More.Body, null, rows(asks.slice(SHOWN))),
+        )
+        : null,
+    )
+    : lines.length
+    ? card(
+      h(
+        Rows,
+        { as: 'ul', class: 'Asks' },
+        lines.map((l) =>
+          h(
+            Rows.Item,
+            { as: 'li' },
+            h(Rows.Name, { mod: 'line', title: l }, l),
           )
-          : null,
-      )
-      : lines.length
-      ? card(
-        h(
-          Rows,
-          { as: 'ul', class: 'Asks' },
-          lines.map((l) =>
-            h(
-              Rows.Item,
-              { as: 'li' },
-              h(Rows.Name, { mod: 'line', title: l }, l),
-            )
-          ),
         ),
-      )
-      : null,
-  }
+      ),
+    )
+    : null
 }

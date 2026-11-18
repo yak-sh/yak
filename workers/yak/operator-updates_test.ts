@@ -187,7 +187,7 @@ test('a fixed break tells the space what the Operator did', async () => {
   }
 })
 
-test('the Updates page and a new chat show what needs the person, and a button opens the chat', async () => {
+test('the Updates page shows what needs the person, a new chat counts it in the side, and a button opens the chat', async () => {
   await store.g.apply([{
     entity: { eid: 'ask' },
     task: {},
@@ -210,15 +210,14 @@ test('the Updates page and a new chat show what needs the person, and a button o
   let buttons = (d: Document) =>
     [...d.querySelectorAll('.Update-needs button[name=choice]')]
       .map((b) => b.textContent)
-  assertEquals(buttons(fresh), ['Send', 'Not yet'])
+  // A chat counts what needs them in the side, and answers it in Updates.
+  assertEquals(buttons(fresh), [])
   let count = (d: Document) => d.querySelector('.Sidebar_Count')?.textContent
   assertEquals(Number(count(fresh)) > 1, true)
   let updates = await page(updatesPage(p.env, space, who))
   assertEquals(buttons(updates), ['Send', 'Not yet'])
-  assertEquals(
-    updates.querySelector('.Update-day')?.textContent?.trim(),
-    'One thing needs you.',
-  )
+  // with no visits to tell of, there is no day to say
+  assertEquals(updates.querySelector('.Update-day'), null)
   assertStringIncludes(
     updates.querySelector('.Updates')!.textContent!,
     'Bo joined Book club.',
@@ -236,7 +235,7 @@ test('the Updates page and a new chat show what needs the person, and a button o
   )
   assertEquals(sent.status, 303)
   assertEquals(sent.headers.get('location'), chatPath('club', 'r1'))
-  assertEquals(buttons(await page(chatPage(p.env, space, who, 'new'))), [])
+  assertEquals(buttons(await page(updatesPage(p.env, space, who))), [])
 })
 
 test('a choice shows a picture, prose or a draft, and only its asker reads the picture', async () => {

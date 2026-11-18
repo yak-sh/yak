@@ -1,60 +1,39 @@
-// What waits on the person, beside their conversation with the Operator
-// (D-153799, The chair): a column at the right of every chat page, held in
-// place while the conversation scrolls, of short lists that are always
-// there. On a phone, or beside an app, the column is one press away: the
-// bar's button (`waitsButton`), wearing the count, opens it over the
-// conversation (`#needs`). Each list is a node and how many it holds;
-// another list is one more entry in the page's `lists`.
+// Beside the person's conversation with the Operator (D-153799, The chair):
+// a column at the right of the chat page, held in place while the
+// conversation scrolls, of the lists their servers offer that do not wait
+// on them (what is working now, spending). What waits on them lives in
+// Updates from <Operator> (operator-page.ts `updatesPage`), counted on the
+// side's one bell. The column is drawn only where a list has something in
+// it; on a phone, or beside an app, it is one press away: the bar's button
+// (`besideButton`) opens it over the conversation (`#beside`).
 import { type ComponentChildren as Node, h } from 'preact'
-import { Badge, Button, Empty, Icon, Toolbar } from '@yaks/ui/parts'
+import { Button, Icon, Toolbar } from '@yaks/ui/parts'
 import { icons } from './icons.ts'
 
-/** One list beside the conversation: what it draws, null where it has
- * nothing to say, and how many things in it wait on the person. */
-export type List = { node: Node; count: number }
-
 /** Where the column is, which the bar's button opens on a phone. */
-export let NEEDS = 'needs'
+export let BESIDE = 'beside'
 
-/** How many things wait on the person across `lists`, which the bar's
- * button and the installed page's icon show. */
-export let counted = (lists: List[]) => lists.reduce((n, l) => n + l.count, 0)
-
-/** The bar's way to the column, with how many wait, `n`. */
-export let waitsButton = (n: number) => {
-  let said = n ? `What needs you: ${n}` : 'What needs you'
-  return h(
+/** The bar's way to the column where it has no room. */
+export let besideButton = () =>
+  h(
     Button,
     {
-      href: `#${NEEDS}`,
-      class: 'Talk_Waits',
+      href: `#${BESIDE}`,
+      class: 'Talk_BesideOpen',
       'data-pane': '',
-      title: said,
-      'aria-label': said,
-      'data-count': n,
+      title: 'Your lists',
+      'aria-label': 'Your lists',
     },
-    h(Icon, { of: icons.bell }),
-    n ? h(Badge, null, n) : null,
+    h(Icon, { of: icons['panel-right'] }),
   )
-}
 
-/** What the column says when no list has anything in it. */
-export let nothing = h(Empty, null, h('p', null, 'Nothing needs you.'))
-
-/** The column: the lists, each under its own title and count, or that
- * nothing needs them. It has no heading of its own, which would repeat the
- * first list's; its bar holds only Close, which takes it away where it is
- * opened over the conversation. */
-export let talkBeside = (lists: List[]) => {
-  let drawn = lists.map((l) => l.node).filter((node) => node != null)
-  return h(
+/** The column: each list under its own title. It has no heading of its own,
+ * which would repeat the first list's; its bar holds only Close, which takes
+ * it away where it is opened over the conversation. */
+export let talkBeside = (lists: Node[]) =>
+  h(
     'aside',
-    {
-      class: 'Talk_Beside',
-      id: NEEDS,
-      'aria-label': 'What needs you',
-      'data-needs': '',
-    },
+    { class: 'Talk_Beside', id: BESIDE, 'aria-label': 'Your lists' },
     h(
       Toolbar,
       { class: 'Talk_BesideBar' },
@@ -65,10 +44,5 @@ export let talkBeside = (lists: List[]) => {
         'Close',
       ),
     ),
-    h(
-      'div',
-      { class: 'Talk_Lists' },
-      drawn.length ? drawn : nothing,
-    ),
+    h('div', { class: 'Talk_Lists' }, lists),
   )
-}

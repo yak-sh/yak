@@ -14,12 +14,19 @@ export type Item = {
   current?: boolean
   /** How many there are, a plain number. */
   count?: number
-  /** How many are new or wait on the person, on the red badge. */
+  /** How many are new or wait on the person, on the red badge, which is
+   * drawn hidden at none so a page can add what it learns later to it
+   * (`data-waiting`, operator-page.ts `lateScript`). */
   waiting?: number
   more?: boolean
   submit?: boolean
   external?: boolean
 }
+
+/** How many wait on the person, `n`, on the red badge: hidden at none, and
+ * saying the count it was drawn with for a page to add to. */
+export let waitingBadge = (n: number, cls?: string) =>
+  h(Badge, { class: cls, hidden: !n || undefined, 'data-waiting': n }, n || '')
 
 export type Section = {
   id: string
@@ -101,8 +108,8 @@ let link = (at: Item) => {
       })
       : glyph(at.icon),
     h(SideNav.Label, null, at.label),
-    at.waiting
-      ? h(Badge, { class: 'Sidebar_Count' }, at.waiting)
+    at.waiting != null
+      ? waitingBadge(at.waiting, 'Sidebar_Count')
       : at.count != null
       ? h(Badge, { mod: 'quiet', class: 'Sidebar_Count' }, at.count)
       : null,

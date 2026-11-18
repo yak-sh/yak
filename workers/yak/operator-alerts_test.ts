@@ -295,13 +295,13 @@ test('an alert to a person who chose push is a notification on each browser they
   assertEquals(byPush.reaches, 'push')
   assertEquals(Object.keys(onBoth).sort(), ['laptop', 'phone'])
   let shown = onBoth.phone
-  // The alert in a line, opening the conversation at what it is about, and
+  // The alert in a line, opening their Updates at what it is about, and
   // how many things need them for the installed icon.
   assertEquals([shown.title, shown.body], [
     space.operator,
     'Your report is ready.',
   ])
-  assertEquals(new URL(shown.url).pathname, '/manage/ana')
+  assertEquals(new URL(shown.url).pathname, '/manage/ana/updates')
   assertEquals(new URL(shown.url).hash, `#ask-${about}`)
   assertEquals(shown.tag, byPush.notification)
   assertEquals(shown.count, 0)

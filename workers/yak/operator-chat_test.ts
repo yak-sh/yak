@@ -389,13 +389,10 @@ test('a new chat greets the person by name, with ways to start over the box', ()
       [`What can ${space.operator} do?`, 'What can you do for me?'],
     ],
   )
-  // Beside it, what needs the person, which is nothing yet; the bar's way
-  // to it on a phone wears no count.
-  assertEquals(
-    document.querySelector('#needs .Talk_Lists')?.textContent,
-    'Nothing needs you.',
-  )
-  assertEquals(document.querySelector('.Talk_Waits .Badge'), null)
+  // Nothing needs the person yet: nothing beside the conversation, and no
+  // count anywhere.
+  assertEquals(document.querySelector('.Talk_Beside, .Talk_BesideOpen'), null)
+  assertEquals(document.querySelector('.Badge:not([hidden])'), null)
   assertEquals(fresh.code, 200)
   assertStringIncludes(
     fresh.document.querySelector('.Talk_Hello')!.textContent!,
@@ -430,8 +427,7 @@ test('an app chosen in the side opens a chat about it, with the app live beside 
     'What should change in Holdfast?',
   )
   // The words sent say which page and app are open; a chat about an app is
-  // not where the person lands, so it holds no ways to start, and what
-  // needs them is still beside it.
+  // not where the person lands, so it holds no ways to start.
   assertEquals(
     document.querySelector('#ask [name=app]')?.getAttribute('value'),
     'app1',
@@ -441,7 +437,6 @@ test('an app chosen in the side opens a chat about it, with the app live beside 
     aboutPath('clerk', 'app1'),
   )
   assertEquals(document.querySelector('.Talk_Starts'), null)
-  assert(document.querySelector('#needs[data-needs]'))
   // On a phone, the bar switches to the app, and the app back to the chat.
   assertEquals(
     document.querySelector('.Talk_Show')?.getAttribute('href'),
@@ -812,10 +807,11 @@ test('a chat in which the Operator changed an app opens with no app beside it', 
   assertEquals(document.querySelector('#ask [name=app]'), null)
 })
 
-// Whichever conversation is open, what needs the person stays beside it,
-// each answered where it is, and its count is on the bar's way to it; the
-// spaces, apps and settings are behind the bar's menu (D-153799, The chair).
-test('what needs the person is beside every conversation, counted, beside the side the settings pages share', async () => {
+// Whichever conversation is open, what needs the person is counted once, on
+// Updates from <Operator> in the side, where it is answered, and on the bar's
+// Menu where the side is behind it; a person with no lists has no column
+// beside the conversation (D-153799, The chair; T-1114).
+test('what needs the person is counted once, in the side the settings pages share, and nothing stands beside a conversation with no lists', async () => {
   let needs = {
     eid: crypto.randomUUID(),
     needs: true,
@@ -859,40 +855,24 @@ test('what needs the person is beside every conversation, counted, beside the si
       app,
     )
     let { document } = parseHTML(await page.text())
-    let aside = document.querySelector('aside#needs')!
-    assertEquals(aside.getAttribute('aria-label'), 'What needs you')
-    assertEquals(aside.querySelector('h2'), null)
+    assertEquals(document.querySelector('.Talk_Beside, .Talk_BesideOpen'), null)
+    assertEquals(document.querySelector(`#u-${needs.eid}`), null)
+    // one bell: the side's, and Menu wearing its count on a phone
     assertEquals(
-      document.querySelector('.Talk_Waits .Badge')?.textContent,
-      '1',
-    )
-    let card = aside.querySelector(`#u-${needs.eid}`)!
-    assertEquals(card.querySelector('.Update_Words em')?.textContent, 'notice')
-    assertEquals(
-      [...card.querySelectorAll('button[name=choice]')].map((b) =>
-        b.textContent
+      [...document.querySelectorAll('.Badge:not([hidden])')].map((b) =>
+        b.closest('.Frame_Menu') ? 'menu' : b.closest('#menu') && 'side'
       ),
-      ['Tomorrow', 'Tonight'],
+      ['side', 'menu'],
     )
-    assert(
-      card.querySelector('details.Update_Reply [name=say]'),
-      'asked about in place',
-    )
-    assertEquals(aside.querySelector(`#u-${told.eid}`), null)
-    let waits = document.querySelector('.Frame_Bar .Talk_Waits')!
-    assertEquals([waits.getAttribute('href'), waits.textContent], [
-      '#needs',
-      '1',
-    ])
     let menu = document.querySelector('.Frame_Bar .Frame_Menu')!
-    // it reads as the desk's does (home_test.ts)
+    // it reads as the desk's does (home_test.ts), with the count
     assertEquals([menu.getAttribute('href'), menu.textContent], [
       '#menu',
-      'Menu',
+      'Menu2',
     ])
     assert(menu.querySelector('svg.Icon'), 'Menu wears the kit’s icon')
     // each layer opens and closes without a history entry (public/pane.js)
-    for (let sel of ['.Frame_Menu', '.Talk_Waits', '#menu .Sidebar_Close']) {
+    for (let sel of ['.Frame_Menu', '#menu .Sidebar_Close']) {
       assert(document.querySelector(sel)?.hasAttribute('data-pane'), sel)
     }
     assert(
