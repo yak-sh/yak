@@ -256,8 +256,6 @@ export let take = async (g: G, project: Eid, o: Opts = {}): Promise<void> => {
   }
   if (await atWork(g, project, o)) return
   let owed = await owing(g, knocks)
-  let at = await operatorOf(g, project)
-  let [operator] = at ? await g.get([at], [SESSION]) : []
   let session = mint()
   let by = persona ? { by: str(persona) } : {}
   let said = (b: Bundle, guarded: boolean): Bundle => ({
@@ -272,9 +270,11 @@ export let take = async (g: G, project: Eid, o: Opts = {}): Promise<void> => {
         entity: { eid: session },
         [SESSION]: { operator: false, ...persona ? { persona } : {} },
         [HELPING]: { project },
-        ...operator && g.vocab.comp('spawned')
-          ? { spawned: { parent: operator.entity.eid } }
-          : {},
+        // The native harness answers it, isolated as every session outside
+        // words start is (@yaks/harness/isolated), never an outside CLI
+        // holding the box's shell. No `spawned` link: its ending is this
+        // file's to tell, and would otherwise wake the operator.
+        ...g.vocab.comp('native') ? { native: {} } : {},
         $actor: by,
       },
       {
@@ -305,12 +305,21 @@ export let take = async (g: G, project: Eid, o: Opts = {}): Promise<void> => {
 let ended = async (g: G, helper: Bundle): Promise<void> => {
   let code = comp(helper, 'exit').code
   if (code === 0 || helper.stop) return
+  // A native helper has no exit: its transcript's status says how it ended.
+  let status = str(comp(helper, SESSION).status)
+  if (!helper.exit && status == 'settled') return
   await handUp(
     g,
     helper,
     'ended',
     `helper ${human(g.vocab)(helper)} ` +
-      `${code == null ? 'ended with no exit code' : `exited ${code}`}, with ` +
+      `${
+        !helper.exit
+          ? status
+          : code == null
+          ? 'ended with no exit code'
+          : `exited ${code}`
+      }, with ` +
       await taken(g, helper.entity.eid),
   )
 }
@@ -378,15 +387,24 @@ let verdicts = async (g: G, helper: Bundle): Promise<void> => {
 }
 
 /** The code behind `session_help`, for the entity a commit moved: a routine
- * knock, a helper that exited, or a project whose `helper` went. */
+ * knock, a helper that exited or whose native transcript ended (./run.ts
+ * tells that), or a project whose `helper` went. */
 export let help = async (g: G, eid: Eid, o: Opts = {}): Promise<void> => {
   let has = (name: string) => !!g.vocab.comp(name)
   let [row] = await g.get(
     [eid],
-    [ROUTINE, HELPING, 'project', 'exit', 'stop'].filter(has),
+    [ROUTINE, HELPING, 'project', 'exit', 'stop', 'native'].filter(has),
   )
   if (!row) return
-  if (row[HELPING] && row.exit) {
+  // A native helper's status is computed from its transcript, which a get
+  // does not read.
+  if (row[HELPING] && row.native) {
+    let [read] = await g.read(line`.entity.eid=${eid}&.fields=session.status`)
+    row = { ...row, [SESSION]: comp(read, SESSION) }
+  }
+  let finished = row.native &&
+    ['settled', 'failed', 'stopped'].includes(str(comp(row, SESSION).status))
+  if (row[HELPING] && (row.exit || finished)) {
     await ended(g, row)
     await verdicts(g, row)
   }

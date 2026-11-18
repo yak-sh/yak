@@ -1,6 +1,6 @@
-// Which sessions the host places in a checkout of their own: a native fixer,
-// and a native session holding a task. One holding nothing, and one an
-// outside CLI runs, are not the host's to place.
+// Which sessions the host places in a checkout of their own: a native session
+// holding a task. A fixer (it works in its sandbox), one holding nothing, and
+// one an outside CLI runs are not the host's to place.
 import { equal, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -35,6 +35,7 @@ await g.apply([
   session('chatting', { native: {} }),
   session('spawned'),
   { entity: { eid: 'job' }, task: {}, claim: { session: 'started' } },
+  { entity: { eid: 'bug' }, task: {}, claim: { session: 'fixing' } },
   { entity: { eid: 'other' }, task: {}, claim: { session: 'spawned' } },
 ], { trusted: true })
 
@@ -44,6 +45,6 @@ let placed = await Promise.all(
   ),
 )
 
-test('a native fixer and a native session holding a task get a checkout; others are not placed', () => {
-  equal(placed, ['fixer', 'task', undefined, undefined, undefined])
+test('a native session holding a task gets a checkout; a fixer and others are not placed', () => {
+  equal(placed, [false, true, false, false, false])
 })

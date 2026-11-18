@@ -128,7 +128,7 @@ let office = async (helper: object | null = HELPER) => {
   // Each helper, oldest first: what it wears, whom it answers to, what it was
   // asked with and told.
   let helpers = async () => {
-    let rows = await g.read('.helping ?session ?spawned ?stop')
+    let rows = await g.read('.helping ?session ?spawned ?stop ?native')
     let out = []
     for (let b of rows as (Bundle & Row)[]) {
       let [first] = await g.read(
@@ -138,6 +138,7 @@ let office = async (helper: object | null = HELPER) => {
         eid: b.entity.eid,
         persona: b.session.persona,
         parent: b.spawned?.parent,
+        native: !!b.native,
         using: first.using,
         told: String(first.content.body).split('\n\n').slice(1)
           .map((line) => line.slice(line.indexOf(': ') + 2)),
@@ -176,7 +177,8 @@ test('a knock at a helped project starts its helper, not its operator', async ()
   equal({ ...h, eid: '' }, {
     eid: '',
     persona: 'taskmaster',
-    parent: 'operator',
+    parent: undefined,
+    native: true,
     using: { provider: CLAUDE, model: SONNET },
     told: ['New bug: gate failed'],
     stopped: false,
@@ -208,6 +210,22 @@ test('a storm is one helper’s batch, and what comes while it works waits for i
     ['bug a', 'bug b', 'bug c'],
     ['bug d', 'bug e'],
   ])
+  equal(await o.heard(), [])
+})
+
+test('a native helper’s ending is its exit: what came while it worked starts the next', async () => {
+  let o = await office()
+  await o.knock('bug a')
+  await o.knock('bug b')
+  let [first] = await o.helpers()
+  await o.write([{
+    entity: { eid: 'said' },
+    entry: { session: first.eid },
+    output: {},
+    content: { body: 'Filed T-2.' },
+  }])
+  await help(o.g, first.eid)
+  equal((await o.helpers()).map((h) => h.told), [['bug a'], ['bug b']])
   equal(await o.heard(), [])
 })
 

@@ -429,6 +429,21 @@
         "session",
         "workspace"
       ]
+    },
+    "lands": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "description": "on a session the host started to land a patch that a session outside words started handed it (@yaks/harness/isolated `submit_patch`); it holds the box's tools",
+      "properties": {
+        "from": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the session that handed the patch"
+        }
+      }
     }
   }
 }

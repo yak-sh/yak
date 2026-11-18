@@ -18,32 +18,70 @@ import { openingFor } from './instructions.ts'
 import type { Handlers } from '@yaks/effects'
 import type { Host } from '@yaks/host'
 
-import { recall, running, starting } from '@yaks/session'
+import { recall, type Runner, running, starting } from '@yaks/session'
 import { usingFor } from './default.ts'
 import { lend } from './agent.ts'
 import { here, type Opts } from './local.ts'
 import { hosted } from './store.ts'
 import { unfinishedEach } from './unfinished.ts'
 import { machines } from './session_machines.ts'
+import { exposed, isolate, type Isolation, snapshot } from './isolated.ts'
+
+/** What config says an exposed session's sandbox is (./isolated.ts): a
+ * bubblewrap sandbox under `dir` with `limits`, the read-only `binds` and
+ * the command `env`, holding the committed HEAD of `source` after `setup`
+ * ran in it; and the host `tools` it is offered by name. */
+export type IsolationConfig = {
+  dir?: string
+  limits?: { cpuQuota: number; memoryMax: number; tasksMax: number }
+  binds?: string[]
+  env?: Record<string, string>
+  source?: string
+  setup?: string
+  tools?: string[]
+}
+
+// The isolation config names. A sandbox needs a directory, limits and a
+// source; without them an exposed session has its host tools alone.
+let isolation = async (config: IsolationConfig = {}): Promise<Isolation> => {
+  let { dir, limits, source } = config
+  if (!dir || !limits || !source) return { tools: config.tools }
+  let { sandboxProvider } = await import('@yaks/sandbox/bubblewrap')
+  return {
+    tools: config.tools,
+    sandbox: sandboxProvider({
+      dir,
+      limits,
+      binds: config.binds,
+      env: () => ({ ...config.env }),
+      prepare: snapshot(source, config.setup),
+    }),
+  }
+}
 
 /** The runner, lent this machine, over the host's graph. The plugin's options
  * may name `compactAt`, the share of its model's context window a transcript
  * fills before it is compacted (half where absent), and `starts`, the most
  * sessions started on comments at work at once (two where absent); the model
  * a session asks by default is graph data (./default.ts `defaultUsing`), and
- * so is the one a project's work runs on (`usingFor`). */
+ * so is the one a project's work runs on (`usingFor`). `isolation`
+ * ({@link IsolationConfig}) is what a session outside words started works
+ * with instead of the host's tools. */
 export let effects = (
   host: Host,
-  options: Record<string, unknown> & Pick<Opts, 'env' | 'http'> = {},
+  options: Record<string, unknown> & Pick<Opts, 'env' | 'http'> & {
+    isolation?: IsolationConfig
+  } = {},
 ): Handlers => {
   // The providers the config names load before the first run is answered.
-  let lent = here(hosted(host), {
+  let made = here(hosted(host), {
     env: options.env,
     http: options.http,
     compactAt: typeof options.compactAt == 'number'
       ? options.compactAt
       : undefined,
-  }).then((here) => here.lent)
+  })
+  let lent = made.then((here) => here.lent)
   host.defer(() => lent.then((lent) => lent.release?.(), () => {}))
   let binding = machines(
     host.graph,
@@ -52,6 +90,14 @@ export let effects = (
     host.workspaces,
   )
   let g = host.graph
+  // A sandbox config that cannot be built is reported, and exposed sessions
+  // keep their host tools alone; every other session goes on as it was.
+  let isolated = isolation(options.isolation).catch(async (error) => {
+    await made.then((h) => h.report(error, { phase: 'isolation' }), () => {})
+    return { tools: options.isolation?.tools }
+  }).then((i) => isolate(g, i))
+  let scoped = async (session: string, runner: Runner) =>
+    (await isolated)(session, runner)
   let entries = (session: string, q: Built) =>
     g.read(
       line`.entry.session=${session}&${sub(q)}&.limit=1&.fields=entity.eid`,
@@ -83,7 +129,9 @@ export let effects = (
             trusted: true,
           })
         }
-        await binding.cwd(session)
+        // An exposed fixer works in its sandbox, never a checkout of the
+        // host's.
+        if (!await exposed(g, session)) await binding.cwd(session)
         ;[owner] = await g.get([session])
       } else if ((await entries(session, line`.ask`)).length) return
       // Preparation is restartable. Admit each immutable source only once.
@@ -148,6 +196,7 @@ export let effects = (
           stopping: host.stopping,
         }
       }),
+      scoped,
     ),
     ...starting(g, {
       beside: recall(host).beside,

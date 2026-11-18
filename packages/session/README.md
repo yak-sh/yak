@@ -984,18 +984,22 @@ operator's session is woken only by a person's mail, comment, text or answer,
 and by a hand-up.
 
 `session_help` runs after that commit ([`help.ts`](./help.ts)). When no helper
-of the project is at work, it writes one session, `helping{project}`, wearing
-the helper's persona, with `spawned{parent}` naming the operator's session. Its
-first input says whose place it takes and how to hand up, then each waiting item
-whole, as a listener would say it. The same write marks each item `notified`,
-`via` the helper. That input carries `using{provider, model, effort}`, so the
-run starts the way any does: whatever answers a `using` runs it (@yaks/spawn for
-a command-line provider, in a checkout of its own). How each kind of item is
-handled is the persona's to say.
+of the project is at work, it writes one session, `helping{project}` and
+`native{}`, wearing the helper's persona. Its first input says whose place it
+takes and how to hand up, then each waiting item whole, as a listener would say
+it. The same write marks each item `notified`, `via` the helper. That input
+carries `using{provider, model, effort}`, and the native harness answers it:
+outside words (a letter anyone could send) reach a helper, so it runs isolated,
+with reads and `session_handup` in place of the box's shell and keys
+([@yaks/harness](../harness/README.md#sessions-outside-words-start)), never
+under an outside CLI. It carries no `spawned` link, so its ending is told by
+this rule and not delivered to the operator as a child's. How each kind of item
+is handled is the persona's to say.
 
 One helper is at work at a time, and it takes everything waiting, so a storm of
-bugs is one helper's batch. What arrives while it works waits for its `exit`,
-which asks again. Two workers that race to start one hold a waiting item in
+bugs is one helper's batch. What arrives while it works waits for its end, which
+asks again: a managed helper's `exit`, or a native one's transcript settling,
+failing or stopping. Two workers that race to start one hold a waiting item in
 common, and the guard on its `notified` lets one write through.
 
 A helper hands up what needs the operator's judgment or a person with
@@ -1013,13 +1017,14 @@ task assigned to them, not a hand-up. The same line from any other session is an
 ordinary knock at the operator, and so routine.
 
 Two more hand-ups are written for a helper, each naming what it had taken: a
-helper that exited with anything but 0, and one the next routine item asks to
-stop before starting another, because its transcript gained no entry for 5
-minutes (`QUIET`) or it was still going after 30 (`LIMIT`). That hand-up carries
-the helper's last words. A run that has said its last words can linger for good
-on a background command it started, and everything behind it would wait. A
-helper's own ending knocks nobody (`reported`), and a run it started that ends
-after it knocks the operator, where it is routine again.
+helper that exited with anything but 0 or whose transcript failed, and one the
+next routine item asks to stop before starting another, because its transcript
+gained no entry for 5 minutes (`QUIET`) or it was still going after 30
+(`LIMIT`). That hand-up carries the helper's last words. A run that has said its
+last words can linger for good on a background command it started, and
+everything behind it would wait. A helper's own ending knocks nobody
+(`reported`), and a run it started that ends after it knocks the operator, where
+it is routine again.
 
 A run's ending and a task's mark are routine to read, not to hear of. When a
 helper exits, each task it took a run's report or a mark for reaches the session

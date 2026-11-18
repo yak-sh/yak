@@ -54,6 +54,7 @@ import { watch } from './watch.ts'
 import { text } from './texted.ts'
 import { knock } from './woken.ts'
 import { help } from './help.ts'
+import { HELPING } from './routine.ts'
 import { completeCompact } from './compact_ask.ts'
 import { attemptState } from './attempt.ts'
 
@@ -139,6 +140,12 @@ let ended = async (g: Graph, session: Eid, r: Runner) => {
   await rouse(g, session)
   if (await currentStatus(g, session) == 'pending') return
   await r.ended?.(session)
+  // A native helper's ending is what a managed one's exit is to it.
+  if (
+    declared(g, 'session_help') && (await one(g, session, [HELPING]))?.[HELPING]
+  ) {
+    await help(g, session)
+  }
   if (g.vocab.comp('provisional')) {
     let owed = await g.read(
       line`.entry.session=${session}&.ask&.provisional`,
@@ -774,7 +781,9 @@ let release = async (g: Graph, e: Event, tx: ReadTx): Promise<void> => {
  * The code behind `session_run`, for a host's `./effects` facet: every
  * transcript write owes one leased step, where this host answers its provider.
  * The runner may still be on its way (a harness loading the providers its
- * config names); each run waits for it.
+ * config names); each run waits for it. `scope` gives the runner one
+ * transcript is answered with, for its steps, its background calls and its
+ * results alike (the harness's isolation of sessions outside words started).
  * Without a durable pool, a standalone consumer uses {@link settle}.
  *
  * ```ts
@@ -786,6 +795,10 @@ let release = async (g: Graph, e: Event, tx: ReadTx): Promise<void> => {
 export let running = (
   g: Graph,
   runner: Runner | Promise<Runner>,
+  scope: (session: Eid, runner: Runner) => Runner | Promise<Runner> = (
+    _session,
+    runner,
+  ) => runner,
 ): Handlers => {
   let pooled = !!g.vocab.comp('effect')
   let asyncTools = pooled && !!g.vocab.comp('tool_async')
@@ -793,11 +806,11 @@ export let running = (
   // A runner that never came fails each run that awaits it, and nothing else.
   ready.catch(() => {})
   let run: Handlers[string] = async (e, _tx, _write, attempt) => {
-    let r = await ready
     // Every transcript the event names is answered; a failure in one, a
     // request to ask again among them, is thrown once the others are.
     let thrown: unknown
     for (let session of await about(g, e)) {
+      let r = await scope(session, await ready)
       await (pooled
         ? advance(g, session, { ...r, attempt }, e.entity.eid)
         : answer(g, session, { ...r, attempt })).catch((err) => {
@@ -809,10 +822,11 @@ export let running = (
   // One background call, run by the tools runner's claim rather than the
   // session's lease.
   let tool = async (eid: string, attempt?: Attempt) => {
-    let r = await ready
     let [call] = await g.get([eid])
     let session = (call?.entry as Comp | undefined)?.session
-    if (!call?.tool_async || !session || !r.asyncTools) return
+    if (!call?.tool_async || !session) return
+    let r = await scope(String(session), await ready)
+    if (!r.asyncTools) return
     // The tool runner's claim, not the session's lease, serializes this call.
     // A restarted effect inspects uncertain execution instead of replaying it.
     let deps = {
@@ -873,10 +887,10 @@ export let running = (
     ...declared(g, 'session_result')
       ? {
         session_result: async (e: Event, _tx, _write, attempt) => {
-          let r = await ready
           let [ask] = await g.get([e.entity.eid])
           if (!ask?.ask || attemptState(ask) != 'inflight') return
           let session = String(comp(ask, 'entry')?.session)
+          let r = await scope(session, await ready)
           if (ask.notice) {
             let result = await r.model.result?.(ask.entity.eid)
             if (result) await completeCompact(g, ask, result)

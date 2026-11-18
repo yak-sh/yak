@@ -212,6 +212,7 @@ The host supplies these **sandbox limits** for the whole sandbox:
 | `limits.cpuQuota`  | Percentage of one CPU, mapped to `CPUQuota`; 50 is half one CPU |
 | `limits.memoryMax` | Maximum resident bytes, mapped to `MemoryMax`; swap is disabled |
 | `limits.tasksMax`  | Maximum processes and threads, mapped to `TasksMax`             |
+| `binds`            | More host paths, each bound read-only at the same guest path    |
 
 All commands and the detached supervisor share one systemd scope. Starting
 another command does not grant another quota. CPU quota must be finite and at

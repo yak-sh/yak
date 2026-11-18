@@ -214,6 +214,56 @@ spawn `cwd` under `worktrees`, attaches it through its workspace binding, and
 admits its instruction files and repository persona. Existing managed fixers
 keep their original runner; changing heal config does not migrate or stop them.
 
+### Sessions outside words start
+
+Anyone can write the words a fixer starts from (a tracker bug's title, stack and
+breadcrumbs) and the letters a project's helper takes. Such a session is
+**exposed** ([`isolated.ts`](./isolated.ts) `exposed`): it carries `fixer{bug}`
+or `helping{project}`, or descends from one through `spawned{parent}`. Each of
+its steps, background calls and results is answered with its own registry, in
+place of the host's tools, persona tool lists and MCP servers:
+
+- the machine tools over a sandbox of its own, holding a committed snapshot of
+  the configured source, without network, with no host home or keys;
+- `submit_patch`, which hands the sandbox's changes to a **lander**: a native
+  session of the host's own (`lands{from}`), wearing the same persona and taking
+  the task's claim, whose first input is the patch, to be read as untrusted
+  code, applied, landed and seen live. The sandbox is then disposed; a later
+  turn gets a fresh one;
+- the host tools the isolation names, by default reads (`graph_show`,
+  `graph_query`, `graph_schema`, `search`, `bug_show`) and `session_handup`.
+
+Its instructions are the runner's with a note on where it works. An exposed
+fixer gets no host checkout. The plugin's `isolation` option says what the
+sandbox is:
+
+```json
+{
+  "use": "@yaks/harness",
+  "with": {
+    "isolation": {
+      "dir": "/home/yaks/.yak/isolated",
+      "limits": { "cpuQuota": 200, "memoryMax": 4294967296, "tasksMax": 512 },
+      "binds": ["/home/linuxbrew", "/home/yaks/.cache/deno"],
+      "env": {
+        "PATH": "/usr/bin:/bin:/home/linuxbrew/.linuxbrew/bin",
+        "DENO_DIR": "/home/yaks/.cache/deno"
+      },
+      "source": "/home/yaks/code/tasks",
+      "setup": "deno install --cached-only",
+      "tools": ["graph_show", "graph_query", "search", "session_handup"]
+    }
+  }
+}
+```
+
+`dir`, `limits`, `binds` and `env` are the bubblewrap provider's
+([@yaks/sandbox](../sandbox/README.md#bubblewrap-sandboxes)); `binds` are
+read-only. `setup` runs in the sandbox after the snapshot is in place. Without
+`dir`, `limits` and `source`, an exposed session has the named host tools alone.
+A sandbox that cannot be built is reported, and exposed sessions keep those
+tools; no other session is affected.
+
 A graph-only model opening needs no workspace and does not borrow the server's
 current directory or filesystem. The local `yak session new` command defaults to
 the checkout where it was started, retaining a nested command directory
