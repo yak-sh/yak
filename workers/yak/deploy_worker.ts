@@ -21,6 +21,7 @@ import { caught } from './defects.ts'
 import { connectedEnv } from './connections.ts'
 import { scriptName } from './dispatch.ts'
 import { barred } from '@yaks/tunnel/hosted'
+import { retirementRequested } from './durable-retirement.ts'
 
 type Read = (path: string) => Promise<Uint8Array<ArrayBuffer> | null>
 
@@ -135,7 +136,7 @@ export let deployWorker = async (
   // answered none: never empty once something is up, since an empty worker
   // is a release that built none, and its pages ask for no worker at all
   // (dispatch.ts `called`).
-  worker = await upload(
+  let uploaded = await upload(
     env,
     target,
     modules,
@@ -143,7 +144,17 @@ export let deployWorker = async (
     bound,
     target == store ? undefined : scriptName(store),
     secrets,
-  ) || scriptName(target)
+  )
+  worker = uploaded.worker || scriptName(target)
+  let retirement = await retirementRequested(
+    env,
+    app,
+    scriptName(target),
+    uploaded,
+  ).catch((e) => {
+    caught(e, { request: 'retire durable storage', app: app.slug })
+    return null
+  })
   // An upload can finish after permanent deletion's script DELETE. Reconcile
   // that late effect while its ids are still in hand, before recording a release.
   if (!(await meta(env).query(line`.entity.eid=${app.eid}&.app`)).length) {
@@ -157,6 +168,7 @@ export let deployWorker = async (
   return {
     worker,
     ready: true,
+    retirement,
     lines: [
       ...report,
       ...idReport(config, bound),

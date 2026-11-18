@@ -48,6 +48,7 @@ import { declarationOf, keepDeclaration } from './declaration.ts'
 import type { Reload } from '@yaks/platform'
 import type { Rows } from './draft-merge.ts'
 import { configured, deployWorker } from './deploy_worker.ts'
+import { retirementLetter } from './durable-retirement.ts'
 import { type Config, sourceOf } from './wrangler_app.ts'
 import { compiled } from './esbuild.ts'
 import { bindingLines, boundOf } from './bindings.ts'
@@ -1867,6 +1868,15 @@ let published = async (
         caught(e, { tool: 'app_deploy', space: space.slug, app: app.slug })
       } catch { /* the release is already live */ }
     })
+  if ('retirement' in deployed && deployed.retirement) {
+    let letter = await after(() =>
+      retirementLetter(ctx.env, ctx.dir, space, deployed.retirement!)
+    )
+    ran += `\n${
+      letter ??
+        'The retired storage is kept. Its confirmation letter could not be sent yet.'
+    }`
+  }
   // The view that follows a release is the person opening what they changed:
   // its files are asked for once now, so that view finds them cached
   // (files.ts `warm`). And the store tells the pages open on it that a

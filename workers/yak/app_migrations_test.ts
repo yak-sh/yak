@@ -1,6 +1,10 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
-import { migrationMetadata } from './app_migrations.ts'
+import {
+  confirmedTag,
+  migrationMetadata,
+  retiredName,
+} from './app_migrations.ts'
 
 let history = [
   { tag: 'v1', new_sqlite_classes: ['Room'] },
@@ -15,7 +19,7 @@ test('app migrations: a first upload carries every step without config tags', ()
     steps: [
       { new_sqlite_classes: ['Room'] },
       { renamed_classes: [{ from: 'Room', to: 'Chat' }] },
-      { deleted_classes: ['Chat'] },
+      { renamed_classes: [{ from: 'Chat', to: retiredName('v3', 'Chat') }] },
     ],
   })
   assertEquals(history, before)
@@ -27,12 +31,34 @@ test('app migrations: only unapplied steps are sent on a redeploy', () => {
     new_tag: 'v3',
     steps: [
       { renamed_classes: [{ from: 'Room', to: 'Chat' }] },
-      { deleted_classes: ['Chat'] },
+      { renamed_classes: [{ from: 'Chat', to: retiredName('v3', 'Chat') }] },
     ],
   })
   assertEquals(migrationMetadata(history, 'v3'), undefined)
   assertEquals(migrationMetadata([]), undefined)
   assertEquals(migrationMetadata(undefined), undefined)
+})
+
+test('a retired class can be recreated without overwriting its saved namespace', () => {
+  let migrations = [
+    { tag: 'v1', new_sqlite_classes: ['Room'] },
+    { tag: 'v2', deleted_classes: ['Room'] },
+    { tag: 'v3', new_sqlite_classes: ['Room'] },
+  ]
+  assertEquals(migrationMetadata(migrations, 'v1'), {
+    old_tag: 'v1',
+    new_tag: 'v3',
+    steps: [
+      { renamed_classes: [{ from: 'Room', to: retiredName('v2', 'Room') }] },
+      { new_sqlite_classes: ['Room'] },
+    ],
+  })
+  let confirmed = confirmedTag('v2', 'a0000000-0000-4000-8000-000000000001')
+  assertEquals(migrationMetadata(migrations, confirmed), {
+    old_tag: confirmed,
+    new_tag: 'v3',
+    steps: [{ new_sqlite_classes: ['Room'] }],
+  })
 })
 
 test('app migrations: unknown deployed history is refused before replay', () => {

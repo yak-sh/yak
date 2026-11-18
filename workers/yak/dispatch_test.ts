@@ -1145,11 +1145,11 @@ test('an upload sends the shim and app without a kernel binding', async () => {
         },
       ]),
   )
-  assertEquals(calls.length, 1)
-  assertEquals(calls[0].method, 'PUT')
-  assertEquals(calls[0].url, `${AT}/jeff_recipes`)
-  assertEquals(calls[0].auth, 'Bearer a-token')
-  let form = calls[0].body as FormData
+  assertEquals(calls.length, 2)
+  assertEquals(calls[1].method, 'PUT')
+  assertEquals(calls[1].url, `${AT}/jeff_recipes`)
+  assertEquals(calls[1].auth, 'Bearer a-token')
+  let form = calls[1].body as FormData
   let meta = JSON.parse(await (form.get('metadata') as File).text())
   // The entry is ours, and the app's own module rides beside it.
   assertEquals(meta.main_module, '__yak_entry.js')
@@ -1214,12 +1214,14 @@ test('no script yet is nowhere to bind, and a removal names one', async () => {
 // Cloudflare refusing the upload with `message`: the error upload throws.
 let refusedWith = (message: string) =>
   recorded(
-    () =>
-      Response.json({
-        success: false,
-        errors: [{ code: 10021, message }],
-        result: null,
-      }, { status: 400 }),
+    (req) =>
+      req.method == 'GET'
+        ? new Response(null, { status: 404 })
+        : Response.json({
+          success: false,
+          errors: [{ code: 10021, message }],
+          result: null,
+        }, { status: 400 }),
     () =>
       upload(api, 'jeff/recipes', [
         { name: 'worker.js', bytes: source('export default {') },
@@ -1338,7 +1340,7 @@ test('a wasm module goes up as a module part of its own type', async () => {
         await carried(filesOf({ 'worker.js': APP, 'add.wasm': WASM })),
       ),
   )
-  let form = calls[0].body as FormData
+  let form = calls.at(-1)!.body as FormData
   let meta = JSON.parse(await (form.get('metadata') as File).text())
   assertEquals(meta.main_module, '__yak_entry.js')
   // Every part named by the module name that imports it, and typed by what

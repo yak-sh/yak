@@ -70,6 +70,12 @@ import { WORKER } from '@yaks/platform/files'
 import { refuse, rejected } from './tool.ts'
 import { caught, refused, reported } from './defects.ts'
 import { modules } from '@yaks/esbuild'
+import {
+  archived,
+  type Retirement,
+  retirementExports,
+  retirements,
+} from './app_migrations.ts'
 
 // The namespace the account holds (`wrangler dispatch-namespace create
 // yak-apps`), named here as well as in wrangler.toml because the upload
@@ -1020,22 +1026,32 @@ export let upload = async (
     names.add(name)
   }
   let tag: string | undefined
-  if (config.migrations?.length && !durableOwner) {
+  let archives: string[] = []
+  if (!durableOwner) {
     let r = await sent(env, `/${scriptName(store)}`, { method: 'GET' })
     if (r.status == 404) await r.body?.cancel()
     else {
       let details = await answered(r) as {
-        script?: { migration_tag?: string }
+        script?: { migration_tag?: string; named_handlers?: { name: string }[] }
       }
       tag = details?.script?.migration_tag
+      archives = archived(details?.script ?? {})
     }
   }
+  let settings = metadata(config, bound, tag, durableOwner, secrets)
+  let planned = new Set(retirements(config.migrations).map((r) => r.to))
+  let retired: Retirement[] =
+    settings.migrations?.steps.flatMap((step) =>
+      (step.renamed_classes as Retirement[] ?? []).filter((r) =>
+        planned.has(r.to)
+      )
+    ) ?? []
   let body = new FormData()
   body.append(
     'metadata',
     new Blob([
       JSON.stringify({
-        ...metadata(config, bound, tag, durableOwner, secrets),
+        ...settings,
         // Born wearing this release's wrapper, so rewrap.ts passes it by.
         tags: [WRAP],
       }),
@@ -1050,9 +1066,16 @@ export let upload = async (
     type: string,
   ) => body.append(name, new Blob([bytes], { type }), name)
   let tunneled = (config.vpc_services ?? []).map((v) => v.binding)
-  part(WRAPPER, shim(config.main, tunneled, config.ai?.binding), ESM)
+  part(
+    WRAPPER,
+    shim(config.main, tunneled, config.ai?.binding) +
+      retirementExports([
+        ...new Set([...archives, ...retired.map((r) => r.to)]),
+      ]),
+    ESM,
+  )
   for (let m of modules) part(m.name, m.bytes, moduleType(m.name))
-  return named(
+  let worker = named(
     await answered(
       await sent(env, `/${scriptName(store)}`, {
         method: 'PUT',
@@ -1062,6 +1085,12 @@ export let upload = async (
       throw unloaded(modules, e)
     }),
   )
+  return {
+    worker,
+    retired,
+    archives: [...new Set([...archives, ...retired.map((r) => r.to)])],
+    tag: settings.migrations?.new_tag ?? tag,
+  }
 }
 
 // Cloudflare refuses a script that fails as it loads (a syntax error, an

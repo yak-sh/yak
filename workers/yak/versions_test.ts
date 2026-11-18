@@ -402,6 +402,9 @@ test('the worker a rollback put back is the source uploaded', async () => {
   let sent: FormData | null = null
   let was = globalThis.fetch
   globalThis.fetch = (async (input: string | Request, init?: RequestInit) => {
+    if ((init?.method ?? 'GET') == 'GET') {
+      return new Response(null, { status: 404 })
+    }
     sent = await new Request(input as string, init).formData()
     return Response.json({
       success: true,
@@ -419,7 +422,7 @@ test('the worker a rollback put back is the source uploaded', async () => {
     )
     // And what the deploy records beside its manifest: Cloudflare's own name
     // for the release.
-    assertEquals(version, 'dep-7')
+    assertEquals(version.worker, 'dep-7')
   } finally {
     globalThis.fetch = was
   }

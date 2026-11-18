@@ -364,6 +364,14 @@ export let allowlist = (value: unknown): Parsed => {
       config.migrations = value.migrations
       let tags = new Set<string>()
       for (let [i, migration] of value.migrations.entries()) {
+        if (
+          'deleted_classes' in migration && !strings(migration.deleted_classes)
+        ) {
+          no(
+            `migrations[${i}].deleted_classes`,
+            'expected an array of class names',
+          )
+        }
         if (typeof migration.tag != 'string' || !migration.tag.trim()) {
           no(`migrations[${i}].tag`, 'expected a nonempty migration tag')
         } else if (tags.has(migration.tag)) {

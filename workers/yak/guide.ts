@@ -291,8 +291,14 @@ vectorize, vpc_services and ai. D1 databases, R2 buckets and Vectorize indexes b
 are created at deploy; a new Vectorize index names dimensions and metric, or a
 preset. app_deploy reports unsupported settings and names the bindings, and
 so does app_list(app). Removing a binding keeps its resource and data until
-the app is permanently deleted, including its 30 days in the trash. vpc_services
-({binding}) reaches the paths the space owner opened on a machine the space has
+the app is permanently deleted, including its 30 days in the trash.
+
+Durable Object deleted_classes migrations keep the retiring class's storage
+under a separate class name, so a new class may reuse the old name. Erasing
+that retired storage needs the space owner's confirmation on the page sent
+to their email; the deploy itself goes ahead.
+
+vpc_services ({binding}) reaches the paths the space owner opened on a machine the space has
 a tunnel to, as env.BINDING.fetch(url); an installed app, or a space with no
 tunnel, is refused it. ai ({binding}) gives the worker env.BINDING.run(model,
 input), the models the space's budget pays for (page models), never the

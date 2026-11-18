@@ -848,27 +848,27 @@ The complete list of reserved names:
     compat completed connection contains content conversation cost counted
     created credit credit_block delegates delete_upload deliver delivered
     demo deploy desk_sidebar dispatch doc document_extract document_page
-    document_text draft draft_rows edge effect email entity entry error
-    event exception execution failed favorite featured fee feed feedback
-    file filed finding fired form form_guest form_mail form_phone form_post
-    former gallery gitobj grant grants_listed heard heard_turn hearing held
-    home hook hostname image inference install installed integration
-    integration_install interrupted invite inviting key last_deploy lease
-    lent lines mail mail_answered mail_dismissed mail_domain mail_post
-    mail_task mcp_list mcp_server member memory mentions meter miss model
-    model_reservation model_result newcomer newcomer_builds notice
-    notice_confirmed notice_letter notice_posted notice_subscription
-    notified notify_deaths notify_trash oauth_grant occupancy occurrence
-    offer openai opened openrouter operator operator_alerts operator_reach
-    order output output_of own_number parent pending person persona phone
-    phone_line plan preview price product project provider provisional
-    public_file published push_subscription quarantined question questions
-    rating reads recalled recipient ref referenced refund_failed
-    refund_request refund_retry refund_sale refund_sent refusal
-    refusal_report register_writes registration release_remake report
-    report_refusals repository representation requires restored result
-    retired revision rtc rtc_lapse sale_access sale_artifact satisfies
-    screen screenshot secret seeded seller sender sending serves
+    document_text draft draft_rows durable_retirement edge effect email
+    entity entry error event exception execution failed favorite featured
+    fee feed feedback file filed finding fired form form_guest form_mail
+    form_phone form_post former gallery gitobj grant grants_listed heard
+    heard_turn hearing held home hook hostname image inference install
+    installed integration integration_install interrupted invite inviting
+    key last_deploy lease lent lines mail mail_answered mail_dismissed
+    mail_domain mail_post mail_task mcp_list mcp_server member memory
+    mentions meter miss model model_reservation model_result newcomer
+    newcomer_builds notice notice_confirmed notice_letter notice_posted
+    notice_subscription notified notify_deaths notify_trash oauth_grant
+    occupancy occurrence offer openai opened openrouter operator
+    operator_alerts operator_reach order output output_of own_number parent
+    pending person persona phone phone_line plan preview price product
+    project provider provisional public_file published push_subscription
+    quarantined question questions rating reads recalled recipient ref
+    referenced refund_failed refund_request refund_retry refund_sale
+    refund_sent refusal refusal_report register_writes registration
+    release_remake report report_refusals repository representation requires
+    restored result retired revision rtc rtc_lapse sale_access sale_artifact
+    satisfies screen screenshot secret seeded seller sender sending serves
     service_checkout service_quote session session_input session_result
     session_run sessions_ended sfu shared signed_in signin skill sms_consent
     space space_logo speech_hear spend staged started starter stop

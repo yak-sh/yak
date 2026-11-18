@@ -1,5 +1,6 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertRejects } from '@std/assert'
+import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
+import { retiredName } from './app_migrations.ts'
 import {
   carried,
   drop,
@@ -36,6 +37,9 @@ test('staging app workers and their secrets stay in their own namespace', async 
       '/client/v4/accounts/acct/workers/dispatch/namespaces/yak-apps-staging',
     )
     methods.push(req.method)
+    if (req.method == 'GET' && !path.endsWith('/secrets')) {
+      return new Response(null, { status: 404 })
+    }
     if (req.method == 'PUT' && !path.endsWith('/secrets')) {
       let body = await req.formData()
       let sent = JSON.parse(await (body.get('metadata') as File).text())
@@ -49,7 +53,65 @@ test('staging app workers and their secrets stay in their own namespace', async 
     await secrets(staged, 'app.abc123')
     await dropSecret(staged, 'app.abc123', 'TOKEN')
     await drop(staged, 'app.abc123')
-    assertEquals(methods, ['PUT', 'PUT', 'GET', 'DELETE', 'DELETE'])
+    assertEquals(methods, ['GET', 'PUT', 'PUT', 'GET', 'DELETE', 'DELETE'])
+  } finally {
+    globalThis.fetch = was
+  }
+})
+
+test('uploads retain old namespaces while allowing the same class name again', async () => {
+  let was = globalThis.fetch
+  let saved = retiredName('v2', 'Room')
+  let current = 'v1'
+  let retained: string[] = []
+  let sent: Record<string, unknown>[] = []
+  globalThis.fetch = (async (_input: string | Request, init?: RequestInit) => {
+    if (init?.method == 'GET') {
+      return Response.json({
+        success: true,
+        result: {
+          script: {
+            migration_tag: current,
+            named_handlers: retained.map((name) => ({
+              name,
+              handlers: ['class'],
+            })),
+          },
+        },
+      })
+    }
+    let form = init!.body as FormData
+    let metadata = JSON.parse(await (form.get('metadata') as File).text())
+    sent.push(metadata)
+    let wrapper = await (form.get('__yak_entry.js') as File).text()
+    assertStringIncludes(wrapper, `export class ${saved}`)
+    current = metadata.migrations?.new_tag ?? current
+    retained = [saved]
+    return Response.json({
+      success: true,
+      result: { version_id: 'new-release' },
+    })
+  }) as typeof fetch
+  try {
+    let retired = await upload(env, 'app', modules, {
+      migrations: [
+        { tag: 'v1', new_sqlite_classes: ['Room'] },
+        { tag: 'v2', deleted_classes: ['Room'] },
+        { tag: 'v3', new_sqlite_classes: ['Room'] },
+      ],
+    })
+    assertEquals(retired.retired, [{ from: 'Room', to: saved }])
+    assertEquals(sent[0].migrations, {
+      old_tag: 'v1',
+      new_tag: 'v3',
+      steps: [
+        { renamed_classes: [{ from: 'Room', to: saved }] },
+        { new_sqlite_classes: ['Room'] },
+      ],
+    })
+    // Removing migration history and the original code never drops the held class.
+    await upload(env, 'app', modules)
+    assertEquals(sent[1].migrations, undefined)
   } finally {
     globalThis.fetch = was
   }
@@ -92,7 +154,7 @@ test('upload sends only migrations after the dispatch script tag', async () => {
         await assertRejects(run, Error, 'keep previously applied tags')
         assertEquals(methods, ['GET'])
       } else {
-        assertEquals(await run(), 'release')
+        assertEquals((await run()).worker, 'release')
         assertEquals(methods, ['GET', 'PUT'])
         assertEquals(
           sent.migrations,

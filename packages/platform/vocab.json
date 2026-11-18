@@ -1132,6 +1132,39 @@
         }
       },
       "wire": false
+    },
+    "durable_retirement": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "A request to permanently erase retired Durable Object namespaces, awaiting the space owner on the shared confirmation page. The class names and remote migration tag are the immutable intent.",
+      "properties": {
+        "app": {
+          "type": "string",
+          "ref": "app",
+          "death": "cascade"
+        },
+        "script": {
+          "type": "string"
+        },
+        "tag": {
+          "type": "string"
+        },
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "kinds": {

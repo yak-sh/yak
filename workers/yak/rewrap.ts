@@ -34,6 +34,7 @@ import { caught } from './defects.ts'
 import type { Env } from './env.ts'
 import type { Bundle } from '@yaks/graph'
 import { sleep } from '@yaks/fp'
+import { retirementExports } from './app_migrations.ts'
 
 /** The directory's wrap row, and the daily pass it is seeded with. */
 export let ROW = 'yak-wrap'
@@ -94,7 +95,7 @@ export let parts = (
 }
 
 // The script's modules as Cloudflare holds them.
-let held = async (
+export let held = async (
   env: Env,
   name: string,
   wait: (ms: number) => Promise<void>,
@@ -107,7 +108,7 @@ let held = async (
   return parts(new Uint8Array(await r.arrayBuffer()), boundary)
 }
 
-let tags = async (
+export let tags = async (
   env: Env,
   name: string,
   wait: (ms: number) => Promise<void>,
@@ -121,7 +122,7 @@ type Settings = Record<string, unknown> & {
 // `inherit` keeps the binding itself, including secret values and provisioned
 // namespaces, without reading or reconstructing it. The settings response's
 // reconciliation report is read-only, and tags are read again before upload.
-let retained = (held: Settings) => {
+export let retained = (held: Settings) => {
   let {
     bindings = [],
     exports_reconciliation: _report,
@@ -168,7 +169,13 @@ export let rewrap = async (
       type: 'application/json',
     }),
   )
-  part(WRAPPER, shim(was.main, was.tunneled, was.ai))
+  let archives = DEC.decode(entry!.bytes).match(/YakRetired_[0-9a-f]{64}/g) ??
+    []
+  part(
+    WRAPPER,
+    shim(was.main, was.tunneled, was.ai) +
+      retirementExports([...new Set(archives)]),
+  )
   for (let m of modules) if (m.name != WRAPPER) part(m.name, m.bytes)
   await answered(
     await sent(env, `/${name}`, { method: 'PUT', body }, wait),

@@ -190,6 +190,10 @@ test('app config: wrong shapes refuse before provisioning or uploading', () => {
     [{ migrations: [{}] }, 'migrations[0].tag'],
     [{ migrations: [{ tag: '' }] }, 'migrations[0].tag'],
     [{ migrations: [{ tag: 'v1' }, { tag: 'v1' }] }, 'migrations[1].tag'],
+    ...[null, 'Room', {}, [7]].map<[unknown, string]>((deleted_classes) => [
+      { migrations: [{ tag: 'v1', deleted_classes }] },
+      'migrations[0].deleted_classes',
+    ]),
     [{ triggers: null }, 'triggers'],
   ]
   for (let [value, path] of cases) {
