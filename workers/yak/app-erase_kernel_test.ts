@@ -1,7 +1,8 @@
 // Erasing an app before its thirty days are up, through the whole kernel:
 // two steps, and an agent takes at most the first. app_delete trashes,
 // app_erase only mails the owner, and the owner's press on the letter's page
-// is what erases (erase.ts `appTicket`, identity.ts `erasing`).
+// is what erases (confirm.ts, erase.ts `trashedApp`, identity.ts
+// `confirming`).
 
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { test, until } from '@yaks/testing'
@@ -31,7 +32,7 @@ test('an app is erased only by its owner from the letter an agent asked for', as
       'is in the trash',
     )
     let said = await agent.tool('app_erase', { space: slug, app: eid })
-    assertStringIncludes(said, 'nothing is erased')
+    assertStringIncludes(said, 'nothing has happened yet')
     assertStringIncludes(said, 'check their email')
     assert(await row(), 'the ask erased the app')
 
@@ -40,7 +41,7 @@ test('an app is erased only by its owner from the letter an agent asked for', as
       { timeout: 20_000, poll: 100, label: 'the erase letter' },
     )
     let link =
-      /https:\/\/yaks\.app(\/space\/[\w-]+\/apps\/[\w-]+\/erase\?t=\S+)/
+      /https:\/\/yaks\.app(\/space\/[\w-]+\/confirm\/app\/[\w-]+\?t=\S+)/
         .exec(mail!.body)
     assert(link, `no confirmation link in: ${mail!.body}`)
     let page = link[1]
@@ -69,7 +70,7 @@ test('an app is erased only by its owner from the letter an agent asked for', as
 
     // Their press erases it.
     let form = (fields: Record<string, string>) =>
-      k.at('yaks.app', `/space/${slug}/apps/${eid}/erase`, {
+      k.at('yaks.app', `/space/${slug}/confirm/app/${eid}`, {
         method: 'POST',
         headers: {
           cookie: them.cookie,

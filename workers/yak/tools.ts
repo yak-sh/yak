@@ -167,9 +167,6 @@ import { appEntry, commandLine, tooLong } from './standing.ts'
 import { listable } from './shelf.ts'
 import { meta } from './meta.ts'
 import {
-  appDoor,
-  appLetter,
-  appTicket,
   doomed,
   door,
   keeping,
@@ -180,8 +177,8 @@ import {
   refused,
   ticket,
   trash,
+  trashedApp,
   trashSpace,
-  unmade,
   untrash,
   untrashSpace,
 } from './erase.ts'
@@ -257,6 +254,7 @@ import {
   valueOf,
 } from './support.ts'
 import { mail } from './mail.ts'
+import { requested } from './confirm.ts'
 import { NARROW, PAGES, uriOf, whole } from './guide.ts'
 import { asset, EITHER, NO_ARGS, PUBLIC, publics, what } from './preauth.ts'
 import { BUDGET, paid, seconds, spending, workbench } from './sandbox.ts'
@@ -5749,8 +5747,8 @@ let OURS: Row[] = [
   {
     // The second of the two steps that erase an app before its thirty days
     // are up, and an agent's part in it is only to ask: the space's owner is
-    // mailed a link, and the erase is their press on that page (erase.ts
-    // `appTicket`, identity.ts `erasing`).
+    // mailed a link, and the erase is their press on that page (confirm.ts,
+    // erase.ts `trashedApp`).
     name: 'app_erase',
     destructive: false,
     input: {
@@ -5767,28 +5765,19 @@ let OURS: Row[] = [
             'only from the trash: app_delete puts it there first',
         )
       }
-      if (!ctx.env.SESSION_SECRET) {
-        throw new Error('the platform cannot sign a confirmation link here')
-      }
-      // The owner's own address, never one the agent named.
-      let to = await ctx.dir.emailAt(ctx.person)
-      if (!to) throw refuse('missing', 'we have no address to write to you at')
-      let link = appDoor(
-        space.slug,
-        app.eid,
-        await appTicket(space, app, ctx.person, ctx.env.SESSION_SECRET),
-        ctx.env,
-      )
-      await mail(ctx.env)({ to, ...appLetter(space, app, link, ctx.env) })
       return {
-        text: `nothing is erased. ${space.slug}/${app.slug} is still in the ` +
-          `trash, ${daysLeft(app.trashed)} days left, and app_restore(app: ` +
-          `'${app.eid}') still brings it back. An assistant cannot erase an ` +
-          'app: a letter is on its way to the address they sign in with, ' +
-          'carrying a link that does it. It lasts an hour, and opening it ' +
-          'asks them once more. Tell them to check their email. What it ' +
-          'would destroy:\n' +
-          unmade(space, app, ctx.env).map((l) => `  - ${l}`).join('\n'),
+        text: `${space.slug}/${app.slug}: ` +
+          await requested(
+            ctx.env,
+            ctx.dir,
+            space,
+            ctx.person,
+            trashedApp,
+            app.eid,
+            app,
+          ) +
+          `\napp_restore(app: '${app.eid}') still brings it back until they ` +
+          'press it.',
         space,
       }
     },

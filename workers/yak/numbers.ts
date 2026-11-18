@@ -15,7 +15,8 @@
 import { type Numbers, shown, type TollFree } from '@yaks/phone'
 import { ModelError } from '@yaks/model'
 import { next } from '@yaks/wake'
-import type { App, PhoneLine, Space } from './directory.ts'
+import type { App, Directory, PhoneLine, Space } from './directory.ts'
+import { type Kind, requested } from './confirm.ts'
 import { stamp } from './directory.ts'
 import type { Env } from './env.ts'
 import { onHold } from './model-spend.ts'
@@ -90,16 +91,41 @@ let heldBy = async (ctx: Ctx, space: Space, args: Args) => {
 }
 
 // Where a number texts from: the space, one of its apps, or nowhere yet.
-let wearer = async (ctx: Ctx, number: string) =>
-  await ctx.dir.textSpace(number) ?? (await ctx.dir.lined(number))?.app ?? null
+let wearer = async (dir: Directory, number: string) =>
+  await dir.textSpace(number) ?? (await dir.lined(number))?.app ?? null
 
-let unworn = async (ctx: Ctx, number: string) => {
-  let on = await wearer(ctx, number)
+let unworn = async (env: Env, dir: Directory, number: string) => {
+  let on = await wearer(dir, number)
   if (on) {
-    await stamp(ctx.env, {
+    await stamp(env, {
       entities: [{ entity: { eid: on.eid }, phone: null }],
     })
   }
+}
+
+// Releasing a number, as its space's owner confirms it (confirm.ts): the
+// provider may never sell it back, so number_release only asks.
+export let heldNumber: Kind<PhoneLine> = {
+  kind: 'number',
+  find: async (dir, space, eid) =>
+    (await dir.lines(space)).find((l) => l.eid == eid) ?? null,
+  typed: (l) => l.number,
+  title: (l) => `Release ${shown(l.number)}?`,
+  until: () =>
+    'The number is still yours: texts to it still arrive, and it costs ' +
+    'what it did.',
+  lines: (_space, l) => [
+    `${shown(l.number)}, given back to the phone company, which may never ` +
+    'sell it to you again',
+    'every text sent to it from then on',
+  ],
+  press: (l) => `Release ${shown(l.number)}`,
+  act: async (env, dir, _space, l) => {
+    await unworn(env, dir, l.number)
+    await released(env, l)
+    return `${shown(l.number)} is released: it costs nothing from now on, ` +
+      'and texts to it no longer arrive.'
+  },
 }
 
 let where = (space: Space, apps: App[], number: string) => {
@@ -332,7 +358,7 @@ export let numberTools: Row[] = [
         app = apps.find((a) => a.slug == slug)
         if (!app) throw await noApp(ctx, space, slug, apps)
       }
-      await unworn(ctx, line.number)
+      await unworn(ctx.env, ctx.dir, line.number)
       await stamp(ctx.env, {
         entities: [
           app ? { entity: { eid: app.eid }, phone: { number: line.number } } : {
@@ -352,9 +378,10 @@ export let numberTools: Row[] = [
     },
   },
   {
+    // The provider may never sell a released number back, so the agent
+    // only asks, and the owner's press releases it (`heldNumber`).
     name: 'number_release',
-    destructive: true,
-    openWorld: true,
+    destructive: false,
     input: {
       type: 'object',
       properties: { space: SPACE, number: NUMBER },
@@ -363,12 +390,16 @@ export let numberTools: Row[] = [
     run: async (ctx, args) => {
       let { space } = await owns(ctx, args)
       let line = await heldBy(ctx, space, args)
-      await released(ctx.env, line)
-      await unworn(ctx, line.number)
       return {
-        text: `Released ${shown(line.number)}: it costs nothing from now on, ` +
-          'and texts to it no longer arrive. A released number cannot be ' +
-          'bought back for certain.',
+        text: await requested(
+          ctx.env,
+          ctx.dir,
+          space,
+          ctx.person,
+          heldNumber,
+          line.eid,
+          line,
+        ),
         space,
       }
     },

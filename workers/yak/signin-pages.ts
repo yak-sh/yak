@@ -368,10 +368,15 @@ export let askDelete = (at: {
 // Erasing one app from the trash (identity.ts `erasing`): the page the
 // letter's link opens. One button with the ticket, the app's slug typed back
 // without one, and no form at all when it cannot happen (`stop`).
-export let askErase = (at: {
-  slug: string
-  app: string
-  name: string
+// An act only a person may confirm (confirm.ts, identity.ts `confirming`):
+// what it destroys, where things stand until they press, and the press, with
+// the letter's ticket held or the target's name to type back.
+export let askConfirm = (at: {
+  action: string
+  title: string
+  until: string
+  typed: string
+  press: string
   lines: string[]
   token?: string | null
   stop?: string
@@ -381,10 +386,10 @@ export let askErase = (at: {
   page(
     env,
     {
-      title: `Erase ${at.name} for good?`,
+      title: at.title,
       lead: at.stop ?? at.why ??
-        'This cannot be undone, and nothing is kept. Until you press the ' +
-          'button it stays in the trash, where it can be restored.',
+        `This cannot be undone. ${at.until} Nothing changes until you press ` +
+          'the button.',
       status: at.status ?? 200,
     },
     at.lines.length
@@ -402,18 +407,14 @@ export let askErase = (at: {
     at.stop ? null : [
       h(
         'form',
-        {
-          class: 'Page_Form',
-          method: 'post',
-          action: `/space/${at.slug}/apps/${at.app}/erase`,
-        },
+        { class: 'Page_Form', method: 'post', action: at.action },
         held('t', at.token),
         at.token ? null : [
           h(
             Form.Label,
             { for: 'confirm' },
             'Type ',
-            h('b', null, at.name),
+            h('b', null, at.typed),
             ' to confirm',
           ),
           h(Field, {
@@ -424,7 +425,7 @@ export let askErase = (at: {
             autofocus: true,
           }),
         ],
-        send(`Erase ${at.name} forever`),
+        send(at.press),
       ),
       h(
         'p',
@@ -434,6 +435,10 @@ export let askErase = (at: {
     ],
     home(env),
   )
+
+// And after an act a person confirmed: what was done.
+export let acted = (said: string, env: Host = {}) =>
+  page(env, { title: "That's done.", lead: said }, home(env))
 
 // And after: what went, and the one thing worth knowing next — the address
 // belongs to nobody now, theirs to take again or somebody else's to take

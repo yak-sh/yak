@@ -4,7 +4,9 @@ import { ownedPrefix } from './file-root.ts'
 // trash (T-34430, T-34431, the bottom of this file) and are erased by the
 // same daily sweep; a space still dies behind a link in a letter (T-33166,
 // everything above it), because it is the owner's act and never an agent's,
-// and `forever` is what skips the trash at that door. One file because there
+// and `forever` is what skips the trash at that door. An app in the trash is
+// erased sooner only by its owner's press at the door every such act shares
+// (confirm.ts, `trashedApp` below). One file because there
 // is one erase — `emptied` empties an app's storage, and whether it is called
 // by the space's death, by the sweep, or by a person who said `forever`, it
 // is the same act.
@@ -80,6 +82,7 @@ import { MORE } from './wake.ts'
 import { type Given, lapsed, VISITS, visits } from '@yaks/platform/visits'
 import { ledgerOf } from './visit.ts'
 import { opened, seal } from './lib/token.ts'
+import { type Kind, LIFE } from './confirm.ts'
 import { wiped } from './build-door.ts'
 import { reachChanged, toolsOf, viewsMoved } from './declared.ts'
 import {
@@ -136,12 +139,8 @@ import {
   whole,
 } from '@yaks/query'
 
-// An hour to walk over to the inbox and read the letter. Longer than a
-// sign-in code's ten minutes, because nobody is standing at the form waiting
-// for this one, and short enough that a link left in a mailbox stops being a
-// live wire the same day. Unconfirmed, it simply lapses: nothing was written
-// when it was minted, so nothing has to be swept when it dies.
-export let LIFE = 60 * 60_000
+// A space's ticket lives as long as every confirmation's (confirm.ts).
+export { LIFE }
 
 // What the letter carries: the space, the person it was mailed to, the unix
 // second it dies, and whether the button under it trashes or erases. The kernel signs
@@ -189,91 +188,37 @@ export let door = (slug: string, token?: string, env: HostEnv = {}) =>
   `https://${apex(env)}/space/${slug}/delete` +
   (token ? `?t=${encodeURIComponent(token)}` : '')
 
-// Erasing one app from the trash before its thirty days are up. Two steps,
-// and an agent takes at most the first: app_delete puts it in the trash, and
-// app_erase mails the space's owner a letter whose link opens the page that
-// erases it, signed in, on their press (identity.ts `erasing`). The ticket
-// names the app by eid, because a trashed app's slug may already be another
-// app's.
-export type AppTicket = {
-  space: string
-  app: string
-  person: string
-  exp: number
+// Erasing one app from the trash before its thirty days are up, as a person
+// confirms it (confirm.ts). Two steps, and an agent takes at most the first:
+// app_delete puts it in the trash, and app_erase asks. The door names the app
+// by eid, because a trashed app's slug may already be another app's.
+export let trashedApp: Kind<App> = {
+  kind: 'app',
+  find: async (dir, space, eid) => {
+    let found = await dir.binned(space, eid)
+    return found?.space == space.eid ? found : null
+  },
+  typed: (a) => a.slug,
+  title: (a) => `Erase ${a.title || a.slug} for good?`,
+  until: (a) =>
+    `It is in the trash, where it stays for ${
+      a.trashed ? daysLeft(a.trashed) : 30
+    } more days and can be restored.`,
+  stop: (a) =>
+    a.trashed ? '' : `${a.slug} is not in the trash. An app is erased only ` +
+      'from the trash: delete it first, and it waits there for 30 days.',
+  lines: (space, a, env) => [
+    `${a.title || a.slug} (${a.slug}), from ${space.slug}.${apex(env)}'s trash`,
+    'its files, its versions and everything it saved',
+  ],
+  press: (a) => `Erase ${a.slug} forever`,
+  act: async (env, dir, space, a, who) => {
+    let files = await erased(env, dir, space, a, who)
+    return `${a.slug} is erased from ${space.slug}'s trash: ${files} ${
+      files == 1 ? 'file' : 'files'
+    } and everything it saved.`
+  },
 }
-
-export let appTicket = (
-  space: Space,
-  app: App,
-  person: string,
-  secret: string,
-) =>
-  seal(
-    'erase-app',
-    {
-      space: space.eid,
-      app: app.eid,
-      person,
-      exp: Math.floor((Date.now() + LIFE) / 1000),
-    } satisfies AppTicket,
-    secret,
-  )
-
-export let appTicketed = async (
-  token: string,
-  secret: string,
-  now = Date.now(),
-): Promise<AppTicket | null> => {
-  let t = await opened<AppTicket>('erase-app', token, secret)
-  return t && typeof t.space == 'string' && typeof t.app == 'string' &&
-      typeof t.person == 'string' && typeof t.exp == 'number' &&
-      t.exp * 1000 > now
-    ? { space: t.space, app: t.app, person: t.person, exp: t.exp }
-    : null
-}
-
-export let appDoor = (
-  slug: string,
-  app: string,
-  token?: string,
-  env: HostEnv = {},
-) =>
-  `https://${apex(env)}/space/${slug}/apps/${app}/erase` +
-  (token ? `?t=${encodeURIComponent(token)}` : '')
-
-// What erasing a trashed app destroys, in the words the letter and the page
-// both say.
-export let unmade = (space: Space, app: App, env: HostEnv = {}) => [
-  `${app.title || app.slug} (${app.slug}), from ${space.slug}.${
-    apex(env)
-  }'s trash`,
-  'its files, its versions and everything it saved',
-]
-
-export let appLetter = (
-  space: Space,
-  app: App,
-  link: string,
-  env: HostEnv = {},
-) => ({
-  subject: `Erase ${app.title || app.slug} for good?`,
-  body: `Your assistant asked to erase ${
-    app.title || app.slug
-  } from ${space.slug}.${apex(env)}'s trash for good.
-
-Nothing has happened yet. It is in the trash, where it stays for ${
-    app.trashed ? daysLeft(app.trashed) : 30
-  } more days and can be restored. Nothing is erased unless you open this
-link, and it only works for the next hour:
-
-${link}
-
-It cannot be undone. It destroys:
-
-${unmade(space, app, env).map((l) => `  - ${l}`).join('\n')}
-
-If you did not ask for this, ignore this letter and nothing happens at all.`,
-})
 
 // Everything one space's death takes with it, read before anything moves —
 // the census the letter and the page both name, and the list the act itself

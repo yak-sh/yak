@@ -686,13 +686,13 @@ export let WORDS: Record<string, Words> = {
       "Put a number the space holds on the space, so its Operator texts from it and texts to it reach the Operator, or on one of its apps (app), so the app's texts go from it and replies reach the app's store. It moves off wherever it was before. Texts still go only to people who agreed to them. Only the space owner may assign.",
   },
   'number_release': {
-    'title': 'Release a phone number',
+    'title': 'Ask to release a phone number',
     'step': {
-      'doing': 'Releasing %{number}…',
-      'done': 'Released %{number}',
+      'doing': 'Asking to release %{number}…',
+      'done': 'Asked to release %{number}',
     },
     'description':
-      "Give a number back to the provider: it stops costing anything, texts to it stop arriving, and whatever texted from it goes back to texting from yaks.app's number. It cannot be bought back for certain, so confirm with the person first. Only the space owner may release.",
+      "Ask for a number to be given back to the provider. This tool releases nothing: it emails the space's owner a link, valid for one hour, and only their press on that page releases it. Then it stops costing anything, texts to it stop arriving, whatever texted from it goes back to texting from yaks.app's number, and it may never be bought back. Use it only when the person asked for exactly that. Until they press it, the number is theirs and works as before. Only the space owner may ask.",
   },
   'number_verify': {
     'title': 'Verify a toll-free number',

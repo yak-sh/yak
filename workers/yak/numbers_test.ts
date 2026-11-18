@@ -1,6 +1,7 @@
 // A space's own number end to end through the connector (numbers.ts): found
 // at its price, bought from the space's budget, its toll-free verification
-// filed and read back, put on the space and then an app, and given back; and
+// filed and read back, put on the space and then an app, and given back on
+// its owner's press on the letter number_release asks for; and
 // a number bought again, charged its next month, and released when its space
 // is erased. The
 // provider is Telnyx in memory: what is on offer, what is held, and every
@@ -14,7 +15,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { next } from '@yaks/wake'
-import { connector, fresh, seed, unique } from './probe.ts'
+import { connector, fresh, letters, seed, unique } from './probe.ts'
 import { endpoints } from './endpoints.ts'
 import { doomed, erase } from './erase.ts'
 import { monthly } from './numbers.ts'
@@ -112,7 +113,9 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
   })
   try {
     let slug = unique('grove')
-    let { cookie, eids, person } = await seed(k, [{ slug, apps: ['members'] }])
+    let { cookie, eids, person, email } = await seed(k, [
+      { slug, apps: ['members'] },
+    ])
     let agent = connector(k, cookie)
     let tool = (name: string, args: Record<string, unknown> = {}) =>
       agent.tool(name, { space: slug, ...args })
@@ -156,10 +159,35 @@ test('a space finds, buys, verifies, assigns and releases a toll-free number of 
       `texts for ${slug}/members`,
     )
 
+    // An agent only asks; the owner's press on the letter's page releases.
     assertStringIncludes(
       await tool('number_release', { number: FREE }),
-      'it costs nothing from now on',
+      'nothing has happened yet',
     )
+    assertEquals(held.size, 1)
+    let mail = await until(
+      () => letters(k, email).findLast((l) => l.subject.includes('Release')),
+      { label: 'the release letter' },
+    )
+    let page =
+      /https:\/\/yaks\.app(\/space\/\S+\/confirm\/number\/\S+)\?t=(\S+)/
+        .exec(mail!.body)!
+    assertStringIncludes(
+      await (await k.at('yaks.app', page[1] + '?t=' + page[2], {
+        headers: { cookie },
+      })).text(),
+      'What goes, for good',
+    )
+    assertEquals(held.size, 1)
+    let pressed = await k.at('yaks.app', page[1], {
+      method: 'POST',
+      headers: {
+        cookie,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ t: decodeURIComponent(page[2]) }).toString(),
+    })
+    assertStringIncludes(await pressed.text(), 'it costs nothing from now on')
     assertEquals(held.size, 0)
     assertEquals(await k.dir.lined(FREE), null)
     assertStringIncludes(await tool('number_status'), 'holds no number')
