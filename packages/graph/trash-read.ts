@@ -73,11 +73,18 @@ export let readTrash = async (
 ): Promise<Trash[]> => {
   if (!graph.storage.trash) throw new Refused('this graph keeps no trash')
   let scoped = graph.scope(opts)
-  let entries = await graph.storage.trash(eids, page)
-  let out: Trash[] = []
-  for (let entry of entries) {
-    let bundles = await screened(graph, entry, scoped)
-    if (bundles.length) out.push({ ...entry, bundles })
+  for (;;) {
+    let entries = await graph.storage.trash(eids, page)
+    let out: Trash[] = []
+    for (let entry of entries) {
+      let bundles = await screened(graph, entry, scoped)
+      if (bundles.length) out.push({ ...entry, bundles })
+    }
+    if (out.length || page?.id || entries.length < (page?.limit ?? 20)) {
+      return out
+    }
+    let after = entries.at(-1)?.id
+    if (!after || after == page?.after) return out
+    page = { ...page, before: undefined, after }
   }
-  return out
 }

@@ -94,3 +94,30 @@ let noTrash = graph({ vocab, storage: { ...ram(vocab), trash: undefined } })
 test('a graph without trash refuses a trash read', async () => {
   await assertRejects(() => readTrash(noTrash), Refused, 'keeps no trash')
 })
+
+let crowded = Array.from({ length: 21 }, (_, i) => ({
+  id: `deletion-${i}`,
+  at: '2026-11-18T00:00:00.000Z',
+  bundles: [row(`note-${i}`, i == 20 ? 'alice' : 'bob')],
+}))
+let crowdedGraph = graph({
+  vocab,
+  storage: {
+    ...ram(vocab),
+    trash: (_ids, page = {}) => {
+      let start = page.after
+        ? crowded.findIndex((x) => x.id == page.after) + 1
+        : 0
+      return crowded.slice(start, start + (page.limit ?? 20))
+    },
+  },
+  plugins: [{
+    name: 'crowded-visibility',
+    scope: () => ({ entity: and(eq('note.by', 'alice')) }),
+  }],
+})
+
+test('hidden trash pages do not conceal older visible deletions', async () => {
+  let entries = await readTrash(crowdedGraph)
+  equal(entries.map((x) => x.id), ['deletion-20'])
+})
