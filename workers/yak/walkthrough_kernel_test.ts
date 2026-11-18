@@ -1,14 +1,16 @@
-// The home page's walkthrough (walkthrough.ts) end to end in one process: a
+// The walkthrough component (walkthrough.ts) end to end in one process: a
 // demo app released four times in the demo space, a picture kept of each
 // release (app_preview `keep`), and a conversation in the space's Operator
 // store its person marks walkthrough{app} through the connector (graph_apply
-// `self`). The served home page holds each step's
+// `self`). A page with the component holds each step's
 // exchange beside the picture of the release it ended in, and drops the
 // walkthrough while no conversation is marked.
 import { test } from '@yaks/testing'
 import { line as q } from '@yaks/query'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
 import { toolEid } from '@yaks/tools/result'
 import type { Bundle } from '@yaks/graph'
 import { valued } from '@yaks/tools/value'
@@ -21,8 +23,7 @@ import { r2Objects } from './lib/objects.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
 import { rootOf } from './operator-root.ts'
-import { page } from './site/mod.ts'
-import { stepsOf, WALKS } from './site/home.tsx'
+import { stepsOf, Walkthrough } from './site/home.tsx'
 import { base64 } from './bytes.ts'
 import { sourceReference } from './operator-source.ts'
 
@@ -190,17 +191,19 @@ let rows = REQUESTS.flatMap((said, i) => {
 })
 await service.store.g.apply(rows, { trusted: true })
 
+let file = renderToString(
+  h('main', null, h(Walkthrough, {}), h('p', { id: 'after' }, 'after')),
+)
 let served = async () =>
   parseHTML(
-    await (await made(env, dir, new Response(page('index.html')))).text(),
+    await (await made(env, dir, new Response(file))).text(),
   )
     .document
 
-test('the home page shows no walkthrough while no conversation is marked one', async () => {
+test('a page shows no walkthrough while no conversation is marked one', async () => {
   let document = await served()
   assertEquals(document.querySelector('.Walk'), null)
-  // The rest of the page is as it was.
-  assert(document.querySelector('#say'))
+  assert(document.querySelector('#after'))
 })
 
 test("each step of a marked conversation is served beside its release's picture", async () => {
@@ -213,7 +216,6 @@ test("each step of a marked conversation is served beside its release's picture"
     (value?.bundles as Bundle[]).map((b) => b.walkthrough),
     [{ app: 'guestbook' }],
   )
-  assert(WALKS.includes('guestbook'))
   let steps = stepsOf('guestbook')
   assertEquals(steps.length, REQUESTS.length)
   let document = await served()
