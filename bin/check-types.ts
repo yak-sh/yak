@@ -392,13 +392,22 @@ export let hostEntries = (
 /** Of a change's `roots`, those a host's `entries` load. The host's program
  * checks them too, under its globals: a native program reports only its
  * roots, and `--all` reports every file its entries load, so a scoped run
- * that checked the entries alone passed what main's then failed. */
-export let hostRoots = (s: Survey, entries: string[], roots: string[]) =>
-  entries.length
-    ? roots.filter((r) =>
-      !entries.includes(r) && s.reaches(entries, [r], false, false)
-    )
-    : []
+ * that checked the entries alone passed what main's then failed. Resources a
+ * module names with new URL are data, not imports checked under its globals. */
+export let hostRoots = async (
+  s: Survey,
+  entries: string[],
+  roots: string[],
+) => {
+  if (!entries.length) return []
+  let info = await s.info(entries)
+  if (!info) throw new Error('Cannot resolve host source imports')
+  let modules = new Set(info.modules.map((m) => m.specifier))
+  return roots.filter((r) => {
+    let url = new URL(r, `file://${CHECKOUT}/`).href
+    return !entries.includes(r) && modules.has(info.redirects[url] ?? url)
+  })
+}
 
 /** The modules a change reaches: those changed, the rest of their package
  * that imports one, each module importing one, and each host's entries
@@ -419,10 +428,13 @@ let reached = async (
     )
   }
   let roots = scope(s, all, changed)
-  let hosted = on.map((h) => {
+  let hosted = await Promise.all(on.map(async (h) => {
     let entries = hostEntries(s, h.entries, changed, h.platform.name)
-    return { ...h, entries: [...entries, ...hostRoots(s, entries, roots)] }
-  })
+    return {
+      ...h,
+      entries: [...entries, ...await hostRoots(s, entries, roots)],
+    }
+  }))
   return { roots, hosted, survey: s }
 }
 

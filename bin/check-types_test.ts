@@ -122,6 +122,7 @@ let scoped = await (async () => {
     'pkg/host.ts': ['pkg/lock.ts', ...world],
     'pkg/host_test.ts': ['pkg/host.ts'],
     'pkg/apart.ts': [],
+    'pkg/native.ts': [],
     'app/direct.ts': ['pkg/lock.ts'],
     'app/far.ts': ['pkg/host.ts'],
     ...Object.fromEntries(world.map((m) => [m, []])),
@@ -129,7 +130,10 @@ let scoped = await (async () => {
   let at = (m: string) => `${dir}/${m}`
   for (let m of Object.keys(imports)) {
     Deno.mkdirSync(at(m).replace(/\/[^/]+$/, ''), { recursive: true })
-    Deno.writeTextFileSync(at(m), '')
+    Deno.writeTextFileSync(
+      at(m),
+      m == 'pkg/host.ts' ? "new URL('./native.ts', import.meta.url)" : '',
+    )
   }
   let info = (): Promise<Info> =>
     Promise.resolve({
@@ -189,14 +193,14 @@ test('host boundaries follow transitive imports through platform composition and
   )
 })
 
-test("a host program checks the change's modules its entries load", () => {
+test('a host checks imported source under its globals, excluding named resources', async () => {
   let { s, all, at } = scoped
-  let roots = scope(s, all, [at('pkg/lock.ts')])
+  let roots = [...scope(s, all, [at('pkg/lock.ts')]), at('pkg/native.ts')]
   equal(
-    hostRoots(s, ['app/far.ts', 'pkg/typed.ts'].map(at), roots),
+    await hostRoots(s, ['app/far.ts', 'pkg/typed.ts'].map(at), roots),
     ['pkg/lock.ts', 'pkg/host.ts'].map(at),
   )
-  equal(hostRoots(s, [], roots), [])
+  equal(await hostRoots(s, [], roots), [])
 })
 
 // A program: each module of the checkout by path, and what it imports.
