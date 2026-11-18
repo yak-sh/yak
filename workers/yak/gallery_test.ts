@@ -444,6 +444,21 @@ test('the homepage paints every chosen screenshot', async () => {
   } as unknown as Directory
   let found = await examples(dir)
   assertEquals(found.map((a) => a.app.slug), DEMOS)
+  // An app in the trash at a demo's address, made before the live one, is not
+  // the demo there.
+  let gone = app({
+    eid: 'trashed-first',
+    slug: DEMOS[0],
+    trashed: { at: '2026-11-18T00:00:00.000Z', by: 'yourname' },
+  })
+  let shadowed = {
+    ...dir,
+    apps: () => Promise.resolve([gone, ...apps]),
+  } as unknown as Directory
+  assertEquals(
+    (await examples(shadowed)).map((a) => a.app.eid),
+    found.map((a) => a.app.eid),
+  )
   // A page names the demos it shows, and is served their cards in its order.
   let naming = (slugs: string[]) =>
     new Response(

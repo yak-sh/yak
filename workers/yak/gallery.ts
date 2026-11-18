@@ -990,7 +990,8 @@ export let featured = (space: Space, app: App) =>
   !!app.featured || !!space.featured
 
 /** The demo space's apps at these addresses, in this order, as cards; none
- * unless every one is published. */
+ * unless every one is published. An app in the trash under an address a live
+ * one serves now is not the app there. */
 export let examples = async (
   dir: Directory,
   env: Host = {},
@@ -998,9 +999,9 @@ export let examples = async (
 ) => {
   let space = await dir.space(DEMO)
   if (!space) return [] as Shown[]
-  let apps = await dir.apps(space)
+  let apps = (await dir.apps(space)).filter((app) => !app.trashed)
   let chosen = slugs.map((slug) => apps.find((app) => app.slug == slug))
-  return chosen.every((app) => app?.published && !app.trashed)
+  return chosen.every((app) => app?.published)
     ? chosen.map((app) => shownOf(space, app!, env))
     : []
 }
