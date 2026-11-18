@@ -137,6 +137,10 @@ app_new:
     allowed to write can change data. Returns the app's entity id, URL and
     access setting. The URL serves nothing until app_deploy releases a
     version, so hand the person the link app_deploy answers, not this one.
+    A slug that already holds an app makes nothing: the answer names that app
+    and a free slug beside it, and the new app is built there. Never delete,
+    move or replace an existing app to take its slug, even to remake it; a
+    remake goes under a new slug.
     Write the new app's copy, the words its pages show, in a copy.json
     beside index.html and mark each element with data-copy, so the person
     can edit the words on the page (https://yaks.app/docs/copy).
@@ -609,7 +613,8 @@ app_set:
     Rename an app, move it to another address, or change who may use it. The
     title is its name; the slug is its address, so a new slug moves the app,
     files and data included, to <space>.yaks.app/<new>/, and the old address
-    redirects there until another app takes it. access is app_new's choice:
+    redirects there until another app takes it. A slug another app holds is
+    refused with that app and a free slug to use. access is app_new's choice:
     'public' (the default: anyone reads, members with write permission change
     data), 'open' (everyone with the link writes) or 'private' (members only).
     home makes this app the space's front page, what <space>.yaks.app/ opens; no
@@ -742,7 +747,9 @@ app_delete:
     answering, its tools and pages disappear from your tools, and it stops being
     the front page, but its files and everything it saved are kept while its
     slug is free immediately, and app_restore brings the whole app back within
-    those 30 days. After that the platform erases it for good. app_files op:
+    those 30 days. After that the platform erases it for good. Delete an app
+    only when the person asked for that app to go, never to free its slug for
+    a new one: a new app takes a new slug. app_files op:
     delete removes one file, and app_set moves an app rather than replacing it.
     A platform admin may trash any app. Nothing an agent does erases an app:
     every delete goes to the trash, and only the 30 days running out erase it.

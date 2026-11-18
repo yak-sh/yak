@@ -2,7 +2,7 @@
 // Address and dormancy decisions use independent rows and marks in memory.
 // Each case is a space of its own.
 import { test } from '@yaks/testing'
-import { assertEquals, assertStringIncludes } from '@std/assert'
+import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { call, type Ctx } from './tools.ts'
 import { appStore, storeName } from './directory.ts'
 import { declared } from './directory-fixture.ts'
@@ -97,16 +97,31 @@ let fixture = async (
     await blobs.put(`${slug}/notes/${path}`, new TextEncoder().encode('kept'))
   }
   let deleted = await call(ctx, 'app_delete', { space: slug, app: 'notes' })
-  if (reuse) {
-    await call(ctx, 'app_new', { space: slug, slug: 'notes', title: 'New' })
+  let reused = reuse
+    ? (await call(ctx, 'app_new', { space: slug, slug: 'notes', title: 'New' }))
+      .text
+    : ''
+  return {
+    env,
+    dir,
+    blobs,
+    ctx,
+    slug,
+    space,
+    app,
+    deleted,
+    row,
+    deploys,
+    by,
+    reused,
   }
-  return { env, dir, blobs, ctx, slug, space, app, deleted, row, deploys, by }
 }
 let free = await fixture('free', { store: true })
 let restoring = await fixture('restoring', { saving: true })
 let reuse = await fixture('reuse', { reuse: true })
 let chosen = await fixture('chosen')
 let renamed = await fixture('renamed')
+let held = await fixture('held', { reuse: true })
 
 let text = async (blobs: ReturnType<typeof r2Objects>, key: string) =>
   new TextDecoder().decode((await blobs.get(key))!)
@@ -182,4 +197,28 @@ test('a rename and a new app can take released and former addresses', async () =
   await call(ctx, 'app_new', { space: slug, slug: 'draft', title: 'Again' })
   assertEquals(await dir.former(space, 'draft'), null)
   assertEquals((await dir.app(space, 'notes'))!.eid, moved.eid)
+})
+
+test('a new app at a trashed address names the app it last served', () => {
+  let { reused, app } = held
+  assertStringIncludes(reused, `notes last served Notes (${app.eid})`)
+  assertStringIncludes(reused, `app_restore(app: '${app.eid}')`)
+})
+
+test('an address an app holds makes nothing and names that app and a free one', async () => {
+  let { dir, ctx, slug, space } = held
+  let standing = (await dir.app(space, 'notes'))!
+  let refused = (tool: string, args: Record<string, unknown>) =>
+    assertRejects(
+      () => call(ctx, tool, { space: slug, ...args }),
+      Error,
+      `app notes exists in ${slug}: New (${standing.eid}), ` +
+        `https://${slug}.yaks.app/notes/. Nothing was made or changed. ` +
+        'Build at notes-2, which is free',
+    )
+  await refused('app_new', { slug: 'notes', title: 'Remake' })
+  await call(ctx, 'app_new', { space: slug, slug: 'other', title: 'Other' })
+  await refused('app_set', { app: 'other', slug: 'notes' })
+  assertEquals((await dir.app(space, 'notes'))!.eid, standing.eid)
+  assertEquals((await dir.apps(space)).filter((a) => !a.trashed).length, 2)
 })

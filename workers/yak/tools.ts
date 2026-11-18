@@ -2442,6 +2442,26 @@ let lost = (address: string) =>
   `${address} stops redirecting and is free for anyone to take, so a link ` +
   'or a letter still aimed there now finds nothing'
 
+// The first numbered address beside `slug` that no app answers at, live or
+// by redirect: the one to build at instead.
+let vacancy = (ctx: Ctx, space: Space, slug: string) =>
+  landing(slug, slug, async (at) => {
+    if (RESERVED.has(at)) return false
+    let [held, left] = await Promise.all([
+      ctx.dir.app(space, at),
+      ctx.dir.former(space, at),
+    ])
+    return (!held || !!held.trashed) && !left
+  })
+
+// What a caller asking for an address an app holds is answered: that app,
+// and where to build instead. Nothing was made, and the app stays.
+let occupied = (ctx: Ctx, space: Space, app: App, free: string) =>
+  `app ${app.slug} exists in ${space.slug}: ${app.title} (${app.eid}), ` +
+  `${url(space, app, ctx.env)}. Nothing was made or changed. Build at ` +
+  `${free}, which is free; an app is never deleted, moved or replaced to ` +
+  'take its slug'
+
 // Taking an address supersedes redirects and any legacy trash reservation.
 let taking = async (
   ctx: Ctx,
@@ -2453,7 +2473,10 @@ let taking = async (
   let taken = await ctx.dir.app(space, slug)
   if (taken && taken.eid != by) {
     if (!taken.trashed) {
-      throw refuse('conflict', `app ${slug} exists in ${space.slug}`)
+      throw refuse(
+        'conflict',
+        occupied(ctx, space, taken, await vacancy(ctx, space, slug)),
+      )
     }
     await trash(ctx.env, ctx.dir, space, taken, who)
   }
@@ -3853,6 +3876,9 @@ let OURS: Row[] = [
         maker.rows.length && ctx.dir.stamp({ entities: maker.rows }),
       ])
       let apps = had.filter((a) => !a.trashed)
+      // The app in the trash this address last served, said in the answer:
+      // taking its slug is never silent.
+      let gone = had.find((a) => a.trashed && a.slugs.includes(s))
       if (free?.apps != null && apps.length >= free.apps) {
         throw refuse('limit', atCeiling(space, 'apps', ctx.env))
       }
@@ -3904,7 +3930,13 @@ let OURS: Row[] = [
             previews ? HELD(previews.site) + ' ' : ''
           }https://${spaceHost(ctx.env, space.slug)}/ ${
             front ? `opens ${front.slug}` : "lists the space's apps"
-          } — app_set(app, home: true) makes this one the front page there`,
+          } — app_set(app, home: true) makes this one the front page there${
+            gone
+              ? `. ${s} last served ${gone.title} (${gone.eid}), which is in ` +
+                `the trash; app_restore(app: '${gone.eid}') brings it back ` +
+                'at another address'
+              : ''
+          }`,
         space,
         value: { eid: app.eid, url: url(space, app, ctx.env), deployed: false },
       }
