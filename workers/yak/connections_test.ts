@@ -1003,12 +1003,12 @@ test(
 
     assertStringIncludes(
       await run('app_secret_remove', { name: 'WEATHER_KEY' }),
-      'WEATHER_KEY removed',
+      'no longer reads env.WEATHER_KEY',
     )
     assertEquals(await env(), {})
     assertEquals(await run('app_secret_list'), 'ada/notes has no secrets')
-    // Read by no other app, the key is forgotten with its name.
-    assertEquals(await ctxOf(s.p.env).graph.read('.connection'), [])
+    // Read by no app now, the key is kept for the person to forget.
+    assertEquals((await ctxOf(s.p.env).graph.read('.connection')).length, 1)
   },
 )
 

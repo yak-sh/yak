@@ -17,7 +17,6 @@ import { line } from '@yaks/query'
 import {
   connect,
   CONNECTION,
-  disconnect,
   INTEGRATION,
   known,
   need,
@@ -239,12 +238,13 @@ let ROWS: Row[] = [
       }
     },
   },
-  // The name's link goes, and a key handed to no other app is forgotten with
-  // it, as a removed secret was. A connection read through a sentinel may be
-  // an account the person signed in to, so it stays for them to end.
+  // The name's link goes, and only the link: the key stays the space's
+  // connection, for app_secret_set or connection_attach to hand back, and a
+  // person forgets it themselves on their connections page. An agent never
+  // forgets a key, because nothing brings one back.
   {
     name: 'app_secret_remove',
-    destructive: true,
+    destructive: false,
     idempotent: true,
     input: {
       type: 'object',
@@ -262,25 +262,18 @@ let ROWS: Row[] = [
       let link = (await linksOf(c.graph.read, app.eid))
         .find((l) => comp(l, USES).binding == name)
       if (link) {
-        let to = String(comp(link, 'edge').to)
-        // The link is the app's, and the key is forgotten with it only where
-        // the connection is this space's or the caller's own.
-        let [held] = await c.graph.read(line`.entity.eid=${to}&.${CONNECTION}`)
-        let ours = !barred(
-          'disconnect',
-          await holdOf(ctx.env, space, who, held, app.eid),
-        )
         await c.graph.apply([{
           entity: { eid: link.entity.eid },
           tombstone: {},
         }])
-        let left = await c.graph.read(line`.edge.to=${to}&.${USES}`)
-        if (comp(link, USES).direct && !left.length && ours) {
-          await disconnect(c, to)
-        }
       }
       await rebind(ctx.env, space, app, [name])
-      return { space, text: `${space.slug}/${app.slug}: ${name} removed` }
+      return {
+        space,
+        text: `${space.slug}/${app.slug}: worker.js no longer reads ` +
+          `env.${name}. The key is kept: connection_list shows it, and the ` +
+          'person forgets it on their connections page',
+      }
     },
   },
 ]

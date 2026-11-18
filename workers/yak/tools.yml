@@ -1271,12 +1271,11 @@ app_secret_list:
 app_secret_remove:
   title: Remove a worker secret
   description: >-
-    Stop the app's worker reading env.NAME. A key handed to the worker
-    itself, as app_secret_set hands one, is forgotten once no other app
-    reads it, and nothing can restore it: to undo, set it again with the
-    value. Any other connection stays on the person's connections page. Pass
-    the name, not its value. Returns a removal confirmation. Documentation:
-    https://yaks.app/docs/code.
+    Stop the app's worker reading env.NAME. Only the app's use of the key
+    goes: the key itself stays the space's connection (connection_list shows
+    it), connection_attach hands it back, and only the person forgets it, on
+    their connections page. Pass the name, not its value. Returns a removal
+    confirmation. Documentation: https://yaks.app/docs/code.
 
 builder_supply:
   title: Supply a builder artifact
