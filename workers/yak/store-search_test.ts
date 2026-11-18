@@ -1,6 +1,9 @@
 // A draft can be the first writer of a component in a newly provisioned store.
 import { equal, test } from '@yaks/testing'
 import { driver } from '@yaks/durable-object'
+import { due } from '@yaks/embedding'
+import { statements } from '@yaks/sqlite'
+import { val } from '@yaks/sql'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { Store } from './graph.ts'
 
@@ -49,9 +52,22 @@ test('a component first written on a draft keeps main searchable after eviction'
 test('a new runtime restores missing search objects and indexes the rows already held', async () => {
   let { storage, send, wake, found } = fixture()
   await send('/apply', [{ entity: { eid: ONE }, doc: { title: 'curry' } }])
-  driver(storage).query({ t: 'drop', kind: 'table', name: 'doc_fts' })
+  let db = driver(storage), sql = statements(db)
+  db.query({ t: 'drop', kind: 'table', name: 'doc_fts' })
+  for (let event of ['insert', 'update', 'delete']) {
+    db.query({
+      t: 'drop',
+      kind: 'trigger',
+      name: `embedding_owed_doc_${event}`,
+    })
+  }
+  db.query({ t: 'delete', from: 'embedding_owed' })
   wake('next version')
   equal(await found(), [ONE])
+  equal(due(sql, 20).length, 1)
+  db.query({ t: 'delete', from: 'embedding_owed' })
+  db.query({ t: 'update', table: 'doc', set: { title: val('curry again') } })
+  equal(due(sql, 20).length, 1)
   wake('next version')
   equal(await found(), [ONE])
 })

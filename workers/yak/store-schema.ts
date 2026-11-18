@@ -371,10 +371,12 @@ export let fitSchema = (
   let { left, stamp } = passed(driver, shape, held)
   if (stamp) write('schema', stamp)
   // A draft written by an older runtime could raise a component without its
-  // search objects while retaining the schema stamp. Fit the standing text
-  // indexes once this version, including terms for rows already written.
+  // search and embedding objects while retaining the schema stamp. Fit them
+  // once this version, including terms and queued embeddings for held rows.
   if (!left.length && !stamp) {
-    adopt(driver, indexed(shape.vocab), blobRead(shape.vocab), { heal: false })
+    let read = blobRead(shape.vocab)
+    adopt(driver, indexed(shape.vocab), read, { heal: false })
+    watchEmbedding(statements(driver), texts(shape.vocab, read))
   }
   let fit = fitted()
   if (!left.length && fit) write('fitted', fit)
