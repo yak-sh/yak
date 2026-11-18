@@ -220,6 +220,17 @@ uploaded() {
   rm "$work/night"/*.zst
 }
 
+# An upload that failed can leave the only snapshot of an older graph here.
+# Successful runs have verified all their bytes remotely before cleanup.
+cleanup() {
+  if [ "$1" -eq 0 ] && [ "${finished:-0}" -eq 1 ]; then
+    rm -rf "$work"
+  else
+    deno run -q -A --config "$here/../deno.json" "$here/backup-trash.ts" \
+      "$data/trash/backups" "$work"
+  fi
+}
+
 backup() {
   started=$(date +%s)
   night=$(date -u +%Y-%m-%dT%H%M%SZ)
@@ -244,15 +255,17 @@ backup() {
     *) die "snapshot directory must be absolute" ;;
   esac
   [ -d "$dir" ] || die "snapshot directory does not exist: $dir"
-  # A run killed past its bound cannot clean up. Reclaim its private
-  # directory before measuring space, not after refusing the next run.
+  # A killed run cannot clean up. Retain its possibly unique snapshot in
+  # private local trash before measuring space; it is never automatically purged.
   find "$dir" -maxdepth 1 -type d -name 'yak-backup.*' -mmin +120 \
-    -exec rm -rf {} + 2>/dev/null || true
+    -exec deno run -q -A --config "$here/../deno.json" "$here/backup-trash.ts" \
+      "$data/trash/backups" {} +
   room > /dev/null
 
-  # Every copy belongs to this run's private directory and goes with it.
+  # A failure keeps this directory's remaining bytes in recoverable trash.
   work=$(mktemp -d "$dir/yak-backup.XXXXXXXX")
-  trap 'rm -rf "$work"' EXIT
+  finished=0
+  trap 'cleanup "$?"' EXIT
   trap 'exit 1' HUP INT QUIT TERM
   mkdir "$work/night"
   say "snapshots in $dir"
@@ -296,6 +309,7 @@ backup() {
   n=$(awk -F "$tab" '$1 == "yak.db" && $2 == "entity" { print $3 }' \
     "$work/counts")
   say "$night: ${n:-0} entities, done in $(( $(date +%s) - started ))s"
+  finished=1
 }
 
 main() {

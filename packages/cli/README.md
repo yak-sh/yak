@@ -889,6 +889,11 @@ report. Reporting failure never changes the backup's exit code. A restore
 newest seven completed nights stay in `snapshots/`; older and incomplete nights
 move to `trash/snapshots/`, which is never automatically purged.
 `bin/backup restore <new dir> trash/<night>` restores a completed trashed night.
+Failed and interrupted local snapshot work moves into private
+`~/.yak/trash/backups/` records with its original path, time and bytes. The
+filesystem `restore(record)` operation recovers it. This local trash is never
+automatically purged or uploaded. Successful runs remove only scratch whose
+bytes were verified in the remote backup.
 
 The existing cron command invoking `bin/backup` needs no change. It reads the
 box config (`$YAK_CONFIG`, otherwise `$HOME/.yak/yak.json`) only for reporting,
