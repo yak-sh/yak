@@ -111,7 +111,7 @@ export let Churches = () => (
           directory: {
             sample: (
               <a
-                href='https://yourname.yaks.app/church-directory/'
+                href='https://yourname.yaks.app/directory/'
                 data-cta='examples'
                 {...text('churches.built.directory.sample', {
                   arrow: <span aria-hidden='true'>↗</span>,
