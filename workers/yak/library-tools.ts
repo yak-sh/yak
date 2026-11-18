@@ -679,8 +679,8 @@ export let libraryTools: Row[] = [
             rows.map((r) => `${(r.attachment as Comp).name} (${r.entity.eid})`)
               .join(', ')
           } from ${space.slug}/${app.slug}, with its extracted text. Its ` +
-          'file is kept 30 days: store_restore to a moment before now ' +
-          'brings it back',
+          'rows and original file stay recoverable in the trash. ' +
+          'store_restore can also bring them back within its history window',
         space,
         value: { removed: eids },
       }

@@ -674,7 +674,7 @@ export let WORDS: Record<string, Words> = {
       'done': 'Bought %{number}',
     },
     'description':
-      "Buy a number number_find offered, for the space to hold. Its price up front and its first month are spent from the space's monthly budget at once, and each later month its monthly price is spent on the day of the month it was bought, including its 30 days in the trash, until it is returned to the provider. Only the space owner may buy; tell the person both prices before buying. A bought number texts nothing until number_assign puts it on the space or one of its apps, and a toll-free number reaches people only once its toll-free verification (number_verify) is approved.",
+      "Buy a number number_find offered, for the space to hold. Its price up front and its first month are spent from the space's monthly budget at once, and each later month its monthly price is spent on the day of the month it was bought, including while it is in the trash, until its owner confirms returning it to the provider. Only the space owner may buy; tell the person both prices before buying. A bought number texts nothing until number_assign puts it on the space or one of its apps, and a toll-free number reaches people only once its toll-free verification (number_verify) is approved.",
   },
   'number_assign': {
     'title': 'Assign a phone number',
@@ -955,7 +955,7 @@ export let WORDS: Record<string, Words> = {
       'done': 'Removed documents from %{app}',
     },
     'description':
-      "Remove documents from an app's library by their eids, from library_list: each one's row and its extracted text are deleted, so search and answers no longer cite it. Its file stays in the app's storage for 30 days, and store_restore to a moment before the removal brings the document back whole. To replace a document with a newer copy, library_add with replaces instead.",
+      "Remove documents from an app's library by their eids, from library_list: each one's row and extracted text leave search and answers, and remain in recoverable graph trash. Its original file stays in the app's storage until the owner confirms a purge. store_restore to a moment before removal also brings the document back within the store's history window. To replace a document with a newer copy, library_add with replaces instead.",
   },
   'operator_stop': {
     'title': 'Stop an operator conversation',

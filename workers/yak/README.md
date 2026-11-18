@@ -625,7 +625,7 @@ Connectivity Directory · Bind**, the last for the gateway of a space's tunnel t
 a machine (tunnel.ts), which is the only script bound to its VPC Service. The
 token stays a Worker secret. Resources follow the app's immutable store handle
 through renames; config removal unbinds them and permanent app erasure deletes
-them. The ordinary 30-day trash keeps them for restoration.
+them. Trash keeps them for restoration until the owner confirms a purge.
 
 Vectorize creation takes `dimensions` and `metric`, or `preset`, on its binding
 entry; these extend Wrangler's binding configuration because a new index needs

@@ -5853,8 +5853,8 @@ let OURS: Row[] = [
     },
   },
   {
-    // The second of the two steps that erase an app before its thirty days
-    // are up, and an agent's part in it is only to ask: the space's owner is
+    // The separate permanent purge of an app already in the trash.
+    // An agent's part in it is only to ask: the space's owner is
     // mailed a link, and the erase is their press on that page (confirm.ts,
     // erase.ts `trashedApp`).
     name: 'app_erase',
@@ -6922,8 +6922,8 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let name = slug(args.name, 'name')
       let visiting = args.visit != null && flag(args.visit, 'visit')
-      // `offered` still names a trashed app, whose name stays claimed for the
-      // trash's thirty days; it is not on offer until it is restored.
+      // `offered` may still name a trashed app by its published handle;
+      // it is not on offer until restored. Its owner-scoped slug is free.
       let offer = await ctx.dir.offered(name)
       let skill = offer ? null : await ctx.dir.skillOffered({ name })
       if (skill) return await shared.installed(ctx, args, skill.skill)
