@@ -13,6 +13,7 @@ import { mint } from '@yaks/graph/identity'
 import { effects } from '@yaks/effects'
 import { ddl, journal, type Log, log } from './log.ts'
 import { applied } from './undo.ts'
+import { purgeEntities } from '@yaks/graph/trash'
 import { col, notNull, tally, val } from '@yaks/sql'
 import { mem, raised } from '../sqlite/testing.ts'
 import { storage } from '../sqlite/mod.ts'
@@ -382,4 +383,52 @@ sync(replayed.g.apply(committed))
 test('a transaction from the log replays as the bundles it committed', () => {
   let { j } = replayed
   assertEquals(j.since(0).map((e) => applied(j.at(e.seq)!)), [committed])
+})
+
+test('confirmed purge removes only its subjects from journal and shared trash', async () => {
+  let { g, j } = wikiGraph()
+  await g.apply([
+    {
+      entity: { eid: 'private' },
+      page: { title: 'unique private', text: 'old private body' },
+    },
+    {
+      entity: { eid: 'shared' },
+      page: { title: 'keep me', text: 'shared body' },
+    },
+  ])
+  await g.apply([{
+    entity: { eid: 'private' },
+    page: { text: 'new private body' },
+  }])
+  await g.apply([
+    { entity: { eid: 'private' }, $delete: true },
+    { entity: { eid: 'shared' }, page: { title: null } },
+  ])
+  let tip = j.tip()
+  assert((await g.storage.trash!(['private'])).length)
+  assert(j.seek('unique private').length)
+  await purgeEntities(g, ['private'])
+  assertEquals(j.history('private'), [])
+  assertEquals(j.seek('unique private'), [])
+  assertEquals(await g.storage.trash!(['private']), [])
+  assertEquals(
+    (await g.storage.trash!(['shared']))[0].bundles.map((b) => b.entity.eid),
+    ['shared'],
+  )
+  assertEquals(j.history('shared').length, 2)
+  assertEquals(j.at(tip)!.deltas.every((d) => d.target == 'shared'), true)
+  assertEquals(j.retained(['keep me', 'unique private']), ['keep me'])
+})
+
+test('purging the last journal subject keeps its sequence anchor', async () => {
+  let { g, j } = wikiGraph()
+  await g.apply([{ entity: { eid: 'gone' }, page: { title: 'private' } }])
+  await g.apply([{ entity: { eid: 'gone' }, $delete: true }])
+  let tip = j.tip()
+  await purgeEntities(g, ['gone'])
+  assertEquals(j.tip(), tip)
+  assertEquals(j.history('gone'), [])
+  await g.apply([{ entity: { eid: 'later' }, page: { title: 'public' } }])
+  assert(j.tip() > tip)
 })

@@ -1,4 +1,4 @@
-import { equal, ok, test, throws } from '@yaks/testing'
+import { cleanup, equal, ok, test, throws } from '@yaks/testing'
 import { type Bundle, graph } from '@yaks/graph'
 import {
   as,
@@ -15,6 +15,7 @@ import {
 } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { eidOf } from '@yaks/archetype/sets'
+import { purgeEntities } from '@yaks/graph/trash'
 import { open } from './db.ts'
 import { render } from '@yaks/sql'
 import { meta, SCHEMA } from './meta.ts'
@@ -384,3 +385,53 @@ test('a branch’s changes are each component it wrote, at the fork, on it and o
     ['c2', 'tombstone', null, {}, null],
     ['c3', 'pinned', null, {}, null],
   ]))
+
+test('confirmed purge erases all versions of its subjects and keeps other history', async () => {
+  let db = open(':memory:')
+  cleanup(() => db.close())
+  db.query(CLOCK)
+  let s = storage(db, vocab, { history })
+  s.install()
+  let g = graph({ storage: s, vocab })
+  await g.apply([
+    { entity: { eid: 'purged' }, page: { title: 'first private' } },
+    { entity: { eid: 'kept' }, page: { title: 'first public' } },
+  ])
+  await g.apply([
+    { entity: { eid: 'purged' }, page: { title: 'second private' } },
+    { entity: { eid: 'kept' }, page: { title: 'second public' } },
+  ])
+  await g.apply([{ entity: { eid: 'purged' }, $delete: true }])
+  let at = moded(db, vocab, { history }, { at: 1 })
+  equal(at.get(['purged'])[0].page, { title: 'first private' })
+  equal(s.retained(['first private', 'first public']), [
+    'first private',
+    'first public',
+  ])
+  let removed: Bundle[] = []
+  g.plugins.push({
+    name: 'purge proof',
+    purged: (_g, values) => {
+      removed = values
+    },
+  })
+  await purgeEntities(g, ['purged'])
+  equal(s.retained(['first private', 'second private', 'first public']), [
+    'first public',
+  ])
+  equal(at.get(['purged']), [{ entity: { eid: 'purged' } }])
+  equal(at.get(['kept'])[0].page, { title: 'first public' })
+  equal(s.trash(['purged']), [])
+  equal(
+    removed.some((b) =>
+      (b.page as { title?: string })?.title == 'first private'
+    ),
+    true,
+  )
+  equal(
+    removed.some((b) =>
+      (b.page as { title?: string })?.title == 'second private'
+    ),
+    true,
+  )
+})

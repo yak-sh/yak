@@ -42,7 +42,9 @@ import { Refused } from '@yaks/graph/errors'
 import { after } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
 import {
+  among,
   and,
+  array,
   as,
   call,
   cell,
@@ -52,6 +54,7 @@ import {
   desc,
   type Drop,
   eq,
+  exists,
   type Expr,
   fn,
   gt,
@@ -60,6 +63,7 @@ import {
   left,
   lit,
   lt,
+  not,
   notNull,
   or,
   over,
@@ -258,6 +262,11 @@ export type Recording = {
 /** The log bound to one store: the writer, and the questions a journal is kept
  * in order to answer. */
 export type Log = {
+  /** Deliberately erase exact entities' recorded values, keeping other
+   * subjects in the same transaction. Returns removed logical values. */
+  purge: (eids: Eid[]) => Bundle[]
+  /** Candidate strings still named by surviving recorded values. */
+  retained: (values: string[]) => string[]
   /** the host this log writes as ({@link LogOpts.host}) */
   host: string
   /** write one transaction down inside the caller's own transaction; returns
@@ -966,8 +975,99 @@ export let log = (opts: LogOpts): Log => {
   /** Point a content-addressed value at clean content instead. */
   let scrubRef = (field: number, ref: number) => scrub(field, { ref: val(ref) })
 
+  let targets = (eids: Eid[]) =>
+    select({
+      cols: [col(idCol)],
+      from: table(spine),
+      where: among(col(eidCol), array(eids)),
+    })
+  let purge = (eids: Eid[]): Bundle[] => {
+    let subject = among(jc('entity'), targets(eids))
+    let transactions = rows(select({
+      cols: [jc('tx')],
+      from: table('journal_change', 'jc'),
+      where: subject,
+      distinct: true,
+    })).map((r) => Number(r.tx))
+    let removed = rebuild(rows(changes(subject, [jc('id')]))).flatMap((p) =>
+      p.value == null ? [] : [{ entity: { eid: p.target }, [p.comp]: p.value }]
+    )
+    rows({
+      t: 'delete',
+      from: 'journal_field',
+      where: among(
+        col('change'),
+        select({
+          cols: [jc('id')],
+          from: table('journal_change', 'jc'),
+          where: subject,
+        }),
+      ),
+    })
+    rows({
+      t: 'delete',
+      from: 'journal_change',
+      where: among(col('entity'), targets(eids)),
+    })
+    for (let prop of ['actor', 'via']) {
+      rows({
+        t: 'update',
+        table: 'journal_tx',
+        set: { [prop]: val(null) },
+        where: among(col(prop), targets(eids)),
+      })
+    }
+    rows({
+      // Sequence anchors may still delimit another subject's versions or a
+      // branch fork. Keep the generated clock, erase its now-unowned metadata.
+      t: 'update',
+      table: 'journal_tx',
+      set: { actor: val(null), via: val(null), trace: val(null) },
+      where: and(
+        among(col('id'), array(transactions)),
+        not(exists(select({
+          cols: [lit(1)],
+          from: table('journal_change'),
+          where: eq(col('tx'), col('id', 'journal_tx')),
+        }))),
+      ),
+    })
+    return removed
+  }
+  let retained = (values: string[]): string[] => {
+    let candidates = new Set(values), found = new Set<string>()
+    let visit = (value: unknown): void => {
+      if (typeof value == 'string') {
+        if (candidates.has(value)) found.add(value)
+      } else if (value && typeof value == 'object') {
+        for (let part of Object.values(value)) visit(part)
+      }
+    }
+    for (
+      let row of rows(
+        select({ cols: [col('value')], from: table('journal_field') }),
+      )
+    ) {
+      visit(dec(row.value))
+    }
+    if (cas) {
+      for (
+        let row of rows(select({
+          cols: [col(cas.value, 'c')],
+          from: table('journal_field', 'jf'),
+          joins: [
+            join(table(cas.table, 'c'), eq(col(cas.key, 'c'), jf('ref'))),
+          ],
+        }))
+      ) visit(row)
+    }
+    return [...found]
+  }
+
   return {
     host,
+    purge,
+    retained,
     write,
     patches,
     entries,
@@ -1046,6 +1146,8 @@ export let journal = (
   }
   return {
     name: opts.name ?? '@yaks/journal',
+    purge: (_graph, eids) => n.purge(eids),
+    retained: (_graph, values) => n.retained(values),
     admission: () => true,
     requests: ['$journal_from'],
     wants: (bundles) => {

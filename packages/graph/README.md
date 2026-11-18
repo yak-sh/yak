@@ -255,6 +255,10 @@ transaction:
   whose names were reused receive free numbered names. `options.notice` reports
   such changes to the caller. The archive remains until a person explicitly
   purges it with `storage.purgeTrash(id)` through the host's confirmation page.
+  A confirmed permanent entity purge uses `purgeEntities(graph, eids)` after
+  removing its live data. This removes its saved snapshots, versions and journal
+  values, then asks resource plugins to release unreferenced pooled content.
+  Ordinary writes and background cleanup never call this operation.
 - `$delete: true` deletes the entity, subject to the vocabulary's
   [death keyword](../vocab/README.md#routing-and-references). A **tombstone** is
   the `tombstone: {}` component that records a deleted entity, keeping its eid

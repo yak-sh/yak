@@ -1,3 +1,4 @@
+import { retained } from './purge.ts'
 import { trashed } from './trash.ts'
 // The capabilities an installed store lends a read-only host.
 import { type BindOpts, type Driver, revision, worn } from '@yaks/sql'
@@ -70,6 +71,8 @@ export let storage = (
     buried: (before, page) => unit(driver, () => graves(before, page), 'read'),
     measure: (signal) => measure(driver, signal),
     purgeTrash: refuse,
+    purgeHistory: refuse,
+    retained: (values) => unit(driver, () => retained(driver, values), 'read'),
     install: refuse,
     maintain: refuse,
     raise: refuse,

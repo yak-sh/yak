@@ -320,6 +320,16 @@ export type ReadView = {
 export type Restored = { bundles: Bundle[]; notices?: string[] }
 
 export type Plugin = {
+  /** Erase this plugin's history only for a person's confirmed purge or a
+   * deliberate security redaction, returning the removed logical values. */
+  purge?: (
+    graph: Graph,
+    eids: Eid[],
+  ) => Bundle[] | void | Promise<Bundle[] | void>
+  /** Candidate strings still referenced by this plugin's surviving history. */
+  retained?: (graph: Graph, values: string[]) => string[] | Promise<string[]>
+  /** Release orphaned content after an explicit purge removed its references. */
+  purged?: (graph: Graph, removed: Bundle[]) => void | Promise<void>
   /** Prepare retained snapshots for restoration, for example allocating names
    * another entity took while these snapshots were in the trash. */
   restore?: (

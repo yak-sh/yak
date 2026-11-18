@@ -1576,3 +1576,14 @@ continues from the previous page's last id through `after`. A composed host can
 page several stores against the same `before: {at, id}` boundary. Passing entity
 eids to `store.purgeTrash(eids)` purges only their snapshots, preserving
 unrelated members of a retained transaction.
+
+`purgeEntities(graph, eids)` from `@yaks/graph/trash` is the explicit permanent
+purge of saved entity data. The caller first removes the live data through its
+confirmed purge flow. The helper erases only those entities' trash snapshots,
+every version (including branches and retired properties), and their journal
+values. Other subjects in the same trash group or recorded transaction remain.
+Plugin `purged` callbacks then release pooled content only when no live row,
+version, archive or journal value still references it. This path is reserved for
+a person's confirmed purge or intentional security redaction; housekeeping never
+calls it. `store.purgeTrash(id)` alone removes just that retained group, leaving
+ordinary edit history intact.

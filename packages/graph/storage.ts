@@ -283,6 +283,12 @@ export type Storage = {
   /** Purge a retained transaction only after the person explicitly chose it. */
   purgeTrash?: (id: string | string[]) => void | Promise<void>
 
+  /** Erase exact entities' retained versions after an explicit person purge
+   * or security redaction, returning every removed logical version. */
+  purgeHistory?: (eids: Eid[]) => Bundle[] | Promise<Bundle[]>
+  /** Candidate strings still named by live rows, versions or trash. */
+  retained?: (values: string[]) => string[] | Promise<string[]>
+
   /** the store's branches, where it keeps any */
   branches?: Branches
   /** Adopt an additive vocabulary snapshot without replacing stored data.

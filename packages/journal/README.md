@@ -493,3 +493,11 @@ The journal builds its statements as @yaks/sql nodes over the graph's entity
 table and needs a synchronous runner for them. It imports no platform-specific
 storage API, so a suitable caller-supplied binding can run it in Deno, Node or a
 browser.
+
+A person's confirmed permanent purge calls `purgeEntities(graph, eids)` from
+`@yaks/graph/trash`. The journal's `purge` callback removes fields and changes
+for those exact subjects and clears their actor references. Other subjects in
+the same transaction remain readable. Versioned storage erases the subjects'
+versions separately in the same operation; pooled bytes are released only after
+all surviving history and trash references have been checked. Ordinary deletion
+retains both history and recoverable trash.

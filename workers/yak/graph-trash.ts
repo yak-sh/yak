@@ -3,7 +3,7 @@
 // including in apps whose ordinary writes are open to visitors.
 import { type Graph, signed } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
-import { restoring } from '@yaks/graph/trash'
+import { purgeEntities, restoring } from '@yaks/graph/trash'
 import { json } from '@yaks/api'
 import { vouchOf, writer } from '@yaks/platform/app-authority'
 
@@ -55,7 +55,7 @@ export let trashDoor = async (
     if (!graph.storage.purgeTrash) {
       throw new Refused('this store cannot purge trash')
     }
-    await graph.storage.purgeTrash(eidsOf(eids))
+    await purgeEntities(graph, eidsOf(eids))
     return json({ ok: true })
   }
   if (typeof id != 'string' || !id) {

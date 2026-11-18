@@ -369,14 +369,14 @@ let named = (
  * component's would, aliased by its name: its table of versions
  * (./history.ts) does, so any version reads as the live row it was.
  */
-export let rowsOf = (
+export let valuesOf = (
   driver: Driver,
   vocab: Vocab,
   comp: string,
   name: string,
   where: Expr,
   opts: BindOpts = {},
-): Map<number, Comp> => {
+): [number, Comp][] => {
   let p = project(vocab, comp, opts.derived, opts.backed, opts.tags, true)
   let rows = driver.query(select({
     with: tagging(p, opts.tags),
@@ -389,11 +389,15 @@ export let rowsOf = (
     driver,
     rows.flatMap((r) => p.refs?.map((x) => r[x]) ?? []),
   )
-  return new Map(rows.map(({ '@id': id, ...value }) => [
+  return rows.map(({ '@id': id, ...value }) => [
     Number(id),
     decoded(vocab, comp, named(value, p.refs, names)) as Comp,
-  ]))
+  ])
 }
+
+/** Whole components keyed by identity, for reads that select one version. */
+export let rowsOf = (...args: Parameters<typeof valuesOf>): Map<number, Comp> =>
+  new Map(valuesOf(...args))
 
 // One component's read, whatever names its owners: `lead` is what is selected
 // before the component's own columns, `owner` the condition on `o`, the

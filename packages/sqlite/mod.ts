@@ -1,3 +1,4 @@
+import { purgeHistory, retained } from './purge.ts'
 import { preserving, type Trash, type TrashPage } from '@yaks/graph/trash'
 import { purgeTrashSql, retainSql, trashed } from './trash.ts'
 import { cardinality, population } from './population.ts'
@@ -357,6 +358,8 @@ export type Store = {
   trash: (eids?: Eid[], page?: TrashPage) => Trash[]
   /** Purge one retained transaction after a person explicitly chooses it. */
   purgeTrash: (id: string | string[]) => void
+  purgeHistory: (eids: Eid[]) => Bundle[]
+  retained: (values: string[]) => string[]
 
   /** its branches, where it keeps history (./branches.ts) */
   branches?: Branches
@@ -1571,6 +1574,9 @@ export let storage = (
         { what: gotten(eids) },
       )
     },
+    purgeHistory: (eids) =>
+      unit(driver, () => purgeHistory(driver, vocab, eids, opts())),
+    retained: (values) => unit(driver, () => retained(driver, values), 'read'),
     purgeTrash: (id) =>
       unit(driver, () => {
         driver.query(purgeTrashSql(id))

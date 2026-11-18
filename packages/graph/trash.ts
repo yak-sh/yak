@@ -239,3 +239,36 @@ export let restoreTrash = async (
 }
 
 export { readTrash } from './trash-read.ts'
+
+/** Erase exact entities' saved copies after a person chose permanent purge,
+ * or for an intentional security redaction. Ordinary deletion never calls it.
+ * Unrelated rows in a shared transaction or trash group remain recoverable. */
+export let purgeEntities = async (
+  graph: Graph,
+  eids: string[],
+): Promise<void> => {
+  let targets = new Set(eids)
+  if (!targets.size) return
+  await graph.storage.tx(async () => {
+    let removed = await graph.storage.get(eids)
+    if (graph.storage.trash) {
+      let after: string | undefined
+      while (true) {
+        let page = await graph.storage.trash(eids, { limit: 100, after })
+        removed.push(
+          ...page.flatMap((t) =>
+            t.bundles.filter((b) => targets.has(b.entity.eid))
+          ),
+        )
+        if (page.length < 100) break
+        after = page.at(-1)!.id
+      }
+    }
+    removed.push(...await graph.storage.purgeHistory?.(eids) ?? [])
+    for (let plugin of graph.plugins) {
+      removed.push(...await plugin.purge?.(graph, eids) ?? [])
+    }
+    await graph.storage.purgeTrash?.(eids)
+    for (let plugin of graph.plugins) await plugin.purged?.(graph, removed)
+  })
+}

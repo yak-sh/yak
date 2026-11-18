@@ -138,6 +138,13 @@ let through = (driver: Driver, on: () => Dialed): Driver => {
 // Each driver's mode driver, bound once.
 let modes = new WeakMap<Driver, { driver: Driver; on: Dialed }>()
 
+/** Explicit history erasure changes even a fixed past view. */
+export let erased = (driver: Driver): void => {
+  turned(driver)
+  let past = modes.get(driver)
+  if (past) turned(past.driver)
+}
+
 /**
  * The store over `driver` reading `mode`: main as of a transaction, or a
  * branch, over a database a store with history keeps. `driver` may be the one
