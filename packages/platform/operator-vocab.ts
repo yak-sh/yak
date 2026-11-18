@@ -28,6 +28,7 @@ export let operatorDoc: VocabDoc = {
       properties: {
         app: {
           type: 'string',
+          index: true,
           description: 'the slug of the app the conversation built',
         },
       },
