@@ -633,6 +633,11 @@ an explicit shape. Durable Object migrations retain their declarations and are
 sent as pending steps after the deployed script's migration tag. A rollback that
 omits that tag refuses the worker upload instead of replaying migrations.
 
+Before an app receives a new R2 binding, provisioning removes the bucket’s
+default incomplete multipart abort rule. Uploads and their parts have no
+automatic expiry. A lost configuration response retains the resource intent;
+retrying configures the same owned bucket before publishing its binding.
+
 R2 erasure lists and deletes objects before deleting the bucket. An object key
 with a `.` or `..` path segment cannot be addressed by the REST delete route:
 the URL parser normalizes it. That erasure retains its directory record and

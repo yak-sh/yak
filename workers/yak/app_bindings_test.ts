@@ -783,3 +783,29 @@ test('invalid main leaves the prior script intact even with no default source', 
     await k.done()
   }
 })
+
+test('R2 creation retains incomplete uploads before publishing a binding and retries configuration without recreating it', async () => {
+  let k = await fixture()
+  try {
+    let config = { r2_buckets: configuration.r2_buckets }
+    k.state.fail = '/lifecycle'
+    await assertRejects(() => k.provision(config), Error, 'R2 Edit')
+    let [intent] = await k.rows('.binding')
+    assertEquals((intent.binding as { id: string }).id, '')
+    assertEquals(k.uploads.length, 0)
+    let created = k.calls.filter((c) => c.method == 'POST')
+    assertEquals(created.length, 1)
+    let resource = String(created[0].body.name)
+    k.state.fail = ''
+    let [bound] = await k.provision(config)
+    assertEquals(bound.resource, resource)
+    assertEquals(k.calls.filter((c) => c.method == 'POST').length, 1)
+    assertEquals(
+      k.calls.filter((c) => c.method == 'PUT' && c.path.endsWith('/lifecycle'))
+        .map((c) => c.body),
+      [{ rules: [] }, { rules: [] }],
+    )
+  } finally {
+    await k.done()
+  }
+})

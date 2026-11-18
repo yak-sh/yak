@@ -217,6 +217,20 @@ export let provision = async (
           if (!id) throw e
         }
       }
+      // R2 creates buckets with a seven-day incomplete multipart abort rule.
+      // Configure retained storage before exposing the binding, including a
+      // create whose reply was lost and recovered by its reserved name.
+      if (b.type == 'r2_bucket') {
+        await api(
+          env,
+          b.type,
+          'PUT',
+          `/${encodeURIComponent(b.resource)}/lifecycle`,
+          {
+            rules: [],
+          },
+        )
+      }
       try {
         // Filled in on the row this read, naming its resource: a permanent
         // deletion that finished meanwhile swallows the write rather than
