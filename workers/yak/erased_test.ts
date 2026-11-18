@@ -12,6 +12,7 @@ import { ledger, mint } from './grants.ts'
 import { KERNEL, meta } from './meta.ts'
 import { closed } from './erase.ts'
 import { BOT } from '@yaks/platform/bots'
+import { managePath } from '@yaks/platform/routes'
 
 let env!: Env
 let k = await fresh({}, (e) => env = e)
@@ -24,7 +25,7 @@ let { token } = await mint(k.secret, ledger(env.OAUTH_KV)!, {
   person: cy.person,
 })
 await closed(env, dir, cy.email, { person: k.owner.person, role: 'owner' })
-let page = await k.at(k.host, '/connect', {
+let page = await k.at(k.host, managePath('agents'), {
   redirect: 'manual',
   headers: { cookie: cy.cookie },
 })

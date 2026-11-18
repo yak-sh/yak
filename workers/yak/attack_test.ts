@@ -4,6 +4,7 @@
 // working. The root that made most of them reachable is the platform's shape:
 // yaks.app is not on the Public Suffix List, so every `<space>.yaks.app` app is
 // same-site with the apex, and anybody can serve code from a free space.
+import { managePath } from '@yaks/platform/routes'
 import { test } from '@yaks/testing'
 import { held } from './signin-fixture.ts'
 import { codeCheck } from './identity.ts'
@@ -204,7 +205,7 @@ test('a page in another space forges no signed-in form (T-37874)', async () => {
       ['/oauth/allow', { q }],
       [`/space/${me.name}/delete`, { confirm: me.name }],
       ['/login/link', { days: '365' }],
-      ['/connect', { space: 'eve-owns-this-name' }],
+      [managePath('settings', me.name), { space: 'eve-owns-this-name' }],
     ]
     for (let [path, fields] of forged) {
       let r = await posted(k, path, fields, me.cookie, evil)

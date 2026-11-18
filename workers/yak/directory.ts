@@ -3815,7 +3815,8 @@ export let directoryRows = (rows: {
     // earlier and refused a taken one out loud (identity.ts `refuse`), so this
     // is the race between that answer and the mint, not the refusal a person
     // reads. Someone who already has a space is not minting one, so their
-    // choice is moot here and `/connect` is where they move (T-34137).
+    // choice is moot here and their space's settings page is where they move
+    // it (T-34137).
     own: async (person: string, want?: string): Promise<Space> => {
       let mine = await self.seats(person, 'owner')
       let marked = mine.find((s) => s.own)
@@ -3848,7 +3849,7 @@ export let directoryRows = (rows: {
     // the batch space_new writes (`minting`), at the address they chose if it
     // is still free and otherwise the next free one their address names. A
     // space nobody has named is known by the name it answers to, which is
-    // what `/connect` writes when one is chosen there too. `as` is the
+    // what its settings page writes when one is chosen there too. `as` is the
     // person as the same write makes them, for a write that mints them too
     // (facets/signin-graph.ts `landing`), whose row is not stored yet.
     owning: async (

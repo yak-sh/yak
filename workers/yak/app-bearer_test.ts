@@ -1,5 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertMatch } from '@std/assert'
+import { managePath } from '@yaks/platform/routes'
 import {
   accepted,
   bearerFor,
@@ -139,7 +140,7 @@ test('a login bearer mints no session or connector at the sign-in doors', async 
   }
 })
 
-test("a login bearer reaches neither the connector page nor its space's address", async () => {
+test('a login bearer does not reach the Agents page', async () => {
   let k = await kernel()
   try {
     let owner = await signIn(k)
@@ -149,32 +150,18 @@ test("a login bearer reaches neither the connector page nor its space's address"
       hours: 1,
     })
     let bearer = `Bearer ${/yak login (\S+)/.exec(grant)![1]}`
-    let renamed = `renamed-${crypto.randomUUID().slice(0, 8)}`
-    // Both send it to sign in, as they would a stranger.
-    for (
-      let init of [{}, {
-        method: 'POST',
-        headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ space: renamed }).toString(),
-      }]
-    ) {
-      let r = await k.at(k.host, '/connect', {
-        ...init,
-        redirect: 'manual',
-        headers: { ...init.headers, authorization: bearer },
-      })
-      assertEquals(
-        [r.status, r.headers.get('location')],
-        [303, '/login?return=%2Fconnect'],
-      )
-      await r.body?.cancel()
-    }
-    let page = await k.at(k.host, '/connect', {
+    // It is sent to sign in, as a stranger would be.
+    let r = await k.at(k.host, managePath('agents'), {
+      redirect: 'manual',
+      headers: { authorization: bearer },
+    })
+    assertEquals(r.status, 303)
+    assertMatch(r.headers.get('location')!, /\/login\?return=/)
+    await r.body?.cancel()
+    let page = await k.at(k.host, managePath('agents'), {
       headers: { cookie: owner.cookie },
     })
-    let text = await page.text()
-    assertMatch(text, new RegExp(space))
-    assertEquals(text.includes(renamed), false)
+    assertMatch(await page.text(), /Connect another agent|Connected agents/)
   } finally {
     await k.stop()
   }

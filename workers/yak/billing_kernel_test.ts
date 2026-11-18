@@ -205,13 +205,15 @@ test('the billing doors say no before they say anything else', async () => {
 
     let { cookie } = await seed(k, [{ slug: jeff4, apps: [] }])
 
-    // The signed-in page is where a purchase starts, and the only place: the
-    // card names the plan they are on and carries the button that asks the
-    // door above for a Stripe URL.
-    let mine = await k.at('yaks.app', '/connect', { headers: { cookie } })
+    // The space's Billing page is where a purchase starts, and the only
+    // place: the card names the plan they are on and carries the button that
+    // asks its door for a Stripe URL.
+    let mine = await k.at('yaks.app', managePath('billing', jeff4), {
+      headers: { cookie },
+    })
     assertEquals(mine.status, 200)
     let card = await mine.text()
-    assert(card.includes('>Plan<'), 'the card is on the connector page')
+    assert(card.includes('>Plan<'), 'the card is on the Billing page')
     assert(
       card.includes('Get the Plus plan'),
       'and it offers the Plus plan to a free space',

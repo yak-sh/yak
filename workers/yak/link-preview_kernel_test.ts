@@ -13,7 +13,7 @@ test('signed-out links keep sign-in navigation while previewing their destinatio
         '/manage/private-space/operator/15ae7fb4-dc03-48f8-b3b6-31a62133ccf9',
         'A conversation with an Operator · yaks.app',
       ],
-      ['/connect', 'Connect an assistant · yaks.app'],
+      ['/manage/account/agents', 'Connect an assistant · yaks.app'],
       ['/admin', 'Platform administration · yaks.app'],
       ['/tv/pair', 'A screen on yaks.app'],
     ]

@@ -17,7 +17,7 @@ import {
 import { h } from 'preact'
 import type { Agent } from './connected.ts'
 import type { Face, Shown } from './connections.ts'
-import { agentList, agentLive } from './connected_ui.ts'
+import { agentList } from './connected_ui.ts'
 import { tile } from './render/mod.ts'
 import { shown } from '@yaks/phone'
 import { CODE_NOTE, texted } from './signin.ts'
@@ -32,10 +32,8 @@ import {
   about,
   at,
   b,
-  billing,
   code,
   copyable,
-  copying,
   field,
   fields,
   firstAsk,
@@ -46,17 +44,13 @@ import {
   keyBox,
   type Kids,
   logo,
-  mine,
   type Offer,
   page,
-  plan,
   run,
   said,
   send,
   state,
   status,
-  tabbing,
-  type Yours,
 } from './pages.ts'
 
 // The path of an address, whole or bare; nothing, for one that is neither.
@@ -827,7 +821,7 @@ export let clients = (env: Host): Client[] => [
       b('Organization settings'),
       ' → ',
       b('Connectors'),
-      ', and then you press ',
+      ', and then you click ',
       b('Connect'),
       ' beside it in ',
       b('Customize'),
@@ -859,7 +853,7 @@ export let clients = (env: Host): Client[] => [
       [
         'Open ',
         external('https://chatgpt.com/plugins', 'ChatGPT Plugins'),
-        ', tap the ',
+        ', click the ',
         b('+'),
         ' button, then ',
         b('Add custom MCP server'),
@@ -868,7 +862,7 @@ export let clients = (env: Host): Client[] => [
       ['Add the name and description:', chatgptFields(env)],
       ['Under ', b('Connection'), ', paste the URL you copied.'],
       [
-        'Read the warning, tap ',
+        'Read the warning, click ',
         b('I understand and want to continue'),
         ', then ',
         b('Create as a plugin'),
@@ -933,7 +927,7 @@ export let clients = (env: Host): Client[] => [
         b('Cursor Settings'),
         ' → ',
         b('Tools & Integrations'),
-        ' and press ',
+        ' and click ',
         b('New MCP Server'),
         '. It opens ',
         code('~/.cursor/mcp.json'),
@@ -1115,73 +1109,3 @@ export let agentSetup = (agents: Agent[], env: Host, back: string) => [
     doors(env),
   ),
 ]
-
-// One listener, no framework: the form answers in place. Constant text, no
-// interpolation, and every write to the page is textContent — the page never
-// speaks HTML on a person's behalf.
-let inline = () =>
-  run(`
-let f = document.querySelector('.Addr')
-if (f) f.addEventListener('submit', async (e) => {
-  e.preventDefault()
-  let say = f.querySelector('.Notice')
-  let go = f.querySelector('button')
-  let now = document.querySelector('.Now b')
-  go.disabled = true
-  say.className = 'Notice'
-  say.textContent = 'Saving…'
-  try {
-    let r = await fetch('/connect', {
-      method: 'POST',
-      headers: { accept: 'application/json' },
-      body: new FormData(f),
-    })
-    let out = await r.json()
-    if (out.address) {
-      now.textContent = out.address
-      f.querySelector('input').value = out.slug
-      say.textContent = 'Saved. Your apps live at ' + out.address + '.'
-    } else {
-      say.className = 'Notice Notice-negative'
-      say.textContent = out.error
-    }
-  } catch (_) {
-    say.className = 'Notice Notice-negative'
-    say.textContent = "That didn't go through. Try again?"
-  }
-  go.disabled = false
-})
-`)
-
-export let connect = (yours: Yours, status = 200, env: Host = {}) =>
-  page(
-    env,
-    {
-      title: 'Connect yaks.app',
-      lead: 'Build and manage your apps from your usual chats.',
-      status,
-    },
-    agentSetup(yours.agents ?? [], env, '/connect'),
-    h(
-      More,
-      { class: 'Attach', open: status != 200 || yours.paid },
-      h(More.Summary, null, 'Your address and plan'),
-      h(More.Body, null, mine(yours, env), plan(yours, env)),
-    ),
-    h(
-      'p',
-      { class: 'Note' },
-      h('a', { href: url(env, MANAGE) }, 'Your apps and settings'),
-    ),
-    h(
-      'p',
-      { class: 'Note' },
-      h('a', { href: url(env, '/help') }, 'Need help?'),
-    ),
-    home(env),
-    copying(),
-    tabbing(),
-    inline(),
-    billing(),
-    agentLive('/oauth/agents'),
-  )

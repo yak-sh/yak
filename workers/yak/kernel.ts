@@ -40,8 +40,8 @@
 //     /support/<thread>       support-page.ts: a support thread, signed in
 //     /tv, /tv/*              screen.ts: a TV paired by a code, and the
 //                             phone's page that pairs and unpairs it
-//     /connect                identity.ts: the connector page, signed in, and
-//                             the address a person's apps live at
+//     /connect                identity.ts: sends a person to the dashboard's
+//                             Agents page
 //     /oauth/*                identity.ts: the OAuth 2.1 door for agents
 //     /.well-known/oauth-*    identity.ts: the provider's metadata
 //     /api/billing/*          billing.ts: checkout and the customer portal

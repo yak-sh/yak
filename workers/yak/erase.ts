@@ -1,3 +1,4 @@
+import { planSettings } from '@yaks/platform/routes'
 import { ownedPrefix } from './file-root.ts'
 // Deleting, and taking it back. An app and a space go to the same 30-day
 // trash (T-34430, T-34431, the bottom of this file) and are erased by the
@@ -338,9 +339,9 @@ export let refused = async (space: Space, env: HostEnv) =>
     : space.plan?.subscription &&
         (await plans(env)).standing(space.plan.status) != 'ended'
     ? `${space.slug} is subscribed to the Plus plan. ` +
-      'Cancel the subscription first — ' +
-      `https://${apex(env)}/connect, "Manage billing" — and delete it after ` +
-      'that, so nothing keeps billing for a space that is gone'
+      'Cancel the subscription first with "Manage billing" at ' +
+      `${planSettings(space.slug, env)}, and delete it after that, so ` +
+      'nothing keeps billing for a space that is gone'
     : ''
 
 // What is about to be destroyed, as lines a person reads: the apps by name

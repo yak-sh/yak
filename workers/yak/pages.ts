@@ -858,7 +858,7 @@ export type DeskPage = {
   /** the name of the payment provider the space pays and sells through
    * (payments.ts), as the selling and billing cards say it */
   provider?: string
-  plan?: Yours['plan']
+  plan?: Billed
   paid?: boolean
   /** the Billing page's month: each allowance the space answers to and how
    * much of it is used, its model budget, when the hourly sweep last read
@@ -1550,28 +1550,11 @@ export let closed = (env: Host = {}) =>
 export let said = (say?: string, no?: boolean) =>
   say ? h(Notice, { mod: no && 'negative', role: 'status' }, say) : null
 
-// The connector page, signed in (T-32972). Provider steps come first. The
-// address and plan remain reachable below them in a closed disclosure, so
-// neither competes with the setup a person came here to finish.
-//
-// Signed in is the only way anyone reads it: a fresh sign-in lands on their own
-// space (T-34233) and the owner block there carries these same steps, so a
-// stranger asking for `/connect` is sent to sign in first (identity.ts
-// `theirs`, T-34408).
-//
-// The provider steps were read off each provider's own documentation on
-// 2026-09-03 (claude.com/docs/connectors/custom/remote-mcp,
-// code.claude.com/docs/en/mcp-quickstart,
-// developers.openai.com/api/docs/guides/developer-mode). Menus move: the last
-// line says so, and says what to search for instead, because a stale
-// instruction with no way past it is worse than none.
-export type Yours = {
+// What the plan card draws: the space it bills and what it pays.
+export type PlanCard = {
   slug: string
-  person?: string
-  agents?: Agent[]
-  said?: string
-  say?: string
-  no?: boolean
+  // The space's name, as its buttons say whom they buy for.
+  title?: string
   // What this space pays (billing.ts `Card`, T-33125). This is the surface
   // that starts a purchase, and it is signed-in web only: the agent surface
   // may name the pricing page and nothing else (C-33033).
@@ -1579,9 +1562,11 @@ export type Yours = {
   // The name of the payment provider that bills it (payments.ts), as the
   // plan card says it.
   provider?: string
-  // `?paid=1` on the way back from the provider's checkout. The webhook is what actually moves
-  // the tier and it may not have landed yet, so the line says "in a moment"
-  // rather than claiming something this request cannot see.
+  // Who pays, as the provider has them.
+  payer?: Payer | null
+  // `?paid=1` on the way back from the provider's checkout. The webhook is
+  // what moves the tier and it may not have landed yet, so the line says "in
+  // a moment" rather than claiming something this request cannot see.
   paid?: boolean
 }
 
@@ -1608,44 +1593,6 @@ export let addressBox = (
     h(At.End, null, `.${apex(env)}`),
   )
 
-// The address card, for a person who is signed in. The form posts, so it
-// works with no script at all; the script below turns that into an inline
-// answer, which is what a person choosing a name expects.
-export let mine = (y: Yours, env: Host) =>
-  h(
-    Card,
-    null,
-    heading('Where your apps live'),
-    h(
-      'p',
-      { class: 'Now' },
-      'Your apps live at ',
-      h('b', null, spaceHost(env, y.slug)),
-      '.',
-    ),
-    h(
-      Form,
-      {
-        class: 'Addr Page_Form',
-        method: 'post',
-        action: '/connect',
-        'data-save': 'address',
-        'data-save-person': y.person,
-      },
-      labeled(
-        'your-space',
-        'Your address',
-        h(
-          Form.Line,
-          null,
-          addressBox('your-space', 'space', y.said ?? y.slug, env),
-        ),
-        MOVES,
-      ),
-      h(Notice, { mod: y.no && 'negative', role: 'status' }, y.say ?? ''),
-    ),
-  )
-
 // What changing an address does, said on both cards that change it: the
 // apps go along, and the old address redirects only until somebody else takes
 // the name, which is free the moment it is left (D-131924).
@@ -1663,10 +1610,7 @@ export let MOVES =
 // A day, not a timestamp: "runs until 14 October 2026" is what somebody wants
 // to know, and the hour is noise on a monthly bill.
 export let plan = (
-  y: Pick<Yours, 'slug' | 'plan' | 'paid' | 'provider'> & {
-    title?: string
-    payer?: Payer | null
-  },
+  y: PlanCard,
   env: Host,
   target?: string,
 ) => {

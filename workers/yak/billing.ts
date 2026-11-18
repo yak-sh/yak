@@ -356,11 +356,6 @@ export let planName = (tier: Tier) =>
     ? 'the Plus plan'
     : 'the free plan'
 
-// Where checkout hands somebody back. Both are on our own zone, and both are
-// the connector page, which is where a signed-in person manages their space.
-let backTo = (done: boolean, env: Host) =>
-  `https://${apex(env)}/connect?${done ? 'paid=1' : 'paid=0'}`
-
 // Start a subscription. Answers the URL to send the person to, and nothing
 // else: this door is reachable from a signed-in page only, never from a tool.
 export let checkout = async (
@@ -411,8 +406,8 @@ export let checkout = async (
       payer: await payerFor(env, lent, space, email),
       tier: want.tier,
       per: want.per,
-      done: at ? `${planSettings(at.slug, env)}?paid=1` : backTo(true, env),
-      cancel: at ? `${planSettings(at.slug, env)}?paid=0` : backTo(false, env),
+      done: `${planSettings(space.slug, env)}?paid=1`,
+      cancel: `${planSettings(space.slug, env)}?paid=0`,
       reference: space.eid,
       tags: tagsOf(env, space),
       trial: free,
@@ -583,7 +578,7 @@ export let buy = async (env: Env, req: Request, at?: Space) => {
   }
   let email = await dir.emailAt(person) ?? ''
   try {
-    let back = at ? planSettings(at.slug, env) : `https://${apex(env)}/connect`
+    let back = planSettings(space.slug, env)
     let url = await lent.once({
       payer: await payerFor(env, lent, space, email),
       name: `$${BLOCK} of AI credit for ${space.slug}`,
@@ -685,7 +680,7 @@ export let portal = async (env: Env, req: Request, at?: Space) => {
   try {
     let url = await lent.portal(
       customer,
-      at ? planSettings(at.slug, env) : `https://${apex(env)}/connect`,
+      planSettings(space.slug, env),
     )
     return Response.json({ url })
   } catch (e) {

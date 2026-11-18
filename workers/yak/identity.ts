@@ -15,9 +15,8 @@ import { linked } from './preview-route.ts'
 // two steps are the whole of signing up (T-34236): give the address, prove it,
 // and land on your own space. The card asks nothing else — what a person is
 // called (T-32654) and the address their apps live at (T-32967) are set on the
-// space page's owner block, where they can see what they are naming, and at
-// `/connect`, which still carries the address for as long as nothing is built
-// there (T-34137).
+// space page's owner block, where they can see what they are naming
+// (T-34137).
 // A person sent here from a page they could not use arrives as
 // `/login?return=<url>`:
 // both cards carry that address forward, and the spent code lands them back on
@@ -110,8 +109,6 @@ import {
   spender,
 } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
-import { planCard } from './billing.ts'
-import { payments } from './payments.ts'
 import {
   daysLeft,
   type Directory,
@@ -179,7 +176,6 @@ import {
   askErase,
   askHandoff,
   askLink,
-  connect,
   deleted,
   type Failed,
 } from './signin-pages.ts'
@@ -188,6 +184,7 @@ import {
   hostOf,
   LOGOUT,
   MANAGE,
+  managePath,
   OAUTH,
   onZone,
 } from '@yaks/platform/routes'
@@ -630,44 +627,6 @@ let erasing = async (
   }
 }
 
-// The connector page as this person sees it: their own address, their plan
-// and the instructions. `own` is the same call sign-in makes, so someone who
-// signed in before spaces existed gets theirs here (T-32482).
-//
-// Keep the setup destination through sign-in. The login form carries its
-// fragment too, because a provider chosen in a link never reaches the server.
-// The account's own page, so only the browser's own session reaches it, never
-// a bearer narrowed to one space (`browser`, T-717).
-let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
-  let person = await browser(env, req)
-  if (!person) return redirect('/login?return=%2Fconnect', undefined, 303)
-  let dir = dirOf(env)
-  // Their agents asked beside their space, in the same directory trip.
-  let [space, theirAgents, provider] = await Promise.all([
-    dir.own(person),
-    agents(env, person, dir),
-    payments(env),
-  ])
-  return connect(
-    {
-      slug: space.slug,
-      person,
-      agents: theirAgents,
-      said,
-      say,
-      no: !!say,
-      // What they pay, and the two doors that change it (billing.ts, T-33125).
-      // `known` is whether the payment provider has ever met this space:
-      // somebody who cancelled still reaches their own invoices.
-      plan: planCard(provider.plans, space),
-      provider: provider.name,
-      paid: new URL(req.url).searchParams.get('paid') == '1',
-    },
-    say ? 400 : 200,
-    env,
-  )
-}
-
 // Taking an address: the space wears the slug its owner chose, at any time —
 // the same move space_set makes (directory.ts `rename`, D-131924), so the
 // apps go with it, the address it leaves redirects until another space takes
@@ -676,8 +635,7 @@ let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
 //
 // `at` names which space, for the owner block on a space's own page, where
 // the answer is the space being looked at rather than whichever one `own()`
-// calls theirs (apps.ts `saved`, T-34236). `/connect` names none and means
-// their own.
+// calls theirs (apps.ts `saved`, T-34236). Without it, their own.
 export let choose = async (
   env: Env,
   person: string,
@@ -1540,27 +1498,11 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   // one door this handler answers for a hostname that is not ours.
   if (path == HANDOFF && req.method == 'GET') return handoff(req, env)
 
-  // The connector page, and the one thing a person may change on it. It is
-  // readable signed out — the home page links here, and the instructions are
-  // nobody's secret — while the address card belongs to whoever is signed in,
-  // so choosing one says nothing to a stranger about any address but their
-  // own (T-32967, T-32972).
-  if (path == '/connect' && req.method == 'GET') return theirs(env, req)
-
-  if (path == '/connect' && req.method == 'POST') {
-    // Renaming the account's space is the browser's to do (`theirs`).
-    let person = await browser(env, req)
-    if (!person) return redirect('/login?return=%2Fconnect', undefined, 303)
-    let out = await choose(
-      env,
-      person,
-      field('space').trim().toLowerCase(),
-    )
-    // A fetch gets the answer to put in the page; a plain form post — no
-    // script, or one that did not load — gets the page back around it.
-    return (req.headers.get('accept') ?? '').includes('application/json')
-      ? Response.json(out, { status: out.error ? 400 : 200 })
-      : theirs(env, req, out.slug ?? field('space'), out.error)
+  // The connector page is the dashboard's Agents page: links to `/connect`,
+  // signed in or not, land there, and the dashboard's own door sends a
+  // stranger to sign in first.
+  if (path == '/connect' && req.method == 'GET') {
+    return redirect(managePath('agents'))
   }
 
   // Closing a space: a page and a form like the rest of this file, and the

@@ -223,7 +223,10 @@ test(
             'content-type': 'application/x-www-form-urlencoded',
             ...headers,
           },
-          body: new URLSearchParams({ agent: 'claude', return: '/connect' }),
+          body: new URLSearchParams({
+            agent: 'claude',
+            return: managePath('agents'),
+          }),
         })
         assertEquals(res.status, 303)
         let to = new URL(res.headers.get('location')!, 'https://yaks.app')
@@ -238,16 +241,16 @@ test(
       }
       equal(
         await disconnect({ authorization: `Bearer ${web.access_token}` }),
-        `/login?return=${encodeURIComponent('/connect')}`,
+        `/login?return=${encodeURIComponent(managePath('agents'))}`,
       )
       equal(
         await disconnect({ cookie: other.cookie }),
-        '/connect?disconnected=1',
+        `${managePath('agents')}?disconnected=1`,
       )
       equal((await snapshots()).map((c) => c.id), ['chatgpt', 'claude'])
       equal(
         await disconnect({ cookie: owner.cookie }),
-        '/connect?disconnected=1',
+        `${managePath('agents')}?disconnected=1`,
       )
       equal((await snapshots()).map((c) => c.id), ['chatgpt'])
       equal(
@@ -1335,7 +1338,7 @@ test('Profile saves the name, and Settings the address', async () => {
     let [quiet] = await dir.query(`.entity.eid=${person}&?doc`)
     assertEquals((quiet.doc as { title: string }).title, slug)
 
-    // A taken address is refused in the sentence `/connect` says, and the page
+    // A taken address is refused in a sentence, and the page
     // comes back around it with everything typed still in the one form —
     // nothing has moved.
     let theirs = await signIn(k, `rex-${uniq()}@yaks.app`)
@@ -1405,133 +1408,41 @@ test('Profile saves the name, and Settings the address', async () => {
   }
 })
 
-// The connector page, signed in: how to hand this platform to the assistant a
-// person already talks to (T-32972), and beside it the address their apps will
-// live at, theirs to change inline while nothing is built there (T-32967). A
-// stranger asking for it is sent to sign in (T-34408). Every directory read
-// below goes through the meta space's door, which is the kernel's owner's.
-test('the connector page, and the address chosen on it', async () => {
+// `/connect` is the dashboard's Agents page, where a person hands this
+// platform to the assistant they already talk to (T-32972). A stranger
+// following a link to it is sent to sign in and lands there (T-34408).
+test('/connect lands on the Agents page, after sign-in for a stranger', async () => {
   let k = await kernel()
-  let uniq = () => crypto.randomUUID().slice(0, 8)
-  let post = (fields: Record<string, string>, cookie?: string) =>
-    form(k, '/connect', fields, cookie)
-  let asJson = async (fields: Record<string, string>, cookie: string) => {
-    let r = await k.at('yaks.app', '/connect', {
-      method: 'POST',
-      redirect: 'manual',
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        accept: 'application/json',
-        cookie,
-      },
-      body: new URLSearchParams(fields).toString(),
-    })
-    return [r.status, await r.json()] as [number, Record<string, string>]
-  }
   try {
-    // Signing in returns to the setup instructions the person came for.
-    let open = await k.at('yaks.app', '/connect', { redirect: 'manual' })
-    assertEquals(open.status, 303)
-    assertEquals(open.headers.get('location'), '/login?return=%2Fconnect')
-    await open.body?.cancel()
-
-    // A first sign-in lands on their own space, and the owner block there is
-    // what carries them here (T-34233).
-    let email = `probe-${uniq()}@yaks.app`
-    await (await form(k, '/login', { email })).body?.cancel()
-    let inn = await form(k, '/login/code', {
-      email,
-      code: await mailed(k, email),
-      name: 'Dana',
-    })
-    assertEquals(inn.status, 303)
-    assertEquals(
-      inn.headers.get('location'),
-      `https://yaks.app/manage/${email.split('@')[0]}`,
+    let hops = async (cookie = '') => {
+      let seen: string[] = []
+      let to = '/connect'
+      for (;;) {
+        seen.push(to)
+        let r = await k.at('yaks.app', to, {
+          redirect: 'manual',
+          headers: { cookie },
+        })
+        let next = r.headers.get('location')
+        if (!next) return { seen, page: await r.text() }
+        await r.body?.cancel()
+        let at = new URL(next, 'https://yaks.app')
+        to = at.pathname + at.search
+      }
+    }
+    let stranger = await hops()
+    assertEquals(stranger.seen.slice(0, 2), ['/connect', managePath('agents')])
+    let login = stranger.seen.at(-1)!
+    assertEquals(new URL(login, 'https://x').pathname, '/login')
+    assertStringIncludes(
+      new URL(login, 'https://x').searchParams.get('return')!,
+      managePath('agents'),
     )
-    await inn.body?.cancel()
-    let cookie = (inn.headers.get('set-cookie') ?? '').split(';')[0]
-    let dir = meta(k)
-
-    // Signed in, the whole page: the instructions, and the card saying where
-    // they are, filled with the address signing in derived for them — theirs
-    // to keep by doing nothing at all.
-    let derived = email.split('@')[0]
-    let whole = await k.at('yaks.app', '/connect', {
-      redirect: 'manual',
-      headers: { cookie },
-    })
-    assertEquals(whole.status, 200)
-    let card = await whole.text()
-    assertMatch(card, /https:\/\/yaks\.app\/mcp/)
-    assertMatch(card, /claude mcp add --transport http yaks/)
-    assertMatch(card, new RegExp(`${derived}.yaks.app`))
-    assertMatch(card, new RegExp(`name="space"[^>]*value="${derived}"`))
-
-    // Choosing one answers in place — the address, for the page to show —
-    // and the space they own wears it.
-    let want = `dana-${uniq()}`
-    assertEquals(await asJson({ space: want }, cookie), [
-      200,
-      { address: `${want}.yaks.app`, slug: want },
-    ])
-    let [theirs] = await dir.query(`.space.slug=${want}&?doc`)
-    assert(theirs, `a space at ${want}`)
-    assertEquals((theirs.doc as { title: string }).title, want)
-    assertEquals(await dir.query(`.space.slug=${derived}`), [])
-
-    // Badly shaped, and taken: a sentence a person can act on, and nothing
-    // moves. Neither answer says a word about anybody's account.
-    let [bad, why] = await asJson({ space: 'Not An Address' }, cookie)
-    assertEquals(bad, 400)
-    assertMatch(why.error, /lowercase letters, numbers and dashes/)
-
-    let them = `probe-${uniq()}@yaks.app`
-    await (await form(k, '/login', { email: them })).body?.cancel()
-    let two = await form(k, '/login/code', {
-      email: them,
-      code: await mailed(k, them),
-      name: 'Rex',
-    })
-    let theirCookie = (two.headers.get('set-cookie') ?? '').split(';')[0]
-    await two.body?.cancel()
-    let [no, taken] = await asJson({ space: want }, theirCookie)
-    assertEquals(no, 400)
-    assertMatch(taken.error, new RegExp(`${want}.yaks.app is taken`))
-
-    // With no script, the same post answers with the page around it.
-    let plain = await post({ space: want }, theirCookie)
-    assertEquals(plain.status, 400)
-    let again = await plain.text()
-    assertMatch(again, new RegExp(`${want}.yaks.app is taken`))
-    assertMatch(again, new RegExp(`name="space"[^>]*value="${want}"`))
-
-    // Built on or not, the address moves at any time, the move space_set
-    // makes (D-131924): the app goes along, and each address the space left
-    // is kept to send people on until another space takes it.
-    let [mine] = await dir.query(`.space.slug=${want}`)
-    await dir.apply([
-      { doc: { title: 'box' }, app: { slug: 'box', space: mine.entity.eid } },
-    ])
-    let next = `dana-${uniq()}`
-    assertEquals(await asJson({ space: next }, cookie), [
-      200,
-      { address: `${next}.yaks.app`, slug: next },
-    ])
-    let [moved] = await dir.query(`.space.slug=${next}&?former`)
-    assertEquals(moved.entity.eid, mine.entity.eid)
-    assertEquals(moved.former, { slug: derived, slugs: want })
-    let built = await (await k.at('yaks.app', '/connect', {
-      headers: { cookie },
-    })).text()
-    assertMatch(built, new RegExp(`name="space"[^>]*value="${next}"`))
-
-    // A stranger who posts one is sent to sign in, and nothing is answered
-    // about the address they asked for.
-    let out = await post({ space: 'whoever' })
-    assertEquals(out.status, 303)
-    assertMatch(out.headers.get('location') ?? '', /^\/login\?return=/)
-    await out.body?.cancel()
+    let { cookie } = await signIn(k)
+    let { seen, page } = await hops(cookie)
+    assertEquals(seen, ['/connect', managePath('agents')])
+    assertMatch(page, /https:\/\/yaks\.app\/mcp/)
+    assertMatch(page, /claude mcp add --transport http yaks/)
   } finally {
     await k.stop()
   }
@@ -1550,7 +1461,7 @@ test(
     let k = await kernel()
     try {
       let { cookie } = await signIn(k)
-      let page = await (await k.at('yaks.app', '/connect', {
+      let page = await (await k.at('yaks.app', managePath('agents'), {
         headers: { cookie },
       })).text()
       let as = await (await k.at(

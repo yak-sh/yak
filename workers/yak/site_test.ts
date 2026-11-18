@@ -46,7 +46,9 @@ import { DRAWN, MARKDOWN } from './docs.ts'
 import { page as galleryPage } from './gallery.ts'
 import { INTEGRATIONS, page as integrationsPage } from './integrations.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
-import { askEmail, connect } from './signin-pages.ts'
+import { agentSetup, askEmail } from './signin-pages.ts'
+import { plan } from './pages.ts'
+import { markup } from './html.ts'
 import * as site from './site/mod.ts'
 import { said as copied } from './site/copy.ts'
 import {
@@ -1132,16 +1134,11 @@ let panel = (html: string, key: string) => {
   return found
 }
 
-// `/connect` is a signed-in page (T-34408), so it always has a space to say
-// something about; none of what is asserted below depends on which.
-let page = () =>
-  connect({
-    slug: 'dana',
-    plan: { tier: 'free' as const, ends: '', known: false },
-  }).text()
+// The Agents page's steps, for a person with none connected yet.
+let page = () => markup(agentSetup([], {}, '/manage'))
 
-test('ChatGPT gets a downloadable icon within its upload limit', async () => {
-  let tab = panel(await page(), 'chatgpt')
+test('ChatGPT gets a downloadable icon within its upload limit', () => {
+  let tab = panel(page(), 'chatgpt')
   let href = `${SITE_URL}/yaks-app.png`
   let downloads = [...tab.querySelectorAll('a[download]')]
   assertEquals(
@@ -1169,14 +1166,16 @@ test('ChatGPT gets a downloadable icon within its upload limit', async () => {
   assert(icon.size < 10_000, `yaks-app.png is ${icon.size} bytes`)
 })
 
-test('the signed-in plan copy derives both tiers from the meter', async () => {
+test('the signed-in plan copy derives both tiers from the meter', () => {
   for (let tier of ['free', 'plus'] as const) {
     let { apps, data } = allowances[tier]
     let html = flat(
-      await connect({
-        slug: 'dana',
-        plan: { tier, ends: '', known: tier != 'free' },
-      }).text(),
+      markup(
+        plan(
+          { slug: 'dana', plan: { tier, ends: '', known: tier != 'free' } },
+          {},
+        ),
+      ),
     )
     assertStringIncludes(
       html,

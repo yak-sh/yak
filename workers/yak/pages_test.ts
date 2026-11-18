@@ -3,7 +3,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { KEY, type Status } from '@yaks/connections'
 import { type DeskPage, lost, spaceBinned, spaceIndex } from './pages.ts'
-import { askCode, askConnect, askEmail, connect } from './signin-pages.ts'
+import { askCode, askConnect, askEmail } from './signin-pages.ts'
 import { desk } from './desk-pages.ts'
 import type { Borrowed, Connections, Shown, Using } from './connections.ts'
 
@@ -99,36 +99,22 @@ test('pages: staging space management and connector forms keep their host', asyn
     ['https://yaks.fyi/login'],
   )
   await staged(
-    connect(
-      {
-        slug: 'ada',
-        plan: { tier: 'free' as const, ends: '', known: false },
-      },
-      200,
-      env,
-    ),
+    desk({ ...page, view: 'agents' }, env),
     [
-      'ada.yaks.fyi',
       'https://yaks.fyi/mcp',
       'https://yaks.fyi/mcp?auth=required',
       'https://yaks.fyi/oauth/authorize',
       'https://yaks.fyi/oauth/token',
       'https://yaks.fyi/oauth/register',
       'https://yaks.fyi/yaks-app.png',
-      'https://yaks.fyi/pricing',
-      'Connect yaks.app',
+      'Connect another agent',
     ],
   )
 })
 
 test('pages: only production offers its repository marketplace shortcut', async () => {
-  let yours = {
-    slug: 'ada',
-    fixed: true,
-    plan: { tier: 'free' as const, ends: '', known: false },
-  }
   for (let host of [{}, env]) {
-    let html = await connect(yours, 200, host).text()
+    let html = await desk({ ...page, view: 'agents' }, host).text()
     assertEquals(
       html.includes('Add plugin marketplace'),
       host == env ? false : true,
