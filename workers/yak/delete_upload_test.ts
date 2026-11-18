@@ -1,10 +1,5 @@
-// Deleting an upload: the row at the upload's eid goes, and the bytes leave the
-// app's bucket 30 days later (facets/app-effects.ts `delete_upload`, blob-key.ts
-// `waiting`), unless a row the app keeps still names them. Who may delete that row is the app's write
-// guard (graph.ts `appGuard`), whether bytes are still served is
-// @yaks/blob/upload `servable`, and whether they leave the bucket is
-// `released`: each checks its own seam over the rows an upload writes
-// (@yaks/platform/uploads).
+// Deleting an upload removes its serving metadata while keeping recoverable
+// graph trash. The bytes remain until a person purges their app from trash.
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, graph, mint, sha256, signed } from '@yaks/graph'
@@ -12,7 +7,6 @@ import { representation } from '@yaks/blob'
 import { Denied } from '@yaks/member'
 import { matcher, type Query } from '@yaks/match'
 import { ram } from '@yaks/ram'
-import { blobPrefix, released } from './blob-key.ts'
 import { type Read, servable } from '@yaks/blob/upload'
 import { uploads } from '@yaks/platform/uploads'
 import { appGuard } from '@yaks/platform/app-authority'
@@ -30,50 +24,6 @@ let vocab = loadVocab([
   pick(artifactDoc, ['artifact', 'representation']),
   pick(uploadDoc, ['blob', 'attachment']),
 ])
-
-let prefix = blobPrefix({ store: 'ada' }, { slug: 'cookbook' })
-let sha = (n: number) => String(n).repeat(64)
-
-// The app's rows, as the uploads left them: sha(1) has none, sha(2) is
-// uploaded again meanwhile, so its content row is back, and sha(3) is a
-// generated file, named by an attachment past its upload's row.
-let keptRows = [
-  { entity: { eid: sha(2) }, blob: { bytes: 3 } },
-  { entity: { eid: sha(3) }, attachment: { artifact: sha(3) } },
-]
-let plans = new Map<string, ReturnType<typeof matcher>>(
-  [1, 2, 3].map((
-    n,
-  ) => [uploads.names(sha(n)), matcher(uploads.names(sha(n)), vocab)]),
-)
-let kept = {
-  read: (q: Query) => (plans.get(String(q)) ?? matcher(q, vocab))(keptRows),
-}
-
-for (
-  let [n, erased, reason] of [
-    [1, true, 'no row names its bytes'],
-    [2, false, 'another upload names its bytes'],
-    [3, false, 'an attachment names its bytes'],
-  ] as [number, boolean, string][]
-) {
-  let deleted: string[] = []
-  let bucket = {
-    delete: (keys: string | string[]) => {
-      deleted.push(...[keys].flat())
-      return Promise.resolve()
-    },
-  }
-  test(
-    n == 1
-      ? 'deleting an upload deletes its bytes, unless a row still names them'
-      : `deleting an upload keeps bytes when ${reason}`,
-    async () => {
-      assertEquals(await released(kept, bucket, prefix, sha(n)), erased)
-      assertEquals(deleted, erased ? [prefix + sha(n)] : [])
-    },
-  )
-}
 
 // An open cookbook, its store guarded as the platform guards it: Ada owns it,
 // and a stranger holds no level on it, so the app's mode lets them in. A

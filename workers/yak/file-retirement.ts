@@ -1,15 +1,10 @@
-// Files outlive their last referrer by the store's point-in-time window.
+// Unreferenced bucket keys remain in recoverable trash until a person purges them.
 import type { Bundle } from '@yaks/graph'
 import { mint } from '@yaks/graph/identity'
 import { addressed } from '@yaks/platform/versions'
 import { type Line, line } from '@yaks/query'
-import { blobPrefix, receiptPrefix, uploadPrefix, waiting } from './blob-key.ts'
-import { ownedPrefix } from './file-root.ts'
-import { WINDOW } from './recover.ts'
-import { idOf } from '@yaks/platform/listing'
 import type { Directory } from './directory.ts'
 import type { Objects } from '@yaks/blob'
-import { pruned } from './written.ts'
 import type { Attempt } from '@yaks/effects'
 
 type Retirement = Bundle & {
@@ -48,8 +43,8 @@ export let retiring = async (
   }
 }
 
-/** A new or departing referrer cancels the old clock for exactly its keys.
- * The next sweep starts their full window again if they are now orphaned. */
+/** A new or departing referrer removes exactly its keys from the trash list.
+ * The next sweep records them again if they are orphaned. */
 export let reclaimed = async (graph: Ledger, keys: string[]) => {
   let named = new Set(keys)
   for (let row of await pending(graph)) {
@@ -60,17 +55,6 @@ export let reclaimed = async (graph: Ledger, keys: string[]) => {
       ...keep.length ? { file_retirement: { keys: keep } } : { $delete: true },
     }], { trusted: true })
   }
-}
-
-/** The directory's complete census, including trash, checked at deletion. */
-export let standing = async (dir: Directory) => {
-  let apps = []
-  for (let space of await dir.all()) {
-    for (let app of await dir.apps(space)) {
-      apps.push({ prefix: `${space.store}/`, app, space })
-    }
-  }
-  return apps
 }
 
 /** Preserve the physical keys before an explicit erase touches its store. */
@@ -86,73 +70,27 @@ export let retiringPrefix = async (
   return keys
 }
 
-let ownerStands = async (graph: Ledger, row: Retirement) => {
-  let owner = row.file_retirement.owner
-  return !!owner && (await graph.read(
-        line`.entity.eid=${idOf(owner)}&(.app|.space|.visit)`,
-      )).length > 0
-}
+/** Complete old queued retirement runs without destroying retained bytes.
+ * Retirement has no timer; only a person's explicit purge removes keys. */
+export let retired = (
+  _graph: Ledger,
+  _dir: Directory,
+  _blobs: Objects,
+  _eid: string,
+  _attempt?: Pick<Attempt, 'defer'>,
+  _now = Date.now(),
+): Promise<void> => Promise.resolve()
 
-let current = async (graph: Ledger, eid: string) =>
-  (await graph.read(line`.entity.eid=${eid}&.file_retirement`))[0] as
-    | Retirement
-    | undefined
-
-let protectedPrefixes = (apps: Awaited<ReturnType<typeof standing>>) =>
-  apps.flatMap(({ app, space }) => [
-    `${ownedPrefix(space, app)}/`,
-    blobPrefix(space, app),
-    `${space.store}/.releases/${app.eid}/`,
-    `${space.store}/.declarations/${app.eid}/`,
-    receiptPrefix(app),
-    uploadPrefix(app),
-  ])
-
-export let retired = async (
+/** Purge a prefix after a person confirms permanent erasure from the trash. */
+export let purgedPrefix = async (
   graph: Ledger,
-  dir: Directory,
   blobs: Objects,
-  eid: string,
-  attempt?: Pick<Attempt, 'defer'>,
-  now = Date.now(),
+  prefix: string,
 ) => {
-  let row = await current(graph, eid)
-  if (!row) return
-  if (row.file_retirement.owner) {
-    if (await ownerStands(graph, row)) return attempt?.defer?.(WINDOW)
-    if (!row.file_retirement.at) {
-      await graph.apply([{
-        entity: { eid },
-        file_retirement: { at: new Date(now).toISOString() },
-      }], { trusted: true })
-      return attempt?.defer?.(WINDOW)
-    }
-  }
-  let wait = waiting(row.file_retirement.at!, now)
-  if (wait > 0) return attempt?.defer?.(wait)
-  let apps = await standing(dir)
-  if (row.file_retirement.owner) {
-    let prefixes = protectedPrefixes(apps)
-    row = await current(graph, eid)
-    if (!row) return
-    if (await ownerStands(graph, row)) return attempt?.defer?.(WINDOW)
-    if (!row.file_retirement.at || waiting(row.file_retirement.at, now)) {
-      return attempt?.defer?.(WINDOW)
-    }
-    await blobs.delete(
-      row.file_retirement.keys.filter((key) =>
-        !prefixes.some((prefix) => key.startsWith(prefix))
-      ),
-    )
-  } else {
-    await pruned(dir, blobs, apps, now, async (keys) => {
-      let currentRow = await current(graph, eid)
-      if (!currentRow || waiting(currentRow.file_retirement.at!, now)) return
-      let due = new Set(currentRow.file_retirement.keys)
-      await blobs.delete(keys.filter((key) => due.has(key)))
-    })
-  }
-  await graph.apply([{ entity: { eid }, $delete: true }], { trusted: true })
+  let keys = await blobs.list(prefix)
+  await blobs.delete(keys)
+  await reclaimed(graph, keys)
+  return keys
 }
 
 /** Hashes in a written row or release manifest, including the file replaced. */

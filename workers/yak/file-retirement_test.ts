@@ -7,6 +7,7 @@ import { bucketObjects } from '@yaks/blob'
 import { memoryBucket } from '../../packages/blob/testing.ts'
 import type { Directory } from './directory.ts'
 import {
+  purgedPrefix,
   reclaimed,
   referenced,
   retired,
@@ -46,7 +47,7 @@ test('successive sweeps keep the first orphan observation', () => {
   equal(first.file_retirement, { keys: [key], at: new Date(now).toISOString() })
 })
 
-test('a recently orphaned old blob waits thirty days through effect defer', async () => {
+test('a newly orphaned blob stays in trash without scheduling a purge', async () => {
   let waits: number[] = []
   await retired(g, dir, blobs, first.entity.eid, {
     defer: (delay) => {
@@ -54,7 +55,7 @@ test('a recently orphaned old blob waits thirty days through effect defer', asyn
       return Promise.resolve()
     },
   }, now + WINDOW - 1)
-  equal(waits, [1])
+  equal(waits, [])
   equal(await blobs.has(key), true)
 })
 
@@ -87,10 +88,10 @@ test('reference cancellation includes the replaced file and full release manifes
   )
 })
 
-test('an orphan goes only after its restore window', async () => {
+test('an orphan remains recoverable after its restore window', async () => {
   await retired(g, dir, blobs, first.entity.eid, undefined, now + WINDOW)
-  equal(await blobs.has(key), false)
-  equal(await g.read('.file_retirement'), [])
+  equal(await blobs.has(key), true)
+  equal((await g.read('.file_retirement')).length, 1)
 })
 
 // Cancellation runs inside the referrer's write, before any effect can run.
@@ -165,11 +166,11 @@ await retired(
 let afterWindow = await erasedBlobs.has(photo)
 let eraseWaits = [...waits]
 
-test('explicit erase preserves prefix bytes for a full window after the owner disappears', () => {
+test('retirement preserves prefix bytes indefinitely after the owner disappears', () => {
   equal(whileNamed, true)
   equal(beforeWindow, true)
-  equal(afterWindow, false)
-  equal(eraseWaits, [WINDOW, WINDOW, 1])
+  equal(afterWindow, true)
+  equal(eraseWaits, [])
 })
 
 let restored = ledger(), restoredBlobs = bucketObjects(memoryBucket().bucket)
@@ -240,9 +241,9 @@ await retired(racing, raceDir, raceBlobs, raceRun.entity.eid, {
   },
 }, now + WINDOW)
 
-test('a clock reset during the census defers deletion again', async () => {
+test('a queued retirement cannot delete bytes or schedule its own purge', async () => {
   equal(await raceBlobs.has(photo), true)
-  equal(raceWaits, [WINDOW])
+  equal(raceWaits, [])
   equal((await racing.read('.file_retirement')).length, 1)
 })
 
@@ -264,4 +265,26 @@ let [resetClock] = await atomic.read('.file_retirement')
 
 test('removing the owner component resets its prefix clock transactionally', () => {
   equal((resetClock.file_retirement as { at?: string | null }).at ?? null, null)
+})
+
+test('a person-confirmed prefix purge removes its bytes and retirement pointer', async () => {
+  let g = ledger(), blobs = bucketObjects(memoryBucket().bucket)
+  await blobs.put(photo, bytes)
+  await retiring(g, [photo], now)
+  equal(await purgedPrefix(g, blobs, 'ada/.apps/old/'), [photo])
+  equal(await blobs.has(photo), false)
+  equal(await g.read('.file_retirement'), [])
+})
+
+test('the app sweep leaves immutable workbench snapshots outside its namespaces', async () => {
+  let blobs = bucketObjects(memoryBucket().bucket)
+  let keys = ['workbench/object/one.tar.gz', 'workbench/object/one.json']
+  for (let key of keys) await blobs.put(key, bytes)
+  let candidates: string[] = []
+  await pruned(dir, blobs, [], now + WINDOW * 100, (keys) => {
+    candidates.push(...keys)
+    return Promise.resolve()
+  })
+  equal(candidates, [])
+  equal(await Promise.all(keys.map((key) => blobs.has(key))), [true, true])
 })

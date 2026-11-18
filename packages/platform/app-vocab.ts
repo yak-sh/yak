@@ -152,7 +152,8 @@ export let kernelDoc: VocabDoc = {
     delete_upload: {
       effect: true,
       removed: ['blob'],
-      description: 'delete a deleted upload’s bytes once nothing names them',
+      description:
+        'finish queued upload deletions, retaining their bytes in trash',
     },
     // Every entity here carries `created`, so its removal is the entity's
     // death (deaths.ts).

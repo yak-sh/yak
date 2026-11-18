@@ -3,6 +3,7 @@ import { equal, ok, test } from '@yaks/testing'
 import { type Bundle, Stale } from '@yaks/graph'
 import { fixture } from './fixture_test.ts'
 import { group, grouped, retained, trim } from './group.ts'
+import { restoreTrash } from '@yaks/graph/trash'
 import { capture } from './report.ts'
 import { comp } from './model.ts'
 import { runs } from './tools.ts'
@@ -290,6 +291,13 @@ test('retention preserves the first per commit and historical hit count', async 
   equal(rows.map((b) => b.entity.eid).sort(), ['1', '3', '5', '6'])
   equal(comp((await bugs(g))[0], 'bug').hits, 6)
   equal(retained(rows, 2).size, 4)
+  let [entry] = await g.storage.trash!(['2'])
+  let saved = entry.bundles.find((b) => b.entity.eid == '2')!
+  await restoreTrash(g, entry, { trusted: true })
+  let [restored] = await g.get(['2'])
+  equal(restored.error, saved.error)
+  equal(restored.exception, saved.exception)
+  equal(comp((await bugs(g))[0], 'bug').hits, 6)
 })
 
 test('retention keeps the newest occurrence of each owner whose stopped work it names', () => {

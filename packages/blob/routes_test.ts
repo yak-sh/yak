@@ -490,15 +490,16 @@ test('an upload in parts lands whole once its parts chain to its address', async
   assertEquals(new Uint8Array(await got.arrayBuffer()), bytes)
 })
 
-test('a whole in parts the store does not take is let go of again', async () => {
+test('a completed upload rejected by admission keeps its original bytes', async () => {
   let { ask, held } = bucketed({ accepts: { contentMediaType: 'image/*' } })
   let sha = await addressOf(text)
   let said = { bytes: text.length }
   await stand(ask, sha, said)
   await ask(part(sha, text, 1))
   assertEquals((await stand(ask, sha, said)).status, 415)
-  assert(!held.has(`app/${sha}`))
-  assertEquals((await (await stand(ask, sha, said)).json()).need, [1])
+  assert(held.has(`app/${sha}`))
+  assertEquals((await stand(ask, sha, said)).status, 415)
+  assert(held.has(`app/${sha}`))
 })
 
 test('a door with no bucket for parts refuses them', async () => {

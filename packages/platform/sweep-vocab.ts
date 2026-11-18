@@ -8,7 +8,7 @@ export let sweepDoc: VocabDoc = {
       wire: false,
       journal: false,
       description:
-        'Unreferenced bucket keys, kept for thirty days after discovery before deletion.',
+        'Unreferenced bucket keys, retained in trash until a person chooses to purge them.',
       properties: {
         keys: { type: 'array', items: { type: 'string' } },
         at: {
@@ -30,7 +30,7 @@ export let sweepDoc: VocabDoc = {
       effect: true,
       created: ['file_retirement'],
       description:
-        'Defer orphaned files for the store restore window, then check references before deleting.',
+        'Finish previously queued file retirements while retaining every recorded key in trash.',
     },
     release_remake: {
       component: true,

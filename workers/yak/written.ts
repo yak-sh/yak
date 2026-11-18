@@ -880,8 +880,8 @@ export let kept = (
 
 /**
  * Find stored files nothing names any more and retire them on the daily
- * sweep (erase.ts `collected`). file-retirement.ts defers their deletion
- * for the store restore window and checks this live set again when due.
+ * sweep (erase.ts `collected`). file-retirement.ts keeps their keys in
+ * recoverable trash with no age-based purge.
  *
  * Mark and sweep, not reference counts (D-34942). The live set is recomputed
  * from the referrers on every run: a count kept beside each write and delete
@@ -895,7 +895,8 @@ export let kept = (
  * app stopped naming may be the very file another app serves. The caller
  * hands every app still standing (including trash and the platform's own
  * space), and the sweep marks from all of them
- * before it retires anything. Erasure starts a further thirty-day window.
+ * before it retires anything. Retired bytes remain recoverable until a person
+ * chooses to purge them.
  *
  * {@link GRACE} is the other half of "only what nothing names": a write puts
  * its bytes before the row that names them, so an object minutes old may be

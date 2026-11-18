@@ -315,15 +315,10 @@ export let routes = (
       name,
       whole.bytes,
     )
-    // A whole the store does not take is let go of again, so it begins anew.
+    // A completed upload remains recoverable if admission refuses its row.
     let as = await writer(request)
-    try {
-      admit(upload, whole.bytes, file.mime)
-      await as.check(file.bundles)
-    } catch (e) {
-      if (whole.made) await options.parts!.objects.delete(going.key)
-      throw e
-    }
+    admit(upload, whole.bytes, file.mime)
+    await as.check(file.bundles)
     await as.write(file.bundles)
     return answer(file)
   }

@@ -1,7 +1,7 @@
 // yaks.app's yak/app effects: the Cloudflare work beside what
 // @yaks/platform/app-effects runs on any host (a store's builders kept with
-// their provenance): a document's text, a hearing, an upload's bytes deleted
-// once its row is gone, a death told to the space, a refund and a notice.
+// their provenance): a document's text, a hearing, upload bytes retained
+// in trash, a death told to the space, a refund and a notice.
 import { extraction } from '../documents.ts'
 import { effects as everywhere } from '@yaks/platform/app-effects'
 import type { Host } from '@yaks/host'
@@ -9,8 +9,6 @@ import type { Handlers } from '@yaks/effects'
 import type { Options } from './store.ts'
 import { maintenance } from '@yaks/platform/lent'
 import { mourned } from '../deaths.ts'
-import { blobPrefix, released, waiting } from '../blob-key.ts'
-import { r2Objects } from '../lib/objects.ts'
 import { noticePost } from '../notices.ts'
 import { refundSale } from '../service-refunds.ts'
 import { noticeEnabled } from '@yaks/platform/notices-vocab'
@@ -46,28 +44,8 @@ export let effects = (host: Host, options: Options): Handlers => {
         )
       }
     }),
-    // A deleted upload's bytes wait out the store's thirty days first
-    // (blob-key.ts `waiting`): until then a store_restore brings the row
-    // back to bytes that are still there. A run that cannot wait keeps them,
-    // and the app's erase takes them with its prefix. The bytes sit under the
-    // app's current address, so the directory is asked for it at run time,
-    // and what names them is read last, after the wait: an upload of the
-    // same file meanwhile names them again and keeps them. An app already
-    // erased has no bytes left to delete.
-    delete_upload: maintenance(async (event, _tx, _write, attempt) => {
-      let sha = event.entity.eid, { STORE, BLOBS } = at.env
-      if (!STORE || !BLOBS || !at.app || !/^[0-9a-f]{64}$/.test(sha)) return
-      let wait = waiting(event.at ?? new Date().toISOString())
-      if (wait > 0) return attempt?.defer?.(wait)
-      let { directoryOf } = await import('../directory.ts')
-      let found = at.context ?? await directoryOf(STORE).appAt(at.app)
-      if (!found) return
-      await released(
-        at.graph,
-        r2Objects(BLOBS),
-        blobPrefix(found.space, found.app),
-        sha,
-      )
-    }),
+    // Drain old queued deletions. The graph retains the deleted upload's
+    // metadata in trash; its bytes stay available for the same recovery.
+    delete_upload: () => Promise.resolve(),
   }
 }

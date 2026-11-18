@@ -19,8 +19,7 @@ let comp = (rows: Bundle[], eid: string, name: string) =>
 let text = (v: unknown) => typeof v == 'string' ? v : ''
 
 /** The rows naming an app's uploads, and what they say. Bytes none of
- * `names` answers for are deleted with their upload (app-effects.ts
- * `delete_upload`), and served no more. */
+ * `names` answers for are served no more, and retained for recovery from trash. */
 export let uploads: Naming = {
   rows: ({ sha, use, mime, name, bytes, size }) => [
     { entity: { eid: sha }, blob: { bytes }, ...size ? { image: size } : {} },

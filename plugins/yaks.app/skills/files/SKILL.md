@@ -467,10 +467,11 @@ undone:
 
     app_files(app, op: 'restore')
 
-The bytes are kept for **30 days**, and always at least the last 20 versions of
-a file, whichever reaches further back. After that a version is deleted, but
-only if nothing else needs it: bytes a kept deploy names are never removed, so
-`app_rollback` keeps working for every version `app_versions` still lists.
+Active file history keeps **30 days**, and always at least the last 20 versions
+of a file, whichever reaches further back. Older history moves into recoverable
+trash and its bytes stay. Time passing never purges them. Bytes a kept deploy
+names remain available, so `app_rollback` works for every version `app_versions`
+still lists.
 
 File history restores one file, or one write. The other restore tools:
 `app_rollback` restores every file of a whole deploy at once, `store_restore`
@@ -895,11 +896,11 @@ app anyone may read (`public` or `open`): the platform caches its check that a
 `file.url` may be served for 30 seconds, so that URL can go on serving the bytes
 for up to 30 seconds after the delete, and a browser that already loaded a
 `file.url` keeps its own copy, because that response is cached as immutable. The
-bytes stay in the app's storage for 30 days after the write, so `store_restore`
-to a moment before the delete brings the upload back whole; after the 30 days
-the platform deletes them. A page listing `.attachment` deletes
-`f.attachment.blob`, not the attachment row's own eid: deleting the attachment
-row alone removes the name and keeps the bytes.
+bytes stay in the app's storage with the deleted rows in recoverable trash.
+`store_restore` to a moment before the delete brings the upload back whole
+within its restore window; retained trash has no automatic purge. A page listing
+`.attachment` deletes `f.attachment.blob`, not the attachment row's own eid:
+deleting the attachment row alone removes the name and keeps the bytes.
 
 Delete your own row that points at the upload in the same batch, so the page
 never draws a picture that is gone:
@@ -909,28 +910,26 @@ never draws a picture that is gone:
       { entity: { eid: p.photo.blob }, $delete: true },   // the upload
     ])
 
-The bytes stay while a row still names them: an attachment that points at them
-by `artifact` (a picture a model made is one), or the content row written again
-by an upload of the same file before the platform deletes them. Nothing else
-keeps them: your own properties holding the eid are text, and the platform does
-not read your files for `./api/blob/` addresses, so delete or change what still
-uses an upload before you delete it.
+An attachment that points at the bytes by `artifact`, or the content row written
+again by an upload of the same file, keeps them served. Your own properties
+holding the eid do not grant serving access, and the platform does not read your
+files for `./api/blob/` addresses: delete or change what uses an upload when you
+delete it.
 
-Deleted bytes count toward the space's storage limit for photos and files until
-the platform deletes them, 30 days on. An app that replaces its uploads (a video
-rendered again, a photo cropped) deletes the ones it no longer uses the same
-way: list `.blob`, keep the eids its files and rows still use, and delete the
-rest, from a page with `apply` or from the assistant with `graph_apply`.
+Deleted uploads remain in recoverable trash and count toward the space's storage
+limit. Replacing a photo or video removes its old serving rows the same way; its
+original bytes remain recoverable until the person chooses to purge the app from
+trash.
 
 Whoever may delete an upload's row may delete the upload: an owner or editor any
 upload, and on an `open` app, anyone else only what they uploaded. A refused
 delete throws like any refused `apply`. The same bytes sent twice are one
 upload, so deleting it deletes it for everyone who sent it.
 
-Deleting the app (`app_delete`) puts it in the trash and keeps every byte of it
-for 30 days, so `app_restore` brings the uploads back with everything else.
-After that the bytes are deleted: every object under the app's own prefix,
-uploads included, and there is no undo.
+Deleting the app (`app_delete`) puts it in the trash and keeps every byte, so
+`app_restore` brings its uploads back with everything else. The trash stays
+until the person confirms a permanent purge on the confirmation page. That purge
+has no undo.
 
 ## Size and type limits, and downscaling images
 
@@ -1129,8 +1128,8 @@ The HTTP endpoints, under the app's own `/api/`:
 - **No server-side resizing and no thumbnails.** What you upload is what is
   served, at one size. Downscale in the page.
 - **No listing of the bucket.** `.attachment` is the listing of uploads, and
-  bytes that no row names are not served at any address. To delete an upload's
-  bytes, delete its content row (Deleting an upload, above).
+  bytes that no row names are not served at any address. Deleting an upload's
+  content row puts it in recoverable trash (Deleting an upload, above).
 - **No `image` for anything but png, jpeg, gif and webp** — a pdf, an svg or a
   heic uploads, but has no size recorded.
 - **No progress events.** `upload` returns when it is done, so a page shows
