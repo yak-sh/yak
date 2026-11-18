@@ -1521,7 +1521,8 @@
      copy it offers, then its picture. The app's own share card where it has
      one, and the platform tile where it does not; a picture from somebody
      else's app is any shape it likes, so the box is what fixes the row:
-     cropped to fill, never stretched. */
+     cropped to fill from its top, so the top of the app always shows, never
+     stretched. */
   .Make_Shot {
     display: block;
     aspect-ratio: 1200 / 630;
@@ -1535,6 +1536,11 @@
     margin-inline: calc(-1 * var(--pad-inline));
   }
 
+  /* Under the card's head, the picture touches its rule. */
+  .Card > .Card_Head + .Make_Shot {
+    margin-top: calc(-1 * var(--half-gap));
+  }
+
   .Card > .Make_Shot:last-child {
     margin-bottom: calc(-1 * var(--pad-block));
     border-radius: 0 0 var(--radius) var(--radius);
@@ -1545,6 +1551,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    object-position: top;
   }
 
   .Make_Shot .Make_Shot-none {
