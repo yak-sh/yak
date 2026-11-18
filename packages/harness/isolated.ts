@@ -110,15 +110,16 @@ export let snapshot =
     )
   }
 
-/** The sandbox `session` works in: one per patch it hands off, since a handed
- * patch leaves its sandbox to be disposed. */
+/** The sandbox `session` works in: one per run it is asked for (each input
+ * carrying `using`, as heal's and a helper's do), let go when the transcript
+ * ends or hands off its patch. A later run starts from a fresh snapshot. */
 export let sandboxed = (g: Graph, sandbox: SandboxProvider) => {
   let ref = async (session: Eid): Promise<SandboxRequest> => {
-    let handed = g.vocab.comp('lands')
-      ? await g.read(line`.lands.from=${session}&.fields=entity.eid`)
-      : []
+    let [asked] = await g.read(
+      line`.entry.session=${session}&.using&.order=-entry.seq&.limit=1&.fields=entity.eid`,
+    )
     return {
-      id: derivedEid(`isolated ${session} ${handed.length}`),
+      id: derivedEid(`isolated ${session} ${asked?.entity.eid ?? ''}`),
       from: 'HEAD',
     }
   }
@@ -266,6 +267,10 @@ export let isolate = (g: Graph, isolation: Isolation = {}) => {
         [await runner.resolveInstructions?.(inherited, s) ?? inherited, NOTE]
           .filter(Boolean).join('\n\n'),
       requestItems: undefined,
+      ended: async (s) => {
+        await runner.ended?.(s)
+        if (box) await box.dispose(await box.ref(s))
+      },
     }
   }
 }

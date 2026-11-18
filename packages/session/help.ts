@@ -229,10 +229,8 @@ let brief = (g: G, home: Bundle, owed: Owed[]): string => {
     } yours to take in its place, so its own session is not woken. Handle ` +
     'each as the operator would and record what you did in the graph, where ' +
     "the work lives. Hand up only what needs the operator's judgment or a " +
-    'person, as one short line about the entity it concerns: ' +
-    // Quoted: an id with no number reads `#…`, which a shell takes for a
-    // comment.
-    '`yak session handup \'<id>\' "<line>"`.',
+    'person, as one short line about the entity it concerns, with ' +
+    '`session_handup`.',
     ...owed.map((o) => o.line),
   ].join('\n\n')
 }

@@ -228,14 +228,15 @@ place of the host's tools, persona tool lists and MCP servers:
 - `submit_patch`, which hands the sandbox's changes to a **lander**: a native
   session of the host's own (`lands{from}`), wearing the same persona and taking
   the task's claim, whose first input is the patch, to be read as untrusted
-  code, applied, landed and seen live. The sandbox is then disposed; a later
-  turn gets a fresh one;
+  code, applied, landed and seen live;
 - the host tools the isolation names, by default reads (`graph_show`,
   `graph_query`, `graph_schema`, `search`, `bug_show`) and `session_handup`.
 
-Its instructions are the runner's with a note on where it works. An exposed
-fixer gets no host checkout. The plugin's `isolation` option says what the
-sandbox is:
+A sandbox lasts one run (each input carrying `using`, as heal's and a helper's
+do): it is disposed when the transcript ends or hands off its patch, and a later
+run starts from a fresh snapshot. Its instructions are the runner's with a note
+on where it works. An exposed fixer gets no host checkout. The plugin's
+`isolation` option says what the sandbox is:
 
 ```json
 {

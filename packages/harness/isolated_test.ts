@@ -119,7 +119,7 @@ test('an exposed session holds its sandbox, submit_patch and the named reads, no
   }
 })
 
-test('submit_patch hands the patch and the task’s claim to a lander, and lets its sandbox go', async () => {
+test('submit_patch hands the patch and the task’s claim to a lander; a sandbox lasts one run', async () => {
   let o = await office()
   try {
     await o.g.apply([
@@ -152,8 +152,17 @@ test('submit_patch hands the patch and the task’s claim to a lander, and lets 
     equal(first.using, fixer.using)
     let [task] = await o.g.get(['task'], ['claim'])
     equal((task.claim as Comp).session, lander.entity.eid)
-    // The handed sandbox is let go; the next one is another.
+    // The handed sandbox is let go, and so is a run's when it ends; the next
+    // run is asked for in another.
     equal(o.disposed, [o.requested[0].id])
+    await r.ended!('fixer')
+    equal(o.disposed, [o.requested[0].id, o.requested[0].id])
+    await o.g.apply([{
+      entity: { eid: 'again' },
+      entry: { session: 'fixer' },
+      content: { body: 'continue' },
+      using: { provider: 'openai' },
+    }], { trusted: true })
     await r.tools.find((t) => t.name == 'shell')!.run(
       { command: 'ls' },
       { session: 'fixer', call: { entity: { eid: 'c3' } }, entries: [] },
