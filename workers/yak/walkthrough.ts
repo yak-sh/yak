@@ -57,8 +57,31 @@ let deploys = (b: Bundle, app: string) => {
 // A request of the person's: their own words, not the system's.
 let request = (b: Bundle) => theirs(b) && !b.system
 
-// What leaves the demo space of a line that was said: its words and where it
-// sits, nothing else it carries.
+// A URL in words, without the punctuation that ends a sentence after it.
+let LINK = /https?:\/\/[^\s<>()"'`\[\]]*[^\s<>()"'`\[\].,;:!?]/g
+
+/**
+ * Words with each URL's query and fragment left behind: they are where a
+ * link carries a key, a claim or a session, a credential of whoever it was
+ * sent to, and any other part a page put there stays behind with them.
+ *
+ * ```ts
+ * import { linksBare } from './walkthrough.ts'
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(
+ *   linksBare('At https://a.yaks.app/dir/?key=K2X. Or https://a.yaks.app#t, [a](https://b.app)'),
+ *   'At https://a.yaks.app/dir/. Or https://a.yaks.app/, [a](https://b.app)',
+ * )
+ * ```
+ */
+export let linksBare = (words: string) =>
+  words.replace(LINK, (link) => {
+    let url = URL.parse(link)
+    return url && (url.search || url.hash) ? url.origin + url.pathname : link
+  })
+
+// What leaves the demo space of a line that was said: its words, their links
+// bare, and where it sits, nothing else it carries.
 let bare = (b: Bundle, body: string, rest: Bundle = {} as Bundle): Bundle => ({
   ...rest,
   entity: { eid: b.entity.eid },
@@ -66,14 +89,15 @@ let bare = (b: Bundle, body: string, rest: Bundle = {} as Bundle): Bundle => ({
     session: String(comp(b, 'entry')?.session ?? ''),
     seq: Number(comp(b, 'entry')?.seq ?? 0),
   },
-  content: { body },
+  content: { body: linksBare(body) },
 })
 
 /**
  * What was said in a step's lines, the only lines of a marked conversation
  * that leave the demo space: the request in the person's exact words, without
  * the note a channel adds to them (operator-source.ts `sourceWords`), and the
- * Operator's reply to it, its last words in the step. Not a call, a result,
+ * Operator's reply to it, its last words in the step, each link in them
+ * without its query or fragment (`linksBare`). Not a call, a result,
  * a prompt, a progress line, recalled memories, reasoning or words it wrote
  * mid-work: a kind of line nobody thought of stays behind too.
  *
