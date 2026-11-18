@@ -1,7 +1,7 @@
 // Persisted tool calls are the explicit creation and disposal doors.
 import { argsOf, identityEid } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
-import { sandboxDispose, sandboxNew } from './lifecycle.ts'
+import { sandboxDispose, sandboxNew, sandboxRestore } from './lifecycle.ts'
 import {
   type Configuration,
   type ConfigurationHost,
@@ -24,6 +24,16 @@ export let runs = (
       ...(args.image ? { image: String(args.image) } : {}),
     })
     return [row]
+  },
+  sandbox_restore: async (call, graph) => {
+    let options = await resolveOptions(host, configuration)
+    return [
+      await sandboxRestore(
+        graph,
+        options.providers,
+        String(argsOf(call).sandbox),
+      ),
+    ]
   },
   sandbox_dispose: async (call, graph) => {
     let options = await resolveOptions(host, configuration)

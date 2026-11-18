@@ -135,7 +135,7 @@ export let sandboxConnect = async (
 }
 
 /** Called from a durable tool invocation. A release is recorded only after the
- * provider confirms disposal; repeated disposal never requests a new resource. */
+ * provider confirms recoverable trash; repeated disposal never requests a new resource. */
 export let sandboxDispose = async (
   graph: Pick<Graph, 'get' | 'apply'>,
   bindings: SandboxBindings,
@@ -168,6 +168,22 @@ export let sandboxDispose = async (
   }
   await graph.apply([released])
   return released
+}
+
+/** Restore the retained resource before clearing its trash receipt. */
+export let sandboxRestore = async (
+  graph: Pick<Graph, 'get' | 'apply'>,
+  bindings: SandboxBindings,
+  id: string,
+): Promise<Bundle> => {
+  let row = await sandboxRow(graph, id)
+  if (!row.released) return row
+  let provider = sandboxBinding(row, bindings).provider
+  if (!provider.restore) throw new Error('Sandbox provider cannot restore')
+  await provider.restore(sandboxRef(row))
+  let restored: Bundle = { entity: row.entity, released: null }
+  await graph.apply([restored])
+  return restored
 }
 
 /** Export only from an existing ready resource; relative paths are validated

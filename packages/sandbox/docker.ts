@@ -11,8 +11,8 @@ import {
   type SandboxRequest,
 } from './provider.ts'
 
-/** Host state is outside the sandbox so confirmed disposal cannot erase the
- * tombstone that prevents accidental reconstruction under an old id. */
+/** Host state is outside the sandbox so the trash receipt and retained
+ * sandbox survive disposal; restoration reconnects the same writable storage. */
 export type DockerOptions = {
   transport: ComputerTransport
   state: string
@@ -153,8 +153,17 @@ sbx exec -u root "$name" chown "$owner" ${quote(root)} </dev/null`,
         ref,
         `if test -f "$d/released"; then exit 0; fi
 test -f "$d/claimed" || { echo 'Sandbox is not owned by this provider' >&2; exit 1; }
-if exists; then owned || { echo 'Sandbox ownership changed' >&2; exit 1; }; sbx rm --force "$name" </dev/null; fi
+if exists; then owned || { echo 'Sandbox ownership changed' >&2; exit 1; }; sbx stop "$name" </dev/null; fi
 touch "$d/released"`,
+      )
+    },
+    restore: async (ref) => {
+      await control(
+        ref,
+        `test -f "$d/claimed" || { echo 'Sandbox is not owned by this provider' >&2; exit 1; }
+exists || { echo 'Sandbox is missing; refusing reconstruction' >&2; exit 1; }
+owned || { echo 'Sandbox ownership changed' >&2; exit 1; }
+rm -f -- "$d/released"`,
       )
     },
     export: async function* (ref, paths) {

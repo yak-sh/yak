@@ -82,7 +82,7 @@ let checkLimits = (limits: SandboxLimits) => {
 
 /** Local isolated sandboxes; every command in a sandbox shares its limits.
  * Reconstruct this provider with the same data to connect sandboxes or recover
- * command receipts. Release stops the whole scope before deleting its files. */
+ * command receipts. Release stops the whole scope and retains its files until restored. */
 export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
   if (system.os != 'linux') throw new Error('sandbox: Linux is required')
   checkLimits(o.limits)
@@ -172,7 +172,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
     if (!state.success) {
       throw new Error(`sandbox: cannot inspect scope: ${state.error}`)
     }
-    // Release is destructive, not a graceful command stop. Kill all scope
+    // Release stops execution, not a graceful command stop. Kill all scope
     // members before stopping; a hostile child may ignore TERM indefinitely.
     await systemctl(['kill', '--signal=SIGKILL', unit])
     let result = await systemctl(['stop', unit])
@@ -483,15 +483,21 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
       })
     },
     dispose: async (ref) => {
-      let { dir } = location(ref)
+      location(ref)
       await locked(ref, async () => {
-        // Keep the tombstone outside the destroyed directory. A crash during
-        // stop/remove may be retried, but can never reprovision this identity.
+        // Keep the trash receipt outside the workspace. A crash during stop
+        // can be retried without recreating or deleting editable files.
         await io.writeTextFile(`${root}/.${ref.id}.released`, '', {
           mode: 0o600,
         })
         await stop(ref)
-        if (await exists(dir)) await io.remove(dir, { recursive: true })
+      })
+    },
+    restore: async (ref) => {
+      await locked(ref, async () => {
+        await configuration(ref)
+        let marker = `${root}/.${ref.id}.released`
+        if (await exists(marker)) await io.remove(marker)
       })
     },
     export: async function* (ref, paths) {

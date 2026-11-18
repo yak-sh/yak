@@ -7,7 +7,12 @@ import { kernelDoc } from '@yaks/kernel'
 import { machineDoc } from '@yaks/machine/vocab'
 import { homeDoc } from '@yaks/harness/vocab'
 import { sandboxDoc } from './vocab.ts'
-import { sandboxConnect, sandboxDispose, sandboxNew } from './lifecycle.ts'
+import {
+  sandboxConnect,
+  sandboxDispose,
+  sandboxNew,
+  sandboxRestore,
+} from './lifecycle.ts'
 import { provisioning } from './effects.ts'
 import { effects } from '@yaks/effects'
 import type { SandboxProvider } from './provider.ts'
@@ -20,6 +25,8 @@ let fixture = async () => {
   await g.apply([{ entity: { eid: machine }, machine: {} }])
   let requested: string[] = []
   let disposed: string[] = []
+  let files = new Map([['draft.txt', 'uncommitted work']])
+  let trashed = false
   let fail = false
   let workspace = {} as Workspace
   let provider: SandboxProvider = {
@@ -32,13 +39,26 @@ let fixture = async () => {
       if (fail) throw new Error('provider failed')
       return { workspace, root: '/work', address: 'box-' + ref.id }
     },
-    connect: () => Promise.resolve({ workspace, root: '/work' }),
+    connect: () => {
+      if (trashed) return Promise.reject(new Error('sandbox remains in trash'))
+      return Promise.resolve({ workspace, root: '/work' })
+    },
     dispose: (ref) => {
       if (fail) return Promise.reject(new Error('provider failed'))
+      trashed = true
       disposed.push(ref.id)
       return Promise.resolve()
     },
-    export: async function* () {},
+    restore: () => {
+      if (fail) return Promise.reject(new Error('provider failed'))
+      trashed = false
+      return Promise.resolve()
+    },
+    export: async function* (_ref, paths) {
+      for (let path of paths) {
+        yield { path, bytes: new TextEncoder().encode(files.get(path)) }
+      }
+    },
   }
   let providers = { fixture: { machine, provider } }
   let run = async (row: Bundle) =>
@@ -53,6 +73,7 @@ let fixture = async () => {
     providers,
     requested,
     disposed,
+    files,
     run,
     fail: () => {
       fail = true
@@ -138,6 +159,19 @@ test('explicit disposal confirms release once and forbids identity reuse', async
     'not ready',
   )
 })
+test('restoring trash returns the retained sandbox without requesting a replacement', async () => {
+  let f = await fixture()
+  let row = await seed(f)
+  await f.run(row)
+  await sandboxDispose(f.g, f.providers, id)
+  await sandboxRestore(f.g, f.providers, id)
+  await sandboxRestore(f.g, f.providers, id)
+  equal((await f.g.get([id]))[0].released, undefined)
+  equal((await sandboxConnect(f.g, f.providers, id)).root, '/work')
+  equal(f.files.get('draft.txt'), 'uncommitted work')
+  equal(f.requested, [id])
+})
+
 test('failed disposal never records released', async () => {
   disposalFailed.fail()
   await throws(

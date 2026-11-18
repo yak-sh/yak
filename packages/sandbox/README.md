@@ -30,11 +30,11 @@ equal(
 ```
 
 `pending{}` means provisioning is requested, `failed{reason}` records a failure,
-and `released{at, by, via}` confirms external disposal. Without these marks,
-`sandbox.status` is `ready`; readiness does not promise the resource is awake.
-Providers must check availability on connection. Missing computer placement is
-unknown, never an implicit local computer. Changing a session's home does not
-release a sandbox.
+and `released{at, by, via}` records that the provider stopped the sandbox and
+retained its files in trash. Without these marks, `sandbox.status` is `ready`;
+readiness does not promise the resource is awake. Providers must check
+availability on connection. Missing computer placement is unknown, never an
+implicit local computer. Changing a session's home does not release a sandbox.
 
 ## Exports
 
@@ -49,10 +49,11 @@ release a sandbox.
 
 ## Docker Sandboxes
 
-A **sandbox provider** creates and disposes containers on an explicitly selected
-computer. A **sandbox connection** offers workspace verbs for the existing
-filesystem; connecting never recreates a missing sandbox. The provider takes a
-preallocated sandbox eid, before any external action.
+A **sandbox provider** creates containers and retains disposed ones in
+recoverable trash on an explicitly selected computer. A **sandbox connection**
+offers workspace verbs for the existing filesystem; connecting never recreates a
+missing sandbox. The provider takes a preallocated sandbox eid, before any
+external action.
 
 The `./docker` adapter runs `sbx` through a computer transport. Its local mode
 uses Docker Sandboxes on that computer, not the graph server. No host directory
@@ -86,8 +87,8 @@ setsid, flock, Python 3 and Linux `/proc`. Host control needs bash and flock.
 Commands passed to `sbx` have stdin detached from the control script so an sbx
 invocation cannot consume later lifecycle instructions. `from` requires an
 idempotent `prepare` callback; without one it is refused before provisioning.
-Initial provenance is not a backup. Disposal destroys writable storage and stops
-its processes; it is never triggered by a session home change.
+Initial provenance is not a backup. Disposal retains writable storage in trash
+and stops its processes; it is never triggered by a session home change.
 
 Exports accept relative names only. They open each path component by directory
 descriptor inside the sandbox root and reject symlinks and special files. The
@@ -99,8 +100,9 @@ local Docker fallback.
 `cloudflareProvider(namespace, options?)` lends the containers in a deployed
 Cloudflare Sandbox namespace. The request id is the container's name. Request
 sets its idle sleep backstop; connect reaches the same files and processes;
-dispose destroys the container. The namespace chooses its deployed image, so
-`from`, `image` and existing-sandbox addresses are refused rather than ignored.
+dispose archives writable storage before stopping the container. The namespace
+chooses its deployed image, so `from`, `image` and existing-sandbox addresses
+are refused rather than ignored.
 
 Commands keep completed processes for `look` and `tail`; their ceiling is four
 minutes. SIGTERM and SIGKILL both use the SDK's single kill operation. Export
@@ -260,8 +262,8 @@ serialized by the supervisor. A durable call is never launched again, even when
 its launch was interrupted and its outcome is unknown. Output and exit status
 survive the requesting host's exit; `look`, `tail` and `kill` reach the same
 supervisor from a replacement host. Termination targets the command's process
-group and PID namespace; dispose stops the entire scope before removing the
-workspace and receipts. Export files before disposal.
+group and PID namespace; dispose stops the entire scope while retaining the
+workspace and receipts. Restore it before exporting files.
 
 `request` optionally calls idempotent `prepare(from, machine, '/workspace')` to
 populate a graph commit. A failed preparation is retried by `request`; `connect`
@@ -312,7 +314,7 @@ await provider.dispose({ id: sandboxEid })
 The template needs bash, setsid, flock, base64, Python 3 and Linux `/proc`.
 Commands use `pct exec` through the PVE computer; no QEMU guest-agent API is
 assumed for LXC. `image` is refused; `from` requires an idempotent `prepare`
-callback. Disposal stops and destroys only the token-matching clone. No PVE
+callback. Disposal stops and retains the token-matching clone in trash. No PVE
 account, API token, template or storage allocation is created by the adapter.
 
 ## Bubblewrap and Cloudflare
@@ -320,8 +322,8 @@ account, API token, template or storage allocation is created by the adapter.
 The `./bubblewrap` adapter provides an explicitly local Linux jail, with CPU,
 memory and task limits. It requires user namespaces, bubblewrap and delegated
 cgroup controls. See its `SandboxProviderOpts` for filesystem and network
-choices. It retains a disposal tombstone outside the removed jail directory. It
-is not a fallback for an unreachable remote computer.
+choices. It retains the workspace and a trash receipt outside the jail
+directory. It is not a fallback for an unreachable remote computer.
 
 The `./cloudflare` adapter binds a deployed sandbox namespace. Its image comes
 from the deployment: `from`, `image` and foreign addresses are refused. Computer
@@ -372,6 +374,13 @@ callback when creating from a graph commit.
 
 `sandbox_new` records an intention and returns its sandbox/workspace row. The
 `sandbox_provision` effect creates the resource later; read `sandbox.status`
-until it is ready or failed. `sandbox_dispose` is an explicit durable tool call,
-not a home-switch action. Adapter exports and these tools do not change which
-plugins the host enables or grant access to another computer.
+until it is ready or failed. `sandbox_dispose` stops execution and retains
+editable files in trash; `sandbox_restore` restores the same resource. Neither
+purges storage. `sandbox_dispose` is an explicit durable tool call, not a
+home-switch action. Adapter exports and these tools do not change which plugins
+the host enables or grant access to another computer.
+
+Disposed Docker sandboxes and PVE clones keep their reserved backend identifiers
+while in the trash. Bubblewrap keeps the complete workspace and control files.
+`provider.restore(ref)` returns the retained resource; a graph-managed sandbox
+uses `sandbox_restore`. These adapters have no automatic purge.

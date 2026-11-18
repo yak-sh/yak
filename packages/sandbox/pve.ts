@@ -204,10 +204,19 @@ if exists; then
   owned
   pct status "$vmid" </dev/null > "$d/status"
   if grep -Fxq 'status: running' "$d/status"; then pct stop "$vmid" </dev/null > /dev/null; fi
-  owned
-  pct destroy "$vmid" </dev/null > /dev/null
 fi
 touch "$d/released"`,
+      )
+    },
+    restore: async (ref) => {
+      await control(
+        ref,
+        `claimed
+exists || { echo 'PVE clone is missing; refusing reconstruction' >&2; exit 1; }
+owned
+pct status "$vmid" </dev/null > "$d/status"
+if grep -Fxq 'status: stopped' "$d/status"; then pct start "$vmid" </dev/null > /dev/null; fi
+rm -f -- "$d/released"`,
       )
     },
     export: async function* (ref, paths) {

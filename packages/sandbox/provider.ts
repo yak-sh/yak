@@ -1,5 +1,5 @@
 // Sandbox lifecycle is independent of computer connections and session defaults.
-// A resource id is allocated before provisioning and never reused after disposal.
+// A resource id is allocated before provisioning and kept while its writable storage is in the trash.
 import type { Workspace } from '@yaks/machine'
 
 /** A durable sandbox locator; address is never a computer connection address. */
@@ -17,11 +17,13 @@ export type SandboxConnection = {
 export type SandboxFile = { path: string; bytes: Uint8Array }
 /** Configured sandbox lifecycle on an explicit computer (or a backend that
  * cannot disclose placement). connect never creates a replacement resource.
- * request and dispose tolerate repeated calls with the same durable id. */
+ * dispose retains writable storage in recoverable trash; restore returns it.
+ * Neither operation purges storage. Both tolerate repeated calls with the same id. */
 export type SandboxProvider = {
   request?: (request: SandboxRequest) => Promise<SandboxConnection>
   connect(ref: SandboxRef): Promise<SandboxConnection>
   dispose(ref: SandboxRef): Promise<void>
+  restore?(ref: SandboxRef): Promise<void>
   export(ref: SandboxRef, paths: string[]): AsyncIterable<SandboxFile>
 }
 

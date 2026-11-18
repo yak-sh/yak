@@ -37,7 +37,7 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "description": "confirmed disposal of a sandbox; written only after external disposal succeeds, never on a home switch",
+      "description": "sandbox retained in recoverable trash after its provider stops execution; restored by sandbox_restore; never purged automatically",
       "properties": {
         "at": {
           "type": "string",
@@ -129,7 +129,7 @@
     },
     "sandbox_dispose": {
       "tool": true,
-      "description": "Explicitly dispose a sandbox and record released only after provider confirmation.",
+      "description": "Stop a sandbox and retain its writable files in recoverable trash. Restore it with sandbox_restore. Does not purge storage.",
       "input": {
         "sandbox": {
           "type": "string",
@@ -143,6 +143,24 @@
       "verb": "dispose",
       "applied": true,
       "idempotent": true
+    },
+    "sandbox_restore": {
+      "tool": true,
+      "description": "Restore a sandbox from the trash, preserving its existing writable files and identity.",
+      "input": {
+        "sandbox": {
+          "type": "string",
+          "ref": "sandbox"
+        }
+      },
+      "required": [
+        "sandbox"
+      ],
+      "noun": "sandbox",
+      "verb": "restore",
+      "applied": true,
+      "idempotent": true,
+      "destructive": false
     }
   }
 }
