@@ -68,6 +68,7 @@ import {
   componentsOf,
   coreDocs,
   grew,
+  heldWords,
   homed,
   type Homes,
   lentDocs,
@@ -1274,14 +1275,21 @@ let fits = async (
   file: string,
   accepted: string[] = [],
 ) => {
-  let { said, homes } = await homesIn(ctx, space, app.slug, app)
+  let [{ said, homes }, mine] = await Promise.all([
+    homesIn(ctx, space, app.slug, app),
+    store.consume(
+      '/vocab',
+      async (r) => r.ok ? meant(await r.json()) : {},
+    ),
+  ])
   let split = homed(
-    unsaid(appDoc(source, file), said.get(app.slug), file, accepted),
+    unsaid(
+      appDoc(source, file),
+      heldWords(said.get(app.slug), mine),
+      file,
+      accepted,
+    ),
     homes,
-  )
-  let mine = await store.consume(
-    '/vocab',
-    async (r) => r.ok ? meant(await r.json()) : {},
   )
   grew(mine, split.mine)
 }
@@ -1459,8 +1467,8 @@ let published = async (
   // bucket now, beside everything below rather than after it (T-124005).
   let snapshot = c.time('snapshot', () => files.finish())
   snapshot.catch(() => {})
-  let [[all, { file: vocabFile, source, pkg }], [, serving]] = await Promise
-    .all([early, readServing()])
+  let [[all, { file: vocabFile, source, pkg }], [stored, serving]] =
+    await Promise.all([early, readServing()])
   let version = target?.version ?? nextVersion(all)
   // And what its declaration is called. A rollback selects a version again,
   // so it declares under a name of its own: a declaration once written is
@@ -1513,7 +1521,7 @@ let published = async (
   let { said, homes } = await homesIn(ctx, space, app.slug, app)
   manifest = unsaid(
     declaration,
-    said.get(app.slug),
+    heldWords(said.get(app.slug), meant(stored)),
     vocabFile,
     accepted,
   )

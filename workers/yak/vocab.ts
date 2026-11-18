@@ -561,7 +561,7 @@ export let unwritten = (doc: VocabDoc, file = 'vocab.json'): string[] => {
  * and it says where the whole list is, because the agent reading it has no
  * other source.
  *
- * `held` is what the app's store declares already, and a word it holds stays
+ * `held` is what the app holds already ({@link held}), and a word it holds stays
  * the app's: the list moves whenever the platform's vocabularies do, and an app
  * that declared a word before the platform said it keeps deploying it. A
  * stored manifest is never held to this, so a store wakes whatever the list
@@ -734,6 +734,29 @@ export let meant = (said: unknown): VocabDoc => {
     return {}
   }
 }
+
+/**
+ * The words an app holds already, for {@link unsaid}: those its serving
+ * declaration says, and those its store declares. They differ where a store
+ * outlived its declaration, as one restored beside a new app row does, and
+ * the store's words are the app's because its rows were written under them.
+ *
+ * ```ts
+ * import { heldWords } from './vocab.ts'
+ * import { equal } from '@std/assert'
+ *
+ * equal(
+ *   Object.keys(heldWords({ $defs: { day: {} } }, { $defs: { cost: {} } }).$defs!),
+ *   ['cost', 'day'],
+ * )
+ * ```
+ */
+export let heldWords = (
+  said: VocabDoc = {},
+  stored: VocabDoc = {},
+): VocabDoc => ({
+  $defs: { ...stored.$defs, ...said.$defs },
+})
 
 /**
  * The core documents under an app's own words: each word the app declares is
