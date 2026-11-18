@@ -674,7 +674,7 @@ let preferences = (at: DeskPage, env: Host) => {
       h(
         Card.Sub,
         null,
-        'Its apps, people and data go to the trash for 30 days.',
+        'Its apps, people and data stay recoverable in the trash.',
       ),
     ),
   ]
@@ -780,7 +780,7 @@ let trash = (at: DeskPage, env: Host) => {
       h(
         'p',
         null,
-        'Deleted apps and released phone numbers wait here for 30 days.',
+        'Deleted apps and released phone numbers stay here until restored or you confirm permanent erasure.',
       ),
     )
   }
@@ -791,7 +791,7 @@ let trash = (at: DeskPage, env: Host) => {
     h(
       Card.Sub,
       null,
-      'Apps and phone numbers are kept for 30 days. Numbers stop taking calls and texts, and still cost their monthly price until returned to the phone company. Restoring a number brings back its assignment.',
+      'Apps and phone numbers stay recoverable until restored or you confirm permanent erasure. Numbers stop taking calls and texts, and still cost their monthly price until returned to the phone company. Restoring a number brings back its assignment.',
     ),
     h(
       Rows,
@@ -818,7 +818,7 @@ let trashRow = (
   at: DeskPage,
   eid: string,
   name: string,
-  days: number,
+  _days: number,
   field: string,
   price = '',
   erase?: string,
@@ -833,9 +833,7 @@ let trashRow = (
       h(
         Rows.Meta,
         null,
-        `${days} ${days == 1 ? 'day' : 'days'} left${
-          price ? ` · ${price}` : ''
-        }`,
+        `Kept until restored or purged${price ? ` · ${price}` : ''}`,
       ),
     ),
     h(

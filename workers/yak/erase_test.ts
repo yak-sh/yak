@@ -26,6 +26,7 @@ import {
   refused,
   ticket,
   ticketed,
+  trashSpace,
 } from './erase.ts'
 import { daysLeft, directory, due, GRACE, overdue } from './directory.ts'
 import { PLATFORM_OBJECT } from './door.ts'
@@ -158,7 +159,7 @@ test('a space erase letter keeps a held number through the space trash grace', (
     'https://example.org/confirm',
     true,
   )
-  assertStringIncludes(sent.body, 'puts the space in the trash for 30 days')
+  assertStringIncludes(sent.body, 'puts the space in the trash')
   assertStringIncludes(sent.body, 'costs $1.50 a month until it is erased')
   assert(!sent.body.includes('It cannot be undone'))
 })
@@ -183,7 +184,11 @@ test('what a delete would destroy is named, not counted', () => {
   // One member is the owner reading the letter; there is nobody to warn about.
   assert(!naming(doomed()).some((l) => l.includes('lose their way in')))
   // And the letter says the same words, with the link and the hour.
-  let l = letter(doomed(), door('shoplab', 'tkt'), true)
+  let l = letter(
+    doomed({ space: space({ trashed: { at: AT, by: 'p1' } }) }),
+    door('shoplab', 'tkt'),
+    true,
+  )
   assertEquals(l.subject, 'Delete shoplab.yaks.app?')
   assertStringIncludes(l.body, 'https://yaks.app/space/shoplab/delete?t=tkt')
   assertStringIncludes(l.body, 'the next hour')
@@ -204,11 +209,14 @@ test('a space in the trash is told what stops, not what is destroyed', () => {
   assertStringIncludes(said, 'everything it has saved are kept')
   assertStringIncludes(said, 'herbusiness.com stops serving until')
   assertStringIncludes(said, "(833) 555-0100 stays the space's, and costs")
-  assertStringIncludes(said, 'shoplab.yaks.app is held for you for 30 days')
+  assertStringIncludes(
+    said,
+    'shoplab.yaks.app is held for you while in the trash',
+  )
   assertEquals(said.includes('back into circulation'), false)
   // And the letter is the act its ticket carries, one list or the other.
   let l = letter(d, door('shoplab', 'tkt'))
-  assertStringIncludes(l.body, 'puts the space in the trash for 30 days')
+  assertStringIncludes(l.body, 'puts the space in the trash')
   assertStringIncludes(l.body, 'stops answering')
   assertEquals(l.body.includes('It cannot be undone'), false)
 })
@@ -490,7 +498,8 @@ test('a deleted space takes its conversation and its workbench', async () => {
   await bench.provider.exec(bench.ref, 'cargo build')
   assertEquals([...box.alive], [named(space.eid, ADA)])
 
-  await erase(env, dir, await census(dir, space), who)
+  await trashSpace(env, dir, space, who)
+  await erase(env, dir, await census(dir, (await dir.space(space.slug))!), who)
 
   // A page joining the object for that space hears what a first visit hears:
   // nothing but the mark that the replay is over.
@@ -499,6 +508,20 @@ test('a deleted space takes its conversation and its workbench', async () => {
   assertEquals(page.sent, [{ ready: true, building: false }])
   // And the container is gone rather than left awake on a name nobody owns.
   assertEquals([...box.alive], [])
+})
+
+test('a live space enters trash before any permanent erase can happen', async () => {
+  await using p = platform('trash first')
+  let { dir, space } = await owned(p.env)
+  let bytes = r2Objects(p.env.BLOBS)
+  await bytes.put('ada/precious', new TextEncoder().encode('saved work'))
+  let out = await erase(p.env, dir, await census(dir, space), {
+    person: ADA,
+    role: 'owner',
+  })
+  assert(out.trashed)
+  assert((await dir.space('ada'))?.trashed)
+  assert(await bytes.has('ada/precious'))
 })
 
 // The daily sweep (the `yak-trash` wake row, fired by the directory's alarm):

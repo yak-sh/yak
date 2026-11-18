@@ -492,7 +492,7 @@ test('past its rate or its cap, a first write is asked to sign up', () => {
 
 test('a closed account takes the store its browser was given', () => {
   assertEquals(claimedLapsed, 0)
-  assertEquals(afterClosing, 2)
+  assertEquals(afterClosing, 3)
 })
 
 test('unused visitor stores survive the sweep with their saved data', () => {

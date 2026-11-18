@@ -306,8 +306,8 @@ export let askDelete = (at: {
       lead: at.stop ?? at.why ??
         (at.forever
           ? 'This cannot be undone, and nothing is kept.'
-          : 'It goes to the trash for 30 days. Nothing is erased, and you ' +
-            'can bring it back any time before then.'),
+          : 'It goes to recoverable trash. Nothing is erased, and you ' +
+            'can bring it back until you separately confirm permanent erasure.'),
       status: at.status ?? 200,
     },
     at.lines.length
@@ -391,7 +391,7 @@ export let askConfirm = (at: {
       lead: at.stop ?? at.why ??
         `${
             at.reversible
-              ? 'It can be restored from the trash within 30 days.'
+              ? 'It stays recoverable until restored or you confirm a purge.'
               : 'This cannot be undone.'
           } ${at.until} Nothing changes until you press ` +
           'the button.',

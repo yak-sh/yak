@@ -20,7 +20,6 @@ import type { Image } from '@yaks/tools/value'
 import {
   type App,
   appStore,
-  daysLeft,
   type Directory,
   META,
   META_STORE,
@@ -545,16 +544,13 @@ let awake = (space: Space, app?: App) => {
   if (space.trashed) {
     throw refuse(
       'conflict',
-      `${space.slug} is in the trash, ${daysLeft(space.trashed)} days ` +
-        `left — space_restore(space: '${space.slug}') brings it back`,
+      `${space.slug} is in the trash — space_restore(space: '${space.slug}') brings it back`,
     )
   }
   if (app?.trashed) {
     throw refuse(
       'conflict',
-      `${space.slug}/${app.slug} is in the trash, ${
-        daysLeft(app.trashed)
-      } days left — app_restore(space: '${space.slug}', app: ` +
+      `${space.slug}/${app.slug} is in the trash — app_restore(space: '${space.slug}', app: ` +
         `'${app.slug}') brings it back`,
     )
   }

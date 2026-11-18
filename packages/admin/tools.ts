@@ -434,16 +434,37 @@ export let runs = (
     admin_erase: verb(async (call) => {
       let a = argsOf(call)
       let at = await acting(a)
-      let c = await erase(host, at.bearer, String(a.address), a.check === true)
-      let ended = a.check === true ? 'would end' : 'ended'
+      let c = await erase(
+        host,
+        at.bearer,
+        String(a.address),
+        a.check === true,
+        a.restore === true,
+      )
+      let ended = a.check === true
+        ? 'would end'
+        : c.trashed || c.restored
+        ? 'retained'
+        : 'ended'
       return [
         said(call, [
           `${c.address}: ${
-            c.gone ? 'already gone' : c.erased ? 'erased' : 'would be erased'
+            c.gone
+              ? 'already gone'
+              : c.erased
+              ? 'erased'
+              : c.restored
+              ? 'restored'
+              : c.trashed
+              ? 'in the trash'
+              : 'would be trashed'
           }`,
           `spaces  ${c.spaces.join(' ') || '(none)'}`,
           `seats   ${c.seats.join(' ') || '(none)'}`,
           `connections on this box  ${c.connections} ${ended}`,
+          ...c.purge
+            ? [`Only the person's confirmation can purge it: ${c.purge}`]
+            : [],
         ]),
       ]
     }),

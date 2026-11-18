@@ -24,6 +24,7 @@ import { type Given, VISITS, visits } from '@yaks/platform/visits'
 import { ledgerOf } from './visit.ts'
 import { opened, seal } from './lib/token.ts'
 import { type Kind, LIFE } from './confirm.ts'
+import { purgeTunnel } from './tunnel-trash.ts'
 import { wiped } from './build-door.ts'
 import { reachChanged, toolsOf, viewsMoved } from './declared.ts'
 import {
@@ -31,11 +32,9 @@ import {
   type App,
   appStore,
   clamped,
-  daysLeft,
   type Directory,
   directory,
   draftStore,
-  due,
   type Host,
   META,
   type PhoneLine,
@@ -129,7 +128,7 @@ export let door = (slug: string, token?: string, env: HostEnv = {}) =>
   `https://${apex(env)}/space/${slug}/delete` +
   (token ? `?t=${encodeURIComponent(token)}` : '')
 
-// Erasing one app from the trash before its thirty days are up, as a person
+// Erasing one app from retained trash, as a person
 // confirms it (confirm.ts). Two steps, and an agent takes at most the first:
 // app_delete puts it in the trash, and app_erase asks. The door names the app
 // by eid, because a trashed app's slug may already be another app's.
@@ -141,13 +140,11 @@ export let trashedApp: Kind<App> = {
   },
   typed: (a) => a.slug,
   title: (a) => `Erase ${a.title || a.slug} for good?`,
-  until: (a) =>
-    `It is in the trash, where it stays for ${
-      a.trashed ? daysLeft(a.trashed) : 30
-    } more days and can be restored.`,
+  until: () =>
+    'It stays in the trash until restored or its owner confirms erasure.',
   stop: (a) =>
     a.trashed ? '' : `${a.slug} is not in the trash. An app is erased only ` +
-      'from the trash: delete it first, and it waits there for 30 days.',
+      'from the trash: delete it first, then choose permanent erasure separately.',
   lines: (space, a, env) => [
     `${a.title || a.slug} (${a.slug}), from ${space.slug}.${apex(env)}'s trash`,
     'its files, its versions and everything it saved',
@@ -172,11 +169,6 @@ export type Doomed = {
   lines: PhoneLine[]
   members: { person: string; name: string | null }[]
 }
-
-/** Whether held numbers still need their own or their space's grace. */
-export let numberGrace = (d: Doomed, now = Date.now()) =>
-  d.lines.some((l) => !l.trashed || !due(l.trashed, now)) &&
-  !(d.space.trashed && due(d.space.trashed, now))
 
 export let doomed = async (
   dir: Directory,
@@ -249,7 +241,7 @@ export let naming = (d: Doomed, env: HostEnv = {}): string[] => [
   ...d.lines.map((l) =>
     `${shown(l.number)} stops taking calls and texts; it costs ${
       dollars(l.monthly)
-    } a month until its 30-day trash grace ends, then returns to the phone company`
+    } a month until this confirmed purge returns it to the phone company`
   ),
   ...(d.members.length > 1
     ? [
@@ -284,7 +276,9 @@ export let keeping = (d: Doomed, env: HostEnv = {}): string[] => [
       d.members.map((m) => m.name ?? 'someone').join(', '),
     ]
     : []),
-  `the address ${d.space.slug}.${apex(env)} is held for you for 30 days — ` +
+  `the address ${d.space.slug}.${
+    apex(env)
+  } is held for you while in the trash — ` +
   'nobody else can take it, and every link to it works again the moment you ' +
   'restore the space',
 ]
@@ -308,16 +302,16 @@ works for the next hour:
 ${link}
 
 ${
-    forever && !numberGrace(d)
+    forever && !!d.space.trashed
       ? `It cannot be undone. It destroys:
 
 ${naming(d, env).map((l) => `  - ${l}`).join('\n')}`
-      : `It puts the space in the trash for 30 days. Nothing is erased, and you
-can bring it back any time in those 30 days. What stops until you do:
+      : `It puts the space in the trash. Nothing is erased, and you
+can bring it back until you separately choose permanent erasure. What stops until you do:
 
 ${keeping(d, env).map((l) => `  - ${l}`).join('\n')}
 
-After 30 days we erase it, and then it is gone for good.`
+It stays recoverable until you choose to erase it from the trash.`
   }
 
 If you did not ask for this, ignore this letter and nothing happens at all.`,
@@ -408,14 +402,12 @@ export let erase = async (
   dir: Directory,
   d: Doomed,
   who: Who,
-  now = Date.now(),
+  _now = Date.now(),
 ) => {
   let no = await refused(d.space, env)
   if (no) throw refuse('access', no)
-  // A number stays recoverable for its own grace or the space's grace.
-  // Keep the space too: its ownership and budget still belong to these lines.
-  if (numberGrace(d, now)) {
-    if (!d.space.trashed) await trashSpace(env, dir, d.space, who)
+  if (!d.space.trashed) {
+    await trashSpace(env, dir, d.space, who)
     return { files: 0, apps: 0, hosts: 0, trashed: true }
   }
   // Cloudflare before anything else, and only if it can be reached: a domain
@@ -431,6 +423,7 @@ export let erase = async (
     await release(env, host.name)
     await unmail(env, host.mail)
   }
+  await purgeTunnel(env, dir, d.space, who)
   // And the mail domains at its subdomains, each one of the plan's.
   await unmailSpace(env, dir, d.space)
   let files = 0
@@ -505,11 +498,8 @@ export let went = (
 // a restore has to put the space back exactly as it was — including which of
 // its apps were already in the trash of their own.
 //
-// The slug is held with it, deliberately, and that is the one place this
-// disagrees with a space's death above ("i'd release the names"): a name
-// comes straight back from an erase because nothing survives it, where
-// something in the trash is still here in every other way, and a second app
-// or space born at its address would be the thing a restore could not undo.
+// A trashed app frees its owner-scoped slug. Space addresses and shared
+// names remain held so restoration cannot give a person's address away.
 
 // What an app's coming or going does to everyone's resource list (T-33004): a
 // trashed app's views leave it and a restored one's rejoin it, so both ask the
@@ -794,10 +784,10 @@ export let kept = (d: Doomed, env: HostEnv = {}) =>
   } is in the trash. Nothing was erased: ${d.apps.length} ${
     d.apps.length == 1 ? 'app' : 'apps'
   }, their files and everything they ` +
-  'saved are all kept, and the address is held. Restore it any time in the ' +
-  `next 30 days — signed in at https://${d.space.slug}.${apex(env)}/, or ` +
-  `space_restore(space: '${d.space.slug}'). After 30 days it is erased for ` +
-  'good.'
+  'saved are all kept, and the address is held. Restore it any time — ' +
+  `signed in at https://${d.space.slug}.${apex(env)}/, or ` +
+  `space_restore(space: '${d.space.slug}'). Only your separate confirmation ` +
+  'can erase it from the trash.'
 
 // One app gone for good: its storage (`emptied` above, the same call a
 // space's death makes), then the row that says the app exists — that order,
@@ -924,15 +914,11 @@ export let collected = async (
 
 // ---- an account's end ----
 //
-// A test account goes for good, with no trash and no letter: nothing it holds
-// is a person's work (@yaks/platform/bots). Its row's death cascades to every
-// seat and grant naming it (member's vocabulary), so no space it leaves may be
-// left without an owner: one it is the last owner of goes with it when only
-// test accounts are left in it, and otherwise passes to who is left, a person
-// before a test account. A space still owned by someone else just loses the
-// seat. A person's own account is never closed here, and neither is a fixture.
+// Test accounts use the same retained trash as their spaces. Revoking their
+// credentials happens only during an explicit permanent purge.
 export type Closing = {
   person: string
+  trashed: boolean
   /** Its last space is still waiting out a held number's trash grace. */
   pending?: boolean
   /** The account as it was named: its address, or its eid. */
@@ -950,8 +936,8 @@ export type Closing = {
 let account = async (env: Env, named: string) => {
   let [row] = await meta(env).query(
     minted(named)
-      ? line`.entity.eid=${named}&.person ?email ?phone ?newcomer`
-      : line`.person&.email.address=${named}`,
+      ? line`.entity.eid=${named}&.person ?email ?phone ?newcomer ?trashed`
+      : line`.person&.email.address=${named} ?trashed`,
   ) as unknown as DirRow[]
   if (!row) return null
   let address = row.email?.address
@@ -973,7 +959,14 @@ export let closing = async (
   let row = await account(env, address)
   if (!row) return null
   let person = row.entity.eid
-  let out: Closing = { person, address, spaces: [], seats: [], heirs: [] }
+  let out: Closing = {
+    person,
+    address,
+    trashed: !!row.trashed,
+    spaces: [],
+    seats: [],
+    heirs: [],
+  }
   for (let { space } of await dir.seated(person)) {
     if ((await dir.owners(space)).some((p) => p != person)) {
       out.seats.push(space)
@@ -1011,24 +1004,52 @@ export let closed = async (
 ) => {
   let c = await closing(env, dir, address)
   if (!c) return null
-  let keeping = false
   for (let space of c.spaces) {
-    let out = await erase(env, dir, await doomed(dir, space), who)
-    keeping ||= !!out.trashed
+    if (!space.trashed) await trashSpace(env, dir, space, who)
   }
-  // A held line's grace keeps its last owner's way back into the space.
-  // The account sweep finishes closing once those spaces are erased.
-  if (keeping) return { ...c, pending: true }
-  if (c.heirs.length) {
-    await dir.stamp({
-      entities: c.heirs.map(({ seat }) => ({
-        entity: { eid: seat },
-        member: { role: 'owner' },
-      })),
-    }, vouched(who))
-  }
-  await buried(env, dir, c.person, who)
-  return c
+  await mark(dir, c.person, who, {})
+  return { ...c, pending: true }
+}
+
+/** Restore the account record; its owner can restore each space separately. */
+export let untrashAccount = (dir: Directory, person: string, who: Who) =>
+  mark(dir, person, who, null)
+
+export let trashedAccount: Kind<Closing> = {
+  kind: 'account',
+  find: async (dir, space, target, env) =>
+    space.slug == META.space ? await closing(env, dir, target) : null,
+  typed: (c) => c.address,
+  title: (c) => `Erase ${c.address} from the trash?`,
+  until: () =>
+    'The account and its saved work remain in the trash until restored or purged.',
+  stop: (c) => c.trashed ? '' : 'Move the account to the trash first.',
+  lines: (
+    _space,
+    c,
+  ) => [
+    c.address,
+    ...c.spaces.map((s) => `${s.slug}: its apps and everything saved`),
+  ],
+  press: () => 'Erase account forever',
+  act: async (env, dir, _space, c, who) => {
+    for (let space of c.spaces) {
+      let out = await erase(env, dir, await doomed(dir, space), who)
+      if (out.trashed) {
+        return 'Newly owned spaces moved to trash. Confirm the account purge separately.'
+      }
+    }
+    if (c.heirs.length) {
+      await dir.stamp({
+        entities: c.heirs.map(({ seat }) => ({
+          entity: { eid: seat },
+          member: { role: 'owner' },
+        })),
+      }, vouched(who))
+    }
+    await buried(env, dir, c.person, who)
+    return `${c.address} is erased from the trash.`
+  },
 }
 
 // A person gone: their credentials before their row, so none of them can
@@ -1054,13 +1075,13 @@ let buried = async (env: Env, dir: Directory, person: string, who: Who) => {
  * Anybody else, or a newcomer with a seat left, is left alone.
  */
 export let vacated = async (
-  env: Env,
+  _env: Env,
   dir: Directory,
   person: string,
   who: Who,
 ) => {
   if (!await dir.newcomer(person) || (await dir.seated(person)).length) return
-  await buried(env, dir, person, who)
+  await mark(dir, person, who, {})
 }
 
 // No app store is woken by the preview. A file write is a `written` row, which

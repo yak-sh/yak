@@ -62,15 +62,15 @@
       "noun": "admin",
       "verb": "accept",
       "title": "Accept an invitation addressed to this account",
-      "description": "Accept the signed invitation link in a local mail entity using this account’s session. The link and session are never printed.\n\n  yak admin accept E-41217 --as admin@bot.yak.sh\n\nRequires the website session retained by a code sign-in; browser OAuth sign-ins have none.",
+      "description": "Accept the signed invitation link in a local mail entity using this account\u2019s session. The link and session are never printed.\n\n  yak admin accept E-41217 --as admin@bot.yak.sh\n\nRequires the website session retained by a code sign-in; browser OAuth sign-ins have none.",
       "input": {
         "letter": {
           "type": "string",
-          "description": "the invitation letter’s id"
+          "description": "the invitation letter\u2019s id"
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -99,7 +99,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "openWorld": true
@@ -123,7 +123,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -158,7 +158,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -179,8 +179,8 @@
       "idempotent": true,
       "noun": "admin",
       "verb": "fee",
-      "title": "Read or set the platform’s fee",
-      "description": "What the platform takes from a sale, in basis points: read it, or set it. The rate is the platform’s, so the selected account must have the platform role.\n\n  yak admin fee --as admin@bot.yak.sh\n  yak admin fee 250 --as admin@bot.yak.sh",
+      "title": "Read or set the platform\u2019s fee",
+      "description": "What the platform takes from a sale, in basis points: read it, or set it. The rate is the platform\u2019s, so the selected account must have the platform role.\n\n  yak admin fee --as admin@bot.yak.sh\n  yak admin fee 250 --as admin@bot.yak.sh",
       "input": {
         "bps": {
           "type": "string",
@@ -188,7 +188,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "openWorld": true,
@@ -209,7 +209,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "readOnly": true,
@@ -223,7 +223,7 @@
       "noun": "admin",
       "verb": "move",
       "title": "Rehearse or run the store mover in every yaks.app store",
-      "description": "The store mover brings a store's rows into a new shape from its alarm, a batch at a time (workers/yak/mover.ts). This asks every store in turn, the app stores first and the directory last, and prints a line per store and rule as it goes. --rehearse moves each rule's rows inside a transaction the store rolls back, up to twenty batches, and says what it found and moved, any failure, and how long the store took to answer; without it each store is woken to move what it owes, a few a minute, and says where each rule stands. A space or space/app narrows it. The platform’s act, so the selected account must have the platform role.\n\n  yak admin move --rehearse --as admin@bot.yak.sh\n  yak admin move --as admin@bot.yak.sh\n  yak admin move ada --rehearse --as admin@bot.yak.sh",
+      "description": "The store mover brings a store's rows into a new shape from its alarm, a batch at a time (workers/yak/mover.ts). This asks every store in turn, the app stores first and the directory last, and prints a line per store and rule as it goes. --rehearse moves each rule's rows inside a transaction the store rolls back, up to twenty batches, and says what it found and moved, any failure, and how long the store took to answer; without it each store is woken to move what it owes, a few a minute, and says where each rule stands. A space or space/app narrows it. The platform\u2019s act, so the selected account must have the platform role.\n\n  yak admin move --rehearse --as admin@bot.yak.sh\n  yak admin move --as admin@bot.yak.sh\n  yak admin move ada --rehearse --as admin@bot.yak.sh",
       "input": {
         "where": {
           "type": "string",
@@ -239,7 +239,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "openWorld": true,
@@ -252,7 +252,7 @@
       "noun": "admin",
       "verb": "relocate",
       "title": "Say where every yaks.app store stands, and move an app's far store beside the kernel",
-      "description": "Cloudflare never moves a Durable Object, and the kernel makes every call a store answers, so a store far from it waits on each. This wakes every store in turn and prints the colo its object stands in, marking one outside the kernel's own colos (ORD, IAD) far. --move moves each far app's store to a new object beside the kernel, a new name tried while one stands far: copied while it serves, handed on in a short hold, the directory then naming the new object, and every entity it held read again through the new one; a missing entity stops the sweep. A space or space/app narrows it. The platform’s act, so the selected account must have the platform role.\n\n  yak admin relocate --as admin@bot.yak.sh\n  yak admin relocate ada --move --as admin@bot.yak.sh",
+      "description": "Cloudflare never moves a Durable Object, and the kernel makes every call a store answers, so a store far from it waits on each. This wakes every store in turn and prints the colo its object stands in, marking one outside the kernel's own colos (ORD, IAD) far. --move moves each far app's store to a new object beside the kernel, a new name tried while one stands far: copied while it serves, handed on in a short hold, the directory then naming the new object, and every entity it held read again through the new one; a missing entity stops the sweep. A space or space/app narrows it. The platform\u2019s act, so the selected account must have the platform role.\n\n  yak admin relocate --as admin@bot.yak.sh\n  yak admin relocate ada --move --as admin@bot.yak.sh",
       "input": {
         "where": {
           "type": "string",
@@ -264,7 +264,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "openWorld": true,
@@ -277,7 +277,7 @@
       "noun": "admin",
       "verb": "copy",
       "title": "Copy a space's Operator store, or every space's, or every app's store, to this machine",
-      "description": "Each space's Operator store is read out of its Builder object a page at a time and written to a SQLite file here, <to>/<space>.db, every table under its own rowids, so a migration over Operator stores is rehearsed on copies before it runs. With --apps, every app's store is read out of its Store object the same way, its sample's and its visitors' too, to <to>/<space>--<app>.db. The store serves while it is read, so its tables are read at different moments: a copy rehearses, it is no backup. A space with no store says so and writes nothing. A copy holds people's private words: remove it once its proof is done. The platform’s act, so the selected account must have the platform role.\n\n  yak admin copy --as admin@bot.yak.sh\n  yak admin copy ada --to .scratch/operators --as admin@bot.yak.sh\n  yak admin copy --apps --as admin@bot.yak.sh",
+      "description": "Each space's Operator store is read out of its Builder object a page at a time and written to a SQLite file here, <to>/<space>.db, every table under its own rowids, so a migration over Operator stores is rehearsed on copies before it runs. With --apps, every app's store is read out of its Store object the same way, its sample's and its visitors' too, to <to>/<space>--<app>.db. The store serves while it is read, so its tables are read at different moments: a copy rehearses, it is no backup. A space with no store says so and writes nothing. A copy holds people's private words: remove it once its proof is done. The platform\u2019s act, so the selected account must have the platform role.\n\n  yak admin copy --as admin@bot.yak.sh\n  yak admin copy ada --to .scratch/operators --as admin@bot.yak.sh\n  yak admin copy --apps --as admin@bot.yak.sh",
       "input": {
         "space": {
           "type": "string",
@@ -293,7 +293,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "openWorld": true,
@@ -305,8 +305,8 @@
       "tool": true,
       "noun": "admin",
       "verb": "erase",
-      "title": "Erase a test account",
-      "description": "Erase a test account for good: the spaces only test accounts are in with it as owner, and its seats and grants anywhere else, and this box's connections to it, which also end when the account is already gone. A person's account or a reviewer's fixture is refused. --check says what would go and changes nothing.\n\n  yak admin erase t133860@bot.yak.sh --check --as admin@bot.yak.sh\n  yak admin erase t133860@bot.yak.sh --as admin@bot.yak.sh",
+      "title": "Trash or restore a test account",
+      "description": "Move a test account and its owned test spaces to recoverable trash, preserving credentials and memberships. --restore brings its account back; restore its spaces separately. --check changes nothing. A person must confirm permanent erasure through the returned confirmation page. A personal account or protected fixture is refused.",
       "input": {
         "address": {
           "type": "string",
@@ -318,7 +318,11 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
+        },
+        "restore": {
+          "type": "boolean",
+          "description": "restore the account from trash; existing credentials work again"
         }
       },
       "required": [
@@ -338,7 +342,7 @@
       "input": {
         "space": {
           "type": "string",
-          "description": "the space’s slug"
+          "description": "the space\u2019s slug"
         },
         "act": {
           "type": "string",
@@ -358,15 +362,15 @@
         },
         "tunnel": {
           "type": "string",
-          "description": "adopt: the tunnel’s id"
+          "description": "adopt: the tunnel\u2019s id"
         },
         "service": {
           "type": "string",
-          "description": "adopt: the VPC Service’s id"
+          "description": "adopt: the VPC Service\u2019s id"
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -387,11 +391,11 @@
       "input": {
         "space": {
           "type": "string",
-          "description": "the space’s slug"
+          "description": "the space\u2019s slug"
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -410,7 +414,7 @@
       ],
       "noun": "admin",
       "verb": "query",
-      "title": "Query an app’s store",
+      "title": "Query an app\u2019s store",
       "outputSchema": {
         "type": "object",
         "properties": {
@@ -420,7 +424,7 @@
           }
         }
       },
-      "description": "An app’s store as this account reads it, through the filter grammar. `yak/platform` is the platform’s own store (people, spaces, seats), answered only to a seat in `yak`.\n\n  yak admin query jeff/recipes .doc\n  yak admin query jeff .kind=note\n  yak admin query yak/platform '.person&.email.address=jeff@yak.sh' --as admin@bot.yak.sh",
+      "description": "An app\u2019s store as this account reads it, through the filter grammar. `yak/platform` is the platform\u2019s own store (people, spaces, seats), answered only to a seat in `yak`.\n\n  yak admin query jeff/recipes .doc\n  yak admin query jeff .kind=note\n  yak admin query yak/platform '.person&.email.address=jeff@yak.sh' --as admin@bot.yak.sh",
       "input": {
         "where": {
           "type": "string",
@@ -435,7 +439,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -455,7 +459,7 @@
       ],
       "noun": "admin",
       "verb": "apply",
-      "title": "Apply bundles to an app’s store",
+      "title": "Apply bundles to an app\u2019s store",
       "outputSchema": {
         "type": "object",
         "properties": {
@@ -465,7 +469,7 @@
           }
         }
       },
-      "description": "Create, patch or delete rows in an app’s store as this account, through the connector’s graph_apply: the store’s rules and journal hold, and the write is recorded as the account. The space’s owner and the platform’s admin write any app’s rows; --check rehearses the batch and keeps nothing.\n\n  yak admin apply yourname/vale '[{\"entity\": {\"eid\": \"<eid>\"}, \"sfx\": {\"notes\": \"chime\"}}]' --as admin@bot.yak.sh\n  yak admin apply jeff/recipes @fix.json --check --as admin@bot.yak.sh",
+      "description": "Create, patch or delete rows in an app\u2019s store as this account, through the connector\u2019s graph_apply: the store\u2019s rules and journal hold, and the write is recorded as the account. The space\u2019s owner and the platform\u2019s admin write any app\u2019s rows; --check rehearses the batch and keeps nothing.\n\n  yak admin apply yourname/vale '[{\"entity\": {\"eid\": \"<eid>\"}, \"sfx\": {\"notes\": \"chime\"}}]' --as admin@bot.yak.sh\n  yak admin apply jeff/recipes @fix.json --check --as admin@bot.yak.sh",
       "input": {
         "where": {
           "type": "string",
@@ -484,7 +488,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -526,7 +530,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         },
         "private": {
           "type": "boolean",
@@ -583,7 +587,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -599,11 +603,11 @@
       "noun": "admin",
       "verb": "deploys",
       "title": "List yaks.app versions and deployments",
-      "description": "The kernel and front versions observed through yaks.app's public gateway, beside recent kernel promotions and their commits; ~ marks a commit inferred by time. Promotion percentages do not prove what the gateway serves. Migration boundaries survive code rollbacks, and unknown history refuses a rollback. Infrastructure requires the platform admin or the configured person’s own account.",
+      "description": "The kernel and front versions observed through yaks.app's public gateway, beside recent kernel promotions and their commits; ~ marks a commit inferred by time. Promotion percentages do not prove what the gateway serves. Migration boundaries survive code rollbacks, and unknown history refuses a rollback. Infrastructure requires the platform admin or the configured person\u2019s own account.",
       "input": {
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "readOnly": true,
@@ -614,7 +618,7 @@
       "noun": "admin",
       "verb": "errors",
       "title": "List yaks.app failures by tracker bug",
-      "description": "Every unresolved tracker bug (not resolved or archived), however old, newest first. No time window by default; since optionally narrows by last seen. Thrown or caught: lifetime count, first and last seen, global bug id, place and message. Then the time to fix of the bugs resolved in the window (a week without since): median and worst, first seen or regressed to resolved; and how long the oldest open bug has been open. Pass resolved to include each resolved bug’s full explanation. Then people's letters to the platform's addresses in the same window: how many, how many have a reply in their thread with median and worst time to answer, and each one still unanswered (a letter that needs no answer leaves the list when its task is cancelled, which archives it). Reads the tracker through its signed door using the remote URL and vault reference of this config's tracker plugin, else tracker.json beside this graph; bug_show, bug_resolve, bug_reopen and bug_archive take a listed bug's global id, and tracker_retry reruns the tracker's failed runs (a resolution's bug_settle) once their fix is live; `admin tail` watches live traffic. Infrastructure requires the platform admin or the configured person’s own account.",
+      "description": "Every unresolved tracker bug (not resolved or archived), however old, newest first. No time window by default; since optionally narrows by last seen. Thrown or caught: lifetime count, first and last seen, global bug id, place and message. Then the time to fix of the bugs resolved in the window (a week without since): median and worst, first seen or regressed to resolved; and how long the oldest open bug has been open. Pass resolved to include each resolved bug\u2019s full explanation. Then people's letters to the platform's addresses in the same window: how many, how many have a reply in their thread with median and worst time to answer, and each one still unanswered (a letter that needs no answer leaves the list when its task is cancelled, which archives it). Reads the tracker through its signed door using the remote URL and vault reference of this config's tracker plugin, else tracker.json beside this graph; bug_show, bug_resolve, bug_reopen and bug_archive take a listed bug's global id, and tracker_retry reruns the tracker's failed runs (a resolution's bug_settle) once their fix is live; `admin tail` watches live traffic. Infrastructure requires the platform admin or the configured person\u2019s own account.",
       "input": {
         "resolved": {
           "type": "boolean",
@@ -626,7 +630,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "readOnly": true,
@@ -640,11 +644,11 @@
       "noun": "admin",
       "verb": "tail",
       "title": "Follow yaks.app live events",
-      "description": "One line per live yaks.app event: outcome, entrypoint, request and errors. Does not return until interrupted. Infrastructure requires the platform admin or the configured person’s own account.",
+      "description": "One line per live yaks.app event: outcome, entrypoint, request and errors. Does not return until interrupted. Infrastructure requires the platform admin or the configured person\u2019s own account.",
       "input": {
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "readOnly": true,
@@ -655,7 +659,7 @@
       "noun": "admin",
       "verb": "rollback",
       "title": "Roll yaks.app back to a prior version",
-      "description": "Emergency rollback, only for a broken build path: code corrections use `yak admin revert`, since main deploys on every push. Defaults to the prior deployed version, refuses data boundaries and uncertain commits, then probes the public doors. Infrastructure requires the platform admin or the configured person’s own account.",
+      "description": "Emergency rollback, only for a broken build path: code corrections use `yak admin revert`, since main deploys on every push. Defaults to the prior deployed version, refuses data boundaries and uncertain commits, then probes the public doors. Infrastructure requires the platform admin or the configured person\u2019s own account.",
       "input": {
         "version": {
           "type": "string",
@@ -663,7 +667,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "destructive": true,
@@ -677,7 +681,7 @@
       "noun": "admin",
       "verb": "revert",
       "title": "Revert and publish a main commit",
-      "description": "Revert a main commit in a fresh worktree, land and push main. Workers Builds deploys in the background; deployment failures are reported by recovery. A failed worktree is kept. Infrastructure requires the platform admin or the configured person’s own account.",
+      "description": "Revert a main commit in a fresh worktree, land and push main. Workers Builds deploys in the background; deployment failures are reported by recovery. A failed worktree is kept. Infrastructure requires the platform admin or the configured person\u2019s own account.",
       "input": {
         "sha": {
           "type": "string",
@@ -685,7 +689,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "destructive": true,
@@ -699,7 +703,7 @@
       "noun": "admin",
       "verb": "gallery",
       "title": "Decide, code-review or list a gallery app",
-      "description": "As the platform admin, act on a gallery request. code-review records your review of the code of an app somebody else asked into the gallery, which comes to you as a task, and sends the platform’s owner its review request with your verdict and findings. approve and decline answer a request, and list puts a published app in the gallery at once, skipping review: do those only when the platform’s owner asks, and name him with --by. The session is recorded from this call.\n\n  yak admin gallery acme/todo code-review --verdict approve --findings @findings.md --as admin@bot.yak.sh\n  yak admin gallery jeff/housebook approve --by jeff@yak.sh --as admin@bot.yak.sh\n  yak admin gallery yourname/garden list --by jeff@yak.sh --as admin@bot.yak.sh",
+      "description": "As the platform admin, act on a gallery request. code-review records your review of the code of an app somebody else asked into the gallery, which comes to you as a task, and sends the platform\u2019s owner its review request with your verdict and findings. approve and decline answer a request, and list puts a published app in the gallery at once, skipping review: do those only when the platform\u2019s owner asks, and name him with --by. The session is recorded from this call.\n\n  yak admin gallery acme/todo code-review --verdict approve --findings @findings.md --as admin@bot.yak.sh\n  yak admin gallery jeff/housebook approve --by jeff@yak.sh --as admin@bot.yak.sh\n  yak admin gallery yourname/garden list --by jeff@yak.sh --as admin@bot.yak.sh",
       "input": {
         "app": {
           "type": "string",
@@ -729,7 +733,7 @@
         },
         "by": {
           "type": "string",
-          "description": "who the decision is recorded as: the platform owner’s address when he asked for it; default the calling agent’s project"
+          "description": "who the decision is recorded as: the platform owner\u2019s address when he asked for it; default the calling agent\u2019s project"
         },
         "reason": {
           "type": "string",
@@ -737,7 +741,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -780,7 +784,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "required": [
@@ -799,7 +803,7 @@
       "noun": "admin",
       "verb": "support",
       "title": "Read or answer yaks.app support threads",
-      "description": "The support threads people and their agents open with feedback, kept in the platform's own store. With no thread, the ones not yet completed, newest first. With a thread, the whole conversation: where it was said from, the words that opened it, and every message with the id a reply names. Text answers in the thread as you, the platform's answer its person reads with feedback(thread); reply_to names the message it answers, fix links the task or commit that fixes it, and complete marks the thread done. Answered only to the platform role.\n\n  yak admin support --as admin@bot.yak.sh\n  yak admin support 6f1c… --as admin@bot.yak.sh\n  yak admin support 6f1c… 'Renaming is app_set(slug); the guide now says so.' --fix T-153200 --complete --as admin@bot.yak.sh",
+      "description": "The support threads people and their agents open with feedback, kept in the platform's own store. With no thread, the ones not yet completed, newest first. With a thread, the whole conversation: where it was said from, the words that opened it, and every message with the id a reply names. Text answers in the thread as you, the platform's answer its person reads with feedback(thread); reply_to names the message it answers, fix links the task or commit that fixes it, and complete marks the thread done. Answered only to the platform role.\n\n  yak admin support --as admin@bot.yak.sh\n  yak admin support 6f1c\u2026 --as admin@bot.yak.sh\n  yak admin support 6f1c\u2026 'Renaming is app_set(slug); the guide now says so.' --fix T-153200 --complete --as admin@bot.yak.sh",
       "input": {
         "thread": {
           "type": "string",
@@ -823,7 +827,7 @@
         },
         "as": {
           "type": "string",
-          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+          "description": "the owner\u2019s yaks.app connection, matched by whole address or the part before @; list the owner\u2019s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry\u2019s account. Default is your own email, else the oldest connection"
         }
       },
       "openWorld": true,

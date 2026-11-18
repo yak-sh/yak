@@ -1,6 +1,5 @@
-// A test account's end: on yaks.app (workers/yak/erase.ts), and on this box,
-// where every connection to it goes with it. A credential the box kept for a
-// person who is gone is only a way to write them back (T-144541).
+// A test account's recoverable trash, and its retained credentials here.
+// Only an account already purged loses this box's connection to it.
 import { type Ctx, disconnect, toAccount } from '@yaks/connections'
 import { CallError } from '@yaks/tools/errors'
 import { closeAccount, type Closed } from './api.ts'
@@ -25,8 +24,9 @@ export let erase = async (
   bearer: string,
   address: string,
   check = false,
+  restore = false,
 ): Promise<Erased> => {
-  let closed = await closeAccount(bearer, address, check).then(
+  let closed = await closeAccount(bearer, address, check, restore).then(
     (closed) => ({ ...closed, gone: false }),
     (error) => {
       if (error instanceof CallError && error.code == 'no_account') {
@@ -35,7 +35,7 @@ export let erase = async (
       throw error
     },
   )
-  let connections = check
+  let connections = check || !closed.erased && !closed.gone
     ? (await toAccount(c.graph.read, 'yaks.app', address)).length
     : await forget(c, address)
   return { ...closed, connections }

@@ -74,33 +74,22 @@ space_set:
 space_delete:
   title: Delete a space
   description: >-
-    Delete a space: it goes to the trash for 30 days. Every app in it stops
-    answering, its address stops serving and its apps disappear from your
-    tools, but nothing is erased, the address is held, and space_restore
-    brings the whole space back within those 30 days. After that the
-    platform erases it: the apps, everything they saved, their files, any
-    domain attached to them, and the address becomes available again. This
-    tool cannot delete the space itself: it emails the space's owner a
-    confirmation link, valid for one hour, and returns a summary of what
-    that link would stop. The confirmation is the owner's to give by opening
-    that link; nothing else completes the deletion. Only the space owner may
-    ask. app_delete trashes one app instead. With forever: true the link
-    erases the space at once instead, with nothing kept and no undo: use it
-    only when the person asked for exactly that; a space left in the trash
-    costs nothing to keep. To undo
-    a delete: space_restore, any time in those 30 days. Documentation:
-    https://yaks.app/docs/errors.
+    Move a space to recoverable trash. Its apps stop serving, but their files
+    and saved data stay intact. The space slug and shared domains, hostnames
+    and phone numbers remain held. The tool emails the owner a confirmation
+    link valid for one hour; only their confirmation trashes the space.
+    space_restore brings it back at any time. With forever: true on a space
+    already in trash, ask the owner to confirm permanent erasure separately.
+    A live space always enters trash first. Only ask for permanent erasure
+    when the person specifically chose it. Documentation: https://yaks.app/docs/errors.
 space_restore:
   title: Restore a deleted space
   description: >-
-    Bring back a space that was deleted. Every app in it serves again at the
-    address it always had, its tools and pages come back, and everything it
-    saved is exactly as it was; nothing is touched while a space sits in the
-    trash. Works within 30 days of the delete being confirmed; after that
-    the space has been erased and there is nothing to bring back. Unlike
-    space_delete, restoring needs no confirmation email. The caller must
-    still be the space owner. Pass the deleted space's slug; returns its
-    restored URL. Documentation: https://yaks.app/docs/errors.
+    Restore a space from trash, with every app and its files and saved data.
+    Its shared names remain held while trashed, so its original addresses
+    return. The caller must still own it. No confirmation email is needed.
+    Pass the space slug; returns its restored URL. Trash has no automatic
+    expiry. Documentation: https://yaks.app/docs/errors.
 space_sell:
   title: Connect Stripe to a space
   description: >-
@@ -226,7 +215,7 @@ app_files:
     text, and with paths several files, or with neither every text file in
     the app, up to 64 KB in all. list and a read of several files or all of
     them end with the messages of the newest releases: read them before
-    changing the app. Replaced or deleted bytes are kept for 30 days: op:
+    changing the app. Replaced or deleted bytes are retained in recoverable history: op:
     history with path lists them (sha256, size, when, by whom), and op:
     restore puts one back; a restore is itself a write, and with no path
     goes back one write.
@@ -743,43 +732,33 @@ connection_list:
 app_delete:
   title: Delete an app
   description: >-
-    Delete an app: it goes to the trash for 30 days. Its address stops
-    answering, its tools and pages disappear from your tools, and it stops being
-    the front page, but its files and everything it saved are kept while its
-    slug is free immediately, and app_restore brings the whole app back within
-    those 30 days. After that the platform erases it for good. Delete an app
-    only when the person asked for that app to go, never to free its slug for
-    a new one: a new app takes a new slug. app_files op:
-    delete removes one file, and app_set moves an app rather than replacing it.
-    A platform admin may trash any app. Nothing an agent does erases an app:
-    every delete goes to the trash, and only the 30 days running out erase it.
-    To undo a delete: app_restore, any time in those 30 days. Returns what was
-    trashed and how to restore it.
+    Move an app to recoverable trash. Its address stops answering, its tools
+    and pages leave the roster and it stops being the front page. All files,
+    versions and saved data remain. Its slug is free immediately for a new app.
+    Never trash or replace someone's app to rebuild it: edit the existing app.
+    app_restore brings it back at any time; permanent erasure requires the
+    owner's separate confirmation through app_erase. A platform admin may
+    trash any app. Returns its trash eid and restore instructions.
     Documentation: https://yaks.app/docs/errors.
 app_restore:
   title: Restore a deleted app
   description: >-
-    Bring back an app that was deleted. It serves again at its old address if
-    free, or a free numbered address otherwise; pass slug to choose another
-    address. Its tools and pages come back, and everything it saved is exactly
-    as it was; nothing is touched while an app sits in the trash. A platform
-    admin may restore any app. Works within 30 days of app_delete; after that it
-    has been erased and there is nothing to bring back. app_list shows what is
-    in the trash and how long each app has left. Pass the deleted app eid from
-    app_delete or app_list (and its space). Its old slug also works while no
-    live app owns it. Returns its restored URL and a confirmation.
+    Restore an app from trash with all files, versions and saved data.
+    Its old slug is used if free; otherwise it gets a free numbered slug and
+    the answer names the new address. Pass slug to choose another free name.
+    A platform admin may restore any app. Pass the deleted app eid from
+    app_delete or app_list and its space; its old slug also works while no
+    live app owns it. Trash has no automatic expiry.
     Documentation: https://yaks.app/docs/errors.
 app_erase:
   title: Ask to erase an app from the trash
   description: >-
-    Ask for an app in the trash to be erased now rather than when its 30 days
-    run out. This tool erases nothing: it emails the space's owner a link,
-    valid for one hour, and only their press on that page erases it, with no
-    undo. Use it only when the person asked for exactly that; an app left in
-    the trash costs nothing to keep. Only the space owner may ask, and only for
-    an app already in the trash (app_delete puts it there). Pass the deleted
-    app eid from app_delete or app_list. Until they press it, app_restore still
-    brings the app back. Documentation: https://yaks.app/docs/errors.
+    Ask the owner to permanently erase an app already in trash, only when
+    they specifically chose permanent erasure. The tool erases nothing:
+    it emails a confirmation link valid for one hour. Only the owner's
+    confirmation purges its files, versions and saved data. Pass the app eid
+    from app_delete or app_list. Until confirmed, app_restore brings it back.
+    Documentation: https://yaks.app/docs/errors.
 app_errors:
   title: List open errors
   step:
@@ -818,9 +797,9 @@ app_list:
     here (member_add sends another letter, member_remove withdraws one), and
     counts everyone else; people: true names them. Name an app to list it
     alone and in full: its email address, version, bindings, month's usage
-    and everyone who can open it. Deleted apps are listed with the days each
-    has left and what each still holds, until app_restore brings it back or
-    the 30 days run out.
+    and everyone who can open it. Deleted apps are listed with what they still
+    hold until app_restore brings them back or the owner confirms permanent
+    erasure.
     Documentation: https://yaks.app/docs.
 commands:
   title: List commands

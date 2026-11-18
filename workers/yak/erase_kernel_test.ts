@@ -67,6 +67,8 @@ test('a space erased: the letter, the act, and the name back', async () => {
     assertEquals((await shop.get('.doc')).length, 1)
     assertEquals((await k.at(`${slug}.yaks.app`, '/shop/')).status, 200)
 
+    await meta(k).apply([{ entity: { eid: them.eids[slug] }, trashed: {} }])
+
     // The agent asks. It deletes nothing: it mails the owner, and says so.
     let said = await agent.tool('space_delete', {
       space: slug,
@@ -75,7 +77,7 @@ test('a space erased: the letter, the act, and the name back', async () => {
     assertStringIncludes(said, 'nothing is deleted')
     assertStringIncludes(said, 'check their email')
     assertStringIncludes(said, `https://${slug}.yaks.app/shop/`)
-    assertEquals((await k.at(`${slug}.yaks.app`, '/shop/')).status, 200)
+    assertEquals((await k.at(`${slug}.yaks.app`, '/shop/')).status, 404)
 
     // The letter names what would go, and carries the link.
     let mail = await until(
@@ -103,7 +105,7 @@ test('a space erased: the letter, the act, and the name back', async () => {
       assertStringIncludes(shut.headers.get('location') ?? '', '/login')
       await shut.body?.cancel()
     }
-    assertEquals((await k.at(`${slug}.yaks.app`, '/shop/')).status, 200)
+    assertEquals((await k.at(`${slug}.yaks.app`, '/shop/')).status, 404)
 
     // Somebody else signed in is told what a stranger is told about a space
     // that does not exist.
@@ -122,7 +124,7 @@ test('a space erased: the letter, the act, and the name back', async () => {
     })).text()
     assertStringIncludes(page, 'What goes, for good')
     assertStringIncludes(page, `https://${slug}.yaks.app/shop/`)
-    assertEquals((await k.at(`${slug}.yaks.app`, '/shop/')).status, 200)
+    assertEquals((await k.at(`${slug}.yaks.app`, '/shop/')).status, 404)
 
     // And confirms.
     let form = (fields: Record<string, string>) =>
@@ -180,6 +182,7 @@ test('an erased space gives its domain back', async () => {
     // leaves every one of them exactly where it is. Its ticket is the one the
     // letter would have carried (erase.ts `ticket`), minted here rather than
     // waited for, since what is under test is the act and not the letter.
+    await dir.apply([{ entity: { eid: them.eids.domainlab20 }, trashed: {} }])
     let out = await k.at('yaks.app', '/space/domainlab20/delete', {
       method: 'POST',
       headers: {
@@ -231,6 +234,7 @@ test('a space whose subscription lapsed unpaid may be erased', async () => {
     assertObjectMatch(row, {
       plan: { subscription: sub.id, status: 'incomplete_expired' },
     })
+    await dir.apply([{ entity: { eid }, trashed: {} }])
     let out = await k.at('yaks.app', '/space/lapsed21/delete', {
       method: 'POST',
       headers: {

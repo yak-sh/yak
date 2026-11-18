@@ -485,6 +485,7 @@ let erasing = async (
   args: Record<string, unknown>,
   status: number,
   code = '',
+  reply: Record<string, unknown> = {},
 ) => {
   let { host, kept, ask } = await box()
   try {
@@ -501,6 +502,7 @@ let erasing = async (
             erased: init?.method == 'DELETE',
             spaces: ['gone-space'],
             seats: [],
+            ...reply,
           })
           : Response.json({ error: { code, message: code } }, { status }),
       async () => {
@@ -540,6 +542,20 @@ test('erasing a test account ends the box connections to it, also once it is gon
   ok(checked.said.includes('connections on this box  1 would end'))
   let refused = await erasing({}, 403, 'access')
   equal([refused.thrown, refused.left], ['access', all])
+})
+
+test('account trash and restoration keep the existing local credential', async () => {
+  let all = [ADMIN, 'gone@bot.yak.sh', 'other@bot.yak.sh'].sort()
+  let trashed = await erasing({}, 200, '', { erased: false, trashed: true })
+  equal(trashed.left, all)
+  ok(trashed.said.includes('in the trash'))
+  ok(trashed.said.includes('1 retained'))
+  let restored = await erasing({ restore: true }, 200, '', {
+    erased: false,
+    restored: true,
+  })
+  equal(restored.left, all)
+  ok(restored.said.includes(': restored'))
 })
 
 test('admin_errors answers its caller with every unresolved bug', async () => {

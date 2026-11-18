@@ -10,7 +10,7 @@ import type { Env } from './env.ts'
 import { connector, fresh, signIn } from './probe.ts'
 import { ledger, mint } from './grants.ts'
 import { KERNEL, meta } from './meta.ts'
-import { closed } from './erase.ts'
+import { closed, untrashAccount } from './erase.ts'
 import { BOT } from '@yaks/platform/bots'
 import { managePath } from '@yaks/platform/routes'
 
@@ -41,15 +41,32 @@ let called = await connector(k, undefined, token).call('initialize', {
 let left = await meta(env).query(line`.entity.eid=${cy.person}`)
 
 test('an erased account is not revived by its cookie', () => {
-  assertEquals(left, [])
+  assertEquals(left.length, 1)
+  assertEquals(!!left[0].trashed, true)
   assertEquals({ ...said, reported }, {
     status: 303,
     reported: 0,
   })
 })
 
-test("an erased account's grant is revoked with it", () => {
+test("an account's trash suspends its grant without destroying it", async () => {
   assertEquals(called, 'mcp 401')
+  await untrashAccount(dir, cy.person, {
+    person: k.owner.person,
+    role: 'owner',
+  })
+  let restored = await connector(k, undefined, token).call('initialize', {
+    protocolVersion: '2025-06-18',
+    capabilities: {},
+    clientInfo: { name: 'probe', version: '1' },
+  }).then(() => 'answered', (e: Error) => e.message)
+  assertEquals(restored, 'answered')
+  let page = await k.at(k.host, managePath('agents'), {
+    redirect: 'manual',
+    headers: { cookie: cy.cookie },
+  })
+  assertEquals(page.status, 200)
+  await page.body?.cancel()
 })
 
 // A row a credential wrote back before its erase revoked them is a bare
@@ -69,9 +86,10 @@ let kept = await closed(env, dir, newcomer, owner).then(
   (e: Error) => e.message,
 )
 
-test('a bare person row is erased by its eid', async () => {
+test('a bare person row is retained in trash by its eid', async () => {
   assertEquals(gone?.person, revived)
-  assertEquals(await meta(env).query(line`.entity.eid=${revived}`), [])
+  let [row] = await meta(env).query(line`.entity.eid=${revived}`)
+  assertEquals(!!row.trashed, true)
 })
 
 test("a newcomer's row is not erased by its eid", () => {

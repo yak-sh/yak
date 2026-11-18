@@ -8,7 +8,7 @@ guide:
     The error codes an ./api/ endpoint refuses with and how a page shows them,
     the error reporter in every page and POST ./api/report, where an error is
     filed and how the agent is told about it once, app_errors, app_versions
-    and app_rollback, the 30-day trash (app_delete, space_delete, app_restore,
+    and app_rollback, retained trash (app_delete, space_delete, app_restore,
     space_restore), store_restore and file history, and feedback for anything
     you or the person have to say about the platform itself.
 ---
@@ -354,10 +354,9 @@ wakes stop firing. What does not change: anything it saved.
 
 `app_restore` takes it out of the trash and restores all of that. A wake that
 came due while it was in the trash fires once, the same way any missed period is
-caught up, and then continues at its cadence. The trash keeps it for 30 days;
-`app_list` lists what is in the trash with the days each one has left, and the
-person can restore one from their space's own page without an assistant at all.
-After 30 days the platform erases it, and then there is nothing to restore.
+caught up, and then continues at its cadence. Trash has no automatic expiry.
+`app_list` lists retained apps, and the person can restore one from their
+space's own page without an assistant.
 
     app_delete(app: 'scratch')
     → yourname/scratch is in the trash. https://yourname.yaks.app/scratch/ stops
@@ -372,10 +371,10 @@ restored app keeps its files, store and deploys; the new app at its old address
 keeps its own data.
 
 Nothing an assistant does erases an app. Every `app_delete` goes to the trash,
-and only the 30 days running out erase it, or the owner's own press. When the
-person asks for an app in the trash to be erased now, `app_erase(app)` mails
-them a link, good for an hour; opening it and pressing the button erases the
-app, with no undo. Until then `app_restore` still brings it back.
+and only the owner's separate confirmation erases it. When the person chooses
+permanent erasure from trash, `app_erase(app)` mails them a link, good for an
+hour; opening it and pressing the button erases the app, with no undo. Until
+then `app_restore` still brings it back.
 
     app_erase(app: '<eid from app_list>')
     → nothing is erased. yourname/scratch is still in the trash… a letter is
@@ -386,12 +385,12 @@ app, with no undo. Until then `app_restore` still brings it back.
     space_delete(space, forever?)
     space_restore(space)
 
-A whole space goes into the same 30-day trash, with the same guarantees: nothing
-is erased, every app in it is kept whole, and the address is held so nobody else
-can take it. While it is in the trash, every hostname of the space answers
-nothing, its apps stop offering their commands and their pages and fire none of
-their wakes, and email to any address under it bounces. `space_restore` takes it
-out of the trash and all of that works as it did before.
+A whole space goes into the same retained trash, with the same guarantees:
+nothing is erased, every app in it is kept whole, and the address is held so
+nobody else can take it. While it is in the trash, every hostname of the space
+answers nothing, its apps stop offering their commands and their pages and fire
+none of their wakes, and email to any address under it bounces. `space_restore`
+takes it out of the trash and all of that works as it did before.
 
 `space_delete` is the one deletion **you cannot complete yourself**. It mails
 the owner a link, good for an hour, and reports what that link would take
@@ -405,16 +404,18 @@ in, at `https://yaks.app/space/<slug>/delete`.
 The person restores it from the space's own address: signed in,
 `https://<slug>.yaks.app/` is the one page a trashed space serves, and it has
 the restore button. `space_new` at that slug is refused for its owner, with the
-reason. `forever: true` mails a link that erases the space on the spot instead,
-with nothing kept: only when the person has said they mean exactly that.
+reason. `forever: true` on an already trashed space emails a link for a separate
+permanent purge, only when the person specifically chose it. A live space always
+enters trash first. Space slugs, phone numbers, domains and hostnames stay held
+while in trash; only an app's owner-scoped slug is freed.
 
 ## Undoing mistakes
 
 Every destructive action on yaks.app can be undone, and each tool's own
 description ends by naming how. There are four ways, at four scopes:
 
-- A deleted app or space is in the trash for 30 days, above, and `app_restore`
-  or `space_restore` brings back the files and data; an app may return at a
+- A deleted app or space stays in recoverable trash, above, and `app_restore` or
+  `space_restore` brings back the files and data; an app may return at a
   different address.
 - A store can be restored to any moment in the last 30 days. `store_restore`
   returns everything the app has saved to how it was at a time you name: a bad
@@ -422,7 +423,7 @@ description ends by naming how. There are four ways, at four scopes:
   is recorded first, so a restore can itself be undone by restoring to a moment
   just before it, and the answer says how. Call it with no time and it reports
   the window and every restore already made.
-- Every file write keeps what it replaced for 30 days, and
+- Every file write retains what it replaced, and
   `app_files(op: 'history', path)` and `app_files(op: 'restore', path)` list and
   put one back (<https://yaks.app/docs/files.md>).
 - Every deploy can be rolled back, above.

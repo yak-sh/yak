@@ -163,19 +163,18 @@ yak admin relocate ada --move --as admin@bot.yak.sh
 
 ## Erasing a test account
 
-`erase` removes a test account from yaks.app for good: the spaces where it is
-the last owner and only test accounts sit, and its seats and grants everywhere
-else. No space is left without an owner: one it is the last owner of where
-someone else sits passes to them, a person before a test account. An owner of
-`yak` may erase any test account, and an account may erase itself. A person's
-account and a reviewer's fixture are refused. Every connection this box keeps to
-the account ends with it, and erasing an account that is already gone, as the
-sweep leaves one, ends them too. `--check` says what would go and changes
-nothing.
+`erase` moves a test account and its owned test spaces to recoverable trash. Its
+saved data, memberships, credentials and shared names remain held. Existing
+credentials cannot be used while its account is trashed. `--restore` brings the
+account back with those same credentials; restore its spaces separately.
+`--check` previews the affected spaces. Only a person's separate confirmation
+through the returned page permanently purges it. Personal accounts and protected
+fixtures are refused.
 
 ```sh
 yak admin erase t133860@bot.yak.sh --check --as admin@bot.yak.sh
 yak admin erase t133860@bot.yak.sh --as admin@bot.yak.sh
+yak admin erase t133860@bot.yak.sh --restore --as admin@bot.yak.sh
 ```
 
 ## Browser-only operations

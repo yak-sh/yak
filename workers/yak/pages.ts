@@ -358,9 +358,6 @@ export let nothingHere = (env: Host = {}) =>
     status: 404,
   }, home(env))
 
-// How long something in the trash is kept: "3 more days".
-let more = (n: number) => `${n} more ${n == 1 ? 'day' : 'days'}`
-
 // An app in the trash, at its own address (erase.ts, T-34430). Everyone else
 // gets `nothingHere` — a deleted app is not a stranger's news — so this is
 // the space's owner, told the one thing that is actually true of this
@@ -376,7 +373,7 @@ export let binned = (
     {
       title: `${at.title} is in the trash.`,
       lead: `Nothing answers at this address until it is restored. It is ` +
-        `kept for ${more(at.days)}, then erased for good.`,
+        'kept until you restore it or confirm permanent erasure.',
       status: 404,
     },
     h(
@@ -407,9 +404,8 @@ export let spaceBinned = (at: {
     {
       title: `${at.title} is in the trash.`,
       lead: `Nothing answers at ${host} until you restore it — no app ` +
-        `here, and no page. Everything the space had is kept for ${
-          more(at.days)
-        }, then erased for good.`,
+        'here, and no page. Everything is kept until you restore it or ' +
+        'confirm permanent erasure.',
       status: 404,
     },
     h(

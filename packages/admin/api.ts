@@ -484,6 +484,9 @@ export let storePage = <T>(
 export type Closed = {
   address: string
   erased: boolean
+  trashed?: boolean
+  restored?: boolean
+  purge?: string
   spaces: string[]
   seats: string[]
 }
@@ -495,6 +498,7 @@ export let closeAccount = (
   session: string,
   address: string,
   check = false,
+  restore = false,
 ): Promise<Closed> =>
   said(sent(
     apex(
@@ -503,7 +507,7 @@ export let closeAccount = (
       }`,
     ),
     session,
-    { method: check ? 'GET' : 'DELETE' },
+    { method: check ? 'GET' : restore ? 'POST' : 'DELETE' },
   ))
 
 /** The tunnel a space has to a machine (workers/yak/tunnel.ts), and, answered

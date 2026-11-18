@@ -144,7 +144,7 @@ ${link}
 
 ${
     k.reversible
-      ? 'It can be restored from the trash within 30 days. What stops:'
+      ? 'It stays recoverable until restored or its owner confirms a purge. What stops:'
       : 'It cannot be undone. It destroys:'
   }
 

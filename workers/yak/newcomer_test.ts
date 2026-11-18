@@ -423,7 +423,8 @@ test("a newcomer a script opened is nobody's before it has any address", () => {
 
 test("keeping into an account takes the newcomer's browser, and their row goes", () => {
   assertEquals(idOf(keptBrowser.by), ana)
-  assertEquals(keptNewcomer, [])
+  assertEquals(keptNewcomer.length, 1)
+  assert(keptNewcomer[0].trashed)
 })
 
 test('an unkept newcomer and their trashed space survive time passing', () => {

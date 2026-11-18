@@ -291,31 +291,38 @@ test('closing a test account keeps its ownership while a number waits in the tra
   assertEquals((await dir.at(space.eid))!.trashed, marked)
 })
 
-test('erasing a test account takes its spaces, seats and grants, and keeps the rest', async () => {
+test('trashing a test account retains its spaces, seats and identity', async () => {
   let { scenario, dir, ask, PROBE, GUEST } = await accounts()
   await using _ = scenario
   let checked = await ask(JEFF, 'probe@bot.yak.sh', 'GET')
   assertEquals(checked.body, {
     address: 'probe@bot.yak.sh',
     erased: false,
+    trashed: false,
+    restored: false,
     spaces: ['probe'],
     seats: ['ada'],
   })
   assertEquals((await dir.space('probe'))?.slug, 'probe')
   let erased = await ask(JEFF, 'probe@bot.yak.sh')
-  assertEquals(erased.body.erased, true)
-  assertEquals(await dir.space('probe'), null)
-  assertEquals(await dir.emailAt(PROBE), null)
+  assertEquals(erased.body.trashed, true)
+  assertEquals(!!(await dir.space('probe'))?.trashed, true)
+  assertEquals(await dir.emailAt(PROBE), 'probe@bot.yak.sh')
   let ada = (await dir.space('ada'))!
-  assertEquals(await dir.members(ada), [ADA])
+  assertEquals((await dir.members(ada)).sort(), [ADA, PROBE].sort())
   assertEquals(await dir.emailAt(GUEST), 'guest@probe.invalid')
-  assertEquals((await ask(JEFF, 'probe@bot.yak.sh')).status, 404)
+  assertEquals((await ask(JEFF, 'probe@bot.yak.sh')).status, 200)
+  assertEquals(
+    (await ask(JEFF, 'probe@bot.yak.sh', 'POST')).body.restored,
+    true,
+  )
+  assertEquals(!!(await dir.at(PROBE))?.trashed, false)
 })
 
 // A space is never left without an owner: one whose last owner is a test
 // account passes to whoever else sits in it, a person before a test account.
-test('erasing a test account hands a space it owns on to the person left in it', async () => {
-  let { scenario, env, dir, ask, GUEST } = await accounts()
+test('account trash preserves ownership until a confirmed purge', async () => {
+  let { scenario, env, dir, ask, PROBE, GUEST } = await accounts()
   await using _ = scenario
   let probe = (await dir.space('probe'))!
   await stamp(env, {
@@ -328,12 +335,12 @@ test('erasing a test account hands a space it owns on to the person left in it',
   assertEquals(checked.body.spaces, [])
   assertEquals(checked.body.seats.sort(), ['ada', 'probe'])
   await ask(JEFF, 'probe@bot.yak.sh')
-  assertEquals(await dir.owners(probe), [ADA])
-  assertEquals((await dir.members(probe)).sort(), [GUEST, ADA].sort())
+  assertEquals(await dir.owners(probe), [PROBE])
+  assertEquals((await dir.members(probe)).sort(), [PROBE, GUEST, ADA].sort())
 })
 
-test('erasing a test account hands a space it owns on to a test account left in a kept space', async () => {
-  let { scenario, env, dir, ask, GUEST } = await accounts()
+test('account trash keeps a protected space and its owner', async () => {
+  let { scenario, env, dir, ask, PROBE } = await accounts()
   await using _ = scenario
   let probe = (await dir.space('probe'))!
   await stamp(env, {
@@ -343,7 +350,7 @@ test('erasing a test account hands a space it owns on to a test account left in 
     }],
   })
   await ask(JEFF, 'probe@bot.yak.sh')
-  assertEquals(await dir.owners((await dir.space('checks'))!), [GUEST])
+  assertEquals(await dir.owners((await dir.space('checks'))!), [PROBE])
 })
 
 test('only the admin, or the account itself, erases it; never a person or fixture', async () => {
@@ -360,7 +367,7 @@ test('only the admin, or the account itself, erases it; never a person or fixtur
     assertEquals(no.code ?? no.body?.error?.code, 'access')
   }
   assertEquals(await dir.emailAt(ADA), 'ada@example.com')
-  assertEquals((await ask(PROBE, 'probe@bot.yak.sh')).body.erased, true)
+  assertEquals((await ask(PROBE, 'probe@bot.yak.sh')).body.trashed, true)
 })
 
 test('an app’s store moves to a new object, and the directory names it there', async () => {

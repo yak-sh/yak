@@ -186,7 +186,6 @@ import {
   letter,
   naming,
   nobodys,
-  numberGrace,
   refused,
   restoredAddress,
   ticket,
@@ -3445,20 +3444,13 @@ let OURS: Row[] = [
       let s = fresh(args.slug, 'slug')
       let taken = await ctx.dir.space(s)
       if (taken) {
-        // The slug is held for a trashed space for its whole thirty days
-        // (erase.ts, T-34431), the way a trashed app's is: a second space
-        // here is the one thing a restore could not put back. Only its own
-        // owner is told that is why — to anybody else the address is taken,
-        // which is all it ever was.
+        // Shared space addresses remain held while in trash.
         let mine = taken.trashed &&
           await ctx.dir.role(taken, ctx.person) == 'owner'
         throw refuse(
           'conflict',
           mine
-            ? `${s} is in the trash, ${
-              daysLeft(taken.trashed!)
-            } days left — space_restore(space: '${s}') brings it back whole, ` +
-              'and after 30 days the platform erases it and frees the address'
+            ? `${s} is in the trash — space_restore(space: '${s}') brings it back whole`
             : `space ${s} is taken`,
         )
       }
@@ -3641,8 +3633,8 @@ let OURS: Row[] = [
         forever: {
           type: 'boolean',
           description:
-            'true to email a link that erases the space at once instead ' +
-            'of trashing it: its apps, everything they saved, their files ' +
+            'true to email a link that permanently purges an already trashed ' +
+            'space: its apps, everything they saved, their files ' +
             'and its address, all gone, with no restore. Only when the ' +
             'person asked for exactly that',
         },
@@ -3663,16 +3655,13 @@ let OURS: Row[] = [
       if (space.trashed && !forever) {
         throw refuse(
           'conflict',
-          `${space.slug} is already in the trash, ${
-            daysLeft(space.trashed)
-          } days left — space_restore(space: '${space.slug}') brings it back`,
+          `${space.slug} is already in the trash — space_restore(space: '${space.slug}') brings it back`,
         )
       }
       let d = await doomed(ctx.dir, space)
-      forever &&= !numberGrace(d)
+      forever &&= !!space.trashed
       // Nobody's space has no letter to write, so it goes straight to the
-      // trash, `forever` or not: no agent erases a space, and its thirty
-      // days running out do.
+      // trash, `forever` or not: only a person's separate confirmation purges.
       if (await nobodys(ctx.dir, d)) {
         await trashSpace(ctx.env, ctx.dir, space, who)
         // The answer's unseen rider must see the committed trash mark rather
@@ -5798,9 +5787,7 @@ let OURS: Row[] = [
       if (app.trashed) {
         throw refuse(
           'conflict',
-          `${space.slug}/${app.slug} is already in the trash, ${
-            daysLeft(app.trashed)
-          } days left — app_restore brings it back`,
+          `${space.slug}/${app.slug} is already in the trash — app_restore brings it back`,
         )
       }
       // The mark, and the tool and view lists of everyone in the space
@@ -5814,8 +5801,7 @@ let OURS: Row[] = [
           } stops answering and its commands have gone ` +
           'with it; ' +
           'its slug is free immediately. Nothing it saved was touched. app_restore(app: ' +
-          `'${app.eid}') brings it back whole, any time in the next 30 ` +
-          'days — after that it is erased for good.',
+          `'${app.eid}') brings it back whole until its owner confirms permanent erasure.`,
         space,
       }
     },
@@ -6141,9 +6127,7 @@ let OURS: Row[] = [
           `${space.slug} — ${at}${home ? ` opens ${home.title}` : ''} — you ` +
             `are ${role == 'owner' ? 'the owner' : `a ${role}`}${
               space.trashed
-                ? ` — in the trash, ${
-                  daysLeft(space.trashed)
-                } days left: nothing here answers until space_restore(space: '${space.slug}')`
+                ? ` — in the trash: nothing here answers until space_restore(space: '${space.slug}')`
                 : ''
             }`,
           // Where the space stands this month (T-32758), so the agent knows
@@ -6178,7 +6162,7 @@ let OURS: Row[] = [
                 trash.map((a) =>
                   [
                     `${a.title} (${a.slug})`,
-                    `${a.days} ${a.days == 1 ? 'day' : 'days'} left`,
+                    'kept until restored or purged',
                     heldAloud(a.held),
                   ].filter(Boolean).join(', ')
                 ).join('; ')

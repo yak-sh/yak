@@ -111,7 +111,6 @@ import {
 } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
 import {
-  daysLeft,
   type Directory,
   directory,
   META,
@@ -125,9 +124,9 @@ import {
   keeping,
   kept,
   naming,
-  numberGrace,
   refused,
   ticketed,
+  trashedAccount,
   trashedApp,
   trashSpace,
   went,
@@ -493,16 +492,16 @@ let closing = async (
   let held = req.method == 'POST' ? form.token : url.searchParams.get('t') ?? ''
   let ok = held ? await ticketed(held, secret(env)) : null
   let mine = !!ok && ok.space == space.eid && ok.person == person
-  let forever = mine && !!ok?.forever && !numberGrace(d)
+  let forever = mine && !!ok?.forever && !!space.trashed
   let lines = forever ? naming(d, env) : keeping(d, env)
   let stop = await refused(space, env) ||
     // Already there, and this visit is not the one that erases it: trashing
     // again would start the thirty days over on a space the person is only
     // looking at, so nothing happens and they are told both ways out.
     (space.trashed && !forever
-      ? `${slug} is already in the trash, ${
-        daysLeft(space.trashed)
-      } days left. Restore it at https://${slug}.${apex(env)}/, or ask your ` +
+      ? `${slug} is already in the trash. Restore it at https://${slug}.${
+        apex(env)
+      }/, or ask your ` +
         'assistant to delete it for good'
       : '')
   if (stop) return askDelete({ slug, lines, stop, forever, status: 409 }, env)
@@ -558,6 +557,7 @@ let closing = async (
 let KINDS = Object.fromEntries(
   [
     trashedApp,
+    trashedAccount,
     heldNumber,
     trashedNumber,
     trashedDomain,

@@ -959,10 +959,18 @@ test('a free space holds one sandbox awake, and each space counts its own', asyn
   // Erasing the space gives back every place in it at once, Ada's included,
   // and takes every member's container with it.
   let gone = (await ada.dir.space('ada'))!
-  await erase(env, ada.dir, await doomed(ada.dir, gone), {
-    person: ADA,
-    role: 'owner',
+  await ada.dir.apply({
+    entities: [{ entity: { eid: gone.eid }, trashed: {} }],
   })
+  await erase(
+    env,
+    ada.dir,
+    await doomed(ada.dir, (await ada.dir.space('ada'))!),
+    {
+      person: ADA,
+      role: 'owner',
+    },
+  )
   assertEquals(await ada.dir.space('ada'), null)
   assert(![...box.alive].some((n) => n.includes(space.eid)))
   assertEquals(await meta(env).query(line`.lent.within=${space.eid}`), [])

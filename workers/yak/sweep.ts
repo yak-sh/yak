@@ -1,4 +1,5 @@
 import { audit } from './admin-action.ts'
+import { door as confirmationDoor } from './confirm.ts'
 // The mover's sweep door (mover.ts, D-45640): every store the platform has,
 // and one store at a time asked to rehearse its rules or to move what it owes.
 // `yak admin move` walks the list and paces the asking; this door never loops
@@ -14,8 +15,8 @@ import { audit } from './admin-action.ts'
 //                                         owes, and where each rule stands
 //   GET  /api/account?address=<address>     what erasing that test account
 //                                           would take
-//   DELETE /api/account?address=<address>   it erased (erase.ts `closed`); a
-//                                           test account may end itself
+//   DELETE /api/account?address=<address>   trash it, preserving its work
+//   POST /api/account?address=<address>     restore its account record
 //   GET  /api/operator-copy                 every space
 //   POST /api/operator-copy?space=<eid>     a page of that space's Operator
 //                                           store (store-copy.ts)
@@ -98,10 +99,10 @@ let account = async (
   dir: ReturnType<typeof dirOf>,
   who: Who,
 ) => {
-  if (req.method != 'GET' && req.method != 'DELETE') {
-    return json(405, 'method_not_allowed', 'read or delete an account')
+  if (!['GET', 'DELETE', 'POST'].includes(req.method)) {
+    return json(405, 'method_not_allowed', 'read, trash or restore an account')
   }
-  let { closed, closing } = await import('./erase.ts')
+  let { closed, closing, untrashAccount } = await import('./erase.ts')
   // By address, or by eid an account whose row has none left (erase.ts
   // `account`).
   let asked = new URL(req.url).searchParams
@@ -116,12 +117,20 @@ let account = async (
   if (!at) {
     return json(404, 'no_account', `no account is ${address || '(nothing)'}`)
   }
+  if (req.method == 'POST') await untrashAccount(dir, at.person, who)
   let result = req.method == 'DELETE'
     ? await closed(env, dir, address, who)
     : null
   return Response.json({
     address,
-    erased: req.method == 'DELETE' && !result?.pending,
+    erased: false,
+    trashed: req.method == 'DELETE' || req.method == 'GET' && at.trashed,
+    restored: req.method == 'POST',
+    ...(req.method == 'DELETE' || at.trashed
+      ? {
+        purge: confirmationDoor('yak', 'account', at.person, undefined, env),
+      }
+      : {}),
     ...(result?.pending ? { pending: true } : {}),
     spaces: at.spaces.map((s) => s.slug),
     seats: at.seats.map((s) => s.slug),
