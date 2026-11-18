@@ -2185,6 +2185,7 @@ test('a spawned run is stamped with its actor from its first MCP call, on either
     ])
     let job = {
       session: run,
+      model: 'selected-model',
       instruction: 'go',
       mcp: { tasks: 'http://localhost/mcp' },
     }
