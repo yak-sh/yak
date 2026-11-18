@@ -121,6 +121,20 @@ let copied = async (response: Response): Promise<() => Response> => {
   return () => new Response(body?.slice(0), init)
 }
 
+// A caller waiting in a batch: its own promise's ends.
+type Seat = {
+  resolve: (answer: () => Response) => void
+  reject: (error: unknown) => void
+}
+
+// One read's callers, the trip that answers them, and `go`, which tells the
+// caller who opened it that the read ahead has landed.
+type Batch = {
+  seats: Seat[]
+  trip: () => Promise<() => Response>
+  go: () => void
+}
+
 /** Share finite reads accepted by `reads` and queued before `turn` sends them,
  * each caller receiving its own bytes. A read already sent answers no later
  * caller: its snapshot may predate that caller. So one read of a request
@@ -128,7 +142,14 @@ let copied = async (response: Response): Promise<() => Response> => {
  * after it lands, as passengers board the next lift rather than the one
  * already moving. However many callers ask one read together, the object
  * answers it once a round trip. A write or an excluded read separates
- * batches. `hold` keeps the first caller's I/O alive. */
+ * batches. `hold` keeps the first caller's I/O alive.
+ *
+ * Callers are often different requests, and a Worker settles a promise only
+ * in the request that created it: once that request ends, whoever awaits it
+ * is failed (workerd's `handle_cross_request_promise_resolution`). So no
+ * caller awaits a promise another made. Each waits on its own seat, settled
+ * from the trip, and a batch is sent from the request that opened it, woken
+ * there when the read ahead lands. */
 export let coalesced = (
   door: Door,
   reads: (request: Request) => boolean,
@@ -138,17 +159,57 @@ export let coalesced = (
   } = {},
 ): Door => {
   // The batch still boarding for each read, and the one travelling.
-  let pending = new Map<string, Promise<() => Response>>()
-  let moving = new Map<string, Promise<unknown>>()
-  let apart = async (send: () => Promise<Response>) => {
-    pending.clear()
+  let boarding = new Map<string, Batch>()
+  let moving = new Map<string, Batch>()
+  // What boards from here on shares nothing sent before; a batch waiting on
+  // a read now forgotten goes at once.
+  let part = () => {
+    for (let batch of boarding.values()) batch.go()
+    boarding.clear()
     moving.clear()
+  }
+  let apart = async (send: () => Promise<Response>) => {
+    part()
     try {
       return await send()
     } finally {
-      pending.clear()
-      moving.clear()
+      part()
     }
+  }
+  let send = async (key: string, batch: Batch) => {
+    if (boarding.get(key) == batch) boarding.delete(key)
+    moving.set(key, batch)
+    let landed = (each: (seat: Seat) => void) => {
+      if (moving.get(key) == batch) {
+        moving.delete(key)
+        boarding.get(key)?.go()
+      }
+      batch.seats.forEach(each)
+    }
+    try {
+      let answer = await batch.trip()
+      landed((seat) => seat.resolve(answer))
+    } catch (error) {
+      landed((seat) => seat.reject(error))
+    }
+  }
+  // A batch opened by this caller, which sends it now or once woken.
+  let board = (key: string, trip: Batch['trip']) => {
+    let batch: Batch = { seats: [], trip, go: () => {} }
+    boarding.set(key, batch)
+    let woken = new Promise<void>((go) => batch.go = go)
+    let done = new Promise<void>((done) => {
+      let left = false
+      let leave = () => {
+        if (left) return
+        left = true
+        turn(() => void send(key, batch).finally(done))
+      }
+      void woken.then(leave)
+      if (!moving.has(key)) leave()
+    })
+    hold?.(done)
+    return batch
   }
   let ask = async (
     path: string,
@@ -168,35 +229,16 @@ export let coalesced = (
         request.url,
         [...request.headers].filter(([name]) => name != IDEMPOTENCY),
       ])
-      let work = pending.get(key)
-      if (!work) {
-        let send!: () => void
-        let batch = new Promise<() => Response>((resolve, reject) => {
-          send = async () => {
-            if (pending.get(key) == batch) pending.delete(key)
-            moving.set(key, landed)
-            try {
-              // The call's own headers are set again past the inner door's
-              // scrub, as an uncoalesced call sets them.
-              resolve(
-                await door.consume(path, copied, request, headers, options),
-              )
-            } catch (error) {
-              reject(error)
-            }
-          }
-        })
-        let landed: Promise<void> = batch.then(() => {}, () => {})
-        void landed.then(() => {
-          if (moving.get(key) == landed) moving.delete(key)
-        })
-        pending.set(key, work = batch)
-        hold?.(landed)
-        let ahead = moving.get(key)
-        if (ahead) void ahead.then(() => turn(send))
-        else turn(send)
-      }
-      return (await work)()
+      // The call's own headers are set again past the inner door's scrub, as
+      // an uncoalesced call sets them.
+      let batch = boarding.get(key) ?? board(
+        key,
+        () => door.consume(path, copied, request, headers, options),
+      )
+      let seat = new Promise<() => Response>((resolve, reject) =>
+        batch.seats.push({ resolve, reject })
+      )
+      return (await seat)()
     })(path, init, headers)
   }
   return Object.assign(ask, {

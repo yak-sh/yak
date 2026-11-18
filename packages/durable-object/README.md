@@ -418,8 +418,10 @@ travels at a time: callers who ask it meanwhile share the next, sent the turn
 after it lands, and the object answers a burst of one read once a round trip. A
 write or an excluded request separates batches. Select only finite read
 responses. `turn` defaults to a microtask; `hold` keeps the first caller's I/O
-alive until the body is read, as a Worker's `waitUntil` does. Wrap a resending
-door so reading the shared body participates in its retries.
+alive until the body is read, as a Worker's `waitUntil` does. A Worker settles a
+promise only in the request that created it, so no caller awaits another's: each
+waits on its own, and a batch is sent from the request that opened it. Wrap a
+resending door so reading the shared body participates in its retries.
 
 `resending(door, { report?, wait? })` sends a call again, as `retried` paces it,
 when the runtime reset the object or lost the call: thrown, or answered as a
