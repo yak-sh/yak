@@ -1,6 +1,5 @@
 import { statements } from '@yaks/sqlite'
-// An expired body's bytes go with it, unless another row still names them; a
-// body removed any other way keeps its bytes for history.
+// Expiration keeps body bytes available to trash and history.
 import { equal, test } from '@yaks/testing'
 import type { Bundle, Tx } from '@yaks/graph'
 import type { Hook } from '@yaks/graph/plugin'
@@ -51,11 +50,8 @@ let removed = async (expiring: boolean) => {
   return dropped
 }
 
-test('an expiring removal asks the store to drop the bytes it named, keeping what any holder names', async () => {
-  equal(await removed(true), [[[address('gone')], [
-    { comp: 'copy', prop: 'sha' },
-    { comp: 'note', prop: 'body' },
-  ]]])
+test('an expiring removal keeps its bytes for trash and history', async () => {
+  equal(await removed(true), [])
 })
 
 test('a removal that is not expiring keeps its bytes for history', async () => {

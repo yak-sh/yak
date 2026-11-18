@@ -355,19 +355,16 @@ in, so a part size is too.
 state after them, and `end(total)` the finished digest, `total` being every byte
 hashed since `START`. `fold(from, bytes, total?)` is the same over one buffer.
 
-## Expiring bodies
+## Retained bodies
 
-A body's bytes outlive the row that wrote them, so an edit's history still reads
-the old text. A body removed by an expiring write
-(`apply(bundles, { trusted:
-true, expiring: true })`, which the vocabulary's
-[`expire`](../vocab/README.md#expiration) sweep makes) is kept for no one: the
-plugin notes the address each removed body held and, once the write is done,
-asks the store to `drop(shas, held)` them. A store drops only what no row of
-`held` names: every body property, and every property declaring `address: true`,
-whose package put the bytes there itself and keeps the address (a Git blob's
-`blob.sha`, an artifact's `address`). `holders(vocab)` lists them. `sqliteBlobs`
-drops in one statement; a store without `drop` keeps everything.
+A body's bytes outlive edits, removals and expiration. Trash and retained
+history still read the old text. The plugin keeps those bytes; ordinary graph
+writes never release them.
+
+A byte store's `drop(shas, holders)` releases addresses only when none of the
+supplied holding columns names them. It is a storage primitive, so callers must
+also account for retained history and trash before requesting a release. Stores
+without `drop` keep everything.
 
 ```ts
 import { equal } from '@yaks/testing'
