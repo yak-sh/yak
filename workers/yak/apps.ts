@@ -161,6 +161,7 @@ import {
   keepable,
   NAMED_CLIENT,
   passed,
+  uploaded,
 } from '@yaks/platform/kept'
 import { sessionCookie } from './browser-cookie.ts'
 import { noted, refusal, serving } from './unseen.ts'
@@ -2022,7 +2023,8 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
     // (visit.ts `ownOf`), only where it is the browser asking.
     let path = new URL(req.url).pathname
     let remember = !pagePath(path) && !bearing(req) &&
-      !req.headers.has('authorization') && !fixed(path) && !checking(path)
+      !req.headers.has('authorization') && !fixed(path) && !uploaded(path) &&
+      !checking(path)
     let res = await browsing(
       req,
       env,
@@ -2611,11 +2613,10 @@ let served = async (
   let wall = (res: Response) => walls ? walled(res) : res
   if (to.to == 'api') {
     let apiPath = to.door
-    // Site keeps an app's `fixed` bytes as it keeps its pages, the hop a
-    // release's module takes back out to the API included; every other door
-    // is the gateway's.
+    // Upload representations get a short keep revalidated against their rows;
+    // release assets and platform modules are kept as pages are.
     if (edge) {
-      if (!fixed(path)) return passed()
+      if (!fixed(path) && !uploaded(path)) return passed()
       return marked(
         keep(
           reporting(
@@ -2626,7 +2627,7 @@ let served = async (
           ),
           space,
           app,
-          [200, 302, 404],
+          uploaded(path) ? [200] : [200, 302, 404],
         ),
       )
     }

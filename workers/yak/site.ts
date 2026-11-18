@@ -240,7 +240,11 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       : await edged(asked, env)
     let copied = page.headers.has(COPIED)
     page.headers.delete(COPIED)
-    let answer = await kept(page, personal(req.url))
+    let answer = await kept(
+      page,
+      personal(req.url),
+      new URL(asked.url).pathname,
+    )
     return copied ? uncached(answer) : answer
   }
   let root = `/${encodeURIComponent(apex(env))}`

@@ -57,6 +57,7 @@
  * @module
  */
 import { matches } from '@yaks/blob/serve'
+import { addressed } from '@yaks/blob'
 import { sha256 } from '@yaks/graph/sha256'
 import { mode } from '@yaks/member/words'
 import { COOKIE, cookieValue } from './cookie.ts'
@@ -303,7 +304,13 @@ export let visitor = (url: string, asking?: Request): Request | null => {
   if (session && searchParams.get('who') == heldBy(session)) {
     headers.set('cookie', `${COOKIE}=${session}`)
   }
-  return new Request(`https://${host}${pathname.slice(at)}`, { headers })
+  let path = pathname.slice(at)
+  // A new edge keep must ask whether the upload is still served now, rather
+  // than starting another lifetime from Files' cached yes.
+  return new Request(`https://${host}${path}`, {
+    headers,
+    ...uploaded(path) ? { cache: 'no-store' } : {},
+  })
 }
 
 /** Whether a key is a session's own (`pageAt`). */
@@ -342,9 +349,17 @@ export let fixed = (path: string): boolean => {
     (CLIENT.includes(api) || NAMED_CLIENT.test(api) || !!assetPath(api))
 }
 
+/** A complete upload representation, whose bytes and headers are fixed but
+ * whose row must still exist. Unlike `fixed`, these are private app data,
+ * even when the app's release is offered for installation. */
+export let uploaded = (path: string): boolean => {
+  let blob = /^(?:\/[^/]+)?\/api\/blob\/(.+)$/.exec(path)?.[1]
+  return !!blob && !!addressed(blob)?.eid
+}
+
 /** Whether a request could be answered by a kept page: a read with nothing
  * that requires the gateway (a grant, a bearer, a byte range), and not an
- * app's `/api/` (but for its `fixed` bytes), a sandboxed page's token path
+ * app's `/api/` (but for its `fixed` bytes and `uploaded` representations), a sandboxed page's token path
  * or a draft's preview link, which never are. */
 export let shareable = (
   req: Request,
@@ -354,7 +369,8 @@ export let shareable = (
   !req.headers.has('authorization') && !req.headers.has('x-yak-caller') &&
   !req.headers.has('range') &&
   !req.headers.has('upgrade') && !bearing(req) &&
-  (fixed(path) || !/^(?:\/[^/]+)?\/(?:api\/|_web(?:\/|$))/.test(path)) &&
+  (fixed(path) || uploaded(path) ||
+    !/^(?:\/[^/]+)?\/(?:api\/|_web(?:\/|$))/.test(path)) &&
   !path.includes('/~') && !previews(path)
 
 /** What a page may say of itself as it answers from the edge: its app, its
@@ -463,24 +479,31 @@ export let keepable = (app: Keepable, path?: string): boolean =>
 /** Site's half: the gateway's anonymous answer as Site keeps it, or the pass
  * every other answer is. At a session's own key (`personal`) that is only
  * the page drawn for an outsider: whatever else it served the person is
- * everyone's, kept at its own key, or theirs alone, which is never kept. */
+ * everyone's, kept at its own key, or theirs alone, which is never kept.
+ * An upload at `path` is kept only until its servability must be asked again,
+ * with neither stale answers nor cached misses. */
 export let kept = async (
   answer: Response,
   personal = false,
+  path = '',
 ): Promise<Response> => {
+  let upload = uploaded(path)
   let tags = answer.headers.get(KEEP)
   let alone = JSON.parse(answer.headers.get(SEEN) ?? '{}') as Said
-  if (!tags || personal && !alone.outsider) {
+  if (!tags || personal && !alone.outsider || upload && answer.status != 200) {
     await answer.body?.cancel()
     return new Response(null, {
       status: 204,
-      headers: { 'cache-control': answer.headers.has(NOW) ? UNKEPT : KEPT },
+      headers: {
+        'cache-control': upload || answer.headers.has(NOW) ? UNKEPT : KEPT,
+      },
     })
   }
   let headers = new Headers(answer.headers)
   headers.delete(KEEP)
   headers.set(BROWSER, answer.headers.get('cache-control') ?? '')
-  headers.set('cache-control', KEPT)
+  // Removed uploads stop serving after this keep, including during an outage.
+  headers.set('cache-control', upload ? FRESH : KEPT)
   headers.set(TAGS, tags)
   return new Response(answer.body, { status: answer.status, headers })
 }

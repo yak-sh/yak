@@ -187,11 +187,18 @@ export let door = (env: Env): Fetcher => ({
     hop('files')
     return elapsed('files_wait', async () =>
       relayed(
-        await through(env.FILES, req, (asked) => fetch(asked, env), {
-          clock: env.CLOCK,
-          failed: unanswered,
-          held,
-        }),
+        // Request.cache is not carried across a service binding. Honor it
+        // before the hop, where a fresh servability read still knows it.
+        await through(
+          req.cache == 'no-store' ? undefined : env.FILES,
+          req,
+          (asked) => fetch(asked, env),
+          {
+            clock: env.CLOCK,
+            failed: unanswered,
+            held,
+          },
+        ),
       ))
   },
 })
@@ -376,9 +383,11 @@ export let servableOf = async (
   store: StoreAt,
   sha: string,
   rep: string,
+  cache?: RequestCache,
 ): Promise<Representation | null> => {
   let r = await door(env).fetch(
     new Request(servableAt(app.eid, sha, rep), {
+      cache,
       headers: { [STORE]: JSON.stringify(store) },
     }),
   )

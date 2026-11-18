@@ -262,7 +262,16 @@ test('a revalidation is a 304 and a HEAD has no body', async () => {
 })
 
 test('what no kept page may answer goes to the kernel without asking Site', async () => {
+  let blob = `https://ada.yaks.app/cookbook/api/blob/${'a'.repeat(64)}/${
+    'b'.repeat(64)
+  }`
   let cases: [string, RequestInit?][] = [
+    [blob, { method: 'PUT', body: 'bytes' }],
+    [blob, { headers: { authorization: 'Bearer x' } }],
+    [blob, { headers: { range: 'bytes=0-1' } }],
+    [blob, { headers: { 'x-yak-grant': 'x' } }],
+    [blob, { headers: { 'x-yak-caller': 'app' } }],
+    [`https://ada.yaks.app/cookbook/api/blob/${'a'.repeat(64)}`],
     ['https://ada.yaks.app/cookbook/api/query'],
     ['https://ada.yaks.app/cookbook/~token/index.html'],
     ['https://ada.yaks.app/cookbook/_preview/t/'],

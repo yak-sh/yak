@@ -190,11 +190,19 @@ export let servedTo = async (
   graph: Pick<Meta, 'query'>,
   sha: string,
   eid: string,
+  cache?: RequestCache,
 ) => {
   let read = () =>
     servable(reading(graph), { scope: app.eid, naming: uploads }, sha, eid)
   return !sandboxed(app) && mode(app.access) != 'private'
-    ? await files.servableOf(env, app, storeAt(space, app, env), sha, eid) ??
+    ? await files.servableOf(
+      env,
+      app,
+      storeAt(space, app, env),
+      sha,
+      eid,
+      cache,
+    ) ??
       await read()
     : await read()
 }
@@ -264,7 +272,8 @@ export let blobDoor = async (
     accepts: writing ? await acceptsOf(env, space, app) : undefined,
     at,
     parts: { objects, bucket: env.BLOBS, prefix, ledger: uploadPrefix(app) },
-    served: (sha, eid) => servedTo(env, space, app, reader, sha, eid),
+    served: (sha, eid) =>
+      servedTo(env, space, app, reader, sha, eid, req.cache),
     bytes: (seek, sha) =>
       files.blobBytes(
         env,
