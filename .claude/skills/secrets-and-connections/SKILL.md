@@ -2,10 +2,10 @@
 name: secrets-and-connections
 description: >
   Use for API keys, tokens, passwords, credentials, vaults, secrets,
-  connections, integrations, OAuth, egress, environment reads for
-  credentials, auth failures (401/403, not connected), or choosing which
-  outside provider a feature calls (comped credits). Covers local and
-  yaks.app secrets. Re-keying stored links/tokens is data-migration.
+  connections, integrations, OAuth, egress, environment reads for credentials,
+  auth failures (401/403, not connected), or choosing which outside provider a
+  feature calls (comped credits). Covers local and yaks.app secrets. Re-keying
+  stored links/tokens is data-migration.
 ---
 
 # Secrets and connections
@@ -50,8 +50,9 @@ when the process starts, so a new key needs a restart; it is inherited by every
 child the process starts; it cannot say which hosts it may go to; and it
 belongs to the host, rather than to a tenant connection. A secret written
 through the
-graph arrives while the process runs, rotates behind the same handle, is gone
-when its entity is deleted, and can be scoped by a sentinel.
+graph arrives while the process runs, rotates behind the same handle, and
+can be scoped by a sentinel. Deleting its entity moves the credential into
+private vault trash so restoring the graph record can recover it.
 
 ## Where the value rests
 
@@ -173,8 +174,14 @@ while its value is on the way to the vault, with `content` explaining a retry,
 and `failed{reason}` when sealing was given up on; the value is then gone and
 has to be given again. The original failure reaches the host's reporter; the
 secret holds its operation's outcome. A successful seal removes `failed`.
-Deleting the entity, or its `secret` component, drops it from the vault
-(`unsealed(name)` is that bundle).
+Deleting the entity, or its `secret` component, moves the credential into
+private vault trash (`unsealed(name)` is that bundle). Rotation also retains the
+previous value there. Restoring the graph record recovers the latest retained
+value for its eid and handle when there is no active credential. The Vault
+interface offers `trash()`, `restore(id)` and `purge(id)`; restore archives any
+active value it displaces. Permanent purge is a person's explicit choice through
+the shared confirmation page. An ordinary connection disconnect keeps its
+broker grant so restoring the connection can use it again.
 
 ## Choosing a provider: comped credits
 

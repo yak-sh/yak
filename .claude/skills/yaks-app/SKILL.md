@@ -1,11 +1,10 @@
 ---
 name: yaks-app
 description: >
-  Use for workers/yak, kernel Workers, stores, app vocab/rows, platform
-  words, connector tools/prompts/guides, space spending, or
-  broken/slow/refusing yaks apps. This is the hosted platform; local yak
-  serve is separate. Shapes are vocabulary; migrations are data-migration;
-  pricing is yaks-app-business.
+  Use for workers/yak, kernel Workers, stores, app vocab/rows, platform words,
+  connector tools/prompts/guides, space spending, or broken/slow/refusing yaks
+  apps. This is the hosted platform; local yak serve is separate. Shapes are
+  vocabulary; migrations are data-migration; pricing is yaks-app-business.
 ---
 
 # The yaks.app platform
@@ -24,8 +23,11 @@ never feels. What makes us wince is a deploy that signs everyone out, a default
 that opens a door, a poll that wakes every store on the platform.
 
 Nothing an agent does erases a person's app or space, the demo space and test
-accounts included. A delete goes to the trash, and only its 30 days running out
-or the owner's own confirmation from a letter erase it. A trash full of old apps
+accounts included. A delete goes to the trash and stays recoverable until the person chooses
+permanent erasure through the shared confirmation page. Time passing never
+erases it. An app already in the trash releases its slug; a restore whose old
+slug was taken gets a free numbered slug and tells the person. Shared names
+(space slugs, phone numbers, domains and hostnames) stay held in the trash. A trash full of old apps
 is fine to leave there. A bot account's letters (`yourname@bot.yak.sh` and the
 other `@bot.yak.sh` owners) land where an agent can read them, and an erase link
 in one is still a person's to press, never an agent's. When a reply or a recording
@@ -442,7 +444,8 @@ use of those apps, and adds no activity hop to those reads.
   directory's source and declaration pointers. A deploy writes that snapshot
   before committing either pointer, including the retained words and
   borrowed-home declarations the Store accepted; they sit under the space's
-  handle, so a space rename moves none, and app erasure sweeps them.
+  handle, so a space rename moves none. Trashing an app keeps them;
+  a person's confirmed permanent erasure removes them.
   `initialize`, `tools/list` and the schema preparation before a named tool call
   read no app Store. Every release a pointer selects has a snapshot, so a
   missing one is a defect the tracker hears about, never a reason to rebuild one
@@ -608,8 +611,9 @@ time, which is how T-161675 measured 80 of them.
   report has (`counted{report}`) into one `refusal_report{}`, grouped by tool,
   code and cause, which is its own platform letter to TaskMaster (mail-config.ts
   `toPlatform`), sent by the pool and marked `delivered{at}`. The letter is kept
-  as the record; the same firing deletes the occurrences a delivered one counted
-  once they are 30 days old (`forgotten`).
+  as the record; the same firing moves the occurrences a delivered one counted
+  into recoverable graph trash once they are 30 days old (`forgotten`).
+  Their retained snapshots are never automatically purged.
 - hello@yaks.app is the public address: what people write to the platform, its
   replies to them, and what a person said that the platform relays (the feedback
   tool). Its owner gets a copy of every letter there. Internal mail never goes
@@ -623,12 +627,13 @@ time, which is how T-161675 measured 80 of them.
   the MCP door; its account check runs once before the stream, so following logs
   is not app traffic.
 - `yak admin throwaway '<command>' [--name <name>]` runs one shell command as a
-  test account, `<name>@bot.yak.sh`, and erases the account when it ends.
+  test account, `<name>@bot.yak.sh`, and trashes its spaces when it ends.
   `yak
   auth yaks.app --as <address>` keeps a test account across commands; the
-  daily sweep erases it after seven idle days.
+  daily sweep trashes its abandoned spaces after seven idle days.
   `yak admin erase <address> --as
-  admin@bot.yak.sh` erases one now.
+  admin@bot.yak.sh` puts its spaces in the trash now. Nothing is purged by
+  either path; permanent erasure is the person's choice through confirmation.
 - An app's own errors surface through `app_errors` and the unseen block
   (`unseen.ts`). Each distinct one starts its space's Operator (unseen.ts `fix`,
   one request per break by `fixOf`), and the owner's Apps page shows its state

@@ -3,9 +3,9 @@ name: end-to-end-checks
 description: >
   Use when checking a change by hand, against live or copied data, in a
   browser/terminal or at a phone's width, taking screenshots or proving UI,
-  query, write and migration behavior. Proof runs in your process with compose(), kernel(),
-  linkedom or TUI lay; no probe servers or Chrome. Automated tests are
-  testing.
+  query, write and migration behavior. Proof runs in your process with
+  compose(), kernel(), linkedom or TUI lay; no probe servers or Chrome.
+  Automated tests are testing.
 ---
 
 # Proving a change end to end
@@ -136,11 +136,12 @@ to measure or exercise it.
 an Operator check that spans several calls (a chat, then `operator_read` until
 it settles, then an answer) runs there too. A free space holds five apps:
 reuse one of its apps when the check allows it, and otherwise `app_delete` an
-old check's app (it waits 30 days in the trash) before `app_new`. Discard the
+old check's app (it stays recoverable in the trash) before `app_new`. Discard the
 drafts a check opens (`op=discard draft=<id>`). A check that needs an account
-with nothing in it runs `yak admin throwaway '<command>'`, which deletes the
-account once that command exits and so cuts off any Operator work still
-running.
+with nothing in it runs `yak admin throwaway '<command>'`, which puts its spaces
+in the trash once that command exits and so cuts off any Operator work still
+running. The account and its data remain recoverable until the person chooses
+permanent erasure through the confirmation page.
 
 An Operator's model varies from run to run, so one run of a behavior proves little:
 send the same kind of request three or more times and count. Comparing two
