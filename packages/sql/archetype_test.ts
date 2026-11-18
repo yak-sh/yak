@@ -118,11 +118,9 @@ test('boolean presence trees retain their negative guards', () => {
   assertEquals(lists(sql.sql), [[10, 11, 12]])
 })
 
-test('a screen beside a value test retains its negative guards', () => {
+test('a screen beside a value test lists only the archetypes that can match', () => {
   let sql = compile(parse('.doc.title=hello !claim !task'), v, { archetypes })
-  for (let comp of ['claim', 'task']) {
-    assert(sql.sql.includes(`not (exists (select 1 from "${comp}"`), sql.sql)
-  }
+  assertEquals(lists(sql.sql), [[11]])
   assertEquals(sql.params, ['hello'])
 })
 
