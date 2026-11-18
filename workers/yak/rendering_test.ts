@@ -360,6 +360,58 @@ let paused = async (time: ReturnType<typeof clock>) => {
   for (let pause of [250, 500, 1000]) await time.advance(pause)
 }
 
+let unavailable = (code: number) =>
+  new Error(
+    `Unable to create new browser: code: ${code}: message: No browser available`,
+  )
+
+for (let code of [500, 503]) {
+  test(`browser acquisition recovers from a temporary ${code}`, async () => {
+    let p = page()
+    let time = clock()
+    let attempts = 0
+    p.browsing.acquire = () =>
+      ++attempts < 3
+        ? Promise.reject(unavailable(code))
+        : Promise.resolve('session')
+    let rendering = capture(
+      p.browsing,
+      { url: 'https://x.invalid/', view },
+      undefined,
+      time,
+    )
+    rendering.catch(() => {})
+    for (let pause of [1000, 2000, 4000]) await time.advance(pause)
+    assertEquals((await rendering).image, 'png-bytes')
+    assertEquals(attempts, 3)
+    assertEquals(p.closed(), true)
+    assertEquals(time.pending(), 0)
+  })
+}
+
+for (let [code, expected] of [[503, 4], [400, 1], [429, 1]]) {
+  test(`browser acquisition ${code} fails after ${expected} attempts`, async () => {
+    let p = page()
+    let time = clock()
+    let attempts = 0
+    p.browsing.acquire = () => {
+      attempts++
+      return Promise.reject(unavailable(code))
+    }
+    let rendering = capture(
+      p.browsing,
+      { url: 'https://x.invalid/', view },
+      undefined,
+      time,
+    )
+    let failed = assertRejects(() => rendering, Error, `code: ${code}`)
+    for (let pause of [1000, 2000, 4000]) await time.advance(pause)
+    await failed
+    assertEquals(attempts, expected)
+    assertEquals(time.pending(), 0)
+  })
+}
+
 test('a session not ready yet is connected to again', async () => {
   let { p, browsing, sessions } = flaky(2)
   let time = clock()

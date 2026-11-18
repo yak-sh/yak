@@ -99,23 +99,36 @@ let isolated = async (page: Page) => {
   }
 }
 
-// A session Cloudflare just acquired may not take a connection yet: its
-// websocket upgrade answers without a socket. The connect is retried on the
-// same session, with growing pauses, before the preview fails.
-let pauses = [250, 500, 1000]
+let retried = async <T>(
+  run: () => Promise<T>,
+  pauses: number[],
+  time: Clock,
+  again: (error: unknown) => boolean = () => true,
+): Promise<T> => {
+  for (let pause of pauses) {
+    try {
+      return await run()
+    } catch (e) {
+      if (!again(e)) throw e
+      await sleep(pause, undefined, time)
+    }
+  }
+  return run()
+}
+
+let temporary = (error: unknown) =>
+  error instanceof Error &&
+  /^Unable to create new browser: code: 5\d\d:/.test(error.message)
+
+// Capacity can return a temporary 503 before a session exists. Once acquired,
+// a session may not take its websocket connection yet; retry that same session
+// rather than allocating another browser.
 let open = async (
   { acquire, connect }: Browsing,
   time: Clock,
 ): Promise<Browser> => {
-  let session = await acquire()
-  for (let pause of pauses) {
-    try {
-      return await connect(session)
-    } catch {
-      await sleep(pause, undefined, time)
-    }
-  }
-  return connect(session)
+  let session = await retried(acquire, [1000, 2000, 4000], time, temporary)
+  return retried(() => connect(session), [250, 500, 1000], time)
 }
 
 // A deadline for one stage of a preview, failing with what ran out of time.
