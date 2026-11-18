@@ -189,6 +189,7 @@ export let door = (env: Env): Fetcher => ({
         await through(env.FILES, req, (asked) => fetch(asked, env), {
           clock: env.CLOCK,
           failed: unanswered,
+          held,
         }),
       ))
   },
@@ -203,6 +204,13 @@ let unanswered = (cached: Response, req: Request) =>
     cache_error: cached.headers.get('cf-error-type'),
     cache_origin: cached.headers.get('cf-error-origin'),
     cache_ray: cached.headers.get('cf-ray'),
+  })
+
+// A files cache that held a read's answer back past its patience.
+let held = (req: Request, ms: number) =>
+  caught(new Error(`the files cache did not answer within ${ms / 1000} s`), {
+    request: `${req.method} files`,
+    cache_url: req.url,
   })
 
 // An app file's bytes, through the cache (@yaks/platform/kept `fileAt`):

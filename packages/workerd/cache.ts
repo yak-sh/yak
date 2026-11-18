@@ -31,7 +31,7 @@
  * @module
  */
 import { evicted, jittered, retried } from '@yaks/durable-object/resets'
-import type { Clock } from '@yaks/fp'
+import { type Clock, heard } from '@yaks/fp'
 import type { Purged } from './purge.ts'
 
 // What `cf-cache-status` says of an answer the cache gave: a fresh one, or a
@@ -46,13 +46,22 @@ export let hit = (res: Response): boolean =>
 /** A service binding to an entrypoint. */
 export type Bound = { fetch(req: Request): Promise<Response> }
 
-/** How {@link through} waits between tries, and hears of a cache that failed
- * it. */
+// How long a read waits on the cache before it is answered in-process. A miss
+// goes the long way round in most of a second; a cache that holds an answer
+// back holds it for a minute or more (T-153286).
+let PATIENCE = 5_000
+
+/** How {@link through} waits between tries and on the cache, and hears of a
+ * cache that failed it. */
 export type Through = {
-  /** the clock the backoff between tries waits on */
+  /** the clock the backoff between tries, and the patience, wait on */
   clock?: Clock
   /** told of a status Cloudflare's cache answered for want of an answer */
   failed?: (res: Response, req: Request) => void
+  /** how long a read waits on the cache, in ms; 5 s unless said */
+  patience?: number
+  /** told of a read the cache did not answer within `patience` */
+  held?: (req: Request, ms: number) => void
 }
 
 /**
@@ -69,22 +78,35 @@ export type Through = {
  *   no body, so each try sends a copy of it with a store call's backoff
  *   (`@yaks/durable-object/resets` `retried`). Anything with a body is its
  *   caller's to send again.
+ * - A read the cache has not answered within `patience` is given up on and
+ *   answered in-process, which `held` is told of: the cache can hold a burst
+ *   of misses back for a minute while the entrypoint behind it has long
+ *   answered.
  */
 export let through = async (
   cache: Bound | undefined,
   req: Request,
   local: (req: Request) => Promise<Response>,
-  { clock, failed }: Through = {},
+  { clock, failed, patience = PATIENCE, held }: Through = {},
 ): Promise<Response> => {
   if (!cache) return await local(req)
   try {
     let read = req.method == 'GET' || req.method == 'HEAD'
-    let answer = await retried(
-      () => cache.fetch(read ? new Request(req) : req),
+    let stop = new AbortController()
+    let signal = AbortSignal.any([req.signal, stop.signal])
+    let asking = retried(
+      () => cache.fetch(read ? new Request(req, { signal }) : req),
       read,
       evicted,
       jittered(clock),
     )
+    let answer = read ? await within(asking, patience, clock) : await asking
+    if (!answer) {
+      stop.abort()
+      asking.then((late) => late.body?.cancel(), () => {})
+      held?.(req, patience)
+      return await local(req)
+    }
     if (answer.status < 520 || answer.status > 530) return answer
     await answer.body?.cancel()
     failed?.(answer, req)
@@ -93,6 +115,14 @@ export let through = async (
   }
   return await local(req)
 }
+
+// What `asking` answers within `ms` heard on `clock` (@yaks/fp `heard`), or
+// null once they lapse.
+let within = <T>(asking: Promise<T>, ms: number, clock?: Clock) =>
+  new Promise<T | null>((resolve, reject) => {
+    let cancel = heard(ms, () => resolve(null), clock)
+    asking.then(resolve, reject).finally(cancel)
+  })
 
 /** What the runtime lends an entrypoint whose cache is on: `ctx.cache`. */
 export type EntryCache = { purge(o: { tags: string[] }): Promise<Purged> }
