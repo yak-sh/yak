@@ -26,8 +26,9 @@
 # session's is lower, so a few fit together and one cannot take the slice: one
 # session's 48 type-checking `deno test` runs at once reached 15 GB with 7 GB
 # in swap, and yak-mail stalled 42 s for memory with yak.db's write lock held.
-# A session is a managed run's process-* scope or a tmux pane's tmux-spawn-*
-# scope. A session at its cap gives back page cache, swaps up to 2 GB, and then
+# A session is a managed run's process-* service or a tmux pane's tmux-spawn-*
+# scope (older runs still use process-* scopes). A session at its cap gives
+# back page cache, swaps up to 2 GB, and then
 # the kernel kills a test run's process first (bin/test.ts raises its
 # oom_score_adj), else the largest; OOMPolicy=continue keeps the rest of the
 # session, where a scope's default stops it whole. The caps are Max, never
@@ -156,6 +157,9 @@ for name in process- tmux-spawn-; do
   mkdir -p "$user/$name.scope.d"
   printf '[Scope]\n%s\n' "$session" >"$user/$name.scope.d/memory.conf"
 done
+mkdir -p "$user/process-.service.d"
+printf '[Service]\n%s\n' "$session" >"$user/process-.service.d/memory.conf"
+printf '[Service]\n%s\n' "$job" >"$user/process-.service.d/io.conf"
 printf '[Unit]\nDescription=the yak servers\n\n[Slice]\nCPUWeight=1000\n%s\n' "$servers" >"$user/yak.slice"
 printf '[Service]\nSlice=yak.slice\n' >"$user/yak-.service.d/slice.conf"
 printf '[Service]\nCPUWeight=100\n' >"$user/yak-.service.d/cpu.conf"

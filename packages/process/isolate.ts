@@ -17,3 +17,30 @@ export let scope = (unit: string): string[] => [
   '--quiet',
   `--unit=${unit}`,
 ]
+
+/** A managed run owns its descendants until its main process exits. Unlike a
+ * scope, this service then ends even descendants that made their own session.
+ * Environment references are expanded by systemd into single argv elements;
+ * env clears the user manager's extras without putting values in the unit. */
+export let service = (
+  unit: string,
+  cwd: string,
+  names: string[],
+): string[] => [
+  'systemd-run',
+  '--user',
+  '--collect',
+  '--quiet',
+  '--service-type=exec',
+  '--property=ExitType=main',
+  '--property=KillMode=control-group',
+  '--property=TimeoutStopSec=2s',
+  '--slice=app.slice',
+  `--unit=${unit}`,
+  `--working-directory=${cwd}`,
+  ...names.map((name) => `--setenv=${name}`),
+  'env',
+  '-i',
+  '--',
+  ...names.map((name) => `${name}=\${${name}}`),
+]

@@ -82,17 +82,21 @@ one process is over: its row records an `exit`, or it is among the vanished.
 Launched processes run through a short-lived launcher and a wrapper in a session
 and process group of its own. The wrapper writes a pidfile and an exit-code
 file, which on Linux also counts the processes the kernel's OOM killer ended in
-the run's scope (`exit.oom`); the launch writes a start file. The pidfile
-contains the wrapper's process-group ID and the child's PID. Monitoring uses
-signals and the files because the tracked program is not a direct child; this
-package does not call `waitpid` or reap children. This allows a child to outlive
-the process that opened the graph and be monitored again after restart.
+the run's control group (`exit.oom`); the launch writes a start file. The
+pidfile contains the wrapper's process-group ID and the child's PID. Monitoring
+uses signals and the files because the tracked program is not a direct child;
+this package does not call `waitpid` or reap children. This allows a child to
+outlive the process that opened the graph and be monitored again after restart.
+On Linux, a transient service tracks the wrapper's lifetime. When it exits,
+systemd stops every remaining process in that service, including fixtures
+started with `setsid` or `nohup`, with two seconds to drain before SIGKILL.
+Independently managed launches have their own services and survive that cleanup.
 
 Only the detaching differs by operating system:
 
 | OS    | Detached by                                         | Needs                              |
 | ----- | --------------------------------------------------- | ---------------------------------- |
-| Linux | `systemd-run --user --scope`, then `setsid`         | util-linux, a systemd user manager |
+| Linux | `systemd-run --user`, then `setsid`                 | util-linux, a systemd user manager |
 | macOS | perl's `setsid()`; launchd stops only a job's group | `/usr/bin/perl`                    |
 
 Any other OS is refused at launch. `opts.os` picks another OS's launcher, which

@@ -15,7 +15,7 @@ import { detached } from './detached.ts'
 // a restart and never a downed web server — every child outlives us (below),
 // so this process dying leaves everything it started running.
 //
-// The child outlives US, because the process supervising another process
+// The child outlives us, because the process supervising another process
 // must be restartable without taking that process with it. The technique is
 // the fleet's (src/sessions.ts, T-7127/T-9261), reused rather than reinvented:
 // our direct child is a launcher that backgrounds the rest and exits
@@ -38,7 +38,7 @@ import { detached } from './detached.ts'
 // is a log, and the graph records the process, not its log. A caller reads the
 // end of it with `tail`, and cleans the files once it is done with them.
 
-import { bus, scope } from './isolate.ts'
+import { bus, service } from './isolate.ts'
 import type { Bundle } from '@yaks/graph'
 import {
   EXIT,
@@ -211,7 +211,12 @@ export let literal = (arg: string): string => arg.replaceAll('$', '$$$$')
 
 /** How one machine detaches a run, given this launch's name and the user it
  * runs as. */
-type Platform = (launch: { unit: string; uid: number }) => {
+type Platform = (launch: {
+  unit: string
+  uid: number
+  cwd: string
+  env: Record<string, string>
+}) => {
   /** the command that starts the wrapper in a session and process group of
    * its own, beyond whatever stops the host */
   detach: string[]
@@ -226,16 +231,19 @@ type Platform = (launch: { unit: string; uid: number }) => {
 }
 
 let platforms: Record<string, Platform> = {
-  // `systemd-run --user --scope` lifts the run out of our cgroup, which
-  // systemd stops whole with our unit, and `setsid` gives it its session. The
+  // A transient service lifts the run out of our cgroup and ends its entire
+  // cgroup when the wrapper exits; `setsid` gives it its session. The
   // two variables are how systemd-run reaches the --user manager's D-Bus
   // socket; that socket exists only while user@<uid> is active, so a missing
   // one fails loudly into the stderr file rather than silently running the
   // child in our own cgroup.
-  linux: ({ unit, uid }) => ({
+  linux: ({ unit, uid, cwd, env }) => ({
     detach: [
-      ...scope(unit),
+      ...service(unit, cwd, Object.keys(env)),
       'setsid',
+      // A service starts as a session leader, so setsid forks. Keep its main
+      // process waiting for the wrapper instead of ending the service here.
+      '--wait',
     ],
     env: bus(uid),
     word: literal,
@@ -283,7 +291,19 @@ let spawn = async (
 ) => {
   let f = files(dir, eid)
   let script = `${dir}/wrapper.sh`
-  let p = platform({ unit: unit(eid), uid: system.uid() ?? 0 })
+  let envs = {
+    ...env,
+    TASKS_OUT: f.out,
+    TASKS_ERR: f.err,
+    TASKS_PID: f.pid,
+    TASKS_CODE: f.code,
+  }
+  let p = platform({
+    unit: unit(eid),
+    uid: system.uid() ?? 0,
+    cwd,
+    env: envs,
+  })
   // Every launch shares this file, and a write truncates before it writes: a
   // `sh wrapper.sh` opened in between ran an empty script, so its child never
   // started. A rename replaces the file whole, and a shell already reading the
@@ -301,12 +321,8 @@ let spawn = async (
     cwd,
     clearEnv: true,
     env: {
-      ...env,
+      ...envs,
       ...p.env,
-      TASKS_OUT: f.out,
-      TASKS_ERR: f.err,
-      TASKS_PID: f.pid,
-      TASKS_CODE: f.code,
     },
   })
 }
