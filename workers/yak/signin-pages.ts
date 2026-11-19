@@ -21,6 +21,7 @@ import { agentList } from './connected_ui.ts'
 import { tile } from './render/mod.ts'
 import { shown } from '@yaks/phone'
 import { CODE_NOTE, texted } from './signin.ts'
+import { beginPath, type Offered } from './oidc.ts'
 import { MANAGE, managePath, OAUTH } from '@yaks/platform/routes'
 import { CONNECTOR } from './seo.ts'
 import { AGENT } from './docs.ts'
@@ -112,6 +113,7 @@ export let askEmail = (at: {
   status?: number
   texts?: boolean
   preview?: Preview
+  providers?: Offered[]
 }, env: Host = {}) =>
   page(
     env,
@@ -171,6 +173,24 @@ export let askEmail = (at: {
         }),
       send('Send me a code'),
     ),
+    at.providers?.length
+      ? [
+        h('p', { class: 'Note' }, 'Or'),
+        at.providers.map((p) =>
+          h(
+            'form',
+            { class: 'Page_Form', method: 'post', action: beginPath(p.name) },
+            carried(at.q ?? null, at.back),
+            h(
+              Button,
+              { type: 'submit' },
+              h('span', { dangerouslySetInnerHTML: { __html: p.logo } }),
+              ` Continue with ${p.title}`,
+            ),
+          )
+        ),
+      ]
+      : null,
     home(env),
   )
 

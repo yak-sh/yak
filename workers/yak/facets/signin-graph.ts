@@ -9,11 +9,13 @@
 // code, via}`, which writes nothing of its own: it becomes a try off every
 // open code, or the burial of every row when it opens one, beside whoever it
 // signs in, stamped as signed in (signin.ts `stamped`), and the space they
-// land on, said as it stands (`landing`).
+// land on, said as it stands (`landing`). An arrival is the request
+// `$arrive{email, via}`: an address another provider vouched for (oidc.ts),
+// which signs in whoever wears it just as a guess that opened would.
 //
-// Both are the platform's alone. A `signin` is wholly server-stamped, so an
-// ask from anywhere else is refused at admission before it gets here, and a
-// guess is refused here unless the write is trusted.
+// All three are the platform's alone. A `signin` is wholly server-stamped,
+// so an ask from anywhere else is refused at admission before it gets here,
+// and a guess or an arrival is refused here unless the write is trusted.
 //
 // The work is the `authorize` hook's, which runs inside the transaction
 // before every precondition: the rows it buries are then read while they
@@ -64,6 +66,9 @@ type Guess = {
   source?: string
 }
 
+// How somebody arrives, by a guess that opened or by an `$arrive`.
+type Arriving = Pick<Guess, 'newcomer' | 'via' | 'session'>
+
 // Every row an address's codes left.
 let rows = (tx: Tx, address: string) =>
   after(
@@ -85,7 +90,7 @@ let arrival = (
   address: string,
   eid: string,
   at: string,
-  { newcomer, via = 'code', session }: Guess,
+  { newcomer, via = 'code', session }: Arriving,
 ): Bundle[] | Promise<Bundle[]> =>
   after(tx.read(personLine(address)), ([found]) =>
     after(
@@ -174,102 +179,118 @@ let asking = (b: Bundle) => !!(b.signin as { code?: string } | undefined)?.code
 
 export let plugins = (_host: unknown, options: Options): Plugin[] => [{
   name: 'yak/signin',
-  requests: ['$guess'],
-  authorize: hook(['signin', '$guess'], (bundles, tx, _err, context) => {
-    if (!bundles.some((b) => b.$guess || asking(b))) return bundles
-    if (bundles.some((b) => b.$guess) && !context?.trusted) {
-      throw new Refused('only the platform guesses at a sign-in code')
-    }
-    let now = options.store.now()
-    let decide = (b: Bundle): Bundle[] | Promise<Bundle[]> => {
-      if (b.$guess) {
-        let g = b.$guess as Guess
-        let address = addressOf(g)
-        let consent = () =>
-          after(tx.read(personLine(address)), (holders) => {
-            if (holders.some((r) => r.entity.eid != g.person)) {
-              throw new Refused(
-                'That contact belongs to another account. Sign in with it to use that account.',
-              )
-            }
-            if (g.email) {
-              return [{
-                entity: { eid: g.person! },
-                email: { address },
-                $alias: b.$alias,
-              }]
-            }
-            return after(
-              tx.read(line`.entity.eid=${consentEid(g.person!)}`),
-              ([before]) => {
-                let welcome = !holders.length || !before?.sms_consent
-                return texts(
-                  g.person!,
-                  address,
-                  true,
-                  new Date(now).toISOString(),
-                  g.space,
-                ).map((row) =>
-                  row.phone ? { ...row, $alias: b.$alias } : {
-                    ...row,
-                    ...(welcome ? { $alias: '$welcome' } : {}),
-                    sms_consent: {
-                      ...row.sms_consent as object,
-                      source: g.source ?? null,
-                    },
-                  }
-                )
-              },
-            )
-          })
-        let decide = () =>
-          after(rows(tx, address), (all) => {
-            let scoped = all.filter((r) =>
-              r.signin.person == g.person && r.signin.space == g.space &&
-              (g.via == 'link'
-                ? r.signin.code == g.code
-                : !r.signin.browser || r.signin.browser == g.browser)
-            )
-            let wrote = guessed(scoped, g.code, now)
-            if (!wrote.some((w) => w.tombstone)) return wrote
-            if (g.person) {
-              return after(consent(), (agreed) => [...wrote, ...agreed])
-            }
-            return after(
-              arrival(
-                tx,
-                address,
-                b.entity.eid,
-                new Date(now).toISOString(),
-                g,
-              ),
-              (
-                [who, ...home],
-              ) => [...wrote, { ...who, $alias: b.$alias }, ...home],
-            )
-          })
-        return g.person && g.phone
-          ? after(
-            tx.read(personLine(address)),
-            (held) =>
-              held.some((r) => r.entity.eid == g.person) ? consent() : decide(),
+  requests: ['$guess', '$arrive'],
+  authorize: hook(
+    ['signin', '$guess', '$arrive'],
+    (bundles, tx, _err, context) => {
+      if (!bundles.some((b) => b.$guess || b.$arrive || asking(b))) {
+        return bundles
+      }
+      if (bundles.some((b) => b.$guess || b.$arrive) && !context?.trusted) {
+        throw new Refused('only the platform signs anybody in')
+      }
+      let now = options.store.now()
+      let decide = (b: Bundle): Bundle[] | Promise<Bundle[]> => {
+        // An address another provider vouched for (oidc.ts): whoever wears it
+        // arrives as a code that opened would have them, with no code spent.
+        if (b.$arrive) {
+          let a = b.$arrive as Arriving & { email: string }
+          return after(
+            arrival(tx, a.email, b.entity.eid, new Date(now).toISOString(), a),
+            ([who, ...home]) => [{ ...who, $alias: b.$alias }, ...home],
           )
-          : decide()
-      }
+        }
+        if (b.$guess) {
+          let g = b.$guess as Guess
+          let address = addressOf(g)
+          let consent = () =>
+            after(tx.read(personLine(address)), (holders) => {
+              if (holders.some((r) => r.entity.eid != g.person)) {
+                throw new Refused(
+                  'That contact belongs to another account. Sign in with it to use that account.',
+                )
+              }
+              if (g.email) {
+                return [{
+                  entity: { eid: g.person! },
+                  email: { address },
+                  $alias: b.$alias,
+                }]
+              }
+              return after(
+                tx.read(line`.entity.eid=${consentEid(g.person!)}`),
+                ([before]) => {
+                  let welcome = !holders.length || !before?.sms_consent
+                  return texts(
+                    g.person!,
+                    address,
+                    true,
+                    new Date(now).toISOString(),
+                    g.space,
+                  ).map((row) =>
+                    row.phone ? { ...row, $alias: b.$alias } : {
+                      ...row,
+                      ...(welcome ? { $alias: '$welcome' } : {}),
+                      sms_consent: {
+                        ...row.sms_consent as object,
+                        source: g.source ?? null,
+                      },
+                    }
+                  )
+                },
+              )
+            })
+          let decide = () =>
+            after(rows(tx, address), (all) => {
+              let scoped = all.filter((r) =>
+                r.signin.person == g.person && r.signin.space == g.space &&
+                (g.via == 'link'
+                  ? r.signin.code == g.code
+                  : !r.signin.browser || r.signin.browser == g.browser)
+              )
+              let wrote = guessed(scoped, g.code, now)
+              if (!wrote.some((w) => w.tombstone)) return wrote
+              if (g.person) {
+                return after(consent(), (agreed) => [...wrote, ...agreed])
+              }
+              return after(
+                arrival(
+                  tx,
+                  address,
+                  b.entity.eid,
+                  new Date(now).toISOString(),
+                  g,
+                ),
+                (
+                  [who, ...home],
+                ) => [...wrote, { ...who, $alias: b.$alias }, ...home],
+              )
+            })
+          return g.person && g.phone
+            ? after(
+              tx.read(personLine(address)),
+              (held) =>
+                held.some((r) => r.entity.eid == g.person)
+                  ? consent()
+                  : decide(),
+            )
+            : decide()
+        }
 
-      if (asking(b)) {
-        return after(
-          rows(tx, addressOf(b.signin as Signin['signin'])),
-          (all) => asked(b, all, now),
-        )
+        if (asking(b)) {
+          return after(
+            rows(tx, addressOf(b.signin as Signin['signin'])),
+            (all) => asked(b, all, now),
+          )
+        }
+        return [b]
       }
-      return [b]
-    }
-    // One bundle at a time, so a synchronous store stays synchronous.
-    return each(
-      bundles,
-      [] as Bundle[],
-      (out, b) => after(decide(b), (wrote) => [...out, ...wrote]),
-    )
-  }),
+      // One bundle at a time, so a synchronous store stays synchronous.
+      return each(
+        bundles,
+        [] as Bundle[],
+        (out, b) => after(decide(b), (wrote) => [...out, ...wrote]),
+      )
+    },
+  ),
 }]

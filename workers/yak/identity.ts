@@ -206,6 +206,7 @@ import {
   worded,
 } from './newcomer.ts'
 import {
+  arrive,
   type Arrived,
   type Ask,
   canon,
@@ -250,6 +251,7 @@ import { sendable, Undeliverable } from '@yaks/mail'
 import { credit } from './referral.ts'
 import { unauthorized, withAuth } from './asking.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
+import * as oidc from './oidc.ts'
 
 // What a grant carries and a token gives back: the person, nothing else.
 // Membership is read from the directory at request time, never a claim.
@@ -1264,11 +1266,12 @@ let phoneAt = async (env: Env, person: string) => {
 
 // The sign-in card, saying whether a number works on it here (`textable`).
 let signCard = async (env: Env, at: Parameters<typeof askEmail>[0] = {}) => {
-  let [texts, preview] = await Promise.all([
+  let [texts, preview, providers] = await Promise.all([
     textable(env),
     linked(env, at.back, dirOf(env)),
+    oidc.offered(env),
   ])
-  return askEmail({ ...at, texts, preview }, env)
+  return askEmail({ ...at, texts, preview, providers }, env)
 }
 
 // Revoke a newcomer's old external credentials before their verified address
@@ -1446,7 +1449,8 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   let path = url.pathname
   if (
     env.SESSION_SECRET && req.method == 'POST' &&
-    (path == '/login' || path == '/login/code') &&
+    (path == '/login' || path == '/login/code' ||
+      oidc.routed(path)?.at == 'begin') &&
     !await browserOf(req, env.SESSION_SECRET, env)
   ) {
     return browsing(req, env, (browser) => ours(browser, env))
@@ -1722,6 +1726,55 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         c,
       )
     })
+  }
+
+  // "Continue with Google": another provider vouches for an address
+  // (oidc.ts), and whoever wears it lands just as a code that opened would
+  // land them: the person it already is, or somebody new with a space.
+  let provider = oidc.routed(path)
+  if (provider?.at == 'begin' && req.method == 'POST') {
+    let q = field('q') || null
+    let back = field('return') || null
+    return await oidc.begin(env, provider.name, {
+      q: q ?? undefined,
+      back: back ?? undefined,
+    }) ?? signCard(env, {
+      q,
+      back,
+      why: oidc.NOT_FINISHED(oidc.PROVIDERS[provider.name].title),
+      status: 503,
+    })
+  }
+  if (provider?.at == 'callback' && req.method == 'GET') {
+    let { name } = provider
+    let said = await oidc.complete(env, name, req)
+    let answer = 'why' in said
+      ? await signCard(env, {
+        q: said.q,
+        back: said.back,
+        why: said.why,
+        status: 400,
+      })
+      : await (async () => {
+        let newcomer = await arrivingOn(env, req)
+        let session = await sessionStart(req, env)
+        let arrived = await arrive(meta(env), said.address, name, {
+          newcomer,
+          session,
+          browser: instrumentEid(session.via),
+        })
+        return landed(
+          req,
+          env,
+          proving(arrived, said.address, newcomer),
+          said.q ?? '',
+          said.back ?? '',
+        )
+      })()
+    // The return's address carried a code, which a Referer must not hand on.
+    let out = quiet(answer)
+    out.headers.append('set-cookie', oidc.spent(name))
+    return out
   }
 
   // One click instead of six digits (link.ts): the letter's own link, or a

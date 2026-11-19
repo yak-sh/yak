@@ -16,6 +16,9 @@ Import paths:
   with reads and serialized updates.
 - `attempt(now?)` from `@yaks/oauth`: a unique correlation value and ten-minute
   deadline.
+- `identity(tokens, expect)` and `claims(jwt)` from `@yaks/oauth`: who an OpenID
+  Connect provider says signed in, read from the id_token its token endpoint
+  answered (see Signing in below).
 - `pkce()` from `@yaks/oauth`: a random verifier and its S256 challenge for
   Proof Key for Code Exchange (PKCE). S256 means the challenge is the URL-safe
   Base64 encoding of the verifier's SHA-256 hash.
@@ -89,6 +92,18 @@ let next = await calendar.refresh(token!)
   (`invalid_grant` means the grant is gone and the person must connect again),
   `http_<status>` when the provider gave no code, or the client's own: `state`,
   `code`, `expired`.
+
+## Signing in
+
+Signing a person in with another provider ("Continue with Google") is the same
+flow asking for `openid email profile`, with the grant kept nowhere. The
+`identity(tokens, {issuers, audience})` that follows `complete` reads the
+id_token and refuses one whose `iss` is not among `issuers`, whose `aud` does
+not name the client id `audience`, or that has expired. It answers the subject,
+the email lowercased, whether the provider says it verified the email, and the
+name. The token came straight from the token endpoint over TLS, so its signature
+is not checked (OpenID Connect Core §3.1.3.7, item 6). Do not use `identity` on
+an id_token that arrived any other way.
 
 ## The store
 

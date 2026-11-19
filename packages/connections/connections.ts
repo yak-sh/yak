@@ -67,6 +67,7 @@ import { token } from '@yaks/graph/sha256'
 import { edgeEid, link } from '@yaks/edge'
 import {
   type Attempt,
+  claims,
   type Client,
   client,
   OAuthError,
@@ -908,14 +909,8 @@ export let accountOf = async (
 ): Promise<string | undefined> => {
   let body: Record<string, unknown> = {}
   if (tokens.id_token) {
-    let payload = tokens.id_token.split('.')[1]
-    try {
-      let bytes = Uint8Array.from(
-        atob(payload.replaceAll('-', '+').replaceAll('_', '/')),
-        (c) => c.charCodeAt(0),
-      )
-      body = JSON.parse(new TextDecoder().decode(bytes))
-    } catch {
+    body = claims(tokens.id_token)
+    if (!Object.keys(body).length) {
       throw new Error('the provider returned an invalid id_token')
     }
   } else if (integration.userinfo && tokens.access_token) {

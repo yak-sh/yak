@@ -35,6 +35,7 @@ import { chose, nameOf } from './names.ts'
 import { type Host, signupAddress } from '@yaks/platform/host'
 import type { Letter } from './mail.ts'
 import type { SessionSeed } from './browser-sessions.ts'
+import type { Named } from './oidc.ts'
 
 // Ten minutes, five guesses: long enough to switch to the mail app, short
 // enough that a six-digit code is never worth grinding.
@@ -401,7 +402,8 @@ export let spend = async (
 
 /** How a guess arrives: `newcomer` is who this browser is signed in as, whose
  * build the person signing in is handed when they are a newcomer (newcomer.ts
- * `keep`), and `via` is how the code came, a code typed or a letter's link followed (link.ts). */
+ * `keep`), and `via` is how they proved the address: a code typed, a
+ * letter's link followed (link.ts), or a provider vouching for it (oidc.ts). */
 export type Arrival = {
   browser?: string
   session?: SessionSeed
@@ -412,7 +414,7 @@ export type Arrival = {
   source?: string
 }
 
-export type Via = 'code' | 'link'
+export type Via = 'code' | 'link' | Named
 
 /** Who a code signed in, whether it is the first time they ever got in,
  * which is the funnel's sign-up (funnel.ts), and the space marked their own,
@@ -453,36 +455,67 @@ export let guess = async (
           ...(browser ? { browser } : {}),
         },
       }])
-      let who = applied.find((b) => b.$alias == '$who')
-      if (!who) return null
-      let signed = who.signed_in as Person['signed_in']
-      let own = applied.find((b) => b.space)
-      return {
-        person: who.entity.eid,
-        first: !!signed?.first,
-        ...session ? { claim: applied.some((b) => b.browser) } : {},
-        ...(session &&
-            applied.some((b) =>
-              b.entity.eid == session.eid && b.browser_session
-            )
-          ? { session }
-          : {}),
-        ...(person
-          ? { contact: applied.some((b) => b.$alias == '$welcome') }
-          : {}),
-        ...own
-          ? {
-            own: {
-              eid: own.entity.eid,
-              slug: (own.space as { slug: string }).slug,
-            },
-          }
-          : {},
-      }
+      return arrivedIn(applied, session, person)
     } catch (e) {
       if (e instanceof Stale) continue
       throw e
     }
+  }
+}
+
+/** Sign in whoever wears an email address another provider vouched for
+ * (oidc.ts): the person found or minted, stamped and landed exactly as a
+ * code that opened would have them (facets/signin-graph.ts `$arrive`), with
+ * no code to spend. Only trusted code proves an address this way. */
+export let arrive = async (
+  store: Meta,
+  address: string,
+  via: Via,
+  { newcomer, session, browser }: Arrival = {},
+): Promise<Arrived> => {
+  let applied = await apply(store, [{
+    entity: { eid: '$who' },
+    $arrive: {
+      email: canon(address),
+      via,
+      ...(newcomer ? { newcomer } : {}),
+      ...(session ? { session } : {}),
+      ...(browser ? { browser } : {}),
+    },
+  }])
+  let arrived = arrivedIn(applied, session)
+  if (!arrived) throw new Error('the directory signed nobody in')
+  return arrived
+}
+
+// Who a sign-in's write answered with, at `$who`, or null when it signed in
+// nobody: a guess that did not open.
+let arrivedIn = (
+  applied: Bundle[],
+  session?: SessionSeed,
+  person?: string,
+): Arrived | null => {
+  let who = applied.find((b) => b.$alias == '$who')
+  if (!who) return null
+  let signed = who.signed_in as Person['signed_in']
+  let own = applied.find((b) => b.space)
+  return {
+    person: who.entity.eid,
+    first: !!signed?.first,
+    ...session ? { claim: applied.some((b) => b.browser) } : {},
+    ...(session &&
+        applied.some((b) => b.entity.eid == session.eid && b.browser_session)
+      ? { session }
+      : {}),
+    ...(person ? { contact: applied.some((b) => b.$alias == '$welcome') } : {}),
+    ...own
+      ? {
+        own: {
+          eid: own.entity.eid,
+          slug: (own.space as { slug: string }).slug,
+        },
+      }
+      : {},
   }
 }
 

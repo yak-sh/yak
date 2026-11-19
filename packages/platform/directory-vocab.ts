@@ -587,7 +587,7 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: {
         at: owned(time),
-        via: owned({ type: 'string', enum: ['code', 'link'] }),
+        via: owned({ type: 'string', enum: ['code', 'link', 'google'] }),
         first: owned(time),
       },
     },

@@ -37,3 +37,4 @@ export {
   type Provider,
   type Tokens,
 } from './client.ts'
+export { claims, type Expect, type Identity, identity } from './identity.ts'

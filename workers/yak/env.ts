@@ -70,6 +70,9 @@ export type Env = {
   // Explicitly disable recording, primarily for isolated cost comparisons.
   STORE_TRACING?: string
   MODEL_FETCH?: typeof fetch
+  // How a sign-in another provider vouches for reaches its token endpoint
+  // (oidc.ts); a probe stands in for the provider here.
+  SIGNIN_FETCH?: typeof fetch
   // New asks use this independently deployed executor only once it is live.
   MODEL?: {
     submit(job: Inference): Promise<void>
