@@ -49,12 +49,35 @@ let SITEMAP = {
   errors: '0',
   warnings: '0',
 }
+// Google's answer while the platform's project has not enabled the API.
+let off = false
+let OFF = {
+  error: {
+    code: 403,
+    message:
+      'Google Search Console API has not been used in project 1 before or it is disabled.',
+    status: 'PERMISSION_DENIED',
+    details: [{
+      '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
+      reason: 'SERVICE_DISABLED',
+      metadata: {
+        service: 'searchconsole.googleapis.com',
+        serviceTitle: 'Google Search Console API',
+        activationUrl:
+          'https://console.developers.google.com/apis/api/searchconsole.googleapis.com/overview?project=1',
+      },
+    }],
+  },
+}
 globalThis.fetch = (input, init) => {
   let r = new Request(input, init)
   let url = new URL(r.url)
   if (!url.host.endsWith('googleapis.com')) return real(r)
   asked.push(r.clone())
   let json = (v: unknown) => Promise.resolve(Response.json(v))
+  if (off && url.host == 'searchconsole.googleapis.com') {
+    return Promise.resolve(Response.json(OFF, { status: 403 }))
+  }
   if (url.host == 'oauth2.googleapis.com') {
     return json({ access_token: 'A1', refresh_token: 'R1', id_token })
   }
@@ -159,6 +182,26 @@ test('connected, it reads the properties, each page, and the sitemaps', async ()
   assertEquals(asked.filter((r) => r.method == 'PUT').map((r) => r.url), [
     'https://searchconsole.googleapis.com/webmasters/v3/sites/sc-domain%3Ayaks.app/sitemaps/https%3A%2F%2Fyaks.app%2Fsitemap.xml',
   ])
+})
+
+test('an API the platform has not enabled is named as the cause, with where it is enabled', async () => {
+  off = true
+  try {
+    for (
+      let [name, args] of [
+        ['search_stats', { site: 'yaks.app' }],
+        ['search_sitemap', { site: 'yaks.app' }],
+      ] as const
+    ) {
+      let refused = await assertRejects(() => tool(name, args))
+      assertEquals(
+        (refused as Error).message,
+        "Google Search Console API is not enabled in yaks.app's Google Cloud project, so Google refuses every call to it; the connection itself is fine. yaks.app's owner enables it at https://console.developers.google.com/apis/api/searchconsole.googleapis.com/overview?project=1",
+      )
+    }
+  } finally {
+    off = false
+  }
 })
 
 test('a property and the query Google is asked', () => {

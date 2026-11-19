@@ -31,6 +31,7 @@ import { addingAt, ctxOf, ownConnection, settling } from './connections.ts'
 import { vaulted, vaultOf } from './vault.ts'
 import { recall } from './lib/hops.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
+import { caught } from './defects.ts'
 
 /** The integrations a person's calendar and mail connect through. */
 export let CALENDAR = 'google-calendar'
@@ -187,6 +188,22 @@ let textOf = (p: Part): string => {
   return ''
 }
 
+/** The API Google says the platform's project has not enabled, from its
+ * error's `ErrorInfo` (`SERVICE_DISABLED`): its service, its title, and where
+ * it is enabled. */
+export let disabledApi = (body: Record<string, unknown>) => {
+  let details = ((body.error as Record<string, unknown> | undefined)?.details ??
+    []) as { reason?: string; metadata?: Record<string, string> }[]
+  let info = details.find((d) => d.reason == 'SERVICE_DISABLED')?.metadata
+  if (!info?.service) return undefined
+  return {
+    service: info.service,
+    title: info.serviceTitle || info.service,
+    enable: info.activationUrl ||
+      `https://console.developers.google.com/apis/api/${info.service}/overview`,
+  }
+}
+
 // ---- where it meets the person's connections ----
 
 let titled = (i: Integration) => i.title || i.name
@@ -214,6 +231,18 @@ export let askGoogle = async (
         res.statusText,
     )
   }`
+  // An API the platform's Google project has not enabled is ours to fix, and
+  // the caller hears that their connection is not the cause.
+  let off = disabledApi(body)
+  if (off) {
+    caught(new Error(said), { request: 'google', service: off.service })
+    throw refuse(
+      'unavailable',
+      `${off.title} is not enabled in yaks.app's Google Cloud project, so ` +
+        'Google refuses every call to it; the connection itself is fine. ' +
+        `yaks.app's owner enables it at ${off.enable}`,
+    )
+  }
   // Google failing is ours to see; Google refusing what was asked is the
   // caller's to hear.
   if (res.status >= 500) throw new Error(said)
