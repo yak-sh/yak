@@ -229,10 +229,14 @@ let copying = async (
   }
   let space = new URL(req.url).searchParams.get('space') ?? ''
   let body = await req.text()
-  if (planned(body) && !(await listed()).some((s) => s.eid == space)) {
+  let plan = planned(body)
+  if (plan && !(await listed()).some((s) => s.eid == space)) {
     return json(404, 'no_space', `no space is ${space || '(nothing)'}`)
   }
-  await audit(env, who, { operation: 'operator_copy', space })
+  // A copy of a space is one act, recorded at its plan, as graves records
+  // only its first page: a sweep takes a page per 2,000 rows, and a record a
+  // page wrote tens of thousands of entities to the directory in an hour.
+  if (plan) await audit(env, who, { operation: 'operator_copy', space })
   return await builderOf(env, space)(() =>
     new Request(`https://builder${COPY}`, {
       method: 'POST',

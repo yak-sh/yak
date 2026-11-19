@@ -161,7 +161,7 @@ test('the platform’s owner reads a space’s Operator store out, a table at a 
   )
   assertEquals((await ask('?space=nobody', {})).body.error.code, 'no_space')
   let copied = await meta(env).query('.admin_action.operation=operator_copy&*')
-  assertEquals(copied.length, 2)
+  assertEquals(copied.length, 1)
   assertEquals((copied[0].admin_action as { space: string }).space, ada.eid)
   assertEquals((copied[0].created as { by: string }).by, JEFF)
 })
