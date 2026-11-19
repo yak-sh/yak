@@ -11,6 +11,7 @@ import {
   events,
   fault,
   main,
+  PRICING,
   verify,
 } from './verify-deploy.ts'
 
@@ -38,7 +39,7 @@ let TOOLS = JSON.stringify({ result: { tools: [{ name: 'about' }] } })
 
 let healthy = () => {
   let table: Record<string, Reply> = { 'POST /mcp?auth=mixed': [200, TOOLS] }
-  for (let path of DOORS) table[path] = [200, '$9 a month']
+  for (let path of DOORS) table[path] = [200, PRICING.has]
   table['/connect'] = [303, '', '/login?return=%2Fconnect']
   return table
 }
@@ -115,10 +116,12 @@ test('verify: connect requires its precise anonymous sign-in redirect', async ()
 test('verify: pricing must show the price and hide the checkout door', async () => {
   let bare = healthy()
   bare['/pricing'] = [200, 'free forever']
-  assertEquals(await verify(fake(bare), SITE), ['/pricing: no $9 on the page'])
+  assertEquals(await verify(fake(bare), SITE), [
+    `/pricing: no ${PRICING.has} on the page`,
+  ])
 
   let leaky = healthy()
-  leaky['/pricing'] = [200, '$9 at checkout.stripe.com/c/pay']
+  leaky['/pricing'] = [200, `${PRICING.has} at checkout.stripe.com/c/pay`]
   assertEquals(await verify(fake(leaky), SITE), [
     '/pricing: leaks checkout.stripe.com',
   ])

@@ -427,7 +427,6 @@ test('billing shows the space’s allowances', async () => {
   })).text()
   for (
     let text of [
-      'Get the Plus plan for Books — $9 a month',
       'Nothing is billed.',
       '0 of 5',
       '0% used',

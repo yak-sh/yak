@@ -7,6 +7,8 @@ import { type DeskPage, lost, spaceBinned, spaceIndex } from './pages.ts'
 import { askCode, askConnect, askEmail } from './signin-pages.ts'
 import { desk } from './desk-pages.ts'
 import type { Borrowed, Connections, Shown, Using } from './connections.ts'
+import type { Card } from './billing.ts'
+import { PRICE, YEARLY } from '@yaks/platform/plans'
 
 let env = { APEX: 'yaks.fyi' }
 // A service as a page draws it, bare but for its name.
@@ -729,12 +731,18 @@ test('connections: a built integration is offered by its face, and a site is lin
   )
 })
 
+// Every paid plan sold by the month and the year, and what each costs as the
+// plan card says it.
+let SOLD: Card['sold'] = { plus: ['month', 'year'], pro: ['month', 'year'] }
+let cost = (tier: 'plus' | 'pro', per: 'month' | 'year') =>
+  `$${(per == 'year' ? YEARLY : PRICE)[tier]} a ${per}`
+
 test('paid plan settings describe unlimited apps', async () => {
   for (let tier of ['plus', 'pro'] as const) {
     const html = await desk({
       ...page,
       view: 'billing',
-      plan: { tier, ends: '', known: true },
+      plan: { tier, ends: '', known: true, sold: SOLD },
     }, env).text()
     assertStringIncludes(html, 'Unlimited apps')
     assertEquals(html.includes('null apps'), false)
@@ -772,34 +780,48 @@ test('a space on the Plus plan free says through when, and offers to keep it aft
       ends: '',
       known: false,
       free: '2026-12-05T15:00:00.000Z',
+      sold: SOLD,
     },
   }, env).text()
   assertStringIncludes(html, 'free through Dec 5th, 2026')
-  assertStringIncludes(html, 'Keep the Plus plan for ada — $9 a month')
+  for (let per of SOLD.plus) {
+    assertStringIncludes(
+      html,
+      `Keep the Plus plan for ada — ${cost('plus', per)}`,
+    )
+  }
 })
 
-test('the plan card offers the Pro plan only where it is on sale', async () => {
-  let card = (pro: ('month' | 'year')[]) =>
+test('the plan card offers each plan by the month and the year only where it is on sale', async () => {
+  let card = (sold: Card['sold']) =>
     desk({
       ...page,
       view: 'billing',
-      plan: { tier: 'free', ends: '', known: false, pro },
+      plan: { tier: 'free', ends: '', known: false, sold },
     }, env).text()
-  let none = await card([])
-  assertStringIncludes(none, 'Get the Plus plan for ada — $9 a month')
-  assertEquals(none.includes('data-plan="pro"'), false)
-  assertStringIncludes(none, 'The Pro plan is not on sale here yet')
-  let both = await card(['month', 'year'])
+  let monthly = await card({ plus: ['month'], pro: [] })
   assertStringIncludes(
-    both,
-    'Get the Pro plan for ada — $49 a month',
+    monthly,
+    `Get the Plus plan for ada — ${cost('plus', 'month')}`,
   )
-  assertStringIncludes(both, 'data-plan="pro" data-per="year"')
-  assertStringIncludes(
-    both,
-    'Get the Pro plan for ada — $490 a year',
-  )
-  assertEquals(both.includes('not on sale'), false)
+  assertEquals(monthly.includes('data-per="year"'), false)
+  assertEquals(monthly.includes('data-plan="pro"'), false)
+  assertStringIncludes(monthly, 'The Pro plan is not on sale here yet')
+  let all = await card(SOLD)
+  for (let tier of ['plus', 'pro'] as const) {
+    for (let per of SOLD[tier]) {
+      assertStringIncludes(all, `data-plan="${tier}" data-per="${per}"`)
+      assertStringIncludes(
+        all,
+        `Get the ${tier == 'pro' ? 'Pro' : 'Plus'} plan for ada — ${
+          cost(tier, per)
+        }`,
+      )
+    }
+  }
+  assertEquals(all.includes('not on sale'), false)
+  let none = await card({ plus: [], pro: [] })
+  assertEquals(none.includes('data-door="checkout"'), false)
 })
 
 test('the Billing page offers a free space the yearly Pro plan by invoice, where it may be', async () => {
@@ -807,7 +829,13 @@ test('the Billing page offers a free space the yearly Pro plan by invoice, where
     desk({
       ...page,
       view,
-      plan: { tier: 'free', ends: '', known: false, pro: ['year'], ...plan },
+      plan: {
+        tier: 'free',
+        ends: '',
+        known: false,
+        sold: { plus: ['month'], pro: ['year'] },
+        ...plan,
+      },
     }, env).text()
   let offered = await card({ invoice: 60 })
   assertStringIncludes(offered, 'Pay by invoice instead')
@@ -848,7 +876,7 @@ test('billing shows each allowance and whom it bills', async () => {
       spaces: [{ slug: 'ada', title: 'Ada’s kitchen', owner: true, own: true }],
       view: 'billing',
       provider: 'Paybox',
-      plan: { tier: known ? 'plus' : 'free', ends: '', known },
+      plan: { tier: known ? 'plus' : 'free', ends: '', known, sold: SOLD },
       bill: {
         limits,
         budget: { spent: 0.05, limit: 0.2 },
@@ -859,7 +887,7 @@ test('billing shows each allowance and whom it bills', async () => {
   let one = await billing({})
   for (
     let text of [
-      'Get the Plus plan for Ada’s kitchen — $9 a month',
+      `Get the Plus plan for Ada’s kitchen — ${cost('plus', 'month')}`,
       'Nothing is billed.',
       'last read at 14:00 UTC',
       '3 of 5',

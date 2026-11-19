@@ -18,8 +18,10 @@
 //
 // Which tier a subscription buys is read off its price, never off metadata a
 // checkout wrote: a plan changed in the portal moves the price and nothing
-// else. A paying price no tier lists buys the first tier the options name, so
-// a subscription made before a later tier existed reads as it did.
+// else. A price a tier no longer sells but keeps (`kept`), because a raise
+// leaves its subscribers on what they signed up for, still buys that tier. A
+// paying price no tier lists buys the first tier the options name, so a
+// subscription made before a later tier existed reads as it did.
 import type {
   Bought,
   Changed,
@@ -33,11 +35,16 @@ import { ask, found, type Keyed, list } from './mod.ts'
 import { checkout } from './checkout.ts'
 
 /** What a config gives the plans: the key and clock every call is made with
- * (`Keyed`), and each tier's price ids by how often it is paid for, in the
- * order a price none lists falls back to the first of. */
+ * (`Keyed`), each tier's price ids by how often it is paid for, in the order
+ * a price none lists falls back to the first of, and each tier's price ids it
+ * no longer sells but whose subscriptions are still on it. */
 export type Options = Keyed & {
   prices?: Record<string, Partial<Record<Per, string>>>
+  kept?: Record<string, string[] | undefined>
 }
+
+/** What a subscription's tier is read with. */
+export type Pricing = Pick<Options, 'prices' | 'kept'>
 
 // The slice of a Stripe invoice read here: whether it is paid, and whether
 // it was for anything, which a trial's opening invoice is not.
@@ -149,14 +156,19 @@ let idOf = (v: string | { id?: string } | null | undefined) =>
   typeof v == 'string' ? v : v?.id ?? ''
 
 /** The tier a subscription's price buys: the first of `prices` listing one of
- * its items' prices, else the first of `prices`. */
-export let tierFor = (sub: Sub, prices: Options['prices'] = {}): string => {
-  let tiers = Object.entries(prices)
+ * its items' prices, else the first of `kept` listing one, else the first of
+ * `prices`. */
+export let tierFor = (
+  sub: Sub,
+  { prices = {}, kept = {} }: Pricing = {},
+): string => {
   let bought = (sub.items?.data ?? []).map((i) => idOf(i.price))
-  let found = tiers.find(([, by]) =>
-    Object.values(by).some((p) => !!p && bought.includes(p))
-  )
-  return (found ?? tiers[0])?.[0] ?? ''
+  let buys = (ids: (string | undefined)[] = []) =>
+    ids.some((p) => !!p && bought.includes(p))
+  let found =
+    Object.entries(prices).find(([, by]) => buys(Object.values(by))) ??
+      Object.entries(kept).find(([, ids]) => buys(ids))
+  return found?.[0] ?? Object.keys(prices)[0] ?? ''
 }
 
 /** When a subscription with this status stops, set only when it will not
@@ -175,12 +187,12 @@ export let ending = (sub: Sub, status: string): string | null => {
 }
 
 /** A Stripe subscription in the host's words. */
-export let read = (sub: Sub, prices?: Options['prices']): Subscription => {
+export let read = (sub: Sub, pricing?: Pricing): Subscription => {
   let status = statusOf(sub)
   return {
     id: sub.id ?? '',
     payer: idOf(sub.customer),
-    tier: tierFor(sub, prices),
+    tier: tierFor(sub, pricing),
     status,
     until: when(periodEnd(sub)),
     ending: ending(sub, status),
@@ -243,7 +255,7 @@ export let plans = (options: Options): Plans => {
   let price = (tier: string, per: Per) => options.prices?.[tier]?.[per]
   let subscription = async (id: string) => {
     let sub = await found(options, expanded(id)) as Sub | null
-    return sub && read(sub, options.prices)
+    return sub && read(sub, options)
   }
   let charges = async (id: string) => {
     let sub = await ask(options, path(id)) as Sub
@@ -344,7 +356,7 @@ export let plans = (options: Options): Plans => {
       ) as Sub
       if (!made.id) throw new Error('stripe made a subscription with no id')
       return {
-        subscription: read(made, options.prices),
+        subscription: read(made, options),
         at: when(made.created) ?? new Date(now()).toISOString(),
       }
     },
@@ -398,7 +410,7 @@ export let plans = (options: Options): Plans => {
           status: 'all',
           'expand[]': 'data.latest_invoice',
         })
-      ) out.push(read(sub, options.prices))
+      ) out.push(read(sub, options))
       return out
     },
     charges,
@@ -465,7 +477,7 @@ export let changed =
       ...referred,
       subscription: () =>
         whole
-          ? Promise.resolve(read(o as Sub, options.prices))
+          ? Promise.resolve(read(o as Sub, options))
           : named
           ? plans(options).subscription(named)
           : Promise.resolve(undefined),

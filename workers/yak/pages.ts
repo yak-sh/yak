@@ -1602,8 +1602,9 @@ export let MOVES =
 // The plan card, for a person who is signed in (T-33125). One card: the paid
 // plans when they are free, manage-billing when they are paying. Each button
 // POSTs to billing.ts and follows the URL the payment provider answers, so no
-// provider's address is written into this page and nothing here knows a key. The Pro
-// plan (D-134567) is offered only where its prices exist (billing.ts `Card`).
+// provider's address is written into this page and nothing here knows a key.
+// Each plan is offered by the month and the year only where that price exists
+// (billing.ts `Card`).
 //
 // A day, not a timestamp: "runs until 14 October 2026" is what somebody wants
 // to know, and the hour is noise on a monthly bill.
@@ -1666,8 +1667,9 @@ export let plan = (
   let doors = [
     ...(open
       ? [
-        buy({ tier: 'plus', per: 'month' }),
-        ...(y.plan.pro ?? []).map((per) => buy({ tier: 'pro', per })),
+        ...(['plus', 'pro'] as const).flatMap((tier) =>
+          y.plan.sold[tier].map((per) => buy({ tier, per }))
+        ),
       ]
       : []),
     y.plan.known ? billButton('portal', 'Manage billing', target) : null,
@@ -1693,7 +1695,7 @@ export let plan = (
   )
   // Where the Pro plan has no price yet, a free space still hears
   // how to get it: the pricing page offers it everywhere.
-  let ask = tier == 'free' && !y.plan.pro?.length
+  let ask = tier == 'free' && !y.plan.sold.pro.length
     ? h(
       Form.Hint,
       null,

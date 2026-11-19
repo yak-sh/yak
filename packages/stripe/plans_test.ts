@@ -8,6 +8,7 @@ import {
   ONCE_TAX,
   periodEnd,
   plans,
+  type Pricing,
   read,
   statusOf,
   type Sub,
@@ -129,13 +130,18 @@ test('an invoiced plan holds once its first period is paid, and stops once an in
 })
 
 test('the tier is read off the price, the first tier where none is listed', () => {
-  for (let price of [...PRO, { id: PRO[1] }]) {
-    equal(read(priced(price), PRICES).tier, 'pro')
-  }
-  equal(read(priced('price_plus'), PRICES).tier, 'plus')
-  equal(read(priced('price_old'), PRICES).tier, 'plus')
-  equal(read(sub(), PRICES).tier, 'plus')
-  equal(read(priced(PRO[0]), { plus: {} }).tier, 'plus')
+  let tier = (price: unknown, pricing: Pricing = { prices: PRICES }) =>
+    read(priced(price), pricing).tier
+  for (let price of [...PRO, { id: PRO[1] }]) equal(tier(price), 'pro')
+  equal(tier('price_plus'), 'plus')
+  equal(tier('price_old'), 'plus')
+  equal(read(sub(), { prices: PRICES }).tier, 'plus')
+  equal(tier(PRO[0], { prices: { plus: {} } }), 'plus')
+  // A price a tier keeps after a raise buys it, wherever it is listed.
+  let kept = { prices: PRICES, kept: { pro: ['price_pro_old'] } }
+  equal(tier('price_pro_old', kept), 'pro')
+  equal(tier('price_old', kept), 'plus')
+  equal(tier(PRO[0], { ...kept, kept: { plus: [PRO[0]] } }), 'pro')
 })
 
 test('cancelled but paid through says both', () => {
@@ -237,7 +243,7 @@ test('an invoiced plan is a subscription sent its invoices, to the address asked
     key: 'invoice|space-eid||',
     tags: { space: 'space-eid', apex: 'yaks.fyi' },
   })
-  equal(made, { subscription: read(answer, PRICES), at: at(START) })
+  equal(made, { subscription: read(answer, { prices: PRICES }), at: at(START) })
   equal([made.subscription.tier, made.subscription.status], [
     'pro',
     'incomplete',

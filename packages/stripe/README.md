@@ -15,8 +15,9 @@ The host lends the key and the clock. Nothing reads the environment.
 `@yaks/stripe/graph` lends Stripe as a payment provider (`payments`, from
 `@yaks/host/payments`) named `stripe`, with `name: 'Stripe'`, its `plans`, its
 `shops` and its `doors`, built from the options a config gives it: `key`,
-`clock`, `prices`, each tier's price ids by `month` and `year`, and `doors`,
-each webhook door's signing secret by its name.
+`clock`, `prices`, each tier's price ids by `month` and `year`, `kept`, each
+tier's price ids it no longer sells but whose subscriptions are still on it, and
+`doors`, each webhook door's signing secret by its name.
 
 ```json
 {
@@ -27,6 +28,7 @@ each webhook door's signing secret by its name.
       "plus": { "month": "price_plus" },
       "pro": { "month": "price_pro", "year": "price_pro_year" }
     },
+    "kept": { "plus": ["price_plus_before_the_raise"] },
     "doors": {
       "webhook": { "secret": "STRIPE_WEBHOOK_SECRET" },
       "connect": { "secret": "STRIPE_CONNECT_WEBHOOK_SECRET" }
@@ -53,19 +55,19 @@ the invoices go. Managed Payments covers no subscription made outside Checkout,
 so on these the account is the seller, and the invoice offers the payment
 methods the account's invoice settings allow. The portal is a billing portal
 session. A subscription reads its tier off its item's price (the first tier
-listing it, else the first tier), its period end off the item or the
-subscription, whichever the API version sends, and its standing off its status:
-`active` and `trialing` pay, `past_due` owes, `incomplete` awaits its first
-payment, `canceled` and `incomplete_expired` have ended, and the rest have
-lapsed. An invoiced subscription's status is read with its latest invoice
-(`statusOf`), since Stripe calls it `active` before anything is paid: its first
-billed period is `incomplete` until that period's invoice is paid, and
-`past_due` is `unpaid`, since nothing retries a check. Postponing sets the trial
-to end later, prorating nothing. `changed(options)(event)` reads a verified
-event as a subscription changed: a `customer.subscription.*` event carries its
-subscription, save an invoiced one, which is asked for with its latest invoice,
-and a checkout session or an invoice names one, read on asking; one Stripe does
-not hold reads as `null`.
+listing it, else the first tier keeping it, else the first tier), its period end
+off the item or the subscription, whichever the API version sends, and its
+standing off its status: `active` and `trialing` pay, `past_due` owes,
+`incomplete` awaits its first payment, `canceled` and `incomplete_expired` have
+ended, and the rest have lapsed. An invoiced subscription's status is read with
+its latest invoice (`statusOf`), since Stripe calls it `active` before anything
+is paid: its first billed period is `incomplete` until that period's invoice is
+paid, and `past_due` is `unpaid`, since nothing retries a check. Postponing sets
+the trial to end later, prorating nothing. `changed(options)(event)` reads a
+verified event as a subscription changed: a `customer.subscription.*` event
+carries its subscription, save an invoiced one, which is asked for with its
+latest invoice, and a checkout session or an invoice names one, read on asking;
+one Stripe does not hold reads as `null`.
 
 ## Shops
 

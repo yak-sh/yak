@@ -35,7 +35,7 @@
       "hint": "Type what you need, like “a potluck sign-up sheet”",
       "go": "Build it",
       "note": "Free to start, with no card. An AI assistant builds what you ask for while you watch. Your first 5 apps are free, and %{price} covers as many as you like. %{examples}",
-      "price": "$9 a month",
+      "price": "$12 a month",
       "examples": "See examples"
     },
     "walk": {
@@ -152,8 +152,8 @@
         "go": "Start Free"
       },
       "plus": {
-        "price": "$9 %{per}",
-        "note": "The Plus plan, for each space. Take payments with Stripe. Your first subscription adds $100 of building credit.",
+        "price": "$12 %{per}",
+        "note": "The Plus plan, for each space, or $120 a year. Take payments with Stripe. Your first subscription adds $100 of building credit.",
         "apps": "Unlimited apps",
         "visitors": "Unlimited visitors",
         "storage": "10 GB of app data, 50 GB of photos and files",
@@ -219,7 +219,7 @@
       },
       "plus": {
         "name": "Plus",
-        "offer": "For one space: unlimited apps, unlimited visitors, 10 GB of app data, 50 GB of photos and files, 2,500 emails a month, and a custom domain. A first subscription adds $100 of building credit."
+        "offer": "For one space: unlimited apps, unlimited visitors, 10 GB of app data, 50 GB of photos and files, 2,500 emails a month, and a custom domain. Or $120 a year. A first subscription adds $100 of building credit."
       },
       "pro": {
         "name": "Pro",
@@ -285,7 +285,7 @@
     "hello": {
       "kicker": "An Operator that does things for you",
       "note": "Tell it what you need, and it builds the app and puts it online at your own address. Free to start, or %{price} for more.",
-      "price": "$9 a month"
+      "price": "$12 a month"
     },
     "text": {
       "label": "Enter your mobile number to get an Operator that builds apps for you.",
@@ -338,8 +338,8 @@
       }
     },
     "cost": {
-      "title": "Free to start, $9 a month for more",
-      "note": "Your first space is free, with 5 apps and your Operator. The Plus plan is $9 a month for each space, with unlimited apps and your own domain. %{plans}."
+      "title": "Free to start, $12 a month for more",
+      "note": "Your first space is free, with 5 apps and your Operator. The Plus plan is $12 a month for each space, with unlimited apps and your own domain. %{plans}."
     },
     "join": {
       "title": "What would you like your Operator to make?"
@@ -542,7 +542,7 @@
       "ai": "Twice the Plus plan's AI use, for the assistant's work",
       "emails": "10,000 emails a month sent or received by your site, such as the list each Friday of who is coming to Saturday's food pantry shift",
       "support": "Support from us, by email",
-      "limits": "Tax is included, and the bill never grows by itself. If a very busy month uses up the AI work the plan includes, the assistant waits until the 1st, unless you choose to buy more, $10 at a time and paid in advance. Your site stays online either way. There are two smaller plans, Free and $9 a month, for a site that needs less. %{plans}, where the assistant is called your Operator.",
+      "limits": "Tax is included, and the bill never grows by itself. If a very busy month uses up the AI work the plan includes, the assistant waits until the 1st, unless you choose to buy more, $10 at a time and paid in advance. Your site stays online either way. There are two smaller plans, Free and $12 a month, for a site that needs less. %{plans}, where the assistant is called your Operator.",
       "plans": "Compare the plans"
     },
     "join": {
@@ -646,7 +646,7 @@
     },
     "cost": {
       "title": "Free to start, with your own domain on a plan",
-      "space": "Your township's copy lives in a space: its address on yaks.app, like %{yours}, its apps and the people you invite to edit them. The site, the minutes and the reminders work on the free plan. Your own domain, like %{domain}, is on the Plus plan at $9 a month. The Pro plan, at $49 a month or $490 a year, adds a larger AI budget and support.",
+      "space": "Your township's copy lives in a space: its address on yaks.app, like %{yours}, its apps and the people you invite to edit them. The site, the minutes and the reminders work on the free plan. Your own domain, like %{domain}, is on the Plus plan at $12 a month. The Pro plan, at $49 a month or $490 a year, adds a larger AI budget and support.",
       "domain": "yourtownship.org",
       "meeting": "Recording a two-hour meeting live uses about $1.25 of AI, from the space's monthly AI budget: $20 on the free plan and $60 on the Pro plan. Nothing is charged beyond the plan's price unless the space's owner buys more AI credit on the Pro plan, up to a monthly cap they set.",
       "links": "%{plans}. %{behind}.",
@@ -658,9 +658,9 @@
     }
   },
   "pricing": {
-    "name": "Pricing: your first space is free, and the Plus plan is $9 a month",
-    "title": "Pricing: your first space is free, and the Plus plan is $9 a month · yaks.app",
-    "description": "You pay for a space, not for people, and invite as many as you like on any plan. Your first space is free. The Plus plan is $9 a month for a space, and the Pro plan $49.",
+    "name": "Pricing: your first space is free, and the Plus plan is $12 a month",
+    "title": "Pricing: your first space is free, and the Plus plan is $12 a month · yaks.app",
+    "description": "You pay for a space, not for people, and invite as many as you like on any plan. Your first space is free. The Plus plan is $12 a month for a space, and the Pro plan $49.",
     "hello": {
       "title": "Pricing",
       "lead": "You pay for a space, not for people. Invite as many as you like on any plan.",
@@ -682,7 +682,7 @@
         "change": "Your Operator, or your own assistant, makes the changes"
       },
       "plus": {
-        "note": "The Plus plan, for any space. Your first subscription adds $100 of building credit.",
+        "note": "The Plus plan, for any space, or $120 a year. Your first subscription adds $100 of building credit.",
         "apps": "Unlimited apps",
         "visitors": "Unlimited visitors",
         "data": "10 GB of app data",

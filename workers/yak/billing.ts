@@ -277,16 +277,15 @@ export let wanted = (form: FormData | null): Want => ({
 
 /** What the signed-in plan card shows (pages.ts `plan`): the space's tier,
  * the day it lapses if it is leaving, whether the provider has ever known it
- * — which is what makes the manage door worth offering — and how the
- * Pro plan is sold here: by the month, by the year, or not yet at
- * all. */
+ * — which is what makes the manage door worth offering — and how each paid
+ * plan is sold here: by the month, by the year, or not yet at all. */
 export type Card = {
   tier: Tier
   ends: string
   known: boolean
   /** the day the Plus plan given free runs through, while it does */
   free?: string
-  pro?: Want['per'][]
+  sold: Record<Want['tier'], Per[]>
   /** the days an invoice gives to pay, where the yearly plan may be paid by
    * invoice */
   invoice?: number
@@ -309,6 +308,10 @@ export let freeThrough = (
     ? space.comped
     : null
 
+// How often a plan is sold here: by the month, by the year, both or neither.
+let sold = (lent: Plans, tier: Want['tier']): Per[] =>
+  (['month', 'year'] as const).filter((per) => lent.offers(tier, per))
+
 export let planCard = (lent: Plans, space: Space, now = new Date()): Card => {
   let free = freeThrough(space)
   let credits = CREDITED.includes(space.tier ?? 'free') || !!space.credit
@@ -317,7 +320,7 @@ export let planCard = (lent: Plans, space: Space, now = new Date()): Card => {
     ends: space.plan?.ending ?? '',
     known: !!space.plan?.customer,
     ...(free ? { free } : {}),
-    pro: (['month', 'year'] as const).filter((per) => lent.offers('pro', per)),
+    sold: { plus: sold(lent, 'plus'), pro: sold(lent, 'pro') },
     ...lent.offers(INVOICED.tier, INVOICED.per) ? { invoice: DUE } : {},
     ...awaiting(lent, space) ? { awaiting: true } : {},
     ...credits

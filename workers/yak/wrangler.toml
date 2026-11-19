@@ -144,12 +144,17 @@ MAIL_VIA = "resend"
 # is on. Not a secret either: a zone id names a zone, it does not open one.
 CF_ZONE = "3b2518c3647029d687bb4f40bebf0f77"
 
-# The recurring price a Plus subscription is for (billing.ts, T-37141): $9 a
-# month, tax-inclusive, live mode. A price id names a price, it does not open
-# an account, and it belongs beside the account and zone above rather than in a
+# The recurring price a Plus subscription is for (billing.ts, T-37141),
+# tax-inclusive, live mode. A price id names a price, it does not open an
+# account, and it belongs beside the account and zone above rather than in a
 # secret store where nobody can read what the site is selling.
-# Existing subscriptions stay on their old price unless migrated in Stripe.
+# Still the $9 monthly price: the $12 monthly and $120 yearly live prices are
+# made by hand (T-1360), and replace it here and fill STRIPE_PRICE_YEAR. Until
+# then the Plus plan is sold by the month only.
 STRIPE_PRICE = "price_1UEDP0ITlUS6lUlggbJ9klVH"
+# The Plus prices no longer sold that existing subscriptions stay on, which
+# still read as the Plus plan (config.ts `payments`): $9 a month.
+STRIPE_PRICE_KEPT = ["price_1UEDP0ITlUS6lUlggbJ9klVH"]
 
 # Telnyx's webhook signing key, which config.ts `phoneConfig` names for its
 # door (T-135147): public, so a var. Staging has none, so its webhook door
@@ -647,9 +652,12 @@ WORKER_NAME = "yak-staging"
 DISPATCH_NAMESPACE = "yak-apps-staging"
 VIEWS_DATASET = "yak_views_staging"
 ENVIRONMENT = "staging"
-# The Stripe sandbox's recurring Plus price (acct_1UBa7vRMiIEYfSxg), the one
-# the probes buy.
-STRIPE_PRICE = "price_1UIXRMRMiIEYfSxgOgO7xBdP"
+# The Stripe sandbox's Plus prices (acct_1UBa7vRMiIEYfSxg), $12 a month and
+# $120 a year, the ones the probes buy, and the $9 monthly price kept for the
+# subscriptions already on it.
+STRIPE_PRICE = "price_1Udb3XRMiIEYfSxgO5jLEyT2"
+STRIPE_PRICE_YEAR = "price_1Udb3YRMiIEYfSxg8ZLiMAOR"
+STRIPE_PRICE_KEPT = ["price_1UIXRMRMiIEYfSxgOgO7xBdP"]
 # The sandbox's Pro prices, $49 a month and $490 a year, mirroring live's.
 STRIPE_PRICE_PRO = "price_1UbMvbRMiIEYfSxgVPtC8Hiw"
 STRIPE_PRICE_PRO_YEAR = "price_1UbMvcRMiIEYfSxgdOMn1GUf"

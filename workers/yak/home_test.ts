@@ -569,6 +569,7 @@ test('Billing is a management page beside Settings with space checkout and porta
         tier: plus ? 'plus' : 'free',
         known: true,
         ends: '2026-10-01T00:00:00Z',
+        sold: { plus: ['month'], pro: [] },
       },
     })
     let { document } = parseHTML(page)

@@ -29,7 +29,7 @@ import {
 } from './probe.ts'
 import { delivered, fakeSub, signed } from '@yaks/stripe/testing'
 import { GET_PLAN } from '@yaks/platform/routes'
-import { STARTER, SUBSCRIBED } from '@yaks/platform/plans'
+import { PRICE, STARTER, SUBSCRIBED } from '@yaks/platform/plans'
 
 test(
   'the webhook flips a plan, once, whatever order it arrives in, and gives its credit once',
@@ -200,7 +200,11 @@ test('an unsigned webhook is refused, and so is a foreign Origin', async () => {
 })
 
 test('the billing doors say no before they say anything else', async () => {
-  let k = await kernel()
+  // The Plus plan is on sale, so its Billing page offers it.
+  let k = await fresh({
+    STRIPE_KEY: 'sk_test_probe',
+    STRIPE_PRICE: 'price_plus',
+  })
   let jeff4 = unique('jeff4')
   try {
     // Signed out, at both doors: the same refusal, and never a 500.
@@ -270,7 +274,7 @@ test('the billing doors say no before they say anything else', async () => {
     let page = await k.at('yaks.app', '/pricing')
     assertEquals(page.status, 200)
     let html = await page.text()
-    assert(html.includes('$9'), 'the price is on the page')
+    assert(html.includes(`$${PRICE.plus} a month`), 'the price is on the page')
     assert(
       !/api\/billing|checkout\.stripe\.com/.test(html),
       'and no way to start a purchase is',

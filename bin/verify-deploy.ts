@@ -26,6 +26,8 @@
 // is in workers/yak/README.md, and it is that nothing in CI knows when the new
 // version went live, nor holds the token the tail needs.
 
+import { PRICE } from '@yaks/platform/plans'
+
 export let SITE = 'https://yaks.app'
 
 // The pages a visitor reaches from the site itself: the nav links, the CTA,
@@ -43,9 +45,13 @@ export let DOORS = [
   '/docs.md',
 ]
 
-// The pricing page's live contract (billing_kernel_test.ts): the price is on
-// the page, and the page does not leak the checkout door to a stranger.
-export let PRICING = { has: '$9', hasnt: 'checkout.stripe.com' }
+// The pricing page's live contract (billing_kernel_test.ts): the Plus plan's
+// price is on the page, and the page does not leak the checkout door to a
+// stranger.
+export let PRICING = {
+  has: `$${PRICE.plus} a month`,
+  hasnt: 'checkout.stripe.com',
+}
 
 export type Fetch = typeof fetch
 

@@ -346,6 +346,8 @@ let flat = (html: string) => html.replace(/\s{2,}|[^\S ]/g, ' ')
 // The plans in the order every page shows them, and what each holds a space to.
 let TIERS = ['free', 'plus', 'pro'] as const
 let LIMITS = { free: FREE, plus: PLUS, pro: PRO }
+// A signed-in plan card with nothing on sale: what it says, not what it sells.
+let UNSOLD = { plus: [], pro: [] }
 
 // The copy each tier's allowances should read as, off the meter's own numbers.
 let allowance = (tier: Tier) => {
@@ -968,7 +970,10 @@ test('the split home pages quote the free apps and the Plus price the code holds
 })
 
 test('the plan pages quote the prices the offers name, and no other', () => {
-  let charged = new Set([...Object.values(PRICE), ...Object.values(YEARLY)])
+  let charged: Record<string, number[]> = {
+    month: Object.values(PRICE),
+    year: Object.values(YEARLY),
+  }
   for (
     let page of [
       'index.html',
@@ -984,8 +989,12 @@ test('the plan pages quote the prices the offers name, and no other', () => {
     }
     assertStringIncludes(html, `$${PRICE.pro} a month`)
     assertStringIncludes(html, `$${YEARLY.pro} a year`)
-    for (let [, n] of html.matchAll(/\$(\d+) a (?:month|year)/g)) {
-      assert(charged.has(Number(n)), `${page} quotes $${n}`)
+    // The plans' cards say what the Plus plan costs by the year.
+    if (['index.html', 'pricing.html'].includes(page)) {
+      assertStringIncludes(html, `$${YEARLY.plus} a year`)
+    }
+    for (let [, n, per] of html.matchAll(/\$(\d+) a (month|year)/g)) {
+      assert(charged[per].includes(Number(n)), `${page} quotes $${n} a ${per}`)
     }
   }
 })
@@ -1180,7 +1189,10 @@ test('the signed-in plan copy derives both tiers from the meter', () => {
     let html = flat(
       markup(
         plan(
-          { slug: 'dana', plan: { tier, ends: '', known: tier != 'free' } },
+          {
+            slug: 'dana',
+            plan: { tier, ends: '', known: tier != 'free', sold: UNSOLD },
+          },
           {},
         ),
       ),
@@ -1214,7 +1226,10 @@ test('every place a person decides names the building credit the code grants', a
   assertStringIncludes(await askEmail({}).text(), starter)
   let card = (tier: Tier) =>
     flat(markup(plan(
-      { slug: 'dana', plan: { tier, ends: '', known: tier != 'free' } },
+      {
+        slug: 'dana',
+        plan: { tier, ends: '', known: tier != 'free', sold: UNSOLD },
+      },
       {},
     )))
   assertStringIncludes(card('free'), subscribed)

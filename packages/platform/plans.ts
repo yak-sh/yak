@@ -173,20 +173,21 @@ export let SECONDS: Record<Tier, number> = {
 }
 
 // What a tier costs a month, in whole dollars (D-32751). The number is
-// tax-inclusive: $9 is what a customer pays anywhere, so this is the whole
+// tax-inclusive: $12 is what a customer pays anywhere, so this is the whole
 // price rather than a subtotal something is added to. The payment provider
 // holds the same number as the price config.ts `payments` sells the tier at,
 // and that is what a card is charged against; this is the number the site
 // says out loud — the pricing copy, and the `Offer`s in the home page's JSON-LD, which is what a search
-// engine shows beside the result. A price change also updates the site's pages
-// (site/home.tsx and site/pricing.tsx), billing_kernel_test.ts, and
-// bin/verify-deploy{,_test}.ts. site_test.ts holds the pages to this number.
-export let PRICE: Record<Tier, number> = { free: 0, plus: 9, pro: 49 }
+// engine shows beside the result. A price change also updates the site's copy
+// (apps/home/copy.json, then `deno task content`) and the provider's price,
+// whose old id stays recognized as config.ts `payments` `kept`. site_test.ts
+// holds the pages to this number.
+export let PRICE: Record<Tier, number> = { free: 0, plus: 12, pro: 49 }
 
 // What a year costs, for a plan sold by the year as well (D-134567: organizations
-// budget by the year). The payment provider holds it as the
+// budget by the year), ten months' price. The payment provider holds it as the
 // tier's yearly price in config.ts `payments`.
-export let YEARLY: Partial<Record<Tier, number>> = { pro: 490 }
+export let YEARLY: Partial<Record<Tier, number>> = { plus: 120, pro: 490 }
 
 export let CURRENCY: string = 'USD'
 

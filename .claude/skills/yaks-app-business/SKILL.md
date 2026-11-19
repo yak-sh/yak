@@ -167,10 +167,13 @@ and the pricing page hold what each one carries:
 - **The Free plan** is a person's first space: 5 apps, 1 GB of app data, 1 GB of
   photos and files and 100 emails a month, with a small badge, no custom domain
   and no payments.
-- **The Plus plan** is $9 a month, for any space (T-131888; Jeff: "let's keep $9
-  for _now_"): unlimited apps, 10 GB of app data, 50 GB of photos and files,
-  2,500 emails a month, a custom domain, payments with Stripe and no badge.
-  Whether a Plus space can pay for model use past its budget is T-131904.
+- **The Plus plan** is $12 a month or $120 a year, for any space (T-131900;
+  Jeff: "*plus* to $12", "$12/mo, $120/yr"): unlimited apps, 10 GB of app data,
+  50 GB of photos and files, 2,500 emails a month, a custom domain, payments
+  with Stripe and no badge. A space that subscribed at $9 keeps paying $9 until
+  Jeff says otherwise: Stripe keeps its price, and @yaks/stripe reads it as the
+  Plus plan (`kept`). Whether a Plus space can pay for model use past its
+  budget is T-131904.
 - **The Pro plan** is $49 a month or $490 a year, since an organization budgets
   by the year (D-412, T-135234). It holds about five times the Plus plan's
   allowances (50 GB of app data, 250 GB of photos and files, 10,000 emails,

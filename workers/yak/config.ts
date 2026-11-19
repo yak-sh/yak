@@ -306,8 +306,9 @@ export let phoneConfig: Config = {
 /**
  * The payment provider the platform takes money through (payments.ts): its
  * plugin lends it under its name, with its key, the clock its calls wait on,
- * each plan's prices as they are sold here, by the month and the year, and
- * the secret each of its webhook doors verifies with, which it serves at
+ * each plan's prices as they are sold here, by the month and the year, the
+ * prices a plan no longer sells but its subscribers before a raise are still
+ * on, and the secret each of its webhook doors verifies with, which it serves at
  * `/<via>/<door>` (payment-doors.ts). A `{"secret": "NAME"}` is read from the
  * Worker's environment at its use; the prices are `[vars]` (wrangler.toml),
  * and a plan whose price is unset is not on sale. The secrets are the
@@ -322,12 +323,16 @@ export let payments: Config & { via: string } = {
       key: { secret: 'STRIPE_KEY' },
       clock: { binding: 'CLOCK' },
       prices: {
-        plus: { month: { secret: 'STRIPE_PRICE' } },
+        plus: {
+          month: { secret: 'STRIPE_PRICE' },
+          year: { secret: 'STRIPE_PRICE_YEAR' },
+        },
         pro: {
           month: { secret: 'STRIPE_PRICE_PRO' },
           year: { secret: 'STRIPE_PRICE_PRO_YEAR' },
         },
       },
+      kept: { plus: { secret: 'STRIPE_PRICE_KEPT' } },
       doors: {
         webhook: { secret: 'STRIPE_WEBHOOK_SECRET' },
         connect: { secret: 'STRIPE_CONNECT_WEBHOOK_SECRET' },

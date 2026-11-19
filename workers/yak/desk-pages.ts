@@ -2101,7 +2101,13 @@ export let desk = (at: DeskPage, env: Host = {}) => {
         {
           slug: at.space,
           title: named(picked(at)),
-          plan: at.plan ?? { tier: 'free', ends: '', known: false },
+          plan: at.plan ??
+            {
+              tier: 'free',
+              ends: '',
+              known: false,
+              sold: { plus: [], pro: [] },
+            },
           paid: at.paid,
           provider: at.provider,
           payer: at.bill?.payer,

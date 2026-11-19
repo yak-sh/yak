@@ -33,6 +33,7 @@ let PRO = ['price_pro_month', 'price_pro_year']
 let ENV = {
   STRIPE_KEY: 'sk',
   STRIPE_PRICE: 'price_plus',
+  STRIPE_PRICE_YEAR: 'price_plus_year',
   STRIPE_PRICE_PRO: PRO[0],
   STRIPE_PRICE_PRO_YEAR: PRO[1],
 }
@@ -82,15 +83,23 @@ test('a paying subscription keeps the tier its price buys, and the rest are free
   })
 })
 
-test('the plan card offers the Pro plan by what is priced', async () => {
+test('the plan card offers each plan by what is priced', async () => {
   let space = { tier: null, plan: null } as never
   let card = async (env: Record<string, string | undefined>) =>
-    planCard(await plans(env), space).pro
-  assertEquals(planCard(lent, space).pro, ['month', 'year'])
-  assertEquals(await card({ ...ENV, STRIPE_KEY: undefined }), [])
+    planCard(await plans(env), space).sold
+  let both = ['month', 'year']
+  assertEquals(planCard(lent, space).sold, { plus: both, pro: both })
+  assertEquals(await card({ ...ENV, STRIPE_KEY: undefined }), {
+    plus: [],
+    pro: [],
+  })
   assertEquals(
-    await card({ ...ENV, STRIPE_PRICE_PRO_YEAR: undefined }),
-    ['month'],
+    await card({
+      ...ENV,
+      STRIPE_PRICE_YEAR: undefined,
+      STRIPE_PRICE_PRO_YEAR: undefined,
+    }),
+    { plus: ['month'], pro: ['month'] },
   )
   assertEquals(planCard(lent, space).tier, 'free')
 })
