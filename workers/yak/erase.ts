@@ -41,6 +41,7 @@ import {
   idOf,
   META,
   type PhoneLine,
+  ranked,
   type Row as DirRow,
   type Space,
   storeName,
@@ -603,7 +604,7 @@ let rehomed = async (
   // An app with no component declarations cannot be anyone's vocabulary
   // home. Check its release metadata before waking stores to find borrowers.
   if (!componentsOf([home.vocab]).length) return []
-  let peers = (await dir.apps(space)).filter((one) =>
+  let peers = ranked(await dir.apps(space)).filter((one) =>
     one.eid != app.eid && !one.trashed && !sandboxed(one) && one.version
   )
   let users = await Promise.all(peers.map(async (one) => {
@@ -691,6 +692,7 @@ export let trash = async (
   await mark(dir, app.eid, who, {}, [{
     entity: { eid: app.eid },
     app: { slug: null, files: ownedPrefix(space, app) },
+    untrashed: null,
     former: addresses([
       app.slug,
       ...app.slugs.filter((slug) => slug != app.slug),
@@ -733,6 +735,7 @@ export let untrash = async (
   await mark(dir, app.eid, who, null, [{
     entity: { eid: app.eid },
     app: { slug: to, files: ownedPrefix(space, app) },
+    untrashed: {},
     ...(app.home && await dir.home(space) ? { home: null } : {}),
     former: addresses(
       (await dir.apps(space))
@@ -749,6 +752,44 @@ export let untrash = async (
   await rostered(env, dir, space, restored)
   return restored
 }
+
+/** The words a restored app declares that another app serving in its space
+ * homes too, by that app's slug: taken while this one was in the trash, they
+ * stay that app's for the space (directory.ts `ranked`), and the restored app
+ * keeps its own for its own pages and rows. */
+export let sharedWords = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+  app: App,
+): Promise<Record<string, string[]>> => {
+  if (sandboxed(app)) return {}
+  let mine = Object.keys(
+    (await declarationOf(env, space, app)).vocab.$defs ?? {},
+  )
+  if (!mine.length) return {}
+  let peers = ranked(await dir.apps(space)).filter((one) =>
+    one.eid != app.eid && !one.trashed && !sandboxed(one) && one.version
+  )
+  let by: Record<string, string[]> = {}
+  let left = new Set(mine)
+  for (let one of peers) {
+    let defs = (await declarationOf(env, space, one)).vocab.$defs ?? {}
+    let theirs = [...left].filter((name) => name in defs)
+    for (let name of theirs) left.delete(name)
+    if (theirs.length) by[one.slug] = theirs
+  }
+  return by
+}
+
+/** A restore tells its caller which of its words another app homes now. */
+export let restoredWords = (app: string, by: Record<string, string[]>) =>
+  Object.entries(by).map(([at, names]) => {
+    let words = names.join(', ')
+    return ` ${words} ${names.length == 1 ? 'is' : 'are'} also ${at}'s, ` +
+      `declared there while ${app} was in the trash: ${app}'s pages keep ` +
+      `their own ${words}, and the rest of the space uses ${at}'s.`
+  }).join('')
 
 /** A restore tells the person when its address changed. */
 export let restoredAddress = (previous: string, slug: string) =>

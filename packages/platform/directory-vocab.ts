@@ -322,6 +322,16 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { at: time, by: ref('keep') },
     },
+    // That this app came back out of the trash, and when (erase.ts
+    // `untrash`). A restore puts it on and the next trash takes it off. It
+    // ranks the app among its space's homes (directory.ts `ranked`): a word
+    // another app took while this one was away stays that app's for the
+    // space, and this app keeps its own for its own pages and rows.
+    untrashed: {
+      component: true,
+      type: 'object',
+      properties: { at: time, by: ref('keep') },
+    },
     // An uploaded image the owner chose to represent this app. Its bytes and
     // attachment live in the app's store; only the content address lives here.
     screenshot: {

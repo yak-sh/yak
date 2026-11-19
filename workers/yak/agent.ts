@@ -67,7 +67,7 @@ import {
 } from './reach.ts'
 import { narrowed } from './lexicon.ts'
 import { queried } from './page-graph.ts'
-import { META, META_STORE } from './directory.ts'
+import { META, META_STORE, ranked } from './directory.ts'
 import { wrote } from './lib/hops.ts'
 import { titling } from './session.ts'
 import {
@@ -545,7 +545,9 @@ let spoken = async (ctx: Ctx, reach: Reach[]): Promise<Vocab> => {
   // The directory's vocabulary belongs to the directory, not an app's
   // declaration; the store applies its own vocabulary to the query.
   let said = await Promise.all(
-    reach.filter((r) => r.space.slug != META.space || r.app.slug != META.app)
+    ranked(reach, (r) => r.app).filter((r) =>
+      r.space.slug != META.space || r.app.slug != META.app
+    )
       .map((r) => vocabAt(ctx.env, r.space, r.app)),
   )
   let defs: Record<string, PropSchema> = {}

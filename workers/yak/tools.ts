@@ -121,6 +121,7 @@ import {
   MODES,
   NO_UPTAKE,
   type Preview,
+  ranked,
   RESERVED,
   type Role,
   type Space,
@@ -188,6 +189,8 @@ import {
   nobodys,
   refused,
   restoredAddress,
+  restoredWords,
+  sharedWords,
   ticket,
   trash,
   trashedApp,
@@ -1128,8 +1131,9 @@ let SKIP = {
   via: str('with review: false, the session listing it'),
 }
 
-// What every app in the space declares as its own, in app order, oldest
-// first — the routing table a deploy reads to find a word's home (T-32728).
+// What every app in the space declares as its own, ranked as homes are
+// (directory.ts `ranked`) — the routing table a deploy reads to find a word's
+// home (T-32728).
 // A store's `/vocab` answers only the words it homes, so a use never looks
 // like a second declaration and the first entry here is always the home.
 //
@@ -1139,7 +1143,7 @@ let SKIP = {
 let vocabs = async (ctx: Ctx, space: Space, app?: App) => {
   // A trashed app keeps its store for restoration, but it no longer homes
   // component names for apps that are serving in the space.
-  let all = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
+  let all = ranked((await ctx.dir.apps(space)).filter((a) => !a.trashed))
   if (app && !all.some((a) => a.eid == app.eid)) all = [...all, app]
   return new Map(
     await Promise.all(
@@ -1150,7 +1154,7 @@ let vocabs = async (ctx: Ctx, space: Space, app?: App) => {
   )
 }
 
-// Where each word of the space lives, oldest app first — the first app to
+// Where each word of the space lives, ranked app first — the first app to
 // declare a word is its home (T-32728), and a word this app already declares
 // stays its own, because a store's vocabulary is additive forever. `said` is
 // every app's manifest beside it, since growing a home means writing the
@@ -5847,7 +5851,11 @@ let OURS: Row[] = [
             url(space, app, ctx.env)
           } serves ` +
           'again and its tools are yours again. Everything it saved is ' +
-          'where it was.' + restoredAddress(previous, app.slug),
+          'where it was.' + restoredAddress(previous, app.slug) +
+          restoredWords(
+            app.slug,
+            await sharedWords(ctx.env, ctx.dir, space, app),
+          ),
         space,
       }
     },

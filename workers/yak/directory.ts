@@ -388,6 +388,10 @@ export type AppInfo = {
   // page and takes no mail, while its bytes and store stay recoverable.
   // Its slug is free immediately; former keeps the address to restore at.
   trashed: Trashed | null
+  // Back out of the trash, and since when (erase.ts `untrash`). Null for every
+  // app never restored, or trashed again since. It ranks the app among its
+  // space's homes (`ranked`).
+  untrashed?: Trashed | null
   // The colours this app's owner set for its installed chrome (apps.ts
   // `manifesting`/`pinned`, T-33055): the phone's splash while it opens
   // (`backgroundColor`) and the browser/status chrome around it
@@ -510,6 +514,21 @@ export type Sowed = { at: string; version: number }
 // When an app or space entered trash and who requested it. Neither field
 // grants permission for an automatic purge.
 export type Trashed = { at: string; by: string }
+
+/**
+ * Apps in the order they home words (T-32728): the first in this order to
+ * declare a word is its home for the space. The order the directory has them,
+ * oldest first, then each app restored from the trash in the order it came
+ * back. A word another app took while this one was in the trash stays that
+ * app's for the space; the restored app keeps its own for its pages and rows.
+ */
+export let ranked = <T>(
+  items: T[],
+  app = (t: T) => t as Pick<AppInfo, 'untrashed'>,
+) => {
+  let since = (t: T) => app(t).untrashed?.at ?? ''
+  return items.toSorted((a, b) => since(a).localeCompare(since(b)))
+}
 
 // Legacy date arithmetic; only daysLeft remains in old view payloads. No
 // purge consumes these functions. Recovery lasts until the owner's purge.
@@ -750,6 +769,7 @@ export type Row = MeteredRow & {
     release?: string | null
   }
   trashed?: { at?: string | null; by?: Id | null }
+  untrashed?: { at?: string | null; by?: Id | null }
   theme?: { theme_color?: string | null; background_color?: string | null }
   rooted?: Record<string, never>
   publishing?: { paths?: string | null }
@@ -1270,6 +1290,7 @@ export let APP_PARTS = [
   'seeded',
   'demo',
   'trashed',
+  'untrashed',
   'theme',
   'rooted',
   'publishing',
@@ -1583,6 +1604,12 @@ export let appAbout = (r: Row): AppInfo => ({
     }
     : null,
   trashed: trashedOf(r),
+  untrashed: r.untrashed
+    ? {
+      at: r.untrashed.at ?? '',
+      by: r.untrashed.by ? idOf(r.untrashed.by) : '',
+    }
+    : null,
   theme: r.theme
     ? {
       themeColor: r.theme.theme_color ?? null,

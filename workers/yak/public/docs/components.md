@@ -876,7 +876,7 @@ The complete list of reserved names:
     stream_item submitted subscription supersedes supervises support sweep
     switched task text text_post theme tool tool_refusal topic trashed
     tree_entry trend tunnel tunnel_tell tunnel_trashed typed unchecked
-    updated upstream usage uses using verified visit visitor_build
+    untrashed updated upstream usage uses using verified visit visitor_build
     visitor_calls visitor_share volume waitlisted wake wake_run wants watch
     web worked worktree written
 

@@ -18,6 +18,7 @@ import {
   type App,
   appStore,
   META_STORE,
+  ranked,
   type Space,
   storeName,
 } from './directory.ts'
@@ -229,16 +230,18 @@ let memberOf = (
   },
 })
 
-// The reach as members, and the one named among them: routing goes by
-// identity, so a named store already in reach is that very member.
+// The reach as members, ranked as a space's homes are (directory.ts `ranked`),
+// and the one named among them: routing goes by identity, so a named store
+// already in reach is that very member.
 let membersOf = (
   env: Env,
   reach: Reach[],
   named?: Reach,
   headers?: Record<string, string>,
 ) => {
-  let members = reach.map((r) => memberOf(env, r, headers))
-  let i = named ? reach.indexOf(named) : -1
+  let order = ranked(reach, (r) => r.app)
+  let members = order.map((r) => memberOf(env, r, headers))
+  let i = named ? order.indexOf(named) : -1
   let one = named && (i >= 0 ? members[i] : memberOf(env, named, headers))
   return { members, named: one }
 }
