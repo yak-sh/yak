@@ -131,6 +131,7 @@ export {
   limitEid,
   limitRows,
   metering,
+  signingIn,
 } from './limits.ts'
 export type { Limit } from './limits.ts'
 import type { Limit } from './limits.ts'

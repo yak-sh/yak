@@ -166,6 +166,36 @@ test('a spawn lands the session, the request and the lease', async () => {
   assertEquals(comp(held, 'claim')?.session, session.entity.eid)
 })
 
+test('a spawn names its account by its directory or its name, and refuses one its CLI keeps not', async () => {
+  let { g } = host()
+  let teams = identityEid('account', ['/u/.fake-teams'])
+  await g.apply([...shelf, {
+    entity: { eid: teams },
+    account: { home: '/u/.fake-teams', provider: P },
+  }])
+  for (let account of ['.fake-teams', '/u/.fake-teams']) {
+    await through(g, 'session_spawn', {
+      task: 'the-task',
+      provider: P,
+      account,
+    })
+    let [entry] = await g.read('.using&*')
+    assertEquals(comp(entry, 'using')?.account, teams)
+    await g.apply([{ entity: { eid: 'the-task' }, claim: null }, {
+      entity: { eid: entry.entity.eid },
+      using: null,
+    }])
+  }
+  let refused = await assertRejects(() =>
+    through(g, 'session_spawn', {
+      task: 'the-task',
+      provider: P,
+      account: '.claude-elsewhere',
+    })
+  )
+  assertStringIncludes((refused as Error).message, 'it keeps /u/.fake-teams')
+})
+
 let extra = host()
 await extra.g.apply(shelf)
 test('an added instruction keeps the task body as the spec', async () => {

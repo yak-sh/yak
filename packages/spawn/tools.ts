@@ -47,6 +47,8 @@ import { render } from '@yaks/text'
 import { CallError } from '@yaks/tools/errors'
 import { changes } from '@yaks/session/wait'
 import { spelling } from './run.ts'
+import { identityEid } from '@yaks/graph/identity'
+import * as system from '@yaks/process/system'
 import { reportOf } from './completion.ts'
 import { ENDED, over } from './over.ts'
 
@@ -214,6 +216,33 @@ export let runs = (host: Host, options: Options = {}): Runs => {
     throw new Error('wait ended without a final read')
   }
 
+  // The account a spawn names, by its row, its directory or the directory's
+  // name (`.claude-teams`), which its provider's CLI must keep.
+  let named = async (
+    graph: Graph,
+    said: string,
+    cli: string,
+  ): Promise<string> => {
+    let home = system.env.get('HOME')
+    let dir = home ? said.replace(/^~(?=\/|$)/, home) : said
+    let provider = identityEid('provider', [cli])
+    let rows = (await graph.read('.account *')).filter((b) =>
+      str(comp(b, 'account')?.provider) == provider
+    )
+    let found = rows.find((b) => {
+      let at = str(comp(b, 'account')?.home)
+      return b.entity.eid == said || at == dir ||
+        at.slice(at.lastIndexOf('/') + 1) == said
+    })
+    if (found) return found.entity.eid
+    let kept = rows.map((b) => str(comp(b, 'account')?.home)).join(', ')
+    throw new CallError(
+      'account',
+      `${said} names no account ${cli} keeps` +
+        (kept ? `; it keeps ${kept}` : ''),
+    )
+  }
+
   return {
     session_spawn: async (call, graph): Promise<Bundle[]> => {
       // The task, the provider and the model arrive as the eids they name,
@@ -286,6 +315,9 @@ export let runs = (host: Host, options: Options = {}): Runs => {
         )
       }
       let effort = str(args.effort)
+      let account = args.account == null
+        ? undefined
+        : await named(graph, str(args.account), str(served.api ?? served.name))
       let session = uuid()
       let parent = str(comp(call, ENTRY)?.session) || str(who(call)?.via)
       let owner = parent ? await one(graph, parent) : undefined
@@ -328,6 +360,7 @@ export let runs = (host: Host, options: Options = {}): Runs => {
               provider,
               ...(model ? { model } : {}),
               ...(effort ? { effort } : {}),
+              ...(account ? { account } : {}),
             },
           },
           { entity: { eid: task }, claim: { session } },

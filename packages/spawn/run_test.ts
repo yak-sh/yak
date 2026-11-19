@@ -137,6 +137,82 @@ for (let resumed of [false, true]) {
   })
 }
 
+// Two Claude accounts offered to runs, the personal one well over its weekly
+// pace: three days into the week, 90% of it used.
+let accounts = async (g: Graph) => {
+  let provider = identityEid('provider', ['claude'])
+  let own = accountEid('/u/.claude'), teams = accountEid('/u/.claude-teams')
+  await g.apply([
+    { entity: { eid: provider }, provider: { name: 'claude' } },
+    ...[own, teams].map((eid, i) => ({
+      entity: { eid },
+      account: {
+        home: ['/u/.claude', '/u/.claude-teams'][i],
+        provider,
+        offered: true,
+      },
+    })),
+    {
+      entity: { eid: 'L1' },
+      rate_limit: {
+        provider,
+        account: own,
+        window: 10080,
+        used: 90,
+        resets: new Date(Date.now() + 4 * 86400_000).toISOString(),
+      },
+    },
+  ])
+  return { own, teams }
+}
+
+let started = async (g: Graph, session: string) => {
+  let dir = Deno.makeTempDirSync({ prefix: 'spawn-' })
+  let launched = launching()
+  try {
+    await start(g, session, {
+      dir,
+      cwd: dir,
+      adapters: { fake: claude },
+      env: { HOME: '/u', CLAUDE_CONFIG_DIR: '/u/.elsewhere' },
+      launch: launched.launch,
+      signal: AbortSignal.abort(),
+    })
+    return launched.envs[0]
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+}
+
+test('a first run signs in with the offered account further under its weekly pace, kept on its request', async () => {
+  let { g } = tracked()
+  let { teams } = await accounts(g)
+  await g.apply(asking('S1', 'E1', 'fix it'))
+  assertEquals((await started(g, 'S1')).CLAUDE_CONFIG_DIR, '/u/.claude-teams')
+  let [request] = await g.get(['E1'])
+  assertEquals(comp(request, 'using').account, teams)
+  assertEquals((await asked(g, 'S1'))?.account, {
+    eid: teams,
+    home: '/u/.claude-teams',
+  })
+})
+
+test('a request naming its account runs on it, and the default account on no variable', async () => {
+  let { g } = tracked()
+  let { own } = await accounts(g)
+  await g.apply(asking('S1', 'E1', 'fix it', { account: own }))
+  let env = await started(g, 'S1')
+  assertEquals([env.HOME, env.CLAUDE_CONFIG_DIR], ['/u', undefined])
+})
+
+test("a run whose provider offers no account runs on the environment's own", async () => {
+  let { g } = tracked()
+  await g.apply(asking('S1', 'E1', 'fix it'))
+  assertEquals((await started(g, 'S1')).CLAUDE_CONFIG_DIR, '/u/.elsewhere')
+  let [request] = await g.get(['E1'])
+  assertEquals(comp(request, 'using').account, undefined)
+})
+
 test('a provider-only HTTP request belongs to the native runner', async () => {
   let { g } = tracked()
   await g.apply([

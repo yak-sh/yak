@@ -186,14 +186,19 @@ export let until = async <T>(
 export let launching = (): {
   launch: typeof launch
   started: string[][]
+  /** the environment each was started in, in the same order */
+  envs: Record<string, string>[]
   first: Promise<string[]>
 } => {
   let started: string[][] = []
+  let envs: Record<string, string>[] = []
   let { promise: first, resolve } = Promise.withResolvers<string[]>()
   return {
     started,
+    envs,
     first,
     launch: async (store, spec, o = {}) => {
+      envs.push({ ...spec.env })
       let eid = String(o.eid)
       let argv = [spec.command, ...spec.args ?? []]
       await store.apply([{

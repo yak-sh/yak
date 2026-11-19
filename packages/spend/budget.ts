@@ -6,9 +6,9 @@ import * as io from '@yaks/file/io'
  * last reading in a cache file per project (`usage.<label>` in
  * `~/.cache/claude-usage`): `SEVEN_DAY_PCT`, `SEVEN_DAY_RESET`,
  * `FIVE_HOUR_PCT`, `FIVE_HOUR_RESET` and `UPDATED_AT`, times in epoch
- * seconds. The limits are the account's, so the newest file is the reading,
- * of the account `yak serve`'s environment signs in with, or of the one a
- * `CLAUDE_CONFIG_DIR` line in it names. Only an interactive session has a
+ * seconds. The limits are the account's, so each account's newest file is its
+ * reading: of the account a `CLAUDE_CONFIG_DIR` line in it names, else of the
+ * one `yak serve`'s environment signs in with. Only an interactive session has a
  * status line: a `claude -p` run reports its limits in its stream, read with
  * the run (@yaks/session's `claude` reader), and the newer of the two
  * readings is the one kept. Codex's arrive with its sessions, each account's
@@ -87,25 +87,30 @@ export let usageDir = (): string | undefined => {
     (env.get('HOME') ? `${env.get('HOME')}/.cache/claude-usage` : undefined)
 }
 
-// The newest reading in a directory, or nothing.
-let newest = (dir: string): string | undefined => {
-  let best: [number, string] | undefined
+// The newest reading of each account in a directory, or none.
+let newest = (dir: string): string[] => {
+  let best = new Map<string, [number, string]>()
   try {
     for (let f of io.readDirSync(dir)) {
       if (!f.isFile || !f.name.startsWith('usage.')) continue
-      let at = io.statSync(`${dir}/${f.name}`).mtime?.getTime() ?? 0
-      if (!best || at > best[0]) best = [at, `${dir}/${f.name}`]
+      let path = `${dir}/${f.name}`
+      let at = io.statSync(path).mtime?.getTime() ?? 0
+      let text = io.readTextFileSync(path)
+      let of = text.match(/^CLAUDE_CONFIG_DIR=(.*)$/m)?.[1] ?? ''
+      if (at > (best.get(of)?.[0] ?? -1)) best.set(of, [at, text])
     }
   } catch {
-    return undefined // no cache: Claude Code has no status line here
+    return [] // no cache: Claude Code has no status line here
   }
-  return best && io.readTextFileSync(best[1])
+  return [...best.values()].map(([, text]) => text)
 }
 
-/** Keep the newest reading as rows, where it is newer than the one kept. */
+/** Keep each account's newest reading as rows, where it is newer than the
+ * one kept. */
 export let read = async (g: Graph, dir = usageDir()): Promise<void> => {
-  let text = dir && newest(dir)
-  let rows = text ? limits(text, home('claude')) : []
+  let rows = (dir ? newest(dir) : []).flatMap((text) =>
+    limits(text, home('claude'))
+  )
   let readings = rows.filter((b) => b.rate_limit)
   if (!readings.length) return
   let kept = new Map(

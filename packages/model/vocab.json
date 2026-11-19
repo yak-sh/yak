@@ -292,7 +292,7 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "description": "an account a provider's CLI keeps on this machine: the config directory it signs in from and keeps its transcripts in (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`). Each has a plan of its own",
+      "description": "an account a provider's CLI keeps on this machine: the config directory it signs in from and keeps its transcripts in (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`). Each has a plan of its own, and a second account is one more row: `/home/me/.claude-teams` beside `/home/me/.claude`",
       "properties": {
         "home": {
           "type": "string",
@@ -303,6 +303,10 @@
           "type": "string",
           "ref": "provider",
           "description": "the provider whose CLI keeps it"
+        },
+        "offered": {
+          "type": "boolean",
+          "description": "a run may be given it: a spawn that names no account runs on the offered account of its provider further under its weekly pace (@yaks/model `freest`)"
         }
       }
     },

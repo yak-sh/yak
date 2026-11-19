@@ -75,6 +75,33 @@ export let accountHome = (
 }
 
 /**
+ * An environment that signs a CLI in with the account in `home`, the
+ * inverse of {@link accountHome}: the variable names it, except for the
+ * account the CLI keeps by default, which it is run without. Claude Code
+ * keeps its default account's config beside `~/.claude`, in `~/.claude.json`,
+ * and reads `$CLAUDE_CONFIG_DIR/.claude.json` once the variable is set.
+ *
+ * ```ts
+ * import { signingIn } from './limits.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let env = { HOME: '/u', CLAUDE_CONFIG_DIR: '/u/.claude-work' }
+ * equal(signingIn('claude', '/u/.claude-teams', env).CLAUDE_CONFIG_DIR, '/u/.claude-teams')
+ * equal(signingIn('claude', '/u/.claude', env), { HOME: '/u' })
+ * equal(signingIn('codex', '/u/.codex-2', { HOME: '/u' }).CODEX_HOME, '/u/.codex-2')
+ * ```
+ */
+export let signingIn = (
+  runner: 'claude' | 'codex',
+  home: string,
+  env: Record<string, string>,
+): Record<string, string> => {
+  let name = runner == 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME'
+  let { [name]: _, ...rest } = env
+  return home == `${env.HOME}/.${runner}` ? rest : { ...rest, [name]: home }
+}
+
+/**
  * Readings as rows: each one's `rate_limit`, read at `at`, and its provider's
  * row. A limit on one model's requests is kept where the model is known, and
  * otherwise says nothing of any plan.

@@ -11,14 +11,24 @@
 
 import * as fs from '@yaks/file/io'
 import * as systemProcess from '@yaks/process/system'
+import { accountHome } from '@yaks/model'
 
 import { PATH } from './routes.ts'
 
-/** Where Claude Code keeps the MCP servers of every project, unless the
- * caller names another path. */
+// The Claude Code account this process signs in with (@yaks/model).
+let own = (): string =>
+  accountHome('claude', (name) => systemProcess.env.get(name)) ?? '.claude'
+
+/** Where a Claude Code account (its directory, this process's by default)
+ * keeps the MCP servers of every project: the default account beside its
+ * directory, in `~/.claude.json`, and any other inside it. */
 export let configPath = (
-  home = systemProcess.env.get('HOME') ?? '.',
-): string => `${home}/.claude.json`
+  account = own(),
+  home = systemProcess.env.get('HOME'),
+): string =>
+  account == `${home}/.claude`
+    ? `${home}/.claude.json`
+    : `${account}/.claude.json`
 
 /** What Claude Code starts beside itself to speak to this graph's MCP door.
  * The client owns local file input; the HTTP server receives only values. */
@@ -92,10 +102,10 @@ export type Hook = {
   )[]
 }
 
-/** Where the entries go, unless the caller names another path. */
-export let settingsPath = (
-  home = systemProcess.env.get('HOME') ?? '.',
-): string => `${home}/.claude/settings.json`
+/** Where the entries go for a Claude Code account, this process's by
+ * default, unless the caller names another path. */
+export let settingsPath = (account = own()): string =>
+  `${account}/settings.json`
 
 let cmd = (command: string, timeout?: number): Hook => ({
   hooks: [{

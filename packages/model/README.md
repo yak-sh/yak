@@ -371,7 +371,8 @@ on Fable. Whoever hears a provider say so reports it as a
 a limit on one model says `per: 'model'`, `metering(limits, model)` names the
 model the request asked, and `limitRows(limits, at)` gives the rows that keep
 them. `accountHome(runner, env)` is the directory of the account a CLI signs in
-with, and `accountEid` its row.
+with, `signingIn(runner, home, env)` the environment that signs it in with
+another, and `accountEid` its row.
 
 ## Routing a default
 
@@ -387,6 +388,12 @@ read. Otherwise the offerings whose plan has a reading are weighed, the one with
 the most of its longest window left first, and a window that has reset since its
 reading counts as unused. A parameter for a later rule (the work's kind) is
 another property of what is asked.
+
+`freest({accounts, readings, now})` chooses which of a provider's accounts a run
+signs in with: the one further under its weekly pace, the most points between
+the share of its week gone and the share used. A week that has reset since its
+reading is unused, and an account nothing has read yet goes first. It answers
+`{account, why}`.
 
 In a graph the offerings are data: a **routes** edge from the row whose `using`
 is the default to a `serves` edge, `routes{pinned}` on the one that is pinned,

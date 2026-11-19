@@ -52,6 +52,8 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import { TOMBSTONE } from '@yaks/graph/bundle'
+import { identityEid } from '@yaks/graph/identity'
+import * as systemProcess from '@yaks/process/system'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
 import { and, every, line as query, present, whole } from '@yaks/query'
@@ -442,7 +444,7 @@ export let runs = (
     ]
   },
 
-  hooks_install: async (call): Promise<Bundle[]> => {
+  hooks_install: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let { install, settingsPath, installed, connect, configPath } =
       await hooks()
@@ -450,23 +452,37 @@ export let runs = (
     let server = str(args.server) ||
       (await import('@yaks/api/address')).served(host.config ?? {})
     let remove = !!args.remove
-    let path = install(str(args.path) || settingsPath(), {
-      server,
-      yak: str(args.yak) || undefined,
-      remove,
-    })
-    let config = str(args.config) || configPath()
-    let name = connect(config, {
-      server,
-      yak: str(args.yak) || undefined,
-      name: str(args.name) || undefined,
-      remove,
+    let yak = str(args.yak) || undefined
+    // Into the account named, else into every Claude Code account the graph
+    // knows, or this process's own where it knows none.
+    let claude = identityEid('provider', ['claude'])
+    let known = (await graph.read('.account *'))
+      .map((b) => b.account as { home?: string; provider?: string })
+      .filter((a) => a.provider == claude && a.home).map((a) => a.home!)
+    let home = systemProcess.env.get('HOME') ?? '~'
+    let accounts = args.account
+      ? [str(args.account).replace(/^~(?=\/|$)/, home)]
+      : args.path || args.config || !known.length
+      ? [undefined]
+      : known
+    let said = accounts.map((account) => {
+      let path = install(str(args.path) || settingsPath(account), {
+        server,
+        yak,
+        remove,
+      })
+      let config = str(args.config) || configPath(account)
+      let name = connect(config, {
+        server,
+        yak,
+        name: str(args.name) || undefined,
+        remove,
+      })
+      return installed(path, server, remove, { path: config, name })
     })
     return [{
       entity: { eid: '$said' },
-      content: {
-        body: installed(path, server, remove, { path: config, name }),
-      },
+      content: { body: said.join('\n\n') },
       output: { source: call.entity.eid },
     }]
   },

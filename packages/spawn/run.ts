@@ -54,7 +54,7 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { type Built, line, sub } from '@yaks/query'
 import { Stale } from '@yaks/graph/errors'
 import { sleep } from '@yaks/effects'
-import { derivedEid } from '@yaks/graph/identity'
+import { derivedEid, identityEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import { edgeEid } from '@yaks/edge'
 import {
@@ -76,7 +76,8 @@ import {
 } from '@yaks/session'
 import { pull, recount, type Tail, tail } from '@yaks/session/tail'
 import { home as signedIn } from '@yaks/session/files'
-import { accountEid } from '@yaks/model'
+import { accountEid, signingIn } from '@yaks/model'
+import { freest, type Reading } from '@yaks/model/route'
 import { kept } from '@yaks/session/service'
 import {
   clean,
@@ -285,7 +286,13 @@ export type Asked = Job & {
   /** the ask a turn of this run answers (@yaks/session `ask`): the model
    * entity, and the request entry it was asked through */
   ask: Comp
+  /** the account its CLI signs in with (@yaks/model `account`), where the
+   * request names one or a first run was given one ({@link accountFor}) */
+  account?: Account
 }
+
+/** An account a run signs in with: its row, and its directory. */
+export type Account = { eid: string; home: string }
 
 // The efforts a model accepts, space- or comma-separated. An empty list allows
 // anything: a provider with no effort setting cannot reject one.
@@ -366,6 +373,9 @@ export let asked = async (
   // `sending{tools}` names exactly the tools a turn is offered (@yaks/session),
   // and a list naming none offers none.
   let tools = comp(request, 'sending')?.tools
+  let account = using.account
+    ? await accountOf(g, String(using.account))
+    : undefined
   return {
     provider: name,
     speaks: String(row?.api ?? name),
@@ -380,7 +390,68 @@ export let asked = async (
       to: chosen,
       through: request.entity.eid,
     },
+    ...account ? { account } : {},
   }
+}
+
+// The account a request names, which must still be one.
+let accountOf = async (g: Graph, eid: string): Promise<Account> => {
+  let home = comp(await one(g, eid), 'account')?.home
+  if (!home) throw new Error(`${eid} names no account`)
+  return { eid, home: String(home) }
+}
+
+/**
+ * The account a first run signs in with: the one its request names, else the
+ * offered account (`account{offered}`) of its CLI's provider further under
+ * its weekly pace (@yaks/model `freest`), and none where its CLI keeps no
+ * account or its provider offers none, which runs on the environment's own.
+ *
+ * ```ts
+ * import { accountFor } from '@yaks/spawn'
+ *
+ * // let account = await accountFor(graph, adapters.claude, job)
+ * ```
+ */
+export let accountFor = async (
+  g: Graph,
+  adapter: Adapter,
+  job: Asked,
+  now: number = Date.now(),
+): Promise<Account | undefined> => {
+  if (job.account || !adapter.account) return job.account
+  let provider = identityEid('provider', [adapter.account])
+  let rows = (await g.read('.account *')).filter((b) => {
+    let a = comp(b, 'account')
+    return a?.offered === true && a.provider == provider && a.home
+  })
+  let homes = new Map(
+    rows.map((b) => [b.entity.eid, String(comp(b, 'account')!.home)]),
+  )
+  let chosen = freest({
+    accounts: [...homes].map(([account, home]) => ({
+      account,
+      name: home.slice(home.lastIndexOf('/') + 1),
+    })),
+    readings: (await g.read('.rate_limit *')).map((b) =>
+      b.rate_limit as Reading
+    ),
+    now,
+  })
+  return chosen && { eid: chosen.account, home: homes.get(chosen.account)! }
+}
+
+// The environment a run starts in: the server's own, the adapter's
+// variables, and the sign-in of the account it runs on.
+let runEnv = (
+  adapter: Adapter,
+  job: Asked,
+  o: Opts,
+): Record<string, string> => {
+  let env = { ...o.env ?? system.env.toObject(), ...adapter.env }
+  return adapter.account && job.account
+    ? signingIn(adapter.account, job.account.home, env)
+    : env
 }
 
 // What a run used says which ask it answers the way a daemon's ask entry
@@ -421,7 +492,7 @@ let reading = (
   o: Opts,
   ask: Comp = job.ask,
 ): Reader => {
-  let env = { ...o.env ?? system.env.toObject(), ...adapter.env }
+  let env = runEnv(adapter, job, o)
   let dir = adapter.account &&
     signedIn(adapter.account, { get: (name) => env[name] })
   return accounted(
@@ -610,9 +681,18 @@ export let start = async (
   if (!job) return null
   let adapter = adapterOf(job, o)
   if (!adapter) return null
+  // A first run is given its account; a later one carries on its thread in
+  // the account that keeps it, the one recorded, else the environment's own.
+  if (!row?.[PROCESS]) {
+    let account = await accountFor(g, adapter, job)
+    if (account) job = { ...job, account }
+  }
   let selection = {
     entity: { eid: String(job.ask.through) },
-    using: { model: String(job.ask.to) },
+    using: {
+      model: String(job.ask.to),
+      ...job.account ? { account: job.account.eid } : {},
+    },
   }
   if (row?.[PROCESS]) {
     // A session that ran before carries on its provider's thread, given what
@@ -660,10 +740,7 @@ export let start = async (
       command: job.command ?? program,
       args,
       cwd,
-      env: sessionEnv(session, {
-        ...o.env ?? system.env.toObject(),
-        ...adapter.env,
-      }),
+      env: sessionEnv(session, runEnv(adapter, job, o)),
     }, {
       ...o,
       eid: session, // one entity: the transcript is the thing running

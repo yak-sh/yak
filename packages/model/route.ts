@@ -4,7 +4,8 @@
 // the readings (`rate_limit`); the one who asks reads both and hands them
 // here. Each rule orders the offerings it can speak for, best first, and the
 // first rule that speaks for any answers. There are two: a pinned offering,
-// then the plan with the most usage left.
+// then the plan with the most usage left. Which of a provider's accounts an
+// offering runs on is chosen here too ({@link freest}).
 
 import type { Eid } from '@yaks/graph'
 
@@ -24,6 +25,8 @@ export type Route = {
 /** A plan limit's latest reading, as its `rate_limit` row holds it. */
 export type Reading = {
   provider: Eid
+  /** the account whose plan it is, where the reading came from one */
+  account?: Eid
   /** minutes: 10080 a week, 300 five hours */
   window: number
   /** the model whose requests it meters, where it is a limit on one model */
@@ -136,4 +139,64 @@ export let route = (asked: Asked): Routed | undefined => {
       why: left.map((r) => `${r.name} ${r.note}`).join(', '),
     }
     : undefined
+}
+
+/** An account an offering may run on (`account`), and what it is called,
+ * for the reason. */
+export type Account = { account: Eid; name: string }
+
+/** The account chosen and, in one line, why. */
+export type Freest = { account: Eid; why: string }
+
+const WEEK = 10080
+
+/**
+ * The account further under its weekly pace: the most points between the
+ * share of its week gone and the share used. A week that has reset since its
+ * reading is unused, and an account nothing has read yet goes first, so its
+ * first run reads it. Nothing where there are no accounts.
+ *
+ * ```ts
+ * import { freest } from './route.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let accounts = [{ account: 'a', name: '.claude' }, { account: 'b', name: '.claude-teams' }]
+ * let now = Date.parse('2026-11-14T00:00:00Z') // three days into the week
+ * let week = (account: string, used: number, resets = '2026-11-18T00:00:00Z') =>
+ *   ({ provider: 'claude', account, window: 10080, used, resets })
+ * equal(freest({ accounts, readings: [week('a', 20), week('b', 50)], now }), {
+ *   account: 'a',
+ *   why: '.claude is 23 points under its weekly pace, ' +
+ *     '.claude-teams is 7 points over its weekly pace',
+ * })
+ * equal(freest({ accounts, readings: [week('a', 20)], now })?.account, 'b')
+ * equal(freest({ accounts, readings: [week('a', 20), week('b', 90, '2026-11-13T00:00:00Z')], now })?.account, 'b')
+ * equal(freest({ accounts: [], readings: [], now }), undefined)
+ * ```
+ */
+export let freest = (
+  asked: { accounts: Account[]; readings: Reading[]; now: number },
+): Freest | undefined => {
+  let { readings, now } = asked
+  // Points under pace, and what the reason says where it is not a number.
+  let weigh = (a: Account): { under: number; fresh?: string } => {
+    let [r] = readings.filter((r) =>
+      r.account == a.account && r.window == WEEK && !r.model
+    ).sort((x, y) => (y.at ?? '').localeCompare(x.at ?? ''))
+    if (!r) return { under: Infinity, fresh: 'has no reading of its week' }
+    let ends = r.resets ? Date.parse(r.resets) : NaN
+    if (ends <= now) return { under: Infinity, fresh: 'has a fresh week' }
+    let gone = isNaN(ends) ? 100 : 100 - 100 * (ends - now) / (WEEK * 60000)
+    return { under: Math.round(gone - r.used) }
+  }
+  let weighed = asked.accounts.map((a) => ({ ...a, ...weigh(a) }))
+    .sort((x, y) => y.under - x.under)
+  if (!weighed.length) return
+  let said = (w: typeof weighed[0]) =>
+    `${w.name} ${
+      w.fresh ??
+        `is ${Math.abs(w.under)} points ${w.under < 0 ? 'over' : 'under'} ` +
+          'its weekly pace'
+    }`
+  return { account: weighed[0].account, why: weighed.map(said).join(', ') }
 }

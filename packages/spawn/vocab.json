@@ -34,6 +34,10 @@
           "type": "string",
           "description": "the reasoning effort, where the model accepts such a setting"
         },
+        "account": {
+          "type": "string",
+          "description": "the account the provider's CLI signs in with, by its id, its directory or the directory's name (`.claude-teams-bob`); by default the offered one further under its weekly pace. Recorded on the session, so every later run uses it too"
+        },
         "instruction": {
           "type": "string",
           "description": "additional instructions beside the task body, which is the agent’s spec"

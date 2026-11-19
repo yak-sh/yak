@@ -69,6 +69,20 @@ answered; Codex's JSON output never says which model answered. Providers handled
 over HTTP have no command adapter and remain the responsibility of the
 in-process `@yaks/session` daemon.
 
+A CLI signs in with an **account**, an `account{home, provider}` row naming its
+config directory (`~/.claude`, `~/.claude-teams-bob`); a second account is one
+more row. A request names one in `using{account}`
+(`yak session spawn T-1
+--provider claude --account .claude-teams-bob`). One
+that names none is given, on its first run, the account of its CLI's provider
+marked `account{offered}` that is further under its weekly pace, as its
+`rate_limit` rows read (`accountFor`, @yaks/model `freest`); an account nothing
+has read yet goes first. The choice is recorded on the request, so every later
+run of the session carries on its thread in the same account. The run is started
+with that account's variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`), and without it
+for the CLI's default directory, which Claude Code reads its `~/.claude.json`
+beside. A provider that offers no account runs on the server's own environment.
+
 The process is stored on the session entity. It runs through `@yaks/process` in
 a detached systemd user scope, so it can outlive the process that opened the
 graph. That graph-opening process is the **host**. The host that stays up holds
@@ -289,9 +303,9 @@ export const service = adopting({ adapters: { ...adapters, mine } })
 ## Exports
 
 The main module exports the built-in `claude` and `codex` adapters, the
-`adapters` table, adapter types, and the lower-level `asked()`, `follow()`,
-`start()`, `resume()`, `takeUp()`, and `down()` functions. Additional entry
-points are:
+`adapters` table, adapter types, and the lower-level `asked()`, `accountFor()`,
+`follow()`, `start()`, `resume()`, `takeUp()`, and `down()` functions.
+Additional entry points are:
 
 - `@yaks/spawn/vocab`: `spawnDoc` and `docs`;
 - `@yaks/spawn/effects`: `effects`, `spawning()`, and effect configuration;
