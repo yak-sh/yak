@@ -1,10 +1,10 @@
 ---
 name: packages-and-plugins
 description: >
-  Use when adding/moving @yaks packages or plugins, changing exports or
-  facets, wiring plugins, fixing import cycles, publishing to jsr or landing
-  with --allow-revert. New package boundaries need design-docs; vocabulary
-  is vocabulary; reading composed wiring is platform-visualize.
+  Use when adding/moving @yaks packages or plugins, changing exports or facets,
+  wiring plugins, fixing import cycles, publishing to jsr or landing with
+  --allow-revert. New package boundaries need design-docs; vocabulary is
+  vocabulary; reading composed wiring is platform-visualize.
 ---
 
 # Packages and plugins
@@ -49,9 +49,10 @@ What the walls are made of:
 - **One home per idea.** A move deletes the old copy and moves every caller in
   the same change (M-17871). A domain component with two consumers gets a
   package of its own rather than a room inside one of them (M-39550).
-- **The platform keeps its own screen and glue.** What workers/yak, the browser
-  door (packages/web) or the browsing app (packages/browse) do that isn't theirs
-  belongs in a package, open source like the rest (M-37867).
+- **New yaks.app code goes in a @yaks/* package (M-17).** workers/yak only
+  wires packages together. What the browser door (packages/web) or the browsing
+  app (packages/browse) do that isn't theirs belongs in a package too, open
+  source like the rest (M-37867).
 - **SQL is @yaks/sql's AST**, and only SQL-facing packages know SQLite exists
   (M-39498).
 - **Parts are often already built.** packages/browse/components, with its

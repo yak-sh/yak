@@ -36,6 +36,9 @@ mentions the trash, the words are what to fix, never the trash.
 workers/yak/README.md is the reference for bindings, the Worker's own secrets
 and setup; this is the map and the feel.
 
+New code goes in a @yaks/* package, never in workers/yak: workers/yak only
+wires packages together (M-17).
+
 ## The parts
 
 - **The kernel Worker** (`workers/yak`). `index.ts` is the entry the runtime
