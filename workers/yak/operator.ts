@@ -712,9 +712,10 @@ export let platformBug = (ctx: Ctx, space: Space): Tool => ({
 })
 
 /** What the Operator runs on (config.ts `agents`): the first choice whose
- * provider the Worker holds every credential of, by default Sonnet on the
- * platform's Anthropic key, handing coding and tricky work to Opus, and
- * without the key GLM on Workers AI. `OPERATOR_MODEL` and
+ * provider the Worker holds every credential of, by default GPT-6.2 Sol on
+ * the Operator's OpenAI key, handing coding and tricky work to GPT-6.2 Astra;
+ * without that key Sonnet on the platform's Anthropic key, handing it to
+ * Opus; and without either GLM on Workers AI. `OPERATOR_MODEL` and
  * `OPERATOR_DELEGATE` name other models of the provider chosen. */
 export let operatorChoice = (env: Env, machine = false) => {
   // On its person's own machine ({@link machineFor}) it asks for the first
@@ -723,9 +724,9 @@ export let operatorChoice = (env: Env, machine = false) => {
     let [first] = agents.machine
     return { provider: MACHINE, name: first.model, delegate: first.delegate }
   }
-  let config = operatorProviders(!!env.OPENAI_OPERATOR_API_KEY)
-  let chosen = agents.operator.find((c) => ready(env, c.provider, config)) ??
-    agents.operator.at(-1)!
+  let chosen =
+    agents.operator.find((c) => ready(env, c.provider, operatorProviders)) ??
+      agents.operator.at(-1)!
   return {
     provider: chosen.provider,
     name: env.OPERATOR_MODEL ?? chosen.model,
@@ -1090,8 +1091,7 @@ export let operating = (
   let implementations: Record<string, Model> = {
     ...options.model
       ? { [provider]: options.model }
-      : served(env, () =>
-        platform(env), operatorProviders(!!env.OPENAI_OPERATOR_API_KEY)),
+      : served(env, () => platform(env), operatorProviders),
     [MACHINE]: machine,
     ...options.providers,
   }

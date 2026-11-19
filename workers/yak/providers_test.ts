@@ -7,6 +7,7 @@ import { anthropicDoc } from '@yaks/anthropic/vocab'
 import { READS } from '@yaks/anthropic/reads'
 import { frozen, granted, platform, provided, served } from './providers.ts'
 import { operatorProviders, providing } from './config.ts'
+import { operatorChoice } from './operator.ts'
 import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
 import type { Env } from './env.ts'
@@ -59,8 +60,9 @@ test('a configured provider keeps its transport and uses the current key after a
   ])
 })
 
-for (let key of [undefined, 'operator-key']) {
-  test(`Operator OpenAI calls use ${key ? 'their scoped' : 'the existing'} credential while pictures keep their key`, async () => {
+{
+  let key = 'operator-key'
+  test('Operator OpenAI calls use their scoped credential while pictures keep their key', async () => {
     let sent: [string, string | null][] = []
     let env = {
       OPENAI_API_KEY: 'image-key',
@@ -95,8 +97,8 @@ for (let key of [undefined, 'operator-key']) {
         )
       },
     } as Env
-    let conversation = served(env, () =>
-      platform(env), operatorProviders(!!key)).openai
+    let conversation =
+      served(env, () => platform(env), operatorProviders).openai
     let pictures = served(env, () => ({
       ...platform(env),
       store: () =>
@@ -117,11 +119,23 @@ for (let key of [undefined, 'operator-key']) {
       items: [{ kind: 'user', text: 'A yak.' }],
     })
     assertEquals(sent, [
-      ['https://api.openai.com/v1/responses', `Bearer ${key ?? 'image-key'}`],
+      ['https://api.openai.com/v1/responses', `Bearer ${key}`],
       ['https://api.openai.com/v1/images/generations', 'Bearer image-key'],
     ])
   })
 }
+
+// The images key may use only the picture models, so it never puts the
+// Operator on OpenAI: without the Operator's own key it runs on the next
+// choice whose credentials the Worker holds.
+test('the Operator is on OpenAI only with its own key, never the images key', () => {
+  let images = { OPENAI_API_KEY: 'image-key', ANTHROPIC_API_KEY: 'a' } as Env
+  let both = { ...images, OPENAI_OPERATOR_API_KEY: 'operator-key' } as Env
+  assertEquals(
+    [operatorChoice(images).provider, operatorChoice(both).provider],
+    ['anthropic', 'openai'],
+  )
+})
 
 // OpenAI as config.ts `serving` names it, paid for by the platform's key.
 let paying = () =>
@@ -129,8 +143,6 @@ let paying = () =>
     VAULT: d1() as unknown as D1Like,
     VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(4))),
     OPENAI_API_KEY: 'platform-key',
-    CF_ACCOUNT: 'acct',
-    AI_GATEWAY: 'gw',
   }) as unknown as Env
 
 test("a hosted call carries the platform's credential as a sentinel, granted only to its provider's hosts", async () => {
@@ -142,11 +154,10 @@ test("a hosted call carries the platform's credential as a sentinel, granted onl
     '',
     false,
   ])
-  assertEquals(options.gateway, { account: 'acct', id: 'gw' })
   assertEquals(await granted(env, 'openai'), [{
     sentinel: options.key as string,
     value: 'platform-key',
-    hosts: ['gateway.ai.cloudflare.com'],
+    hosts: ['api.openai.com'],
   }])
   assertEquals(await granted(env, 'openrouter'), [])
 })
