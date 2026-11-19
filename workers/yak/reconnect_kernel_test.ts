@@ -2,7 +2,7 @@ import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { state } from './testing.ts'
 import { browser, tick } from './page-release_fixture.ts'
-import { INCARNATIONS, reconnect } from './reconnect_fixture.ts'
+import { reconnect } from './reconnect_fixture.ts'
 
 test('a signed-in socket survives repeated cold incarnations without losing current standing', async () => {
   let r = await reconnect(state('probe/reconnect').storage)
@@ -18,12 +18,10 @@ test('a signed-in socket survives repeated cold incarnations without losing curr
   // not amplify polls when the inherited connection no longer retires.
   assertEquals(page.asks.length, 1)
   assertEquals(r.validCloses, [])
-  // App and membership lookups once per cold principal, not per message.
-  assertEquals(r.validQueries, INCARNATIONS * 2)
   assertEquals(r.accepted.length, 1)
   assertEquals(r.accepted[0].endsWith(' cursor'), true)
   assertEquals(r.revokedCloses, [{
     code: 1012,
-    reason: 'writer handshake required',
+    reason: 'authorization handshake required',
   }])
 })

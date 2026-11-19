@@ -495,7 +495,10 @@ export let sockets = (
   // resync.
   let authorize = (ws: Wire): boolean | Promise<boolean> => {
     if (!opts.authorize) return true
+    // A socket is closed once: two checks in flight together (a wake's and a
+    // message's) both refuse it, and only the first closes it.
     let refused = (why?: unknown) => {
+      if (closed.has(ws)) return false
       if (why !== undefined) {
         report?.(why instanceof Error ? why : new Error(String(why)))
       }

@@ -3,15 +3,15 @@ import { Store } from './graph.ts'
 import type { State } from './graph.ts'
 import type { Namespace } from '@yaks/durable-object/door'
 import { useUntil } from './used.ts'
+import { EPOCH } from './directory-copy.ts'
 
-/** How many cold incarnations take the held socket's frames, two each. */
-export let INCARNATIONS = 2
+let INCARNATIONS = 2
 
 export let reconnect = async (storage: State['storage']) => {
   let app = crypto.randomUUID(),
     person = crypto.randomUUID(),
-    space = crypto.randomUUID()
-  let queries: string[] = []
+    space = crypto.randomUUID(),
+    seat = crypto.randomUUID()
   let revoked = false
   let directory: Namespace = {
     idFromName: (n) => n,
@@ -30,22 +30,17 @@ export let reconnect = async (storage: State['storage']) => {
           throw new Error('unexpected directory request')
         }
         let q = url.searchParams.get('q') ?? ''
-        queries.push(q)
-        if (q.includes(`.entity.eid=${app}`)) {
-          return Response.json([{
-            entity: { eid: app },
-            app: { space, access: 'private' },
-          }])
-        }
-        if (q.includes('.member')) {
-          return Response.json(
-            revoked ? [] : [{
-              entity: { eid: crypto.randomUUID() },
+        return Response.json([
+          ...q.includes(`.entity.eid=${app}`)
+            ? [{ entity: { eid: app }, app: { space, access: 'private' } }]
+            : [],
+          ...!revoked && q.includes(`.member.person=${person}`)
+            ? [{
+              entity: { eid: seat },
               member: { space, person, role: 'owner' },
-            }],
-          )
-        }
-        return Response.json([])
+            }]
+            : [],
+        ], { headers: { [EPOCH]: '1' } })
       },
     }),
   }
@@ -70,6 +65,7 @@ export let reconnect = async (storage: State['storage']) => {
     'x-yak-access': 'private',
     'x-yak-person': person,
     'x-yak-role': 'owner',
+    'x-yak-policy': '1',
   }
   let initial = new Store(ctx, { STORE: directory })
   let res = await initial.fetch(
@@ -116,7 +112,6 @@ export let reconnect = async (storage: State['storage']) => {
     }
   }
   let validCloses = [...closed]
-  let validQueries = queries.length
   revoked = true
   let cold = new Store(ctx, { STORE: directory })
   await cold.webSocketMessage(
@@ -128,7 +123,6 @@ export let reconnect = async (storage: State['storage']) => {
   )
   return {
     validCloses,
-    validQueries,
     revokedCloses: closed.slice(validCloses.length),
     frames,
     accepted: (attachment as { relay?: string[] }).relay ?? [],

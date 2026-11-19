@@ -42,7 +42,7 @@ export let told = (
 export let servingAuthority = (host: Host) => {
   let learn = async (req: Request) => {
     let revision = policy(req)
-    if (appMetadata(req) && host.copy()) {
+    if (appMetadata(req) && (revision != null || host.copy())) {
       if (revision == null) {
         throw Object.assign(new Refused('Serving authorization unavailable'), {
           status: 503,

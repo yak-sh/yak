@@ -174,12 +174,23 @@ let access = (app: string, access: string) =>
 test('a visitor watches a borrowed word with the standing their visit holds', async () => {
   await access('loans', 'private')
   await access('shelf', 'private')
+  // A stranger views a private app on offer at its sample, which is the store
+  // their socket opened (@yaks/platform/visits `visitorRole`).
+  let offered = {
+    entity: { eid: loans.eid },
+    published: { name: 'loans', version: 1 },
+    demo: { store: name },
+  }
+  await dir.apply({ entities: [offered] }, KERNEL)
   let visit = { 'x-yak-via': crypto.randomUUID(), 'x-yak-role': 'viewer' }
   equal(await (await watching('loans', visit)).heard(), [[
     'Dune',
     'Emma',
     'Kim',
   ]])
+  await dir.apply({
+    entities: [{ entity: { eid: loans.eid }, published: null, demo: null }],
+  }, KERNEL)
 })
 
 test('a home made private leaves the next answer of a watch it fed', async () => {

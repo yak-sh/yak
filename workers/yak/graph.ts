@@ -308,7 +308,6 @@ import { formsOptions } from './forms-host.ts'
 import { calendarIn } from './calendar.ts'
 import {
   Denied,
-  level,
   type Mode,
   mode,
   type Personal,
@@ -2191,28 +2190,19 @@ export class Store extends Durable {
       at,
       (error) => defect(error, { request: 'socket restore', store: name }),
       {
-        // Restore current standing after hibernation; keep the verified identity.
-        // Guest instruments have no standing to lose.
         deferStatic: true,
-        read: (read, writer) => ({
-          ...read,
-          person: this.#authority(writer?.actor)?.person ??
-            writer?.actor?.by ?? null,
-          level: this.#authority(writer?.actor)?.level ?? read?.level ?? null,
-          administrative: false,
-        }),
-        writer: ({ actor }) => this.#socketWriter(actor),
-        ...(this.#bind.SERVING_COPY
-          ? {
-            authorize: (
-              read: ReadOpts | undefined,
-              writer: PeerWriter | undefined,
-            ) =>
-              this.#socketWriter(
-                writer?.actor ?? (read?.person ? { by: read.person } : null),
-              ),
+        read: (read, writer) => {
+          let actor = writer?.actor
+          let authority = this.#authority(actor)
+          return {
+            ...read,
+            person: read?.person ?? authority?.person ?? actor?.by ?? null,
+            level: authority?.level ?? null,
+            administrative: false,
           }
-          : {}),
+        },
+        authorize: (read, writer) =>
+          this.#socketStanding(read?.person ?? null, writer?.actor),
       },
     )
     let route = api({ ...applying, graph: g, subs })
@@ -2498,120 +2488,35 @@ export class Store extends Durable {
     })
   }
 
-  #socketStanding = new Map<string, Promise<boolean>>()
-
-  #socketWriter(actor: Actor | null | undefined): boolean | Promise<boolean> {
-    let person = this.#authority(actor)?.person ?? actor?.by
-    if (!person && !this.#bind.SERVING_COPY) return true
-    if (!this.#bind.SERVING_COPY && person && this.#vouched.has(person)) {
-      return true
-    }
-    let held = !this.#bind.SERVING_COPY && person &&
-      this.#socketStanding.get(person)
-    if (held) return held
-    let run = async () => {
-      let ns = this.#bind.STORE, app = this.#get('app')
-      if (!ns || !app) return false
-      if (this.#bind.SERVING_COPY) {
-        // The browser is asked about too: a stranger with no seat stands by
-        // its visit to the app (@yaks/platform/visits `visitorRole`).
-        let via = instrumentActor(actor)?.via
-        let req = new Request('http://store', {
-          headers: {
-            'x-yak-app': app,
-            ...(person ? { 'x-yak-person': person } : {}),
-            ...(via ? { 'x-yak-via': via } : {}),
-          },
-        })
-        await this.#recheck(req)
-        await this.#learn(req)
-        let v = vouchOf(req)
-        if (!reads(mode(req.headers.get('x-yak-access')), v.level)) {
-          return false
-        }
-        this.#vouch({
-          ...v,
-          ...(person && actor?.by && actor.by != person
-            ? { actor: actor.by }
-            : {}),
-        })
+  // The attachment keeps the identity across wakes. The directory supplies
+  // current standing for each frame, including a browser's visit to the app.
+  async #socketStanding(person: string | null, actor?: Actor | null) {
+    let app = this.#get('app')
+    if (!this.#bind.STORE || !app) return false
+    let via = instrumentActor(actor)?.via
+    let req = new Request('http://store', {
+      headers: {
+        'x-yak-app': app,
+        ...(person ? { 'x-yak-person': person } : {}),
+        ...(person && actor?.by && actor.by != person
+          ? { 'x-yak-actor': actor.by }
+          : {}),
+        ...(via ? { 'x-yak-via': via } : {}),
+      },
+    })
+    try {
+      await this.#recheck(req)
+      await this.#learn(req)
+      let v = vouchOf(req)
+      if (reads(mode(req.headers.get('x-yak-access')), v.level)) {
+        this.#vouch(v)
         return true
       }
-      let via = this.#directoryTransport()
-      let revision: string | null = null
-      let ask = async (q: Line): Promise<Bundle[]> => {
-        let answer = await via.fetch(
-          new Request(`http://directory/query?q=${encodeURIComponent(q)}`),
-        )
-        if (!answer.ok) {
-          throw Object.assign(
-            new Refused('Serving authorization unavailable'),
-            { status: 503 },
-          )
-        }
-        revision = answer.headers.get(EPOCH)
-        return answer.json()
-      }
-      let [row] = await ask(
-        line`.entity.eid=${app}&.fields=app.space,app.access`,
-      )
-      let definition = row?.app as Comp | undefined
-      let space = typeof definition?.space == 'string'
-        ? definition.space
-        : (definition?.space as { eid?: unknown } | undefined)?.eid
-      if (typeof space != 'string') return false
-      let rows = person
-        ? await ask(
-          line`.member.space=${space}&.member.person=${person}&?member|.grant.app=${app}&.grant.person=${person}&?grant`,
-        )
-        : []
-      let membership = rows.find((r) => r.member)?.member as Comp | undefined
-      let grant = rows.find((r) => r.grant)?.grant as Comp | undefined
-      let memberRole = membership?.role
-      let access = memberRole == 'owner' || memberRole == 'editor' ||
-          memberRole == 'viewer'
-        ? memberRole
-        : grant?.access
-      let standing =
-        access == 'owner' || access == 'editor' || access == 'viewer'
-          ? level(access)
-          : null
-      await this.#learn(
-        new Request('http://store', {
-          headers: {
-            'x-yak-app': app,
-            'x-yak-access': mode(definition?.access),
-            ...(revision == null ? {} : { 'x-yak-policy': String(revision) }),
-          } as Record<string, string>,
-        }),
-      )
-      if (!reads(mode(definition?.access), standing)) return false
-      if (person) {
-        this.#vouch({
-          person,
-          ...(actor?.by && actor.by != person ? { actor: actor.by } : {}),
-          via: instrumentActor(actor)?.via ?? null,
-          level: standing,
-          title: null,
-        })
-      }
-      return true
+    } catch (error) {
+      caught(error, { request: 'socket authorize', store: this.#name() })
     }
-    let refresh = async () => {
-      try {
-        let ok = await run()
-        if (!ok && person) this.#forget(actor, person)
-        return ok
-      } catch (error) {
-        caught(error, { request: 'socket authorize', store: this.#name() })
-        if (person) this.#forget(actor, person)
-        return false
-      }
-    }
-    if (this.#bind.SERVING_COPY) return refresh()
-    let pending = run().finally(() => this.#socketStanding.delete(person!))
-    this.#socketStanding.set(person!, pending)
-    return pending
+    if (person) this.#forget(actor, person)
+    return false
   }
 
   #vouched = new Map<string, Vouch>()
