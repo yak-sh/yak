@@ -640,8 +640,10 @@ app_set:
     drops it: it stops redirecting and another app can take it, final for that
     address. sandboxed: true runs an app installed from someone else's release
     in a browser origin of its own, reaching only its own data, with
-    localStorage supplied by the platform; false lets it out again. Only the
-    space owner may set home, screenshot, forget or sandboxed. Returns the
+    localStorage supplied by the platform; false lets it out again. join sets
+    who may join without an invitation. Installed copies use the policy set
+    by their space owner. An empty join object clears the owner policy. Only
+    the space owner may set home, screenshot, forget, sandboxed or join. Returns the
     current URL and a summary of the changes. Documentation:
     https://yaks.app/docs/home.
 connection_attach:

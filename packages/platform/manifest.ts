@@ -5,7 +5,7 @@
 import { CallError } from '@yaks/tools/errors'
 import { conditioned, floored, isFloor, permitted, unowned } from '@yaks/member'
 import { acceptsErrors } from '@yaks/blob'
-import { read } from '@yaks/yaml'
+import { read, stringify as yaml } from '@yaks/yaml'
 import { parse } from '@yaks/query'
 import {
   type KindDecl,
@@ -70,6 +70,36 @@ let kindOf = (decl: KindDecl): KindDecl =>
 export let OPENS: Record<string, string> = {
   models: 'ask its models',
   rtc: 'speak and listen through its voice door',
+}
+
+/** Who may join an app through its own rows (workers/yak join.ts): a
+ * manifest's `join` word, or the one its space's owner set on the app. */
+export type Join = {
+  emails?: string[]
+  phones?: string[]
+  where?: string
+  domain?: string
+  role?: 'viewer' | 'editor'
+}
+
+/** The shape shared by the directory and the app_set tool. */
+export let joinSchema: PropSchema = {
+  type: 'object',
+  properties: {
+    emails: { type: 'array', items: { type: 'string' } },
+    phones: { type: 'array', items: { type: 'string' } },
+    where: { type: 'string' },
+    domain: { type: 'string' },
+    role: { type: 'string', enum: ['viewer', 'editor'] },
+  },
+}
+
+/** Remove the source app's join policy from a manifest that will be installed. */
+export let withoutJoin = (source: string, file: string): string => {
+  if (!source.trim()) return source
+  let { join, ...words } = (read(source, file) ?? {}) as VocabDoc
+  if (join === undefined) return source
+  return file.endsWith('.json') ? JSON.stringify(words, null, 2) : yaml(words)
 }
 
 /**

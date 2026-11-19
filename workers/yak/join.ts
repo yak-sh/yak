@@ -12,6 +12,10 @@
 //       "domain": "example.org"
 //     }
 //
+// Who may join is the space's say. The word in an app's own vocab.json is
+// stored on its directory row at deploy. The space owner can set a policy
+// through app_set. Installed copies use only the policy their owner set.
+//
 // Somebody signed in whose address or number is among those rows, or whose
 // address is at that domain, is offered Join, and one press writes the grant
 // on this app that member_add would have offered them, at the word's `role`
@@ -28,15 +32,16 @@ import type { Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { e164 } from '@yaks/phone/mobile'
 import { addresses } from '@yaks/people'
+import type { Join } from '@yaks/platform/manifest'
 
-/** The `join` word of an app's vocab.json, as vocab.ts `appDoc` admits it. */
-export type Join = {
-  emails?: string[]
-  phones?: string[]
-  where?: string
-  domain?: string
-  role?: 'viewer' | 'editor'
-}
+// Older original apps keep their existing policy until their next deploy.
+// For older installed copies, the install pin already identifies which
+// declaration cannot serve as policy, so there is no data write to wait for.
+let joinOf = async (env: Env, space: Space, app: App): Promise<Join | null> =>
+  app.join !== undefined || app.installed
+    ? app.join ?? null
+    : (await declarationOf(env, space, app)).vocab.join as Join | undefined ??
+      null
 
 // Who stands higher, so Join is offered only where it gives more.
 let RANK: (Role | null)[] = [null, 'viewer', 'editor', 'owner']
@@ -105,11 +110,12 @@ export let joinable = async (
   who: { person: string | null; role: Role | null; guest?: boolean },
 ): Promise<Role | null> => {
   if (!who.person || (who.role && !who.guest)) return null
-  let join = (await declarationOf(env, space, app)).vocab.join as
-    | Join
-    | undefined
+  let join = await joinOf(env, space, app)
+  if (!join?.domain && !join?.emails?.length && !join?.phones?.length) {
+    return null
+  }
   let role = join?.role ?? 'viewer'
-  if (!join || RANK.indexOf(who.role) >= RANK.indexOf(role)) return null
+  if (RANK.indexOf(who.role) >= RANK.indexOf(role)) return null
   let [email, phone] = await Promise.all([
     dir.emailAt(who.person),
     join.phones?.length ? dir.phoneAt(who.person) : null,

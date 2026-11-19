@@ -239,6 +239,12 @@ without the `@`. `role` is `viewer` (the default) or `editor`. `join` needs
 `emails`, `phones`, `domain` or some of them, and takes effect with the next
 `app_deploy`.
 
+The space owner can set the join policy with `app_set(app, join: {...})`. It
+overrides the policy in the original app's vocab.json. Pass `join: {}` to clear
+the owner policy. Installed copies start with joining disabled and use only the
+policy set by the installer’s space owner. Updating an installed copy preserves
+its owner policy.
+
 Somebody signed in with a listed address or number who opens the private app
 sees a Join button instead of "Nothing here yet." (or, when the app is
 published, instead of its sample); on a `public` app, where they can already

@@ -12,6 +12,7 @@ import { mint } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import type { App, Directory, Space } from './directory.ts'
 import type { Reload } from '@yaks/platform'
+import type { Join } from '@yaks/platform/manifest'
 import type { Files, Version } from '@yaks/platform/versions'
 import { acting, vouched, type Who } from './session.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
@@ -175,6 +176,7 @@ export let record = async (
     reload,
     target,
     declaration = String(version),
+    join,
     speaks,
     message,
   }: {
@@ -189,6 +191,7 @@ export let record = async (
     reload?: Reload
     target?: Version
     declaration?: string
+    join?: Join
     speaks?: Record<string, number>
     /** Everything the release changed and why, as its deployer wrote it. */
     message?: string
@@ -223,6 +226,7 @@ export let record = async (
           ...(app.lenses ? { lenses: app.lenses } : {}),
         },
         last_deploy: moved,
+        ...join === undefined ? {} : { join: { declared: join } },
         ...seeded ? { seeded: { at, version } } : {},
         $was: {
           app: {

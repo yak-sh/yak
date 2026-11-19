@@ -10,6 +10,21 @@ let agent = connector(k, owner.cookie)
 let host = `${owner.email.split('@')[0]}.${k.host}`
 let app = unique('directory')
 let church = `${unique('church')}.bot.yak.sh`
+let vocab = {
+  join: {
+    emails: ['individual.email', 'household.email'],
+    domain: church,
+  },
+  $defs: {
+    individual: {
+      properties: {
+        first: { type: 'string' },
+        email: { type: 'string' },
+      },
+    },
+    household: { properties: { email: { type: 'string' } } },
+  },
+}
 await agent.tool('app_new', {
   slug: app,
   title: 'Directory',
@@ -21,21 +36,7 @@ await agent.tool('app_files', {
     { path: 'index.html', content: '<h1>Members</h1>' },
     {
       path: 'vocab.json',
-      content: JSON.stringify({
-        join: {
-          emails: ['individual.email', 'household.email'],
-          domain: church,
-        },
-        $defs: {
-          individual: {
-            properties: {
-              first: { type: 'string' },
-              email: { type: 'string' },
-            },
-          },
-          household: { properties: { email: { type: 'string' } } },
-        },
-      }),
+      content: JSON.stringify(vocab),
     },
   ],
 })
@@ -116,4 +117,62 @@ test('an address at the domain joins without a row', async () => {
   })
   equal(await joined.json(), { joined: 'viewer' })
   equal((await page(di.cookie)).status, 200)
+})
+
+test('the installer sets the join policy and keeps it through updates', async () => {
+  let offer = unique('roster')
+  await agent.tool('app_publish', { app, name: offer })
+  let installer = await signIn(k)
+  let theirs = connector(k, installer.cookie)
+  let at = `${installer.email.split('@')[0]}.${k.host}`
+  await theirs.tool('app_install', { name: offer, as: app })
+  let ask = async (cookie: string) =>
+    (await (await k.at(at, `/${app}/api/who`, { headers: { cookie } }))
+      .json()).join
+  let contents = () =>
+    theirs.tool('app_files', { app, op: 'read', path: 'vocab.json' })
+  ok(!(await contents()).includes('"join"'))
+  let stranger = await signIn(k, `${unique('pub')}@${church}`)
+  equal(await ask(stranger.cookie), null)
+  let pressed = await k.at(at, `/${app}/api/join`, {
+    method: 'POST',
+    headers: { cookie: stranger.cookie },
+  })
+  equal(pressed.status, 403)
+
+  let mine = `${unique('flock')}.bot.yak.sh`
+  await theirs.tool('app_set', { app, join: { domain: mine, role: 'editor' } })
+  equal(await ask(stranger.cookie), null)
+  let member = await signIn(k, `${unique('ann')}@${mine}`)
+  equal(await ask(member.cookie), 'editor')
+
+  let other = `${unique('other')}.bot.yak.sh`
+  await agent.tool('app_files', {
+    app,
+    files: [{
+      path: 'vocab.json',
+      content: JSON.stringify({ ...vocab, join: { domain: other } }),
+    }],
+  })
+  await agent.tool('app_deploy', { app })
+  await agent.tool('app_publish', { app, name: offer })
+  await theirs.tool('app_update', { app })
+  ok(!(await contents()).includes('"join"'))
+  let outsider = await signIn(k, `${unique('pub')}@${other}`)
+  equal(await me(outsider.cookie), 'viewer')
+  equal(await ask(outsider.cookie), null)
+  equal(await ask(member.cookie), 'editor')
+
+  let joined = await k.at(at, `/${app}/api/join`, {
+    method: 'POST',
+    headers: { cookie: member.cookie },
+  })
+  equal(await joined.json(), { joined: 'editor' })
+  await theirs.tool('app_set', { app, join: {} })
+  let later = await signIn(k, `${unique('later')}@${mine}`)
+  equal(await ask(later.cookie), null)
+  equal(
+    (await k.at(at, `/${app}/`, { headers: { cookie: member.cookie } })).status,
+    200,
+  )
 })

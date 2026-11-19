@@ -81,7 +81,14 @@ import {
   unwritten,
   wordsOf,
 } from './vocab.ts'
-import { EXAMPLE, VOCABS } from '@yaks/platform/manifest'
+import {
+  EXAMPLE,
+  type Join,
+  joinErrors,
+  joinSchema,
+  VOCABS,
+  withoutJoin,
+} from '@yaks/platform/manifest'
 import { commandsOf } from '@yaks/platform/app-commands'
 import { mode, reaches } from '@yaks/member'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
@@ -1603,7 +1610,9 @@ let published = async (
   // The file the app declares its words in — and its name, for every sentence
   // below that tells somebody to go and edit it — with the packages whose
   // words its package.json lends it.
-  let declaration = stated(source, vocabFile, pkg)
+  let statedDoc = stated(source, vocabFile, pkg)
+  let { join, ...wordsDeclared } = statedDoc
+  let declaration = app.installed ? wordsDeclared : statedDoc
   if (target) accepted = Object.keys(declaration.$defs ?? {})
   // A command was once declared in a file of its own; it is an entry in the
   // manifest now (T-38021), and a file still saying one that way is refused in
@@ -1968,6 +1977,7 @@ let published = async (
           reload,
           target,
           declaration: pointer,
+          join: app.installed ? undefined : (join as Join | undefined) ?? {},
           speaks: ownSpeaks(
             dirPart.storeName(space, app),
             appDoc(source ?? {}, vocabFile),
@@ -2494,6 +2504,7 @@ let copied = async (
   from: Files,
   onto: { space: Space; app: App },
   who: Who,
+  manifest: Change | null,
 ) => {
   let out = await modifying(
     r2RawObjects(ctx.env.BLOBS),
@@ -2503,6 +2514,7 @@ let copied = async (
     who,
     (draft) => {
       let { changes, wrote, gone } = copying(from, draft.files)
+      if (manifest) changes.push(manifest)
       return Promise.resolve({ changes, value: { wrote, gone } })
     },
     watching(ctx.env, onto.space, onto.app),
@@ -2540,6 +2552,32 @@ let fileKey = (space: Space, app: App, path: string) =>
 // An app and a space keep the same address history and change it in the same
 // two ways, so the words and the arithmetic are here once rather than twice in
 // two tools that would drift.
+
+// Who may join an app through its own rows (join.ts), as app_set takes it.
+let JOIN = {
+  ...joinSchema,
+  description:
+    'Who may join this app without an invitation. Uses the join shape in ' +
+    "the Sharing guide. An installed copy uses its space owner's policy. " +
+    'Set {} to clear the owner policy. Only the space owner may set it.',
+}
+
+// The `join` app_set was given, checked against the words the app declares,
+// or null for {}: what the row's component becomes.
+let joining = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  given: unknown,
+): Promise<Join | null> => {
+  if (given && typeof given == 'object' && !Object.keys(given).length) {
+    return null
+  }
+  let defs = (await declarationOf(ctx.env, space, app)).vocab.$defs
+  let wrong = joinErrors(given, defs)
+  if (wrong.length) throw refuse('arguments', `join: ${wrong.join('; ')}`)
+  return given as Join
+}
 
 let FORGET = str(
   'a previous slug (not a URL) this has moved away from, to stop redirects ' +
@@ -2691,12 +2729,21 @@ let declaring = async (
     : { file: files[at], source: decoded(read[at]!), pkg }
 }
 
-// The words a publication declares, read from the bytes its vocab file names.
+// The installable manifest. Joining is configured by the destination owner.
 let offeredWords = async (raw: Objects, files: Files) => {
   let file = VOCABS.find((path) => path in files)
   let bytes = file ? await raw.read(addressed(files[file])) : null
   if (file && !bytes) throw refuse('missing', `no blob for ${files[file]}`)
-  return { file: file ?? 'vocab.json', source: bytes ? decoded(bytes) : null }
+  if (!file || !bytes) return { file: 'vocab.json', source: null, change: null }
+  let text = decoded(bytes)
+  let source = withoutJoin(text, file)
+  if (source === text) return { file, source, change: null }
+  let clean = new TextEncoder().encode(source)
+  return {
+    file,
+    source,
+    change: { path: file, bytes: clean, sha: await digest(clean) },
+  }
 }
 
 // A file named as a picture is one, refused at the write with what is wrong
@@ -5518,6 +5565,7 @@ let OURS: Row[] = [
           "the phone's splash-screen colour while the app opens, as CSS. " +
             "Unset, the platform's own colour is used",
         ),
+        join: JOIN,
         sandboxed: {
           type: 'boolean',
           description: "for an app installed from someone else's release, " +
@@ -5561,15 +5609,24 @@ let OURS: Row[] = [
       if (
         title == null && to == null && open == null && home == null &&
         first == null && show == null && image == null && drop == null &&
-        themeColor == null && background == null && wall == null
+        themeColor == null && background == null && wall == null &&
+        args.join == null
       ) {
         throw refuse(
           'arguments',
           'nothing to change: pass title, slug, access, home, first, ' +
             'gallery, screenshot, theme_color, background_color, ' +
-            'sandboxed, forget, or all',
+            'join, sandboxed, forget, or all',
         )
       }
+      // Who may join is the space owner's, the way membership is: a join is
+      // a seat in the app, which member_add gives.
+      if (args.join != null && who.role != 'owner') {
+        throw refuse('access', `not the owner of ${space.slug}`)
+      }
+      let join = args.join == null
+        ? undefined
+        : await joining(ctx, space, app, args.join)
       // Whether a copy is walled off from its space is the space owner's: what
       // letting it out costs is everything in the space
       // (@yaks/platform/installs).
@@ -5638,7 +5695,8 @@ let OURS: Row[] = [
       let entities: Bundle[] = [...claims]
       if (
         title != null || moving || open || had || themeColor != null ||
-        background != null || wall != null || image != null
+        background != null || wall != null || image != null ||
+        join !== undefined
       ) {
         entities.push({
           entity: { eid: app.eid },
@@ -5658,6 +5716,7 @@ let OURS: Row[] = [
           ...(image == null
             ? {}
             : { screenshot: image ? { blob: image } : null }),
+          ...(join === undefined ? {} : { join: { policy: join } }),
           ...(themeColor != null || background != null
             ? {
               theme: {
@@ -5698,7 +5757,8 @@ let OURS: Row[] = [
           ...homing(await ctx.dir.home(space), app, first),
         )
       }
-      await ctx.dir.apply({ entities }, vouched(who))
+      let write = join === undefined ? ctx.dir.apply : ctx.dir.stamp
+      await write({ entities }, vouched(who))
       let now: App
       if (ctx.reopen) {
         let current = await reacquire(ctx, space, app, true, !!skip)
@@ -5769,6 +5829,14 @@ let OURS: Row[] = [
               background == null ? '' : `background ${background}`,
             ].filter(Boolean).join(', ')
           }`
+        }${
+          join === undefined
+            ? ''
+            : join
+            ? ` — eligible people may join as ${join.role ?? 'viewer'}`
+            : app.installed
+            ? ' — nobody joins it without an invitation now'
+            : " — join: it answers its own vocab.json's word again, if it says one"
         }${
           drop == null
             ? ''
@@ -7164,7 +7232,7 @@ let OURS: Row[] = [
         app = current.app!
       }
       let onto = { space, app }
-      let { wrote, draft } = await copied(ctx, source, onto, who)
+      let { wrote, draft } = await copied(ctx, source, onto, who, said.change)
       if (ctx.reopen) {
         let current = await reacquire(ctx, space, app)
         space = current.space
@@ -7173,8 +7241,7 @@ let OURS: Row[] = [
       }
       // A release of the copy, in the installer's own space: the components
       // its vocab.json declares planted in its store, its tools listed under
-      // its slug, its worker.js uploaded as its own script. It says what the
-      // publisher's release said.
+      // its slug, its worker.js uploaded as its own script.
       let theirs = await ctx.dir.deploys(offer.app)
       let out = await released(
         ctx,
@@ -7281,6 +7348,7 @@ let OURS: Row[] = [
         source,
         { space, app },
         who,
+        said.change,
       )
       // The asks for what the new version uses that the copy did not, before
       // the release, which binds what the copy is connected to.

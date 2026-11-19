@@ -60,6 +60,7 @@ import { SUBSCRIBED, type Tier } from '@yaks/platform/plans'
 import { type Price, priceOf } from '@yaks/platform/price'
 import { token } from '@yaks/graph/sha256'
 import type { Sample } from '@yaks/platform/visits'
+import type { Join } from '@yaks/platform/manifest'
 import type { Tunnel } from '@yaks/tunnel/hosted'
 import { type Host as HostEnv, spaceHost } from '@yaks/platform/host'
 import { type Upstream, upstreamOf } from '@yaks/platform/upstream'
@@ -414,6 +415,9 @@ export type AppInfo = {
   // request at one of them is answered its file before the app runs, and one
   // anywhere else goes on to the app without asking the directory again.
   publishing?: string[]
+  // The effective join policy. Only an original app deployed before the
+  // directory stored join policies can still have an undefined value.
+  join?: Join | null
 }
 export type Role = 'owner' | 'editor' | 'viewer'
 
@@ -788,6 +792,7 @@ export type Row = MeteredRow & {
   theme?: { theme_color?: string | null; background_color?: string | null }
   rooted?: Record<string, never>
   publishing?: { paths?: string | null }
+  join?: { policy?: Join | null; declared?: Join | null }
   public_file?: {
     app: Id
     path: string
@@ -1330,6 +1335,7 @@ export let APP_PARTS = [
   'rooted',
   'publishing',
   'phone',
+  'join',
 ]
 let ABOUT = chain(APP_PARTS.map((part) => line`?${part}`), '&')
 
@@ -1655,6 +1661,7 @@ export let appAbout = (r: Row): AppInfo => ({
     : null,
   rooted: r.rooted != null,
   publishing: publishingOf(r.publishing),
+  join: r.join?.policy ?? (r.installed ? null : r.join?.declared ?? undefined),
 })
 
 type ReadRow = Row & { policy: { revision: number } }

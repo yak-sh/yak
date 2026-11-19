@@ -1,6 +1,7 @@
 // The directory's store words, beside platformDoc's.
 import { CORE_URI, type VocabDoc } from '@yaks/vocab'
 import { sweepDoc } from './sweep-vocab.ts'
+import { joinSchema } from './manifest.ts'
 import { bool, num, owned, ref, text, time, unique } from './schema.ts'
 export let directoryDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
@@ -756,6 +757,18 @@ export let servingDoc: VocabDoc = {
       component: true,
       type: 'object',
       properties: { paths: text },
+    },
+    // The owner's policy and the original app's deployed manifest policy.
+    // Only the kernel writes either. A copy uses only its owner's policy.
+    join: {
+      description:
+        "Who may join an app through its own rows, set by its space's owner.",
+      component: true,
+      type: 'object',
+      properties: {
+        policy: owned(joinSchema),
+        declared: owned(joinSchema),
+      },
     },
   },
 }
