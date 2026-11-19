@@ -106,9 +106,11 @@ gmail connection made earlier, directly as the `google` client asking for
 same `google` client: it asks for `webmasters`, which reads a site's search
 numbers and submits its sitemaps, asks for offline access, sends its token to
 `searchconsole.googleapis.com` alone, and is `testing: true` as google-calendar
-is. `openai` is built for the native harness's ChatGPT sign-in; it uses a public
-OAuth client, asks for a refreshable grant, and sends its bearer to
-`chatgpt.com`.
+is. Each Google API an integration calls is enabled once in the Cloud project of
+the `google` client (project 538693127965); until then Google refuses every call
+with "API has not been used in project … or it is disabled". `openai` is built
+for the native harness's ChatGPT sign-in; it uses a public OAuth client, asks
+for a refreshable grant, and sends its bearer to `chatgpt.com`.
 
 An integration reached by OAuth signs in as the client it names
 (`client: 'google'`), registered once with the service and shared by every
