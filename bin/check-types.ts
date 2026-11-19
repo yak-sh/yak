@@ -23,15 +23,15 @@ import {
   digest,
   FACTS,
   GRAPH,
+  graphSeed,
   passed,
   remember,
   remembered,
   seal,
-  SEED,
   type Survey,
   survey,
 } from '@yaks/testing/deps'
-import { stores } from '@yaks/testing/kept'
+import { seed, stores } from '@yaks/testing/kept'
 import { exported, fences, typed } from '@yaks/testing/examples'
 import { changes, git, member } from './test-changes.ts'
 import { type Info, type Project, project, relative } from './tsconfig.ts'
@@ -640,12 +640,10 @@ let manifest = (path: string) => {
  * configuration names the checkout's own paths, so both are keyed by it as
  * any checkout would write it. */
 let shared = (name: string, config: string): [string, string] => {
-  let key = hex(
-    Deno.readTextFileSync(config).replaceAll(CHECKOUT, '<checkout>'),
-  ).slice(0, 16)
+  let text = Deno.readTextFileSync(config).replaceAll(CHECKOUT, '<checkout>')
   return [
-    `${stores()}/${name}-${key}.json`,
-    `${CACHE}/types-${name}-${key}.json`,
+    `${stores()}/${name}-${hex(text).slice(0, 16)}.json`,
+    seed(`types-${name}`, text),
   ]
 }
 
@@ -689,7 +687,7 @@ let program = async (
             [...roots, ...docs],
             Object.values(MADE).flat(),
           ) ??
-            await remembered(resolve, GRAPH, SEED)(
+            await remembered(resolve, GRAPH, graphSeed())(
               [...roots, ...docs],
               snapshot?.said,
             ))(),

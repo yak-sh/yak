@@ -16,6 +16,28 @@ export let stores = (cwd: string = system.cwd()): string =>
     createHash('sha256').update(cwd).digest('hex').slice(0, 16)
   }`
 
+/** A store every checkout on the machine starts from, one of `name`'s by
+ * `key`: checkouts whose `key` differs (another revision's configuration)
+ * each keep their own, rather than one replacing what the other wrote. One
+ * no run has written for two days goes as the next is asked for. */
+export let seed = (name: string, key: string): string => {
+  let dir = `${cache}/yak/${name}`
+  try {
+    for (let e of io.readDirSync(dir)) {
+      let at = `${dir}/${e.name}`
+      try {
+        if (Date.now() - io.statSync(at).mtime.getTime() > 2 * DAY) {
+          io.removeSync(at)
+        }
+      } catch { /* another run removed it */ }
+    }
+  } catch { /* none kept yet */ }
+  return `${dir}/${
+    createHash('sha256').update(key).digest('hex').slice(0, 16)
+  }.json`
+}
+let DAY = 86_400_000
+
 // A checkout's stores, made with its first: the stores of checkouts since
 // removed go then. Each names its checkout beside them.
 let room = (store: string) => {

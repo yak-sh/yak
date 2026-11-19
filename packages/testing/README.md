@@ -352,8 +352,9 @@ from `@yaks/testing/kept`), since checkouts differ: what deno says each module
 imports, in `graph.json` by the module's import lines (`importing`) and the
 configs and lock that resolve it (`remembered`), so a survey asks `deno info`
 only of modules whose imports changed since, a new checkout starting from the
-one any checkout wrote last (`tests-graph-v3.json`); what each file surveyed
-held, in `facts-v2.json`, and what each page's examples are, in `pages.json`
+one any checkout under the same deno.json, deno.lock, package.json and pnpm lock
+wrote last (`yak/graphs/`, `graphSeed`); what each file surveyed held, in
+`facts-v2.json`, and what each page's examples are, in `pages.json`
 (`discover`'s `store`), each by the file's inode, size and times (`byStatus`),
 so a file unchanged is not read again. What each file took to load and run in
 `tests-took.json` (`took`, `tally`), which a caller can hand `choose` as a

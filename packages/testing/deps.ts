@@ -21,7 +21,16 @@ import { type Info, modules } from '@yaks/process/modules'
 // beside it.
 import { createHash } from 'node:crypto'
 import { written } from './find.ts'
-import { append, byStatus, cache, load, put, stores, write } from './kept.ts'
+import {
+  append,
+  byStatus,
+  cache,
+  load,
+  put,
+  seed,
+  stores,
+  write,
+} from './kept.ts'
 
 export type { Info }
 
@@ -113,8 +122,30 @@ export let said: Bytes = (path) =>
 /** Where what deno said each module imports is kept, by what decides it. */
 export let GRAPH: string = `${stores()}/graph.json`
 
-/** What a checkout's graph starts from: the one any checkout wrote last. */
-export let SEED: string = `${cache}/yak/tests-graph-v3.json`
+// The configuration a whole graph is resolved under, whose change has every
+// module asked of deno again (`remembered`).
+let ROOT = [
+  'deno.json',
+  'deno.lock',
+  'package.json',
+  'node_modules/.pnpm/lock.yaml',
+]
+
+/** What a checkout's graph starts from: the one any checkout under the same
+ * root configuration wrote last. A checkout of another revision keeps its
+ * own, so checkouts of main and of a branch changing deno.json, run at once,
+ * never each find the other's and resolve every module again. */
+export let graphSeed = (cwd: string = system.cwd()): string =>
+  seed(
+    'graphs',
+    ROOT.map((f) => {
+      try {
+        return hex(io.readFileSync(`${cwd}/${f}`))
+      } catch {
+        return 'absent'
+      }
+    }).join('\n'),
+  )
 
 /** Where what each file of the checkout held, as last read, is kept by the
  * file's status (`survey`). */
@@ -485,7 +516,7 @@ type Fact = { digest: string; names: string[]; imports: string }
 export let survey = async (
   paths: string[],
   info: (roots: string[], bytes: Bytes) => Promise<Info | undefined> =
-    remembered(graph, GRAPH, SEED),
+    remembered(graph, GRAPH, graphSeed()),
   store?: string,
 ): Promise<Survey | undefined> => {
   let where = location(), { url, rel } = where
