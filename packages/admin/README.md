@@ -107,19 +107,22 @@ yak admin comp ada revoke --as admin@bot.yak.sh
 
 ## The funnel
 
-`funnel` reads yaks.app's own funnel through the query /admin/funnel shows
-(workers/yak funnel.ts): first how far strangers got, from a home page visit,
-through a connector or a build begun in the home page's box, a first sign-in and
-a first app, to coming back, and the stage most of them stop after; then each
-step people took from a time or a duration back, with its share of the step it
-follows, the sites and calls to action, and the home page's visits, clicks,
-sign-ups and checkouts by campaign and by variant. Steps crawlers, agents'
-scripts and `@bot.yak.sh` test accounts took are listed apart and are in no
-other count.
+`funnel` leads with the customer goal's number: outside people who built a first
+app, for each week from the one the window starts in, counted from the
+platform's directory (@yaks/platform/firsts). Then it reads yaks.app's own
+funnel through the query /admin/funnel shows (workers/yak funnel.ts): first how
+far strangers got, from a home page visit, through a connector or a build begun
+in the home page's box, a first sign-in and a first app, to coming back, and the
+stage most of them stop after; then each step people took from a time or a
+duration back, with its share of the step it follows, the sites and calls to
+action, and the home page's visits, clicks, sign-ups and checkouts by campaign
+and by variant. Steps crawlers, agents' scripts and `@bot.yak.sh` test accounts
+took are listed apart and are in no other count.
 
 ```sh
 yak admin funnel 2026-11-07T00:00Z --as admin
 yak admin funnel 24h --as admin
+yak admin funnel 2026-09-14T00:00Z --as admin   # first apps for each week since Sep 14
 ```
 
 ## A throwaway without a browser

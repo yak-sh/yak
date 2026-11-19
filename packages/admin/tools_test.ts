@@ -9,6 +9,7 @@ import { integrationEid } from '@yaks/connections/identity'
 import { ramVault, reveal, secretEid } from '@yaks/secrets'
 import { CallError, Interrupted } from '@yaks/tools'
 import { ADMIN } from '@yaks/platform/bots'
+import { firstsLines, weekly } from '@yaks/platform/firsts'
 import { door as trackerDoor } from '../../workers/tracker/door.ts'
 import {
   options as trackerOptions,
@@ -117,7 +118,31 @@ test("funnel reads the platform's counts from a time or a duration back", async 
   try {
     await kept('own@example.com', 'own-bearer')
     let asked: string[] = []
-    await answering((url) => {
+    // The directory as the platform's store answers each read: one outside
+    // person's first app on Nov 3, and the owner of `yak`, who is not one.
+    let ann = '2026-11-03T17:08:08.624Z'
+    let directory: Record<string, unknown[]> = {
+      '.space.slug=yak': [{ entity: { eid: 'yak' } }],
+      '.person': [
+        { entity: { eid: 'ann' }, email: { address: 'ann@example.com' } },
+        { entity: { eid: 'jeff' }, email: { address: 'jeff@example.com' } },
+      ],
+      '.member': [{
+        entity: { eid: 'm' },
+        member: { space: 'yak', person: 'jeff', role: 'owner' },
+      }],
+      '.app': [
+        { entity: { eid: 'a' }, created: { by: 'ann', at: ann } },
+        { entity: { eid: 'j' }, created: { by: 'jeff', at: ann } },
+      ],
+      '.acts_for': [],
+    }
+    await answering((url, init) => {
+      if (url.endsWith('/mcp')) {
+        let q = JSON.parse(String(init?.body)).params.arguments.q as string
+        let result = directory[q.split('&')[0]]
+        return Response.json({ result: { structuredContent: { result } } })
+      }
       let since = new URL(url).searchParams.get('since')!
       asked.push(since)
       return Response.json({
@@ -146,9 +171,12 @@ test("funnel reads the platform's counts from a time or a duration back", async 
       })
     }, async () => {
       equal(
-        body(await ask('admin_funnel', { since: '2026-11-07T00:00Z' })),
+        body(await ask('admin_funnel', { since: '2026-11-01T00:00Z' })),
         [
-          'People since 2026-11-07T00:00:00.000Z:',
+          ...firstsLines(
+            weekly([ann], '2026-11-01T00:00Z', new Date().toISOString()),
+          ),
+          'People since 2026-11-01T00:00:00.000Z:',
           '  Home page visits: 40',
           '  First sign-ins: 2 (50% of signed_in)',
           'By campaign:',
@@ -163,7 +191,7 @@ test("funnel reads the platform's counts from a time or a duration back", async 
         CallError,
       )
     })
-    equal(asked[0], '2026-11-07T00:00:00.000Z')
+    equal(asked[0], '2026-11-01T00:00:00.000Z')
     equal(Math.round((Date.now() - Date.parse(asked[1])) / 3_600_000), 24)
     equal(asked.length, 2)
   } finally {

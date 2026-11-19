@@ -20,6 +20,7 @@ import { type Account, account } from './account.ts'
 import { ADMIN } from '@yaks/platform/bots'
 import { budgetLines } from '@yaks/platform/budget'
 import { funnelLines } from '@yaks/platform/funnel'
+import { firstApps, firstsLines, weekly } from '@yaks/platform/firsts'
 import { duration } from '@yaks/tracker/errors'
 
 import { Refused } from './refusal.ts'
@@ -32,6 +33,7 @@ import {
   compNow,
   doomedIn,
   feeNow,
+  firstsNow,
   funnelNow,
   gravesIn,
   linkFor,
@@ -416,8 +418,16 @@ export let runs = (
         throw new CallError('since', `not a time or a duration: ${since}`)
       }
       let at = await acting(a)
-      let f = await funnelNow(at.bearer, from.toISOString())
-      return [said(call, funnelLines(f).join('\n'))]
+      let [f, d] = await Promise.all([
+        funnelNow(at.bearer, from.toISOString()),
+        firstsNow(at.bearer),
+      ])
+      let weeks = weekly(
+        firstApps(d).values(),
+        from.toISOString(),
+        new Date().toISOString(),
+      )
+      return [said(call, [...firstsLines(weeks), ...funnelLines(f)].join('\n'))]
     }),
 
     admin_refund: verb(async (call) => {

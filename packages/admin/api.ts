@@ -368,12 +368,32 @@ export let refund = (
  * space is answered. */
 export type { Funnel } from '@yaks/platform/funnel'
 import type { Funnel } from '@yaks/platform/funnel'
+import type { Directory } from '@yaks/platform/firsts'
 import type { Graves, Window } from '@yaks/platform/graves'
 
 export let FUNNEL = '/api/funnel'
 
 export let funnelNow = (session: string, since: string): Promise<Funnel> =>
   said(sent(apex(`${FUNNEL}?since=${encodeURIComponent(since)}`), session))
+
+/** The directory's rows outside people's first apps are counted from
+ * (@yaks/platform/firsts), read from the platform's store, which answers only
+ * a seat in the `yak` space. */
+export let firstsNow = async (session: string): Promise<Directory> => {
+  let read = (q: string) =>
+    storeQuery(session, PLATFORM_STORE, [q]) as Promise<Directory['apps']>
+  let [meta, people, members, apps, agents] = await Promise.all([
+    read('.space.slug=yak'),
+    read('.person&?email&.fields=email.address'),
+    read('.member&.fields=member.space,member.person,member.role'),
+    read(
+      '.app&?created&?installed&.fields=app.space,created.at,created.by,installed.of',
+    ),
+    read('.acts_for'),
+  ])
+  if (!meta[0]) throw new Error('the directory holds no yak space')
+  return { meta: meta[0].entity.eid, people, members, apps, agents }
+}
 
 /** The store mover's sweep door (workers/yak/sweep.ts): every store there is,
  * and one of them asked to rehearse its rules, or woken to move what it owes.
