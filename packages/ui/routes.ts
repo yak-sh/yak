@@ -126,7 +126,7 @@ export let page = async (
       })}${fragment}")`,
   )
   return `<!doctype html><html${forced}><head><meta charset="utf-8">` +
-    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">' +
     `<title>${title}</title><style>${css}</style></head>` +
     `<body>${renderToString(shell)}</body></html>`
 }

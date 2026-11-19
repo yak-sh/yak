@@ -318,6 +318,14 @@ doing now (`now`), and how many lines came before these that it was not given
 `#row-<id>`: an address naming one opens there, and scrolling while the address
 names a place outside it (a menu over it) is not the reader's.
 
+Where it scrolls in a place of its own (`pane`) rather than the page, it holds
+the page to what a person sees (`fit`): it sets `--viewport-height` on the root
+from the visual viewport, which a frame takes its height from (@yaks/ui's
+`Shell` does), and keeps the page at its top. A phone's keyboard then shortens
+the frame and the conversation's scroll area, the box sits on the keyboard, and
+the newest lines stay in view. iOS Safari needs this; elsewhere the viewport
+meta's `interactive-widget=resizes-content` does the same.
+
 Its state is `Conversation{take, away}` on `conversationAt(owner, session)`,
 emitted through `onChange` like a disclosure's. Its owner keeps the bundle and
 supplies it again; writing `away: false` takes the reader back to the newest

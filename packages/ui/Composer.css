@@ -21,8 +21,14 @@
 .Composer_Field {
   width: 100%;
   min-height: calc(var(--control-height, 2rem) * 1.5);
-  max-height: 40vh;
+  max-height: calc(var(--viewport-height, 100dvh) * .4);
   resize: none;
+}
+/* iOS zooms the page into a field whose words are under 16px. */
+@media (pointer: coarse) {
+  .Composer_Field {
+    font-size: max(1rem, 1em);
+  }
 }
 .Composer_Tools {
   display: flex;

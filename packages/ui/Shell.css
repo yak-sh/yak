@@ -8,11 +8,14 @@
    slides over the page when opened, a shade behind it.
    --floor is the paper the page lies on, the floor itself or, in
    Shell-sheet, a sheet on it. The frame paints it, and a sidebar's tab that
-   opens into the page fills with it, so the two are the one paper. */
+   opens into the page fills with it, so the two are the one paper.
+   It is as tall as what a person sees, --viewport-height where a page
+   holds it (@yaks/ux's Conversation does), so a phone's keyboard shortens
+   it and its body rather than scrolling the page. */
 .Shell {
   --floor: var(--bg);
   display: flex;
-  height: 100dvh;
+  height: var(--viewport-height, 100dvh);
   min-height: 0;
   background: var(--floor);
 }

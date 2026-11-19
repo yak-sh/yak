@@ -8,7 +8,7 @@
 .Panes {
   display: flex;
   flex: 1;
-  height: 100dvh;
+  height: var(--viewport-height, 100dvh);
   min-height: 0;
 }
 .Panes_Pane {

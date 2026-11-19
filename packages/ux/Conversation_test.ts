@@ -21,10 +21,12 @@ import {
   Fold,
   type Line,
   scrolled,
+  seen,
   shown,
   stopped,
   TAKE,
   useFold,
+  VIEWPORT,
 } from './Conversation.ts'
 import { signal } from '@preact/signals'
 import { docs } from './vocab.ts'
@@ -36,7 +38,10 @@ let lines = (n: number, from = 0): Line[] =>
   }))
 
 // A page with its pane, the conversation in it held in a page graph; `grow`
-// is the browser telling it its content changed size.
+// is the browser telling it its content changed size. It is a phone's,
+// 844px tall, its pane the frame's height but for its bar and box (44px),
+// the frame as tall as the page holds it (`VIEWPORT`); `keyboard` opens one
+// that many px tall the way iOS Safari does, the page panned up under it.
 let page = (hash = '') => {
   let { document, window, Event } = parseHTML(
     '<html><body><main id="pane"><div id="talk"></div></main>' +
@@ -50,8 +55,19 @@ let page = (hash = '') => {
   let grew: (() => void)[] = []
   // The page's window is its own: what is set on linkedom's is set on
   // globalThis, for every file after this one.
+  let visible = 844, panned = 0, pageY = 0
+  let view = Object.defineProperties(new EventTarget(), {
+    height: { get: () => visible },
+    offsetTop: { get: () => panned },
+    scale: { value: 1 },
+  })
   let win = Object.assign(new EventTarget(), {
     location: { hash },
+    visualViewport: view,
+    get scrollY() {
+      return pageY
+    },
+    scrollTo: (_x: number, y: number) => void (pageY = panned = y),
     ResizeObserver: class {
       constructor(fn: () => void) {
         grew.push(fn)
@@ -67,12 +83,16 @@ let page = (hash = '') => {
   let rows = () => [...pane.querySelectorAll('[id^=row-]')]
   let grown = 2700, y = 0
   let height = () => grown + rows().length * 100
+  let frame = () =>
+    parseFloat(document.documentElement.style.getPropertyValue(VIEWPORT)) ||
+    visible
+  let tall = () => frame() - 44
   Object.defineProperties(pane, {
-    clientHeight: { get: () => 800 },
+    clientHeight: { get: tall },
     scrollHeight: { get: height },
     scrollTop: {
       get: () => y,
-      set: (v: number) => y = Math.max(0, Math.min(v, height() - 800)),
+      set: (v: number) => y = Math.max(0, Math.min(v, height() - tall())),
     },
   })
   let element = (window as unknown as { HTMLElement: typeof HTMLElement })
@@ -118,7 +138,16 @@ let page = (hash = '') => {
     },
     press: (at: Element) => at.dispatchEvent(new Event('click')),
     grow: (by: number) => (grown += by, grew.forEach((f) => f())),
-    newest: () => pane.scrollTop == height() - 800,
+    newest: () => pane.scrollTop == height() - tall(),
+    keyboard: (px: number) => {
+      visible = 844 - px
+      pageY = panned = px
+      view.dispatchEvent(new globalThis.Event('scroll'))
+      view.dispatchEvent(new globalThis.Event('resize'))
+      grew.forEach((f) => f())
+    },
+    frame,
+    pageY: () => pageY,
     rows: () => rows().map((r) => r.id),
     [Symbol.dispose]: () => {
       render(null, root)
@@ -160,6 +189,40 @@ test('it stays at the newest as lines arrive, until the reader scrolls up', () =
   equal(p.state().away, false)
   p.grow(300)
   equal(p.newest(), true)
+})
+
+test('the page is held to what a person sees, at its own scale, and back at its top unless pinched', () => {
+  equal(seen({ height: 508, scale: 1, offsetTop: 336 }, 0), {
+    height: 508,
+    top: true,
+  })
+  equal(seen({ height: 844, scale: 1, offsetTop: 0 }, 0), {
+    height: 844,
+    top: false,
+  })
+  equal(seen({ height: 254, scale: 2, offsetTop: 120 }, 120), {
+    height: 508,
+    top: false,
+  })
+})
+
+test('a keyboard opening shortens its pane at the newest, and the page stays at its top', () => {
+  using p = page()
+  p.draw(lines(20))
+  equal([p.frame(), p.newest()], [844, true])
+  p.keyboard(336)
+  equal([p.frame(), p.pane.clientHeight, p.pageY()], [508, 464, 0])
+  equal([p.newest(), p.state().away], [true, false])
+  p.keyboard(0)
+  equal([p.frame(), p.newest()], [844, true])
+})
+
+test('a reader scrolled up stays where they were as the keyboard opens', () => {
+  using p = page()
+  p.draw(lines(20))
+  p.scroll(900)
+  p.keyboard(336)
+  equal([p.pane.scrollTop, p.state().away, p.pageY()], [900, true, 0])
 })
 
 test('told it is back at the newest, it goes there', () => {

@@ -16,15 +16,16 @@ import { waitingBadge } from './sidebar.ts'
 /** The layout (pages.ts `shell`) of a page drawn in the frame. */
 export let FRAMED = 'Framed'
 
-/** What opens the side where it is folded away: a phone's Menu, wearing
- * what waits in the side where it has a count, since the side's own is out
- * of sight behind it. */
+/** What opens the side where it is folded away: a phone's Menu, its icon
+ * shown and its word heard, so the bar's title has the room, wearing what
+ * waits in the side where it has a count, since the side's own is out of
+ * sight behind it. */
 let menu = (waiting?: number) =>
   h(
     Button,
     { class: 'Frame_Menu', href: '#menu', 'data-pane': '' },
     h(Icon, { of: icons.menu }),
-    'Menu',
+    h('span', { class: 'Frame_MenuWord' }, 'Menu'),
     waiting != null ? waitingBadge(waiting) : null,
   )
 

@@ -15,6 +15,11 @@
  * and emits them, lit while they are held over it; the owner holds them and
  * draws them in its slots.
  *
+ * Where it scrolls in a place of its own rather than the page, it holds the
+ * page to what a person sees (`fit`): a phone's keyboard shortens the page,
+ * so its own scroll area gets shorter and the box sits on the keyboard, and
+ * the page itself never scrolls.
+ *
  * Whether each fold in a line is open is `Disclosure{open}` in the same page
  * graph, on the page entity of the line and the fold's place in it (`Folds`,
  * `useFold`), so a line drawn again keeps its folds as the reader left them
@@ -163,6 +168,10 @@ export let Fold = (
 
 export { Disclosure, DisclosureMark }
 
+// What scrolls the page.
+let paged = (doc: Document): HTMLElement =>
+  (doc.scrollingElement ?? doc.documentElement) as HTMLElement
+
 // The nearest place around `at` that scrolls, or the page.
 let scroller = (at: HTMLElement): HTMLElement => {
   let win = at.ownerDocument.defaultView
@@ -170,8 +179,49 @@ let scroller = (at: HTMLElement): HTMLElement => {
     let y = win?.getComputedStyle?.(p).overflowY
     if (y == 'auto' || y == 'scroll') return p
   }
-  let doc = at.ownerDocument
-  return (doc.scrollingElement ?? doc.documentElement) as HTMLElement
+  return paged(at.ownerDocument)
+}
+
+/** The visual viewport, as much of it as `seen` reads. */
+export type Seen = { height: number; scale: number; offsetTop: number }
+
+/** What the page is held to, given the visual viewport and how far the page
+ * is scrolled: its height in px, which the keyboard shortens, at the page's
+ * own scale; and whether the page goes back to its top, which it does unless
+ * a person pinched it larger, when where it is shown is theirs. */
+export let seen = (
+  view: Seen,
+  scrollY: number,
+): { height: number; top: boolean } => ({
+  height: Math.round(view.height * view.scale),
+  top: view.scale == 1 && (scrollY > 0 || view.offsetTop > 0),
+})
+
+/** The property a page's frame takes its height from, set on its root:
+ * `height: var(--viewport-height, 100dvh)`. */
+export let VIEWPORT = '--viewport-height'
+
+/** Holds `doc`'s page to what a person sees as it changes (`seen`): a
+ * keyboard opening shortens it rather than scrolling it, which iOS Safari
+ * does whatever the viewport meta says. Returns what lets it go. */
+export let fit = (doc: Document): () => void => {
+  let win = doc.defaultView
+  let view = win?.visualViewport
+  if (!win || !view) return () => {}
+  let root = doc.documentElement
+  let held = () => {
+    let { height, top } = seen(view, win.scrollY ?? 0)
+    root.style.setProperty(VIEWPORT, `${height}px`)
+    if (top) win.scrollTo(0, 0)
+  }
+  held()
+  view.addEventListener('resize', held)
+  view.addEventListener('scroll', held)
+  return () => {
+    view.removeEventListener('resize', held)
+    view.removeEventListener('scroll', held)
+    root.style.removeProperty(VIEWPORT)
+  }
 }
 
 /** What a box's owner gives it. Any other prop goes on its form, which
@@ -396,6 +446,7 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
     if (!el || !win) return
     let p = pane?.() ?? scroller(el)
     at.current.pane = p
+    let unfit = p == paged(el.ownerDocument) ? () => {} : fit(el.ownerDocument)
     let near = () =>
       !p.clientHeight || p.clientHeight + p.scrollTop >= p.scrollHeight - NEAR
     // What the address names: a line of it, where it opens, or a place
@@ -474,6 +525,7 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
       win.removeEventListener('resize', grown)
       win.removeEventListener('hashchange', hash)
       sizes?.disconnect()
+      unfit()
     }
   }, [])
   // Told it is back at the newest (its owner's "Newest"), it goes there, and
