@@ -9,12 +9,13 @@
 //            command: '/srv/repo/packages/spawn/standin.ts'}
 //
 // The model it is asked for names the recording, so the provider serves one
-// model per ending: `clean`, `limit`, `refusal`, `crash`. A model it has no
-// recording of ends cleanly.
+// model per ending: `clean`, `limit`, `hours`, `refusal`, `crash`. A model it
+// has no recording of ends cleanly.
 //
 // The recordings are written to the shapes @yaks/session's claude reader
 // reads; the texts of `limit` are those of the runs of 2026-11-10 (bugs
-// dbc37007 and f9b77269), whose own logs were not kept.
+// dbc37007 and f9b77269), whose own logs were not kept, and those of `hours`
+// the runs of 2026-11-19 (T-1364).
 
 /** How a recorded run went: what it printed, and the code it exited with. */
 /** What a stand-in run prints and ends with; `oom`, the processes a memory
@@ -41,6 +42,10 @@ let result = (refused?: string) => ({
 
 /** What the plan said when it ended the runs of 2026-11-10. */
 export let LIMIT = "You've reached your Fable limit."
+
+/** What the plan said when its five hours ended the runs of 2026-11-19. */
+export let HOURS =
+  "You've hit your 5-hour limit · resets 3:50pm (America/Detroit)"
 
 /** What Codex's content filter said when it ended a run of 2026-11-15. */
 export let FILTERED =
@@ -70,6 +75,23 @@ export let endings: Record<string, Recording> = {
       result(LIMIT),
     ],
     err: POLICY,
+    code: 1,
+  },
+  // The plan's five hours refused the turn, the week far from spent.
+  hours: {
+    lines: [
+      {
+        type: 'rate_limit_event',
+        rate_limit_info: {
+          unifiedWindows: {
+            five_hour: { utilization: 1, resetsAt: 1795549800 },
+            seven_day: { utilization: 0.1, resetsAt: 1795885200 },
+          },
+        },
+      },
+      say(HOURS, { error: 'rate_limit' }),
+      result(HOURS),
+    ],
     code: 1,
   },
   // The provider's content filter refused the turn: the refusal code a

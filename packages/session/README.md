@@ -802,6 +802,8 @@ an `account{home, provider}` row (@yaks/model), and each transcript keeps its
 account: a Codex rollout's plan readings are that account's `rate_limit` rows,
 as are those a `claude -p` run reports in its stream (`rate_limit_event`), and
 @yaks/spend bills a request to the account whose directory holds its transcript.
+`moveThread(from, to, thread)` moves a thread's transcript into another
+account's, at the same place, so the CLI signed in there carries it on.
 
 ## Identity and HTTP attribution
 

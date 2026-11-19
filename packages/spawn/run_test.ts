@@ -197,6 +197,89 @@ test('a first run signs in with the offered account further under its weekly pac
   })
 })
 
+test('a first run passes over an account whose five hours are spent', async () => {
+  let { g } = tracked()
+  let { teams } = await accounts(g)
+  await g.apply([{
+    entity: { eid: 'L2' },
+    rate_limit: {
+      provider: identityEid('provider', ['claude']),
+      account: teams,
+      window: 300,
+      used: 100,
+      resets: new Date(Date.now() + 3600_000).toISOString(),
+    },
+  }])
+  await g.apply(asking('S1', 'E1', 'fix it'))
+  let env = await started(g, 'S1')
+  assertEquals([env.HOME, env.CLAUDE_CONFIG_DIR], ['/u', undefined])
+})
+
+test("a run its five hours end carries on in another account with room, its thread and the session's account moved there", async () => {
+  let { g } = tracked()
+  let dir = Deno.makeTempDirSync({ prefix: 'spawn-' })
+  let provider = identityEid('provider', ['claude'])
+  let [bob, jeff] = ['.claude-teams-bob', '.claude-teams-jeff']
+    .map((name) => `${dir}/${name}`)
+  let thread = (home: string) => `${home}/projects/-w/S1.jsonl`
+  Deno.mkdirSync(`${bob}/projects/-w`, { recursive: true })
+  Deno.writeTextFileSync(thread(bob), '{}\n')
+  let runs: { args: string[]; env: Record<string, string> }[] = []
+  try {
+    await g.apply([
+      ...standing('S1', 'E1', 'hours'),
+      { entity: { eid: provider }, provider: { name: 'claude' } },
+      ...[bob, jeff].map((home) => ({
+        entity: { eid: accountEid(home) },
+        account: { home, provider, offered: true },
+      })),
+      {
+        entity: { eid: 'L1' },
+        rate_limit: {
+          provider,
+          account: accountEid(jeff),
+          window: 10080,
+          used: 50,
+        },
+      },
+    ])
+    await start(g, 'S1', {
+      cwd: dir,
+      dir,
+      poll: 5,
+      env: { HOME: dir },
+      launch: (store, spec, o) => {
+        runs.push({ args: spec.args ?? [], env: spec.env ?? {} })
+        return playing(store, spec, o)
+      },
+    })
+    await until(
+      async () =>
+        runs.length == 2 &&
+        await Deno.stat(`${dir}/S1.out`).then(() => false, () => true),
+      'the run to carry on, and end',
+    )
+    assertEquals(
+      runs.map((r) => [r.env.CLAUDE_CONFIG_DIR, r.args.includes('--resume')]),
+      [[bob, false], [jeff, true]],
+    )
+    let there = (path: string) => Deno.stat(path).then(() => true, () => false)
+    assertEquals([await there(thread(bob)), await there(thread(jeff))], [
+      false,
+      true,
+    ])
+    let [request] = await g.get(['E1'])
+    assertEquals(comp(request, 'using').account, accountEid(jeff))
+    // Its second run's five hours ended too, and the first account has none
+    // left: it ends there.
+    let ending = (await entries(g)).filter((e) => e.stop)
+      .map((e) => comp(e, 'failed')?.reason)
+    assertEquals(ending, ['Plan limit reached', 'Plan limit reached'])
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
 test('a request naming its account runs on it, and the default account on no variable', async () => {
   let { g } = tracked()
   let { own } = await accounts(g)

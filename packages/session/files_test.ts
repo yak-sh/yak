@@ -1,7 +1,7 @@
 // Every account on a machine is found: the environment's, the ones listed,
 // and each `~/.claude*` and `~/.codex*` holding transcripts.
 import { equal, test } from '@yaks/testing'
-import { held, homes } from './files.ts'
+import { held, homes, moveThread } from './files.ts'
 import { accountEid } from '@yaks/model'
 
 let at = Deno.makeTempDirSync()
@@ -68,4 +68,15 @@ test('each transcript keeps its account', async () => {
       ['s1', 'claude', accountEid(`${h}/.claude-work`)],
     ],
   )
+})
+
+test("a thread moves to another account's transcripts, at the same place", async () => {
+  let from = { runner: 'claude' as const, dir: `${h}/.claude-work` }
+  equal(await moveThread(from, `${h}/.claude-moved`, 's1'), true)
+  equal(
+    (await held([{ runner: 'claude', dir: `${h}/.claude-moved` }]))
+      .map((f) => [f.id, f.path.slice(at.length)]),
+    [['s1', '/h/.claude-moved/projects/-p/s1.jsonl']],
+  )
+  equal(await moveThread(from, `${h}/.claude-moved`, 's1'), false)
 })

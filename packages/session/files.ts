@@ -119,6 +119,31 @@ export let held = async (from: Home[]): Promise<Found[]> =>
     return found.map((f) => ({ ...f, account }))
   }))).flat()
 
+/**
+ * Move a thread's transcript from one account of a CLI to another, at the
+ * same place under the other's transcripts, so the CLI signed in there
+ * carries the thread on (`claude --resume`, `codex resume`). Its subagents'
+ * transcripts stay where they were read from. Whether it was found to move.
+ *
+ * ```ts
+ * import { moveThread } from './files.ts'
+ *
+ * // await moveThread({ runner: 'claude', dir: '~/.claude-a' }, '~/.claude-b', id)
+ * ```
+ */
+export let moveThread = async (
+  from: Home,
+  to: string,
+  thread: string,
+): Promise<boolean> => {
+  let [found] = (await held([from])).filter((f) => f.id == thread && !f.parent)
+  if (!found) return false
+  let path = to + found.path.slice(from.dir.length)
+  await fs.mkdir(path.slice(0, path.lastIndexOf('/')), { recursive: true })
+  await fs.rename(found.path, path)
+  return true
+}
+
 /** What a compressed transcript is at a moment: its size and when it was
  * written. A read that reached its end records this as `transcript.finished`. */
 export let versionOf = (

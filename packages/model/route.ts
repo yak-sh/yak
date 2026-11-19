@@ -145,10 +145,12 @@ export let route = (asked: Asked): Routed | undefined => {
  * for the reason. */
 export type Account = { account: Eid; name: string }
 
-/** The account chosen and, in one line, why. */
-export type Freest = { account: Eid; why: string }
+/** The account chosen and, in one line, why; `full` where its plan has no
+ * room, as every account's had none. */
+export type Freest = { account: Eid; why: string; full?: true }
 
 const WEEK = 10080
+const HOURS = 300
 
 /** A window's usage against its pace, in points of the window. */
 export type Pace = {
@@ -197,12 +199,20 @@ export let pace = (
 // Fable is half the week, and a Fable reset gives its share back.
 const CAP = 0.5
 
+// Five hours are spent from this share on: an account whose five hours read
+// this much used has no room for a run until they reset. The week is its
+// pace's to weigh.
+const FULL = 90
+
 /**
  * The account further under its weekly pace ({@link pace}): the most points
  * between the share of its week gone and the share used, less what a reset of
  * its limit on one model gives back, half that limit's reading. A week that
  * has reset since its reading is unused, and an account nothing has read yet
- * goes first, so its first run reads it. Nothing where there are no accounts.
+ * goes first, so its first run reads it. An account whose five hours are
+ * spent or nearly so goes after every account with room, and the answer says
+ * `full` where none has any. Nothing where
+ * there are no accounts.
  *
  * ```ts
  * import { freest } from './route.ts'
@@ -222,6 +232,16 @@ const CAP = 0.5
  * equal(freest({ accounts, readings: [week('a', 20), week('b', 50), fable], now })?.account, 'b')
  * equal(freest({ accounts, readings: [week('a', 20)], now })?.account, 'b')
  * equal(freest({ accounts, readings: [week('a', 20), week('b', 90, '2026-11-13T00:00:00Z')], now })?.account, 'b')
+ * // Five hours used up put an account last, until they reset.
+ * let hours = (account: string, used: number, resets = '2026-11-14T02:00:00Z') =>
+ *   ({ provider: 'claude', account, window: 300, used, resets })
+ * equal(freest({ accounts, readings: [week('a', 20), hours('a', 95), week('b', 50)], now }), {
+ *   account: 'b',
+ *   why: '.claude-teams is 7 points over its weekly pace, ' +
+ *     '.claude has used 95% of its five hours',
+ * })
+ * equal(freest({ accounts, readings: [hours('a', 100, '2026-11-13T23:00:00Z')], now })?.account, 'a')
+ * equal(freest({ accounts: accounts.slice(0, 1), readings: [hours('a', 100)], now })?.full, true)
  * equal(freest({ accounts: [], readings: [], now }), undefined)
  * ```
  */
@@ -229,32 +249,47 @@ export let freest = (
   asked: { accounts: Account[]; readings: Reading[]; now: number },
 ): Freest | undefined => {
   let { readings, now } = asked
-  // An account's newest weekly reading, of the plan or of its limit on one model.
-  let newest = (a: Account, capped: boolean) =>
+  let current = (r: Reading) => !(r.resets && Date.parse(r.resets) <= now)
+  // An account's newest reading of a window, of the plan or of its limit on
+  // one model.
+  let newest = (a: Account, window: number, capped = false) =>
     readings.filter((r) =>
-      r.account == a.account && r.window == WEEK && !r.model == !capped
+      r.account == a.account && r.window == window && !r.model == !capped
     ).sort((x, y) => (y.at ?? '').localeCompare(x.at ?? ''))[0]
+  // Its five hours' reading, where they are spent.
+  let spent = (a: Account) => {
+    let r = newest(a, HOURS)
+    return r && current(r) && r.used >= FULL ? r : undefined
+  }
   // Points under pace, and what the reason says where it is not a number.
   let weigh = (a: Account): { under: number; fresh?: string } => {
-    let r = newest(a, false)
+    let r = newest(a, WEEK)
     if (!r) return { under: Infinity, fresh: 'has no reading of its week' }
-    if (r.resets && Date.parse(r.resets) <= now) {
-      return { under: Infinity, fresh: 'has a fresh week' }
-    }
-    let cap = newest(a, true)
-    let running = cap && !(cap.resets && Date.parse(cap.resets) <= now)
+    if (!current(r)) return { under: Infinity, fresh: 'has a fresh week' }
+    let cap = newest(a, WEEK, true)
+    let running = cap && current(cap)
     return {
       under: Math.round(pace(r, now, running ? cap.used * CAP : 0).under),
     }
   }
-  let weighed = asked.accounts.map((a) => ({ ...a, ...weigh(a) }))
-    .sort((x, y) => y.under - x.under)
+  let weighed = asked.accounts.map((a) => ({
+    ...a,
+    ...weigh(a),
+    spent: spent(a),
+  }))
+    .sort((x, y) => Number(!!x.spent) - Number(!!y.spent) || y.under - x.under)
   if (!weighed.length) return
   let said = (w: typeof weighed[0]) =>
     `${w.name} ${
-      w.fresh ??
-        `is ${Math.abs(w.under)} points ${w.under < 0 ? 'over' : 'under'} ` +
-          'its weekly pace'
+      w.spent
+        ? `has used ${w.spent.used}% of its ${span(w.spent.window)}`
+        : w.fresh ??
+          `is ${Math.abs(w.under)} points ${w.under < 0 ? 'over' : 'under'} ` +
+            'its weekly pace'
     }`
-  return { account: weighed[0].account, why: weighed.map(said).join(', ') }
+  return {
+    account: weighed[0].account,
+    why: weighed.map(said).join(', '),
+    ...weighed[0].spent ? { full: true as const } : {},
+  }
 }

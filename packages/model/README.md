@@ -396,8 +396,10 @@ which of a provider's accounts a run signs in with: the one further under its
 weekly pace, the week's reading less half its limit on one model (Claude's cap
 on Fable is half the week, and a Fable reset gives that share back). A week that
 has reset since its reading is unused, and an account nothing has read yet goes
-first. It answers `{account, why}`. `bin/pace.ts` prints the same pace for
-`claude-budget`, so the two agree.
+first. An account whose five hours read 90% used or more, and have not reset,
+goes after every account with room. It answers `{account, why}`, and `full`
+where even the chosen account has no room. `bin/pace.ts` prints the same pace
+for `claude-budget`, so the two agree.
 
 In a graph the offerings are data: a **routes** edge from the row whose `using`
 is the default to a `serves` edge, `routes{pinned}` on the one that is pinned,

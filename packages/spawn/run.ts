@@ -75,7 +75,7 @@ import {
   unanswered,
 } from '@yaks/session'
 import { pull, recount, type Tail, tail } from '@yaks/session/tail'
-import { home as signedIn } from '@yaks/session/files'
+import { home as signedIn, moveThread } from '@yaks/session/files'
 import { accountEid, signingIn } from '@yaks/model'
 import { freest, type Reading } from '@yaks/model/route'
 import { kept } from '@yaks/session/service'
@@ -420,10 +420,23 @@ export let accountFor = async (
   now: number = Date.now(),
 ): Promise<Account | undefined> => {
   if (job.account || !adapter.account) return job.account
-  let provider = identityEid('provider', [adapter.account])
+  let chosen = await offered(g, adapter.account, now)
+  return chosen && { eid: chosen.eid, home: chosen.home }
+}
+
+// The offered account of a CLI's provider a run is best given, all but
+// `other`'s (@yaks/model `freest`), and whether its plan is `full`.
+let offered = async (
+  g: Graph,
+  runner: NonNullable<Adapter['account']>,
+  now: number,
+  other?: string,
+): Promise<(Account & { full?: true }) | undefined> => {
+  let provider = identityEid('provider', [runner])
   let rows = (await g.read('.account *')).filter((b) => {
     let a = comp(b, 'account')
-    return a?.offered === true && a.provider == provider && a.home
+    return a?.offered === true && a.provider == provider && a.home &&
+      b.entity.eid != other
   })
   let homes = new Map(
     rows.map((b) => [b.entity.eid, String(comp(b, 'account')!.home)]),
@@ -438,7 +451,59 @@ export let accountFor = async (
     ),
     now,
   })
-  return chosen && { eid: chosen.account, home: homes.get(chosen.account)! }
+  return chosen && {
+    eid: chosen.account,
+    home: homes.get(chosen.account)!,
+    ...chosen.full ? { full: chosen.full } : {},
+  }
+}
+
+// What a run its plan's limit ended is told as it carries on elsewhere.
+const MOVED = "Your account's plan limit ended your last turn, and you now " +
+  'run on another account. Carry on where you left off.'
+
+// A run its plan's limit ended carries on in another offered account of its
+// CLI with room (`offered`), on its thread, moved to that account
+// (@yaks/session `moveThread`), and the session's account moves with it: its
+// request names the new one, and so does the request that tells it to carry
+// on. Nothing moves for a run that plays a recording, nor where no other
+// account has room or its thread is not where its account keeps threads.
+// Whether it moved.
+let moveOn = async (
+  g: Graph,
+  session: string,
+  o: Opts,
+  now = Date.now(),
+): Promise<boolean> => {
+  let job = await asked(g, session).catch(() => null)
+  let adapter = adapterOf(job, o)
+  let runner = adapter?.account
+  if (!job || job.recorded || !adapter || !runner) return false
+  let env = runEnv(adapter, job, o)
+  let from = signedIn(runner, { get: (name) => env[name] })
+  let to = from && await offered(g, runner, now, accountEid(from))
+  if (!from || !to || to.full) return false
+  let thread = comp(await one(g, session), SESSION)?.id
+  if (
+    thread != null &&
+    !await moveThread({ runner, dir: from }, to.home, String(thread))
+  ) return false
+  let [first, last] = await Promise.all([
+    firstRequest(g, session),
+    latestRequest(g, session),
+  ])
+  await g.apply([
+    { entity: { eid: first!.entity.eid }, using: { account: to.eid } },
+    {
+      entity: {
+        eid: derivedEid(`spawn moving ${session} ${last?.entity.eid ?? ''}`),
+      },
+      entry: { session },
+      using: { ...comp(first, 'using'), account: to.eid },
+      content: { body: MOVED },
+    },
+  ], { trusted: true })
+  return true
 }
 
 // The environment a run starts in: the server's own, the adapter's
@@ -844,8 +909,10 @@ export let finish = async (
   o: Opts = {},
   through?: string,
 ): Promise<boolean | undefined> => {
-  await ended(g, session, o, through)
+  let limited = await ended(g, session, o, through)
   try {
+    // A run carried on in another account goes on as one that ended well.
+    if (limited && await moveOn(g, session, o)) return true
     let well = cleanEnd(await ran(g, session))
     if (well) await rouse(g, session)
     await complete(g, session)
@@ -1036,19 +1103,20 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
 // running forever. So the ending is written down — the process ending is
 // observed, not inferred from the conversation, which is the difference
 // between evidence and a guess. A run said it ended when the request it
-// answered has a stop after it.
+// answered has a stop after it. Whether it was its plan's limit that ended
+// it, unasked.
 let ended = async (
   g: Graph,
   session: string,
   o: Opts,
   through?: string,
-): Promise<void> => {
+): Promise<boolean> => {
   let [stop, request] = await Promise.all([
     receiptOf(g, session),
     through ? one(g, through) : latestRequest(g, session),
   ])
   let seq = (b?: Bundle) => Number(comp(b, 'entry')?.seq ?? 0)
-  if (stop && seq(stop) > seq(request)) return
+  if (stop && seq(stop) > seq(request)) return false
   let row = await ran(g, session)
   let code = comp(row, EXIT)?.code as number | null | undefined
   // A shell or service manager can ask the provider to stop without writing
@@ -1099,6 +1167,7 @@ let ended = async (
   ) {
     failure(o, session, 'run ended', `a spawned run ended: ${why}`)
   }
+  return !stopped && no == DECLINED.rate_limit
 }
 
 // The refusals that are the provider declining a run, not a fault of it: its

@@ -127,15 +127,17 @@ export let standing = (
 }
 
 /** A `launch` that plays the stand-in where a machine would run it: what the
- * program prints for the command line it was given is left in the files a
- * wrapper keeps, and the row says it exited with its code. Another command is
- * refused, as a machine without it would. */
+ * program prints for the command line it was given is added to the files a
+ * wrapper keeps, as the wrapper adds to a parked run's, and the row says it
+ * exited with its code. Another command is refused, as a machine without it
+ * would. */
 export let playing: typeof launch = async (store, spec, o = {}) => {
   if (spec.command != STANDIN.command) throw new Error(`no ${spec.command}`)
   let eid = String(o.eid)
   let run = played(spec.args ?? [])
-  await Deno.writeTextFile(`${o.dir}/${eid}.out`, run.out)
-  await Deno.writeTextFile(`${o.dir}/${eid}.err`, run.err)
+  let append = { append: true }
+  await Deno.writeTextFile(`${o.dir}/${eid}.out`, run.out, append)
+  await Deno.writeTextFile(`${o.dir}/${eid}.err`, run.err, append)
   await store.apply([{
     entity: { eid },
     process: { pid: 1, command: spec.command },

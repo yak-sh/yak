@@ -78,11 +78,16 @@ that names none is given, on its first run, the account of its CLI's provider
 marked `account{offered}` that is further under its weekly pace, as its
 `rate_limit` rows read and leaving out the Fable share a reset gives back, as
 `claude-budget` does (`accountFor`, @yaks/model `freest`); an account nothing
-has read yet goes first. The choice is recorded on the request, so every later
-run of the session carries on its thread in the same account. The run is started
-with that account's variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`), and without it
-for the CLI's default directory, which Claude Code reads its `~/.claude.json`
-beside. A provider that offers no account runs on the server's own environment.
+has read yet goes first, and one whose five hours are spent, or nearly, goes
+last. The choice is recorded on the request, so every later run of the session
+carries on its thread in the same account. A run its plan's limit ends moves
+instead, where another offered account has room: its thread moves to that
+account's transcripts (@yaks/session `moveThread`), the request names the new
+account, and a request telling it to carry on starts its next run there, on the
+same thread and in the same checkout. The run is started with that account's
+variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`), and without it for the CLI's
+default directory, which Claude Code reads its `~/.claude.json` beside. A
+provider that offers no account runs on the server's own environment.
 
 The process is stored on the session entity. It runs through `@yaks/process` in
 a detached systemd user scope, so it can outlive the process that opened the
