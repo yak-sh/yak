@@ -416,10 +416,16 @@ app_deploy:
     to use; optional (or none) derives severity from what changed. Open pages
     are notified after the release and never reload on their own. It creates
     the components the app's vocab.json declares ({{vocab}}): a component is
-    a named group of typed fields on a stored record, an entity. A component
-    name the platform already uses refuses the whole manifest before anything
-    is created; a component or property the manifest no longer names that
-    holds nothing is dropped. It reports the properties added, and those
+    a named group of typed fields on a stored record, an entity. The
+    platform's own component names are reserved, since every app's store
+    already holds those components and a name means one thing in every store:
+    doc, comment, email, event, cost, error, deploy, file and the rest the
+    guide lists under "Reserved component names". Declaring one refuses the
+    whole manifest before anything is created, naming every reserved word. A
+    component another app in the space declares keeps that app's property
+    types: declare its properties with the same types, or new names. A
+    component or property the manifest no longer names that holds nothing is
+    dropped. It reports the properties added, and those
     still holding values the manifest no longer names: a property with values
     is never renamed or retyped, so a new name is added beside the old one,
     which keeps its rows. A seed.json beside index.html (a list of bundles,
@@ -616,7 +622,10 @@ app_set:
     ["/recipes/*"] sends everything under /recipes/ to the front page; an empty
     list puts every path back. gallery: true submits a published app to
     https://yaks.app/gallery, the public page of yaks apps, for review by the
-    platform's owner; false withdraws it at once. review: false with gallery:
+    platform's owner; false withdraws it at once. Review needs a picture for
+    the app's card: set screenshot first, in this call or an earlier one, or
+    give its index.html an og:image; gallery: true without one is refused.
+    review: false with gallery:
     true lists it without review: only the platform admin may, and only when the
     platform's owner asks. screenshot takes the eid of an image uploaded to this
     app through /api/blob for its gallery and homepage cards, without
@@ -999,7 +1008,11 @@ app_publish:
     nothing. Nobody who installed it moves to the new version until they
     call app_update. Only the space owner may publish. gallery: true also
     submits it to be shown on https://yaks.app/gallery, a public page of
-    what people have made. That is separate from publishing. It is not
+    what people have made. That is separate from publishing. Gallery review
+    needs a picture for the app's card, so give it one first: upload an image
+    to the app's /api/blob door and pass the returned eid to
+    app_set(screenshot: …), or give its index.html an og:image; gallery: true
+    without one is refused. It is not
     listed at once; an agent reviews its code first, unless it is one of the
     platform's own, then the platform's owner reviews the submission and
     decides, and the app is published either way. review: false lists it at once

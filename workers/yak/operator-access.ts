@@ -274,7 +274,9 @@ export let mayWrite = async (store: Store, who: Owner, bundles: Bundle[]) => {
     throw new Denied(
       'Only your own drafts, and the archive marks on the lines of your own ' +
         'conversations and the walkthrough marks on them, are yours to write ' +
-        'here.',
+        'here. The Operator writes the rest: ask it with operator_chat, or ' +
+        'use memory_save, task_new or goal_new; graph_apply without self ' +
+        'writes to the apps.',
     )
   }
 }

@@ -304,6 +304,11 @@ test('a manifest is refused in the words that fix it', () => {
     Error,
     'comment, email are components the platform already declares',
   )
+  // Why, and every reserved name, so the next pick is free in one deploy.
+  let reason = assertThrows(() => unsaid(appDoc(says({ cost: {} }))), Error)
+    .message
+  assertStringIncludes(reason, 'a name means the same thing in every store')
+  for (let n of reserved()) assertStringIncludes(reason, ` ${n} `)
   // A word every app's store has is offered as it is, by its properties.
   assertThrows(
     () => unsaid(appDoc(says({ event: {}, tool_refusal: {} }))),
@@ -490,6 +495,8 @@ test('a word the space already has is a use, not a home', () => {
   ).message
   assertStringIncludes(why, 'book.pages is text here and number in')
   assertStringIncludes(why, 'reading-list, where book lives')
+  // It says what works: the home's type, or a name of its own.
+  assertStringIncludes(why, 'so declare pages as number as reading-list does')
 
   // A union is the same type whatever order it lists its members in.
   let tagged = {
@@ -539,7 +546,8 @@ test('a property takes a new type only while it holds nothing', () => {
   assertEquals(r.doc.$defs!.fight.properties!.dealt, { type: 'array' })
   assertStringIncludes(
     assertThrows(() => grew(was, next), Error).message,
-    'fight.dealt is already text',
+    'fight.dealt is already text — a property keeps the type its rows were ' +
+      'written under, so declare it as text again',
   )
   // The same union, listed in another order, is no change at all.
   let union = (type: string[]) => says({ dish: { size: { type } } })

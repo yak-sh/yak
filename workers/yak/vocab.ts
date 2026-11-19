@@ -293,7 +293,9 @@ export let grew = (
         'arguments',
         `vocab.json: ${name}.${prop} is already ${
           wordOf(had)
-        } — a property keeps the type its rows were written under`,
+        } — a property keeps the type its rows were written under, so ` +
+          `declare it as ${wordOf(had)} again, or give the new type a ` +
+          'property name of its own beside it',
       )
     }
   })
@@ -475,7 +477,9 @@ export let homed = (next: VocabDoc, homes: Homes) => {
           `vocab.json: ${name}.${prop} is ${wordOf(s)} here and ${
             wordOf(had)
           } in ${home.at}, where ${name} lives — a property keeps the type its ` +
-            'rows were written under',
+            `rows were written under, so declare ${prop} as ${
+              wordOf(had)
+            } as ${home.at} does, or give this one a property name of its own`,
         )
       }
       if (!had) add[prop] = s
@@ -558,8 +562,8 @@ export let unwritten = (doc: VocabDoc, file = 'vocab.json'): string[] => {
  * manifest refused one name at a time is probed one deploy at a time, and every
  * probe that got through left a component behind for good (C-32624 item 1).
  * The sentence is the one the guide prints under "Reserved component names",
- * and it says where the whole list is, because the agent reading it has no
- * other source.
+ * and it says why and names every reserved word, because the agent reading it
+ * picks its next name from this answer alone.
  *
  * `held` is what the app holds already ({@link held}), and a word it holds stays
  * the app's: the list moves whenever the platform's vocabularies do, and an app
@@ -606,7 +610,10 @@ export let unsaid = (
             had.length == 1 ? 'it' : 'them'
           }, leaving ${had.length == 1 ? 'it' : 'them'} out of ${file}`
           : '') +
-        `; the whole list is in the guide under "Reserved component names" (${GUIDE})`,
+        ". Every app's store already holds the platform's components, so " +
+        'a name means the same thing in every store and no app can give it ' +
+        `another shape. The reserved names: ${reserved().join(' ')} (the ` +
+        `guide's "Reserved component names", ${GUIDE})`,
     )
   }
   return doc

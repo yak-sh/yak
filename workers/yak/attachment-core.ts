@@ -25,7 +25,11 @@ let SELF_APPLY = {
   type: 'boolean',
   description:
     'Write bundles to your Operator conversations in this space instead of ' +
-    'the apps: a walkthrough mark on one of yours.',
+    'the apps. Only three things there are yours to write: your own drafts, ' +
+    'the archive mark on a line of one of your conversations, and the ' +
+    'walkthrough mark on one of them. The Operator writes the rest: ask it ' +
+    'with operator_chat; memory_save, task_new and goal_new write its ' +
+    'memories, tasks and goals.',
 }
 
 let APP = {
