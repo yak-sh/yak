@@ -6,7 +6,7 @@ import { RELAY_ENTITIES } from './names.ts'
 import { PERSON_COMMANDS } from './person-commands.ts'
 import { HOOK_WAITS } from './hook-waits.ts'
 import { OPERATION_COMMANDS } from './operation-commands.ts'
-import { collector } from './collector.ts'
+import { collector, denoWorker } from './collector.ts'
 
 let deno = (
   name: string,
@@ -44,9 +44,7 @@ let registration = (
   baseline: `bench/${name}.baseline.json`,
   suite: (args = [], root, selected) => {
     let worker = collector(
-      deno
-        ? ['bench/deno-worker.ts', file]
-        : ['bench/standalone-worker.ts', file, ...args],
+      deno ? denoWorker(file) : ['bench/standalone-worker.ts', file, ...args],
       root,
       selected ? { BENCH_NAMES: JSON.stringify(selected) } : undefined,
     )

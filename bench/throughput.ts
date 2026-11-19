@@ -6,7 +6,7 @@ import {
   type Sample,
 } from '@yaks/benchmark'
 import { type DenoReport, extract } from '@yaks/benchmark/deno'
-import { collector } from './collector.ts'
+import { collector, denoWorker } from './collector.ts'
 import { WORKLOAD_VERSION } from '../packages/sqlite/fixtures/fleet.ts'
 import {
   applyBenchmarkNames,
@@ -127,7 +127,7 @@ let measure = (
     env.DENO_SQLITE_PATH = Deno.env.get('DENO_SQLITE_PATH') ?? 'libsqlite3.so.0'
   }
   return collector(
-    ['bench/deno-worker.ts', 'bench/apply_bench.ts'],
+    denoWorker('bench/apply_bench.ts'),
     root,
     env,
   )

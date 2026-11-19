@@ -14,6 +14,19 @@ export async function* lines(stream: ReadableStream<Uint8Array>) {
   if (pending) yield pending
 }
 
+/** The collector's arguments for Deno.bench workloads in `file`
+ * (./deno-worker.ts), with allocation-site pretenuring off. V8 pretenures a
+ * site once enough of its objects survive a scavenge, and whether a bench's
+ * loop crosses that line depends on the heap it starts with, not the code it
+ * measures: the same rows() ran 550µs or 1,150µs a call, the second mostly
+ * concurrent marking on helper threads, as unrelated imports moved the heap
+ * (T-1209). Without it a loop's garbage dies young on every revision alike. */
+export let denoWorker = (file: string) => [
+  '--v8-flags=--no-allocation-site-pretenuring',
+  'bench/deno-worker.ts',
+  file,
+]
+
 export let collector = (
   args: string[],
   root?: string,
