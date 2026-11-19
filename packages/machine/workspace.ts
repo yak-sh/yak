@@ -18,6 +18,9 @@ export type Workspace = {
   look(id: string): Promise<Proc | null>
   /** the last `n` lines it printed */
   tail(id: string, n: number): Promise<string[]>
+  /** what it printed from byte `from` on, as far as it has printed; empty
+   * for an id the machine does not know */
+  output?: (id: string, from: number) => Promise<Uint8Array>
   /** asks it to end */
   kill(id: string, signal: 'SIGTERM' | 'SIGKILL'): Promise<void>
   read(path: string): Promise<string>
@@ -38,11 +41,13 @@ export type Stat =
   | { kind: 'missing' | 'dangling' }
   | { kind: 'file' | 'directory' | 'other'; canonical: string }
 
+/** Bytes from base64, whitespace and all. */
+export let unbase64 = (text: string): Uint8Array =>
+  Uint8Array.from(atob(text.replaceAll(/\s/g, '')), (c) => c.charCodeAt(0))
+
 /** UTF-8 text from base64, whitespace and all. */
 export let decode = (text: string): string =>
-  new TextDecoder().decode(
-    Uint8Array.from(atob(text.replaceAll(/\s/g, '')), (c) => c.charCodeAt(0)),
-  )
+  new TextDecoder().decode(unbase64(text))
 
 // One shell for every path, and no forks but for a link: `cd -P` resolves a
 // directory's links, as `pwd -P` says, and `realpath` runs only for a path
@@ -116,12 +121,44 @@ export let settle = async (
   }
 }
 
+/** The process once it has ended, or null for an id the machine does not
+ * know, handing `write` what it prints as it prints it: a terminal's view of
+ * a command on another computer. Each look reads what is new since the last;
+ * the first gap is the machine's `poll` and each quiet one half again as long,
+ * up to a second, so a run's last words come within a second of its end. An
+ * abort ends only the following, never the command. */
+export let follow = async (
+  m: Pick<Workspace, 'look' | 'poll'> & Pick<Required<Workspace>, 'output'>,
+  id: string,
+  write: (bytes: Uint8Array) => void | Promise<void>,
+  { signal, sleep = nap }: Pick<SettleOpts, 'signal' | 'sleep'> = {},
+): Promise<Proc | null> => {
+  let at = 0, gap = m.poll ?? 100
+  for (;;) {
+    // Look first: what an ended process printed is all there by its exit.
+    let p = await m.look(id)
+    let bytes = await m.output(id, at)
+    if (bytes.length) {
+      at += bytes.length
+      await write(bytes)
+      gap = m.poll ?? 100
+    }
+    if (!p || p.exit || signal?.aborted) return p
+    await sleep(gap, signal)
+    gap = Math.min(gap * 1.5, 1000)
+  }
+}
+
 /** A concrete, immutable launch target. Paths are in the target filesystem. */
 export type WorkspaceTarget = {
   workspace: string
   root: string
   /** Absolute directory for receipts on the original filesystem. */
   receipts: string
+  /** Each command's own systemd scope properties, such as `MemoryMax=6G`,
+   * where the computer runs systemd: the command past its cap is the one
+   * ended (@yaks/process/isolate `scope`). */
+  limits?: string[]
 }
 
 /** A computer transport executes a short control script, not a managed run.

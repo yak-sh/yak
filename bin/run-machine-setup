@@ -1,0 +1,62 @@
+#!/bin/sh
+# Sets up a run machine: a GCE VM the box's heavy commands run on, so a test
+# run's 4 GB lands there and not beside the box's agents (bin/elsewhere.ts).
+# yak-run-1 is one, an n4d-standard-4 (4 vCPU, 16 GB) in GCP project justyaks,
+# us-east5-a, at the static address 34.186.247.59. Run it as root on the VM
+# with the public half of the box's key for it:
+#
+#   gcloud compute ssh yak-run-1 --project justyaks --zone us-east5-a \
+#     --command "sudo sh -s '$(cat ~/.ssh/yak_run.pub)'" < bin/run-machine-setup
+#
+# Rerunning it is safe: it installs what is missing and changes what differs.
+# The VM gets what a test run uses and nothing else: git, Deno, Node and pnpm,
+# a C compiler for the pinned SQLite (bin/sqlite.ts), no service account and
+# no keys but the box's, which logs in as `yak`, a user without sudo.
+#
+# A run is a `git worktree` of /home/yak/repo.git, a bare clone of the public
+# repository, under /home/yak/runs. The Deno cache, the pnpm store and the
+# test caches are yak's own (~/.cache, ~/.local/share/pnpm), shared and warm
+# across runs. Each run's command is a user scope with its own MemoryMax and
+# no swap (@yaks/process/isolate `scope`), so a run that grows past it is the
+# one killed; the user's slice is capped below the VM's memory, so sshd and
+# the system keep theirs however many runs there are.
+set -eu
+DENO=v2.9.1
+PNPM=12.16.1
+NODE=24
+SLICE=13G
+key=$1
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -q
+apt-get install -yq git curl unzip sqlite3 ca-certificates jq build-essential
+[ "$(node --version 2>/dev/null | cut -d. -f1)" = "v$NODE" ] || {
+  curl -fsSL https://deb.nodesource.com/setup_$NODE.x | bash -
+  apt-get install -yq nodejs
+}
+[ "$(pnpm --version 2>/dev/null)" = "$PNPM" ] || npm install -g -s pnpm@$PNPM
+[ "$(deno --version 2>/dev/null | head -1 | cut -d' ' -f2)" = "${DENO#v}" ] || {
+  curl -fsSL -o /tmp/deno.zip \
+    "https://github.com/denoland/deno/releases/download/$DENO/deno-x86_64-unknown-linux-gnu.zip"
+  unzip -o -d /usr/local/bin /tmp/deno.zip && rm /tmp/deno.zip
+}
+
+id yak >/dev/null 2>&1 || useradd -m -s /bin/bash yak
+install -d -m 700 -o yak -g yak /home/yak/.ssh /home/yak/runs
+printf '%s\n' "$key" > /home/yak/.ssh/authorized_keys
+chown yak:yak /home/yak/.ssh/authorized_keys
+chmod 600 /home/yak/.ssh/authorized_keys
+# The user manager outlives a login, so a run's scope does too.
+loginctl enable-linger yak
+uid=$(id -u yak)
+mkdir -p /etc/systemd/system/user-$uid.slice.d
+printf '[Slice]\nMemoryMax=%s\nMemorySwapMax=0\n' $SLICE \
+  > /etc/systemd/system/user-$uid.slice.d/memory.conf
+systemctl daemon-reload
+# A run that ended without removing its tree (its caller killed) goes after
+# two days; `git worktree prune` at the next run forgets it.
+printf 'd /home/yak/runs 0700 yak yak 2d\n' > /etc/tmpfiles.d/yak-runs.conf
+
+[ -d /home/yak/repo.git ] || su yak -c '
+  git clone -q --bare https://github.com/yak-sh/yak.git /home/yak/repo.git &&
+  git -C /home/yak/repo.git config remote.origin.fetch "+refs/heads/*:refs/heads/*"'

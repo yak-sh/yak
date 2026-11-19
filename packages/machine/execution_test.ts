@@ -1,5 +1,5 @@
 // Recovery is bound to the launch workspace, never a caller's later default.
-import { equal, test, throws } from '@yaks/testing'
+import { equal, ok, test, throws } from '@yaks/testing'
 import { graph, mint } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -7,6 +7,7 @@ import { kernelDoc } from '@yaks/kernel'
 import { processDoc } from '@yaks/process'
 import { machineDoc } from './vocab.ts'
 import { executionWorkspace } from './execution.ts'
+import { localConnector } from './connectors.ts'
 
 let vocab = loadVocab([kernelDoc, machineDoc, processDoc])
 let g = graph({ storage: ram(vocab), vocab })
@@ -84,4 +85,47 @@ let missingRead = executionWorkspace(g, {
 test('a missing user file is a path refusal rather than a connector failure', async () => {
   let error = await throws(() => missingRead.read('absent'))
   equal((error as Error).name, 'CallError')
+})
+
+test('each command starts in a scope carrying its workspace limits', async () => {
+  let seen: string[] = []
+  let capped = executionWorkspace(g, {
+    execute: (script) => {
+      seen.push(script)
+      return Promise.resolve(script.includes("printf 'exit '") ? 'pending' : '')
+    },
+  }, { ...target, limits: ['MemoryMax=6G', 'MemorySwapMax=0'] })
+  await capped.start('true')
+  ok(
+    seen.some((s) =>
+      s.includes(
+        "'--property=MemoryMax=6G' '--property=MemorySwapMax=0' setsid",
+      )
+    ),
+  )
+})
+
+// What a command printed reads back from any byte on, bytes as they were,
+// through the computer's own shell.
+let receipts = await Deno.makeTempDir()
+let printed = mint()
+await g.apply([{
+  entity: { eid: printed },
+  process: { workspace, command: 'printf', cwd: '/repo' },
+}])
+let bytes = Uint8Array.of(0, 255, 10, 104, 105)
+await Deno.mkdir(`${receipts}/${workspace}/${printed}`, { recursive: true })
+await Deno.writeFile(`${receipts}/${workspace}/${printed}/output`, bytes)
+let here = executionWorkspace(g, await localConnector().connect('local://'), {
+  ...target,
+  receipts,
+})
+let read = await Promise.all(
+  [0, 3, 5].map((from) => here.output(printed, from)),
+)
+let unknown = await here.output(mint(), 0)
+await Deno.remove(receipts, { recursive: true })
+test('a command output reads from any byte on, as it was printed', () => {
+  equal(read, [bytes, bytes.subarray(3), new Uint8Array()])
+  equal(unknown, new Uint8Array())
 })

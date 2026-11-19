@@ -89,6 +89,17 @@ supervisor dies without writing an exit code, `look` records an unknown exit,
 not an invented success. No connector reaps or sweeps user receipts; deletion
 belongs to explicit resource disposal.
 
+A target's optional `limits` are systemd properties each command's scope
+carries, such as `['MemoryMax=6G', 'MemorySwapMax=0']`: a command that grows
+past its cap is the one the kernel ends, not its neighbours. `output(id, from)`
+answers the bytes a command printed from byte `from` on, and
+`follow(workspace,
+id, write)`, exported at `@yaks/machine`, hands `write` each
+new stretch as it appears and answers the process once it ends: a terminal's
+view of a command on another computer. It looks as `settle` does, but at most a
+second apart, and again at once after output, so a run's last words arrive
+within a second of its end.
+
 ```ts
 import { equal } from '@yaks/testing'
 import { graph, mint } from '@yaks/graph'

@@ -10,6 +10,7 @@ import {
   decode,
   quote,
   shellStat,
+  unbase64,
   type Workspace,
   type WorkspaceTarget,
 } from './workspace.ts'
@@ -52,7 +53,7 @@ export let executionWorkspace = (
   g: Graph,
   transport: ComputerTransport,
   target: WorkspaceTarget,
-): Workspace => {
+): Workspace & Pick<Required<Workspace>, 'output'> => {
   let root = absolute(target.root), receipts = absolute(target.receipts)
   let location = (id: string) =>
     `${receipts}/${safeId(target.workspace)}/${safeId(id)}`
@@ -167,7 +168,7 @@ if test ! -f "$d/claimed"; then
     export XDG_RUNTIME_DIR="/run/user/$uid"
     export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus"
     ${
-        scope('yak-process-' + id).map(quote).join(' ')
+        scope('yak-process-' + id, target.limits).map(quote).join(' ')
       } setsid bash "$d/run" 9>&- </dev/null >"$d/output" 2>&1 &
   else
     setsid bash "$d/run" 9>&- </dev/null >"$d/output" 2>&1 &
@@ -197,6 +198,18 @@ fi`)
         }; if test -f "$d/output"; then tail -n ${n} -- "$d/output"; fi`,
       )
       return output ? output.replace(/\n$/, '').split('\n') : []
+    },
+    output: async (id, from) => {
+      if (!Number.isSafeInteger(from) || from < 0) {
+        throw new Error('Output offset must be a nonnegative integer')
+      }
+      if (!await row(id)) return new Uint8Array()
+      let text = await transport.execute(
+        `d=${quote(location(id))}; if test -f "$d/output"; then tail -c +${
+          from + 1
+        } -- "$d/output" | base64; fi`,
+      )
+      return unbase64(text)
     },
     kill: async (id, signal) => {
       if (!['SIGTERM', 'SIGKILL'].includes(signal)) {

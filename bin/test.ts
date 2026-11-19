@@ -19,6 +19,11 @@ import type { Prepared } from './check-types.ts'
  * inherits it, so a run started from inside one refuses. */
 export let RUN = 'TASKS_TEST_RUN'
 
+/** A run elsewhere is capped at half again its measured peak, about 4 GB: the
+ * driver, two type-check programs and a test runtime (T-1463). With no swap,
+ * a run past it is ended rather than slowed. */
+export let LIMITS = ['MemoryMax=6G', 'MemorySwapMax=0']
+
 if (import.meta.main && Deno.args[0] !== '--bulk') {
   let outer = Deno.env.get(RUN)
   if (outer) {
@@ -39,6 +44,26 @@ if (import.meta.main && Deno.args[0] !== '--bulk') {
       if (!(e instanceof Deno.errors.NotFound)) throw e
     },
   )
+  // A run goes to the machine named for it, where it can, so its 4 GB are
+  // not the box's (./elsewhere.ts). There it is this run in a copy of the
+  // checkout, measured from the same commit, so it selects the same tests.
+  // The files its change touches are formatted here, in the checkout that
+  // keeps them, as a run here formats them. A report of past results reads
+  // this checkout, and stays here.
+  if (!Deno.args.some((a) => a.startsWith('--from='))) {
+    let { elsewhere } = await import('./elsewhere.ts')
+    let { base, changes } = await import('./test-changes.ts')
+    let code = await elsewhere(['deno', 'task', 'test', ...Deno.args], {
+      from: () => base(),
+      before: async () => {
+        if (Deno.args.includes('--all')) return
+        let { format } = await import('./test-checks.ts')
+        await format(await changes())
+      },
+      limits: LIMITS,
+    })
+    if (code != undefined) Deno.exit(code)
+  }
 }
 
 let { relative } = await import('node:path')

@@ -117,6 +117,13 @@ deno task test     # the tests this branch's changes reach, against main
 deno task check    # fmt, lint, types, and the package checks
 ```
 
+A clone may send its test runs to another computer, so their memory is not the
+one its editors and agents share: `git config yak.machine
+ssh://user@host` names
+a machine set up by `bin/run-machine-setup`, and `YAK_MACHINE` in a command's
+environment names another, or with no value runs it here. `bin/elsewhere.ts`
+says how a run gets there and back.
+
 `deno task install` writes `~/.deno/bin/yak`, a shim that runs
 `deno run -A --unstable-no-legacy-abort --config deno.json packages/cli/yak.ts`
 in this checkout, so every edit runs at once and nothing needs reinstalling.

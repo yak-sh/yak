@@ -9,7 +9,7 @@ export type Machine = import('./workspace.ts').Workspace
 
 export * from './comp.ts'
 
-export { settle, shellStat } from './workspace.ts'
+export { follow, settle, shellStat } from './workspace.ts'
 export type {
   ComputerConnector,
   ComputerTransport,

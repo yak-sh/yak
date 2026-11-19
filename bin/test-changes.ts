@@ -37,9 +37,9 @@ export let changes = async (run: Run = git): Promise<string[]> => {
   return [...new Set((tracked + added).split('\0').filter(Boolean))]
 }
 
-// What this branch's changes are measured from: on main, the latest commit's
-// parent.
-let base = async (run: Run) =>
+/** What this branch's changes are measured from: on main, the latest
+ * commit's parent. */
+export let base = async (run: Run = git): Promise<string> =>
   (await run(['branch', '--show-current'])).trim() == 'main'
     ? 'HEAD^'
     : (await run(['merge-base', 'main', 'HEAD'])).trim()

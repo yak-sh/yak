@@ -1,7 +1,7 @@
 // A waiting call looks often at first and seldom later: a short command still
 // answers promptly, while a long wait costs few looks.
 import { clock, equal, ok, test } from '@yaks/testing'
-import { settle } from './workspace.ts'
+import { follow, settle } from './workspace.ts'
 
 // Wait up to `ms` on a command ending `after` ms in, on a virtual clock.
 // Polling every 100 ms would look ten times a second.
@@ -40,4 +40,36 @@ test('a command outliving its wait is still running at the deadline, after few l
   let { looks, at, ended, few } = await waited(Infinity, 600_000)
   equal([ended, at], [false, 600_000])
   ok(few, `${looks} looks`)
+})
+
+// A command printing a chunk every `every` ms, followed on a virtual clock.
+let followed = async (chunks: string[], every: number) => {
+  let time = clock(), printed = '', looks = 0
+  let end = chunks.length * every
+  let said = () => chunks.slice(0, Math.floor(time.now() / every)).join('')
+  let p = await follow(
+    {
+      look: () => {
+        looks++
+        return Promise.resolve(
+          time.now() >= end ? { pid: 1, exit: { code: 3 } } : { pid: 1 },
+        )
+      },
+      output: (_, from) =>
+        Promise.resolve(new TextEncoder().encode(said().slice(from))),
+    },
+    'p',
+    (bytes) => {
+      printed += new TextDecoder().decode(bytes)
+    },
+    { sleep: (gap) => time.advance(gap) },
+  )
+  return { printed, exit: p?.exit, late: time.now() - end, looks }
+}
+
+test('following a command passes on all it printed, in order, with its exit', async () => {
+  let { printed, exit, late, looks } = await followed(['a', 'b', 'c'], 5_000)
+  equal([printed, exit], ['abc', { code: 3 }])
+  ok(late <= 1_000, `${late} ms late`)
+  ok(looks <= 30, `${looks} looks`)
 })

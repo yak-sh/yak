@@ -8,14 +8,17 @@ export let bus = (uid: number): Record<string, string> => ({
 })
 
 /** Lift the following command out of the launcher's systemd unit. Failure to
- * reach that manager must fail the launch, never fall back inside its unit. */
-export let scope = (unit: string): string[] => [
+ * reach that manager must fail the launch, never fall back inside its unit.
+ * `properties` are the scope's own, such as `MemoryMax=6G`: a command that
+ * grows past its cap is the one the kernel ends. */
+export let scope = (unit: string, properties: string[] = []): string[] => [
   'systemd-run',
   '--user',
   '--scope',
   '--collect',
   '--quiet',
   `--unit=${unit}`,
+  ...properties.map((p) => `--property=${p}`),
 ]
 
 /** A managed run owns its descendants until its main process exits. Unlike a
