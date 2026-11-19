@@ -55,7 +55,7 @@ import { durable as raw } from '../../packages/durable-object/testing.ts'
 import { dropDdl } from '@yaks/journal'
 import { builders } from './builder-probe.ts'
 import type { Load } from '@yaks/host'
-import { cleanup } from '@yaks/testing'
+import { cleanup, type Clock as Virtual, tick } from '@yaks/testing'
 import type { Env } from './env.ts'
 import { Store } from './graph.ts'
 import { PLATFORM_OBJECT } from './door.ts'
@@ -429,6 +429,22 @@ export let lasting = (
     }
   }
   let closing: Promise<void> | null = null
+  // A test's clock moves only when the test moves it (@yaks/testing `clock`),
+  // so a platform on one waits, as it closes, for what settles without it:
+  // work left waiting on that clock (a line kept a beat after its answer)
+  // would otherwise wait on a test that has ended, and is left.
+  let queued = (time as Partial<Virtual>).pending
+  let moving = async (queued: () => number) => {
+    for (let work = pending(); work.length; work = pending()) {
+      let moved = await Promise.race([
+        Promise.allSettled(work).then(() => true),
+        tick().then(() => false),
+      ])
+      if (moved) continue
+      if (queued()) return
+      await Promise.allSettled(work)
+    }
+  }
   let close = () => {
     if (closing) return closing
     // A closed platform holds none of its objects: a test module that keeps
@@ -451,7 +467,7 @@ export let lasting = (
     }
     return closing = (async () => {
       try {
-        await settled()
+        await (queued ? moving(queued) : settled())
       } finally {
         release()
       }

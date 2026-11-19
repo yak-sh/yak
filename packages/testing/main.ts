@@ -27,7 +27,7 @@ import * as system from '@yaks/process/system'
 //
 // A runtime keeps every module it loaded, and whatever their tests left
 // reachable, until it exits. With `--rest`, once it holds more than FULL, or
-// the fewer bytes `--full` names, it loads no more files and writes those it
+// the fewer bytes `--full` names (`full` below), it loads no more files and writes those it
 // did not reach to that file as a JSON list, for a fresh runtime to run
 // (bin/test.ts).
 //
@@ -42,6 +42,7 @@ import { examples } from './load.ts'
 import { observe } from './reads.ts'
 import { summary, timed } from './run.ts'
 import { collect, from, type Test, test } from './suite.ts'
+import { tick } from './wait.ts'
 
 // Before anything a test could start inherits it.
 system.env.delete('DENO_AUDIT_PERMISSIONS')
@@ -70,6 +71,21 @@ let rest = flag('rest').at(-1)
 let part = flag('part').at(-1)
 // The resident memory past which a runtime with `--rest` hands on its files.
 let FULL = Math.min(2 * 1024 ** 3, Number(flag('full').at(-1) ?? Infinity))
+// Most of a runtime past FULL is what it no longer holds: V8 grows its heap
+// while memory is free, a database's pages are freed only once its object is
+// collected, and freed memory stays resident until given back. So a runtime
+// past FULL first collects (with `--expose-gc`), lets the finalizers that
+// queued run, and gives back what it freed (@yaks/process `trim`). It hands
+// on its files only when what remains is past three quarters of FULL, so it
+// runs a few files before it judges again.
+let sweep = (globalThis as { gc?: () => void }).gc
+let full = async () => {
+  if (!rest || system.memoryUsage().rss <= FULL) return false
+  sweep?.()
+  await tick()
+  system.trim()
+  return system.memoryUsage().rss > FULL * 0.75
+}
 let started = performance.now()
 let here = (path: string) => new URL(path, `file://${system.cwd()}/`).href
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
@@ -128,7 +144,7 @@ let load = async (path: string) => {
 let { outcomes, loading, loads, took, rest: unreached } = await drive(
   [...pages, ...modules],
   load,
-  { timeout, verbose, full: () => !!rest && system.memoryUsage().rss > FULL },
+  { timeout, verbose, full },
 )
 
 // A file passed when every test it declared ran and passed; a run that
