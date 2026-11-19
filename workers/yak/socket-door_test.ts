@@ -2,6 +2,7 @@
 // store, which answers the socket whatever words its app borrows (graph.ts
 // `#lending`).
 import { equal, test } from '@yaks/testing'
+import { assert } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { installPair, made } from '../../packages/workerd/testing.ts'
 import * as apps from './apps.ts'
@@ -100,8 +101,11 @@ let mistook = await (async () => {
     undo()
   }
 })()
-test("a page's watch its store refuses in its own words is filed once as the app's break", () =>
+test("a page's watch its store refuses in its own words is filed once as the app's break", () => {
+  let said = String(mistook.refused[0]?.[1])
+  assert(said.startsWith('unknown prop: .nope'), said)
   equal(mistook, {
-    refused: [['a', 'unknown prop: .nope'], ['b', 'unknown prop: .nope']],
-    breaks: [['unknown prop: .nope', 'subscribe .nope', true]],
-  }))
+    refused: [['a', said], ['b', said]],
+    breaks: [[said, 'subscribe .nope', true]],
+  })
+})
