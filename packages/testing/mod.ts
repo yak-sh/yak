@@ -33,6 +33,7 @@
 export { equal, match, ok, throws } from './assert.ts'
 export { type Clock, clock } from './clock.ts'
 export {
+  afterAll,
   cleanup,
   type It,
   type Options,

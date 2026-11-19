@@ -1,6 +1,6 @@
-import { equal, ok, test } from './mod.ts'
+import { afterAll, equal, ok, test } from './mod.ts'
 import { drive } from './drive.ts'
-import type { Test } from './suite.ts'
+import { from, type Test } from './suite.ts'
 
 test('files load and execute in order, retaining reports without fixture bodies', async () => {
   let events: string[] = []
@@ -48,4 +48,40 @@ test('a full runtime loads no more files and leaves them for another', async () 
     return Promise.resolve([])
   }, { full: () => loaded.length == 2 })
   equal([loaded, result.rest], [['a.ts', 'b.ts'], ['c.ts']])
+})
+
+test('a file ends once its tests have run, before the next loads, and a failed end is its own', async () => {
+  let events: string[] = []
+  let result = await drive(['a.ts', 'b.ts'], (path) => {
+    from(path)
+    events.push(`load ${path}`)
+    afterAll(() => events.push(`${path} opened first`))
+    return Promise.resolve([{
+      file: path,
+      name: `${path} test`,
+      tags: [],
+      skip: false,
+      body: () => {
+        events.push(`${path} test`)
+        afterAll(() => {
+          events.push(`${path} opened last`)
+          if (path == 'b.ts') throw new Error('would not close')
+        })
+      },
+    }])
+  })
+  equal(events, [
+    'load a.ts',
+    'a.ts test',
+    'a.ts opened last',
+    'a.ts opened first',
+    'load b.ts',
+    'b.ts test',
+    'b.ts opened last',
+    'b.ts opened first',
+  ])
+  equal(
+    result.outcomes.map((o) => [o.test.name, o.ok]),
+    [['a.ts test', true], ['b.ts test', true], ['b.ts ends', false]],
+  )
 })

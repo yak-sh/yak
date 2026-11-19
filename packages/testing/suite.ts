@@ -25,10 +25,12 @@ let mapped = false
  * returned, instead of going to Deno.test. */
 export let collect = (): Test[] => tests = []
 
-/** Names the module whose declarations follow. */
+/** Names the module whose declarations follow, and opens its scope
+ * (`afterAll`). */
 export let from = (path: string) => {
   file = path
   mapped = false
+  leaving = tests ? [] : undefined
 }
 
 /**
@@ -57,13 +59,17 @@ export let test = (
   }
 }
 
-// What the running test asked to have done once it ends (`cleanup`).
+// What the running test asked to have done once it ends (`cleanup`), and
+// what the file the runner loaded last asked to have done once its tests
+// have run (`afterAll`).
 let ending: (() => unknown)[] | undefined
+let leaving: (() => unknown)[] | undefined
 
 /**
  * Asks for `done` once the running test ends, before its time is taken, so
  * a test pays for closing what it opened and leaves nothing running into
- * the next one. Outside a test it does nothing, and answers false.
+ * the next one. Outside a test, it is the file's (`afterAll`). Outside the
+ * runner and any test it does nothing, and answers false.
  *
  * ```ts ignore
  * let fixture = () => {
@@ -74,8 +80,38 @@ let ending: (() => unknown)[] | undefined
  * ```
  */
 export let cleanup = (done: () => unknown): boolean => {
-  ending?.push(done)
-  return !!ending
+  let scope = ending ?? leaving
+  scope?.push(done)
+  return !!scope
+}
+
+/**
+ * Asks for `done` once the file the runner loaded last has run its tests,
+ * whichever of them asks. A runtime keeps every module it loads, and what a
+ * module holds: a kernel a file opened for its tests would otherwise run on,
+ * holding every store it made, beside every file the runtime loads after.
+ * Outside the runner it does nothing, and answers false.
+ *
+ * ```ts ignore
+ * let shared: Promise<Kernel> | undefined
+ * let kernel = () => {
+ *   if (!shared) afterAll(async () => (await shared)?.close())
+ *   return shared ??= boot()
+ * }
+ * ```
+ */
+export let afterAll = (done: () => unknown): boolean => {
+  leaving?.push(done)
+  return !!leaving
+}
+
+/** What the file the runner loaded last asked for with `afterAll`, run last
+ * asked first; none when it asked for nothing. The scope closes: the file
+ * asks for no more. */
+export let left = (): (() => Promise<void>) | undefined => {
+  let asked = leaving
+  leaving = undefined
+  return asked?.length ? () => settle(asked) : undefined
 }
 
 /** Runs a test's body, then what it asked to have done once it ends, last
@@ -91,6 +127,15 @@ export let closing = async (body: () => unknown): Promise<void> => {
   } finally {
     ending = was
   }
+  await settle(asked, failed)
+}
+
+// Runs what a scope asked for, last asked first: the scope's failure, or else
+// the first of theirs, is thrown once all have run.
+let settle = async (
+  asked: (() => unknown)[],
+  failed?: { error: unknown },
+): Promise<void> => {
   for (let done of asked.reverse()) {
     try {
       await done()
