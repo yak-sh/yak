@@ -2,10 +2,10 @@
 name: testing
 description: >
   Use whenever writing, changing, running, narrowing or debugging tests,
-  doctests, examples or benchmarks, investigating failed/slow runs, or
-  choosing checks before landing. Covers @yaks/testing and deno task
-  test with dependency selection. Manual proof is end-to-end-checks; observation
-  is platform-visualize.
+  doctests, examples or benchmarks, investigating failed/slow runs, or choosing
+  checks before landing. Covers @yaks/testing and deno task test with dependency
+  selection. Manual proof is end-to-end-checks; observation is
+  platform-visualize.
 ---
 
 # Testing
@@ -155,6 +155,12 @@ Main's CI checks every module after the push (`deno task check:types --all`). Ma
 examples and custom `///` doctests run through the example runner. Package
 compiler libraries can differ from the Deno runtime these examples use.
 Cached passing dependencies can narrow execution further.
+
+On the box a run goes to yak-run-1, a GCE VM (the clone's `git config
+yak.machine`, bin/elsewhere.ts): your checkout as it stands is copied there, the
+run's output streams back, and its exit code is yours. Changed files are still
+formatted in your checkout. Where the VM cannot be reached the run goes on here,
+having said why; `YAK_MACHINE= deno task test` runs here on purpose.
 
 While iterating, name a source file to run its tests and every test depending
 on it, selected as a no-path run selects from a change to it:
