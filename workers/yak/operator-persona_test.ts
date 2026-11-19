@@ -17,6 +17,7 @@ import { KERNEL, meta } from './meta.ts'
 import { derivedEid } from '@yaks/graph/identity'
 import { PRICE } from '@yaks/platform/plans'
 import { agents } from './config.ts'
+import { short } from '@yaks/id'
 
 let owner = crypto.randomUUID()
 // The platform holds Anthropic's key, so the Operator is on Claude.
@@ -180,4 +181,11 @@ test('separating a space topic from its Operator persona preserves authored text
     [],
   )
   assertEquals(again, [])
+})
+
+test('it is told its session and the model its using names, never another assistant', () => {
+  let text = String(first.instructions)
+  assertStringIncludes(text, `your session ${short(first.conversation!)}`)
+  assertStringIncludes(text, `answered by the model ${first.model}`)
+  assertStringIncludes(text, 'never ChatGPT, Claude')
 })

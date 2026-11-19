@@ -28,8 +28,10 @@ import {
   type Tool,
   topOf,
   transcript,
+  usingOf as usingIn,
 } from '@yaks/session'
 import { derivedEid } from '@yaks/graph/identity'
+import { short } from '@yaks/id'
 import { CALLED, channelOf, HEARD } from './operator-view.ts'
 import { cameBy } from './operator-draw.ts'
 import { fetchable } from './newcomer.ts'
@@ -335,6 +337,34 @@ let told = (
       ctx.beyond.map((r) => `${r.space.slug} (${r.role})`).join(', ')
     }. Name the space, or the app as space/app, to work in one of them.`
     : ''
+
+// What the Operator is told of itself each turn: its conversation, whose
+// session row a fork shares with it, so the two keep one cached prefix, and
+// the model and provider this session's using{provider, model} names, the
+// rows the turn is answered by, so it says so when asked and stays true when
+// the model changes.
+let serving = (conversation: string, model?: Bundle, provider?: Bundle) => {
+  let name = comp(model, 'model')?.name
+  let by = comp(provider, 'provider')?.name
+  return `This conversation is your session ${
+    short(conversation)
+  }; read it with self true to see its entries and its using{provider, model}.${
+    name
+      ? ` This turn is answered by the model ${name}${
+        by ? ` from ${by}` : ''
+      }: name it when asked which model you are.`
+      : ''
+  } You are the person's Operator on yaks.app, never ChatGPT, Claude or another company's assistant.`
+}
+
+// The rows of the model and provider a session's turns are answered by.
+let servedIn = async (g: Graph, session: string) => {
+  let using = await usingIn(g, session)
+  let eids = [using?.model, using?.provider].filter(Boolean).map(String)
+  let rows = eids.length ? await g.get(eids) : []
+  let of = (eid: unknown) => rows.find((r) => r?.entity.eid == eid)
+  return { model: of(using?.model), provider: of(using?.provider) }
+}
 
 // What the Operator is told when the person it is talking with has no seat
 // in its space to write with: it has only their permissions.
@@ -1976,8 +2006,13 @@ export let operating = (
       )
     },
     instructionScope: async (session) => {
-      let work = await workingOf(store, session)
+      let [work, served] = await Promise.all([
+        workingOf(store, session),
+        servedIn(g, session),
+      ])
       return JSON.stringify([
+        served.model?.entity.eid,
+        served.provider?.entity.eid,
         work?.person,
         work?.administrative,
         work?.signup,
@@ -1988,11 +2023,17 @@ export let operating = (
     // session opened on a topic carries that topic's compiled context.
     instructions: async (session) => {
       reached('instructing', null)
-      let [{ eid, space: at, here, ctx: context }, [row]] = await Promise
-        .all([
+      let [{ eid, space: at, here, ctx: context }, [row], served] =
+        await Promise.all([
           working(env, store, session, options.directory),
           g.read(q`.entity.eid=${session}&.fields=session.topic`),
+          servedIn(g, session),
         ])
+      let self = serving(
+        await topOf(store.g, session),
+        served.model,
+        served.provider,
+      )
       // Reply channels carry no personal server instructions.
       let work = await workingOf(store, session)
       let servers =
@@ -2008,7 +2049,7 @@ export let operating = (
       if (!writes(ctx.role)) {
         return reached(
           'instructions',
-          [outside(space, ctx.role), await servers].filter(Boolean)
+          [outside(space, ctx.role), self, await servers].filter(Boolean)
             .join('\n\n'),
         )
       }
@@ -2019,7 +2060,8 @@ export let operating = (
       ])
       return reached(
         'instructions',
-        [map, told(ctx, space), accounts, said].filter(Boolean).join('\n\n'),
+        [map, told(ctx, space), self, accounts, said].filter(Boolean)
+          .join('\n\n'),
       )
     },
     each: (_, session) => void (session && options.tell?.(session)),
