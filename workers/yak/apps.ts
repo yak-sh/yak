@@ -189,6 +189,7 @@ import {
 import {
   born,
   ledgerOf,
+  offeredSource,
   ownOf,
   type Release,
   releaseFor,
@@ -205,7 +206,6 @@ import { commandIn, commandsIn } from './app-command.ts'
 import { type Limiter, source, tooMany, within } from '@yaks/workerd/rate'
 import {
   bearerOf,
-  offered,
   sandboxed,
   stored,
   tokenOf,
@@ -1315,6 +1315,11 @@ export let api = async (
       )
   let mayRead = reads(mode(app.access), who.role)
   let mayPost = edits(mode(app.access), who.role)
+  // The app's own doors, its commands, DOORS and its releases below, are
+  // keyed on the app and not on the store this request reads, so a stranger's
+  // visit holds no level at them (@yaks/platform/visits `atApp`).
+  let caller = atApp(who)
+  let mayUse = reads(mode(app.access), caller.role)
   let versioned = assetPath(path)
   if (versioned) {
     if (req.method != 'GET' && req.method != 'HEAD') {
@@ -1333,14 +1338,16 @@ export let api = async (
         },
       })
     }
+    let source = `${space.store}/.releases/${app.eid}/${versioned.release}`
     // On a private app the worker is the gatekeeper (T-34303): a page it
     // serves to someone who may not read the app was woven these addresses,
     // and its files are the worker's to give or refuse at their own path, as
     // that page would have asked before its addresses were the release's.
-    // A published app's release files are anyone's, as installing it hands
-    // them out (`offered`), so Site can keep them (@yaks/platform/kept
-    // `keepable`).
-    if (!mayRead && !offered(app)) {
+    // The release a published app offers is anyone's, as installing it hands
+    // it out (`offered`), so Site can keep it (@yaks/platform/kept
+    // `keepable`). Every other release is its own people's, a stranger's
+    // sample visit included.
+    if (!mayUse && source != await offeredSource(dir, app)) {
       let url = new URL(req.url)
       url.pathname = url.pathname.slice(0, -`/api${path}`.length) +
         versioned.path
@@ -1352,7 +1359,6 @@ export let api = async (
       await own?.body?.cancel()
       return refused('not_a_reader')
     }
-    let source = `${space.store}/.releases/${app.eid}/${versioned.release}`
     if (source != app.source && !await dir.released(app, source)) {
       return json(404, 'no_such_file')
     }
@@ -1373,11 +1379,6 @@ export let api = async (
     let { serviceRoute } = await import('./service-api.ts')
     return serviceRoute(req, env, dir, { space, app }, who, path)
   }
-  // The app's own doors, its commands and DOORS below, are keyed on the app
-  // and not on the store this request reads, so a stranger's visit holds no
-  // level at them (@yaks/platform/visits `atApp`).
-  let caller = atApp(who)
-  let mayUse = reads(mode(app.access), caller.role)
   if (path == '/commands') {
     if (req.method != 'GET') return json(405, 'method_not_allowed')
     if (!mayUse) return refused('not_a_reader')

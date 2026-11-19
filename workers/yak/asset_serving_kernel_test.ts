@@ -198,3 +198,59 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
     await k.stop()
   }
 })
+
+// A private app's offered release is anyone's, as installing hands it out;
+// its others stay its people's, though a stranger learned their ids (T-711).
+test("a stranger reads a private app's offered release, never its others", async () => {
+  let k = await kernel()
+  try {
+    let space = 'offeredrelease'
+    let app = { space, app: 'notes' }
+    let { cookie } = await seed(k, [{ slug: space, apps: ['notes'] }])
+    let agent = connector(k, cookie)
+    let at = (path: string, init: RequestInit = {}) =>
+      k.at(`${space}.yaks.app`, path, init)
+    await agent.tool('app_set', { ...app, access: 'private' })
+    let release = async (n: number) => {
+      await agent.tool('app_files', {
+        ...app,
+        files: [
+          {
+            path: 'index.html',
+            content: '<script type="module" src="./app.js"></script>',
+          },
+          { path: 'app.js', content: `export let v = ${n}` },
+        ],
+      })
+      await agent.tool('app_deploy', app)
+      let page = await (await at('/notes/', { headers: { cookie } })).text()
+      return page.match(/\/notes\/api\/assets\/[0-9a-f-]+\/app\.js/)![0]
+    }
+    let [v1, v2] = [await release(1), await release(2)]
+    await agent.tool('app_publish', {
+      ...app,
+      name: `offered-${crypto.randomUUID()}`,
+    })
+    let v3 = await release(3)
+    let read = async (path: string, init?: RequestInit) => {
+      let got = await at(path, init)
+      return [got.status, got.status == 200 ? await got.text() : null]
+    }
+    // Signed out, and on a visit to the sample, whose page weaves v2.
+    let visited = await at('/notes/')
+    let visit = visited.headers.get('set-cookie')!.split(';')[0]
+    assertStringIncludes(await visited.text(), v2)
+    for (let headers of [{}, { cookie: visit }] as HeadersInit[]) {
+      assertEquals(
+        await Promise.all([v1, v2, v3].map((v) => read(v, { headers }))),
+        [[401, null], [200, 'export let v = 2'], [401, null]],
+      )
+    }
+    assertEquals(
+      await Promise.all([v1, v3].map((v) => read(v, { headers: { cookie } }))),
+      [[200, 'export let v = 1'], [200, 'export let v = 3']],
+    )
+  } finally {
+    await k.stop()
+  }
+})

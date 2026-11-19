@@ -35,6 +35,7 @@ import { cleared } from './sample.ts'
 import { domainOf, newcomer, SESSION } from './session.ts'
 import { background } from './defects.ts'
 import { sharing } from './lib/shared.ts'
+import { offered } from '@yaks/platform/installs'
 
 /** The directory as @yaks/platform/visits reads and writes it: every write
  * the kernel's own. */
@@ -161,19 +162,17 @@ let bear = async (
   return kept
 }
 
-/** The published release a stranger is served when the app has moved past
- * it, read once per isolate: a release never changes. */
+/** One release of the app, by its version, read once per isolate: a release
+ * never changes. */
 let releases = new Map<string, Promise<Release | null>>()
-export let releaseFor = (
+export let releaseAt = (
   dir: Pick<Directory, 'deployAt'>,
   app: App,
-): Promise<Release | null> => {
-  let version = app.demo?.version
-  if (version == null || version == app.version) return Promise.resolve(null)
-  let key = `${app.eid} ${version}`
-  return sharing(
+  version: number,
+): Promise<Release | null> =>
+  sharing(
     releases,
-    key,
+    `${app.eid} ${version}`,
     () =>
       dir.deployAt(app, version).then((d) =>
         d
@@ -188,4 +187,28 @@ export let releaseFor = (
       ),
     256,
   )
+
+/** The source of the release the app offers, whose files anyone may have
+ * (@yaks/platform/installs `offered`): the published version's. Null for an
+ * app that offers none. */
+export let offeredSource = async (
+  dir: Pick<Directory, 'deployAt'>,
+  app: App,
+): Promise<string | null> => {
+  if (!offered(app)) return null
+  let version = app.published!.version
+  if (version == app.version) return app.source ?? null
+  return (await releaseAt(dir, app, version))?.source ?? null
+}
+
+/** The published release a stranger is served when the app has moved past
+ * it. */
+export let releaseFor = (
+  dir: Pick<Directory, 'deployAt'>,
+  app: App,
+): Promise<Release | null> => {
+  let version = app.demo?.version
+  return version == null || version == app.version
+    ? Promise.resolve(null)
+    : releaseAt(dir, app, version)
 }
