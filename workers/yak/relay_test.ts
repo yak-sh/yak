@@ -11,15 +11,17 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Frame } from '@yaks/api'
 import type { Actor, Bundle } from '@yaks/graph'
+import type { Level } from '@yaks/member'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from './testing.ts'
+import { socketDirectory } from './socket-fixture.ts'
 import { Store, type Time } from './graph.ts'
 import { clock, test, until } from '@yaks/testing'
 
 let wire = (actor: Actor | null = { by: ADA }) => {
   let sent: Frame[] = []
   let closed: number[] = []
-  let held: unknown = { writer: { actor } }
+  let held: unknown = { read: { person: actor?.by }, writer: { actor } }
   return {
     sent,
     closed,
@@ -45,6 +47,7 @@ let state = () => {
 
 let APP = 'a0000000-0000-4000-8000-000000000001'
 let ADA = 'b0000000-0000-4000-8000-000000000002'
+let EVE = 'd0000000-0000-4000-8000-000000000004'
 let CAKE = 'c0000000-0000-4000-8000-000000000003'
 let owner = { app: APP, person: ADA, role: 'owner', title: 'Ada' }
 
@@ -76,6 +79,7 @@ let headers = (): Record<string, string> => ({
   'x-yak-person': owner.person,
   'x-yak-role': owner.role,
   'x-yak-title': owner.title,
+  'x-yak-policy': '1',
 })
 
 let post = (store: Store, path: string, body: string | unknown[]) =>
@@ -90,14 +94,30 @@ let post = (store: Store, path: string, body: string | unknown[]) =>
 let get = (store: Store, path: string) =>
   store.fetch(new Request(`http://store${path}`, { headers: headers() }))
 
-// A cookbook with one recipe in it, and two cooks watching it.
+let subscribe = async (
+  store: Store,
+  ws: ReturnType<typeof wire>,
+  query = '.recipe',
+) => {
+  await store.webSocketMessage(
+    ws,
+    JSON.stringify({ subscribe: query, id: 'r' }),
+  )
+  await until(() => ws.sent.some((f) => f.id == 'r'))
+  return ws
+}
+
+// A cookbook with one recipe in it, and cooks watching it.
 let watching = async (
   ctx = state(),
   access = 'private',
   schema = SCHEMA,
   time?: Time,
 ) => {
-  let store = new Store(ctx, {}, undefined, time)
+  let members: Record<string, Level> = { [ADA]: 'owner' }
+  let env = { STORE: socketDirectory(APP, members, { access }) }
+  let wake = () => new Store(ctx, env, undefined, time)
+  let store = wake()
   assertEquals((await post(store, '/vocab', schema)).status, 200)
   assertEquals(
     (await store.fetch(
@@ -115,14 +135,11 @@ let watching = async (
   let watch = async (actor: Actor | null = { by: ADA }, opening = false) => {
     let ws = wire(actor)
     ctx.live.push(ws)
-    await store.webSocketMessage(
-      ws,
-      JSON.stringify({ subscribe: '.recipe', id: 'r' }),
-    )
+    await subscribe(store, ws)
     if (!opening) ws.sent.length = 0
     return ws
   }
-  return { ctx, store, watch }
+  return { ctx, store, watch, wake, members }
 }
 
 let relay = (ws: { sent: Frame[] }) => ws.sent.flatMap((f) => f.relay ?? [])
@@ -177,11 +194,7 @@ test('a paced mover is heard at 10Hz; a flooder is closed', async () => {
   await move(flood, 10)
   await move(flood, 11)
   for (let x = 12; x < 19; x++) await move(flood, x)
-  let late = wire()
-  await store.webSocketMessage(
-    late,
-    JSON.stringify({ subscribe: '.recipe', id: 'r' }),
-  )
+  let late = await watch({ by: ADA }, true)
   assertEquals(late.sent[0].relay, says(CAKE, { x: 11 }))
   assertEquals(flood.closed, [])
 
@@ -210,11 +223,7 @@ test('a cook who arrives late sees the fingers already on the page', async () =>
 
   // A cook who subscribes after the move is told it in her opening frame,
   // beside the set — she never saw the write that put it there.
-  let cleo = wire()
-  await store.webSocketMessage(
-    cleo,
-    JSON.stringify({ subscribe: '.recipe', id: 'r' }),
-  )
+  let cleo = await watch({ by: ADA }, true)
   let [first] = cleo.sent
   assertEquals(first.relay, says(CAKE, { x: 3, y: 9, name: 'Ada' }))
 })
@@ -249,7 +258,7 @@ test('clearing it is the component set to null, like anywhere else', async () =>
 })
 
 test('a finger lost to an eviction is still taken away', async () => {
-  let { ctx, store, watch } = await watching()
+  let { store, watch, wake } = await watching()
   let ada = await watch(), bert = await watch()
   await store.webSocketMessage(
     ada,
@@ -259,12 +268,8 @@ test('a finger lost to an eviction is still taken away', async () => {
 
   // The object is evicted. Its memory went with it — the value is gone, and a
   // cook arriving now is told nothing …
-  let woken = new Store(ctx)
-  let late = wire()
-  await woken.webSocketMessage(
-    late,
-    JSON.stringify({ subscribe: '.recipe', id: 'r' }),
-  )
+  let woken = wake()
+  let late = await subscribe(woken, wire())
   assert(!late.sent[0].relay)
 
   // … but the keys rode the attachment, so Ada leaving still un-says it.
@@ -362,13 +367,9 @@ test('a malformed relay batch never leaves a held value for another subscriber',
   }
 })
 
-test('a hibernated editor reconnects for current standing before relaying again', async () => {
-  let { ctx, store, watch } = await watching()
-  let EVE = 'd0000000-0000-4000-8000-000000000004'
-  let head = { ...headers(), 'x-yak-person': EVE, 'x-yak-role': 'editor' }
-  await (await store.door).authenticate(
-    new Request('http://store/ws', { headers: head }),
-  )
+test('a hibernated editor loses their socket when their seat is removed', async () => {
+  let { ctx, store, watch, wake, members } = await watching()
+  members[EVE] = 'editor'
   let eve = await watch({ by: EVE }), bert = await watch()
   await store.webSocketMessage(
     eve,
@@ -377,31 +378,28 @@ test('a hibernated editor reconnects for current standing before relaying again'
   await until(() => relay(bert).length)
   assertEquals(await (await store.door).graph.get([EVE]), [])
 
-  let woken = new Store(ctx)
+  delete members[EVE]
+  let woken = wake()
   let late = wire()
   ctx.live.push(late)
-  await woken.webSocketMessage(
-    late,
-    JSON.stringify({ subscribe: '.recipe', id: 'r' }),
-  )
+  await subscribe(woken, late)
   late.sent.length = 0
   await woken.webSocketMessage(
     eve,
     JSON.stringify({ relay: says(CAKE, { x: 4 }) }),
   )
   assertEquals(eve.closed, [1012])
-  assertEquals(relay(late), [])
+  assertEquals(relay(late).filter((b) => b.presence), [])
 
-  // A replacement connection goes through the ordinary handshake's auth seam.
-  await (await woken.door).authenticate(
+  // A new connection can relay once the directory restores its seat.
+  members[EVE] = 'editor'
+  let head = { ...headers(), 'x-yak-person': EVE, 'x-yak-role': 'editor' }
+  let actor = await (await woken.door).authenticate(
     new Request('http://store/ws', { headers: head }),
   )
-  let back = wire({ by: EVE })
+  let back = wire(actor)
   ctx.live.push(back)
-  await woken.webSocketMessage(
-    back,
-    JSON.stringify({ subscribe: '.recipe', id: 'r' }),
-  )
+  await subscribe(woken, back)
   await woken.webSocketMessage(
     back,
     JSON.stringify({ relay: says(CAKE, { x: 5 }) }),
@@ -417,10 +415,7 @@ test('an open-app guest can keep moving a new ephemeral entity without storing i
   let { ctx, store, watch } = await watching(state(), 'open')
   let guest = await watch({ via: 'guest-browser' }), observer = wire()
   ctx.live.push(observer)
-  await store.webSocketMessage(
-    observer,
-    JSON.stringify({ subscribe: '.presence', id: 'p' }),
-  )
+  await subscribe(store, observer, '.presence')
   let eid = 'e0000000-0000-4000-8000-000000000005'
   for (let x of [1, 2]) {
     await store.webSocketMessage(
@@ -437,7 +432,6 @@ test('an open-app guest can keep moving a new ephemeral entity without storing i
 
 test('an app-local grant admits a relaying editor with no kernel role', async () => {
   let { store, watch } = await watching()
-  let EVE = 'd0000000-0000-4000-8000-000000000004'
   assertEquals(
     (await post(store, '/apply', [{
       entity: { eid: 'e0000000-0000-4000-8000-000000000005' },

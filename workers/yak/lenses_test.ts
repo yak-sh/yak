@@ -1,4 +1,4 @@
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Frame } from '@yaks/api'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -11,6 +11,7 @@ import { doorOf } from './door.ts'
 import { IDEMPOTENCY } from '@yaks/durable-object/door'
 import { KERNEL, metaOf } from './meta.ts'
 import { state } from './testing.ts'
+import { socketDirectory } from './socket-fixture.ts'
 import {
   latestSpeaks,
   lensDocAt,
@@ -36,9 +37,12 @@ let next = {
 }
 let speaks = versions([lensDocAt(name, old)])
 let headers = { ...KERNEL, 'x-yak-speaks': JSON.stringify(speaks) }
-let wire = () => {
+let wire = (person: string) => {
   let sent: Frame[] = []
-  let held: unknown = { read: { speaks } }
+  let held: unknown = {
+    read: { speaks, person },
+    writer: { actor: { by: person } },
+  }
   return {
     readyState: 1,
     sent,
@@ -51,31 +55,41 @@ let wire = () => {
 test('an app lens keeps old writes, reads and subscriptions through reload', async () => {
   let ctx = state()
   using _db = ctx.storage
-  let store = new Store(ctx)
+  let app = crypto.randomUUID(), person = crypto.randomUUID()
+  let vouch = {
+    ...KERNEL,
+    'x-yak-app': app,
+    'x-yak-person': person,
+    'x-yak-role': 'owner',
+    'x-yak-policy': '1',
+  }
+  let spoken = { ...headers, ...vouch }
+  let env = { STORE: socketDirectory(app, { [person]: 'owner' }) }
+  let store = new Store(ctx, env)
   let door = doorOf((r) => store.fetch(r), name)
-  let meta = metaOf(door)
+  let meta = metaOf(door, vouch)
   let declare = (doc: unknown) =>
     door('/vocab', {
       method: 'POST',
       body: JSON.stringify(doc),
-    }, KERNEL)
+    }, vouch)
   assert((await declare(old)).ok)
   let deployed = await declare(next)
   assert(deployed.ok, await deployed.text())
   let row = { entity: { eid: 'cake' }, recipe: { title: 'Cake' } }
-  await meta.apply([row], headers)
+  await meta.apply([row], spoken)
   let current = await meta.query('.recipe ?doc') as Bundle[]
   assertEquals(
     current.map((r) => [(r.recipe as Comp).title, (r.doc as Comp).title]),
     [[undefined, 'Cake']],
   )
-  let held = await metaOf(door, headers).query(
+  let held = await metaOf(door, spoken).query(
     '.recipe.title~=Cake',
   ) as Bundle[]
   assertEquals((held[0].recipe as Comp).title, 'Cake')
   assertEquals((held[0].doc as Comp).title, 'Cake')
 
-  let ws = wire()
+  let ws = wire(person)
   ctx.live.push(ws)
   await store.webSocketMessage(
     ws,
@@ -84,11 +98,13 @@ test('an app lens keeps old writes, reads and subscriptions through reload', asy
       id: 'old',
     }),
   )
+  await until(() => ws.sent.length == 1)
   assertEquals((ws.sent.at(-1)!.bundles![0].recipe as Comp).title, 'Cake')
   await meta.apply(
     [{ entity: row.entity, doc: { title: 'Cake again' } }],
-    KERNEL,
+    vouch,
   )
+  await until(() => ws.sent.length == 2)
   assertEquals(
     (ws.sent.at(-1)!.bundles![0].recipe as Comp).title,
     'Cake again',
@@ -96,21 +112,20 @@ test('an app lens keeps old writes, reads and subscriptions through reload', asy
 
   // Rollback puts the old page vocabulary back, while retaining its bridge.
   assert((await declare(old)).ok)
-  store = new Store(ctx)
+  store = new Store(ctx, env)
   assertEquals(
-    ((await metaOf(door, headers).query('.recipe.title~=again'))[0]
+    ((await metaOf(door, spoken).query('.recipe.title~=again'))[0]
       .recipe as Comp)
       .title,
     'Cake again',
   )
   await meta.apply(
     [{ entity: row.entity, recipe: { title: 'Cake third' } }],
-    headers,
+    spoken,
   )
-  assertEquals(
-    (ws.sent.at(-1)!.bundles![0].recipe as Comp).title,
-    'Cake third',
-  )
+  let latest = () => (ws.sent.at(-1)?.bundles?.[0].recipe as Comp)?.title
+  await until(() => latest() == 'Cake third')
+  assertEquals(latest(), 'Cake third')
 })
 
 test('the app lens mover rehearses, consumes its source, and is idempotent', async () => {

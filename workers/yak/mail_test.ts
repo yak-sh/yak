@@ -242,6 +242,7 @@ type Vouch = {
   role?: string
   access?: string
   kernel?: boolean
+  policy?: number
 }
 
 let headers = (v: Vouch = {}): Record<string, string> => ({
@@ -252,6 +253,7 @@ let headers = (v: Vouch = {}): Record<string, string> => ({
   ...(v.person ? { 'x-yak-person': v.person } : {}),
   ...(v.role ? { 'x-yak-role': v.role } : {}),
   ...(v.kernel ? { 'x-yak-kernel': '1' } : {}),
+  ...(v.policy != null ? { 'x-yak-policy': String(v.policy) } : {}),
 })
 
 let owner: Vouch = { person: ADA, role: 'owner' }
@@ -279,7 +281,10 @@ let hosted = (
   return p.register('mail store', ctx, () => new Store(ctx, bindings))
 }
 
-let platform = async (meter?: Record<string, unknown>) => {
+let platform = async (
+  meter?: Record<string, unknown>,
+  members: Bundle[] = [],
+) => {
   let dir = hosted(state(PLATFORM_STORE))
   let ns: Namespace = {
     idFromName: (name: string) => name,
@@ -294,7 +299,7 @@ let platform = async (meter?: Record<string, unknown>) => {
   }, {
     entity: { eid: APP },
     app: { slug: 'cookbook', space: SPACE, access: 'private' },
-  }], KERNEL)
+  }, ...members], KERNEL)
   // What the space has spent this month, as the directory holds it.
   let spent = async () => {
     let [row] = await store.query(line`.entity.eid=${SPACE}&?meter`)
@@ -383,14 +388,20 @@ test("a member's letter leaves from the app's own address", async () => {
 // same second, instead of finding out on its next query.
 test('a page watching the letter is told it left', async () => {
   let ctx = state()
-  let { store, mail } = await cookbook(outbox(), owner, ctx)
+  let { ns } = await platform(undefined, [
+    { entity: { eid: ADA }, person: {} },
+    {
+      entity: { eid: crypto.randomUUID() },
+      member: { space: SPACE, person: ADA, role: 'owner' },
+    },
+  ])
+  let sender = { ...owner, policy: 0 }
+  let { store, mail } = await cookbook(outbox(), sender, ctx, ns)
   let bundles = (f: Frame) => (f.bundles ?? []) as Bundle[]
   let heard = new Set<string>()
-  let left = Promise.withResolvers<void>()
-  let ws = wire(owner, (frame) => {
+  let ws = wire(sender, (frame) => {
     if (bundles(frame).some((b) => b.entity.eid == NOTE && b.delivered)) {
       heard.add(frame.id)
-      if (heard.has('all') && heard.has('note')) left.resolve()
     }
   })
   ctx.live.push(ws)
@@ -405,11 +416,12 @@ test('a page watching the letter is told it left', async () => {
     ws,
     JSON.stringify({ subscribe: '.delivered', id: 'note' }),
   )
+  await until(() => ws.sent.length > 0)
   assertEquals(ws.sent.length, 1) // the raw feed opens with no set at all
   assertEquals((ws.sent[0] as { id: string }).id, 'note')
 
-  assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
-  await left.promise
+  assertEquals((await post(store, '/apply', letter(), sender)).status, 200)
+  await until(() => heard.has('all') && heard.has('note'))
   assertEquals(mail.sent.length, 1)
 
   let cast = ws.sent.filter((f) =>

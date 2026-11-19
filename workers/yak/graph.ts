@@ -2179,6 +2179,7 @@ export class Store extends Durable {
     }
     let afar = this.#lending(branch, feed)
     if (branch == null) this.#feed = feed
+    let local = policy(g.storage, { ignore: this.#staleGrant })
     let live = sockets(
       beside(
         this.#naming(subs, spared),
@@ -2200,7 +2201,7 @@ export class Store extends Durable {
           }
         },
         authorize: (read, writer) =>
-          this.#socketStanding(read?.person ?? null, writer?.actor),
+          this.#socketStanding(local, read?.person ?? null, writer?.actor),
       },
     )
     let route = api({ ...applying, graph: g, subs })
@@ -2488,7 +2489,11 @@ export class Store extends Durable {
 
   // The attachment keeps the identity across wakes. The directory supplies
   // current standing for each frame, including a browser's visit to the app.
-  async #socketStanding(person: string | null, actor?: Actor | null) {
+  async #socketStanding(
+    local: ReturnType<typeof policy>,
+    person: string | null,
+    actor?: Actor | null,
+  ) {
     let app = this.#get('app')
     if (!this.#bind.STORE || !app) return false
     let via = instrumentActor(actor)?.via
@@ -2506,7 +2511,11 @@ export class Store extends Durable {
       await this.#recheck(req)
       await this.#learn(req)
       let v = vouchOf(req)
-      if (reads(mode(req.headers.get('x-yak-access')), v.level)) {
+      let access = mode(req.headers.get('x-yak-access'))
+      if (
+        reads(access, v.level) ||
+        reads(access, await local.levelOf(person, app))
+      ) {
         this.#vouch(v)
         return true
       }

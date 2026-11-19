@@ -4,7 +4,7 @@
 // meanwhile is marked failed. Each store spends its rows through the ceiling
 // its driver counts against, on a clock the case moves.
 import { line } from '@yaks/query'
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { bounded } from '@yaks/durable-object/ceiling'
 import { by, tally } from '@yaks/sql'
@@ -17,6 +17,7 @@ import type { Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { WAKE } from './door.ts'
 import { db, state, titling } from './testing.ts'
+import { socketDirectory } from './socket-fixture.ts'
 import { Pending } from '@yaks/api/log'
 import { BINARY, binary } from '@yaks/vocab/wire'
 
@@ -47,14 +48,18 @@ let held = () => {
 
 // A store with one note in it, speaking `words` beside the platform's, and
 // the last answer its door gave.
-let object = async (words?: unknown) => {
+let object = async (
+  words?: unknown,
+  env = {},
+  headers: Record<string, string> = {},
+) => {
   let h = held()
-  let store = new Store(h.ctx, {}, undefined, { now: () => h.at.t })
+  let store = new Store(h.ctx, env, undefined, { now: () => h.at.t })
   if (words) {
     await store.fetch(
       new Request('http://store/vocab', {
         method: 'POST',
-        headers: { ...KERNEL, 'x-store': NAME },
+        headers: { ...KERNEL, ...headers, 'x-store': NAME },
         body: JSON.stringify(words),
       }),
     )
@@ -62,8 +67,10 @@ let object = async (words?: unknown) => {
   let last: Response | undefined
   let door = metaOf(
     doorOf(async (r) => (last = await store.fetch(r)).clone(), NAME),
+    headers,
   )
-  let apply = (b: unknown[]) => door.apply(b as never, KERNEL)
+  let apply = (b: unknown[]) =>
+    door.apply(b as never, { ...KERNEL, ...headers })
   let title = async (eid: string) =>
     ((await door.query(line`.entity.eid=${eid}`))[0]?.doc as { title?: string })
       ?.title
@@ -132,15 +139,29 @@ test('a store restarted in a window spent past its writes answers a read', async
   assertEquals(read.status, 200)
 })
 
-let watched = await object()
+let WATCHED = 'f0000000-0000-4000-8000-000000000001'
+let VIEWER = 'f0000000-0000-4000-8000-000000000002'
+let watched = await object(
+  {},
+  { STORE: socketDirectory(WATCHED, { [VIEWER]: 'viewer' }) },
+  {
+    'x-yak-app': WATCHED,
+    'x-yak-access': 'private',
+    'x-yak-policy': '1',
+  },
+)
 test('a stopped store refuses a watch with how long to wait', async () => {
   let o = watched
   let sent: { id?: string; refused?: { error: string; retry: unknown } }[] = []
+  let held: unknown = {
+    read: { person: VIEWER },
+    writer: { actor: { by: VIEWER } },
+  }
   let ws = {
     readyState: 1,
     send: (data: string) => void sent.push(JSON.parse(data)),
-    serializeAttachment: () => {},
-    deserializeAttachment: () => null,
+    serializeAttachment: (value: unknown) => void (held = value),
+    deserializeAttachment: () => held,
   }
   o.ctx.live.push(ws as never)
   o.spend('read')
@@ -148,6 +169,7 @@ test('a stopped store refuses a watch with how long to wait', async () => {
     ws as never,
     JSON.stringify({ subscribe: '.doc', id: 'd' }),
   )
+  await until(() => sent.length > 0)
   assertEquals(sent.at(-1)?.refused?.error, 'Stopped')
   assertEquals(sent.at(-1)?.refused?.retry, { after: MINUTE, defer: true })
 })

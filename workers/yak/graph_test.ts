@@ -36,9 +36,7 @@ import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { metaOf } from './meta.ts'
 import type { Load } from '@yaks/host'
-import type { Namespace } from '@yaks/durable-object/door'
-import { EPOCH } from './directory-copy.ts'
-import { useUntil } from './used.ts'
+import { socketDirectory } from './socket-fixture.ts'
 import { appConfig } from '@yaks/platform/config'
 import { load } from './load.ts'
 import { named as spoken, type Names } from '@yaks/platform/listing'
@@ -225,32 +223,7 @@ let viewer: Vouch = { app: APP, person: KIM, role: 'viewer', policy: 1 }
 
 // The directory a Store rereads a socket's standing from on every frame: the
 // app is private, in a space Ada owns and Kim views.
-let directory: Namespace = {
-  idFromName: (n) => n,
-  get: () => ({
-    fetch: (req: Request) => Promise.resolve(answer(req)),
-  }),
-}
-let answer = (req: Request) => {
-  let url = new URL(req.url)
-  if (url.pathname == '/used') return Response.json({ at: useUntil() })
-  let q = url.searchParams.get('q') ?? ''
-  let seat = (person: string, role: string) =>
-    q.includes(`.member.person=${person}`)
-      ? [{
-        entity: { eid: person },
-        member: { space: SPACE, person, role },
-      }]
-      : []
-  return Response.json([
-    ...q.includes(`.entity.eid=${APP}`)
-      ? [{ entity: { eid: APP }, app: { space: SPACE, access: 'private' } }]
-      : [],
-    ...seat(ADA, 'owner'),
-    ...seat(KIM, 'viewer'),
-  ], { headers: { [EPOCH]: '1' } })
-}
-let env = { STORE: directory }
+let env = { STORE: socketDirectory(APP, { [ADA]: 'owner', [KIM]: 'viewer' }) }
 
 // A socket as its handshake left it: the identity the kernel vouched for.
 let watcher = async (store: Store, v = seated) => {

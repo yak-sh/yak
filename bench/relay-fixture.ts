@@ -5,6 +5,8 @@
 // whose Store, graph and guard take the clock it gives them. The fixture's time
 // is its own: it never replaces the runtime's clock or timers.
 import { type Sample, stopwatch } from '@yaks/benchmark'
+import { until } from '@yaks/testing'
+import { socketDirectory } from '../workers/yak/socket-fixture.ts'
 import { stamps } from './vocabulary.ts'
 import type { durable } from '../packages/durable-object/testing.ts'
 
@@ -30,6 +32,7 @@ const headers = {
   'x-yak-app': APP,
   'x-yak-person': ADA,
   'x-yak-role': 'owner',
+  'x-yak-policy': '1',
   'x-yak-via': VIA,
   'x-yak-access': 'private',
   'x-yak-title': 'Ada',
@@ -113,7 +116,7 @@ export async function relayFixture(
         acceptWebSocket: (ws: unknown) => live.push(ws),
         getWebSockets: () => live,
       },
-      {},
+      { STORE: socketDirectory(APP, { [ADA]: 'owner' }) },
       undefined,
       {
         now: () => now,
@@ -164,6 +167,11 @@ export async function relayFixture(
     const received: { entity: { eid: string }; presence?: { x?: number } }[] =
       []
     let timingValue = false
+    let opened = false
+    let observerAttachment: unknown = {
+      read: { person: ADA },
+      writer: { actor: { by: ADA } },
+    }
     const observer = {
       readyState: 1,
       send: (raw: string) => {
@@ -173,16 +181,18 @@ export async function relayFixture(
           throw new Error('Fanout ran inside admission timing')
         }
         received.push(...(frame.relay ?? []))
+        if (frame.id === 'observe') opened = true
       },
       close: () => {},
-      serializeAttachment: (_value: unknown) => {},
-      deserializeAttachment: () => null,
+      serializeAttachment: (value: unknown) => observerAttachment = value,
+      deserializeAttachment: () => observerAttachment,
     }
     live.push(observer)
     await store.webSocketMessage(
       observer,
       JSON.stringify({ subscribe: '.hero', id: 'observe' }),
     )
+    await until(() => opened)
     received.length = 0
     send = async (i, x, timing) => {
       let flush: (() => void) | undefined, cancelled = false, flushing = false
@@ -234,6 +244,7 @@ export async function relayFixture(
           )
         }
         const expected = batch(eids[i], x)
+        await until(() => received.length)
         if (JSON.stringify(received) !== JSON.stringify(expected)) {
           throw new Error(
             `Relay delivery mismatch: ${JSON.stringify(received)}`,
