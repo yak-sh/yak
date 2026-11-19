@@ -275,8 +275,11 @@ export type Env = {
   // first app. Both tiers run on Workers AI — `AI` is the binding
   // (wrangler.toml `[ai]`), no key of ours and nothing bought, absent under
   // the workerd probes where the loop says so rather than half-running.
-  // AI_GATEWAY is the gateway Workers AI calls go through, which nobody has
-  // set. Which provider the builder runs on is config.ts `agents`. BUILDER_MODEL_FREE and
+  // The four beside it are OpenAI's (config.ts `openai`), which nobody has
+  // switched on: the AI Gateway named by AI_GATEWAY, paid for by
+  // OPENAI_API_KEY or by the gateway's own stored key (AI_GATEWAY_TOKEN), and
+  // OPENAI_API, a probe's door to somewhere other than the gateway. Which
+  // provider the builder runs on is config.ts `agents`. BUILDER_MODEL_FREE and
   // BUILDER_MODEL_PAID are the model ids, so changing either is a `wrangler
   // secret put` and no deploy of new code.
   AI?: {
@@ -285,10 +288,10 @@ export type Env = {
     toMarkdown?: import('./documents.ts').Markdown
   }
   AI_GATEWAY?: string
+  AI_GATEWAY_TOKEN?: string
   OPENAI_API_KEY?: string
-  // The key scoped to OpenAI text models, for Operator conversations
-  // (config.ts `operatorProviders`): with it the Operator runs on GPT-6.2 Sol.
-  // OPENAI_API_KEY remains the image service's credential.
+  // Optional key scoped to OpenAI text models for Operator conversations.
+  // The shared OPENAI_API_KEY remains the image service's credential.
   OPENAI_OPERATOR_API_KEY?: string
   // The "yaks.app models" project's key, limited to the OpenAI models that
   // answer the chat names apps ask ./api/ai/run for (config.ts `answering`).
@@ -298,9 +301,8 @@ export type Env = {
   BUILDER_MODEL_PAID?: string
   OPERATOR_MODEL?: string
   // Claude for the Operator and builders (providers.ts): the platform's
-  // Anthropic key, for product use only. With it and without
-  // OPENAI_OPERATOR_API_KEY the Operator runs on Sonnet and hands coding to
-  // OPERATOR_DELEGATE (Opus by default).
+  // Anthropic key, for product use only. With it the Operator runs on Sonnet
+  // and hands coding to OPERATOR_DELEGATE (Opus by default).
   ANTHROPIC_API_KEY?: string
   OPERATOR_DELEGATE?: string
   // The builder's workbench (sandbox.ts, T-34264): the Cloudflare Container

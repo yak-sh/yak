@@ -597,9 +597,8 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 # OPENAI_API_KEY is the "yaks.app images" OpenAI project's service account
 # key (1Password "OpenAI yaks.app images"): it may use only the GPT Image 2.5
 # and 2.6 models and spend $20 a month, and an app's image asks spend the
-# space's budget on it (config.ts `openai`). OPENAI_OPERATOR_API_KEY is the
-# key the Operator's conversations run on GPT-6.2 Sol with. AI_GATEWAY is
-# unset on purpose: no gateway exists on the account and nothing needs
+# space's budget on it (config.ts `openai`). AI_GATEWAY and AI_GATEWAY_TOKEN
+# are unset on purpose: no gateway exists on the account and nothing needs
 # one, since both builder tiers build on the `[ai]` binding above. Point
 # BUILDER_MODEL_PAID at an OpenAI model on a key that may use it, and the paid
 # build speaks to OpenAI instead. BUILDER_MODEL_FREE and BUILDER_MODEL_PAID are the

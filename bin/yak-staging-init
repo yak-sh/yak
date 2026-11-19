@@ -14,6 +14,7 @@ export let OAUTH_KV = 'yak-oauth-staging'
 // deployed environment.
 export let SECRETS = [
   'AI_GATEWAY',
+  'AI_GATEWAY_TOKEN',
   'BUILDER_MODEL_FREE',
   'BUILDER_MODEL_PAID',
   'CF_ANALYTICS_TOKEN',
