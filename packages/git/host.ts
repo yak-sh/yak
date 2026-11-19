@@ -72,6 +72,12 @@ let canonical = async (path: string): Promise<string> => {
   }
 }
 
+let exists = (path: string): Promise<boolean> =>
+  io.lstat(path).then(() => true, (error) => {
+    if (io.isNotFound(error)) return false
+    throw error
+  })
+
 // Serialize creation and restoration at one worktree path, including requests
 // through different graph clients. The advisory lock holds across processes,
 // and the kernel releases it if this one dies. Lock files stay: unlinking one
@@ -501,11 +507,7 @@ let commonOf = async (source: string): Promise<string> =>
 
 let { add, keep } = spares({
   git,
-  exists: (path) =>
-    io.stat(path).then(() => true, (error) => {
-      if (io.isNotFound(error)) return false
-      throw error
-    }),
+  exists,
   entries: io.readDir,
   remove: (path) =>
     io.remove(path, { recursive: true }).catch((error) => {
@@ -992,16 +994,20 @@ export let restore = async (g: Graph, tree: Bundle): Promise<string> => {
 }
 
 // Called with the checkout path locked by create or restore. A peer may have
-// restored it while this request waited; an existing path is never replaced.
+// restored it while this request waited; a checkout standing at the path is
+// never replaced. A directory there without its `.git` is what a removal
+// killed partway leaves: it goes to trash and the checkout grows again.
 let replace = async (
   g: Graph,
   path: string,
   w: Comp,
   spare?: boolean,
 ): Promise<string> => {
-  if (await io.stat(path).then(() => true, () => false)) return path
+  let there = await exists(path)
+  if (there && await exists(path + '/.git')) return path
   let common = ((await row(g, String(w.repository)))?.repository as Comp)
     ?.common
+  if (there && typeof common == 'string') await gone(common, path)
   let head = w.head
   if (typeof head != 'string' || typeof common != 'string') {
     throw new Error('nothing recorded to cut ' + path + ' again from')
@@ -1025,4 +1031,20 @@ let replace = async (
   )
   await discover(g, path)
   return path
+}
+
+// Trash what a killed `git worktree remove` left of the checkout at `path`:
+// the directory, which Git empties before its registration, and the
+// registration, which still claims the path and its branch.
+let gone = async (common: string, path: string) => {
+  let admin = common + '/worktrees'
+  let names = await Array.fromAsync(io.readDir(admin)).catch((error) => {
+    if (io.isNotFound(error)) return []
+    throw error
+  })
+  for (let { name } of names) {
+    let at = await io.readTextFile(`${admin}/${name}/gitdir`).catch(() => '')
+    if (at.trim() == path + '/.git') await trash(`${admin}/${name}`)
+  }
+  await trash(path)
 }

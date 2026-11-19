@@ -121,3 +121,23 @@ test('a checkout cut while it is taken back grows again once the removal is done
     close()
   }
 })
+
+test('a checkout whose removal was killed partway grows again', async () => {
+  let { dir, source, close } = await repo()
+  try {
+    let g = fixture().g
+    let path = `${dir}/S1`
+    let request = { path, branch: 'session-S1', base: 'refs/heads/main' }
+    await createWorktree(g, source, request)
+    // `git worktree remove` empties the directory before it drops Git's
+    // registration; killed between, a file and the registration are left.
+    Deno.removeSync(`${path}/.git`)
+    Deno.writeTextFileSync(`${path}/left`, 'x')
+    let tree = await createWorktree(g, source, request)
+    assertEquals((tree.workspace as { root: string }).root, path)
+    assertEquals((await Deno.stat(`${path}/.git`)).isFile, true)
+    assertEquals(Deno.readDirSync(path).some((e) => e.name == 'left'), false)
+  } finally {
+    close()
+  }
+})
