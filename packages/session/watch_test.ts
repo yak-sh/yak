@@ -341,7 +341,7 @@ test("a run's completion and its receipt are one knock, the report whole", async
   let o = await started()
   await o.write(done, o.run)
   equal(await o.heard('worker'), [])
-  equal((await o.heard('operator')).length, 1)
+  equal(await o.heard('operator'), [])
   let report = `Landed 1234abc. ${'It works. '.repeat(40)}`.trim()
   await o.write(
     comment('receipt', report, { knock: { target: 'worker' } }),

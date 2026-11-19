@@ -49,9 +49,12 @@
 // One event is one knock. A managed run that ends leaves its whole report as
 // a comment on its task that knocks whoever started it (`reported`, which
 // @yaks/spawn's completion writes by). That receipt is the knock for
-// the run's work on the task: the session it knocks is knocked neither for
-// the comment a second time nor, a little earlier, for the run marking the
-// task completed or cancelled.
+// the run's work on the task: the session it knocks is not knocked for the
+// comment a second time, and nobody it reaches, that session or a watcher
+// knocked about the comment, is knocked a little earlier for the run marking
+// the task completed or cancelled. Each would be a second helper's batch for
+// one report (./help.ts). Only a person's assistant, which hears no such
+// comment, hears of the mark.
 
 import { line, sub } from '@yaks/query'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
@@ -381,20 +384,28 @@ export let reported = async (
   return { tasks }
 }
 
-// Who hears a change another way, so is not knocked for it: the session a
-// comment itself knocks, and, for a mark a managed run made while still at
-// work on the task, whoever its receipt will knock.
+// Who hears a change another way, so is not knocked for it. A comment: the
+// session it knocks itself. A mark a managed run made while still at work on
+// the task: everyone its receipt reaches, which is the session the receipt
+// knocks and every watcher the receipt, a comment, knocks in turn. A person's
+// assistant hears no comment that does not answer them, so for it the mark is
+// the news.
 let told = async (
   g: Addressing,
   row: Bundle,
   task: Eid,
   via: Eid,
-): Promise<Eid[]> => {
-  if (row.comment) return [str(comp(row, 'knock').target)].filter(Boolean)
+): Promise<(target: Eid, person: Eid) => boolean> => {
+  let none = () => false
+  if (row.comment) {
+    let to = str(comp(row, 'knock').target)
+    return (t) => t == to
+  }
   let run = via ? await managed(g, via) : undefined
-  if (!run?.process || run.exit) return []
+  if (!run?.process || run.exit) return none
   let { tasks, to } = await reported(g, via)
-  return to && tasks.includes(task) ? [to] : []
+  if (!tasks.includes(task)) return none
+  return (t, person) => t == to || !person
 }
 
 /** A change worth telling: what happened, what it says (the task's title, or
@@ -512,23 +523,22 @@ export let knocks = async (
     watching = watching.filter((w) => !told.includes(w))
   }
   let own = change.via ? await writers(g, change.via) : new Set<Eid>()
-  let knows = new Set([
-    ...own,
-    ...await told(g, row, task.entity.eid, change.via),
-  ])
+  let knows = await told(g, row, task.entity.eid, change.via)
   watching = watching.filter((w) => !own.has(w))
   let worked = !!row.comment && (await taken(g, [eid])).has(eid)
   let stands = await standing(g, change.via)
   let to = (await targets(g, watching, muting, !worked, change.by))
-    .filter((t) => !knows.has(t) && !stands(t))
+    .filter((t) => !own.has(t) && !stands(t))
+  // The person each target stands for, if it stands for one.
+  let stood = new Map(
+    (to.length ? await g.get(to, [SESSION]) : []).map((b) => [
+      b.entity.eid,
+      str(comp(b, SESSION).person),
+    ]),
+  )
+  to = to.filter((t) => !knows(t, stood.get(t) ?? ''))
   // A comment reaches a person's assistant only when it answers them.
-  if (row.comment && to.length) {
-    let stood = new Map(
-      (await g.get(to, [SESSION])).map((b) => [
-        b.entity.eid,
-        str(comp(b, SESSION).person),
-      ]),
-    )
+  if (row.comment) {
     to = to.filter((t) => [replied, ''].includes(stood.get(t) ?? ''))
   }
   if (!to.length) return []

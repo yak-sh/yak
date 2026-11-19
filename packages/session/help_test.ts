@@ -32,7 +32,7 @@ import { statusComputed } from './state.ts'
 import { sessions } from './plugin.ts'
 import { help, LIMIT, QUIET } from './help.ts'
 import { hear } from './listen.ts'
-import { reported, targets } from './watch.ts'
+import { reported, targets, watch } from './watch.ts'
 import { runs } from './tools.ts'
 
 let vocab = loadVocab([
@@ -242,6 +242,37 @@ test('a helper whose work is done is over: what it was told of reaches its opera
   }])
   await help(o.g, h.eid)
   equal(await targets(o.g, [h.eid], new Set()), ['operator'])
+})
+
+test('a run’s mark and its report, however far apart, are one helper’s to check', async () => {
+  let o = await office()
+  await o.write([
+    { entity: { eid: 'run' }, session: { id: 'run' }, process: { pid: 2 } },
+    { entity: { eid: 'gate' }, claim: { session: 'run' } },
+    {
+      entity: { eid: 'watching' },
+      subscription: { actor: 'operator', target: 'gate', mode: 'watch' },
+    },
+  ])
+  let run = async (eid: string, bundles: Bundle[]) => {
+    await o.write(bundles.map((b) => ({ ...b, $actor: { via: 'run' } })))
+    await watch(o.g, eid)
+    await o.fx()
+    for (let h of await o.helpers()) await o.exit(h.eid, 0)
+  }
+  await run('gate', [{ entity: { eid: 'gate' }, completed: {} }])
+  await run('report', [
+    { entity: { eid: 'run' }, exit: { code: 0 } },
+    {
+      entity: { eid: 'report' },
+      comment: { target: 'gate' },
+      doc: { body: 'Landed abc.' },
+    },
+  ])
+  equal(
+    (await o.helpers()).map((h) => h.told.map((l) => l.split(':')[0])),
+    [['C-1 on T-1']],
+  )
 })
 
 test('a person’s words reach the operator, whoever relays them', async () => {
