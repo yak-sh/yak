@@ -5,6 +5,7 @@ import { apex } from '@yaks/platform/host'
 import { challenge } from '@yaks/oauth'
 import { cleanup, clock, kept, until } from '@yaks/testing'
 import { COOKIE, sign, verify } from './lib/token.ts'
+import { unsealed } from './invite.ts'
 import type { Custom } from './domains.ts'
 import type { Command } from './declared.ts'
 import type { Bundle } from '@yaks/graph'
@@ -630,6 +631,9 @@ export let clickInvite = async (
 }
 
 // Accepted: the click, signed in as its person, landing where it points.
+// Anything else says which door answered: its page's title (or its first
+// words), the link clicked, and what that link's seal opens to under the
+// kernel's own secret (invite.ts `unsealed`).
 export let accepted = async (
   k: Kernel,
   email: string,
@@ -637,9 +641,20 @@ export let accepted = async (
   after = 0,
 ) => {
   let r = await clickInvite(k, email, cookie, after)
-  await r.body?.cancel()
-  if (r.status != 303) throw new Error(`accept: ${r.status}`)
-  return r.headers.get('location')!
+  if (r.status == 303) {
+    await r.body?.cancel()
+    return r.headers.get('location')!
+  }
+  let text = await r.text()
+  let said = /<title>([^<]*)<\/title>/.exec(text)?.[1] ?? text.slice(0, 200)
+  let l = await letter(k, email, '/invite?t=', after)
+  let link = /https:\/\/\S+\/invite\?t=\S+/.exec(l.body)![0]
+  let t = new URL(link).searchParams.get('t') ?? ''
+  let sealed = await unsealed(t, k.secret)
+  throw new Error(
+    `accept: ${r.status} ${said} at ${link}, ` +
+      `sealed ${JSON.stringify(sealed)}`,
+  )
 }
 
 // Deliver an RFC 5322 letter directly through the kernel's email adapter.
