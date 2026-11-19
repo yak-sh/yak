@@ -717,11 +717,12 @@ export let unknownName = (word: string, names: string[]): string => {
 }
 
 /** The refusal for properties a component does not declare: one wording,
- * whether a query or a write named them. A component with no properties is
- * explained by its description, the one place what it means is said. */
+ * whether a query or a write named them. Where it can name nothing the caller
+ * was closer to (a marker has no properties to be close to), the component is
+ * explained by its description, the one place what it means is said, such as
+ * where a value it does not hold is read instead. */
 export let unknownProps = (v: Vocab, comp: string, props: string[]): string => {
   let own = [...comp == SPINE ? [EID] : [], ...v.props(comp)]
-  let about = own.length ? '' : v.comp(comp)?.description
   let near = [...new Set(props.flatMap((p) => nearest(p, own)))]
   let first = (c: string) =>
     v.props(c).find((q) => v.prop(c, q)?.scalar != 'jsonb')
@@ -742,6 +743,9 @@ export let unknownProps = (v: Vocab, comp: string, props: string[]): string => {
     let f = first(p)
     return f ? [`.${comp}&.${p}.${f}=…`] : []
   })
+  let about = near.length || through.length || worn.length
+    ? ''
+    : v.comp(comp)?.description
   return `unknown ${props.length > 1 ? 'properties' : 'property'}: ${
     props.map((p) => `${comp}.${p}`).join(', ')
   }${

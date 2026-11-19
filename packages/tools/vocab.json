@@ -4,7 +4,7 @@
     "call": {
       "component": true,
       "type": "object",
-      "description": "A recorded tool invocation. `to` references the tool, so a query names a tool by .call.to.tool.name=…; `name`, when present, is the name the caller wrote.",
+      "description": "A recorded tool invocation. `to` references the tool, so a query names a tool by .call.to.tool.name=…; `name`, when present, is the name the caller wrote. Its outcome is not on the call: .execution.state beside it reads running, done, failed or interrupted, and what the tool answered is the result that names it (.result.call=<call>, result{call, ms, value}), refused or thrown when that result also wears refusal{code} or exception{type, value}.",
       "properties": {
         "to": {
           "type": "string",

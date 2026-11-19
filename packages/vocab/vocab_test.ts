@@ -1039,14 +1039,15 @@ test('a value compared with a component names the properties that hold one', () 
   ) assert(valueless(w, path, op, value).includes(said), `${path}${op}${value}`)
 })
 
-// A property no component declares is refused with the component's shape; one
-// with no properties at all is explained by its own description.
+// A property no component declares is refused with the component's shape, and
+// with its description where nothing closer can be named.
 test('an unknown property is refused with what its component holds', () => {
   let w = loadVocab({
     $defs: {
       book: {
         component: true,
         type: 'object',
+        description: 'a book; who has it is read from the loan of it',
         properties: { title: { type: 'string' } },
       },
       alias: {
@@ -1067,7 +1068,8 @@ test('an unknown property is refused with what its component holds', () => {
   })
   assertEquals(
     unknownProps(w, 'book', ['name']),
-    'unknown property: book.name — book has title (string)',
+    'unknown property: book.name — book has title (string); book: a book; ' +
+      'who has it is read from the loan of it',
   )
   assertEquals(
     unknownProps(w, 'alias', ['name']),
