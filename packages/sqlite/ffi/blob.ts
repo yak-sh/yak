@@ -34,8 +34,11 @@ export interface BlobOpenOptions {
  */
 export class SQLBlob {
   #handle: Deno.PointerValue
+  // An open blob keeps its connection from closing unreached (./database.ts).
+  #db: Database
 
   constructor(db: Database, options: BlobOpenOptions) {
+    this.#db = db
     options = Object.assign({
       readonly: true,
       db: 'main',
