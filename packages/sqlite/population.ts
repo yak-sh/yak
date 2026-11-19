@@ -166,11 +166,19 @@ let TABLES: CreateTable[] = [
 // each deploy deleted and none created.
 let PARTS = [...TABLES, ...tallying, ...membership, ...burying]
 
-/** Whether the file keeps counts, and every trigger that keeps them true. */
+/** Whether the file keeps counts, and every trigger that keeps them true:
+ * what an answer read from them asks. It reads the file's whole schema, once
+ * per schema revision (@yaks/sql `catalogue`). */
 export let installed = (driver: Driver): boolean => {
   let held = new Set(catalogue(driver).map((o) => o.name))
   return PARTS.every((s) => held.has(s.name))
 }
+
+// Whether the file keeps counts at all, one look at their table: what a plan
+// is sized by asks. A count gone stale sizes a plan badly and answers nothing,
+// and the next answer read from the counts seeds them anew ({@link population}).
+let kept = (driver: Driver): boolean =>
+  driver.query({ t: 'pragma', name: 'table_info', arg: POPULATION }).length > 0
 
 /** Install once, after the entity schema and its archetype backfill stand.
  * Seeding and the triggers commit together; another opener sees both or none.
@@ -294,7 +302,7 @@ let counting = (driver: Driver, component?: string): number => {
 // `revision`): the reads of one summary share a revision, and ask once.
 type Counted = {
   at: number
-  installed?: boolean
+  kept?: boolean
   held: Map<string, number | undefined>
   looked: Map<string, boolean>
   numbered: Map<string, boolean>
@@ -344,7 +352,7 @@ let numbering = (driver: Driver, comp: string): boolean =>
 export let census = (driver: Driver): Census => ({
   held: (comp) => {
     let at = counted(driver)
-    if (!(at.installed ??= installed(driver))) return
+    if (!(at.kept ??= kept(driver))) return
     if (!at.held.has(comp)) at.held.set(comp, counting(driver, comp))
     return at.held.get(comp)
   },
@@ -371,7 +379,7 @@ export let census = (driver: Driver): Census => ({
   },
   numbered: (comp) => {
     let at = counted(driver)
-    if (!(at.installed ??= installed(driver))) return
+    if (!(at.kept ??= kept(driver))) return
     if (!at.numbered.has(comp)) at.numbered.set(comp, numbering(driver, comp))
     return at.numbered.get(comp)
   },
