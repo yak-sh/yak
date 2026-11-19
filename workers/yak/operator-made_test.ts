@@ -12,7 +12,6 @@ import { directoryOf } from './directory.ts'
 import { platform } from './testing.ts'
 import { operatorModel, operatorService } from './operator-testing.ts'
 import { receive } from './operator-channels.ts'
-import { rootOf } from './operator-root.ts'
 import { chatPage } from './operator-page.ts'
 import { TOOLS } from './tools.ts'
 
@@ -73,7 +72,7 @@ let after = async (...steps: Item[]) => {
     title: a.title,
   }))
   let { document } = parseHTML(
-    await (await chatPage(p.env, space, who, rootOf(eid, person), { apps }))
+    await (await chatPage(p.env, space, who, 'new', { apps }))
       .text(),
   )
   let part = (id: string) => document.querySelector(`[data-part=${id}]`)

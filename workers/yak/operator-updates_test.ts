@@ -15,7 +15,7 @@ import { parseHTML } from 'linkedom'
 import { chatPage, updatesPage } from './operator-page.ts'
 import { chatAt, shownAnswer, updatesAnswer } from './updates.ts'
 import { attachmentKey } from './attachments.ts'
-import { chatPath, managePath } from '@yaks/platform/routes'
+import { chatPath, managed, managePath } from '@yaks/platform/routes'
 
 let p = platform('operator-updates')
 let [ada, bo, eid] = [0, 1, 2].map(() => crypto.randomUUID())
@@ -332,24 +332,28 @@ test('a choice shows a picture, prose or a draft, and only its asker reads the p
 })
 
 // Whether an update's "See the chat" opens a page holding the line its
-// address names.
+// address names, followed as a browser follows it: through a redirect, its
+// fragment kept.
 let lands = async (u: Update) => {
   let space = (await directoryOf(p.env.STORE).at(eid))!
   let who = { person: ada, role: 'owner' as const, space: eid }
   let href = new URL(chatAt(space, u), 'https://yaks.app')
-  let open = href.pathname.split('/').at(-1)!
-  let from = href.searchParams.get('from')
-  let d = parseHTML(
-    await (await chatPage(
+  let page = async (at: URL): Promise<Response> => {
+    let from = at.searchParams.get('from')
+    let route = managed(at.pathname)
+    let answer = await chatPage(
       p.env,
       space,
       who,
-      open,
+      route && 'open' in route && route.open || 'new',
       {},
       null,
       from == null ? undefined : Number(from),
-    )).text(),
-  ).document
+    )
+    let to = answer.headers.get('location')
+    return to ? page(new URL(to, at)) : answer
+  }
+  let d = parseHTML(await (await page(href)).text()).document
   return !!d.getElementById(href.hash.slice(1))
 }
 

@@ -17,6 +17,7 @@ import { within } from './defects.ts'
 import { RETIRED, ServingCopy } from './serving-copy.ts'
 import { directory } from './directory.ts'
 import { storeOf } from './door.ts'
+import { tallying } from './lib/hops.ts'
 import { type Namespace } from '@yaks/durable-object/door'
 
 let fixture = () => {
@@ -299,16 +300,24 @@ test('reads asked in one turn are one trip, each answered its own line', async (
   assertEquals(trips.at(-1), ['.d'])
 })
 test('an isolate-wide door batches reads only within the same request', async () => {
-  let { trips, ask, answers } = reading()
-  let request = (name: string) =>
-    inRequest(async () =>
-      answers(await Promise.all([ask(`${name}.a`), ask(`${name}.b`)]))
-    )
-  assertEquals(await Promise.all([request('first'), request('second')]), [
-    ['first.a', 'first.b'],
-    ['second.a', 'second.b'],
-  ])
-  assertEquals(trips, [['first.a', 'first.b'], ['second.a', 'second.b']])
+  // A request is its invocation, or its tally where one counts it.
+  for (
+    let entered of [
+      inRequest,
+      <T>(read: () => Promise<T>) => tallying(new Map(), read),
+    ]
+  ) {
+    let { trips, ask, answers } = reading()
+    let request = (name: string) =>
+      entered(async () =>
+        answers(await Promise.all([ask(`${name}.a`), ask(`${name}.b`)]))
+      )
+    assertEquals(await Promise.all([request('first'), request('second')]), [
+      ['first.a', 'first.b'],
+      ['second.a', 'second.b'],
+    ])
+    assertEquals(trips, [['first.a', 'first.b'], ['second.a', 'second.b']])
+  }
 })
 test('a store reset mid-trip is read again whole, each caller its own line', async () => {
   let said = (q: string, n: number) =>
