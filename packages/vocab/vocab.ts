@@ -1080,6 +1080,7 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
   // compiles and every bundle a write carries: each is worked out once, and
   // handed out frozen, since every caller shares it.
   let aimed = new Map<string, Hop[]>()
+  let refusals = new Map<string, { prop: string; message: string }>()
   let frozen = <T>(x: T): T => {
     if (x && typeof x == 'object') {
       for (let v of Object.values(x)) frozen(v)
@@ -1124,6 +1125,11 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
       let key = facet ? `?${path}` : path
       let held = aimed.get(key)
       if (held) return held
+      // A refusal's words are this vocabulary's, so they are found once: a
+      // read that asks every app's vocabulary about a word few of them
+      // declare would otherwise measure its distance to every name, each time.
+      let no = refusals.get(key)
+      if (no) throw new Unknown(no.prop, no.message)
       let segs = path.split('.')
       let local = segs.length <= 2 ? read.get(segs[0]) : undefined
       let known = local?.paths?.get(path)
@@ -1132,6 +1138,10 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
         return known
       }
       let out: Hop[] = []
+      let refuse = (prop: string, message: string): never => {
+        refusals.set(key, { prop, message })
+        throw new Unknown(prop, message)
+      }
       for (let i = 0; i < segs.length; i += 2) {
         let [a, b] = [segs[i], segs[i + 1]]
         if (a == SPINE && b == EID) {
@@ -1141,8 +1151,8 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
         let own = routes.get(a)
         if (!own) {
           let at = homes(a)
-          if (at.length) throw new Unknown(a, unqualified(a, at))
-          if (b != null || !facet) throw new Unknown(a, unknownName(a, names))
+          if (at.length) refuse(a, unqualified(a, at))
+          if (b != null || !facet) refuse(a, unknownName(a, names))
           out.push({ comp: a, prop: '' })
           continue
         }
@@ -1151,7 +1161,7 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
           continue
         }
         if (!own.includes(b)) {
-          throw new Unknown(`${a}.${b}`, unknownProps(v, a, [b]))
+          refuse(`${a}.${b}`, unknownProps(v, a, [b]))
         }
         out.push({ comp: a, prop: b })
       }
