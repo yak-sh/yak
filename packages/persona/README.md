@@ -134,10 +134,11 @@ last had.
 The files are a write-only [@yaks/mirror](../mirror) binding: the graph owns
 them. A hand edit is put back; one made while the graph also moved is left and
 reported; the file of a renamed or deleted persona is removed. The links in
-`.claude/agents` follow the files: each specialist's is made, and a link into
-`.tasks/personas` that no file is named for is removed, so a renamed persona's
-link moves with its file. Anything else in `.claude/agents` is left alone. What
-each file last agreed on is kept in `mirror/personas.json` beside the database.
+`.claude/agents` follow the files: a specialist no link names gets `<name>.md`,
+and a link into `.tasks/personas` naming no current file is removed, so a
+renamed persona's link moves with its file. Anything else in `.claude/agents` is
+left alone. What each file last agreed on is kept in `mirror/personas.json`
+beside the database.
 
 `persona_sync` writes them (`check` reports what would change instead). A host
 keeps them current after every write that touches a persona or a document one

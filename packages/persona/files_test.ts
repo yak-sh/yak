@@ -116,6 +116,7 @@ test("a specialist's link follows its file; a person's own agent stays", async (
     let agents = `${root}/.claude/agents`
     Deno.mkdirSync(agents, { recursive: true })
     Deno.symlinkSync('../../.tasks/personas/old.md', `${agents}/old.md`)
+    Deno.symlinkSync('../../.tasks/personas/old.md', `${agents}/operator.md`)
     Deno.symlinkSync('../../elsewhere.md', `${agents}/theirs.md`)
     Deno.writeTextFileSync(`${agents}/mine.md`, 'mine\n')
     let g = fleet(root)
@@ -127,7 +128,7 @@ test("a specialist's link follows its file; a person's own agent stays", async (
     let first = await pass()
     assertEquals(first, {
       linked: [`${agents}/coder.md`],
-      unlinked: [`${agents}/old.md`],
+      unlinked: [`${agents}/old.md`, `${agents}/operator.md`],
       failed: [],
     })
     assertMatch(
@@ -138,6 +139,10 @@ test("a specialist's link follows its file; a person's own agent stays", async (
       [...Deno.readDirSync(agents)].map((e) => e.name).sort(),
       ['coder.md', 'mine.md', 'theirs.md'],
     )
+    assertEquals(await pass(), { linked: [], unlinked: [], failed: [] })
+    // A link of another name to a current file is as good as its own.
+    Deno.removeSync(`${agents}/coder.md`)
+    Deno.symlinkSync('../../.tasks/personas/coder.md', `${agents}/operator.md`)
     assertEquals(await pass(), { linked: [], unlinked: [], failed: [] })
   } finally {
     Deno.removeSync(root, { recursive: true })

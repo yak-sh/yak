@@ -20,9 +20,9 @@
 // it is. Every file already under an owned `.tasks` directory is in the binding
 // too, so a renamed or deleted persona's file is removed.
 //
-// The links in `.claude/agents` follow the files: each specialist gets one,
-// and a link into `.tasks/personas` that no file is named for is removed, so a
-// renamed persona's link moves with its file. Anything else there is a
+// The links in `.claude/agents` follow the files: a specialist no link names
+// gets one, and a link into `.tasks/personas` naming no current file is
+// removed, so a renamed persona's link moves with its file. Anything else there is a
 // person's own agent, left alone.
 //
 // Which checkout is borrowed, not declared here: a project's `repo.repository`
@@ -253,29 +253,18 @@ let linkOf = (path: string): string | undefined => {
   }
 }
 
-/** The `.claude/agents` links that differ from what the persona files want:
- * a specialist's link missing or naming another file is made, and a link
- * into `.tasks/personas` that no file wants is removed. A file of a person's
- * own at a link's path is left. */
+/** The `.claude/agents` links the persona files want changed: a specialist
+ * whose file no link names gets `<name>.md`, and a link into
+ * `.tasks/personas` naming no file the graph still says is removed, so a
+ * renamed persona's link moves with its file. A link of another name that
+ * names a current file is kept, and a person's own file at a link's path is
+ * left. */
 export let agentLinks = ({ files, roots }: Files): Link[] => {
-  let want = new Map<string, string>()
-  for (let { path } of files) {
-    let at = path.indexOf(PERSONAS)
-    if (at < 0) continue
-    let name = path.slice(at + PERSONAS.length)
-    want.set(
-      `${path.slice(0, at)}/.claude/agents/${name}`,
-      `../..${PERSONAS}${name}`,
-    )
-  }
+  let current = new Set(files.map((f) => f.path))
   let out: Link[] = []
-  for (let [path, to] of want) {
-    let now = linkOf(path)
-    if (now == to || now == null && taken(path)) continue
-    out.push({ path, to })
-  }
   for (let root of roots) {
     let dir = `${root.slice(0, -'/.tasks'.length)}/.claude/agents`
+    let named = new Set<string>()
     let entries: fs.DirEntry[] = []
     try {
       entries = [...fs.readDirSync(dir)]
@@ -283,10 +272,17 @@ export let agentLinks = ({ files, roots }: Files): Link[] => {
     for (let e of entries) {
       let path = `${dir}/${e.name}`
       let to = e.isSymlink ? linkOf(path) : undefined
-      if (!to || want.has(path)) continue
-      if (fs.resolve(dir, to).startsWith(`${root}/personas/`)) {
-        out.push({ path })
-      }
+      if (!to) continue
+      let target = fs.resolve(dir, to)
+      if (current.has(target)) named.add(target)
+      else if (target.startsWith(`${root}/personas/`)) out.push({ path })
+    }
+    for (let path of current) {
+      if (!path.startsWith(`${root}/personas/`) || named.has(path)) continue
+      let name = path.slice(path.lastIndexOf('/') + 1)
+      let at = `${dir}/${name}`
+      if (linkOf(at) == null && taken(at)) continue
+      out.push({ path: at, to: `../..${PERSONAS}${name}` })
     }
   }
   return out.sort((a, b) => a.path.localeCompare(b.path))
