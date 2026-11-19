@@ -4,11 +4,11 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { machineTools } from '@yaks/harness/machine'
 import { SENTINEL } from '@yaks/secrets'
 import { called, transcribed } from './builder.ts'
-import { kv } from './binding-probe.ts'
+import { ownedBy } from './directory-fixture.ts'
+import { platform } from './directory-rows-probe.ts'
 import { sandboxes } from '../../packages/sandbox/testing.ts'
 import { GRANT } from './grants.ts'
 import { HOST, routed, spending, workbench } from './sandbox.ts'
-import type { Space } from './directory.ts'
 
 let SECRET = 'a probe secret'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -107,14 +107,13 @@ for (
 
 let placeholder = async () => {
   let box = sandboxes(() => ({ stdout: 'ok' }))
-  let env = {
+  let { env, dir } = platform(SECRET, {
     WORKBENCH: box.WORKBENCH,
-    OAUTH_KV: kv(),
-    SESSION_SECRET: SECRET,
-  }
+  })
+  let space = await ownedBy(dir, ADA, 'ada')
   let { workspace: machine } = await workbench(
     env,
-    { eid: 'ada', slug: 'ada' } as Space,
+    space,
     ADA,
     spending(),
   )
