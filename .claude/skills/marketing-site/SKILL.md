@@ -191,6 +191,8 @@ else, so each one has to stand alone as a statement of what the section holds.
 "Keep what people make" sounds like a slogan and leaves them guessing. "It
 saves what people add" tells them.
 
+**Every section heading ends with a period**, on every page of the site; a question keeps its question mark.
+
 **A term is defined before it's used, or it isn't used.** The words we use
 every day ("space", "store", "vocab", "connector") mean nothing to a stranger.
 If the page needs one, the sentence that first uses it says what it is.
