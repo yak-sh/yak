@@ -419,6 +419,18 @@ export let client = (
   return { get, post, applied, put, headers }
 }
 
+// The output schemas each caller of a kernel was listed, by tool: a caller
+// lists its tools once, however many clients it opens (`meta` opens one a
+// call), and lists them again only for a tool it was not listed yet.
+type Schemas = Map<string, ReturnType<typeof ajv.compile>>
+let listings = new WeakMap<object, Map<string, Schemas>>()
+let listedFor = (k: Pick<Kernel, 'at'>, caller: string): Schemas => {
+  let held = listings.get(k.at) ?? new Map<string, Schemas>()
+  listings.set(k.at, held)
+  if (!held.has(caller)) held.set(caller, new Map())
+  return held.get(caller)!
+}
+
 // An agent on the connector: JSON-RPC over POST /mcp at the apex, as one
 // signed-in person. `tool` answers the reply's text, throwing when the tool
 // says it erred, so a test reads the words and not the envelope.
@@ -437,7 +449,7 @@ export let connector = (
   // later request, the way a client does — it names this client's stream and
   // the tool list it cached (mcp.ts).
   let session = ''
-  let schemas = new Map<string, ReturnType<typeof ajv.compile>>()
+  let schemas = listedFor(k, `${k.host}${path} ${cookie ?? ''} ${bearer ?? ''}`)
   let ask = async (method: string, params: unknown = {}) => {
     let r = await k.at(k.host, path, {
       method: 'POST',

@@ -11,7 +11,6 @@ import { handle, secretEid } from '@yaks/secrets'
 import {
   client,
   connector,
-  fresh,
   kernel,
   meta,
   num,
@@ -1548,9 +1547,10 @@ test('an app declares which of its own properties are searched', async () => {
 
 for (let plan of ['Plus', 'comped']) {
   test(`${plan} spaces can create and install more than fifty apps`, async () => {
-    let k = await fresh()
+    let k = await kernel()
     try {
       let slug = plan == 'Plus' ? 'plus-limits37' : 'yourname'
+      let name = `limits-${plan.toLowerCase()}`
       let { cookie, eids, email } = await seed(k, [
         { slug, apps: ['original'] },
       ])
@@ -1562,16 +1562,19 @@ for (let plan of ['Plus', 'comped']) {
         content: '<h1>Original</h1>',
       })
       await agent.tool('app_deploy', at)
-      await agent.tool('app_publish', { ...at, name: 'limits-example' })
+      await agent.tool('app_publish', { ...at, name })
       if (plan == 'Plus') await onPlus(k, eids[slug])
       let seeded = Array.from({ length: 50 }, (_, i) => ({
         entity: { eid: crypto.randomUUID() },
         doc: { title: `App ${i}` },
-        app: { slug: `app-${i}`, space: eids[slug], store: `${slug}/app-${i}` },
+        app: {
+          slug: `app-${i}`,
+          space: eids[slug],
+          store: `${slug}/app-${i}`,
+          access: 'private',
+        },
       }))
-      for (let i = 0; i < seeded.length; i += 10) {
-        await meta(k).apply(seeded.slice(i, i + 10))
-      }
+      await meta(k).apply(seeded)
       // Refresh the directory after seeding through its graph.
       await agent.tool('space_set', {
         space: email.split('@')[0],
@@ -1583,7 +1586,7 @@ for (let plan of ['Plus', 'comped']) {
       assertStringIncludes(
         await agent.tool('app_install', {
           space: slug,
-          name: 'limits-example',
+          name,
           as: 'copy',
         }),
         `as ${slug}/copy`,
