@@ -49,21 +49,44 @@ export class Unknown extends Error {
 /**
  * The refusal for a property named alone. A name alone is a component; a
  * property is named with its component, so the message names each component
- * that declares it. It only teaches: what the query means is unchanged.
+ * that declares it, with what that component is where `about` says (the head
+ * of its description), so a caller choosing among several knows which one it
+ * meant. It only teaches: what the query means is unchanged.
  *
  * ```ts
+ * import { assertEquals } from '@std/assert'
  * import { unqualified } from '@yaks/vocab'
- * unqualified('status', ['session', 'task'])
- * // '.status is a property, not a component — name it .session.status or .task.status'
+ * assertEquals(
+ *   unqualified('status', ['session', 'task']),
+ *   '.status is a property, not a component — name it .session.status or .task.status',
+ * )
+ * assertEquals(
+ *   unqualified('version', ['app', 'deploy'], (c) =>
+ *     ({ app: 'one app in a space: its slug', deploy: 'one release of an app' })[c]),
+ *   '.version is a property, not a component — name it .app.version (one app in a space) ' +
+ *     'or .deploy.version (one release of an app)',
+ * )
  * ```
  */
-export let unqualified = (prop: string, comps: string[]): string => {
-  let forms = comps.map((c) => `.${c}.${prop}`)
+export let unqualified = (
+  prop: string,
+  comps: string[],
+  about: (comp: string) => string | undefined = () => undefined,
+): string => {
+  let forms = comps.map((c) => {
+    let is = gist(about(c))
+    return `.${c}.${prop}${is ? ` (${is})` : ''}`
+  })
   let last = forms.pop()
   return `.${prop} is a property, not a component — name it ${
     forms.length ? `${forms.join(', ')} or ` : ''
   }${last}`
 }
+
+// What a description says a component is: its first clause, before the
+// colon, comma, parenthesis, dash or sentence that goes on to its parts.
+let gist = (description?: string) =>
+  description?.split(/[:;(,]|\s—\s|\.\s/)[0].trim() || undefined
 
 // The scalar types a `~=` contains-test reads as text.
 let TEXT = ['text', 'url', 'query']
@@ -1155,7 +1178,9 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
         let own = routes.get(a)
         if (!own) {
           let at = homes(a)
-          if (at.length) refuse(a, unqualified(a, at))
+          if (at.length) {
+            refuse(a, unqualified(a, at, (c) => v.comp(c)?.description))
+          }
           if (b != null || !facet) refuse(a, unknownName(a, names))
           out.push({ comp: a, prop: '' })
           continue

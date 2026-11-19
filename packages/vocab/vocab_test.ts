@@ -113,7 +113,8 @@ test('a property named alone is refused with the forms that name it', () => {
   let e = assertThrows(() => v.aim('title'), Unknown)
   assertEquals(
     e.message,
-    '.title is a property, not a component — name it .doc.title',
+    '.title is a property, not a component — name it .doc.title ' +
+      '(The written face of an entity)',
   )
   assertEquals((e as Unknown).prop, 'title')
   // a presence test is held to the same rule
@@ -135,6 +136,27 @@ test('a property named alone is refused with the forms that name it', () => {
   )
   // past a reference too
   assertThrows(() => v.aim('comment.target.title'), Unknown, '.doc.title')
+  // each form says what its component is, by the head of its description
+  let d = loadVocab({
+    $defs: {
+      app: {
+        component: true,
+        description: 'one app in a space: its slug and the version served',
+        properties: { version: { type: 'number' } },
+      },
+      deploy: {
+        component: true,
+        description: 'one release of an app, and the worker built from it',
+        properties: { version: { type: 'number' } },
+      },
+    },
+  })
+  assertThrows(
+    () => d.aim('version'),
+    Unknown,
+    '.version is a property, not a component — name it ' +
+      '.app.version (one app in a space) or .deploy.version (one release of an app)',
+  )
 })
 
 test('a name alone is the component, even where a property shares it', () => {

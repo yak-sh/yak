@@ -101,10 +101,11 @@ their `doc`; add `?doc` or `.fields=doc.title` to read titles.
 Many components share a property name, and a guess between them would be
 silently wrong, so a property is always named with its component:
 `.task.status=open`. A name by itself tests for a component, and a property
-named alone is refused with every form that names it: `.status=open` answers
-`.status is a property, not a component — name it .connection.status,
-.dispatch.status, .plan.status, .request.status, .session.status, .task.status
-or ._extends.status`. The refusal never picks one for you. The other way round,
+named alone is refused with every form that names it, each with the head of
+its component's description: `.version` in yak/platform answers `.version is a
+property, not a component — name it .app.version (one app in a space),
+.deploy.version (one release of an app), …`. The refusal never picks one for
+you. The other way round,
 a value compared with a component is refused with the properties that hold one:
 `.topic~=moss` answers `.topic~=moss names a component, not a property: … write
 .topic.name~=moss, or the bare word moss to search all indexed text`. An
