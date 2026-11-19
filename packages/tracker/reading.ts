@@ -78,15 +78,23 @@ export let said = (e: Bundle): string =>
 /// let back = (regressed: object) => ({ ...bug, regressed })
 /// reopened(back({ message: 'Error: again\n  at f', commit: 'a'.repeat(40) })) -> 'Error: again (aaaaaaa)'
 /// reopened(back({ message: 'Error: red (aaaaaaa1b) https://ci/1', commit: 'a'.repeat(7) + '1b' + 'c'.repeat(31) })) -> 'Error: red (aaaaaaa1b) https://ci/1'
+/// reopened(back({ message: 'Error: busy', commit: 'dafb20d7-a68f-4f8c-8393-9c038d0f854c' })) -> 'Error: busy (version dafb20d7)'
 /// reopened(back({})) -> 'Error: first'
-/** The hit that reopened a bug, in a line: its message and its commit. A bug
- * reopened before its mark said so reads as its title. */
+/** The hit that reopened a bug, in a line: its message and the code it ran
+ * on. A bug reopened before its mark said so reads as its title. */
 export let reopened = (bug: Bundle): string => {
   let back = comp(bug, 'regressed')
   let line = (str(back.message) || said(bug)).split('\n')[0]
-  let commit = sha(str(back.commit))
-  return commit && !line.includes(commit) ? `${line} (${commit})` : line
+  let code = ran(str(back.commit))
+  return code && !line.includes(code) ? `${line} (${code})` : line
 }
+
+/** The code a hit ran on, as people say it. A Worker reports its deployment's
+ * version, a UUID: said whole beside a bug, it reads as the bug's own id. */
+let ran = (commit: string): string =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(commit)
+    ? `version ${commit.slice(0, 8)}`
+    : sha(commit)
 
 /** Where a bug is open, resolved or archived; regressed is open again. */
 export let standing = (e: Bundle): string =>
