@@ -541,8 +541,8 @@ export let keepSpare = async (
 }
 
 /** Why a worktree was kept: uncommitted files, commits that exist nowhere
- * else, or a removal that did not succeed. */
-export type Held = 'dirty' | 'unlanded' | 'failed'
+ * else, a removal that did not succeed, or a run that took it up again. */
+export type Held = 'dirty' | 'unlanded' | 'failed' | 'taken'
 
 /** What the scan reads of this host's processes, each read failing as procfs
  * does: `procfs` reads Linux's, and a test hands the scan its own. */
@@ -862,31 +862,38 @@ let keepIgnored = async (path: string) => {
  * unless it still holds something. Returns what kept it, or nothing. A worktree
  * Git has lost is kept: its unique contents cannot be proved absent. Nothing
  * here passes `--force`, so Git's own
- * refusal is a second guard behind `holds`. */
+ * refusal is a second guard behind `holds`. It is removed under the lock
+ * creation takes at its path, after `free` (asked under that lock) says
+ * nobody took it up again: a checkout created there meanwhile waits for the
+ * removal to finish and cuts it again, rather than finding it half gone. */
 export let reclaim = async (
   path: string,
   landed?: string,
   base?: string,
+  free: () => Promise<boolean> = () => Promise.resolve(true),
 ): Promise<Held | undefined> => {
   if (await lost(path)) {
     // Without Git's index and HEAD, cleanliness and landing cannot be proved.
     return 'unlanded'
   }
-  let { held, branch } = await holding(path, landed, base)
-  if (held) return held
-  let common = await quiet(path, [
-    'rev-parse',
-    '--path-format=absolute',
-    '--git-common-dir',
-  ])
-  await keepIgnored(path)
-  if (await quiet(path, ['worktree', 'remove', path]) == null) return 'failed'
-  // The branch outlives its worktree, and only the repository can delete it.
-  // `-D` is safe here: the commits were proved to exist on another branch.
-  if (branch && common) {
-    await quiet(common, ['--git-dir=' + common, 'branch', '-D', branch])
-  }
-  return undefined
+  let common = await commonOf(path).catch(() => undefined)
+  if (!common) return 'failed'
+  return locked(common, await canonical(path), async () => {
+    if (!await free()) return 'taken'
+    let { held, branch } = await holding(path, landed, base)
+    if (held) return held
+    await keepIgnored(path)
+    if (await quiet(path, ['worktree', 'remove', path]) == null) {
+      return 'failed'
+    }
+    // The branch outlives its worktree, and only the repository can delete
+    // it. `-D` is safe here: the commits were proved to exist on another
+    // branch.
+    if (branch) {
+      await quiet(common, ['--git-dir=' + common, 'branch', '-D', branch])
+    }
+    return undefined
+  })
 }
 
 /** The size of an untracked file too large to commit when shelving: a
@@ -899,12 +906,23 @@ export let LARGE = 1_000_000
  * on a branch, so `restore` cuts it again where it stood once `onBranch` (run
  * with the work committed and the checkout still there) has recorded it.
  * Returns what kept it, or nothing: `dirty` for an untracked file of
- * {@link LARGE} or more, `failed` when Git refused a step. */
+ * {@link LARGE} or more, `failed` when Git refused a step. It is removed
+ * under the lock creation takes at its path, as `reclaim` removes one. */
 export let shelve = async (
   path: string,
   onBranch: () => Promise<unknown> = async () => {},
 ): Promise<Held | undefined> => {
   if (await lost(path)) return 'unlanded'
+  let common = await commonOf(path).catch(() => undefined)
+  if (!common) return 'failed'
+  return locked(common, await canonical(path), () => put(path, onBranch))
+}
+
+// Shelve, under the lock creation takes at `path`.
+let put = async (
+  path: string,
+  onBranch: () => Promise<unknown>,
+): Promise<Held | undefined> => {
   let at = await standing(path)
   if (!at) return 'unlanded'
   if (at.dirty) {

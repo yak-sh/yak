@@ -1,7 +1,16 @@
 // Worktree occupancy compares paths; the scan reads processes through Procs.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { inUse, processCwds, processPaths, type Procs } from './host.ts'
+import {
+  createWorktree,
+  inUse,
+  processCwds,
+  processPaths,
+  type Procs,
+  reclaim,
+} from './host.ts'
+import { fixture } from './testing.ts'
+import type { Comp } from '@yaks/graph'
 
 test('process directories protect a worktree and its descendants', () => {
   for (
@@ -46,4 +55,69 @@ test('a process the scan cannot read holds nothing', async () => {
     [...await processCwds(procs)].slice(1).sort(),
     ['/cwd/1', '/cwd/6', '/hidden'],
   )
+})
+
+// A throwaway repository with one commit on main.
+let repo = async () => {
+  let dir = await Deno.realPath(Deno.makeTempDirSync({ prefix: 'host-' }))
+  let run = (...args: string[]) =>
+    new Deno.Command('git', { args, cwd: `${dir}/repo` }).output()
+  Deno.mkdirSync(`${dir}/repo`)
+  await run('init', '-q', '-b', 'main')
+  await run(
+    '-c',
+    'user.name=t',
+    '-c',
+    'user.email=t@t',
+    'commit',
+    '-q',
+    '--allow-empty',
+    '-m',
+    'one',
+  )
+  return {
+    dir,
+    source: `${dir}/repo`,
+    close: () => Deno.removeSync(dir, { recursive: true }),
+  }
+}
+
+test('a checkout cut while it is taken back grows again once the removal is done', async () => {
+  let { dir, source, close } = await repo()
+  try {
+    let g = fixture().g
+    let path = `${dir}/S1`
+    let request = { path, branch: 'session-S1', base: 'refs/heads/main' }
+    let base = String(
+      ((await createWorktree(g, source, request)).checkout as Comp).base,
+    )
+    // The removal holds the path's lock while it asks whether the checkout
+    // is free; the cut starts then, and must wait for it.
+    let free!: (yes: boolean) => void
+    let held!: () => void
+    let holding = new Promise<void>((r) => held = r)
+    let removing = reclaim(path, 'refs/heads/main', base, () => {
+      held()
+      return new Promise((r) => free = r)
+    })
+    await holding
+    let cutting = createWorktree(g, source, request)
+    free(true)
+    assertEquals(await removing, undefined)
+    let tree = await cutting
+    assertEquals((tree.workspace as { root: string }).root, path)
+    // Taken up again before its removal is asked: it is kept.
+    assertEquals(
+      await reclaim(
+        path,
+        'refs/heads/main',
+        base,
+        () => Promise.resolve(false),
+      ),
+      'taken',
+    )
+    assertEquals((await Deno.stat(`${path}/.git`)).isFile, true)
+  } finally {
+    close()
+  }
 })

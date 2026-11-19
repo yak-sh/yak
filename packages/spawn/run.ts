@@ -868,7 +868,7 @@ let onward = async (
   well: boolean,
 ): Promise<void> => {
   if (!well || !await parked(g, session)) {
-    if (o.worktrees) await taken(g, checkoutOf(session, o.worktrees))
+    if (o.worktrees) await taken(g, session, checkoutOf(session, o.worktrees))
     await trash(emptyOf(session, o))
     await clean(session, o)
   }
@@ -1186,8 +1186,12 @@ let cause = async (
 
 // A run's checkout, taken back now that the run is over — its row brought up
 // to date first, so a resume can create it again where it stood. One that
-// holds work (uncommitted, or commits nothing has landed) is kept.
-let taken = async (g: Graph, path: string): Promise<void> => {
+// holds work (uncommitted, or commits nothing has landed) is kept, and so is
+// one whose session a next run has taken meanwhile (`take` clears its exit):
+// that run is starting in it.
+let taken = async (g: Graph, session: string, path: string): Promise<void> => {
+  let over = async () => (await ran(g, session))?.[EXIT] != null
+  if (!await over()) return
   try {
     await disk.stat(path)
   } catch {
@@ -1205,6 +1209,7 @@ let taken = async (g: Graph, path: string): Promise<void> => {
       path,
       'refs/heads/main',
       base == null ? undefined : String(base),
+      over,
     )
   }
 }
