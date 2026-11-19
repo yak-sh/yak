@@ -31,7 +31,7 @@ import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import * as apps from './apps.ts'
 import { owned } from './directory-fixture.ts'
-import { type Ran, sandboxes } from './workspace-probe.ts'
+import { type Ran, sandboxes } from '../../packages/sandbox/testing.ts'
 import { platform } from './deploy-probe.ts'
 import { held, ledger } from './grants.ts'
 import {

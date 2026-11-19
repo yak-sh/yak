@@ -7,7 +7,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import './binding-probe.ts'
-import { embeds } from './model-probe.ts'
+import { embeds } from './testing.ts'
 import { connector, fresh, meta, seed, signIn } from './probe.ts'
 import { digest } from '@yaks/graph/sha256'
 import type { Env } from './env.ts'

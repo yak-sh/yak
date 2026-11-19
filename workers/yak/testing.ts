@@ -15,9 +15,18 @@ export {
   kvStorage,
   limiter,
 } from './binding-probe.ts'
-export { type Ran, sandboxes } from './workspace-probe.ts'
-export { ai, embeds, modelPage, type Turn } from './model-probe.ts'
+export { type Ran, sandboxes } from '../../packages/sandbox/testing.ts'
+import * as workersAi from '../../packages/workers-ai/testing.ts'
+export { modelPage, type Turn } from '../../packages/workers-ai/testing.ts'
+import { DIM, MODEL } from './embedding.ts'
 export { app, declared, owned, space } from './directory-fixture.ts'
+// Workers AI as the Worker binds it: its stores embed with embedding.json's
+// model at its width.
+let vectors = { model: MODEL, dimensions: DIM }
+export let embeds = <A extends Parameters<typeof workersAi.embeds>[0]>(a: A) =>
+  workersAi.embeds(a, vectors)
+export let ai = (script: workersAi.Turn[]) => workersAi.ai(script, vectors)
+
 // The platform in memory: the kernel's own bindings, stood up under Deno so a
 // test can drive the code that runs in production with nothing stubbed between
 // a request and the rows.

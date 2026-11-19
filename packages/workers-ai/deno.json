@@ -2,7 +2,8 @@
   "publish": {
     "exclude": [
       "**/*_test.ts",
-      "browser.json"
+      "browser.json",
+      "testing.ts"
     ]
   }
 }

@@ -1,3 +1,6 @@
+// Cloudflare's Sandbox binding in memory (not part of the published package;
+// see deno.json), as ./cloudflare.ts and a host's tools reach for it.
+
 /** One command, as the stand-in sandbox was told to answer it. */
 export type Ran = {
   stdout?: string
@@ -8,11 +11,9 @@ export type Ran = {
 }
 
 /**
- * The builder's workbench, in memory (sandbox.ts): a scripted answer per
- * command and a Map for a filesystem. It is here beside the Store and the
- * bucket for the same reason they are — a second copy of what a sandbox
- * answers is a second answer to what a sandbox is — and it keeps the tools
- * that reach for one testable with no container anywhere.
+ * A workbench in memory: a scripted answer per command and a Map for a
+ * filesystem, so the tools that reach for a sandbox are testable with no
+ * container anywhere.
  *
  * `answer` is asked for every command; what it returns is what `exec` says,
  * and what a process `startProcess` began has printed and exited with.

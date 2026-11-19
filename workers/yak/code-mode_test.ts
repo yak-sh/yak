@@ -38,7 +38,7 @@ import {
 } from './operator-testing.ts'
 import { operating } from './operator.ts'
 import { receive } from './operator-channels.ts'
-import { sandboxes } from './workspace-probe.ts'
+import { sandboxes } from '../../packages/sandbox/testing.ts'
 import { attachmentBytes, attachmentKey } from './attachments.ts'
 import { attachmentRows } from '@yaks/blob/attachment'
 import { digest } from '@yaks/graph/sha256'

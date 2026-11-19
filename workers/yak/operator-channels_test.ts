@@ -16,7 +16,7 @@ import {
   type Space,
 } from './directory.ts'
 import { declared } from './directory-fixture.ts'
-import { modelPage } from './model-probe.ts'
+import { modelPage } from '../../packages/workers-ai/testing.ts'
 import { platform } from './directory-rows-probe.ts'
 import { stores } from './app-store-probe.ts'
 import { appDoc, appVocab } from './vocab.ts'
