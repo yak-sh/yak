@@ -316,6 +316,16 @@ let SWEEP = { tries: 8, wait: 500 }
  * (`refused`). A space whose files cannot be listed keeps its figures, every
  * other space is still read. `counts` is the analytics' figures for an app,
  * or null where no credential was given and only storage is measured. */
+// An app whose figures read as its row already holds them, read the same day,
+// owes no write: most apps are idle in most hours, and the directory answers
+// every write while the sweep holds it. Its trend moves only with its
+// requests or when a day turns and the window with it.
+let unmoved = (app: App, meter: Record<string, unknown>, at: string) => {
+  let was: Record<string, unknown> | null = app.meter
+  return !!was && String(was.at).slice(0, 10) == at.slice(0, 10) &&
+    Object.entries(meter).every(([k, v]) => (was[k] ?? 0) == v)
+}
+
 export let measured = async (
   spaces: { space: Space; apps: App[] }[],
   { sizesOf, counts, daysOf, month, now }: {
@@ -375,11 +385,14 @@ export let measured = async (
       let requests = daysOf?.(space, app) ?? {}
       days.push(requests)
       // No `bytes`: the store's own figure stands, and a patch leaves it.
-      entities.push({
-        entity: { eid: app.eid },
-        meter: { month, ...got, at, ...sizes ? { files: filesOf(app) } : {} },
-        ...daysOf ? { trend: { requests } } : {},
-      })
+      let meter = { month, ...got, ...sizes ? { files: filesOf(app) } : {} }
+      if (!unmoved(app, meter, at)) {
+        entities.push({
+          entity: { eid: app.eid },
+          meter: { ...meter, at },
+          ...daysOf ? { trend: { requests } } : {},
+        })
+      }
       total.requests += got.requests
       total.ws_messages += got.ws_messages
       total.ws_hibernated += got.ws_hibernated
@@ -467,10 +480,12 @@ export let sweep = async (env: Env, now = new Date()) => {
   let counts = answer ? read(answer) : null
   let days = answer ? daysOfAnswer(answer) : null
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  let spaces = []
-  for (let space of await dir.all()) {
-    spaces.push({ space, apps: await dir.apps(space) })
-  }
+  // Every space and every app in two reads, not one read a space: the sweep
+  // runs inside the directory's own object, and each read is a request it
+  // answers while the sweep holds it.
+  let all = await dir.all()
+  let apps = Map.groupBy(await dir.apps(all), (a) => a.space)
+  let spaces = all.map((space) => ({ space, apps: apps.get(space.eid) ?? [] }))
   // Visits are read beside the bill and never hold it up: a reading that
   // fails leaves each app's last figure where it is.
   let views = counts

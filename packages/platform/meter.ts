@@ -151,6 +151,7 @@ export let meterOf = (r: MeteredRow): Meter | null =>
       rows_read: r.meter.rows_read ?? 0,
       rows_written: r.meter.rows_written ?? 0,
       bytes: r.meter.bytes ?? 0,
+      ...r.meter.visits == null ? {} : { visits: r.meter.visits },
       files: r.meter.files ?? 0,
       emails: r.meter.emails ?? 0,
       builds: r.meter.builds ?? 0,

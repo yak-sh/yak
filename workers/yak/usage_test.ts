@@ -890,6 +890,37 @@ test('each reading writes a row its days, and a space its apps added up', async 
   )
 })
 
+// An idle hour writes no app row: one that already holds this reading, read
+// the same day, is left; one whose figures moved, or read on an earlier day
+// whose trend window has since turned, is written.
+test('a reading writes only the apps it moved', async () => {
+  let held = (eid: string, at: string, requests = 0) =>
+    ({
+      eid,
+      slug: eid,
+      meter: { ...none(), month: '2026-09', requests, files: 0, at },
+    }) as unknown as dirPart.App
+  let today = NOW.toISOString()
+  let yesterday = new Date(NOW.getTime() - 86_400_000).toISOString()
+  let { entities } = await measured(
+    [{
+      space: { eid: 's', slug: 'ada', meter: null } as Space,
+      apps: [
+        held('idle', today),
+        held('busy', today, 3),
+        held('turned', yesterday),
+      ],
+    }],
+    {
+      sizesOf: () => Promise.resolve(new Map()),
+      counts: (_, a) => ({ ...none(), requests: a.eid == 'busy' ? 4 : 0 }),
+      month: '2026-09',
+      now: NOW,
+    },
+  )
+  assertEquals(entities.map((e) => e.entity.eid), ['busy', 'turned', 's'])
+})
+
 test("the answer's requests by object and day, added across its groups", () => {
   let group = (objectId: string, date: string, requests: number) => ({
     dimensions: { objectId, date },
