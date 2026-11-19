@@ -92,6 +92,7 @@ let script = (seed: number, size: number, forked = false): Bundle[] => {
       let ask = line({
         ask: { to: M, through: last },
         using: { model: M },
+        sending: { instructions: 'rules ' + pick(3) },
         attempt: { by: null },
         ...roll() < 0.1 ? { interrupted: { code: 'transport' } } : {},
       }, owner)
@@ -158,6 +159,8 @@ let script = (seed: number, size: number, forked = false): Bundle[] => {
 
 // Everything a step asks of the entries, answered by eids.
 let view = (entries: Bundle[]) => {
+  let source = (call: Bundle) =>
+    entries.find((b) => b.entity.eid == (call.call as Comp).source)
   let eids = (bs: Bundle[]) => bs.map((b) => b.entity.eid)
   let said = lines(context(entries), askingOf(entries))
   let sending = sendingBefore(entries)
@@ -167,6 +170,10 @@ let view = (entries: Bundle[]) => {
     open: eids(openCalls(entries)),
     using: usingBefore(entries),
     sending,
+    // What the asks a step reads sent: the newest, and each an open call came
+    // from.
+    sent_by: [newestAsk(entries), ...openCalls(entries).map(source)]
+      .map((b) => b?.sending),
     asking: askingOf(entries)?.entity.eid,
     sent: eids(recent(said, sending?.window)),
     prompts: eids(entries.filter((b) => b.prompt)),
@@ -218,6 +225,18 @@ for (let forked of [false, true]) {
     })
   }
 }
+
+// Each ask records the instructions it sent. A turn holds what its newest
+// ask and its open calls' asks sent, not every ask's.
+test('a turn holds what the asks it reads sent, not what every ask sent', async () => {
+  let g = await world(script(1, 80))
+  let all = await transcript(g, 's')
+  let held = (await reach(g, 's', { turn: true, bodies: true }))
+    .filter((b) => b.ask && b.sending)
+  let asks = all.filter((b) => b.ask)
+  assertEquals(held.length <= 1 + openCalls(all).length, true)
+  assertEquals(asks.length > 10, true, `${asks.length} asks`)
+})
 
 // Four hundred lines of turns, then a window or a checkpoint that bounds what
 // a model is sent and a line that owes it a turn; or neither, and settled,

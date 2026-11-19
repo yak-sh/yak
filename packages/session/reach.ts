@@ -42,6 +42,13 @@
 // answers from memory, and reads them by query again once one is no longer
 // the line it was or holds other components.
 //
+// No page reads a line's `sending`. Every ask records the instructions it sent,
+// tens of kilobytes the same from one ask to the next, and a model turn's
+// reading held one copy an ask: a Builder stepping a handful of long
+// transcripts at once ran out of memory (T-1572). A step reads what was sent
+// of the newest ask, the ask still in flight and each ask an open call came
+// from, and what is in force (`aspect`); those are read by name.
+//
 // A fork reads through its segments (./window.ts): the parent up to the
 // anchor, then its own. A pending transcript with no checkpoint and no window
 // is its own context, so its turn reads it all: the model is sent all of it
@@ -58,6 +65,8 @@ import {
   attemptState,
   kindOf,
   marksOf,
+  newestAsk,
+  openCalls,
   ordered,
   outranking,
   RETRIES,
@@ -243,14 +252,17 @@ let recalled = async (
   return stands ? found : undefined
 }
 
-// Older rows of the whole chain, `n` at a time, newest first.
+// Older rows of the whole chain, `n` at a time, newest first, without what
+// they sent.
 let pages = (r: Read) => {
   let { segs } = r
   let i = segs.length - 1, after = line``
-  let below: Read = {
+  let without = (...gone: string[]): Read => ({
     ...r,
-    names: (r.names ?? r.g.vocab.all).filter((n) => !LIFECYCLES.includes(n)),
-  }
+    names: (r.names ?? r.g.vocab.all).filter((n) => !gone.includes(n)),
+  })
+  let page = without(SENDING)
+  let below = without(SENDING, ...LIFECYCLES)
   // What each segment was read down to, and its rows, newest first.
   let reached = segs.map(() => ({ from: Infinity, rows: [] as Bundle[] }))
   let took = (k: number, rows: Bundle[], from: number) => {
@@ -267,7 +279,7 @@ let pages = (r: Read) => {
       while (i >= 0 && got.length < n) {
         let want = n - got.length
         let rows = await selected(
-          r,
+          page,
           line`${sub(within(segs[i]))}&.order=-entry.seq&.limit=${want}${
             sub(after)
           }`,
@@ -867,14 +879,32 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
     await fill(true)
   }
   page.keep()
-  // And what a model selection and `sending` in force are.
+  // And what a model selection and `sending` in force are, and what the asks a
+  // step reads sent.
   if (o.turn || o.call) {
     held.push(
       ...await aspect(r, USING, rows),
       ...await aspect(r, SENDING, rows),
     )
+    let asks = await fetch({ ...r, names: [SENDING] }, unsent(await gather()))
+    for (let b of asks) {
+      let line = held.find((h) => h.entity.eid == b.entity.eid)
+      if (line) Object.assign(line, b)
+      else held.push(b)
+    }
   }
   return { entries: await gather(), shapes: r.shapes }
+}
+
+// The asks whose own `sending` a step reads (./react.ts) and a page left out:
+// the newest, the one in flight and each an open call came from.
+let unsent = (entries: Bundle[]): Eid[] => {
+  let newest = newestAsk(entries)
+  let sources = new Set(openCalls(entries).map((b) => comp(b, CALL)?.source))
+  return entries.filter((b) =>
+    b.ask && !(SENDING in b) &&
+    (b == newest || attemptState(b) == 'inflight' || sources.has(b.entity.eid))
+  ).map((b) => b.entity.eid)
 }
 
 // Re-read every membership/kind fact, including legacy rows and mutable fork
