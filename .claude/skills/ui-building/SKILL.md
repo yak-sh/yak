@@ -2,10 +2,9 @@
 name: ui-building
 description: >
   Use for anything a person sees or presses in browser or terminal: UI/UX
-  components, entity renderers, pages, lists, panels, styling and
-  confusing/slow screens. Covers ui, ux, tui, inspect, browse and visualize
-  packages. Manual proof is end-to-end-checks; app platform pages also use
-  yaks-app.
+  components, entity renderers, pages, lists, panels, styling and confusing/slow
+  screens. Covers ui, ux, tui, inspect, browse and visualize packages. Manual
+  proof is end-to-end-checks; app platform pages also use yaks-app.
 ---
 
 # Building UI
@@ -258,10 +257,12 @@ an agent for its person, the same way. A part a page lacks goes into the kit,
 composed from the shared primitives, with an example in the style guide
 (site_test checks every worn part has one), not into one page's stylesheet.
 
-The site's static pages (home, pricing, help, the legal pages and the style
-guide) are TSX in workers/yak/site/, drawn from the kit's parts in one frame
-(frame.tsx: head, nav, footer) and written into public/ by the deploy's build,
-gitignored like _ui.css. A part takes `as` where the page's outline wants
+yaks.app's own pages (home, pricing, help and the legal pages) are the `home`
+app in the `yak` space (apps/home, its README), drawn from the kit's parts in
+one frame (site/frame.tsx: head, nav, footer) by `deno task content`; the
+deploy's build writes them and the style guide into public/ too, which answers
+where the app has no page. A new page goes in plugins/yaks.app, never as
+another .tsx in workers/yak/site/ (M-17), where those pages move (T-163672). A part takes `as` where the page's outline wants
 another element (`<Card as='li'>`, `<Card.Title as='h3'>`); never write its
 class by hand. The style guide's prose is yaks.app's, and the parts it wears are
 shown by the kit's own specimens (@yaks/ui `Worn`), so a part's example lives
