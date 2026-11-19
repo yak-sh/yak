@@ -54,7 +54,7 @@ jobs:
           CI=1 nohup npx expo start --port 8081 --go > "$RUNNER_TEMP/metro.log" 2>&1 &
           until curl -fsS http://127.0.0.1:8081/status; do sleep 2; done
           nohup xcrun simctl spawn booted log stream --style compact \
-            --predicate 'process == "Expo Go"' > "$RUNNER_TEMP/device.log" 2>&1 &
+            --predicate 'process CONTAINS "Expo"' > "$RUNNER_TEMP/device.log" 2>&1 &
       - name: Maestro
         run: |
           curl -fsSL https://get.maestro.mobile.dev | bash
@@ -62,6 +62,9 @@ jobs:
       - name: through the shell
         env:
           LINK: ${{ secrets.CHECKS_SIGNIN_LINK }}
+          # Its driver takes minutes to start on a hosted runner's first run.
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: 300000
+          MAESTRO_CLI_NO_ANALYTICS: 1
         run: |
           pass="${LINK#*\?}"
           echo "::add-mask::${pass#t=}"
