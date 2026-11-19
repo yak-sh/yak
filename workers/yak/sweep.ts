@@ -23,6 +23,9 @@ import { door as confirmationDoor } from './confirm.ts'
 //   GET  /api/store-copy                    every app's store, its sample's
 //                                           and its visitors'
 //   POST /api/store-copy?store=<name>       a page of that store
+//   GET  /api/graves?since=<t>&until=<t>    a page of the directory's graves,
+//                                           as its journal tells them
+//                                           (graves.ts); `after` continues
 //
 // The gate is the one the fee answers to (sell.ts `fees`): an owner of the
 // platform's own space, read off a website session or an OAuth token. A store is named by the
@@ -38,7 +41,7 @@ import { GIT_STORE, storeOf } from './door.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import type { Swept } from '@yaks/platform/mover'
 import { bound, type Env } from './env.ts'
-import { KERNEL } from './meta.ts'
+import { KERNEL, meta } from './meta.ts'
 import { adminWho } from './asking.ts'
 import { vouched, type Who } from './session.ts'
 import { LEAVE, WHERE } from './relocate.ts'
@@ -46,6 +49,7 @@ import { visits } from '@yaks/platform/visits'
 import { ledgerOf } from './visit.ts'
 import { builderOf } from './build-door.ts'
 import { type Asked, COPY } from './store-copy.ts'
+import { graves } from '@yaks/platform/graves'
 
 export let PATH = '/api/move'
 export let RELOCATE_PATH = '/api/relocate'
@@ -53,6 +57,7 @@ export let IDLE_PATH = '/api/idle-spaces'
 export let ACCOUNT_PATH = '/api/account'
 export let OPERATOR_PATH = '/api/operator-copy'
 export let STORE_COPY_PATH = '/api/store-copy'
+export let GRAVES_PATH = '/api/graves'
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
@@ -277,6 +282,32 @@ let storeCopying = async (req: Request, env: Env): Promise<Response> => {
   }, KERNEL)
 }
 
+// The directory's graves in a window of their deaths (graves.ts), a page at
+// a time. A window that is not one is the caller's to fix.
+let buried = async (req: Request, env: Env, who: Who): Promise<Response> => {
+  if (req.method != 'GET') {
+    return json(405, 'method_not_allowed', 'read the graves')
+  }
+  let asked = new URL(req.url).searchParams
+  let limit = asked.get('limit')
+  let window = {
+    since: asked.get('since') ?? '',
+    until: asked.get('until') ?? new Date().toISOString(),
+    after: asked.get('after') ?? undefined,
+    limit: limit == null ? undefined : Number(limit),
+  }
+  try {
+    let page = await graves((q) => meta(env).query(q as never), window)
+    await audit(env, who, { operation: 'graves' })
+    return Response.json(page, {
+      headers: { 'cache-control': 'private, no-store' },
+    })
+  } catch (e) {
+    if (!(e instanceof RangeError)) throw e
+    return json(400, 'window', e.message)
+  }
+}
+
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let dir = dirOf(env)
   let meta = await dir.space(dirPart.META.space)
@@ -312,6 +343,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   if (new URL(req.url).pathname == STORE_COPY_PATH) {
     return storeCopying(req, env)
+  }
+  if (new URL(req.url).pathname == GRAVES_PATH) {
+    return buried(req, env, who)
   }
   let all = await stores(env)
   if (req.method == 'GET') return Response.json(all)

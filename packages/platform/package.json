@@ -10,6 +10,7 @@
     "./bots": "./bots.ts",
     "./budget": "./budget.ts",
     "./funnel": "./funnel.ts",
+    "./graves": "./graves.ts",
     "./mover": "./mover.ts",
     "./comp": "./comp.ts",
     "./host": "./host.ts",

@@ -301,6 +301,58 @@
         "space"
       ]
     },
+    "admin_graves": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "graves",
+      "title": "Read the directory's graves: every deleted person, space and app in a window",
+      "description": "A page of the entities the yaks.app directory deleted with deaths in [since, until), newest first, each as the directory's journal tells it: when it died, who deleted it (by) and through what (via), and held, what each journaled component (space, doc, former, member, grant, invite) last held. An app erased forever leaves nothing else: its row's retained copy is purged with it. A row that held none of those components, a lapsed browser session or a meter, leaves no record here. Continue with next as after until next is null. The answer can name people: print only what the check needs. The platform’s act, so the selected account must have the platform role.\n\n  yak admin graves 2026-10-20 --as admin@bot.yak.sh\n  yak admin graves 2026-10-20 --until 2026-11-01 --after <next> --as admin@bot.yak.sh",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "graves": {
+            "type": "array",
+            "description": "each deleted entity: eid, at, by, via, held"
+          },
+          "next": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the after that continues, or null at the window's end"
+          }
+        }
+      },
+      "input": {
+        "since": {
+          "type": "string",
+          "description": "the window's start, a time"
+        },
+        "until": {
+          "type": "string",
+          "description": "the window's end, exclusive (default now)"
+        },
+        "after": {
+          "type": "string",
+          "description": "the next a page answered"
+        },
+        "limit": {
+          "type": "number",
+          "description": "graves a page, 1 to 1,000 (default 100)"
+        },
+        "as": {
+          "type": "string",
+          "description": "the owner’s yaks.app connection, matched by whole address or the part before @; list the owner’s connections with connection_list(owner), or yak connection list <owner> (owner id or name), and use a yaks.app entry’s account. Default is your own email, else the oldest connection"
+        }
+      },
+      "required": [
+        "since"
+      ],
+      "openWorld": true,
+      "positional": [
+        "since"
+      ]
+    },
     "admin_erase": {
       "tool": true,
       "noun": "admin",
@@ -841,7 +893,7 @@
       "journal": false,
       "wire": false,
       "type": "object",
-      "description": "An authorized request to inspect Operator conversations or run a store move. Kept in the platform directory; created records the actor, instrument and time, while person identifies the administrator whose authority was used. The record names the requested operation and targets, never conversation content.",
+      "description": "An authorized request to inspect Operator conversations, run a store move or read the directory's graves. Kept in the platform directory; created records the actor, instrument and time, while person identifies the administrator whose authority was used. The record names the requested operation and targets, never conversation content.",
       "properties": {
         "person": {
           "type": "string",

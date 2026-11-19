@@ -9,6 +9,7 @@ import { KERNEL, metaOf } from './meta.ts'
 import * as dirPart from './directory.ts'
 import { sign } from './lib/token.ts'
 import * as sweep from './sweep.ts'
+import type { Grave } from '@yaks/platform/graves'
 import type { Swept } from '@yaks/platform/mover'
 import { platform } from './testing.ts'
 import { builderOf } from './build-door.ts'
@@ -428,6 +429,52 @@ test('an app’s store moves to a new object, and the directory names it there',
   assertEquals(
     (await door(ADA, '?store=ada/notes.near&to=x', 'POST', sweep.RELOCATE_PATH))
       .status,
+    403,
+  )
+})
+
+test('the platform’s owner reads the directory’s graves as its journal tells them', async () => {
+  let { scenario, door, dir } = await spaces()
+  await using _ = scenario
+  let ada = (await dir.space('ada'))!
+  let [notes] = await dir.apps(ada)
+  let since = new Date().toISOString()
+  let [, second] = await dir.apply({
+    entities: [
+      { entity: { eid: '$a' }, doc: { title: 'first' } },
+      { entity: { eid: '$b' }, doc: { title: 'second' } },
+    ],
+  })
+  await dir.apply({
+    entities: [
+      { entity: { eid: notes.eid }, tombstone: {} },
+      { entity: { eid: second.entity.eid }, tombstone: {} },
+    ],
+  }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
+  let read = (q: string) => door(JEFF, q, 'GET', sweep.GRAVES_PATH)
+  let all = await read(`?since=${since}`)
+  assertEquals(
+    all.body.graves.map((g: Grave) => [g.eid, g.by, g.held.doc]).sort(),
+    [
+      [notes.eid, ADA, { title: 'notes' }],
+      [second.entity.eid, ADA, { title: 'second' }],
+    ].sort(),
+  )
+  assertEquals(all.body.next, null)
+  let first = await read(`?since=${since}&limit=1`)
+  assertEquals(first.body.graves.length, 1)
+  let rest = await read(`?since=${since}&limit=1&after=${first.body.next}`)
+  assertEquals(
+    [...first.body.graves, ...rest.body.graves].map((g: Grave) => g.eid).sort(),
+    [notes.eid, second.entity.eid].sort(),
+  )
+  assertEquals(
+    (await read(`?since=${new Date().toISOString()}`)).body.graves,
+    [],
+  )
+  assertEquals((await read('?since=never')).body.error.code, 'window')
+  assertEquals(
+    (await door(ADA, `?since=${since}`, 'GET', sweep.GRAVES_PATH)).status,
     403,
   )
 })

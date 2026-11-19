@@ -368,6 +368,7 @@ export let refund = (
  * space is answered. */
 export type { Funnel } from '@yaks/platform/funnel'
 import type { Funnel } from '@yaks/platform/funnel'
+import type { Graves, Window } from '@yaks/platform/graves'
 
 export let FUNNEL = '/api/funnel'
 
@@ -457,6 +458,21 @@ export let operatorPage = <T>(
       body: JSON.stringify(asked),
       rereads: true,
     },
+  ))
+
+/** The directory's graves (workers/yak/sweep.ts `buried`): a page of the
+ * entities whose deaths fall in [since, until), as its journal tells them. An
+ * owner of the `yak` space is answered. */
+export let GRAVES = '/api/graves'
+
+export let gravesIn = (session: string, window: Window): Promise<Graves> =>
+  said(sent(
+    apex(`${GRAVES}?${new URLSearchParams(
+      Object.entries(window).flatMap(([k, v]) =>
+        v == null ? [] : [[k, String(v)]]
+      ),
+    )}`),
+    session,
   ))
 
 /** An app's store read out the same way (workers/yak/sweep.ts

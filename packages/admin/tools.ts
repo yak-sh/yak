@@ -33,6 +33,7 @@ import {
   doomedIn,
   feeNow,
   funnelNow,
+  gravesIn,
   linkFor,
   moveIn,
   operatorPage,
@@ -706,6 +707,21 @@ export let runs = (
         stopping: host.stopping,
       })
       return [said(call, each.lines)]
+    }),
+
+    // The directory's graves, a page at a time, as its journal tells them
+    // (@yaks/platform/graves). The platform's act, with authorization checked
+    // by the server.
+    admin_graves: verb(async (call) => {
+      let a = argsOf(call)
+      let at = await acting(a)
+      let page = await gravesIn(at.bearer, {
+        since: String(a.since),
+        until: word(a, 'until') ?? new Date().toISOString(),
+        after: word(a, 'after'),
+        limit: typeof a.limit == 'number' ? a.limit : undefined,
+      })
+      return [valued(call, page)]
     }),
 
     admin_deploys: verb(async (call) => {
