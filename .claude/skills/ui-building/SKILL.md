@@ -261,8 +261,12 @@ yaks.app's own pages (home, pricing, help and the legal pages) are the `home`
 app in the `yak` space (apps/home, its README), drawn from the kit's parts in
 one frame (site/frame.tsx: head, nav, footer) by `deno task content`; the
 deploy's build writes them and the style guide into public/ too, which answers
-where the app has no page. A new page goes in plugins/yaks.app, never as
-another .tsx in workers/yak/site/ (M-17), where those pages move (T-163672).
+where the app has no page. A new page is a component in the @yaks/* package
+that owns what it shows (@yaks/platform for yaks.app's own words), never
+another .tsx in workers/yak/site/ (M-17) nor in plugins/yaks.app, the agent
+plugin; site/mod.ts `PAGES` only names it, and until T-163672 lands its path
+also goes in kept-page.ts `STATICS`, so Site keeps it and the home app answers
+it.
 A part takes `as` where the page's outline wants another element
 (`<Card as='li'>`, `<Card.Title as='h3'>`); never write its class by hand.
 The style guide's prose is yaks.app's, and the parts it wears are shown by
