@@ -1,4 +1,5 @@
-// Resolving the ids written in a query to the eids they refer to.
+// Resolving the ids written in a query to the eids they refer to, and a kind
+// named where a component goes to the components it is (@yaks/query `kinded`).
 //
 // A person types the id they can remember — `T-37584`, `jeff` — while the
 // store keys rows by eid, and every entry point owes them that translation:
@@ -21,6 +22,7 @@
 import {
   bare,
   type Clause,
+  kinded,
   map,
   parse,
   type Query as Ast,
@@ -123,7 +125,9 @@ export let addressing = (vocab: Vocab) =>
   address: (ids: string[]) => Map<string, Eid> | Promise<Map<string, Eid>>,
 ): Query | Promise<Query> => {
   let parsed: Ast = typeof query == 'string' ? parse(query) : query
-  let ast = handles(parsed) as Ast
+  // A kind named where a component goes reads as what the kind is, before
+  // anything reads which components the query names.
+  let ast = kinded(vocab, handles(parsed)) as Ast
   let held = ast === parsed ? query : ast
   let said: string[] = []
   mapped(vocab, ast, (id) => (said.push(id), id))

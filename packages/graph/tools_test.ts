@@ -81,6 +81,7 @@ let shelves = loadVocab({
     book: { component: true, type: 'object', properties: {} },
     shelf: { component: true, type: 'object', properties: {} },
   },
+  kinds: { library: { is: ['shelf', 'book'] } },
 })
 let schema = tier().find((t) => t.name == 'graph_schema')!
 let read = (component: unknown) => {
@@ -112,6 +113,13 @@ test('graph_schema reads several components however the names are sent', () => {
     Refused,
     "no component 'bok', 'shelv' — call graph_schema with no arguments",
   )
+  assertThrows(
+    () => read('shelv'),
+    Refused,
+    "no component 'shelv' (closest: shelf) — call graph_schema",
+  )
+  // a kind's name, as the kinds index lists it, is the kind
+  assertEquals(read('library'), ['shelf', 'book'])
 })
 
 // The index is what every agent reads to learn the words, so its answer

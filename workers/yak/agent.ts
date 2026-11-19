@@ -53,7 +53,7 @@ import { barred, openly } from './anon.ts'
 import { confined } from './newcomer.ts'
 import type { Search } from '@yaks/mcp'
 import { answerWith } from '@yaks/tools/schema'
-import type { PropSchema, Vocab } from '@yaks/vocab'
+import type { KindDecl, PropSchema, Vocab } from '@yaks/vocab'
 import { clock } from './timing.ts'
 import { letters } from './letters.ts'
 import { packageTools } from './package-tools.ts'
@@ -553,16 +553,26 @@ let spoken = async (ctx: Ctx, reach: Reach[]): Promise<Vocab> => {
       .map((r) => vocabAt(ctx.env, r.space, r.app)),
   )
   let defs: Record<string, PropSchema> = {}
+  let kinds: Record<string, KindDecl> = {}
   let core = appVocab()
   for (let one of said) {
     for (let [name, schema] of Object.entries(one.$defs ?? {})) {
       if (!defs[name] && !core.def(name)) defs[name] = schema
     }
+    // The kinds an app names, which the roster lists to the agent (standing.ts
+    // `kindsOf`), are words of the reach too.
+    for (let [name, kind] of Object.entries(one.kinds ?? {})) {
+      if (!kinds[name] && !core.kind(name)) kinds[name] = kind
+    }
   }
   // And the words their `"platform"` dependencies lend (vocab.ts `lent`),
   // beneath every app's own.
   let packages = [...new Set(said.flatMap(packagesOf))].sort()
-  return appVocab({ $defs: defs, ...packages.length ? { packages } : {} })
+  return appVocab({
+    $defs: defs,
+    ...Object.keys(kinds).length ? { kinds } : {},
+    ...packages.length ? { packages } : {},
+  })
 }
 
 // The batch as applied, as `graph_apply` promises it: one bundle per entity,

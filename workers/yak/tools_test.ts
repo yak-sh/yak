@@ -396,7 +396,7 @@ test('a patch takes a list of edits across files, in order, all or none', () => 
   )
   assertStringIncludes(
     refused({ edits: [list[0], { path: 'c.js', find: 'x', replace: '' }] }),
-    'no file c.js (edits[1])',
+    "no file c.js (edits[1]) — app_files(op: 'list') says what is there",
   )
   assertStringIncludes(
     refused({ edits: [{ path: 'a.css', find: 'x' }] }),

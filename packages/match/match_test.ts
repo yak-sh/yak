@@ -181,7 +181,8 @@ test('a property named alone is refused with the forms that name it', () => {
     Unknown,
     '.price is a property, not a component — name it .book.price',
   )
-  assertThrows(() => matcher('.eid=b1', shop), Unknown, '.entity.eid')
+  // the eid alone is the spine's, the one every entity has
+  assertEquals(sel('.eid=b1'), ['b1'])
 })
 
 test('a name alone is the component, never the property beside it', () => {

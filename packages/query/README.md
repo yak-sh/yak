@@ -41,7 +41,12 @@ and a value, such as `.task.status=open`. The parser keeps paths as segments; a
 [vocabulary](../vocab/README.md#vocabulary) determines what they name. A
 [property](../graph/README.md#data-model) is named with its
 [component](../graph/README.md#data-model): `.task.status`, never `.status`. A
-name alone names a component: `.task`.
+name alone names a component: `.task`. Two forms say one thing however they are
+written, so the parser reads them as it: `.eid=T-12` is `.entity.eid=T-12`,
+since every entity has one eid, and a component written as a bundle writes it
+with one property given one value, `.space{slug="chata"}`, is
+`.space.slug="chata"`. `kinded(vocab, query)` reads a kind's name tested for
+alone, where no component has it, as the components the kind is.
 
 A **value** is the right-hand side of a predicate. A **scalar** keeps its raw
 text (`{ kind: 'scalar', raw: 'open' }`); a **list** holds alternative values

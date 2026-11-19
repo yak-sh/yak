@@ -221,6 +221,21 @@ test('| is OR, looser than the AND of adjacent terms; ( ) groups', () => {
   )
 })
 
+// What an agent writes when it means one thing reads as that thing: the
+// eid every entity has on its spine, and a component's one property given one
+// value as a bundle writes it.
+for (
+  let [q, means] of [
+    ['.eid=T-7', '.entity.eid=T-7'],
+    ['.eid!=a1,b2', '.entity.eid!=a1,b2'],
+    ['.space{slug="chata"}', '.space.slug="chata"'],
+    ['.app{name:"menu"} .doc', '.app.name="menu" .doc'],
+    ['.space{slug="claude review"}', '.space.slug="claude review"'],
+  ]
+) {
+  test(`${q} reads as ${means}`, () => assertEquals(parse(q), parse(means)))
+}
+
 // A refusal is a SyntaxError naming what the query needs instead. Each row: a
 // query, and what its refusal says.
 let refused = (rows: [string, string][]) => {
@@ -495,8 +510,8 @@ refused(
     ['+!.created', '+!created'],
     ['+.doc.title=$x', '+doc.title=$x'],
     ['.refs=', '!refs'],
-    ['.app{name:"menu"}', '.app.name="menu"'],
     ['.doc{title}', '.doc.title'],
+    ['.app.name{x=1}', '.app.name.x=1'],
     ['.meeting?doc', '.meeting&?doc'],
   ].map(([old, now]): [string, string] => [
     `.task ${old}`,

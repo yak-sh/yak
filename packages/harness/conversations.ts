@@ -107,10 +107,16 @@ let sessionAt = async (
     line`.entity.eid=${id} ${sub(conversation(owner, project))}`,
   )
   if (!s) {
-    throw new Refused('Conversation not found for this owner and project')
+    throw new Refused(NOT_FOUND)
   }
   return s
 }
+// A conversation this owner has none of in this project, and where to find
+// the ones there are.
+let NOT_FOUND = 'Conversation not found for this owner and project — ' +
+  'conversation_recent lists the ones there are, by session id, and ' +
+  'conversation_start begins one'
+
 // What a read may open: a conversation, a task, or a line of either, which
 // reads as the conversation it is in.
 let openAt = async (g: Graph, args: Record<string, unknown>) => {
@@ -438,7 +444,7 @@ export let conversations = (host: Conversing = {}): Runs => {
       let p = (await projectOf(g, args)).entity.eid
       let row = await openAt(g, args)
       if (!row || !await reads(g, row, owner, p)) {
-        throw new Refused('Conversation not found for this owner and project')
+        throw new Refused(NOT_FOUND)
       }
       let lines = args.lines === true
       let context = args.context === true

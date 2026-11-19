@@ -49,6 +49,7 @@ import {
 } from '@yaks/query/core'
 import { toolsIn, toolsSaid } from '@yaks/vocab/tools'
 import type { Keywords, VocabDoc } from '@yaks/vocab'
+import { nearest } from '@yaks/vocab'
 import { aggregate, reduced } from './aggregate.ts'
 import { hit } from './hit.ts'
 import { named } from './projection.ts'
@@ -461,13 +462,22 @@ export let runs = (seams: Seams = {}): Runs => {
       )
       let kind = str(args.kind) || set.find((m) => m?.[1] == 'kind')?.[2] ||
         ''
+      // A kind's name sent alone as a component is the kind: the kinds index
+      // lists `app`, and an `app` is often no component of that name.
+      if (!kind && named.length == 1 && !v.comp(named[0]) && v.kind(named[0])) {
+        kind = named.pop()!
+      }
       let unknown = [...named, ...(kind && !v.kind(kind) ? [kind] : [])]
         .filter((name) => !v.comp(name))
       if (unknown.length) {
+        let near = nearest(unknown[0], [...new Set([...v.all, ...v.kinds])])
         throw new Refused(
-          `no component ${unknown.map((n) => `'${n}'`).join(', ')} — call ` +
-            `graph_schema with no arguments for the index of every word ` +
-            `this graph knows`,
+          `no component ${unknown.map((n) => `'${n}'`).join(', ')}${
+            unknown.length == 1 && near.length
+              ? ` (closest: ${near.join(', ')})`
+              : ''
+          } — call graph_schema with no arguments for the index of every ` +
+            `word this graph knows`,
         )
       }
       if (kind && !v.kind(kind)) {

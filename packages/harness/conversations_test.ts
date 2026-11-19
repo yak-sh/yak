@@ -465,7 +465,11 @@ let opened = await (async () => {
         tasked.sessions.length,
         tasked.messages.map((m: { text: string }) => m.text),
       ],
-      refused: refused.isError,
+      // and a conversation it cannot open says where the ones there are
+      refused: [
+        refused.isError,
+        refused.content.some((c) => c.text.includes('conversation_recent')),
+      ],
     })
   } finally {
     await h.close()
@@ -474,5 +478,5 @@ let opened = await (async () => {
 test('a helper under an owned conversation reads with every line, and a task with its comments and conversations', () => {
   assertEquals(opened.helper, [['content'], ['content', 'notice']])
   assertEquals(opened.task, [true, 1, 1, ['hi']])
-  assertEquals(opened.refused, true)
+  assertEquals(opened.refused, [true, true])
 })

@@ -731,7 +731,11 @@ test('a property named alone is refused with the forms that name it', () => {
         '.cursor.client',
     )
   }
-  assertThrows(() => compile(parse('.eid=c1'), v), Unknown, '.entity.eid')
+  // the eid alone is the spine's, the one every entity has
+  assertEquals(
+    compile(parse('.eid=c1'), v),
+    compile(parse('.entity.eid=c1'), v),
+  )
   // a name alone is the component, even where a property shares it
   let { sql } = compile(parse('.name'), named)
   assert(sql.includes('"name"'), sql)

@@ -169,6 +169,10 @@ let BOUND = new RegExp(`^\\$(${SEG})=(.*)$`, 's')
 // The operators, longest first so `<=` is not read as `<`, `<-` not as `<`.
 let OPS = /^(!=|~=|<=|>=|->|<-|<|>|=)/
 
+// The spine every entity carries, and the id it holds there.
+let SPINE = 'entity'
+let EID = 'eid'
+
 // A clause in a spelling it had before each had one (T-39341), refused by the
 // one it has. Suffix presence `.p!` and optional `.p?` still arrive from kept
 // app releases and are translated below; `.p!=` with no value, absence `.p=`
@@ -186,19 +190,24 @@ let unknown = (token: string) =>
       `a bare word searches all indexed text, and .near=T-42 ranks by meaning`,
   )
 
-// A component written as prose and bundles write it, `.app{name:"menu"}` or
-// `.doc{title}`: the refusal is the clause the property is queried by. A
-// comma splits the line before a token reaches here, so it holds one.
-let braced = (token: string, comp: string, rest: string) => {
+// A component written as prose and bundles write it. One property given one
+// value, `.space{slug="chata"}` or `.app{name:"menu"}`, says one thing, and
+// reads as the clause it means (`.space.slug="chata"`); anything else
+// (`.doc{title}`, a property of a property) is refused with the clause the
+// property is queried by. A comma splits the line before a token reaches
+// here, so it holds one.
+let braced = (token: string, comp: string, rest: string): string => {
   let [, prop, value] =
     rest.match(/^\{\s*([\w$]+)(?:\s*[:=]\s*(.+?))?\s*\}$/s) ??
       []
   if (!prop) {
-    return new SyntaxError(
+    throw new SyntaxError(
       `not a clause: ${token}; a property is queried as .${comp}.<prop>=<value>`,
     )
   }
-  return spelled(token, `.${comp}.${prop}${value == null ? '' : `=${value}`}`)
+  let said = `.${comp}.${prop}${value == null ? '' : `=${value}`}`
+  if (value == null || comp.includes('.')) throw spelled(token, said)
+  return said
 }
 
 // ---- qualifiers ----
@@ -451,7 +460,11 @@ export let parseDot = (token: string): Clause[] | null => {
     // `doc.title~copy` is a clause short of its `~=`, not a word: searched,
     // it matched the words doc, title and copy, and nothing it meant.
     if (!dotted && bracket == null && !rest.startsWith('~')) return null
-    if (rest.startsWith('{')) throw braced(token, pathStr, rest)
+    if (rest.startsWith('{')) {
+      let said = braced(token, pathStr, rest)
+      if (bracket != null) throw spelled(token, said)
+      return parseDot(said)
+    }
     // `.meeting?doc`: a second clause, `?doc`, with no `&` before it.
     if (/^\?[A-Za-z_]/.test(rest)) {
       throw spelled(token, `${head}&${rest}`)
@@ -556,6 +569,9 @@ export let parseDot = (token: string): Clause[] | null => {
   // An ordinary predicate. Contains (`~=`) is deliberately literal, so its
   // value is one raw scalar; every other form parses list and range structure
   // outside quotes.
+  // Every entity has one eid, on its spine, so `.eid=T-7` can mean only
+  // `.entity.eid=T-7`.
+  if (pathStr == EID) segs = [SPINE, EID]
   if (op == '~=') return [{ kind: 'pred', path: segs, op, value: scalar(val) }]
   return [{ kind: 'pred', path: segs, op: op as Op, value: value(rawValue) }]
 }

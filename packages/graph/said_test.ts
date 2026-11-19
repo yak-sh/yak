@@ -21,6 +21,7 @@ let vocab = loadVocab([{
       },
     },
   },
+  kinds: { verdict: { is: ['decided', 'person'] } },
 }])
 
 let JEFF = 'a3f19c02-4b00-4000-8000-000000000001' as Eid
@@ -88,4 +89,9 @@ test('a substring on a reference is not an id, so it is left alone', () => {
 test('a line naming nobody, and one nobody answers for, come back whole', () => {
   assertEquals(said('.decided.how=yes&.limit=3'), '.decided.how=yes&.limit=3')
   assertEquals(said('.decided.by=nobody'), '.decided.by=nobody')
+})
+
+test("a kind's name where a component goes is what the kind is", () => {
+  assertEquals(said('.verdict ?doc'), parse('.decided .person ?doc'))
+  assertEquals(said('.person'), '.person')
 })

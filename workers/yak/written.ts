@@ -768,6 +768,11 @@ export let discarded = (dir: Directory, app: App, d: AppDraft, who: Who) =>
       : [{ entity: { eid: d.eid }, $delete: true }],
   }, vouched(who))
 
+/** The refusal for a path an app keeps no file at, with where to look. */
+export let noFile = (path: string, app?: string) =>
+  `no file ${path}${app ? ` in ${app}` : ''} — app_files(op: 'list') says ` +
+  'what is there'
+
 /** A delete sent again is already done if this draft records its deletion,
  * or if a competing writer deleted it while the caller retried. */
 export let deleting = (draft: Draft, path: string, attempt = 0) => {
@@ -775,7 +780,7 @@ export let deleting = (draft: Draft, path: string, attempt = 0) => {
   if (attempt || draft.rows.some((w) => w.path == path && !w.sha)) {
     return { changes: [], value: false }
   }
-  throw refuse('missing', `no file ${path}`)
+  throw refuse('missing', noFile(path))
 }
 
 /** The sha a restore selects: an explicit sha the path held, its value at a

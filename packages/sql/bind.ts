@@ -73,7 +73,7 @@ import type { Assoc, Hop, Presence, Vocab } from '@yaks/vocab/runtime'
 import {
   jsonValued,
   Unknown,
-  unknownName,
+  unknownWord,
   valueless,
 } from '@yaks/vocab/runtime'
 import {
@@ -951,7 +951,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     // vocabulary's own, so the CLI, the HTTP endpoint and the MCP server all
     // report it identically.
     if (!ctx.v.comp(hop.comp)) {
-      throw new Unknown(hop.comp, unknownName(hop.comp, ctx.v.all))
+      throw new Unknown(hop.comp, unknownWord(ctx.v, hop.comp))
     }
     // Nor can it wear one the file holds no table for (./absent.ts).
     if (!worn(ctx, hop.comp) || ctx.absent?.includes(hop.comp)) {

@@ -115,7 +115,15 @@ the clause it meant. A path followed by no operator the grammar has
 it has: part of a value is `~=`, and there is no bare `~`, with or without
 the dot (`doc.title~copy` is refused, not searched as words). A path through a
 reference goes on with the target's own `comp.prop`
-(`.filed.project.doc.title~=yak`), and the entity's id is `.entity.eid`.
+(`.filed.project.doc.title~=yak`), and the entity's id is `.entity.eid`
+(`.eid=T-12` reads the same, since every entity has one eid). A kind's name
+where no component has it reads as the components the kind is: for a kind
+`booking` that is `seat` and `venue`, `.booking` is `.seat&.venue` (@yaks/query
+`kinded`, applied where a read addresses its ids), and `graph_schema` takes
+`booking` as the kind. A component written the way a bundle
+writes it, with one property given one value (`.space{slug="chata"}`), reads
+as `.space.slug="chata"`; any other brace form is refused with the clause it
+meant.
 Completion offers the qualified forms of a name as it is typed: `.ti` offers
 `.timing` and `.doc.title`, and a form whose component is already on the line
 comes first.

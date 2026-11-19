@@ -324,6 +324,47 @@ test('graph_query answers a count and a tally as their value', async () => {
   }
 })
 
+// What an agent writes for the thing it means is read as that thing: a kind
+// an app's vocab.json names, the eid alone, and a component as a bundle
+// writes it.
+test('graph_query and graph_schema read the forms agents write', async () => {
+  let k = await kernel()
+  try {
+    let agent = connector(k, (await signIn(k)).cookie)
+    await agent.tool('app_new', { slug: 'recipes', title: 'recipes' })
+    await agent.tool('app_files', {
+      app: 'recipes',
+      files: [{
+        path: 'vocab.json',
+        content: JSON.stringify({
+          ...JSON.parse(vocabFile({ recipe: { cuisine: txt } })),
+          kinds: { dish: { is: ['recipe'] } },
+        }),
+      }],
+    })
+    await agent.tool('app_deploy', { app: 'recipes' })
+    let made = await agent.tool('graph_apply', {
+      app: 'recipes',
+      entities: ['thai', 'thai', 'greek'].map((cuisine, i) => ({
+        entity: { eid: `$r${i}` },
+        recipe: { cuisine },
+      })),
+    })
+    let greek = minted(made, '$r2')
+    let said = async (filter: string) =>
+      JSON.parse(await agent.tool('graph_query', { filter }))
+    assertEquals(await said('.dish&.count'), { count: 3 })
+    assertEquals(await said('.recipe{cuisine="thai"}&.count'), { count: 2 })
+    assertEquals(await said(`.eid=${greek}&.count`), { count: 1 })
+    assertStringIncludes(
+      await agent.tool('graph_schema', { component: 'dish' }),
+      '# dish (kind)',
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
 // An entity spans apps (T-32699): a read that names no app asks every store
 // the caller can reach and answers one bundle per eid — and only the stores
 // they can reach.

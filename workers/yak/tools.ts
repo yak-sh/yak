@@ -388,6 +388,7 @@ import {
   history,
   modifying,
   NEW,
+  noFile,
   releasing,
   replaced,
   replayed,
@@ -3198,7 +3199,7 @@ export let patching = (texts: Record<string, string>, list: Edit[]) => {
   let lines = list.map(({ path, find, replace }, i) => {
     let was = now[path]
     let at = list.length > 1 ? `${path} (edits[${i}])` : path
-    if (was == null) throw refuse('missing', `no file ${at}`)
+    if (was == null) throw refuse('missing', noFile(at))
     now[path] = patched(was, find, replace, at)
     return was.slice(0, was.indexOf(find)).split('\n').length
   })
@@ -4341,7 +4342,7 @@ let OURS: Row[] = [
         let d = await draft()
         let path = named(text(args.path, 'path'))
         let bytes = await d.view.read(at(d, path))
-        if (!bytes) throw refuse('missing', `no file ${args.path}`)
+        if (!bytes) throw refuse('missing', noFile(String(args.path)))
         let content = decoded(bytes)
         return {
           text: content,
@@ -5075,11 +5076,7 @@ let OURS: Row[] = [
         own(Object.keys(draft.files)).filter((p) => asked(path, p)),
       )
       if (!files.length) {
-        throw refuse(
-          'missing',
-          `no file ${path} in ${app.slug} — app_files(op: 'list') says what ` +
-            'is there',
-        )
+        throw refuse('missing', noFile(path, app.slug))
       }
       let cut = parts(loaded(
         files,

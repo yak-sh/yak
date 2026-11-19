@@ -241,9 +241,10 @@ test('presence can name an undeclared component, comparisons cannot', () => {
 
 test('the spine routes its own identity, declared or not', () => {
   // no document declares `entity.eid`; the loader routes it because every
-  // entity has one — so `.entity.eid=` names entities, and `.eid` alone is a
-  // property named without its component
+  // entity has one — so `.entity.eid=` names entities, and so does `.eid=`,
+  // while `.eid` alone tests for nothing
   assertEquals(v.aim('entity.eid'), [{ comp: 'entity', prop: 'eid' }])
+  assertEquals(v.aim('eid'), [{ comp: 'entity', prop: 'eid' }])
   assertThrows(() => v.aim('eid', true), Unknown, '.entity.eid')
   // it stays out of the property set: identity is not prose, so it reaches no
   // text index, no embedding, and no component's DDL
@@ -1119,5 +1120,50 @@ test('an unknown property is refused with what its component holds', () => {
     unknownProps(w, 'loan', ['book']),
     'unknown property: loan.book — loan.of references the book: ' +
       '.loan.of.book.title=… or its own .loan.title=…; loan has',
+  )
+})
+
+// A name alone that no component has is refused with where to look: the
+// components a kind of that name is, a near component, or a near property with
+// its component; the eid alone is the spine's.
+test('a name alone that names no component says what it is closest to', () => {
+  let w = loadVocab({
+    $defs: {
+      seat: {
+        component: true,
+        type: 'object',
+        properties: { row: { type: 'string' } },
+      },
+      venue: {
+        component: true,
+        type: 'object',
+        properties: { seats: { type: 'number' } },
+      },
+    },
+    kinds: { booking: { is: ['seat', 'venue'] } },
+  })
+  let said = (path: string) => {
+    try {
+      w.aim(path)
+    } catch (e) {
+      return (e as Error).message
+    }
+  }
+  assertEquals(said('eid'), undefined)
+  assertEquals(w.aim('eid'), w.aim('entity.eid'))
+  assertEquals(
+    said('booking'),
+    '.booking names a kind, not a component: a booking is .seat&.venue, ' +
+      'and a property is named on one of them (.seat.<prop>)',
+  )
+  assertEquals(said('seet'), 'unknown prop: .seet (closest declared: .seat)')
+  assertEquals(
+    said('rows'),
+    'unknown prop: .rows (closest declared: .seat.row)',
+  )
+  assertEquals(
+    said('sandwich'),
+    'unknown prop: .sandwich — no component is named sandwich, and none has ' +
+      'a property of that name',
   )
 })

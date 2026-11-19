@@ -726,17 +726,71 @@ let WRITTEN: Record<string, string> = {
  *   unknownName('recipy', ['recipe', 'doc']),
  *   'unknown prop: .recipy (closest declared: .recipe)',
  * )
- * assertEquals(unknownName('sandwich', ['recipe']), 'unknown prop: .sandwich')
+ * assertEquals(
+ *   unknownName('sandwich', ['recipe']),
+ *   'unknown prop: .sandwich — no component is named sandwich, and none has ' +
+ *     'a property of that name',
+ * )
  * assertStringIncludes(unknownName('$was', []), '.updated.at and .created.at')
  * ```
  */
-export let unknownName = (word: string, names: string[]): string => {
+export let unknownName = (
+  word: string,
+  names: string[],
+  props: (comp: string) => string[] = () => [],
+): string => {
   let said = `unknown prop: .${word}`
   if (WRITTEN[word]) return `${said} — ${WRITTEN[word]}`
-  let near = nearest(word, names)
+  // A slip of a component's name, else of a property's, said with its
+  // component.
+  let near = nearest(word, names).map((n) => `.${n}`)
+  if (!near.length) {
+    let forms = names.flatMap((c) => props(c).map((p) => `${c}.${p}`))
+    let close = new Set(
+      nearest(word, [...new Set(forms.map((f) => f.split('.')[1]))]),
+    )
+    near = forms.filter((f) => close.has(f.split('.')[1])).slice(0, 3)
+      .map((f) => `.${f}`)
+  }
   return near.length
-    ? `${said} (closest declared: ${near.map((n) => `.${n}`).join(', ')})`
-    : said
+    ? `${said} (closest declared: ${near.join(', ')})`
+    : `${said} — no component is named ${word}, and none has a property of ` +
+      `that name`
+}
+
+/**
+ * The refusal for a kind's name where a query reads it as a component: on a
+ * path, or where nothing reads the kind as what it is (a query's reads do,
+ * @yaks/query `kinded`). It says the components the kind is.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { kindNamed } from '@yaks/vocab'
+ * assertEquals(
+ *   kindNamed('booking', ['seat', 'venue']),
+ *   '.booking names a kind, not a component: a booking is .seat&.venue, ' +
+ *     'and a property is named on one of them (.seat.<prop>)',
+ * )
+ * ```
+ */
+export let kindNamed = (kind: string, is: string[]): string =>
+  `.${kind} names a kind, not a component: a${
+    /^[aeiou]/.test(kind) ? 'n' : ''
+  } ${kind} is ${is.map((c) => `.${c}`).join('&')}, and a property is named ` +
+  `on one of them (.${is[0]}.<prop>)`
+
+/** The refusal for a name this vocabulary has no component of, where a query
+ * names it alone: a kind's name says the components the kind is
+ * ({@link kindNamed}), and any other the names it is closest to
+ * ({@link unknownName}). */
+export let unknownWord = (
+  v: Pick<Vocab, 'all' | 'props' | 'kind'>,
+  word: string,
+): string => {
+  let kind = v.kind(word)
+  return kind?.is.length
+    ? kindNamed(word, kind.is)
+    : unknownName(word, v.all, v.props)
 }
 
 /** The refusal for properties a component does not declare: one wording,
@@ -1171,8 +1225,11 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
       }
       for (let i = 0; i < segs.length; i += 2) {
         let [a, b] = [segs[i], segs[i + 1]]
-        if (a == SPINE && b == EID) {
-          out.push({ comp: a, prop: b })
+        // Every entity has one eid, on its spine, so `eid` alone compared or
+        // ordered by can mean only that one; tested for alone, it asks
+        // nothing.
+        if (a == SPINE && b == EID || i == 0 && a == EID && !b && !facet) {
+          out.push({ comp: SPINE, prop: EID })
           continue
         }
         let own = routes.get(a)
@@ -1181,7 +1238,7 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
           if (at.length) {
             refuse(a, unqualified(a, at, (c) => v.comp(c)?.description))
           }
-          if (b != null || !facet) refuse(a, unknownName(a, names))
+          if (b != null || !facet) refuse(a, unknownWord(v, a))
           out.push({ comp: a, prop: '' })
           continue
         }
