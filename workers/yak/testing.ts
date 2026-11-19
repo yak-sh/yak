@@ -125,8 +125,17 @@ export let state = (name = '', prepared = true) => {
       live.push(ws)
       tagged.set(ws, tags)
     },
-    getWebSockets: (tag?: string) =>
-      tag == null ? live : live.filter((ws) => tagged.get(ws)?.includes(tag)),
+    // A socket that closed is no longer the object's, as in the runtime: let
+    // go of here, it would keep the page that opened it for the platform's
+    // life.
+    getWebSockets: (tag?: string) => {
+      for (let i = live.length; i--;) {
+        if (live[i].readyState > 1) live.splice(i, 1)
+      }
+      return tag == null
+        ? live
+        : live.filter((ws) => tagged.get(ws)?.includes(tag))
+    },
     // The runtime lets go of a socket's tags once it has closed, and reading
     // them after throws.
     getTags: (ws: Wire) => {
@@ -429,6 +438,15 @@ export let lasting = (
     }
   }
   let closing: Promise<void> | null = null
+  // Until what is running has settled, including work that work started. A
+  // closing platform delivers no alarm: what an object still owes is left
+  // undone, as the runtime leaves it for an object it evicts.
+  let drained = async () => {
+    for (let work = pending(); work.length; work = pending()) {
+      await Promise.allSettled(work)
+    }
+    if (failed.length) throw failed.shift()
+  }
   // A test's clock moves only when the test moves it (@yaks/testing `clock`),
   // so a platform on one waits, as it closes, for what settles without it:
   // work left waiting on that clock (a line kept a beat after its answer)
@@ -467,7 +485,7 @@ export let lasting = (
     }
     return closing = (async () => {
       try {
-        await (queued ? moving(queued) : settled())
+        await (queued ? moving(queued) : drained())
       } finally {
         release()
       }

@@ -300,7 +300,7 @@ let load = async (
     close() {
       if (this.readyState == 3) return
       this.readyState = 3
-      if (this.server) p.builder(eid).webSocketClose(this.server)
+      if (this.server) shut(this.server)
       queueMicrotask(() => this.emit('close'))
     }
   }
@@ -385,10 +385,12 @@ let load = async (
       // What the Builder says before the page hears its socket open comes
       // after, as a browser delivers it.
       let early: string[] = []
-      await upgrade(
-        page.url,
-        as,
-        (data) => opened ? page.onmessage?.({ data }) : void early.push(data),
+      servers.push(
+        await upgrade(
+          page.url,
+          as,
+          (data) => opened ? page.onmessage?.({ data }) : void early.push(data),
+        ),
       )
       page.onopen?.()
       opened = true
@@ -423,7 +425,7 @@ let load = async (
       left = true
       for (let t of timers) clearTimeout(t)
       waits.clear()
-      for (let server of servers) p.builder(eid).webSocketClose(server)
+      for (let server of servers) shut(server)
     },
   }
 }
@@ -454,6 +456,12 @@ let upgrade = (url: string, as: Who, hear: (data: string) => void) => {
   })
   upgrading = made.then(() => {}, () => {})
   return made
+}
+// A socket the page closed, closed as the runtime closes it: no longer open,
+// and its object told.
+let shut = (server: Wire) => {
+  server.readyState = 3
+  p.builder(eid).webSocketClose(server)
 }
 let settle = async () => {
   for (let i = 0; i < 20; i++) await new Promise((ok) => setTimeout(ok, 1))
