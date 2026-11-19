@@ -923,6 +923,26 @@ export let openedOf = async (
   return waiting.length ? { waiting } : {}
 }
 
+// The calls among these lines.
+let callsIn = (entries: Bundle[]) =>
+  new Set(entries.flatMap((b) => b.call ? [b.entity.eid] : []))
+
+// The app the conversation `open` is making (operator-view.ts `making`), read
+// as its own page reads it (`conversationOf`), without drawing it.
+let underway = async (store: Store, open: string) => {
+  let { session, task } = await openedOf(store, open)
+  if (session) {
+    let entries = await linesOf(store, session.entity.eid, SHOWN)
+    return making(entries, await helpersOf(store, [session], callsIn(entries)))
+  }
+  if (!task) return null
+  let sessions = await sessionsOf(store, task.entity.eid)
+  return making(
+    await entriesOf(store, sessions),
+    await helpersOf(store, sessions),
+  )
+}
+
 /**
  * One conversation in the Operator's chat app, opened by a person's
  * conversation, a piece of work it started, a task, or a request: its title
@@ -1150,10 +1170,7 @@ export let conversationOf = async (
     let eid = row.entity.eid
     let helper = !!row.spawned
     let entries = await linesOf(store, eid, SHOWN, from)
-    let calls = new Set(
-      entries.flatMap((b) => b.call ? [b.entity.eid] : []),
-    )
-    let helped = await seenOf(store, [row], entries, calls)
+    let helped = await seenOf(store, [row], entries, callsIn(entries))
     let seen = {
       ...helped,
       threads: await threadsOf(store, entries, named, called, opens),
@@ -2034,9 +2051,12 @@ export let operatorRequest = async (
       typeof args.take == 'number' && args.take > 0 ? args.take : undefined,
     )
     // Its lines as data only for a reader that draws them (the iOS shell).
+    // A helper's page is zoomed in on the person's conversation, and the app
+    // that conversation opens beside it opens beside the helper too.
     return Response.json({
       root,
       ...talked,
+      ...talked.helper ? { making: await underway(store, root) } : {},
       ...args.lines ? { lines: lines() } : {},
       ...await news(),
     })

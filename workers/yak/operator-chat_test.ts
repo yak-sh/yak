@@ -860,6 +860,53 @@ test('a helper’s page is zoomed in: held under the bar, the way back out, its 
   assert(!root.querySelector('.Talk')!.classList.contains('Talk-zoomed'))
 })
 
+test('a helper’s page opens the app the person’s conversation opens beside it', async () => {
+  // One helper of the conversation started an app; another is drafting.
+  let started = crypto.randomUUID(), maker = crypto.randomUUID()
+  let made = crypto.randomUUID(), drafter = crypto.randomUUID()
+  await service.store.g.apply([
+    {
+      entity: { eid: started },
+      entry: { session: task },
+      call: { to: toolEid('session_fork'), args: {} },
+    },
+    {
+      entity: { eid: maker },
+      session: { id: maker },
+      spawned: { parent: task, call: started },
+      operator_session: { space: eid, person },
+    },
+    {
+      entity: { eid: made },
+      entry: { session: maker },
+      call: { to: toolEid('app_new'), args: { slug: 'app1' } },
+    },
+    {
+      entity: { eid: crypto.randomUUID() },
+      entry: { session: maker },
+      created: { at: new Date().toISOString() },
+      result: { call: made },
+      content: { body: '{}' },
+    },
+    {
+      entity: { eid: drafter },
+      session: { id: drafter },
+      spawned: { parent: task },
+      operator_session: { space: eid, person },
+    },
+    {
+      entity: { eid: crypto.randomUUID() },
+      entry: { session: drafter },
+      content: { body: 'Draft the game' },
+    },
+  ], { trusted: true })
+  let beside = async (open?: string) =>
+    (await sided('owner', open)).document.querySelector('.Talk_App')
+      ?.getAttribute('data-app')
+  assertEquals(await beside(), 'app1')
+  assertEquals(await beside(drafter), 'app1')
+})
+
 // Last, since it adds to the conversation every test above reads.
 test('a chat in which the Operator changed an app opens with no app beside it', async () => {
   let call = crypto.randomUUID()
