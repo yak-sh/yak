@@ -30,6 +30,10 @@ command -v node >/dev/null || {
 }
 
 id runner >/dev/null 2>&1 || useradd -m -s /bin/bash runner
+unit=/etc/systemd/system/actions.runner.yak-sh-yak.yak-ci.service.d
+mkdir -p $unit
+printf '[Service]\nRestart=on-failure\nRestartSec=30\n' > $unit/restart.conf
+systemctl daemon-reload
 dir=/opt/actions-runner
 [ -f $dir/.runner ] && exit 0
 mkdir -p $dir && cd $dir
