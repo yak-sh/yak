@@ -302,7 +302,8 @@ let sigil = (token: string): Clause[] | null => {
   let dot = token.match(DOTTED)
   if (dot) throw spelled(token, dot[1] + dot[2])
   // An eid fragment is a singleton resource too; unlike a component name it
-  // may contain (or consist entirely of) digits. The store resolves it.
+  // may contain (or consist entirely of) digits. A read takes it as the
+  // entity's own eid it starts (@yaks/graph said.ts).
   if (/^#[0-9a-f]{6,64}$/i.test(token)) {
     return [{ kind: 'resource', comp: token.slice(1) }]
   }

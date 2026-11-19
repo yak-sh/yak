@@ -7,7 +7,8 @@
 // `.decided.by=jeff` matched nothing while `.decided.by=<eid>` matched.
 //
 // A query names an entity in exactly five places: the entity's own eid
-// (`.entity.eid=#47e9678bdf`), a reference property's value (`.decided.by=jeff`),
+// (`.entity.eid=#47e9678bdf`, or the handle alone, `#47e9678bdf *`), a
+// reference property's value (`.decided.by=jeff`),
 // the reverse-reference filter `.refs=`, a walk's target (`.requires->T-42`)
 // and the neighbour filter `.near=`. Nowhere else —
 // `.task.status=done` is an enum, and a value that happens to be somebody's name
@@ -69,6 +70,20 @@ let value = (v: Value, f: Says): Value => {
   return v
 }
 
+/** A handle alone (`#47e9678bdf`) as the entity's own eid it starts: the
+ * parser keeps it a resource clause, which only a rule's write gives meaning
+ * to, so a read says what it means, `.entity.eid=#47e9678bdf`. */
+let handles = (c: Clause): Clause =>
+  map(c, (c) =>
+    c.kind == 'resource' && /^[0-9a-f]{6,64}$/i.test(c.comp)
+      ? {
+        kind: 'pred',
+        path: ['entity', 'eid'],
+        op: '=',
+        value: { kind: 'scalar', raw: `#${c.comp}` },
+      }
+      : c)
+
 /** One clause with every id that names an entity mapped through `f`. */
 let mapped = (vocab: Vocab, c: Clause, f: Says): Clause =>
   map(c, (c) => {
@@ -107,13 +122,15 @@ export let addressing = (vocab: Vocab) =>
   query: Query,
   address: (ids: string[]) => Map<string, Eid> | Promise<Map<string, Eid>>,
 ): Query | Promise<Query> => {
-  let ast: Ast = typeof query == 'string' ? parse(query) : query
+  let parsed: Ast = typeof query == 'string' ? parse(query) : query
+  let ast = handles(parsed) as Ast
+  let held = ast === parsed ? query : ast
   let said: string[] = []
   mapped(vocab, ast, (id) => (said.push(id), id))
-  if (!said.length) return query
+  if (!said.length) return held
   return after(
     address([...new Set(said)]),
     (at) =>
-      at.size ? mapped(vocab, ast, (id) => at.get(id) ?? id) as Ast : query,
+      at.size ? mapped(vocab, ast, (id) => at.get(id) ?? id) as Ast : held,
   )
 }

@@ -60,6 +60,13 @@ test("an entity's own eid names it, a range of eids does not", () => {
   assertEquals(asked('.entity.eid=47e9..47ea'), [])
 })
 
+test('a handle alone reads as the eid it starts', () => {
+  assertEquals(said('#47e9678bdf *'), parse('.entity.eid=#47e9678bdf *'))
+  assertEquals(asked('#47e9678bdf'), ['#47e9678bdf'])
+  // a rule's resource is no handle
+  assertEquals(said('#Now'), '#Now')
+})
+
 test('the backlink, the walk and the neighbour name entities too', () => {
   assertEquals(asked('.refs=jeff'), ['jeff'])
   assertEquals(asked('.requires->P-1'), ['P-1'])
