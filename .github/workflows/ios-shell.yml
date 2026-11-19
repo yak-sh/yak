@@ -1,0 +1,87 @@
+# The iOS shell (native/) once through on a simulator, in Expo Go, signed in
+# as checks: native/simulator.yaml drives it with Maestro and screenshots each
+# screen into the run's artifacts. Run by hand when the shell changes:
+#
+#   gh workflow run ios-shell --ref <branch>
+#
+# A hosted runner, as macos.yml's: GitHub's standard runners cost nothing for
+# a public repository, and it never touches the box. CHECKS_SIGNIN_LINK is a
+# standing sign-in link for checks@bot.yak.sh (`POST /login/link`, minted
+# from a checks session); a run with an expired one stops at the sign-in card.
+name: ios-shell
+
+on:
+  workflow_dispatch:
+
+jobs:
+  simulator:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: native/package-lock.json
+      - name: shell dependencies
+        working-directory: native
+        run: npm ci
+      - name: the bundle compiles for Hermes
+        working-directory: native
+        run: npx expo export --platform ios --output-dir "$RUNNER_TEMP/export"
+      - name: an iPhone simulator
+        run: |
+          id=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)["devices"]
+          ios = sorted(k for k in d if "iOS" in k)
+          print(next(x["udid"] for x in d[ios[-1]] if x["name"].startswith("iPhone")))')
+          xcrun simctl boot "$id"
+          xcrun simctl bootstatus "$id"
+          xcrun simctl list devices booted
+      - name: Expo Go
+        run: |
+          url=$(curl -fsS https://api.expo.dev/v2/versions/latest | python3 -c '
+          import json, sys
+          print(json.load(sys.stdin)["data"]["sdkVersions"]["58.0.0"]["iosClientUrl"])')
+          mkdir -p "$RUNNER_TEMP/ExpoGo.app"
+          curl -fsSL "$url" | tar xz -C "$RUNNER_TEMP/ExpoGo.app"
+          xcrun simctl install booted "$RUNNER_TEMP/ExpoGo.app"
+      - name: Metro
+        working-directory: native
+        run: |
+          CI=1 nohup npx expo start --port 8081 --go > "$RUNNER_TEMP/metro.log" 2>&1 &
+          until curl -fsS http://127.0.0.1:8081/status; do sleep 2; done
+          nohup xcrun simctl spawn booted log stream --style compact \
+            --predicate 'process == "Expo Go"' > "$RUNNER_TEMP/device.log" 2>&1 &
+      - name: Maestro
+        run: |
+          curl -fsSL https://get.maestro.mobile.dev | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+      - name: through the shell
+        env:
+          LINK: ${{ secrets.CHECKS_SIGNIN_LINK }}
+        run: |
+          pass="${LINK#*\?}"
+          echo "::add-mask::${pass#t=}"
+          mkdir -p shots
+          cd shots
+          maestro test -e SIGNIN="exp://127.0.0.1:8081/--/login/link?$pass" ../native/simulator.yaml
+      - name: what the simulator showed last
+        if: always()
+        run: |
+          mkdir -p shots
+          find native -maxdepth 1 -name '*.png' -exec mv {} shots/ \;
+          xcrun simctl io booted screenshot shots/last.png || true
+          pass="${LINK#*\?}"
+          for f in metro device; do
+            sed "s/${pass#t=}/…/g" "$RUNNER_TEMP/$f.log" > "shots/$f.log" || true
+          done
+        env:
+          LINK: ${{ secrets.CHECKS_SIGNIN_LINK }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-shell
+          path: shots

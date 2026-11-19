@@ -38,6 +38,20 @@ export let spend = async (address: string, code: string) => {
   await spaces()
 }
 
+/** The pass a sign-in link opened in the shell carries (`/login/link?t=`):
+ * a letter's, or a standing one somebody was handed; none where `url` is not
+ * one. */
+export let passIn = (url: string) => {
+  let t = /\/login\/link\?(?:[^#]*&)?t=([^&#]+)/.exec(url)?.[1]
+  return t ? decodeURIComponent(t) : null
+}
+
+/** Follow a sign-in link: its answer sets the session cookie, as a spent
+ * code's does. */
+export let follow = async (pass: string) => {
+  await fetch(`${APEX}/login/link`, form({ t: pass }))
+}
+
 /** Call one of the connector's tools as the signed-in person; its answer's
  * value. */
 export let tool = async <T>(name: string, args: object = {}): Promise<T> => {

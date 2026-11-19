@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -29,6 +30,8 @@ import {
   ask,
   type Brand,
   brandOf,
+  follow,
+  passIn,
   SignedOut,
   type Space,
   spaces,
@@ -321,8 +324,17 @@ export default function App() {
       if (!(e instanceof SignedOut)) report(e)
       setAll('out')
     })
+  // A sign-in link opened in the shell, as it opens or while it runs, signs it
+  // in as the link's own page would.
   useEffect(() => {
+    let opened = (url: string | null) => {
+      let pass = url && passIn(url)
+      if (pass) follow(pass).then(load, report)
+    }
     load()
+    Linking.getInitialURL().then(opened, report)
+    let heard = Linking.addEventListener('url', ({ url }) => opened(url))
+    return () => heard.remove()
   }, [])
   return (
     <SafeAreaProvider>

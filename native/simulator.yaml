@@ -1,0 +1,43 @@
+# The shell once through on an iOS simulator, in Expo Go, as checks
+# (.github/workflows/ios-shell.yml runs it): the sign-in card, the Operator,
+# the apps list and Packing List's native view, a screenshot of each. A check
+# by hand, run when the shell changes, not a test of the suite.
+#
+# SIGNIN is a standing sign-in link for checks@bot.yak.sh, as Expo Go opens it
+# (exp://…/--/login/link?t=…).
+appId: host.exp.Exponent
+---
+- openLink: exp://127.0.0.1:8081
+# Expo Go's first launch shows its developer menu once.
+- runFlow:
+    when:
+      visible: Continue
+    commands:
+      - tapOn: Continue
+- extendedWaitUntil:
+    visible: Send me a code
+    timeout: 300000
+- takeScreenshot: 1-sign-in
+- tapOn: you@example.com
+- inputText: checks@bot.yak.sh
+- tapOn: Send me a code
+- extendedWaitUntil:
+    visible: Use another address
+    timeout: 30000
+- takeScreenshot: 2-code
+- openLink: ${SIGNIN}
+- extendedWaitUntil:
+    visible: Apps
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 15000
+- takeScreenshot: 3-operator
+- tapOn: Apps
+- extendedWaitUntil:
+    visible: Packing List
+    timeout: 30000
+- takeScreenshot: 4-apps
+- tapOn: Packing List
+- waitForAnimationToEnd:
+    timeout: 20000
+- takeScreenshot: 5-packing-list
