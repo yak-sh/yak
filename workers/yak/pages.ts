@@ -734,41 +734,33 @@ export let dropped = (at: {
 // One control, everywhere something is meant to be pasted: the three things to
 // say below, and each of the three a connector form asks for (T-34412).
 export let copyable = (said: Kids, what = '') =>
-  h(
-    Copy,
-    null,
-    h(Copy.Text, null, said),
-    h(Copy.Go, {
-      type: 'button',
-      'aria-label': what ? `Copy ${what}` : undefined,
-      hidden: true,
-    }, 'Copy'),
-  )
+  h(Copy, { what: what || undefined, go: { hidden: true } }, said)
 
-// The button's half. Constant text, no interpolation, and every write to the
-// page is textContent — the page never speaks HTML on a person's behalf. The
-// words come from the span beside it rather than an attribute of its own, so
-// there is one copy of them on the page and nothing to keep in step. Where the
-// clipboard is refused — an insecure origin, a browser that asks first — the
-// words are selected instead, so the person's own copy keystroke lands.
+// The button's half. Constant code, no interpolation, and nothing is written
+// to the page but a class: the words come from the span beside the button
+// rather than an attribute of its own, so there is one copy of them on the
+// page and nothing to keep in step. A copy turns its glyph to a check for a
+// moment (`Copy-copied`). Where the clipboard is refused — an insecure origin,
+// a browser that asks first — the words are selected instead, so the person's
+// own copy keystroke lands.
 export let copying = () =>
   run(`
 for (let go of document.querySelectorAll('.Copy_Go')) {
-  let said = go.previousElementSibling
+  let said = go.previousElementSibling, box = go.parentElement, done
   go.hidden = false
   go.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(said.textContent)
-      go.textContent = 'Copied'
+      box.classList.add('Copy-copied')
+      clearTimeout(done)
+      done = setTimeout(() => box.classList.remove('Copy-copied'), 2000)
     } catch (_) {
       let range = document.createRange()
       range.selectNodeContents(said)
       let sel = getSelection()
       sel.removeAllRanges()
       sel.addRange(range)
-      go.textContent = 'Copy it'
     }
-    setTimeout(() => { go.textContent = 'Copy' }, 2000)
   })
 }
 `)

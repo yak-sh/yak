@@ -74,7 +74,14 @@ test('a component absent from the skin inherits its surface paint in a subset ki
   assertEquals(pencil.Receipt, undefined)
   assert(matching('.Receipt', 'background').length)
   assert(matching('.Receipt', 'border', '::after').length)
-  assert(matching('.Receipt_Action', 'background', '::before').length)
+  assert(matching('.Receipt_Action', 'box-shadow', '::before').length)
+  // Its hatch is cut by nothing but its own corners, whatever their radius.
+  assertEquals(matching('.Receipt_Action', 'clip-path', '::before'), [])
+  assertEquals(
+    matching('.Receipt_Action', 'border-radius', '::before')
+      .map((rule) => rule.style.getPropertyValue('border-radius')),
+    ['inherit'],
+  )
   assert(
     matching(
       '.Receipt_Action',

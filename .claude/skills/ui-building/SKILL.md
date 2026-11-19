@@ -88,7 +88,7 @@ made of other parts holds them, the way `Say` holds a `Field` and a `Button`: an
 `input` a part styles itself is a second text box beside `Field`, with its own
 look in both hosts. A part that is another part is drawn as it, never by writing
 its class: a report is a card (`block(Card, 'Report', …)`), copy's button a
-`Button` (`Copy.Go`), and a caller makes a tab's panel a card with
+`Button` (`Copy_Go`), and a caller makes a tab's panel a card with
 `<TabSet.Panel as={Card}>` (packages/ui/el.ts).
 
 A textarea is as tall as what is typed in it: `field-sizing: content`, set once

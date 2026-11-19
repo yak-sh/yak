@@ -31,16 +31,18 @@
 :is(.Surface_Raised, .Surface_Press) {
   box-shadow: var(--raised-shadow);
 }
+/* What it is raised off: a copy of its own shape --lift down and right,
+   seen only past its edge. That is a hard box-shadow, which a browser draws
+   outside the box's own corners whatever their radius (a pill, a circle),
+   inked in --raised-ink and seen through --raised-hatch's lines. The hatch
+   is laid from where the shadow is, so it stays put as --lift changes. */
 :is(.Surface_Raised, .Surface_Press, .Menu, .Menu_Summary, .Button, .Card-button)::before {
   content: '';
   position: absolute;
-  inset: calc(var(--lift) - 1px) calc(-1px - var(--lift))
-    calc(-1px - var(--lift)) calc(var(--lift) - 1px);
+  inset: -1px;
   border-radius: inherit;
-  background: var(--raised-hatch);
-  clip-path: polygon(calc(100% - var(--lift)) 0, 100% 0, 100% 100%, 0 100%,
-    0 calc(100% - var(--lift)), calc(100% - var(--lift)) calc(100% -
-    var(--lift)));
+  box-shadow: var(--lift) var(--lift) 0 var(--raised-ink);
+  mask: var(--raised-hatch) var(--lift) var(--lift) no-clip;
   pointer-events: none;
 }
 :is(.Surface_Press) {

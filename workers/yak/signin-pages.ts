@@ -7,7 +7,6 @@ import {
   Button,
   Card,
   Cards,
-  Copy,
   Field,
   Form,
   Group,
@@ -933,10 +932,9 @@ export let clients = (env: Host): Client[] => [
     steps: [
       [
         'In your terminal: ',
-        h(
-          Copy.Text,
-          { as: 'code' },
+        copyable(
           `claude mcp add --transport http yaks ${url(env, '/mcp')}`,
+          'the command',
         ),
       ],
       [
@@ -974,10 +972,9 @@ export let clients = (env: Host): Client[] => [
       ],
       [
         'Add the server, with the URL as its one field: ',
-        h(
-          Copy.Text,
-          { as: 'code' },
+        copyable(
           `{ "mcpServers": { "yaks": { "url": "${url(env, '/mcp')}" } } }`,
+          'the server',
         ),
       ],
       [

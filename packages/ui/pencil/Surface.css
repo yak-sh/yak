@@ -9,7 +9,8 @@
   --edge-color: var(--graphite);
   --edge-filter: var(--drawn);
   --raised-shadow: none;
-  --raised-hatch: var(--hatch);
+  --raised-hatch: var(--hatch); /* its lines, as a mask */
+  --raised-ink: var(--text); /* what they are drawn in */
   --raised-lift: 4px;
   --raised-hover-lift: 5px;
   --raised-down-lift: 1.5px;

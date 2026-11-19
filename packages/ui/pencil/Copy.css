@@ -1,6 +1,6 @@
 /* Pencil's words to copy, yaks.app's: a strip of the floor a control tall,
-   the words in the face around them, and the button beside it a paper press
-   inked in the accent, a size down (pages.ts `copyable`). */
+   the words in the mono face, and the button beside it a paper press inked
+   in the accent, a control square. */
 .Copy {
   display: flex;
   align-items: center;
@@ -14,6 +14,8 @@
   padding: .4rem .75rem;
   background: var(--bg);
   color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--small);
   overflow-wrap: anywhere;
   user-select: all;
 }
@@ -22,5 +24,10 @@
 .Copy .Copy_Go {
   --button-ink: var(--accent);
   flex: none;
-  font-size: var(--fine, var(--small));
+  width: var(--control-height);
+  padding: 0;
+}
+.Copy:not(.Copy-copied) .Copy_Icon-done,
+.Copy-copied .Copy_Icon:not(.Copy_Icon-done) {
+  display: none;
 }

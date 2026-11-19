@@ -1,5 +1,6 @@
 /* Words to copy, in the mono face on a faint wash, selected whole at a
-   press, and the button beside them, its own width. */
+   press, and the button beside them, its own width, drawn as a copy glyph
+   that turns to a check once they are copied. */
 .Copy {
   display: flex;
   align-items: center;
@@ -20,4 +21,8 @@
 }
 .Copy_Go {
   flex: none;
+}
+.Copy:not(.Copy-copied) .Copy_Icon-done,
+.Copy-copied .Copy_Icon:not(.Copy_Icon-done) {
+  display: none;
 }
