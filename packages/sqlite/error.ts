@@ -3,6 +3,12 @@
 export let busy = (e: unknown): e is Error =>
   e instanceof Error && /database is (locked|busy)/.test(e.message)
 
+/** A file SQLite cannot read as a database: its pages or its header are
+ * damaged. Rebuildable data in it is discarded, never repaired. */
+export let malformed = (e: unknown): e is Error =>
+  e instanceof Error &&
+  /database disk image is malformed|file is not a database/.test(e.message)
+
 /** A stored entity has no archetype. The writer reports and classifies it
  * before retrying; a reader cannot discover its components instead. */
 export class Unpointed extends Error {

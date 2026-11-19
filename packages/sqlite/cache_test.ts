@@ -3,7 +3,7 @@
 import * as io from '@yaks/file/io'
 import { col, insert, select, table } from '@yaks/sql'
 import { equal, ok, test } from '@yaks/testing'
-import { held, prune, trim } from './cache.ts'
+import { held, prune, threaded, trim } from './cache.ts'
 import { open } from './db.ts'
 
 let schema = (db: ReturnType<typeof open>) => {
@@ -68,6 +68,12 @@ let full = fixture()
 full.add(full.kept, 256 * 1024)
 let small = fixture()
 small.add(small.kept, 1000)
+let locked = fixture()
+locked.add(locked.gone, 256 * 1024)
+let read = fixture()
+read.add(read.gone, 256 * 1024)
+let damaged = fixture()
+damaged.add(damaged.gone, 256 * 1024)
 
 test('cache eviction compacts in place while an existing connection continues writing', async () => {
   let { path, db, kept, close } = stale
@@ -112,5 +118,49 @@ test('a cache below budget retains its rows and a missing cache stays absent', a
     equal([...io.readDirSync(dir)].some((e) => e.name == 'absent'), false)
   } finally {
     close()
+  }
+})
+
+test('a trim waits for its lock on its own thread while the caller runs', async () => {
+  let { path, db, close } = locked
+  try {
+    db.query({ t: 'begin', mode: 'immediate' })
+    setTimeout(() => db.query({ t: 'commit' }), 100)
+    ok(await threaded(path, { most: 64 * 1024, tables }) > 0)
+    equal(rows(db), [])
+  } finally {
+    close()
+  }
+})
+
+test('a cache another connection is reading waits for the next pass', async () => {
+  let { path, db, close } = read
+  let cache = { most: 64 * 1024, tables }
+  try {
+    db.query({ t: 'begin' })
+    equal(rows(db).length, 1)
+    await trim(path, cache)
+    db.query({ t: 'commit' })
+    equal(rows(db), [])
+    await trim(path, cache)
+    ok(await held(path) <= 64 * 1024)
+  } finally {
+    close()
+  }
+})
+
+test('a malformed cache is removed for its owner to rebuild', async () => {
+  let { dir, path, db } = damaged
+  db.query({ t: 'pragma', name: 'wal_checkpoint', value: 'truncate' })
+  db.close()
+  let file = io.openSync(path, { write: true })
+  file.seekSync(4096, io.SeekMode.Start)
+  file.writeSync(new Uint8Array(4096).fill(0xff))
+  file.close()
+  try {
+    ok(await trim(path, { most: 64 * 1024, tables }) > 0)
+    equal([...io.readDirSync(dir)].map((e) => e.name), ['kept.ts'])
+  } finally {
+    io.removeSync(dir, { recursive: true })
   }
 })

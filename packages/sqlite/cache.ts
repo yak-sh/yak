@@ -1,8 +1,11 @@
 // Rebuildable SQLite caches stay at their path and inode: another process may
 // still have them open. Their file-URL columns identify entries nobody can use
 // once the source is gone; deleting and vacuuming returns their pages in place.
+// A trim waits on the disk, on file checks, a vacuum and its lock, so a
+// process runs it on a thread of its own (./cache_worker.ts).
 import * as io from '@yaks/file/io'
 import { col, type Driver, oneOf, select, table } from '@yaks/sql'
+import { busy, malformed } from './error.ts'
 import { Database } from './legacy.ts'
 import { driver } from './native.ts'
 import { unit } from './unit.ts'
@@ -70,38 +73,81 @@ export let prune = (
   return removed
 }
 
-let compact = (db: Driver) => {
+/** Vacuum and truncate the WAL. False while another connection reads the
+ * cache: the vacuumed pages stay in the WAL until a later pass. */
+let compact = (db: Driver): boolean => {
   db.query({ t: 'vacuum' })
   let [checkpoint] = db.query({
     t: 'pragma',
     name: 'wal_checkpoint',
     value: 'truncate',
   })
-  if (checkpoint?.busy) throw new Error('cache checkpoint is busy')
+  return !checkpoint?.busy
 }
 
-/** Trim a cache over budget in place. Missing sources go first; if its live
- * entries still exceed the budget, clear its rebuildable tables. The database
- * and its WAL are never unlinked, including while another connection uses it.
- * Returns bytes reclaimed. A cache that does not exist is left absent. */
-export let trim = async (path: string, cache: Cache): Promise<number> => {
-  let before = await held(path)
-  if (before <= cache.most) return 0
+let shrink = async (path: string, cache: Cache) => {
   let db = driver(new Database(path, { create: false }))
   try {
     db.query({ t: 'pragma', name: 'busy_timeout', value: 1000 })
     prune(db, cache.tables)
+    if (!compact(db) || await held(path) <= cache.most) return
+    unit(db, () => {
+      for (let name of Object.keys(cache.tables)) {
+        db.query({ t: 'delete', from: name })
+      }
+    })
     compact(db)
-    if (await held(path) > cache.most) {
-      unit(db, () => {
-        for (let name of Object.keys(cache.tables)) {
-          db.query({ t: 'delete', from: name })
-        }
-      })
-      compact(db)
-    }
-    return Math.max(0, before - await held(path))
   } finally {
     db.close()
   }
 }
+
+/** A malformed cache is rebuildable, not data: its files are removed, WAL
+ * first, so the owner rebuilds it at the same path. */
+let discard = async (path: string) => {
+  for (let p of [path + '-wal', path + '-shm', path]) {
+    await io.remove(p).catch((error) => {
+      if (!io.isNotFound(error)) throw error
+    })
+  }
+}
+
+/** Trim a cache over budget in place. Missing sources go first; if its live
+ * entries still exceed the budget, clear its rebuildable tables. The database
+ * and its WAL are never unlinked while it is readable, including while another
+ * connection uses it; a malformed one is removed for its owner to rebuild. A
+ * cache another connection holds busy waits for the next pass. Returns bytes
+ * reclaimed. A cache that does not exist is left absent. Its file checks and
+ * vacuum block the calling thread; {@link threaded} runs it on its own. */
+export let trim = async (path: string, cache: Cache): Promise<number> => {
+  let before = await held(path)
+  if (before <= cache.most) return 0
+  try {
+    await shrink(path, cache)
+  } catch (error) {
+    if (malformed(error)) await discard(path)
+    else if (!busy(error)) throw error
+  }
+  return Math.max(0, before - await held(path))
+}
+
+/** What the trim thread answers. */
+export type Trimmed = { value: number } | { error: string }
+
+/** {@link trim} on a thread of its own, so no disk stall holds the caller's. */
+export let threaded = (path: string, cache: Cache): Promise<number> =>
+  new Promise((resolve, reject) => {
+    let worker = new Worker(new URL('./cache_worker.ts', import.meta.url), {
+      type: 'module',
+    })
+    worker.onmessage = ({ data }: MessageEvent<Trimmed>) => {
+      worker.terminate()
+      'value' in data ? resolve(data.value) : reject(new Error(data.error))
+    }
+    worker.onerror = (e) => {
+      e.preventDefault()
+      worker.terminate()
+      reject(e.error ?? new Error(e.message))
+    }
+    worker.postMessage({ path, cache })
+  })

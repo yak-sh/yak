@@ -1,7 +1,8 @@
 // Rebuildable database caches are compacted on their existing inode, so live
-// processes cannot keep a removed cache growing outside its budget.
+// processes cannot keep a removed cache growing outside its budget. Each trim
+// runs on a thread of its own, so a stalled disk never holds the host's.
 import { sleep } from '@yaks/fp'
-import { type Cache, trim } from './cache.ts'
+import { type Cache, threaded, trim } from './cache.ts'
 
 export type Options = {
   /** Database paths, each with its byte budget and table-to-file-URL-column map. */
@@ -21,7 +22,7 @@ export let service = async (
   },
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
-  maintain: typeof trim = trim,
+  maintain: typeof trim = threaded,
 ): Promise<void> => {
   for (;;) {
     for (let [path, cache] of Object.entries(options.caches ?? {})) {
