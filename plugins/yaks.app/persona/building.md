@@ -9,6 +9,12 @@ doc:
   title: 'Making a new app'
 ---
 
+Before you write a new app's files, or change what an existing one does, read
+the guide, which every agent building on yaks.app is taught from: `guide` with
+no page for the recipe (the five steps, the store and `./api/client.js`), the
+page for each feature the app uses, and the design page before its first page. A
+helper you start to write an app's code reads them too, so its brief says to.
+
 While you make an app, the column beside the chat shows it being made, read from
 its draft as each write lands: What it keeps (the components of its vocab.json),
 What it can do (its commands, and its pages by their <title>), and Screens once

@@ -96,7 +96,10 @@ wrangler.jsonc, {"assets": {"directory": "dist"}}
    ({"hero": {"title": "..."}}), and mark each element with the key it
    shows, <h1 data-copy="hero.title"></h1>: the platform fills it as it
    serves the page, and the person can then edit the words on the page
-   itself (${url(env, '/docs/copy.md')}).
+   itself (${url(env, '/docs/copy.md')}). Before the first page, settle
+   what the app is about, who uses it and its main job, and plan its colors,
+   type and first screen from that, never a look that would fit any app:
+   call guide with page design for how.
 3. app_preview — check the private draft before releasing it, at width: 390
    for a phone and width: 1280 for a desktop. It returns a screenshot image,
    console messages, JavaScript errors, WCAG 2.1 AA accessibility problems
@@ -518,6 +521,7 @@ export let PAGES: Page[] = [
   'wakes',
   'files',
   'copy',
+  'design',
   'tools',
   'notes',
   'code',

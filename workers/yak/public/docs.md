@@ -122,6 +122,22 @@ Deeper: <https://yaks.app/docs/copy.md> — the file, attributes such as
 `data-copy-placeholder`, slots, text a script draws, editing on the page, and
 moving an existing app's copy.
 
+## Visual Design
+
+A page's look starts from what the app is about, who uses it and its main job.
+Plan four to six colors by role, one or two typefaces and a type scale, and the
+first screen at 390 and 1280 pixels before writing code, and put them in CSS
+custom properties. Open with the thing the app is for, put emphasis in one
+place, keep motion to what answers an action, and meet keyboard focus, contrast
+and reduced motion without being asked. The defaults a model reaches for when
+nobody chose (a cream page with a serif and an orange accent, identical rounded
+cards, gradients, capitals above every heading) are what to avoid unless the
+person asked for them.
+
+Deeper: <https://yaks.app/docs/design.md> — planning, type, color, layout,
+motion, accessibility, interface wording, the defaults that look generated, and
+checking with `app_preview`.
+
 ## Components and vocab.json
 
 A component is a named set of properties an entity carries. The platform's own,
