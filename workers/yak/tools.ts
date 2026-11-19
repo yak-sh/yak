@@ -537,18 +537,134 @@ let FILE = {
   required: ['path'],
 }
 
-// What app_files does to a file, in the order an app is built.
-let OPS = [
-  'list',
-  'read',
-  'write',
-  'patch',
-  'fetch',
-  'delete',
-  'history',
-  'restore',
-  'discard',
-]
+// What app_files does to a file, in the order an app is built, and what each
+// takes: the op's schema and its refusal both say them from here.
+let TAKES: Record<string, string> = {
+  list: 'nothing more',
+  read: 'path, paths, or neither for every text file',
+  write: 'path and content (base64 for bytes), or files: [{path, content}, …]',
+  patch: 'path, find and replace, or edits: [{path, find, replace}, …]',
+  fetch: 'path and url',
+  delete: 'path',
+  history: 'path',
+  restore: 'path with sha or at, or nothing to undo the last write',
+  discard: 'draft',
+}
+let OPS = Object.keys(TAKES)
+
+// app_files' arguments.
+let FILES_INPUT: Shape = {
+  type: 'object',
+  properties: {
+    space: SPACE,
+    app: APP,
+    op: {
+      type: 'string',
+      enum: OPS,
+      description: OPS.map((op) => `${op}: ${TAKES[op]}`).join('; ') +
+        '. Left out, a call with files, content or base64 is a write',
+    },
+    draft: str(
+      'the id of the draft to work in, from an earlier answer: every ' +
+        'write answers the id of the draft it landed in. new opens ' +
+        'another beside the ones this conversation holds. Left out, the ' +
+        "call works in this conversation's own draft: a read sees it " +
+        'over the live files, and the first write opens it. Of several, ' +
+        'the one last written; write, fetch, delete and restore name ' +
+        'one. With drafts, the draft they start from. For discard, ' +
+        'the draft to close unreleased',
+    ),
+    path: str(
+      'path relative to the app root, e.g. index.html. For restore, ' +
+        'leaving path, sha and at out goes back one write: every file ' +
+        "the app's newest write changed returns to what it replaced",
+    ),
+    paths: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'for read: several paths answered in one call, each ' +
+        'with its SHA-256. With neither path nor paths, read answers ' +
+        'every text file in the app',
+    },
+    content: str('the file text, for write'),
+    base64: str(
+      'the file bytes, base64-encoded, instead of content: for a file ' +
+        'that is not text, such as the .wasm a worker.js imports',
+    ),
+    find: str(
+      'for patch: the exact text to replace, which must appear exactly ' +
+        'once in the file',
+    ),
+    edits: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          path: str('path relative to the app root'),
+          find: str('the exact text, which must appear exactly once'),
+          replace: str('what goes in its place; empty removes it'),
+        },
+        required: ['path', 'find', 'replace'],
+      },
+      description: 'for patch: many edits in one call, instead of ' +
+        "path, find and replace, across any of the app's files. They " +
+        'apply in order, all or none, in one write. Send every edit a ' +
+        'change needs as one patch call rather than one call each',
+    },
+    replace: str(
+      'for patch: what goes in its place; the empty string removes the ' +
+        'text',
+    ),
+    url: str(
+      'for fetch: the https URL whose response body is written to ' +
+        'path, which vendors a library into the app without transcribing ' +
+        'it',
+    ),
+    sha: str(
+      'for restore: the SHA-256 content hash of the version to put back, from op ' +
+        'history. With both sha and at left out, the newest is put back',
+    ),
+    at: str(
+      'for restore: put the file back to what it was at this moment, ' +
+        'e.g. 2026-09-06T14:20:00Z',
+    ),
+    files: {
+      type: 'array',
+      items: FILE,
+      description: 'several files to write at once, instead of ' +
+        'path and content: the whole app in one call',
+    },
+    drafts: {
+      type: 'array',
+      minItems: 2,
+      maxItems: 4,
+      items: {
+        type: 'object',
+        properties: {
+          files: { type: 'array', items: FILE },
+        },
+        required: ['files'],
+      },
+      description: 'for a write: two to four drafts in one call, each ' +
+        'its own files over what files shares, all over what the ' +
+        'draft held. The first lands in the draft, each other opens one ' +
+        'beside it, and the answer lists their ids',
+    },
+  },
+  required: ['app'],
+}
+
+// The refusal of a call with no op and nothing to write (the schema refuses an
+// op it does not list): every op with what it takes, and any argument the
+// tool has no use for, since a caller that left the op out has often guessed
+// a name too (`contents` for `content`).
+let opless = (args: Args) => {
+  let stray = Object.keys(args).filter((k) => !(k in FILES_INPUT.properties))
+  return 'no op, and no content, base64 or files to write. op is one of ' +
+    OPS.map((op) => `${op} (${TAKES[op]})`).join('; ') +
+    '; a write may leave op out' +
+    (stray.length ? `. app_files takes no ${stray.join(', ')}` : '')
+}
 
 // The ops that need a writer, which is every one that changes a byte.
 let WRITES = ['write', 'patch', 'fetch', 'delete', 'restore', 'discard']
@@ -3956,121 +4072,12 @@ let OURS: Row[] = [
     name: 'app_files',
     destructive: false,
     openWorld: true,
-    input: {
-      type: 'object',
-      properties: {
-        space: SPACE,
-        app: APP,
-        op: {
-          type: 'string',
-          enum: [...OPS],
-          description:
-            'list, read, write, patch, fetch, delete, history, restore or ' +
-            'discard. Required unless files, content or base64 supplies a ' +
-            'write',
-        },
-        draft: str(
-          'the id of the draft to work in, from an earlier answer: every ' +
-            'write answers the id of the draft it landed in. new opens ' +
-            'another beside the ones this conversation holds. Left out, the ' +
-            "call works in this conversation's own draft: a read sees it " +
-            'over the live files, and the first write opens it. Of several, ' +
-            'the one last written; write, fetch, delete and restore name ' +
-            'one. With drafts, the draft they start from. For discard, ' +
-            'the draft to close unreleased',
-        ),
-        path: str(
-          'path relative to the app root, e.g. index.html. For restore, ' +
-            'leaving path, sha and at out goes back one write: every file ' +
-            "the app's newest write changed returns to what it replaced",
-        ),
-        paths: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'for read: several paths answered in one call, each ' +
-            'with its SHA-256. With neither path nor paths, read answers ' +
-            'every text file in the app',
-        },
-        content: str('the file text, for write'),
-        base64: str(
-          'the file bytes, base64-encoded, instead of content: for a file ' +
-            'that is not text, such as the .wasm a worker.js imports',
-        ),
-        find: str(
-          'for patch: the exact text to replace, which must appear exactly ' +
-            'once in the file',
-        ),
-        edits: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              path: str('path relative to the app root'),
-              find: str('the exact text, which must appear exactly once'),
-              replace: str('what goes in its place; empty removes it'),
-            },
-            required: ['path', 'find', 'replace'],
-          },
-          description: 'for patch: many edits in one call, instead of ' +
-            "path, find and replace, across any of the app's files. They " +
-            'apply in order, all or none, in one write. Send every edit a ' +
-            'change needs as one patch call rather than one call each',
-        },
-        replace: str(
-          'for patch: what goes in its place; the empty string removes the ' +
-            'text',
-        ),
-        url: str(
-          'for fetch: the https URL whose response body is written to ' +
-            'path, which vendors a library into the app without transcribing ' +
-            'it',
-        ),
-        sha: str(
-          'for restore: the SHA-256 content hash of the version to put back, from op ' +
-            'history. With both sha and at left out, the newest is put back',
-        ),
-        at: str(
-          'for restore: put the file back to what it was at this moment, ' +
-            'e.g. 2026-09-06T14:20:00Z',
-        ),
-        files: {
-          type: 'array',
-          items: FILE,
-          description: 'several files to write at once, instead of ' +
-            'path and content: the whole app in one call',
-        },
-        drafts: {
-          type: 'array',
-          minItems: 2,
-          maxItems: 4,
-          items: {
-            type: 'object',
-            properties: {
-              files: { type: 'array', items: FILE },
-            },
-            required: ['files'],
-          },
-          description: 'for a write: two to four drafts in one call, each ' +
-            'its own files over what files shares, all over what the ' +
-            'draft held. The first lands in the draft, each other opens one ' +
-            'beside it, and the answer lists their ids',
-        },
-      },
-      required: ['app'],
-    },
+    input: FILES_INPUT,
     run: async (ctx, args) => {
       let batch = files(args.files)
       let fan = entries(args.drafts)
       let op = opOf(args, batch.length + fan.length)
-      // The refusal names the ops and the batch, because a bare "op is
-      // required" leaves an agent guessing at both (C-32624 item 5).
-      if (!OPS.includes(op)) {
-        throw refuse(
-          'arguments',
-          `op: one of ${OPS.join(', ')} — write takes path and content, or ` +
-            'files: [{path, content}] for several at once',
-        )
-      }
+      if (!OPS.includes(op)) throw refuse('arguments', opless(args))
       if (fan.length && op != 'write') {
         throw refuse('arguments', `drafts: for a write, not op: ${op}`)
       }

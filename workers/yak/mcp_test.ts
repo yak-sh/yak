@@ -671,16 +671,32 @@ test(
         }),
         '<svg/>',
       )
-      // What is missing is named: the ops, and the batch that writes several.
-      let lost = await assertRejects(
-        () => agent.tool('app_files', { ...app }),
-        Error,
+      // A call it cannot place is told what it sent, every op with what it
+      // takes, and any argument the tool has no use for.
+      let refused = async (
+        args: Record<string, unknown>,
+        ...said: string[]
+      ) => {
+        let e = await assertRejects(
+          () => agent.tool('app_files', { ...app, ...args }),
+          Error,
+        )
+        for (
+          let s of [
+            ...said,
+            'write (path and content',
+            'files: [{path, content}, …]',
+            'patch (path, find and replace',
+          ]
+        ) {
+          assertStringIncludes(e.message, s)
+        }
+      }
+      await refused({}, 'no op, and no content, base64 or files to write')
+      await refused(
+        { path: 'a.js', contents: 'x' },
+        'app_files takes no contents',
       )
-      assertStringIncludes(
-        lost.message,
-        'op: one of list, read, write, patch, fetch, delete',
-      )
-      assertStringIncludes(lost.message, 'files: [{path, content}]')
       await assertRejects(
         () => agent.tool('app_files', { ...app, files: [{ path: 'x.js' }] }),
         Error,
