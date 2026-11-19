@@ -40,7 +40,7 @@ import { note, proof, remember, survey, tally } from './deps.ts'
 import { discover, tested } from './find.ts'
 import { examples } from './load.ts'
 import { observe } from './reads.ts'
-import { summary, timed } from './run.ts'
+import { type Outcome, release, summary, timed } from './run.ts'
 import { collect, from, type Test, test } from './suite.ts'
 import { tick } from './wait.ts'
 
@@ -69,18 +69,23 @@ let paths = system.args.filter((a) => !a.startsWith('--'))
 let given = flag('keys').at(-1)
 let rest = flag('rest').at(-1)
 let part = flag('part').at(-1)
-// The resident memory past which a runtime with `--rest` hands on its files.
+// The resident memory past which a runtime lets go of what it kept across
+// files and, with `--rest`, hands on its files.
 let FULL = Math.min(2 * 1024 ** 3, Number(flag('full').at(-1) ?? Infinity))
-// Most of a runtime past FULL is what it no longer holds: V8 grows its heap
-// while memory is free, a database's pages are freed only once its object is
-// collected, and freed memory stays resident until given back. So a runtime
-// past FULL first collects (with `--expose-gc`), lets the finalizers that
-// queued run, and gives back what it freed (@yaks/process `trim`). It hands
-// on its files only when what remains is past three quarters of FULL, so it
-// runs a few files before it judges again.
+// Most of a runtime past FULL is what it no longer needs or holds: what files
+// kept for those after them (./suite.ts `kept`, a kernel and its stores, say),
+// V8's heap grown while memory was free, a database's pages, freed only once
+// its object is collected, and freed memory, resident until given back. So a
+// runtime past FULL first ends what it kept, collects (with `--expose-gc`),
+// lets the finalizers that queued run, and gives back what it freed
+// (@yaks/process `trim`). It hands on its files only when what remains is
+// past three quarters of FULL, so it runs a few files before it judges again.
 let sweep = (globalThis as { gc?: () => void }).gc
+let releases: Outcome[] = []
 let full = async () => {
-  if (!rest || system.memoryUsage().rss <= FULL) return false
+  if (system.memoryUsage().rss <= FULL) return false
+  releases.push(...await release(timeout, verbose))
+  if (!rest) return false
   sweep?.()
   await tick()
   system.trim()
@@ -146,6 +151,9 @@ let { outcomes, loading, loads, took, rest: unreached } = await drive(
   load,
   { timeout, verbose, full },
 )
+// What a file kept for those after it ends with the runtime's files, as it
+// would have ended with the runtime's memory.
+outcomes.push(...releases, ...await release(timeout, verbose))
 
 // A file passed when every test it declared ran and passed; a run that
 // picked by tag ran only some. Its pass is kept by its proof: its key, and

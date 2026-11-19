@@ -3,7 +3,7 @@
 import * as io from '@yaks/file/io'
 import { apex } from '@yaks/platform/host'
 import { challenge } from '@yaks/oauth'
-import { afterAll, cleanup, clock, until } from '@yaks/testing'
+import { cleanup, clock, kept, until } from '@yaks/testing'
 import { COOKIE, sign, verify } from './lib/token.ts'
 import type { Custom } from './domains.ts'
 import type { Command } from './declared.ts'
@@ -304,17 +304,19 @@ export let recording = () => {
   return { purged, PURGER, held }
 }
 
-// The kernel of the file the runner runs, started by the first of its tests
-// that asks for one. It ends once the file's tests have run: kept for the
-// process, it held every store any file made, and a test runtime outgrew its
-// memory a few dozen files in.
+// The kernel the runner's files share, started by the first of their tests
+// that asks for one. Booting it (its platform store, the owner's sign-in) is
+// most of what a small file costs, so it serves every file after, and ends
+// once the runtime needs its memory back (@yaks/testing `kept`): it holds
+// every store any file made. Files keep apart on it through their own people,
+// spaces and hostnames.
 let shared: ReturnType<typeof boot> | undefined
 
-/** The in-memory kernel shared by this test file's tests. */
+/** The in-memory kernel shared by the runner's files. */
 export let kernel = async (): Promise<Kernel> => {
   if (!shared) {
     let mine = shared = boot()
-    afterAll(async () => {
+    kept(async () => {
       if (shared == mine) shared = undefined
       await (await mine).close()
     })

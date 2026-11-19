@@ -80,6 +80,12 @@ everything they hold, so what a file opens for all its tests (a shared kernel,
 say) closes there, rather than living on beside every file loaded after. The
 file's end runs as one more test of it, `<path> ends`, said only when it fails.
 
+`kept(done)` asks for `done` once the runtime needs back the memory it holds
+(past `--full`), or else once its files have run, rather than once the file that
+asked ends: a fixture that costs more to make than to keep, such as a kernel,
+serves every file loaded after it until then. It ends as one more test of the
+file that asked last, `<path> releases`, said only when it fails.
+
 Outside the runner, declarations register with `Deno.test` when it is available.
 In a runtime without `Deno.test`, declarations need the runner's collection
 mechanism to be executed.

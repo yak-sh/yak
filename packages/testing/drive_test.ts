@@ -1,5 +1,6 @@
-import { afterAll, equal, ok, test } from './mod.ts'
+import { afterAll, equal, kept, ok, test } from './mod.ts'
 import { drive } from './drive.ts'
+import { release } from './run.ts'
 import { from, type Test } from './suite.ts'
 
 test('files load and execute in order, retaining reports without fixture bodies', async () => {
@@ -84,4 +85,28 @@ test('a file ends once its tests have run, before the next loads, and a failed e
     result.outcomes.map((o) => [o.test.name, o.ok]),
     [['a.ts test', true], ['b.ts test', true], ['b.ts ends', false]],
   )
+})
+
+test("what a file kept outlives it until the runtime releases it, and a failed release is that file's", async () => {
+  let events: string[] = []
+  await drive(['a.ts', 'b.ts'], (path) => {
+    from(path)
+    events.push(`load ${path}`)
+    kept(() => {
+      events.push(`${path} released`)
+      if (path == 'b.ts') throw new Error('would not close')
+    })
+    return Promise.resolve([])
+  })
+  events.push('ran')
+  let released = await release(1_000)
+  equal(events, [
+    'load a.ts',
+    'load b.ts',
+    'ran',
+    'b.ts released',
+    'a.ts released',
+  ])
+  equal(released.map((o) => [o.test.name, o.ok]), [['b.ts releases', false]])
+  equal(await release(1_000), [])
 })

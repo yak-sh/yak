@@ -36,6 +36,7 @@ export {
   afterAll,
   cleanup,
   type It,
+  kept,
   type Options,
   type Spec,
   suite,

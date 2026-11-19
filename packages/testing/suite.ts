@@ -105,6 +105,42 @@ export let afterAll = (done: () => unknown): boolean => {
   return !!leaving
 }
 
+// What files asked the runtime to keep until it needs their memory back
+// (`kept`), and the file that asked last.
+let keeping: (() => unknown)[] = []
+let keeper = ''
+
+/**
+ * Asks for `done` once the runtime needs back the memory a fixture holds
+ * (./main.ts `full`), rather than once the file that made it ends: a fixture
+ * that costs more to make than to keep (a kernel, say) serves every file
+ * after it until then. Outside the runner it does nothing, and answers false.
+ *
+ * ```ts ignore
+ * let shared: Promise<Kernel> | undefined
+ * let kernel = () => {
+ *   if (!shared) kept(async () => (await shared)?.close())
+ *   return shared ??= boot()
+ * }
+ * ```
+ */
+export let kept = (done: () => unknown): boolean => {
+  if (!tests) return false
+  keeping.push(done)
+  keeper = file
+  return true
+}
+
+/** What the runtime kept (`kept`), run last asked first, with the file that
+ * asked last; none when it keeps nothing. The runtime keeps nothing after. */
+export let unkept = ():
+  | { file: string; body: () => Promise<void> }
+  | undefined => {
+  let asked = keeping
+  keeping = []
+  return asked.length ? { file: keeper, body: () => settle(asked) } : undefined
+}
+
 /** What the file the runner loaded last asked for with `afterAll`, run last
  * asked first; none when it asked for nothing. The scope closes: the file
  * asks for no more. */

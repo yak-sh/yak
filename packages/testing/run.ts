@@ -4,7 +4,7 @@ import * as system from '@yaks/process/system'
 // which what watches a run reads.
 import { threadtime } from '@yaks/benchmark'
 import { own } from './own.ts'
-import { closing, left, type Test } from './suite.ts'
+import { closing, left, type Test, unkept } from './suite.ts'
 
 /** How one test went. */
 export type Outcome = {
@@ -256,6 +256,25 @@ export let end = async (
   if (!body) return []
   let name = `${path} ends`
   let o = await one({ name, body, tags: [], skip: false, file: path }, timeout)
+  if (o.ok) return []
+  say(`${name} ... ${how(o)}${told(o, verbose)}\n`)
+  return [o]
+}
+
+/** Ends what the runtime kept across files (./suite.ts `kept`), as one more
+ * test of the file that asked last, `<path> releases`, said only when it
+ * fails. */
+export let release = async (
+  timeout: number,
+  verbose = false,
+): Promise<Outcome[]> => {
+  let asked = unkept()
+  if (!asked) return []
+  let name = `${asked.file} releases`
+  let o = await one(
+    { name, body: asked.body, tags: [], skip: false, file: asked.file },
+    timeout,
+  )
   if (o.ok) return []
   say(`${name} ... ${how(o)}${told(o, verbose)}\n`)
   return [o]
