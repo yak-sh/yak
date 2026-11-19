@@ -6,6 +6,7 @@ import { fresh, seed } from './probe.ts'
 import { stamp } from './directory.ts'
 import { monthOf, starterOf } from '@yaks/platform/meter'
 import type { Env } from './env.ts'
+import { BUDGET, STARTER } from '@yaks/platform/plans'
 
 test('a refund corrects the meter, and the budget and starter stay as they were', async () => {
   let env!: Env
@@ -37,9 +38,9 @@ test('a refund corrects the meter, and the budget and starter stay as they were'
     equal(now, {
       space: 'refunded',
       dollars: null,
-      limit: 120,
+      limit: BUDGET.free + STARTER,
       spent: 0,
-      starter: 100,
+      starter: STARTER,
     })
     let space = (await k.dir.at(eid))!
     equal([space.meter!.models, space.meter!.refunded, space.meter!.drawn], [
@@ -48,7 +49,7 @@ test('a refund corrects the meter, and the budget and starter stay as they were'
       0,
     ])
     let next = new Date(Date.parse(month + '-01T00:00:00Z') + 40 * 864e5)
-    equal(starterOf(space, next), 100)
+    equal(starterOf(space, next), STARTER)
   } finally {
     await k.stop()
   }

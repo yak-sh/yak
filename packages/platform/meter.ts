@@ -276,10 +276,40 @@ export let over = (
 
 /** What is left of a space's starter as this month began: what it holds,
  * less every dollar it drew before this month (`drawn` counts them all). */
-export let starterOf = (space: Metered, now: Date = new Date()): number => {
-  let before = (space.meter?.drawn ?? 0) - used(spent(space, now), 'models')
-  return Math.max(0, (space.starter ?? STARTER) - Math.max(0, before))
-}
+export let starterOf = (space: Metered, now: Date = new Date()): number =>
+  Math.max(0, (space.starter ?? STARTER) - drawnBefore(space, now))
+
+// Every dollar a space drew before this month.
+let drawnBefore = (space: Metered, now: Date) =>
+  Math.max(0, (space.meter?.drawn ?? 0) - used(spent(space, now), 'models'))
+
+/** The starter that leaves `dollars` more of it than {@link starterOf} does
+ * now: a grant on top of what is left, never swallowed by what was drawn
+ * before it (workers/yak billing.ts `granted`).
+ *
+ * ```ts
+ * import { meterOf, starterOf, topUp } from '@yaks/platform/meter'
+ * import { equal } from '@yaks/testing'
+ *
+ * let now = new Date('2026-11-19T00:00:00Z')
+ * let space = (starter: number | null, drawn: number) => ({
+ *   slug: 'a',
+ *   tier: null,
+ *   budget: null,
+ *   starter,
+ *   meter: meterOf({ meter: { month: '2026-11', drawn } }),
+ * })
+ * equal(topUp(space(null, 5), 100, now), 120)
+ * equal(topUp(space(0, 150), 100, now), 250)
+ * equal(starterOf({ ...space(0, 150), starter: 250 }, now), 100)
+ * ```
+ */
+export let topUp = (
+  space: Metered,
+  dollars: number,
+  now: Date = new Date(),
+): number =>
+  Math.max(space.starter ?? STARTER, drawnBefore(space, now)) + dollars
 
 /** The dollars a space's models and voice may spend this month before its
  * credit: the month the platform's owner set on it (budget.ts), else its

@@ -17,6 +17,7 @@ import {
   paid,
   SPACES,
   type Spend,
+  SUBSCRIBED,
   type Tier,
   WARN,
 } from './plans.ts'
@@ -420,12 +421,16 @@ export let UNKEPT: string =
   `it. Give your email in the card above this chat to keep this app and ` +
   `keep building, free`
 
-// Where every refusal ends: the page that describes the plans.
+// Where every refusal ends: the page that describes the plans, and on a free
+// space the building credit a person's first subscription adds (./plans.ts
+// `SUBSCRIBED`).
 export let plans = (space: Metered, env: Host): string =>
   `${
     paid(space.tier)
       ? `Manage usage and plan settings`
-      : `Putting ${space.slug} on the Plus plan allows more. Compare paid plans in its settings`
+      : `Putting ${space.slug} on the Plus plan allows more, and your first ` +
+        `subscription adds $${SUBSCRIBED} of building credit. Compare paid ` +
+        `plans in its settings`
   }: ${planSettings(space.slug, env)}`
 
 /** What one app holds, as a person reads it, leaving out what it holds none

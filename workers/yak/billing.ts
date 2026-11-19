@@ -793,8 +793,23 @@ let follow = async (
     step(env, 'paid', undefined, {
       who: await Promise.all(owners.map((p) => dir.emailAt(p))),
     })
+    await granted(env, dir, space)
   }
   return `${space.slug} is ${next.tier}`
+}
+
+// A first paid subscription's building credit (@yaks/platform/plans
+// `SUBSCRIBED`), given to the space it pays for once per person
+// (directory.ts `subscribing`). A delivery that lost the race to another
+// finds its guard moved and gives nothing.
+export let granted = async (env: Env, dir: Dir, space: Space) => {
+  let grant = await dir.subscribing(space)
+  if (!grant.length) return
+  try {
+    await stamp(env, { entities: grant })
+  } catch (e) {
+    if (!(e instanceof Stale)) throw e
+  }
 }
 
 export let fetch = (req: Request, env: Env): Promise<Response> => {

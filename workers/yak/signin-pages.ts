@@ -28,6 +28,7 @@ import { AGENT } from './docs.ts'
 import { destination, type Preview } from './link-preview.ts'
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 import { INVITE, REPO as PUBLIC } from '@yaks/platform/names'
+import { STARTER } from '@yaks/platform/plans'
 
 import {
   about,
@@ -135,6 +136,12 @@ export let askEmail = (at: {
         `Enter your ${
           at.texts ? 'email or mobile number' : 'email'
         } to get a sign-in code.`,
+        // Where a person decides to sign up: what their first space starts
+        // with (@yaks/platform/plans `STARTER`). An agent asking to be let
+        // in is someone already deciding something else.
+        at.who
+          ? ''
+          : ` Signing up is free, with $${STARTER} of building credit.`,
       ),
       at.texts
         ? [

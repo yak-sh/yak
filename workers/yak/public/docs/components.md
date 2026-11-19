@@ -873,12 +873,12 @@ The complete list of reserved names:
     service_checkout service_quote session session_input session_result
     session_run sessions_ended sfu shared signed_in signin skill sms_consent
     space space_logo speech_hear spend staged started starter stop
-    stream_item submitted subscription supersedes supervises support sweep
-    switched task text text_post theme tool tool_refusal topic trashed
-    tree_entry trend tunnel tunnel_tell tunnel_trashed typed unchecked
-    untrashed updated upstream usage uses using verified visit visitor_build
-    visitor_calls visitor_share volume waitlisted wake wake_run wants watch
-    web worked worktree written
+    stream_item submitted subscribed subscription supersedes supervises
+    support sweep switched task text text_post theme tool tool_refusal topic
+    trashed tree_entry trend tunnel tunnel_tell tunnel_trashed typed
+    unchecked untrashed updated upstream usage uses using verified visit
+    visitor_build visitor_calls visitor_share volume waitlisted wake
+    wake_run wants watch web worked worktree written
 
 A reserved name listed under Platform components above is in your store already,
 and the refusal names its properties: when it means what you meant, such as

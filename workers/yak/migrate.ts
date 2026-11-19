@@ -351,6 +351,9 @@ export let BOUNDARIES = [
   // An app store that made a branch keeps versions and requires @yaks/journal
   // (config.ts `versions`); code before it drops the journal it reads them by.
   'yak/store/versions/1',
+  // Every space born before the starter became $20 keeps the $100 it held
+  // (starter-move.ts, T-1313).
+  'yak/store/starter-kept/1',
 ]
 
 /** The column the interruption contract emptied before `attempt.state` and

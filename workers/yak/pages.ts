@@ -76,7 +76,7 @@ import {
   dollars,
   type Gauge,
 } from '@yaks/platform/standing'
-import { ceilings, PRICE, YEARLY } from '@yaks/platform/plans'
+import { ceilings, PRICE, SUBSCRIBED, YEARLY } from '@yaks/platform/plans'
 
 import type { Card as Billed, Payer, Want } from './billing.ts'
 
@@ -1626,7 +1626,8 @@ export let plan = (
       null,
       `${host} is on the `,
       h('b', null, 'free'),
-      ` plan — ${allowance}. `,
+      ` plan — ${allowance}. Your first subscription adds $${SUBSCRIBED} ` +
+        'of building credit. ',
       h('a', { href: url(env, '/pricing') }, 'Compare plans'),
       '.',
     )

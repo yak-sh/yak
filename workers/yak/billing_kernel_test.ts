@@ -29,14 +29,15 @@ import {
 } from './probe.ts'
 import { delivered, fakeSub, signed } from '@yaks/stripe/testing'
 import { GET_PLAN } from '@yaks/platform/routes'
+import { STARTER, SUBSCRIBED } from '@yaks/platform/plans'
 
 test(
-  'the webhook flips a plan, once, whatever order it arrives in',
+  'the webhook flips a plan, once, whatever order it arrives in, and gives its credit once',
   async () => {
     let k = await kernel()
     let jeff2 = unique('jeff2')
     try {
-      let { eids } = await seed(k, [{
+      let { eids, person } = await seed(k, [{
         slug: jeff2,
         apps: ['recipes'],
       }])
@@ -48,6 +49,16 @@ test(
         ((await graph.query(`id=${space}`))[0] as {
           plan?: Record<string, string>
         }).plan
+      // The building credit it holds once, and the space its owner's first
+      // subscription gave it to.
+      let starter = async () =>
+        ((await graph.query(`id=${space}`))[0] as {
+          starter?: { dollars?: number }
+        }).starter?.dollars
+      let subscribed = async () =>
+        ((await graph.query(`id=${person}`))[0] as {
+          subscribed?: { space?: string }
+        }).subscribed?.space
       let post = async (type: string, sub: unknown, at: number) =>
         (JSON.parse(
           await delivered(
@@ -74,6 +85,8 @@ test(
       assertEquals(paid?.customer, sub.customer)
       assertEquals(paid?.subscription, sub.id)
       assertEquals(paid?.status, 'active')
+      assertEquals(await starter(), STARTER + SUBSCRIBED)
+      assertEquals(await subscribed(), space)
       assertEquals(
         paid?.until,
         new Date(sub.current_period_end * 1000).toISOString(),
@@ -100,6 +113,11 @@ test(
 
       assertEquals(await post(updated, sub, now), 'stale')
       assertEquals(await plan(), dead, 'a cancelled plan does not come back')
+
+      // ---- subscribing again is no first subscription: no second credit.
+      let again = fakeSub(tagged(space))
+      assertEquals(await post(updated, again, now + 90), `${jeff2} is plus`)
+      assertEquals(await starter(), STARTER + SUBSCRIBED)
     } finally {
       await k.stop()
     }

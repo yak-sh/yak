@@ -26,11 +26,13 @@ import {
   PRICE,
   PRO,
   SECONDS,
+  STARTER,
+  SUBSCRIBED,
   type Tier,
   YEARLY,
 } from '@yaks/platform/plans'
 import { size } from '@yaks/fp'
-import { count } from '@yaks/platform/standing'
+import { count, plans as refused } from '@yaks/platform/standing'
 import { GET_PLAN, installAt } from '@yaks/platform/routes'
 import { DEEPGRAM } from '@yaks/speech'
 import * as townships from './site/townships.tsx'
@@ -1184,6 +1186,41 @@ test('the signed-in plan copy derives both tiers from the meter', () => {
   }
 })
 
+// The building credit a person is given, said where they decide: signing up
+// free gives the starter, and a first subscription adds its own, each the
+// figure @yaks/platform/plans grants.
+test('every place a person decides names the building credit the code grants', async () => {
+  let starter = `$${STARTER} of building credit`
+  let subscribed = `$${SUBSCRIBED} of building credit`
+  for (
+    let [key, said] of [
+      ['home.cost.free.note', starter],
+      ['home.cost.plus.note', subscribed],
+      ['home.cost.pro.note', subscribed],
+      ['home.data.free.offer', starter],
+      ['home.data.plus.offer', subscribed],
+      ['home.data.pro.offer', subscribed],
+      ['pricing.plans.free.note', starter],
+      ['pricing.plans.plus.note', subscribed],
+      ['pricing.plans.pro.note', subscribed],
+    ]
+  ) assertStringIncludes(copied(key), said, key)
+  assertStringIncludes(await askEmail({}).text(), starter)
+  let card = (tier: Tier) =>
+    flat(markup(plan(
+      { slug: 'dana', plan: { tier, ends: '', known: tier != 'free' } },
+      {},
+    )))
+  assertStringIncludes(card('free'), subscribed)
+  assertEquals(card('plus').includes(subscribed), false)
+  let space = { slug: 'dana', budget: null, meter: null }
+  assertStringIncludes(refused({ ...space, tier: 'free' }, {}), subscribed)
+  assertEquals(
+    refused({ ...space, tier: 'plus' }, {}).includes(subscribed),
+    false,
+  )
+})
+
 // style.css lays a plan card's parts on four rows the cards share, so the
 // cards' buttons line up: each card is those four parts, in that order.
 test('every plan card is a price, a note, a list and a button', () => {
@@ -1217,7 +1254,9 @@ test('pricing cards offer signup and omit build quotas', () => {
       cards.map((c) => c.querySelector('.Button')?.getAttribute('href')),
       tiers.map((t) => paid(t) ? GET_PLAN : '/login'),
     )
-    for (let card of cards) assert(!/\bbuild/i.test(card.textContent!), page)
+    for (let card of cards) {
+      assert(!/\bbuilds?\b/i.test(card.textContent!), page)
+    }
   }
 })
 

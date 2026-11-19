@@ -143,7 +143,7 @@
       "per": "a month",
       "free": {
         "price": "Free",
-        "note": "Your first space.",
+        "note": "Your first space, with $20 of building credit.",
         "apps": "5 apps",
         "visitors": "Unlimited visitors",
         "storage": "1 GB of app data, 1 GB of photos and files",
@@ -153,7 +153,7 @@
       },
       "plus": {
         "price": "$9 %{per}",
-        "note": "The Plus plan, for each space. Take payments with Stripe.",
+        "note": "The Plus plan, for each space. Take payments with Stripe. Your first subscription adds $100 of building credit.",
         "apps": "Unlimited apps",
         "visitors": "Unlimited visitors",
         "storage": "10 GB of app data, 50 GB of photos and files",
@@ -164,7 +164,7 @@
       },
       "pro": {
         "price": "$49 %{per}",
-        "note": "The Pro plan, or $490 a year. Your staff ask the Operator by email or chat, and it makes the change.",
+        "note": "The Pro plan, or $490 a year. Your staff ask the Operator by email or chat, and it makes the change. Your first subscription adds $100 of building credit.",
         "apps": "Unlimited apps",
         "visitors": "Unlimited visitors",
         "storage": "10 GB of app data, 50 GB of photos and files",
@@ -215,15 +215,15 @@
       },
       "free": {
         "name": "Free",
-        "offer": "For one space: 5 apps, unlimited visitors, 1 GB of app data, 1 GB of photos and files, and 100 emails a month. A person's first space is free."
+        "offer": "For one space: 5 apps, unlimited visitors, 1 GB of app data, 1 GB of photos and files, and 100 emails a month. A person's first space is free, with $20 of building credit."
       },
       "plus": {
         "name": "Plus",
-        "offer": "For one space: unlimited apps, unlimited visitors, 10 GB of app data, 50 GB of photos and files, 2,500 emails a month, and a custom domain."
+        "offer": "For one space: unlimited apps, unlimited visitors, 10 GB of app data, 50 GB of photos and files, 2,500 emails a month, and a custom domain. A first subscription adds $100 of building credit."
       },
       "pro": {
         "name": "Pro",
-        "offer": "For one space: unlimited apps, where staff ask for a change by email or chat and yaks.app makes it, document search, notices by email, AI use included, email support, unlimited visitors, 10 GB of app data, 50 GB of photos and files, 2,500 emails a month, and a custom domain. Or $490 a year."
+        "offer": "For one space: unlimited apps, where staff ask for a change by email or chat and yaks.app makes it, document search, notices by email, AI use included, email support, unlimited visitors, 10 GB of app data, 50 GB of photos and files, 2,500 emails a month, and a custom domain. Or $490 a year. A first subscription adds $100 of building credit."
       }
     }
   },
@@ -669,7 +669,7 @@
     "plans": {
       "title": "Each space is free or on a paid plan",
       "free": {
-        "note": "Your first space.",
+        "note": "Your first space, with $20 of building credit.",
         "apps": "5 apps",
         "visitors": "Unlimited visitors",
         "data": "1 GB of app data",
@@ -682,7 +682,7 @@
         "change": "Your Operator, or your own assistant, makes the changes"
       },
       "plus": {
-        "note": "The Plus plan, for any space.",
+        "note": "The Plus plan, for any space. Your first subscription adds $100 of building credit.",
         "apps": "Unlimited apps",
         "visitors": "Unlimited visitors",
         "data": "10 GB of app data",
@@ -695,7 +695,7 @@
         "change": "Your Operator, or your own assistant, makes the changes"
       },
       "pro": {
-        "note": "The Pro plan. Or $490 a year.",
+        "note": "The Pro plan. Or $490 a year. Your first subscription adds $100 of building credit.",
         "apps": "Unlimited apps",
         "visitors": "Unlimited visitors",
         "data": "10 GB of app data",

@@ -53,7 +53,7 @@ import {
 import { apex, type Host, spaceHost, url } from '@yaks/platform/host'
 import { size } from '@yaks/fp'
 import { type Ceiling, count, share } from '@yaks/platform/standing'
-import { PRICE, WARN } from '@yaks/platform/plans'
+import { PRICE, STARTER, WARN } from '@yaks/platform/plans'
 import { columns } from '@yaks/ui/chart'
 
 import {
@@ -477,7 +477,7 @@ let invitation = (r: Invitation, space: string, env: Host) => {
     h(
       'p',
       { class: 'Invite_Head' },
-      'Show this to a friend. They scan it with their phone’s camera and send what opens: that signs them up, with their own space ready and its Operator writing back.',
+      `Show this to a friend. They scan it with their phone’s camera and send what opens: that signs them up, with their own space ready, $${STARTER} of building credit and its Operator writing back.`,
     ),
     h(
       TabSet,
@@ -1804,6 +1804,16 @@ let inviting = (at: DeskPage) => {
     Card,
     null,
     heading('Invite someone'),
+    // A seat is no referral (referral.ts `credit` reads only the person's own
+    // code), so the month an invite gives is offered where it is earned.
+    h(
+      Card.Sub,
+      null,
+      'To bring a friend to yaks.app itself, use ',
+      h('a', { href: managePath('invite') }, 'Invite a friend'),
+      ': each friend who signs up from it and builds their first app gives ' +
+        'your own space one more free month of the Plus plan.',
+    ),
     h(
       Form,
       {

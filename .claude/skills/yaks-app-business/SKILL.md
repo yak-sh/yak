@@ -18,11 +18,11 @@ says who yaks.app is for.
 
 The principles are `business-model`, and they hold for every venture; load it
 first. This skill is how they land here. Jeff's words are in M-131884 and
-M-157410. The strategy is D-448: who yaks.app goes to first, what the
-platform still lacks for them, what is measured and what is charged. The people
+M-157410. The strategy is D-448: who yaks.app goes to first, what the platform
+still lacks for them, what is measured and what is charged. The people
 themselves, organizations first, each with a problem, a week and a use-case, are
-D-452. The model for people who come alone, the plans and the site's
-information architecture, is D-398.
+D-452. The model for people who come alone, the plans and the site's information
+architecture, is D-398.
 
 A public page holds only what a visitor needs. No draft marker, task or memory
 id, decision date, or note about the owner, agents or our process, in its text
@@ -41,7 +41,7 @@ just wouldn't be interacting with this stuff at all otherwise." He wins them one
 at a time, in person: "almost every good business starts with the founders
 hand-holding every new customer. That's what makes the product so good and
 useful. It's built for real problems and not just internet randos." They stay
-for something no page can offer: "The *sell* for them is that they know me and
+for something no page can offer: "The _sell_ for them is that they know me and
 can simply call me if they need something."
 
 So yaks.app is to be "a support + testimonial driven company". The first two
@@ -68,28 +68,27 @@ automating things. real work. not just these random sites that anyone could
 probably just install right now." /organizations and /churches are the pages he
 hands to an office.
 
-yaks.app is its own agent product, designed for non-technical people with
-little jargon (M-140239): its pages are where they reach their apps, talk with
-their operators and read logs and sessions, and the old web UI is now its
-settings. Connecting Claude or ChatGPT stays for people who already know their
-assistant well, and is not the center. What the product gives an app that a
-chat can't: an address, data that stays, sign-in, the people it's for, on any
-phone (M-37845).
+yaks.app is its own agent product, designed for non-technical people with little
+jargon (M-140239): its pages are where they reach their apps, talk with their
+operators and read logs and sessions, and the old web UI is now its settings.
+Connecting Claude or ChatGPT stays for people who already know their assistant
+well, and is not the center. What the product gives an app that a chat can't: an
+address, data that stays, sign-in, the people it's for, on any phone (M-37845).
 
-The home page leads with the pitch, "Build, host and share web apps"
-(M-37845). It led with the Operator from 2026-11-08 until Jeff, 2026-11-13,
-verbatim: "please fix the homepage copy to not be about the Operator and go
-back to our normal pitch". The Operator is named on it as how changes get
-made, and /operator is the page that pitches it.
+The home page leads with the pitch, "Build, host and share web apps" (M-37845).
+It led with the Operator from 2026-11-08 until Jeff, 2026-11-13, verbatim:
+"please fix the homepage copy to not be about the Operator and go back to our
+normal pitch". The Operator is named on it as how changes get made, and
+/operator is the page that pitches it.
 
-The individual people who use yaks.app today are literal too. D-452 has
-each as a person to write for, and D-398 has the model built on them:
+The individual people who use yaks.app today are literal too. D-452 has each as
+a person to write for, and D-398 has the model built on them:
 
 - **Jill** builds tools for her work and for a hobby business, in one free
-  space. She gets value and says she'd pay, yet pays nothing because
-  she has hit no limit. Her next steps are what the Plus plan carries: her
-  custom domain, payments to sell merch, coding taken off her own assistant's
-  allowance, and a long list of features waiting in her app.
+  space. She gets value and says she'd pay, yet pays nothing because she has hit
+  no limit. Her next steps are what the Plus plan carries: her custom domain,
+  payments to sell merch, coding taken off her own assistant's allowance, and a
+  long list of features waiting in her app.
 - **companygardener** is a developer with more ideas than he builds, because of
   friction. He writes very short prompts for unique ideas, and he'd be best
   served by an operator that takes the idea and builds it. Behind him is the
@@ -110,9 +109,9 @@ and at most one subscription (billing.ts `payerFor`), it's paid for, changed and
 cancelled from that space's plan settings, and only its owner may pay. A
 person's first space is free, and every other space they own is on a paid plan:
 Jeff decided one free space on T-131887 ("and yes, one included space."), and
-@yaks/platform/plans `SPACES` holds it. Spaces that were free before the cap stay free. So
-the plan is one sentence: each space is free or on a paid plan. Copy never says
-a plan, budget or allowance is a person's or an account's.
+@yaks/platform/plans `SPACES` holds it. Spaces that were free before the cap
+stay free. So the plan is one sentence: each space is free or on a paid plan.
+Copy never says a plan, budget or allowance is a person's or an account's.
 
 - **Free is generous with people.** Members, invitations, visitors, publishing,
   installing someone's app and exporting are unlimited on every plan, because
@@ -121,9 +120,10 @@ a plan, budget or allowance is a person's or an account's.
 - **The space's owner hears about a limit**, in a sentence that names the space,
   the limit and the one thing to do. A guest who finds an app paused is a
   recommendation we won't get.
-- **Every allowance is the space's own.** @yaks/platform/meter reads each one, and the model
-  and voice budget, from the space's meter against the space's plan; nothing
-  sums across an owner's spaces. Sandboxes awake are counted per space.
+- **Every allowance is the space's own.** @yaks/platform/meter reads each one,
+  and the model and voice budget, from the space's meter against the space's
+  plan; nothing sums across an owner's spaces. Sandboxes awake are counted per
+  space.
 
 ## Upgrades by pull
 
@@ -139,9 +139,9 @@ Today the cycle runs through Jeff. He visits an organization near him and asks
 about its problems. What it asks for is built in its space, mostly by its
 Operator, and its staff keep asking by email, chat or a call to him. What was
 built for it is published, so the next organization starts from it. Its own
-words, a number it gives us and its name, once it says we may use them, are
-what the next organization hears. Each pays for its space by the year, and
-whatever he did by hand for one is the next thing the platform learns to do.
+words, a number it gives us and its name, once it says we may use them, are what
+the next organization hears. Each pays for its space by the year, and whatever
+he did by hand for one is the next thing the platform learns to do.
 
 For people who come alone, the cycle is the older one. Someone asks for an app,
 in yaks.app or through their own assistant, and it's live at their address
@@ -161,8 +161,8 @@ missing, is in D-398.
 ## Price and copy
 
 A flat price per space, with every member free, says _for a person, their team
-and the things they run_. yaks.app sells three plans, and @yaks/platform/plans and
-the pricing page hold what each one carries:
+and the things they run_. yaks.app sells three plans, and @yaks/platform/plans
+and the pricing page hold what each one carries:
 
 - **The Free plan** is a person's first space: 5 apps, 1 GB of app data, 1 GB of
   photos and files and 100 emails a month, with a small badge, no custom domain
@@ -172,12 +172,23 @@ the pricing page hold what each one carries:
   2,500 emails a month, a custom domain, payments with Stripe and no badge.
   Whether a Plus space can pay for model use past its budget is T-131904.
 - **The Pro plan** is $49 a month or $490 a year, since an organization budgets
-  by the year (D-412, T-135234). It carries the Plus plan's allowances and
-  adds the Operator built in, so staff ask by email or chat and yaks.app makes
-  the change, a larger model budget and support. Past that budget it spends AI
+  by the year (D-412, T-135234). It carries the Plus plan's allowances and adds
+  the Operator built in, so staff ask by email or chat and yaks.app makes the
+  change, a larger model budget and support. Past that budget it spends AI
   credit its owner buys in $10 blocks, paid before it is spent, up to a monthly
   cap they set on the plan card: $0 until they choose one, and nothing is ever
   charged past it (@yaks/platform/meter `creditOf`, billing.ts `buy`).
+
+Building credit is the space's model budget, as a person is told it. Signing up
+free gives $20 of it on a person's first space (plans.ts `STARTER`), and their
+first paid subscription adds $100 to the space it pays for (`SUBSCRIBED`,
+billing.ts `granted`), each once per person and spent before the month's budget.
+Jeff, 2026-11-19: "you get $20 building credits for signing up free and $100
+when you subscribe to paid plan". The sign-up page, the plan cards,
+/manage/billing and the upgrade refusal say it. Sharing is said as reward.ts
+grants it: each friend who signs up through a person's own invite and builds
+their first app gives that person's space one more free month of the Plus plan;
+a seat in a space earns nothing.
 
 Jeff expects the organizations to have "plenty of work for us aside from the
 platform at $490/yr". That work has no price yet and nothing bills it: a space
@@ -210,8 +221,8 @@ installed and spaces upgraded, with what tipped each one.
 
 An organization hears of yaks.app from Jeff, or from an organization he already
 serves. Its asks are evidence too: what each one was, who made it and how long
-it took to be done (the goals in D-448). The record held none of the pilots'
-own words on 2026-11-11, so write theirs down verbatim when they come, the way
+it took to be done (the goals in D-448). The record held none of the pilots' own
+words on 2026-11-11, so write theirs down verbatim when they come, the way
 Jeff's are (M-31946).
 
 Other people find yaks.app through an app someone shared with them, and through
@@ -219,10 +230,10 @@ the assistants' connector directories for those who already use one.
 
 ## Where it lives
 
-- **The numbers.** packages/platform/plans.ts (`FREE`, `PLUS`, `PRO`,
-  `LETTERS`, `BUDGET`, `PRICE`, `YEARLY`, `SPACES`), and site_test.ts holds the
-  pages to them; packages/platform/meter.ts spends a space's month against them
-  and standing.ts says its refusals. The plan is
+- **The numbers.** packages/platform/plans.ts (`FREE`, `PLUS`, `PRO`, `LETTERS`,
+  `BUDGET`, `PRICE`, `YEARLY`, `SPACES`), and site_test.ts holds the pages to
+  them; packages/platform/meter.ts spends a space's month against them and
+  standing.ts says its refusals. The plan is
   `plan{tier, customer, subscription, status, until, ending, at}` on the space
   (packages/platform/vocab.json), and its AI credit is
   `credit{cap, bought,
@@ -241,35 +252,34 @@ the assistants' connector directories for those who already use one.
   its sample at yourname.yaks.app/township) and holds no box: its button
   installs that app, and its calculator of Open Meetings Act dates imports the
   sample's own deadlines.js, so the page and every township's meeting pages
-  count alike. /organizations sells the Pro plan to any
-  organization's office as a web person on staff, and says who is behind
-  yaks.app and who fixes mistakes, each promise read from where it is done; it
-  never says "Operator" until the plans. /churches keeps the rebuild in a
-  church's words and links there for that answer. The box on both
-  asks for the web address of the site they have now, and the
-  newcomer's Operator reads it and builds theirs from it (newcomer.ts `worded`,
-  `REBUILDING`) as a private preview, published only once the person verifies
-  that site's domain on their space (`previewing`); words typed there are built
-  as an idea. A page's time to build is one measured on a live build. An ad test
-  gets a landing page and never changes the home page. A visit to any of them is
-  a home page visit in the funnel under that page's name, and so are the click,
-  the build begun and the sign-up that follow (`yak admin funnel`, "By home page
-  variant"). A page names an audience only with what yaks.app has built for one,
-  and names or quotes a customer only once they have said we may, in their own
-  words (T-157489; nobody has yet). The home page is workers/yak/site/home.tsx,
-  drawn from the kit's parts into the `home` app in the `yak` space (apps/home,
-  written by `deno task content` and released by the box's deploy catch-up once
-  main's head is live), which the apex answers it from. It carries a
-  JSON-LD copy of the plans and a card for each of the three, as
-  site/pricing.tsx has; a plan on sale is a card on both pages, never a note
-  under them. Next to it are site/pricing.tsx, site/help.tsx and the Limits
-  section of docs/technical.md. The link a person pastes into their own agent to
-  connect it is /agent, public/agent.md drawn by docs.ts, and the home page,
-  /connect and the dashboard offer it. The connector's skills in
+  count alike. /organizations sells the Pro plan to any organization's office as
+  a web person on staff, and says who is behind yaks.app and who fixes mistakes,
+  each promise read from where it is done; it never says "Operator" until the
+  plans. /churches keeps the rebuild in a church's words and links there for
+  that answer. The box on both asks for the web address of the site they have
+  now, and the newcomer's Operator reads it and builds theirs from it
+  (newcomer.ts `worded`, `REBUILDING`) as a private preview, published only once
+  the person verifies that site's domain on their space (`previewing`); words
+  typed there are built as an idea. A page's time to build is one measured on a
+  live build. An ad test gets a landing page and never changes the home page. A
+  visit to any of them is a home page visit in the funnel under that page's
+  name, and so are the click, the build begun and the sign-up that follow
+  (`yak admin funnel`, "By home page variant"). A page names an audience only
+  with what yaks.app has built for one, and names or quotes a customer only once
+  they have said we may, in their own words (T-157489; nobody has yet). The home
+  page is workers/yak/site/home.tsx, drawn from the kit's parts into the `home`
+  app in the `yak` space (apps/home, written by `deno task content` and released
+  by the box's deploy catch-up once main's head is live), which the apex answers
+  it from. It carries a JSON-LD copy of the plans and a card for each of the
+  three, as site/pricing.tsx has; a plan on sale is a card on both pages, never
+  a note under them. Next to it are site/pricing.tsx, site/help.tsx and the
+  Limits section of docs/technical.md. The link a person pastes into their own
+  agent to connect it is /agent, public/agent.md drawn by docs.ts, and the home
+  page, /connect and the dashboard offer it. The connector's skills in
   plugins/yaks.app mirror the guide. The plan card a signed-in person sees is
   /manage/billing, in workers/yak/pages.ts.
 - **The work.** The two pilots' milestones are T-153602 and T-153603, and
-  D-448's tasks hold what the platform lacks for organizations. T-131889
-  holds what's left to make yaks.app work as D-398 describes.
+  D-448's tasks hold what the platform lacks for organizations. T-131889 holds
+  what's left to make yaks.app work as D-398 describes.
 
 When this skill is wrong or missing something, fix it in the same change.

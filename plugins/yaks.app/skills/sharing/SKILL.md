@@ -1,6 +1,6 @@
 ---
 name: sharing
-description: "Access, Publishing and Installing (yaks.app). Who may read and write an app (the public, open and private access settings), inviting people with member_add to one app or the whole space, roles, letting the people an app's own rows list join it (join in vocab.json), a stranger's own copy of a private published app, kept by app_install(visit: true), and publishing and installing: app_publish, app_install, app_update, the gallery, an installed copy's independent data and borrowed connections, how it runs like the space's own apps and the sandboxed setting, version pinning, what an update does to the data people saved, and sharing a skill: published, reviewed, installed and updated with the same tools."
+description: "Access, Publishing and Installing (yaks.app). Who may read and write an app (the public, open and private access settings), inviting people with member_add to one app or the whole space, roles, inviting a friend to yaks.app with your own invite, letting the people an app's own rows list join it (join in vocab.json), a stranger's own copy of a private published app, kept by app_install(visit: true), and publishing and installing: app_publish, app_install, app_update, the gallery, an installed copy's independent data and borrowed connections, how it runs like the space's own apps and the sandboxed setting, version pinning, what an update does to the data people saved, and sharing a skill: published, reviewed, installed and updated with the same tools."
 ---
 
 # Access, Publishing and Installing
@@ -194,6 +194,21 @@ and counts against nothing.
 decide who belongs could never be opened again. Removing someone leaves their
 sign-in working: they lose access to this space, not to the platform.
 `member_remove(email, app)` removes access to that one app and leaves the rest.
+
+## Inviting a friend to yaks.app
+
+Inviting someone into a space or an app is a seat, not a referral. To bring a
+friend to yaks.app itself, each person has their own invite at
+https://yaks.app/manage/account/invite: a QR code that opens a text or an email
+to yaks.app's sign-up address with their invite code already written in. A
+friend who signs up by sending it gets their own free space with $20 of building
+credit, like anyone signing up free.
+
+Each friend who signs up through that invite and then builds their first app
+gives the inviter's own space one more free month of the Plus plan. Months
+stack, one per friend. On a space already paying for a subscription, the next
+charge moves a month later instead. The invite page counts how many people have
+signed up with it and how many built an app.
 
 ## Letting the people an app lists join it
 

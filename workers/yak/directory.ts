@@ -53,8 +53,10 @@ import {
   meteredOf,
   type MeteredRow,
   meterOf,
+  topUp,
 } from '@yaks/platform/meter'
-import type { Tier } from '@yaks/platform/plans'
+import { SUBSCRIBED, type Tier } from '@yaks/platform/plans'
+import { token } from '@yaks/graph/sha256'
 import type { Sample } from '@yaks/platform/visits'
 import type { Tunnel } from '@yaks/tunnel/hosted'
 import { type Host as HostEnv, spaceHost } from '@yaks/platform/host'
@@ -828,6 +830,7 @@ export type Row = MeteredRow & {
     cache_retention?: number | null
   }
   started?: { space?: Id | null }
+  subscribed?: { space?: Id | null }
   newcomer?: { at?: string; campaign?: string | null; client?: string | null }
   visitor_build?: { at?: string }
   preview?: { site?: string | null; at?: string | null }
@@ -3800,6 +3803,38 @@ export let directoryRows = (rows: {
       (await query(line`.member.space=${space.eid}&.member.role=owner`))
         .map((r) => r.member && idOf(r.member.person))
         .filter((p): p is string => !!p),
+    // The building credit a space's paid plan gives, as the write that gives
+    // it: plans.ts `SUBSCRIBED` on top of what is left of its starter, for
+    // its owners who never subscribed, who wear `subscribed` from now on.
+    // None once every owner has had theirs. Each row is guarded (`$was`), so
+    // two deliveries of the same purchase give it once.
+    subscribing: async (
+      space: Space,
+      now: Date = new Date(),
+    ): Promise<Bundle[]> => {
+      let owners = await self.owners(space)
+      let rows = await Promise.all(
+        owners.map((p) => one(line`.entity.eid=${p}&?subscribed`)),
+      )
+      let fresh = owners.filter((_, i) => !rows[i]?.subscribed)
+      if (!fresh.length) return []
+      return [
+        {
+          entity: { eid: space.eid },
+          starter: { dollars: topUp(space, SUBSCRIBED, now) },
+          $was: {
+            starter: {
+              dollars: space.starter == null ? null : token(space.starter),
+            },
+          },
+        },
+        ...fresh.map((p) => ({
+          entity: { eid: p },
+          subscribed: { space: space.eid },
+          $was: { subscribed: { space: null } },
+        })),
+      ]
+    },
     // Who is at an address, if the platform has met them. signin.ts's
     // `personOf` asks this same question and mints when the answer is
     // nobody, which is how an invited person's later sign-in finds the row

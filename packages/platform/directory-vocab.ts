@@ -489,6 +489,14 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { space: owned(ref('keep')) },
     },
+    // The space a person's first paid subscription went to, which was given
+    // plans.ts `SUBSCRIBED` of building credit (billing.ts `granted`): kept
+    // once that space is gone, so the credit is theirs once.
+    subscribed: {
+      component: true,
+      type: 'object',
+      properties: { space: owned(ref('keep')) },
+    },
     // When a person came in by the home page's box (newcomer.ts), before they
     // had an address: a newcomer (directory.ts `newcomer`) until they sign in
     // on that browser or their space is erased, when the row goes

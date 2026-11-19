@@ -143,13 +143,16 @@ export let BUDGET: Record<Tier, number> = {
   pro: 60,
 }
 
-// The dollars a person's first space holds once, spent before its monthly
-// budget (T-138717: "Once, then a larger monthly"). It guards a spike rather
-// than rationing: Jeff, 2026-11-05, "the $100 is just to prevent a random
-// spike, but basically we want them to not think about or hit the limit".
-// Once per person: a space minted for someone who already holds one, or who
-// has had theirs, holds none (workers/yak directory.ts `mint`, `starter`).
-export let STARTER: number = 100
+// The building credit a person is given once, spent before a space's monthly
+// budget. Signing up free gives {@link STARTER} on their first space; their
+// first paid subscription adds {@link SUBSCRIBED} to the space it pays for
+// (workers/yak billing.ts `granted`). Jeff, 2026-11-19: "you get $20 building
+// credits for signing up free and $100 when you subscribe to paid plan". Each
+// is once per person: a space minted for someone who already holds one, or
+// who has had theirs, holds no starter (workers/yak directory.ts `mint`,
+// `started`), and a person who subscribed once wears `subscribed`.
+export let STARTER: number = 20
+export let SUBSCRIBED: number = 100
 
 // Compute seconds a month: the sandbox container's (sandbox.ts) and the compile
 // at app_deploy's (esbuild.ts). An hour free is six builds' whole sandbox

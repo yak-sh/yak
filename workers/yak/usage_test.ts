@@ -15,6 +15,7 @@ import {
   none,
   requestUnits,
   spent,
+  topUp,
 } from '@yaks/platform/meter'
 import {
   BUDGET,
@@ -26,6 +27,7 @@ import {
   PLUS,
   type Spend,
   STARTER,
+  SUBSCRIBED,
   type Tier,
   WARN,
 } from '@yaks/platform/plans'
@@ -1012,15 +1014,21 @@ test('a space draws its starter once, before its months', () => {
     budget({ ...space(meter), starter }, NOW).limit
   assertEquals(limit({}), STARTER + BUDGET.free)
   // What earlier months drew comes off the starter; this month's does not.
-  assertEquals(limit({ models: 30, drawn: 70 }), STARTER - 40 + BUDGET.free)
+  assertEquals(limit({ models: 30, drawn: 40 }), STARTER - 10 + BUDGET.free)
   assertEquals(limit({ drawn: 500 }), BUDGET.free)
   // A month behind is all drawn before this one.
   assertEquals(
-    limit({ month: '2026-08', models: 30, drawn: 30 }),
-    STARTER - 30 + BUDGET.free,
+    limit({ month: '2026-08', models: 15, drawn: 15 }),
+    STARTER - 15 + BUDGET.free,
   )
   // A person's later space holds none.
   assertEquals(limit({}, 0), BUDGET.free)
+  // A first subscription's credit comes on top of what is left, whatever
+  // was drawn before it.
+  let given = (meter: Partial<Meter>, starter?: number) =>
+    limit(meter, topUp({ ...space(meter), starter }, SUBSCRIBED, NOW))
+  assertEquals(given({}), STARTER + SUBSCRIBED + BUDGET.free)
+  assertEquals(given({ drawn: 500 }, 0), SUBSCRIBED + BUDGET.free)
 })
 
 test('a conversation that shipped nothing pays for its model and seconds', async () => {
