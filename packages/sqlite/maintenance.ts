@@ -14,6 +14,7 @@ import {
   gt,
   lit,
   oneOf,
+  revision,
   select,
   table,
   val,
@@ -44,12 +45,22 @@ let most = (driver: Driver, name: string) =>
 export let maintenance = (driver: Driver, vocab: Vocab) => {
   let marks = meta(driver)
   let classifying = () => marks.get(CLASSIFYING) != null
-  let pending = () =>
-    classifying() ||
-    owed(driver).some((w) =>
-      w.kind == 'index' && w.stmt.on == 'entity' &&
-      w.stmt.cols.some((c) => c.t == 'col' && c.name == 'archetype')
-    )
+  // Asked before every read the store plans, and answered by two reads of
+  // `server_meta`: kept until the connection's data moves (@yaks/sql
+  // `revision`), which every write, rollback, DDL and other connection's
+  // commit does.
+  let known: { at: number; pending: boolean } | undefined
+  let pending = () => {
+    let at = revision(driver, 'data')
+    if (known?.at === at) return known.pending
+    let pending = classifying() ||
+      owed(driver).some((w) =>
+        w.kind == 'index' && w.stmt.on == 'entity' &&
+        w.stmt.cols.some((c) => c.t == 'col' && c.name == 'archetype')
+      )
+    known = { at, pending }
+    return pending
+  }
   let page = (after = 0, limit = PAGE) =>
     driver.query(select({
       cols: [col('id'), col('eid'), col('archetype')],
