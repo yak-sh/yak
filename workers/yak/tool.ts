@@ -291,9 +291,9 @@ export let str = (description: string) => ({ type: 'string', description })
 // The two arguments nearly every tool takes, so each word here is sent once
 // per tool on every listing.
 export let SPACE = str(
-  'the space slug, as in <space>.yaks.app; if optional and omitted, the ' +
+  'the space slug, as in <space>.yaks.app. If optional and omitted: the ' +
     "space holding the app, else an Operator's own space, else the " +
-    "person's only space",
+    "person's only space; a person who owns several spaces names one",
 )
 
 export let APP = str('the app slug, as in <space>.yaks.app/<app>/')
@@ -387,7 +387,10 @@ let ownSeat = async (
   if (owned.length > 1) {
     throw refuse(
       'arguments',
-      `space: name one of ${owned.map((s) => s.space.slug).join(', ')}`,
+      `space: name one of ${owned.map((s) => s.space.slug).join(', ')} — ` +
+        'you own several spaces, so a call that names no space has no one ' +
+        "space to mean. Send space: '<one of your spaces>'; naming the app " +
+        'alone is enough where only one of them holds it.',
     )
   }
   if (owned[0]) return { space: owned[0].space, role: owned[0].role }

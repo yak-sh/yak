@@ -75,7 +75,17 @@ test('a call naming no space means the app’s, the Operator’s, the only one',
       means(mine([work])),
       means(mine([jeff, work]), 'garden'),
     ]),
-    ['jeff', 'other', 'jeff', 'space: name one of jeff, work', 'work', 'other'],
+    [
+      'jeff',
+      'other',
+      'jeff',
+      'space: name one of jeff, work — you own several spaces, so a call ' +
+      'that names no space has no one space to mean. Send space: ' +
+      "'<one of your spaces>'; naming the app alone is enough where only " +
+      'one of them holds it.',
+      'work',
+      'other',
+    ],
   )
 })
 
