@@ -11,7 +11,7 @@
 // the object is for.
 
 import { IDEMPOTENCY } from '@yaks/api/log'
-import { type Clock, heard, type Hold, system } from '@yaks/fp'
+import { type Clock, heard, type Hold, resolvers, system } from '@yaks/fp'
 import { evicted, killed, opaque, retried, starved } from './resets.ts'
 
 /** A Durable Object stub: one object, reachable by fetch. */
@@ -154,7 +154,11 @@ type Batch = {
  * is failed (workerd's `handle_cross_request_promise_resolution`). So no
  * caller awaits a promise another made. Each waits on its own seat, settled
  * from the trip, and a batch is sent from the request that opened it, woken
- * there when the read ahead lands.
+ * there when the read ahead lands. Seats and wakes are made by `resolvers`
+ * (@yaks/fp), whose promise carries the request that made it: one made by a
+ * `new Promise` V8 had optimized carried none, so the request whose trip
+ * settled it ran its waiter, and the bytes it handed on were that request's
+ * (cloudflare/workerd#8228).
  *
  * What runs in another request is dropped, without a word, once that request
  * ends: a batch whose opener ended before sending it, or whose sender ended
@@ -217,20 +221,18 @@ export let coalesced = (
   }
   // A batch opened by this caller, which sends it now or once woken.
   let board = (key: string, trip: Batch['trip']) => {
-    let batch: Batch = { seats: [], trip, go: () => {} }
+    let woken = resolvers<void>(), done = resolvers<void>()
+    let batch: Batch = { seats: [], trip, go: () => woken.resolve() }
     boarding.set(key, batch)
-    let woken = new Promise<void>((go) => batch.go = go)
-    let done = new Promise<void>((done) => {
-      let left = false
-      let leave = () => {
-        if (left) return
-        left = true
-        turn(() => void send(key, batch).finally(done))
-      }
-      void woken.then(leave)
-      if (!moving.has(key)) leave()
-    })
-    hold?.(done)
+    let left = false
+    let leave = () => {
+      if (left) return
+      left = true
+      turn(() => void send(key, batch).finally(() => done.resolve()))
+    }
+    void woken.promise.then(leave)
+    if (!moving.has(key)) leave()
+    hold?.(done.promise)
     return batch
   }
   // A batch nobody answered in time, and the read ahead it waited on if it
@@ -252,15 +254,15 @@ export let coalesced = (
     trip: Batch['trip'],
   ): Promise<Response> => {
     let batch = boarding.get(key) ?? board(key, trip)
-    let answer = await wait(() =>
-      new Promise<(() => Response) | null>((resolve, reject) => {
-        let cancel = heard(patience, () => resolve(null), clock)
-        batch.seats.push({
-          resolve: (answer) => (cancel(), resolve(answer)),
-          reject: (error) => (cancel(), reject(error)),
-        })
-      })
-    )
+    let seat = resolvers<(() => Response) | null>()
+    let cancel = heard(patience, () => seat.resolve(null), clock)
+    batch.seats.push(seat)
+    let answer: (() => Response) | null
+    try {
+      answer = await wait(() => seat.promise)
+    } finally {
+      cancel()
+    }
     if (answer) return answer()
     lost(key, batch)
     return await ride(key, trip)

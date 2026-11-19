@@ -420,12 +420,14 @@ once a round trip. A write or an excluded request separates batches. Select only
 finite read responses. `turn` defaults to a microtask; `hold` keeps the first
 caller's I/O alive until the body is read, as a Worker's `waitUntil` does. A
 Worker settles a promise only in the request that created it, so no caller
-awaits another's: each waits on its own, and a batch is sent from the request
-that opened it. What runs in another request is dropped once that request ends,
-so a caller whose seat is unanswered for `patience` ms (15 s by default, on
-`clock`) presumes its batch lost: the door forgets it and the caller boards
-again. `wait` wraps each caller's wait on its seat, so a host can name it. Wrap
-a resending door so reading the shared body participates in its retries.
+awaits another's: each waits on its own, made by `resolvers` (@yaks/fp) so it
+carries its request even once V8 optimizes the door, and a batch is sent from
+the request that opened it. What runs in another request is dropped once that
+request ends, so a caller whose seat is unanswered for `patience` ms (15 s by
+default, on `clock`) presumes its batch lost: the door forgets it and the caller
+boards again. `wait` wraps each caller's wait on its seat, so a host can name
+it. Wrap a resending door so reading the shared body participates in its
+retries.
 
 `resending(door, { report?, wait? })` sends a call again, as `retried` paces it,
 when the runtime reset the object or lost the call: thrown, or answered as a

@@ -439,15 +439,28 @@ export let size = (bytes: number): string => {
   return `${round ? Math.round(bytes) : bytes.toFixed(1)} ${units[n]}`
 }
 
-/**
- * A promise with its resolve and reject: `Promise.withResolvers`, which
- * browsers before Safari 17.4 and Chrome 119 lack.
- */
-export let resolvers = <T>(): {
+/** A promise and the two calls that settle it. */
+export type Resolvers<T> = {
   promise: Promise<T>
   resolve: (value: T | PromiseLike<T>) => void
   reject: (reason?: unknown) => void
-} => {
+}
+
+/**
+ * A promise with its resolve and reject: `Promise.withResolvers`, built by
+ * hand where it is missing, as in browsers before Safari 17.4 and Chrome 119.
+ *
+ * Make a promise another request settles or awaits here. workerd tags each
+ * promise with the request that made it: one another request settles is
+ * settled back in its own, and a request awaiting another's resumes in its
+ * own. A `new Promise` in code V8 has optimized carries no tag, so whoever
+ * settles it runs its waiters, inside the wrong request
+ * (cloudflare/workerd#8228). The builtin is called, never inlined, so its
+ * promise always carries one.
+ */
+export let resolvers = <T>(): Resolvers<T> => {
+  let builtin = Promise as { withResolvers?: <T>() => Resolvers<T> }
+  if (builtin.withResolvers) return builtin.withResolvers<T>()
   let resolve!: (value: T | PromiseLike<T>) => void
   let reject!: (reason?: unknown) => void
   let promise = new Promise<T>((yes, no) => {
@@ -652,7 +665,9 @@ export type Hold = (work: Promise<void>) => void
  * Where a runtime cancels a read once the request that began it ends, a read
  * still running then never settles, and every later caller waits on it. So
  * the caller that begins a read is held (`hold`) until the read settles. A
- * host lends its hold; code that knows no host takes it from its caller.
+ * host lends its hold; code that knows no host takes it from its caller. The
+ * promise kept is made by `resolvers`, so a caller that joins the read resumes
+ * in its own request.
  */
 export let sharing = <K, T>(
   kept: Kept<K, T>,
@@ -667,7 +682,9 @@ export let sharing = <K, T>(
     lru?.set(key, had)
     return had
   }
-  let reading = read()
+  let began = read()
+  let { promise: reading, resolve, reject } = resolvers<T>()
+  began.then(resolve, reject)
   kept.set(key, reading)
   let settled = reading.then(() => {}, () => {
     if (kept.get(key) == reading) kept.delete(key)

@@ -268,6 +268,13 @@ A query that works on the box can be refused in a store.
   runs where no answer is under way: the Builder marks its answers while its
   incarnation owes work (build-door.ts `OWED`), and its door wakes it once it
   has one.
+- **A promise another request settles or awaits is made by `resolvers`**
+  (@yaks/fp; `sharing` keeps one). workerd runs a request's waiter in its own
+  request only while the promise carries that request's tag, and a
+  `new Promise` in code V8 has optimized carries none, so the code works until
+  it is hot and then fails with "Cannot perform I/O on behalf of a different
+  request" (cloudflare/workerd#8228). A local workerd shows it with v8Flags
+  `--invocation-count-for-maglev=2 --invocation-count-for-turbofan=4`.
 - **An isolate's first wake runs every path cold.** Its boot and first read cost
   a store 130-320 ms of CPU against a warm wake's 5-15 ms (T-148354): each
   function runs for the first time, and each per-isolate derivation (a
