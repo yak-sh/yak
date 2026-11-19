@@ -19,9 +19,11 @@
   min-width: 0;
   margin: 0;
 }
+/* A narrow head wraps rather than squeezing its title: how it stands goes
+   under the title, and the actions under that, still at the right. */
 .Card_Head {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--half-gap);
   margin: calc(-1 * var(--card-pad)) calc(-1 * var(--card-pad)) 0;
@@ -33,7 +35,7 @@
   border-bottom: 0;
 }
 .Card_Title {
-  flex: 1;
+  flex: 1 1 10rem;
   min-width: 0;
   margin: 0;
   color: var(--heading);
@@ -57,7 +59,7 @@
   object-fit: contain;
 }
 .Card_Actions {
-  flex: none;
+  flex: 0 1 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;

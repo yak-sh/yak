@@ -28,12 +28,14 @@
 
 /* The head: a mark, the title, how it stands, and then whatever acts on
    the whole card, pushed to the right. Its controls are a size down, so a
-   head keeps its actions beside the title, whose words can wrap. */
+   wide head keeps them all on one line. A narrow one, a phone's, wraps
+   rather than squeezing the title: how it stands goes under the title,
+   and the actions under that, still at the right. */
 .Card_Head {
   --control-height: 2rem;
   --control-pad-inline: 0.7rem;
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 0.75rem;
   position: relative;
@@ -56,7 +58,7 @@
   content: none;
 }
 .Card_Title {
-  flex: 1;
+  flex: 1 1 10rem;
   min-width: 0;
   margin: 0;
   color: var(--text);
@@ -79,7 +81,7 @@
   object-fit: contain;
 }
 .Card_Actions {
-  flex: none;
+  flex: 0 1 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
