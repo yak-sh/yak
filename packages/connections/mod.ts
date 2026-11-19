@@ -72,6 +72,7 @@ export {
 } from './integrations.ts'
 export { CONNECTION, INTEGRATION, integrationEid, USES } from './identity.ts'
 export { through } from './graph.ts'
+export { configuredSignIns } from './sign-in.ts'
 export {
   clientOf,
   type Registered,

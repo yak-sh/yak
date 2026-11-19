@@ -17,19 +17,19 @@ import { installed, type Integration, type Read } from './integrations.ts'
 export type Registered = { id: string; secret?: string }
 
 // The name a client is kept under among the graph's secrets.
-let keptAs = (name: string) => `oauth_client ${name}`
+export let clientSecret = (name: string) => `oauth_client ${name}`
 
 /** The bundle that keeps `client` under `name`: the id and the secret go to
  * the vault, and the graph holds the handle. */
 export let registration = (name: string, client: Registered): Bundle =>
-  sealed(keptAs(name), JSON.stringify(client))
+  sealed(clientSecret(name), JSON.stringify(client))
 
 /** The client kept under `name`, if one is. */
 export let registered = async (
   vault: Vault,
   name: string,
 ): Promise<Registered | undefined> => {
-  let text = await reveal(vault, keptAs(name), { env: () => undefined })
+  let text = await reveal(vault, clientSecret(name), { env: () => undefined })
   if (!text) return undefined
   let c = JSON.parse(text)
   if (

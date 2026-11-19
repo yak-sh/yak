@@ -303,12 +303,12 @@ export let BROKERS: Record<string, (key: string, f?: Fetch) => Broker> = {
 }
 
 // The name a broker's key is kept under among the graph's secrets.
-let keptAs = (name: string) => `broker ${name}`
+export let brokerSecret = (name: string) => `broker ${name}`
 
 /** The bundle that keeps a broker's key: the vault holds it, and the graph
  * its handle. */
 export let brokerKey = (name: string, key: string): Bundle =>
-  sealed(keptAs(name), key)
+  sealed(brokerSecret(name), key)
 
 /** The broker named `name`, ready to ask, once its key is kept; none while it
  * is not, or for a name this package does not implement. */
@@ -319,6 +319,6 @@ export let brokerOf = async (
 ): Promise<Broker | undefined> => {
   let make = BROKERS[name]
   if (!make) return undefined
-  let key = await reveal(vault, keptAs(name), { env: () => undefined })
+  let key = await reveal(vault, brokerSecret(name), { env: () => undefined })
   return key ? make(key, fetcher) : undefined
 }

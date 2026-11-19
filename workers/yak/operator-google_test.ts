@@ -3,7 +3,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { Item, Request as Asked } from '@yaks/model'
 import type { D1Like } from '@yaks/d1'
 import { brokerKey, registration } from '@yaks/connections'
-import { d1 } from '../../packages/d1/testing.ts'
+import { counting } from '../../packages/d1/testing.ts'
 import { platform } from './testing.ts'
 import { directoryOf } from './directory.ts'
 import { CALLBACK, callback, connecting, connectionsOf } from './connections.ts'
@@ -27,8 +27,9 @@ import {
 // Nango (D-151626), and its token still goes straight to Google. Google and
 // Nango are faked at the fetch they are called through.
 let SECRET = 'operator-google'
+let vault = counting()
 let { env } = platform(SECRET, {
-  VAULT: d1() as unknown as D1Like,
+  VAULT: vault.db as unknown as D1Like,
   VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(7))),
 })
 let dir = directoryOf(env.STORE)
@@ -208,12 +209,14 @@ let service = operatorService(
 env.BUILDER = service.binding
 let { store } = service
 
+vault.reset()
 await receive(
   store,
   { space: eid, person, channel: 'chat' },
   'Can you see my calendar?',
 )
 await service.drain()
+let beforeTrips = vault.hops().trips
 let before = requests.splice(0)
 let back = [await connect('google-calendar'), await connect('gmail')]
 await receive(
@@ -232,6 +235,7 @@ test('before they connect, the Operator is told where to, and holds no Google to
   )
   assertStringIncludes(first.instructions!, '- Gmail: not connected.')
   assert(!names(first).some((n) => /^(calendar|gmail)_/.test(n)))
+  assertEquals(beforeTrips, 0)
 })
 
 test('connected from the page, each names its account, and the Operator uses both in a conversation', async () => {

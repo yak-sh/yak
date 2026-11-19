@@ -17,18 +17,17 @@ import { toBase64, toBase64url } from '@yaks/fp'
 import type { Bundle, Comp } from '@yaks/graph'
 import {
   call,
-  connectable,
+  configuredSignIns,
   CONNECTION,
   type Integration,
   known,
-  signsInWith,
 } from '@yaks/connections'
 import type { Tool } from '@yaks/session'
 import type { Env } from './env.ts'
 import type { Space } from './directory.ts'
 import { type Ctx, refuse } from './tool.ts'
 import { addingAt, ctxOf, ownConnection, settling } from './connections.ts'
-import { vaulted, vaultOf } from './vault.ts'
+import { vaulted } from './vault.ts'
 import { recall } from './lib/hops.ts'
 import { PLATFORM_STORE } from '@yaks/platform/names'
 import { caught } from './defects.ts'
@@ -269,23 +268,15 @@ export let googleAccounts = (
       Promise.all([CALENDAR, GMAIL].map(async (name) => {
         // A sign-in finished at a broker is theirs from this ask on: the
         // connection is read beside it, and again only once one settled.
-        // What the person would sign in with, told where they have not, is
-        // read as soon as the integration is.
         let { read } = ctxOf(env).graph
-        let found = known(read, name)
-        let client = found.then((i) =>
-          i && vaulted(env) ? signsInWith(vaultOf(env), read, i) : undefined
-        )
-        client.catch(() => {})
         let [made, i, held] = await Promise.all([
           settling(env, [ctx.person, space.eid], name),
-          found,
+          known(read, name),
           ownConnection(env, ctx, space, name),
         ])
         return {
           i,
           held: made ? await ownConnection(env, ctx, space, name) : held,
-          client,
         }
       })),
   )
@@ -319,26 +310,30 @@ export let googleTools = async (
  * connected, and where they connect each that this deploy can connect and
  * they have not. */
 export let googleTold = async (env: Env, ctx: Ctx, space: Space) => {
-  let said = await Promise.all(
-    (await googleAccounts(env, ctx, space)).map(async ({ i, held, client }) => {
-      if (!i) return []
-      if (held) {
-        let account = str(comp(held, CONNECTION).account)
-        return [`- ${titled(i)}: connected${account ? ` as ${account}` : ''}`]
-      }
-      if (!connectable(i, await client)) return []
-      return [
-        `- ${titled(i)}: not connected. They connect it at ${
-          addingAt(env, space.slug, i)
-        }${
-          i.testing
-            ? ' (Google has not verified it yet, so only the people Google lists can; offer it only when they ask for what it does)'
-            : ''
-        }`,
-      ]
-    }),
-  )
-  let lines = said.flat()
+  let accounts = await googleAccounts(env, ctx, space)
+  let available = vaulted(env)
+    ? await configuredSignIns(
+      ctxOf(env).graph.read,
+      accounts.flatMap(({ i, held }) => i && !held ? [i] : []),
+    )
+    : new Set<string>()
+  let lines = accounts.flatMap(({ i, held }) => {
+    if (!i) return []
+    if (held) {
+      let account = str(comp(held, CONNECTION).account)
+      return [`- ${titled(i)}: connected${account ? ` as ${account}` : ''}`]
+    }
+    if (!available.has(i.name)) return []
+    return [
+      `- ${titled(i)}: not connected. They connect it at ${
+        addingAt(env, space.slug, i)
+      }${
+        i.testing
+          ? ' (Google has not verified it yet, so only the people Google lists can; offer it only when they ask for what it does)'
+          : ''
+      }`,
+    ]
+  })
   return lines.length
     ? `The person's own Google accounts, which you use for them as their assistant:\n${
       lines.join('\n')

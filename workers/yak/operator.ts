@@ -1917,8 +1917,6 @@ export let operating = (
       let space = await at
       if (work?.signup) return outside(space) + '\n\n' + SIGNUP
       let topic = topicOf(row)
-      let google = googleTold(env, here, space)
-      google.catch(() => {})
       let ctx = await context
       // Someone who does not write in the space is told none of its work.
       if (!writes(ctx.role)) {
@@ -1930,7 +1928,7 @@ export let operating = (
       }
       let [map, accounts, said] = await Promise.all([
         topic ? oracleContext(ctx, g, topic) : oracleMap(ctx, g),
-        google,
+        googleTold(env, here, space),
         servers,
       ])
       return reached(
