@@ -227,7 +227,7 @@ import {
 import { nameOf } from './names.ts'
 import { system } from '@yaks/fp'
 import { textable } from './phones.ts'
-import { RETRY, source, within } from '@yaks/workerd/rate'
+import { place, RETRY, source, within } from '@yaks/workerd/rate'
 import {
   browserOf,
   browsing,
@@ -1724,7 +1724,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
           'rate',
           async () =>
             (await Promise.all([
-              within(env.SIGNIN_RATE, source(req), failing('rate limit')),
+              within(env.SIGNIN_RATE, place(req), failing('rate limit')),
               mayText(meta(env), from),
             ])).every(Boolean),
         )

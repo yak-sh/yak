@@ -34,6 +34,25 @@ test('a browser’s wrong guesses spend only its own tries', async () => {
   assert(await spend(tries.at, secret, address, '123456', { browser: a }))
 })
 
+test('an address’s wrong guesses count across browsers, and a browser new to them gets one', async () => {
+  let [s1, s2, person] = [0, 1, 2].map(() => crypto.randomUUID())
+  let at = await held([
+    scoped(s1, 'x'),
+    scoped(s2, 'y'),
+    scoped(person, digest),
+  ])
+  let guess = (browser: string, code = '654321') =>
+    spend(at.at, secret, address, code, { browser })
+  for (let i = 0; i < TRIES; i++) assertEquals(await guess(s1), null)
+  assertEquals(await guess(s2), null)
+  assertEquals(await guess(s2), null)
+  let tried = Object.fromEntries(
+    (await at.rows(address)).map((r) => [r.signin.browser, r.signin.tries]),
+  )
+  assertEquals(tried, { [s1]: TRIES, [s2]: 1, [person]: 0 })
+  assert(await guess(person, '123456'))
+})
+
 test('typed codes stay with their browser and emailed links open on another', async () => {
   assertEquals(
     await spend(crossing.at, secret, address, '123456', { browser: b }),

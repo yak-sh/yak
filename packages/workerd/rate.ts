@@ -40,6 +40,36 @@ export type Limiter = {
 export let source = (req: Request): string =>
   req.headers.get('cf-connecting-ip') ?? ''
 
+/** The network an address belongs to, which is what a door counts: an IPv4
+ * address as it is, an IPv6 address its /48, the first three groups written
+ * out. A subscriber is handed a whole /64, /56 or /48 and can walk every
+ * address in it, so counting a smaller prefix counts one source many times.
+ *
+ * ```ts
+ * import { network } from '@yaks/workerd/rate'
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(network('203.0.113.9'), '203.0.113.9')
+ * assertEquals(network('2001:DB8:0:ff::7'), '2001:db8:0')
+ * assertEquals(network('::1'), '0:0:0')
+ * ```
+ */
+export let network = (ip: string): string => {
+  if (!ip.includes(':')) return ip
+  let [head, tail = ''] = ip.toLowerCase().split('::')
+  let front = head ? head.split(':') : []
+  let back = ip.includes('::') && tail ? tail.split(':') : []
+  let groups = [
+    ...front,
+    ...Array(8 - front.length - back.length).fill('0'),
+    ...back,
+  ]
+  return groups.slice(0, 3).map((g) => g.replace(/^0+(?=.)/, '')).join(':')
+}
+
+/** The network a request came from (`network`), the key a door's limiter
+ * counts, or '' when it came from inside. */
+export let place = (req: Request): string => network(source(req))
+
 /** Who a visitor at a door is: their person, else the address they came
  * from, else (a request from inside) one stranger. */
 export let visitorKey = (

@@ -24,13 +24,14 @@
 // ask answers and mails nothing, because a visible refusal would say whether
 // an address had been asked for.
 import { type Line, line } from '@yaks/query'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, mint as uuid } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { KERNEL, type Meta } from './meta.ts'
 import { minted } from '@yaks/platform/page-wire'
 import { secretKey } from '@yaks/secrets/signed'
 import { mobile } from '@yaks/phone/mobile'
+import { network } from '@yaks/workerd/rate'
 import { chose, nameOf } from './names.ts'
 import { type Host, signupAddress } from '@yaks/platform/host'
 import type { Letter } from './mail.ts'
@@ -282,11 +283,87 @@ export let guessed = (rows: Signin[], want: string, now: number): Bundle[] => {
   }))
 }
 
+/** A typed code that matched none of an address's open codes, kept for the
+ * hour (`barred`). */
+export type Miss = {
+  entity: { eid: string }
+  signin_miss: { email?: string; phone?: string; browser?: string; at: string }
+}
+
+/** The filter line that reads every wrong guess an address holds. */
+export let missLine = (address: string) =>
+  line`.signin_miss.${key(address)}=${canon(address)}`
+
+/**
+ * Whether a typed guess from this browser is compared at all. Wrong guesses
+ * are counted per address, whichever browser typed them, since a new browser
+ * is free to make and each one's codes have tries of their own. Once TRIES
+ * of them are spent in the hour, a browser that guessed wrong there gets no
+ * more, and a browser that has not still gets one: the person holding the
+ * letter or the text types it once, whatever a stranger burned (T-781).
+ *
+ * ```ts
+ * import { barred, TRIES } from './signin.ts'
+ * import { assert, assertFalse } from '@std/assert'
+ * let now = Date.parse('2026-11-07T12:00:00Z')
+ * let miss = (browser: string, ago = 60_000) => ({
+ *   entity: { eid: crypto.randomUUID() },
+ *   signin_miss: { email: 'a@b.c', browser,
+ *     at: new Date(now - ago).toISOString() },
+ * })
+ * let spent = Array.from({ length: TRIES }, () => miss('stranger'))
+ * assert(barred(spent, 'stranger', now))
+ * assertFalse(barred(spent, 'person', now))
+ * assertFalse(barred(spent.slice(1), 'stranger', now))
+ * assertFalse(barred(spent.map(() => miss('stranger', 2 * 3600_000)),
+ *   'stranger', now))
+ * ```
+ */
+export let barred = (
+  misses: Miss[],
+  browser: string | undefined,
+  now: number,
+) => {
+  let hour = misses.filter(missing(now))
+  return hour.length >= TRIES &&
+    hour.some((m) => m.signin_miss.browser == browser)
+}
+
+/** What a typed guess that compared and opened nothing writes beside its
+ * tries: the miss, and the burial of the misses fallen out of the hour. A
+ * guess that opened buries this browser's own misses instead. */
+export let missed = (
+  misses: Miss[],
+  address: string,
+  browser: string | undefined,
+  now: number,
+  opened: boolean,
+): Bundle[] => [
+  ...misses
+    .filter((m) =>
+      !missing(now)(m) || (opened && m.signin_miss.browser == browser)
+    )
+    .map((m) => bury(m.entity.eid)),
+  ...opened ? [] : [{
+    entity: { eid: uuid() },
+    signin_miss: {
+      [key(address)]: canon(address),
+      ...(browser ? { browser } : {}),
+      at: new Date(now).toISOString(),
+    },
+  }],
+]
+
+// Whether a miss still counts toward its hour, at `now`.
+let missing = (now: number) => (m: Miss) =>
+  Date.parse(m.signin_miss.at) > now - WINDOW
+
 /**
  * Who is asking, as a row may keep it: the address a request came from (@yaks/workerd/rate
  * `source`), under the session secret so a row read out of the store names no
- * one. An IPv6 address counts by its /64, which one subscriber holds whole and
- * can walk. Empty for a request from inside, which is never counted.
+ * one. An IPv6 address counts by its network (@yaks/workerd/rate `network`),
+ * which one subscriber can hold whole and walk. Empty for a request from
+ * inside, which is never counted.
  */
 export let visitor = async (secret: string, source: string) =>
   source
@@ -298,20 +375,6 @@ export let visitor = async (secret: string, source: string) =>
       ),
     )
     : ''
-
-// An IPv6 address's first four groups, written out; an IPv4 address as it is.
-let network = (ip: string) => {
-  if (!ip.includes(':')) return ip
-  let [head, tail = ''] = ip.toLowerCase().split('::')
-  let front = head ? head.split(':') : []
-  let back = ip.includes('::') && tail ? tail.split(':') : []
-  let groups = [
-    ...front,
-    ...Array(8 - front.length - back.length).fill('0'),
-    ...back,
-  ]
-  return groups.slice(0, 4).map((g) => g.replace(/^0+(?=.)/, '')).join(':')
-}
 
 /** Whether this visitor may have another code texted this hour (VISITS). */
 export let mayText = async (store: Meta, from: string) =>
@@ -383,8 +446,9 @@ export let lodge = async (
   return minted(applied).$code ?? null
 }
 
-// A typed code spends this browser's codes for the address. An emailed link
-// spends its own code from any browser. Scoped contact codes sign nobody in.
+// A typed code spends this browser's codes for the address, and is held to
+// the address's wrong guesses (`barred`). An emailed link spends its own code
+// from any browser. Scoped contact codes sign nobody in.
 //
 // The try is taken before the guess is compared, in the store's own
 // transaction, and each count on the precondition that it is still the count

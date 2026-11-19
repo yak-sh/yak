@@ -916,6 +916,37 @@
       },
       "description": "a sign-in in progress: the code mailed or texted out, when it expires, how many tries are left, and why its letter never left when it did not"
     },
+    "signin_miss": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "stamped": true,
+          "description": "the address a code was typed wrong for"
+        },
+        "phone": {
+          "type": "string",
+          "stamped": true,
+          "description": "the US mobile number a code was typed wrong for, in E.164 form; set instead of `email`"
+        },
+        "browser": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the verified browser that typed it; absent when none did"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was typed"
+        }
+      },
+      "description": "a typed sign-in code that matched none of the address's open codes: an address's wrong guesses are counted across every browser for the hour (signin.ts `barred`)"
+    },
     "space": {
       "component": true,
       "type": "object",
@@ -1267,6 +1298,9 @@
       "before": [
         "doc"
       ]
+    },
+    "signin_miss": {
+      "description": "a sign-in code typed wrong, kept for the hour so an address's wrong guesses are counted whichever browser typed them"
     },
     "space": {
       "description": "one customer’s area of the platform, at its own slug",

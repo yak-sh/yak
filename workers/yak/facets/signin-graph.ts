@@ -6,10 +6,11 @@
 // An ask is the new `signin` row itself: it is written, beside the burial of
 // the rows fallen out of the hour, unless the address has had its letters,
 // and the answer says which. A guess is the request `$guess{email | phone,
-// code, via}`, which writes nothing of its own: it becomes a try off every
-// open code, or the burial of every row when it opens one, beside whoever it
-// signs in, stamped as signed in (signin.ts `stamped`), and the space they
-// land on, said as it stands (`landing`). An arrival is the request
+// code, via}`: it becomes a try off every open code, and for a typed code a
+// `signin_miss` counting it against the address (signin.ts `barred`), or the
+// burial of every row when it opens one, beside whoever it signs in, stamped
+// as signed in (signin.ts `stamped`), and the space they land on, said as it
+// stands (`landing`). An arrival is the request
 // `$arrive{email, via}`: an address another provider vouched for (oidc.ts),
 // which signs in whoever wears it just as a guess that opened would.
 //
@@ -32,8 +33,12 @@ import type { Options } from './store.ts'
 import {
   arriving,
   asked,
+  barred,
   called,
   guessed,
+  type Miss,
+  missed,
+  missLine,
   type Person,
   personLine,
   type Signin,
@@ -68,6 +73,13 @@ type Guess = {
 
 // How somebody arrives, by a guess that opened or by an `$arrive`.
 type Arriving = Pick<Guess, 'newcomer' | 'via' | 'session'>
+
+// Every wrong guess an address holds (signin.ts `barred`).
+let misses = (tx: Tx, address: string) =>
+  after(
+    tx.read(missLine(address)),
+    (found) => found.filter((r) => r.signin_miss) as unknown as Miss[],
+  )
 
 // Every row an address's codes left.
 let rows = (tx: Tx, address: string) =>
@@ -240,32 +252,44 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => [{
                 },
               )
             })
+          // A typed code is also held to the address's wrong guesses
+          // (`barred`); a letter's link opens its own code from anywhere.
+          let typed = g.via != 'link'
           let decide = () =>
-            after(rows(tx, address), (all) => {
-              let scoped = all.filter((r) =>
-                r.signin.person == g.person && r.signin.space == g.space &&
-                (g.via == 'link'
-                  ? r.signin.code == g.code
-                  : !r.signin.browser || r.signin.browser == g.browser)
-              )
-              let wrote = guessed(scoped, g.code, now)
-              if (!wrote.some((w) => w.tombstone)) return wrote
-              if (g.person) {
-                return after(consent(), (agreed) => [...wrote, ...agreed])
-              }
-              return after(
-                arrival(
-                  tx,
-                  address,
-                  b.entity.eid,
-                  new Date(now).toISOString(),
-                  g,
-                ),
-                (
-                  [who, ...home],
-                ) => [...wrote, { ...who, $alias: b.$alias }, ...home],
-              )
-            })
+            after(
+              rows(tx, address),
+              (all) =>
+                after(typed ? misses(tx, address) : [], (ms) => {
+                  if (typed && barred(ms, g.browser, now)) return []
+                  let scoped = all.filter((r) =>
+                    r.signin.person == g.person && r.signin.space == g.space &&
+                    (typed
+                      ? !r.signin.browser || r.signin.browser == g.browser
+                      : r.signin.code == g.code)
+                  )
+                  let tried = guessed(scoped, g.code, now)
+                  let opened = tried.some((w) => w.tombstone)
+                  let wrote = typed && tried.length
+                    ? [...tried, ...missed(ms, address, g.browser, now, opened)]
+                    : tried
+                  if (!opened) return wrote
+                  if (g.person) {
+                    return after(consent(), (agreed) => [...wrote, ...agreed])
+                  }
+                  return after(
+                    arrival(
+                      tx,
+                      address,
+                      b.entity.eid,
+                      new Date(now).toISOString(),
+                      g,
+                    ),
+                    (
+                      [who, ...home],
+                    ) => [...wrote, { ...who, $alias: b.$alias }, ...home],
+                  )
+                }),
+            )
           return g.person && g.phone
             ? after(
               tx.read(personLine(address)),

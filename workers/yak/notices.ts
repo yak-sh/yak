@@ -14,7 +14,7 @@ import { appStore, url } from './directory.ts'
 import { KERNEL } from './meta.ts'
 import { opened, seal } from './lib/token.ts'
 import { noticeEnabled } from '@yaks/platform/notices-vocab'
-import { source, tooMany, within } from '@yaks/workerd/rate'
+import { place, tooMany, within } from '@yaks/workerd/rate'
 import { failing } from './defects.ts'
 
 type Subscription = Bundle & {
@@ -228,7 +228,7 @@ export let notices: Answer = async (
   ) return reply('Method not allowed.', 405)
   if (
     action == 'subscribe' &&
-    !await within(env.SIGNIN_RATE, source(req), failing('rate limit'))
+    !await within(env.SIGNIN_RATE, place(req), failing('rate limit'))
   ) {
     return tooMany()
   }

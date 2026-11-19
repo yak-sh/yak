@@ -494,10 +494,10 @@ test('five texted codes an hour from one visitor, and no more', async () => {
   assertMatch(me, /^[0-9a-f]{64}$/)
   assertEquals(await visitor(SECRET, '203.0.113.9'), me)
   assertEquals(await visitor(SECRET, ''), '')
-  // An IPv6 subscriber holds a whole /64, so it is one visitor.
+  // An IPv6 subscriber can hold a whole /48, so it is one visitor.
   let six = await visitor(SECRET, '2001:db8:0:1::7')
-  assertEquals(await visitor(SECRET, '2001:DB8:0:1:abcd::9'), six)
-  assertFalse(await visitor(SECRET, '2001:db8:0:2::7') == six)
+  assertEquals(await visitor(SECRET, '2001:DB8:0:ff:abcd::9'), six)
+  assertFalse(await visitor(SECRET, '2001:db8:1::7') == six)
   let under = asking(() =>
     Array.from({ length: VISITS - 1 }, () => visit(me, 60_000))
   )
