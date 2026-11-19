@@ -596,14 +596,43 @@ let declared = (c: Prop): string => {
  * `doc has title (string), body (string)`. An error naming only what it failed
  * to parse teaches nothing. */
 export let shapeOf = (v: Vocab, comp: string): string => {
-  let props = v.props(comp)
-  if (!props.length) {
+  // The spine's eid is no declared property, and it is what an entity is
+  // named by, so it leads.
+  let said = [
+    ...comp == SPINE ? [`${EID} (${NAMED})`] : [],
+    ...v.props(comp).map((p) => `${p} (${declared(v.prop(comp, p)!)})`),
+  ]
+  if (!said.length) {
     return `${comp} has no properties, so it is present (.${comp}) or absent ` +
       `(!${comp})`
   }
-  let said = props.map((p) => `${p} (${declared(v.prop(comp, p)!)})`)
   return `${comp} has ${said.join(', ')}`
 }
+
+// How the spine's eid is read, said where its shape is.
+let NAMED =
+  "the entity's id: .entity.eid=T-12 or .entity.eid=#<hex>; graph_show reads one"
+
+/**
+ * The refusal for comparing or ordering by a property that holds a JSON value
+ * (an object, an array or a union), which has no scalar to compare: what can
+ * be asked of it, and how to reach the rows by something else.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { jsonValued } from '@yaks/vocab'
+ * assertEquals(
+ *   jsonValued('call.args'),
+ *   '.call.args holds a JSON value — it can be projected (.fields=call.args) ' +
+ *     'or tested for presence (.call.args); find the rows by another ' +
+ *     'property or by bare search words, and read the value in what comes back',
+ * )
+ * ```
+ */
+export let jsonValued = (path: string): string =>
+  `.${path} holds a JSON value — it can be projected (.fields=${path}) or ` +
+  `tested for presence (.${path}); find the rows by another property or by ` +
+  `bare search words, and read the value in what comes back`
 
 // The edits that turn one word into another (Levenshtein): one row of the
 // table at a time.
@@ -691,10 +720,26 @@ export let unknownName = (word: string, names: string[]): string => {
  * whether a query or a write named them. A component with no properties is
  * explained by its description, the one place what it means is said. */
 export let unknownProps = (v: Vocab, comp: string, props: string[]): string => {
-  let about = v.props(comp).length ? '' : v.comp(comp)?.description
+  let own = [...comp == SPINE ? [EID] : [], ...v.props(comp)]
+  let about = own.length ? '' : v.comp(comp)?.description
+  let near = [...new Set(props.flatMap((p) => nearest(p, own)))]
+  // A component named as a property (`person.email`) is worn beside it.
+  let worn = props.flatMap((p) => {
+    let first = v.props(p).find((q) => v.prop(p, q)?.scalar != 'jsonb')
+    return first ? [`.${comp}&.${p}.${first}=…`] : []
+  })
   return `unknown ${props.length > 1 ? 'properties' : 'property'}: ${
     props.map((p) => `${comp}.${p}`).join(', ')
-  } — ${shapeOf(v, comp)}${about ? `; ${comp}: ${about}` : ''}`
+  }${
+    near.length
+      ? ` (closest declared: ${near.map((p) => `${comp}.${p}`).join(', ')})`
+      : ''
+  } — ${
+    worn.length
+      ? `a component is no property of another, so an entity wearing both ` +
+        `is ${worn.join(' or ')}; `
+      : ''
+  }${shapeOf(v, comp)}${about ? `; ${comp}: ${about}` : ''}`
 }
 
 /**

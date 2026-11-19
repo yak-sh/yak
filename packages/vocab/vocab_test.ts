@@ -3,7 +3,12 @@
 // no global vocabulary anywhere.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertStringIncludes,
+  assertThrows,
+} from '@std/assert'
 import {
   cast,
   extendMeta,
@@ -1060,5 +1065,21 @@ test('an unknown property is refused with what its component holds', () => {
     unknownProps(w, 'alias', ['name']),
     'unknown property: alias.name — alias has no properties, so it is ' +
       'present (.alias) or absent (!alias); alias: a stable name for an entity',
+  )
+  // a slip is told the name it was closest to, and the spine's id is its eid
+  assertEquals(
+    unknownProps(w, 'book', ['titles']),
+    'unknown property: book.titles (closest declared: book.title) — book has ' +
+      'title (string)',
+  )
+  assertStringIncludes(
+    unknownProps(w, 'entity', ['id']),
+    'entity.id (closest declared: entity.eid) — entity has eid (the ' +
+      "entity's id: .entity.eid=T-12 or .entity.eid=#<hex>",
+  )
+  // a component named as a property is worn beside it
+  assertStringIncludes(
+    unknownProps(w, 'alias', ['book']),
+    'an entity wearing both is .alias&.book.title=…',
   )
 })

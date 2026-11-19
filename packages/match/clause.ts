@@ -21,7 +21,7 @@ import {
   WALK_LIMIT,
 } from '@yaks/query/core'
 import { identity, literals, Unsupported } from '@yaks/sql/core'
-import type { Assoc, Hop, Vocab } from '@yaks/vocab'
+import { type Assoc, type Hop, jsonValued, type Vocab } from '@yaks/vocab'
 import { Unknown, valueless } from '@yaks/vocab/runtime'
 import {
   type Bundle,
@@ -180,8 +180,7 @@ let scalar = (
   if (read.tag == 'jsonb' && opOf(p) != EXISTS) {
     throw new Unsupported(
       'a filter on it',
-      `.${hop.comp}.${hop.prop} holds a JSON value — only its presence ` +
-        `(.${hop.comp}.${hop.prop}) can be asked of it yet`,
+      jsonValued(`${hop.comp}.${hop.prop}`),
       BY,
     )
   }

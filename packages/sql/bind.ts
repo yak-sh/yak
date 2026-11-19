@@ -70,7 +70,12 @@ import {
   present,
 } from '@yaks/query/core'
 import type { Assoc, Hop, Presence, Vocab } from '@yaks/vocab/runtime'
-import { Unknown, unknownName, valueless } from '@yaks/vocab/runtime'
+import {
+  jsonValued,
+  Unknown,
+  unknownName,
+  valueless,
+} from '@yaks/vocab/runtime'
 import {
   among,
   and,
@@ -791,8 +796,7 @@ let opaque = (tag: Tag, what: string, path: string): void => {
   if (tag != 'jsonb') return
   throw new Unsupported(
     what,
-    `.${path} holds a JSON value — it can be projected or tested for ` +
-      `presence (.${path})`,
+    jsonValued(path),
   )
 }
 

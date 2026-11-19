@@ -43,7 +43,7 @@ import {
   type Tally,
 } from '@yaks/query/core'
 import { type Tag, tallied, Unsupported, whole } from '@yaks/sql/core'
-import type { Vocab } from '@yaks/vocab'
+import { jsonValued, type Vocab } from '@yaks/vocab'
 import {
   BY,
   chained,
@@ -261,8 +261,7 @@ let field = (ctx: Ctx, path: string, projection = false): Field => {
     let at = `${leaf.comp}.${leaf.prop}`
     throw new Unsupported(
       'ordering by it',
-      `.${at} holds a JSON value — it can be projected or tested for ` +
-        `presence (.${at})`,
+      jsonValued(at),
       BY,
     )
   }
