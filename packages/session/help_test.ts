@@ -32,7 +32,7 @@ import { statusComputed } from './state.ts'
 import { sessions } from './plugin.ts'
 import { help, LIMIT, QUIET } from './help.ts'
 import { hear } from './listen.ts'
-import { reported } from './watch.ts'
+import { reported, targets } from './watch.ts'
 import { runs } from './tools.ts'
 
 let vocab = loadVocab([
@@ -227,6 +227,21 @@ test('a native helper’s ending is its exit: what came while it worked starts t
   await help(o.g, first.eid)
   equal((await o.helpers()).map((h) => h.told), [['bug a'], ['bug b']])
   equal(await o.heard(), [])
+})
+
+test('a helper whose work is done is over: what it was told of reaches its operator, not it', async () => {
+  let o = await office()
+  await o.knock('T-1 is done')
+  let [h] = await o.helpers()
+  equal(await targets(o.g, [h.eid], new Set()), [h.eid])
+  await o.write([{
+    entity: { eid: 'said' },
+    entry: { session: h.eid },
+    output: {},
+    content: { body: 'Holds.' },
+  }])
+  await help(o.g, h.eid)
+  equal(await targets(o.g, [h.eid], new Set()), ['operator'])
 })
 
 test('a person’s words reach the operator, whoever relays them', async () => {

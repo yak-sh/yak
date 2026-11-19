@@ -11,7 +11,8 @@
 //
 // One helper is at work at a time, and it takes everything waiting, so a
 // storm of bugs is one helper's batch. Knocks that come while it works wait
-// for its `exit`, which asks again. Two workers racing to start one read the
+// for its `exit`, which asks again, and the helper is over from then on, so
+// nothing it was told of wakes it again. Two workers racing to start one read the
 // same waiting knocks, and the guard on each knock's `notified` lets one
 // write through.
 //
@@ -322,6 +323,17 @@ let ended = async (g: G, helper: Bundle): Promise<void> => {
   )
 }
 
+// A helper whose work is done is over at once, not after the quiet that ends
+// a session with no process to ask about (./ended.ts): until then it watches
+// every task it was told of or spoke of, and each change to one would knock it
+// awake to check work its operator hears of anyway (./watch.ts `targets`).
+// An observation, as ./ended.ts writes it, so `updated` stays as it was.
+let rest = (g: G, helper: Eid) =>
+  g.apply([{ entity: { eid: helper }, [SESSION]: { ended: true } }], {
+    trusted: true,
+    stamp: false,
+  })
+
 // Where a taken item's line goes: the session it knocked while that can still
 // hear, else the operator.
 let hearer = async (g: G, item: Bundle): Promise<Eid | undefined> => {
@@ -403,6 +415,7 @@ export let help = async (g: G, eid: Eid, o: Opts = {}): Promise<void> => {
   let finished = row.native &&
     ['settled', 'failed', 'stopped'].includes(str(comp(row, SESSION).status))
   if (row[HELPING] && (row.exit || finished)) {
+    await rest(g, eid)
     await ended(g, row)
     await verdicts(g, row)
   }
