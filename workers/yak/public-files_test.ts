@@ -65,6 +65,11 @@ await publish('gone')
 purged.length = 0
 let ungone = await ask('api/public/gone', { method: 'DELETE' }, ada)
 let ungonePurged = [...purged]
+// Week 2 replaced in place: its path stays on the app's list.
+await publish('notes/week-2')
+purged.length = 0
+await publish('notes/week-2', PAGE.replace('Psalm 23', 'Psalm 24'))
+let replacedPurged = [...purged]
 // Two paths share bytes `one`, and `a` then moves on to `two`.
 let kept = () =>
   new Set([...files.held.keys()].filter((k) => k.includes('/public/'))).size
@@ -123,6 +128,11 @@ test('unpublishing gives the address back to the app', async () => {
 
 test("unpublishing purges the app's kept pages", () => {
   assert(ungonePurged.includes(appTag(app.eid)), String(ungonePurged))
+})
+
+test("replacing a published file purges the app's kept pages", async () => {
+  assert(replacedPurged.includes(appTag(app.eid)), String(replacedPurged))
+  assert((await (await ask('notes/week-2')).text()).includes('Psalm 24'))
 })
 
 test('files published at once are each served', () => {

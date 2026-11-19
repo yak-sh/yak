@@ -24,7 +24,9 @@
 // on one. Its first release purges its space as it raises its fence, which
 // takes those pages out before it serves anything. A file it published is
 // shown, so an app with one, or a write to what it publishes, owes as any
-// other does.
+// other does. A file written owes its app's pages whatever its write does to
+// the paths the app lists: a file replaced in place leaves the list as it
+// was (T-709).
 //
 // A seat written in a space purges it too: a person signed in with none is
 // shown its index as an outsider, kept under their session (page-cache.ts),
@@ -175,6 +177,13 @@ let shows = (b: Bundle) =>
  *   await owed([{ entity: { eid: 'x' }, publishing: { paths: '["p"]' } }], rows),
  *   ['app:x'],
  * )
+ * // A file replaced in place, which leaves its app's paths as they were.
+ * let files = async (eids: string[]) =>
+ *   eids.map((eid) => ({ entity: { eid }, public_file: { app: 'x', path: 'p' } }))
+ * assertEquals(
+ *   await owed([{ entity: { eid: 'f' }, public_file: { sha: 'b' } }], files),
+ *   ['app:x'],
+ * )
  * // A release's commit: its pages went as its fence rose.
  * assertEquals(
  *   await owed([{ entity: { eid: 'x' }, app: { version: 2, fence: null } }], rows),
@@ -242,7 +251,7 @@ export let owed = async (
   }
   let touched = applied.filter((b) =>
     !b.tombstone &&
-    (shows(b) || 'gallery' in b || 'member' in b || has(b, DOMAIN))
+    (shows(b) || has(b, ['gallery', 'member', 'public_file', ...DOMAIN]))
   )
   let now = new Map(
     (touched.length ? await rows(touched.map((b) => b.entity.eid)) : [])
@@ -251,6 +260,8 @@ export let owed = async (
   for (let b of touched) {
     let row = now.get(b.entity.eid)
     let seat = row?.member as { space: string | { eid: string } } | undefined
+    let file = row?.public_file as { app: string | { eid: string } } | undefined
+    if (file && 'public_file' in b) tags.add(appTag(idOf(file.app)))
     if (seat && 'member' in b) tags.add(spaceTag(idOf(seat.space)))
     if (row?.hostname && has(b, DOMAIN)) tags.add(hostTag(b.entity.eid))
     if (row?.app) {
@@ -315,7 +326,16 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => {
       return applied
     },
     {
-      keys: [...new Set([...PARTS, ...LISTED, 'member', ...DOMAIN, TOMBSTONE])],
+      keys: [
+        ...new Set([
+          ...PARTS,
+          ...LISTED,
+          'member',
+          'public_file',
+          ...DOMAIN,
+          TOMBSTONE,
+        ]),
+      ],
     },
   )
   return [{
