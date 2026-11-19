@@ -68,7 +68,12 @@
 import type { Bundle } from '@yaks/graph'
 import { line as ql } from '@yaks/query'
 import type { Hibernation, Wire } from '@yaks/durable-object'
-import { driver, type DurableStorage, freely } from '@yaks/durable-object/sql'
+import {
+  driver,
+  type DurableStorage,
+  freely,
+  type Observe,
+} from '@yaks/durable-object/sql'
 import type { Stopped } from '@yaks/durable-object/ceiling'
 import type { Alarms } from '@yaks/durable-object/alarm'
 import { Durable, type Spec } from '@yaks/durable-object/object'
@@ -130,6 +135,7 @@ import {
  * here is the socket slice above, which is checked where it is declared.
  */
 export type State = Hibernation & Restartable & {
+  id?: { name?: string }
   storage: DurableStorage & Restartable['storage'] & {
     // The one way to empty an object: dropping the tables leaves metadata
     // behind, and an object whose storage is empty ceases to exist. It is what
@@ -1050,12 +1056,31 @@ export class Builder extends Durable {
           )
         }
         let { operatorPost } = await import('./metered.ts')
-        let store = await operatorStore(this.#ctx.storage, {
-          version: this.#env.CF_VERSION_METADATA?.id,
-          report: (e, where) =>
-            caught(e, { request: 'operator effects', handler: where.handler }),
-          nudge,
-        }, { operator: operatorPost(this.#env) })
+        let observe: Observe | undefined =
+          this.#ctx.id?.name == '268500ad-1fa7-4088-9520-cb61aa69cb9f'
+            ? ({ shape, rowsRead }, returned) => {
+              if (
+                shape.includes('from "entry_fts"') &&
+                shape.includes('order by "rank" limit')
+              ) {
+                console.log('T-1552 entry rank', rowsRead, returned)
+              }
+            }
+            : undefined
+        let store = await operatorStore(
+          this.#ctx.storage,
+          {
+            version: this.#env.CF_VERSION_METADATA?.id,
+            report: (e, where) =>
+              caught(e, {
+                request: 'operator effects',
+                handler: where.handler,
+              }),
+            nudge,
+          },
+          { operator: operatorPost(this.#env) },
+          observe,
+        )
         this.#fx = store.fx
         owing(store.fx, () => this.#work())
         // What a person is called, as the Operator asks it (operator.ts

@@ -9,7 +9,11 @@ import type { Vocab } from '@yaks/vocab'
 import { type Held, held } from '@yaks/id/graph'
 import { drawing } from '@yaks/tools/readable'
 import type { Extension } from '@yaks/sql'
-import { driver, type DurableStorage } from '@yaks/durable-object/sql'
+import {
+  driver,
+  type DurableStorage,
+  type Observe,
+} from '@yaks/durable-object/sql'
 import { bounded } from '@yaks/durable-object/ceiling'
 import { storage } from '@yaks/durable-object/store'
 import { type Config, used } from '@yaks/host/config'
@@ -119,9 +123,10 @@ export let operatorStore = async (
   durable: DurableStorage,
   options: Parameters<typeof effects>[1] = {},
   senders: Bound['senders'] = {},
+  observe?: Observe,
 ): Promise<OperatorStore> => {
   let plan = await operatorPlan()
-  let sql = driver(durable)
+  let sql = driver(durable, observe)
   let stood = false
   let store!: ReturnType<typeof storage>
   let marks = meta(sql)
