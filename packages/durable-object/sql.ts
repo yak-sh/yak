@@ -74,7 +74,7 @@ export type Sample = {
   rowsWritten: number
 }
 
-export type Observe = (sample: Sample, returned?: number) => void
+export type Observe = (sample: Sample) => void
 export type Measure = (rowsRead?: number, rowsWritten?: number) => void
 
 /**
@@ -189,7 +189,7 @@ export let driver = (
             shape: shape(rendered),
             rowsRead: cursor.rowsRead,
             rowsWritten: cursor.rowsWritten,
-          }, returned)
+          })
         } catch (e) {
           // A broken observer cannot change a store answer, but its defect must
           // still be visible. Each driver reports it at most once.
