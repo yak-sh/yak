@@ -421,9 +421,12 @@ export let granted = async (
   }
 }
 
-// The session cookie taken out and every other cookie left alone: the app is
+// The visitor's credentials taken out: the session cookie, leaving every
+// other cookie alone, and the bearer, which the kernel reads only at an
+// `/api/` door and could be a grant to anything the person holds. The app is
 // owed this visit, not the person's platform-wide credential.
-let uncookied = (headers: Headers) => {
+let uncredited = (headers: Headers) => {
+  headers.delete('authorization')
   let sent = headers.get('cookie')
   if (!sent) return
   let kept = sent.split(';').map((c) => c.trim())
@@ -433,7 +436,7 @@ let uncookied = (headers: Headers) => {
 }
 
 // The request an app's worker is handed: the visitor's own, minus what only
-// the kernel may say and minus the platform's cookie, plus who is looking
+// the kernel may say and minus the visitor's credentials, plus who is looking
 // (session.ts `vouched`, said the same way everything else the kernel serves
 // says it) and the two grants — the visitor the worker answers, and the app
 // itself.
@@ -462,7 +465,7 @@ let handed = async (
     url = publicUrl
   }
   for (let h of [...VOUCH, GRANT, SELF, ADDRESS]) headers.delete(h)
-  uncookied(headers)
+  uncredited(headers)
   headers.set('x-yak-app', app.slug)
   headers.set('x-yak-app-eid', app.eid)
   if (mount) headers.set(MOUNT, mount)

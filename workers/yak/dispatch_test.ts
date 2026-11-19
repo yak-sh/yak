@@ -159,9 +159,10 @@ test('a script is named for the store, which a rename never moves', () => {
   assertEquals(scriptName('jeff/recipes'), 'jeff_recipes')
 })
 
-test('the worker is handed who is looking, and never the cookie', async () => {
+test('the worker is handed who is looking, and never a credential', async () => {
   let m = mirror()
-  let out = await ran(envOf(m.get), space, app, visit(), who)
+  let req = visit('/hello', { authorization: 'Bearer ygrant_visitor' })
+  let out = await ran(envOf(m.get), space, app, req, who)
   assertEquals(await out!.text(), 'from the worker')
   let sent = m.seen()
   assertEquals(sent.headers.get('x-yak-person'), 'p1')
@@ -170,6 +171,7 @@ test('the worker is handed who is looking, and never the cookie', async () => {
   // The session cookie is a credential for every space this person belongs
   // to; the app is owed this visit and no more. Its own cookies survive.
   assertEquals(sent.headers.get('cookie'), 'theme=dark')
+  assertEquals(sent.headers.get('authorization'), null)
 })
 
 test('a custom-domain worker receives its public URL and mount', async () => {
