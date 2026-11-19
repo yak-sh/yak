@@ -9,6 +9,9 @@
 // (unlike identity.ts), so this contract is unit-testable on its own; the
 // handler there adds only the cookie and the redirect.
 import type { Host } from '@yaks/platform/host'
+import type { Bundle } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
+import { derivedEid } from '@yaks/graph/identity'
 import { opened, seal } from './lib/token.ts'
 import { foreign, HANDOFF } from '@yaks/platform/routes'
 
@@ -110,9 +113,9 @@ export let safeNext = (next: string) =>
 
 // The person a valid token names, or null. Valid means: written under this
 // secret, unexpired, minted for this host, and not already spent. `spend`
-// records the jti and answers false if it was already spent (single use); it is
-// injected so the store is the caller's (KV) and the test's (a map). It runs
-// last, so a token that fails any other check is never consumed.
+// records the jti and answers false if it was already spent (single use); it
+// is injected so the store is the caller's (the meta store) and the test's.
+// It runs last, so a token that fails any other check is never consumed.
 export let opener = async (
   t: string,
   secret: string,
@@ -132,19 +135,26 @@ export let opener = async (
     : null
 }
 
-// The single-use ledger over a KV: a spent jti is written with a life just past
-// the token's own, so a replay inside the window finds it already there. KV's
-// TTL sweeps it; nothing here has to. Absent a KV (a probe with none wired),
-// the host/person binding and the minute-long life still stand between a leaked
-// URL and a session.
-export let spender = (kv: unknown) => async (jti: string): Promise<boolean> => {
-  let store = kv as {
-    get(k: string): Promise<string | null>
-    put(k: string, v: string, o?: { expirationTtl?: number }): Promise<void>
-  } | undefined
-  if (!store?.get) return true
-  let k = `handoff:${jti}`
-  if (await store.get(k)) return false
-  await store.put(k, '1', { expirationTtl: HANDOFF_LIFE + 5 })
-  return true
-}
+// The single-use ledger: a spent jti is a `handoff_spent` row in the meta
+// store at an eid derived from it, written only where nothing ever stood
+// (`$was` on the identity, which a grave fails too). The check and the write
+// are one transaction in the store's Durable Object, so two spends at once, or
+// from two locations, cannot both find it absent. `apply` is the store's
+// kernel write (identity.ts wires meta.ts); a spend that loses answers false.
+export let spender =
+  (apply: (bundles: Bundle[]) => Promise<unknown>, now = Date.now) =>
+  async (jti: string): Promise<boolean> => {
+    try {
+      await apply([{
+        entity: { eid: derivedEid(`handoff|${jti}`) },
+        handoff_spent: {
+          expires: new Date(now() + HANDOFF_LIFE * 1000).toISOString(),
+        },
+        $was: { entity: { eid: null } },
+      }])
+      return true
+    } catch (e) {
+      if (e instanceof Stale) return false
+      throw e
+    }
+  }

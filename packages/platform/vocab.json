@@ -182,6 +182,20 @@
       },
       "description": "an agent writing for a person (a connector client, the CLI), named for itself in doc.title: the actor its deploys and the apps it makes are stamped with, never the person"
     },
+    "handoff_spent": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "properties": {
+        "expires": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when the token it was spent from died"
+        }
+      },
+      "description": "a custom-domain sign-in handoff token, spent: its eid is derived from the token's jti and written only where nothing ever stood, so a token opens one session at most (workers/yak/handoff.ts `spender`)"
+    },
     "hostname": {
       "component": true,
       "type": "object",
@@ -1208,6 +1222,9 @@
       "with": {
         "doc": true
       }
+    },
+    "handoff_spent": {
+      "description": "a custom-domain sign-in handoff token, spent once"
     },
     "hostname": {
       "description": "a domain somebody owns, and the one place it serves",

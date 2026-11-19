@@ -337,7 +337,18 @@ let customHandoff = async (k: Kernel, person: string, full: string) => {
   equal(allowed.status, 303)
   let to = new URL(ok(allowed.headers.get('location')))
   await allowed.body?.cancel()
-  let hand = await k.at(host, to.pathname + to.search, { redirect: 'manual' })
+  // The token spent twice at once opens one session: the other is sent to
+  // sign in again.
+  let spends = await Promise.all(
+    [0, 1].map(() =>
+      k.at(host, to.pathname + to.search, { redirect: 'manual' })
+    ),
+  )
+  let hand = ok(spends.find((r) => r.headers.get('set-cookie')))
+  let lost = ok(spends.find((r) => r != hand))
+  equal(lost.headers.get('set-cookie'), null)
+  ok(ok(lost.headers.get('location')).includes('/login?return='))
+  await lost.body?.cancel()
   equal(hand.status, 303)
   equal(hand.headers.get('location'), next)
   let set = ok(hand.headers.get('set-cookie'))

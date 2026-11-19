@@ -722,7 +722,7 @@ export let handoff = async (req: Request, env: Env): Promise<Response> => {
     url.searchParams.get('t') ?? '',
     secret(env),
     hostOf(req, env),
-    spender(env.OAUTH_KV),
+    spender((bundles) => meta(env).apply(bundles, KERNEL)),
   )
   let at = await dirOf(env).serves(hostOf(req, env))
   if (!hand || !at || hand.space && hand.space != at.space.eid) {

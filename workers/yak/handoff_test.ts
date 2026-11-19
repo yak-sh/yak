@@ -5,7 +5,7 @@
 // it can be misused, and `handoffTo` mints only for a directory-verified host.
 // These functions carry no Cloudflare import, so this suite runs in plain Deno.
 import { test } from '@yaks/testing'
-import { assertEquals, assertMatch } from '@std/assert'
+import { assertEquals, assertMatch, assertRejects } from '@std/assert'
 import {
   consented,
   consenting,
@@ -16,16 +16,22 @@ import {
   spender,
 } from './handoff.ts'
 import { opened, seal } from './lib/token.ts'
+import type { Bundle } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
 
 let SECRET = 'handoff-test-secret'
 let sec = () => Math.floor(Date.now() / 1000)
 
-// A Map-backed KV standing in for OAUTH_KV: the single-use ledger.
-let kv = () => {
-  let m = new Map<string, string>()
-  return {
-    get: (k: string) => Promise.resolve(m.get(k) ?? null),
-    put: (k: string, v: string) => (m.set(k, v), Promise.resolve()),
+// The meta store's create-only write, as `spender` asks it: an eid that
+// already stands is refused as stale, the way the graph's guard refuses it.
+let store = () => {
+  let spent = new Set<string>()
+  return (bundles: Bundle[]) => {
+    for (let { entity: { eid } } of bundles) {
+      if (spent.has(eid)) throw new Stale(eid, 'entity', 'eid', eid)
+      spent.add(eid)
+    }
+    return Promise.resolve()
   }
 }
 
@@ -45,7 +51,7 @@ let dir = {
 }
 
 test('opener: a valid token names its person and is spent', async () => {
-  let spend = spender(kv())
+  let spend = spender(store())
   let t = await tokenFor({ person: 'u-1', host: 'good.com' })
   assertEquals(await opener(t, SECRET, 'good.com', spend), {
     person: 'u-1',
@@ -54,7 +60,7 @@ test('opener: a valid token names its person and is spent', async () => {
 })
 
 test('opener: expired, tampered, wrong-host, wrong-secret refused', async () => {
-  let spend = spender(kv())
+  let spend = spender(store())
   // expired
   assertEquals(
     await opener(
@@ -86,13 +92,18 @@ test('opener: expired, tampered, wrong-host, wrong-secret refused', async () => 
 })
 
 test('opener: a token is single-use — a replay is refused', async () => {
-  let spend = spender(kv()) // one ledger across both calls
+  let spend = spender(store()) // one store across both calls
   let t = await tokenFor({ person: 'u-1', host: 'good.com' })
   assertEquals(await opener(t, SECRET, 'good.com', spend), {
     person: 'u-1',
     space: null,
   }) // spent
   assertEquals(await opener(t, SECRET, 'good.com', spend), null) // refused
+})
+
+test('spender: a store that cannot answer is a failure, not a spend', async () => {
+  let down = spender(() => Promise.reject(new Error('store is down')))
+  await assertRejects(() => down('j'), Error, 'store is down')
 })
 
 test('safeNext: only a same-host relative path survives', () => {
@@ -129,7 +140,12 @@ test('handoffTo: mints only for a directory-verified custom host', async () => {
   assertEquals(hand?.host, 'good.com')
   assertEquals(hand?.space, 'space-1')
   assertEquals(
-    await opener(u.searchParams.get('t')!, SECRET, 'good.com', spender(kv())),
+    await opener(
+      u.searchParams.get('t')!,
+      SECRET,
+      'good.com',
+      spender(store()),
+    ),
     {
       person: 'u-1',
       space: 'space-1',
