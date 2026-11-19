@@ -281,6 +281,30 @@ test('a deferred tool is listed by tool_load and sent once a call loads it', asy
   )
 })
 
+test('a tool_load naming its tools in one string of JSON loads them as a list would', async () => {
+  let g = world()
+  let shout = { ...echo, name: 'shout', deferred: true }
+  let { model, asked } = scripted([{
+    id: 'r1',
+    model: 'fake-1',
+    items: [{
+      kind: 'call',
+      id: 'c1',
+      name: 'tool_load',
+      args: JSON.stringify({ names: '["shout"]' }),
+    }],
+  }, says('r2', 'done')])
+  assertEquals(
+    await rest(g, ids.s, { model, tools: [echo, shout], mint }),
+    'settled',
+  )
+  assertEquals(asked[1].tools?.map((t) => t.name), [
+    'echo',
+    'shout',
+    'tool_load',
+  ])
+})
+
 // The declaration is available before any process has registered its tool row.
 const freshTools = world()
 const freshCalls: unknown[] = []

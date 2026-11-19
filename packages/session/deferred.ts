@@ -9,6 +9,7 @@ import type { Bundle } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import { CallError } from '@yaks/tools/errors'
 import { toolEid } from '@yaks/tools/result'
+import { validateToolInput } from '@yaks/vocab/tools'
 import { CALL } from './native.ts'
 import type { Tool } from './react.ts'
 
@@ -38,6 +39,31 @@ export let named = (name: string, known: Set<string>): string | undefined => {
   }
 }
 
+// What `tool_load` takes: the names of the tools to load.
+let parameters = {
+  type: 'object',
+  properties: {
+    names: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'The tools to load.',
+    },
+  },
+  required: ['names'],
+}
+
+// The names a `tool_load` call gives, read as its run is handed them
+// (@yaks/vocab/tools `validateToolInput`), so a list a model wrote as a
+// string of JSON loads what it names; arguments its run refuses load nothing.
+let namesOf = (call: Bundle): string[] => {
+  try {
+    return validateToolInput({ inputSchema: parameters }, argsOf(call))
+      .names as string[]
+  } catch {
+    return []
+  }
+}
+
 /**
  * The tools a runner offers, with `tool_load` beside them when any is
  * deferred: its description lists each deferred one, and its call names
@@ -60,17 +86,7 @@ export let loading = (tools: Tool[]): Tool[] => {
     description:
       'Load tools you are not sent yet, by name, so you can call them: their schemas are sent with your next turn. Load every one a task needs in one call. These are the tools you can load:\n' +
       later.map(line).join('\n'),
-    parameters: {
-      type: 'object',
-      properties: {
-        names: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'The tools to load.',
-        },
-      },
-      required: ['names'],
-    },
+    parameters,
     readOnly: true,
     run: (args) => {
       let names = (args.names ?? []) as string[]
@@ -108,6 +124,10 @@ export let loading = (tools: Tool[]): Tool[] => {
  * let tools = [tool('search'), tool('buy', true), tool('sell', true)]
  * schemas(tools, [load]).map((t) => t.name) // ['search', 'buy']
  * schemas(tools, [sold]).map((t) => t.name) // ['search', 'sell']
+ * let quoted = { ...load, call: { ...load.call, args: { names: '["buy"]' } } }
+ * schemas(tools, [quoted]).map((t) => t.name) // ['search', 'buy']
+ * let wrong = { ...load, call: { ...load.call, args: { names: 7 } } }
+ * schemas(tools, [wrong]).map((t) => t.name) // ['search']
  * ```
  */
 export let schemas = (tools: Tool[], entries: Bundle[]): Tool[] => {
@@ -118,8 +138,7 @@ export let schemas = (tools: Tool[], entries: Bundle[]): Tool[] => {
     entries.flatMap((b) => {
       let to = (b[CALL] as { to?: unknown } | undefined)?.to
       if (to != load) return to ? [to] : []
-      return ((argsOf(b).names ?? []) as string[])
-        .map((n) => toolEid(named(n, known) ?? n))
+      return namesOf(b).map((n) => toolEid(named(n, known) ?? n))
     }),
   )
   return tools.filter((t) => !t.deferred || loaded.has(toolEid(t.name)))
