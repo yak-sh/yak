@@ -143,6 +143,10 @@ export type Opts = {
    * place a run touches the machine's processes, so a host that starts them
    * another way, or a test that starts none, lends its own */
   launch?: typeof launch
+  /** whether the machine a run starts on has room for it now (@yaks/machine
+   * `admitter`); a start it refuses waits in the effect pool for room
+   * (default the room of the computer this process runs on) */
+  admit?: () => Promise<boolean>
   /** mint an entry's eid (default a uuid) */
   mint?: () => string
   /** where a failure that has nobody to throw at goes: the host's tracker

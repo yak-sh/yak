@@ -589,3 +589,39 @@ test('a dependency that finishes while the run goes is told as it ends', async (
   assertEquals(p.started[0].slice(0, 2), ['agent', 'S1'])
   assert(p.started[0][2].includes('has finished'), p.started[0][2])
 })
+
+// A start the machine has no room for waits in the pool and launches nothing;
+// asked again with room, it launches.
+test('a start waits for its machine to have room', async () => {
+  let { g } = tracked()
+  let where = dir()
+  try {
+    await g.apply(asking('S1', 'E1', 'do the thing'))
+    let room = false, waits: number[] = []
+    let start = spawning({
+      adapters: { fake },
+      launch: launched,
+      cwd: where,
+      dir: where,
+      admit: () => Promise.resolve(room),
+    })({ graph: g }).spawn_start
+    let ask = () =>
+      start(
+        { entity: { eid: 'E1' } } as never,
+        undefined as never,
+        undefined as never,
+        {
+          last: () => false,
+          progressed: () => Promise.resolve(),
+          defer: (ms) => (waits.push(ms), Promise.resolve()),
+        },
+      )
+    await ask()
+    assertEquals([proc((await g.get(['S1']))[0]), waits], [undefined, [15_000]])
+    room = true
+    await ask()
+    assertEquals(proc((await g.get(['S1']))[0])?.pid, 1)
+  } finally {
+    Deno.removeSync(where, { recursive: true })
+  }
+})

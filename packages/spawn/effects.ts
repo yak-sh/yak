@@ -45,6 +45,11 @@ import {
   start,
 } from './run.ts'
 import { complete } from './completion.ts'
+import { here } from '@yaks/machine/room'
+
+/** How long a start the machine has no room for waits before it asks again
+ * (ms). */
+export let WAIT = 15_000
 
 /** What these handlers are given: the open graph, where a failure is told
  * (@yaks/cli `Host.report`), and where a release the host awaits before its
@@ -120,6 +125,7 @@ export let spawning =
       report,
       detach: detaching(o, host),
     }
+    let admit = o.admit ?? here()
     return {
       spawn_complete: async (e) => {
         let entry = await one(host.graph, e.entity.eid)
@@ -131,11 +137,14 @@ export let spawning =
       // that run ends (./run.ts); one whose run is over carries on its thread;
       // one whose start a process that is over cut off starts again, so this
       // effect run again after its worker died finishes what it began.
-      spawn_start: async (e) => {
+      // A start the machine has no room for waits in the pool, pending, and
+      // asks again (T-1463): the fleet slows down rather than falling over.
+      spawn_start: async (e, _tx, _write, attempt) => {
         let entry = await one(host.graph, e.entity.eid)
         if (!requestOf(entry)) return
         let session = String(comp(entry, 'entry')?.session ?? '')
         if (!session || !await one(host.graph, session)) return
+        if (attempt?.defer && !await admit()) return await attempt.defer(WAIT)
         await start(host.graph, session, opts)
       },
       // Kill. A `stop` on an entry only marks the end of a transcript; only

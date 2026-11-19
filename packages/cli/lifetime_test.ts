@@ -2,7 +2,7 @@
 // to serve.
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
-import { lifetime } from './lifetime.ts'
+import { lifetime, superseded } from './lifetime.ts'
 
 let dir = await Deno.makeTempDir({ prefix: 'yak-lifetime-' })
 let results: boolean[] = []
@@ -35,4 +35,29 @@ let tethered = async (end: (w: WritableStream<Uint8Array>) => unknown) => {
 test('worker lifetime ends when its starter closes or drops the tether', async () => {
   assertEquals(await tethered((w) => w.close()), [true, false])
   assertEquals(await tethered((w) => w.abort()), [true, false])
+})
+
+// A worker leaves once a newer one of its role is ready, and only then.
+test('a worker ends once a newer instance of its role is ready', async () => {
+  let dir = await Deno.makeTempDir({ prefix: 'yak-superseded-' })
+  let file = (role: string, n: number, at: number) => {
+    let path = `${dir}/${role}-0000000${n}-0000-4000-8000-000000000000.ready`
+    Deno.writeTextFileSync(path, '1\n')
+    Deno.utimeSync(path, at, at)
+    return path
+  }
+  try {
+    let mine = `${dir}/yak-work-00000001-0000-4000-8000-000000000000.ready`
+    let gone = superseded(mine)
+    let seen = [await gone()]
+    file('yak-work', 1, 100)
+    file('yak-work', 2, 50)
+    file('yak-work-web', 3, 200)
+    seen.push(await gone())
+    file('yak-work', 4, 150)
+    seen.push(await gone())
+    assertEquals(seen, [false, false, true])
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
 })

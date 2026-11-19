@@ -56,6 +56,11 @@ applied in one transaction.
 ]
 ```
 
+A run starts only while its machine has room for it (@yaks/machine/room
+`admitter`, `Opts.admit`): without room, `spawn_start` defers its run in the
+effect pool, pending and reported nowhere, and asks again every 15 seconds. The
+fleet slows down instead of taking the machine down.
+
 The `@yaks/spawn/effects` handlers run after the batch commits. They read the
 CLI the provider speaks (`provider.api`, else its `name`), select the matching
 `claude` or `codex` adapter, validate the requested effort against the model,

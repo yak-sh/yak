@@ -10,7 +10,8 @@
     "./tools": "./tools.ts",
     "./targets": "./targets.ts",
     "./workspaces": "./workspaces.ts",
-    "./graph": "./graph.ts"
+    "./graph": "./graph.ts",
+    "./room": "./room.ts"
   },
   "license": "Apache-2.0",
   "description": "Computers, explicit connection transports and durable file-and-command workspaces, separate from sandbox provisioning.",

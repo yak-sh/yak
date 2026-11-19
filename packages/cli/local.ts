@@ -278,6 +278,7 @@ export let work = async (
   let lives = await lifetime(
     dbOf(config),
     tethered ? system.stdin.readable : undefined,
+    ready,
   )
   let said = await declarations(config)
   let duties = dutyRoles(

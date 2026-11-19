@@ -106,6 +106,18 @@ let workspace = executionWorkspace(g, {
 equal(await workspace.receipt!(mint()), undefined)
 ```
 
+## Room
+
+`@yaks/machine/room` says whether a machine has room for one more run.
+`room(transport)` reads `/proc/meminfo` and `/proc/pressure/memory` in one
+control script, the same way on every computer, and `roomOf` turns that into the
+bytes available and the memory pressure (PSI `some avg10`).
+`admitter(read, need)` answers, one call at a time, whether a run may start now:
+while the pressure is under `need.pressure` and the memory available, less what
+runs admitted in the last `need.settle` ms were reserved, covers `need.memory`.
+`here()` is the admitter of the computer the process runs on. There is no count:
+light runs fit many to a machine, heavy ones few.
+
 ## Exports
 
 | Export                     | What it owns                                     |
@@ -117,6 +129,7 @@ equal(await workspace.receipt!(mint()), undefined)
 | `@yaks/machine/workspaces` | Recorded placement to configured connection      |
 | `@yaks/machine/tools`      | File-and-command tools over workspaces           |
 | `@yaks/machine/graph`      | Workspace placement and home validation          |
+| `@yaks/machine/room`       | A machine's free memory and pressure, admission  |
 | `@yaks/machine/vocab`      | Computer and workspace vocabulary                |
 
 ## Workspace records

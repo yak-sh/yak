@@ -4475,6 +4475,9 @@ importers:
       '@yaks/id':
         specifier: 0.2.23
         version: link:../id
+      '@yaks/machine':
+        specifier: 0.2.24
+        version: link:../machine
       '@yaks/persona':
         specifier: 0.2.23
         version: link:../persona
@@ -4503,9 +4506,6 @@ importers:
       '@yaks/kernel':
         specifier: 0.2.28
         version: link:../kernel
-      '@yaks/machine':
-        specifier: 0.2.24
-        version: link:../machine
       '@yaks/mail':
         specifier: 0.2.23
         version: link:../mail

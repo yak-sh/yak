@@ -70,8 +70,11 @@ let given = flag('keys').at(-1)
 let rest = flag('rest').at(-1)
 let part = flag('part').at(-1)
 // The resident memory past which a runtime lets go of what it kept across
-// files and, with `--rest`, hands on its files.
-let FULL = Math.min(2 * 1024 ** 3, Number(flag('full').at(-1) ?? Infinity))
+// files and, with `--rest`, hands on its files. At most 1 GiB: thirteen runs at
+// once, each judging itself by the box's free memory as it started, took 2 GB a
+// runtime and the box down (T-1463). Forty workers/yak files peak at 0.9 GB
+// under it in 85 s; at 512 MiB they took 159 s.
+let FULL = Math.min(1024 ** 3, Number(flag('full').at(-1) ?? Infinity))
 // Most of a runtime past FULL is what it no longer needs or holds: what files
 // kept for those after them (./suite.ts `kept`, a kernel and its stores, say),
 // V8's heap grown while memory was free, a database's pages, freed only once
