@@ -15,9 +15,12 @@ export type Held = { path: string; files: Set<string> }
 /// best([{ path: 'a', files: new Set(['x']) }], ['y']) -> undefined
 /** Of the build infos held (newest first), the one naming most of `files`,
  * or none naming any. */
-export let best = (held: Held[], files: string[]): Held | undefined => {
-  let score = (h: Held) => files.filter((f) => h.files.has(f)).length
-  let top = held.reduce<Held | undefined>(
+export let best = <H extends Held>(
+  held: H[],
+  files: string[],
+): H | undefined => {
+  let score = (h: H) => files.filter((f) => h.files.has(f)).length
+  let top = held.reduce<H | undefined>(
     (a, h) => !a || score(h) > score(a) ? h : a,
     undefined,
   )
@@ -53,13 +56,21 @@ let absent = (e: unknown) => {
   if (!(e instanceof Deno.errors.NotFound)) throw e
 }
 
-/** The files a build info names, or none when it is not one. */
-let named = async (path: string): Promise<Set<string>> => {
+/** A build info as read once, and the files it names: none when it is not
+ * one, or is gone. Read at once, so that compiles started together in one
+ * process each hold the pool as it stood before any of them published. */
+let named = (path: string): Held & { text?: string } => {
+  let text: string | undefined
   try {
-    let { fileNames } = JSON.parse(await Deno.readTextFile(path))
-    return new Set(Array.isArray(fileNames) ? fileNames : [])
+    text = Deno.readTextFileSync(path)
+    let { fileNames } = JSON.parse(text)
+    return {
+      path,
+      text,
+      files: new Set(Array.isArray(fileNames) ? fileNames : []),
+    }
   } catch {
-    return new Set()
+    return { path, text, files: new Set() }
   }
 }
 
@@ -106,16 +117,16 @@ export let incremental = async <T>(
       }
     })
     .sort((a, b) => b.at - a.at)
-  let held = await Promise.all(
-    entries.map(async ({ path }) => ({ path, files: await named(path) })),
-  )
+  let held = entries.map(({ path }) => named(path))
   let mine = `${dir}/build.tsbuildinfo`
-  let from = best([{ path: mine, files: await named(mine) }, ...held], files)
+  let from = best([named(mine), ...held], files)
   let own = `${dir}/build.${Deno.pid}.${crypto.randomUUID()}.tsbuildinfo`
   try {
-    if (from) await Deno.copyFile(from.path, own).catch(absent)
+    // The bytes chosen, not the file as it is now: a compile that finished
+    // meanwhile may have published over it.
+    if (from?.text !== undefined) await Deno.writeTextFile(own, from.text)
     let result = await compile(own)
-    let next = await named(own)
+    let { files: next } = named(own)
     let near = best(held, [...next])
     let where = placed(near, next)
     try {
