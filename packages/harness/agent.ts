@@ -35,7 +35,14 @@ import {
 import { identityEid } from '@yaks/graph/identity'
 import type { Effects } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
-import { MODEL, type Model, ModelError, PROVIDER, TOOL } from '@yaks/model'
+import {
+  labelOf,
+  MODEL,
+  type Model,
+  ModelError,
+  PROVIDER,
+  TOOL,
+} from '@yaks/model'
 import { resultTool } from './results.ts'
 import { valueTools } from '@yaks/blob'
 import { toolEid } from '@yaks/tools/result'
@@ -251,8 +258,10 @@ export type Agent<H extends Host = Host> = {
   tools: Tool[]
   /** the model entity every new session is started under */
   model: Eid
-  /** what to call a model or tool entity, for the views */
+  /** what to call a model or tool entity, for the views: every model by its
+   * label once `naming` settles */
   names: Record<string, string>
+  naming: Promise<void>
   /** start a transcript with one instruction; the runner takes it from there.
    * `by` is who wrote the instruction, where the caller knows. */
   start: (
@@ -636,6 +645,20 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     ...using.model ? { [using.model]: name } : {},
     ...Object.fromEntries(tools.map((t) => [toolEid(t.name), t.name])),
   }
+  // Every model this graph holds, by its label (@yaks/model `labelOf`): an
+  // ask may reach any of them, not only the one lent. A test's stand-in
+  // models have none, so one without is not reported here.
+  let naming = Promise.resolve(h.g.read('.model&.fields=model')).then(
+    (rows) => {
+      for (let b of rows) {
+        let model = b[MODEL] as Comp | undefined
+        if (model?.name) {
+          names[b.entity.eid] = labelOf(model)
+        }
+      }
+    },
+    (error) => report(error, { phase: 'model-label' }),
+  )
   // Lifecycle bookkeeping only; all application state remains in the graph.
   let refusal: Error | undefined
   let shutdown: Promise<void> | undefined
@@ -678,6 +701,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     h,
     tools,
     names,
+    naming,
     get model() {
       return String(using.model ?? '')
     },

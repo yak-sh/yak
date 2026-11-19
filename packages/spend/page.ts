@@ -11,6 +11,7 @@
  */
 import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
 import { and, eq, ge, lt, parse, stringify } from '@yaks/query'
+import { labelOf } from '@yaks/model'
 import { partQuery } from '@yaks/session/parts'
 import { mention, type Props, useNamed, type View } from '@yaks/inspect'
 import { Head, Loading, Meter, Section, Table } from '@yaks/ui'
@@ -404,7 +405,7 @@ export let Page = ({ io, got }: Props): JSX.Element => {
   let names = new Map([
     ...(got.models?.rows ?? []).map((b): [string, string] => [
       b.entity.eid,
-      String((b.model as { name?: unknown }).name ?? ''),
+      labelOf(b.model as { name?: unknown; label?: unknown }),
     ]),
     ...providers,
     ...accountNames(got.accounts?.rows ?? [], providers),

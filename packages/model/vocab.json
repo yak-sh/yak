@@ -132,7 +132,8 @@
           ]
         },
         "label": {
-          "type": "string"
+          "type": "string",
+          "description": "what a person sees the model called (\"Sonnet 5.5\", \"GPT-6.2 Sol\"), read by @yaks/model `labelOf`; its name is an id, for tools and logs"
         },
         "modalities": {
           "type": "array",

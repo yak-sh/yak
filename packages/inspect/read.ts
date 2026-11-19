@@ -229,8 +229,9 @@ export let cut = (text: string, n: number): string =>
   text.length > n ? text.slice(0, n - 1).trimEnd() + '…' : text
 
 /**
- * What an entity is called, in words: its title; else the `name` its kind
- * gives it (a topic's, a component's); else its id where it is numbered
+ * What an entity is called, in words: its title; else the `label` its kind
+ * gives it (a model's "GPT-6.2 Sol"), or the `name` (a topic's, a
+ * component's); else its id where it is numbered
  * (`S-12`); else the first line of what it says (a transcript entry); else
  * its kind and its handle (`process #1320a8ee61`). `id` is the id a person
  * reads, and `kind` the kind it shows as.
@@ -240,13 +241,14 @@ export let cut = (text: string, n: number): string =>
  * let e = (b: object) => ({ entity: { eid: 'e1' }, ...b })
  * called(e({ doc: { title: 'Fix it' } }), 'T-9', 'task') // 'Fix it'
  * called(e({ topic: { name: 'naming' } }), '#e1', 'topic') // 'naming'
+ * called(e({ model: { name: 'gpt-6.2-sol', label: 'GPT-6.2 Sol' } }), 'O-50', 'model') // 'GPT-6.2 Sol'
  * called(e({ content: { body: '\nuse grams' } }), '#e1', 'entry') // 'use grams'
  * called(e({ process: { pid: 1 } }), '#e1', 'process') // 'process #e1'
  * called(e({ file: { path: 'a/b/c.jsonl' } }), '#e1', 'file') // 'c.jsonl'
  * ```
  */
 export let called = (b: Bundle, id: string, kind: string): string =>
-  str(b, 'doc', 'title') || str(b, kind, 'name') ||
+  str(b, 'doc', 'title') || str(b, kind, 'label') || str(b, kind, 'name') ||
   str(b, kind, 'path').split('/').at(-1) ||
   (b.entity.num != null ? id : '') || line(bodyOf(b), 80) ||
   (kind && kind != 'entity' ? `${kind} ${id}` : id)

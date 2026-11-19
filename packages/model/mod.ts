@@ -61,8 +61,8 @@ import {
   weigh,
 } from './vocab.ts'
 import type { MediaReceipt } from './media.ts'
-import { listPrice } from './prices.ts'
-export { listPrice } from './prices.ts'
+import { listLabel, listPrice } from './prices.ts'
+export { listLabel, listPrice } from './prices.ts'
 export { deferredModel } from './deferred.ts'
 export { type ModelResult, type ModelResults, modelResults } from './results.ts'
 export { message } from './message.ts'
@@ -421,6 +421,41 @@ export class ModelError extends Error {
   }
 }
 
+/**
+ * What a person sees a model called: its row's `label` ("Sonnet 5.5"), else
+ * the label the list gives its name ({@link listLabel}), as a row that has
+ * none takes it when next asked; never its id. A model neither labels, or one
+ * with no row, is called by its name or its id, and `missing` hears an error
+ * to report, so the row gets one.
+ *
+ * ```ts
+ * import { labelOf } from '@yaks/model'
+ * import { equal } from '@yaks/testing'
+ *
+ * let heard: string[] = []
+ * let missing = (e: Error) => heard.push(e.message)
+ * equal(labelOf({ name: 'gpt-6.2-sol', label: 'Sol' }, missing), 'Sol')
+ * equal(labelOf({ name: 'claude-sonnet-5-5' }, missing), 'Sonnet 5.5')
+ * equal(labelOf({ name: 'glm-5.3' }, missing), 'glm-5.3')
+ * equal(labelOf(undefined, missing, 'O-9'), 'O-9')
+ * equal(heard, ['model glm-5.3 has no label', 'model O-9 has no row'])
+ * ```
+ */
+export let labelOf = (
+  model: { name?: unknown; label?: unknown } | null | undefined,
+  missing?: (error: Error) => void,
+  id?: string,
+): string => {
+  if (model?.label) return String(model.label)
+  let name = String(model?.name ?? id ?? '')
+  let listed = model?.name ? listLabel(name) : undefined
+  if (listed) return listed
+  if (name) {
+    missing?.(new Error(`model ${name} has no ${model ? 'label' : 'row'}`))
+  }
+  return name
+}
+
 /** What a provider says about one of its models, in graph vocabulary. */
 export type Listed = {
   name: string
@@ -434,9 +469,10 @@ export type Listed = {
 /** A requested name exists before dispatch, but is not offered until answered.
  * A model with no price, met for the first time or held since before the
  * table knew it, is weighed at its list price ({@link listPrice}) unless the
- * batch prices it; a price on a stored row stands. A provider a `using` names
- * that no row holds is a row of that name from then on: the host lent it is
- * the one that answers it. */
+ * batch prices it; a price on a stored row stands. A model with no label
+ * takes its list label ({@link listLabel}) the same way. A provider a `using`
+ * names that no row holds is a row of that name from then on: the host lent it
+ * is the one that answers it. */
 export let requesting: Hook = (bundles, tx) => {
   let names = new Map<string, string>()
   let providers = new Map<string, string>()
@@ -470,10 +506,11 @@ export let requesting: Hook = (bundles, tx) => {
     }
   }
   // by name: a batch's new row is still an alias here, minted after
-  let priced = new Set(
-    out.filter((b) => b.price).map((b) =>
-      identityEid(MODEL, [String((b.model as Comp | undefined)?.name)])
-    ),
+  let rowOf = (b: Bundle) =>
+    identityEid(MODEL, [String((b.model as Comp | undefined)?.name)])
+  let priced = new Set(out.filter((b) => b.price).map(rowOf))
+  let labeled = new Set(
+    out.filter((b) => (b.model as Comp | undefined)?.label).map(rowOf),
   )
   return after(
     tx.get([...names.keys(), ...providers.keys()], [
@@ -495,12 +532,20 @@ export let requesting: Hook = (bundles, tx) => {
         ...[...names].flatMap(([eid, name]): Bundle[] => {
           let row = held.get(eid)
           let price = !priced.has(eid) && !row?.price && listPrice(name)
+          let label = !labeled.has(eid) &&
+            !(row?.[MODEL] as Comp | undefined)?.label && listLabel(name)
           if (row?.model || written.has(eid)) {
-            return price ? [{ entity: { eid }, price }] : []
+            return price || label
+              ? [{
+                entity: { eid },
+                ...price ? { price } : {},
+                ...label ? { [MODEL]: { name, label } } : {},
+              }]
+              : []
           }
           return [{
             entity: { eid },
-            model: { name, offered: false },
+            model: { name, offered: false, ...label ? { label } : {} },
             pending: {},
             ...price ? { price } : {},
           }]

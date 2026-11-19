@@ -19,7 +19,12 @@ await box.apply([
   },
   {
     entity: { eid: eid('claude-opus-5-5') },
-    model: { name: 'claude-opus-5-5', context: 1000000, offered: true },
+    model: {
+      name: 'claude-opus-5-5',
+      label: 'Opus 5.5',
+      context: 1000000,
+      offered: true,
+    },
     price: { input: 5, output: 25 },
   },
   { entity: { eid: eid('unpriced') }, model: { name: 'unpriced' } },
@@ -38,18 +43,19 @@ let choose = async (named: string, provider?: string) => {
 test('a model the box prices is named whole, on the provider given', async () => {
   assertEquals(
     await choose('claude-opus-5-5', 'anthropic'),
-    'claude-opus-5-5 on anthropic, $5 in, $25 out per million tokens, a window of 1,000,000',
+    'Opus 5.5 (claude-opus-5-5) on anthropic, $5 in, $25 out per million tokens, a window of 1,000,000',
   )
 })
 
-test('a model with no price on the box takes its list price there first, on its vendor', async () => {
+test('a model with no price or label on the box takes its list ones there first, on its vendor', async () => {
   let { input, output } = listPrice('gpt-6.1-sol')!
   assertEquals(
     await choose('gpt-6.1-sol'),
-    `gpt-6.1-sol on openai, $${input} in, $${output} out per million tokens, a window of 500,000`,
+    `GPT-6.1 Sol (gpt-6.1-sol) on openai, $${input} in, $${output} out per million tokens, a window of 500,000`,
   )
   let [row] = await box.get([eid('gpt-6.1-sol')])
   assertEquals(row.price, listPrice('gpt-6.1-sol'))
+  assertEquals((row.model as { label?: string }).label, 'GPT-6.1 Sol')
 })
 
 test('a model the box does not hold, or cannot price, is refused', async () => {

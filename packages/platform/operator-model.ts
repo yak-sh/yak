@@ -75,7 +75,7 @@ export let namedBy = async (
 }
 
 /** What a model's own row in `rows` says of it, by its name, as a provider
- * lists a model (`Listed`): its price, window and longest reply. */
+ * lists a model (`Listed`): its label, price, window and longest reply. */
 export let listingOf = async (
   rows: Rows,
   name: string,
@@ -84,9 +84,14 @@ export let listingOf = async (
   let model = comp(row, MODEL)
   if (!model) return undefined
   let price = comp(row, 'price') as Price | undefined
-  let { context, output } = model as { context?: number; output?: number }
+  let { label, context, output } = model as {
+    label?: string
+    context?: number
+    output?: number
+  }
   return {
     name,
+    ...label ? { label } : {},
     ...context ? { context } : {},
     ...output ? { output } : {},
     ...price ? { price } : {},

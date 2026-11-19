@@ -142,6 +142,7 @@ let serve = (port: MessagePort) => {
       // command run beside it. The feed stops when the host closes.
       let fed = subs
       served.feed?.(fed.hear)
+      await a.naming
       return { names: a.names }
     }
     if (!a || !subs) throw new Error('Worker not initialized')

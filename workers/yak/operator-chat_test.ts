@@ -780,7 +780,7 @@ test('a helper’s page is zoomed in: held under the bar, the way back out, its 
   // Where it runs and its model, in one line under its standing.
   assertEquals(
     band.querySelector('[data-runs]')?.textContent,
-    'yaks.app · claude-sonnet-5-5',
+    'yaks.app · Sonnet 5.5',
   )
   // Its row says how it stands, so the aside does not say it again.
   let aside = document.querySelector('[data-aside]')!

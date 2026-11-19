@@ -17,9 +17,11 @@
 // refused.
 
 import type { Authenticate, Route } from '@yaks/api'
+import { fault } from '@yaks/api/refuse'
 import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
 import { mint } from '@yaks/graph/identity'
 import { human } from '@yaks/id'
+import { labelOf } from '@yaks/model'
 import { line } from '@yaks/query'
 import type { Runner } from '@yaks/tools'
 import { answerOf, faultOf, toolEid } from '@yaks/tools/result'
@@ -181,14 +183,18 @@ let spawn = async (
   }
 }
 
-// The model a session's input names, by its label or name; none where it
-// runs its provider's own.
+// The model a session's input names, by its label (@yaks/model `labelOf`);
+// none where it runs its provider's own.
 let modelOf = async (graph: Graph, session: string) => {
   let [first] = await graph.read(
     line`.entry.session=${session}&.using&.fields=using`,
   )
   let eid = (first?.using as Comp | undefined)?.model
-  let [row] = eid ? await graph.get([String(eid)], ['model']) : []
-  let m = row?.model as Comp | undefined
-  return String(m?.label ?? m?.name ?? '') || undefined
+  if (!eid) return undefined
+  let [row] = await graph.get([String(eid)], ['model'])
+  return labelOf(
+    row?.model as Comp | undefined,
+    (error) => fault(error, 'spawn', { session }),
+    String(eid),
+  ) || undefined
 }

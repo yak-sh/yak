@@ -268,7 +268,7 @@ let answered = (q: string): Bundle[] | undefined => {
 }
 
 /** What an entity is called, as @yaks/inspect's `called` says (its title,
- * else the name its kind gives it: a model's `model.name`); one this page has
+ * else the label or name its kind gives it: a model's `model.label`); one this page has
  * never held, its short handle. */
 export let named = (eid: string): string => {
   if (!row(eid).value) return short(eid)

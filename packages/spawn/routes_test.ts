@@ -68,7 +68,10 @@ let hosting = async (first: Actor | null) => {
       entity: { eid: PROVIDER },
       provider: { name: 'claude', transport: 'process' },
     },
-    { entity: { eid: MODEL }, model: { name: 'opus' } },
+    {
+      entity: { eid: MODEL },
+      model: { name: 'opus', label: 'Claude Code Opus' },
+    },
     { ...link(PROVIDER, 'serves', MODEL), serves: { name: 'opus' } },
     { entity: { eid: PERSONA }, persona: {}, doc: { title: 'An Operator' } },
     { entity: { eid: STANDING }, session: { door: 'tunnel' } },
@@ -129,7 +132,7 @@ test('a run asks for a model, and one its provider does not serve is refused', a
   )
   let refused = await ask({ brief: 'Go.', model: 'nobody-serves-this' })
   equal(comp(first, 'using').model, MODEL)
-  equal(spawned.model, 'opus')
+  equal(spawned.model, 'Claude Code Opus')
   equal(refused.status, 422)
 })
 

@@ -94,11 +94,11 @@ test('a new name on a staged builder exists pending, never offered', () => {
   assertEquals(((g.get([E]) as Bundle[])[0].using as Comp).model, eid)
 })
 
-test('a model row written whole keeps what it says, and is priced', () => {
+test('a model row written whole keeps what it says, and is priced and labelled', () => {
   let g = shelf()
   g.apply([{ entity: { eid: '$n' }, model: { name: 'gpt-5', offered: true } }])
   let [row] = g.get([identityEid('model', ['gpt-5'])]) as Bundle[]
-  assertEquals(row.model, { name: 'gpt-5', offered: true })
+  assertEquals(row.model, { name: 'gpt-5', offered: true, label: 'GPT-5' })
   assertEquals(row.pending, undefined)
   assertEquals(row.price, listPrice('gpt-5'))
 })
@@ -141,6 +141,28 @@ test('a held model with no price takes its list price when next named', () => {
   assertEquals(priceOf(), undefined)
   g.apply([{ entity: { eid: E }, using: { model: name } }])
   assertEquals(priceOf(), listPrice('claude-opus-4-8'))
+})
+
+test('a model takes its list label when met or next named; a label it has stands', () => {
+  let g = shelf()
+  let labelOf = (name: string) =>
+    ((g.get([identityEid('model', [name])]) as Bundle[])[0]?.model as {
+      label?: string
+    })?.label
+  g.apply([
+    { entity: { eid: E }, using: { model: 'claude-opus-4-8[1m]' } },
+    { entity: { eid: '$a' }, model: { name: 'gpt-6.2-sol', label: 'Sol' } },
+    { entity: { eid: '$b' }, model: { name: 'no-such-model' } },
+  ])
+  assertEquals(labelOf('claude-opus-4-8[1m]'), 'Opus 4.8 1M')
+  assertEquals(labelOf('gpt-6.2-sol'), 'Sol')
+  assertEquals(labelOf('no-such-model'), undefined)
+  // a row held without one takes it when a request next names it
+  let eid = identityEid('model', ['claude-sonnet-5-5'])
+  g.apply([{ entity: { eid }, model: { name: 'claude-sonnet-5-5' } }])
+  g.apply([{ entity: { eid }, model: { label: null } }])
+  g.apply([{ entity: { eid: E }, using: { model: 'claude-sonnet-5-5' } }])
+  assertEquals(labelOf('claude-sonnet-5-5'), 'Sonnet 5.5')
 })
 
 test('reported cost beats row pricing and unknown cost stays unknown', () => {

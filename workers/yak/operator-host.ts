@@ -39,7 +39,9 @@ import {
 } from './walkthrough.ts'
 import { transcript } from '@yaks/session/transcript'
 import { dispatchStatus } from '@yaks/session/admission'
-import type { Tool } from '@yaks/model'
+import { labelOf, type Tool } from '@yaks/model'
+import { caught } from './defects.ts'
+import { MACHINE } from './operator-machine.ts'
 import {
   frame,
   helperFrame,
@@ -281,9 +283,10 @@ let helpersBy = async (store: Store, calls: Set<string>): Promise<Helper[]> =>
     )
     : []
 // Where a helper runs and its model, from its own rows: the machine its run
-// went to (`operator_machine`) and the model asked of it there; else
-// yaks.app, and the model that answered its newest ask, or the one its
-// input names.
+// went to (`operator_machine`) and the model asked of it there; else the
+// model that answered its newest ask, or the one its input names, by its
+// label, on yaks.app, or on its person's machine where that model's provider
+// is the machine (operator-machine.ts `MACHINE`), which answers each step.
 let ranOn = async (
   store: Store,
   row: Bundle,
@@ -297,12 +300,26 @@ let ranOn = async (
     }
   }
   let ask = comp(entries.findLast((b) => b.ask), 'ask')
-  let eid = ask?.served ?? ask?.to ??
-    comp(entries.find((b) => comp(b, 'using')?.model), 'using')?.model
-  let [named] = eid ? await store.g.get([String(eid)], ['model']) : []
-  let model = comp(named, 'model')
-  let name = String(model?.label ?? model?.name ?? '')
-  return { runs: 'yaks.app', ...name ? { model: name } : {} }
+  let using = comp(entries.findLast((b) => comp(b, 'using')?.model), 'using')
+  let eid = String(ask?.served ?? ask?.to ?? using?.model ?? '')
+  let from = String(using?.provider ?? '')
+  let rows = await store.g.get(
+    [eid, from].filter(Boolean),
+    ['model', 'provider'],
+  )
+  let at = (e: string) => rows.find((b) => b?.entity.eid == e)
+  let machine = comp(at(from), 'provider')?.name == MACHINE
+  let model = eid
+    ? labelOf(
+      comp(at(eid), 'model'),
+      (error) => caught(error, { session: row.entity.eid }),
+      eid,
+    )
+    : ''
+  return {
+    runs: machine ? 'Your machine' : 'yaks.app',
+    ...model ? { model } : {},
+  }
 }
 
 // A helper as the conversation's aside lists it (operator-view.ts

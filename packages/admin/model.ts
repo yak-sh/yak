@@ -1,11 +1,11 @@
 // The model every yaks.app Operator runs on, set from the box
 // (@yaks/platform/operator-model): this graph's `O-` row of the model, its
 // price beside it, is written whole to the directory, whose base persona then
-// names it. The box's row is the one source: a model it holds no price for
-// takes its list price there first.
+// names it. The box's row is the one source: a model it holds no price or
+// label for takes its list price and label there first.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
-import { type Listed, listPrice } from '@yaks/model'
+import { type Listed, listLabel, listPrice } from '@yaks/model'
 import { CallError } from '@yaks/tools/errors'
 import {
   BASE,
@@ -27,8 +27,8 @@ export let operatorModel = async (
 
 /** The writes that make the model `named` (its `O-` id or its name) the one
  * every Operator runs on, served by `provider` (the model's vendor where
- * none is named): the price its row on the box takes first where it has
- * none, and the directory's rows. */
+ * none is named): the list price and label its row on the box takes first
+ * where it has none, and the directory's rows. */
 export let operatorRows = async (
   graph: Graph,
   named: string,
@@ -55,19 +55,26 @@ export let operatorRows = async (
       `${named} names no vendor: say which provider serves it`,
     )
   }
+  let label = model.label ?? listLabel(String(model.name))
+  let whole = label ? { ...model, label } : model
   return {
-    box: row.price ? [] : [{ entity: { eid }, price }],
-    directory: choosing({ ...row, price }, String(from)),
+    box: row.price && model.label == label
+      ? []
+      : [{ entity: { eid }, price, model: whole }],
+    directory: choosing({ ...row, price, model: whole }, String(from)),
   }
 }
 
 let dollars = (n: unknown) => `$${n}`
 
-/** The model every Operator runs on, as a line. */
+/** The model every Operator runs on, as a line: its label, and its id beside
+ * it for the tool that sets it; its id alone where its row has no label. */
 export let modelLine = (now?: Choice & Partial<Listed>): string =>
   now
     ? [
-      `${now.model} on ${now.provider}`,
+      `${
+        now.label ? `${now.label} (${now.model})` : now.model
+      } on ${now.provider}`,
       now.price
         ? `${dollars(now.price.input)} in, ${
           dollars(now.price.output)
