@@ -114,8 +114,11 @@ export let Field: FunctionComponent<FieldProps> = (
     as: as ?? (choose ? 'select' : lines ? 'textarea' : 'input'),
     elRef: ref,
     // Drawn, a text field is told what it already shows, so drawing it
-    // again never writes over typing; `show` puts a new value in.
-    value: given.current != null && el.current ? el.current.value : value,
+    // again never writes over typing; `show` puts a new value in. A field
+    // given none carries no `value`, so its `defaultValue` is what it shows.
+    ...value !== undefined && {
+      value: given.current != null && el.current ? el.current.value : value,
+    },
     'data-caret': caret,
   })
 }

@@ -5,6 +5,7 @@ import { signal } from '@preact/signals'
 import { parseHTML } from 'linkedom'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
+import { renderToString } from 'preact-render-to-string'
 import { Field, moved } from './Field.ts'
 
 test('an offset stays before the change, moves after it, and goes to the end of a span it was inside', () => {
@@ -84,4 +85,12 @@ test('a value arriving while a word is composed waits until it ends', () => {
   equal(f.shows(), ['Find m the recipe', 6])
   act(() => f.t.end())
   equal(f.shows(), ['Find m the recipe, please', 6])
+})
+
+test('a field given only a defaultValue shows it, drawn on the server', () => {
+  let shown = (lines: boolean) =>
+    parseHTML(renderToString(h(Field, { lines, defaultValue: 'A fox' })))
+      .document.querySelector(lines ? 'textarea' : 'input')!
+  equal(shown(true).textContent, 'A fox')
+  equal(shown(false).getAttribute('value'), 'A fox')
 })
