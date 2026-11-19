@@ -7,33 +7,19 @@ import { test } from '@yaks/testing'
 import * as apps from './apps.ts'
 import { granting, owning } from './dispatch.ts'
 import { storeName } from './directory.ts'
-import type { ServingCopyDoor } from './directory-copy.ts'
-import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
-import { ADA, ADA_OWNS, platform, seeded, visit } from './serving-probe.ts'
+import {
+  ADA,
+  ADA_OWNS,
+  platform,
+  seeded,
+  servingCopy,
+  visit,
+} from './serving-probe.ts'
 
 let ELI = 'e0000000-0000-4000-8000-0000000000e1'
 
-// Production's serving copy, which is what gives the directory a revision.
-let serving = (): ServingCopyDoor => {
-  let saved: ServingCopyState | undefined
-  let copy = new ServingCopy({
-    persistence: { read: () => saved, write: (next) => void (saved = next) },
-  })
-  return {
-    begin: (floor) => Promise.resolve(copy.begin(floor)),
-    finish: (revision) => Promise.resolve(copy.finish(revision)),
-    revision: () => Promise.resolve(copy.revision),
-    settle: (revision, committed) =>
-      Promise.resolve(copy.settle(revision, committed)),
-    put: (...args) => Promise.resolve(copy.put(...args)),
-    get: (key) => Promise.resolve().then(() => copy.get(key)),
-    valid: (revision) => Promise.resolve(copy.valid(revision)),
-    publish: (...args) => Promise.resolve(copy.publish(...args)),
-  }
-}
-
 let scene = async () => {
-  let rpc = serving()
+  let rpc = servingCopy()
   let scenario = platform({
     SERVING_COPY: { idFromName: (name: string) => name, get: () => rpc },
   } as never)

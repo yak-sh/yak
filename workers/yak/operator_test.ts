@@ -21,8 +21,7 @@ import {
 import { sentRows } from './operator-testing.ts'
 import { TOOLS } from './tools.ts'
 import { operatorContext } from './operator.ts'
-import { ServingCopy, type ServingCopyState } from './serving-copy.ts'
-import type { ServingCopyDoor } from './directory-copy.ts'
+import { servingCopy } from './serving-probe.ts'
 import { KERNEL } from './meta.ts'
 import { appDoc, appVocab } from './vocab.ts'
 import { withKinds } from '@yaks/platform/app-commands'
@@ -31,24 +30,7 @@ import { trashSpace } from './erase.ts'
 
 let owner = crypto.randomUUID()
 let fixture = async () => {
-  let saved: ServingCopyState | undefined
-  let copy = new ServingCopy({
-    persistence: {
-      read: () => saved,
-      write: (next) => void (saved = next),
-    },
-  })
-  let rpc: ServingCopyDoor = {
-    begin: (floor) => Promise.resolve(copy.begin(floor)),
-    finish: (revision) => Promise.resolve(copy.finish(revision)),
-    revision: () => Promise.resolve(copy.revision),
-    settle: (revision, committed) =>
-      Promise.resolve(copy.settle(revision, committed)),
-    put: (...args) => Promise.resolve(copy.put(...args)),
-    get: (key) => Promise.resolve().then(() => copy.get(key)),
-    valid: (revision) => Promise.resolve(copy.valid(revision)),
-    publish: (...args) => Promise.resolve(copy.publish(...args)),
-  }
+  let rpc = servingCopy()
   let p = platform('operator-test', {
     SERVING_COPY: { idFromName: (name) => name, get: () => rpc },
   }, { copy: rpc })
