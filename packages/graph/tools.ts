@@ -163,7 +163,7 @@ export let BEST = 20
  */
 export let textSearch =
   (graph: Pick<Graph, 'read' | 'vocab'>): Search => async (said, opts) => {
-    let terms = said.replaceAll('"', ' ').split(/\s+/).filter(Boolean)
+    let terms = termsOf(said)
     if (!terms.length) return []
     let line = hit(graph.vocab, terms)
     let rows = await graph.read(
@@ -171,6 +171,19 @@ export let textSearch =
     )
     return rows.map((b) => ({ ...b, hit: line(b) }))
   }
+
+// The words a search is asked for, each a term.
+let termsOf = (said: string) =>
+  said.replaceAll('"', ' ').split(/\s+/).filter(Boolean)
+
+// A search's row as the `search` tool answers it: which entity, and its `hit`.
+// Whole rows are graph_query's to answer: a search of a transcript finds the
+// lines a tool answered, and each answer it carried whole, a screenshot or an
+// earlier search's rows, was written into the transcript again (T-1572).
+let compact = (vocab: Graph['vocab'], said: string) => {
+  let line = hit(vocab, termsOf(said))
+  return (b: Bundle): Bundle => ({ entity: b.entity, hit: b.hit ?? line(b) })
+}
 
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
 let num = (v: unknown): number | undefined =>
@@ -495,11 +508,12 @@ export let runs = (seams: Seams = {}): Runs => {
     },
     ...(find
       ? {
-        search: async (call: Bundle) => {
+        search: async (call: Bundle, graph: Graph) => {
           let args = argsOf(call)
           let words = str(args.words).trim()
           if (!words) throw new Refused('search needs words')
-          return await find(words, { limit: num(args.limit) })
+          return (await find(words, { limit: num(args.limit) }))
+            .map(compact(graph.vocab, words))
         },
       }
       : {}),
