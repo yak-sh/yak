@@ -139,7 +139,12 @@ run (a second or so a package); every package's public API at once is main's
 CI's (`deno task check:publish`). Beside the tests it checks the types of source and doc comments the
 change reaches: each changed module, direct importers (including type-only
 imports), and transitive importers within its package, stopping at a module
-composing a whole platform. `deno task check:types` does the same alone.
+composing a whole platform. `deno task check:types` does the same alone, and
+`deno task check:types <files>` checks what those files reach. That is the one
+type check: never run `deno check`, or `deno test` and `deno bench` without
+`--no-check`. Those run Deno's own checker, which took 115 s and 2.2 GB for six
+Worker files in a fresh worktree, where `check:types` took 13 s and 0.8 GB at
+most per process.
 TypeScript's native compiler (tsgo) resolves the complete program through Deno,
 then checks diagnostics only in those sources; dependencies supply their full
 inferred types without checking their unrelated bodies. Host entries follow

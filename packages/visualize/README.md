@@ -157,7 +157,7 @@ captures, authentication, SSE replay/backpressure and the graph-owned model:
 
 ```sh
 deno task test --tag=deno packages/visualize
-deno check --no-lock --config packages/visualize/browser.json packages/visualize/main.ts
+deno task check:types packages/visualize/main.ts
 ```
 
 The standalone page and both CLI examples were also exercised on an isolated

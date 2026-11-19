@@ -22,10 +22,12 @@ import { once } from '@yaks/fp'
 import {
   digest,
   FACTS,
+  GRAPH,
   passed,
   remember,
   remembered,
   seal,
+  SEED,
   type Survey,
   survey,
 } from '@yaks/testing/deps'
@@ -633,6 +635,20 @@ let manifest = (path: string) => {
   }
 }
 
+/** Where what deno says a platform's configuration resolves is kept: the
+ * checkout's store, and the machine's, which seeds a checkout with none. The
+ * configuration names the checkout's own paths, so both are keyed by it as
+ * any checkout would write it. */
+let shared = (name: string, config: string): [string, string] => {
+  let key = hex(
+    Deno.readTextFileSync(config).replaceAll(CHECKOUT, '<checkout>'),
+  ).slice(0, 16)
+  return [
+    `${stores()}/${name}-${key}.json`,
+    `${CACHE}/types-${name}-${key}.json`,
+  ]
+}
+
 /** Check the types of `roots` in a platform's program, and of their doc
  * comment examples where it checks those. */
 let program = async (
@@ -662,20 +678,21 @@ let program = async (
       return JSON.parse(info.out) as Info
     }
     // What deno said a platform's own configuration resolves is kept by
-    // that configuration, as Deno's is by the checkout's.
-    let own = on.config &&
-      `${stores()}/${on.name}-${
-        hex(Deno.readTextFileSync(on.config)).slice(0, 16)
-      }.json`
+    // that configuration, as Deno's is by the checkout's, and a new checkout
+    // starts from what any checkout said under the same one (`shared`).
+    let own = on.config && shared(on.name, on.config)
     let [found, globals] = await Promise.all([
       own
-        ? remembered(resolve, own)(roots, snapshot?.said)
+        ? remembered(resolve, ...own)(roots, snapshot?.said)
         : (async () =>
           await snapshot?.info(
             [...roots, ...docs],
             Object.values(MADE).flat(),
           ) ??
-            await remembered(resolve)([...roots, ...docs], snapshot?.said))(),
+            await remembered(resolve, GRAPH, SEED)(
+              [...roots, ...docs],
+              snapshot?.said,
+            ))(),
       on.globals(),
     ])
     if (!found) throw new Error('Cannot resolve source types')

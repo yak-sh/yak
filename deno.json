@@ -14,7 +14,7 @@
       ]
     },
     "check:publish": {
-      "command": "deno task publish --dry-run --allow-dirty --no-check",
+      "command": "deno task publish --dry-run --allow-dirty",
       "files": [
         "deno.json",
         "deno.lock",

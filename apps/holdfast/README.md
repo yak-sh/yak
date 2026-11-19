@@ -164,7 +164,7 @@ in their owning packages, not in app-local substitutes.
 From the repository root:
 
 ```sh
-deno check apps/holdfast/*.ts
+deno task check:types apps/holdfast/*.ts
 deno lint --config deno.json apps/holdfast
 deno task test apps/holdfast
 ```

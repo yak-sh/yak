@@ -88,7 +88,6 @@ export let checks = (changed: string[]): Check[] => {
           'bin/publish.ts',
           '--dry-run',
           '--allow-dirty',
-          '--no-check',
           ...members,
         ],
       }]

@@ -212,10 +212,12 @@ let member = (dir: string): Member => {
 
 /** `deno publish` with the projected config at `config`. Run alone, it
  * answers in the terminal, where a publish asks to authorize; beside others,
- * each answer is kept until all are done, so none interleave. */
+ * each answer is kept until all are done, so none interleave. Types are
+ * TypeScript 7's (./check-types.ts), never Deno's own checker: the publish
+ * reads each package's public API for slow types without it. */
 let publish = (config: string, args: string[], piped = false) =>
   new Deno.Command(Deno.execPath(), {
-    args: ['publish', '--config', config, ...args],
+    args: ['publish', '--no-check', '--config', config, ...args],
     // Keep the source checkout's Git cleanliness and provenance checks.
     cwd: root,
     stdin: piped ? 'null' : 'inherit',
