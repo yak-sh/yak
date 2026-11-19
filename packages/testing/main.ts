@@ -5,7 +5,8 @@ import * as system from '@yaks/process/system'
 // this one runtime a file at a time, each file's tests run as it loads.
 //
 //   main.ts [--tag=t]... [--platform=p] [--all] [--also=path]... [--keys=file]
-//     [--timeout=ms] [--times=dir] [--rest=file] [--part=n] [--verbose] path...
+//     [--timeout=ms] [--times=dir] [--rest=file] [--full=bytes] [--part=n]
+//     [--verbose] path...
 //
 // A path is a test module (`*_test.ts`), a page whose examples run (a module
 // or a Markdown page), or a directory holding them. `--tag` keeps the tests
@@ -25,9 +26,10 @@ import * as system from '@yaks/process/system'
 // `<dir>/<platform>-<n>.json` for `--part=n`.
 //
 // A runtime keeps every module it loaded, and whatever their tests left
-// reachable, until it exits. With `--rest`, once it holds more than FULL it
-// loads no more files and writes those it did not reach to that file as a
-// JSON list, for a fresh runtime to run (bin/test.ts).
+// reachable, until it exits. With `--rest`, once it holds more than FULL, or
+// the fewer bytes `--full` names, it loads no more files and writes those it
+// did not reach to that file as a JSON list, for a fresh runtime to run
+// (bin/test.ts).
 //
 // Each test is said as it runs, a failure's error right after it, and the
 // closing report says every failure again; each error is cut short (./run.ts
@@ -46,7 +48,7 @@ system.env.delete('DENO_AUDIT_PERMISSIONS')
 let observation = observe()
 
 let FLAGS =
-  /^--(tag|platform|also|keys|timeout|times|rest|part)=(.*)$|^--(all|verbose)$/
+  /^--(tag|platform|also|keys|timeout|times|rest|part|full)=(.*)$|^--(all|verbose)$/
 let odd = system.args.find((a) => a.startsWith('--') && !FLAGS.test(a))
 if (odd) {
   console.error(`main.ts: the runner has no flag ${odd}`)
@@ -67,7 +69,7 @@ let given = flag('keys').at(-1)
 let rest = flag('rest').at(-1)
 let part = flag('part').at(-1)
 // The resident memory past which a runtime with `--rest` hands on its files.
-let FULL = 2 * 1024 ** 3
+let FULL = Math.min(2 * 1024 ** 3, Number(flag('full').at(-1) ?? Infinity))
 let started = performance.now()
 let here = (path: string) => new URL(path, `file://${system.cwd()}/`).href
 let code = (path: string) => /\.[mc]?[jt]sx?$/.test(path)
