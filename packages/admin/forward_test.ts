@@ -114,3 +114,8 @@ let accountClose = request(
 test('forwarding allows the platform account cleanup door', async () => {
   equal((await handler(accountClose)).status, 200)
 })
+
+test('forwarding allows the directory graves door', async () => {
+  let graves = request('https://yaks.app/api/graves?since=2026-10-20')
+  equal((await handler(graves)).status, 200)
+})
