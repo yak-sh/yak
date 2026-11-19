@@ -849,9 +849,13 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
       ),
       ...await fetch(r, missing((b) => comp(b, OUTPUT)?.source)),
     )
-    // What a lookup read of a line stands over the rows' reading of it, which
-    // may lack its lifecycle.
-    let looked = new Map(held.map((b) => [b.entity.eid, b]))
+    // What the lookups read of a line stands over the rows' reading of it,
+    // which may lack its lifecycle and what it sent; each lookup adds what it
+    // read, as one may read a line in part that another read whole.
+    let looked = new Map<Eid, Bundle>()
+    for (let b of held) {
+      looked.set(b.entity.eid, { ...looked.get(b.entity.eid), ...b })
+    }
     let seen = new Set<Eid>()
     return ordered([...rows, ...held].flatMap((b) => {
       if (seen.has(b.entity.eid)) return []
@@ -886,12 +890,9 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<{
       ...await aspect(r, USING, rows),
       ...await aspect(r, SENDING, rows),
     )
-    let asks = await fetch({ ...r, names: [SENDING] }, unsent(await gather()))
-    for (let b of asks) {
-      let line = held.find((h) => h.entity.eid == b.entity.eid)
-      if (line) Object.assign(line, b)
-      else held.push(b)
-    }
+    held.push(
+      ...await fetch({ ...r, names: [SENDING] }, unsent(await gather())),
+    )
   }
   return { entries: await gather(), shapes: r.shapes }
 }

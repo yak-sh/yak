@@ -27,6 +27,7 @@ import {
   newestAsk,
   openCalls,
   sendingBefore,
+  sendingSelected,
   statusOf,
   usingBefore,
 } from './state.ts'
@@ -170,6 +171,7 @@ let view = (entries: Bundle[]) => {
     open: eids(openCalls(entries)),
     using: usingBefore(entries),
     sending,
+    selected: sendingSelected(entries),
     // What the asks a step reads sent: the newest, and each an open call came
     // from.
     sent_by: [newestAsk(entries), ...openCalls(entries).map(source)]
@@ -225,6 +227,44 @@ for (let forked of [false, true]) {
     })
   }
 }
+
+// An input chooses what to send, and the ask sent through it records what it
+// sent: the input's choice still stands after it.
+test('a turn reads the choice of the line its newest ask was sent through', async () => {
+  let at = (seq: number) => ({ session: 's', seq })
+  let g = await world([
+    { entity: { eid: 's' }, session: {} },
+    {
+      entity: { eid: 'in' },
+      entry: at(1),
+      content: { body: 'file x' },
+      using: { model: M },
+      sending: { tools: ['echo'] },
+    },
+    {
+      entity: { eid: 'ask' },
+      entry: at(2),
+      ask: { to: M, through: 'in' },
+      using: { model: M },
+      sending: { instructions: 'rules' },
+      attempt: { by: null },
+    },
+    {
+      entity: { eid: 'call' },
+      entry: at(3),
+      call: { to: T, id: 'c', source: 'ask' },
+      content: { body: '{}' },
+    },
+    {
+      entity: { eid: 'res' },
+      entry: at(4),
+      result: { call: 'call' },
+      content: { body: 'ok' },
+    },
+  ])
+  let all = await transcript(g, 's')
+  assertEquals(turned(await reach(g, 's', { turn: true })), turned(all))
+})
 
 // Each ask records the instructions it sent. A turn holds what its newest
 // ask and its open calls' asks sent, not every ask's.
