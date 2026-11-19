@@ -82,9 +82,15 @@ export let PLUS: Ceilings = {
   bytes: 10 * GB,
   files: 50 * GB,
 }
-// The Pro plan (D-134567) carries the Plus plan's allowances; what it
-// adds is a bigger model budget, the operator and support.
-export let PRO: Ceilings = PLUS
+// The Pro plan (D-134567) holds more of each than the Plus plan, about five
+// times, as it costs about five times as much; it also adds twice the model
+// budget, the operator and support.
+export let PRO: Ceilings = {
+  apps: null,
+  requests: 5_000_000,
+  bytes: 50 * GB,
+  files: 250 * GB,
+}
 
 // Photos and files, including on comped spaces (only apps/data are exempt).
 // Free: proposed 1 GB allowance (T-37149), pending owner feedback.
@@ -116,7 +122,7 @@ export let ceilings = (tier: Tier | null, slug = ''): Ceilings | null =>
 export let LETTERS: Record<Tier, number> = {
   free: 100,
   plus: 2_500,
-  pro: 2_500,
+  pro: 10_000,
 }
 
 export let letters = (tier: Tier | null): number => LETTERS[tier ?? 'free']
@@ -126,7 +132,7 @@ export let letters = (tier: Tier | null): number => LETTERS[tier ?? 'free']
 export let BUILDS: Record<Tier, number> = {
   free: 5,
   plus: 100,
-  pro: 100,
+  pro: 500,
 }
 
 export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
@@ -157,12 +163,13 @@ export let SUBSCRIBED: number = 100
 // Compute seconds a month: the sandbox container's (sandbox.ts) and the compile
 // at app_deploy's (esbuild.ts). An hour free is six builds' whole sandbox
 // budget (sandbox.ts `BUDGET`); ten hours on the Plus plan is about $1.30 of
-// standard-2 time at Cloudflare's rates (wrangler.toml). A compile's second
+// standard-2 time at Cloudflare's rates (wrangler.toml), and fifty on the Pro
+// plan about $6.50. A compile's second
 // costs less than a container's, so the one allowance bounds both.
 export let SECONDS: Record<Tier, number> = {
   free: 3_600,
   plus: 36_000,
-  pro: 36_000,
+  pro: 180_000,
 }
 
 // What a tier costs a month, in whole dollars (D-32751). The number is

@@ -129,14 +129,16 @@ owns one free space, and every other space they make is on a paid plan; a space
 somebody invited you into does not count toward yours, and spaces that were free
 before stay free. Each space has its own monthly budget for models and voice,
 included on every plan. Plus allows unlimited apps, 10 GB of app data, 50 GB of
-photos and files, and 2,500 emails a month. Visitors are never capped on any
-plan: an app is served to however many people come. The hourly meter estimates
-each space's request units (an ordinary request uses one unit; incoming
-WebSocket messages use one unit per 20 messages, as Cloudflare bills them), and
-your assistant is told when a month passes 50,000 on Free or 1,000,000 on the
-Plus plan. Operations that exceed a limit are refused, but existing apps and
-data are not deleted. Your assistant receives a notice when usage reaches 80% of
-a limit.
+photos and files, and 2,500 emails a month. Pro allows twice the Plus plan's
+model and voice budget, 50 GB of app data, 250 GB of photos and files, and
+10,000 emails a month. Visitors are never capped on any plan: an app is served
+to however many people come. The hourly meter estimates each space's request
+units (an ordinary request uses one unit; incoming WebSocket messages use one
+unit per 20 messages, as Cloudflare bills them), and your assistant is told when
+a month passes 50,000 on Free, 1,000,000 on the Plus plan or 5,000,000 on the
+Pro plan. Operations that exceed a limit are refused, but existing apps and data
+are not deleted. Your assistant receives a notice when usage reaches 80% of a
+limit.
 
 Every page an app serves on the free plan wears a small "Made with yaks.app"
 badge in a corner. On a published app it opens the app's own page on yaks.app,

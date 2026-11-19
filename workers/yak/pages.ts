@@ -71,6 +71,7 @@ import { decodeHTML } from 'entities'
 import { BLOCK, type Budget } from '@yaks/platform/meter'
 import { size } from '@yaks/fp'
 import {
+  beyond,
   type Ceiling,
   count,
   dollars,
@@ -1614,11 +1615,11 @@ export let plan = (
   let { tier } = y.plan
   let ends = y.plan.ends ? day(y.plan.ends) : ''
   let limits = ceilings(tier)!
-  let allowance = `${
-    limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`
-  }, unlimited visitors, ${size(limits.bytes)} of app data${
-    tier == 'pro' ? `, AI use included, and email support` : ''
-  }`
+  let allowance = tier == 'pro'
+    ? `Unlimited apps, unlimited visitors, ${beyond()}, and email support`
+    : `${
+      limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`
+    }, unlimited visitors, ${size(limits.bytes)} of app data`
   let host = spaceHost(env, y.slug)
   let head = tier == 'free'
     ? h(
@@ -1682,6 +1683,14 @@ export let plan = (
     : target && y.plan.invoice && open
     ? byInvoice(target, y.plan.invoice)
     : null
+  // What the Pro plan adds, for every space not on it yet: a paying Plus
+  // space moves to it from the billing portal.
+  let more = tier == 'pro' ? null : h(
+    Form.Hint,
+    null,
+    `The Pro plan gives ${beyond()}, and email support.`,
+    tier == 'plus' && y.plan.known ? ' Switch to it from Manage billing.' : '',
+  )
   // Where the Pro plan has no price yet, a free space still hears
   // how to get it: the pricing page offers it everywhere.
   let ask = tier == 'free' && !y.plan.pro?.length
@@ -1706,6 +1715,7 @@ export let plan = (
     billedLine(y.plan, y.payer, y.provider),
     target && y.plan.credit ? credit(y.plan.credit, space, target) : null,
     invoiced,
+    more,
     ask,
     y.paid
       ? h(

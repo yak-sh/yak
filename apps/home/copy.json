@@ -164,11 +164,11 @@
       },
       "pro": {
         "price": "$49 %{per}",
-        "note": "The Pro plan, or $490 a year. Your staff ask the Operator by email or chat, and it makes the change. Your first subscription adds $100 of building credit.",
+        "note": "The Pro plan, or $490 a year: twice the Plus plan's AI use and more room for everything. Your staff ask the Operator by email or chat, and it makes the change. Your first subscription adds $100 of building credit.",
         "apps": "Unlimited apps",
         "visitors": "Unlimited visitors",
-        "storage": "10 GB of app data, 50 GB of photos and files",
-        "emails": "2,500 emails a month",
+        "storage": "50 GB of app data, 250 GB of photos and files",
+        "emails": "10,000 emails a month",
         "domain": "Your own domain, like %{domain}",
         "example": "ourtownship.org",
         "go": "Get Started"
@@ -223,7 +223,7 @@
       },
       "pro": {
         "name": "Pro",
-        "offer": "For one space: unlimited apps, where staff ask for a change by email or chat and yaks.app makes it, document search, notices by email, AI use included, email support, unlimited visitors, 10 GB of app data, 50 GB of photos and files, 2,500 emails a month, and a custom domain. Or $490 a year. A first subscription adds $100 of building credit."
+        "offer": "For one space: twice the Plus plan's AI use, unlimited apps, where staff ask for a change by email or chat and yaks.app makes it, document search, notices by email, email support, unlimited visitors, 50 GB of app data, 250 GB of photos and files, 10,000 emails a month, and a custom domain. Or $490 a year. A first subscription adds $100 of building credit."
       }
     }
   },
@@ -539,8 +539,8 @@
       "asks": "Your office asks by email or chat, and the change is made",
       "people": "No charge per person: staff, members and visitors cost nothing extra",
       "domain": "Your own web address, like %{domain}",
-      "ai": "The AI assistant's work is included",
-      "emails": "2,500 emails a month sent or received by your site, such as the list each Friday of who is coming to Saturday's food pantry shift",
+      "ai": "Twice the Plus plan's AI use, for the assistant's work",
+      "emails": "10,000 emails a month sent or received by your site, such as the list each Friday of who is coming to Saturday's food pantry shift",
       "support": "Support from us, by email",
       "limits": "Tax is included, and the bill never grows by itself. If a very busy month uses up the AI work the plan includes, the assistant waits until the 1st, unless you choose to buy more, $10 at a time and paid in advance. Your site stays online either way. There are two smaller plans, Free and $9 a month, for a site that needs less. %{plans}, where the assistant is called your Operator.",
       "plans": "Compare the plans"
@@ -695,16 +695,16 @@
         "change": "Your Operator, or your own assistant, makes the changes"
       },
       "pro": {
-        "note": "The Pro plan. Or $490 a year. Your first subscription adds $100 of building credit.",
+        "note": "The Pro plan, or $490 a year: twice the Plus plan's AI use, and more room for data, files and email. Your first subscription adds $100 of building credit.",
         "apps": "Unlimited apps",
         "visitors": "Unlimited visitors",
-        "data": "10 GB of app data",
-        "files": "50 GB of photos and files",
-        "emails": "2,500 emails a month",
+        "data": "50 GB of app data",
+        "files": "250 GB of photos and files",
+        "emails": "10,000 emails a month",
         "domain": "A custom domain, like %{domain}",
         "payments": "Take payments with Stripe",
         "badge": "No yaks.app badge",
-        "ai": "AI use included",
+        "ai": "Twice the Plus plan's AI use",
         "change": "Your staff ask the Operator by email or chat, and it makes the change"
       }
     },
@@ -770,56 +770,56 @@
         "note": "What your apps save, like entries, lists and settings.",
         "free": "1 GB",
         "plus": "10 GB",
-        "pro": "10 GB"
+        "pro": "50 GB"
       },
       "files": {
         "name": "Photos and files %{note}",
         "note": "Pictures and documents your apps keep.",
         "free": "1 GB",
         "plus": "50 GB",
-        "pro": "50 GB"
+        "pro": "250 GB"
       },
       "visits": {
         "name": "Visits a month %{note}",
         "note": "Counted in request units: each request for a page or its data is one, and 20 live updates are one. Past it, visitors are still served and the owner is told.",
         "free": "50,000",
         "plus": "1,000,000",
-        "pro": "1,000,000"
+        "pro": "5,000,000"
       },
       "emails": {
         "name": "Emails a month %{note}",
         "note": "Sent or received by your apps. Invitations don't count.",
         "free": "100",
         "plus": "2,500",
-        "pro": "2,500"
+        "pro": "10,000"
       },
       "ai": {
         "name": "AI use %{note}",
         "note": "What models and voice cost, in your apps and in the built-in builder.",
         "free": "Included",
         "plus": "Included",
-        "pro": "Included"
+        "pro": "Twice the Plus plan's"
       },
       "builds": {
         "name": "Builds a month %{note}",
         "note": "With yaks.app's built-in builder, for people without an assistant of their own. A build counts when it puts an app online.",
         "free": "5",
         "plus": "100",
-        "pro": "100"
+        "pro": "500"
       },
       "compute": {
         "name": "Compute time a month %{note}",
         "note": "Time your sandbox runs commands, and compiling code at deploy.",
         "free": "1 hour",
         "plus": "10 hours",
-        "pro": "10 hours"
+        "pro": "50 hours"
       },
       "sandboxes": {
         "name": "Sandboxes at once %{note}",
         "note": "Each sandbox is a computer of its own.",
         "free": "1",
         "plus": "2",
-        "pro": "2"
+        "pro": "3"
       },
       "mail": {
         "term": "Mail to your apps always arrives.",

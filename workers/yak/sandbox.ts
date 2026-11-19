@@ -170,7 +170,7 @@ export let NO_BOX =
 /** How many sandboxes one space may hold awake at once, by its plan
  * (D-131886). A sandbox is keyed per person and space (`named`), so each
  * member working in a space wakes one of the space's. */
-export let AWAKE: Record<Tier, number> = { free: 1, plus: 2, pro: 2 }
+export let AWAKE: Record<Tier, number> = { free: 1, plus: 2, pro: 3 }
 
 // Who is awake in each space is the directory's: a `lent` row per person and
 // space (@yaks/sandbox/cloudflare `hold`), written by the platform, never by a

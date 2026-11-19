@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
+import { beyond } from '@yaks/platform/standing'
 import { KEY, type Status } from '@yaks/connections'
 import { type DeskPage, lost, spaceBinned, spaceIndex } from './pages.ts'
 import { askCode, askConnect, askEmail } from './signin-pages.ts'
@@ -739,6 +740,27 @@ test('paid plan settings describe unlimited apps', async () => {
     assertEquals(html.includes('null apps'), false)
     assertEquals(html.includes('data-door="checkout"'), false, tier)
   }
+})
+
+test('the plan card says what the Pro plan gives beyond the Plus plan', async () => {
+  let said = (tier: 'free' | 'plus' | 'pro') =>
+    desk(
+      { ...page, view: 'billing', plan: { tier, ends: '', known: true } },
+      env,
+    )
+      .text().then((html) => parseHTML(html).document.body.textContent!)
+  let gives = `The Pro plan gives ${beyond()}, and email support.`
+  assertStringIncludes(await said('free'), gives)
+  assertStringIncludes(
+    await said('plus'),
+    `${gives} Switch to it from Manage billing.`,
+  )
+  let pro = await said('pro')
+  assertEquals(pro.includes('The Pro plan gives'), false)
+  assertStringIncludes(
+    pro,
+    `unlimited visitors, ${beyond()}, and email support`,
+  )
 })
 
 test('a space on the Plus plan free says through when, and offers to keep it after', async () => {

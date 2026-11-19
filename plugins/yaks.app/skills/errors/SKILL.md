@@ -51,13 +51,14 @@ The codes an endpoint returns, and what each means:
 - **`blob_unavailable`** — 503. The app's store failed while `blob/<eid>` was
   read. Nothing is wrong with the request; ask again.
 - **`space_full`** — 413. The space is at its app data ceiling (1 GB on the free
-  plan, 10 GB on the Plus plan) or photos-and-files ceiling (1 GB on the free
-  plan, 50 GB on the Plus plan). The message says which ceiling, how much the
-  space holds and each app's share of it, and what to do; the app itself is not
-  broken. File uploads check live storage and only charge growth; duplicates and
-  smaller replacements still work. `app_list` says what each app holds as of the
-  hourly reading, before a write is refused. Space-owned files in the trash
-  still count until erased; shared version snapshots do not.
+  plan, 10 GB on the Plus plan, 50 GB on the Pro plan) or photos-and-files
+  ceiling (1 GB on the free plan, 50 GB on the Plus plan, 250 GB on the Pro
+  plan). The message says which ceiling, how much the space holds and each app's
+  share of it, and what to do; the app itself is not broken. File uploads check
+  live storage and only charge growth; duplicates and smaller replacements still
+  work. `app_list` says what each app holds as of the hourly reading, before a
+  write is refused. Space-owned files in the trash still count until erased;
+  shared version snapshots do not.
 - **`too_many_reports`** — 429. More than 30 reports from one app in one minute.
   This usually means a page is reporting from a render loop; the endpoint is not
   broken.

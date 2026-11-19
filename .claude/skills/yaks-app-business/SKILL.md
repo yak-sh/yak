@@ -172,9 +172,12 @@ and the pricing page hold what each one carries:
   2,500 emails a month, a custom domain, payments with Stripe and no badge.
   Whether a Plus space can pay for model use past its budget is T-131904.
 - **The Pro plan** is $49 a month or $490 a year, since an organization budgets
-  by the year (D-412, T-135234). It carries the Plus plan's allowances and adds
-  the Operator built in, so staff ask by email or chat and yaks.app makes the
-  change, a larger model budget and support. Past that budget it spends AI
+  by the year (D-412, T-135234). It holds about five times the Plus plan's
+  allowances (50 GB of app data, 250 GB of photos and files, 10,000 emails,
+  5,000,000 request units, 500 builds and 50 compute hours a month, three
+  sandboxes at once) and twice its AI budget, which its cards say first
+  (T-1317). It adds the Operator built in, so staff ask by email or chat and
+  yaks.app makes the change, and support. Past that budget it spends AI
   credit its owner buys in $10 blocks, paid before it is spent, up to a monthly
   cap they set on the plan card: $0 until they choose one, and nothing is ever
   charged past it (@yaks/platform/meter `creditOf`, billing.ts `buy`).

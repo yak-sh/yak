@@ -32,7 +32,7 @@ import {
   YEARLY,
 } from '@yaks/platform/plans'
 import { size } from '@yaks/fp'
-import { count, plans as refused } from '@yaks/platform/standing'
+import { beyond, count, plans as refused } from '@yaks/platform/standing'
 import { GET_PLAN, installAt } from '@yaks/platform/routes'
 import { DEEPGRAM } from '@yaks/speech'
 import * as townships from './site/townships.tsx'
@@ -425,6 +425,12 @@ let FEATURES = [
 
 let pricing = () => parseHTML(read('pricing.html')).document
 
+// What a card says of AI use: the Pro plan's is what it gives beyond the
+// Plus plan, said first (standing.ts `beyond`).
+let twice = beyond().split(',')[0]
+let ai = (tier: Tier) =>
+  tier == 'pro' ? twice[0].toUpperCase() + twice.slice(1) : 'AI use included'
+
 test('every pricing card lists the same features in the same order', () => {
   let cards = [...pricing().querySelectorAll('.Plan')]
   assertEquals(cards.length, TIERS.length)
@@ -437,7 +443,7 @@ test('every pricing card lists the same features in the same order', () => {
         : line
     )
     assertEquals(named, FEATURES, TIERS[i])
-    assertEquals(lines[FEATURES.indexOf('AI use')], 'AI use included')
+    assertEquals(lines[FEATURES.indexOf('AI use')], ai(TIERS[i]))
   })
 })
 
@@ -450,7 +456,7 @@ test('the pricing page tabulates the limits the code holds a space to', () => {
     ['Photos and files', (t) => size(FILES[t])],
     ['Visits a month', (t) => count(LIMITS[t].requests)],
     ['Emails a month', (t) => count(LETTERS[t])],
-    ['AI use', () => 'Included'],
+    ['AI use', (t) => t == 'pro' ? ai(t).replace(' AI use', '') : 'Included'],
     ['Builds a month', (t) => String(BUILDS[t])],
     ['Compute time a month', (t) => hours(SECONDS[t])],
     ['Sandboxes at once', (t) => String(AWAKE[t])],
