@@ -91,7 +91,7 @@ export * from './readers.ts'
 
 export * from './children.ts'
 export * from './answer.ts'
-export { noticeParent, raiseNotice } from './child-notice.ts'
+export { calledIn, noticeParent, raiseNotice } from './child-notice.ts'
 
 export { appendEntry } from './append.ts'
 export { grafted } from './graft.ts'

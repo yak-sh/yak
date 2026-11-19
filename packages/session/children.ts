@@ -25,7 +25,7 @@ import { entryStatus, newestOf, openOf, usingOf } from './reach.ts'
 import { live, newestAsk, textOf, usingBefore } from './state.ts'
 import { type Clock, system } from '@yaks/fp'
 import { changes } from './wait.ts'
-import { childNotice, overheard } from './child-notice.ts'
+import { calledIn, childNotice, overheard } from './child-notice.ts'
 
 export type ChildLimits = {
   /** Defaults for user-created tasks, resolved before durable queue admission. */
@@ -709,9 +709,7 @@ export let deliverChild = async (
   eid = receipt(last)
   if (await row(g, eid)) return
   let message = announceTask
-    ? `task ${
-      task!.entity.num != null ? human(g.vocab)(task!) : task!.entity.eid
-    } ${taskStatus(g.vocab, task!)}`
+    ? `task ${calledIn(g, task!)} ${taskStatus(g.vocab, task!)}`
     : `child ${child} ${status}`
   let notice = await row(g, derivedEid('notice:' + child))
   let context = notice?.notice

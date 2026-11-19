@@ -1639,6 +1639,11 @@ export let operatorRequest = async (
   let everyone = args.everyone === true && access.administrative
     ? operator.named
     : undefined
+  // A stop names its conversation by eid or short id, as a report does.
+  if (path == '/operator/stop' && typeof args.task == 'string' && args.task) {
+    let [eid] = await addressed(store.g, [args.task])
+    args = { ...args, task: eid ?? args.task }
+  }
   // The platform's admin may stop anyone's, as it may retry anyone's.
   let stopping = path == '/operator/stop' && access.administrative
   if (

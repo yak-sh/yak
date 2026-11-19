@@ -3,8 +3,14 @@
 import { type Built, line, sub } from '@yaks/query'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
+import { human } from '@yaks/id'
 import { kindOf, statusOf, textOf } from './state.ts'
 import { entryStatus } from './reach.ts'
+
+/** What a report calls a row: its short id (`S-12`) where its store numbers
+ * it, else its whole eid, which every tool takes. */
+export let calledIn = (g: Graph, b: Bundle): string =>
+  b.entity.num != null ? human(g.vocab)(b) : b.entity.eid
 
 /** The main thread above a chain of passive children. */
 export let noticeParent = async (g: Graph, child: string): Promise<string> => {
@@ -88,10 +94,11 @@ export let childNotice = async (
   )
   let answer = entries.findLast((b) => b.output && !b.notice)
   let reports = entries.filter((b) => b.notice && b.delivery)
+  let [named] = await g.get([child], ['session'])
   let body = [
-    `${link.quiet == null ? 'Helper' : 'Chat'} ${child} closed (${
-      status == 'settled' ? 'quiet' : status
-    }).`,
+    `${link.quiet == null ? 'Helper' : 'Chat'} ${
+      named ? calledIn(g, named) : child
+    } closed (${status == 'settled' ? 'quiet' : status}).`,
     'Asked:\n' + inputs.map(textOf).join('\n\n'),
     'Done / open:\n' + (answer ? textOf(answer) : textOf(entries.at(-1)!)),
     ...reports.length ? ['Helpers:\n' + reports.map(textOf).join('\n\n')] : [],

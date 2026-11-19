@@ -271,7 +271,9 @@ export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
       type: 'object',
       properties: {
         space: SPACE,
-        task: str("The operator task, or a conversation's session, to stop."),
+        task: str(
+          "The operator task, or a conversation's session, to stop, by eid or short id.",
+        ),
       },
       required: ['task'],
     },

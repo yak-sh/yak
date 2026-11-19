@@ -17,6 +17,7 @@ import { line } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import {
+  calledIn,
   deliverChild,
   noticeParent,
   raiseNotice,
@@ -122,8 +123,17 @@ export let spawnHelper = async (
   return {
     session,
     parent,
-    text: `Helper ${session} started. Its report goes to chat ${parent}.`,
+    text: `Helper ${await called(
+      store,
+      session,
+    )} started. Its report goes to chat ${parent}.`,
   }
+}
+
+// A helper as its report will name it (@yaks/session `calledIn`).
+let called = async (store: OperatorStore, session: string) => {
+  let [row] = await store.g.get([session], ['session'])
+  return row ? calledIn(store.g, row) : session
 }
 
 // What the machine answers a run asked of it with (@yaks/spawn/routes).
@@ -191,8 +201,10 @@ let onMachine = async (
   return {
     session,
     parent,
-    text:
-      `Helper ${session} started on your machine as ${names}. Its report goes to chat ${parent}.`,
+    text: `Helper ${await called(
+      store,
+      session,
+    )} started on your machine as ${names}. Its report goes to chat ${parent}.`,
   }
 }
 

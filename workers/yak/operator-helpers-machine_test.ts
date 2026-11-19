@@ -97,13 +97,14 @@ let parent = String(chat.session)
 await service.drain()
 let root = await rootAt(service.store, eid, jeff)
 let before = steps
-let spawned = (await call(ctx, 'helper_spawn', {
+let started = await call(ctx, 'helper_spawn', {
   space: 'jeffs',
   task: parent,
   title: 'Parser fix',
   brief: 'Fix the parser.',
   machine: 'jeffs',
-})).value!
+})
+let spawned = started.value!
 let helper = String(spawned.session)
 await service.drain()
 let [row] = await g.get([helper])
@@ -137,7 +138,9 @@ let closed = (await transcript(g, root)).filter((b) =>
   (b.delivery as Comp | undefined)?.child == parent
 )
 
-let stopped = await call(ctx, 'operator_stop', { space: 'jeffs', task: helper })
+// The helper as its report names it, its short id here.
+let name = started.text.split(' ')[1]
+let stopped = await call(ctx, 'operator_stop', { space: 'jeffs', task: name })
 await service.drain()
 
 test('a helper on the machine is one spawn asked of it as the Operator, in the conversation, and runs nothing here', () => {
@@ -156,6 +159,11 @@ test('a helper on the machine is one spawn asked of it as the Operator, in the c
 test("the machine's word about its task is the helper's report, folded into the chat's closing notice", () => {
   assertEquals(heard.status, 200)
   assertEquals(reports.length, 1)
+  assertEquals(/^S-\d+$/.test(name), true)
+  assertEquals(
+    String((reports[0].content as Comp).body).split('\n')[0],
+    `Helper ${name} closed (quiet).`,
+  )
   assertStringIncludes(
     String((reports[0].content as Comp).body),
     'Fixed it; checks pass.',
@@ -182,7 +190,7 @@ test('a machine no tunnel of this space reaches starts nothing', async () => {
   assertEquals(sent.length, 1)
 })
 
-test('operator_stop on the helper asks its machine, as the Operator in the conversation, to stop the run there', () => {
+test('operator_stop on the helper, by its short id, asks its machine, as the Operator in the conversation, to stop the run there', () => {
   assertEquals(stopped.value?.stopped, true)
   assertEquals(stops, [{
     caller: 'operator',
