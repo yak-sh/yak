@@ -9,9 +9,11 @@ import {
   as,
   type BindOpts,
   call,
+  catalogue,
   type Census,
   col,
   count,
+  type CreateTable,
   type CreateTrigger,
   derivedOf,
   type Driver,
@@ -29,8 +31,6 @@ import {
   type Stmt,
   table,
 } from '@yaks/sql'
-export let installed = (driver: Driver) =>
-  driver.query({ t: 'pragma', name: 'table_info', arg: POPULATION }).length > 0
 
 export const POPULATION = '_yaks_population'
 export const POPULATION_VERSION = 1
@@ -75,11 +75,71 @@ export let tallying: CreateTrigger[] = (['insert', 'delete', 'update'] as const)
     ] as Extract<Stmt, { t: 'insert' }>[],
   }))
 
-/** Install once, after the entity schema and its archetype backfill stand.
- * Seeding and the triggers commit together; another opener sees both or none. */
-export let population = (driver: Driver): void => {
-  if (installed(driver)) return
-  driver.query({
+// The membership of each archetype: which component tables it holds, kept as
+// descriptors come and go.
+let membership: CreateTrigger[] = [
+  {
+    t: 'create trigger',
+    name: `${MEMBERSHIP}_insert`,
+    timing: 'after',
+    event: 'insert',
+    on: 'archetype',
+    body: [{
+      t: 'insert',
+      into: MEMBERSHIP,
+      cols: ['component', 'archetype'],
+      q: select({
+        cols: [col('value'), col('entity', 'new')],
+        from: call('json_each', [col('tables', 'new')]),
+      }),
+    }],
+  },
+  {
+    t: 'create trigger',
+    name: `${MEMBERSHIP}_delete`,
+    timing: 'after',
+    event: 'delete',
+    on: 'archetype',
+    body: [{
+      t: 'delete',
+      from: MEMBERSHIP,
+      where: eq(col('archetype'), col('entity', 'old')),
+    }],
+  },
+]
+
+// Graves can be written before classification (or by SQL extensions).
+// Their physical presence, not the eventual descriptor, decides liveness.
+let burying: CreateTrigger[] = (['insert', 'delete'] as const).map((event) => {
+  let which = event == 'insert' ? 'new' : 'old'
+  return {
+    t: 'create trigger',
+    name: `${POPULATION}_grave_${event}`,
+    timing: 'after',
+    event,
+    on: 'tombstone',
+    body: [{
+      t: 'insert',
+      into: POPULATION,
+      cols: ['archetype', 'n'],
+      q: select({
+        cols: [col('archetype'), lit(event == 'insert' ? -1 : 1)],
+        from: table('entity'),
+        where: and(
+          eq(col('id'), col('entity', which)),
+          notNull(col('archetype')),
+        ),
+      }),
+      upsert: [{
+        on: [col('archetype')],
+        set: { n: op('+', col('n'), lit(event == 'insert' ? -1 : 1)) },
+      }],
+    }],
+  }
+})
+
+let TABLES: CreateTable[] = [
+  {
     t: 'create table',
     name: POPULATION,
     cols: [{ name: 'archetype', type: 'integer', pk: true }, {
@@ -87,7 +147,45 @@ export let population = (driver: Driver): void => {
       type: 'integer',
       notNull: true,
     }],
-  })
+  },
+  {
+    t: 'create table',
+    name: MEMBERSHIP,
+    cols: [{ name: 'component', type: 'text' }, {
+      name: 'archetype',
+      type: 'integer',
+    }],
+    keys: [{ pk: ['component', 'archetype'] }],
+  },
+]
+
+// Everything the counts are made of. Each trigger moves them with the rows,
+// and the counts are only true while every one stands: a table made again
+// drops the triggers on it (./ddl.ts `refit`), and a spine respun before
+// T-164366 dropped `tallying`, so the platform's directory went on counting
+// each deploy deleted and none created.
+let PARTS = [...TABLES, ...tallying, ...membership, ...burying]
+
+/** Whether the file keeps counts, and every trigger that keeps them true. */
+export let installed = (driver: Driver): boolean => {
+  let held = new Set(catalogue(driver).map((o) => o.name))
+  return PARTS.every((s) => held.has(s.name))
+}
+
+/** Install once, after the entity schema and its archetype backfill stand.
+ * Seeding and the triggers commit together; another opener sees both or none.
+ * Counts missing any part are not trusted: what is left of them goes, and they
+ * are seeded anew from the rows. */
+export let population = (driver: Driver): void => {
+  if (installed(driver)) return
+  let held = new Map(catalogue(driver).map((o) => [o.name, o.type]))
+  for (let s of PARTS.toReversed()) {
+    let kind = held.get(s.name)
+    if (kind == 'table' || kind == 'trigger') {
+      driver.query({ t: 'drop', kind, name: s.name })
+    }
+  }
+  for (let s of TABLES) driver.query(s)
   driver.query({
     t: 'insert',
     into: POPULATION,
@@ -111,15 +209,6 @@ export let population = (driver: Driver): void => {
     }),
   })
   driver.query({
-    t: 'create table',
-    name: MEMBERSHIP,
-    cols: [{ name: 'component', type: 'text' }, {
-      name: 'archetype',
-      type: 'integer',
-    }],
-    keys: [{ pk: ['component', 'archetype'] }],
-  })
-  driver.query({
     t: 'insert',
     into: MEMBERSHIP,
     cols: ['component', 'archetype'],
@@ -132,65 +221,7 @@ export let population = (driver: Driver): void => {
       }],
     }),
   })
-  driver.query({
-    t: 'create trigger',
-    name: `${MEMBERSHIP}_insert`,
-    timing: 'after',
-    event: 'insert',
-    on: 'archetype',
-    body: [{
-      t: 'insert',
-      into: MEMBERSHIP,
-      cols: ['component', 'archetype'],
-      q: select({
-        cols: [col('value'), col('entity', 'new')],
-        from: call('json_each', [col('tables', 'new')]),
-      }),
-    }],
-  })
-  driver.query({
-    t: 'create trigger',
-    name: `${MEMBERSHIP}_delete`,
-    timing: 'after',
-    event: 'delete',
-    on: 'archetype',
-    body: [{
-      t: 'delete',
-      from: MEMBERSHIP,
-      where: eq(col('archetype'), col('entity', 'old')),
-    }],
-  })
-  for (let t of tallying) driver.query(t)
-  // Graves can be written before classification (or by SQL extensions).
-  // Their physical presence, not the eventual descriptor, decides liveness.
-  for (let event of ['insert', 'delete'] as const) {
-    let which = event == 'insert' ? 'new' : 'old'
-    let n = event == 'insert' ? -1 : 1
-    driver.query({
-      t: 'create trigger',
-      name: `${POPULATION}_grave_${event}`,
-      timing: 'after',
-      event,
-      on: 'tombstone',
-      body: [{
-        t: 'insert',
-        into: POPULATION,
-        cols: ['archetype', 'n'],
-        q: select({
-          cols: [col('archetype'), lit(n)],
-          from: table('entity'),
-          where: and(
-            eq(col('id'), col('entity', which)),
-            notNull(col('archetype')),
-          ),
-        }),
-        upsert: [{
-          on: [col('archetype')],
-          set: { n: op('+', col('n'), lit(n)) },
-        }],
-      }],
-    })
-  }
+  for (let t of [...tallying, ...membership, ...burying]) driver.query(t)
 }
 
 export type Population = { value: string; n: number; tables: string[] }

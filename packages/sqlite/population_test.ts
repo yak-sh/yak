@@ -109,6 +109,40 @@ test('an existing file seeds once and another opener reads persisted population'
   assertEquals(kept, { text: 'kept' })
 })
 
+// A spine respun before it raised its other triggers again kept the counts
+// and lost the triggers moving them (T-164366): owners born after it were
+// never counted, and each one deleted still was, so yaks.app's directory
+// counted 1,070 of 1,195 deploys. Counts with a trigger missing are not read,
+// and the next count seeds them anew.
+let respun = fixture()
+let born = (n: number, from = 0) =>
+  respun.g.apply(
+    Array.from({ length: n }, (_, i) => ({
+      entity: { eid: `respun${from + i}` },
+      note: {},
+    })),
+  )
+born(3)
+Number(respun.store.rows('.note&.count')[0].n)
+for (let event of ['insert', 'delete', 'update']) {
+  respun.d.query({ t: 'drop', kind: 'trigger', name: `${POPULATION}_${event}` })
+}
+let lost = populations(respun.d)
+born(4, 3)
+respun.g.apply([{ entity: { eid: 'respun0' }, $delete: true }])
+let heal = (line: string) => Number(respun.store.rows(line)[0].n)
+let healed = heal('.note&.count')
+let mended = populations(respun.d)?.reduce((n, b) => n + b.n, 0)
+let whole = Number(respun.store.rows('.entity.eid&.count')[0].n)
+born(1, 7)
+let after = heal('.note&.count')
+test('counts that lost a trigger are seeded anew rather than read', () => {
+  assertEquals(lost, undefined)
+  assertEquals(healed, 6)
+  assertEquals(mended, whole)
+  assertEquals(after, 7)
+})
+
 let observed = fixture()
 observed.g.apply(
   Array.from(
