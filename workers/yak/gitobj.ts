@@ -298,9 +298,13 @@ export let releases = (env: Bound, dir: Held): Releases => ({
  * Per app, in `version` order, so the chain a clone walks is the order the
  * versions actually happened in. An app whose commit fails is skipped and left
  * for tomorrow: one app's bucket is never another app's problem.
+ *
+ * Only the deploys no commit targets are read: the job runs inside the
+ * directory's own object, and reading every deploy with its manifest held
+ * that object for seconds each day, long enough for its queue to overflow.
  */
 export let backfilled = async (env: Bound, dir: Held): Promise<number> => {
-  let deploys = (await dir.read(line`.deploy&?created`))
+  let deploys = (await dir.read(line`.deploy&!commits_target&?created`))
     .map(deployOf)
     .filter((d): d is Deploy => !!d)
   let apps = new Map<Eid, Deploy[]>()
