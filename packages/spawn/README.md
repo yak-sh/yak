@@ -132,7 +132,10 @@ entry as a final import receipt, even if the provider already printed a stop. A
 nonzero exit is recorded with that entry, its text naming the cause: the exit
 code or the signal it names, a wrapper killed before it wrote a code, or one
 that never reported a pid, then the last line the provider wrote on stderr. A
-run nobody asked to stop that ends any way but cleanly is reported.
+run nobody asked to stop that ends any way but cleanly is reported. One whose
+provider could not reach its API (`server_error`: a 5xx, or no DNS yet at boot)
+is retried once instead, by a request telling it to carry on; the retry that
+ends the same way is reported.
 
 <a id="carrying-on"></a>
 

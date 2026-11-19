@@ -909,10 +909,12 @@ export let finish = async (
   o: Opts = {},
   through?: string,
 ): Promise<boolean | undefined> => {
-  let limited = await ended(g, session, o, through)
+  let next = await ended(g, session, o, through)
   try {
-    // A run carried on in another account goes on as one that ended well.
-    if (limited && await moveOn(g, session, o)) return true
+    // A run carried on in another account, or retried, goes on as one that
+    // ended well.
+    if (next == 'limit' && await moveOn(g, session, o)) return true
+    if (next == 'retry') return await retry(g, session), true
     let well = cleanEnd(await ran(g, session))
     if (well) await rouse(g, session)
     await complete(g, session)
@@ -1103,20 +1105,20 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
 // running forever. So the ending is written down — the process ending is
 // observed, not inferred from the conversation, which is the difference
 // between evidence and a guess. A run said it ended when the request it
-// answered has a stop after it. Whether it was its plan's limit that ended
-// it, unasked.
+// answered has a stop after it. What ended it, unasked, when it goes on: its
+// plan's limit, or a provider it could not reach the first time.
 let ended = async (
   g: Graph,
   session: string,
   o: Opts,
   through?: string,
-): Promise<boolean> => {
+): Promise<Onward | undefined> => {
   let [stop, request] = await Promise.all([
     receiptOf(g, session),
     through ? one(g, through) : latestRequest(g, session),
   ])
   let seq = (b?: Bundle) => Number(comp(b, 'entry')?.seq ?? 0)
-  if (stop && seq(stop) > seq(request)) return false
+  if (stop && seq(stop) > seq(request)) return undefined
   let row = await ran(g, session)
   let code = comp(row, EXIT)?.code as number | null | undefined
   // A shell or service manager can ask the provider to stop without writing
@@ -1125,6 +1127,10 @@ let ended = async (
   let stopped = !!row?.stop || [129, 130, 143].includes(code ?? 0)
   let said = code === 0 ? undefined : await refused(g, session, seq(request))
   let no = declined(said?.code)
+  // A provider it could not reach is tried once more: the run the retry
+  // started that ends the same way is the failure.
+  let again = !stopped && no == DECLINED.server_error &&
+    !await retried(g, request)
   let why = code === 0
     ? ''
     : no
@@ -1160,19 +1166,56 @@ let ended = async (
   // A run nobody asked to stop that ended any way but cleanly is a failure,
   // told where it is seen. One its provider declined ended as the provider
   // chose, and its starter hears why (./completion.ts); one that played a
-  // recording ended as it was chosen to.
+  // recording ended as it was chosen to; one that is retried goes on.
   if (
-    code !== 0 && !stopped && !no &&
+    code !== 0 && !stopped && !again &&
+    (!no || no == DECLINED.server_error) &&
     !(await asked(g, session).catch(() => null))?.recorded
   ) {
     failure(o, session, 'run ended', `a spawned run ended: ${why}`)
   }
-  return !stopped && no == DECLINED.rate_limit
+  return stopped
+    ? undefined
+    : no == DECLINED.rate_limit
+    ? 'limit'
+    : again
+    ? 'retry'
+    : undefined
+}
+
+// How a run that ended goes on: in another account (`moveOn`), or retried.
+type Onward = 'limit' | 'retry'
+
+// What a run a provider it could not reach ended is told as it is retried.
+const RETRIED = 'The provider could not be reached and ended your last ' +
+  'turn. Carry on where you left off.'
+
+// Whether a request is the retry of a run its provider could not reach.
+let retried = async (g: Graph, request?: Bundle): Promise<boolean> =>
+  !!request && comp(
+      await one(g, request.entity.eid, ['content']),
+      'content',
+    )?.body == RETRIED
+
+// A run a provider it could not reach ended (a network down, a DNS not up
+// yet at boot) is asked again on its thread and account, once, by a request
+// that tells it to carry on.
+let retry = async (g: Graph, session: string): Promise<void> => {
+  let last = await latestRequest(g, session)
+  await g.apply([{
+    entity: {
+      eid: derivedEid(`spawn retrying ${session} ${last?.entity.eid ?? ''}`),
+    },
+    entry: { session },
+    using: comp(last, 'using'),
+    content: { body: RETRIED },
+  }], { trusted: true })
 }
 
 // The refusals that are the provider declining a run, not a fault of it: its
-// plan's limit, and its content filter refusing what the run was asked. Each
-// is the reason the run's ending records, and what its account begins with.
+// plan's limit, its content filter refusing what the run was asked, and its
+// API out of reach (`server_error`: a 5xx, or no network). Each is the reason
+// the run's ending records, and what its account begins with.
 let DECLINED: Record<string, { reason: string; why: string }> = {
   rate_limit: {
     reason: 'Plan limit reached',
@@ -1181,6 +1224,10 @@ let DECLINED: Record<string, { reason: string; why: string }> = {
   content_policy: {
     reason: 'Provider refused the content',
     why: "the provider's content filter refused the run",
+  },
+  server_error: {
+    reason: 'Provider unreachable',
+    why: 'the provider could not be reached',
   },
 }
 let declined = (code?: string) =>

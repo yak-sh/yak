@@ -11,7 +11,7 @@ import { storage } from '@yaks/sqlite'
 import { stepping } from '../sqlite/testing.ts'
 import { claude } from './adapters.ts'
 import { asked, detached, down, finish, follow, resume, start } from './run.ts'
-import { FILTERED, LIMIT } from './standin.ts'
+import { FILTERED, LIMIT, UNREACHABLE } from './standin.ts'
 import {
   asking,
   FAKE,
@@ -275,6 +275,39 @@ test("a run its five hours end carries on in another account with room, its thre
     let ending = (await entries(g)).filter((e) => e.stop)
       .map((e) => comp(e, 'failed')?.reason)
     assertEquals(ending, ['Plan limit reached', 'Plan limit reached'])
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
+test('a run whose provider could not be reached is retried once, and the retry ending the same way is the failure', async () => {
+  let { g } = tracked()
+  let dir = Deno.makeTempDirSync({ prefix: 'spawn-' })
+  let told: string[] = []
+  let runs = 0
+  try {
+    await g.apply(standing('S1', 'E1', 'unreachable'))
+    await start(g, 'S1', {
+      cwd: dir,
+      dir,
+      poll: 5,
+      launch: (store, spec, o) => (runs++, playing(store, spec, o)),
+      report: (e, c) => void told.push(`${c?.tags?.step}: ${e}`),
+    })
+    await until(
+      async () =>
+        runs == 2 &&
+        await Deno.stat(`${dir}/S1.out`).then(() => false, () => true),
+      'the retry to end',
+    )
+    let ending = (await entries(g)).filter((e) => e.stop)
+      .map((e) => comp(e, 'failed')?.reason)
+    assertEquals([runs, ending, told], [2, [
+      'Provider unreachable',
+      'Provider unreachable',
+    ], [
+      `run ended: Error: a spawned run ended: the provider could not be reached: ${UNREACHABLE}`,
+    ]])
   } finally {
     Deno.removeSync(dir, { recursive: true })
   }

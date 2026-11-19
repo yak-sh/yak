@@ -9,7 +9,8 @@
 //            command: '/srv/repo/packages/spawn/standin.ts'}
 //
 // The model it is asked for names the recording, so the provider serves one
-// model per ending: `clean`, `limit`, `hours`, `refusal`, `crash`. A model it
+// model per ending: `clean`, `limit`, `hours`, `unreachable`, `refusal`,
+// `crash`. A model it
 // has no recording of ends cleanly.
 //
 // The recordings are written to the shapes @yaks/session's claude reader
@@ -46,6 +47,10 @@ export let LIMIT = "You've reached your Fable limit."
 /** What the plan said when its five hours ended the runs of 2026-11-19. */
 export let HOURS =
   "You've hit your 5-hour limit · resets 3:50pm (America/Detroit)"
+
+/** What claude said when no DNS answered it after the reboot of 2026-11-19. */
+export let UNREACHABLE =
+  "API Error: Can't reach the API server — check your internet or DNS (EAI_AGAIN)"
 
 /** What Codex's content filter said when it ended a run of 2026-11-15. */
 export let FILTERED =
@@ -99,6 +104,12 @@ export let endings: Record<string, Recording> = {
   // here on the answer the stand-in writes itself.
   filtered: {
     lines: [say(FILTERED, { error: 'content_policy' }), result(FILTERED)],
+    code: 1,
+  },
+  // The API could not be reached: the answer claude writes itself once its
+  // own retries are spent, and a failed result.
+  unreachable: {
+    lines: [say(UNREACHABLE, { error: 'server_error' }), result(UNREACHABLE)],
     code: 1,
   },
   // The API refused the turn for another reason.
