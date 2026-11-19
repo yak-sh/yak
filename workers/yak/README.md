@@ -1243,8 +1243,8 @@ Closing marks the chat `completed{}` so later alarms skip it. A new input clears
 that mark; closing again updates its existing notice. Each turn uses the
 caller's current permissions.
 
-`helper_spawn({space, task, brief, model?})` queues a helper under the private
-chat named by `task` (its task or session id), and returns
+`helper_spawn({space, task, brief, title?, model?, machine?})` queues a helper
+under the private chat named by `task` (its task or session id), and returns
 `{session, parent,
 text}` immediately. The helper uses the caller's permissions
 and the space's shared budget. `operator_read` and `operator_stop` accept its
@@ -1253,6 +1253,23 @@ their results are included in that chat's closing notice. A failure also reaches
 the main thread immediately, and a question filed with `decision_new` sends a
 passive notice there pointing to the choices in Updates. Routine helper
 completions start no model turn in either thread.
+
+With `machine` (a space the caller owns whose tunnel goes to their own machine,
+as `mcp_server.machine` names one), the helper runs on that machine instead of
+in the sandbox, for the space's Operator alone and only where the machine
+already answers its steps (operator.ts `machineFor`). The machine is asked once,
+`POST /session/spawn` through the tunnel (@yaks/spawn/routes), with the brief,
+title and model; it files the brief as a task and starts an agent on it through
+its own spawn path and providers, recorded `by` the persona its tunnel config
+names and `via` the session standing there for the chat. Here the helper is the
+same child of the chat, holding the brief and
+`operator_machine{space, task,
+session, names}`, and nothing here runs it. The
+run's report knocks that standing session, the machine tells it back on the
+`machine` channel naming the task (`about`), and those words are the helper's
+answer (operator-helpers.ts `machineReport`), reaching the chat as any helper's
+report does. The machine opens `/session/spawn` to the Operator by listing it
+under its tunnel's `callers.operator.routes`.
 
 `operator_retry({space, request})` runs a request that could not finish again,
 as itself, once its cause is fixed: its failure and the answer that told of it

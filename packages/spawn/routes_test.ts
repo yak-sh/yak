@@ -1,0 +1,135 @@
+// `/session/spawn` as another host asks it: the brief filed as a task and an
+// agent started on it, both written as whoever the host says is asking.
+import { line } from '@yaks/query'
+import { equal, test } from '@yaks/testing'
+import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
+import { graph, identityEid } from '@yaks/graph'
+import { loadTools } from '@yaks/graph/tools'
+import { loadVocab } from '@yaks/vocab'
+import { link } from '@yaks/edge'
+import { edgeDoc, edgeKeywords } from '@yaks/edge'
+import { idDoc, idKeywords } from '@yaks/id'
+import { ids } from '@yaks/id/graph'
+import { nameKeywords } from '@yaks/names'
+import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { ram } from '@yaks/ram'
+import { docDoc } from '@yaks/doc'
+import { taskDoc } from '@yaks/task'
+import { runs as taskRuns } from '@yaks/task/tools'
+import { modelDoc } from '@yaks/model'
+import { personaDoc } from '@yaks/persona'
+import { sessionDoc, sessions } from '@yaks/session'
+import { toolsDoc } from '@yaks/tools/vocab'
+import { fileDoc } from '@yaks/file/vocab'
+import { machineDoc } from '@yaks/machine/vocab'
+import { processDoc } from '@yaks/process'
+import { runner } from '@yaks/tools'
+import { provenanceDoc } from '@yaks/provenance'
+import { runs } from './tools.ts'
+import { spawnDoc } from './vocab.ts'
+import { PATH, routes } from './routes.ts'
+
+let vocab = loadVocab(
+  [
+    kernelDoc,
+    idDoc,
+    sessionDoc,
+    toolsDoc,
+    modelDoc,
+    fileDoc,
+    machineDoc,
+    personaDoc,
+    processDoc,
+    docDoc,
+    taskDoc,
+    spawnDoc,
+    edgeDoc,
+    provenanceDoc,
+  ],
+  [kernelKeywords, idKeywords, nameKeywords, edgeKeywords],
+)
+
+let PROVIDER = identityEid('provider', ['claude'])
+let MODEL = identityEid('model', ['opus'])
+let PERSONA = crypto.randomUUID(), STANDING = crypto.randomUUID()
+
+// A host whose door says every request is the persona, through the session
+// standing for its conversation, as a tunnel's does; or says nobody.
+let hosting = async (actor: Actor | null) => {
+  let g: Graph = graph({
+    storage: ram(vocab, { number: true }),
+    vocab,
+    plugins: [ids(vocab), sessions()],
+  })
+  await g.apply([
+    {
+      entity: { eid: PROVIDER },
+      provider: { name: 'claude', transport: 'process' },
+    },
+    { entity: { eid: MODEL }, model: { name: 'opus' } },
+    { ...link(PROVIDER, 'serves', MODEL), serves: { name: 'opus' } },
+    { entity: { eid: PERSONA }, persona: {}, doc: { title: 'An Operator' } },
+    { entity: { eid: STANDING }, session: { door: 'tunnel' } },
+  ], { trusted: true })
+  let tools = [
+    ...loadTools(taskDoc, taskRuns()),
+    ...loadTools(spawnDoc, runs({ graph: g })),
+  ]
+  let [route] = routes({
+    graph: g,
+    who: () => actor,
+    runner: runner(g, { tools }),
+  }, { provider: PROVIDER })
+  let ask = (body: object) =>
+    route.handle(
+      new Request(`http://machine${PATH}`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    )
+  return { g, ask }
+}
+
+let comp = (b: Bundle | undefined, name: string) => (b?.[name] ?? {}) as Comp
+
+test('a brief becomes a task and a run on it, written as the tunnel’s caller', async () => {
+  let { g, ask } = await hosting({ by: PERSONA, via: STANDING })
+  let r = await ask({ title: 'Check the parser', brief: 'Fix the parser.' })
+  let spawned = await r.json()
+  let [task, session] = await g.get([spawned.task, spawned.session])
+  let [first] = await g.read(
+    line`.entry.session=${spawned.session}&.using&.fields=using,content.body`,
+  )
+  equal(r.status, 200)
+  equal(comp(task, 'doc'), {
+    title: 'Check the parser',
+    body: 'Fix the parser.',
+  })
+  equal(comp(task, 'created').by, PERSONA)
+  equal(comp(task, 'created').via, STANDING)
+  equal(comp(task, 'claim').session, spawned.session)
+  equal(comp(session, 'spawned').parent, STANDING)
+  equal(comp(session, 'created').by, PERSONA)
+  equal(comp(first, 'using').provider, PROVIDER)
+  equal(String(comp(first, 'content').body).includes('Fix the parser.'), true)
+  equal(spawned.names.task.startsWith('T-'), true)
+})
+
+test('a run asks for a model, and one its provider does not serve is refused', async () => {
+  let { g, ask } = await hosting({ by: PERSONA, via: STANDING })
+  let spawned = await (await ask({ brief: 'Go.', model: MODEL })).json()
+  let [first] = await g.read(
+    line`.entry.session=${spawned.session}&.using&.fields=using`,
+  )
+  let refused = await ask({ brief: 'Go.', model: 'nobody-serves-this' })
+  equal(comp(first, 'using').model, MODEL)
+  equal(refused.status, 422)
+})
+
+test('nobody, and no brief, start nothing', async () => {
+  let nobody = await (await hosting(null)).ask({ brief: 'Go.' })
+  let { g, ask } = await hosting({ by: PERSONA, via: STANDING })
+  let empty = await ask({ brief: '  ' })
+  equal([nobody.status, empty.status], [403, 400])
+  equal(await g.read(line`.task&.fields=entity.eid`), [])
+})

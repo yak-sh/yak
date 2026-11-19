@@ -4619,6 +4619,7 @@
         "packageJson": {
           "dependencies": [
             "npm:@jsr/std__assert@1",
+            "npm:@yaks/api@0.2.29",
             "npm:@yaks/context@0.2.23",
             "npm:@yaks/doc@0.2.24",
             "npm:@yaks/edge@0.2.24",

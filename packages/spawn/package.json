@@ -8,11 +8,13 @@
     "./tools": "./tools.ts",
     "./over": "./over.ts",
     "./effects": "./effects.ts",
-    "./service": "./service.ts"
+    "./service": "./service.ts",
+    "./routes": "./routes.ts"
   },
   "license": "Apache-2.0",
   "description": "Runs an agent CLI as a detached child process and reads its JSON-lines stdout back into the graph as a session transcript.",
   "dependencies": {
+    "@yaks/api": "0.2.29",
     "@yaks/context": "0.2.23",
     "@yaks/edge": "0.2.24",
     "@yaks/effects": "0.2.33",

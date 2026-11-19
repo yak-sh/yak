@@ -1,9 +1,21 @@
 // Outside helpers belong to a caller-owned chat, never the person's main
 // thread. Questions for the person cross that boundary as passive notices.
+//
+// A helper runs in yaks.app's sandbox, or on its person's own machine, the
+// one a space's tunnel goes to (`machine`, as `mcp_server.machine` names
+// one). Either way it is a child session of the chat, so its report reaches
+// the chat as every helper's does (@yaks/session `deliverChild`). On a
+// machine nothing here runs it: the machine is asked once to run an agent on
+// the brief (`POST /session/spawn`, @yaks/spawn/routes) as the Operator, in
+// the conversation the chat works for, and the session here holds the brief
+// and where it went (`operator_machine`). The machine's word about that task,
+// which its run's report knocks the conversation with (@yaks/tunnel/effects),
+// is the helper's answer ({@link machineReport}).
 import { line } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import {
+  deliverChild,
   noticeParent,
   raiseNotice,
   spawnChild,
@@ -52,7 +64,7 @@ export let helperParent = async (
  * (`choose`), answered at once; its report reaches the chat as the session
  * tools' helpers' do (@yaks/session `spawnChild`). */
 export let spawnHelper = async (
-  { store, choose }: Pick<Operator, 'store' | 'choose'>,
+  { store, choose, machine }: Pick<Operator, 'store' | 'choose' | 'machine'>,
   held: Pick<Held, 'person' | 'administrative'>,
   space: Space,
   args: Args,
@@ -73,15 +85,29 @@ export let spawnHelper = async (
   ) {
     throw refuse('access', 'Start a chat with your current permissions first.')
   }
-  let selected = await choose(
-    held,
-    space,
-    typeof args.model == 'string' ? args.model : undefined,
-  )
+  let title = typeof args.title == 'string' ? args.title.trim() : ''
+  let model = typeof args.model == 'string' ? args.model : undefined
+  let at = typeof args.machine == 'string' ? args.machine.trim() : ''
+  if (at) {
+    let reached = at == space.slug &&
+      await machine(held, space, parent)
+    if (!reached) {
+      throw refuse(
+        'access',
+        `No machine of yours answers through ${at}'s tunnel for this Operator: name ${space.slug}, whose tunnel goes to your machine, or omit machine for yaks.app's sandbox.`,
+      )
+    }
+    return await onMachine(store, reached, space, parent, {
+      brief,
+      title,
+      ...model ? { model } : {},
+    }, scope)
+  }
+  let selected = await choose(held, space, model)
   let session = await spawnChild(store.g, parent, {
     prompt: brief,
     model: selected.model,
-    ...typeof args.title == 'string' ? { title: args.title } : {},
+    ...title ? { title } : {},
   })
   // The chat takes up the report when it comes, however long ago it closed.
   await store.g.apply([{ entity: { eid: parent }, completed: null }], {
@@ -92,6 +118,103 @@ export let spawnHelper = async (
     parent,
     text: `Helper ${session} started. Its report goes to chat ${parent}.`,
   }
+}
+
+// What the machine answers a run asked of it with (@yaks/spawn/routes).
+type Spawned = {
+  task: string
+  session: string
+  names: { task: string; session: string }
+}
+
+/** A helper on the machine `reached`: the run asked of it, and the child of
+ * the chat `parent` that stands for it here, holding the brief and where it
+ * went, which no runner here takes up. */
+let onMachine = async (
+  store: OperatorStore,
+  reached: typeof fetch,
+  space: Space,
+  parent: string,
+  asked: { brief: string; title: string; model?: string },
+  scope: Bundle | undefined,
+) => {
+  let r = await reached('http://machine/session/spawn', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(asked),
+  })
+  let said = await r.json().catch(() => ({})) as
+    & Partial<Spawned>
+    & { error?: { message?: string } }
+  if (!r.ok || !said.task || !said.session) {
+    throw refuse(
+      'machine',
+      `Your machine did not start the helper (${r.status}): ${
+        said.error?.message ?? 'it said nothing more'
+      }`,
+    )
+  }
+  let session = crypto.randomUUID()
+  let names = `${said.names?.task ?? said.task} ${
+    said.names?.session ?? said.session
+  }`
+  await store.g.apply([
+    {
+      entity: { eid: session },
+      session: { id: session },
+      spawned: { parent, notice: true },
+      ...scope?.operator_session
+        ? { operator_session: scope.operator_session }
+        : {},
+      operator_machine: {
+        space: space.eid,
+        task: said.task,
+        session: said.session,
+        names,
+      },
+      ...asked.title ? { doc: { title: asked.title } } : {},
+    },
+    {
+      entity: { eid: derivedEid(`${session}:input`) },
+      entry: { session, from: 'your parent session' },
+      content: { body: asked.brief },
+    },
+    // The chat takes up the report when it comes, however long ago it closed.
+    { entity: { eid: parent }, completed: null },
+  ], { trusted: true })
+  return {
+    session,
+    parent,
+    text:
+      `Helper ${session} started on your machine as ${names}. Its report goes to chat ${parent}.`,
+  }
+}
+
+/**
+ * What a machine said about `about` (`text`, the knock `key` names), as the
+ * report of the helper here that runs as that task there ({@link onMachine}):
+ * its answer, which reaches its chat as every helper's does. Answers the
+ * helper, or nothing where no helper runs as `about`, which leaves the words
+ * to whatever else takes in a machine's word.
+ */
+export let machineReport = async (
+  store: OperatorStore,
+  told: { about?: string; text: string; key: string },
+): Promise<string | undefined> => {
+  if (!told.about) return
+  let [helper] = await store.g.read(
+    line`.operator_machine.task=${told.about}&.spawned&.fields=entity.eid`,
+  )
+  let session = helper?.entity.eid
+  if (!session) return
+  await store.g.apply([{
+    entity: { eid: derivedEid(`operator-machine-report|${told.key}`) },
+    entry: { session },
+    content: { body: told.text },
+    output: { source: derivedEid(`${session}:input`) },
+  }], { trusted: true })
+  await deliverChild(store.g, session)
+  return session
 }
 
 export let questionNotice = async (

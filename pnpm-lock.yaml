@@ -4442,6 +4442,9 @@ importers:
 
   packages/spawn:
     dependencies:
+      '@yaks/api':
+        specifier: 0.2.29
+        version: link:../api
       '@yaks/context':
         specifier: 0.2.23
         version: link:../context

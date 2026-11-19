@@ -301,6 +301,30 @@ export const effects = spawning({ adapters: { ...adapters, mine } })
 export const service = adopting({ adapters: { ...adapters, mine } })
 ```
 
+## Asked by another host
+
+`@yaks/spawn/routes` answers `POST /session/spawn` on a host that serves `web`:
+another host's brief (`{brief, title?, model?}`) filed as a task (`task_new`)
+and an agent started on it (`session_spawn`), both called as whoever the host
+says is asking, and answered at once with `{task, session, names}`. The provider
+is the config's `provider`, by name (default `claude`). A request the host names
+nobody for is refused. Through a tunnel the caller is the persona its config
+names, through the session standing for the caller's conversation
+(@yaks/tunnel/routes), so the run's report knocks that session, about the task,
+and the tunnel tells the conversation (@yaks/tunnel/effects). The route says
+nothing of who may ask; a machine opens it the way it opens any path:
+
+```jsonc
+{
+  "use": "@yaks/tunnel",
+  "with": {
+    "callers": {
+      "operator": { "routes": ["/mcp", "/session/spawn"], "persona": "N-32" }
+    }
+  }
+}
+```
+
 ## Exports
 
 The main module exports the built-in `claude` and `codex` adapters, the
@@ -313,6 +337,7 @@ Additional entry points are:
 - `@yaks/spawn/service`: `service` and `adopting()`, the duty that resumes runs
   after a restart;
 - `@yaks/spawn/tools`: `runs()`, duration parsing, and brief formatting;
+- `@yaks/spawn/routes`: `routes()` and `PATH`, `/session/spawn`;
 - `@yaks/spawn/over`: `over()`, whether a session's run is over, read from the
   graph alone, so a Worker can import it.
 

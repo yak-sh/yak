@@ -216,6 +216,9 @@ export let operatorTools: Omit<Tool, 'title' | 'description'>[] = [
         ),
         brief: str('The work for the helper to do, with the context it needs.'),
         model: str('The model to use. Omit for the Operator’s default model.'),
+        machine: str(
+          'Where the helper runs: a space you own whose tunnel goes to your own machine, by its slug. Omit for yaks.app’s sandbox.',
+        ),
       },
       required: ['task', 'brief'],
     },

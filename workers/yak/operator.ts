@@ -2412,6 +2412,8 @@ export let operating = (
     tools,
     chats,
     choose,
+    machine: (held, space, session) =>
+      reachMachine(space, held.person, () => topOf(g, session)),
     named,
     watching,
     scheduled,
@@ -2542,6 +2544,14 @@ export type Operator = {
     model?: string,
     provider?: string,
   ) => Promise<{ provider: string; model: string }>
+  /** The machine `space`'s tunnel goes to, as `held`'s Operator reaches it
+   * in the conversation `session` works for ({@link machineFor}), or null
+   * where none serves them. */
+  machine: (
+    held: Asker,
+    space: Space,
+    session: string,
+  ) => Promise<typeof fetch | null>
   /** What to call a person, as the page names them (directory `nameAt`). */
   named: (person: string) => Promise<string | null>
   /** A subscription's query, read as the person who set it. */

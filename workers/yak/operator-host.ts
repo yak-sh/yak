@@ -1736,6 +1736,20 @@ export let operatorRequest = async (
     }
     let [old] = options?.id ? await store.g.get([options.id]) : []
     if (old && !await own(old.entity.eid)) return missing()
+    // A machine's word about the task a helper runs as there is that
+    // helper's report, and no request (operator-helpers.ts).
+    if (intake.channel == 'machine' && intake.about && options?.id) {
+      let { machineReport } = await import('./operator-helpers.ts')
+      let helper = await machineReport(store, {
+        about: String(intake.about),
+        text: String(args.say ?? ''),
+        key: options.id,
+      })
+      if (helper) {
+        await armed()
+        return Response.json({ request: helper })
+      }
+    }
     let { receive } = await channels()
     let id = await receive(store, intake, String(args.say ?? ''), options)
     await armed()

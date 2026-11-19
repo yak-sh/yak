@@ -144,7 +144,7 @@ test('an ended run saves its spoken report after its claim is gone', async () =>
     (report.doc as { body: string }).body,
     `${await name(finished)} — exited 0\n\nFixed it; checks pass.`,
   )
-  equal(report.knock, { target: 'parent' })
+  equal(report.knock, { target: 'parent', about: 'work' })
 })
 
 test('the spawning session hears its child report through the listener', async () => {
@@ -173,7 +173,7 @@ test('a run whose starter is over reports to the nearest session up its line', a
   ])
   await complete(handed, 'child')
   let [report] = await handed.read('.comment.target=work&*')
-  equal(report.knock, { target: 'root' })
+  equal(report.knock, { target: 'root', about: 'work' })
   let lines: string[] = []
   await hear(handed, null, 'root', (line) => lines.push(line))
   equal(lines.map((line) => line.split(' ')[0]), ['knock'])
@@ -249,7 +249,7 @@ test('a run that ends while its subagents are live names each one cut off', asyn
       'Fixed it; checks pass.',
     ].join('\n\n'),
   )
-  equal(report.knock, { target: 'parent' })
+  equal(report.knock, { target: 'parent', about: 'work' })
 })
 
 test('a run with no spoken output still reports its ending', async () => {

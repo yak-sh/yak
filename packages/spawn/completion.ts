@@ -1,5 +1,5 @@
-// An ended CLI run leaves its report on its task and a knock for whoever
-// started it, or for the nearest session up that one's line once it is over
+// An ended CLI run leaves its report on its task and a knock about that task
+// for whoever started it, or for the nearest session up that one's line once it is over
 // (@yaks/session `reported`). The knock is ordinary session-bus delivery, so
 // listen, hooks and native transcripts all hear the same receipt: one row
 // carrying the whole report, which is the only knock its work on the task
@@ -110,7 +110,11 @@ export let complete = async (g: Graph, session: string): Promise<void> => {
           entity: { eid },
           doc: { title, body },
           ...target ? { comment: { target } } : {},
-          ...notify ? { knock: { target: notify } } : {},
+          // What it tells of is the task the run worked, so whoever hears
+          // the knock elsewhere (@yaks/tunnel/effects) knows which run ended.
+          ...notify
+            ? { knock: { target: notify, ...target ? { about: target } : {} } }
+            : {},
           $was: { doc: { body: null } },
         }], actor),
         { trusted: true },
