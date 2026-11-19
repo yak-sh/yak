@@ -4,7 +4,7 @@
     "call": {
       "component": true,
       "type": "object",
-      "description": "A recorded tool invocation.",
+      "description": "A recorded tool invocation. `to` references the tool, so a query names a tool by .call.to.tool.name=…; `name`, when present, is the name the caller wrote.",
       "properties": {
         "to": {
           "type": "string",

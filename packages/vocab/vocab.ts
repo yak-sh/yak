@@ -723,10 +723,24 @@ export let unknownProps = (v: Vocab, comp: string, props: string[]): string => {
   let own = [...comp == SPINE ? [EID] : [], ...v.props(comp)]
   let about = own.length ? '' : v.comp(comp)?.description
   let near = [...new Set(props.flatMap((p) => nearest(p, own)))]
+  let first = (c: string) =>
+    v.props(c).find((q) => v.prop(c, q)?.scalar != 'jsonb')
+  // A kind the component references (`call.tool`, where `call.to` is a ref
+  // tool) is reached through that reference, beside any own property that
+  // says the same thing (`call.name`).
+  let through = props.flatMap((p) => {
+    let q = own.find((q) => v.prop(comp, q)?.ref == p)
+    let f = q && first(p)
+    if (!q || !f) return []
+    let same = own.includes(f) ? ` or its own .${comp}.${f}=…` : ''
+    return [
+      `${comp}.${q} references the ${p}: .${comp}.${q}.${p}.${f}=…${same}`,
+    ]
+  })
   // A component named as a property (`person.email`) is worn beside it.
-  let worn = props.flatMap((p) => {
-    let first = v.props(p).find((q) => v.prop(p, q)?.scalar != 'jsonb')
-    return first ? [`.${comp}&.${p}.${first}=…`] : []
+  let worn = through.length ? [] : props.flatMap((p) => {
+    let f = first(p)
+    return f ? [`.${comp}&.${p}.${f}=…`] : []
   })
   return `unknown ${props.length > 1 ? 'properties' : 'property'}: ${
     props.map((p) => `${comp}.${p}`).join(', ')
@@ -734,7 +748,7 @@ export let unknownProps = (v: Vocab, comp: string, props: string[]): string => {
     near.length
       ? ` (closest declared: ${near.map((p) => `${comp}.${p}`).join(', ')})`
       : ''
-  } — ${
+  } — ${through.map((t) => `${t}; `).join('')}${
     worn.length
       ? `a component is no property of another, so an entity wearing both ` +
         `is ${worn.join(' or ')}; `

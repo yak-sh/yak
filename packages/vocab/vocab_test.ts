@@ -1055,6 +1055,14 @@ test('an unknown property is refused with what its component holds', () => {
         description: 'a stable name for an entity',
         properties: {},
       },
+      loan: {
+        component: true,
+        type: 'object',
+        properties: {
+          of: { type: 'string', ref: 'book' },
+          title: { type: 'string' },
+        },
+      },
     },
   })
   assertEquals(
@@ -1081,5 +1089,11 @@ test('an unknown property is refused with what its component holds', () => {
   assertStringIncludes(
     unknownProps(w, 'alias', ['book']),
     'an entity wearing both is .alias&.book.title=…',
+  )
+  // a kind the component references is reached through the reference
+  assertStringIncludes(
+    unknownProps(w, 'loan', ['book']),
+    'unknown property: loan.book — loan.of references the book: ' +
+      '.loan.of.book.title=… or its own .loan.title=…; loan has',
   )
 })
