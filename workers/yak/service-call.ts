@@ -21,6 +21,29 @@ import { asCaller, type Ctx, refuse } from './tool.ts'
 import { vouched, type Who } from './session.ts'
 import type { Command } from './declared.ts'
 import { opened, seal } from './lib/token.ts'
+import { mode, reads } from '@yaks/member'
+import { atApp } from '@yaks/platform/visits'
+
+type Source = { space: Space; app: App }
+
+/** A service customer uses the source app under a seat or an app grant
+ * when the source is private. */
+export let serviceRole = async (
+  dir: Pick<Directory, 'role' | 'grant'>,
+  source: Source,
+  person: string,
+) =>
+  await dir.role(source.space, person) ??
+    (await dir.grant(source.app, person))?.access ?? null
+
+export let serviceUser = (app: App, who: Who) => {
+  let caller = atApp(who)
+  if (
+    !caller.person || caller.person == app.eid ||
+    !reads(mode(app.access), caller.role)
+  ) throw refuse('access', 'Use the source app as a signed-in person')
+  return { ...caller, person: caller.person }
+}
 
 // A tree is printed as the line it parses back from.
 let read = (env: Env): Read => (said) => {
@@ -42,6 +65,10 @@ export let verifyService = async (
     !source || source.app.trashed || source.space.trashed ||
     source.space.eid != a.space
   ) return false
+  let access = mode(source.app.access)
+  if (!reads(access, null) && !await serviceRole(dir, source, a.person)) {
+    return false
+  }
   let target = await dir.appAt(a.service)
   if (!target || target.app.trashed || target.space.trashed) return false
   let tool = (await toolsOf(env, target.space, target.app))[a.operation]
@@ -93,15 +120,16 @@ export let offeredService = async (
 export let requestService = async (
   env: Env,
   dir: Directory,
-  source: { space: Space; app: App },
+  source: Source,
   who: Who,
   service: string,
   operations: string[],
 ) => {
+  let caller = serviceUser(source.app, who)
   let { integration } = await offeredService(
     env,
     dir,
-    who,
+    caller,
     service,
     operations,
   )
@@ -109,16 +137,16 @@ export let requestService = async (
   await g.apply(
     await need(read(env), {
       app: source.app.eid,
-      owner: who.person!,
+      owner: caller.person,
       integration,
       each: true,
       scopes: [],
     }),
-    vouched(who),
+    vouched(caller),
   )
   let connection = await using(read(env), {
     app: source.app.eid,
-    owner: who.person!,
+    owner: caller.person,
     integration,
     each: true,
   })
@@ -133,7 +161,7 @@ export let requestService = async (
 export let connectService = async (
   env: Env,
   dir: Directory,
-  source: { space: Space; app: App },
+  source: Source,
   who: Who,
   service: string,
   operations: string[],
@@ -161,26 +189,26 @@ export let connectService = async (
 export let callService = async (
   env: Env,
   dir: Directory,
-  source: { space: Space; app: App },
+  source: Source,
   who: Who,
   service: string,
   name: string,
   args: Record<string, unknown>,
 ): Promise<{ text: string; value: Record<string, unknown> }> => {
-  if (!who.person) throw refuse('access', 'Sign in to call an app service')
+  let caller = serviceUser(source.app, who)
   let i = await known(read(env), serviceName(service))
   if (i?.service?.app != service) {
     throw refuse('missing', 'No app service has that identity')
   }
   let connections = await read(env)(
-    line`.connection.owner=${who.person}&.connection.integration=${
+    line`.connection.owner=${caller.person}&.connection.integration=${
       serviceName(service)
     }`,
   )
   let authority: ServiceAuthority | undefined
   for (let b of connections) {
     let a = {
-      person: who.person,
+      person: caller.person,
       app: source.app.eid,
       space: source.space.eid,
       service,
@@ -204,10 +232,10 @@ export let callService = async (
   }
   let tool = (await toolsOf(env, target.space, target.app))[name]
   let customer: Who = {
-    person: who.person,
-    actor: who.actor,
-    agent: who.agent,
-    via: who.via,
+    person: caller.person,
+    actor: caller.actor,
+    agent: caller.agent,
+    via: caller.via,
     role: null,
     service: authority,
   }
@@ -258,7 +286,7 @@ export let runServiceCommand = async (
   ) {
     throw refuse('access', 'This credential does not reach the source space')
   }
-  let role = await ctx.dir.role(source.space, ctx.person)
+  let role = await serviceRole(ctx.dir, source, ctx.person)
   let who = asCaller(ctx, role)
   return callService(ctx.env, ctx.dir, source, who, service, name, args)
 }

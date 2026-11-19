@@ -24,7 +24,7 @@
 import { stated } from './vocab.ts'
 import { ACCEPTED } from './door.ts'
 import { declarationOf } from './declaration.ts'
-import { api, copyFor, storing, unwritten, woven } from './apps.ts'
+import { copyFor, storeApi, storing, unwritten, woven } from './apps.ts'
 import {
   type App,
   appStore,
@@ -869,7 +869,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (to.to == 'nothing') return no(to.status)
   if (to.to == 'api') {
     return privateResponse(
-      await api(
+      await storeApi(
         req,
         env,
         dir,

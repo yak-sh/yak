@@ -3534,11 +3534,15 @@ export let directoryRows = (rows: {
     // app; a manifest is a few hundred bytes and git derives its commit chain
     // from them (D-34942). Never cached: a deploy reads its own versions back
     // the moment it writes one.
-    deploys: async (app: Pick<App, 'eid'>) =>
-      (await self.deploysOf([app])).get(app.eid) ?? [],
-    deploysOf: async (apps: Pick<App, 'eid'>[]) => {
+    deploys: async (app: Pick<App, 'eid'>, through?: number) =>
+      (await self.deploysOf([app], through)).get(app.eid) ?? [],
+    deploysOf: async (apps: Pick<App, 'eid'>[], through?: number) => {
+      let range = through == null ? NONE : line`&.deploy.version<=${through}`
       let all = byApp(
-        await many(apps, (eids) => line`.deploy.app=${eids}&?created`),
+        await many(
+          apps,
+          (eids) => line`.deploy.app=${eids}${sub(range)}&?created`,
+        ),
         (row) => row.deploy?.app,
         deployOf,
       )

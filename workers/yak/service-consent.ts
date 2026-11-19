@@ -13,6 +13,8 @@ import {
   connectService,
   offeredService,
   requestService,
+  serviceRole,
+  serviceUser,
 } from './service-call.ts'
 
 type Ask = {
@@ -92,10 +94,14 @@ export let serviceConsent = async (req: Request, env: Env) => {
     if (!source || source.app.trashed || source.space.trashed) {
       throw new CallError('missing', 'The app is unavailable')
     }
+    let caller = serviceUser(source.app, {
+      ...who,
+      role: await serviceRole(dir, source, who.person),
+    })
     let { target, tools } = await offeredService(
       env,
       dir,
-      who,
+      caller,
       ask.service,
       ask.operations,
     )
@@ -114,7 +120,14 @@ export let serviceConsent = async (req: Request, env: Env) => {
           'Open the service consent page and choose Allow.',
         )
       }
-      await connectService(env, dir, source, who, ask.service, ask.operations)
+      await connectService(
+        env,
+        dir,
+        source,
+        caller,
+        ask.service,
+        ask.operations,
+      )
       return Response.redirect(backTo(env, source), 303)
     }
     let consent = await seal(

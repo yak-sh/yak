@@ -55,6 +55,12 @@ await agent.tool('app_files', {
   ],
 })
 await agent.tool('app_deploy', { space: 'owner', app: 'notes' })
+await agent.tool('app_files', {
+  space: 'owner',
+  app: 'notes',
+  files: [{ path: 'index.html', content: '<h1>Notes</h1>\n' }],
+})
+await agent.tool('app_deploy', { space: 'owner', app: 'notes' })
 await agent.tool('graph_apply', {
   app: 'owner/notes',
   entities: [{ entity: { eid: '$mine' }, note: { title: 'Owner only' } }],
@@ -155,6 +161,7 @@ let APP_DOORS: [string, RequestInit?][] = [
   ['/line'],
   ['/commands'],
   ['/command'],
+  ['/service/connect', { method: 'POST', body: '{}' }],
   ['/ai/run', { method: 'POST', body: '{}' }],
   ['/pdf?page=1', { method: 'POST', body: 'x' }],
   // A visit's store is a copy whose prices the visitor may write (T-796).
@@ -387,6 +394,38 @@ for (let path of ['/', '/api/who']) {
   fayAsked.push([res.status, hops])
   await res.body?.cancel()
 }
+// A required reload in a later deploy is visible to the owner.
+let published = app.published!.version
+for (let n of [1, 2]) {
+  await agent.tool('app_files', {
+    space: 'owner',
+    app: 'notes',
+    files: [{ path: 'index.html', content: `<h1>Notes ${n}</h1>` }],
+  })
+  await agent.tool('app_deploy', {
+    space: 'owner',
+    app: 'notes',
+    ...(n == 2 ? { reload: 'required' } : {}),
+  })
+}
+let latest = published + 2
+let releases = (c: ReturnType<typeof client>) =>
+  Promise.all(
+    [published - 1, published, published + 1, latest, latest + 1].map(
+      async (version) => {
+        let res = await k.at(host, `/notes/api/release?version=${version}`, {
+          headers: c.headers,
+        })
+        return [res.status, await res.json()]
+      },
+    ),
+  )
+let told = {
+  sample: await releases(nobody),
+  own: await releases(out),
+  signedIn: await releases(ada),
+  owner: await releases(owner),
+}
 await k.stop()
 
 test('a stranger reads the sample and hears they may write', () => {
@@ -471,6 +510,30 @@ test('signed out, a browser reads the sample and its first write gives it a stor
 test('a visitor holds no level at the app’s own doors: no key, no budget', () => {
   let all = (status: number) => APP_DOORS.map(() => status)
   assertEquals(atDoors, { sample: all(401), own: all(401), signedIn: all(403) })
+})
+
+test('a stranger is told only of the releases the app offers', () => {
+  let missing = told.owner[4]
+  assertEquals(missing[0], 404)
+  let offered = [
+    [200, { version: published, reload: 'optional' }],
+    [200, { version: published }],
+    missing,
+    missing,
+    missing,
+  ]
+  assertEquals(told, {
+    sample: offered,
+    own: offered,
+    signedIn: offered,
+    owner: [
+      [200, { version: latest, reload: 'required' }],
+      [200, { version: latest, reload: 'required' }],
+      [200, { version: latest, reload: 'required' }],
+      [200, { version: latest }],
+      missing,
+    ],
+  })
 })
 
 test('a visitor sends no mail from the app’s address', () => {

@@ -17,17 +17,20 @@ let held = new WeakMap<Env, Map<string, Promise<Status>>>()
 // page names may be one the directory has not answered with yet.
 let NONE = Symbol('no such release')
 
-/** What a page built with `version` is told of `app`'s release now; null
- * where the app keeps no such version. */
+/** What a page built with `version` is told of the app's live or offered
+ * release. An offered release includes its history through publication. */
 export let releaseStatus = async (
   env: Env,
   dir: Directory,
   app: App,
   version: number,
+  publishedOnly: boolean,
 ): Promise<Status | null> => {
-  let now = app.version ?? 0
+  let through = publishedOnly ? app.published?.version : undefined
+  if (publishedOnly && (through == null || version > through)) return null
+  let now = through ?? app.version ?? 0
   let kept = {
-    versions: () => dir.deploys(app),
+    versions: () => dir.deploys(app, through),
     vocab: async (v: Version) => {
       let file = VOCABS.find((p) => v.files[p])
       if (!file) return {}

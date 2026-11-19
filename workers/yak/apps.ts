@@ -1229,14 +1229,250 @@ export let acting = (env: Env, space: Space, app: App, who: Who) => {
   }
 }
 
-// The graph API, and the file door beside it. Who may do what to the store is
-// the app's own `access` (T-32504): `public` reads to anyone and writes to a
-// member, `open` writes to anyone with the link, `private` neither without a
-// role — 401 to nobody, 403 to a member who may not. The file door is not
-// part of that bargain: writing an app's bytes is always a member's, whatever
-// the app lets its visitors save. Every internal request is built here, so the
-// store sees the vouched headers and never the cookie.
-export let api = async (
+// These routes use the directory app and the caller's standing there.
+let appDoor = async (
+  asked: Asked,
+  dir: ReturnType<typeof directory>,
+  c: Clock,
+  mount: string,
+  worker: (req: Request) => Promise<Response | null>,
+): Promise<Response | null> => {
+  let { env, req, path, space, app, who, refuse, json } = asked
+  let mayUse = reads(mode(app.access), who.role)
+  let versioned = assetPath(path)
+  if (versioned) {
+    if (req.method != 'GET' && req.method != 'HEAD') {
+      return json(405, 'method_not_allowed')
+    }
+    // A release's module asking for `./api/client.js` is sent back out to the
+    // app's API. Where it is sent never changes for that address, so the
+    // browser keeps the hop instead of asking again on every load.
+    let out = apiOut(versioned.path)
+    if (out) {
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: out + new URL(req.url).search,
+          'cache-control': browserImmutable,
+        },
+      })
+    }
+    let source = `${space.store}/.releases/${app.eid}/${versioned.release}`
+    // On a private app the worker is the gatekeeper (T-34303): a page it
+    // serves to someone who may not read the app was woven these addresses,
+    // and its files are the worker's to give or refuse at their own path, as
+    // that page would have asked before its addresses were the release's.
+    // The release a published app offers is anyone's, as installing it hands
+    // it out (`offered`), so Site can keep it (@yaks/platform/kept
+    // `keepable`). Every other release is its own people's, a stranger's
+    // sample visit included.
+    if (!mayUse && source != await offeredSource(dir, app)) {
+      let url = new URL(req.url)
+      url.pathname = url.pathname.slice(0, -`/api${path}`.length) +
+        versioned.path
+      let own = await c.time('worker', () => worker(new Request(url, req)))
+      if (own && own.status != 404) return own
+      await own?.body?.cancel()
+      return refuse('not_a_reader')
+    }
+    if (mayUse && source != app.source && !await dir.released(app, source)) {
+      return json(404, 'no_such_file')
+    }
+    return versionedAsset(req, env, app, source, versioned.path, c)
+  }
+  if (path == '/release') {
+    if (req.method != 'GET') return json(405, 'method_not_allowed')
+    if (!mayUse && !app.published) return refuse('not_a_reader')
+    let value = new URL(req.url).searchParams.get('version')
+    let version = value == null || !/^[0-9]+$/.test(value) ? NaN : Number(value)
+    if (!Number.isSafeInteger(version)) return json(400, 'invalid_version')
+    let { releaseStatus } = await import('./release-status.ts')
+    let said = await releaseStatus(env, dir, app, version, !mayUse)
+    if (!said) return json(404, 'no_such_release')
+    return Response.json(said, { headers: { 'cache-control': 'no-store' } })
+  }
+  if (path == '/service' || path.startsWith('/service/')) {
+    if (!mayUse && !(path == '/service/verify' && itsApp(who, app))) {
+      return refuse('not_a_reader')
+    }
+    let { serviceRoute } = await import('./service-api.ts')
+    return serviceRoute(req, env, dir, { space, app }, who, path)
+  }
+  if (path == '/commands') {
+    if (req.method != 'GET') return json(405, 'method_not_allowed')
+    if (!mayUse) return refuse('not_a_reader')
+    return Response.json(await commandsIn(env, space, app, who))
+  }
+  if (path == '/command') {
+    if (!mayUse) return refuse('not_a_reader')
+    let [route] = commandRoutes({
+      command: (name, args) =>
+        commandIn(
+          env,
+          space,
+          app,
+          who,
+          name,
+          args,
+          acting(env, space, app, who),
+        ),
+    })
+    return route.handle(req)
+  }
+  let door = DOORS.get(path.split('/')[1])
+  let mine = door && await (await door())(asked)
+  if (mine) return mine
+  // Taking money (sell.ts, T-34525). A read door as far as this app is
+  // concerned — it reads the products the cart names and writes nothing — so it
+  // asks `mayUse` and not a writer's level: a public shop sells to a stranger,
+  // which is what a shop is, and a private one sells to its members. It is
+  // keyed on the app like the doors above, so a visit holds no level here: the
+  // store a visit reads is a copy whose prices the visitor may have written.
+  // The price comes off the app's own rows, never off the request, so what a
+  // who can do here is buy what the seller put on the shelf at the price
+  // the seller wrote.
+  if (path == '/pay/checkout') {
+    if (req.method != 'POST') return json(405, 'method_not_allowed')
+    if (!mayUse) return refuse('not_a_reader')
+    let body = await req.json().catch(() => null)
+    return buying(
+      env,
+      {
+        space,
+        app: app.slug,
+        root: urlOf(space, app),
+        buyer: who.service?.person ?? who.person,
+        via: who.via,
+        source: who.service?.app ?? app.eid,
+        merchant: who.person == app.eid,
+      },
+      body,
+    )
+  }
+  if (path.startsWith('/files/')) {
+    if (req.method != 'PUT') return json(405, 'method_not_allowed')
+    // The file door is never widened (public/docs/sharing.md): a guest of
+    // this app writes its data and never its bytes, whatever level the grant
+    // gave them. An app takes a guest's rows and never a guest's deploy.
+    //
+    // Nor is a sandboxed app's (installed.ts): its API hears only its page
+    // token, and that token is the page's — writing the app's code stays a
+    // member's act through the tools, never something its own page does.
+    if (!writes(who.role) || who.guest || sandboxed(app)) return refuse()
+    // Into the draft as app_files writes: a file the draft already holds as
+    // sent is not sent again.
+    let file = decodedPath(path.slice('/files/'.length))
+    if (file == null) return nothingHere(env)
+    try {
+      let { drafted, fullAt, hashed } = await import('./tools.ts')
+      let sent = await hashed([{
+        path: file,
+        bytes: new Uint8Array(await req.arrayBuffer()),
+      }])
+      let stopped = await fullAt(env, space, sent)
+      if (stopped) return json(413, 'space_full', stopped)
+      await drafted(env, space, app, who, sent)
+    } catch (e) {
+      return rejection(e, {
+        request: 'PUT /api/files',
+        space: space.slug,
+        app: app.slug,
+      })
+    }
+    return Response.json({ ok: true, key: file })
+  }
+  // Save in edit mode (save.ts): the person's drafted snippets set in the
+  // app's copy.json and released, and Undo taking that release back. Writing
+  // the app's files and releasing them is the file door's member's act, held
+  // as that door holds it.
+  if (path == '/save' || path == '/save/undo') {
+    if (req.method != 'POST') return json(405, 'method_not_allowed')
+    if (!writes(who.role) || who.guest || sandboxed(app)) return refuse()
+    try {
+      let sent = await req.json().catch(() => ({})) as {
+        copy?: unknown
+        version?: unknown
+      }
+      let { saved, snippets, undone } = await import('./save.ts')
+      let ctx = { env, dir, person: who.person!, clock: c }
+      let store = appStore(env.STORE, space, app, env)
+      return Response.json(
+        path == '/save'
+          ? await saved(ctx, space, app, who, store, snippets(sent?.copy))
+          : await undone(ctx, space, app, who, store, sent?.version),
+      )
+    } catch (e) {
+      return rejection(e, {
+        request: `POST /api${path}`,
+        space: space.slug,
+        app: app.slug,
+      })
+    }
+  }
+  // Publishing a file to anyone (public-files.ts) is the same member's act as
+  // writing the app's files, and listing them is too: what this app put on
+  // the public web is its members' business.
+  if (path == '/public' || path.startsWith('/public/')) {
+    if (!writes(who.role) || who.guest || sandboxed(app)) return refuse()
+    return await publicDoor(
+      { req, env, dir, space, app, at: mount },
+      path.slice('/public'.length),
+    )
+  }
+  return null
+}
+
+let apiAsk = (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  space: Space,
+  app: App,
+  path: string,
+  who: Who,
+): Asked => ({
+  req,
+  env,
+  path,
+  space,
+  app,
+  who,
+  json,
+  refuse: async (what = 'not_a_writer') =>
+    who.person
+      ? json(403, what, await refusedSaid(dir, space, app, who.person, what))
+      : json(
+        401,
+        what,
+        SAYS[what],
+        signInAt(req.headers.get('referer') || req.url, env),
+      ),
+})
+
+let api = async (
+  req: Request,
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  space: Space,
+  served: { app: App; who: Who },
+  source: { app: App; who: Who },
+  path: string,
+  c: Clock,
+  mount: string,
+) =>
+  await appDoor(
+    apiAsk(req, env, dir, space, source.app, path, source.who),
+    dir,
+    c,
+    mount,
+    // A rewritten asset path can still be the worker's own route, served
+    // just as if the browser requested it directly.
+    (request) => ran(env, space, served.app, request, served.who),
+  ) ??
+    await storeApi(req, env, dir, space, served.app, path, served.who, c, mount)
+
+// The graph and its uploaded files use the store and standing of the visit.
+export let storeApi = async (
   req: Request,
   env: Env,
   dir: ReturnType<typeof directory>,
@@ -1247,13 +1483,11 @@ export let api = async (
   c: Clock,
   mount: string,
 ) => {
-  // The store client an app's pages import (@yaks/platform/client), served beside
-  // the doors it wraps so a page needs no address but its own. One file for
-  // every app, so it comes from the platform's assets, not the app's blobs.
-  // It is served as one module, its parts bundled in (assets.ts).
+  // The store client and its named modules come from the platform's assets.
   if (path == '/client.js') return platformFile(req, env, '/_client.js')
   if (NAMED_CLIENT.test(path)) return namedClient(req, env, path)
   if (CLIENT.includes(path)) return platformFile(req, env, path)
+  let { refuse: refused } = apiAsk(req, env, dir, space, app, path, who)
   let store = appStore(env.STORE, space, app, env)
   // What the page (or the browser itself) says broke, filed as the app's
   // (@yaks/tracker/report `door`). A no somebody answered on purpose is not a
@@ -1298,108 +1532,8 @@ export let api = async (
       })
     }
   }
-  // Signed out, the way through is to sign in (SAYS); signed in, it is the
-  // owner's to grant, so the sentence says so, unless the owner already did.
-  let refused = async (what = 'not_a_writer') =>
-    who.person
-      ? json(
-        403,
-        what,
-        await refusedSaid(dir, space, app, who.person, what),
-      )
-      : json(
-        401,
-        what,
-        SAYS[what],
-        signInAt(req.headers.get('referer') || req.url, env),
-      )
   let mayRead = reads(mode(app.access), who.role)
   let mayPost = edits(mode(app.access), who.role)
-  // The app's own doors, its commands, DOORS and its releases below, are
-  // keyed on the app and not on the store this request reads, so a stranger's
-  // visit holds no level at them (@yaks/platform/visits `atApp`).
-  let caller = atApp(who)
-  let mayUse = reads(mode(app.access), caller.role)
-  let versioned = assetPath(path)
-  if (versioned) {
-    if (req.method != 'GET' && req.method != 'HEAD') {
-      return json(405, 'method_not_allowed')
-    }
-    // A release's module asking for `./api/client.js` is sent back out to the
-    // app's API. Where it is sent never changes for that address, so the
-    // browser keeps the hop instead of asking again on every load.
-    let out = apiOut(versioned.path)
-    if (out) {
-      return new Response(null, {
-        status: 302,
-        headers: {
-          location: out + new URL(req.url).search,
-          'cache-control': browserImmutable,
-        },
-      })
-    }
-    let source = `${space.store}/.releases/${app.eid}/${versioned.release}`
-    // On a private app the worker is the gatekeeper (T-34303): a page it
-    // serves to someone who may not read the app was woven these addresses,
-    // and its files are the worker's to give or refuse at their own path, as
-    // that page would have asked before its addresses were the release's.
-    // The release a published app offers is anyone's, as installing it hands
-    // it out (`offered`), so Site can keep it (@yaks/platform/kept
-    // `keepable`). Every other release is its own people's, a stranger's
-    // sample visit included.
-    if (!mayUse && source != await offeredSource(dir, app)) {
-      let url = new URL(req.url)
-      url.pathname = url.pathname.slice(0, -`/api${path}`.length) +
-        versioned.path
-      let own = await c.time(
-        'worker',
-        () => ran(env, space, app, new Request(url, req), who),
-      )
-      if (own && own.status != 404) return own
-      await own?.body?.cancel()
-      return refused('not_a_reader')
-    }
-    if (source != app.source && !await dir.released(app, source)) {
-      return json(404, 'no_such_file')
-    }
-    return versionedAsset(req, env, app, source, versioned.path, c)
-  }
-  if (path == '/release') {
-    if (req.method != 'GET') return json(405, 'method_not_allowed')
-    if (!mayRead) return refused('not_a_reader')
-    let value = new URL(req.url).searchParams.get('version')
-    let version = value == null || !/^[0-9]+$/.test(value) ? NaN : Number(value)
-    if (!Number.isSafeInteger(version)) return json(400, 'invalid_version')
-    let { releaseStatus } = await import('./release-status.ts')
-    let said = await releaseStatus(env, dir, app, version)
-    if (!said) return json(404, 'no_such_release')
-    return Response.json(said, { headers: { 'cache-control': 'no-store' } })
-  }
-  if (path == '/service' || path.startsWith('/service/')) {
-    let { serviceRoute } = await import('./service-api.ts')
-    return serviceRoute(req, env, dir, { space, app }, who, path)
-  }
-  if (path == '/commands') {
-    if (req.method != 'GET') return json(405, 'method_not_allowed')
-    if (!mayUse) return refused('not_a_reader')
-    return Response.json(await commandsIn(env, space, app, caller))
-  }
-  if (path == '/command') {
-    if (!mayUse) return refused('not_a_reader')
-    let [route] = commandRoutes({
-      command: (name, args) =>
-        commandIn(
-          env,
-          space,
-          app,
-          caller,
-          name,
-          args,
-          acting(env, space, app, caller),
-        ),
-    })
-    return route.handle(req)
-  }
   // Who is looking, before the first write (T-32679), as @yaks/api's `/who`
   // answers it: the actor the store signs this caller's writes as, and beside
   // it their standing here. A page could only learn this from a refusal,
@@ -1465,47 +1599,6 @@ export let api = async (
     return req.headers.get('accept')?.includes('text/html')
       ? redirect(mount, 303)
       : Response.json({ joined: role })
-  }
-  // The app's platform doors use the same refusals as its store doors.
-  let asked: Asked = {
-    env,
-    req,
-    path,
-    space,
-    app,
-    who: caller,
-    refuse: refused,
-    json,
-  }
-  let door = DOORS.get(path.split('/')[1])
-  let mine = door && await (await door())(asked)
-  if (mine) return mine
-  // Taking money (sell.ts, T-34525). A read door as far as this app is
-  // concerned — it reads the products the cart names and writes nothing — so it
-  // asks `mayUse` and not a writer's level: a public shop sells to a stranger,
-  // which is what a shop is, and a private one sells to its members. It is
-  // keyed on the app like the doors above, so a visit holds no level here: the
-  // store a visit reads is a copy whose prices the visitor may have written.
-  // The price comes off the app's own rows, never off the request, so what a
-  // caller can do here is buy what the seller put on the shelf at the price
-  // the seller wrote.
-  if (path == '/pay/checkout') {
-    if (req.method != 'POST') return json(405, 'method_not_allowed')
-    if (!mayUse) return refused('not_a_reader')
-    let body = await req.json().catch(() => null)
-    return buying(
-      env,
-      {
-        space,
-        app: app.slug,
-        root: urlOf(space, app),
-        buyer: caller.service?.person ?? caller.person,
-        via: caller.via,
-        source: caller.service?.app ?? app.eid,
-        merchant: caller.person == app.eid,
-      },
-      body,
-    )
   }
   if (path == '/graph') {
     if (!mayRead) return refused('not_a_reader')
@@ -1754,75 +1847,6 @@ export let api = async (
       writer: async () =>
         form ? headers : { ...headers, ...await named(env, who, app) },
     })
-  }
-  if (path.startsWith('/files/')) {
-    if (req.method != 'PUT') return json(405, 'method_not_allowed')
-    // The file door is never widened (public/docs/sharing.md): a guest of
-    // this app writes its data and never its bytes, whatever level the grant
-    // gave them. An app takes a guest's rows and never a guest's deploy.
-    //
-    // Nor is a sandboxed app's (installed.ts): its API hears only its page
-    // token, and that token is the page's — writing the app's code stays a
-    // member's act through the tools, never something its own page does.
-    if (!writes(who.role) || who.guest || sandboxed(app)) return refused()
-    // Into the draft as app_files writes: a file the draft already holds as
-    // sent is not sent again.
-    let file = decodedPath(path.slice('/files/'.length))
-    if (file == null) return nothingHere(env)
-    try {
-      let { drafted, fullAt, hashed } = await import('./tools.ts')
-      let sent = await hashed([{
-        path: file,
-        bytes: new Uint8Array(await req.arrayBuffer()),
-      }])
-      let stopped = await fullAt(env, space, sent)
-      if (stopped) return json(413, 'space_full', stopped)
-      await drafted(env, space, app, who, sent)
-    } catch (e) {
-      return rejection(e, {
-        request: 'PUT /api/files',
-        space: space.slug,
-        app: app.slug,
-      })
-    }
-    return Response.json({ ok: true, key: file })
-  }
-  // Save in edit mode (save.ts): the person's drafted snippets set in the
-  // app's copy.json and released, and Undo taking that release back. Writing
-  // the app's files and releasing them is the file door's member's act, held
-  // as that door holds it.
-  if (path == '/save' || path == '/save/undo') {
-    if (req.method != 'POST') return json(405, 'method_not_allowed')
-    if (!writes(who.role) || who.guest || sandboxed(app)) return refused()
-    try {
-      let sent = await req.json().catch(() => ({})) as {
-        copy?: unknown
-        version?: unknown
-      }
-      let { saved, snippets, undone } = await import('./save.ts')
-      let ctx = { env, dir, person: who.person!, clock: c }
-      return Response.json(
-        path == '/save'
-          ? await saved(ctx, space, app, who, store, snippets(sent?.copy))
-          : await undone(ctx, space, app, who, store, sent?.version),
-      )
-    } catch (e) {
-      return rejection(e, {
-        request: `POST /api${path}`,
-        space: space.slug,
-        app: app.slug,
-      })
-    }
-  }
-  // Publishing a file to anyone (public-files.ts) is the same member's act as
-  // writing the app's files, and listing them is too: what this app put on
-  // the public web is its members' business.
-  if (path == '/public' || path.startsWith('/public/')) {
-    if (!writes(who.role) || who.guest || sandboxed(app)) return refused()
-    return await publicDoor(
-      { req, env, dir, space, app, at: mount },
-      path.slice('/public'.length),
-    )
   }
   return json(404, 'not_found')
 }
@@ -2334,7 +2358,8 @@ let served = async (
     url = clean
     path = paper.rest
   }
-  let store = storeName(space, app)
+  let appHandle = storeName(space, app)
+  let store = appHandle
   if (
     paper && (!env.SESSION_SECRET ||
       !await paged(paper.token, env, store))
@@ -2614,6 +2639,23 @@ let served = async (
   let wall = (res: Response) => walls ? walled(res) : res
   if (to.to == 'api') {
     let apiPath = to.door
+    // A worker coming back with a grant for a visit's store holds no app
+    // role, just like the browser it answered.
+    let answerApi = () =>
+      api(
+        req,
+        env,
+        dir,
+        space!,
+        { app: app!, who },
+        {
+          app: theirs,
+          who: minted == appHandle ? atApp(who) : { ...who, role: null },
+        },
+        apiPath,
+        c,
+        at,
+      )
     // Upload representations get a short keep revalidated against their rows;
     // release assets and platform modules are kept as pages are.
     if (edge) {
@@ -2621,7 +2663,7 @@ let served = async (
       return marked(
         keep(
           reporting(
-            await api(req, env, dir, space, app, apiPath, who, c, at),
+            await answerApi(),
             req,
             at,
             app,
@@ -2672,10 +2714,7 @@ let served = async (
         stranger.release,
       ))
     }
-    let answer = await c.time(
-      'api',
-      () => api(req, env, dir, space!, app!, apiPath, who, c, at),
-    )
+    let answer = await c.time('api', answerApi)
     if (moved) {
       answer = new Response(answer.body, answer)
       answer.headers.set(MOVED, '1')

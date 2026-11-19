@@ -137,14 +137,26 @@ test('service customers retain their identity and lose authority after revocatio
       },
     }),
   } as Dispatch
-  let connect = await apps.fetch(
-    visit('/cookbook/api/service/connect', {
-      method: 'POST',
-      headers: { cookie: await as(eli), 'content-type': 'application/json' },
-      body: JSON.stringify({ service: app.eid, operations: ['order'] }),
-    }),
-    env,
-  )
+  let connecting = async () =>
+    apps.fetch(
+      visit('/cookbook/api/service/connect', {
+        method: 'POST',
+        headers: { cookie: await as(eli), 'content-type': 'application/json' },
+        body: JSON.stringify({ service: app.eid, operations: ['order'] }),
+      }),
+      env,
+    )
+  // Connecting requires access to the source app.
+  let stranger = await connecting()
+  assertEquals(stranger.status, 403)
+  await stranger.body?.cancel()
+  await dir.apply({
+    entities: [{
+      entity: { eid: '$guest' },
+      grant: { app: source.app.eid, person: eli, access: 'viewer' },
+    }],
+  }, ADA_OWNS)
+  let connect = await connecting()
   assertEquals(connect.status, 200)
   let pending = await connect.json() as { connection: string; url: string }
   let before = await apps.fetch(
@@ -238,13 +250,6 @@ test('service customers retain their identity and lose authority after revocatio
     approved.headers.get('location'),
     'https://ada.yaks.app/cookbook/',
   )
-  let graph = await apps.fetch(
-    visit('/cookbook/api/query?.doc', {
-      headers: { cookie: await as(eli) },
-    }),
-    env,
-  )
-  assertEquals(graph.status, 403)
   await assertRejects(() =>
     connectService(env, dir, source, { person: ADA, role: 'owner' }, app.eid, [
       'admin',
@@ -259,15 +264,10 @@ test('service customers retain their identity and lose authority after revocatio
     'order',
     {},
   )
-  let other = await callService(
-    env,
-    dir,
-    source,
-    { person: eli, role: null },
-    app.eid,
-    'order',
-    {},
-  )
+  let call = (role: 'viewer' | null) =>
+    callService(env, dir, source, { person: eli, role }, app.eid, 'order', {})
+  await assertRejects(() => call(null))
+  let other = await call('viewer')
   assertEquals(JSON.parse(String(ada.value.answer)).order, `private-${ADA}`)
   assertEquals(JSON.parse(String(other.value.answer)).order, `private-${eli}`)
   assertEquals(requests[0].headers.get('x-yak-role'), null)
@@ -277,6 +277,14 @@ test('service customers retain their identity and lose authority after revocatio
   assertEquals(authority.person, ADA)
   assertEquals(authority.app, source.app.eid)
   assertEquals(await verifyService(env, dir, authority), true)
+  let eliSource = JSON.parse(requests[1].headers.get('x-yak-command-source')!)
+  let eliAuthority = (await serviceFrom(env, eliSource.authority))!
+  assertEquals(await verifyService(env, dir, eliAuthority), true)
+  let guest = (await dir.grant(source.app, eli))!
+  await dir.apply({
+    entities: [{ entity: { eid: guest.eid }, $delete: true }],
+  }, ADA_OWNS)
+  assertEquals(await verifyService(env, dir, eliAuthority), false)
   await assertRejects(() =>
     callService(
       env,
