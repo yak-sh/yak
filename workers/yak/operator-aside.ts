@@ -37,7 +37,7 @@ export type Work = {
   since: string
   until?: string
   recap?: string
-  where?: string
+  runs?: string
   model?: string
 }
 
@@ -166,11 +166,11 @@ export let Work = (
             : h(Popover.Time, { at: x.since, now, lasting: true }),
         ].filter(Boolean).flatMap((part, i) => i ? [' · ', part] : [part]),
       ),
-      x.where || x.model
+      x.runs || x.model
         ? h(
           Rows.Meta,
           { mod: 'line', 'data-runs': '' },
-          [x.where, x.model].filter(Boolean).join(' · '),
+          [x.runs, x.model].filter(Boolean).join(' · '),
         )
         : null,
     ),

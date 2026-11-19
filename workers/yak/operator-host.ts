@@ -288,11 +288,11 @@ let ranOn = async (
   store: Store,
   row: Bundle,
   entries: Bundle[],
-): Promise<{ where: string; model?: string }> => {
+): Promise<{ runs: string; model?: string }> => {
   let there = comp(row, 'operator_machine')
   if (there) {
     return {
-      where: String(there.machine || 'Your machine'),
+      runs: String(there.machine || 'Your machine'),
       ...there.model ? { model: String(there.model) } : {},
     }
   }
@@ -302,7 +302,7 @@ let ranOn = async (
   let [named] = eid ? await store.g.get([String(eid)], ['model']) : []
   let model = comp(named, 'model')
   let name = String(model?.label ?? model?.name ?? '')
-  return { where: 'yaks.app', ...name ? { model: name } : {} }
+  return { runs: 'yaks.app', ...name ? { model: name } : {} }
 }
 
 // A helper as the conversation's aside lists it (operator-view.ts

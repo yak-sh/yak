@@ -1100,9 +1100,14 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
         text(own, `.Talk_Helper ${at}`),
       ].map((t) => t.replace(/\d+s$/, 'Ns')),
     )
+    // A helper's own page says no turn of its own: its row in the band
+    // does. The aside's row says how it stands, then where it runs.
+    let says = (page: typeof own, at: string) =>
+      text(page, at).replace(/\d+s$/, 'Ns')
     return [
-      text(own, '[data-turn]').replace(/\d+s$/, 'Ns'),
-      text(theirs, row).replace(/\d+s$/, 'Ns'),
+      says(own, '[data-turn]'),
+      says(theirs, `${row} .Rows_Name`) + says(theirs, `${row} .Rows_Meta`),
+      says(theirs, `${row} [data-runs]`),
     ]
   }
   let first = drawn()
@@ -1135,8 +1140,9 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
   own.leave()
   theirs.leave()
   assertEquals(first, [
-    'Thinking · Ns',
+    '',
     'Import the people CSVRunning · Thinking · Ns',
+    'yaks.app',
   ])
   assertEquals(
     link?.endsWith(`/${helper}`),
@@ -1144,14 +1150,15 @@ test('a helper’s page and its conversation’s aside follow its steps as they 
     'the helper links to its run',
   )
   assertEquals(
-    running[0].startsWith('Thinking'),
+    running[1].includes('Thinking'),
     false,
     'its tool, not thinking',
   )
   assertStringIncludes(running[1], 'Running · ')
   assertEquals(ended, [
-    'Nothing running',
+    '',
     'Import the people CSVDone · just now',
+    'yaks.app',
   ])
   assertEquals(alike, [
     Array(3).fill('Running · Thinking · Ns'),
