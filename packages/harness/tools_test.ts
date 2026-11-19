@@ -5,6 +5,7 @@ import { core, inputSchemaOf } from '@yaks/mcp/tools'
 import { type Bundle, type Comp, identityEid, mint } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { wordsOf } from '@yaks/session'
+import { unnamed } from '@yaks/id'
 import { harness } from './testing.ts'
 import { local } from './local.ts'
 import { agent } from './agent.ts'
@@ -311,7 +312,7 @@ test('a session’s graph_show of an id that names nothing answers the rest', ()
   assertEquals(shown, {
     shown: [shown.held],
     held: shown.held,
-    words: `${gone} names nothing: no entity has that id; the other is shown`,
+    words: `${unnamed(gone)}; the other is shown`,
     refused: false,
   })
 })

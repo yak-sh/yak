@@ -8,6 +8,7 @@ import { capture } from './report.ts'
 import { fixture } from './fixture_test.ts'
 import { group } from './group.ts'
 import { comp } from './model.ts'
+import { unnamed } from '@yaks/id'
 
 let remote = { url: 'https://tracker.example', secret: 'test' }
 let memory = () => {
@@ -213,7 +214,8 @@ test('refused captures are set aside and each is told by its refusal', () => {
   equal(refusals, {
     refused: ['one', 'two'],
     told: [
-      "Refused: during.process takes an entity's id or name: flood-check names nothing",
+      "Refused: during.process takes an entity's id or name: " +
+      unnamed('flood-check'),
     ],
     reports: 2,
   })
