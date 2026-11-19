@@ -8,7 +8,8 @@ import { identityEid, mint } from '@yaks/graph'
 import { type Model, ModelError, type Request } from '@yaks/model'
 import { answering } from '@yaks/model/step'
 import { CALLER } from '@yaks/tunnel'
-import { transcript } from '@yaks/session'
+import { spawnChild, transcript } from '@yaks/session'
+import { agents } from './config.ts'
 import { platform } from './directory-probe.ts'
 import { directoryOf, META, stamp } from './directory.ts'
 import type { Env } from './env.ts'
@@ -188,6 +189,33 @@ test('a run names the machine’s provider and a model of it, and only its owner
 test('words that name their own model, as a call’s do, are answered by the hosted one', async () => {
   let t = await turn(jeff, { model: paid.name })
   assertEquals([t.box, t.hosted, t.using], [[], 1, HOSTED])
+})
+
+test('a helper of the conversation the machine answers is answered by the hosted model, as every Operator’s helpers are', async () => {
+  let { session } = await turn(jeff)
+  let helper = async (model?: string) => {
+    box.length = hosted.length = 0
+    let child = await spawnChild(store.g, session, {
+      prompt: 'Look into it',
+      ...model ? { model } : {},
+    }, operator.children)
+    await drain(store)
+    let entries = await transcript(store.g, child)
+    return {
+      using: entries[0].using as { provider?: string } | undefined,
+      said: entries.findLast((b) => b.output && b.content)?.content,
+    }
+  }
+  // Its report then reaches the conversation, which the machine answers.
+  assertEquals(await helper(), {
+    using: HOSTED,
+    said: { body: 'the hosted model' },
+  })
+  // A model of the machine's, named, is hosted too.
+  for (let { model, delegate } of agents.machine) {
+    assertEquals((await helper(model)).using, HOSTED)
+    assertEquals((await helper(delegate)).using?.provider, HOSTED.provider)
+  }
 })
 
 test('a turn nobody asked for at that moment waits for the machine that is off, and the space pays for none of it', async () => {

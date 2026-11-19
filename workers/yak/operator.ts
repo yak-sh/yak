@@ -16,6 +16,7 @@ import type { Conversing } from '@yaks/harness/conversations'
 import { skillItems, skillRead } from '@yaks/harness/skills'
 import {
   answerOf,
+  type ChildLimits,
   grafted,
   inputOf,
   type Intake,
@@ -1022,7 +1023,29 @@ export let operating = (
   let reachMachine = options.machine ??
     ((space: Space, person: string, via?: Calling['via']) =>
       machineFor(env, space, person, options.directory ?? opening(env), via))
-  let spawn = sessionTools(g, { childProperties: { topic: TOPIC } })
+  // A machine serves only its person's own conversation. What that
+  // conversation starts, a fork or a helper, asks the hosted model as every
+  // Operator's helpers do: the stronger one where it asked the machine for
+  // its stronger one. A helper runs on a machine only where helper_spawn
+  // names one.
+  let machined = identityEid('provider', [MACHINE])
+  let strong = new Set(
+    agents.machine.flatMap((l) =>
+      l.delegate ? [identityEid('model', [l.delegate])] : []
+    ),
+  )
+  let children: ChildLimits = {
+    using: (u) =>
+      u.provider != machined ? u : {
+        ...u,
+        provider,
+        model: strong.has(String(u.model)) ? delegate ?? name : name,
+      },
+  }
+  let spawn = sessionTools(g, {
+    ...children,
+    childProperties: { topic: TOPIC },
+  })
     .find((t) => t.name == 'spawn')!
   // `to` is the stronger model of the provider the session is on, if any.
   let delegated = (to?: string): Tool => ({
@@ -1686,7 +1709,7 @@ export let operating = (
       ])
     }
     return deferred([
-      ...sessionTools(g).filter((t) => t.name == 'fork'),
+      ...sessionTools(g, children).filter((t) => t.name == 'fork'),
       // A conversation and its forks hand coding and careful reasoning
       // to the stronger model in a fresh helper, which starts no other.
       ...!(row?.spawned && !row.fork && !topicOf(row))
@@ -1694,7 +1717,7 @@ export let operating = (
           delegated(
             new Map([
               [identityEid('provider', [provider]), delegate],
-              [identityEid('provider', [MACHINE]), mine.delegate],
+              [machined, delegate],
             ]).get(String(comp(using, 'using')?.provider)),
           ),
         ]
@@ -2422,6 +2445,7 @@ export let operating = (
     tools,
     chats,
     choose,
+    children,
     machine: (held, space, session) =>
       reachMachine(space, held.person, () => topOf(g, session)),
     named,
@@ -2554,6 +2578,10 @@ export type Operator = {
     model?: string,
     provider?: string,
   ) => Promise<{ provider: string; model: string }>
+  /** What a child of one of its sessions is started with (@yaks/session
+   * `spawnChild`): on the hosted model, where its parent is answered by a
+   * machine. */
+  children: ChildLimits
   /** The machine `space`'s tunnel goes to, as `held`'s Operator reaches it
    * in the conversation `session` works for ({@link machineFor}), or null
    * where none serves them. */

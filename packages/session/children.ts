@@ -40,6 +40,10 @@ export type ChildLimits = {
   ) => Promise<Omit<Bundle, 'entity'>>
   /** The clock a wait keeps time by (default the system's). */
   clock?: Clock
+  /** The model a child asks (`using{provider, model, effort}`, each by eid
+   * or by name), given the one it would take: its parent's in force, with the
+   * model and effort its spawn named. Without this, that one. */
+  using?: (using: Comp) => Comp | Promise<Comp>
 }
 let locks = new WeakMap<Graph, Promise<unknown>>()
 let comp = (b: Bundle | undefined, name: string) =>
@@ -202,7 +206,7 @@ let delegation = (
         args = { ...await limits.taskDefaults(ctx.session, eid), ...args }
       }
       if (minted) ctx = { ...ctx, entries: await transcript(g, ctx.session) }
-      let using = { ...usingBefore(ctx.entries) }
+      let using: Comp = { ...usingBefore(ctx.entries) }
       let models: Bundle[] = []
       if (args.model != null) {
         // A model is named by its id or by its own name. The provider in force
@@ -234,6 +238,7 @@ let delegation = (
       for (let key of ['effort']) {
         if (args[key] != null) using[key] = String(args[key])
       }
+      if (limits.using) using = await limits.using(using)
       // Never inherit the unanswered delegation call (or any sibling calls).
       let anchorId = comp(newestAsk(ctx.entries), 'ask')?.through
       let anchor = ctx.entries.find((b) => b.entity.eid == anchorId)

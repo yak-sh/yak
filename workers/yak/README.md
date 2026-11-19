@@ -1303,7 +1303,12 @@ serves, by the model's name. The space is charged nothing for such a step, and
 no price is asked for its model. Anyone else's turn in the same space (a
 member's, a stranger's text, a form) runs on the hosted model as before, and so
 do words that name their own model, as a call's do. `operator_chat` takes
-`provider: "machine"` with a `model` from the machine's owner alone.
+`provider: "machine"` with a `model` from the machine's owner alone. The machine
+answers only the conversation itself: what it starts (a `fork`, a `spawn`, a
+`helper_spawn` naming no `machine`) runs on the hosted model as every Operator's
+helpers do, the stronger one where it asked the machine for its stronger one
+(operator.ts `children`, @yaks/session `ChildLimits.using`), and the space pays
+for it. A helper runs on the machine only where `helper_spawn` names it.
 
 A step the machine fails before its first output (the tunnel or the machine does
 not answer, a provider's allowance is spent, a provider takes no such input) is
