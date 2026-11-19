@@ -1941,6 +1941,14 @@ export let operating = (
       (await runner.answers?.(using, session) ?? true) &&
       !(session && await away(session)),
   })))
+  // A helper on its person's machine stopped here is stopped there
+  // (operator-helpers.ts `stopOnMachine`).
+  fx.handle({
+    operator_machine_stop: async (event) => {
+      let { stopOnMachine } = await import('./operator-helpers.ts')
+      await stopOnMachine(store, machineAt, event.entity.eid)
+    },
+  })
 
   // Whoever carries a session on, the newest words' reach applies, and the
   // files it was given stay with it. A person's one conversation says so.

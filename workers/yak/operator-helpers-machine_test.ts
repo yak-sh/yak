@@ -1,7 +1,8 @@
 // A helper on its person's own machine: helper_spawn naming the space whose
 // tunnel goes there asks the machine, through a stub gateway, to run an agent
-// on the brief as the Operator in the person's conversation, and the
-// machine's word about that run's task is the helper's report in its chat.
+// on the brief as the Operator in the person's conversation, the machine's
+// word about that run's task is the helper's report in its chat, and
+// operator_stop on the helper stops the run there.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import type { Comp } from '@yaks/graph'
@@ -25,6 +26,7 @@ let sent: {
   via: string | null
   body: unknown
 }[] = []
+let stops: typeof sent = []
 let BOX = { task: mint(), session: mint() }
 let steps = 0
 let step = answering((req) => {
@@ -40,8 +42,9 @@ let step = answering((req) => {
 let DISPATCH = {
   get: () => ({
     fetch: async (r: globalThis.Request) => {
-      if (new URL(r.url).pathname != '/session/spawn') return step(r)
-      sent.push({
+      let path = new URL(r.url).pathname
+      if (path != '/session/spawn' && path != '/session/stop') return step(r)
+      ;(path == '/session/spawn' ? sent : stops).push({
         caller: r.headers.get(CALLER),
         via: r.headers.get('x-via'),
         body: await r.json(),
@@ -134,6 +137,9 @@ let closed = (await transcript(g, root)).filter((b) =>
   (b.delivery as Comp | undefined)?.child == parent
 )
 
+let stopped = await call(ctx, 'operator_stop', { space: 'jeffs', task: helper })
+await service.drain()
+
 test('a helper on the machine is one spawn asked of it as the Operator, in the conversation, and runs nothing here', () => {
   assertEquals(sent.length, 1)
   assertEquals(sent[0].caller, 'operator')
@@ -174,4 +180,13 @@ test('a machine no tunnel of this space reaches starts nothing', async () => {
     'No machine of yours',
   )
   assertEquals(sent.length, 1)
+})
+
+test('operator_stop on the helper asks its machine, as the Operator in the conversation, to stop the run there', () => {
+  assertEquals(stopped.value?.stopped, true)
+  assertEquals(stops, [{
+    caller: 'operator',
+    via: parent,
+    body: { session: BOX.session },
+  }])
 })

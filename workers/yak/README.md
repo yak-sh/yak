@@ -1268,8 +1268,11 @@ session, names}`, and nothing here runs it. The
 run's report knocks that standing session, the machine tells it back on the
 `machine` channel naming the task (`about`), and those words are the helper's
 answer (operator-helpers.ts `machineReport`), reaching the chat as any helper's
-report does. The machine opens `/session/spawn` to the Operator by listing it
-under its tunnel's `callers.operator.routes`.
+report does. A stop of the helper here (`operator_stop` on it or the chat above
+it) asks the machine to stop the run, `POST /session/stop` with its session
+there, as an effect of the helper's stop entry (`operator_machine_stop`,
+operator-helpers.ts `stopOnMachine`). The machine opens both paths to the
+Operator by listing them under its tunnel's `callers.operator.routes`.
 
 `operator_retry({space, request})` runs a request that could not finish again,
 as itself, once its cause is fixed: its failure and the answer that told of it

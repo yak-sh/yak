@@ -1,5 +1,6 @@
 // `/session/spawn` as another host asks it: the brief filed as a task and an
-// agent started on it, both written as whoever the host says is asking.
+// agent started on it, both written as whoever the host says is asking; and
+// `/session/stop`, that run stopped, by the same caller alone.
 import { line } from '@yaks/query'
 import { equal, test } from '@yaks/testing'
 import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
@@ -27,7 +28,7 @@ import { runner } from '@yaks/tools'
 import { provenanceDoc } from '@yaks/provenance'
 import { runs } from './tools.ts'
 import { spawnDoc } from './vocab.ts'
-import { PATH, routes } from './routes.ts'
+import { PATH, routes, STOP } from './routes.ts'
 
 let vocab = loadVocab(
   [
@@ -53,9 +54,10 @@ let PROVIDER = identityEid('provider', ['claude'])
 let MODEL = identityEid('model', ['opus'])
 let PERSONA = crypto.randomUUID(), STANDING = crypto.randomUUID()
 
-// A host whose door says every request is the persona, through the session
-// standing for its conversation, as a tunnel's does; or says nobody.
-let hosting = async (actor: Actor | null) => {
+// A host whose door says every request is `actor`, as a tunnel's says the
+// persona through the session standing for its conversation; or says nobody.
+let hosting = async (first: Actor | null) => {
+  let actor = first
   let g: Graph = graph({
     storage: ram(vocab, { number: true }),
     vocab,
@@ -75,19 +77,20 @@ let hosting = async (actor: Actor | null) => {
     ...loadTools(taskDoc, taskRuns()),
     ...loadTools(spawnDoc, runs({ graph: g })),
   ]
-  let [route] = routes({
+  let served = routes({
     graph: g,
     who: () => actor,
     runner: runner(g, { tools }),
   }, { provider: PROVIDER })
-  let ask = (body: object) =>
-    route.handle(
-      new Request(`http://machine${PATH}`, {
+  let at = (path: string) => (body: object) =>
+    served.find((r) => r.path == path)!.handle(
+      new Request(`http://machine${path}`, {
         method: 'POST',
         body: JSON.stringify(body),
       }),
     )
-  return { g, ask }
+  let as = (who: Actor) => actor = who
+  return { g, ask: at(PATH), stop: at(STOP), as }
 }
 
 let comp = (b: Bundle | undefined, name: string) => (b?.[name] ?? {}) as Comp
@@ -132,4 +135,18 @@ test('nobody, and no brief, start nothing', async () => {
   let empty = await ask({ brief: '  ' })
   equal([nobody.status, empty.status], [403, 400])
   equal(await g.read(line`.task&.fields=entity.eid`), [])
+})
+
+test('a run is stopped by the conversation that asked for it, and no other', async () => {
+  let { g, ask, stop, as } = await hosting({ by: PERSONA, via: STANDING })
+  let { session } = await (await ask({ brief: 'Go.' })).json()
+  as({ by: PERSONA, via: crypto.randomUUID() })
+  let stranger = await stop({ session })
+  let untouched = comp((await g.get([session]))[0], 'stop')
+  as({ by: PERSONA, via: STANDING })
+  let stopped = await stop({ session })
+  let [row] = await g.get([session])
+  equal([stranger.status, untouched], [404, {}])
+  equal([stopped.status, await stopped.json()], [200, { session }])
+  equal(row.stop != null, true)
 })

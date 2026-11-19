@@ -469,6 +469,14 @@ export let operatorDoc: VocabDoc = {
       description:
         "Point the SMS callback of each of a connection's numbers taken inbound at yaks.app, and put back the callback of each that no longer is (operator-line.ts `pointed`).",
     },
+    operator_machine_stop: {
+      effect: true,
+      target: '.entry&.stop',
+      created: ['stop'],
+      tries: 3,
+      description:
+        'Ask the machine a stopped helper runs on to stop its run there (workers/yak operator-helpers.ts `stopOnMachine`); a stop of any other session asks nothing.',
+    },
     operator_receive: {
       effect: true,
       created: ['operator_request'],

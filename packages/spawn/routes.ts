@@ -1,12 +1,15 @@
 // The routes facet, exported as `@yaks/spawn/routes`: where another host asks
-// this machine to run an agent, `POST /session/spawn` with a brief. The brief
+// this machine to run an agent, `POST /session/spawn` with a brief, and to
+// stop one it asked for, `POST /session/stop` with its session. The brief
 // is filed as a task (`task_new`) and an agent is started on it
 // (`session_spawn`), both called as whoever the host says is asking, the way a
 // door calls any tool: through a tunnel, that is the persona the tunnel's
 // config names, through the session standing for the conversation the request
 // came from (@yaks/tunnel/routes `arrived`). So the run's final report knocks
 // that session (./completion.ts), and the knock goes back to the conversation
-// the way any news for it does (@yaks/tunnel/effects).
+// the way any news for it does (@yaks/tunnel/effects). A stop is
+// `session_stop`, called the same way, on a run the session it comes through
+// started: a host stops only what it asked for.
 //
 // The route says nothing of who may ask, as @yaks/harness's `/model/step`
 // says nothing: a machine opens it the way it opens any path, such as
@@ -22,6 +25,9 @@ import { answerOf, faultOf, toolEid } from '@yaks/tools/result'
 
 /** Where another host asks this machine for an agent. */
 export const PATH = '/session/spawn'
+
+/** Where another host asks this machine to stop an agent it asked for. */
+export const STOP = '/session/stop'
 
 /** What a config file can set for this facet. */
 export type Options = {
@@ -42,6 +48,9 @@ export type Spawned = {
   names: { task: string; session: string }
 }
 
+/** What another host sends to stop a run: its session, by eid here. */
+export type Stopping = { session: string }
+
 /** What this facet reads off the host: the graph, who a request is from, and
  * the runner its tools are called through. */
 export type Hosting = { graph: Graph; who: Authenticate; runner?: Runner }
@@ -52,31 +61,35 @@ let refused = (status: number, code: string, message: string) =>
 let str = (v: unknown) => typeof v == 'string' ? v.trim() : ''
 
 /** `POST /session/spawn`: the brief filed as a task and an agent started on
- * it, answered at once with both ({@link Spawned}). */
+ * it, answered at once with both ({@link Spawned}). `POST /session/stop`: the
+ * run of a session the caller started, asked to stop, answered with it. */
 export let routes = (host: Hosting, options: Options = {}): Route[] => [{
   method: 'POST',
   path: PATH,
-  handle: async (request) => {
-    let actor = await host.who(request)
-    if (!actor?.by && !actor?.via) {
-      return refused(403, 'nobody', 'an agent is started for somebody')
-    }
-    let asked = await request.json().catch(() => ({})) as Partial<Asked>
+  handle: asking(host, async (call, asked: Partial<Asked>) => {
     let brief = str(asked.brief)
     if (!brief) return refused(400, 'arguments', 'give the agent a brief')
-    if (!host.runner) return refused(503, 'tools', 'this host runs no tools')
-    try {
-      let spawned = await spawn(host as Required<Hosting>, actor, {
+    return Response.json(
+      await spawn(host.graph, call, {
         brief,
         title: str(asked.title) || brief.split('\n')[0].slice(0, 120),
         model: str(asked.model),
-      }, options.provider ?? 'claude')
-      return Response.json(spawned)
-    } catch (e) {
-      if (!(e instanceof Fault)) throw e
-      return refused(422, e.code, e.message)
+      }, options.provider ?? 'claude'),
+    )
+  }),
+}, {
+  method: 'POST',
+  path: STOP,
+  handle: asking(host, async (call, asked: Partial<Stopping>, actor) => {
+    let session = str(asked.session)
+    let [row] = session ? await host.graph.get([session], ['spawned']) : []
+    let parent = (row?.spawned as Comp | undefined)?.parent
+    if (!parent || parent != actor.via) {
+      return refused(404, 'missing', `no run ${session} was asked for here`)
     }
-  },
+    await call('session_stop', { session })
+    return Response.json({ session })
+  }),
 }]
 
 class Fault extends Error {
@@ -85,29 +98,56 @@ class Fault extends Error {
   }
 }
 
+// A tool called as whoever asked, answered with what it wrote.
+type Call = (tool: string, args: Record<string, unknown>) => Promise<Bundle[]>
+
+// A request answered with what it sent, its tools called as whoever the host
+// says asks; a tool's refusal is the request's.
+let asking = <T>(
+  host: Hosting,
+  answer: (call: Call, asked: Partial<T>, actor: Actor) => Promise<Response>,
+) =>
+async (request: Request) => {
+  let actor = await host.who(request)
+  if (!actor?.by && !actor?.via) {
+    return refused(403, 'nobody', 'an agent is run for somebody')
+  }
+  let asked = await request.json().catch(() => ({})) as Partial<T>
+  if (!host.runner) return refused(503, 'tools', 'this host runs no tools')
+  try {
+    return await answer(caller(host.runner, actor), asked, actor)
+  } catch (e) {
+    if (!(e instanceof Fault)) throw e
+    return refused(422, e.code, e.message)
+  }
+}
+
+// A tool called through `runner` as `actor`, answered with what it wrote, or
+// a {@link Fault} saying why it refused.
+let caller = (runner: Runner, actor: Actor): Call => async (tool, args) => {
+  await runner.ensure([tool])
+  let id = mint()
+  let landed = await runner.call({
+    entity: { eid: id },
+    call: { to: toolEid(tool), args },
+    $actor: { ...actor },
+  })
+  let fault = faultOf(landed, id)
+  if (fault) {
+    throw new Fault(
+      String((fault.refusal as Comp | undefined)?.code ?? tool),
+      String((fault.content as Comp | undefined)?.body ?? tool),
+    )
+  }
+  return answerOf(landed, id)
+}
+
 let spawn = async (
-  host: Required<Hosting>,
-  actor: Actor,
+  graph: Graph,
+  call: Call,
   asked: Required<Asked>,
   provider: string,
 ): Promise<Spawned> => {
-  let call = async (tool: string, args: Record<string, unknown>) => {
-    await host.runner.ensure([tool])
-    let id = mint()
-    let landed = await host.runner.call({
-      entity: { eid: id },
-      call: { to: toolEid(tool), args },
-      $actor: { ...actor },
-    })
-    let fault = faultOf(landed, id)
-    if (fault) {
-      throw new Fault(
-        String((fault.refusal as Comp | undefined)?.code ?? tool),
-        String((fault.content as Comp | undefined)?.body ?? tool),
-      )
-    }
-    return answerOf(landed, id)
-  }
   let made = await call('task_new', { title: asked.title, body: asked.brief })
   let task = made.find((b) => b.task)?.entity.eid
   if (!task) throw new Error('task_new answered no task')
@@ -116,12 +156,12 @@ let spawn = async (
     provider,
     ...asked.model ? { model: asked.model } : {},
   })
-  let [row] = await host.graph.get([task], ['claim'])
+  let [row] = await graph.get([task], ['claim'])
   let session = String((row?.claim as Comp | undefined)?.session ?? '')
   if (!session) throw new Error(`session_spawn left ${task} unclaimed`)
-  let name = human(host.graph.vocab)
+  let name = human(graph.vocab)
   let rows = new Map<string, Bundle>(
-    (await host.graph.get([task, session])).map((b) => [b.entity.eid, b]),
+    (await graph.get([task, session])).map((b) => [b.entity.eid, b]),
   )
   return {
     task,

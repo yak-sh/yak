@@ -311,15 +311,26 @@ is the config's `provider`, by name (default `claude`). A request the host names
 nobody for is refused. Through a tunnel the caller is the persona its config
 names, through the session standing for the caller's conversation
 (@yaks/tunnel/routes), so the run's report knocks that session, about the task,
-and the tunnel tells the conversation (@yaks/tunnel/effects). The route says
-nothing of who may ask; a machine opens it the way it opens any path:
+and the tunnel tells the conversation (@yaks/tunnel/effects).
+
+`POST /session/stop` with `{session}` stops a run the caller asked for: one
+whose session was started through the same session the request comes through
+(`spawned.parent`, the standing session through a tunnel). It calls
+`session_stop` as the caller and answers `{session}`; any other session is
+missing (404).
+
+The routes say nothing of who may ask; a machine opens them the way it opens any
+path:
 
 ```jsonc
 {
   "use": "@yaks/tunnel",
   "with": {
     "callers": {
-      "operator": { "routes": ["/mcp", "/session/spawn"], "persona": "N-32" }
+      "operator": {
+        "routes": ["/mcp", "/session/spawn", "/session/stop"],
+        "persona": "N-32"
+      }
     }
   }
 }
@@ -337,7 +348,8 @@ Additional entry points are:
 - `@yaks/spawn/service`: `service` and `adopting()`, the duty that resumes runs
   after a restart;
 - `@yaks/spawn/tools`: `runs()`, duration parsing, and brief formatting;
-- `@yaks/spawn/routes`: `routes()` and `PATH`, `/session/spawn`;
+- `@yaks/spawn/routes`: `routes()`, `PATH` (`/session/spawn`) and `STOP`
+  (`/session/stop`);
 - `@yaks/spawn/over`: `over()`, whether a session's run is over, read from the
   graph alone, so a Worker can import it.
 

@@ -11,6 +11,8 @@
 // and where it went (`operator_machine`). The machine's word about that task,
 // which its run's report knocks the conversation with (@yaks/tunnel/effects),
 // is the helper's answer ({@link machineReport}).
+// A stop of the helper here, however it came, asks the machine to stop the
+// run (`POST /session/stop`, {@link stopOnMachine}).
 import { line } from '@yaks/query'
 import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
@@ -219,6 +221,42 @@ export let machineReport = async (
   }], { trusted: true })
   await deliverChild(store.g, session)
   return session
+}
+
+/**
+ * The run on its machine of the helper a stop entry (`stop`) ends, asked to
+ * stop there (`POST /session/stop`, @yaks/spawn/routes), through the machine
+ * `reach` finds for the helper as it found it to start the run: nothing where
+ * the stopped session is no machine's helper. A machine that cannot be
+ * reached, or does not stop the run, fails the effect, which tries again and
+ * is reported.
+ */
+export let stopOnMachine = async (
+  store: OperatorStore,
+  reach: (session: string) => Promise<typeof fetch | null>,
+  stop: string,
+) => {
+  let [entry] = await store.g.get([stop], ['entry'])
+  let session = String((entry?.entry as Comp | undefined)?.session ?? '')
+  let [helper] = session
+    ? await store.g.get([session], ['operator_machine'])
+    : []
+  let on = helper?.operator_machine as Comp | undefined
+  if (!on) return
+  let reached = await reach(session)
+  if (!reached) {
+    throw new Error(`No machine reaches helper ${session} to stop ${on.names}`)
+  }
+  let r = await reached('http://machine/session/stop', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ session: on.session }),
+  })
+  if (!r.ok) {
+    throw new Error(
+      `The machine did not stop ${on.names} (${r.status}): ${await r.text()}`,
+    )
+  }
 }
 
 export let questionNotice = async (
