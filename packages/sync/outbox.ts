@@ -79,8 +79,8 @@ export type Outbox<T, R> = {
 /** A durable, ordered queue. An unknown answer rejects that caller (unsaved),
  * but retains and retries the exact intent/key. A refusal is retained for the
  * person to inspect, never silently discarded or automatically resubmitted.
- * Without IndexedDB (non-browser runtimes), the queue lasts for this instance.
- * In a browser a failed disk write fails closed: nothing is sent first. */
+ * When IndexedDB is absent or the browser denies access at startup, the queue
+ * lasts for this instance. A failed disk write prevents sending. */
 export let durableOutbox = <T, R>(opts: {
   scope: string
   send: (key: string, sent: T) => Promise<R>
@@ -90,8 +90,7 @@ export let durableOutbox = <T, R>(opts: {
   cancelTimer?: (handle: unknown) => void
   wait?: number
 }): Outbox<T, R> => {
-  let disk = opts.store ??
-    (globalThis.indexedDB ? outboxIdb<T>(opts.scope) : undefined)
+  let disk = opts.store
   let entries = new Map<string, Pending<T>>()
   let listeners = new Set<() => void>()
   let waiting = new Map<
@@ -117,7 +116,19 @@ export let durableOutbox = <T, R>(opts: {
       void drain()
     }, Math.max(opts.wait ?? 1000, typeof asked == 'number' ? asked : 0))
   }
-  let ready = (disk?.load() ?? Promise.resolve([])).then((rows) => {
+  let load = async () => {
+    if (!disk && globalThis.indexedDB) disk = outboxIdb<T>(opts.scope)
+    return await disk?.load() ?? []
+  }
+  let ready = load().catch((error) => {
+    if (
+      opts.store || !(error instanceof DOMException) ||
+      error.name !== 'SecurityError'
+    ) throw error
+    disk?.close?.()
+    disk = undefined
+    return []
+  }).then((rows) => {
     rows.sort((a, b) => (a.at ?? 0) - (b.at ?? 0))
     for (let row of rows) {
       last = Math.max(last, row.at ?? 0)

@@ -563,9 +563,9 @@ export let store = (base, { clock = system } = {}) => {
       listeners.clear()
     },
   }
-  // Browser stores recover on opening, even when the page has no new write.
-  // Non-browser imports have no disk to recover and need no identity request.
-  if (globalThis.indexedDB) void boot().catch(() => {})
+  // Browser stores recover on opening. The outbox checks access to IndexedDB
+  // itself because even reading the property can throw in a sandbox.
+  if ('indexedDB' in globalThis) void boot().catch(() => {})
   let apply = async (bundles) => {
     // Snapshot intent before the asynchronous identity lookup.
     let payload = structuredClone({
