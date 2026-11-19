@@ -8,7 +8,7 @@ import { sqlitePath } from '../sqlite/sqlitepath.ts'
 import { compile } from '@yaks/sql'
 import { parse } from '@yaks/query'
 import { search } from './compile.ts'
-import { seed, text, vocab } from '../../workers/yak/fts_cost_fixture.ts'
+import { seed, text, vocab } from './cost_testing.ts'
 
 let counters = Deno.dlopen(sqlitePath, {
   sqlite3_stmt_status: { parameters: ['pointer', 'i32', 'i32'], result: 'i32' },

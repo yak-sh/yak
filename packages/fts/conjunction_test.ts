@@ -6,7 +6,7 @@ import { test } from '@yaks/testing'
 import { parse } from '@yaks/query'
 import { compile } from '@yaks/sql'
 import { driver } from '../sqlite/native.ts'
-import { mixed, seed, text, vocab } from '../../workers/yak/fts_cost_fixture.ts'
+import { mixed, seed, text, vocab } from './cost_testing.ts'
 import { search } from './compile.ts'
 
 let native = new Database(':memory:'), db = driver(native)

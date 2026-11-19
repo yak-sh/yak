@@ -17,7 +17,7 @@ import {
   table,
   val,
 } from './mod.ts'
-import { mixed, seed, text, vocab } from '../../workers/yak/fts_cost_fixture.ts'
+import { mixed, seed, text, vocab } from '../fts/cost_testing.ts'
 
 let db = new Database(':memory:'), sql = driver(db)
 seed(sql, 128)

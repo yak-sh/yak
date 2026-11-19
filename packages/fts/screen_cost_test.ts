@@ -21,12 +21,7 @@ import {
   table,
 } from '@yaks/sql'
 import { hits, screens, type SearchOpts } from './search.ts'
-import {
-  seed,
-  selected,
-  text,
-  vocab,
-} from '../../workers/yak/fts_cost_fixture.ts'
+import { seed, selected, text, vocab } from './cost_testing.ts'
 
 let counters = Deno.dlopen(sqlitePath, {
   sqlite3_stmt_status: {

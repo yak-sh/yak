@@ -188,3 +188,61 @@ test('a statement that holds 100 cursors before it names a relation is answered'
   let d = driver(durable())
   for (let n of [10, 100, 200]) equal(d.query(held(n)).length, 1)
 })
+
+test('a write counts its affected rows and returns none, and a failed transaction rolls back', () => {
+  using storage = durable()
+  let sql = driver(storage)
+  sql.query({
+    t: 'create table',
+    name: 'item',
+    cols: [
+      { name: 'id', type: 'integer', pk: true },
+      { name: 'value', type: 'integer' },
+    ],
+  })
+  sql.query({
+    t: 'create table',
+    name: 'audit',
+    cols: [{ name: 'value', type: 'integer' }],
+  })
+  sql.query({
+    t: 'create trigger',
+    name: 'edited',
+    on: 'item',
+    timing: 'after',
+    event: 'update',
+    body: [{ t: 'insert', into: 'audit', cols: ['value'], rows: [[lit(1)]] }],
+  })
+  let run = sql.run!
+  let update = {
+    t: 'update' as const,
+    table: 'item',
+    set: { value: val(2) },
+    where: eq(col('id'), val(1)),
+  }
+  let counts = [
+    run(insert('item', { id: 1, value: 1 })),
+    run({ ...insert('item', { id: 1 }), or: 'ignore' }),
+    run(update),
+  ]
+  sql.query({ ...update, returning: [col('id')] })
+  counts.push(
+    run(update),
+    run({ ...update, where: eq(col('id'), val(99)) }),
+    run({ t: 'delete', from: 'item', where: eq(col('id'), val(1)) }),
+    run({ t: 'delete', from: 'item' }),
+  )
+  assertThrows(
+    () =>
+      sql.tx!(() => {
+        counts.push(run(insert('item', { id: 2, value: 3 })))
+        counts.push(run({ ...update, where: eq(col('id'), val(2)) }))
+        throw new Error('rollback')
+      }),
+    Error,
+    'rollback',
+  )
+  equal(counts, [1, 0, 1, 1, 0, 1, 0, 1, 1])
+  equal(sql.query(select({ from: table('item') })), [])
+  equal(sql.query(select({ from: table('audit') })).length, 3)
+})

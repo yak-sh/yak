@@ -957,16 +957,6 @@ polling. Do not run older writers against an upgraded store: they do not
 maintain the derived pointers. Rebuilding all pointers is an explicit repair,
 not a reason to change their values through the app API.
 
-An isolated benchmark is available with
-`deno run -A workers/yak/archetype_bench.ts`. In one run with 2,000 entities
-spread across 40 sparse component tables, 50 reads returning 25 entities took 48
-ms without tracking and 25 ms with it; SQL statements per read dropped from 13
-to 5. Seeding writes increased from 192 ms to 252 ms and backfill took 22 ms.
-This is not a production latency guarantee: savings depend on sparsity/query
-projection, and writes and descriptor storage have a cost. One large app still
-pays a synchronous first-wake backfill; large-data Cloudflare CPU limits need
-monitoring.
-
 ## Store composition
 
 The Worker's application names its HTTP doors in `kernel.ts` and `apps.ts`, its
@@ -1130,22 +1120,10 @@ usage sweep is not a guarantee that the Git store has woken. Dormant stores are
 not all migrated when code is deployed. Backfill is synchronous; a large store
 will pay its initial migration cost before serving that request.
 
-Run `deno run -A workers/yak/platform_archetype_bench.ts` for an isolated,
-repeatable comparison (`BENCH_ROWS=20000` selects a larger fixture). With 20,000
-entities and fifty 25-row reads, one local run measured:
-
-| Store     | Statements/read before → after | Fifty reads before → after | Seed writes before → after | Backfill |
-| --------- | ------------------------------ | -------------------------- | -------------------------- | -------- |
-| Directory | 20 → 7                         | 47 → 27 ms                 | 3.50 → 4.26 s              | 172 ms   |
-| Git blobs | 9 → 7                          | 23 → 34 ms                 | 4.42 → 5.55 s              | 218 ms   |
-
 The rollout adds an `(archetype, num)` index: without it, SQLite sorted every
-matching entity before applying the default page limit, and the homogeneous Git
-fixture took 352 ms for those fifty reads. The index removes that scaling
-regression. Classification still adds descriptor work: narrow, homogeneous
-stores are not guaranteed a speedup. These are local adapter measurements, not
-production latency promises. Git gains the shared metadata and fewer table
-probes, not a claimed latency improvement for this workload.
+matching entity before applying the default page limit. Classification still
+adds descriptor work, so narrow, homogeneous stores are not guaranteed a
+speedup.
 
 ## License
 

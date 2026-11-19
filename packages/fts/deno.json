@@ -2,7 +2,8 @@
   "publish": {
     "exclude": [
       "**/*_test.ts",
-      "testing.ts"
+      "testing.ts",
+      "cost_testing.ts"
     ]
   }
 }
