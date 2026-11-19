@@ -114,8 +114,10 @@ export let affordable = (
     : null
 }
 
-/** Measured dollars require reported cost or complete usage. Unclassified
- * input uses its highest cache tariff; missing usage stays unknown. */
+/** Measured dollars require reported cost or complete usage. Input the
+ * provider classified (it said how many tokens it wrote to the cache, none
+ * included) is weighed as it said; unclassified input uses its highest cache
+ * tariff; missing usage stays unknown. */
 export let measured = (
   reply: { cost?: number; costReported?: boolean; usage?: Usage },
   price: Price | undefined,
@@ -132,6 +134,9 @@ export let measured = (
     )
   ) {
     return undefined
+  }
+  if (n.cache_write_tokens != null) {
+    return { dollars: weigh(price, n), reported: false }
   }
   let input = Math.max(
     price.input,

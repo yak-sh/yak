@@ -383,6 +383,19 @@ test('usage keeps missing counts unknown and rejects invalid counts', () => {
     }),
     { usage: { cached_tokens: 0 } },
   )
+  assertEquals(
+    tokenUsage({
+      input_tokens: 3015,
+      output_tokens: 5,
+      input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 },
+    }).usage,
+    {
+      input_tokens: 3015,
+      output_tokens: 5,
+      cached_tokens: 0,
+      cache_write_tokens: 0,
+    },
+  )
 })
 
 test('equivalent tool registries produce an identical request prefix', () => {

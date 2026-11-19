@@ -468,6 +468,7 @@ export let tokenUsage = (raw: unknown): Pick<Reply, 'usage' | 'cost'> => {
       output_tokens: u.output_tokens,
       total_tokens: u.total_tokens,
       cached_tokens: detail('input_tokens_details', 'cached_tokens'),
+      cache_write_tokens: detail('input_tokens_details', 'cache_write_tokens'),
       reasoning_tokens: detail('output_tokens_details', 'reasoning_tokens'),
     }).filter(([, n]) =>
       typeof n == 'number' && Number.isSafeInteger(n) && n >= 0

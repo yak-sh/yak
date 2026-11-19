@@ -107,6 +107,26 @@ test('settlement keeps unknown usage held and prices unclassified cache input co
     charged({ usage: { input_tokens: 100, output_tokens: 1 } }, price, 0.2),
     { dollars: 0.001002, reported: false },
   )
+  // A provider that says what it wrote to the cache, none included, is
+  // charged fresh input at the input price.
+  assertEquals(
+    charged(
+      { usage: { input_tokens: 100, output_tokens: 1, cache_write_tokens: 0 } },
+      price,
+      0.2,
+    ),
+    { dollars: 0.000102, reported: false },
+  )
+  assertEquals(
+    charged(
+      {
+        usage: { input_tokens: 100, output_tokens: 1, cache_write_tokens: 40 },
+      },
+      price,
+      0.2,
+    ),
+    { dollars: 0.000462, reported: false },
+  )
   assertEquals(charged({ cost: 0.01 }, price, 0.2), {
     dollars: 0.01,
     reported: true,
