@@ -53,6 +53,14 @@ jobs:
         run: |
           CI=1 nohup npx expo start --port 8081 --go > "$RUNNER_TEMP/metro.log" 2>&1 &
           until curl -fsS http://127.0.0.1:8081/status; do sleep 2; done
+          # The manifest once, before Expo Go asks for it twice at once (two
+          # first asks race on the CLI's code-signing file), then its bundle,
+          # so the flow waits on neither.
+          manifest='-H expo-platform:ios -H accept:application/expo+json,application/json'
+          bundle=$(curl -fsS $manifest http://127.0.0.1:8081 | python3 -c '
+          import json, sys
+          print(json.load(sys.stdin)["launchAsset"]["url"])')
+          time curl -fsS -o /dev/null "$bundle"
           nohup xcrun simctl spawn booted log stream --style compact \
             --predicate 'process CONTAINS "Expo"' > "$RUNNER_TEMP/device.log" 2>&1 &
       - name: Maestro
