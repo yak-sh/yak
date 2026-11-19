@@ -1196,6 +1196,12 @@ export class Builder extends Durable {
             let { oracleBackfill } = await import('./oracle-move.ts')
             return backfill(oracleBackfill(store))
           },
+          // The projects the oracle pass hid before it knew a project from
+          // an oracle (oracle-move.ts).
+          projects: async () => {
+            let { projectRepair } = await import('./oracle-move.ts')
+            return backfill(projectRepair(store))
+          },
           owners: async () => {
             let { ownerBackfill } = await import('./owner-move.ts')
             return backfill(ownerBackfill(store))

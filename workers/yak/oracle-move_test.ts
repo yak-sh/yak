@@ -7,7 +7,13 @@ import { operatorStore } from './operator-store.ts'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { operatorApi } from './operator-api.ts'
 import { seenBy } from './operator-access.ts'
-import { BATCH, oracleBackfill, ORACLES } from './oracle-move.ts'
+import {
+  BATCH,
+  oracleBackfill,
+  ORACLES,
+  projectRepair,
+  PROJECTS,
+} from './oracle-move.ts'
 import { oracleOf } from './operator-oracles.ts'
 import { state } from './testing.ts'
 
@@ -31,6 +37,8 @@ let own = (b: Bundle): Bundle => ({
 })
 let reference = id()
 await store.g.apply([
+  // The space's home, a topic too, which every task and decision is filed under.
+  { entity: { eid: space }, project: {}, topic: { name: 'club' } },
   {
     entity: { eid: subject },
     topic: { name: 'Legacy private space' },
@@ -113,6 +121,7 @@ await hidden()
 let again = await oracleBackfill(repaired)
 let rows = await store.g.get([subject, source, edge.entity.eid])
 let visible = await seenBy(store, other).get([source])
+let home = await seenBy(store, other).get([space], ['project'])
 
 test('the query door hides legacy projections before repair, between batches and after completion', () => {
   equal([more, again, kept.get(ORACLES)], [true, false, 'done'])
@@ -122,4 +131,30 @@ test('the query door hides legacy projections before repair, between batches and
   equal((rows[1].doc as Comp).body, 'Legacy memory secret')
   equal(reads.some((q) => /doc|content|\*/.test(q)), false)
   equal(visible.length, 0)
+  equal(home.map((b) => b.entity.eid), [space])
+})
+
+// A store the pass ran in before it knew a project from an oracle: its
+// project quarantined, with what the legacy oracle learned on it.
+let hid = { ...await operatorStore(durable()), marks }
+let learned = derivedEid(`operator-oracle|learned|${space}`)
+await hid.g.apply([{
+  entity: { eid: space },
+  project: {},
+  topic: { name: 'club' },
+  content: { body: 'Legacy learned secret' },
+  operator_oracle: { person: null, subject: space },
+}], { trusted: true })
+let before = await seenBy(hid, person).get([space], ['project'])
+while (await projectRepair(hid)) { /* bounded batches */ }
+let after = await seenBy(hid, person).get([space], ['project', 'content'])
+let moved = await hid.g.get([learned])
+
+test('a quarantined project is restored to every reader, its learned words kept hidden', () => {
+  equal([before.length, kept.get(PROJECTS)], [0, 'done'])
+  equal(after.map((b) => [b.entity.eid, !!b.project, b.content ?? null]), [
+    [space, true, null],
+  ])
+  equal((moved[0].content as Comp).body, 'Legacy learned secret')
+  equal((moved[0].owner as Comp).person ?? null, null)
 })
