@@ -10,7 +10,7 @@ import { type Fetcher } from './door.ts'
 import { reset } from '@yaks/durable-object/door'
 import type { Env } from './env.ts'
 import { background, defect, invocationKey } from './defects.ts'
-import { ambient, apart, elapsed, spanned } from './lib/hops.ts'
+import { apart, elapsed, spanned } from './lib/hops.ts'
 import { evicted, jittered, opaque, retried } from '@yaks/durable-object/resets'
 import { type Clock, system } from '@yaks/fp'
 import { setImmediate } from 'node:timers'
@@ -368,13 +368,12 @@ let ROOM = 8_000
 // timer rule, which Deno keeps), and a request asks dozens of turns.
 let turn = (then: () => void) => void setImmediate(then)
 
-/** Reads one request asks in one turn travel as one trip, with a response
- * body for each caller. A directory client can outlive its first request
- * (directory.ts `directoryOf`), and workerd refuses a body to any request but
- * the one whose trip fetched it, so each request has its own queue: its tally
- * (hops.ts `ambient`, which its reads are recalled by too), else its Worker
- * invocation. Outside both, or when the store answers 404 to the batch route,
- * reads go individually. */
+/** Reads a Worker invocation asks in one turn travel as one trip, with a
+ * response body for each caller. A directory client can outlive its first
+ * request (`directoryOf`), and a timing tally can span invocations. Each
+ * queue belongs to the invocation that owns its response bodies. Outside an
+ * invocation, or when the store answers 404 to the batch route, reads go
+ * individually. */
 export let gathered = (via: Fetcher): Fetcher => {
   type Asked = {
     req: Request
@@ -444,7 +443,7 @@ export let gathered = (via: Fetcher): Fetcher => {
         req.method != 'GET' || url.pathname != '/query' || q == null ||
         req.headers.has(MEND)
       ) return via.fetch(req)
-      let owner = ambient() ?? invocationKey()
+      let owner = invocationKey()
       if (!owner) return via.fetch(req)
       let queued = waiting.get(owner)
       if (!queued) waiting.set(owner, queued = [[], []])

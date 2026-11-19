@@ -295,29 +295,26 @@ test('reads asked in one turn are one trip, each answered its own line', async (
   assertEquals(await answers(rs), ['.a', '.b', '.c'])
   assertEquals(trips, [['.a', '.b', '.c']])
   assertEquals(rs[0].headers.get(EPOCH), '7')
-  // A read alone asks as it always did.
-  assertEquals(await (await ask('.d')).text(), '.d')
-  assertEquals(trips.at(-1), ['.d'])
+  // Each read outside a Worker invocation asks directly.
+  let unscoped = await tallying(
+    new Map(),
+    () => Promise.all([ask('.d'), ask('.e')]),
+  )
+  assertEquals(await answers(unscoped), ['.d', '.e'])
+  assertEquals(trips.slice(1), [['.d'], ['.e']])
 })
 test('an isolate-wide door batches reads only within the same request', async () => {
-  // A request is its invocation, or its tally where one counts it.
-  for (
-    let entered of [
-      inRequest,
-      <T>(read: () => Promise<T>) => tallying(new Map(), read),
-    ]
-  ) {
-    let { trips, ask, answers } = reading()
-    let request = (name: string) =>
-      entered(async () =>
-        answers(await Promise.all([ask(`${name}.a`), ask(`${name}.b`)]))
-      )
-    assertEquals(await Promise.all([request('first'), request('second')]), [
-      ['first.a', 'first.b'],
-      ['second.a', 'second.b'],
-    ])
-    assertEquals(trips, [['first.a', 'first.b'], ['second.a', 'second.b']])
-  }
+  let { trips, ask, answers } = reading()
+  let request = (name: string) =>
+    inRequest(async () =>
+      answers(await Promise.all([ask(`${name}.a`), ask(`${name}.b`)]))
+    )
+  let both = await tallying(
+    new Map(),
+    () => Promise.all([request('first'), request('second')]),
+  )
+  assertEquals(both, [['first.a', 'first.b'], ['second.a', 'second.b']])
+  assertEquals(trips, [['first.a', 'first.b'], ['second.a', 'second.b']])
 })
 test('a store reset mid-trip is read again whole, each caller its own line', async () => {
   let said = (q: string, n: number) =>
