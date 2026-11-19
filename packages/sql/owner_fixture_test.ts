@@ -2,7 +2,14 @@
 import { Archetypes, eidOf } from '@yaks/archetype/sets'
 import { loadVocab } from '@yaks/vocab'
 import type { ReadOpts } from '@yaks/graph'
-import { archetypeSet, col, type Driver, insert, type Row } from './core.ts'
+import {
+  archetypeSet,
+  col,
+  type Driver,
+  insert,
+  type Param,
+  type Row,
+} from './core.ts'
 
 let facets = Array.from({ length: 6 }, (_, i) => `facet${i}`)
 export let ownerVocab = loadVocab({
@@ -11,6 +18,7 @@ export let ownerVocab = loadVocab({
       component: true,
       properties: {
         num: { type: 'number' },
+        prefix: { type: 'string' },
         archetype: { type: 'string', ref: 'archetype' },
       },
     },
@@ -44,6 +52,7 @@ export let seedOwners = (d: Driver) => {
       { name: 'id', type: 'integer', pk: true },
       { name: 'eid', type: 'text', unique: true },
       { name: 'num', type: 'integer' },
+      { name: 'prefix', type: 'text' },
       { name: 'archetype', type: 'integer' },
     ],
   })
@@ -83,13 +92,15 @@ export let seedOwners = (d: Driver) => {
     return id
   }
   let descriptor = shape(['archetype'])
-  let owners = [
-    { id: 1, eid: 'target', num: 7, archetype: shape(['post']) },
+  let owners: Record<string, Param>[] = [
+    { id: 1, eid: 'target', num: 7, prefix: 'P', archetype: shape(['post']) },
     { id: 2, eid: 'closed', num: 8, archetype: shape(['blocked', 'post']) },
     { id: 3, eid: 'person', num: 9, archetype: shape(['person']) },
     { id: 4, eid: 'grave', num: 10, archetype: shape(['post', 'tombstone']) },
     { id: 5, eid: 'P-7', num: 11, archetype: shape(['post']) },
     { id: 6, eid: 'comment', num: 12, archetype: shape(['comment']) },
+    // 7 in another series: P-7 does not name it
+    { id: 7, eid: 'other', num: 7, prefix: 'Q', archetype: shape(['post']) },
     ...Array.from({ length: 64 }, (_, i) => ({
       id: 1000 + i,
       eid: `unrelated-${i}`,

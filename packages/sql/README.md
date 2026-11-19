@@ -815,16 +815,19 @@ each group's eid once. Absent values and empty text are dropped.
 
 ## Identity, references and walks
 
-An **Identity** is an operand list split into `eids` and entity `nums`.
-`identity` uses [@yaks/id](../id/README.md) to read display ids such as `B-7` as
-entity number 7. A list of text binds as one JSON parameter however long it is,
-and integers are spelled out in the statement (`spelled`), binding nothing: a
-list SQLite reads from JSON costs a row per member. One eid is an equality. A
-host that keeps its statements by their text (`stable`, as the box's driver
-does: `Driver.stable`) binds every list of more than one value as one JSON
-parameter, so a read's text is the same whatever its ids, and is prepared once.
-One value is an equality there too: SQLite cannot tell that a JSON array holds
-no null, so a negated test against one rereads it for every row.
+An **Identity** is an operand list split into `eids` and `numbered` ids, each a
+number and its letter (`''` for a bare number). `identity` uses
+[@yaks/id](../id/README.md) to read display ids such as `B-7` as the entity
+numbered 7 in the B series, so `J-7` names nothing while no J series reaches 7;
+a bare `7` names any entity numbered 7. A list of text binds as one JSON
+parameter however long it is, and integers are spelled out in the statement
+(`spelled`), binding nothing: a list SQLite reads from JSON costs a row per
+member. One eid is an equality. A host that keeps its statements by their text
+(`stable`, as the box's driver does: `Driver.stable`) binds every list of more
+than one value as one JSON parameter, so a read's text is the same whatever its
+ids, and is prepared once. One value is an equality there too: SQLite cannot
+tell that a JSON array holds no null, so a negated test against one rereads it
+for every row.
 
 ```ts
 import { compile, identity } from '@yaks/sql'
@@ -840,7 +843,10 @@ let vocab = loadVocab({
     },
   },
 })
-equal(identity('eid', 'b1,B-7'), { eids: ['b1'], nums: [7] })
+equal(identity('eid', 'b1,B-7'), {
+  eids: ['b1'],
+  numbered: [{ prefix: 'B', num: 7 }],
+})
 equal(compile(parse('.entity.eid=b1,b2'), vocab).params, ['["b1","b2"]'])
 equal(compile(parse('.entity.eid=b1'), vocab).params, ['b1'])
 equal(compile(parse('.entity.num=3,4'), vocab).params, [])

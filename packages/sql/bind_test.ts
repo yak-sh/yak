@@ -248,7 +248,8 @@ test('a walk over a chain of references composes one step', () => {
     ),
     sql,
   )
-  assertEquals(params, [1, 3])
+  // the seed is the session numbered 1 in the S series
+  assertEquals(params, [1, 'S', 3])
   // a hop that is no reference is refused, never answered empty
   assertThrows(
     () => compile(parse('.entry.session.entity.num->S-1'), vocab),
@@ -451,18 +452,20 @@ test('.entity.num and a human id name entities by their spine number', () => {
   let nums = compile(parse('.entity.num=3,4'), v)
   assert(nums.sql.includes('"entity"."num" in (values (3), (4))'), nums.sql)
   assertEquals(nums.params, [])
-  // `T-7` is the entity numbered 7 — the letter is display, the number is
-  // identity — so a human id lands on the num arm
+  // `T-7` is the entity numbered 7 in the T series: the num arm, with its
+  // letter
   let human = compile(parse('.entity.eid=T-7'), v)
-  assert(human.sql.includes('"entity"."num" in (values (7))'), human.sql)
-  assertEquals(human.params, [])
+  let lettered = '("entity"."num" in (values (7)) and "entity"."prefix" = ?)'
+  assert(human.sql.includes(lettered), human.sql)
+  assertEquals(human.params, ['T'])
+  // a bare number is any entity numbered 7, whatever its letter
+  let bare = compile(parse('.entity.eid=7'), v)
+  assert(bare.sql.includes('"entity"."num" in (values (7))'), bare.sql)
+  assertEquals(bare.params, [])
   // a mixed list asks both arms
   let both = compile(parse('.entity.eid=a3f1,T-7'), v)
-  assert(
-    both.sql.includes('("entity"."eid" = ? or "entity"."num" in (values (7)))'),
-    both.sql,
-  )
-  assertEquals(both.params, ['a3f1'])
+  assert(both.sql.includes(`("entity"."eid" = ? or ${lettered})`), both.sql)
+  assertEquals(both.params, ['a3f1', 'T'])
 })
 
 test('an OR compiles independent selections and keeps operand order', () => {

@@ -288,9 +288,10 @@ Only a nonempty `=` operand is supported here. The parser accepts `.refs` and
 
 `.entity.eid=b1`, `.entity.eid=b1,b2` and `.entity.num=3` name entities rather
 than filter them, and are answered as a lookup in the array. A human-readable id
-works in either property: `B-3` is read as the entity numbered 3 (the prefix is
-ignored for lookup), so one operand form fetches by eid, by entity number, or by
-the id a person types.
+works in either property: `B-3` names the entity numbered 3 in the B series, and
+a bare `3` any entity numbered 3, so one operand form fetches by eid, by entity
+number, or by the id a person types. The letter counts: `J-3` names nothing
+while no J series reaches 3.
 
 ### Walks
 
@@ -374,7 +375,7 @@ const vocab = loadVocab({
 })
 const author = { entity: { eid: 'a1' }, doc: { title: 'Ursula Vale' } }
 const b1 = {
-  entity: { eid: 'b1', num: 3 },
+  entity: { eid: 'b1', num: 3, prefix: 'B' },
   doc: { title: 'Spring Catalogue' },
   book: {
     price: 12,

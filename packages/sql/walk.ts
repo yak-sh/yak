@@ -23,16 +23,23 @@ import { render } from './render.ts'
 import { identity } from './ident.ts'
 
 // The seed: the target's row in the entity table, named by eid or by a
-// human-readable id (`T-42` is the entity numbered 42 — @yaks/id), so one
-// syntax serves both.
+// human-readable id (`T-42` is the entity holding 42 in the T series, a bare
+// `42` any holding it — @yaks/id), so one syntax serves both.
 let seed = (target: string): Frag => {
   let id = identity('eid', target)
   if (!id) return { sql: 'eid = ?', params: [target] }
   let arms = [
-    ...id.eids.map(() => 'eid = ?'),
-    ...id.nums.map(() => 'num = ?'),
+    ...id.eids.map((eid): Frag => ({ sql: 'eid = ?', params: [eid] })),
+    ...id.numbered.map(({ num, prefix }): Frag =>
+      prefix
+        ? { sql: '(num = ? and prefix = ?)', params: [num, prefix] }
+        : { sql: 'num = ?', params: [num] }
+    ),
   ]
-  return { sql: arms.join(' or '), params: [...id.eids, ...id.nums] }
+  return {
+    sql: arms.map((a) => a.sql).join(' or '),
+    params: arms.flatMap((a) => a.params),
+  }
 }
 
 // The set of reachable entities as a relation of one `id` column, with the

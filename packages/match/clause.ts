@@ -20,7 +20,7 @@ import {
   type Walk,
   WALK_LIMIT,
 } from '@yaks/query/core'
-import { identity, literals, Unsupported } from '@yaks/sql/core'
+import { holds, identity, literals, Unsupported } from '@yaks/sql/core'
 import { type Assoc, type Hop, jsonValued, type Vocab } from '@yaks/vocab'
 import { Unknown, valueless } from '@yaks/vocab/runtime'
 import {
@@ -232,12 +232,11 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Arm => {
     let set = identity(hop.prop, p.value, ctx.exactIds)
     if (set) {
       let eids = new Set(set.eids)
-      let nums = new Set(set.nums)
       return arm(
         (b) =>
           eids.has(b.entity.eid) ||
-          (b.entity.num != null && nums.has(b.entity.num)),
-        nums.size ? [] : [{ eids: [...eids] }],
+          set.numbered.some((id) => holds(b.entity, id)),
+        set.numbered.length ? [] : [{ eids: [...eids] }],
       )
     }
   }
@@ -402,9 +401,7 @@ let walk = (ctx: Ctx, w: Walk): Test => {
   let closure = (among: Index): Set<string> => {
     let out = new Set<string>()
     let t = among.of(w.target) ??
-      among.list.find((b) =>
-        b.entity.num != null && id?.nums.includes(b.entity.num)
-      )
+      among.list.find((b) => !!id?.numbered.some((n) => holds(b.entity, n)))
     if (!t) return out
     let pairs = among.list.flatMap((b) => {
       let p = step(b, among)

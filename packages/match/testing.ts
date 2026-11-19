@@ -180,7 +180,7 @@ let letter = (b: Bundle) =>
 
 /** The fixture as it is written to storage, in order, each entity stating
  * its id: the number of its place in the list, under its kind's letter, so
- * `B-3` is the entity numbered 3. */
+ * `B-3` is the entity numbered 3, and `J-3` and `D-3` name nothing. */
 export let corpus: Bundle[] = rows.map((b, i) => ({
   ...b,
   entity: { eid: b.entity.eid, num: i + 1, prefix: letter(b) },
@@ -279,8 +279,9 @@ export let QUERIES: string[] = [
   '.book.author.member',
   '!book.author.member',
   // identity: naming entities instead of filtering them — an eid, a list of
-  // them, a spine number, a human id (`B-3` is the entity numbered 3), a mixed
-  // list, and a name nothing wears
+  // them, a spine number, a human id (`B-3` is the entity numbered 3 in the B
+  // series), one whose letter numbers nothing there, a mixed list, and a name
+  // nothing wears
   '.entity.eid=b1',
   '.entity.eid=b1,b2',
   '!entity.eid',
@@ -288,6 +289,8 @@ export let QUERIES: string[] = [
   '.entity.num=3,4',
   '.entity.eid=B-3',
   '.entity.eid=b1,B-4',
+  '.entity.eid=J-3',
+  '.entity.eid=b1,J-3,D-1',
   '.entity.eid=nosuchentity',
   // the deleted entity is named but still dead
   '.entity.eid=r9',

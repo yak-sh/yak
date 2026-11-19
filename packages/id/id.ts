@@ -176,14 +176,14 @@ export let seriesOf = (
 export let format = (prefix: string, num: number): string => `${prefix}-${num}`
 
 /**
- * An id, parsed back: `'B-7'` → `{ prefix: 'B', num: 7 }`. A bare number parses
- * too (`'7'` → `{ prefix: '', num: 7 }`), since people drop the letter: it
- * names an entity while only one holds that number. Anything else — an eid, a
- * short handle, an arbitrary string — is not a human id, and returns
- * undefined.
+ * An id, parsed back: `'B-7'` → `{ prefix: 'B', num: 7 }`, the letter in either
+ * case. A bare number parses too (`'7'` → `{ prefix: '', num: 7 }`), since
+ * people drop the letter: it names an entity while only one holds that number.
+ * Anything else — an eid, a short handle, a word and a number (`book-1`) — is
+ * not a human id, and returns undefined.
  */
 export let parse = (id: string): Parsed | undefined => {
-  let m = id.match(/^(?:([A-Za-z]+)-)?(\d+)$/)
+  let m = id.match(/^(?:([A-Za-z])-)?(\d+)$/)
   if (!m) return undefined
   let num = Number(m[2])
   return Number.isSafeInteger(num)
@@ -221,7 +221,7 @@ export let human = (v?: Vocab): (b: Wearing) => string => {
 
 /** A human id as typed, with its letter: `B-7`, `b-7`. A bare number parses
  * (`parse`) but is not written with its series. */
-export let HUMAN: RegExp = /^[A-Za-z]+-\d+$/
+export let HUMAN: RegExp = /^[A-Za-z]-\d+$/
 
 /** A short handle with a letter in front of its `#`, as handles were once
  * written (`T#47e9678bdf`). It names nothing. */
@@ -251,6 +251,13 @@ export let replaceIds = (text: string, f: (id: string) => string): string =>
 export let mentions = (text: string, id: string): boolean =>
   word(id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), '').test(text)
 
+/** Whether an entity holds a parsed id: its number, and its letter unless
+ * the id was a bare number (`prefix` `''`). */
+export let holds = (
+  e: { num?: number | null; prefix?: string | null },
+  p: Parsed,
+): boolean => !!e.num && p.num == e.num && (!p.prefix || p.prefix == e.prefix)
+
 /** Whether an id as typed names this entity: its number, and its letter
  * unless the id was typed as a bare number. */
 export let names = (
@@ -258,8 +265,7 @@ export let names = (
   e: { num?: number | null; prefix?: string | null },
 ): boolean => {
   let p = parse(id)
-  return !!p && !!e.num && p.num == e.num &&
-    (!p.prefix || p.prefix == e.prefix)
+  return !!p && holds(e, p)
 }
 
 /**

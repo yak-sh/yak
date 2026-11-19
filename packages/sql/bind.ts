@@ -151,6 +151,8 @@ import {
   type Site,
 } from './extend.ts'
 import { type Identity, identity, literals } from './ident.ts'
+import type { Parsed } from '@yaks/id'
+import { groupBy } from '@yaks/fp'
 import { walk as walked } from './walk.ts'
 import { Unsupported, whole } from './unsupported.ts'
 import { backedDialect, backingOf, computed, hasComputed } from './spine.ts'
@@ -846,7 +848,8 @@ let once = (expr: string, lower: (c: string) => Frag | null): Frag | null => {
 
 // The entity table's identity columns as one set lookup, the list bound as one
 // parameter however long it is (the dialect's `among`), with a second term for
-// the numbers a `.entity.num=` or a human-readable id named. An operand list that
+// the numbers a `.entity.num=` or a human-readable id named, each with its
+// letter where it was typed with one. An operand list that
 // names nothing at all compiles to a constant false.
 let inSet = (ctx: Ctx, set: Identity): Frag => {
   // A backed spine's eids are its ids written out, so naming one is reading
@@ -865,10 +868,19 @@ let inSet = (ctx: Ctx, set: Identity): Frag => {
       ? { sql: `${c} = ?`, params: vals }
       : ctx.d.among(c, vals)
   }
-  let arms = [
-    ...set.eids.length ? [arm('eid', set.eids)] : [],
-    ...set.nums.length ? [arm('num', set.nums)] : [],
-  ]
+  // A bare number names whichever letter holds it; a lettered id names only
+  // the entity holding that number in its own series, so it reads the
+  // numbers asked with each letter alongside the letter.
+  let byLetter = groupBy(set.numbered, (n: Parsed) => n.prefix)
+  let lettered = [...byLetter].map(([prefix, ids]): Frag => {
+    let nums = arm('num', [...new Set(ids.map((n) => n.num))])
+    if (!prefix) return nums
+    return {
+      sql: `(${nums.sql} and ${ctx.d.col('entity', 'prefix', ctx.v)} = ?)`,
+      params: [...nums.params, prefix],
+    }
+  })
+  let arms = [...set.eids.length ? [arm('eid', set.eids)] : [], ...lettered]
   if (!arms.length) return { sql: '0', params: [] }
   return arms.length == 1 ? arms[0] : {
     sql: `(${arms.map((a) => a.sql).join(' or ')})`,
@@ -2190,7 +2202,7 @@ let wants = (v: Vocab, tags: Tags, c: Clause): string[] => {
   if (!hop || op == 'want') return []
   if (hop.comp == 'entity' && op == '') {
     let set = identity(hop.prop, c.value)
-    let eids = set && !set.nums.length ? set.eids : []
+    let eids = set && !set.numbered.length ? set.eids : []
     return Object.keys(tags).filter((k) =>
       eids.length && eids.every((e) => idOf(tags[k], e) != null)
     )
@@ -2287,7 +2299,7 @@ let owners = (
   ctx: Ctx,
   clauses: Clause[],
 ): (Identity & { clause?: Pred }) | undefined => {
-  if (ctx.eids) return { eids: [...ctx.eids], nums: [], clause: ctx.rooted }
+  if (ctx.eids) return { eids: [...ctx.eids], numbered: [], clause: ctx.rooted }
   if (ctx.spine || claims(ctx, 'pred')) return
   for (let c of flattened(clauses)) {
     if (
@@ -3037,7 +3049,7 @@ let beginning = (
       Object.defineProperty(selected, 'maximum', {
         get: () => {
           let finite = owners(ctx, ast.clauses)
-          return !ctx.spine && finite && !finite.nums.length
+          return !ctx.spine && finite && !finite.numbered.length
             ? finite.eids.length
             : undefined
         },
@@ -3228,7 +3240,7 @@ let indexedRelation = (
   ) {
     let set = owners(ctx, clauses)
     if (set) {
-      if (set.eids.length && !set.nums.length) {
+      if (set.eids.length && !set.numbered.length) {
         let s = rel(from, o)
         let eids = [...new Set(set.eids)]
         let known = set.clause && ctx.identities.get(set.clause)

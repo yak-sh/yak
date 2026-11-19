@@ -99,6 +99,24 @@ test('every query selects the same entities', () => {
   }
 })
 
+test('a human id names its number in its own series, a bare number any', () => {
+  let s = sql()
+  let cases: [string, string[]][] = [
+    ['.entity.eid=B-3', ['b1']],
+    ['.entity.eid=b2,D-1', ['a1', 'b2']],
+    ['.entity.eid=3', ['b1']],
+    // a letter nothing is numbered with, or one numbering elsewhere, names
+    // nothing even though something holds the number
+    ['.entity.eid=J-3', []],
+    ['.entity.eid=D-3', []],
+    ['.entity.eid=J-3,b2', ['b2']],
+  ]
+  for (let [q, want] of cases) {
+    assertEquals(eids(matcher(q, shop, { now: NOW })(bundles)).sort(), want, q)
+    assertEquals(eids(fromSql(s, q)).sort(), want, q)
+  }
+})
+
 test('epoch millisecond properties resolve the same time bounds in both evaluators', () => {
   let bs: Bundle[] = [
     { entity: { eid: 'old' }, book: { price: NOW - 30_001 } },
@@ -384,7 +402,7 @@ let blog: Vocab = loadVocab([edgeDoc, {
 
 let posts: Bundle[] = [
   ...['p1', 'p2', 'p3', 'p4', 'p9'].map((eid, i) => ({
-    entity: { eid, num: i + 1 },
+    entity: { eid, num: i + 1, prefix: 'P' },
     post: { title: eid },
   })),
   link('p2', 'cites', 'p1'),
@@ -401,6 +419,8 @@ let WALKS = [
   '.cites[<=1]<-p1',
   '.cites<-p1',
   '.cites->P-1',
+  '.cites->1',
+  '.cites->J-1',
   '.linked->p1',
   '.linked<-p1',
   '.cites->p9',
@@ -478,12 +498,12 @@ let forked: Vocab = loadVocab([{
 // s1 → e1 forked into s2 → e2 forked into s3 → e3 forked into s4.
 let lineage: Bundle[] = [1, 2, 3, 4].flatMap((n) => [
   {
-    entity: { eid: `s${n}`, num: n },
+    entity: { eid: `s${n}`, num: n, prefix: 'S' },
     session: { title: `s${n}` },
     ...(n > 1 ? { fork: { from: `e${n - 1}` } } : {}),
   },
   {
-    entity: { eid: `e${n}`, num: n + 4 },
+    entity: { eid: `e${n}`, num: n + 4, prefix: 'E' },
     entry: { session: `s${n}`, text: `entry ${n}` },
   },
 ])
