@@ -43,6 +43,18 @@ export class StripeError extends Error {
   }
 }
 
+/** What Stripe holds at `path`, on account `on` where one is named; null
+ * where it holds nothing by that name, which Stripe says as a refusal. */
+export let found = (
+  at: Keyed,
+  path: string,
+  on?: string,
+): Promise<Record<string, unknown> | null> =>
+  ask(at, path, undefined, on).catch((e) => {
+    if (e instanceof StripeError && e.code == 'resource_missing') return null
+    throw e
+  })
+
 /** Rows from a Stripe list, including every page. */
 export let list = async function* <T extends { id: string }>(
   at: Keyed,

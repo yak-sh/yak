@@ -106,7 +106,7 @@ test('quoted checkout charges shipping and tax once, and its receipt points to t
     sale.lines.reduce((n, l) => n + l.cents * l.qty, 0) + sale.shipping!.cents,
     quote.total,
   )
-  equal(sale.fee, 67)
+  equal(sale.bps, 250)
   equal(sale.destination, quote.destination)
   equal(sale.key, quote.id)
   let order = quotedOrder(quote, paid)
@@ -142,5 +142,5 @@ test('a checkout retry keeps the original fee and provider parameters', async ()
     email: 'changed@example.com',
   })
   equal(next, first)
-  equal(next.fee, 67)
+  equal(next.bps, 250)
 })

@@ -137,7 +137,7 @@ export let quotedSale = (
     ...(q.tax ? [{ name: 'Tax', cents: q.tax, qty: 1 }] : []),
   ],
   currency: q.currency,
-  fee: Math.min(q.total, Math.max(0, Math.floor(q.total * at.bps / 10_000))),
+  bps: at.bps,
   destination: q.destination,
   shipping: { name: q.shipping.name, cents: q.shipping.cents },
   expires: q.expires,

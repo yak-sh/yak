@@ -383,8 +383,8 @@ export let backAt = (root: string, asked: unknown) => {
 
 /**
  * The checkout a cart makes, on the seller's account (payments.ts `shops`):
- * its lines in dollars, the platform's cut of the total, and the buyer sent
- * back inside the app either way.
+ * its lines in dollars, the platform's rate, which the provider takes of the
+ * payment, and the buyer sent back inside the app either way.
  *
  * Its tags say whose sale this is in the two words the webhook routes by, plus
  * the cart, and ride the payment as well as the checkout: a refund or a
@@ -399,7 +399,6 @@ export let sale = (at: {
   space: string
   app: string
   lines: Line[]
-  total: number
   packed: string
   bps: number
   email?: string
@@ -411,7 +410,7 @@ export let sale = (at: {
 }): Sale => ({
   lines: at.lines,
   currency: 'usd',
-  fee: fee(at.total, at.bps),
+  bps: at.bps,
   ...(at.email ? { email: at.email } : {}),
   done: at.success,
   cancel: at.cancel,
@@ -548,7 +547,6 @@ export let buying = async (
           space: at.space.eid,
           app: at.app,
           lines: priceless!.lines,
-          total: priceless!.total,
           packed: priceless!.packed,
           // The rate as it stands right now, read fresh (`dirOf`): a sale is
           // charged what the owner set a moment ago, never what a cached row

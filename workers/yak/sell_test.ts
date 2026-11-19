@@ -261,7 +261,6 @@ let asked = {
   space: 'e-space',
   app: 'shop',
   lines: [{ name: 'Tee', cents: 10_000, qty: 1 }],
-  total: 10_000,
   packed: '[{"p":"x","q":1}]',
   bps: 0,
   success: 'https://ada.yaks.app/shop/?ok',
@@ -273,7 +272,7 @@ test('a sale carries the cart, the fee and the rate it was charged at', () => {
   assertEquals(made, {
     lines: asked.lines,
     currency: 'usd',
-    fee: 0,
+    bps: 0,
     email: 'ana@example.com',
     done: asked.success,
     cancel: asked.cancel,
@@ -285,7 +284,7 @@ test('a sale carries the cart, the fee and the rate it was charged at', () => {
   // No address given is none at all, so the checkout asks for one.
   assertEquals('email' in sale(asked), false)
   let charged = sale({ ...asked, bps: 250 })
-  assertEquals([charged.fee, charged.tags.fee], [250, '250'])
+  assertEquals([charged.bps, charged.tags.fee], [250, '250'])
 })
 
 // A completed checkout, as the provider reads one.

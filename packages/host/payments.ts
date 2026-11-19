@@ -216,7 +216,9 @@ export type Quote = {
   expires: string
 }
 
-/** A hosted checkout on a seller's account. */
+/** A hosted checkout on a seller's account: paid once, or, where it says
+ * how often, a subscription that charges its lines again each period until
+ * it is cancelled. */
 export type Sale = {
   /** A durable request identity: retries address the same checkout. */
   key?: string
@@ -226,8 +228,11 @@ export type Sale = {
   expires?: string
   lines: Line[]
   currency: string
-  /** what the host takes of it, in the same unit; none when 0 */
-  fee: number
+  /** how often every line is charged again; none for a sale paid once */
+  per?: Per
+  /** the host's share of each payment, in basis points (250 is 2.5%), which
+   * the provider takes for it, rounded down; none when 0 */
+  bps: number
   /** the buyer's address to start the page with, if one is known */
   email?: string
   /** where the provider hands the buyer back when they paid, and when they
@@ -250,9 +255,12 @@ export type Paid = {
   /** the provider's own word for where the payment stands, for a sentence */
   status: string
   /** the checkout's id, and the payment it made, which every later word
-   * about the sale names */
+   * about the sale names: '' for a subscription's, whose payments are its
+   * own */
   checkout: string
   payment: string
+  /** the subscription it started, where it sold one ({@link Term}) */
+  subscription?: string
   /** what was paid, in the currency's smallest unit */
   total: number
   /** the address the buyer gave, else the one the checkout started with */
@@ -300,10 +308,27 @@ export type Settled =
   | 'lost'
   | 'restored'
 
+/** A subscription a buyer took out at a seller's checkout, as the term it
+ * is paid for. Whether it is paid for now is `until` against the clock, so
+ * nothing about it is a status to keep. */
+export type Term = {
+  id: string
+  /** when what was paid for runs out: the period's end while it renews or
+   * its charge is being retried, the start of the period it failed to pay
+   * once it lapsed, when it stopped once it ended, and null where nothing was
+   * ever paid */
+  until: string | null
+  /** set only when it will not renew: when it stops, or stopped */
+  ending: string | null
+  /** what the checkout that started it carried ({@link Sale.tags}) */
+  tags: Tags
+}
+
 /** One verified event a seller's account posted, read, with the account it
  * happened on ('' where it names none): the seller's account changed, or it
  * revoked the host's permission to act on it, or a checkout completed, or a
- * payment moved, or something the host has no word for. */
+ * payment moved, or a subscription's term moved (it renewed, was cancelled or
+ * lapsed), or something the host has no word for. */
 export type Shopped =
   & { account: string }
   & (
@@ -318,12 +343,20 @@ export type Shopped =
        * where the event names none */
       payment: () => Promise<Payment | null>
     }
+    | {
+      about: 'term'
+      /** the subscription as it stands now, read on asking, so events
+       * delivered out of order still leave the latest word; null where the
+       * event names none, or the provider holds none by that name */
+      term: () => Promise<Term | null>
+    }
     | { about: 'other' }
   )
 
 /** What a provider lends a party selling on an account of its own: the
  * account opened once and finished through the provider's onboarding, and
- * hosted checkouts on it, which the host takes a fee from. */
+ * hosted checkouts on it, paid once or by subscription, which the host takes
+ * a fee from. */
 export type Shops = {
   /** whether it can be asked anything here: its credentials are set */
   on: () => boolean
@@ -338,6 +371,15 @@ export type Shops = {
   onboarding: (account: string, back: string) => Promise<string>
   /** the address of a hosted checkout on a seller's account */
   checkout: (account: string, sale: Sale) => Promise<string>
+  /** a checkout on a seller's account as it stands, read back by its id,
+   * completed or not; null where the provider holds none by that id */
+  paid: (account: string, checkout: string) => Promise<Paid | null>
+  /** a subscription on a seller's account as it stands; null where the
+   * provider holds none by that id */
+  term: (account: string, subscription: string) => Promise<Term | null>
+  /** a subscription on a seller's account set to stop when the period paid
+   * for ends, and as it then stands: asked again, it changes nothing */
+  cancel: (account: string, subscription: string) => Promise<Term>
   /** Refund on the merchant's account, returning the application fee in
    * proportion. An identical key and request must never refund twice. */
   refund: (account: string, request: Refund) => Promise<Refunded>

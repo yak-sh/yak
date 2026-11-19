@@ -29,7 +29,7 @@ import type {
   Subscription,
   Tags,
 } from '@yaks/host/payments'
-import { ask, type Keyed, list, StripeError } from './mod.ts'
+import { ask, found, type Keyed, list } from './mod.ts'
 import { checkout } from './checkout.ts'
 
 /** What a config gives the plans: the key and clock every call is made with
@@ -94,7 +94,10 @@ let STANDING: Record<string, Standing> = {
 export let standing = (status: string): Standing =>
   Object.hasOwn(STANDING, status) ? STANDING[status] : 'lapsed'
 
-let when = (unix?: number | null) =>
+/// when(0) -> '1970-01-01T00:00:00.000Z'
+/// when(null) -> null
+/** A Stripe time, in seconds, as an ISO date. */
+export let when = (unix?: number | null): string | null =>
   unix == null ? null : new Date(unix * 1000).toISOString()
 
 /** When the paid-for period runs out. The field moved off the subscription
@@ -156,25 +159,31 @@ export let tierFor = (sub: Sub, prices: Options['prices'] = {}): string => {
   return (found ?? tiers[0])?.[0] ?? ''
 }
 
+/** When a subscription with this status stops, set only when it will not
+ * renew, so "cancelled, but paid through the 14th" is one row to read: an
+ * explicit `cancel_at`, else the period end it is riding out, else, for one
+ * already over, when it ended. */
+export let ending = (sub: Sub, status: string): string | null => {
+  let end = periodEnd(sub)
+  return when(
+    sub.cancel_at ??
+      (sub.cancel_at_period_end ? end : null) ??
+      (standing(status) == 'ended'
+        ? sub.ended_at ?? sub.canceled_at ?? end
+        : null),
+  )
+}
+
 /** A Stripe subscription in the host's words. */
 export let read = (sub: Sub, prices?: Options['prices']): Subscription => {
   let status = statusOf(sub)
-  let end = periodEnd(sub)
-  // Set only when the subscription will not renew, so "cancelled, but paid
-  // through the 14th" is one row to read: an explicit `cancel_at`, else the
-  // period end it is riding out, else, for one already over, when it ended.
-  let ends = sub.cancel_at ??
-    (sub.cancel_at_period_end ? end : null) ??
-    (standing(status) == 'ended'
-      ? sub.ended_at ?? sub.canceled_at ?? end
-      : null)
   return {
     id: sub.id ?? '',
     payer: idOf(sub.customer),
     tier: tierFor(sub, prices),
     status,
-    until: when(end),
-    ending: when(ends),
+    until: when(periodEnd(sub)),
+    ending: ending(sub, status),
     tags: { ...sub.metadata },
   }
 }
@@ -232,18 +241,8 @@ let expanded = (subscription: string) =>
 export let plans = (options: Options): Plans => {
   let now = () => options.clock?.now() ?? Date.now()
   let price = (tier: string, per: Per) => options.prices?.[tier]?.[per]
-  let fetched = (id: string) =>
-    ask(options, expanded(id)).then(
-      (sub) => sub as Sub,
-      (e) => {
-        if (e instanceof StripeError && e.code == 'resource_missing') {
-          return null
-        }
-        throw e
-      },
-    )
   let subscription = async (id: string) => {
-    let sub = await fetched(id)
+    let sub = await found(options, expanded(id)) as Sub | null
     return sub && read(sub, options.prices)
   }
   let charges = async (id: string) => {

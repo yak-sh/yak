@@ -1,8 +1,10 @@
 // What Stripe lends a party selling on an account of its own, as @yaks/host's
 // `Shops`: a Connect account opened once, finished through Stripe's hosted
 // onboarding, Checkout Sessions on it that the platform takes an application
-// fee from, and the events Stripe posts about it read into the host's words
-// (`shopped`, which ./doors.ts hears them with).
+// fee from, in payment mode or in subscription mode, the subscriptions those
+// start, read and cancelled at their period's end, and the events Stripe
+// posts about it read into the host's words (`shopped`, which ./doors.ts
+// hears them with).
 //
 // Direct charges throughout, the "charge merchants directly" model. The
 // connected account is the merchant: the charge is on their books, Stripe's
@@ -27,8 +29,17 @@ import type {
   Shopped,
   Shops,
   Tags,
+  Term,
 } from '@yaks/host/payments'
-import { ask, type Keyed } from './mod.ts'
+import { ask, found, type Keyed } from './mod.ts'
+import {
+  ending,
+  periodEnd,
+  periodStart,
+  standing,
+  type Sub,
+  when,
+} from './plans.ts'
 
 /** The slice of a Stripe account read here. Optional throughout: the shape is
  * Stripe's to move, and a field that went missing must leave a readable row
@@ -50,6 +61,8 @@ export type Session = {
   customer_email?: string | null
   customer_details?: { email?: string | null }
   metadata?: Record<string, string>
+  /** the one it started, in subscription mode */
+  subscription?: string | { id?: string } | null
 }
 
 /** The slice of a charge, or of a dispute about one, read here. */
@@ -171,47 +184,90 @@ export let TAG = 500
 export let back = (url: string): string =>
   url.replaceAll('%7B', '{').replaceAll('%7D', '}')
 
+/// cut({ lines: [{ name: 'Tee', cents: 999, qty: 1 }], bps: 250 }) -> 24
+/// cut({ lines: [{ name: 'Tee', cents: 100, qty: 1 }], bps: 20_000 }) -> 100
+/** The platform's cut of a sale paid once, in its smallest unit: the rate of
+ * its whole total, shipping included, rounded down, and never more than the
+ * sale. */
+export let cut = (sale: Pick<Sale, 'lines' | 'shipping' | 'bps'>): number => {
+  let total = sale.lines.reduce((n, l) => n + l.cents * l.qty, 0) +
+    (sale.shipping?.cents ?? 0)
+  return Math.min(
+    total,
+    Math.max(0, Math.floor(total * (sale.bps || 0) / 10_000)),
+  )
+}
+
+// The payment a sale paid once makes. `application_fee_amount` is the
+// platform's cut, and this is the only place Stripe takes one for a payment
+// Checkout Session: there is no top-level parameter. It is left out entirely
+// when it is zero, since Stripe requires a positive amount, so a fee of
+// nothing has to be no fee rather than a fee of 0.
+//
+// The tags are copied onto it, which is not redundancy: a refund arrives as a
+// `charge.refunded`, whose object inherits the PaymentIntent's metadata and
+// knows nothing of the session, so without them the refund of a sale could
+// not be told whose it was.
+let once = (sale: Sale) => {
+  let fee = cut(sale)
+  return {
+    ...(sale.shipping
+      ? {
+        shipping_options: [{
+          shipping_rate_data: {
+            type: 'fixed_amount',
+            display_name: sale.shipping.name,
+            fixed_amount: {
+              amount: sale.shipping.cents,
+              currency: sale.currency,
+            },
+          },
+        }],
+      }
+      : {}),
+    payment_intent_data: {
+      ...(fee > 0 ? { application_fee_amount: fee } : {}),
+      metadata: sale.tags,
+      ...(sale.destination ? { shipping: sale.destination } : {}),
+    },
+  }
+}
+
+// The subscription a renewing sale makes. Its fee is a percent of every
+// invoice, since an amount would be taken from the first payment alone, and a
+// rate in whole basis points is a percent with the two decimal places Stripe
+// takes. The tags ride the subscription, which every `customer.subscription.*`
+// event carries back, and which an invoice's payment does not inherit.
+let renewing = (sale: Sale) => ({
+  subscription_data: {
+    ...(sale.bps > 0
+      ? { application_fee_percent: Math.min(100, sale.bps / 100) }
+      : {}),
+    metadata: sale.tags,
+  },
+})
+
 /**
  * The Checkout Session, as the form fields of `POST /v1/checkout/sessions`,
- * made on the seller's account (the `Stripe-Account` header `checkout` adds).
+ * made on the seller's account (the `Stripe-Account` header `checkout` adds):
+ * in payment mode for a sale paid once, and in subscription mode for one that
+ * says how often it renews, where every line recurs at that interval.
  *
- * `payment_intent_data[application_fee_amount]` is the platform's cut, and it
- * is the only place Stripe takes one for a Checkout Session: there is no
- * top-level parameter. It is left out entirely when it is zero, since Stripe
- * requires a positive amount, so a fee of nothing has to be no fee rather than
- * a fee of 0.
- *
- * The tags ride `metadata`, and are copied onto `payment_intent_data[metadata]`
- * as well, which is not redundancy: a refund arrives as a `charge.refunded`,
- * whose object inherits the PaymentIntent's metadata and knows nothing of the
- * session, so without this the refund of a sale could not be told whose it
- * was. Lines go out as inline `price_data`, numbered as Stripe's form encoding
- * numbers a list.
+ * The tags ride `metadata`, and the payment or the subscription it makes as
+ * well. Lines go out as inline `price_data`, numbered as Stripe's form
+ * encoding numbers a list.
  */
 export let session = (sale: Sale): Record<string, unknown> => ({
-  mode: 'payment',
+  mode: sale.per ? 'subscription' : 'payment',
   ...(sale.expires
     ? { expires_at: Math.floor(Date.parse(sale.expires) / 1000) }
-    : {}),
-  ...(sale.shipping
-    ? {
-      shipping_options: [{
-        shipping_rate_data: {
-          type: 'fixed_amount',
-          display_name: sale.shipping.name,
-          fixed_amount: {
-            amount: sale.shipping.cents,
-            currency: sale.currency,
-          },
-        },
-      }],
-    }
     : {}),
   line_items: Object.fromEntries(sale.lines.map((l, i) => [i, {
     price_data: {
       currency: sale.currency,
       product_data: { name: l.name },
       unit_amount: l.cents,
+      ...(sale.per ? { recurring: { interval: sale.per } } : {}),
     },
     quantity: l.qty,
   }])),
@@ -219,11 +275,7 @@ export let session = (sale: Sale): Record<string, unknown> => ({
   cancel_url: back(sale.cancel),
   ...(sale.email ? { customer_email: sale.email } : {}),
   metadata: sale.tags,
-  payment_intent_data: {
-    ...(sale.fee > 0 ? { application_fee_amount: sale.fee } : {}),
-    metadata: sale.tags,
-    ...(sale.destination ? { shipping: sale.destination } : {}),
-  },
+  ...(sale.per ? renewing(sale) : once(sale)),
 })
 
 /** A completed session as the sale it made. The buyer's address is
@@ -239,9 +291,35 @@ export let paidOf = (o: Session): Paid => ({
   status: String(o.payment_status ?? ''),
   checkout: String(o.id ?? ''),
   payment: idOf(o.payment_intent),
+  ...(idOf(o.subscription) ? { subscription: idOf(o.subscription) } : {}),
   total: Math.max(0, Math.floor(Number(o.amount_total ?? 0))),
   email: String(o.customer_details?.email || o.customer_email || ''),
   tags: { ...o.metadata },
+})
+
+/** When what a subscription was paid for runs out, in Stripe's seconds.
+ * While it renews, or while Stripe retries a failed charge (`past_due`, which
+ * keeps it as ./plans.ts keeps a plan), that is the period's end. One that
+ * never paid has none. One that lapsed unpaid was paid up to the period it
+ * failed to pay, and one that ended stopped when it ended, which for one
+ * cancelled at its period's end is that end. */
+export let paidThrough = (sub: Sub): number | null => {
+  let status = sub.status ?? ''
+  if (status == 'incomplete' || status == 'incomplete_expired') return null
+  let stands = standing(status)
+  return stands == 'paying' || stands == 'owing'
+    ? periodEnd(sub)
+    : stands == 'ended'
+    ? sub.ended_at ?? sub.canceled_at ?? periodEnd(sub)
+    : periodStart(sub)
+}
+
+/** A subscription on a seller's account as the term it is paid for. */
+export let termOf = (sub: Sub): Term => ({
+  id: String(sub.id ?? ''),
+  until: when(paidThrough(sub)),
+  ending: ending(sub, sub.status ?? ''),
+  tags: { ...sub.metadata },
 })
 
 // Where an event moves a payment. A refund is whole only once the whole charge
@@ -317,6 +395,14 @@ let priorRefund = async (
   }
 }
 
+let subscription = (id: string) => `/v1/subscriptions/${encodeURIComponent(id)}`
+
+// A subscription on a seller's account as it stands.
+let termAt = async (options: Keyed, on: string, id: string) => {
+  let sub = await found(options, subscription(id), on) as Sub | null
+  return sub && termOf(sub)
+}
+
 /** Stripe's shops, every call made with `options` as they read at the
  * time. */
 export let shops = (options: Keyed): Shops => {
@@ -353,6 +439,28 @@ export let shops = (options: Keyed): Shops => {
         session(sale),
         on,
         sale.key,
+      ),
+    paid: async (on, checkout) => {
+      let o = await found(
+        options,
+        `/v1/checkout/sessions/${encodeURIComponent(checkout)}`,
+        on,
+      )
+      return o && paidOf(o as Session)
+    },
+    term: (on, id) => termAt(options, on, id),
+    // `cancel_at_period_end` and not a delete: the buyer keeps what they paid
+    // for, and Stripe ends it when the period does. Setting it twice is one
+    // setting, so no request key holds it: one would replay a stale answer
+    // to a cancel asked again after the seller undid the first.
+    cancel: async (on, id) =>
+      termOf(
+        await ask(
+          options,
+          subscription(id),
+          { cancel_at_period_end: true },
+          on,
+        ) as Sub,
       ),
     refund: async (on, request) => {
       let old = await priorRefund(options, on, request)
@@ -414,6 +522,27 @@ let payment = (o: Charge) => {
     : null
 }
 
+// The subscription an event moves the term of, '' where it names none, and
+// null for an event about no subscription's term. A subscription's own events
+// say it was made, renewed, cancelled or ended; an invoice paid is a period
+// paid for, and names its subscription under `parent` since API
+// 2025-03-31.basil and at its top level before (as ./plans.ts `changed`
+// reads it). Every one is read again from Stripe when it is applied, so the
+// order they arrive in leaves the latest word.
+let subscribedBy = (type: string, o: Record<string, unknown>) => {
+  if (type.startsWith('customer.subscription.')) {
+    return idOf(o.id as string | undefined)
+  }
+  if (type != 'invoice.paid') return null
+  let parent = o.parent as
+    | { subscription_details?: { subscription?: string | { id?: string } } }
+    | undefined
+  return idOf(
+    (o.subscription as string | { id?: string } | undefined) ??
+      parent?.subscription_details?.subscription,
+  )
+}
+
 /** A verified event Stripe posted to the Connect endpoint, read, with the
  * account it happened on. */
 export let shopped = (options: Keyed) => (event: unknown): Shopped => {
@@ -429,6 +558,15 @@ export let shopped = (options: Keyed) => (event: unknown): Shopped => {
   }
   if (type == 'checkout.session.completed') {
     return { account, about: 'sale', sale: paidOf(o as Session) }
+  }
+  let renewed = subscribedBy(type, o)
+  if (renewed != null) {
+    return {
+      account,
+      about: 'term',
+      term: async () =>
+        renewed ? await termAt(options, account, renewed) : null,
+    }
   }
   if (
     type == 'refund.created' || type == 'refund.updated' ||
