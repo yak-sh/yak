@@ -4,7 +4,7 @@ import * as system from '@yaks/process/system'
 // which what watches a run reads.
 import { threadtime } from '@yaks/benchmark'
 import { own } from './own.ts'
-import { closing, type Test } from './suite.ts'
+import { closing, left, type Test } from './suite.ts'
 
 /** How one test went. */
 export type Outcome = {
@@ -242,6 +242,23 @@ export let file = async (
     out.push(o)
   }
   return out
+}
+
+/** Ends the file `file` ran last (./suite.ts `afterAll`) as one more test of
+ * it, `<path> ends`, said only when it fails: a file that ends cleanly reads
+ * as it did before it asked. */
+export let end = async (
+  path: string,
+  timeout: number,
+  verbose = false,
+): Promise<Outcome[]> => {
+  let body = left()
+  if (!body) return []
+  let name = `${path} ends`
+  let o = await one({ name, body, tags: [], skip: false, file: path }, timeout)
+  if (o.ok) return []
+  say(`${name} ... ${how(o)}${told(o, verbose)}\n`)
+  return [o]
 }
 
 /** What a run took, in milliseconds: the whole of it, its planning and its

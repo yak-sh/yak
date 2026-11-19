@@ -72,7 +72,13 @@ failing test instead.
 `cleanup(done)` asks for `done` once the running test ends, last asked first,
 inside the test's time: a fixture that opens something closes it there, and
 nothing it left running reaches the next test. A cleanup that throws fails the
-test.
+test. Asked outside a test, it is the file's.
+
+`afterAll(done)` asks for `done` once the file the runner loaded has run its
+tests, whichever of them asks. A runtime keeps every module it loads and
+everything they hold, so what a file opens for all its tests (a shared kernel,
+say) closes there, rather than living on beside every file loaded after. The
+file's end runs as one more test of it, `<path> ends`, said only when it fails.
 
 Outside the runner, declarations register with `Deno.test` when it is available.
 In a runtime without `Deno.test`, declarations need the runner's collection

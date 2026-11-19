@@ -431,11 +431,16 @@ export let lasting = (
   let closing: Promise<void> | null = null
   let close = () => {
     if (closing) return closing
+    // A closed platform holds none of its objects: a test module that keeps
+    // its kernel keeps only that, beside every file the runtime loads after.
     let release = () => {
       disposed = true
       for (let name of timers.keys()) cancel(name)
       for (let ctx of stores) ctx.storage[Symbol.dispose]()
       stores.length = 0
+      for (let held of [objects, sockets, recovery, states, armed, alarms]) {
+        held.clear()
+      }
     }
     // A Durable Object's runtime retains its storage for waitUntil work.
     // An alarm delivery can start such work or call another store before it

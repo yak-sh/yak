@@ -3,7 +3,7 @@
 import * as io from '@yaks/file/io'
 import { apex } from '@yaks/platform/host'
 import { challenge } from '@yaks/oauth'
-import { clock, until } from '@yaks/testing'
+import { afterAll, cleanup, clock, until } from '@yaks/testing'
 import { COOKIE, sign, verify } from './lib/token.ts'
 import type { Custom } from './domains.ts'
 import type { Command } from './declared.ts'
@@ -251,13 +251,16 @@ let boot = async (
     )
   )
   let ticking = setInterval(p.ring, 10)
-  let close = async () => {
-    clearInterval(ticking)
-    await service.stop()
-    await p[Symbol.asyncDispose]()
-    await cf.stop()
-    logs.delete(log)
-  }
+  // Once, however many ask: a test's `stop`, and its scope after it.
+  let closed: Promise<void> | undefined
+  let close = () =>
+    closed ??= (async () => {
+      clearInterval(ticking)
+      await service.stop()
+      await p[Symbol.asyncDispose]()
+      await cf.stop()
+      logs.delete(log)
+    })()
   let door = driven(service.url, secret, log, apex(), cf.url)
   let deliveries = async () => {
     while (held.size) await Promise.allSettled([...held])
@@ -301,19 +304,30 @@ export let recording = () => {
   return { purged, PURGER, held }
 }
 
-// This process's kernel, started by the first test that asks for one.
+// The kernel of the file the runner runs, started by the first of its tests
+// that asks for one. It ends once the file's tests have run: kept for the
+// process, it held every store any file made, and a test runtime outgrew its
+// memory a few dozen files in.
 let shared: ReturnType<typeof boot> | undefined
 
-/** The in-memory kernel shared by this test process. */
+/** The in-memory kernel shared by this test file's tests. */
 export let kernel = async (): Promise<Kernel> => {
-  let { close: _, ...k } = await (shared ??= boot())
+  if (!shared) {
+    let mine = shared = boot()
+    afterAll(async () => {
+      if (shared == mine) shared = undefined
+      await (await mine).close()
+    })
+  }
+  let { close: _, ...k } = await shared
   return owning(k)
 }
 
 /**
  * A kernel in memory of one test's own, started for it and ended by its
- * `stop`: for a test that needs the kernel whole, such as one that times a
- * store's first wake.
+ * `stop`, or else as the test ends (or, made outside a test, its file): for
+ * a test that needs the kernel whole, such as one that times a store's first
+ * wake.
  */
 export let fresh = async (
   bindings: Vars = {},
@@ -321,6 +335,7 @@ export let fresh = async (
   load?: Load,
 ): Promise<Kernel> => {
   let { close, ...k } = await boot(bindings, prepare, load)
+  cleanup(close)
   return owning(k, close)
 }
 
