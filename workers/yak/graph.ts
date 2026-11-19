@@ -3979,30 +3979,33 @@ export class Store extends Durable {
   #mover = (held: (() => void | Promise<void>)[], rule?: Rule): Moving => {
     let g = this.#graph
     let words = this.#vocab
-    if (rule?.source) {
-      let source = {
-        ...rule.source,
-        $defs: Object.fromEntries(
-          Object.entries(rule.source.$defs ?? {}).flatMap(([comp, schema]) => {
-            let columns = this.#sql.query({
-              t: 'pragma',
-              name: 'table_info',
-              arg: comp,
-            }).map((c) => c.name)
-            // A retired word this store never raised a table for holds
-            // nothing: left undeclared, the rule finds it unspoken here.
-            if (!columns.length) return []
-            return [[comp, {
-              ...schema,
-              properties: Object.fromEntries(
-                Object.entries(schema.properties ?? {}).filter(([prop]) =>
-                  !this.#vocab.prop(comp, prop) && columns.includes(prop)
-                ),
-              ),
-            }]]
-          }),
-        ),
-      }
+    let retired = rule?.source && Object.fromEntries(
+      Object.entries(rule.source.$defs ?? {}).flatMap(([comp, schema]) => {
+        let columns = this.#sql.query({
+          t: 'pragma',
+          name: 'table_info',
+          arg: comp,
+        }).map((c) => c.name)
+        // A retired word this store never raised a table for holds
+        // nothing: left undeclared, the rule finds it unspoken here.
+        if (!columns.length) return []
+        let properties = Object.fromEntries(
+          Object.entries(schema.properties ?? {}).filter(([prop]) =>
+            !this.#vocab.prop(comp, prop) && columns.includes(prop)
+          ),
+        )
+        // A word the store still speaks, with no retired property left in
+        // its table, is read as the store reads it.
+        if (this.#vocab.comp(comp) && !Object.keys(properties).length) {
+          return []
+        }
+        return [[comp, { ...schema, properties }]]
+      }),
+    )
+    // A source that adds nothing this store holds reads through the store's
+    // own graph: composing the same words again would build a second one.
+    if (rule?.source && Object.keys(retired!).length) {
+      let source = { ...rule.source, $defs: retired }
       let vocab = words = loadVocab(
         [...this.#vocab.docs, source],
         metaKeywords,

@@ -50,7 +50,13 @@ import { plan, planned } from './plan.ts'
 import { behind, declares, exact } from './ddl.ts'
 import { tables } from './layout.ts'
 import { recorded, unraised } from './raise.ts'
-import { columns, componentTables, pinned, words } from './physical.ts'
+import {
+  columns,
+  columnsBy,
+  componentTables,
+  pinned,
+  words,
+} from './physical.ts'
 
 /** The print of a composed schema: a store's own print (`Store.print`) and
  * every further statement the file needs, rendered. */
@@ -253,8 +259,9 @@ export let shed = (driver: Driver, { vocab, beside = [] }: Named): Seat[] => {
   let defined = new Map(catalogue(driver).map((o) => [o.name, o.sql ?? '']))
   let unnamed = componentTables(driver, [], [...made.keys()]).flatMap(
     (name) => {
-      let held = pinned(defined.get(name) ?? '')
-      return columns(driver, name)
+      let sql = defined.get(name)
+      let held = pinned(sql ?? '')
+      return columnsBy(driver, name, sql)
         .filter((c) => {
           let low = c.toLowerCase()
           return !made.get(name)!.has(low) && !held.has(low) &&

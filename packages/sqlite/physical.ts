@@ -231,6 +231,29 @@ export let columns = (driver: Driver, name: string): string[] =>
   driver.query({ t: 'pragma', name: 'table_info', arg: name })
     .map((c) => String(c.name))
 
+// A table's columns by the statement SQLite keeps for it, which an added,
+// dropped or renamed column rewrites: a store whose tables were made as
+// another's were asks the engine nothing.
+let made = new Map<string, readonly string[]>()
+let MADE = 4096
+
+/** A table's columns, in declaration order, given the statement the file's
+ * schema keeps for it (@yaks/sql `catalogue`): asked of the engine once a
+ * statement. */
+export let columnsBy = (
+  driver: Driver,
+  name: string,
+  sql: string | null | undefined,
+): readonly string[] => {
+  if (sql == null) return columns(driver, name)
+  let held = made.get(sql)
+  if (held) return held
+  let found = columns(driver, name)
+  if (made.size >= MADE) made.delete(made.keys().next().value!)
+  made.set(sql, found)
+  return found
+}
+
 /** The columns a table requires a value for: not null, with no default, as
  * the file holds them. Asked once a table while the connection's schema
  * stands. */
