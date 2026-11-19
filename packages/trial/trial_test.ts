@@ -17,6 +17,7 @@ import { type Arrival, asking, before, cases, run, WORDS } from './moment.ts'
 import {
   carried,
   drafted,
+  missed,
   naming,
   open,
   said as saidBefore,
@@ -459,6 +460,26 @@ test('trial: standing is the person and the notices that came more than once to 
     ['persona', ['jeff']],
     ['notice', ['pace1', 'pace2']],
   ])
+})
+
+test("trial: missed is the person's corrections of the week before the window that wear a miss, in their words", async () => {
+  let fix = (eid: string, when: string, by = 'jeff') => ({
+    entity: { eid },
+    content: { body: `not  that, ${eid}` },
+    created: { at: when, by: 'jeff' },
+    feedback: { by },
+    miss: { entry: 'elsewhere' },
+  })
+  await g.apply([
+    fix('lastweek', '2026-11-02T11:00:00.000Z'),
+    fix('thursday', '2026-11-06T11:00:00.000Z'),
+    fix('monday', '2026-11-09T11:00:00.000Z'),
+    fix('anna', '2026-11-09T11:00:00.000Z', 'anna'),
+    fix('after', '2026-11-10T11:13:00.000Z'),
+  ])
+  let [part] = await missed('jeff')(stand())
+  assertEquals([part.door, part.eids], ['notice', ['thursday', 'monday']])
+  assertEquals(part.text.endsWith('"not that, monday"'), true)
 })
 
 test('trial: a window names a row by its eid, its number or its short handle', () => {

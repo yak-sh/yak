@@ -24,6 +24,8 @@
  * - {@link standing}: at the session's start and after each compaction, who
  *   the person is, and each notice that came to the session, or to the session
  *   that spawned it, more than once in the day before.
+ * - {@link missed}: at the session's start and after each compaction, the
+ *   person's corrections of the week before that wear a `miss`, in their words.
  *
  * Each reads the graph as it stands now, cut back at the moment: a row
  * created later is left out, and a body edited since reads as it does now.
@@ -437,4 +439,28 @@ export let standing =
         text: kept.map(([text]) => text).join('\n'),
       }]
       : parts
+  }
+
+let WEEK = 7 * DAY
+
+/** At the window's start (the session's start or a compaction): each of the
+ * person's corrections of the week before that wears a `miss`, one line of
+ * their words each, whichever session it corrected. A helper's start is its
+ * own window's start, so a spawn of a spawn has them too. */
+export let missed =
+  (person: Eid): Arrival => async ({ storage, vocab, since }) => {
+    let id = human(vocab)
+    let week = new Date(Date.parse(since) - WEEK).toISOString()
+    let rows = (await asOf(storage, vocab, since).read(and(
+      present('miss'),
+      eq('feedback.by', person),
+      gt('created.at', week),
+    ))).toSorted((a, b) => at(a).localeCompare(at(b)))
+    return lines(
+      'notice',
+      rows.map((b) => [
+        b,
+        `${id(b)} · ${at(b).slice(0, 10)} · ${JSON.stringify(flat(body(b)))}`,
+      ]),
+    )
   }
