@@ -1018,16 +1018,19 @@ test(
 // use them, or other spaces the caller sits in hold.
 test('connection_list reads the directory in one trip, whatever the space holds', async () => {
   let s = await setup()
-  // Each admission opens its own directory, as the connector's door does.
-  let reopen = () => directory({ fetch: over(meta(s.p.env)) })
-  let ctx = { env: s.p.env, dir: reopen(), reopen, person: s.person }
+  let env = s.p.env
+  let reopen = () => directory({ fetch: over(meta(env)) })
+  let tool = PUBLISHED.find((t) => t.name == 'connection_list')!
   let listed = async (
     args: Record<string, unknown>,
   ): Promise<[string[] | null, number | undefined]> => {
+    // Each call opens its own invocation and directory, as the connector does.
+    let ctx = { env, dir: reopen(), reopen, person: s.person }
     let tally = new Map<string, number>()
-    let out = await tallying(
-      tally,
-      () => PUBLISHED.find((t) => t.name == 'connection_list')!.run(ctx, args),
+    let out = await within(
+      env,
+      {},
+      () => tallying(tally, () => tool.run(ctx, args)),
     )
     return [
       out.text.match(/^\S+(?= \()|\w+ reads it as env\.\w+/gm),

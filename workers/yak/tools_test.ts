@@ -62,10 +62,19 @@ import { stages } from '../../bin/app-deploy-time.ts'
 import { running } from './agent.ts'
 import { copyOf, type ServingCopyDoor } from './directory-copy.ts'
 import { ServingCopy } from './serving-copy.ts'
+import { within } from './defects.ts'
 
 // Every app app_list answered as data, across its spaces.
 let apps = (out: Out) =>
   (out.value as { spaces: Listed[] }).spaces.flatMap((s) => s.apps)
+
+// The kernel opens an invocation around each connector request. The directory
+// batches that invocation's reads, and the clock counts its own trips.
+let measured = async (ctx: Ctx, run: (ctx: Ctx) => Promise<unknown>) => {
+  let c = clock()
+  await within(ctx.env, {}, () => c.counting(() => run({ ...ctx, clock: c })))
+  return stages(c.header())
+}
 
 // These fixtures count SQL and store doors, so the directory and app API keep
 // SQLite and its production driver while leaving Store deployment duties out.
@@ -513,10 +522,7 @@ let deployRoundTrips = await (async () => {
   // its own — a per-request memo shared across two calls would count the
   // second one short.
   let costs = async (name: string, args: Record<string, unknown>) => {
-    let c = clock()
-    let ctx: Ctx = { env, dir, person: ADA, clock: c }
-    await c.counting(() => call(ctx, name, args))
-    let said = stages(c.header())
+    let said = await measured(setup, (ctx) => call(ctx, name, args))
     assertEquals(said.stmts > 0, true)
     return { hops: said.hops, r2: said.r2 }
   }
@@ -555,16 +561,14 @@ let deployRoundTrips = await (async () => {
   // A release's index names bytes that never change, so once it has been
   // read, a file of that release costs the bucket its bytes alone.
   let read = async () => {
-    let c = clock()
-    await c.counting(() =>
-      call({ env, dir, person: ADA, clock: c }, 'app_files', {
+    let said = await measured(setup, (ctx) =>
+      call(ctx, 'app_files', {
         space: 'ada',
         app: 'recipes',
         op: 'read',
         path: 'index.html',
-      })
-    )
-    return stages(c.header()).r2
+      }))
+    return said.r2
   }
   await read()
   assertEquals(await read(), 1)
@@ -631,11 +635,12 @@ let signedRoundTrips = await (async () => {
   await call(setup, 'app_new', { space: 'ada', slug: 'recipes', title: 'R' })
   await booted(setup)
   let hops = async (name: string, args: Record<string, unknown>) => {
-    let c = clock()
-    let ctx: Ctx = { env, dir: reopen(), reopen, person: ADA, clock: c }
     let tool = TOOLS.find((t) => t.name == name)!
-    await c.counting(() => running(ctx, tool)(args))
-    return stages(c.header()).hops
+    let said = await measured(
+      { ...setup, dir: reopen() },
+      (ctx) => running(ctx, tool)(args),
+    )
+    return said.hops
   }
   let app = { space: 'ada', app: 'recipes' }
   return {
@@ -708,15 +713,10 @@ test('a listing asks the directory a fixed number of times', async () => {
   })
   // What the setup's writes owed runs after them; only the listing is counted.
   await p.settled()
-  // Each call its own client, as each request is: a client gathers the reads
-  // asked in one turn into one trip, whoever asked them.
+  // Each request opens its own directory client, as the connector does.
   let costs = async (name: string, args: Record<string, unknown>) => {
-    let c = clock()
-    let own = directory({ fetch: (r) => dirPart.fetch(r, env) })
-    await c.counting(() =>
-      call({ env, dir: own, person: ADA, clock: c }, name, args)
-    )
-    let said = stages(c.header())
+    let dir = directory({ fetch: (r) => dirPart.fetch(r, env) })
+    let said = await measured({ ...setup, dir }, (ctx) => call(ctx, name, args))
     if (name == 'about') assertEquals(said.stmts, 0)
     else assertEquals(said.stmts > 0, true)
     return { hops: said.hops, stmts: said.stmts, r2: said.r2 }
@@ -832,14 +832,14 @@ test('a listing asks the trackers it last read beside the directory', async () =
     return res
   }
   let list = async (args: Record<string, unknown>) => {
-    let c = clock()
     said = []
     asked = Promise.withResolvers<void>()
     let dir = directory({ fetch: held })
-    await c.counting(() =>
-      call({ env, dir, person: ADA, clock: c }, 'app_list', args)
+    let timing = await measured(
+      { env, dir, person: ADA },
+      (ctx) => call(ctx, 'app_list', args),
     )
-    return { said, waited: 'tracker_wait' in stages(c.header()) }
+    return { said, waited: 'tracker_wait' in timing }
   }
   assertEquals(await list({}), { said: ['directory', 'tracker'], waited: true })
   for (let args of [{}, { space: 'ada' }, { app: 'recipes' }]) {
