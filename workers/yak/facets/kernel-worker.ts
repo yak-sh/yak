@@ -242,6 +242,7 @@ export let classes: Record<string, Deferred> = {
         stored(() => caches.open('Files'), req, (req) => fetch(req, env), {
           hold: waitUntil,
           failed: failing('Files cache'),
+          clock: env.CLOCK,
         }),
     }
   }),

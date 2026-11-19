@@ -39,14 +39,14 @@ All exports are available from `@yaks/workerd`:
 
 Six subpaths serve a Worker made from a config:
 
-| Subpath                 | Purpose                                                                                                                                                           |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/workerd/compose` | `compose` alone, importing nothing of `@yaks/api` but its route matching                                                                                          |
-| `@yaks/workerd/worker`  | this package's own `./worker` facet: the deploy's version route                                                                                                   |
-| `@yaks/workerd/gen`     | `written`, the module of a config and its plugins' facets; `loader` and `imports`, the module its stores load their facets from                                   |
-| `@yaks/workerd/rate`    | `within`, `source`, `tooMany`: a door's per-source ceiling, a Rate Limiting binding                                                                               |
-| `@yaks/workerd/cache`   | `stored`: local Cache API reads with detached fills; `through`, `hit`, `purging`: a cached entrypoint's service hop, bounded fallback, cache status and tag purge |
-| `@yaks/workerd/purge`   | `purge`, `Purger`, `purger`, `SPREAD`: purges by tag through one Durable Object that keeps the account's purge bucket, and how long one takes to reach every colo |
+| Subpath                 | Purpose                                                                                                                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@yaks/workerd/compose` | `compose` alone, importing nothing of `@yaks/api` but its route matching                                                                                                                   |
+| `@yaks/workerd/worker`  | this package's own `./worker` facet: the deploy's version route                                                                                                                            |
+| `@yaks/workerd/gen`     | `written`, the module of a config and its plugins' facets; `loader` and `imports`, the module its stores load their facets from                                                            |
+| `@yaks/workerd/rate`    | `within`, `source`, `tooMany`: a door's per-source ceiling, a Rate Limiting binding                                                                                                        |
+| `@yaks/workerd/cache`   | `stored`: local Cache API reads with detached fills, read around past 500 ms; `through`, `hit`, `purging`: a cached entrypoint's service hop, bounded fallback, cache status and tag purge |
+| `@yaks/workerd/purge`   | `purge`, `Purger`, `purger`, `SPREAD`: purges by tag through one Durable Object that keeps the account's purge bucket, and how long one takes to reach every colo                          |
 
 ## A Worker from a config
 

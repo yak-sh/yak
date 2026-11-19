@@ -134,6 +134,33 @@ test('only public whole reads fill the cache and failures still answer', async (
   assertEquals(failures, [broken, broken, broken])
 })
 
+test('a cache that holds a match back is read around, and not filled', async () => {
+  let time = clock()
+  let late = Promise.withResolvers<Response | undefined>()
+  let puts = 0, failures: unknown[] = []
+  let cache = {
+    match: () => late.promise,
+    put: () => (puts++, Promise.resolve()),
+  }
+  let pending: Promise<void>[] = []
+  let draw = () => Promise.resolve(publicAnswer('drawn'))
+  let answer = stored(cache, asked(), draw, {
+    hold: (work) => pending.push(work),
+    failed: (error) => failures.push(error),
+    clock: time,
+    patience: 500,
+  })
+  await time.advance(500)
+  assertEquals(await said(await answer), [200, 'drawn'])
+  let cancelled = Promise.withResolvers<void>()
+  let body = new ReadableStream({ cancel: () => cancelled.resolve() })
+  late.resolve(new Response(body))
+  await cancelled.promise
+  await Promise.all(pending)
+  assertEquals([puts, failures], [0, []])
+  assertEquals(time.pending(), 0)
+})
+
 test('writes, credentials and no-store reads never open a shared cache', async () => {
   let opens = 0
   let open = () => (opens++, Promise.reject(new Error('cache should not open')))

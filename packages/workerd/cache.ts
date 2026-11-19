@@ -55,27 +55,52 @@ export type Stored = {
   put(req: Request, res: Response): Promise<unknown>
 }
 
+// How long a read waits on a local cache before it draws its own answer. A
+// match answers in a few milliseconds, but Cloudflare's Cache API now and then
+// holds one for seconds while the origin would have answered in a tenth of
+// one (T-1112). Past this, the cache is slower than what it saves.
+let GLANCE = 500
+
+/** How {@link stored} waits on its cache, and hears of one that failed. */
+export type Shelving = {
+  /** keeps a fill going behind the answer (`ctx.waitUntil`) */
+  hold: (work: Promise<void>) => void
+  /** told of a cache that could not be opened, matched or filled */
+  failed: (error: unknown) => void
+  /** the clock `patience` is heard on */
+  clock?: Clock
+  /** how long opening and matching may take, in ms; 500 unless said */
+  patience?: number
+}
+
 /** Read a local cache, drawing a miss immediately and retaining its fill
  * behind the answer. Only explicitly public, whole GET responses are stored;
- * HEAD and Range can read an existing entry without replacing it. */
+ * HEAD and Range can read an existing entry without replacing it. A cache
+ * that has not answered within `patience` is read around: the answer is
+ * drawn, and nothing is filled into a cache that is not keeping up. That is
+ * not a failure, since the read costs no more than a miss. */
 export let stored = async (
   cache: Stored | (() => Promise<Stored>),
   req: Request,
   draw: (req: Request) => Promise<Response>,
-  { hold, failed }: {
-    hold: (work: Promise<void>) => void
-    failed: (error: unknown) => void
-  },
+  { hold, failed, clock, patience = GLANCE }: Shelving,
 ): Promise<Response> => {
   let read = ['GET', 'HEAD'].includes(req.method) &&
     !req.headers.has('authorization') && req.cache != 'no-store'
   if (!read) return draw(req)
   let key = new Request(req, { method: 'GET' })
   let shelf: Stored | undefined
+  let lapsed = false
   try {
-    shelf = typeof cache == 'function' ? await cache() : cache
-    let found = await shelf.match(key)
-    if (found) {
+    let matching = (async () => {
+      shelf = typeof cache == 'function' ? await cache() : cache
+      return await shelf.match(key)
+    })()
+    let found = await within(matching, patience, clock)
+    if (found === null) {
+      lapsed = true
+      matching.then((late) => late?.body?.cancel(), () => {})
+    } else if (found) {
       let headers = new Headers(found.headers)
       headers.set('cf-cache-status', 'HIT')
       if (req.method == 'HEAD') await found.body?.cancel()
@@ -88,7 +113,7 @@ export let stored = async (
     failed(error)
   }
   let answer = await draw(req)
-  if (shelf && req.method == 'GET' && cacheable(answer)) {
+  if (shelf && !lapsed && req.method == 'GET' && cacheable(answer)) {
     let copy = answer.clone()
     let opened = shelf
     hold(
