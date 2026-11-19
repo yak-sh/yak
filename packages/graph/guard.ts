@@ -44,41 +44,52 @@ export let guard = (
   let guarded = bundles.filter((b) => b.$was)
   if (!guarded.length) return bundles
   return after(tx.get(guarded.map((b) => b.entity.eid)), (found) => {
-    let at = new Map(found.map((b) => [b.entity.eid, b]))
-    for (let b of guarded) {
-      let stored = at.get(b.entity.eid)
-      let buried = !!stored && dead(stored)
-      for (let [comp, props] of Object.entries(b.$was!)) {
-        if (comp != 'entity' && comp != TOMBSTONE && !vocab.comp(comp)) {
-          throw new Refused(`unknown component in $was: ${comp}`)
-        }
-        for (let [prop, want] of Object.entries(props)) {
-          let identity = comp == 'entity' && prop == 'eid'
-          if (!identity && prop !== '' && !vocab.prop(comp, prop)) {
-            throw new Refused(`unknown property in $was: ${comp}.${prop}`)
-          }
-          // First creation requires an unused identity, including no grave.
-          // Other guards keep the existing delete-race semantics below.
-          if (buried && comp != TOMBSTONE && !(identity && want === null)) {
-            continue
-          }
-          let cur = prop === ''
-            ? stored?.[comp] ?? null
-            : (stored?.[comp] as Comp | undefined)?.[prop] ?? null
-          if (token(cur) == want) continue
-          // A value read from an id that names nothing was never read: the
-          // id is mistyped or made up, which no re-read would merge onto.
-          if (!stored) {
-            throw new Refused(
-              `${b.entity.eid} names nothing: $was says its ${comp}.${prop} ` +
-                `was read, and no entity has that id or name`,
-              { eid: b.$alias ?? b.entity.eid, comp, prop },
-            )
-          }
-          throw new Stale(b.entity.eid, comp, prop, cur)
-        }
-      }
-    }
+    preconditions(guarded, found, vocab)
     return bundles
   })
+}
+
+/** Check each bundle's `$was` against `found`, the entities as they stand,
+ * read by the caller: throws {@link Stale} on the first property that
+ * changed, as {@link guard} does. */
+export let preconditions = (
+  bundles: Bundle[],
+  found: Bundle[],
+  vocab: Vocab,
+): void => {
+  let at = new Map(found.map((b) => [b.entity.eid, b]))
+  for (let b of bundles) {
+    let stored = at.get(b.entity.eid)
+    let buried = !!stored && dead(stored)
+    for (let [comp, props] of Object.entries(b.$was ?? {})) {
+      if (comp != 'entity' && comp != TOMBSTONE && !vocab.comp(comp)) {
+        throw new Refused(`unknown component in $was: ${comp}`)
+      }
+      for (let [prop, want] of Object.entries(props)) {
+        let identity = comp == 'entity' && prop == 'eid'
+        if (!identity && prop !== '' && !vocab.prop(comp, prop)) {
+          throw new Refused(`unknown property in $was: ${comp}.${prop}`)
+        }
+        // First creation requires an unused identity, including no grave.
+        // Other guards keep the existing delete-race semantics below.
+        if (buried && comp != TOMBSTONE && !(identity && want === null)) {
+          continue
+        }
+        let cur = prop === ''
+          ? stored?.[comp] ?? null
+          : (stored?.[comp] as Comp | undefined)?.[prop] ?? null
+        if (token(cur) == want) continue
+        // A value read from an id that names nothing was never read: the
+        // id is mistyped or made up, which no re-read would merge onto.
+        if (!stored) {
+          throw new Refused(
+            `${b.entity.eid} names nothing: $was says its ${comp}.${prop} ` +
+              `was read, and no entity has that id or name`,
+            { eid: b.$alias ?? b.entity.eid, comp, prop },
+          )
+        }
+        throw new Stale(b.entity.eid, comp, prop, cur)
+      }
+    }
+  }
 }

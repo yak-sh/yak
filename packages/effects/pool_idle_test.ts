@@ -1,4 +1,11 @@
-import { type Access, type Bundle, dead, detached, guard } from '@yaks/graph'
+import {
+  type Access,
+  type Bundle,
+  dead,
+  detached,
+  drop,
+  guard,
+} from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { matcher } from '@yaks/match'
 import { equal, test } from '@yaks/testing'
@@ -45,6 +52,7 @@ let waiting = async (boundary: 'discovery' | 'claim') => {
       return plan(await storage.get(['run']))
     },
     rows: () => [{ eid: 'run' }],
+    drop: (bundles) => drop(storage, vocab, bundles),
     apply: async (bundles) => {
       if (boundary == 'claim' && bundles.some((b) => b.$was && !dead(b))) {
         reached.resolve()

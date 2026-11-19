@@ -32,7 +32,11 @@ g.read = (q, opts) => {
   return read(q, opts)
 }
 await fx.work(g, AbortSignal.abort(), { passes: 1 })
-let idleReads = reads, active = fx.running().map((r) => r.target)
+let idleReads = reads
+// A finite pass waits only on the runs it started; the swept run, started at
+// the commit, has ended once its microtasks have.
+await new Promise((done) => setTimeout(done))
+let active = fx.running().map((r) => r.target)
 test('locally running work leaves idle discovery at one pending seek', () => {
   equal(active, ['held'])
   ok(idleReads <= 2, `${idleReads} discovery reads with only a running handler`)

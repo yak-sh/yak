@@ -159,12 +159,9 @@ test('a run whose ending the store refuses waits and runs again, not cut off', a
     backoff: () => 10,
   })
   let refusing = true
-  let apply = a.g.apply
+  let drop = a.g.drop
   // Every run's ending refused: post_note's and post_swept's.
-  a.g.apply = (b, o) =>
-    refusing && b.some((x) => x.$delete && x.$was?.effect)
-      ? Promise.reject(Error('no such index'))
-      : apply(b, o)
+  a.g.drop = (b) => refusing ? Promise.reject(Error('no such index')) : drop(b)
   await a.g.apply([post('p1')])
   for (let i = 0; i < 3; i++) await a.fx.work(a.g)
   let note = () =>

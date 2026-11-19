@@ -118,6 +118,7 @@ import {
   reached,
 } from './gather.ts'
 import { guard } from './guard.ts'
+import { drop } from './drop.ts'
 import { mutate, rejoin } from './mutate.ts'
 import { unchanged } from './unchanged.ts'
 import { ordered } from './ordered.ts'
@@ -448,6 +449,16 @@ export type Graph = {
    * the owning adapter's ordinary dry run. Returns composed checked patches,
    * including rule outputs, rewrites and stamps. */
   admit: (bundles: Bundle[], opts?: AdmitOpts) => Bundle[] | Promise<Bundle[]>
+  /** Remove entities that are only their writer's own bookkeeping, each named
+   * with its `$was` and where it still holds what that says: straight through
+   * storage in one transaction, past every phase of {@link apply}, so no
+   * rule, cascade, stamp, tracker, journal or effect hears it. Storage keeps
+   * what it keeps of any removal (its trash, the tombstone). For rows nothing
+   * refers to and nothing derives from, such as a finished effect's run
+   * (@yaks/effects pool.ts), whose removal through `apply()` took longer than
+   * many a run. A changed `$was` throws {@link Stale}, as `apply()` does.
+   * → the eids removed: one already gone is not. */
+  drop: (bundles: Bundle[]) => Eid[] | Promise<Eid[]>
   /** The graph's branches, where its host gives them ({@link
    * Options.branches}). A read or write naming one (`branch`) runs on that
    * branch's graph. */
@@ -473,9 +484,10 @@ export type GraphBranches = {
 }
 
 /** A graph's data interface, whether its storage is local or another thread
- * owns it. Every write uses the owning graph's `apply()` pipeline. */
+ * owns it. Every write uses the owning graph's `apply()` pipeline, but for
+ * the bookkeeping it `drop`s. */
 export type Access =
-  & Pick<Graph, 'vocab' | 'read' | 'rows' | 'get' | 'outside'>
+  & Pick<Graph, 'vocab' | 'read' | 'rows' | 'get' | 'outside' | 'drop'>
   & {
     /** Write data through the owning graph; local controls stay on Graph. */
     apply: (
@@ -1799,6 +1811,7 @@ export let graph = (opts: Options): Graph => {
     ...branchReads(main, on),
     apply,
     admit: (bundles, o) => apply(bundles, { ...o, check: true }, true),
+    drop: (bundles) => drop(storage, vocab, bundles),
     ...branches ? { branches } : {},
   }
   return g

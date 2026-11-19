@@ -325,7 +325,9 @@ after a process stops.
 A run is the pool's bookkeeping rather than anyone's data, so `effect` is
 declared `journal: false` ([@yaks/vocab](../vocab/README.md#the-format)): a
 [journal](../journal/README.md) records nothing of a run, from the commit that
-owes it to its deletion once done.
+owes it to its deletion once done. A finished run's row leaves under its claim
+through the graph's `drop`, straight through storage: nothing refers to it and
+nothing derives from it, so none of `apply()`'s phases has anything to do.
 
 A **claim** assigns a run to one worker until an expiry, using the run's
 `lease_owner`, `lease_token`, and `lease_expiry` properties. Claims use graph

@@ -10,6 +10,7 @@ import {
   type Comp,
   dead,
   detached,
+  drop,
   graph,
   guard,
   type Reads,
@@ -118,6 +119,7 @@ let committingGraph: Access = {
   rows: committingStore.rows,
   outside: committingOutside,
   apply: commitWrite,
+  drop: (bundles) => drop(committingStore, committingWords, bundles),
 }
 let committingFx = effects(committingWords, {
   singleOwner: true,

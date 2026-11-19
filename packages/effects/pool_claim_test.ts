@@ -4,6 +4,7 @@ import {
   type Comp,
   dead,
   detached,
+  drop,
   guard,
   type Query,
   type ReadOpts,
@@ -68,6 +69,7 @@ let worker = (
     get: storage.get,
     read,
     rows: (q, opts) => read(q, opts),
+    drop: (bs) => drop(storage, words, bs),
     apply: (bs) =>
       tx((t) =>
         after(guard(bs, t, words), (ready) => {

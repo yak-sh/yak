@@ -816,6 +816,7 @@ export let graph = (opts: Options): Graph => {
     },
     apply: refuse,
     admit: refuse,
+    drop: refuse,
     install: refuse,
   }
   return g

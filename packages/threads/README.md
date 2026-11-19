@@ -76,14 +76,14 @@ stop; closing waits for the effects and services already started.
 ## Graph access over a port
 
 `serve(port, graph)` and `remote(port, vocab)` use @yaks/sync `portLink`.
-`remote` supplies @yaks/graph `Access`: `read`, `rows`, `get`, `apply`, `vocab`,
-and `outside` detached handler reads, including pattern bindings. Write options
-are `WriteOpts` data; graph-local trace and deferred-effect callbacks stay with
-the owning graph. Reads ask the owning graph every time. Writes await its
-complete `apply()` result, so its admission, preconditions, rules, stamps, and
-effect accounting run there once. Local-only components are available too: this
-is access to that graph, not its server sync tier. There is no optimistic
-replica or raw storage write door.
+`remote` supplies @yaks/graph `Access`: `read`, `rows`, `get`, `apply`, `drop`,
+`vocab`, and `outside` detached handler reads, including pattern bindings. Write
+options are `WriteOpts` data; graph-local trace and deferred-effect callbacks
+stay with the owning graph. Reads ask the owning graph every time. Writes await
+its complete `apply()` result, so its admission, preconditions, rules, stamps,
+and effect accounting run there once; a `drop` is the owning graph's too.
+Local-only components are available too: this is access to that graph, not its
+server sync tier. There is no optimistic replica or raw storage write door.
 
 A connected pair gives another thread access without copying data. The real port
 write/read, refusals and claims are exercised in `thread_test.ts`; this example

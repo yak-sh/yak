@@ -42,7 +42,8 @@ let decodeError = (value: unknown): Error => {
 }
 
 /** Serve this graph's authoritative operations to trusted code on a port.
- * The caller owns the port. All writes enter this graph's apply pipeline. */
+ * The caller owns the port. Every write enters this graph's apply pipeline,
+ * but for the bookkeeping it drops (@yaks/graph `Graph.drop`). */
 export let serve = (port: Port, graph: Access): PortLink =>
   portLink(port, {
     encodeError,
@@ -57,6 +58,8 @@ export let serve = (port: Port, graph: Access): PortLink =>
           return graph.get(...args as [Eid[], string[]?, ReadOpts?])
         case 'apply':
           return graph.apply(...args as [Bundle[], WriteOpts?])
+        case 'drop':
+          return graph.drop(...args as [Bundle[]])
         case 'outside.read':
           return graph.outside.read(...args as [Taken, ReadOpts?])
         case 'outside.get':
@@ -95,6 +98,7 @@ export let remote = (port: Port, vocab: Vocab): Remote => {
     rows: (...args) => ask('rows', args),
     get: (...args) => ask('get', args),
     apply: (...args) => ask('apply', args),
+    drop: (...args) => ask('drop', args),
     outside: {
       read: (...args) => ask('outside.read', args),
       get: (...args) => ask('outside.get', args),

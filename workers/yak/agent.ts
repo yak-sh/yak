@@ -44,6 +44,7 @@ import { aggregate } from '@yaks/graph/read'
 import { argsOf } from '@yaks/graph/call'
 import { composed as perEntity } from '@yaks/graph/bundle'
 import { detached } from '@yaks/graph/storage'
+import { Refused } from '@yaks/graph/errors'
 import { parse, stringify, whole } from '@yaks/query'
 import { addressed, wordish } from '@yaks/alias'
 import { SHORT } from '@yaks/id'
@@ -769,6 +770,10 @@ export let reaching = async (
     prose: (texts) => texts,
     apply: writing,
     admit: (bundles, opts) => writing(bundles, { ...opts, check: true }, true),
+    // Each reached store drops its own bookkeeping; none is this one's.
+    drop: () => {
+      throw new Refused('a reach holds no bookkeeping of its own to drop')
+    },
   }
   return self
 }

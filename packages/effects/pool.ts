@@ -43,7 +43,8 @@
 // them, or starved by a loaded box, comes back late, and the worker takes no
 // more until it catches up. A host that wants a fixed bound still says `max`.
 //
-// Success deletes its run under the same claim guard; it leaves no done row.
+// Success drops its run under the same claim guard, straight through storage
+// (@yaks/graph `drop`); it leaves no done row.
 // There are two ways a run does not complete, and they are not the same:
 //
 //   It reported. The handler threw, so the row is marked with the error and
@@ -493,13 +494,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // Compare and set: the patch lands only if the row's claim and attempt count
   // are still the ones read — the graph's own precondition, riding on the
   // write like any other (@yaks/graph `$was`).
-  let changing = (
-    eid: Eid,
-    was: Comp,
-    patch: Comp | null,
-  ): Bundle => ({
+  let guarded = (eid: Eid, was: Comp): Bundle => ({
     entity: { eid },
-    ...(patch == null ? { $delete: true } : { [EFFECT]: patch }),
     $was: {
       [EFFECT]: {
         ...(opts.singleOwner ? {} : {
@@ -509,22 +505,31 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       },
     },
   })
-  let swap = async (
-    g: Access,
-    eid: Eid,
-    was: Comp,
-    patch: Comp | null,
-  ): Promise<boolean> => {
+  let changing = (eid: Eid, was: Comp, patch: Comp): Bundle => ({
+    ...guarded(eid, was),
+    [EFFECT]: patch,
+  })
+  // Whether `write` landed, or found the row's claim moved on.
+  let landed = async (write: () => Promise<boolean>): Promise<boolean> => {
     try {
-      let applied = await g.apply([changing(eid, was, patch)], {
-        trusted: true,
-      })
-      return applied.some((b) => b.entity.eid == eid)
+      return await write()
     } catch (error) {
       if (error instanceof Stale) return false
       throw error
     }
   }
+  let swap = (g: Access, eid: Eid, was: Comp, patch: Comp) =>
+    landed(async () =>
+      (await g.apply([changing(eid, was, patch)], {
+        trusted: true,
+      })).some((b) => b.entity.eid == eid)
+    )
+  // A finished run's row leaves under the same guard. Nothing refers to it
+  // and nothing derives from it, so it leaves through storage alone
+  // (@yaks/graph `drop`): through `apply()`, its phases and the host's own
+  // wrapping took a sixth of a yaks.app sign-in.
+  let drop = (g: Access, eid: Eid, was: Comp) =>
+    landed(async () => (await g.drop([guarded(eid, was)])).includes(eid))
 
   // One claimed run: the event rebuilt from what the target holds now, the
   // handler, and the outcome written back under the same claim. A run with
@@ -676,7 +681,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           ended = () => settle({ state: 'pending', next, ...free })
         } else if (kept) {
           let was = { lease_token: held.token, attempts: held.attempts }
-          ended = () => swap(g, eid, was, null)
+          ended = () => drop(g, eid, was)
         }
       } catch (err) {
         if (peek(g) && span?.active) {

@@ -131,8 +131,6 @@ export async function measure(path: string, target: string) {
   let kindOf = (bundles: Bundle[]) =>
     bundles.length != 1 || !bundles[0].$was
       ? 'apply'
-      : bundles[0].$delete
-      ? 'settle'
       : (bundles[0].effect as { lease_token?: string })?.lease_token
       ? 'claim'
       : 'apply'
@@ -155,6 +153,13 @@ export async function measure(path: string, target: string) {
         bundles[0]?.entity.eid,
         () => g.apply(bundles, o),
       ) as Promise<Bundle[]>,
+    // A finished run's row leaves through `drop` (@yaks/effects pool.ts).
+    drop: (bundles) =>
+      timed(
+        'settle',
+        bundles[0]?.entity.eid,
+        () => g.drop(bundles),
+      ) as Promise<string[]>,
   }
   let worker = (max: number) =>
     effects(g.vocab, {

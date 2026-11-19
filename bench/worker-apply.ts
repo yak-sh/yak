@@ -65,8 +65,6 @@ export async function measure(path: string, samples: number, backlog: number) {
   let kindOf = (bundles: Bundle[]) =>
     !bundles.length || !bundles.every((b) => b.$was)
       ? 'apply'
-      : bundles.every((b) => b.$delete)
-      ? 'settle'
       : bundles.every((b) =>
           (b.effect as { lease_token?: string })?.lease_token
         )
@@ -108,6 +106,13 @@ export async function measure(path: string, samples: number, backlog: number) {
         bundles[0]?.entity.eid,
         () => g.apply(bundles, o),
       ) as Promise<Bundle[]>,
+    // A finished run's row leaves through `drop` (@yaks/effects pool.ts).
+    drop: (bundles) =>
+      timed(
+        'settle',
+        bundles[0]?.entity.eid,
+        () => g.drop(bundles),
+      ) as Promise<string[]>,
   }
   let settled = 0
   let waiters: { n: number; done: (at: number) => void }[] = []

@@ -5,6 +5,7 @@ import {
   type Bundle,
   dead,
   detached,
+  drop,
   guard,
   type Storage,
 } from '@yaks/graph'
@@ -44,6 +45,7 @@ let proc = (opts: Opts, storage: Storage, words: Vocab = vocab) => {
     get: outside.get,
     read: outside.read,
     rows: storage.rows,
+    drop: (bundles) => drop(storage, words, bundles),
     apply: (bundles) =>
       storage.tx((tx) =>
         after(
