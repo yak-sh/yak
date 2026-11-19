@@ -262,11 +262,12 @@ app in the `yak` space (apps/home, its README), drawn from the kit's parts in
 one frame (site/frame.tsx: head, nav, footer) by `deno task content`; the
 deploy's build writes them and the style guide into public/ too, which answers
 where the app has no page. A new page goes in plugins/yaks.app, never as
-another .tsx in workers/yak/site/ (M-17), where those pages move (T-163672). A part takes `as` where the page's outline wants
-another element (`<Card as='li'>`, `<Card.Title as='h3'>`); never write its
-class by hand. The style guide's prose is yaks.app's, and the parts it wears are
-shown by the kit's own specimens (@yaks/ui `Worn`), so a part's example lives
-with the part: a variant pencil draws and no specimen shows is added to the
+another .tsx in workers/yak/site/ (M-17), where those pages move (T-163672).
+A part takes `as` where the page's outline wants another element
+(`<Card as='li'>`, `<Card.Title as='h3'>`); never write its class by hand.
+The style guide's prose is yaks.app's, and the parts it wears are shown by
+the kit's own specimens (@yaks/ui `Worn`), so a part's example lives with the
+part: a variant pencil draws and no specimen shows is added to the
 part's `specimens()`.
 
 What a person does to their own account (invite someone, take someone off,
