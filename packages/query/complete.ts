@@ -380,7 +380,7 @@ let value = (
   )
 }
 
-let SEG = '[A-Za-z_]+(?:-[A-Za-z_]+)*'
+let SEG = '[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z_][A-Za-z0-9_]*)*'
 let DOTTED = `${SEG}(?:\\.${SEG})*`
 // A bracket on the path (`.order[last]=`) stays as typed before the value.
 let VALUE = new RegExp(

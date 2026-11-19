@@ -143,10 +143,11 @@ let value = (raw: string): Value => {
 
 // ---- component names ----
 
-// The shape of a path in a component clause: dotted segments of letters, with a
-// hyphen only between letters — so `.requires->x` ends its path before the
+// The shape of a path in a component clause: dotted segments, each a letter or
+// underscore and then letters, digits or underscores (the names vocab.json
+// allows, `sol62_book`), with a hyphen only before a letter — so `.requires->x` ends its path before the
 // arrow. A token not of this shape is a value or a text term, never a path.
-let SEG = '[A-Za-z_]+(?:-[A-Za-z_]+)*'
+let SEG = '[A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z_][A-Za-z0-9_]*)*'
 let WORD = `${SEG}(?:\\.${SEG})*`
 // A bare path so far — where a `[` opens a bracket rather than joining a value.
 let PATH = new RegExp(`^\\.?${WORD}$`)
@@ -356,7 +357,7 @@ let RIDER = /^(?:\.edges!?|\.?edges(?:\[.*\]!?|\.(?:peers|limit)=.*))$/s
 export let parseDot = (token: string): Clause[] | null => {
   // A `!` before a child path negates the reverse existential, not its leaf.
   // Whether the leading name is an association is still for the binder to say.
-  let reverse = token.match(/^\.?([A-Za-z_]+(?:\.[A-Za-z_]+)*)!\.(.+)$/s)
+  let reverse = token.match(/^\.?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)!\.(.+)$/s)
   if (reverse) {
     let inner = parseDot(`.${reverse[2]}`)
     if (inner?.length == 1 && inner[0].kind == 'pred') {

@@ -84,6 +84,9 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['.created.at=2026-07-25', and(eq('created.at', scalar('2026-07-25')))],
   // presence and absence
   ['.assignee', and(present('assignee'))],
+  // a name vocab.json allows: digits after its first letter
+  ['.sol62_book', and(present('sol62_book'))],
+  ['.sol62_book.title2=x', and(eq('sol62_book.title2', 'x'))],
   ['!assignee', and(absent('assignee'))],
   ['.created.at', and(present('created.at'))],
   // the rule sigils
