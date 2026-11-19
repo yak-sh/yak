@@ -73,8 +73,14 @@ export let copy = async (o: {
   let once = async (space: { eid: string; slug: string }) => {
     going()
     if (o.kept?.(space.slug)) return `${space.slug}  kept: copied already`
-    let { plan } = await o.page(space.eid, {}) as { plan: Plan }
+    let asked = await o.page(space.eid, {})
     going()
+    if (!('plan' in asked)) {
+      throw new Error(
+        `its plan was answered ${JSON.stringify(asked).slice(0, 300)}`,
+      )
+    }
+    let { plan } = asked
     if (!plan.tables.length) return `${space.slug}  no store`
     let sql = o.open(space.slug)
     let rows = 0, complete = false
@@ -112,7 +118,12 @@ export let copy = async (o: {
       try {
         return await once(space)
       } catch (error) {
-        if (!(error instanceof Reshaped) || tried == TRIES) throw error
+        if (error instanceof Reshaped && tried < TRIES) continue
+        // A sweep's failure names the space it failed on.
+        if (error instanceof Error && !(error instanceof Interrupted)) {
+          error.message = `${space.slug}: ${error.message}`
+        }
+        throw error
       }
     }
   }

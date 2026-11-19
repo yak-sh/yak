@@ -171,7 +171,22 @@ test('a space that fails stops the others, and its failure is the answer', async
         lanes: 2,
       }),
     Error,
-    'bea said 500',
+    'bea: bea said 500',
   )
   equal(asked.includes('cy'), false)
+})
+
+test('a plan answered without one fails naming its space and the answer', async () => {
+  await assertRejects(
+    () =>
+      copy({
+        spaces: [{ eid: 'ada', slug: 'ada' }],
+        page: () => Promise.resolve({ ok: true } as unknown as Copying),
+        open: into,
+        out: () => {},
+        stopping: new AbortController().signal,
+      }),
+    Error,
+    'ada: its plan was answered {"ok":true}',
+  )
 })
