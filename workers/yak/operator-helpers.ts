@@ -89,12 +89,16 @@ export let spawnHelper = async (
   let model = typeof args.model == 'string' ? args.model : undefined
   let at = typeof args.machine == 'string' ? args.machine.trim() : ''
   if (at) {
-    let reached = at == space.slug &&
-      await machine(held, space, parent)
+    let mine = at == space.slug
+    let reached = mine && await machine(held, space, parent)
     if (!reached) {
       throw refuse(
         'access',
-        `No machine of yours answers through ${at}'s tunnel for this Operator: name ${space.slug}, whose tunnel goes to your machine, or omit machine for yaks.app's sandbox.`,
+        `No machine of yours answers through ${at}'s tunnel for this Operator: ${
+          mine
+            ? `${at} has no tunnel, or its machine runs helpers only for the platform's admin`
+            : `name ${space.slug}, whose tunnel goes to your machine`
+        }, or omit machine for yaks.app's sandbox.`,
       )
     }
     return await onMachine(store, reached, space, parent, {
