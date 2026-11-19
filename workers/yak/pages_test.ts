@@ -753,7 +753,11 @@ test('paid plan settings describe unlimited apps', async () => {
 test('the plan card says what the Pro plan gives beyond the Plus plan', async () => {
   let said = (tier: 'free' | 'plus' | 'pro') =>
     desk(
-      { ...page, view: 'billing', plan: { tier, ends: '', known: true } },
+      {
+        ...page,
+        view: 'billing',
+        plan: { tier, ends: '', known: true, sold: SOLD },
+      },
       env,
     )
       .text().then((html) => parseHTML(html).document.body.textContent!)

@@ -471,16 +471,16 @@ already hold them (staging: the `[env.staging]` copies, `yak-*-staging` names).
 
 **Stripe dashboard**, sandbox first, then live:
 
-| step                           | where                                                                                     | without it                                                       |
-| ------------------------------ | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Managed Payments               | Stripe is the merchant of record for the paid tier (billing.ts); enable it on the account | tax and invoicing fall to us                                     |
-| Plus plan product | Product catalog: $12 monthly and $120 yearly prices, tax-inclusive, `STRIPE_PRICE{,_YEAR}`; a price it replaces stays active, in `STRIPE_PRICE_KEPT` | checkout has nothing to sell |
-| Pro plan product               | Product catalog: $49 monthly and $490 yearly prices, `STRIPE_PRICE_PRO{,_YEAR}`           | the Pro plan is not offered                                      |
-| Customer portal configuration  | Settings → Billing → Customer portal, save a configuration once                           | the portal door is refused by Stripe, and the refusal is filed   |
-| Invoice payment methods        | Settings → Payment methods: turn on bank transfer (and ACH) for invoices                  | an invoiced plan is payable by card or check only                |
-| Invoices sent to customers     | Settings → Billing → Subscriptions and emails: what an invoice unpaid past due does       | a subscription past due stays in Stripe; its plan stops anyway   |
-| Billing webhook, five events   | the billing section below                                                                 | plan changes never land                                          |
-| Connect webhook, its v1 events | the Connect section below                                                                 | seller account changes, refunds, disputes and renewals go unseen |
+| step                           | where                                                                                                                                                | without it                                                       |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Managed Payments               | Stripe is the merchant of record for the paid tier (billing.ts); enable it on the account                                                            | tax and invoicing fall to us                                     |
+| Plus plan product              | Product catalog: $12 monthly and $120 yearly prices, tax-inclusive, `STRIPE_PRICE{,_YEAR}`; a price it replaces stays active, in `STRIPE_PRICE_KEPT` | checkout has nothing to sell                                     |
+| Pro plan product               | Product catalog: $49 monthly and $490 yearly prices, `STRIPE_PRICE_PRO{,_YEAR}`                                                                      | the Pro plan is not offered                                      |
+| Customer portal configuration  | Settings → Billing → Customer portal, save a configuration once                                                                                      | the portal door is refused by Stripe, and the refusal is filed   |
+| Invoice payment methods        | Settings → Payment methods: turn on bank transfer (and ACH) for invoices                                                                             | an invoiced plan is payable by card or check only                |
+| Invoices sent to customers     | Settings → Billing → Subscriptions and emails: what an invoice unpaid past due does                                                                  | a subscription past due stays in Stripe; its plan stops anyway   |
+| Billing webhook, five events   | the billing section below                                                                                                                            | plan changes never land                                          |
+| Connect webhook, its v1 events | the Connect section below                                                                                                                            | seller account changes, refunds, disputes and renewals go unseen |
 
 ## Staging (yaks.fyi)
 

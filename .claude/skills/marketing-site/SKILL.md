@@ -129,7 +129,7 @@ mockups are neat. but the questions the site is meant to *answer* are instead
 being *asked*. it's backwards". And: ""Is it for me?" should never appear on
 the site. that's so dumb". So no heading, tab, index item or label on the
 page is a visitor's question. Each states its answer in plain words: "For your
-work, a side business or home", "Free for five apps, or $9 a month for more".
+work, a side business or home", "Free for five apps, or $12 a month for more".
 
 **The hero fits on a phone's first screen.** Of a 55-word lead, Jeff,
 verbatim: "is way too long", and "that's practically a screen of text on a
