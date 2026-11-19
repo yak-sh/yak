@@ -150,11 +150,59 @@ export type Freest = { account: Eid; why: string }
 
 const WEEK = 10080
 
+/** A window's usage against its pace, in points of the window. */
+export type Pace = {
+  /** the share of the window gone, rounded */
+  gone: number
+  /** the points used that its reset does not give back */
+  spent: number
+  /** `gone` less `spent`: below zero, over pace */
+  under: number
+}
+
 /**
- * The account further under its weekly pace: the most points between the
- * share of its week gone and the share used. A week that has reset since its
- * reading is unused, and an account nothing has read yet goes first, so its
- * first run reads it. Nothing where there are no accounts.
+ * A window's usage against the share of it gone: `used` less the points
+ * `back` a reset gives back (Fable's share of Claude's week), set against the
+ * share of the window gone by `now`. A window that resets at an unknown time
+ * is taken as all gone. The pace `claude-budget` prints (`bin/pace.ts`) and
+ * the one {@link freest} picks an account by.
+ *
+ * ```ts
+ * import { pace } from './route.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let now = Date.parse('2026-11-14T00:00:00Z') // three days into the week
+ * let week = { window: 10080, used: 40, resets: '2026-11-18T00:00:00Z' }
+ * equal(pace(week, now), { gone: 43, spent: 40, under: 3 })
+ * equal(pace(week, now, 7), { gone: 43, spent: 33, under: 10 })
+ * equal(pace({ ...week, used: 5 }, now, 7).spent, 0)
+ * equal(pace({ window: 10080, used: 40 }, now).gone, 100)
+ * ```
+ */
+export let pace = (
+  window: { window: number; used: number; resets?: string },
+  now: number,
+  back = 0,
+): Pace => {
+  let ends = window.resets ? Date.parse(window.resets) : NaN
+  let left = (ends - now) / (window.window * 60000)
+  let gone = isNaN(left)
+    ? 100
+    : Math.round(100 * Math.min(1, Math.max(0, 1 - left)))
+  let spent = Math.max(0, window.used - back)
+  return { gone, spent, under: gone - spent }
+}
+
+// The points of the week a plan's limit on one model holds: Claude's cap on
+// Fable is half the week, and a Fable reset gives its share back.
+const CAP = 0.5
+
+/**
+ * The account further under its weekly pace ({@link pace}): the most points
+ * between the share of its week gone and the share used, less what a reset of
+ * its limit on one model gives back, half that limit's reading. A week that
+ * has reset since its reading is unused, and an account nothing has read yet
+ * goes first, so its first run reads it. Nothing where there are no accounts.
  *
  * ```ts
  * import { freest } from './route.ts'
@@ -169,6 +217,9 @@ const WEEK = 10080
  *   why: '.claude is 23 points under its weekly pace, ' +
  *     '.claude-teams is 7 points over its weekly pace',
  * })
+ * // Fable's share, half its cap's reading, is not held against the week.
+ * let fable = { ...week('b', 80), model: 'fable' }
+ * equal(freest({ accounts, readings: [week('a', 20), week('b', 50), fable], now })?.account, 'b')
  * equal(freest({ accounts, readings: [week('a', 20)], now })?.account, 'b')
  * equal(freest({ accounts, readings: [week('a', 20), week('b', 90, '2026-11-13T00:00:00Z')], now })?.account, 'b')
  * equal(freest({ accounts: [], readings: [], now }), undefined)
@@ -178,16 +229,23 @@ export let freest = (
   asked: { accounts: Account[]; readings: Reading[]; now: number },
 ): Freest | undefined => {
   let { readings, now } = asked
+  // An account's newest weekly reading, of the plan or of its limit on one model.
+  let newest = (a: Account, capped: boolean) =>
+    readings.filter((r) =>
+      r.account == a.account && r.window == WEEK && !r.model == !capped
+    ).sort((x, y) => (y.at ?? '').localeCompare(x.at ?? ''))[0]
   // Points under pace, and what the reason says where it is not a number.
   let weigh = (a: Account): { under: number; fresh?: string } => {
-    let [r] = readings.filter((r) =>
-      r.account == a.account && r.window == WEEK && !r.model
-    ).sort((x, y) => (y.at ?? '').localeCompare(x.at ?? ''))
+    let r = newest(a, false)
     if (!r) return { under: Infinity, fresh: 'has no reading of its week' }
-    let ends = r.resets ? Date.parse(r.resets) : NaN
-    if (ends <= now) return { under: Infinity, fresh: 'has a fresh week' }
-    let gone = isNaN(ends) ? 100 : 100 - 100 * (ends - now) / (WEEK * 60000)
-    return { under: Math.round(gone - r.used) }
+    if (r.resets && Date.parse(r.resets) <= now) {
+      return { under: Infinity, fresh: 'has a fresh week' }
+    }
+    let cap = newest(a, true)
+    let running = cap && !(cap.resets && Date.parse(cap.resets) <= now)
+    return {
+      under: Math.round(pace(r, now, running ? cap.used * CAP : 0).under),
+    }
   }
   let weighed = asked.accounts.map((a) => ({ ...a, ...weigh(a) }))
     .sort((x, y) => y.under - x.under)

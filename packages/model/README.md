@@ -389,11 +389,15 @@ the most of its longest window left first, and a window that has reset since its
 reading counts as unused. A parameter for a later rule (the work's kind) is
 another property of what is asked.
 
-`freest({accounts, readings, now})` chooses which of a provider's accounts a run
-signs in with: the one further under its weekly pace, the most points between
-the share of its week gone and the share used. A week that has reset since its
-reading is unused, and an account nothing has read yet goes first. It answers
-`{account, why}`.
+`pace(window, now, back)` is a window's usage against its pace: the share of it
+gone, the points used less `back`, the points a reset gives back, and the
+difference (`{gone, spent, under}`). `freest({accounts, readings, now})` chooses
+which of a provider's accounts a run signs in with: the one further under its
+weekly pace, the week's reading less half its limit on one model (Claude's cap
+on Fable is half the week, and a Fable reset gives that share back). A week that
+has reset since its reading is unused, and an account nothing has read yet goes
+first. It answers `{account, why}`. `bin/pace.ts` prints the same pace for
+`claude-budget`, so the two agree.
 
 In a graph the offerings are data: a **routes** edge from the row whose `using`
 is the default to a `serves` edge, `routes{pinned}` on the one that is pinned,

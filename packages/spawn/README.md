@@ -76,7 +76,8 @@ more row. A request names one in `using{account}`
 --provider claude --account .claude-teams-bob`). One
 that names none is given, on its first run, the account of its CLI's provider
 marked `account{offered}` that is further under its weekly pace, as its
-`rate_limit` rows read (`accountFor`, @yaks/model `freest`); an account nothing
+`rate_limit` rows read and leaving out the Fable share a reset gives back, as
+`claude-budget` does (`accountFor`, @yaks/model `freest`); an account nothing
 has read yet goes first. The choice is recorded on the request, so every later
 run of the session carries on its thread in the same account. The run is started
 with that account's variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`), and without it
