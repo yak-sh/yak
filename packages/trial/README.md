@@ -74,6 +74,7 @@ names, whose text says what the doors add and which no session wears:
 | `carried`  | after a compaction, what the session kept of the person's words in the day before it: the memories it saved of them, and the tasks it filed quoting them                                                 |
 | `kept`     | `carried`, listing every memory the session saved in the day, whoever wrote the row                                                                                                                      |
 | `standing` | at the window's start, the person's own row, and each notice that came more than once in the day before to the session or the session that spawned it                                                    |
+| `missed`   | at the window's start (the session's start or a compaction), the person's corrections of the week before that wear a `miss`, one line of their words each                                                |
 
 ```sh
 yak trial score --under <persona> --arrive beside --floor 0.6
