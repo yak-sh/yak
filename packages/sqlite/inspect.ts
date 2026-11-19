@@ -5,18 +5,36 @@ import { foreign } from './physical.ts'
 import { heldBy } from './archetype.ts'
 import { ledger } from './ledger.ts'
 import { populations } from './population.ts'
-import { by, col, type Driver, gt, lit, select, table } from '@yaks/sql'
+import {
+  by,
+  col,
+  type Driver,
+  eq,
+  gt,
+  join,
+  lit,
+  select,
+  table,
+} from '@yaks/sql'
 
-export type DeletionWindow = { since: string; until: string; after?: number }
+export type DeletionWindow = {
+  since: string
+  until: string
+  after?: number
+  /** name each grave in the window, its eid and when it was laid */
+  eids?: boolean
+}
 export type Deletions = {
   scanned: number
   count: number
   minutes: Record<string, number>
   next: number | null
+  graves?: { eid: string; at: string }[]
 }
 
 /** Count deletions in [since, until), reading at most 1,000 graves from the
- * primary key. Continue with `next` until null; timestamps need no new index. */
+ * primary key. Continue with `next` until null; timestamps need no new index.
+ * With `eids`, each grave in the window is named too. */
 export let deletions = (db: Driver, window: DeletionWindow): Deletions => {
   let since = Date.parse(window.since), until = Date.parse(window.until)
   let after = window.after ?? 0
@@ -29,25 +47,37 @@ export let deletions = (db: Driver, window: DeletionWindow): Deletions => {
     )
   }
   let rows = db.query(select({
-    cols: [col('entity'), col('deleted_at')],
-    from: table('tombstone'),
-    where: gt(col('entity'), lit(after)),
-    order: [col('entity')],
+    cols: [
+      col('entity', 't'),
+      col('deleted_at', 't'),
+      ...window.eids ? [col('eid', 'e')] : [],
+    ],
+    from: table('tombstone', 't'),
+    joins: window.eids
+      ? [join(table('entity', 'e'), eq(col('id', 'e'), col('entity', 't')))]
+      : [],
+    where: gt(col('entity', 't'), lit(after)),
+    order: [col('entity', 't')],
     limit: lit(1000),
   }))
   let minutes: Record<string, number> = {}, count = 0
+  let graves: { eid: string; at: string }[] = []
   for (let row of rows) {
     let at = Date.parse(String(row.deleted_at))
     if (!(at >= since && at < until)) continue
     let minute = new Date(Math.floor(at / 60_000) * 60_000).toISOString()
     minutes[minute] = (minutes[minute] ?? 0) + 1
     count++
+    if (window.eids) {
+      graves.push({ eid: String(row.eid), at: new Date(at).toISOString() })
+    }
   }
   return {
     scanned: rows.length,
     count,
     minutes,
     next: rows.length == 1000 ? Number(rows.at(-1)!.entity) : null,
+    ...window.eids ? { graves } : {},
   }
 }
 

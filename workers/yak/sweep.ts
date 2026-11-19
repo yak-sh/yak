@@ -23,9 +23,10 @@ import { door as confirmationDoor } from './confirm.ts'
 //   GET  /api/store-copy                    every app's store, its sample's
 //                                           and its visitors'
 //   POST /api/store-copy?store=<name>       a page of that store
-//   GET  /api/graves?since=<t>&until=<t>    a page of the directory's graves,
-//                                           as its journal tells them
-//                                           (graves.ts); `after` continues
+//   GET  /api/graves?since=<t>&until=<t>    a page of the directory's
+//                                           tombstones, each with what still
+//                                           tells of it (@yaks/platform/graves);
+//                                           `after` continues
 //
 // The gate is the one the fee answers to (sell.ts `fees`): an owner of the
 // platform's own space, read off a website session or an OAuth token. A store is named by the
@@ -50,6 +51,7 @@ import { ledgerOf } from './visit.ts'
 import { builderOf } from './build-door.ts'
 import { type Asked, COPY } from './store-copy.ts'
 import { graves } from '@yaks/platform/graves'
+import { inspect } from './store-inspect.ts'
 
 export let PATH = '/api/move'
 export let RELOCATE_PATH = '/api/relocate'
@@ -282,22 +284,29 @@ let storeCopying = async (req: Request, env: Env): Promise<Response> => {
   }, KERNEL)
 }
 
-// The directory's graves in a window of their deaths (graves.ts), a page at
-// a time. A window that is not one is the caller's to fix.
+// The directory's graves laid in a window (@yaks/platform/graves), a page of
+// its tombstones at a time. A window that is not one is the caller's to fix.
 let buried = async (req: Request, env: Env, who: Who): Promise<Response> => {
   if (req.method != 'GET') {
     return json(405, 'method_not_allowed', 'read the graves')
   }
   let asked = new URL(req.url).searchParams
-  let limit = asked.get('limit')
+  let after = asked.get('after')
   let window = {
     since: asked.get('since') ?? '',
     until: asked.get('until') ?? new Date().toISOString(),
-    after: asked.get('after') ?? undefined,
-    limit: limit == null ? undefined : Number(limit),
+    after: after == null ? undefined : Number(after),
   }
+  let dir = meta(env)
   try {
-    let page = await graves((q) => meta(env).query(q as never), window)
+    let page = await graves({
+      buried: async (w) =>
+        (await inspect(storeOf(env.STORE, PLATFORM_STORE), {
+          deletions: { ...w, eids: true },
+        })).deletions!,
+      query: (q) => dir.query(q as never),
+      trash: (eids, page) => dir.trash!(eids, page),
+    }, window)
     await audit(env, who, { operation: 'graves' })
     return Response.json(page, {
       headers: { 'cache-control': 'private, no-store' },

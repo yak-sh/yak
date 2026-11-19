@@ -709,17 +709,16 @@ export let runs = (
       return [said(call, each.lines)]
     }),
 
-    // The directory's graves, a page at a time, as its journal tells them
-    // (@yaks/platform/graves). The platform's act, with authorization checked
-    // by the server.
+    // The directory's graves, a page of its tombstones at a time, each with
+    // what still tells of it (@yaks/platform/graves). The platform's act,
+    // with authorization checked by the server.
     admin_graves: verb(async (call) => {
       let a = argsOf(call)
       let at = await acting(a)
       let page = await gravesIn(at.bearer, {
         since: String(a.since),
         until: word(a, 'until') ?? new Date().toISOString(),
-        after: word(a, 'after'),
-        limit: typeof a.limit == 'number' ? a.limit : undefined,
+        after: typeof a.after == 'number' ? a.after : undefined,
       })
       return [valued(call, page)]
     }),

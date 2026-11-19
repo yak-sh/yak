@@ -43,6 +43,7 @@ export let physical = (
         since: at.get('since') ?? '',
         until: at.get('until') ?? '',
         after: at.has('after') ? Number(at.get('after')) : undefined,
+        eids: at.get('eids') == '1',
       }),
     }
   }
@@ -78,6 +79,7 @@ export let inspect = async (
     query.set('since', deletions.since)
     query.set('until', deletions.until)
     if (deletions.after != null) query.set('after', String(deletions.after))
+    if (deletions.eids) query.set('eids', '1')
   }
   return await store.consume(
     `/inspect?${query}`,

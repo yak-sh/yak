@@ -168,6 +168,37 @@ test('deletion inspection counts a bounded page and resumes across sparse identi
   })
 })
 
+test('deletion inspection names the graves in its window when asked', () => {
+  let named = open(':memory:')
+  for (
+    let [name, cols] of [
+      ['tombstone', [{ name: 'entity', type: 'integer', pk: true }, {
+        name: 'deleted_at',
+        type: 'text',
+      }]],
+      ['entity', [{ name: 'id', type: 'integer', pk: true }, {
+        name: 'eid',
+        type: 'text',
+      }]],
+    ] as const
+  ) named.query({ t: 'create table', name, cols: [...cols] })
+  named.query({
+    t: 'insert',
+    into: 'entity',
+    cols: ['id', 'eid'],
+    rows: [[lit(1), lit('early')], [lit(2), lit('in')]],
+  })
+  named.query({
+    t: 'insert',
+    into: 'tombstone',
+    cols: ['entity', 'deleted_at'],
+    rows: [[lit(1), lit('2026-10-28T04:19:59.999Z')], [lit(2), lit(since)]],
+  })
+  assertEquals(deletions(named, { since, until, eids: true }).graves, [
+    { eid: 'in', at: since },
+  ])
+})
+
 test('deletion inspection rejects an invalid window or cursor before reading', () => {
   for (
     let window of [

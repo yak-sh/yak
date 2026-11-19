@@ -433,17 +433,14 @@ test('an app’s store moves to a new object, and the directory names it there',
   )
 })
 
-test('the platform’s owner reads the directory’s graves as its journal tells them', async () => {
+test('the platform’s owner reads the directory’s graves, and what still tells of each', async () => {
   let { scenario, door, dir } = await spaces()
   await using _ = scenario
   let ada = (await dir.space('ada'))!
   let [notes] = await dir.apps(ada)
   let since = new Date().toISOString()
-  let [, second] = await dir.apply({
-    entities: [
-      { entity: { eid: '$a' }, doc: { title: 'first' } },
-      { entity: { eid: '$b' }, doc: { title: 'second' } },
-    ],
+  let [second] = await dir.apply({
+    entities: [{ entity: { eid: '$b' }, doc: { title: 'second' } }],
   })
   await dir.apply({
     entities: [
@@ -451,23 +448,22 @@ test('the platform’s owner reads the directory’s graves as its journal tells
       { entity: { eid: second.entity.eid }, tombstone: {} },
     ],
   }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
+  // An erase forever purges what the trash and the journal kept of its app
+  // (erase.ts), so its grave is an eid and a time alone.
+  await dir.purgeTrashEntities([notes.eid])
   let read = (q: string) => door(JEFF, q, 'GET', sweep.GRAVES_PATH)
-  let all = await read(`?since=${since}`)
+  let page = await read(`?since=${since}`)
+  let told = (
+    g: Grave,
+  ) => [g.eid, g.by, g.held.doc ?? null, g.kept?.doc ?? null]
   assertEquals(
-    all.body.graves.map((g: Grave) => [g.eid, g.by, g.held.doc]).sort(),
+    page.body.graves.map(told).sort(),
     [
-      [notes.eid, ADA, { title: 'notes' }],
-      [second.entity.eid, ADA, { title: 'second' }],
+      [notes.eid, null, null, null],
+      [second.entity.eid, ADA, { title: 'second' }, { title: 'second' }],
     ].sort(),
   )
-  assertEquals(all.body.next, null)
-  let first = await read(`?since=${since}&limit=1`)
-  assertEquals(first.body.graves.length, 1)
-  let rest = await read(`?since=${since}&limit=1&after=${first.body.next}`)
-  assertEquals(
-    [...first.body.graves, ...rest.body.graves].map((g: Grave) => g.eid).sort(),
-    [notes.eid, second.entity.eid].sort(),
-  )
+  assertEquals(page.body.next, null)
   assertEquals(
     (await read(`?since=${new Date().toISOString()}`)).body.graves,
     [],
