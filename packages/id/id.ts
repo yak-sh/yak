@@ -19,6 +19,23 @@ export let short = (eid: string): string =>
 /** A short handle as typed: 6–64 hex characters after the `#`. */
 export let SHORT: RegExp = /^#[0-9a-f]{6,64}$/i
 
+/**
+ * What a short handle no entity here starts with is refused with: what a
+ * handle is, so a caller holding one copied from another store knows why it
+ * reads nothing here.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * equal(
+ *   unheld('#744b934dac'),
+ *   "#744b934dac names nothing: a #… handle is the start of an entity's eid, and no entity here has an eid starting 744b934dac",
+ * )
+ * ```
+ */
+export let unheld = (handle: string): string =>
+  `${handle} names nothing: a #… handle is the start of an entity's eid, ` +
+  `and no entity here has an eid starting ${handle.slice(1).toLowerCase()}`
+
 /** A short handle copied without its `#`, as a shell or a sentence leaves it:
  * hex at least as long as a uuid's first segment (`e854bf7d`), which is how an
  * eid is most often quoted, as a bug's letter names it. The `#` is what

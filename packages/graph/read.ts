@@ -13,7 +13,7 @@ import {
 } from '@yaks/query/core'
 import { matcher, rows as matchRows } from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
-import { BARE } from '@yaks/id'
+import { BARE, SHORT, unheld } from '@yaks/id'
 import { starting } from '@yaks/id/graph'
 import { type Context, context, during, live, peek, scope } from '@yaks/trace'
 import { after, each, isPromise } from '@yaks/fp'
@@ -70,7 +70,7 @@ export let continuing = <A, B>(
 
 /** What an id several entities fit is refused with: a few of their eids, so
  * the caller can give enough of one to tell it apart. */
-let fits = (id: string, eids: Eid[]): string =>
+export let fits = (id: string, eids: Eid[]): string =>
   `${id} names ${eids.length} entities (${eids.slice(0, 3).join(', ')}` +
   `${eids.length > 3 ? ', …' : ''}); give more of it`
 
@@ -266,9 +266,12 @@ export let reader = (opts: {
         } else if (typeof eid != 'string') refusals.push(fits(id, eid))
         else found.set(id, eid)
       }
-      if (nothing.length) {
+      let handles = nothing.filter((id) => SHORT.test(id))
+      let words = nothing.filter((id) => !SHORT.test(id))
+      refusals.unshift(...handles.map(unheld))
+      if (words.length) {
         refusals.unshift(
-          `${nothing.join(', ')} ${nothing.length == 1 ? 'names' : 'name'} ` +
+          `${words.join(', ')} ${words.length == 1 ? 'names' : 'name'} ` +
             'nothing',
         )
       }

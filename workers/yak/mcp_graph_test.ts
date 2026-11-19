@@ -28,6 +28,7 @@ import { monthOf } from '@yaks/platform/meter'
 import type { Listed } from './tools.ts'
 import { minted } from './mcp-probe.ts'
 import { token } from '@yaks/graph'
+import { short } from '@yaks/id'
 import { Ajv } from 'ajv'
 
 // A client holds every answer to the output schema its tool is listed with
@@ -279,8 +280,9 @@ test('graph_show and graph_apply take the space and app other tools take', async
         shown({ ids: [eid], space }),
         shown({ ids: [eid], space, app: 'notes' }),
         shown({ id: eid }),
+        shown({ id: short(eid) }),
       ]),
-      ['Kept', 'Kept', 'Kept'],
+      ['Kept', 'Kept', 'Kept', 'Kept'],
     )
   } finally {
     await k.stop()

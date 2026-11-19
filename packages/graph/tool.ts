@@ -5,6 +5,7 @@ import type { Actor, Bundle, Comp, Eid } from './bundle.ts'
 import type { Tool } from './plugin.ts'
 import { type NamedTool, toolName } from './tool_meta.ts'
 export { type NamedTool, offered, type ToolId, toolName } from './tool_meta.ts'
+import { SHORT, unheld } from '@yaks/id'
 import { alive } from './bundle.ts'
 import { minted } from './mint.ts'
 import { Refused } from './errors.ts'
@@ -157,7 +158,11 @@ export let referenced = (
             }
             if (!found.length) {
               throw new Refused(
-                `${said} names ${kind == 'entity' ? 'nothing' : `no ${kind}`}`,
+                kind == 'entity' && SHORT.test(said)
+                  ? unheld(said)
+                  : `${said} names ${
+                    kind == 'entity' ? 'nothing' : `no ${kind}`
+                  }`,
               )
             }
             out[i] = found[0].entity.eid

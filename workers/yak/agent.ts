@@ -32,19 +32,22 @@ import type {
   Graph,
   Plugin,
   Query,
+  ReadTx,
   Reduced,
   Row,
   Storage,
   Tool,
   Tx,
 } from '@yaks/graph'
-import { addressing } from '@yaks/graph/read'
+import { addressing, fits } from '@yaks/graph/read'
 import { aggregate } from '@yaks/graph/read'
 import { argsOf } from '@yaks/graph/call'
 import { composed as perEntity } from '@yaks/graph/bundle'
 import { detached } from '@yaks/graph/storage'
 import { parse, stringify, whole } from '@yaks/query'
 import { addressed, wordish } from '@yaks/alias'
+import { SHORT } from '@yaks/id'
+import { starting } from '@yaks/id/graph'
 import { barred, openly } from './anon.ts'
 import { confined } from './newcomer.ts'
 import type { Search } from '@yaks/mcp'
@@ -397,6 +400,31 @@ let byName = async (
   )
 }
 
+// The ids a caller passed → the eids they name, across the reach: a name
+// (@yaks/alias), and a short handle (`#3b5bc70420`, @yaks/id `short`), which
+// is how every entity no store has numbered shows, so it is what a caller
+// copies out of an answer to read again. Each store resolves its own handles;
+// the reach asks every store for the eids the handle starts, as @yaks/id's
+// plugin asks one. A handle several eids start with is refused naming a few,
+// unless `loose`, which leaves it out as `Graph.named` does.
+let reached = async (
+  tx: ReadTx,
+  ids: string[],
+  loose = false,
+): Promise<Map<string, Eid>> => {
+  let at = await addressed(tx, ids)
+  let handles = [...new Set(ids)].filter((id) => !at.has(id) && SHORT.test(id))
+  let starts = await Promise.all(
+    handles.map((id) => starting(tx, id.slice(1).toLowerCase())),
+  )
+  handles.forEach((id, i) => {
+    let eids = starts[i]
+    if (eids.length == 1) at.set(id, eids[0])
+    else if (eids.length && !loose) throw refuse('arguments', fits(id, eids))
+  })
+  return at
+}
+
 // A composition is not a database: these are the members of `Graph` that only
 // mean something to an adapter that owns bytes, and nothing calls them here.
 let nope = (what: string) => (): never => {
@@ -730,12 +758,11 @@ export let reaching = async (
     read: (q) => storage.read(q),
     rows: (q) => storage.rows(q),
     get: (eids, comps) => storage.get(eids, comps),
-    // A name where an eid goes (T-34390). The ladder is @yaks/alias's and it
-    // is nothing but reads by id, so it works here exactly as it does inside a
-    // store: `get` fans across the reach, and a name held in whichever store
-    // this caller can see answers.
-    address: (ids) => addressed(detached(storage), ids),
-    named: (ids) => addressed(detached(storage), ids),
+    // A name or a short handle where an eid goes (`reached`). Both are reads,
+    // so they work here as they do inside a store: `get` and `read` fan across
+    // the reach, and whichever store this caller can see that holds it answers.
+    address: (ids) => reached(detached(storage), ids),
+    named: (ids) => reached(detached(storage), ids, true),
     // Each reached store keeps its prose as it composes it to.
     prose: (texts) => texts,
     apply: writing,

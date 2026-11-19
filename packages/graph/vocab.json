@@ -228,7 +228,7 @@
         "doing": "Reading records\u2026",
         "done": "Read records"
       },
-      "description": "Read whole entities by eid, human id or name, once each: id for one, ids for several. $was.doc.body holds its SHA-256 for guarded writes. Missing ids are reported; all missing refuses. Backlinks: graph_query .refs=<id>; text search: search.",
+      "description": "Read whole entities by eid, human id (T-12), #… handle (#3b5bc70420, the start of an eid, which an unnumbered entity shows) or name, once each: id for one, ids for several. $was.doc.body holds its SHA-256 for guarded writes. Missing ids are reported; all missing refuses. Backlinks: graph_query .refs=<id>; text search: search.",
       "input": {
         "ids": {
           "type": "array",
