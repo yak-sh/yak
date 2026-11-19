@@ -92,7 +92,10 @@ type Kept = {
   origin?: Stmt
   asked: Asked[]
 }
-// A shape seen once: its statement and what that call bound.
+// A shape seen once: its statement and what that call bound. The statement
+// keeps no origin: most shapes are seen once, and an origin holds the whole
+// tree it was rendered from, with the text of each of its nodes
+// (./render.ts `seen`). A kept statement takes its probe's (`proven`).
 type Seen = { first: Raw; call: Call; asked: Asked[] }
 // A shape that is lowered on every call.
 type Lowered = null
@@ -101,11 +104,23 @@ type Shelf = Map<string, Kept | Seen | Lowered>
 // and the extensions as `heard` relays them: a query, or a scope's screen.
 type Begin = (ast: And, opts: BindOpts, heard: Heard) => Prepared
 
+// A shelf for each of the SHELVES vocabularies compiled for last, of SHELF
+// statements each. A process serves a few vocabularies, but a test runtime
+// meets hundreds, one or more a file, each kept alive by its module, and kept
+// a full shelf for every one of them, with the text of every statement's
+// nodes (./render.ts `seen`), until it exited.
 let SHELF = 512
-let shelves = new WeakMap<Vocab, Shelf>()
+let SHELVES = 16
+let shelves = new Map<Vocab, Shelf>()
 let shelf = (v: Vocab): Shelf => {
   let found = shelves.get(v)
-  if (!found) shelves.set(v, found = new Map())
+  if (found) {
+    shelves.delete(v)
+  } else {
+    found = new Map()
+    if (shelves.size >= SHELVES) shelves.delete(shelves.keys().next().value!)
+  }
+  shelves.set(v, found)
   return found
 }
 let put = (s: Shelf, key: string, entry: Kept | Seen | Lowered) => {
@@ -629,7 +644,7 @@ let proven = (
     sql: first.sql,
     params,
     table: first.table,
-    origin: first.origin,
+    origin: probes[0].out.origin,
     asked: seen.asked,
   }
   // The first call again, from the kept statement.
@@ -758,6 +773,12 @@ let kept = (
     return proof ? bound(proof, call) : lowered()
   }
   let first = lowered()
-  put(s, key, touched.any ? null : { first, call, asked })
+  put(
+    s,
+    key,
+    touched.any
+      ? null
+      : { first: raw(first.sql, first.params, first.table), call, asked },
+  )
   return first
 }

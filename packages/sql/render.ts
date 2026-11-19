@@ -146,8 +146,29 @@ let compound = (e: Expr): boolean =>
 // component, asked thousands of times a session) renders only what changed
 // since: the part holding its bound values. A leaf is cheaper to write than to
 // look up, and short text is not worth keeping.
+// Only the nodes asked for lately are kept: those of the last two generations
+// of TEXTS, one found in the older moving to the newer. Every node of a tree
+// keeps the text of all it holds, so a process that kept every tree it held
+// (a test runtime holds hundreds of files' stores) kept hundreds of
+// megabytes of text.
 // Stable text writes collections its own way, so it is kept apart.
-let seen = [new WeakMap<object, string>(), new WeakMap<object, string>()]
+let TEXTS = 8192
+let texts = () => {
+  let now = new WeakMap<object, string>(), was = now, n = 0
+  let set = (node: object, text: string) => {
+    if (++n > TEXTS) was = now, now = new WeakMap(), n = 1
+    now.set(node, text)
+  }
+  return {
+    get: (node: object): string | undefined => {
+      let text = now.get(node)
+      if (text == null && (text = was.get(node)) != null) set(node, text)
+      return text
+    },
+    set,
+  }
+}
+let seen = [texts(), texts()]
 let LEAF = new Set(['col', 'val', 'lit', 'star', 'table'])
 let kept =
   <N extends { t: string }>(write: (n: N, c: Ctx) => string) =>

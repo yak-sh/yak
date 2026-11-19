@@ -238,8 +238,32 @@ export let prepared = (db: Database) => {
 
 // The schemas this process's databases in memory were made with, each kept as
 // a database of its own under what made it and what stood before
-// (Driver.template).
+// (Driver.template): the TEMPLATES used last, and the spares made from them.
+// A test runtime meets a schema for nearly every vocabulary its files
+// declare, and kept them all, a few hundred kilobytes of pages each, until it
+// exited.
 let templates = new Map<string, Database>()
+let TEMPLATES = 32
+
+/** The template kept under `at`, now the one used last. */
+let recall = (at: string): Database | undefined => {
+  let db = templates.get(at)
+  if (db) templates.delete(at), templates.set(at, db)
+  return db
+}
+
+/** Keeps `db` as the template under `at`, closing the one used longest ago,
+ * and its spares, once there are more than TEMPLATES. */
+let keep = (at: string, db: Database) => {
+  templates.set(at, db)
+  for (let [old, template] of templates) {
+    if (templates.size <= TEMPLATES) break
+    templates.delete(old)
+    template.close()
+    for (let spare of spares.get(old) ?? []) spare.close()
+    spares.delete(old)
+  }
+}
 
 // What a database holds before its schema is made: each object's text, and
 // whether any of its tables has a row. A template stands for a database that
@@ -421,8 +445,8 @@ export let driver = (
         // A schema made inside another's making (the store's own, inside its
         // host's) is part of the outer template, which alone is lent.
         let lending = lend && !making
+        let kept = recall(at)
         let spare = lending ? spares.get(at)?.pop() : undefined
-        let kept = templates.get(at)
         if (spare || kept) {
           if (!spare) kept!.backup(db)
           if (lending) lendFrom(at, spare)
@@ -439,7 +463,7 @@ export let driver = (
         }
         let copy = new Database(':memory:')
         db.backup(copy)
-        templates.set(at, copy)
+        keep(at, copy)
         if (lending) lendFrom(at)
       },
     },
@@ -459,7 +483,9 @@ export let driver = (
           throw error
         }
         let held = spares.get(at) ?? []
-        if (!db.inTransaction && held.length < SPARES) {
+        if (
+          !db.inTransaction && templates.has(at) && held.length < SPARES
+        ) {
           spares.set(at, [...held, db])
           return
         }

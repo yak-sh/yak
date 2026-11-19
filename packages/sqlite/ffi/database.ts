@@ -129,6 +129,32 @@ export function isComplete(statement: string): boolean {
 
 const BIG_MAX = BigInt(Number.MAX_SAFE_INTEGER)
 
+/** What a connection holds natively: its handle and the callbacks it calls. */
+type Native = {
+  handle: Deno.PointerValue
+  callbacks: Set<Deno.UnsafeCallback>
+}
+
+/** Finalizes the connection's statements, frees its callbacks and closes
+ * it. */
+const shut = ({ handle, callbacks }: Native): number => {
+  for (const [stmt, db] of STATEMENTS_TO_DB) {
+    if (db === handle) {
+      sqlite3_finalize(stmt)
+      STATEMENTS_TO_DB.delete(stmt)
+    }
+  }
+  for (const cb of callbacks) cb.close()
+  return sqlite3_close_v2(handle)
+}
+
+// A connection nothing reaches any longer closes, as its statements finalize
+// (./statement.ts). Its pages and caches are SQLite's, outside the JS heap,
+// so one left open (a test's fresh in-memory database, say) held them until
+// the process exited: a test runtime hundreds of files in held hundreds of
+// megabytes of them. A statement holds its database, so none is in use.
+const unreached = new FinalizationRegistry(shut)
+
 /**
  * Represents a SQLite3 database connection.
  *
@@ -245,6 +271,11 @@ export class Database {
     this.#handle = Deno.UnsafePointer.create(pHandle[0])
     if (result !== 0) sqlite3_close_v2(this.#handle)
     unwrap(result)
+    unreached.register(
+      this,
+      { handle: this.#handle, callbacks: this.#callbacks },
+      this,
+    )
 
     if (options.enableLoadExtension) {
       this.enableLoadExtension = options.enableLoadExtension
@@ -786,16 +817,8 @@ export class Database {
    */
   close(): void {
     if (!this.#open) return
-    for (const [stmt, db] of STATEMENTS_TO_DB) {
-      if (db === this.#handle) {
-        sqlite3_finalize(stmt)
-        STATEMENTS_TO_DB.delete(stmt)
-      }
-    }
-    for (const cb of this.#callbacks) {
-      cb.close()
-    }
-    unwrap(sqlite3_close_v2(this.#handle))
+    unreached.unregister(this)
+    unwrap(shut({ handle: this.#handle, callbacks: this.#callbacks }))
     this.#open = false
   }
 
