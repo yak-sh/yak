@@ -38,6 +38,10 @@ export let copyFile = (to: string, slug: string): Target => {
   }
 }
 
+/** Whether `slug`'s copy is in `to` already. */
+export let copiedTo = (to: string, slug: string): boolean =>
+  present(`${to}/${slug}.db`)
+
 let present = (path: string) => {
   try {
     fs.lstatSync(path)

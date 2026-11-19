@@ -32,6 +32,8 @@ export let copyErrors = {
 export type CopyPlan = {
   spaces: { eid: string; slug: string }[]
   to: string
+  /** whether a space whose copy is in `to` already is kept, not read again */
+  keep: boolean
 }
 
 export type CopyPage = {
@@ -42,7 +44,9 @@ export type CopyPage = {
 type Thread = Port & { terminate: () => void }
 
 export let copyThread = async (
-  o: Omit<Parameters<typeof copy>[0], 'open'> & { to: string },
+  o:
+    & Omit<Parameters<typeof copy>[0], 'open' | 'kept' | 'lanes'>
+    & Omit<CopyPlan, 'spaces'>,
   start: () => Thread = () =>
     new Worker(new URL('./copy_worker.ts', import.meta.url), {
       type: 'module',
@@ -75,6 +79,7 @@ export let copyThread = async (
       {
         spaces: o.spaces,
         to: o.to,
+        keep: o.keep,
       } satisfies CopyPlan,
       { timeout: null },
     )

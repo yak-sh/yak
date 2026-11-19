@@ -2,7 +2,7 @@
 /// <reference lib="deno.worker" />
 import { type Port, portLink } from '@yaks/sync/port'
 import { copy, type Copying } from './copy.ts'
-import { copyFile } from './copy_file.ts'
+import { copiedTo, copyFile } from './copy_file.ts'
 import { copyErrors, type CopyPage, type CopyPlan } from './copy_thread.ts'
 
 let stopping = new AbortController()
@@ -11,9 +11,10 @@ let link = portLink(self as unknown as Port, {
   receive: async (method, value) => {
     if (method == 'stop') return stopping.abort()
     if (method != 'run') throw new Error(`unknown copy request: ${method}`)
-    let { spaces, to } = value as CopyPlan
+    let { spaces, to, keep } = value as CopyPlan
     await copy({
       spaces,
+      kept: keep ? (slug) => copiedTo(to, slug) : undefined,
       page: async (space, asked) =>
         await link.request('page', { space, asked } satisfies CopyPage, {
           timeout: null,

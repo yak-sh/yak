@@ -7,6 +7,11 @@
 // a relocation's far end takes it (@yaks/durable-object's copy protocol). The
 // store serves while it is read, so its tables are read at different moments.
 // A copy holds people's private words: it is removed once its proof is done.
+//
+// Several spaces are read at once: each page waits on the platform for most
+// of a second, and a sweep of every space one page at a time outlasts the
+// serving process between two restarts. A restart interrupts a sweep anyway,
+// so a sweep asked again keeps every space it already copied (`kept`).
 import {
   arrived,
   type Cell,
@@ -34,11 +39,16 @@ class Reshaped extends Error {}
 // store migrates once a deploy, so one more is enough.
 const TRIES = 3
 
+// How many spaces are copied at once.
+export const LANES = 8
+
 /** Each space's store into the file `open` makes for its slug, a line said
- * for each: its tables and rows, or that it holds none. The file is one, to
- * be copied or opened anywhere: `open` makes it with a rollback journal. A
- * copy stops at the next page once `stopping` aborts, as its process drains,
- * which waits for it. A space whose store migrates while it is read is
+ * for each: its tables and rows, that it holds none, or that it was `kept`,
+ * copied already, and is not read again. The file is one, to be copied or
+ * opened anywhere: `open` makes it with a rollback journal. `lanes` spaces
+ * are copied at once. A copy stops at the next page once `stopping` aborts,
+ * as its process drains, which waits for it, and once one space fails, the
+ * others stop the same way. A space whose store migrates while it is read is
  * copied again from its new plan. */
 export let copy = async (o: {
   spaces: { eid: string; slug: string }[]
@@ -49,12 +59,20 @@ export let copy = async (o: {
   open: (slug: string) => Target
   out: (line: string) => unknown
   stopping: AbortSignal
+  kept?: (slug: string) => boolean
+  lanes?: number
 }) => {
+  let failed = false, done = 0
   let going = () => {
-    if (o.stopping.aborted) throw new Interrupted('the copy was interrupted')
+    if (o.stopping.aborted || failed) {
+      throw new Interrupted(
+        `the copy was interrupted with ${done} of ${o.spaces.length} spaces copied`,
+      )
+    }
   }
   let once = async (space: { eid: string; slug: string }) => {
     going()
+    if (o.kept?.(space.slug)) return `${space.slug}  kept: copied already`
     let { plan } = await o.page(space.eid, {}) as { plan: Plan }
     going()
     if (!plan.tables.length) return `${space.slug}  no store`
@@ -89,14 +107,33 @@ export let copy = async (o: {
     }
     return `${space.slug}  ${plan.tables.length} tables, ${rows} rows`
   }
-  for (let space of o.spaces) {
+  let tries = async (space: { eid: string; slug: string }) => {
     for (let tried = 1;; tried++) {
       try {
-        await o.out(await once(space))
-        break
+        return await once(space)
       } catch (error) {
         if (!(error instanceof Reshaped) || tried == TRIES) throw error
       }
     }
   }
+  let next = 0
+  let lane = async () => {
+    try {
+      while (next < o.spaces.length) {
+        await o.out(await tries(o.spaces[next++]))
+        done++
+      }
+    } catch (error) {
+      failed = true
+      throw error
+    }
+  }
+  let lanes = Array.from({ length: o.lanes ?? LANES }, lane)
+  let ended = await Promise.allSettled(lanes)
+  // The failure that stopped the copy, not the lanes it stopped after it.
+  let first =
+    ended.find((e) =>
+      e.status == 'rejected' && !(e.reason instanceof Interrupted)
+    ) ?? ended.find((e) => e.status == 'rejected')
+  if (first) throw (first as PromiseRejectedResult).reason
 }

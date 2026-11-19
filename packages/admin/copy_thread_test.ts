@@ -7,6 +7,7 @@ import { CallError, Interrupted } from '@yaks/tools/errors'
 let options = () => ({
   spaces: [{ eid: 'store', slug: 'ada' }],
   to: '.scratch/copies',
+  keep: true,
   stopping: new AbortController().signal,
   page: () => Promise.resolve({ rows: [[1, 'hello']], last: 1 }),
   out: (_line: string) => {},
@@ -20,7 +21,7 @@ test('copying delegates file work and answers its pages and progress', async () 
     ...copyErrors,
     receive: async (method, value) => {
       equal(method, 'run')
-      equal(value, { spaces: o.spaces, to: o.to })
+      equal(value, { spaces: o.spaces, to: o.to, keep: true })
       let page = await peer.request('page', {
         space: 'store',
         asked: { table: 'note', after: 0 },

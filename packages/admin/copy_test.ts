@@ -126,3 +126,52 @@ test('a store that migrates while it is copied is copied again under its new col
     [{ at: '1', for: null }],
   )
 })
+
+// A copy into a fresh file, said as its lines once every space is read.
+let into = () => ({ ...open(':memory:'), close: () => {} })
+
+test('spaces are copied at once, and a space copied already is kept', async () => {
+  let started: string[] = [], both = Promise.withResolvers<void>()
+  let lines: string[] = []
+  await copy({
+    spaces: ['ada', 'bea', 'cy'].map((slug) => ({ eid: slug, slug })),
+    page: async (space, asked) => {
+      if (!asked.table && started.push(space) == 2) both.resolve()
+      await both.promise
+      return asking(source)(space, asked)
+    },
+    open: into,
+    out: (line) => lines.push(line),
+    stopping: new AbortController().signal,
+    kept: (slug) => slug == 'cy',
+    lanes: 2,
+  })
+  equal(started, ['ada', 'bea'])
+  equal(lines.sort(), [
+    'ada  1 tables, 3 rows',
+    'bea  1 tables, 3 rows',
+    'cy  kept: copied already',
+  ])
+})
+
+test('a space that fails stops the others, and its failure is the answer', async () => {
+  let asked: string[] = []
+  await assertRejects(
+    () =>
+      copy({
+        spaces: ['ada', 'bea', 'cy'].map((slug) => ({ eid: slug, slug })),
+        page: (space, at) => {
+          asked.push(space)
+          if (space == 'bea') return Promise.reject(new Error('bea said 500'))
+          return asking(source)(space, at)
+        },
+        open: into,
+        out: () => {},
+        stopping: new AbortController().signal,
+        lanes: 2,
+      }),
+    Error,
+    'bea said 500',
+  )
+  equal(asked.includes('cy'), false)
+})

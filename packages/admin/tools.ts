@@ -696,9 +696,12 @@ export let runs = (
         throw new CallError('space', `no space is ${where}`)
       }
       let each = kept()
+      // Every space's copy, asked again after a restart interrupted it, goes
+      // on from where it stopped; one space asked for is copied afresh.
       await copyThread({
         spaces,
         to,
+        keep: !where,
         page: (space, asked) =>
           apps
             ? storePage<Copying>(at.bearer, space, asked)
