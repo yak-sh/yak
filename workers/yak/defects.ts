@@ -48,6 +48,9 @@ type Invocation = {
 let context = new AsyncLocalStorage<Invocation>()
 let reporters = new WeakMap<object, Coalesced>()
 
+/** An opaque key for work that belongs to the current invocation. */
+export let invocationKey = (): object | undefined => context.getStore()
+
 /** Keep detached work alive without joining the request's awaited reports. */
 export let background = (work: Promise<void>): void =>
   context.getStore()?.retain?.(work)

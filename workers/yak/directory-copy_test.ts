@@ -13,6 +13,7 @@ import {
   type ServingCopyDoor,
   STALL,
 } from './directory-copy.ts'
+import { within } from './defects.ts'
 import { RETIRED, ServingCopy } from './serving-copy.ts'
 import { directory } from './directory.ts'
 import { storeOf } from './door.ts'
@@ -262,6 +263,7 @@ test('public directory stamps current and copied Apps but never invents legacy a
 
 // What a door behind `gathered` is sent, and a store that answers each line
 // with the line itself.
+let inRequest = <T>(read: () => Promise<T>) => within({}, {}, read)
 let reading = (
   door = (lines: string[]) =>
     Response.json(lines.map((q) => ({ status: 200, epoch: '7', body: q }))),
@@ -288,13 +290,25 @@ let reading = (
 }
 test('reads asked in one turn are one trip, each answered its own line', async () => {
   let { trips, ask, answers } = reading()
-  let rs = await Promise.all([ask('.a'), ask('.b'), ask('.c')])
+  let rs = await inRequest(() => Promise.all([ask('.a'), ask('.b'), ask('.c')]))
   assertEquals(await answers(rs), ['.a', '.b', '.c'])
   assertEquals(trips, [['.a', '.b', '.c']])
   assertEquals(rs[0].headers.get(EPOCH), '7')
   // A read alone asks as it always did.
   assertEquals(await (await ask('.d')).text(), '.d')
   assertEquals(trips.at(-1), ['.d'])
+})
+test('an isolate-wide door batches reads only within the same request', async () => {
+  let { trips, ask, answers } = reading()
+  let request = (name: string) =>
+    inRequest(async () =>
+      answers(await Promise.all([ask(`${name}.a`), ask(`${name}.b`)]))
+    )
+  assertEquals(await Promise.all([request('first'), request('second')]), [
+    ['first.a', 'first.b'],
+    ['second.a', 'second.b'],
+  ])
+  assertEquals(trips, [['first.a', 'first.b'], ['second.a', 'second.b']])
 })
 test('a store reset mid-trip is read again whole, each caller its own line', async () => {
   let said = (q: string, n: number) =>
@@ -326,7 +340,7 @@ test('a store reset mid-trip is read again whole, each caller its own line', asy
   })
   let ask = (q: string) =>
     via.fetch(new Request(`http://directory/query?q=${q}`))
-  let rs = await Promise.all([ask('.a'), ask('.b')])
+  let rs = await inRequest(() => Promise.all([ask('.a'), ask('.b')]))
   assertEquals(await Promise.all(rs.map((r) => r.text())), ['.a', '.b'])
   assertEquals([trips, rs[0].headers.get(EPOCH)], [2, '7'])
 })
@@ -334,7 +348,7 @@ test('a store on the code before the door is read one line at a time', async () 
   let { trips, ask, answers } = reading(() =>
     new Response('no route', { status: 404 })
   )
-  let rs = await Promise.all([ask('.a'), ask('.b')])
+  let rs = await inRequest(() => Promise.all([ask('.a'), ask('.b')]))
   assertEquals(await answers(rs), ['.a', '.b'])
   assertEquals(trips, [['.a', '.b'], ['.a'], ['.b']])
 })
@@ -346,16 +360,20 @@ test("one refused line stays that line, and a failed trip is every line's", asyn
       body: q,
     })))
   )
-  let [good, bad] = await Promise.all([ask('.good'), ask('.bad')])
+  let [good, bad] = await inRequest(() =>
+    Promise.all([ask('.good'), ask('.bad')])
+  )
   assertEquals([good.status, bad.status], [200, 400])
   let failing = reading(() => new Response('down', { status: 503 }))
-  let down = await Promise.all([failing.ask('.a'), failing.ask('.b')])
+  let down = await inRequest(() =>
+    Promise.all([failing.ask('.a'), failing.ask('.b')])
+  )
   assertEquals(down.map((r) => r.status), [503, 503])
 })
 test('a long list of reads takes the trips its addresses need', async () => {
   let { trips, ask } = reading()
   let long = '.x'.repeat(1500)
-  await Promise.all(['a', 'b', 'c'].map((n) => ask(long + n)))
+  await inRequest(() => Promise.all(['a', 'b', 'c'].map((n) => ask(long + n))))
   assertEquals(trips.map((t) => t.length), [2, 1])
 })
 

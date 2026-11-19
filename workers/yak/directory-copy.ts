@@ -9,7 +9,7 @@ import { HOST_COOKIE } from './browser-cookie.ts'
 import { type Fetcher } from './door.ts'
 import { reset } from '@yaks/durable-object/door'
 import type { Env } from './env.ts'
-import { background, defect } from './defects.ts'
+import { background, defect, invocationKey } from './defects.ts'
 import { apart, elapsed, spanned } from './lib/hops.ts'
 import { evicted, jittered, opaque, retried } from '@yaks/durable-object/resets'
 import { type Clock, system } from '@yaks/fp'
@@ -368,11 +368,10 @@ let ROOM = 8_000
 // timer rule, which Deno keeps), and a request asks dozens of turns.
 let turn = (then: () => void) => void setImmediate(then)
 
-/** The directory door with reads gathered: the reads asked in one turn travel
- * as one trip, however many callers asked them, and each caller is answered
- * its own lines. A store still on the code before the door answers 404 while
- * a deploy moves it, and the reads then go one at a time. Never share across
- * requests. */
+/** Reads asked in one turn of an invocation travel as one trip, with a
+ * response body for each caller. A directory client can outlive its first
+ * request, so each invocation has its own queue. Outside an invocation or
+ * when the store answers 404 to the batch route, reads go individually. */
 export let gathered = (via: Fetcher): Fetcher => {
   type Asked = {
     req: Request
@@ -380,7 +379,7 @@ export let gathered = (via: Fetcher): Fetcher => {
     answer: (r: Response) => void
     fail: (e: unknown) => void
   }
-  let waiting: Asked[][] = [[], []]
+  let waiting = new WeakMap<object, [Asked[], Asked[]]>()
   let single = ({ req, answer, fail }: Asked) =>
     via.fetch(req).then(answer, fail)
   let send = async (asked: Asked[]) => {
@@ -442,7 +441,11 @@ export let gathered = (via: Fetcher): Fetcher => {
         req.method != 'GET' || url.pathname != '/query' || q == null ||
         req.headers.has(MEND)
       ) return via.fetch(req)
-      let at = waiting[req.headers.has(EPOCH) ? 1 : 0]
+      let owner = invocationKey()
+      if (!owner) return via.fetch(req)
+      let queued = waiting.get(owner)
+      if (!queued) waiting.set(owner, queued = [[], []])
+      let at = queued[req.headers.has(EPOCH) ? 1 : 0]
       return new Promise<Response>((answer, fail) => {
         if (!at.length) {
           turn(() => flush(at.splice(0)))
