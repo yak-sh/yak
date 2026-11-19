@@ -1077,10 +1077,13 @@ and the duty's work is the woken session's to do
   `wake{every: '0 7 * * * America/Detroit', target: <TaskMaster>, note}`, the
   owner's morning in his time zone.
 - **Aimed at a topic**, it knocks the session opened on that topic
-  (`session.topic`, [@yaks/topic](../topic)) that has not ended, the one opened
-  first where several have not (`attending`). A goal or a project that is its
-  own topic is aimed at directly. Such a session is opened by an agent, so it is
-  no operator, and with no session opened on the topic nobody is knocked.
+  (`session.topic`, [@yaks/topic](../topic)) that has not ended or stopped, the
+  one opened first where several have not (`attending`). One whose last turn
+  failed still attends: a failed transcript hears what is said to it by name, a
+  knock at it or a letter delivered to it, and that opens its next turn. A goal
+  or a project that is its own topic is aimed at directly. Such a session is
+  opened by an agent, so it is no operator, and with no session opened on the
+  topic nobody is knocked.
 
 A wake still to fire keeps the session it reaches from being marked over
 (`awaited`, below), so a session that stays on a topic rests between daily turns

@@ -159,25 +159,41 @@ let addressedTo = (
   ]
 }
 
-/** The sessions whose harness ended or whose transcript stopped or failed.
- * Late output cannot hide a stop; a settled turn is still live. */
+/** How each of these sessions that is over came to be: `ended` where its
+ * harness ended it, else its transcript's `stopped` or `failed`. Late output
+ * cannot hide a stop; a settled turn is still live. A failed transcript is
+ * over for what reaches it through what it wrote or holds, but what is said
+ * to it by name opens its next turn (./bus.ts). */
+export let ends = async (
+  graph: Pick<Graph, 'read'>,
+  sessions: Bundle[],
+): Promise<Map<Eid, 'ended' | 'stopped' | 'failed'>> => {
+  let gone = sessions.filter((s) => comp(s, SESSION).ended == true)
+  let live = sessions.filter((s) => comp(s, SESSION).ended != true)
+  let resting = live.length
+    ? await graph.read(and(
+      eq('entity.eid', value(live.map((s) => s.entity.eid))),
+      eq(`${SESSION}.status`, list('stopped', 'failed')),
+      fields('entity.eid', `${SESSION}.status`),
+    ))
+    : []
+  return new Map([
+    ...gone.map((s) => [s.entity.eid, 'ended'] as const),
+    ...resting.map((s) =>
+      [
+        s.entity.eid,
+        comp(s, SESSION).status == 'failed' ? 'failed' : 'stopped',
+      ] as const
+    ),
+  ])
+}
+
+/** The sessions whose harness ended or whose transcript stopped or failed
+ * ({@link ends}). */
 export let ended = async (
   graph: Pick<Graph, 'read'>,
   sessions: Bundle[],
-): Promise<Set<Eid>> => {
-  let gone = sessions.filter((s) => comp(s, SESSION).ended == true)
-  let live = sessions.filter((s) => comp(s, SESSION).ended != true)
-  return new Set([
-    ...gone,
-    ...live.length
-      ? await graph.read(and(
-        eq('entity.eid', value(live.map((s) => s.entity.eid))),
-        eq(`${SESSION}.status`, list('stopped', 'failed')),
-        fields('entity.eid'),
-      ))
-      : [],
-  ].map((s) => s.entity.eid))
-}
+): Promise<Set<Eid>> => new Set((await ends(graph, sessions)).keys())
 
 let eids = (rows: Bundle[]): Eid[] => rows.map((b) => b.entity.eid)
 

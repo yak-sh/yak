@@ -376,3 +376,25 @@ test('a turn keeps the newest reading of each plan window the stream gave, a fai
   )
   assertEquals(e.limits, [week(100)])
 })
+
+test('a rate limit or server error passes, deferred until a spent window resets; any other error is the CLI no', async () => {
+  let failed = async (error: string, ...before: Frame[]) =>
+    await assertRejects(
+      () => read(req, [...before, { type: 'assistant', error, message: {} }]),
+      ModelError,
+    )
+  let soon = Math.floor(Date.now() / 1000) + 600
+  let spent = {
+    type: 'rate_limit_event',
+    rate_limit_info: {
+      status: 'rejected',
+      unifiedWindows: { five_hour: { utilization: 1, resetsAt: soon } },
+    },
+  }
+  let deferred = await failed('rate_limit', spent)
+  assertEquals([deferred.code, deferred.retry?.defer], ['busy', true])
+  let after = deferred.retry!.after!
+  assertEquals(after > 590_000 && after <= 600_000, true)
+  assertEquals((await failed('server_error')).retry, {})
+  assertEquals((await failed('billing_error', spent)).retry, undefined)
+})

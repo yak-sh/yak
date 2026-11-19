@@ -285,6 +285,35 @@ for (let [name, storage] of [['RAM', memory], ['SQLite', lite]] as const) {
   test(`${name} leaves bus messages queued after a stop until explicit input`, () => {
     assertEquals(stopped(), { before: 0, queued: true, after: 2 })
   })
+  let failed = await scene(async () => {
+    let g = await fresh(storage())
+    let line = (eid: string, more: object): Bundle => ({
+      entity: { eid },
+      entry: { session: 'native' },
+      ...more,
+    })
+    await g.apply([
+      line('asked', { ask: {} }),
+      line('no', {
+        refusal: { code: 'claude' },
+        output: { source: 'asked' },
+        content: { body: 'rate_limit' },
+      }),
+    ], { trusted: true })
+    await feed(g)
+    let [s] = await g.get(['native'])
+    let said = await g.read('.entry.session=native&.intake&*')
+    return {
+      said: said.map((e) => (e.content as { body: string }).body),
+      status: (s.session as { status: string }).status,
+    }
+  })
+  test(`${name} says to a failed transcript only what is said to it by name, which opens its next turn`, () => {
+    assertEquals(failed(), {
+      said: ['knock #knock at #native: child finished'],
+      status: 'pending',
+    })
+  })
 }
 
 let nativeWrap = await scene(async () => {

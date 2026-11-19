@@ -110,6 +110,45 @@ let counted = (u: Frame): Usage => {
   }
 }
 
+// The CLI's errors that pass: a 429 (`rate_limit`), whether a plan window is
+// spent or the service is short of capacity, and a 5xx (`server_error`).
+let PASSING = ['rate_limit', 'server_error']
+
+// The longest a spent window defers a step: its owner may reset it early.
+let RESET_WAIT = 60 * 60 * 1000
+
+/**
+ * What an assistant frame's `error` comes to. One that passes is `busy`, as an
+ * API's 429 or 5xx is (@yaks/anthropic): asked again after a backoff, or, where
+ * a window the stream reported is spent, deferred until it resets, an hour at
+ * most, spending no attempt. Any other is the CLI's no, `claude`.
+ */
+let refused = (
+  frame: Frame,
+  limits: Limit[],
+  now = Date.now(),
+): ModelError => {
+  let code = String(frame.error)
+  let content = frame.message?.content
+  let said = (Array.isArray(content) ? content : [])
+    .map((p: Frame) => p.text).filter(Boolean).join('\n') || code
+  let error = !PASSING.includes(code)
+    ? new ModelError('claude', said)
+    : new ModelError('busy', said, resets(limits, now))
+  return Object.assign(error, limits.length ? { limits } : {})
+}
+
+// How long until the last spent window resets, an hour at most, as a deferral;
+// a plain retry where no reading says a window is spent.
+let resets = (limits: Limit[], now: number) => {
+  let wait = Math.max(
+    0,
+    ...limits.filter((l) => l.used >= 100 && l.resets)
+      .map((l) => Date.parse(l.resets!) - now),
+  )
+  return wait > 0 ? { after: Math.min(wait, RESET_WAIT), defer: true } : {}
+}
+
 /** What the frames of one turn came to. `terminal` says the CLI reported a
  * successful result, which a turn ended by a call never reaches. */
 export type Turn = {
@@ -185,7 +224,7 @@ export let read = async (
       if (turn.reply && turn.reply.id != frame.message?.id) {
         throw new ModelError('claude_protocol', 'More than one model turn')
       }
-      if (frame.error) throw new ModelError('claude', String(frame.error))
+      if (frame.error) throw refused(frame, turn.limits)
       began(req)
       let message = frame.message
       id = String(message.id)

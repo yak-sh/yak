@@ -38,7 +38,10 @@ result. `--include-partial-messages` makes the CLI send text as it is written,
 and each piece reaches the request's `onText` as it arrives; the completed frame
 tells only what no piece carried. There are no retries within this adapter;
 durable submission/acknowledgement uses the same model callbacks as the HTTP
-providers.
+providers. A message the CLI ends with `error: "rate_limit"` or `"server_error"`
+(a 429 or a 5xx) is `busy` and passes, as an API's is: the session asks again
+after a backoff, and where the stream said a plan window is spent, defers until
+it resets, an hour at most. Any other error is the CLI's no (`claude`).
 
 The graph records each ask, assistant text, requested call, harness result, CLI
 session/message ids and reported token usage: input, output, what was read from

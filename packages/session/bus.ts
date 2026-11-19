@@ -45,7 +45,7 @@ import {
   creatorOf,
   deliver,
   deliverAll,
-  ended,
+  ends,
   heirs,
   HOLD,
   knocked,
@@ -256,14 +256,36 @@ let candidates = async (
   ]
 }
 
-// The native transcripts among these entities which are not over. An outside
-// session's long log is never loaded to tell.
-let hearing = async (g: Graph, ids: Eid[]): Promise<Eid[]> => {
+// The native transcripts among these entities which can hear, each with
+// whether its last turn failed. A failed one is over for what reaches it
+// through what it wrote or holds, which its project hears instead
+// (./listen.ts `held`), but what is said to it by name, a knock at it or a
+// letter delivered to it, opens its next turn, as it reopens one that ended
+// (./reopen.ts). An outside session's long log is never loaded to tell.
+let hearing = async (
+  g: Graph,
+  ids: Eid[],
+): Promise<Map<Eid, boolean>> => {
   let found = ids.length
     ? await natives(g, [eq('entity.eid', list(...ids))], [`${SESSION}.ended`])
     : []
-  let gone = await ended(g, found)
-  return found.filter((s) => !gone.has(s.entity.eid)).map((s) => s.entity.eid)
+  let gone = await ends(g, found)
+  return new Map(
+    found.map((s) => s.entity.eid)
+      .filter((id) => (gone.get(id) ?? 'failed') == 'failed')
+      .map((id) => [id, gone.has(id)]),
+  )
+}
+
+// What a failed transcript hears of the news: only what is said to it by
+// name, which {@link pending} reads for itself.
+let byName = (news: News): News => {
+  let none = { items: [], creators: new Map(), holders: new Map() }
+  return {
+    ...news,
+    comments: { ...none, taken: news.comments.taken },
+    replies: { ...none, taken: news.replies.taken },
+  }
 }
 
 /** A line a native transcript is owed: the item, what is said of it, and the
@@ -283,9 +305,9 @@ export let due = async (g: Graph, at: Scope = scope(true)): Promise<Due[]> => {
   }
   let found = !ids || ids.length ? await candidates(g, news, ids) : []
   let listening = await hearing(g, [...new Set([...found, ...at.sessions])])
-  if (listening.length) news.projects = await projects(g)
-  for (let id of listening) {
-    for (let said of await pending(g, id, news)) {
+  if (listening.size) news.projects = await projects(g)
+  for (let [id, failed] of listening) {
+    for (let said of await pending(g, id, failed ? byName(news) : news)) {
       out.push({ session: id, ...said })
     }
   }
@@ -594,7 +616,7 @@ export let reply = async (host: Door, call: Bundle): Promise<Bundle[]> => {
   )
   if (
     !session?.session || await hooked(g, id) ||
-    (await hearing(g, [id])).length
+    (await hearing(g, [id])).size
   ) return []
   return (await owed(host, id)).map(({ item, line }) => ({
     entity: {

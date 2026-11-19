@@ -3,7 +3,7 @@
 // the project, where the knock waits for the next session at work. One aimed
 // at a topic knocks the session opened on it.
 
-import { graph } from '@yaks/graph'
+import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { effects } from '@yaks/effects'
@@ -139,8 +139,35 @@ for (let [who, sessions, target] of cases) {
   })
 }
 
-let attended: [string, [string, object][], string[]][] = [
+// The lines that leave a session's last turn refused by its provider, or
+// stopped.
+let refused = (s: string): Bundle[] => [
+  { entity: { eid: `${s}-ask` }, entry: { session: s, seq: 1 }, ask: {} },
+  {
+    entity: { eid: `${s}-no` },
+    entry: { session: s, seq: 2 },
+    refusal: { code: 'busy' },
+    output: { source: `${s}-ask` },
+  },
+]
+let halted = (s: string): Bundle[] => [
+  { entity: { eid: `${s}-stop` }, entry: { session: s, seq: 1 }, stop: {} },
+]
+
+let attended: [string, [string, object][], string[], Bundle[]?][] = [
   ['the session opened on its topic', [['head', on]], ['head']],
+  [
+    'the one whose last turn failed, which the knock opens again',
+    [['head', on], ['asked', on]],
+    ['head'],
+    refused('head'),
+  ],
+  [
+    'the next one past one that was stopped',
+    [['head', on], ['asked', on]],
+    ['asked'],
+    halted('head'),
+  ],
   [
     'the one opened first, of two that can hear',
     [['head', on], ['asked', on]],
@@ -153,9 +180,10 @@ let attended: [string, [string, object][], string[]][] = [
   ],
   ['nobody while no session is opened on it', [['worker', {}]], []],
 ]
-for (let [who, sessions, heard] of attended) {
+for (let [who, sessions, heard, lines = []] of attended) {
   test(`a goal's wake knocks ${who}`, async () => {
     let g = await box(...sessions)
+    await g.apply(lines, { trusted: true })
     equal(
       (await fire(g, SAT)).filter((k) => k.body == WEIGH),
       heard.map((target) => ({ target, body: WEIGH })),
@@ -165,6 +193,8 @@ for (let [who, sessions, heard] of attended) {
 
 test('a wake still to fire names the session it reaches as awaited', async () => {
   let g = await box(['head', on], ['asked', on], ['worker', {}])
+  equal([...await awaited(g)], ['head'])
+  await g.apply(refused('head'), { trusted: true })
   equal([...await awaited(g)], ['head'])
   await g.apply([{ entity: { eid: 'funnel-wake' }, wake: { at: null } }], {
     trusted: true,

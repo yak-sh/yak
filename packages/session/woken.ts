@@ -17,13 +17,16 @@
 // by hand and so is no operator. A wake still to fire keeps that session from
 // being marked over while it rests ({@link awaited}, ./ended.ts), so the
 // session a daily wake reaches is the one that has not ended, not a run that
-// once answered a question about the topic.
+// once answered a question about the topic. One whose last turn failed (its
+// provider refused, its retries ran out) still attends: the knock is said to
+// it by name and opens its next turn (./bus.ts). Only a stop, which a person
+// asked for, takes it off its topic.
 
 import { line } from '@yaks/query'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { SESSION } from './comp.ts'
-import { ended } from './listen.ts'
+import { ends } from './listen.ts'
 import { targets } from './watch.ts'
 
 type G = Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>
@@ -32,8 +35,8 @@ let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
 
-/** The session a wake aimed at `topic` reaches: the one opened on it that can
- * still hear, the one opened first where several can. */
+/** The session a wake aimed at `topic` reaches: the one opened on it that
+ * has not ended or stopped, the one opened first where several have not. */
 export let attending = async (g: G, topic: Eid): Promise<Eid | undefined> => {
   if (!g.vocab.prop(SESSION, 'topic')) return
   let open = await g.read(
@@ -42,9 +45,9 @@ export let attending = async (g: G, topic: Eid): Promise<Eid | undefined> => {
       'created.at',
     ]}`,
   )
-  let gone = await ended(g, open)
+  let gone = await ends(g, open)
   let opened = (b: Bundle) => str(comp(b, 'created').at) + b.entity.eid
-  return open.filter((s) => !gone.has(s.entity.eid))
+  return open.filter((s) => (gone.get(s.entity.eid) ?? 'failed') == 'failed')
     .toSorted((a, b) => opened(a).localeCompare(opened(b)))[0]?.entity.eid
 }
 
