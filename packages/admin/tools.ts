@@ -20,7 +20,7 @@ import { type Account, account } from './account.ts'
 import { ADMIN } from '@yaks/platform/bots'
 import { budgetLines } from '@yaks/platform/budget'
 import { funnelLines } from '@yaks/platform/funnel'
-import { firstApps, firstsLines, weekly } from '@yaks/platform/firsts'
+import { cameFrom, firstApps, firstsLines, weekly } from '@yaks/platform/firsts'
 import { duration } from '@yaks/tracker/errors'
 
 import { Refused } from './refusal.ts'
@@ -423,9 +423,10 @@ export let runs = (
         firstsNow(at.bearer),
       ])
       let weeks = weekly(
-        firstApps(d).values(),
+        firstApps(d),
         from.toISOString(),
         new Date().toISOString(),
+        cameFrom(d),
       )
       return [said(call, [...firstsLines(weeks), ...funnelLines(f)].join('\n'))]
     }),

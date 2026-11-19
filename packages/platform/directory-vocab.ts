@@ -518,6 +518,42 @@ export let directoryDoc: VocabDoc = {
         client: { type: 'string', enum: ['browser', 'agent', 'bot', 'test'] },
       },
     },
+    // Where a person came from when they signed up (workers/yak arrivals.ts
+    // `welcomed`): written once, by the kernel, the first time they come in
+    // by any door, and never moved after. `door` is the way in: the home
+    // page's box (`box`), the sign-in page (`login`), an assistant's
+    // connector (`connector`), an invitation's link (`invitation`), or a
+    // letter or a text to the platform (`email`, `text`). The rest is what
+    // their browser's arrival held (arrival.ts `Came`), where there was one:
+    // `page`, the home page they opened last (variant.ts); `said`, the tags
+    // and click ids of the link that brought them, read whole; `campaign`,
+    // the funnel's name for those tags (arrival.ts `campaign`), kept apart to
+    // filter and group on; `app`, the app whose badge they followed. Beside
+    // them, `assistant` is the name the connector's client registered under,
+    // its own choice, and `inviter` who sent the invitation. Somebody
+    // invited by another's code (`referral`) is that entity's to say.
+    arrived: {
+      description:
+        'Where a person came from when they signed up: the door, and the page, campaign, app, assistant or inviter that brought them.',
+      component: true,
+      type: 'object',
+      properties: {
+        at: owned(time),
+        door: owned({
+          type: 'string',
+          enum: ['box', 'login', 'connector', 'invitation', 'email', 'text'],
+        }),
+        page: owned(text),
+        campaign: owned(text),
+        said: owned({
+          type: 'object',
+          additionalProperties: { type: 'string' },
+        }),
+        app: owned(ref('keep')),
+        assistant: owned(text),
+        inviter: owned(ref('keep')),
+      },
+    },
     // When the home page's box opened this space for a newcomer
     // (newcomer.ts `oneBuild`). It stays once they keep it, so the platform
     // admin's Visitor builds page (admin.ts) says who kept each build after

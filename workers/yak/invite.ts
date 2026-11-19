@@ -478,7 +478,7 @@ export let taken = async (
   dir: Directory,
   secret: string,
   notify = tell,
-): Promise<{ person: string; link: string } | null> => {
+): Promise<{ person: string; link: string; by: string | null } | null> => {
   let sealed = await unsealed(t, secret)
   if (!sealed || !signs(sealed)) return null
   let [invite, place] = await Promise.all([
@@ -487,5 +487,5 @@ export let taken = async (
   ])
   if (!invite || !place || invite.to != sealed.to) return null
   await seated(env, dir, invite, place, notify)
-  return { person: invite.person, link: linkOf(place, env) }
+  return { person: invite.person, link: linkOf(place, env), by: invite.by }
 }

@@ -242,7 +242,8 @@ import { WHO } from './signed.ts'
 import { versionOf } from './running.ts'
 import { background, caught, defect, failing, refusing } from './defects.ts'
 import { step } from './funnel.ts'
-import { arrival, campaign } from './arrival.ts'
+import { arrival, arrivedOf, campaign, type Door } from './arrival.ts'
+import { welcomed } from './arrivals.ts'
 import { classed } from './crawlers.ts'
 import { CHECK } from '@yaks/platform/bots'
 import * as ads from './ads.ts'
@@ -904,7 +905,8 @@ let LETTER = 10_000
  * D-136811): the same sign-up a code gives, for someone who never opened the
  * page. The person behind the address, found or minted and called what the
  * letter called them, else the front of their address; whoever's invite the
- * letter's words carry, credited; and their own space.
+ * letter's words carry, credited; that they came by a letter, for one who had
+ * no space yet (arrivals.ts); and their own space.
  */
 export let joined = async (
   env: Env,
@@ -912,10 +914,25 @@ export let joined = async (
   name?: string,
   said = '',
 ) => {
+  let back = await met(env, email)
   let person = await personOf(meta(env), email, name || nameOf(null, email))
   await invitedBy(env, person, said)
+  // Somebody with a space of their own is writing in, not signing up.
+  if (!back) await arrivedBy(env, person, 'email')
   return { person, space: await settle(env, person) }
 }
+
+// Where a sign-up came from (arrivals.ts `welcomed`): a report rather than a
+// sign-up refused, since it is only what the funnel reads.
+let arrivedBy = (
+  env: Env,
+  person: string,
+  door: Door,
+  req?: Request,
+  more?: Parameters<typeof arrivedOf>[2],
+) =>
+  welcomed(env, person, arrivedOf(req ? arrival(req) : null, door, more))
+    .then(() => {}, (e) => caught(e, { request: 'arrived' }))
 
 /**
  * Signing up by a text to the platform's number (operator-texts.ts,
@@ -941,6 +958,7 @@ export let textedIn = async (
     },
   ], KERNEL)
   await invitedBy(env, person, consent)
+  await arrivedBy(env, person, 'text')
   return { person, space: await settle(env, person) }
 }
 
@@ -957,6 +975,8 @@ type Landing = {
   proved?: Proved
   session?: SessionSeed
   newcomer?: string
+  /** Who sent the invitation whose link this is, for one that is. */
+  inviter?: string
 }
 
 // The person is known: the cookie, the space that is theirs, the first-owner
@@ -964,7 +984,7 @@ type Landing = {
 let landed = async (
   req: Request,
   env: Env,
-  { person, own: home, proved, session, newcomer, claim }: Landing,
+  { person, own: home, proved, session, newcomer, claim, inviter }: Landing,
   q: string,
   back: string,
   c: Clock = clock(),
@@ -1001,6 +1021,12 @@ let landed = async (
     if (proved.first) {
       step(env, 'signup', req, { who: proved.who })
       ads.after(env, 'signup', req)
+      background(
+        apart(() => cameIn(req, env, person, q, inviter)).then(
+          () => {},
+          (e) => caught(e, { request: 'arrived' }),
+        ),
+      )
     }
   }
   if (!session || claim) {
@@ -1099,10 +1125,11 @@ let begun = async (
       return signCard(env, { why: FULL, status: 429 })
     }
     person = crypto.randomUUID()
-    let came = campaign(arrival(req))
+    let from = arrival(req), came = campaign(from)
     await meta(env).apply([{
       entity: { eid: person },
       person: {},
+      arrived: arrivedOf(from, 'box'),
       // A script's newcomer, or an agent's check's, is nobody's
       // (directory.ts `testIs`), whatever it goes on to build.
       newcomer: {
@@ -1430,6 +1457,26 @@ let consented = async (
     typeof c.exp == 'number' && c.exp * 1000 > Date.now()
 }
 
+// Where somebody signing in for the first time came from (arrivals.ts): by
+// an assistant's connector when an authorize request rides along, naming the
+// client as it registered; by an invitation's link when it names an inviter;
+// else by the sign-in page. A newcomer kept on this browser came by the box,
+// which already says so.
+let cameIn = async (
+  req: Request,
+  env: Env,
+  person: string,
+  q: string,
+  inviter?: string,
+) => {
+  let ask = q ? await asked(req, env, q).catch(() => null) : null
+  let assistant = ask && !(ask instanceof Response)
+    ? (await api(env).lookupClient(ask.clientId))?.clientName ?? ask.clientId
+    : undefined
+  let way: Door = q ? 'connector' : inviter ? 'invitation' : 'login'
+  await arrivedBy(env, person, way, req, { assistant, inviter })
+}
+
 // The name a person sees on the consent card: what the client called itself
 // when it registered, or its bare id, and beside it the host the authorization
 // is sent to. The name is the client's own choice, so anybody can register as
@@ -1510,7 +1557,8 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     if (!took || !arrived) {
       return door(t, env, dir, await browser(env, req), secret(env))
     }
-    return quiet(await landed(req, env, arrived, '', took.link))
+    let inviter = took.by ?? undefined
+    return quiet(await landed(req, env, { ...arrived, inviter }, '', took.link))
   }
 
   // The custom-domain end of cross-domain sign-in (`handoff`). index.ts sends

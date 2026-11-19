@@ -14,12 +14,17 @@
 //
 // A space deleted since takes its apps out of the directory, so a person who
 // built and left is not counted.
+//
+// Beside each week's count is where its people came from: the directory's
+// `arrived` on each person's row (workers/yak arrivals.ts), named by the most
+// telling thing it holds (`cameFrom`).
 import { BOT } from './bots.ts'
 
 type Row = { entity: { eid: string } } & Record<string, unknown>
 
-/** The directory's rows the count reads: every person, member, app and agent,
- * and the eid of the `yak` space, whose owners are not outside people. */
+/** The directory's rows the count reads: every person, with their address
+ * and where they came from (`arrived`), member, app and agent, and the eid of
+ * the `yak` space, whose owners are not outside people. */
 export type Directory = {
   meta: string
   people: Row[]
@@ -28,9 +33,10 @@ export type Directory = {
   agents: Row[]
 }
 
-/** One week, by its Monday (`YYYY-MM-DD`), and how many outside people made
- * their first app in it. */
-export type Week = { week: string; n: number }
+/** One week, by its Monday (`YYYY-MM-DD`), how many outside people made
+ * their first app in it, and how many of them came from where, the most
+ * first. */
+export type Week = { week: string; n: number; from: [string, number][] }
 
 let comp = (r: Row, name: string) =>
   r[name] as Record<string, unknown> | undefined
@@ -112,6 +118,62 @@ export let firstApps = (d: Directory): Map<string, string> => {
   return first
 }
 
+/**
+ * Where each person came from, in a few words, by person: the campaign their
+ * link named, else the app whose badge they followed (by its slug), who
+ * invited them (by their address), the assistant whose connector they came
+ * by, the home page they opened, or only the way in (`login`, `box`,
+ * `email`, `text`). One who signed up before arrivals were kept is
+ * `unknown`.
+ *
+ * @example
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let from = cameFrom({
+ *   meta: 'yak',
+ *   people: [
+ *     { entity: { eid: 'ann' }, email: { address: 'ann@example.com' } },
+ *     { entity: { eid: 'bo' }, arrived: { door: 'login', app: { eid: 'r' } } },
+ *     { entity: { eid: 'cy' }, arrived: { door: 'invitation', inviter: 'ann' } },
+ *     { entity: { eid: 'di' }, arrived: { door: 'box', page: 'church', campaign: 'meta//pilot' } },
+ *   ],
+ *   members: [],
+ *   apps: [{ entity: { eid: 'r' }, app: { slug: 'recipes' } }],
+ *   agents: [],
+ * })
+ * assertEquals(['ann', 'bo', 'cy', 'di'].map(from), [
+ *   'unknown',
+ *   'badge of recipes',
+ *   'invited by ann@example.com',
+ *   'campaign meta//pilot',
+ * ])
+ * ```
+ */
+export let cameFrom = (d: Directory): (person: string) => string => {
+  let rows = new Map([...d.people, ...d.apps].map((r) => [r.entity.eid, r]))
+  // What `eid`'s row says in `name.prop`, else the eid itself.
+  let said = (eid: string, name: string, prop: string) => {
+    let r = rows.get(eid)
+    return String((r && comp(r, name)?.[prop]) ?? eid)
+  }
+  return (person) => {
+    let r = rows.get(person), a = r && comp(r, 'arrived')
+    if (!a) return 'unknown'
+    let app = idOf(a.app), inviter = idOf(a.inviter)
+    return a.campaign
+      ? `campaign ${a.campaign}`
+      : app
+      ? `badge of ${said(app, 'app', 'slug')}`
+      : inviter
+      ? `invited by ${said(inviter, 'email', 'address')}`
+      : a.assistant
+      ? `assistant ${a.assistant}`
+      : a.page
+      ? `page ${a.page}`
+      : String(a.door)
+  }
+}
+
 let DAY = 86_400_000
 
 /// monday('2026-11-19T12:00:00Z') -> '2026-11-16'
@@ -124,31 +186,39 @@ export let monday = (at: string) => {
 }
 
 /**
- * Each week from the one `from` falls in to the one `to` falls in, and how
- * many of `firsts` fell in it, none for a week with none.
+ * Each week from the one `from` falls in to the one `to` falls in, how many
+ * of `firsts` (when each person made their first app, by person) fell in it,
+ * none for a week with none, and where they came from (`came`).
  *
  * @example
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * let firsts = new Map([
+ *   ['ann', '2026-11-03T17:08:08Z'],
+ *   ['bo', '2026-11-04T00:00:00Z'],
+ *   ['old', '2026-09-01T00:00:00Z'],
+ * ])
  * assertEquals(
- *   weekly(['2026-11-03T17:08:08Z', '2026-09-01T00:00:00Z'], '2026-10-27', '2026-11-12'),
+ *   weekly(firsts, '2026-10-27', '2026-11-12', () => 'login'),
  *   [
- *     { week: '2026-10-26', n: 0 },
- *     { week: '2026-11-02', n: 1 },
- *     { week: '2026-11-09', n: 0 },
+ *     { week: '2026-10-26', n: 0, from: [] },
+ *     { week: '2026-11-02', n: 2, from: [['login', 2]] },
+ *     { week: '2026-11-09', n: 0, from: [] },
  *   ],
  * )
  * ```
  */
 export let weekly = (
-  firsts: Iterable<string>,
+  firsts: Map<string, string>,
   from: string,
   to: string,
+  came: (person: string) => string = () => 'unknown',
 ): Week[] => {
-  let counts = new Map<string, number>()
-  for (let at of firsts) {
-    let w = monday(at)
-    counts.set(w, (counts.get(w) ?? 0) + 1)
+  let counts = new Map<string, Map<string, number>>()
+  for (let [person, at] of firsts) {
+    let w = monday(at), source = came(person)
+    let week = counts.get(w) ?? counts.set(w, new Map()).get(w)!
+    week.set(source, (week.get(source) ?? 0) + 1)
   }
   let weeks: Week[] = []
   let last = monday(to)
@@ -158,7 +228,9 @@ export let weekly = (
     t += 7 * DAY
   ) {
     let week = new Date(t).toISOString().slice(0, 10)
-    weeks.push({ week, n: counts.get(week) ?? 0 })
+    let from = [...counts.get(week) ?? []]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    weeks.push({ week, n: from.reduce((n, [, k]) => n + k, 0), from })
   }
   return weeks
 }
@@ -177,30 +249,41 @@ export let weekSays = (week: string) => {
 }
 
 /**
- * The weeks as a table a person reads: each week and its first apps.
+ * The weeks as a table a person reads: each week, its first apps, and where
+ * their people came from.
  *
  * @example
  * ```ts
  * import { assertEquals } from '@std/assert'
  * assertEquals(
- *   firstsLines([{ week: '2026-09-28', n: 0 }, { week: '2026-10-05', n: 2 }]),
+ *   firstsLines([
+ *     { week: '2026-09-28', n: 0, from: [] },
+ *     { week: '2026-10-05', n: 3, from: [['page church', 2], ['unknown', 1]] },
+ *   ]),
  *   [
  *     "Outside people's first apps by week (Monday to Sunday, UTC):",
- *     '  Week             First apps',
+ *     '  Week             First apps  Came from',
  *     '  Sep 28 to Oct 4  0',
- *     '  Oct 5 to 11      2',
+ *     '  Oct 5 to 11      3           page church 2, unknown 1',
  *   ],
  * )
  * ```
  */
 export let firstsLines = (weeks: Week[]): string[] => {
   let rows = [
-    ['Week', 'First apps'],
-    ...weeks.map((w) => [weekSays(w.week), String(w.n)]),
+    ['Week', 'First apps', 'Came from'],
+    ...weeks.map((w) => [
+      weekSays(w.week),
+      String(w.n),
+      w.from.map(([source, n]) => `${source} ${n}`).join(', '),
+    ]),
   ]
-  let wide = Math.max(...rows.map((r) => r[0].length))
+  let wide = (i: number) => Math.max(...rows.map((r) => r[i].length))
+  let [week, n] = [wide(0), wide(1)]
   return [
     "Outside people's first apps by week (Monday to Sunday, UTC):",
-    ...rows.map((r) => `  ${r[0].padEnd(wide)}  ${r[1]}`),
+    ...rows.map((r) =>
+      `  ${r[0].padEnd(week)}  ${r[1].padEnd(n)}  ${r[2]}`.trimEnd()
+    ),
   ]
 }

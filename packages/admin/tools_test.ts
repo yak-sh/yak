@@ -124,7 +124,11 @@ test("funnel reads the platform's counts from a time or a duration back", async 
     let directory: Record<string, unknown[]> = {
       '.space.slug=yak': [{ entity: { eid: 'yak' } }],
       '.person': [
-        { entity: { eid: 'ann' }, email: { address: 'ann@example.com' } },
+        {
+          entity: { eid: 'ann' },
+          email: { address: 'ann@example.com' },
+          arrived: { door: 'login', page: 'church' },
+        },
         { entity: { eid: 'jeff' }, email: { address: 'jeff@example.com' } },
       ],
       '.member': [{
@@ -174,7 +178,12 @@ test("funnel reads the platform's counts from a time or a duration back", async 
         body(await ask('admin_funnel', { since: '2026-11-01T00:00Z' })),
         [
           ...firstsLines(
-            weekly([ann], '2026-11-01T00:00Z', new Date().toISOString()),
+            weekly(
+              new Map([['ann', ann]]),
+              '2026-11-01T00:00Z',
+              new Date().toISOString(),
+              () => 'page church',
+            ),
           ),
           'People since 2026-11-01T00:00:00.000Z:',
           '  Home page visits: 40',

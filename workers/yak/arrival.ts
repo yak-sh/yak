@@ -7,8 +7,11 @@
 // A home page opened (variant.ts) is kept in the same cookie, beside the
 // tags, so the click, the build and the sign-up that follow a visit to
 // /churches count under the church page; the home page opened last is the one
-// kept.
+// kept. A link from an app's badge names that app (`?app=`, @yaks/platform/woven
+// `badgeOf`), kept the same way.
 //
+// A sign-up keeps the arrival it carried on the person (`arrivedOf`, the
+// directory's `arrived`), so where somebody came from outlives the cookie.
 // The funnel counts its steps by the campaign and the home page (funnel.ts),
 // and an ad network is told of a visit its click brought (conversions.ts).
 // Nothing here imports past @yaks/platform/cookie, crawlers.ts and
@@ -29,9 +32,21 @@ let CLICK = /^[a-z]{1,8}clid$/
 // A value is whatever the link said, so it is capped rather than trusted.
 let CAP = 200
 
-/** An arrival: the tags and click ids its link carried, when, in ms, and
- * the name of the home page its visitor opened last, if any. */
-export type Came = { at: number; said: Record<string, string>; page?: string }
+/** An arrival: the tags and click ids its link carried, when, in ms, the
+ * name of the home page its visitor opened last, if any, and the app whose
+ * badge the link was, if it was one. */
+export type Came = {
+  at: number
+  said: Record<string, string>
+  page?: string
+  app?: string
+}
+
+let EID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+let appIn = (q: URLSearchParams) => {
+  let app = q.get('app')?.toLowerCase()
+  return app && EID.test(app) ? app : undefined
+}
 
 /**
  * What an address says of where it came from, or null when it says nothing.
@@ -44,6 +59,13 @@ export type Came = { at: number; said: Record<string, string>; page?: string }
  *   said: { utm_source: 'meta', fbclid: 'Ab1' },
  * })
  * assertEquals(cameFrom(new URL('https://yaks.app/?q=x')), null)
+ * let app = '6f1c1b3e-0b5e-4c4a-9d1a-2b8f8c1d7e10'
+ * assertEquals(cameFrom(new URL(`https://yaks.app/?app=${app}`), 5), {
+ *   at: 5,
+ *   said: {},
+ *   app,
+ * })
+ * assertEquals(cameFrom(new URL('https://yaks.app/?app=recipes')), null)
  * ```
  */
 export let cameFrom = (url: URL, now = Date.now()): Came | null => {
@@ -51,20 +73,27 @@ export let cameFrom = (url: URL, now = Date.now()): Came | null => {
   for (let [k, v] of url.searchParams) {
     if ((TAG.test(k) || CLICK.test(k)) && v) said[k] = v.slice(0, CAP)
   }
-  return Object.keys(said).length ? { at: now, said } : null
+  let app = appIn(url.searchParams)
+  return Object.keys(said).length || app
+    ? came(now, said, undefined, app)
+    : null
 }
 
 let read = (value: string): Came | null => {
   let q = new URLSearchParams(value), at = Number(q.get('at'))
   let page = VARIANTS.find((v) => v.name == q.get('page'))?.name
   q.delete('at'), q.delete('page')
-  let said = cameFrom(new URL(`https://x/?${q}`), at)?.said ?? {}
+  let link = cameFrom(new URL(`https://x/?${q}`), at)
   if (!Number.isFinite(at) || at <= 0) return null
-  return page || Object.keys(said).length ? came(at, said, page) : null
+  return page || link ? came(at, link?.said ?? {}, page, link?.app) : null
 }
 
-let came = (at: number, said: Record<string, string>, page?: string): Came =>
-  page ? { at, said, page } : { at, said }
+let came = (
+  at: number,
+  said: Record<string, string>,
+  page?: string,
+  app?: string,
+): Came => ({ at, said, ...page ? { page } : {}, ...app ? { app } : {} })
 
 let held = (req: Request) => {
   let cookie = cookieValue(req.headers.get('cookie'), COOKIE)
@@ -99,7 +128,7 @@ export let arrival = (req: Request): Came | null => {
   let page = shown(req)?.name ?? kept?.page
   let from = link ?? kept
   return from || page
-    ? came(from?.at ?? Date.now(), from?.said ?? {}, page)
+    ? came(from?.at ?? Date.now(), from?.said ?? {}, page, from?.app)
     : null
 }
 
@@ -109,6 +138,7 @@ let valued = (came: Came) =>
       ...came.said,
       at: String(came.at),
       ...came.page ? { page: came.page } : {},
+      ...came.app ? { app: came.app } : {},
     }),
   )
 
@@ -211,5 +241,74 @@ export let conversionOf = (
     ip: req.headers.get('cf-connecting-ip') ?? '',
     agent: req.headers.get('user-agent') ?? '',
     came,
+  }
+}
+
+/** The way somebody came in when they signed up: the home page's box, the
+ * sign-in page, an assistant's connector, an invitation's link, or a letter
+ * or a text to the platform. */
+export type Door =
+  | 'box'
+  | 'login'
+  | 'connector'
+  | 'invitation'
+  | 'email'
+  | 'text'
+
+/** Where a person came from when they signed up, as the directory keeps it
+ * (`arrived`), from the door, the arrival their browser carried, if any, and
+ * the assistant or inviter the door names. */
+export type Arrived = {
+  at: string
+  door: Door
+  page?: string
+  campaign?: string
+  said?: Record<string, string>
+  app?: string
+  assistant?: string
+  inviter?: string
+}
+
+/**
+ * The `arrived` a sign-up through `door` keeps, at `now`: what its arrival
+ * says, and whoever else brought them. Nothing it does not know is written.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let at = '2026-11-19T00:00:00.000Z'
+ * let came = { at: 5, said: { utm_source: 'meta', fbclid: 'Ab1' }, page: 'church' }
+ * assertEquals(arrivedOf(came, 'login', { now: at }), {
+ *   at,
+ *   door: 'login',
+ *   page: 'church',
+ *   campaign: 'meta//',
+ *   said: { utm_source: 'meta', fbclid: 'Ab1' },
+ * })
+ * assertEquals(arrivedOf(null, 'connector', { now: at, assistant: 'Claude' }), {
+ *   at,
+ *   door: 'connector',
+ *   assistant: 'Claude',
+ * })
+ * ```
+ */
+export let arrivedOf = (
+  came: Came | null,
+  door: Door,
+  { now = new Date().toISOString(), assistant, inviter }: {
+    now?: string
+    assistant?: string
+    inviter?: string
+  } = {},
+): Arrived => {
+  let said = came?.said ?? {}, named = campaign(came)
+  return {
+    at: now,
+    door,
+    ...came?.page ? { page: came.page } : {},
+    ...named ? { campaign: named } : {},
+    ...Object.keys(said).length ? { said } : {},
+    ...came?.app ? { app: came.app } : {},
+    ...assistant ? { assistant: assistant.slice(0, CAP) } : {},
+    ...inviter ? { inviter } : {},
   }
 }

@@ -219,6 +219,7 @@ test("an invitation's link signs its person in for its days and no longer", asyn
     {
       person: 'ana',
       link: 'https://jeff.yaks.app/diary/',
+      by: JEFF,
     },
   )
 })

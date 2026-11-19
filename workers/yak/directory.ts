@@ -10,6 +10,7 @@ import {
 import { after, together } from '@yaks/fp'
 import { christened, pick } from '@yaks/persona'
 import { calledOf } from './operator-name.ts'
+import type { Door as Entry } from './arrival.ts'
 import {
   EPOCH,
   MEND,
@@ -837,6 +838,16 @@ export type Row = MeteredRow & {
   started?: { space?: Id | null }
   subscribed?: { space?: Id | null }
   newcomer?: { at?: string; campaign?: string | null; client?: string | null }
+  arrived?: {
+    at: string
+    door: Entry
+    page?: string
+    campaign?: string
+    said?: Record<string, string>
+    app?: Id | null
+    assistant?: string
+    inviter?: Id | null
+  }
   visitor_build?: { at?: string }
   preview?: { site?: string | null; at?: string | null }
   created?: { at?: string; by?: Id | null }

@@ -384,10 +384,12 @@ export let firstsNow = async (session: string): Promise<Directory> => {
     storeQuery(session, PLATFORM_STORE, [q]) as Promise<Directory['apps']>
   let [meta, people, members, apps, agents] = await Promise.all([
     read('.space.slug=yak'),
-    read('.person&?email&.fields=email.address'),
+    read(
+      '.person&?email&?arrived&.fields=email.address,arrived.door,arrived.page,arrived.campaign,arrived.app,arrived.assistant,arrived.inviter',
+    ),
     read('.member&.fields=member.space,member.person,member.role'),
     read(
-      '.app&?created&?installed&.fields=app.space,created.at,created.by,installed.of',
+      '.app&?created&?installed&.fields=app.space,app.slug,created.at,created.by,installed.of',
     ),
     read('.acts_for'),
   ])

@@ -353,6 +353,7 @@ export let admitted = (policy: string, hashes: string[]): string =>
 /** An app as its badge reads it: the name it was published under, and the
  * site a preview of it was rebuilt from. */
 export type Badged = {
+  eid?: string
   published?: { name?: string | null } | null
   preview?: { site: string } | null
 }
@@ -360,7 +361,9 @@ export type Badged = {
 /** What the badge on an app's page opens, or null for no badge, which is a
  * paid plan's. A published app's badge opens its own page on the platform
  * (`pageAt`), where whoever followed it can open the app and make their own
- * copy; an app that is not published opens the platform's front page.
+ * copy; an app that is not published opens the platform's front page. The
+ * link names the app (`?app=`), so a sign-up it leads to says which app's
+ * badge brought them (workers/yak arrival.ts).
  *
  * ```ts
  * import { badgeOf } from '@yaks/platform/woven'
@@ -368,6 +371,8 @@ export type Badged = {
  * let space = { tier: null }
  * equal(badgeOf(space, { published: { name: 'recipes' } }, {}), 'https://yaks.app/apps/recipes')
  * equal(badgeOf(space, {}, {}), 'https://yaks.app/')
+ * let eid = '6f1c1b3e-0b5e-4c4a-9d1a-2b8f8c1d7e10'
+ * equal(badgeOf(space, { eid }, {}), `https://yaks.app/?app=${eid}`)
  * equal(badgeOf({ ...space, tier: 'plus' }, {}, {}), null)
  * ```
  */
@@ -375,12 +380,11 @@ export let badgeOf = (
   space: Pick<Metered, 'tier'>,
   app: Badged,
   env: Host,
-): string | null =>
-  !free(space)
-    ? null
-    : app.published?.name
-    ? pageAt(app.published.name, env)
-    : url(env, '/')
+): string | null => {
+  if (!free(space)) return null
+  let to = app.published?.name ? pageAt(app.published.name, env) : url(env, '/')
+  return app.eid ? `${to}?app=${encodeURIComponent(app.eid)}` : to
+}
 
 /** The badge and what it says of a site's preview (workers/yak newcomer.ts
  * `previewing`): every plan's preview wears it, saying whose site it is

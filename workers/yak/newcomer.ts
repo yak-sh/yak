@@ -340,6 +340,14 @@ let joined = (bundles: Bundle[]) =>
     })
   )
 
+// An arrival as read, its references as eids again, to write on somebody
+// else's row.
+let handed = (a: NonNullable<Row['arrived']>) => ({
+  ...a,
+  ...a.app ? { app: idOf(a.app) } : {},
+  ...a.inviter ? { inviter: idOf(a.inviter) } : {},
+})
+
 let dayOf = (now: Date) => now.toISOString().slice(0, 10)
 let tallyEid = (day: string, source = '') =>
   derivedEid('newcomer-builds|' + day + (source ? '|' + source : ''))
@@ -440,13 +448,13 @@ export let keep = async (
 ) => {
   if (!was) return
   let [came] = await meta(env).query(
-    line`.entity.eid=${was}&.newcomer&?email&?phone&?started`,
+    line`.entity.eid=${was}&.newcomer&?email&?phone&?started&?arrived`,
   ) as Row[]
   if (!came) return
   let [[recipient], invitations] = await Promise.all([
-    was == person
-      ? Promise.resolve([came])
-      : meta(env).query(line`.entity.eid=${person}&?email&?phone&?started`),
+    was == person ? Promise.resolve([came]) : meta(env).query(
+      line`.entity.eid=${person}&?email&?phone&?started&?arrived`,
+    ),
     meta(env).query(line`.invite.by=${was}`),
   ])
   if (!recipient?.email && !recipient?.phone) return
@@ -490,6 +498,10 @@ export let keep = async (
     ]),
     ...first
       ? [{ entity: { eid: person }, started: { space: theirs[0].space.eid } }]
+      : [],
+    // Where they came from is the box's, unless they had come in before.
+    ...came.arrived && !recipient.arrived
+      ? [{ entity: { eid: person }, arrived: handed(came.arrived) }]
       : [],
   ])
   if (moved.length) await stamp(env, { entities: moved })

@@ -28,6 +28,54 @@ export type FunnelSplit = {
  * `test`, a test account. */
 export type FunnelApart = { client: string; step: string; n: number }
 
+/** One person who signed up in the window and where they came from
+ * (workers/yak arrivals.ts): when; who, their address or number; the way in
+ * (`door`: `box`, `login`, `connector`, `invitation`, `email` or `text`); the
+ * home page they opened last and the campaign their link named; the app whose
+ * badge they followed (`slug`); the assistant whose connector they came by;
+ * who invited them (`invited`), or whose invite code they sent (`referrer`). */
+export type FunnelPerson = {
+  at: string
+  who: string
+  door: string
+  page?: string
+  campaign?: string
+  slug?: string
+  assistant?: string
+  invited?: string
+  referrer?: string
+}
+
+/**
+ * Where one person came from, in a line.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(
+ *   cameLine({
+ *     at: '2026-11-18T14:02:09.000Z',
+ *     who: 'dana@example.com',
+ *     door: 'login',
+ *     page: 'church',
+ *     campaign: 'meta//pilot',
+ *   }),
+ *   '  2026-11-18 14:02 dana@example.com: login, page church, campaign meta//pilot',
+ * )
+ * ```
+ */
+export let cameLine = (p: FunnelPerson): string => {
+  let said = [
+    p.door,
+    p.page && `page ${p.page}`,
+    p.campaign && `campaign ${p.campaign}`,
+    p.slug && `badge of ${p.slug}`,
+    p.assistant && `assistant ${p.assistant}`,
+    p.invited && `invited by ${p.invited}`,
+    p.referrer && `invite code of ${p.referrer}`,
+  ].filter(Boolean)
+  return `  ${p.at.slice(0, 16).replace('T', ' ')} ${p.who}: ${said.join(', ')}`
+}
+
 export type Funnel = {
   /** Where the window starts, as an ISO time; it runs to now. */
   since: string
@@ -42,6 +90,9 @@ export type Funnel = {
   buttons: { button: string; say: string; n: number }[]
   campaigns: FunnelSplit[]
   variants: FunnelSplit[]
+  /** Each person who signed up in the window, oldest first, and where they
+   * came from. A Worker older than these has none. */
+  people?: FunnelPerson[]
 }
 
 /** A stage most go no further than, and the share of it that went on. */
@@ -152,6 +203,7 @@ export let funnelLines = (f: Funnel): string[] => {
     ),
     ...group('By campaign:', f.campaigns, split),
     ...group('By home page variant:', f.variants, split),
+    ...group(`Signed up since ${f.since}:`, f.people ?? [], cameLine),
     ...group(
       'Not people, counted apart:',
       f.apart,

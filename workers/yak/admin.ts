@@ -72,6 +72,7 @@ import { type IconName } from './icons.ts'
 import { type Host, spaceHost, url } from '@yaks/platform/host'
 import { DAYS, NOT_ON, statsOf } from './views.ts'
 import { type Funnel, funnel, STEPS } from './funnel.ts'
+import { arrivals } from './arrivals.ts'
 import { splitSays, stopped } from '@yaks/platform/funnel'
 import { type ByDay, series, summed } from '@yaks/ui/chart'
 import { caught } from './defects.ts'
@@ -1075,8 +1076,9 @@ let refused = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
 
 /**
- * The funnel as data (funnel.ts `funnel`, the page's own read): from `since`,
- * an ISO time, or over the last `days`, a week by default. An owner of the
+ * The funnel as data (funnel.ts `funnel`, the page's own read), with each
+ * person who signed up in its window and where they came from (arrivals.ts):
+ * from `since`, an ISO time, or over the last `days`, a week by default. An owner of the
  * meta space is answered by a bearer token as well as by a session, as the
  * fee's door is (sell.ts `fees`): an agent reads what the page shows.
  */
@@ -1105,7 +1107,7 @@ export let funnelDoor = async (req: Request, env: Env): Promise<Response> => {
   }
   let f = await funnel(env, at ?? (Number(asked.get('days')) || 7))
   return f
-    ? Response.json(f)
+    ? Response.json({ ...f, people: await arrivals(env, f.since) })
     : refused(503, 'not_on', 'visitor counts are not switched on here')
 }
 
