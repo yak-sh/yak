@@ -32,6 +32,7 @@
  *
  * @module
  */
+import { DOORS as STORE } from '@yaks/api'
 import { type Level, writes } from '@yaks/member'
 import { derivedEid } from '@yaks/graph/identity'
 import { decoded, inside, seedy } from './files.ts'
@@ -184,8 +185,11 @@ export let viewer = <G extends { person: string | null; role: Level | null }>(
     : { person: t.person, role: level, via: t.app }
 }
 
-/** The store doors a link's pages reach, from the app's `/api`. */
-export let DOORS = [
+/** The store doors a link's pages reach, from the app's `/api`: every door
+ * @yaks/api answers, so a page's client finds each one it asks (`me()` asks
+ * `/who`), and the platform's own beside them. */
+export let DOORS: string[] = [
+  ...STORE,
   '/client.js',
   '/storage.js',
   '/storage',
@@ -194,10 +198,6 @@ export let DOORS = [
   '/_wire.js',
   '/me',
   '/graph',
-  '/query',
-  '/apply',
-  '/ws',
-  '/vocab',
   '/vocab.json',
 ]
 
@@ -217,6 +217,7 @@ export type Door =
  * whose draft is closed): its page's writes are refused, and what the page
  * keeps for the person stays in the page. */
 /// door({ path: '/api/query', method: 'GET', reads: false, waiting: false }) -> { to: 'api', door: '/query' }
+/// door({ path: '/api/who', method: 'GET', reads: true, waiting: false }) -> { to: 'api', door: '/who' }
 /// door({ path: '/api/query', method: 'GET', reads: false, waiting: true }) -> { to: 'nothing', status: 503 }
 /// door({ path: '/api/blob', method: 'GET', reads: false, waiting: false }) -> { to: 'nothing', status: 404 }
 /// door({ path: '/api/storage', method: 'PUT', reads: true, waiting: false }) -> { to: 'nothing', status: 403 }

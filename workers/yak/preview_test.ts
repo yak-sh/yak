@@ -15,6 +15,8 @@ import { type Ctx, TOOLS } from './tools.ts'
 import { digest } from '@yaks/graph/sha256'
 import { h } from 'preact'
 import { client } from '@yaks/client'
+import { store } from '@yaks/platform/client'
+import { stub } from '@std/testing/mock'
 import { host } from '@yaks/preact/host'
 import { loadVocab } from '@yaks/vocab'
 import { CustomEvent, stage } from '../../packages/preact/testing.ts'
@@ -152,6 +154,23 @@ test('preview installs vocabulary and seed data in a separate store before first
   let live = appStore(env.STORE, space, app, env)
   let words = await live.consume('/vocab', (res) => res.json(), {}, ADA_OWNS)
   equal(words, {})
+})
+
+test("a draft's page asks its link's ./api/ who it is and what it holds, through the platform client", async () => {
+  using _ = stub(
+    globalThis,
+    'fetch',
+    (to, init) => kernel(new Request(to, init), env),
+  )
+  let page = store(new URL('api/', url))
+  let [me, notes] = await Promise.all([
+    page.me(),
+    page.query('.draft_note'),
+  ])
+  equal([me.person, me.writes], [ADA, true])
+  equal(notes.map((r: { draft_note: { text: string } }) => r.draft_note.text), [
+    'seeded privately',
+  ])
 })
 
 test('preview writes stay on the draft’s branch, and the live app never sees them', async () => {
