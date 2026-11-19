@@ -32,8 +32,13 @@ let vocab = loadVocab([
 let ledger = () => graph({ vocab, storage: ram(vocab) })
 let now = Date.parse('2026-11-18T00:00:00Z')
 let key = 'sha/' + 'a'.repeat(64)
+// A directory with no apps: each reader over many answers none.
+let nothing = () => Promise.resolve(new Map())
 let dir = {
   all: () => Promise.resolve([]),
+  deploysOf: nothing,
+  switchesOf: nothing,
+  draftsOf: nothing,
 } as unknown as Directory
 let bytes = new TextEncoder().encode('kept for recovery')
 

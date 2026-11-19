@@ -7,7 +7,10 @@ import { cleanup, test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parse } from 'smol-toml'
 import { next } from '@yaks/wake'
-import { r2Objects } from './lib/objects.ts'
+import { r2Objects, r2RawObjects } from './lib/objects.ts'
+import { staged } from './release.ts'
+import { addressed } from '@yaks/platform/versions'
+import { digest } from '@yaks/graph/sha256'
 import { blobPrefix, receiptPrefix, uploadPrefix } from './blob-key.ts'
 import type { Wire } from '@yaks/durable-object'
 import type { Held } from './build-door.ts'
@@ -644,6 +647,69 @@ test(
     ])
   },
 )
+
+// The sweep's marks come from every app's referrers at once (written.ts
+// `pruned`): a deploy's manifest, its release's index, and the history a
+// path keeps. Only bytes none of them names go to the trash.
+test('the sweep retires only the bytes no app names', async () => {
+  let { env } = platform('a probe secret')
+  let { dir, space } = await owned(env)
+  let raw = r2RawObjects(env.BLOBS)
+  let stored = async (text: string) => {
+    let bytes = new TextEncoder().encode(text)
+    let sha = await digest(bytes)
+    await raw.put(addressed(sha), bytes)
+    return sha
+  }
+  let app = async (home: Space, slug: string) => {
+    await dir.apply({
+      entities: [{
+        entity: { eid: '$app' },
+        app: { slug, space: home.eid, version: 1, access: 'public' },
+        former: { slug },
+      }],
+    }, by)
+    return (await dir.app(home, slug))!
+  }
+  let shipped = await stored('<h1>shipped</h1>')
+  let one = await app(space, 'shop')
+  let source = `ada/.releases/${one.eid}/${crypto.randomUUID()}`
+  let release = staged(raw, { 'index.html': shipped }, source)
+  await release.files.put(
+    `${source}/esbuild/app.js`,
+    new TextEncoder().encode('compiled'),
+  )
+  let drafted = await stored('a draft another space holds')
+  let two = await app(await makes(dir, 'bob'), 'notes')
+  await meta(env).apply([
+    {
+      entity: { eid: '$deploy' },
+      deploy: {
+        app: one.eid,
+        version: 1,
+        files: JSON.stringify(await release.finish()),
+        source,
+        worker: '',
+      },
+    },
+    { entity: { eid: one.eid }, app: { source } },
+    {
+      entity: { eid: '$write' },
+      written: {
+        app: two.eid,
+        path: 'notes.md',
+        sha: drafted,
+        at: new Date().toISOString(),
+        by: ADA,
+      },
+    },
+  ], KERNEL)
+  let orphan = await stored('nobody names this')
+  await collected(env, new Date(Date.now() + 2 * day))
+  let retired = (await meta(env).query('.file_retirement'))
+    .flatMap((r) => (r.file_retirement as { keys: string[] }).keys)
+  assertEquals(retired, [addressed(orphan)])
+})
 
 test('the sweep keeps a reviewer space and its trash', async () => {
   let { env } = platform('a probe secret')

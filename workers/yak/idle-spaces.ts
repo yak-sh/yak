@@ -1,7 +1,7 @@
 // Test-space eligibility, from directory evidence of use. Lifecycle stamps
 // and monthly bills describe platform work too; neither is a use clock.
 // Creation gives a new record its grace period, and used survives bookkeeping.
-import { line } from '@yaks/query'
+import { type Line, line, sub } from '@yaks/query'
 import { isTestAddress } from '@yaks/platform/bots'
 
 // `checks` is the agents' own space for live checks, its Operator included
@@ -36,6 +36,7 @@ export type Row = {
   used?: { at?: string }
   written?: { at?: string | null; by?: Ref | null }
   signed_in?: { at?: string }
+  trashed?: unknown
 }
 let id = (ref: Ref) => typeof ref == 'string' ? ref : ref.eid
 let quiet = (row: Row, cutoff: number) => {
@@ -48,6 +49,8 @@ export let inactive = (rows: Row[], now = Date.now()) =>
   rows.every((row) => quiet(row, now - IDLE))
 
 // This selection is shared by the scheduled sweep and its read-only preview.
+// A space already in the trash is where the sweep would put it, so it is not
+// selected again.
 export let idleSpaces = (rows: Row[], now = Date.now()): string[] => {
   let emails = new Map(
     rows.filter((r) => r.email).map((r) => [
@@ -57,7 +60,9 @@ export let idleSpaces = (rows: Row[], now = Date.now()): string[] => {
   )
   let test = (person: Ref) => isTestAddress(emails.get(id(person)) ?? '')
   return rows.filter((space) => {
-    if (!space.space || PROTECTED.has(space.space.slug)) return false
+    if (!space.space || space.trashed || PROTECTED.has(space.space.slug)) {
+      return false
+    }
     let eid = space.entity.eid
     let apps = rows.filter((r) => r.app && id(r.app.space) == eid)
     if (apps.some((r) => r.published != null)) return false
@@ -110,5 +115,37 @@ export let idleAccounts = (rows: Row[], now = Date.now()): string[] => {
   ).map((r) => r.entity.eid)
 }
 
+let STAMPS = line`?person ?created ?used ?published ?signed_in ?trashed`
+
 export let CENSUS =
-  line`(.space | .app | .member | .grant | .invite | .hostname | .email) ?person ?created ?used ?published ?signed_in`
+  line`(.space | .app | .member | .grant | .invite | .hostname | .email) ${
+    sub(STAMPS)
+  }`
+
+/** The census rows one space's selection reads: the space, its apps, seats
+ * and invitations, the grants, invitations and hostnames on its apps, then
+ * the address of everyone those name. Over them `idleSpaces` says of the
+ * space what it says over the whole census, in two reads of what the space
+ * holds rather than one of everything there is. */
+export let censusOf = async (
+  read: (q: Line) => Promise<Row[]>,
+  space: string,
+): Promise<Row[]> => {
+  let apps = line`.app.space=${space}`
+  let rows = await read(
+    line`(.entity.eid=${space}&.space | ${
+      sub(apps)
+    } | .member.space=${space} | .invite.to=${space} | .grant.app${
+      sub(apps)
+    } | .invite.to${sub(apps)} | .hostname.serves${sub(apps)}) ${sub(STAMPS)}`,
+  )
+  let people = [
+    ...new Set(
+      rows.flatMap((r) => [r.member?.person, r.grant?.person])
+        .flatMap((p) => p ? [id(p)] : []),
+    ),
+  ]
+  return people.length
+    ? [...rows, ...await read(line`.entity.eid=${people}&.email`)]
+    : rows
+}

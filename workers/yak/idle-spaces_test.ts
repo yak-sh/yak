@@ -63,6 +63,10 @@ test('only an unpublished test space with seven days of recorded inactivity goes
   )
 })
 
+test('a space already in the trash is not selected again', () => {
+  assertEquals(selected((rows) => rows[0].trashed = { at: at(0) }), [])
+})
+
 test('use expires after seven days and missing evidence keeps the space', () => {
   assertEquals(selected((rows) => rows[0].used = { at: at(IDLE) }), ['space'])
   assertEquals(selected((rows) => rows[0].used = {}), [])

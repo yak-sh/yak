@@ -38,7 +38,7 @@ import { filesAt, filesIn, viewOf } from './release.ts'
 import { vouched, type Who } from './session.ts'
 import { refuse } from './tool.ts'
 import { META } from './release_index.ts'
-import { GRACE, LANES, type Pinner, versions, waiting } from './versions.ts'
+import { GRACE, LANES, type Pinner, waiting } from './versions.ts'
 import { addressed, type Files, KEEP, same, SHA } from '@yaks/platform/versions'
 import { linkFor } from '@yaks/platform/preview'
 
@@ -886,8 +886,9 @@ export let kept = (
  * from the referrers on every run: a count kept beside each write and delete
  * drifts the first time a batch dies halfway, while a sweep that reads the
  * referrers heals whatever the last one got wrong. Two things name a blob:
- * a deploy (its manifest and its release's index) and a written row the
- * history keeps. The rows it no longer keeps go first, in the same pass,
+ * a deploy (its manifest, and its release's index, which alone names what
+ * the release compiled: @yaks/platform/versions `BUILT`) and a written row
+ * the history keeps. The rows it no longer keeps go first, in the same pass,
  * since what a blob is still named by is exactly what that trim decides.
  *
  * The key space is the whole bucket's, so the mark set is too: an object one
@@ -913,11 +914,19 @@ export let pruned = async (
 ) => {
   let named = new Set<string>()
   let unindexed: string[] = []
+  // Each referrer kind of every app in one read apiece. What lands after is
+  // younger than GRACE, which keeps its bytes whatever these say.
+  let each = apps.map((a) => a.app)
+  let [deploys, switches, drafts] = await Promise.all([
+    dir.deploysOf(each),
+    dir.switchesOf(each),
+    dir.draftsOf(each),
+  ])
   for (let { prefix, app } of apps) {
     let space = `${prefix.split('/')[0]}/`
     let stage = `${space}.releases/${app.eid}/`
-    let releases = await versions(dir, app)
-    let moves = await dir.switches(app)
+    let releases = deploys.get(app.eid) ?? []
+    let moves = switches.get(app.eid) ?? []
     let sources = new Set(
       [
         app.source,
@@ -955,11 +964,15 @@ export let pruned = async (
       ).map(([key]) => key),
     )
     let paths = new Map<string, Written[]>()
-    for (let row of await dir.written(app)) {
-      paths.set(row.path, [...paths.get(row.path) ?? [], row])
+    for (let row of await dir.marks(app)) {
+      let held = paths.get(row.path)
+      if (held) held.push(row)
+      else paths.set(row.path, [row])
     }
     let gone: string[] = []
-    let open = new Set((await draftsOf(dir, app)).map((d) => d.eid))
+    let open = new Set(
+      withLegacy(app, drafts.get(app.eid) ?? []).map((d) => d.eid),
+    )
     for (let rows of paths.values()) {
       let all = newest(rows)
       let keep = new Set(kept(all, now, open))

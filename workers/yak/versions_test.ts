@@ -192,20 +192,24 @@ let directory = () => {
     }
     return Promise.resolve([])
   }
+  // Per app, because the sweep marks from every app in the bucket and what
+  // one names has to be tellable from what another does.
+  let deploys = (app: Pick<App, 'eid'>) =>
+    rows.filter((r) => r.app == app.eid).sort((a, b) => b.version - a.version)
+  let written = (app: Pick<App, 'eid'>, draft?: string) =>
+    writes.filter((w) => w.app == app.eid && (!draft || w.draft == draft))
+  let none = (apps: Pick<App, 'eid'>[]) =>
+    Promise.resolve(new Map(apps.map((a) => [a.eid, []])))
   let dir = {
     switches: () => Promise.resolve([]),
+    switchesOf: none,
     drafts: () => Promise.resolve([]),
-    // Per app, because the sweep now marks from every app in the bucket and
-    // what one names has to be tellable from what another does.
-    deploys: (app: App) =>
-      Promise.resolve(
-        rows.filter((r) => r.app == app.eid)
-          .sort((a, b) => b.version - a.version),
-      ),
-    written: (app: App, draft?: string) =>
-      Promise.resolve(
-        writes.filter((w) => w.app == app.eid && (!draft || w.draft == draft)),
-      ),
+    draftsOf: none,
+    deploys: (app: App) => Promise.resolve(deploys(app)),
+    deploysOf: (apps: App[]) =>
+      Promise.resolve(new Map(apps.map((a) => [a.eid, deploys(a)]))),
+    written: (app: App, draft?: string) => Promise.resolve(written(app, draft)),
+    marks: (app: App) => Promise.resolve(written(app)),
     apply,
     stamp: apply,
   } as unknown as Directory
@@ -299,7 +303,7 @@ test('pruning finishes when an app in its census was erased meanwhile', async ()
   let sha = files['index.html']
   let app = { ...APP, source: 'jeff/.releases/a1/erased' }
   dir.appAt = () => Promise.resolve(null)
-  dir.written = () => {
+  dir.marks = () => {
     throw new Error('an erased app has no history to trim')
   }
   assertEquals(await pruned(dir, blobs, [{ prefix: PREFIX, app }]), 1)

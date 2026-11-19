@@ -13,6 +13,7 @@ import { componentsOf } from './vocab.ts'
 import { isTestAddress } from '@yaks/platform/bots'
 import {
   CENSUS,
+  censusOf,
   expendable,
   idleSpaces,
   inactive,
@@ -37,6 +38,7 @@ import {
   directory,
   draftStore,
   type Host,
+  idOf,
   META,
   type PhoneLine,
   type Row as DirRow,
@@ -73,6 +75,7 @@ import {
   eq,
   every,
   joined,
+  type Line,
   line,
   list,
   stringify,
@@ -879,51 +882,50 @@ export let collected = async (
   }
   // A newcomer's budget is a month's (newcomer.ts `KEEPING`): trashed, the
   // space spends nothing in the next one, and each one on its own, so one
-  // that will not go holds up none of the rest. A newcomer holding nothing
-  // is one whose keeping or erasing died before their row went, finished.
+  // that will not go holds up none of the rest. Only spaces still out of the
+  // trash are read: one already in it is owed nothing more.
   for (let { person, spaces } of await unkept(env, dir, now)) {
     if (spent()) return more()
     let who = { person, role: 'owner' as const }
-    for (let space of spaces.filter((s) => !s.trashed)) {
+    for (let space of spaces) {
       if (spent()) return more()
       await trashSpace(env, dir, space, who)
         .then(() => gone++)
         .catch((why) => caught(why, { request: 'trash an unkept space' }))
     }
   }
+  let spaces = await dir.all()
   let idle = new Set(await abandoned(env, now))
-  // Trashed apps retain their files and versions alongside active apps.
-  let standing: Pinner[] = []
-  for (let space of await dir.all()) {
-    if (spent()) return more()
+  for (let space of spaces) {
     // Never the directory itself, whatever its row says: the app that holds
     // every space on the platform is not one a sweep may erase (`refused`
     // above and tools.ts app_delete hold the same line at the doors).
-    let sweepable = !PROTECTED.has(space.slug)
+    if (!idle.has(space.eid) || PROTECTED.has(space.slug)) continue
+    if (spent()) return more()
     // Other requests can write while an external read yields. Read the
     // present again before moving an abandoned space to the trash.
+    if (!(await abandoned(env, now, space.eid)).includes(space.eid)) continue
+    let d = await doomed(dir, space)
     if (
-      sweepable && idle.has(space.eid) &&
-      (await abandoned(env, now, space.eid)).includes(space.eid)
+      !await refused(space, env) && await nobodys(dir, d) &&
+      !d.apps.some((a) => a.published)
     ) {
-      let d = await doomed(dir, space)
-      if (
-        !await refused(space, env) && await nobodys(dir, d) &&
-        !d.apps.some((a) => a.published)
-      ) {
-        if (!space.trashed) {
-          await trashSpace(env, dir, space, {
-            person: d.members[0]?.person ?? null,
-            role: 'owner',
-          })
-          gone++
-        }
-      }
+      await trashSpace(env, dir, space, {
+        person: d.members[0]?.person ?? null,
+        role: 'owner',
+      })
+      gone++
     }
-    let apps = await dir.apps(space)
-    await retitled(dir, [space, ...apps])
-    for (let app of apps) standing.push({ prefix: under(space, app), app })
   }
+  if (spent()) return more()
+  // Trashed apps retain their files and versions alongside active apps.
+  let apps = await dir.apps(spaces)
+  await retitled(dir, [...spaces, ...apps])
+  let of = new Map(spaces.map((s) => [s.eid, s]))
+  let standing: Pinner[] = apps.flatMap((app) => {
+    let space = of.get(app.space)
+    return space ? [{ prefix: under(space, app), app }] : []
+  })
   // And then what those apps are still holding on to: the bytes a write or a
   // deploy pinned that nothing names any more (written.ts `pruned`, T-34508).
   // It rides here rather than on every write because the rule needs to see the
@@ -1133,20 +1135,24 @@ export let vacated = async (
 }
 
 // No app store is woken by the preview. A file write is a `written` row, which
-// keeps the edit's own time and author whoever stamped the row.
+// keeps the edit's own time and author whoever stamped the row. Asked about
+// one space, it reads only what that space holds.
 export let abandoned = async (env: Env, now = new Date(), only?: string) => {
-  let rows = await meta(env).query(CENSUS) as unknown as Row[]
+  let read = (q: Line) => meta(env).query(q) as unknown as Promise<Row[]>
+  let rows = only ? await censusOf(read, only) : await read(CENSUS)
   let eligible = new Set(idleSpaces(rows, now.getTime()))
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let spaces = only ? [await dir.at(only)] : await dir.all()
   let result: string[] = []
-  for (let space of await dir.all()) {
-    if (only && space.eid != only) continue
-    if (!eligible.has(space.eid) || await refused(space, env)) continue
+  for (let space of spaces) {
+    if (!space || !eligible.has(space.eid) || await refused(space, env)) {
+      continue
+    }
     // Directory references carry their creation and use clocks: memory,
     // connections, deploys, space or app hostnames, invitations and reports.
     // Ask generically so a new space-owned record needs no cleanup whitelist.
-    let apps = await dir.apps(space)
-    let refs = [space.eid, ...apps.map((app) => app.eid)]
+    let apps = rows.filter((r) => r.app && idOf(r.app.space) == space.eid)
+    let refs = [space.eid, ...apps.map((app) => app.entity.eid)]
     let used = false
     // Plus spaces have no app ceiling; each read must stay under the
     // directory's parameter and SQL statement-size limits.

@@ -1691,6 +1691,24 @@ export let draftRowsOf = (r: Row) => ({
   at: r.draft_rows!.at ?? null,
 })
 
+// Rows by the app each names, each as `of` reads it: what a reader asked of
+// many apps at once answers (`deploysOf`).
+let byApp = <R extends Row, T>(
+  rows: R[],
+  app: (row: R) => Id | undefined,
+  of: (row: R) => T,
+) => {
+  let out = new Map<string, T[]>()
+  for (let row of rows) {
+    let eid = app(row)
+    if (eid == null) continue
+    let held = out.get(idOf(eid))
+    if (held) held.push(of(row))
+    else out.set(idOf(eid), [of(row)])
+  }
+  return out
+}
+
 /** One file written into an app (written.ts `Written`), as a row reads. */
 export let writtenOf = (r: Row) => ({
   eid: r.entity.eid,
@@ -2486,6 +2504,10 @@ export let directoryRows = (rows: {
 }) => {
   let query = rows.query
   let one = async (q: Line) => (await query(q))[0]
+  // A read about each of these apps, and none about no app: an empty list
+  // would say `.app=`, which is a question about rows naming none.
+  let many = (apps: Pick<App, 'eid'>[], about: (eids: string[]) => Line) =>
+    apps.length ? query(about(apps.map((a) => a.eid))) : Promise.resolve([])
   let decided = decisions(query)
   let held = (to: string, person: string) => {
     let invited = found()?.invited
@@ -3356,15 +3378,25 @@ export let directoryRows = (rows: {
     integrations: (words?: string): Promise<Listed[]> =>
       // `listing` asks one line of text it writes itself.
       listing((q) => query(q as Line) as Promise<Bundle[]>, words),
-    switches: async (app: App) =>
-      (await query(line`.switched.app=${app.eid}`)).map((row) => ({
-        ...row,
-        switched: row.switched && {
-          ...row.switched,
-          by: row.switched.by ? idOf(row.switched.by) : null,
-          via: row.switched.via ? idOf(row.switched.via) : null,
-        },
-      })),
+    // Each app's moves of its live pointer, its `switched` rows. Of many
+    // apps at once, as of each of the readers named `…Of` below, the answer
+    // is by app eid: a caller over every app (the daily sweep, written.ts
+    // `pruned`) asks once, not once per app.
+    switches: async (app: Pick<App, 'eid'>) =>
+      (await self.switchesOf([app])).get(app.eid) ?? [],
+    switchesOf: async (apps: Pick<App, 'eid'>[]) =>
+      byApp(
+        await many(apps, (eids) => line`.switched.app=${eids}`),
+        (row) => row.switched?.app,
+        (row) => ({
+          ...row,
+          switched: row.switched && {
+            ...row.switched,
+            by: row.switched.by ? idOf(row.switched.by) : null,
+            via: row.switched.via ? idOf(row.switched.via) : null,
+          },
+        }),
+      ),
     // What was written into an app's files (drafts.ts): every row it keeps,
     // or one draft's alone. Never cached: a write reads its own draft back.
     written: async (app: App, draft?: string) =>
@@ -3373,10 +3405,24 @@ export let directoryRows = (rows: {
           sub(draft ? line`&.written.draft=${draft}` : NONE)
         }`,
       )).map(writtenOf),
+    // What every row an app's history keeps names, and no more: each write's
+    // path, the shas it left and replaced, when, and in which draft. The
+    // daily sweep marks from every app's whole history (written.ts
+    // `pruned`), and the rest of a row is most of its weight.
+    marks: async (app: Pick<App, 'eid'>) =>
+      (await query(
+        line`.written.app=${app.eid}&.fields=written.path,written.sha,written.was,written.at,written.draft`,
+      )).map(writtenOf),
     // An app's open drafts (written.ts `draftsOf`), each its `app_draft`
     // row. Never cached: a write chooses among them.
-    drafts: async (app: App) =>
-      (await query(line`.app_draft.app=${app.eid}`)).map(appDraftOf),
+    drafts: async (app: Pick<App, 'eid'>) =>
+      (await self.draftsOf([app])).get(app.eid) ?? [],
+    draftsOf: async (apps: Pick<App, 'eid'>[]) =>
+      byApp(
+        await many(apps, (eids) => line`.app_draft.app=${eids}`),
+        (row) => row.app_draft?.app,
+        appDraftOf,
+      ),
     // A released draft's preview rows kept on its branch, by the draft's
     // eid (draft-merge.ts `DraftRows`); none once merged or discarded.
     draftRows: async (app: App, draft: string) => {
@@ -3420,9 +3466,16 @@ export let directoryRows = (rows: {
     // from them (D-34942). Never cached: a deploy reads its own versions back
     // the moment it writes one.
     deploys: async (app: Pick<App, 'eid'>) =>
-      (await query(line`.deploy.app=${app.eid}&?created`))
-        .map(deployOf)
-        .sort((a, b) => b.version - a.version),
+      (await self.deploysOf([app])).get(app.eid) ?? [],
+    deploysOf: async (apps: Pick<App, 'eid'>[]) => {
+      let all = byApp(
+        await many(apps, (eids) => line`.deploy.app=${eids}&?created`),
+        (row) => row.deploy?.app,
+        deployOf,
+      )
+      for (let held of all.values()) held.sort((a, b) => b.version - a.version)
+      return all
+    },
     // When each app of a space was made and last put live, and by whom
     // (T-151161): its `created` and `last_deploy`, and for an app last
     // deployed before `last_deploy` was kept, its newest release's `created`.
@@ -3881,6 +3934,35 @@ export let directoryRows = (rows: {
     // round trips where the whole answer is three (T-35431).
     seats: async (person: string, role?: Role): Promise<Seat[]> =>
       await decided.seats(person, role),
+    // The spaces out of the trash that each of these people owns, by person,
+    // the meta space left out: what the daily sweep asks of every newcomer
+    // past their keeping (newcomer.ts `unkept`). The spaces are asked first,
+    // so a day when every one of theirs is already in the trash costs one
+    // read that finds none, however many newcomers there have been.
+    standing: async (people: string[]): Promise<Map<string, Space[]>> => {
+      let out = new Map<string, Space[]>()
+      if (!people.length) return out
+      let spaces = new Map(
+        (await query(
+          line`.space&!trashed&.members_space.member.person=${people}&${
+            sub(SPACE_ABOUT)
+          }`,
+        )).map(spaceOf).filter((s) => s.slug != META.space)
+          .map((s) => [s.eid, s]),
+      )
+      if (!spaces.size) return out
+      let at = [...spaces.keys()]
+      let seats = await query(
+        line`.member.space=${at}&.member.person=${people}&.member.role=owner`,
+      )
+      for (let { member } of seats) {
+        let space = member && spaces.get(idOf(member.space))
+        if (!member || !space) continue
+        let person = idOf(member.person)
+        out.set(person, [...out.get(person) ?? [], space])
+      }
+      return out
+    },
     // Every seat, the meta space's among them: the same read, and what says
     // whether this person may address the platform's own store (agent.ts
     // `spoken`), which is a seat in `yak` like any other.

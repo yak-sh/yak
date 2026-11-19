@@ -504,20 +504,20 @@ export let keep = async (
 }
 
 /**
- * The newcomers who came in more than KEEPING ago, each with the spaces they
- * own, in the trash or not. Keeping moves a newcomer's owner seats to
- * whoever signed in (`keep`) and the newcomer goes, as they go when their
- * space is erased (erase.ts `vacated`), so a newcomer still here is one
- * nobody kept, and one holding nothing is one whose going died halfway.
+ * The newcomers who came in more than KEEPING ago and still own a space out
+ * of the trash, each with those spaces. Keeping moves a newcomer's owner
+ * seats to whoever signed in (`keep`) and the newcomer goes, as they go when
+ * their space is erased (erase.ts `vacated`), so a newcomer still here is
+ * one nobody kept. One whose spaces are all in the trash is owed nothing.
  */
 export let unkept = async (env: Env, dir: Directory, now = new Date()) => {
   let since = now.getTime() - KEEPING
   let people = (await meta(env).query('.newcomer ?email ?phone') as Row[])
     .filter((r) => newcomerIs(r) && Date.parse(r.newcomer!.at ?? '') <= since)
     .map((r) => r.entity.eid)
-  let seats = await Promise.all(people.map((p) => dir.seats(p, 'owner')))
-  return people.map((person, i) => ({
-    person,
-    spaces: seats[i].map((s) => s.space),
-  }))
+  let held = await dir.standing(people)
+  return people.flatMap((person) => {
+    let spaces = held.get(person)
+    return spaces ? [{ person, spaces }] : []
+  })
 }
