@@ -2,7 +2,9 @@
 // says back up its tunnel. A session standing here for a conversation held on
 // the tunnel's platform (@yaks/session `standIn`, at ./routes.ts `DOOR`) has
 // no process to hear a knock with, so a knock at it is news for that
-// conversation: `tunnel_tell` gives its words to the platform, as the
+// conversation. Only one held with the machine's person is told, since it is
+// told through their own connection (a space that adopted this machine's
+// tunnel but is somebody else's has no such conversation there): `tunnel_tell` gives its words to the platform, as the
 // machine's person through their own connection to it, naming the
 // conversation and the knock, and marks the knock said. yaks.app takes it in
 // as a request on the Operator's `machine` channel (workers/yak/tunnel.ts),
@@ -51,7 +53,8 @@ let comp = (b: Bundle | undefined, name: string): Comp =>
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
 
 /** What the knock `eid` tells the platform, or nothing where it is said
- * already or is not at a session standing at this door for a conversation. */
+ * already or is not at a session standing at this door for a conversation
+ * held with the machine's person (`session.person`). */
 export let telling = async (
   g: Pick<Graph, 'get'>,
   eid: Eid,
@@ -61,7 +64,9 @@ export let telling = async (
   let [at] = await g.get([str(comp(knock, 'knock').target)], ['session'])
   let session = comp(at, 'session')
   let conversation = str(session.source)
-  if (session.door != DOOR || !conversation) return
+  // Only a conversation held with the machine's person is told: it is told
+  // through their own connection, and the platform holds nobody else's there.
+  if (session.door != DOOR || !conversation || !session.person) return
   let about = str(comp(knock, 'knock').about)
   return {
     conversation,

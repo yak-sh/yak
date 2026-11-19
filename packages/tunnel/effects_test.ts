@@ -113,3 +113,10 @@ test('a knock at a session of this machine tells the platform nothing', async ()
   await o.knock('k1', 'run')
   equal(o.told, [])
 })
+
+test('a knock at a conversation held with somebody else tells the platform nothing: the machine speaks as its own person', async () => {
+  let o = await office()
+  let { via } = (await o.asked(HIS, 'u-someone-else'))!
+  await o.knock('k1', via!)
+  equal(o.told, [])
+})
