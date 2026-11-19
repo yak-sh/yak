@@ -140,10 +140,13 @@ test('trash releases the slug while retaining every owned byte and store', async
     'kept',
   )
   assertEquals(await text(blobs, `${slug}/notes/blobs/image`), 'kept')
-  // Its store is kept, answering nothing while it is in the trash.
+  // Its store is kept, answering nothing but the call that brings it back.
   let words = await appStore(env.STORE, space, kept)('/vocab', {}, by)
   assertEquals(words.status, 404)
-  await words.body?.cancel()
+  assertStringIncludes(
+    (await words.json()).message,
+    `app_restore(space: '${slug}', app: 'notes')`,
+  )
 })
 
 test('restore returns to the old address when it is free', async () => {

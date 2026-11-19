@@ -187,6 +187,7 @@ let VOUCH = [
   'x-yak-access',
   'x-yak-policy',
   'x-yak-mail',
+  'x-yak-at',
   'x-yak-phone',
   'x-yak-release',
   'x-yak-speaks',
@@ -221,6 +222,10 @@ export type Served = {
   space?: string
   access: string
   mail?: string
+  /** the app's address as the directory has it now, `<space>/<app>`: what
+   * a store asleep in the trash names when it says how to bring it back
+   * (graph.ts `#missing`) */
+  at?: string
   /** the app's own number, empty when it has none (app-texts.ts) */
   phone?: string
   release?: string
@@ -245,6 +250,7 @@ let vouched = (req: Request, name: string, app?: Served) => {
   req.headers.set('x-yak-access', app.access)
   if (app.policy != null) req.headers.set('x-yak-policy', String(app.policy))
   if (app.mail) req.headers.set('x-yak-mail', app.mail)
+  if (app.at) req.headers.set('x-yak-at', app.at)
   // Said even when empty, so a number taken away is heard.
   if (app.phone != null) req.headers.set('x-yak-phone', app.phone)
   if (app.release != null) req.headers.set('x-yak-release', app.release)

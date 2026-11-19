@@ -21,6 +21,7 @@ import {
   type App,
   appStore,
   type Directory,
+  inTrash,
   META,
   META_STORE,
   type Page,
@@ -548,11 +549,7 @@ let awake = (space: Space, app?: App) => {
     )
   }
   if (app?.trashed) {
-    throw refuse(
-      'conflict',
-      `${space.slug}/${app.slug} is in the trash — app_restore(space: '${space.slug}', app: ` +
-        `'${app.slug}') brings it back`,
-    )
+    throw refuse('conflict', inTrash(`${space.slug}/${app.slug}`))
   }
 }
 

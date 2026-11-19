@@ -1,7 +1,7 @@
 import { kvStorage } from './binding-probe.ts'
 import { servingAuthority } from './app-serving-authority.ts'
 import { copyOf, servingDirectory } from './directory-copy.ts'
-import { fetch as directoryFetch } from './directory.ts'
+import { fetch as directoryFetch, inTrash } from './directory.ts'
 import { BRANCH } from './door.ts'
 import type { Driver } from '@yaks/sql'
 // App graph lifecycle over RAM rows, or private SQLite for storage behavior. The production declaration
@@ -302,7 +302,10 @@ export let lifecycleStores = (
               request.method == 'POST')
           ) {
             return json(
-              { error: 'NotFound', message: 'app is in the trash' },
+              {
+                error: 'NotFound',
+                message: inTrash(request.headers.get('x-yak-at')),
+              },
               404,
             )
           }

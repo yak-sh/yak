@@ -1823,9 +1823,22 @@ let served = (space: Space, app: App, env: HostEnv) => ({
   space: space.eid,
   access: app.access,
   mail: mailbox(space, app, env),
+  at: `${space.slug}/${app.slug}`,
   phone: app.phone ?? '',
   ...app.branch != null ? { branch: app.branch } : {},
 })
+
+/** What is said of an app in the trash, at `<space>/<app>`: where it is and
+ * the call that brings it back. The kernel's doors say it before they reach
+ * the store (tool.ts `awake`), and a store asleep in the trash says it to
+ * whatever reaches it anyway (graph.ts `#missing`), told its address on every
+ * request (`served`). Without an address it can only say where it is. */
+export let inTrash = (at?: string | null) => {
+  let [space, app] = at?.split('/') ?? []
+  return app
+    ? `${at} is in the trash — app_restore(space: '${space}', app: '${app}') brings it back`
+    : 'this app is in the trash — app_list lists the trash, and app_restore brings an app back'
+}
 
 /**
  * Which of its declarations an app's store serves: the one a borrowing deploy

@@ -427,7 +427,7 @@ import {
 } from './mover.ts'
 import { weighed } from './meter.ts'
 import { embedder, ranking, SPACE, texts, withheld } from './embedding.ts'
-import { directory, fetch as directoryFetch } from './directory.ts'
+import { directory, fetch as directoryFetch, inTrash } from './directory.ts'
 import {
   isRetired,
   RECEIPTS,
@@ -1311,8 +1311,11 @@ export class Store extends Durable {
     )
   }
 
-  #missing() {
-    return json({ error: 'NotFound', message: 'app is in the trash' }, 404)
+  // Asleep in the trash: the caller is told the call that wakes it, at the
+  // address the kernel says the app has now (door.ts `Served.at`).
+  #missing(request: Request) {
+    let message = inTrash(request.headers.get('x-yak-at'))
+    return json({ error: 'NotFound', message }, 404)
   }
 
   async #start(request?: Request) {
@@ -4798,7 +4801,7 @@ export class Store extends Durable {
         await this.#ctx.storage.deleteAll()
         return json({ ok: true })
       }
-      return this.#missing()
+      return this.#missing(request)
     }
     // A stopped object (`#ceiling`) answers a read at once with how long to
     // wait, and keeps a person's write for the window's end (`#write`), which
