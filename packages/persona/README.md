@@ -119,9 +119,10 @@ project's personas are written into its checkout:
 - every other persona whose `home` is the project, or a sub-project landing in
   its checkout (below), is `.tasks/personas/<name>.md`, which a
   `.claude/agents/<name>.md` links to. `<name>` is the persona's
-  [@yaks/alias](../alias) name, or its id. The file opens with the frontmatter a
-  Claude agent file needs (`name`, `description`), and leaves out what
-  `AGENTS.md` already says, since the two are read together.
+  [@yaks/alias](../alias) name, or its id; an alias that is itself an id (an old
+  number kept when a series was renumbered) is not a name. The file opens with
+  the frontmatter a Claude agent file needs (`name`, `description`), and leaves
+  out what `AGENTS.md` already says, since the two are read together.
 
 Each file is `voice`'s text under a line naming the persona it was generated
 from. The checkout is the main worktree of the project's
@@ -132,8 +133,11 @@ last had.
 
 The files are a write-only [@yaks/mirror](../mirror) binding: the graph owns
 them. A hand edit is put back; one made while the graph also moved is left and
-reported; the file of a renamed or deleted persona is removed. What each file
-last agreed on is kept in `mirror/personas.json` beside the database.
+reported; the file of a renamed or deleted persona is removed. The links in
+`.claude/agents` follow the files: each specialist's is made, and a link into
+`.tasks/personas` that no file is named for is removed, so a renamed persona's
+link moves with its file. Anything else in `.claude/agents` is left alone. What
+each file last agreed on is kept in `mirror/personas.json` beside the database.
 
 `persona_sync` writes them (`check` reports what would change instead). A host
 keeps them current after every write that touches a persona or a document one

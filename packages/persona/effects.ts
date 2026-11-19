@@ -26,7 +26,7 @@ import type { Comp, Eid } from '@yaks/graph'
 import { EDGE } from '@yaks/edge'
 import { DOC } from '@yaks/doc'
 import { sync } from '@yaks/mirror'
-import { personaMirror, remembered } from './files.ts'
+import { link, personaMirror, remembered } from './files.ts'
 import {
   skillEffects,
   type SkillHost,
@@ -89,7 +89,7 @@ export let effects = (
       let m = await personaMirror(host.graph, remembered(db))
       said = m.said
       let done = await sync(m.binding)
-      for (let f of done.failed) {
+      for (let f of [...done.failed, ...(await link(m.links)).failed]) {
         console.warn('@yaks/persona files —', f)
         await host.report?.(new Error(`persona files: ${f}`), {
           tags: { step: 'persona_files' },

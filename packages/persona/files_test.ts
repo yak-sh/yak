@@ -6,7 +6,7 @@ import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { memo, sync } from '@yaks/mirror'
 import { checkout, fleet, nested } from './testing.ts'
-import { personaFiles, personaMirror } from './files.ts'
+import { link, personaFiles, personaMirror } from './files.ts'
 
 let then = (g: Graph, ...bundles: Bundle[]): Graph => (g.apply(bundles), g)
 
@@ -58,6 +58,15 @@ test('a specialist with no name is named for its id', () => {
   assertMatch([...unnamedTexts.keys()][1], /\/personas\/n-\d+\.md$/)
 })
 
+test('an id kept as an alias is no name: the specialist keeps its own', async () => {
+  let by = await texts(then(fleet('/r'), {
+    entity: { eid: 'k9' },
+    key: { of: 'n2', value: 'B-4568' },
+    alias: {},
+  }))
+  assert(by.has('/r/.tasks/personas/coder.md'), [...by.keys()].join())
+})
+
 test('an archived project keeps what it last had', async () => {
   let archived = then(fleet('/r'), { entity: { eid: 'p1' }, archived: {} })
   assertEquals((await personaFiles(archived)).files, [])
@@ -96,6 +105,40 @@ test('a sync writes the files, removes a stale one, then has nothing to do', asy
     assertEquals(first.removed, [`${root}/.tasks/personas/gone.md`])
     let again = await sync((await personaMirror(g, mem)).binding)
     assertEquals([again.wrote, again.removed], [[], []])
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
+})
+
+test("a specialist's link follows its file; a person's own agent stays", async () => {
+  let root = Deno.makeTempDirSync()
+  try {
+    let agents = `${root}/.claude/agents`
+    Deno.mkdirSync(agents, { recursive: true })
+    Deno.symlinkSync('../../.tasks/personas/old.md', `${agents}/old.md`)
+    Deno.symlinkSync('../../elsewhere.md', `${agents}/theirs.md`)
+    Deno.writeTextFileSync(`${agents}/mine.md`, 'mine\n')
+    let g = fleet(root)
+    let pass = async () => {
+      let m = await personaMirror(g, memo(`${root}/memo.json`))
+      await sync(m.binding)
+      return link(m.links)
+    }
+    let first = await pass()
+    assertEquals(first, {
+      linked: [`${agents}/coder.md`],
+      unlinked: [`${agents}/old.md`],
+      failed: [],
+    })
+    assertMatch(
+      Deno.readTextFileSync(`${agents}/coder.md`),
+      /^---\nname: coder/,
+    )
+    assertEquals(
+      [...Deno.readDirSync(agents)].map((e) => e.name).sort(),
+      ['coder.md', 'mine.md', 'theirs.md'],
+    )
+    assertEquals(await pass(), { linked: [], unlinked: [], failed: [] })
   } finally {
     Deno.removeSync(root, { recursive: true })
   }

@@ -14,7 +14,7 @@ import { argsOf } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
 import { plan, sync } from '@yaks/mirror'
-import { personaMirror, remembered } from './files.ts'
+import { link, personaMirror, remembered } from './files.ts'
 import { voice } from './voice.ts'
 import { wear } from './worn.ts'
 
@@ -29,11 +29,16 @@ let CURRENT = 'every persona file is current'
 // What a sync did. A file that could not be written is not the caller's to
 // fix, so it throws, and the call is recorded as failed.
 let synced = async (graph: Graph, db?: string): Promise<string> => {
-  let done = await sync((await personaMirror(graph, remembered(db))).binding)
-  if (done.failed.length) throw new Error(done.failed.join('\n'))
+  let m = await personaMirror(graph, remembered(db))
+  let done = await sync(m.binding)
+  let links = await link(m.links)
+  let failed = [...done.failed, ...links.failed]
+  if (failed.length) throw new Error(failed.join('\n'))
   let lines = [
     ...done.wrote.map((p) => `wrote ${p}`),
     ...done.removed.map((p) => `removed ${p}`),
+    ...links.linked.map((p) => `linked ${p}`),
+    ...links.unlinked.map((p) => `unlinked ${p}`),
     ...done.conflicts.map((p) =>
       `left ${p}: edited by hand while the graph moved; delete it to take ` +
       "the graph's"
@@ -43,15 +48,19 @@ let synced = async (graph: Graph, db?: string): Promise<string> => {
 }
 
 // What a sync would do, without doing it.
-let drift = async (graph: Graph, db?: string): Promise<string> =>
-  (await plan((await personaMirror(graph, remembered(db))).binding))
-    .filter((p) => p.act != 'same')
-    .map((p) =>
-      `${
-        p.act == 'conflict' ? 'conflict' : p.text == null ? 'remove' : 'write'
-      } ${p.path}`
-    )
-    .join('\n') || CURRENT
+let drift = async (graph: Graph, db?: string): Promise<string> => {
+  let m = await personaMirror(graph, remembered(db))
+  return [
+    ...(await plan(m.binding))
+      .filter((p) => p.act != 'same')
+      .map((p) =>
+        `${
+          p.act == 'conflict' ? 'conflict' : p.text == null ? 'remove' : 'write'
+        } ${p.path}`
+      ),
+    ...m.links.map((l) => `${l.to == null ? 'unlink' : 'link'} ${l.path}`),
+  ].join('\n') || CURRENT
+}
 
 /** The implementations behind the tools ./vocab.json declares. The host's
  * config names the database, beside which `persona_sync` remembers what each

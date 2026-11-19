@@ -2,7 +2,7 @@
 // a harness started there finds them. The persona a project `contains` is
 // `.tasks/AGENTS.md`, which a repository's CLAUDE.md and AGENTS.md link to,
 // and every other persona whose `home` is the project is
-// `.tasks/personas/<name>.md`, which a `.claude/agents/<name>.md` links to. A
+// `.tasks/personas/<name>.md`, which `.claude/agents/<name>.md` links to. A
 // sub-project without a checkout of its own lands in its nearest ancestor's,
 // so its personas, its common one included, are specialists there.
 //
@@ -20,6 +20,11 @@
 // it is. Every file already under an owned `.tasks` directory is in the binding
 // too, so a renamed or deleted persona's file is removed.
 //
+// The links in `.claude/agents` follow the files: each specialist gets one,
+// and a link into `.tasks/personas` that no file is named for is removed, so a
+// renamed persona's link moves with its file. Anything else there is a
+// person's own agent, left alone.
+//
 // Which checkout is borrowed, not declared here: a project's `repo.repository`
 // (@yaks/project) and that repository's main worktree (@yaks/git), the one
 // whose own Git directory is the repository's common one. Every linked
@@ -33,7 +38,7 @@ import { type Binding, memo, present as exists } from '@yaks/mirror'
 import { and, eq, every, type Input, list, present } from '@yaks/query'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { DOC, TITLE } from '@yaks/doc'
-import { human } from '@yaks/id'
+import { human, parse } from '@yaks/id'
 import { lineage } from '@yaks/project'
 import { PERSONA } from './comp.ts'
 import { voice, type Worn } from './voice.ts'
@@ -90,9 +95,10 @@ let checkouts = async (g: Graph): Promise<Map<Eid, string>> => {
 
 // The name a persona registers under as a Claude agent: its alias
 // (@yaks/alias keeps one as a `key`), reduced to claude's charset, or its
-// lowered id where it has none. The file is named for it too, because claude
-// keys an agent by its frontmatter `name`, and a harness resolves the file by
-// its own.
+// lowered id where it has none. An alias that is itself an id (`N-4568`, an
+// old number kept when a series was renumbered) is no name. The file is named
+// for it too, because claude keys an agent by its frontmatter `name`, and a
+// harness resolves the file by its own.
 let names = async (g: Graph, eids: Eid[]): Promise<Map<Eid, string>> => {
   let out = new Map<Eid, string>()
   if (!eids.length || !g.vocab.comp('alias') || !g.vocab.comp('key')) {
@@ -100,9 +106,9 @@ let names = async (g: Graph, eids: Eid[]): Promise<Map<Eid, string>> => {
   }
   let keys = (await g.storage.read(
     and(eq('key.of', value(eids)), present('alias')),
-  )).map((b) => comp(b, 'key')).sort((a, b) =>
-    str(a.value).localeCompare(str(b.value))
-  )
+  )).map((b) => comp(b, 'key'))
+    .filter((k) => !parse(str(k.value)))
+    .sort((a, b) => str(a.value).localeCompare(str(b.value)))
   for (let k of keys) {
     if (!out.has(str(k.of))) out.set(str(k.of), str(k.value))
   }
@@ -201,13 +207,15 @@ export let remembered = (
   )
 
 /** The persona files as a write-only @yaks/mirror binding — hand it to
- * `sync` to write them, or to `plan` to see what would change — and every
- * entity they say something about. */
+ * `sync` to write them, or to `plan` to see what would change — the
+ * `.claude/agents` links they want made or removed (hand those to `link`),
+ * and every entity they say something about. */
 export let personaMirror = async (
   g: Graph,
   memory: Pick<Binding, 'agreed' | 'remember'>,
-): Promise<{ binding: Binding; said: Set<Eid> }> => {
-  let { files, roots, said } = await personaFiles(g)
+): Promise<{ binding: Binding; links: Link[]; said: Set<Eid> }> => {
+  let all = await personaFiles(g)
+  let { files, roots, said } = all
   let paths = new Set([...files.map((f) => f.path), ...roots.flatMap(held)])
   return {
     binding: {
@@ -217,6 +225,99 @@ export let personaMirror = async (
         Promise.resolve(new Map(files.map((f) => [f.path, f.text]))),
       ...memory,
     },
+    links: agentLinks(all),
     said,
   }
+}
+
+let PERSONAS = '/.tasks/personas/'
+
+/** One `.claude/agents` link a sync makes, or removes where `to` is absent:
+ * the persona file it names, relative to the link. */
+export type Link = { path: string; to?: string }
+
+// Whether anything is at a path, a dangling link included.
+let taken = (path: string): boolean => {
+  try {
+    return !!fs.lstatSync(path)
+  } catch {
+    return false
+  }
+}
+
+let linkOf = (path: string): string | undefined => {
+  try {
+    return fs.readLinkSync(path)
+  } catch {
+    return undefined
+  }
+}
+
+/** The `.claude/agents` links that differ from what the persona files want:
+ * a specialist's link missing or naming another file is made, and a link
+ * into `.tasks/personas` that no file wants is removed. A file of a person's
+ * own at a link's path is left. */
+export let agentLinks = ({ files, roots }: Files): Link[] => {
+  let want = new Map<string, string>()
+  for (let { path } of files) {
+    let at = path.indexOf(PERSONAS)
+    if (at < 0) continue
+    let name = path.slice(at + PERSONAS.length)
+    want.set(
+      `${path.slice(0, at)}/.claude/agents/${name}`,
+      `../..${PERSONAS}${name}`,
+    )
+  }
+  let out: Link[] = []
+  for (let [path, to] of want) {
+    let now = linkOf(path)
+    if (now == to || now == null && taken(path)) continue
+    out.push({ path, to })
+  }
+  for (let root of roots) {
+    let dir = `${root.slice(0, -'/.tasks'.length)}/.claude/agents`
+    let entries: fs.DirEntry[] = []
+    try {
+      entries = [...fs.readDirSync(dir)]
+    } catch { /* no agents here */ }
+    for (let e of entries) {
+      let path = `${dir}/${e.name}`
+      let to = e.isSymlink ? linkOf(path) : undefined
+      if (!to || want.has(path)) continue
+      if (fs.resolve(dir, to).startsWith(`${root}/personas/`)) {
+        out.push({ path })
+      }
+    }
+  }
+  return out.sort((a, b) => a.path.localeCompare(b.path))
+}
+
+/** Make and remove the links: each made one is swapped in by a rename, so a
+ * harness reading it sees the old link or the new one. A failure on one link
+ * never stops the others. */
+export let link = async (
+  links: Link[],
+): Promise<{ linked: string[]; unlinked: string[]; failed: string[] }> => {
+  let out = {
+    linked: [] as string[],
+    unlinked: [] as string[],
+    failed: [] as string[],
+  }
+  for (let { path, to } of links) {
+    try {
+      if (to == null) {
+        await fs.remove(path)
+        out.unlinked.push(path)
+        continue
+      }
+      await fs.mkdir(fs.dirname(path), { recursive: true })
+      let tmp = `${path}.${crypto.randomUUID()}.tmp`
+      await fs.symlink(to, tmp)
+      await fs.rename(tmp, path)
+      out.linked.push(path)
+    } catch (e) {
+      out.failed.push(`${path}: ${(e as Error).message}`)
+    }
+  }
+  return out
 }
