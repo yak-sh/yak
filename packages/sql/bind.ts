@@ -5897,6 +5897,17 @@ let visible = (
         ? c.clauses.every(predicates)
         : c.kind == 'pred'
     if (comp == 'entity' && query && predicates(query) && !masked && !graves) {
+      // A screen reads the scope as a set of ids, whole or keyed by the outer
+      // row's, and a component driving the scope is still sought by that id
+      // through its key, so the policy's component drives it: read from the
+      // spine without statistics, the scope walks every entity as soon as the
+      // spine is wide enough that its eid index covers the read (T-1227). A
+      // statement that names its entities (by eid, or a page in the spine's
+      // order) seeks them on the spine, so it reads the scope a row at a time.
+      let ids = correlated || screening && !opts.eids &&
+          !flattened(ast.clauses).some((c) =>
+            c.kind == 'pred' && !c.not && c.path.join('.') == 'entity.eid'
+          )
       let selected = bound(
         query,
         vocab,
@@ -5911,7 +5922,7 @@ let visible = (
         },
         base,
         [],
-        { correlated: true },
+        { correlated: !ids },
       )
       return {
         name,

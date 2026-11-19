@@ -457,11 +457,15 @@ export let owner: Column = {
   ref: SPINE_REF,
 }
 export let text = (name: string): Column => ({ name, type: 'text' })
+/** The spine as ./ddl.ts raises it, column for column: the planner sizes a
+ * read by its row's width, so a narrower spine plans what no store does. */
 export let SPINE = raised(
   'entity',
   { name: 'id', type: 'integer', pk: true },
   { name: 'eid', type: 'text', notNull: true, unique: true },
   { name: 'num', type: 'integer' },
+  { name: 'archetype', type: 'integer', ref: SPINE_REF },
+  { name: 'prefix', type: 'text' },
 )
 export let TOMBSTONE = raised('tombstone', owner, {
   name: 'deleted_at',
