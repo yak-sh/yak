@@ -291,7 +291,8 @@ export let str = (description: string) => ({ type: 'string', description })
 // The two arguments nearly every tool takes, so each word here is sent once
 // per tool on every listing.
 export let SPACE = str(
-  'the space slug, as in <space>.yaks.app. If optional and omitted: the ' +
+  'the space slug, as in <space>.yaks.app: one of the spaces you own or ' +
+    'hold a seat in, as app_list names them. If optional and omitted: the ' +
     "space holding the app, else an Operator's own space, else the " +
     "person's only space; a person who owns several spaces names one",
 )
