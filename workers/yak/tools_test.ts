@@ -7,6 +7,7 @@ import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
+  assertMatch,
   assertRejects,
   assertStringIncludes,
   assertThrows,
@@ -432,19 +433,13 @@ test('the tool teaches every op it answers', () => {
   for (let arg of ['find', 'replace', 'url', 'sha', 'at', 'draft']) {
     assertEquals(typeof input.properties[arg], 'object', `${arg} is described`)
   }
-  for (
-    let word of [
-      'sha256',
-      'parses',
-      'op: patch',
-      'op: fetch',
-      // Every destructive op names its way back in the description itself
-      // (T-34508, T-34509): an agent reading the tool is told before it
-      // hesitates, not after.
-      'op: history',
-      'op: restore',
-    ]
-  ) {
+  // Every op is taught in the description itself, the destructive ones with
+  // their way back (history, restore; T-34508, T-34509): an agent reading the
+  // tool is told before it hesitates, not after.
+  for (let op of input.properties.op.enum!) {
+    assertMatch(app_files.description, new RegExp(`\\b${op}( \\([^)]*\\))?: `))
+  }
+  for (let word of ['sha256', 'parses']) {
     assertStringIncludes(app_files.description, word)
   }
 })
