@@ -3,6 +3,9 @@
 What it is and what every binding is for: `wrangler.toml`. The doors:
 `index.ts`.
 
+New code goes in a @yaks/* package, never here: this Worker only wires packages
+together (M-17).
+
 Deploy is one command, from the repo root:
 
 ```sh
