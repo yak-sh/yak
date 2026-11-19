@@ -2952,16 +2952,21 @@ let selectionScreen = (
   let quiet = (frozen.extend ?? []).map(({ begin: _begin, ...rest }) => rest)
   // Extensions may retain values resolved for this query. Capture both forms
   // before a later query begins on those same compiler instances.
-  let keyed = bound(query, vocab, { ...frozen, extend: quiet }, d, [], {
-    screening,
-    correlated: true,
-  })
+  let keyed = {
+    ...bound(query, vocab, { ...frozen, extend: quiet }, d, [], {
+      screening,
+      correlated: true,
+    }),
+    cols: [raw(`${d.ownerKey('entity')} as id`)],
+    order: [],
+  }
   return {
     ...render({
       ...admits,
       cols: [raw(`${d.ownerKey('entity')} as id`)],
       order: [],
     }),
+    keyed,
     probe: (owner) =>
       exists({
         ...keyed,
@@ -5897,17 +5902,14 @@ let visible = (
         ? c.clauses.every(predicates)
         : c.kind == 'pred'
     if (comp == 'entity' && query && predicates(query) && !masked && !graves) {
-      // A screen reads the scope as a set of ids, whole or keyed by the outer
-      // row's, and a component driving the scope is still sought by that id
-      // through its key, so the policy's component drives it: read from the
-      // spine without statistics, the scope walks every entity as soon as the
-      // spine is wide enough that its eid index covers the read (T-1227). A
-      // statement that names its entities (by eid, or a page in the spine's
-      // order) seeks them on the spine, so it reads the scope a row at a time.
-      let ids = correlated || screening && !opts.eids &&
-          !flattened(ast.clauses).some((c) =>
-            c.kind == 'pred' && !c.not && c.path.join('.') == 'entity.eid'
-          )
+      // An iterable screen can let a sparse policy component drive it
+      // (T-1227). A keyed screen already has its driver. Lower the policy
+      // against that key so a disjunction doesn't enumerate its candidate
+      // union before testing the key.
+      let ids = screening && !correlated && !opts.eids &&
+        !flattened(ast.clauses).some((c) =>
+          c.kind == 'pred' && !c.not && c.path.join('.') == 'entity.eid'
+        )
       let selected = bound(
         query,
         vocab,

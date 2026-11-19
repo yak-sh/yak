@@ -1,13 +1,15 @@
 // A kind screen must bound the rows ranked, even after text history grows.
 import '../sqlite/sqlitepath.ts'
-import { Database } from '@yaks/sqlite/testing'
+import { Database, stepping } from '@yaks/sqlite/testing'
 import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { driver } from '../sqlite/native.ts'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'
 import {
+  and,
   as,
   col,
+  compile,
   cross,
   type Driver,
   eq,
@@ -15,11 +17,16 @@ import {
   gt,
   insert,
   lit,
+  lt,
   op,
   render,
   select,
   table,
+  val,
 } from '@yaks/sql'
+import { parse } from '@yaks/query'
+import { loadVocab } from '@yaks/vocab'
+import { search } from './compile.ts'
 import { hits, screens, type SearchOpts } from './search.ts'
 import { seed, selected, text, vocab } from './cost_testing.ts'
 
@@ -157,4 +164,64 @@ test('a CPU search probes a whole-graph screen rather than enumerating it', () =
   })
   assertEquals(s.entities.length, 2)
   assert(s.steps < largeHistory * 60, `${s.steps} VM instructions`)
+})
+
+let { driver: owned, steps } = stepping()
+seed(owned, 1500)
+let ownedVocab = loadVocab({
+  $defs: {
+    entity: { component: true, properties: {} },
+    prose: { component: true, properties: { body: { type: 'string' } } },
+    extra: { component: true, properties: { body: { type: 'string' } } },
+    owner: {
+      component: true,
+      properties: { person: { type: 'string', ref: 'entity', index: true } },
+    },
+  },
+})
+for (let name of ['owner', 'archetype', 'quarantined']) {
+  owned.query({
+    t: 'create table',
+    name,
+    cols: [
+      { name: 'entity', type: 'integer', pk: true },
+      ...name == 'owner' ? [{ name: 'person', type: 'integer' as const }] : [],
+    ],
+  })
+}
+owned.query({
+  t: 'create index',
+  name: 'owner_person',
+  on: 'owner',
+  cols: [col('person')],
+})
+owned.query(
+  insert('entity', { id: 4000, eid: 'reader' }, { id: 4001, eid: 'other' }),
+)
+owned.query(
+  insert('owner', { entity: 2, person: 4000 }, { entity: 3, person: 4001 }, {
+    entity: 4,
+    person: null,
+  }),
+)
+owned.query(insert('tombstone', { entity: 5 }))
+owned.query(insert('archetype', { entity: 6 }))
+owned.query(insert('quarantined', { entity: 7 }))
+owned.query({
+  t: 'update',
+  table: 'prose',
+  set: { body: val('needle') },
+  where: and(gt(col('entity'), lit(2)), lt(col('entity'), lit(8))),
+})
+
+test('a ranked page joins visible owners by key even when its policy admits most of the graph', () => {
+  let before = steps()
+  let statement = compile(parse('needle .order=search .limit=2'), ownedVocab, {
+    bookkeeping: ['archetype'],
+    visibility: { entity: '(!owner|.owner.person=reader)' },
+    extend: [search(text.map((f) => ({ ...f, not: ['quarantined'] })), owned)],
+  })
+  let cost = steps() - before
+  assertEquals(owned.query(statement).map((r) => r.eid), ['near', 'far'])
+  assert(cost < 2500, `${cost} VM instructions`)
 })

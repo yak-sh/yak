@@ -52,13 +52,17 @@ import {
   lit,
   type Query,
   type Raw,
+  type Select,
   select,
   type Source,
 } from './ast.ts'
 import type { BindOpts } from './bind.ts'
 
-/** An owner-ID relation with an equivalent keyed membership predicate. */
-export type Selection = Raw & { probe?: (owner: Expr) => Expr }
+/** An owner-ID relation, with a lowering for a join or probe by owner ID. */
+export type Selection = Raw & {
+  keyed?: Select
+  probe?: (owner: Expr) => Expr
+}
 
 /** Test one owner without enumerating an iterable selection when the compiler
  * supplied its keyed form. Ordinary rendered relations keep SQL semantics. */

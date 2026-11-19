@@ -29,6 +29,7 @@ import {
   type Expr,
   fn,
   from,
+  type Join,
   join,
   lit,
   member,
@@ -118,15 +119,11 @@ export let permitted = (
     : lit(true)
 }
 
-// An owner wearing none of `not`, the components whose wearers no word search
-// finds (./fields.ts `unfound`): a seek per component, as the tombstone's is.
+// Component owner IDs are integer primary keys, so SQLite can test their
+// indexes directly for IN without building a set or running a subquery per hit.
 export let unworn = (comps: string[] = [], owner: Expr): Expr[] =>
   comps.map((comp) =>
-    not(exists(select({
-      cols: [lit(1)],
-      from: table(comp, '__unfound'),
-      where: eq(col('entity', '__unfound'), owner),
-    })))
+    not(among(owner, select({ cols: [col('entity')], from: table(comp) })))
   )
 
 // The ranked hits for a search, best first, or null when the text contains no
@@ -270,12 +267,12 @@ let best = (
   if (!t || !arms.length) return null
   let limit = opts.limit ?? 20
   let sorting = opts.plan == 'sort'
-  // A screen the compiler made tests one owner by its keyed form, a seek per
-  // posting however many owners it admits. A bare relation is read whole: a
-  // CPU sort visits every matching posting, so it is read once a statement;
-  // index-order pages keep candidate seeks for sparse paid reads.
+  // A compiler screen can join the postings by owner ID. Keep the FTS cursor
+  // first so a sparse term never walks the visibility relation to find its
+  // matches. A bare screen on the CPU sort is read once per statement.
+  let keyed = opts.screen?.keyed
   let probed = !!opts.screen?.probe
-  let screen: Cte[] = opts.screen
+  let screen: Cte[] = opts.screen && (sorting || !keyed && !probed)
     ? [{
       name: '__fts_screen',
       cols: ['id'],
@@ -283,13 +280,24 @@ let best = (
       materialized: sorting && !probed,
     }]
     : []
-  let ask = (q: Select, arm: number, named: 0 | 1): Candidate[] =>
-    db.query({ ...q, with: screen }).map((r) => ({
+  let ask = (q: Select, arm: number, named: 0 | 1): Candidate[] => {
+    let joins: Join[] = keyed
+      ? [{
+        how: 'cross',
+        src: from(keyed, '__fts_visible'),
+        on: eq(
+          col('id', '__fts_visible'),
+          col('rowid', indexName(arms[arm].name)),
+        ),
+      }]
+      : []
+    return db.query({ ...q, with: screen, joins }).map((r) => ({
       owner: Number(r.owner),
       rank: Number(r.rank),
       arm,
       named,
     }))
+  }
   let eligible = (owner: Expr) =>
     probed ? member(opts.screen!, owner) : exists(select({
       cols: [lit(1)],
@@ -322,13 +330,11 @@ let best = (
     return and(
       op('match', col(fts), val(expr)),
       permitted(name, owner, opts.screens),
-      ...unworn(arms.find((arm) => arm.name == name)!.not, owner),
-      ...opts.screen ? [eligible(owner)] : [],
-      not(exists(select({
-        cols: [lit(1)],
-        from: table('tombstone', 't'),
-        where: eq(col('entity', 't'), owner),
-      }))),
+      ...unworn(
+        ['tombstone', ...arms.find((arm) => arm.name == name)!.not ?? []],
+        owner,
+      ),
+      ...opts.screen && !keyed ? [eligible(owner)] : [],
     )
   }
   let found = arms.flatMap((arm, i) => {
