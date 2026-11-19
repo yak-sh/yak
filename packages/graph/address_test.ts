@@ -45,7 +45,7 @@ test('an id that names nothing is refused, by name', () => {
   assertThrows(
     () => g(numbered).address(['dune', 'B-7', 'B-9', 'B-10']),
     Refused,
-    'B-9, B-10 name nothing',
+    'B-9 names nothing',
   )
   assertEquals(
     g(numbered).address(['dune', 'B-7']),

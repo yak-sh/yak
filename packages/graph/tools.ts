@@ -29,6 +29,7 @@
 // declaration means validating it, which means a JSON Schema validator, which
 // has no business in a browser tab that only wants the graph. Import `@yaks/graph/tools` to get it.
 
+import { unnamed } from '@yaks/id'
 import {
   adopt,
   and,
@@ -375,9 +376,7 @@ export let runs = (seams: Seams = {}): Runs => {
       let found = new Set(rows.map((b) => b.entity.eid))
       let nothing = asked.filter((id) => !found.has(id))
       if (!nothing.length) return rows
-      let one = nothing.length == 1
-      let missing = `${nothing.join(', ')} ${one ? 'names' : 'name'} ` +
-        `nothing: no entity has ${one ? 'that id' : 'those ids'}`
+      let missing = nothing.map((id) => unnamed(id, graph.vocab)).join('; ')
       // A call naming nothing at all is told where an id that exists is
       // found: by its words, or by what it holds.
       if (!rows.length) {

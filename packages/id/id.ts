@@ -20,21 +20,68 @@ export let short = (eid: string): string =>
 export let SHORT: RegExp = /^#[0-9a-f]{6,64}$/i
 
 /**
- * What a short handle no entity here starts with is refused with: what a
- * handle is, so a caller holding one copied from another store knows why it
- * reads nothing here.
+ * What an id no entity here answers to is refused with: what that id is, so a
+ * caller holding one mistyped, or copied from another store, knows why it reads
+ * nothing here and what would. A short handle is the start of an eid; a human
+ * id is a letter the vocabulary numbers a kind in, and a number; a bare number
+ * is a number in any series; anything else was an id or a name.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { unnamed } from '@yaks/id'
+ * let v = loadVocab({
+ *   $defs: {
+ *     task: { component: true, kind: true, prefix: 'T' },
+ *     wake: { component: true, kind: true, prefix: 'W' },
+ *   },
+ * })
  * equal(
- *   unheld('#744b934dac'),
+ *   unnamed('#744b934dac'),
  *   "#744b934dac names nothing: a #… handle is the start of an entity's eid, and no entity here has an eid starting 744b934dac",
+ * )
+ * equal(
+ *   unnamed('W-99', v),
+ *   'W-99 names nothing: W- numbers each wake, and no wake here holds 99; graph_query .wake lists them',
+ * )
+ * equal(
+ *   unnamed('J-12', v),
+ *   'J-12 names nothing: no kind here is numbered J-; the letters are T- task, W- wake',
+ * )
+ * equal(unnamed('12', v), '12 names nothing: no entity here holds the number 12')
+ * equal(
+ *   unnamed('launch plan', v),
+ *   'launch plan names nothing: no entity here has that id or name; an id is a human id (T-12), a #… handle or an eid, and one from another store names nothing here',
  * )
  * ```
  */
-export let unheld = (handle: string): string =>
-  `${handle} names nothing: a #… handle is the start of an entity's eid, ` +
-  `and no entity here has an eid starting ${handle.slice(1).toLowerCase()}`
+export let unnamed = (id: string, v?: Vocab): string => {
+  let said = `${id} names nothing:`
+  if (SHORT.test(id)) {
+    return `${said} a #… handle is the start of an entity's eid, and no ` +
+      `entity here has an eid starting ${id.slice(1).toLowerCase()}`
+  }
+  let p = parse(id)
+  if (p && !p.prefix) {
+    return `${said} no entity here holds the number ${p.num}`
+  }
+  let table = v ? declared(v) : {}
+  let kind = p && Object.keys(table).find((k) => table[k] == p.prefix)
+  if (p && kind) {
+    return `${said} ${p.prefix}- numbers each ${kind}, and no ${kind} here ` +
+      `holds ${p.num}; graph_query .${kind} lists them`
+  }
+  if (p && v) {
+    let letters = Object.entries(table).sort(([, a], [, b]) => a < b ? -1 : 1)
+      .map(([k, l]) => `${l}- ${k}`)
+    return `${said} no kind here is numbered ${p.prefix}-${
+      letters.length ? `; the letters are ${letters.join(', ')}` : ''
+    }`
+  }
+  return `${said} no entity here has that id or name; an id is a human id ` +
+    `(T-12), a #… handle or an eid, and one from another store names ` +
+    `nothing here`
+}
 
 /** A short handle copied without its `#`, as a shell or a sentence leaves it:
  * hex at least as long as a uuid's first segment (`e854bf7d`), which is how an

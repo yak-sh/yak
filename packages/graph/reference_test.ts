@@ -3,6 +3,7 @@ import { equal, ok, test } from '@yaks/testing'
 import { assertRejects } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
+import { unnamed } from '@yaks/id'
 import { graph } from './graph.ts'
 import { Refused } from './errors.ts'
 import type { Comp } from './bundle.ts'
@@ -127,7 +128,7 @@ test('a reference that names nothing is refused naming its property', async () =
   equal(
     [refused.message, refused.comp, refused.prop],
     [
-      "link.to takes an entity's id or name: a name names nothing",
+      `link.to takes an entity's id or name: ${unnamed('a name')}`,
       'link',
       'to',
     ],

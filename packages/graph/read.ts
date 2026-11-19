@@ -13,7 +13,7 @@ import {
 } from '@yaks/query/core'
 import { matcher, rows as matchRows } from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
-import { BARE, SHORT, unheld } from '@yaks/id'
+import { BARE, unnamed } from '@yaks/id'
 import { starting } from '@yaks/id/graph'
 import { type Context, context, during, live, peek, scope } from '@yaks/trace'
 import { after, each, isPromise } from '@yaks/fp'
@@ -266,15 +266,7 @@ export let reader = (opts: {
         } else if (typeof eid != 'string') refusals.push(fits(id, eid))
         else found.set(id, eid)
       }
-      let handles = nothing.filter((id) => SHORT.test(id))
-      let words = nothing.filter((id) => !SHORT.test(id))
-      refusals.unshift(...handles.map(unheld))
-      if (words.length) {
-        refusals.unshift(
-          `${words.join(', ')} ${words.length == 1 ? 'names' : 'name'} ` +
-            'nothing',
-        )
-      }
+      refusals.unshift(...nothing.map((id) => unnamed(id, vocab)))
       if (refusals.length && strict != 'words') {
         throw new Refused(refusals.join('; '))
       }

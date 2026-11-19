@@ -10,6 +10,7 @@ import {
   Refused,
 } from '@yaks/graph'
 import { ram } from '@yaks/ram'
+import { unnamed } from '@yaks/id'
 import { loadVocab } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
 import { kernelDoc } from '@yaks/kernel'
@@ -182,8 +183,8 @@ for (let shell of ['absent', 'empty', 'deleted']) {
       Refused,
     )
     equal([failure.message, error.message], [
-      `filed.assignee takes an entity's id or name: ${word} names nothing`,
-      `who takes an entity's id or name: ${word} names nothing`,
+      `filed.assignee takes an entity's id or name: ${unnamed(word)}`,
+      `who takes an entity's id or name: ${unnamed(word)}`,
     ])
     equal(await ask.g.get(['Nobodyhere']), [])
     let applied = await ask.g.apply([

@@ -12,6 +12,7 @@ import type { Bundle } from './bundle.ts'
 import type { Graph } from './graph.ts'
 import { toolRow } from '@yaks/tools'
 import { loadVocab } from '@yaks/vocab'
+import { unnamed } from '@yaks/id'
 import { validateToolInput, validateToolOutput } from '@yaks/vocab/tools'
 
 type Answer = { $defs: Record<string, unknown> }
@@ -250,14 +251,13 @@ test('graph_show answers the ids that name something and says which do not', asy
   let out = await shown('b1', 'gone', 'empty', 'b2')
   assertEquals(out.map((b) => b.entity.eid), ['b1', 'b2', '$said'])
   assertEquals(out[2].content, {
-    body: 'gone, empty name nothing: no entity has those ids; the other 2 ' +
-      'are shown',
+    body: `${unnamed('gone')}; ${unnamed('empty')}; the other 2 are shown`,
   })
   assertEquals(out[2].output, { source: 'c' })
   await assertRejects(
     () => shown('gone'),
     Refused,
-    'gone names nothing: no entity has that id; graph_query by what it holds',
+    `${unnamed('gone')}; graph_query by what it holds`,
   )
   let searching = tier({ search: () => [] }).find((t) =>
     t.name == 'graph_show'
@@ -269,7 +269,7 @@ test('graph_show answers the ids that name something and says which do not', asy
         books,
       ),
     Refused,
-    'gone names nothing: no entity has that id; search finds an entity by ' +
-      'its words, and graph_query by what it holds',
+    `${unnamed('gone')}; search finds an entity by its words, and ` +
+      'graph_query by what it holds',
   )
 })
