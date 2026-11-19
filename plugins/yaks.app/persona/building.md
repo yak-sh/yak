@@ -3,7 +3,7 @@
 # (workers/yak/made.ts) shows it being made in order and in plain words. One
 # write more than writing the whole app at once costs a build about a cent:
 # the step reads the conversation from the cache ($0.10 a million tokens on
-# GPT-6.2 Sol), against the $5 a newcomer's build may spend (newcomer.ts
+# GPT-6.1 Sol), against the $5 a newcomer's build may spend (newcomer.ts
 # PER_BUILD).
 doc:
   title: 'Making a new app'

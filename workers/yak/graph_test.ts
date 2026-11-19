@@ -228,26 +228,27 @@ let viewer: Vouch = { app: APP, person: KIM, role: 'viewer', policy: 1 }
 let directory: Namespace = {
   idFromName: (n) => n,
   get: () => ({
-    fetch: async (req: Request) => {
-      let url = new URL(req.url)
-      if (url.pathname == '/used') return Response.json({ at: useUntil() })
-      let q = url.searchParams.get('q') ?? ''
-      let seat = (person: string, role: string) =>
-        q.includes(`.member.person=${person}`)
-          ? [{
-            entity: { eid: person },
-            member: { space: SPACE, person, role },
-          }]
-          : []
-      return Response.json([
-        ...q.includes(`.entity.eid=${APP}`)
-          ? [{ entity: { eid: APP }, app: { space: SPACE, access: 'private' } }]
-          : [],
-        ...seat(ADA, 'owner'),
-        ...seat(KIM, 'viewer'),
-      ], { headers: { [EPOCH]: '1' } })
-    },
+    fetch: (req: Request) => Promise.resolve(answer(req)),
   }),
+}
+let answer = (req: Request) => {
+  let url = new URL(req.url)
+  if (url.pathname == '/used') return Response.json({ at: useUntil() })
+  let q = url.searchParams.get('q') ?? ''
+  let seat = (person: string, role: string) =>
+    q.includes(`.member.person=${person}`)
+      ? [{
+        entity: { eid: person },
+        member: { space: SPACE, person, role },
+      }]
+      : []
+  return Response.json([
+    ...q.includes(`.entity.eid=${APP}`)
+      ? [{ entity: { eid: APP }, app: { space: SPACE, access: 'private' } }]
+      : [],
+    ...seat(ADA, 'owner'),
+    ...seat(KIM, 'viewer'),
+  ], { headers: { [EPOCH]: '1' } })
 }
 let env = { STORE: directory }
 

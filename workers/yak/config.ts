@@ -395,7 +395,7 @@ export let agents: {
 } = {
   builder: 'workers-ai',
   operator: [
-    { provider: 'openai', model: 'gpt-6.2-sol', delegate: 'gpt-6.2-astra' },
+    { provider: 'openai', model: 'gpt-6.1-sol', delegate: 'gpt-6-astra' },
     {
       provider: 'anthropic',
       model: 'claude-sonnet-5-5',

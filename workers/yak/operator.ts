@@ -712,8 +712,8 @@ export let platformBug = (ctx: Ctx, space: Space): Tool => ({
 })
 
 /** What the Operator runs on (config.ts `agents`): the first choice whose
- * provider the Worker holds every credential of, by default GPT-6.2 Sol on
- * the Operator's OpenAI key, handing coding and tricky work to GPT-6.2 Astra;
+ * provider the Worker holds every credential of, by default GPT-6.1 Sol on
+ * the Operator's OpenAI key, handing coding and tricky work to GPT-6 Astra;
  * without that key Sonnet on the platform's Anthropic key, handing it to
  * Opus; and without either GLM on Workers AI. `OPERATOR_MODEL` and
  * `OPERATOR_DELEGATE` name other models of the provider chosen. */

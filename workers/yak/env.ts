@@ -287,7 +287,7 @@ export type Env = {
   AI_GATEWAY?: string
   OPENAI_API_KEY?: string
   // The key scoped to OpenAI text models, for Operator conversations
-  // (config.ts `operatorProviders`): with it the Operator runs on GPT-6.2 Sol.
+  // (config.ts `operatorProviders`): with it the Operator runs on GPT-6.1 Sol.
   // OPENAI_API_KEY remains the image service's credential.
   OPENAI_OPERATOR_API_KEY?: string
   // The "yaks.app models" project's key, limited to the OpenAI models that
