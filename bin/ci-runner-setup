@@ -9,6 +9,7 @@
 #
 # Rerunning it is safe: it installs what is missing and registers only once.
 # The VM gets what the gate uses and nothing else: git, Deno, Node for pnpm,
+# a C compiler for the pinned SQLite (bin/sqlite.ts),
 # no Chrome, no service account, no keys. Its disk keeps the Deno cache and
 # the pnpm store between runs.
 set -eu
@@ -17,7 +18,7 @@ token=$1
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
-apt-get install -yq git curl unzip perl sqlite3 ca-certificates jq
+apt-get install -yq git curl unzip perl sqlite3 ca-certificates jq build-essential
 command -v node >/dev/null || {
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt-get install -yq nodejs

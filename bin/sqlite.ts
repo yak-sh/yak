@@ -31,7 +31,14 @@
 
 export let VERSION = '3.54.1'
 
-let SOURCE = 'https://www.sqlite.org/2026/sqlite-autoconf-3540100.tar.gz'
+// The tarball, from sqlite.org or a mirror of it: sqlite.org refuses
+// connections from Google Cloud, where the gate's runner is. The digest pins
+// the bytes, so whichever answers first gives the same source.
+let TARBALL = 'sqlite-autoconf-3540100.tar.gz'
+let SOURCES = [
+  `https://www.sqlite.org/2026/${TARBALL}`,
+  `https://distfiles.macports.org/sqlite3/${TARBALL}`,
+]
 let SHA256 = '926ef8d3eab93fbf6e06011901273eec076b25594a4e1cdadd50c987f4f6d64e'
 
 export let OPTIONS = [
@@ -88,20 +95,31 @@ let run = async (cmd: string, args: string[], cwd: string) => {
   }
 }
 
+// The pinned tarball from the first source that gives it, each given 20 s.
+let source = async () => {
+  let failed = []
+  for (let url of SOURCES) {
+    try {
+      let got = await fetch(url, { signal: AbortSignal.timeout(20_000) })
+      if (!got.ok) throw new Error(`${got.status}`)
+      let bytes = new Uint8Array(await got.arrayBuffer())
+      if (await hex(bytes) == SHA256) return bytes
+      throw new Error('not the source pinned (sha256 differs)')
+    } catch (e) {
+      failed.push(`${url}: ${(e as Error).message}`)
+    }
+  }
+  throw new Error(`no source gave SQLite ${VERSION}:\n${failed.join('\n')}`)
+}
+
 // Fetch, check, unpack the amalgamation alone, compile, and put the library
 // in place by a rename, so a run that builds beside another finds it whole.
 let build = async (dir: string) => {
   let work = `${dir}.${Deno.pid}`
   await Deno.mkdir(work, { recursive: true })
   try {
-    let got = await fetch(SOURCE)
-    if (!got.ok) throw new Error(`${SOURCE}: ${got.status}`)
-    let bytes = new Uint8Array(await got.arrayBuffer())
-    if (await hex(bytes) != SHA256) {
-      throw new Error(`${SOURCE} is not the source pinned (sha256 differs)`)
-    }
-    await Deno.writeFile(`${work}/source.tar.gz`, bytes)
-    let member = `${SOURCE.split('/').at(-1)!.replace('.tar.gz', '')}/sqlite3.c`
+    await Deno.writeFile(`${work}/source.tar.gz`, await source())
+    let member = `${TARBALL.replace('.tar.gz', '')}/sqlite3.c`
     await run(
       'tar',
       ['-xzf', 'source.tar.gz', '--strip-components=1', member],
