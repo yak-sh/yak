@@ -43,9 +43,10 @@ as their web pages in a web view holding the same session (D-148409).
 - `globals.ts`: the `Event` and window @yaks/tui's DOM reaches for, which Hermes
   lacks.
 - `metro.config.js`: resolves `@yaks/<name>/<path>` to the file
-  `packages/<name>` exports there, `@yaks/ui` to its parts, and the shell's own
-  React, React Native, Preact, Preact's signals and marked for every file,
-  workers/yak's included.
+  `packages/<name>` exports there, and the shell's own React, React Native,
+  Preact, Preact's signals and marked for every file, workers/yak's included.
+- `asset.ts`: `@yaks/api/asset` as the shell reads a package's file, by its web
+  address, since a React Native bundle has no module loader for one.
 - `babel.config.js`: Expo's preset, with TypeScript stripped before the preset's
   Flow stripping, which refuses the `declare` fields packages/ uses.
 - `simulator.yaml`: the shell once through on an iOS simulator, signed in as

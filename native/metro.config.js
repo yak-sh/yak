@@ -2,9 +2,7 @@
 // kit's parts, the in-memory DOM they render into, the painter, and the
 // Operator's drawing of its lines (workers/yak/operator-draw.ts). A
 // `@yaks/<name>/<path>` import is the file packages/<name>'s package.json
-// exports at `./<path>`, except `@yaks/ui`, which resolves to its parts alone
-// (packages/ui/parts.ts), the entry for a host that serves its look from
-// elsewhere, as this one does through @yaks/native's look. Every package the
+// exports at `./<path>`. Every package the
 // shell itself holds (React, React Native, Preact) resolves from here, so a
 // file in packages/ or workers/ shares the shell's one copy.
 const { getDefaultConfig } = require('expo/metro-config')
@@ -19,9 +17,6 @@ config.watchFolders = [
   path.join(repo, 'workers', 'yak'),
 ]
 
-const hosted = {
-  '@yaks/ui': 'packages/ui/parts.ts',
-}
 // The file a package exports at a subpath, by its package.json.
 const exported = (name) => {
   let [, pkg, sub] = name.match(/^@yaks\/([^/]+)(?:\/(.+))?$/) ?? []
@@ -47,10 +42,14 @@ const own = [
 ]
 const here = path.join(__dirname, 'index.ts')
 
+// What the shell gives in place of a package's file: @yaks/api/asset reads a
+// file through the module loader, which a React Native bundle lacks.
+const hosted = {
+  '@yaks/api/asset': path.join(__dirname, 'asset.ts'),
+}
+
 config.resolver.resolveRequest = (context, name, platform) => {
-  if (hosted[name]) {
-    return { type: 'sourceFile', filePath: path.join(repo, hosted[name]) }
-  }
+  if (hosted[name]) return { type: 'sourceFile', filePath: hosted[name] }
   let file = exported(name)
   if (file) return { type: 'sourceFile', filePath: file }
   if (own.some((p) => name == p || name.startsWith(p + '/'))) {
