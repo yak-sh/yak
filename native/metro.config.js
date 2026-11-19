@@ -29,11 +29,22 @@ const exported = (name) => {
   let dir = path.join(repo, 'packages', pkg)
   let file = path.join(dir, 'package.json')
   if (!fs.existsSync(file)) return null
-  let to = JSON.parse(fs.readFileSync(file, 'utf8')).exports
-    ?.[sub ? `./${sub}` : '.']
+  // `exports` is a map of subpaths, or the one file a package exports.
+  let exports = JSON.parse(fs.readFileSync(file, 'utf8')).exports
+  let to = typeof exports == 'string'
+    ? sub ? null : exports
+    : exports?.[sub ? `./${sub}` : '.']
   return typeof to == 'string' ? path.join(dir, to) : null
 }
-const own = ['preact', 'react', 'react-native', 'lucide', 'sucrase', 'marked']
+const own = [
+  'preact',
+  '@preact/signals',
+  'react',
+  'react-native',
+  'lucide',
+  'sucrase',
+  'marked',
+]
 const here = path.join(__dirname, 'index.ts')
 
 config.resolver.resolveRequest = (context, name, platform) => {

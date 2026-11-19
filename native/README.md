@@ -44,7 +44,15 @@ as their web pages in a web view holding the same session (D-148409).
   lacks.
 - `metro.config.js`: resolves `@yaks/<name>/<path>` to the file
   `packages/<name>` exports there, `@yaks/ui` to its parts, and the shell's own
-  React, React Native, Preact and marked for every file, workers/yak's included.
+  React, React Native, Preact, Preact's signals and marked for every file,
+  workers/yak's included.
+- `babel.config.js`: Expo's preset, with TypeScript stripped before the preset's
+  Flow stripping, which refuses the `declare` fields packages/ uses.
+- `simulator.yaml`: the shell once through on an iOS simulator, signed in as
+  checks, a screenshot of each screen:
+  `gh workflow run ios-shell --ref <branch>` (.github/workflows/ios-shell.yml).
+  A sign-in link opened in the shell signs it in, which is how the run gets past
+  the card.
 
 ## Run it on a phone with Expo Go
 
