@@ -10,19 +10,23 @@ test('no changed paths selects no tests without needing a dependency graph or ca
   equal(unchanged.reaches(['missing_test.ts']), false)
 })
 
-// A survey of test files that each import a.ts, and a.ts.
-let importing = async (tests: string[]) => {
+// A survey of tests importing a.ts directly or through relay.ts.
+let importing = async (tests: string[], indirect: string[] = []) => {
   let url = (f: string) => new URL(f, `file://${Deno.cwd()}/`).href
-  return (await survey([...tests, 'a.ts'], () =>
+  let imports = (file: string, from: string) => ({
+    specifier: url(file),
+    dependencies: [{
+      specifier: './' + from,
+      code: { specifier: url(from) },
+    }],
+  })
+  return (await survey([...tests, 'a.ts', 'relay.ts'], () =>
     Promise.resolve({
       modules: [
-        ...tests.map((f) => ({
-          specifier: url(f),
-          dependencies: [{
-            specifier: './a.ts',
-            code: { specifier: url('a.ts') },
-          }],
-        })),
+        ...tests.map((f) =>
+          imports(f, indirect.includes(f) ? 'relay.ts' : 'a.ts')
+        ),
+        imports('relay.ts', 'a.ts'),
         { specifier: url('a.ts'), dependencies: [] },
       ],
       redirects: {},
@@ -77,9 +81,10 @@ test('a workspace-wide change keeps its own tests within the local budget', asyn
 })
 
 test('a test file the change edits runs whatever it costs, and what is left of the budget holds the rest', async () => {
-  let s = await importing(['slow_test.ts', 'b_test.ts', 'c_test.ts'])
+  let files = ['slow_test.ts', 'b_test.ts', 'c_test.ts']
+  let s = await importing(files, files)
   let cost = (f: string) => ({ 'slow_test.ts': 50 })[f] ?? 10
-  let selected = await choose(['slow_test.ts', 'b_test.ts', 'c_test.ts'], {
+  let selected = await choose(files, {
     changed: ['a.ts', 'slow_test.ts'],
     all: true,
     budget: 65,
@@ -90,13 +95,49 @@ test('a test file the change edits runs whatever it costs, and what is left of t
   equal(selected.beyond, 1)
 })
 
-test('a file importing a declaration the change edits comes before cheaper files as near', async () => {
-  let files = ['page_test.ts', 'b_test.ts', 'c_test.ts']
-  let s = await importing(files)
+test('a direct test still runs when its estimated cost exceeds the entire budget', async () => {
+  let files = ['a_test.ts', 'farther_test.ts']
+  let s = await importing(files, ['farther_test.ts'])
+  let selected = await choose(files, {
+    changed: ['a.ts'],
+    all: true,
+    budget: 6,
+    cost: (f) => f == 'a_test.ts' ? 7 : 1,
+    inspect: () => Promise.resolve(s),
+  })
+  equal(selected.run, ['a_test.ts'])
+  equal(selected.beyond, 1)
+})
+
+test('a test importing an edited declaration through a re-export still runs when the budget is spent', async () => {
+  let files = ['page_test.ts', 'other_test.ts']
+  let s = await importing(files, files)
   let source = (f: string) =>
     ({
-      'page_test.ts': "import { page } from './a.ts'",
-      'b_test.ts': "import { other } from './a.ts'",
+      'relay.ts': "export { page } from './a.ts'",
+      'page_test.ts': "import { page } from './relay.ts'",
+    })[f]
+  let selected = await choose(files, {
+    changed: ['a.ts'],
+    all: true,
+    budget: 0,
+    cost: () => 1,
+    edits: { 'a.ts': ['page'] },
+    source,
+    inspect: () => Promise.resolve(s),
+  })
+  equal(selected.run, ['page_test.ts'])
+  equal(selected.beyond, 1)
+})
+
+test('a test of code calling an edited declaration comes before cheaper farther consumers', async () => {
+  let files = ['page_test.ts', 'b_test.ts', 'c_test.ts']
+  let s = await importing(files, files)
+  let source = (f: string) =>
+    ({
+      'relay.ts':
+        "import { render } from './a.ts'\nexport let page = () => render()",
+      'page_test.ts': "import { page } from './relay.ts'",
     })[f]
   let chosen = (edits?: Record<string, string[]>) =>
     choose(files, {
@@ -109,5 +150,5 @@ test('a file importing a declaration the change edits comes before cheaper files
       inspect: () => Promise.resolve(s),
     })
   equal((await chosen()).run, ['b_test.ts', 'c_test.ts'])
-  equal((await chosen({ 'a.ts': ['page'] })).run, ['page_test.ts'])
+  equal((await chosen({ 'a.ts': ['render'] })).run, ['page_test.ts'])
 })

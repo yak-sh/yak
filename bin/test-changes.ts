@@ -5,6 +5,7 @@ import { tested } from '@yaks/testing/find'
 import { declared } from '@yaks/testing/names'
 
 type Run = (args: string[]) => Promise<string>
+type Comparison = { run?: Run; at?: string }
 
 /** Git's answer to `args`, or why it refused. */
 export let git: Run = async (args) => {
@@ -25,24 +26,29 @@ export let git: Run = async (args) => {
 
 /** Paths changed on this branch, including staged, unstaged and untracked
  * files. On main, the latest commit supplies the committed changes. */
-export let changes = async (run: Run = git): Promise<string[]> => {
+export let changes = async (
+  { run = git, at }: Comparison = {},
+): Promise<string[]> => {
   let tracked = await run([
     'diff',
     '--name-only',
     '--no-renames',
     '-z',
-    await base(run),
+    at ?? await base(run),
   ])
   let added = await run(['ls-files', '--others', '--exclude-standard', '-z'])
   return [...new Set((tracked + added).split('\0').filter(Boolean))]
 }
 
-/** What this branch's changes are measured from: on main, the latest
+/** The commit this change is measured from. On main it is the latest
  * commit's parent. */
-export let base = async (run: Run = git): Promise<string> =>
-  (await run(['branch', '--show-current'])).trim() == 'main'
-    ? 'HEAD^'
-    : (await run(['merge-base', 'main', 'HEAD'])).trim()
+export let base = async (run: Run = git): Promise<string> => {
+  let branch = (await run(['branch', '--show-current'])).trim()
+  let compare = branch == 'main'
+    ? ['rev-parse', 'HEAD^']
+    : ['merge-base', 'main', 'HEAD']
+  return (await run(compare)).trim()
+}
 
 /// lines('+++ b/a.ts\n@@ -3,2 +3,3 @@ x\n@@ -9 +10,0 @@\n+++ b/b.ts\n@@ -0,0 +1 @@') -> { 'a.ts': [3, 4, 5, 10], 'b.ts': [1] }
 /// lines('+++ /dev/null\n@@ -1 +0,0 @@') -> {}
@@ -71,10 +77,11 @@ export let lines = (diff: string): Record<string, number[]> => {
  * top-level declarations holding the lines they edit
  * (@yaks/testing/names `declared`). */
 export let edits = async (
-  run: Run = git,
-  read: (path: string) => Promise<string> = (p) => Deno.readTextFile(p),
+  { run = git, at, read = (p) => Deno.readTextFile(p) }: Comparison & {
+    read?: (path: string) => Promise<string>
+  } = {},
 ): Promise<Record<string, string[]>> => {
-  let diff = await run(['diff', '-U0', '--no-renames', await base(run)])
+  let diff = await run(['diff', '-U0', '--no-renames', at ?? await base(run)])
   let edited: Record<string, string[]> = {}
   for (let [path, at] of Object.entries(lines(diff))) {
     if (!/\.[mc]?[jt]sx?$/.test(path) || tested(path)) continue

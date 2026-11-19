@@ -52,13 +52,16 @@ let planned = async (args: string[], shallow = false, pass = true) => {
   let plan = await prepare(args, '/sqlite.so', {
     edits: () => Promise.resolve({}),
     changes: () =>
-      changes((args) => {
-        git.push(args)
-        if (args[0] == 'branch') return Promise.resolve('main\n')
-        if (args[0] == 'diff' && shallow) {
-          throw new Error("fatal: ambiguous argument 'HEAD^'")
-        }
-        return Promise.resolve(args[0] == 'diff' ? 'a.ts\0' : '')
+      changes({
+        run: (args) => {
+          git.push(args)
+          if (args[0] == 'branch') return Promise.resolve('main\n')
+          if (args[0] == 'rev-parse' && shallow) {
+            throw new Error("fatal: ambiguous argument 'HEAD^'")
+          }
+          if (args[0] == 'rev-parse') return Promise.resolve('parent\n')
+          return Promise.resolve(args[0] == 'diff' ? 'a.ts\0' : '')
+        },
       }),
     format: (paths) => Promise.resolve(paths),
     find: () => Promise.resolve({ tests: [files[0]], pages: [files[1]] }),

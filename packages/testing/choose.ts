@@ -70,8 +70,9 @@ export let within = (
  * (./deps.ts `shared`); when a run is `observed` its runtimes see what each
  * file reads (./reads.ts), and a pass is kept by that too. `changed` first
  * narrows the files to those reached by these paths, even with no cache.
- * A narrowed run with a `budget` runs each file `changed` names, then what
- * fits the rest of it by what each file is expected to `cost` (`within`):
+ * A narrowed run with a `budget` keeps changed files, their direct runtime
+ * consumers and files importing an edited declaration, including through
+ * re-exports. The rest compete for what remains by expected `cost` (`within`):
  * first the files naming a declaration the change `edits`, or one naming it,
  * the fewest steps from it first (./names.ts `naming`, reading each file's
  * `source`), then the nearest to the change (./deps.ts `distance`), and only
@@ -208,32 +209,30 @@ export let choose = async (
         run.push(f)
       }
     }
-    let far = changed && s.distance(changed, owner)
     let root = (f: string) => plans.get(f) ?? f
-    let info = changed && edits ? await s.info(run.map(root)) : undefined
-    let named = info && edits
-      ? naming(info, run, edits, source, root)
-      : new Map<string, number>()
-    // A file naming what the change edits comes before every distance, the
-    // fewer steps from it the sooner.
-    let rank = (f: string) =>
-      named.has(f)
-        ? -1 / (1 + named.get(f)!)
-        : far
-        ? Math.min(far(f), far(root(f)))
-        : Infinity
-    let near = run.filter((f) => rank(f) < Infinity)
-    // A file the change edits is the change, and runs whatever it costs; the
-    // budget left is for the rest of what it reaches.
-    let edited = new Set(changed)
-    let mine = run.filter((f) => edited.has(f))
-    let spent = mine.reduce((sum, f) => sum + cost(f), 0)
-    let rest = (near.length ? near : run).filter((f) => !edited.has(f))
-    let fits = new Set([
-      ...mine,
-      ...within(rest, rank, cost, Math.max(0, (budget ?? 0) - spent)),
-    ])
-    let kept = changed && budget != null ? run.filter((f) => fits.has(f)) : run
+    let kept = run
+    if (changed && budget != null) {
+      let info = edits ? await s.info(run.map(root)) : undefined
+      let named = info && edits
+        ? naming(info, run, edits, source, root)
+        : new Map<string, number>()
+      let direct = s.distance(changed)
+      let far = owner ? s.distance(changed, owner) : direct
+      let touched = new Set(changed)
+      let required = new Set(
+        run.filter((f) =>
+          touched.has(f) || direct(root(f)) <= 1 || named.get(f) == 0 ||
+          reads(f)?.some((path) => touched.has(path))
+        ),
+      )
+      let rank = (f: string) =>
+        named.has(f) ? -1 / (1 + named.get(f)!) : Math.min(far(f), far(root(f)))
+      let near = run.filter((f) => rank(f) < Infinity)
+      let rest = (near.length ? near : run).filter((f) => !required.has(f))
+      let spent = [...required].reduce((sum, f) => sum + cost(f), 0)
+      let fits = new Set(within(rest, rank, cost, Math.max(0, budget - spent)))
+      kept = run.filter((f) => required.has(f) || fits.has(f))
+    }
     let typed = sources.filter((f) => !changed || s.reaches([f], changed))
     let roots = [...kept.map((f) => plans.get(f) ?? f), ...typed]
     return {

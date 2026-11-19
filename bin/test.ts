@@ -1,10 +1,9 @@
 // Tests run on Deno, with a separate document for the terminal UI. Page
 // behavior runs in process on linkedom. With no paths, the dependency graph
-// selects tests reached by branch and working changes: every test file the
-// change edits, then those naming a declaration it edits or one naming it
-// (@yaks/testing/names), then a changed workspace package, then its nearest
-// consumers, as many as a few seconds hold by what each took as it last ran
-// here; main's CI runs the rest after the push. Cached passes leave out tests already passed unchanged.
+// selects tests reached by branch and working changes. Tests the change edits,
+// its direct consumers and tests importing an edited declaration stay in
+// the run. What remains of the budget goes to nearby consumers; main's CI runs
+// the rest after the push. Cached passes leave out tests already passed unchanged.
 // Paths narrow an explicit run.
 // There are no browser or workerd tests. A run whose files reach the Worker's
 // generated files and npm tree makes them current first (`READIES`).
@@ -53,12 +52,16 @@ if (import.meta.main && Deno.args[0] !== '--bulk') {
   if (!Deno.args.some((a) => a.startsWith('--from='))) {
     let { elsewhere } = await import('./elsewhere.ts')
     let { base, changes } = await import('./test-changes.ts')
+    let at: Promise<string> | undefined
+    let from = () => at ??= base()
     let code = await elsewhere(['deno', 'task', 'test', ...Deno.args], {
-      from: () => base(),
+      from,
+      // The transferred patch is applied to a detached worktree at its base.
+      env: { TASKS_TEST_BASE: 'HEAD', YAK_MACHINE: '' },
       before: async () => {
         if (Deno.args.includes('--all')) return
         let { format } = await import('./test-checks.ts')
-        await format(await changes())
+        await format(await changes({ at: await from() }))
       },
       limits: LIMITS,
     })
@@ -489,10 +492,11 @@ export let prepare = async (
   // A whole run has no change to find, and main's gate checks out one commit,
   // with no parent for git to compare it with.
   let all = flags.includes('--all')
-  let changedPaths = all ? [] : await effects.changes()
+  let comparison = { at: Deno.env.get('TASKS_TEST_BASE') }
+  let changedPaths = all ? [] : await effects.changes(comparison)
   // What a whole change edits, which ranks the files naming it
   // (@yaks/testing/names); a run of named paths is no change's.
-  let edited = all || paths.length ? undefined : effects.edits()
+  let edited = all || paths.length ? undefined : effects.edits(comparison)
   void edited?.catch(() => {})
   let changedFiles = await effects.format(changedPaths)
   let snapshot = Promise.withResolvers<Survey | undefined>()
