@@ -148,10 +148,9 @@ CF_ZONE = "3b2518c3647029d687bb4f40bebf0f77"
 # tax-inclusive, live mode. A price id names a price, it does not open an
 # account, and it belongs beside the account and zone above rather than in a
 # secret store where nobody can read what the site is selling.
-# Still the $9 monthly price: the $12 monthly and $120 yearly live prices are
-# made by hand (T-1360), and replace it here and fill STRIPE_PRICE_YEAR. Until
-# then the Plus plan is sold by the month only.
-STRIPE_PRICE = "price_1UEDP0ITlUS6lUlggbJ9klVH"
+# $12 a month and $120 a year.
+STRIPE_PRICE = "price_1UdbLQITlUS6lUlgCFNwxJIW"
+STRIPE_PRICE_YEAR = "price_1UdbLQITlUS6lUlgPu2QQ4XG"
 # The Plus prices no longer sold that existing subscriptions stay on, which
 # still read as the Plus plan (config.ts `payments`): $9 a month.
 STRIPE_PRICE_KEPT = ["price_1UEDP0ITlUS6lUlggbJ9klVH"]
