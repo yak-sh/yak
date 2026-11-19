@@ -459,10 +459,14 @@ export let requesting: Hook = (bundles, tx) => {
     }
     return { ...b, using: named }
   })
+  // a row the batch writes itself is priced, never stubbed over
+  let written = new Set<string>()
   for (let b of out) {
     let name = (b.model as Comp | undefined)?.name
     if (typeof name == 'string' && b.pending !== null) {
-      names.set(identityEid(MODEL, [name]), name)
+      let eid = identityEid(MODEL, [name])
+      names.set(eid, name)
+      written.add(eid)
     }
   }
   // by name: a batch's new row is still an alias here, minted after
@@ -491,7 +495,9 @@ export let requesting: Hook = (bundles, tx) => {
         ...[...names].flatMap(([eid, name]): Bundle[] => {
           let row = held.get(eid)
           let price = !priced.has(eid) && !row?.price && listPrice(name)
-          if (row?.model) return price ? [{ entity: { eid }, price }] : []
+          if (row?.model || written.has(eid)) {
+            return price ? [{ entity: { eid }, price }] : []
+          }
           return [{
             entity: { eid },
             model: { name, offered: false },

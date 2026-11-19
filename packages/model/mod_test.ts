@@ -94,6 +94,15 @@ test('a new name on a staged builder exists pending, never offered', () => {
   assertEquals(((g.get([E]) as Bundle[])[0].using as Comp).model, eid)
 })
 
+test('a model row written whole keeps what it says, and is priced', () => {
+  let g = shelf()
+  g.apply([{ entity: { eid: '$n' }, model: { name: 'gpt-5', offered: true } }])
+  let [row] = g.get([identityEid('model', ['gpt-5'])]) as Bundle[]
+  assertEquals(row.model, { name: 'gpt-5', offered: true })
+  assertEquals(row.pending, undefined)
+  assertEquals(row.price, listPrice('gpt-5'))
+})
+
 test('a model met for the first time is priced at its list price', () => {
   let g = shelf()
   let priceOf = (name: string) =>
