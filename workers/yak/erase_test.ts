@@ -31,7 +31,14 @@ import {
   ticketed,
   trashSpace,
 } from './erase.ts'
-import { daysLeft, directory, due, GRACE, overdue } from './directory.ts'
+import {
+  daysLeft,
+  directory,
+  due,
+  GRACE,
+  overdue,
+  ranked,
+} from './directory.ts'
 import { PLATFORM_OBJECT } from './door.ts'
 import { MORE } from './wake.ts'
 import * as dirPart from './directory.ts'
@@ -258,6 +265,29 @@ test('the platform and a paying space refuse to be deleted', async () => {
 let AT = '2026-09-05T12:00:00.000Z'
 let day = 86_400_000
 let then = (ms: number) => Date.parse(AT) + ms
+
+// Each app as `slug:born` or `slug:born:restored`, by day of the month.
+let homes = (...apps: string[]) =>
+  ranked(apps.map((one) => {
+    let [slug, born, back] = one.split(':')
+    let day = (d: string) => `2026-11-${d.padStart(2, '0')}T00:00:00.000Z`
+    return app({
+      slug,
+      born: day(born),
+      untrashed: back ? { at: day(back), by: 'p1' } : null,
+    })
+  })).map((a) => a.slug)
+
+test('apps home words oldest first, a restored one as old as its restore', () => {
+  // Birth order, whatever order the directory read them in.
+  assertEquals(homes('menu:18', 'garden:3'), ['garden', 'menu'])
+  // A restored app ranks behind an app born while it was in the trash, and
+  // ahead of every app born after it came back.
+  assertEquals(
+    homes('menu:1:10', 'potluck:5', 'third:12'),
+    ['potluck', 'menu', 'third'],
+  )
+})
 
 test('the trash is thirty days, counted in whole days left', () => {
   let t = { at: AT, by: 'p1' }

@@ -390,8 +390,11 @@ export type AppInfo = {
   trashed: Trashed | null
   // Back out of the trash, and since when (erase.ts `untrash`). Null for every
   // app never restored, or trashed again since. It ranks the app among its
-  // space's homes (`ranked`).
+  // space's homes (`ranked`) in place of its birth.
   untrashed?: Trashed | null
+  // When it was born, its row's `created.at`: where it ranks among its
+  // space's homes (`ranked`). Empty where a fixture made it without one.
+  born?: string
   // The colours this app's owner set for its installed chrome (apps.ts
   // `manifesting`/`pinned`, T-33055): the phone's splash while it opens
   // (`backgroundColor`) and the browser/status chrome around it
@@ -517,16 +520,20 @@ export type Trashed = { at: string; by: string }
 
 /**
  * Apps in the order they home words (T-32728): the first in this order to
- * declare a word is its home for the space. The order the directory has them,
- * oldest first, then each app restored from the trash in the order it came
- * back. A word another app took while this one was in the trash stays that
- * app's for the space; the restored app keeps its own for its pages and rows.
+ * declare a word is its home for the space. Oldest first, where an app
+ * restored from the trash is as old as its restore: a word another app took
+ * while it was in the trash stays that app's for the space, the restored app
+ * keeps its own for its pages and rows, and it ranks ahead of every app born
+ * after it came back.
  */
 export let ranked = <T>(
   items: T[],
-  app = (t: T) => t as Pick<AppInfo, 'untrashed'>,
+  app = (t: T) => t as Pick<AppInfo, 'untrashed' | 'born'>,
 ) => {
-  let since = (t: T) => app(t).untrashed?.at ?? ''
+  let since = (t: T) => {
+    let a = app(t)
+    return a.untrashed?.at || a.born || ''
+  }
   return items.toSorted((a, b) => since(a).localeCompare(since(b)))
 }
 
@@ -1291,6 +1298,7 @@ export let APP_PARTS = [
   'demo',
   'trashed',
   'untrashed',
+  'created',
   'theme',
   'rooted',
   'publishing',
@@ -1610,6 +1618,7 @@ export let appAbout = (r: Row): AppInfo => ({
       by: r.untrashed.by ? idOf(r.untrashed.by) : '',
     }
     : null,
+  born: r.created?.at ?? '',
   theme: r.theme
     ? {
       themeColor: r.theme.theme_color ?? null,
