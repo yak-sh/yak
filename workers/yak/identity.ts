@@ -304,12 +304,18 @@ let forUs = (resource: string | string[] | undefined, env: Host) =>
 
 let NOT_US = 'yaks.app grants access to yaks.app and to no other resource'
 
-/** The person an OAuth access token was granted for, and when it ends
- * (asking.ts `asking`). A token for another resource is nobody here. */
+/** The person an OAuth access token was granted for, the grant, and when it
+ * ends, as the provider reads them from KV (asking.ts `asking`, which asks
+ * the directory whether the grant still stands: grant-rows.ts `stands`). A
+ * token for another resource is nobody here. */
 export let unwrapped = async (env: Env, token: string) => {
   let held = await api(env).unwrapToken<Props>(token)
-  if (held && !forUs(held.audience, env)) return {}
-  return { person: held?.grant.props?.person, until: held?.expiresAt }
+  if (!held || !forUs(held.audience, env)) return {}
+  return {
+    person: held.grant.props?.person,
+    grant: held.grantId,
+    until: held.expiresAt,
+  }
 }
 
 // Every credential the platform gave a person, taken back: their connectors'
@@ -325,9 +331,10 @@ export let unheld = async (
     await (await import('./browser-sessions.ts')).endAll(env, person)
   }
   await disconnectAll(grants(env), person)
-  let granted = ledger(env.OAUTH_KV)
+  let dir = dirOf(env)
+  let granted = ledger(env.OAUTH_KV, dir)
   if (granted) await revokeGrants(granted, person, '')
-  let standing = links(env.OAUTH_KV)
+  let standing = links(env.OAUTH_KV, dir)
   if (standing) await revoke(standing, person, '')
 }
 
@@ -1248,7 +1255,7 @@ let proving = (
 // A standing link spends no code, so no guess stamps its person: they are
 // read and stamped here (`vouched`).
 let stood = async (env: Env, standing: Standing) => {
-  let person = await whose(standing, links(env.OAUTH_KV))
+  let person = await whose(standing, links(env.OAUTH_KV, dirOf(env)))
   return person ? await vouched(env, person) : null
 }
 
@@ -1835,7 +1842,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let pass = await passOf(t, secret(env))
     if (pass?.once) return askLink(t, pass.once.back ?? null, env)
     let person = pass?.standing &&
-      await whose(pass.standing, links(env.OAUTH_KV))
+      await whose(pass.standing, links(env.OAUTH_KV, dirOf(env)))
     let row = await addressed(env, person || null)
     let account = row?.email?.address ?? row?.phone?.number
     return account
@@ -1867,7 +1874,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         },
       }, { status: 403 })
     }
-    let book = links(env.OAUTH_KV)
+    let book = links(env.OAUTH_KV, dirOf(env))
     if (!book) {
       return Response.json({
         error: {

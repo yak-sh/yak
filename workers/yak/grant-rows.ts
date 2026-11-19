@@ -13,8 +13,8 @@
 // written as the provider writes KV (`through`): whatever writes a grant (a
 // consent, a code exchanged, a token refreshed), its row is written first,
 // and whatever deletes one (a disconnect, a client revoking its own token, a
-// grant replaced), its row goes after. The rows hold every grant KV holds the
-// moment it does, a revocation is gone from them at once, and a person's
+// grant replaced), its row is cancelled after. The rows hold every grant KV
+// holds the moment it does, a revocation is in them at once, and a person's
 // listing is one directory read in the trip their page already makes
 // (`listing`). KV stays the record of grants and tokens; a row holds only
 // what a listing shows, and none of the grant's secrets.
@@ -26,6 +26,7 @@ import type { Bundle } from '@yaks/graph'
 import { identityEid } from '@yaks/graph'
 import type { GrantSummary } from '@cloudflare/workers-oauth-provider'
 import { Pending } from '@yaks/api/log'
+import type { Directory } from './directory.ts'
 
 /** An `oauth_grant` row: what a listing shows of one grant. Times are unix
  * seconds, as the provider keeps them; `until` is when KV lets the grant go
@@ -55,7 +56,11 @@ export type Book = {
 // The KV as the provider and this file ask of it.
 type Kv = {
   get(key: string, as: { type: 'json' }): Promise<unknown>
-  put(key: string, value: string, o?: { expirationTtl?: number }): Promise<void>
+  put(
+    key: string,
+    value: string,
+    o?: { expirationTtl?: number; expiration?: number },
+  ): Promise<void>
   delete(key: string): Promise<void>
   list(o: { prefix: string; cursor?: string }): Promise<{
     keys: { name: string; expiration?: number }[]
@@ -102,16 +107,52 @@ let rowOf = (person: string, stored: unknown, until?: number): Row => {
   }
 }
 
+// Every property said, null where the grant has none: a patch keeps what it
+// omits, so a grant put again without a lapse (its code exchanged) would keep
+// the `until` its code had, and lapse from its listing ten minutes later.
 let bundleOf = (row: Row): Bundle => ({
   entity: { eid: eidOf(row.id) },
-  oauth_grant: row,
+  oauth_grant: {
+    redirect: null,
+    name: null,
+    scope: null,
+    expires: null,
+    until: null,
+    ...row,
+  },
 })
 
-// A grant's row gone, as KV's own grant went.
+// A grant's row gone, as KV let its grant go on its own.
 let unlisted = (id: string): Bundle => ({
   entity: { eid: eidOf(id) },
   oauth_grant: null,
 })
+
+// A grant's row cancelled, as the provider deleted it: what refuses its tokens
+// at once (`stands`), and what a late write of the grant (a refresh that read
+// it from KV before the delete reached there) cannot undo.
+let revoked = (id: string): Bundle => ({
+  entity: { eid: eidOf(id) },
+  oauth_grant: null,
+  cancelled: {},
+})
+
+/**
+ * Whether a token's grant still stands, as the directory says (T-1353): the
+ * provider reads the token from KV, which a location that read it before a
+ * revocation keeps answering for a minute or more. A grant the provider
+ * deleted has its row cancelled, so its tokens are refused at once. A grant
+ * with no row is still KV's to answer: rows began after grants did, and a row
+ * KV let go on its own (`listing`) names no token.
+ */
+export let stands = async (
+  dir: Pick<Directory, 'credential'>,
+  grant: string,
+  person: string,
+) => {
+  let { present, row } = await dir.credential(eidOf(grant), person)
+  return present && !row?.cancelled
+}
 
 /** The grant a row lists, as the provider summarizes one. */
 let summary = (row: Row): GrantSummary => ({
@@ -150,7 +191,7 @@ export let through = <T extends object>(
     let grant = keyed(key)
     if (grant) {
       let ttl = o?.expirationTtl
-      let until = ttl ? seconds(now()) + ttl : undefined
+      let until = ttl ? seconds(now()) + ttl : o?.expiration
       await write([bundleOf(rowOf(grant.person, JSON.parse(value), until))])
     }
     await store.put(key, value, o)
@@ -158,7 +199,7 @@ export let through = <T extends object>(
   let gone: Kv['delete'] = async (key) => {
     await store.delete(key)
     let grant = keyed(key)
-    if (grant) await write([unlisted(grant.id)])
+    if (grant) await write([revoked(grant.id)])
   }
   return new Proxy(kv, {
     get: (target, name) => {

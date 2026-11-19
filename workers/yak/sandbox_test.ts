@@ -608,7 +608,7 @@ test('every command is signed in as the caller, with one grant', async () => {
 
   // And on its way here it opens the door as Ada, narrowed to her space, for
   // about as long as the container can live.
-  let book = ledger(env.OAUTH_KV)!
+  let book = ledger(env.OAUTH_KV, dirOf(env))!
   assertEquals((await book.ids(ADA)).length, 1)
   let { bearer } = await sent(
     env,
@@ -631,7 +631,7 @@ test('destroying the container revokes what it was wearing', async () => {
   await tool('sandbox_shell').run(lone, { command: 'ls' })
   let placeholder = box.env.at(-1)!.YAKS_TOKEN
   let token = (await sent(env, mine, `${HOST}/mcp`, placeholder)).bearer!
-  let book = ledger(env.OAUTH_KV)!
+  let book = ledger(env.OAUTH_KV, dirOf(env))!
   assert(await held(token, SECRET, book), 'live while the container is')
 
   // Destroy is the one door — a build's own end (`released`) and a space

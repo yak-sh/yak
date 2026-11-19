@@ -68,7 +68,7 @@ let cloner = async (
     )
   }
   let grant = env.SESSION_SECRET
-    ? await heldGrant(said, env.SESSION_SECRET, ledger(env.OAUTH_KV))
+    ? await heldGrant(said, env.SESSION_SECRET, ledger(env.OAUTH_KV, dir))
     : null
   if (!grant) return nobody
   let reach = grant.space ? narrowed(dir, grant.space, grant.spaceEid) : dir

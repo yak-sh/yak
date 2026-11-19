@@ -5,6 +5,8 @@
 // so the whole contract holds in plain Deno; the door it hangs on is held in
 // the kernel (mcp_test.ts).
 import { test } from '@yaks/testing'
+import { kv } from './testing.ts'
+import { kernel } from './probe.ts'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { seal } from './lib/token.ts'
 import type { Directory, Space } from './directory.ts'
@@ -23,29 +25,32 @@ import {
 
 let SECRET = 'grant-test-secret'
 
-// A Map-backed KV standing in for OAUTH_KV, with the one shape grants.ts asks
-// for. TTL is not simulated: expiry is the token's own `exp`, which the tests
-// below move by handing `now` in.
-let kv = () => {
-  let m = new Map<string, string>()
+let k = await kernel()
+// Two people the directory holds: a grant's row names its person.
+let [P1, P2] = [crypto.randomUUID(), crypto.randomUUID()]
+await k.dir.stamp({
+  entities: [P1, P2].map((eid) => ({ entity: { eid }, person: {} })),
+})
+
+// A view of one KV as a location that read it before keeps it: every read it
+// once answered, answered again, which is how KV serves a key for a minute
+// after it changed elsewhere.
+let stale = (base: ReturnType<typeof kv>) => {
+  let seen = new Map<string, unknown>()
   return {
-    get: (k: string) => Promise.resolve(m.get(k) ?? null),
-    put: (k: string, v: string) => (m.set(k, v), Promise.resolve()),
-    delete: (k: string) => (m.delete(k), Promise.resolve()),
-    list: ({ prefix }: { prefix: string }) =>
-      Promise.resolve({
-        keys: [...m.keys()].filter((k) => k.startsWith(prefix)).map((name) => ({
-          name,
-        })),
-      }),
+    ...base,
+    get: async (key: string) => {
+      if (!seen.has(key)) seen.set(key, await base.get(key))
+      return seen.get(key) as string | null
+    },
   }
 }
 
-let book = () => ledger(kv()) as Ledger
+let book = () => ledger(kv(), k.dir) as Ledger
 
 test('a grant is minted, and the token names it back', async () => {
   let b = book()
-  let { grant, token } = await mint(SECRET, b, { person: 'p-1' })
+  let { grant, token } = await mint(SECRET, b, { person: P1 })
   assert(token.startsWith(GRANT), 'a grant says so in its first characters')
   assertEquals(grant.space, null)
   assertEquals(await held(token, SECRET, b), grant)
@@ -56,7 +61,7 @@ test('a grant is minted, and the token names it back', async () => {
 test('a grant carries the space it was narrowed to', async () => {
   let b = book()
   let { token } = await mint(SECRET, b, {
-    person: 'p-1',
+    person: P1,
     space: { eid: 'e-dana', slug: 'dana' },
   })
   assertEquals((await held(token, SECRET, b))?.space, 'dana')
@@ -66,11 +71,11 @@ test('a grant carries the space it was narrowed to', async () => {
 test('hours: asked for, and refused past the ceiling', async () => {
   let b = book()
   let now = Date.now()
-  let { grant } = await mint(SECRET, b, { person: 'p-1', hours: 6 }, now)
+  let { grant } = await mint(SECRET, b, { person: P1, hours: 6 }, now)
   assertEquals(grant.exp, Math.floor(now / 1000) + 6 * 3600)
   for (let hours of [0, -1, HOURS + 1, NaN]) {
     await assertRejects(
-      () => mint(SECRET, b, { person: 'p-1', hours }),
+      () => mint(SECRET, b, { person: P1, hours }),
       Error,
       'hours:',
     )
@@ -81,7 +86,7 @@ test('a held grant minted before stable space identities keeps working', async (
   let b = book()
   let grant: Grant = {
     id: 'older',
-    person: 'p-1',
+    person: P1,
     space: 'dana',
     exp: Math.floor(Date.now() / 1000) + 3600,
   }
@@ -92,36 +97,36 @@ test('a held grant minted before stable space identities keeps working', async (
 test('a grant is refused when it expires', async () => {
   let b = book()
   let now = Date.now()
-  let { token } = await mint(SECRET, b, { person: 'p-1', hours: 1 }, now)
+  let { token } = await mint(SECRET, b, { person: P1, hours: 1 }, now)
   assert(await held(token, SECRET, b, now + 59 * 60_000))
   assertEquals(await held(token, SECRET, b, now + 61 * 60_000), null)
 })
 
 test('a grant is refused when it is revoked, by id or by prefix', async () => {
   let b = book()
-  let one = await mint(SECRET, b, { person: 'p-1' })
-  let two = await mint(SECRET, b, { person: 'p-1' })
-  assertEquals(await revoke(b, 'p-1', one.grant.id), [one.grant.id])
+  let one = await mint(SECRET, b, { person: P1 })
+  let two = await mint(SECRET, b, { person: P1 })
+  assertEquals(await revoke(b, P1, one.grant.id), [one.grant.id])
   assertEquals(await held(one.token, SECRET, b), null)
   // The other is untouched, and a prefix of its id names it.
   assert(await held(two.token, SECRET, b))
-  assertEquals(await revoke(b, 'p-1', two.grant.id.slice(0, 6)), [two.grant.id])
+  assertEquals(await revoke(b, P1, two.grant.id.slice(0, 6)), [two.grant.id])
   assertEquals(await held(two.token, SECRET, b), null)
   // A prefix nobody wears revokes nothing, and says so by answering none.
-  assertEquals(await revoke(b, 'p-1', 'zzzz'), [])
+  assertEquals(await revoke(b, P1, 'zzzz'), [])
 })
 
 test("one person's grant is not another's to revoke", async () => {
   let b = book()
-  let { grant, token } = await mint(SECRET, b, { person: 'p-1' })
-  assertEquals(await revoke(b, 'p-2', grant.id), [])
+  let { grant, token } = await mint(SECRET, b, { person: P1 })
+  assertEquals(await revoke(b, P2, grant.id), [])
   assert(await held(token, SECRET, b))
 })
 
 test('revoking a CLI grant prefix leaves connector grants in place', async () => {
   let grant: Grant = {
     id: 'abcdef123456',
-    person: 'p-1',
+    person: P1,
     space: null,
     exp: Math.floor(Date.now() / 1000) + 3600,
   }
@@ -135,7 +140,7 @@ test('revoking a CLI grant prefix leaves connector grants in place', async () =>
   })
   let key = `grant:${grant.person}:abcdef-connector`
   let store = kv()
-  let b = ledger(store)!
+  let b = ledger(store, k.dir)!
   await store.put(key, connector)
   await b.keep(grant)
   await b.wear('container', grant)
@@ -152,7 +157,7 @@ test('revoking a CLI grant prefix leaves connector grants in place', async () =>
 
 test('a forged, edited or foreign token is nobody', async () => {
   let b = book()
-  let { grant, token } = await mint(SECRET, b, { person: 'p-1' })
+  let { grant, token } = await mint(SECRET, b, { person: P1 })
   // Another secret's seal, carrying a grant this ledger really holds.
   let forged = GRANT + await seal('grant', grant, 'other')
   assertEquals(await held(forged, SECRET, b), null)
@@ -170,8 +175,45 @@ test('a forged, edited or foreign token is nobody', async () => {
 })
 
 test('no ledger is no grants at all', () => {
-  assertEquals(ledger(undefined), null)
-  assertEquals(ledger({}), null)
+  assertEquals(ledger(kv(), undefined), null)
+  assertEquals(ledger(undefined, k.dir), null)
+})
+
+test('a revoked grant is refused at once where KV still answers it', async () => {
+  let store = kv()
+  let here = ledger(store, k.dir)!, there = ledger(stale(store), k.dir)!
+  let { grant, token } = await mint(SECRET, here, { person: P1 })
+  assert(await held(token, SECRET, there))
+  await revoke(here, P1, grant.id)
+  assertEquals(await held(token, SECRET, there), null)
+  assertEquals(await there.stands(P1, grant.id), false)
+})
+
+test('a grant kept only in KV keeps working, and its row then decides', async () => {
+  let store = kv(), P3 = crypto.randomUUID()
+  await k.dir.stamp({ entities: [{ entity: { eid: P3 }, person: {} }] })
+  let old: Grant = {
+    id: 'kvonly123456',
+    person: P3,
+    space: 'dana',
+    spaceEid: 'e-dana',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  }
+  await store.put(`cli-grant:${P3}:${old.id}`, JSON.stringify(old))
+  let b = ledger(stale(store), k.dir)!
+  let token = await tokenOf(old, SECRET)
+  assertEquals(await held(token, SECRET, b), old)
+  assertEquals(await b.ids(P3), [old.id])
+  assertEquals(await revoke(b, P3, old.id), [old.id])
+  assertEquals(await held(token, SECRET, b), null)
+  assertEquals(await b.ids(P3), [])
+})
+
+test('a grant stands only while its person does', async () => {
+  let ghost = crypto.randomUUID()
+  let b = book()
+  let { grant } = await mint(SECRET, b, { person: ghost })
+  assertEquals(await b.stands(ghost, grant.id), false)
 })
 
 // The narrowing, over a directory of two spaces the person owns.

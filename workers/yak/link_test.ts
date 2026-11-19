@@ -4,6 +4,8 @@
 // here imports a Cloudflare name, so the whole contract holds in plain Deno;
 // the door it hangs on is held through the kernel (identity_test.ts).
 import { test } from '@yaks/testing'
+import { kv } from './testing.ts'
+import { kernel } from './probe.ts'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { seal } from './lib/token.ts'
 import {
@@ -28,24 +30,13 @@ let ME = 'me@yaks.app'
 await seal('link', {}, SECRET)
 await seal('link', {}, ELSE)
 
-// The KV as `shelf` asks for it, in a map.
-let kv = () => {
-  let rows = new Map<string, string>()
-  return {
-    rows,
-    get: (k: string) => Promise.resolve(rows.get(k) ?? null),
-    put: (k: string, v: string) => (rows.set(k, v), Promise.resolve()),
-    delete: (k: string) => (rows.delete(k), Promise.resolve()),
-    list: ({ prefix }: { prefix: string }) =>
-      Promise.resolve({
-        keys: [...rows.keys()].filter((k) => k.startsWith(prefix)).map((
-          name,
-        ) => ({ name })),
-      }),
-  }
-}
+let k = await kernel()
+let [P1, P2] = [crypto.randomUUID(), crypto.randomUUID()]
+await k.dir.stamp({
+  entities: [P1, P2].map((eid) => ({ entity: { eid }, person: {} })),
+})
 
-let book = () => links(kv())!
+let book = () => links(kv(), k.dir)!
 
 test('a letter’s link carries the code, and what it was finishing', async () => {
   let url = await onceLink(SECRET, {
@@ -79,7 +70,7 @@ test('following the link spends the code, and nothing spends it twice', async ()
 
 test('a standing link lives to its expiry, and not past it', async () => {
   let now = Date.now()
-  let { standing, url } = await stand(SECRET, book(), { person: 'p1' }, now)
+  let { standing, url } = await stand(SECRET, book(), { person: P1 }, now)
   assertEquals(standing.exp, Math.floor(now / 1000) + DAYS * 86_400)
   assert(url.startsWith('https://yaks.app/login/link?t='))
   assertEquals(
@@ -91,28 +82,28 @@ test('a standing link lives to its expiry, and not past it', async () => {
 test('a standing link needs its row: revoked, expired, or somebody else’s', async () => {
   let shelf = book()
   let now = Date.now()
-  let { standing } = await stand(SECRET, shelf, { person: 'p1', days: 2 }, now)
-  assertEquals(await whose(standing, shelf, now), 'p1')
+  let { standing } = await stand(SECRET, shelf, { person: P1, days: 2 }, now)
+  assertEquals(await whose(standing, shelf, now), P1)
   // Past its own expiry it opens nothing, row or no row.
   assertEquals(await whose(standing, shelf, now + 3 * 86_400_000), null)
   // A pass naming another person finds no row at all: the person is in the key.
-  assertEquals(await whose({ ...standing, person: 'p2' }, shelf, now), null)
+  assertEquals(await whose({ ...standing, person: P2 }, shelf, now), null)
   // Nowhere to write one down is nowhere to take it back from.
   assertEquals(await whose(standing, null, now), null)
   // Revoked by the front of its id, and dead the moment the row goes.
-  assertEquals(await revoke(shelf, 'p1', standing.id.slice(0, 4)), [
+  assertEquals(await revoke(shelf, P1, standing.id.slice(0, 4)), [
     standing.id,
   ])
   assertEquals(await whose(standing, shelf, now), null)
-  assertEquals(await revoke(shelf, 'p1', 'nothing'), [])
+  assertEquals(await revoke(shelf, P1, 'nothing'), [])
 })
 
 test('a life outside the ceiling is refused, never clamped', async () => {
   let shelf = book()
   for (let days of [0, -1, MOST + 1]) {
-    await assertRejects(() => stand(SECRET, shelf, { person: 'p1', days }))
+    await assertRejects(() => stand(SECRET, shelf, { person: P1, days }))
   }
-  assert((await stand(SECRET, shelf, { person: 'p1', days: MOST })).standing)
+  assert((await stand(SECRET, shelf, { person: P1, days: MOST })).standing)
 })
 
 test('nothing but a well-formed pass under this secret opens', async () => {
@@ -128,5 +119,5 @@ test('nothing but a well-formed pass under this secret opens', async () => {
   ) assertEquals(await passOf(await seal('link', junk, SECRET), SECRET), null)
   // And a store row is not a link: what it keeps is a mac, never the digits.
   assert((await mac(ME, '123456', SECRET)) != '123456')
-  assertEquals(links(undefined), null)
+  assertEquals(links(kv(), undefined), null)
 })

@@ -7632,7 +7632,7 @@ let OURS: Row[] = [
     },
     run: async (ctx, args) => {
       let secret = ctx.env.SESSION_SECRET
-      let book = ledger(ctx.env.OAUTH_KV)
+      let book = ledger(ctx.env.OAUTH_KV, ctx.dir)
       if (!secret || !book) {
         throw refuse('unavailable', 'grants are not switched on here')
       }

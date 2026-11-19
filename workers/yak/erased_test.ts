@@ -21,7 +21,7 @@ let dir = directoryOf(env.STORE)
 let cy = await signIn(k, `cy-${crypto.randomUUID()}${BOT}`)
 // The box's connection to a test account is a grant, and outlived the account
 // it was for (T-144541).
-let { token } = await mint(k.secret, ledger(env.OAUTH_KV)!, {
+let { token } = await mint(k.secret, ledger(env.OAUTH_KV, k.dir)!, {
   person: cy.person,
 })
 await closed(env, dir, cy.email, { person: k.owner.person, role: 'owner' })

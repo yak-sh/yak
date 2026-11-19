@@ -27,6 +27,35 @@ export let directoryDoc: VocabDoc = {
         agent: owned(text),
       },
     },
+    // One CLI grant (workers/yak/grants.ts): whose it is, its id, the space
+    // it is narrowed to, and when it dies. Revoked by cancelling its row.
+    cli_grant: {
+      description: 'One CLI grant, revoked by cancelling its row.',
+      component: true,
+      type: 'object',
+      journal: false,
+      expire: '.cli_grant.until<=now',
+      properties: {
+        person: owned(ref('cascade')),
+        id: owned(text),
+        until: owned(time),
+        space: owned(text),
+        space_eid: owned(text),
+      },
+    },
+    // One standing sign-in link (workers/yak/link.ts), revoked the same way.
+    standing_link: {
+      description: 'One standing sign-in link, revoked by cancelling its row.',
+      component: true,
+      type: 'object',
+      journal: false,
+      expire: '.standing_link.until<=now',
+      properties: {
+        person: owned(ref('cascade')),
+        id: owned(text),
+        until: owned(time),
+      },
+    },
     // Storage survives config edits and renames. Only the kernel may record
     // account resource ids, so an app cannot claim another tenant's data.
     binding: {
@@ -232,8 +261,9 @@ export let directoryDoc: VocabDoc = {
       properties: { url: text },
     },
     // One OAuth grant a person holds, as their agents and services are listed
-    // (grant-rows.ts): written as the provider writes the grant to KV, gone
-    // when it deletes it, and holding none of its secrets. Its eid is derived
+    // (grant-rows.ts): written as the provider writes the grant to KV,
+    // cancelled when it deletes it, and holding none of its secrets. A token
+    // is refused once its grant's row is cancelled (asking.ts). Its eid is derived
     // from the grant's id. Times are unix seconds; `until` is when KV lets a
     // grant whose code was never exchanged go.
     oauth_grant: {

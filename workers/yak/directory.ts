@@ -897,6 +897,14 @@ export type Row = MeteredRow & {
   oauth_grant?: Omit<GrantRow, 'person'> & { person: Id }
   grants_listed?: { at: string }
   browser_session?: { person: Id; via: Id; until: string; agent: string }
+  cli_grant?: {
+    person: Id
+    id: string
+    until: string
+    space?: string | null
+    space_eid?: string | null
+  }
+  standing_link?: { person: Id; id: string; until: string }
   sessions_ended?: { at: string }
   cancelled?: Record<string, unknown>
   signed_in?: { at?: string | null; via?: string | null }
@@ -2706,13 +2714,26 @@ export let directoryRows = (rows: {
       (await query(asked as Line)).map(({ policy: _, ...row }) =>
         row as Bundle
       ),
+    // A credential's row and its person's row, in one read: whether the
+    // person still stands, and the row whose `cancelled` mark ends the
+    // credential (browser-sessions.ts, grants.ts `shelf`, identity.ts
+    // `unwrapped`). The directory is one strongly consistent store, so a
+    // credential ended here is ended for every caller at once.
+    credential: async (eid: string, person: string) => {
+      let rows = (await query(line`.entity.eid=${[eid, person]}`))
+        .map(({ policy: _, ...row }): Row => row)
+      let owner = rows.find((r) => r.entity.eid == person) ?? null
+      return {
+        owner,
+        present: !!owner?.person && !owner.trashed,
+        row: rows.find((r) => r.entity.eid == eid) ?? null,
+      }
+    },
     browserSession: async (eid: string, person: string) => {
-      let rows = await query(line`.entity.eid=${[eid, person]}`)
-      let row = rows.find((r) => r.entity.eid == eid)
-      let owner = rows.find((r) => r.entity.eid == person)
+      let { owner, present, row } = await self.credential(eid, person)
       return {
         ended: !!owner?.sessions_ended,
-        present: !!owner?.person && !owner.trashed,
+        present,
         cancelled: !!row?.cancelled,
         session: row?.browser_session
           ? {
@@ -3970,7 +3991,7 @@ export let directoryRows = (rows: {
     grants: async (person: string) => {
       let [them, rows] = await Promise.all([
         one(line`.entity.eid=${person}`),
-        theirs(person, line`.oauth_grant.person=${person}`),
+        theirs(person, line`.oauth_grant.person=${person}&!cancelled`),
       ])
       return {
         listed: !!them?.grants_listed,

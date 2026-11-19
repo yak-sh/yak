@@ -1,7 +1,7 @@
 import { Pending } from '@yaks/api/log'
 import type { Bundle } from '@yaks/graph'
 import { equal, test } from '@yaks/testing'
-import { through } from './grant-rows.ts'
+import { stands, through } from './grant-rows.ts'
 
 let KEY = 'grant:person:g1'
 let GRANT = JSON.stringify({ id: 'g1', clientId: 'c', createdAt: 1 })
@@ -39,4 +39,37 @@ test('a grant whose row fails is not written to KV', async () => {
   let { kv, held } = kvWith(new TypeError('down'))
   equal(await outcome(() => kv.put(KEY, GRANT)), 'TypeError')
   equal(held.has(KEY), false)
+})
+
+test('a deleted grant leaves its row cancelled', async () => {
+  let { kv, written } = kvWith()
+  await kv.put(KEY, GRANT)
+  await kv.delete(KEY)
+  equal(written[1][0].cancelled, {})
+})
+
+// Whether a token's grant stands, by what the directory holds of the grant and
+// of its person.
+let standing = (person: boolean, row: Bundle | null) =>
+  stands(
+    {
+      credential: () =>
+        Promise.resolve({ owner: null, present: person, row } as never),
+    },
+    'g1',
+    'person',
+  )
+
+test("a token's grant stands until its row is cancelled or its person goes", async () => {
+  let row = { entity: { eid: 'g' }, oauth_grant: { id: 'g1' } } as Bundle
+  let ended = { ...row, cancelled: {} }
+  equal(
+    await Promise.all([
+      standing(true, row),
+      standing(true, null),
+      standing(true, ended),
+      standing(false, row),
+    ]),
+    [true, true, false, false],
+  )
 })

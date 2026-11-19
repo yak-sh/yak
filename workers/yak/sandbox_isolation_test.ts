@@ -1,8 +1,8 @@
 // A leftover process must never see a different member's command environment.
 import { whole } from '@yaks/query'
 import { equal, match, test } from '@yaks/testing'
-import { kv, sandboxes } from './testing.ts'
-import type { Space } from './directory.ts'
+import { kv, platform, sandboxes } from './testing.ts'
+import { directoryOf, type Space } from './directory.ts'
 import { held, ledger, mint } from './grants.ts'
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -62,16 +62,24 @@ let containers = () => {
   }
 }
 
+// The directory the grants are kept in, and the person the owner's grant is
+// for.
+let door = platform(secret)
+let dir = directoryOf(door.env.STORE)
+let OWNER = crypto.randomUUID()
+await dir.stamp({ entities: [{ entity: { eid: OWNER }, person: {} }] })
+
 let isolated = async () => {
-  let oauth = kv(), book = ledger(oauth)!
+  let oauth = kv(), book = ledger(oauth, dir)!
   let { grant: owned } = await mint(secret, book, {
-    person: 'owner',
+    person: OWNER,
     space,
   })
   let box = containers()
   let env = {
     WORKBENCH: box.WORKBENCH,
     OAUTH_KV: oauth,
+    STORE: door.env.STORE,
     SESSION_SECRET: secret,
   }
   let [theirs, mine] = [named(space.eid, 'editor'), named(space.eid, 'owner')]
@@ -92,7 +100,7 @@ test('a member cannot read another member’s grant through leftover sandbox cod
   // container.
   let [lend] = await lent(env, mine)
   match(await held(lend.value, secret, book), {
-    person: 'owner',
+    person: OWNER,
     space: space.slug,
   })
 })

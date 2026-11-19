@@ -1145,7 +1145,7 @@ export let trashedAccount: Kind<Closing> = {
 // and they never installed, which nobody else can reach.
 let buried = async (env: Env, dir: Directory, person: string, who: Who) => {
   let held = await dir.read(
-    line`(.browser_session.person=${person} | .oauth_grant.person=${person} | .grant.person=${person})`,
+    line`(.browser_session.person=${person} | .oauth_grant.person=${person} | .cli_grant.person=${person} | .standing_link.person=${person} | .grant.person=${person})`,
   )
   let { unheld } = await import('./identity.ts')
   await unheld(env, person)

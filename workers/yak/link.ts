@@ -40,7 +40,8 @@
 // A forged pass fails its mac before any read. A letter's signed pass selects
 // only its own code, so an old link spends none of another browser's tries.
 import { opened, seal } from './lib/token.ts'
-import { type Row, shelf } from './grants.ts'
+import { type Row, type Rows, shelf } from './grants.ts'
+import { line } from '@yaks/query'
 import { onZone } from '@yaks/platform/routes'
 import { LINK, PLATFORM } from '@yaks/platform/names'
 import type { Host } from '@yaks/platform/host'
@@ -70,7 +71,14 @@ export type Standing = Row
 export type Pass = { once?: Once; standing?: Standing }
 
 /** Where the standing links are written down (grants.ts `shelf`). */
-export let links = (kv: unknown) => shelf<Standing>(kv, 'link')
+export let links = (kv: unknown, dir: Rows | null | undefined) =>
+  shelf<Standing>(kv, dir, {
+    what: 'link',
+    component: 'standing_link',
+    mine: (person) => line`.standing_link.person=${person}&!cancelled`,
+    said: () => ({}),
+    of: (_, r) => r,
+  })
 
 export type Links = NonNullable<ReturnType<typeof links>>
 

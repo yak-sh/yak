@@ -57,9 +57,13 @@ let ADA = crypto.randomUUID()
 await directoryOf(door.env.STORE).stamp({
   entities: [{ entity: { eid: ADA }, person: {} }],
 })
-let { token: grant } = await mint(SECRET, ledger(door.env.OAUTH_KV)!, {
-  person: ADA,
-})
+let { token: grant } = await mint(
+  SECRET,
+  ledger(door.env.OAUTH_KV, directoryOf(door.env.STORE))!,
+  {
+    person: ADA,
+  },
+)
 let ask = (headers: Record<string, string>) =>
   asking(door.env, new Request('https://yaks.app/manage', { headers }))
 

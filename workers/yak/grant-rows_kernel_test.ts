@@ -5,6 +5,8 @@
 import { equal, test } from '@yaks/testing'
 import { challenge } from '@yaks/oauth'
 import { allowed, fresh, signIn } from './probe.ts'
+import { asking } from './asking.ts'
+import type { Env } from './env.ts'
 
 // KV as the provider meets it, its listing frozen while `lagging` (as KV's
 // edge answers a list it already holds) and its reads of grants counted.
@@ -16,7 +18,11 @@ type Kv = {
 let lagging = false
 let reads = 0
 let held: Kv
-let k = await fresh({}, (env) => {
+let env: Env
+// What KV's edge answered for a token, answered again while `lagging`.
+let tokens = new Map<string, unknown>()
+let k = await fresh({}, (e) => {
+  env = e
   held = env.OAUTH_KV as Kv
   let { list, get } = { list: held.list.bind(held), get: held.get.bind(held) }
   let frozen = new Map<string, Awaited<ReturnType<Kv['list']>>>()
@@ -25,9 +31,11 @@ let k = await fresh({}, (env) => {
     if (!lagging) return frozen.set(o.prefix, await list(o)).get(o.prefix)!
     return frozen.get(o.prefix) ?? await list(o)
   }
-  held.get = (key, as) => {
+  held.get = async (key, as) => {
     if (key.startsWith('grant:')) reads++
-    return get(key, as)
+    if (!key.startsWith('token:')) return get(key, as)
+    if (!lagging || !tokens.has(key)) tokens.set(key, await get(key, as))
+    return tokens.get(key)
   }
 })
 addEventListener('unload', () => void k.stop())
@@ -74,9 +82,20 @@ let connect = async (cookie: string, name: string) => {
     }).toString(),
   })
   equal(token.status, 200)
-  await token.body?.cancel()
+  issued = (await token.json()).access_token
   return client_id as string
 }
+// The access token the last `connect` was answered.
+let issued = ''
+
+// Who a request bearing this token is, as every door asks.
+let bearer = async (token: string) =>
+  (await asking(
+    env,
+    new Request('https://yaks.app/mcp', {
+      headers: { authorization: `Bearer ${token}` },
+    }),
+  )).who?.person
 
 let disconnect = async (cookie: string, agent: string) => {
   let res = await k.at('yaks.app', '/oauth/agents/disconnect', {
@@ -138,4 +157,24 @@ test('grants from before the rows are listed from KV once, and then from the row
   reads = 0
   equal(await agents(before.cookie), ['Older agent'])
   equal(reads, 0)
+})
+
+test("a disconnected agent's token is refused at once, while KV still answers it", async () => {
+  let agent = await connect(lag.cookie, 'Revoked agent')
+  let token = issued
+  equal(await bearer(token), lag.person)
+  lagging = true
+  try {
+    await disconnect(lag.cookie, agent)
+    equal(await bearer(token), undefined)
+  } finally {
+    lagging = false
+  }
+})
+
+test('a grant whose code was exchanged does not lapse with the code', async () => {
+  let them = await listedPerson()
+  await connect(them.cookie, 'Exchanged agent')
+  let [row] = (await k.dir.grants(them.person)).rows
+  equal([row.name, row.until], ['Exchanged agent', undefined])
 })

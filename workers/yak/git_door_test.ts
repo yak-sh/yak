@@ -29,8 +29,10 @@ let utf8 = new TextEncoder()
 // A space with one app in it, at the access mode this test is about. Ada owns
 // the space, which is what a credential of hers has to find to reach a private
 // app; Ben is a person of the platform with no seat here at all.
+let dirOf = (env: Env) =>
+  directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
 let standing = async (env: Env, access: string, trashed = false) => {
-  let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
+  let dir = dirOf(env)
   await dir.apply({
     entities: [
       { entity: { eid: ADA }, person: {}, doc: { title: 'Ada' } },
@@ -97,7 +99,7 @@ let asked = (env: Env, address: string, headers: HeadersInit = {}) => {
 // A grant of this person's, as `yak login` writes one down: the token the door
 // takes as a Basic password, and the credential a `git clone` URL carries.
 let tokenFor = async (env: Env, person: string) =>
-  (await mint(SECRET, ledger(env.OAUTH_KV)!, { person })).token
+  (await mint(SECRET, ledger(env.OAUTH_KV, dirOf(env))!, { person })).token
 
 // The credential git sends once it has been challenged. The username is
 // decoration — the door reads the password.

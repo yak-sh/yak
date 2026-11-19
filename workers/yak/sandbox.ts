@@ -83,7 +83,9 @@ import {
 import { granted, Refused } from '@yaks/egress'
 import { DOORS } from '@yaks/git/door'
 import { sentinel } from '@yaks/secrets'
-import { type Space, stamp } from './directory.ts'
+import { directory, type Space, stamp } from './directory.ts'
+import * as dirPart from './directory.ts'
+import { bound, type Env } from './env.ts'
 import type { Tier } from '@yaks/platform/plans'
 import { evicted, jittered, retried } from '@yaks/durable-object/resets'
 import type { Namespace } from '@yaks/durable-object/door'
@@ -242,7 +244,20 @@ export let overBudget = (spent: number) =>
 
 /** What a grant is made and unmade with: the secret it is sealed under and
  * the ledger it is written in (grants.ts). */
-type Keys = Host & { SESSION_SECRET?: string; OAUTH_KV?: unknown }
+type Keys = Host & {
+  SESSION_SECRET?: string
+  OAUTH_KV?: unknown
+  DIRECTORY?: Env['DIRECTORY']
+}
+
+// The grants a container wears (grants.ts `ledger`), kept in the directory.
+// Every caller is handed the Worker's whole env, which the directory's
+// in-process door reads when no binding is wired.
+let bookOf = (env: Keys) =>
+  ledger(
+    env.OAUTH_KV,
+    directory(bound(env.DIRECTORY, dirPart.fetch, env as Env)),
+  )
 type Bound = Keys & {
   WORKBENCH?: Sandboxes
   STORE?: unknown
@@ -295,7 +310,7 @@ export let signed = async (
   person: string,
   now = Date.now(),
 ): Promise<Record<string, string>> => {
-  let book = ledger(env.OAUTH_KV)
+  let book = bookOf(env)
   let secret = env.SESSION_SECRET
   if (!book || !secret) return {}
   let was = await book.wearing(container)
@@ -320,7 +335,7 @@ export let signed = async (
 // and the address of the one space the grant reaches, where a clone of its
 // apps knocks (git_door.ts). None when it wears none.
 export let lent = async (env: Keys, container: string) => {
-  let book = ledger(env.OAUTH_KV)
+  let book = bookOf(env)
   let secret = env.SESSION_SECRET
   let was = book && await book.wearing(container)
   let grant = was && await book!.held(was.person, was.id)
@@ -387,7 +402,7 @@ export let routed = async (
 // who was closing their space.
 let bared = async (env: Keys, space: Space, holder: string) => {
   try {
-    let book = ledger(env.OAUTH_KV)
+    let book = bookOf(env)
     if (!book) return
     let was = await book.wearing(holder)
     if (!was) return

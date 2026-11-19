@@ -844,7 +844,7 @@ The complete list of reserved names:
     belief binding blob bounced browser browser_session budget build
     build_of builder builder_answer builder_dep builder_edit
     builder_model_answer builder_open builder_ring built call call_ready
-    call_woken called calls cancel cancelled checkout chosen cites
+    call_woken called calls cancel cancelled checkout chosen cites cli_grant
     code_review comment commit comp compat completed connection contains
     content conversation cost counted created credit credit_block delegates
     delete_retired_files delete_upload deliver delivered demo deploy
@@ -872,8 +872,8 @@ The complete list of reserved names:
     satisfies screen screenshot secret seeded seller sender sending serves
     service_checkout service_quote session session_input session_result
     session_run sessions_ended sfu shared signed_in signin skill sms_consent
-    space space_logo speech_hear spend staged started starter stop
-    stream_item submitted subscribed subscription supersedes supervises
+    space space_logo speech_hear spend staged standing_link started starter
+    stop stream_item submitted subscribed subscription supersedes supervises
     support sweep switched task text text_post theme tool tool_refusal topic
     trashed tree_entry trend tunnel tunnel_tell tunnel_trashed typed
     unchecked untrashed updated upstream usage uses using verified visit

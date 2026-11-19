@@ -21,12 +21,14 @@
 // a narrowing (`narrowed` below).
 //
 // And it is revocable, which a sealed value is not on its own: minting writes
-// a row in the same KV the OAuth grants live in, verifying requires that row,
-// and revoking deletes it. The row expires with the token, so nothing has to
-// sweep it. KV is eventually consistent, so a revocation lands everywhere
-// within about a minute rather than instantly — which is why the life is short
-// and the ceiling is a day.
+// a row in the directory, verifying requires that row, and revoking marks it
+// `cancelled`. The directory is one strongly consistent store, so a grant
+// revoked is refused at once everywhere; KV, eventually consistent, kept a
+// revoked grant answering for a minute wherever it had been read (T-1353).
 import { opened, seal } from './lib/token.ts'
+import type { Bundle } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
+import { type Line, line } from '@yaks/query'
 import {
   type Directory,
   listingOf,
@@ -73,51 +75,150 @@ export type Ledger = NonNullable<ReturnType<typeof ledger>>
 // which one it is, and the second it dies at.
 export type Row = { id: string; person: string; exp: number }
 
-// A shelf of those over the KV, keyed `<what>:<person>:<id>`. Both revocable
-// credentials here are one — a CLI grant, and the standing sign-in link beside
-// it (link.ts) — because a sealed value nobody can forge is still one nobody
-// could end: verifying asks whether the row is there, and revoking deletes it.
-// The row expires with what it names, so nothing has to sweep it, and a token
-// naming somebody else's id finds no row at all, since the person is in the
-// key.
+// What a shelf asks of the directory: one credential's row with its person's,
+// a read of a person's rows, and a write.
+export type Rows = Pick<Directory, 'credential' | 'read' | 'stamp'>
+
+// One kind of row a shelf keeps: its component, the KV prefix it was kept
+// under before the directory (`what`), the read of a person's rows still
+// standing, and how one of its credentials is said as a row and read back.
+export type Kind<T extends Row> = {
+  what: string
+  component: 'cli_grant' | 'standing_link'
+  mine: (person: string) => Line
+  said: (r: T) => Record<string, unknown>
+  of: (said: Record<string, unknown>, r: Row) => T
+}
+
+let iso = (exp: number) => new Date(exp * 1000).toISOString()
+
+// A shelf of those in the directory, one row each, its eid derived from whose
+// it is and which one. Both revocable credentials here are one — a CLI grant,
+// and the standing sign-in link beside it (link.ts) — because a sealed value
+// nobody can forge is still one nobody could end: verifying asks whether the
+// row stands, and revoking marks it `cancelled`. The row lapses with what it
+// names (its `until`, the directory's `expire`), and a token naming somebody
+// else's id finds no row at all, since the person is in its eid.
 //
-// Null when there is no KV (a probe with none wired): minting refuses rather
-// than handing out something nothing could ever take back. `kv` and `ttl` are
-// answered too, for the rows a shelf's owner keeps beside its own (`wearing`).
-export let shelf = <T extends Row>(kv: unknown, what: string) => {
-  let store = kv as Kv | undefined
-  if (!store?.get) return null
-  let key = (person: string, id: string) => `${what}:${person}:${id}`
+// A credential minted before the rows (T-1353) is in KV, under
+// `<what>:<person>:<id>`: the first read that finds no row reads it there and
+// writes its row, which decides from then on, so nobody holding one is signed
+// out (M-37923). Revoking one marks its row the same way. And minting still
+// writes KV beside the row, for a Worker on the release before this one.
+//
+// Null when there is no directory (a probe with none wired): minting refuses
+// rather than handing out something nothing could ever take back. `kv` and
+// `ttl` are answered too, for the rows a shelf's owner keeps beside its own
+// (`wearing`).
+export let shelf = <T extends Row>(
+  kv: unknown,
+  dir: Rows | null | undefined,
+  kind: Kind<T>,
+) => {
+  let store = (kv as Kv | undefined)?.get ? kv as Kv : null
+  if (!dir) return null
+  let key = (person: string, id: string) => `${kind.what}:${person}:${id}`
+  let eid = (person: string, id: string) =>
+    identityEid(kind.component, [person, id])
   // A minute past the row's own death — KV's own floor is a minute — so a
   // clock that disagrees slightly reads a live one as live.
   let ttl = (r: Row, now = Date.now()) =>
     Math.max(60, r.exp - Math.floor(now / 1000) + 60)
+  let rowOf = (r: T, ended = false): Bundle => ({
+    entity: { eid: eid(r.person, r.id) },
+    [kind.component]: {
+      person: r.person,
+      id: r.id,
+      until: iso(r.exp),
+      ...kind.said(r),
+    },
+    ...ended ? { cancelled: {} } : {},
+  })
+  let kept = async (person: string, id: string): Promise<T | null> =>
+    store ? JSON.parse(await store.get(key(person, id)) ?? 'null') : null
+  // The credential and whether its person stands, as the directory says.
+  let look = async (person: string, id: string) => {
+    let { present, row } = await dir.credential(eid(person, id), person)
+    if (row?.cancelled) return { present, held: null }
+    let said = row?.[kind.component] as Record<string, unknown> | undefined
+    if (said) {
+      let exp = Date.parse(String(said.until)) / 1000
+      return { present, held: kind.of(said, { id, person, exp }) }
+    }
+    let old = await kept(person, id)
+    if (old && present) await dir.stamp({ entities: [rowOf(old)] })
+    return { present, held: old }
+  }
+  let held = async (person: string, id: string) => (await look(person, id)).held
   return {
     key,
     kv: store,
     ttl,
     keep: async (r: T, now = Date.now()) => {
-      await store.put(key(r.person, r.id), JSON.stringify(r), {
+      await dir.stamp({ entities: [rowOf(r)] })
+      await store?.put(key(r.person, r.id), JSON.stringify(r), {
         expirationTtl: ttl(r, now),
       })
     },
-    held: async (person: string, id: string): Promise<T | null> =>
-      JSON.parse(await store.get(key(person, id)) ?? 'null'),
-    // Every one of this person's still on the books, by id.
-    ids: async (person: string) =>
-      (await store.list({ prefix: key(person, '') })).keys
-        .map((k) => k.name.slice(key(person, '').length)),
+    held,
+    // Whether the credential stands and so does its person, in one read.
+    stands: async (person: string, id: string) => {
+      let { present, held } = await look(person, id)
+      return present && !!held
+    },
+    // Every one of this person's still on the books, by id: their rows, and
+    // whatever KV still holds from before the rows.
+    ids: async (person: string) => {
+      let [rows, old] = await Promise.all([
+        dir.read(kind.mine(person)),
+        store
+          ? store.list({ prefix: key(person, '') }).then((l) =>
+            l.keys.map((k) => k.name.slice(key(person, '').length))
+          )
+          : [],
+      ])
+      let ids = rows.map((b) =>
+        String((b[kind.component] as { id: string }).id)
+      )
+      return [...new Set([...ids, ...old])]
+    },
     drop: async (person: string, id: string) => {
-      await store.delete(key(person, id))
+      let r = await held(person, id)
+      await dir.stamp({
+        entities: [
+          r
+            ? rowOf(r, true)
+            : { entity: { eid: eid(person, id) }, cancelled: {} },
+        ],
+      })
+      await store?.delete(key(person, id))
     },
   }
 }
 
+// A CLI grant as a row: the space it is narrowed to beside whose it is, read
+// back in the order it was sealed, since the seal is said again from it
+// (`tokenOf`).
+let GRANTS: Kind<Grant> = {
+  what: CLI_GRANT,
+  component: 'cli_grant',
+  mine: (person) => line`.cli_grant.person=${person}&!cancelled`,
+  said: (g) => ({ space: g.space, space_eid: g.spaceEid ?? null }),
+  of: (said, { id, person, exp }) => ({
+    id,
+    person,
+    space: (said.space as string | null | undefined) ?? null,
+    ...said.space_eid ? { spaceEid: String(said.space_eid) } : {},
+    exp,
+  }),
+}
+
 // Where a grant is written down: the shelf above, plus the one row a grant has
 // that a sign-in link does not.
-export let ledger = (kv: unknown) => {
-  let book = shelf<Grant>(kv, CLI_GRANT)
-  if (!book) return null
+export let ledger = (kv: unknown, dir: Rows | null | undefined) => {
+  let book = shelf<Grant>(kv, dir, GRANTS)
+  let worns = book?.kv
+  if (!book || !worns) return null
   // Never write or delete provider-owned grant: rows here.
   // What a long-lived holder is signed in with, by what the holder is known
   // by.
@@ -132,19 +233,19 @@ export let ledger = (kv: unknown) => {
     // holder to take it back without having minted it. It expires with the
     // grant it names.
     wear: async (holder: string, g: Grant, now = Date.now()) => {
-      await book.kv.put(worn(holder), `${g.person}:${g.id}`, {
+      await worns.put(worn(holder), `${g.person}:${g.id}`, {
         expirationTtl: book.ttl(g, now),
       })
     },
     wearing: async (holder: string) => {
-      let said = await book.kv.get(worn(holder))
+      let said = await worns.get(worn(holder))
       let cut = said?.indexOf(':') ?? -1
       return cut < 0
         ? null
         : { person: said!.slice(0, cut), id: said!.slice(cut + 1) }
     },
     bare: async (holder: string) => {
-      await book.kv.delete(worn(holder))
+      await worns.delete(worn(holder))
     },
   }
 }
@@ -197,13 +298,24 @@ export let held = async (
   book: Ledger | null,
   now = Date.now(),
 ): Promise<Grant | null> => {
-  if (!token.startsWith(GRANT) || !book) return null
+  if (!book) return null
+  let g = await sealed(token, secret, now)
+  return g && await book.held(g.person, g.id) ? g : null
+}
+
+// The grant a token's seal says, before the ledger is asked whether it still
+// stands: what a door can start on while the directory answers (asking.ts).
+export let sealed = async (
+  token: string,
+  secret: string,
+  now = Date.now(),
+): Promise<Grant | null> => {
+  if (!token.startsWith(GRANT)) return null
   let g = await opened<Grant>('grant', token.slice(GRANT.length), secret)
-  if (
-    !g || typeof g.person != 'string' || typeof g.id != 'string' ||
-    typeof g.exp != 'number' || g.exp * 1000 <= now
-  ) return null
-  return await book.held(g.person, g.id) ? g : null
+  return !g || typeof g.person != 'string' || typeof g.id != 'string' ||
+      typeof g.exp != 'number' || g.exp * 1000 <= now
+    ? null
+    : g
 }
 
 // Taking one back, named by its id or by enough of the front of one to find

@@ -10,7 +10,8 @@ import { sessionCookie } from './browser-cookie.ts'
 import { type Directory, directory, type Role } from './directory.ts'
 import { copyOf } from './directory-copy.ts'
 import * as dirPart from './directory.ts'
-import { CLI_GRANT, GRANT, held, ledger } from './grants.ts'
+import { CLI_GRANT, GRANT, ledger, sealed } from './grants.ts'
+import { stands } from './grant-rows.ts'
 import { instrumentEid } from '@yaks/platform/instrument'
 import { bound, type Env } from './env.ts'
 import { says } from '@yaks/platform/routes'
@@ -80,10 +81,18 @@ export let asking = async (
   ahead?: (who: Caller) => void,
   dir: Directory = dirOf(env),
 ): Promise<{ who: Caller | null; tried: boolean }> => {
-  let person = async (who: Caller | null) => {
+  // The caller, once the directory says their person stands: by
+  // `standing`, a credential's own read that says it with the person's row,
+  // else by asking. `ahead` starts on them meanwhile.
+  let person = async (
+    who: Caller | null,
+    standing?: () => Promise<boolean>,
+  ) => {
     if (!who) return null
     ahead?.(who)
-    return await dir.hasPerson(who.person) ? who : null
+    return await (standing ? standing() : dir.hasPerson(who.person))
+      ? who
+      : null
   }
   let said = req.headers.get('authorization') ?? ''
   let cookied = sessionCookie(req, env)
@@ -97,43 +106,41 @@ export let asking = async (
     // never heard of it, so it is opened here, under the session secret and
     // against the ledger row that is what makes it revocable.
     if (token.startsWith(GRANT)) {
-      let g = env.SESSION_SECRET
-        ? await held(token, env.SESSION_SECRET, ledger(env.OAUTH_KV))
+      let book = ledger(env.OAUTH_KV, dir)
+      let g = env.SESSION_SECRET && book
+        ? await sealed(token, env.SESSION_SECRET)
         : null
       return {
-        who: await person(
-          g
-            ? {
-              person: g.person,
-              via: 'grant',
-              until: g.exp,
-              grant: g.id,
-              space: g.space,
-              ...g.spaceEid ? { spaceEid: g.spaceEid } : {},
-              instrument: instrumentEid(`${CLI_GRANT}:${g.person}:${g.id}`),
-            }
-            : null,
-        ),
+        who: g && book
+          ? await person({
+            person: g.person,
+            via: 'grant',
+            until: g.exp,
+            grant: g.id,
+            space: g.space,
+            ...g.spaceEid ? { spaceEid: g.spaceEid } : {},
+            instrument: instrumentEid(`${CLI_GRANT}:${g.person}:${g.id}`),
+          }, () => book.stands(g.person, g.id))
+          : null,
         tried,
       }
     }
     // Only an agent's token needs the provider, which loads with the sign-in
-    // door it belongs to (identity.ts).
-    let { person: id, until } = await (await import('./identity.ts')).unwrapped(
-      env,
-      token,
-    )
+    // door it belongs to (identity.ts). Whether its grant still stands is the
+    // directory's word, read with the person's row (grant-rows.ts `stands`):
+    // KV, which the provider reads the token from, keeps a revoked one
+    // answering wherever it was read.
+    let { person: id, grant, until } = await (await import('./identity.ts'))
+      .unwrapped(env, token)
     return {
-      who: await person(
-        id
-          ? {
-            person: id,
-            via: 'oauth',
-            until,
-            instrument: instrumentEid(`oauth:${sha256(token)}`),
-          }
-          : null,
-      ),
+      who: id && grant
+        ? await person({
+          person: id,
+          via: 'oauth',
+          until,
+          instrument: instrumentEid(`oauth:${sha256(token)}`),
+        }, () => stands(dir, grant, id))
+        : null,
       tried,
     }
   }

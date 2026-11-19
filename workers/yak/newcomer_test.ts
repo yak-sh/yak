@@ -179,8 +179,12 @@ let signed = async (on: string) =>
   (await (await k.at('yaks.app', '/login/who', { headers: { cookie: on } }))
     .json()).signedIn
 // Credentials issued before newcomers stopped minting them must end too.
-let oldLink = await stand(k.secret, links(env.OAUTH_KV)!, { person: owner })
-let oldGrant = await mint(k.secret, ledger(env.OAUTH_KV)!, { person: owner })
+let oldLink = await stand(k.secret, links(env.OAUTH_KV, k.dir)!, {
+  person: owner,
+})
+let oldGrant = await mint(k.secret, ledger(env.OAUTH_KV, k.dir)!, {
+  person: owner,
+})
 await (await signIn('/login', { address: 'dana@example.com', return: back }))
   .body?.cancel()
 let digits = await mailed(k, 'dana@example.com')
