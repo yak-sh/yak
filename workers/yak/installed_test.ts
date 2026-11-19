@@ -8,6 +8,7 @@ import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
+  assertMatch,
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
@@ -46,6 +47,15 @@ test('an installed copy runs like its space, or sandboxed', async () => {
     await wrote(home, 'pantry')
     await agent.tool('app_install', { space: home, name: offer })
     await agent.tool('app_install', { space: home, name: offer, as: 'other' })
+    // A published name sent as the space is refused with the caller's spaces,
+    // so the next call names one of them.
+    assertMatch(
+      (await assertRejects(
+        () => agent.tool('app_install', { space: offer, name: offer }),
+        Error,
+      )).message,
+      new RegExp(`^no space ${offer} — your spaces are ${home}, .*${pub}`),
+    )
     let host = `${home}.yaks.app`
     let cookie = { cookie: me.cookie }
     let at = (path: string, init: RequestInit = {}) => k.at(host, path, init)
