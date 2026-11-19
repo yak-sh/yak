@@ -75,12 +75,12 @@ export let copy = async (o: {
     if (o.kept?.(space.slug)) return `${space.slug}  kept: copied already`
     let asked = await o.page(space.eid, {})
     going()
-    if (!('plan' in asked)) {
+    let plan = (asked as { plan?: Plan } | null)?.plan
+    if (!plan) {
       throw new Error(
         `its plan was answered ${JSON.stringify(asked).slice(0, 300)}`,
       )
     }
-    let { plan } = asked
     if (!plan.tables.length) return `${space.slug}  no store`
     let sql = o.open(space.slug)
     let rows = 0, complete = false

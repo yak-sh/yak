@@ -573,6 +573,17 @@ let said = async <T>(answer: Promise<Response>): Promise<T> => {
         `${new URL(r.url).pathname} said ${r.status}${traced(r)}`,
     )
   }
+  // JSON that does not parse was cut short on its way, whatever its status
+  // said: the platform's answer ends early when the request it ran in ends.
+  if (
+    typeof body == 'string' && /json/.test(r.headers.get('content-type') ?? '')
+  ) {
+    throw new Error(
+      `${new URL(r.url).pathname} said ${r.status}, its JSON cut short at ${
+        new TextEncoder().encode(body).length
+      } bytes${traced(r)}`,
+    )
+  }
   return body as T
 }
 

@@ -465,6 +465,19 @@ test('a copy page the platform failed is asked again, and a failure names the do
     assertEquals([down.asked.length, paused], [4, []])
   } finally {
     down.done()
+  }
+  let cut = answers([() =>
+    new Response('{"plan":{"tables":[{"na', {
+      headers: { 'content-type': 'application/json', 'x-request-id': 'req-2' },
+    })])
+  try {
+    await assertRejects(
+      () => storePage(through, 'ada/app', {}),
+      Error,
+      '/api/store-copy said 200, its JSON cut short at 23 bytes (request req-2)',
+    )
+  } finally {
+    cut.done()
     Object.assign(reconnect, was)
   }
 })
