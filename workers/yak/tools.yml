@@ -1013,7 +1013,12 @@ app_publish:
     under the name it already has; a name is claimed once, and only an
     explicit new name moves it, which leaves the old name resolving to
     nothing. Nobody who installed it moves to the new version until they
-    call app_update. Only the space owner may publish. gallery: true also
+    call app_update. Only the space owner may publish. price sells each
+    copy for that many dollars, paid once or, with interval, each month or
+    year; it needs a space on the Plus plan whose payment account is ready,
+    which space_sell connects. Publishing again keeps the price unless it
+    names another, which only new buyers pay, and free: true takes it off.
+    gallery: true also
     submits it to be shown on https://yaks.app/gallery, a public page of
     what people have made. That is separate from publishing. Gallery review
     needs a picture for the app's card, so give it one first: upload an image

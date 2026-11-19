@@ -56,6 +56,7 @@ import {
   topUp,
 } from '@yaks/platform/meter'
 import { SUBSCRIBED, type Tier } from '@yaks/platform/plans'
+import { type Price, priceOf } from '@yaks/platform/price'
 import { token } from '@yaks/graph/sha256'
 import type { Sample } from '@yaks/platform/visits'
 import type { Tunnel } from '@yaks/tunnel/hosted'
@@ -455,12 +456,14 @@ export let slugsOf = (a?: { slug?: string | null; slugs?: string | null }) =>
 
 // The offer an app stands as while it is published (T-32888): the
 // platform-wide name another space installs it by, the deploy on offer, when
-// it was offered, and the line a browsing agent reads.
+// it was offered, the line a browsing agent reads, and what a copy costs
+// (null for free, @yaks/platform/price).
 export type Offer = {
   name: string
   version: number
   at: string
   about: string
+  price: Price | null
 }
 
 // Where an installed app came from, and the version it took (T-32889). The pin
@@ -742,6 +745,8 @@ export type Row = MeteredRow & {
     at?: string | null
     about?: string | null
     space?: Id | null
+    price_cents?: number | null
+    interval?: string | null
   }
   skill?: Record<string, unknown>
   upstream?: Partial<Upstream> | null
@@ -1547,6 +1552,7 @@ let offerOf = (r: Row): Offer | null =>
       version: r.published.version ?? 0,
       at: r.published.at ?? '',
       about: r.published.about ?? '',
+      price: priceOf(r.published),
     }
     : null
 

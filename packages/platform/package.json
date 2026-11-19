@@ -65,6 +65,7 @@
     "./versions": "./versions.ts",
     "./cli": "./cli.ts",
     "./plans": "./plans.ts",
+    "./price": "./price.ts",
     "./meter": "./meter.ts",
     "./standing": "./standing.ts",
     "./meter-graph": "./meter-graph.ts",

@@ -275,8 +275,8 @@ An app is a plugin. Once it is deployed, you can publish it, which offers that
 version to every other space on yaks.app, and anyone can install a copy into
 their own space.
 
-**`app_publish(app, name?, about?, space?)`** — offer the version that is live
-now.
+**`app_publish(app, name?, about?, price?, interval?, free?, space?)`** — offer
+the version that is live now.
 
 - The app must have been deployed. An app at v0 has no files for an installer to
   copy, so publishing it is refused.
@@ -291,6 +291,12 @@ now.
   Each name belongs to one app across the whole platform.
 - `about` is the one-line description someone browsing reads. Leave it out on a
   republish and the previous one stays.
+- `price` sells each copy, in dollars to the cent (`40`, `4.99`). It is paid
+  once, or each month or year with `interval: 'month'` or `'year'`. Only a space
+  on the Plus plan whose payment account is ready may set one, which
+  `space_sell` connects (see the selling guide); otherwise the refusal names
+  what is missing. A republish keeps the price unless it names another, and a
+  new price reaches new buyers only. `free: true` takes the price off.
 - Every published app has a page of its own at `https://yaks.app/apps/<name>`,
   which the answer names: its title, its `about`, the space it was made in, a
   link to open it, and a button to make your own copy. It is the address to send

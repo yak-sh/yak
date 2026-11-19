@@ -146,6 +146,7 @@ test('public app defaults describe the app while private defaults reveal no reco
           version: 1,
           at: '',
           about: 'Secret description',
+          price: null,
         },
       }),
       '',

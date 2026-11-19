@@ -65,6 +65,7 @@ export let app = (over: Partial<App> = {}): App => ({
     version: 1,
     at: '2026-09-01T00:00:00.000Z',
     about: 'Somewhere to keep recipes',
+    price: null,
   },
   installed: null,
   gallery: null,

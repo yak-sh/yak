@@ -306,6 +306,13 @@ export let text = (v: unknown, what: string) => {
   return v
 }
 
+export let flag = (v: unknown, what: string) => {
+  if (typeof v == 'boolean') return v
+  if (v === 'true') return true
+  if (v === 'false') return false
+  throw refuse('arguments', `${what}: true or false`)
+}
+
 // A file's bytes, from either encoding of them (T-34263): `content` is the
 // text an app is almost always made of, and `base64` is what a file that is
 // not text arrives as — the `.wasm` an app's worker imports, a picture. One

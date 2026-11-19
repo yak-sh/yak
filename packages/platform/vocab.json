@@ -549,6 +549,18 @@
           "ref": "space",
           "death": "cascade",
           "description": "the space that offers it, on a shared thing that does not say so itself; an app says by app.space"
+        },
+        "price_cents": {
+          "type": "number",
+          "description": "what a copy of an app costs, in whole cents; absent for a free app. A change reaches new buyers only"
+        },
+        "interval": {
+          "type": "string",
+          "enum": [
+            "month",
+            "year"
+          ],
+          "description": "how often price_cents is charged; absent for a price paid once"
         }
       },
       "description": "anything shared on the platform: an app or a skill under its platform-wide name and version, or a custom integration in the integration directory, since `at`"

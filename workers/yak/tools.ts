@@ -280,6 +280,8 @@ import {
   selling,
 } from './sell.ts'
 import { payments } from './payments.ts'
+import { pricing, refusedPrice } from './pricing.ts'
+import { INTERVALS, priceTag } from '@yaks/platform/price'
 import { pair } from './screen.ts'
 import { mailFrom } from '@yaks/platform/host'
 import {
@@ -400,6 +402,7 @@ import {
   byCaller,
   bytesOf,
   type Ctx,
+  flag,
   inApp,
   inBin,
   inSpace,
@@ -873,13 +876,6 @@ let restorable = async (ctx: Ctx, args: Args, operator: boolean) => {
     store: store as Restorable,
     again: `store_restore(app: '${app.slug}'`,
   }
-}
-
-let flag = (v: unknown, what: string) => {
-  if (typeof v == 'boolean') return v
-  if (v === 'true') return true
-  if (v === 'false') return false
-  throw refuse('arguments', `${what}: true or false`)
 }
 
 let role = (v: unknown): Role => {
@@ -6689,6 +6685,22 @@ let OURS: Row[] = [
             "one, made from the published version's seed and never from " +
             "the app's own data",
         },
+        price: {
+          type: 'number',
+          description:
+            'what a copy costs, in dollars to the cent (40, or 4.99), from ' +
+            'a space on the Plus plan whose payment account is ready ' +
+            '(space_sell). Kept when publishing again without one',
+        },
+        interval: {
+          type: 'string',
+          enum: ['once', ...INTERVALS],
+          description: 'how often the price is paid: once by default',
+        },
+        free: {
+          type: 'boolean',
+          description: 'true to take its price off, so it installs free',
+        },
         skill: shared.SKILL_ARG,
         ...SKIP,
       },
@@ -6732,10 +6744,26 @@ let OURS: Row[] = [
         : text(args.about, 'about')
       let show = args.gallery == null ? null : flag(args.gallery, 'gallery')
       let sample = args.demo == null || flag(args.demo, 'demo')
+      // A price stays until one call changes it, and stands only where the
+      // space can take the money: a priced offer nobody can pay for is a page
+      // that can only refuse its buyers.
+      let had = app.published?.price ?? null
+      let price = pricing(args, had)
+      if (price) {
+        let no = refusedPrice(space, (await payments(ctx.env)).name, ctx.env)
+        if (no) throw no
+      }
       await ctx.dir.apply({
         entities: [{
           entity: { eid: app.eid },
-          published: { name, version, at: new Date().toISOString(), about },
+          published: {
+            name,
+            version,
+            at: new Date().toISOString(),
+            about,
+            price_cents: price?.cents ?? null,
+            interval: price?.interval ?? null,
+          },
         }],
       }, vouched(who))
       // The sample a stranger reads, made from what was just published. The
@@ -6765,6 +6793,13 @@ let OURS: Row[] = [
           'so everyone already told to install it still finds it'
         : `\nit was offered as ${was}, and that name no longer resolves: ` +
           `anyone holding it finds nothing, so tell them ${name}`
+      let moved = had?.cents != price?.cents || had?.interval != price?.interval
+      let costs = price
+        ? `\na copy costs ${priceTag(price)}` +
+          (had && moved ? ', for new buyers; who bought keeps their price' : '')
+        : had
+        ? '\nit is free again'
+        : ''
       // The gallery: true puts the offer forward, false takes it back, and
       // an existing listing refreshes its demo on republish. Read back first — the
       // letter names the offer as it now stands, and on a first publish the
@@ -6785,7 +6820,7 @@ let OURS: Row[] = [
       }
       return {
         text: `published ${name} v${version} from ${space.slug}/${app.slug}` +
-          (about ? ` — ${about}` : '') + said +
+          (about ? ` — ${about}` : '') + said + costs +
           (demo === undefined
             ? '\nits sample for people who are not members could not be ' +
               'made; yaks.app has the error, and app_publish again retries it'
@@ -6887,6 +6922,8 @@ let OURS: Row[] = [
           app.published!.about ? `: ${app.published!.about}` : ''
         } (from ${space.slug}/${app.slug}, installs as ${app.slug}, ` +
         `published ${app.published!.at.slice(0, 10)}; ${
+          app.published!.price ? `${priceTag(app.published!.price)}; ` : ''
+        }${
           reputed(
             reputation(app, uptakes.get(app.eid) ?? NO_UPTAKE, space),
           ).join('; ')
