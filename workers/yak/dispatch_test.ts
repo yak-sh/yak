@@ -22,6 +22,8 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { clock } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { COOKIE, seal, sign } from './lib/token.ts'
+import { tokenOf as grantToken } from './grants.ts'
+import { paging } from './page-token.ts'
 import type { App, Space } from './directory.ts'
 import { space as spaceOf } from './directory-fixture.ts'
 import {
@@ -159,9 +161,22 @@ test('a script is named for the store, which a rename never moves', () => {
   assertEquals(scriptName('jeff/recipes'), 'jeff_recipes')
 })
 
+// One of each credential yaks.app issues, minted the way it is minted: a
+// `yak login` grant, a session cookie's token, a sandboxed page's bearer. An
+// OAuth provider's token is checked where one is minted (identity_test.ts).
+let credentials = (() => {
+  let exp = Math.floor(Date.now() / 1000) + 3600
+  let grant = { id: 'g1', person: 'p1', space: null, exp }
+  return [
+    grantToken(grant, 'secret'),
+    sign({ person: 'p1', space: null, exp }, 'secret'),
+    paging('secret', 'jeff_recipes', 'p1', exp),
+  ]
+})()
+
 test('the worker is handed who is looking, and never a credential', async () => {
   let m = mirror()
-  let req = visit('/hello', { authorization: 'Bearer ygrant_visitor' })
+  let req = visit('/hello', { authorization: `Bearer ${await credentials[0]}` })
   let out = await ran(envOf(m.get), space, app, req, who)
   assertEquals(await out!.text(), 'from the worker')
   let sent = m.seen()
@@ -172,6 +187,37 @@ test('the worker is handed who is looking, and never a credential', async () => 
   // to; the app is owed this visit and no more. Its own cookies survive.
   assertEquals(sent.headers.get('cookie'), 'theme=dark')
   assertEquals(sent.headers.get('authorization'), null)
+})
+
+let handedAuth = async (authorization: string) => {
+  let m = mirror()
+  await ran(envOf(m.get), space, app, visit('/hook', { authorization }), who)
+  return m.seen().headers.get('authorization')
+}
+
+test("a sender's own Authorization reaches the worker as sent", async () => {
+  for (
+    let said of [
+      'Basic ' + btoa('hook:s3cret'),
+      'Bearer whsec_5f2a9c',
+      'Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl',
+      'Token abc123',
+    ]
+  ) assertEquals(await handedAuth(said), said)
+})
+
+test('a yaks.app credential never reaches the worker, however it is said', async () => {
+  for (let token of await Promise.all(credentials)) {
+    for (
+      let said of [
+        `Bearer ${token}`,
+        `bearer  ${token}`,
+        'Basic ' + btoa(`git:${token}`),
+        `Token ${token}`,
+      ]
+    ) assertEquals(await handedAuth(said), null, said)
+  }
+  assertEquals(await handedAuth('Basic not-base64!'), null)
 })
 
 test('a custom-domain worker receives its public URL and mount', async () => {

@@ -37,6 +37,7 @@ import {
 import { COOKIE, cookieValue, sign, verify } from './lib/token.ts'
 import { SENDS } from './signin.ts'
 import { NO_MAILBOX, NOT_EMAIL } from './identity.ts'
+import { ours } from './asking.ts'
 import { managePath } from '@yaks/platform/routes'
 import type { Agent } from './connected.ts'
 
@@ -139,6 +140,9 @@ let agentGrants = await (async () => {
     assertEquals(token.status, 200)
     let tokens: { access_token: string; refresh_token: string } = await token
       .json()
+    // An app's worker is never handed one (dispatch.ts `uncredited`).
+    ok(ours(`Bearer ${tokens.access_token}`))
+    ok(ours(`Bearer ${tokens.refresh_token}`))
     return { client_id, ...tokens }
   }
   let chatgpt = await authorize(

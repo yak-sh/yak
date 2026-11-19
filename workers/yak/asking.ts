@@ -34,6 +34,38 @@ export let bearerIn = (req: Request): string | null =>
   /^Bearer\s+(\S+)$/i.exec(req.headers.get('authorization') ?? '')?.[1] ??
     (carried(req) || null)
 
+// A word that could be a credential we issued: a grant (grants.ts), an OAuth
+// provider's token, which it writes `person:grant:secret`, or anything sealed
+// (lib/token.ts), which is `body.mac` in base64url: a session, a page bearer.
+let marked = (word: string) =>
+  word.toLowerCase().startsWith(GRANT) || word.includes(':') ||
+  /^[\w=-]+\.[\w=-]+$/.test(word)
+
+/// ours('Bearer yaks_abc') -> true
+/// ours('Basic ' + btoa('git:yaks_abc')) -> true
+/// ours('Basic ' + btoa('hook:s3cret')) -> false
+/// ours('Bearer whsec_abc') -> false
+/// ours(null) -> false
+/** Whether an `Authorization` value could carry a credential yaks.app reads:
+ * a bearer `asking` or a page door would take, or a `Basic` password the git
+ * door would. What cannot be told apart from one is ours, so a door that must
+ * not pass our credentials on drops it and passes anything else as sent. */
+export let ours = (said: string | null) => {
+  if (said == null) return false
+  let [scheme = '', ...rest] = said.trim().split(/[\s,]+/)
+  if (scheme.toLowerCase() != 'basic') return [scheme, ...rest].some(marked)
+  if (rest.length != 1) return true
+  let pair
+  try {
+    pair = atob(rest[0])
+  } catch {
+    return true
+  }
+  let colon = pair.indexOf(':')
+  return colon < 0 ||
+    [pair.slice(0, colon), pair.slice(colon + 1)].some(marked)
+}
+
 // Who is asking, and whether anybody tried: `who` is the caller — by session
 // cookie or by bearer token — and `tried` says a credential was presented at
 // all. They are two different answers and a lazy door needs both: a token that

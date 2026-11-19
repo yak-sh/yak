@@ -48,6 +48,7 @@ import {
 } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import { report } from './accessibility.ts'
+import { ours } from './asking.ts'
 import { compiled, pageInputs } from './esbuild.ts'
 import { configured } from './deploy_worker.ts'
 import { baseOf } from '@yaks/platform/woven'
@@ -857,7 +858,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // No ambient platform login follows a preview or reaches its app code.
   let headers = new Headers(req.headers)
   headers.delete('cookie')
-  headers.delete('authorization')
+  if (ours(headers.get('authorization'))) headers.delete('authorization')
   req = new Request(req, { headers })
   let to = door({
     path,

@@ -64,6 +64,7 @@ import type { Who } from './session.ts'
 import { browsersOf } from './attribution.ts'
 import type { Dispatch } from './door.ts'
 import { failed, noted, refusal } from './unseen.ts'
+import { ours } from './asking.ts'
 import { FILED } from '@yaks/api/refuse'
 import { type Bound, type Config, metadata, WRAPPER } from './wrangler_app.ts'
 import { WORKER } from '@yaks/platform/files'
@@ -422,11 +423,12 @@ export let granted = async (
 }
 
 // The visitor's credentials taken out: the session cookie, leaving every
-// other cookie alone, and the bearer, which the kernel reads only at an
-// `/api/` door and could be a grant to anything the person holds. The app is
-// owed this visit, not the person's platform-wide credential.
+// other cookie alone, and an `Authorization` that could be ours (asking.ts
+// `ours`), which the kernel reads only at an `/api/` door and could be a grant
+// to anything the person holds. The app is owed this visit, not the person's
+// platform-wide credential; a sender's own `Basic` or bearer reaches it as sent.
 let uncredited = (headers: Headers) => {
-  headers.delete('authorization')
+  if (ours(headers.get('authorization'))) headers.delete('authorization')
   let sent = headers.get('cookie')
   if (!sent) return
   let kept = sent.split(';').map((c) => c.trim())

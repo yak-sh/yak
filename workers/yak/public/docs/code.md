@@ -550,7 +550,10 @@ What they do not guarantee:
   No email address ever reaches app code.
 - **A session.** The platform's session cookie is removed from the request: the
   app is given this visit, not a credential for every space the person belongs
-  to. Other cookies are kept, so a cookie your own page set is still there.
+  to. Other cookies are kept, so a cookie your own page set is still there. An
+  `Authorization` header that could be a yaks.app credential is removed the same
+  way; a sender's own reaches the worker (see the webhook receiver under
+  [Example workers](#example-workers)).
 
 ## API keys and connections
 
@@ -882,6 +885,18 @@ shared secret in a header, and compare it with a secret of yours.
 
 (`ticket` is the app's own component, declared in its `vocab.json` and installed
 by `app_deploy`.)
+
+A sender that can only authenticate with an `Authorization` header works too:
+the worker receives the header as the sender wrote it, whether `Basic` (as
+`curl -u` sends it) or a `Bearer` carrying your shared secret. Compare it with
+your secret the same way. The one exception is a yaks.app credential: a
+`yak login` token, a session, a page's token or an agent's sign-in. The platform
+removes an `Authorization` that carries one, or that could be one, so app code
+never holds a credential that acts as a person everywhere they belong. A token
+can be one when it starts with `yaks_`, contains a `:`, or is letters, digits,
+`-` and `_` around a single `.`; for `Basic` the user name and password are each
+read that way. Choose a secret that is none of those, such as the hex string
+`openssl rand -hex 32` prints, and it always arrives.
 
 ## Deploying a worker
 
