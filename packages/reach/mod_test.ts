@@ -5,7 +5,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { loadVocab, type PropSchema, type VocabDoc } from '@yaks/vocab'
 import { type Member, reach } from './mod.ts'
 
 let text = { type: 'string' }
@@ -153,4 +153,31 @@ test('a core word is nobody’s, and a write aimed at a member stays in its spac
   })
   assertEquals(await at(grove, { loan: {} }), { 'grove/church': ['loan'] })
   assertEquals(await at(undefined, { loan: {} }), { 'town/hall': ['loan'] })
+})
+
+test('a refusal names the $app a caller should send', async () => {
+  // Two spaces each have a `recipes` app, and spell `recipe.serves` apart.
+  let recipes = (space: string, serves: PropSchema): Member => ({
+    ...member(`${space}/recipes`, {
+      $defs: { recipe: { component: true, properties: { serves } } },
+    }),
+    name: 'recipes',
+    space,
+  })
+  let both = [recipes('jeff', { type: 'number' }), recipes('mom', text)]
+  let refused = (b: Record<string, unknown>) =>
+    assertRejects(
+      () => parts(both, undefined, { entity: { eid: 'e' }, ...b } as Bundle),
+      Error,
+    ).then((e) => e.message)
+  assertEquals(
+    await refused({ recipe: { serves: 4 } }),
+    'recipe means two things — jeff/recipes, mom/recipes declare it ' +
+      'differently; name one on the bundle, as "$app": "jeff/recipes"',
+  )
+  assertEquals(
+    await refused({ doc: { title: 'Soup' } }),
+    'which app should doc go in? name it on the bundle, as "$app": ' +
+      '"jeff/recipes" — jeff/recipes, mom/recipes',
+  )
 })

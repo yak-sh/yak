@@ -41,8 +41,12 @@ let APP = {
     'not needed: an id names one entity in every app you can reach',
   ),
   graph_apply: str(
-    'the app slug, as in <space>.yaks.app/<app>/, that bundles write to; ' +
-      'omitted, each component goes to the app that declares it',
+    'the app slug, as in <space>.yaks.app/<app>/, that bundles write to, ' +
+      'with space where two spaces have an app by that name; the same as ' +
+      '"$app": "<space>/<app>" on each bundle. Omitted, each component goes ' +
+      'to the app that declares it. Name the app when a new entity carries ' +
+      'only shared components such as doc, or when two spaces declare a ' +
+      'component differently: a write cannot guess between them',
   ),
 }
 

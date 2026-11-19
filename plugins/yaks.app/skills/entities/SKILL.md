@@ -50,12 +50,13 @@ to the first of these that applies:
    recipe goes with the recipe, which is what lets a new entity be written in
    one call.
 
-`$app` is set on the bundle rather than on the call, because the bundles in one
-write may go to several apps at once: each bundle goes to one app, not the whole
-write. When none of the three rules decides, the write is refused instead of
-guessed:
+`$app` is set on the bundle, beside the other `$` words. One write names one
+app, and naming it on any bundle aims the whole write there; two bundles naming
+two apps are refused. Where two spaces each have an app by that slug, write
+`"$app": "<space>/<slug>"`. When none of the three rules decides, the write is
+refused instead of guessed:
 
-    which app should doc go in? say $app on the bundle — reading-list, lending
+    which app should doc go in? name it on the bundle, as "$app": "reading-list" — reading-list, lending
 
 Every part is checked in its own store before any of them commits, so a refusal
 in one leaves the others unwritten. A `$alias` is minted once, when the write
@@ -147,8 +148,8 @@ naming the space it is answering for:
 A write cannot be split this way, since one bundle cannot be written under two
 meanings, so it is refused and asks you to name the app:
 
-    note means two things — shelf and stall declare it differently;
-      name the app this goes in
+    note means two things — shelf/notes and stall/notes declare it
+      differently; name one on the bundle, as "$app": "shelf/notes"
 
 Components in apps you cannot read are left out. Another person's private app
 can hold a component on the same eid you are reading, and it never appears on

@@ -884,12 +884,22 @@ export let reach = (words: Words): Reach => {
     )
     let held = await gathered(members, asking)
     let by = (label: string) => members.find((m) => m.at == label)
-    let slugs = () => members.map((m) => m.name ?? m.at).join(', ')
+    // What `$app` takes for a member: its name, or its `at` where another
+    // member answers to the same name, as two spaces' `recipes` do.
+    let called = (m: Member) =>
+      members.filter((o) => (o.name ?? o.at) == (m.name ?? m.at)).length > 1
+        ? m.at
+        : m.name ?? m.at
+    let slugs = (ms = members) => ms.map(called).join(', ')
+    let onBundle = (m?: Member) =>
+      m ? `on the bundle, as "$app": "${called(m)}"` : 'on the bundle with $app'
     // The one member a bundle that cannot be split goes to.
     let only = () => {
       if (named) return named
       if (members.length == 1) return members[0]
-      throw refuse(`name the app this goes in with $app — ${slugs()}`)
+      throw refuse(
+        `name the app this goes in ${onBundle(members[0])} — ${slugs()}`,
+      )
     }
     let home = (name: string, eid: string | null, mates: Member[]): Member => {
       let declared = words.get(name) ?? []
@@ -906,11 +916,12 @@ export let reach = (words: Words): Reach => {
         if (named && declared.includes(named)) return named
         // Across spaces the shapes may disagree, and then the name is two
         // words: nothing here can pick between them, so the caller does.
-        let spaces = [...new Set(declared.map(spaceOf))]
-        if (apart.has(name) && spaces.length > 1) {
+        let homes = [...new Set(declared.map(spaceOf))]
+          .map((s) => declared.find((m) => spaceOf(m) == s)!)
+        if (apart.has(name) && homes.length > 1) {
           throw refuse(
-            `${name} means two things — ${spaces.join(' and ')} declare it ` +
-              'differently; say which with $app on the bundle',
+            `${name} means two things — ${slugs(homes)} declare it ` +
+              `differently; name one ${onBundle(homes[0])}`,
           )
         }
         return declared[0]
@@ -926,7 +937,9 @@ export let reach = (words: Words): Reach => {
       if (mates.length == 1) return mates[0]
       if (members.length == 1) return members[0]
       throw refuse(
-        `which app should ${name} go in? say $app on the bundle — ${slugs()}`,
+        `which app should ${name} go in? name it ${
+          onBundle(members[0])
+        } — ${slugs()}`,
       )
     }
     let parts = new Map<Member, Bundle[]>()
