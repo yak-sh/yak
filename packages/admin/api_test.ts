@@ -17,6 +17,7 @@ import { mailDoc } from '@yaks/mail/vocab'
 import { CallError } from '@yaks/tools'
 import { lined } from '@yaks/platform/page-wire'
 import { PLATFORM_STORE } from '@yaks/platform/names'
+import { FORWARDED } from './forward.ts'
 import {
   acceptInvite,
   claimsOf,
@@ -413,6 +414,57 @@ test('a request that never connected is sent again, and nothing else is', async 
     assertEquals([page.tries(), paused], [3, [1, 2]])
   } finally {
     page.done()
+    Object.assign(reconnect, was)
+  }
+})
+
+// The platform's own failure page, as kernel.ts answers a defect.
+let oops = () =>
+  new Response('<html>Something went wrong.</html>', {
+    status: 500,
+    headers: { 'content-type': 'text/html', 'x-request-id': 'req-1' },
+  })
+
+let answers = (made: (() => Response)[]) => {
+  let real = globalThis.fetch
+  let asked: string[] = []
+  globalThis.fetch = ((url: string) => {
+    asked.push(url)
+    return Promise.resolve((made[asked.length - 1] ?? made.at(-1)!)())
+  }) as typeof fetch
+  return { asked, done: () => void (globalThis.fetch = real) }
+}
+
+test('a copy page the platform failed is asked again, and a failure names the door and its request', async () => {
+  let was = { ...reconnect }, paused: number[] = []
+  Object.assign(reconnect, {
+    pauses: [1, 2],
+    sleep: (ms: number) => Promise.resolve(void paused.push(ms)),
+  })
+  let through = `${FORWARDED}http://127.0.0.1:5176/`
+  let page = answers([oops, oops, () => Response.json({ last: null })])
+  try {
+    assertEquals(await storePage(through, 'ada/app', {}), { last: null })
+    assertEquals([page.asked.length, paused.splice(0)], [3, [1, 2]])
+  } finally {
+    page.done()
+  }
+  let down = answers([oops])
+  try {
+    await assertRejects(
+      () => storePage(through, 'ada/app', {}),
+      Error,
+      '/api/store-copy said 500 (request req-1)',
+    )
+    assertEquals([down.asked.length, paused.splice(0)], [3, [1, 2]])
+    await assertRejects(
+      () => feeNow(through),
+      Error,
+      '/api/fee said 500 (request req-1)',
+    )
+    assertEquals([down.asked.length, paused], [4, []])
+  } finally {
+    down.done()
     Object.assign(reconnect, was)
   }
 })

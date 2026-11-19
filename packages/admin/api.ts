@@ -113,7 +113,8 @@ export let timing = {
 // each pause, which `sleep` spends. A failure after connecting may have
 // arrived, and is thrown, unless the call only reads (`rereads`): a copy's
 // page, asked again on a pooled connection that broke as it was sent, is the
-// same page.
+// same page. A read the platform failed (a 5xx, as when an object it asked
+// was overloaded) is asked again the same way, and the last answer stands.
 export let reconnect = { pauses: [200, 1000, 3000], sleep }
 
 let connecting = (err: unknown) =>
@@ -122,7 +123,9 @@ let connecting = (err: unknown) =>
 let again = async (go: () => Promise<Response>, rereads = false) => {
   for (let pause of reconnect.pauses) {
     try {
-      return await go()
+      let r = await go()
+      if (!rereads || r.status < 500) return r
+      await r.body?.cancel()
     } catch (err) {
       if (!connecting(err) && !(rereads && err instanceof TypeError)) throw err
     }
@@ -154,6 +157,8 @@ let sent = async (
   let r = timing.on && !quiet
     ? await timed(timing.say, go)(new Request(url, asked))
     : await go()
+  // A forwarded answer reads as the door it was asked of, not the forwarder.
+  if (destination.url != url) Object.defineProperty(r, 'url', { value: url })
   let fresh = session && browser ? cookieOf(r.headers.get('set-cookie')) : null
   if (fresh && fresh != session) await told(fresh)
   return r
@@ -548,10 +553,22 @@ let said = async <T>(answer: Promise<Response>): Promise<T> => {
   }
   if (!r.ok) {
     throw new Error(
-      body?.error?.message ?? `${new URL(r.url).pathname} said ${r.status}`,
+      body?.error?.message ??
+        `${new URL(r.url).pathname} said ${r.status}${traced(r)}`,
     )
   }
   return body as T
+}
+
+// The id a failed answer names, which finds its line in the platform's log.
+let traced = (r: Response) => {
+  let requestId = r.headers.get('x-request-id')
+  let ray = r.headers.get('cf-ray')
+  return requestId
+    ? ` (request ${requestId})`
+    : ray
+    ? ` (Cloudflare ray ${ray})`
+    : ''
 }
 
 // The digits out of the letters the graph holds for an address. Newest first,
@@ -579,17 +596,10 @@ export let rpc = (session: string) => {
       if (r.status >= 400 && r.status < 500 && refusal) {
         throw new CallError(refusal.code, refusal.message)
       }
-      let requestId = r.headers.get('x-request-id')
-      let ray = r.headers.get('cf-ray')
-      let trace = requestId
-        ? ` (request ${requestId})`
-        : ray
-        ? ` (Cloudflare ray ${ray})`
-        : ''
       let detail = r.headers.get('content-type')?.includes('text/html')
         ? ''
         : `: ${text}`
-      let message = `/mcp said ${r.status}${trace}${detail}`
+      let message = `/mcp said ${r.status}${traced(r)}${detail}`
       if (r.status >= 400 && r.status < 500) {
         throw new CallError(refusalCode[r.status] ?? 'arguments', message)
       }
