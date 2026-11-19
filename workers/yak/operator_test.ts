@@ -782,6 +782,7 @@ test('a helper’s page says it is one, where its parent opens, and how it stand
     '/chat',
   )
   assertEquals(drawn.helper?.parent, {
+    eid: middle,
     href: `/chat/${middle}`,
     asked: 'Check the draft.',
   })
@@ -795,7 +796,10 @@ test('a helper’s page says it is one, where its parent opens, and how it stand
     undefined,
     '/chat',
   )
-  assertEquals(parent.helper?.parent, { href: `/chat/${root}` })
+  assertEquals(parent.helper?.parent, {
+    eid: root,
+    href: `/chat/${root}`,
+  })
   let conversation = await conversationOf(
     watched,
     '/chat',

@@ -16,6 +16,7 @@ import {
   heard,
   type Held,
   readerAt,
+  removed,
   reread,
   Talk,
   typingAt,
@@ -222,6 +223,12 @@ export let mountTalk = (
       held = next
       draw(fresh)
       return missing
+    },
+    /** lines whose entries were removed from the store, taken off */
+    removed: (ids: string[]) => {
+      if (!held || !ids.length) return
+      held = removed(held, ids)
+      draw()
     },
     /** Stop pressed, which takes effect here at once; what it answers puts
      * it back, should the stop fail */

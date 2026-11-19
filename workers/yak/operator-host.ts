@@ -347,12 +347,12 @@ let listedOf = async (
   }, names)
 }
 
-/** What a helper's own page says of it: where the session that started it
- * opens and, when that is a helper too, what it was asked (else it is the
+/** What a helper's own page says of it: the session that started it, where
+ * it opens and, when that is a helper too, what it was asked (else it is the
  * person's conversation), and the helper as the aside lists it, whose
  * standing says whether it can still be stopped. */
 export type HelperPage = {
-  parent: { href: string; asked?: string }
+  parent: { eid: string; href: string; asked?: string }
   line: HelperLine | null
 }
 
@@ -371,6 +371,7 @@ let helperPage = async (
   ])
   return {
     parent: {
+      eid: parent,
       href: `${opens}/${parent}`,
       ...above?.spawned ? { asked: await titleAt(store, above) } : {},
     },

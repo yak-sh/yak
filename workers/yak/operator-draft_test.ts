@@ -960,16 +960,27 @@ test('a line heard while the page reads the conversation stays on it', async () 
 })
 
 // Words of the person the page showed are never taken off it by a read that
-// leaves them out, and the tracker hears of it then.
+// leaves them out, and the tracker hears of it then; but words removed from
+// the store (operator_remove) leave the page with them, and nobody hears.
 test(
-  'a read that leaves out words the page showed keeps their order and reports it',
+  'a read that leaves out words the page showed keeps their order and reports it, unless they were removed',
   async () => {
     let page = await load(storage(), false, park)
     await page.connect()
     await settle()
     let card = page.document.querySelector('[data-task]') as HTMLElement
-    let ids = [crypto.randomUUID(), crypto.randomUUID()]
-    let words = ['Keep my first words', 'Keep my next words']
+    let ids = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()]
+    let words = ['Keep my first words', 'Keep my next words', 'Gone words']
+    // The first two still stand in the store, outside the conversation; the
+    // last was removed.
+    let { g } = await operatorStore(p.states.get(`builder ${eid}`)!.storage)
+    await g.apply(
+      ids.slice(0, 2).map((id, i) => ({
+        entity: { eid: id },
+        content: { body: words[i] },
+      })),
+      { trusted: true },
+    )
     page.hear({
       operator: {
         task: card.dataset.task,
@@ -994,14 +1005,15 @@ test(
     try {
       page.hear({ ready: true, standing: 'moved' })
       await until(() => reported.length == 2)
+      await settle()
       assertEquals(
         [...page.document.querySelectorAll('.Transcript_Bubble')]
           .map((r) => r.textContent).filter((t) => words.includes(t!)),
-        words,
+        words.slice(0, 2),
       )
       assertEquals(
         reported.sort(),
-        ids.map((id) =>
+        ids.slice(0, 2).map((id) =>
           `Error: The Operator chat page left out words of the person it had shown: ${id}`
         ).sort(),
       )

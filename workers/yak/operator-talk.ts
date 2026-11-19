@@ -179,6 +179,13 @@ export let reread = (
   }
 }
 
+/** What the page holds once `ids` were removed from the conversation
+ * (operator-remove.ts): those lines are no longer anyone's to see. */
+export let removed = (held: Held, ids: string[]): Held => ({
+  ...held,
+  lines: held.lines.filter((l) => !ids.includes(l.id)),
+})
+
 /** The page-only row of the reply being written in `task`. */
 export let typingAt = (task: string): string =>
   derivedEid(['Operator reply being written', task].join('|'))

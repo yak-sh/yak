@@ -1981,6 +1981,17 @@ export let chatPage = async (
   // Their one conversation, as the store names it: what an empty `open` asks
   // for (operator-host.ts `/operator/conversation`).
   let root = talked.root
+  // The person's one conversation is at the space's address, and its own
+  // address sends them there, as links to it from before still do.
+  if (open == root && talked.title) {
+    let home = new URL(chatPath(space.slug), url(env))
+    if (chosen) home.searchParams.set('app', chosen)
+    if (from != null) home.searchParams.set('from', String(from))
+    return new Response(null, {
+      status: 303,
+      headers: { location: home.pathname + home.search },
+    })
+  }
   if (open == 'new' && talked.title) open = root
   let fresh = open == 'new'
   let first = beside.name?.trim().split(/\s+/)[0]
@@ -2017,7 +2028,7 @@ export let chatPage = async (
     here,
     operator,
     ...app ? { app: { slug: app.slug, title: app.title } } : {},
-    ...talked.helper ? { to: `${at}/${root}` } : {},
+    ...talked.helper ? { to: chatPath(space.slug) } : {},
     inline: fresh,
     base: url(env),
     request: crypto.randomUUID(),
@@ -2030,10 +2041,20 @@ export let chatPage = async (
     title: fresh
       ? app ? app.title || app.slug : `Message ${operator}`
       : talked.title || 'Not here',
-    band: talked.helper ? helperBand(talked.helper) : undefined,
+    band: talked.helper
+      ? helperBand({
+        ...talked.helper,
+        parent: {
+          ...talked.helper.parent,
+          href: talked.helper.parent.eid == root
+            ? chatPath(space.slug)
+            : talked.helper.parent.href,
+        },
+      })
+      : undefined,
     status: fresh || talked.title ? 200 : 404,
     waiting: news.waiting,
-    current: [open, talked.task],
+    current: [shown, talked.task],
     here,
     listed,
     column: true,
@@ -2588,7 +2609,17 @@ let reading, again = false
 let from = talk.from()
 // Words of theirs the page showed are never taken off it: one a read left
 // out stays in its place, and the tracker hears of it, unless a step heard
-// during the read came after what it answered, which the next read covers.
+// during the read came after what it answered, which the next read covers,
+// or its entry was removed from the store (operator-remove.ts), which takes
+// it off the page too.
+let left = async (ids) => {
+  let kept = await store.query('.entity.eid=' + ids.join(',')).catch((error) => void globalThis.reportError?.(error))
+  if (!kept) return
+  let there = new Set(kept.filter((b) => !b.tombstone).map((b) => b.entity.eid))
+  talk.removed(ids.filter((id) => !there.has(id)))
+  for (let id of ids) if (there.has(id)) globalThis.reportError?.(new Error('The Operator chat page left out words of the person it had shown: ' + id))
+  redrawn()
+}
 let read = async () => {
   if (open == 'new') return
   if (reading) return void (again = true)
@@ -2601,8 +2632,8 @@ let read = async () => {
       standing = got.standing
       if (got.html) {
         let missing = talk.read(got.html)
-        if (!again) for (let id of missing) globalThis.reportError?.(new Error('The Operator chat page left out words of the person it had shown: ' + id))
         redrawn()
+        if (missing.length && !again) await left(missing)
       }
       from ??= talk.from()
       if (got.aside && aside()) happening = got.aside, aside().replaceWith(drawn(asideHtml(happening, unfolded()))), shown(), show()

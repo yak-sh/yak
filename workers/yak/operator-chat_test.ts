@@ -136,7 +136,7 @@ let six = [
 let beside = { name: '  Ada Lovelace ', apps: six }
 let sided = async (
   role: 'owner' | 'editor',
-  open = task,
+  open = 'new',
   app?: string,
   admin = false,
 ) => {
@@ -195,9 +195,10 @@ let request = await receive(service.store, {
   channel: 'chat',
 }, 'Post a special meeting Thursday at 7 about the road millage.')
 await service.drain()
-let page = await drawn(task)
+let page = await drawn('new')
+let own = await chatPage(p.env, space, who, task)
 let byRequest = await drawn(request)
-let home = await drawn('new')
+let home = page
 let gone = await drawn(crypto.randomUUID())
 let text = (s: string) =>
   [...page.document.querySelectorAll(s)].map((e) => e.textContent?.trim())
@@ -261,6 +262,11 @@ test('a conversation opens in the chat app: its words, each step in plain words,
 })
 
 test("the space's address opens the person's one conversation, and a new chat until they have one", () => {
+  // Its own address sends the person there, as links to it from before do.
+  assertEquals([own.status, own.headers.get('location')], [
+    303,
+    chatPath('clerk'),
+  ])
   assertEquals(
     home.document.querySelector('[data-task]')?.getAttribute('data-task'),
     task,
@@ -325,7 +331,7 @@ test("the chat app installs to a home screen as its Operator's web app", () => {
 
 let owner = await sided('owner')
 let member = await sided('editor')
-let admin = await sided('owner', task, undefined, true)
+let admin = await sided('owner', 'new', undefined, true)
 test('the side holds the space, the Operator, Updates, a few apps and Manage', () => {
   let op = space.operator
   assertEquals(owner.said, [
@@ -348,10 +354,10 @@ test('the side holds the space, the Operator, Updates, a few apps and Manage', (
     [op]: chatPath('clerk'),
     [`Updates from ${op}`]: managePath('updates', 'clerk'),
     'Your apps': null,
-    'Recipe box': aboutPath('clerk', 'app0', task),
-    Holdfast: aboutPath('clerk', 'app1', task),
-    'Book club': aboutPath('clerk', 'app2', task),
-    Chores: aboutPath('clerk', 'app3', task),
+    'Recipe box': aboutPath('clerk', 'app0'),
+    Holdfast: aboutPath('clerk', 'app1'),
+    'Book club': aboutPath('clerk', 'app2'),
+    Chores: aboutPath('clerk', 'app3'),
     'All 6 apps': managePath('apps', 'clerk'),
     Manage: managePath('operator', 'clerk'),
   })
@@ -461,7 +467,7 @@ test('an app chosen in the side opens a chat about it, with the app live beside 
 
 test("an app opens beside the person's one conversation, its words on screen from the first frame", async () => {
   let words = 'Post a special meeting Thursday at 7 about the road millage.'
-  let { document } = await sided('owner', task, 'app1')
+  let { document } = await sided('owner', 'new', 'app1')
   assertEquals(
     document.querySelector('.Talk_App')?.getAttribute('data-app'),
     'app1',
@@ -478,7 +484,7 @@ test("an app opens beside the person's one conversation, its words on screen fro
   // From the space's address, or Updates, an app opens beside that
   // conversation too.
   let fresh = await sided('owner', 'new', 'app1')
-  assertEquals(fresh.to.Holdfast, aboutPath('clerk', 'app1', task))
+  assertEquals(fresh.to.Holdfast, aboutPath('clerk', 'app1'))
   assertEquals(
     fresh.document.querySelector('.Transcript_Bubble')?.textContent?.trim(),
     words,
@@ -792,7 +798,7 @@ test('a helper’s page is zoomed in: held under the bar, the way back out, its 
     },
   ], { trusted: true })
   let { document } = await sided('owner', helper)
-  let theirs = `${managePath('operator', space.slug)}/${task}`
+  let theirs = chatPath(space.slug)
   assert(document.querySelector('.Talk')!.classList.contains('Talk-zoomed'))
   let band = document.querySelector('.Frame_Bar + .Talk_Helper')!
   let out = band.querySelector('.Talk_Out')!
@@ -910,7 +916,7 @@ test('what needs the person is counted once, in the side the settings pages shar
       },
     }),
   }
-  for (let [open, app] of [['new'], [task], ['new', 'app1']]) {
+  for (let [open, app] of [['new'], ['new', 'app1']]) {
     let page = await chatPage(
       { ...p.env, BUILDER },
       space,

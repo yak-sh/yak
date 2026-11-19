@@ -55,6 +55,17 @@ export let storeAt = (
       }
       return { bundles: answer as Bundle[] }
     },
+    /** The rows `query` answers now, as the person may read them. */
+    query: async (query: string): Promise<Bundle[]> => {
+      let response = await fetch(`${url}/query`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ q: query }),
+        signal: AbortSignal.timeout(WAIT),
+      })
+      if (!response.ok) throw new Error(`The store answered ${response.status}`)
+      return await response.json() as Bundle[]
+    },
     /** The rows `query` answers now, and again each time they change; the
      * function returned ends it. */
     subscribe: (query: string, hear: (rows: Bundle[]) => void) => {
