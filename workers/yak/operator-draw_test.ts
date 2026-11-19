@@ -129,28 +129,29 @@ let seen: Seen = {
 test('each line sent alone draws from its own entries what the conversation draws', () => {
   let names = namer(seen)
   let whole = rows(conversation, names, seen)
-  assertEquals(whole.map((r) => r.id), [
+  // A run of steps is one line, drawing what its steps draw.
+  let drawn = lines(conversation, names, seen)
+  assertEquals(drawn.map((l) => l.of ?? l.id), [
     'in',
-    'ask1',
-    'c4',
-    'ask2',
-    'h',
+    ['ask1', 'c4', 'ask2'],
+    ['h', 'q', 'c9', 'a'],
     'no',
     'gask',
   ])
-  for (let line of lines(conversation, names, seen)) {
+  assertEquals(whole.map((r) => r.id), drawn.map((l) => l.id))
+  for (let line of drawn) {
     let sent = JSON.parse(JSON.stringify(wire([line], conversation, seen)))
     assertEquals(sentRows(sent), whole.filter((r) => r.id == line.id))
   }
   // What a line sends is what it reads (a helper's step, the ask before it
   // too), and the tools, helpers and offers those name.
-  let [c4] = lines(conversation, names, seen).filter((l) => l.id == 'c4')
-  let sent = wire([c4], conversation, seen)
+  let sent = wire([drawn[1]], conversation, seen)
   assertEquals(sent.entries.map((b) => b.entity.eid), [
     'fork',
     'ask1',
     'c4',
     'r5',
+    'ask2',
   ])
   assertEquals(sent.helpers.map((h) => h.entries.map((b) => b.entity.eid)), [
     ['hask'],
@@ -166,18 +167,19 @@ test('a view draws what it loads: the context a model was given, a margin beside
     lines(conversation, names, seen, view).map((l) =>
       renderToString(h(Fragment, null, l.node))
     )
-  // Each line's own number, after those of the lines folded in it.
+  // Each line's own number, after those of the lines folded in it; a run of
+  // steps has none of its own, its steps theirs.
   let numbers = (view?: View) =>
     drawn(view).map((s) =>
       [...s.matchAll(/data-sequence[^>]*>([^<]*)/g)].at(-1)?.[1]
     )
   let briefless = define(PERSON.filter((k) => !CONTEXT.includes(k)))
-  assertEquals(drawn().filter((s) => s.includes('The context')).length, 4)
+  assertEquals(drawn().join('').match(/The context/g)!.length, 4)
   assertEquals(drawn(briefless).filter((s) => s.includes('context')), [])
   assertEquals(drawn(briefless).length, 4)
-  assertEquals(numbers(), Array(7).fill(undefined))
+  assertEquals(numbers(), Array(5).fill(undefined))
   let admin = define([...PERSON, margins(metadata(conversation, [], [], []))])
-  assertEquals(numbers(admin), ['#1', '#3', '#4', '#6', '#7', '#11', undefined])
+  assertEquals(numbers(admin), ['#1', '#6', '#7', '#11', undefined])
 })
 
 test('a contact request stays inline in the person’s conversation through confirmation and socket updates', () => {
@@ -299,11 +301,20 @@ test('a context that changed draws only its changed layers, each with its change
     ask('a3', 4, ['# Base\n  Be   kind. ', '# Rules\nBe plain.\n\nBe calm.']),
     ask('a4', 5, [base, '# Rules\nBe plain.\nBe calm.', '# More\nBe quick.']),
   ]
-  let painted = rows(entries, namer(seen), { ...seen, helpers: [] })
-  assertEquals(painted.map((r) => r.id), ['a1', 'b1', 'a2', 'a4'])
+  let painted = parseHTML(
+    `<div>${
+      rows(entries, namer(seen), { ...seen, helpers: [] }).map((r) => r.html)
+        .join('')
+    }</div>`,
+  ).document
+  // One run of steps, holding each ask drawn.
+  assertEquals(
+    [...painted.querySelectorAll('.More_Body [id^=row-]')].map((r) => r.id),
+    ['row-a1', 'row-b1', 'row-a2', 'row-a4'],
+  )
   let text = (id: string) =>
-    parseHTML(`<div>${painted.find((r) => r.id == id)!.html}</div>`)
-      .document.querySelector('div')!.textContent!.replace(/\s+/g, ' ').trim()
+    painted.querySelector(`#row-${id}`)!.textContent!.replace(/\s+/g, ' ')
+      .trim()
   for (let id of ['a2', 'a4']) {
     assertStringIncludes(text(id), 'changed here')
     assertEquals(text(id).includes('The same as above'), false)
@@ -316,6 +327,38 @@ test('a context that changed draws only its changed layers, each with its change
   assertEquals(text('a2').includes('Be calm.'), false)
   assertStringIncludes(text('a4'), 'More (new)Be quick.')
   assertEquals(text('a4').includes('Rules'), false)
+})
+
+test('a note stays in what every later ask in its session was given, until a note of its kind replaces it', () => {
+  let note = (eid: string, seq: number, body: string) =>
+    entry(eid, seq, {
+      prompt: { scope: 'local', source: 'operator:earlier' },
+      content: { body },
+    })
+  let entries = [
+    note('n1', 1, 'Earlier: make it blue.'),
+    entry('a1', 2, told('# Base\nBe kind.')),
+    entry('c', 3, { call: { to: 'files', args: {} } }),
+    entry('a2', 4, told('# Base\nBe kind.')),
+    note('n2', 5, 'Earlier: make it green.'),
+    entry('a3', 6, told('# Base\nBe kind.')),
+  ]
+  let doc = parseHTML(
+    `<div>${
+      rows(entries, namer(seen), { ...seen, helpers: [] }).map((r) => r.html)
+        .join('')
+    }</div>`,
+  ).document
+  let said = (id: string) =>
+    doc.querySelector(`#row-${id} summary`)?.textContent
+  assertEquals(said('a1'), 'The context Wren was given')
+  assertEquals(said('a2'), undefined)
+  assertEquals(
+    [...doc.querySelectorAll('#row-a3 .More_Body summary')].map((s) =>
+      s.textContent
+    ).slice(0, 1),
+    ['What the person said before on this (changed)'],
+  )
 })
 
 // What a painted node says, its boxes' parts joined by `|`.
@@ -347,7 +390,7 @@ test('the lines sent paint natively, each step one line until pressed', async ()
   let main = (painted as unknown as Box).children[0] as Box
   let words = main.children.map(said).map((s) => s.replace(/\|+$/, ''))
   assertEquals(words[0], 'Make me a notes app')
-  assertEquals(words[2], 'Read notes for Jeff')
+  assertEquals(words[1], '3 steps')
   assertEquals(
     words.at(-2),
     'Something went wrong, and the Operator stopped before it finished. Send your message again to try once more.|Details',

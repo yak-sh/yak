@@ -27,7 +27,15 @@ let looks = (() => {
 type Drawn = Map<string, VNode | string | null>
 let drawnOf = (sent: Lines | null | undefined, into: Drawn = new Map()) => {
   let next = new Map(into)
-  for (let { id, node } of sent ? drawLines(sent) : []) {
+  for (let { id, node, of } of sent ? drawLines(sent) : []) {
+    // A run of steps takes the place of the first step it now draws.
+    let taken = [...next.keys()].filter((k) => k != id && of?.includes(k))
+    if (taken.length && !next.has(id)) {
+      next = new Map(
+        [...next].map(([k, v]) => k == taken[0] ? [id, node as VNode] : [k, v]),
+      )
+    }
+    for (let k of taken) next.delete(k)
     next.set(id, node as VNode)
   }
   return next

@@ -119,6 +119,17 @@ test("a step's lines are drawn from the entries its frame sends, as the server d
   equal(p.talk.working(), false)
 })
 
+test('a step that joins the one before it is drawn with it as one line, in its place', () => {
+  using p = page([asked, call, result])
+  let again = entry('again', 4, {
+    call: { to: 'read', args: { path: 'stew' } },
+  })
+  let all = [asked, call, result, again]
+  p.talk.heard(frame('task-1', all, names, 3).operator)
+  equal(p.rows(), rowsOf(talk(task, all, names)))
+  equal(p.rows().length, 2)
+})
+
 test('a reply as it is written is drawn as a settled reply, until its step lands', () => {
   using p = page([asked])
   p.talk.typed('It is the ')

@@ -158,8 +158,8 @@ test('a sub-thread appears once at its closing notice, a step named for whom it 
 let socket = delivered.find((f) => f.operator.task == root && f.operator.lines)!
 let row = sentRows(JSON.parse(JSON.stringify(socket.operator.lines))).find((
   r,
-) => r.id == notice)!
-let socketFold = documentOf(row.html).querySelector('details')!.outerHTML
+) => r.html.includes(`row-${notice}`))!
+let socketFold = foldOf(row.html).outerHTML
 let pageFold = foldOf(first.html).outerHTML
 // The page as it was drawn, the sub-thread opened, then read again whole.
 let page = parseHTML(

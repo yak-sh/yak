@@ -28,6 +28,7 @@ import {
   Transcript,
 } from '@yaks/ui/parts'
 import { define, type Registry } from '@yaks/render'
+import { derivedEid } from '@yaks/graph/identity'
 import {
   Disclosure,
   DisclosureMark,
@@ -55,6 +56,7 @@ import {
   type Sent,
   step,
   theirs,
+  type Tone,
   trouble,
   unsaid,
   words,
@@ -82,6 +84,11 @@ export type Line = {
   /** a step, which flows beside the steps around it while closed, or the
    * person's own words, which sit on their side */
   is?: 'step' | 'theirs'
+  /** a step's tone: under way, or failed */
+  tone?: Tone
+  /** a step that is no work of the model's (words the platform wrote),
+   * never gathered into a run of steps */
+  alone?: boolean
 }
 let cut = (text: string, most: number) =>
   text.length > most ? text.slice(0, most) + '…' : text
@@ -206,6 +213,7 @@ let helper = (b: Bundle, body: string) => {
       ),
       text: `${name}\n\n${problem}`,
       is: 'step' as const,
+      tone: 'no' as const,
     }
 }
 
@@ -392,9 +400,11 @@ let context = (
  * entry holding each layer of its system prompt (`sending{instructions}`),
  * each prompt entry before it (a fork's note, a helper's guidance) and the
  * tools it was offered (`sending{offer}`); and again at a later ask whose
- * context differs from the ask before it. Each is drawn when its line is,
- * in the page's order, so what it says is above is. `sources` is given each
- * ask's own entries: the notes it carried, and itself. */
+ * context differs from the ask before it. A note stays in its session's
+ * transcript, so every later ask there carries it until a note of its kind
+ * replaces it. Each is drawn when its line is, in the page's order, so what
+ * it says is above is. `sources` is given each ask's own entries: the notes
+ * it carried, and itself. */
 let briefed = (
   entries: Bundle[],
   who: string,
@@ -405,7 +415,9 @@ let briefed = (
   let last = new Map<string, Layers>()
   // The entries each session's last ask was told from: its notes and itself.
   let from = new Map<string, string[]>()
-  let notes: (Layer & { id: string })[] = []
+  // The notes each session's transcript holds, the newest of each kind.
+  let held = new Map<string, Map<string, Note>>()
+  let notes: Note[] = []
   let rows = entries.flatMap((b): Told[] => {
     let id = b.entity.eid
     if (b.prompt) {
@@ -424,7 +436,10 @@ let briefed = (
       : ''
     let offer = typeof sending.offer == 'string' ? sending.offer : ''
     let tools = offers.get(offer)
-    let noted = notes.splice(0)
+    let kept = new Map(held.get(session))
+    for (let n of notes.splice(0)) kept.set(n.key, n)
+    held.set(session, kept)
+    let noted = [...kept.values()]
     let own = [...noted.map((n) => n.id), id]
     let uses = [...from.get(session) ?? [], ...own]
     from.set(session, own)
@@ -449,6 +464,9 @@ let briefed = (
     }]
     : rows
 }
+
+// A prompt entry as a layer of what a model was told.
+type Note = Layer & { id: string }
 
 // A line of what a model was told, drawn when the page reaches it, and the
 // entries it was told from: the ask, the notes it carried, and the ask
@@ -581,8 +599,56 @@ export let framed = (
 }
 
 /** A conversation's lines, each in its frame, drawn by the renderers `view`
- * loads. */
+ * loads; each run of steps one line that opens on them (`gathered`). */
 export let lines = (
+  entries: Bundle[],
+  names: Names,
+  seen: Seen = {},
+  view: View = person,
+): Line[] => {
+  let { drawn, gather } = drawing(entries, names, seen, view)
+  return runs(drawn).map(gather)
+}
+
+// The lines in runs: each run of steps together, every other line alone.
+let runs = (drawn: Line[]) => {
+  let joins = (l?: Line) => l?.is == 'step' && !l.alone
+  return drawn.reduce((all: Line[][], l) => {
+    let run = all.at(-1)
+    if (joins(l) && joins(run?.[0])) run!.push(l)
+    else all.push([l])
+    return all
+  }, [])
+}
+
+// The line a run of steps is drawn as: the one step alone, or one step
+// named for how many they are, opening on them, under way or failed when one
+// of them is. Its id is made from its first step's, so it stays put as steps
+// join it, and it draws every entry they draw (`of`), so the page puts it in
+// place of the line its first step was.
+let gathered = (
+  run: Line[],
+  frame: (line: Line, rows: Bundle[]) => Line,
+  framedWith: (line: Line) => Bundle[],
+): Line => {
+  if (run.length < 2) return run[0]
+  let tone = run.find((l) => l.tone == 'no')?.tone ??
+    run.find((l) => l.tone)?.tone
+  let name = `${run.length} steps`
+  return frame({
+    id: derivedEid(['Steps', run[0].id].join('|')),
+    node: step(name, tone ?? '', rows(run)),
+    text: name,
+    of: run.flatMap((l) => l.of ?? [l.id]),
+    uses: [...new Set(run.flatMap((l) => l.uses))],
+    is: 'step',
+    ...tone ? { tone } : {},
+  }, run.flatMap(framedWith))
+}
+
+// A conversation's lines before a run of steps is gathered, and how a run
+// of them is: what `lines` draws, and `drawLines` draws one line of.
+let drawing = (
   entries: Bundle[],
   names: Names,
   {
@@ -593,15 +659,20 @@ export let lines = (
     opens,
     files,
   }: Seen = {},
-  view: View = person,
-): Line[] => {
+  view: View,
+) => {
   let page: Drawn = new Set()
   let sources = new Map<string, string[]>()
   let told = new Map(
     briefed(entries, called, offers, page, sources).map((r) => [r.id, r]),
   )
   let beside: Heard = { names, who: 'the Operator', opens, files }
-  let frame = (line: Line, rows: Bundle[]) => framed(line, rows, view, beside)
+  // The entries each line is framed with, which a run of them is framed with.
+  let framing = new Map<string, Bundle[]>()
+  let frame = (line: Line, rows: Bundle[]) => {
+    framing.set(line.id, rows)
+    return framed(line, rows, view, beside)
+  }
   // A helper is told mostly what the ask before it was, which the page drew
   // above it: a line drawing what a helper was told reads that ask too, so
   // drawn alone it says the same is above where the page does.
@@ -652,6 +723,7 @@ export let lines = (
           ? [...helping ? before : [], id, ...result ? [result.entity.eid] : []]
           : [id]),
         ...saying,
+        ...b.system ? { alone: true } : {},
       }]
       : []
     let these = unwrapped.map((l) => frame(l, result ? [b, result] : [b]))
@@ -681,23 +753,29 @@ export let lines = (
       else drawn[back] = fold
     } else drawn.push(...these)
   }
-  return [
-    ...drawn.map((l) =>
-      'nodes' in l
-        ? frame({
-          id: l.of[0],
-          of: l.of,
-          uses: l.uses,
-          node: h(Called, l),
-          text: l.said,
-          is: 'theirs',
-        }, [l.b])
-        : l
-    ),
-    // A helper no step of these started (one given a task) closes the list.
-    ...helpers.filter((h) => !h.call || !calls.has(h.call))
-      .flatMap((h) => context(h).map((l) => ({ ...l, uses: before }))),
-  ]
+  let gather = (run: Line[]) =>
+    gathered(run, frame, (l) => framing.get(l.id) ?? [])
+  return {
+    gather,
+    drawn: [
+      ...drawn.map((l) =>
+        'nodes' in l
+          ? frame({
+            id: l.of[0],
+            of: l.of,
+            uses: l.uses,
+            node: h(Called, l),
+            text: l.said,
+            is: 'theirs',
+          }, [l.b])
+          : l
+      ),
+      // A helper no step of these started (one given a task) closes the
+      // list.
+      ...helpers.filter((h) => !h.call || !calls.has(h.call))
+        .flatMap((h) => context(h).map((l) => ({ ...l, uses: before }))),
+    ],
+  }
 }
 
 // What a call's talking model asked the Operator (`operator_call.asked`)
@@ -951,7 +1029,9 @@ let threaded = (thread: Thread) => {
  */
 export type Lines = {
   threads?: Record<string, Thread>
-  lines: { id: string; uses: string[] }[]
+  /** each line, and the entries it draws when it draws more than its own,
+   * which it is drawn in place of */
+  lines: Sending[]
   entries: Bundle[]
   tools: Record<string, Named>
   person?: string | null
@@ -971,6 +1051,9 @@ let offerOf = (b: Bundle) => {
   let offer = comp(b, 'sending')?.offer
   return typeof offer == 'string' ? offer : ''
 }
+
+/** A line as {@link Lines} sends it. */
+export type Sending = { id: string; uses: string[]; of?: string[] }
 
 /** These lines of `entries`, as {@link Lines}: only what they read. A
  * helper's lines are only what it was told (its asks and notes), all a
@@ -994,7 +1077,7 @@ export let wire = (
   let ids = Object.entries(seen.ids ?? {}).filter(([eid]) => said.includes(eid))
   let files = Object.entries(seen.files ?? {}).filter(([eid]) => used.has(eid))
   return {
-    lines: drawn.map(({ id, uses }) => ({ id, uses })),
+    lines: drawn.map(({ id, uses, of }) => ({ id, uses, ...of ? { of } : {} })),
     entries: read,
     tools: Object.fromEntries(
       Object.entries(seen.tools ?? {}).filter(([eid]) => tools.has(eid)),
@@ -1015,26 +1098,41 @@ export let wire = (
 }
 
 /** Each line {@link Lines} sends, drawn from the entries it reads, as the
- * whole conversation draws it, and whether it is the person's own words. */
+ * whole conversation draws it, whether it is the person's own words, and
+ * the entries it draws when it draws more than its own. A run of steps is
+ * gathered again from the steps it draws. */
 export let drawLines = (
   sent: Lines,
-): { id: string; node: Node; is?: Line['is'] }[] => {
+): (Sending & { node: Node; is?: Line['is'] })[] => {
   let seen = {
     ...sent,
     offers: new Map(Object.entries(sent.offers ?? {})),
   }
   let names = namer(sent)
-  return sent.lines.flatMap(({ id, uses }) => {
+  return sent.lines.flatMap(({ id, uses, of = [] }) => {
     let reads = new Set(uses)
     let helpers = (sent.helpers ?? []).filter((h) =>
-      h.call && reads.has(h.call) || h.entries.some((b) => b.entity.eid == id)
+      h.call && reads.has(h.call) ||
+      h.entries.some((b) => b.entity.eid == id || of.includes(b.entity.eid))
     )
     let entries = sent.entries.filter((b) => reads.has(b.entity.eid))
-    let drawn = lines(entries, names, { ...seen, helpers })
-      .find((l) => l.id == id)
-    if (!drawn) return []
-    let { is } = drawn
-    return [{ id, node: called(sent.ids, drawn.node), ...is ? { is } : {} }]
+    let { drawn, gather } = drawing(
+      entries,
+      names,
+      { ...seen, helpers },
+      person,
+    )
+    let line = drawn.find((l) => l.id == id) ??
+      (of.length ? gather(drawn.filter((l) => of.includes(l.id))) : undefined)
+    if (!line || line.id != id) return []
+    let { is } = line
+    return [{
+      id,
+      uses,
+      node: called(sent.ids, line.node),
+      ...is ? { is } : {},
+      ...line.of ? { of: line.of } : {},
+    }]
   })
 }
 

@@ -32,6 +32,8 @@ import { drawLines, type Lines } from './operator-draw.ts'
 export type Kept = {
   id: string
   uses?: string[]
+  /** the entries it draws when it draws more than its own */
+  of?: string[]
   html?: string
   mine?: boolean
 }
@@ -110,19 +112,23 @@ let kept = <K extends 'person' | 'called' | 'opens'>(
 }
 
 /** What the page holds once a frame's lines have come: each line in its
- * place, or after the others when new, drawn from its entries from now on,
- * and what they are drawn with gathered. A line of the person's own words
- * stays theirs, however it came. */
+ * place, or in the place of the first line it now draws (a step a run of
+ * steps took in), or after the others when new, drawn from its entries from
+ * now on, and what they are drawn with gathered. A line of the person's own
+ * words stays theirs, however it came. */
 export let heard = (was: Held, sent: Lines): Held => {
   let lines = [...was.lines]
   let theirs = new Set(
     drawLines(sent).flatMap((l) => l.is == 'theirs' ? [l.id] : []),
   )
-  for (let { id, uses } of sent.lines) {
-    let at = lines.findIndex((l) => l.id == id)
+  for (let { id, uses, of } of sent.lines) {
+    let taken = (l: Kept) => l.id != id && !!of?.includes(l.id)
+    let at = lines.findIndex((l) => l.id == id || taken(l))
     let mine = theirs.has(id) || at >= 0 && lines[at].mine ? { mine: true } : {}
-    if (at >= 0) lines[at] = { id, uses, ...mine }
-    else lines.push({ id, uses, ...mine })
+    let line = { id, uses, ...of ? { of } : {}, ...mine }
+    if (at >= 0) lines[at] = line
+    else lines.push(line)
+    lines = lines.filter((l, i) => i == at || !taken(l))
   }
   let helpers = new Map(was.beside.helpers.map((h) => [helperKey(h), h]))
   for (let h of sent.helpers ?? []) helpers.set(helperKey(h), h)

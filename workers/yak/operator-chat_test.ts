@@ -212,10 +212,12 @@ test('a conversation opens in the chat app: its words, each step in plain words,
     'Post a special meeting Thursday at 7 about the road millage.',
   ])
   // Each step said from the person's side, as what it did for them, or
-  // tried to: the step names the app and the person it acted on.
+  // tried to: the step names the app and the person it acted on. The turn's
+  // steps are one line, opening on them.
   assertEquals(
-    text('.More:not(.Transcript_Error > *, .More_Body *) > summary'),
+    text('.More:not(.Transcript_Error > *, .More_Body .More_Body *) > summary'),
     [
+      '6 steps',
       'The context the Operator was given',
       'Read the schema',
       'Tried listing the files of notices',
@@ -231,10 +233,11 @@ test('a conversation opens in the chat app: its words, each step in plain words,
     'posted',
   )
   assertEquals(text('.Transcript_Reply li'), ['Thursday at 7'])
-  // Every entry keeps its action beside its own time, including steps.
+  // Every entry keeps its action beside its own time, including steps and
+  // the run that holds them.
   assertEquals(
     text('.Transcript_Lines .Transcript_When'),
-    Array(8).fill('just now'),
+    Array(9).fill('just now'),
   )
   // A step opens on what it asked for in words; what its error said shows
   // only inside its closed Details, and what the model was told only in its
@@ -954,7 +957,9 @@ test('what needs the person is counted once, in the side the settings pages shar
     get: (name) => ({
       fetch: async (req: Request) => {
         let answer = await service.binding.get(name).fetch(req)
-        if (new URL(req.url).pathname != '/operator/conversation') return answer
+        if (new URL(req.url).pathname != '/operator/conversation') {
+          return answer
+        }
         let said = await answer.json()
         return Response.json({
           ...said,
@@ -973,7 +978,10 @@ test('what needs the person is counted once, in the side the settings pages shar
       app,
     )
     let { document } = parseHTML(await page.text())
-    assertEquals(document.querySelector('.Talk_Beside, .Talk_BesideOpen'), null)
+    assertEquals(
+      document.querySelector('.Talk_Beside, .Talk_BesideOpen'),
+      null,
+    )
     assertEquals(document.querySelector(`#u-${needs.eid}`), null)
     // one bell: the side's, and Menu wearing its count on a phone
     assertEquals(

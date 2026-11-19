@@ -576,7 +576,9 @@ export let helperFrame = (
       task,
       lines: wire(
         told.length && call
-          ? lines(entries, names, shown).filter((l) => l.id == helper.call)
+          ? lines(entries, names, shown).filter((l) =>
+            (l.of ?? [l.id]).includes(helper.call!)
+          )
           : told.map((r) => ({ id: r.id, uses: [], node: r.draw() })),
         entries,
         shown,

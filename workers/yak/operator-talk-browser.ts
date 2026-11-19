@@ -128,7 +128,7 @@ export let mountTalk = (
       if (!line.uses) return { id: line.id, html: line.html }
       let [drawn] = drawLines({
         ...talk.beside,
-        lines: [{ id: line.id, uses: line.uses }],
+        lines: [{ id: line.id, uses: line.uses, of: line.of }],
         entries: line.uses.flatMap((eid) => front.ent(eid) ?? []),
       })
       return { id: line.id, node: drawn?.node ?? null }

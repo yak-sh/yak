@@ -56,10 +56,18 @@ let cut = (text: string, most: number) =>
   text.length > most ? text.slice(0, most) + '…' : text
 
 /** A line as it is drawn: its parts, the words it says when copied where they
- * are not its entries' own (`text`), and whether it is a step, which flows
+ * are not its entries' own (`text`), whether it is a step, which flows
  * beside the steps around it while closed, or the person's own words, which
- * sit on their side (`is`). */
-export type Said = { node: Node; text?: string; is?: 'step' | 'theirs' }
+ * sit on their side (`is`), and a step's tone: under way, or failed. */
+export type Said = {
+  node: Node
+  text?: string
+  is?: 'step' | 'theirs'
+  tone?: Tone
+}
+
+/** A step's tone: under way (`on`) or failed (`no`). */
+export type Tone = 'on' | 'no'
 
 /** How a call reads to the person, by its tool's eid (`call.to`) and its
  * arguments: what it is doing while it runs and what it did once it answered
@@ -279,7 +287,7 @@ export let files = (sent: Filed[], mod?: 'end'): VNode | null =>
  * fold state (@yaks/ux `Fold`), which a redrawn line keeps. */
 export let step = (
   name: Node,
-  mod: '' | 'on' | 'no',
+  mod: '' | Tone,
   ...inside: Node[]
 ): VNode => h(Fold, { mod: ['quiet', mod], summary: name }, ...inside) as VNode
 
@@ -390,6 +398,7 @@ let tool = (call: Bundle, beside: Beside): Said => {
     ),
     text: ok === false ? `${name}\n\n${problem}` : undefined,
     is: 'step',
+    ...ok ? {} : { tone: ok == null ? 'on' : 'no' },
   }
 }
 

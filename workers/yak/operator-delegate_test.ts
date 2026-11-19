@@ -191,9 +191,10 @@ test('the conversation shows the context the Operator and each helper were given
   assertEquals(live!.frame.operator.task, out.session)
   // A helper's step brings the page that step, live, its context inside.
   let rows = sentRows(live!.frame.operator.lines)
-  assertEquals(rows.map((r) => `row-${r.id}`), [
-    step.closest('[id^="row-"]')!.id,
-  ])
+  let top = [...document.querySelectorAll('[id^="row-"]')].find((r) =>
+    r.contains(step) && !r.parentElement!.closest('[id^="row-"]')
+  )!
+  assertEquals(rows.map((r) => `row-${r.id}`), [top.id])
   assertStringIncludes(rows[0].html, 'The context the helper was given')
 })
 
