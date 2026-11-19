@@ -13,7 +13,7 @@
 // web's — so a socket is driven the way the runtime drives a hibernated one,
 // through `webSocketMessage`.
 import { whole } from '@yaks/query'
-import { clock, equal, ok, test } from '@yaks/testing'
+import { clock, equal, ok, test, until } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -36,6 +36,9 @@ import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { metaOf } from './meta.ts'
 import type { Load } from '@yaks/host'
+import type { Namespace } from '@yaks/durable-object/door'
+import { EPOCH } from './directory-copy.ts'
+import { useUntil } from './used.ts'
 import { appConfig } from '@yaks/platform/config'
 import { load } from './load.ts'
 import { named as spoken, type Names } from '@yaks/platform/listing'
@@ -210,7 +213,58 @@ let SCHEMA = JSON.stringify({
   },
 })
 
+let KIM = 'b0000000-0000-4000-8000-00000000000b'
+let SPACE = 'e0000000-0000-4000-8000-000000000005'
+
 let owner: Vouch = { app: APP, person: ADA, role: 'owner', title: 'Ada' }
+// A socket's standing is reread from the directory at revision 1
+// (`directory`), and the store refuses any later word older than that, so a
+// test with a socket speaks as the kernel does: at the revision it read.
+let seated: Vouch = { ...owner, policy: 1 }
+let viewer: Vouch = { app: APP, person: KIM, role: 'viewer', policy: 1 }
+
+// The directory a Store rereads a socket's standing from on every frame: the
+// app is private, in a space Ada owns and Kim views.
+let directory: Namespace = {
+  idFromName: (n) => n,
+  get: () => ({
+    fetch: async (req: Request) => {
+      let url = new URL(req.url)
+      if (url.pathname == '/used') return Response.json({ at: useUntil() })
+      let q = url.searchParams.get('q') ?? ''
+      let seat = (person: string, role: string) =>
+        q.includes(`.member.person=${person}`)
+          ? [{
+            entity: { eid: person },
+            member: { space: SPACE, person, role },
+          }]
+          : []
+      return Response.json([
+        ...q.includes(`.entity.eid=${APP}`)
+          ? [{ entity: { eid: APP }, app: { space: SPACE, access: 'private' } }]
+          : [],
+        ...seat(ADA, 'owner'),
+        ...seat(KIM, 'viewer'),
+      ], { headers: { [EPOCH]: '1' } })
+    },
+  }),
+}
+let env = { STORE: directory }
+
+// A socket as its handshake left it: the identity the kernel vouched for.
+let watcher = async (store: Store, v = seated) => {
+  let ws = wire()
+  let actor = await (await store.door).authenticate(
+    new Request('http://store/ws', { headers: headers(v) }),
+  )
+  ws.serializeAttachment({ writer: { actor } })
+  return ws
+}
+
+// A frame reaches a socket once the directory has said its standing, after
+// the message or commit that made it has returned: wait for the nth.
+let heard = (ws: { sent: Frame[] }, n = 1) =>
+  until(() => ws.sent.length >= n, { label: `frame ${n}` })
 
 // The byline off a returned bundle. `Bundle` carries any component, so a test
 // reading one names the shape it expects.
@@ -223,11 +277,16 @@ let cookbook = async (
   manifest = SCHEMA,
   v = owner,
   time?: Time,
+  bindings = {},
 ) => {
-  let store = new Store(ctx, {}, undefined, time, fixtureLoad)
+  let store = new Store(ctx, bindings, undefined, time, fixtureLoad)
   assertEquals((await post(store, '/vocab', manifest, v)).status, 200)
   return store
 }
+
+// A cookbook whose sockets stand by what the directory says of them.
+let watched = (ctx = state(), manifest = SCHEMA, v = owner, time?: Time) =>
+  cookbook(ctx, manifest, v, time, env)
 
 let appOwned = await (async () => {
   let ctx = state()
@@ -418,25 +477,26 @@ test('a newborn directory reads without importing an app’s runtime facets', ()
 test('erasing a Store closes its subscribers and serves the empty Store', async () => {
   let ctx = state()
   using _db = ctx.storage
-  let store = await cookbook(ctx)
-  let ws = wire()
+  let store = await watched(ctx)
+  let ws = await watcher(store)
   ctx.live.push(ws)
   await store.webSocketMessage(
     ws,
     JSON.stringify({ subscribe: '.recipe', id: 'r' }),
   )
+  await heard(ws)
   assertEquals(ws.sent.length, 1)
 
   let erased = await store.fetch(
     new Request('http://store/', {
       method: 'DELETE',
-      headers: headers({ ...owner, kernel: true }),
+      headers: headers({ ...seated, kernel: true }),
     }),
   )
   assertEquals(erased.status, 200, await erased.text())
   assertEquals(ws.readyState, 2)
   assertEquals(ws.sent.length, 1)
-  assertEquals((await get(store, '/vocab', owner)).status, 200)
+  assertEquals((await get(store, '/vocab', seated)).status, 200)
 })
 
 test('a kernel apply dry run returns the patch without keeping it', async () => {
@@ -1219,22 +1279,18 @@ test('a Store live query sees only connected peer positions', async () => {
       },
     },
   })
-  let store = await cookbook(ctx, manifest)
+  let store = await watched(ctx, manifest)
   await post(store, '/apply', [{
     entity: { eid: CAKE },
     recipe: { serves: 8 },
-  }], owner)
-  let ws = wire()
-  let actor = await (await store.door).authenticate(
-    new Request('http://store/ws', { headers: headers(owner) }),
-  )
-  ws.serializeAttachment({ writer: { actor } })
+  }], seated)
+  let ws = await watcher(store)
   ctx.live.push(ws)
   let path = `/query?live=1&q=${
     encodeURIComponent(`.entity.eid=${CAKE}&.position`)
   }`
   let positions = async () =>
-    await (await get(store, path, owner)).json() as Bundle[]
+    await (await get(store, path, seated)).json() as Bundle[]
   assertEquals(await positions(), [])
   await store.webSocketMessage(
     ws,
@@ -1246,7 +1302,7 @@ test('a Store live query sees only connected peer positions', async () => {
   let count = await get(
     store,
     `/query?live=1&q=${encodeURIComponent('.position&.count')}`,
-    owner,
+    seated,
   )
   assertEquals(await count.json(), { count: 1 })
   await store.webSocketClose(ws)
@@ -1255,14 +1311,15 @@ test('a Store live query sees only connected peer positions', async () => {
 
 test('a subscription is answered, and a commit reaches the socket', async () => {
   let ctx = state()
-  let store = await cookbook(ctx)
-  let ws = wire()
+  let store = await watched(ctx)
+  let ws = await watcher(store)
   ctx.live.push(ws)
 
   await store.webSocketMessage(
     ws,
     JSON.stringify({ subscribe: '.recipe', id: 'r' }),
   )
+  await heard(ws)
   assertEquals(ws.sent, [
     { id: 'r', bundles: [], coverage: {}, transientReset: [] },
   ])
@@ -1271,7 +1328,8 @@ test('a subscription is answered, and a commit reaches the socket', async () => 
     entity: { eid: CAKE },
     doc: { title: 'Lemon drizzle' },
     recipe: { serves: 8 },
-  }], owner)
+  }], seated)
+  await heard(ws, 2)
   assertEquals(ws.sent.length, 2)
   let pushed = ws.sent[1] as {
     id: string
@@ -1283,7 +1341,7 @@ test('a subscription is answered, and a commit reaches the socket', async () => 
 
 test('a viewer subscribed to rows kept by conditions is sent the others, and no patch of a kept one', async () => {
   let ctx = state()
-  let store = await cookbook(
+  let store = await watched(
     ctx,
     JSON.stringify({
       $defs: {
@@ -1297,9 +1355,8 @@ test('a viewer subscribed to rows kept by conditions is sent the others, and no 
   let [ruth, noah] = [crypto.randomUUID(), crypto.randomUUID()]
   let people = (status: string) =>
     [ruth, noah].map((eid) => ({ entity: { eid }, individual: { status } }))
-  await post(store, '/apply', people('member'), owner)
-  let ws = wire()
-  ws.serializeAttachment({ read: { person: 'kim', level: 'viewer' } })
+  await post(store, '/apply', people('member'), seated)
+  let ws = await watcher(store, viewer)
   ctx.live.push(ws)
   let eids = () =>
     ws.sent.flatMap((f) => (f as { bundles?: Bundle[] }).bundles ?? [])
@@ -1308,6 +1365,7 @@ test('a viewer subscribed to rows kept by conditions is sent the others, and no 
     ws,
     JSON.stringify({ subscribe: '.individual', id: 'all' }),
   )
+  await heard(ws)
   assertEquals(eids().sort(), [noah, ruth].sort())
   ws.sent.length = 0
   await post(
@@ -1317,19 +1375,20 @@ test('a viewer subscribed to rows kept by conditions is sent the others, and no 
       entity: { eid },
       individual: { status: eid == ruth ? 'former' : 'attender' },
     })),
-    owner,
+    seated,
   )
+  await heard(ws)
   assertEquals(eids(), [noah])
 })
 
 test("a page's subscription leaves out the platform's rows unless it names one", async () => {
   let ctx = state()
-  let store = await cookbook(ctx)
+  let store = await watched(ctx)
   await post(store, '/apply', [{
     entity: { eid: CAKE },
     doc: { title: 'Lemon drizzle' },
-  }], owner)
-  let ws = wire()
+  }], seated)
+  let ws = await watcher(store)
   ctx.live.push(ws)
   let eids = async (line: string) => {
     ws.sent.length = 0
@@ -1337,6 +1396,7 @@ test("a page's subscription leaves out the platform's rows unless it names one",
       ws,
       JSON.stringify({ subscribe: line, id: line }),
     )
+    await heard(ws)
     return (ws.sent[0] as { bundles: Bundle[] }).bundles.map((b) =>
       b.entity.eid
     )
@@ -1352,8 +1412,8 @@ test("a page's subscription leaves out the platform's rows unless it names one",
 // matches — the subscription answered empty and stayed silent forever (T-34070).
 test('a subscription asking `*` answers what /query answers', async () => {
   let ctx = state()
-  let store = await cookbook(ctx)
-  let ws = wire()
+  let store = await watched(ctx)
+  let ws = await watcher(store)
   ctx.live.push(ws)
   let line = '.recipe&*'
 
@@ -1361,13 +1421,15 @@ test('a subscription asking `*` answers what /query answers', async () => {
     ws,
     JSON.stringify({ subscribe: line, id: 'r' }),
   )
+  await heard(ws)
   assertEquals(ws.sent, [{ id: 'r', bundles: [], transientReset: [] }])
 
   await post(store, '/apply', [{
     entity: { eid: CAKE },
     doc: { title: 'Lemon drizzle' },
     recipe: { serves: 8 },
-  }], owner)
+  }], seated)
+  await heard(ws, 2)
   assertEquals(ws.sent.length, 2)
   let pushed = ws.sent[1] as Frame & Names & { bundles: Bundle[] }
   assertEquals(pushed.id, 'r')
@@ -1388,7 +1450,7 @@ test('a subscription asking `*` answers what /query answers', async () => {
   let read = await (await get(
     store,
     `/query?q=${encodeURIComponent(line)}`,
-    owner,
+    seated,
   )).json() as Bundle[]
   assertEquals(read, spoken(pushed.bundles, pushed))
 
@@ -1397,18 +1459,26 @@ test('a subscription asking `*` answers what /query answers', async () => {
   let renamed = await post(store, '/apply', [{
     entity: { eid: ADA },
     doc: { title: 'Adele' },
-  }], owner)
+  }], seated)
   assertEquals(renamed.status, 200)
   await post(store, '/apply', [{
     entity: { eid: CAKE },
     recipe: { serves: 12 },
-  }], owner)
-  let changed = ws.sent.at(-1) as Frame & Names
+  }], seated)
+  let changed = await until(
+    () =>
+      ws.sent.find((f) =>
+        (f as { bundles?: Bundle[] }).bundles?.some((b) =>
+          (b.recipe as { serves?: number } | undefined)?.serves == 12
+        )
+      ) as Frame & Names | undefined,
+    { label: 'the frame serving 12' },
+  )
   assertEquals(changed.names, { [ADA]: 'Adele' })
   let queried = await (await get(
     store,
     `/query?q=${encodeURIComponent(line)}`,
-    owner,
+    seated,
   )).json() as Bundle[]
   assertEquals(
     (queried[0].created as { by: { name: string } }).by.name,
@@ -1418,12 +1488,12 @@ test('a subscription asking `*` answers what /query answers', async () => {
 
 test('a woken object serves the same app, and the same sockets', async () => {
   let ctx = state()
-  let store = await cookbook(ctx)
+  let store = await watched(ctx)
   await post(store, '/apply', [{
     entity: { eid: CAKE },
     recipe: { serves: 8 },
-  }], owner)
-  let ws = wire()
+  }], seated)
+  let ws = await watcher(store)
   ctx.live.push(ws)
   await store.webSocketMessage(
     ws,
@@ -1431,11 +1501,12 @@ test('a woken object serves the same app, and the same sockets', async () => {
   )
 
   // The object is evicted; its storage and its sockets are not.
-  let woken = new Store(ctx)
-  let read = await (await get(woken, '/query?q=.recipe', owner)).json()
+  let woken = new Store(ctx, env)
+  let read = await (await get(woken, '/query?q=.recipe', seated)).json()
   assertEquals(read.length, 1)
   assertEquals(read[0].recipe.serves, 8)
   // The wake re-opened what the socket held, and answered it with the set.
+  await heard(ws, 2)
   assertEquals(ws.sent.length, 2)
   assertEquals((ws.sent[1] as { id: string }).id, 'r')
 })
@@ -2148,7 +2219,7 @@ test(
         return () => void timers.delete(mine)
       },
     }
-    let store = await cookbook(ctx, manifest, owner, time)
+    let store = await watched(ctx, manifest, seated, time)
     let tick = (ms: number) => {
       at += ms
       for (let [id, t] of [...timers]) {
@@ -2161,12 +2232,8 @@ test(
     await post(store, '/apply', [{
       entity: { eid: CAKE },
       recipe: { serves: 8 },
-    }], owner)
-    let ws = wire()
-    let actor = await (await store.door).authenticate(
-      new Request('http://store/ws', { headers: headers(owner) }),
-    )
-    ws.serializeAttachment({ writer: { actor } })
+    }], seated)
+    let ws = await watcher(store)
     ctx.live.push(ws)
     let wildlife = Array.from({ length: 4 }, () => crypto.randomUUID())
     // Stored entities without recipe are never eligible, despite the time arm.
@@ -2174,7 +2241,7 @@ test(
       store,
       '/apply',
       wildlife.map((eid) => ({ entity: { eid } })),
-      owner,
+      seated,
     )
     await store.webSocketMessage(
       ws,
@@ -2197,16 +2264,16 @@ test(
     assertEquals(timers.size, 1)
     tick(30_000)
     assertEquals(timers.size, 0)
-    let rows = await (await get(store, '/query?q=.position', owner))
+    let rows = await (await get(store, '/query?q=.position', seated))
       .json() as Bundle[]
     assertEquals(rows.map((b) => b.position), [{ x: 9, at: at - 31_000 + 1 }])
     await post(store, '/apply', [{
       entity: { eid: CAKE },
       recipe: { serves: 9 },
-    }], owner)
+    }], seated)
     tick(0)
     assertEquals(timers.size, 0)
-    assertEquals((await get(store, '/query?q=.recipe', owner)).status, 200)
+    assertEquals((await get(store, '/query?q=.recipe', seated)).status, 200)
   },
   { tags: ['T-65211'] },
 )
@@ -2393,7 +2460,6 @@ for (
 // its frames asks the directory again (T-492).
 let VIA = 'c0000000-0000-4000-8000-000000000003'
 let BO = 'd0000000-0000-4000-8000-000000000004'
-let SPACE = 'e0000000-0000-4000-8000-000000000005'
 for (
   let [stranger, demo, visit, answered] of [
     ['signed out, on the sample', 'ada/cookbook', null, true],
