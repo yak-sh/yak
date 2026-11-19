@@ -13,6 +13,7 @@ import {
   connector,
   kernel,
   letter,
+  letters,
   meta,
   num,
   seed,
@@ -367,9 +368,11 @@ test(
       assertEquals(after.status, 403)
       await after.body?.cancel()
 
-      // And a member is never quietly demoted to a guest.
+      // And a member is never quietly demoted to a guest. Her first letter's
+      // link is withdrawn by now, so the click is on the new one.
+      let seen = letters(k, ana).length
       await his.tool('member_add', { email: ana, role: 'editor' })
-      await accepted(k, ana, hers.cookie)
+      await accepted(k, ana, hers.cookie, seen)
       await assertRejects(
         () => his.tool('member_add', { email: ana, app: 'arena' }),
         Error,

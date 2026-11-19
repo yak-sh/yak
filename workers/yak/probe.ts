@@ -547,8 +547,11 @@ let posted = async <T>(
   return until(find, { timeout: 20_000, poll: 10, label })
 }
 
-// The latest letter to an address that says a thing, waited for: the one the
-// latest request sent.
+// The latest letter to an address that says a thing, past the letters it had
+// already received, waited for. The pool sends a letter after the write that
+// asked for it commits, so a request that answered may not have sent its letter
+// yet: when an earlier letter says the same thing, `after` (the count of
+// `letters` taken before the request) is what makes this the request's own.
 export let letter = (
   k: Mailbox,
   to: string,
@@ -580,10 +583,16 @@ export let mailed = (
   )
 
 // An invitation's one click, the way its person makes it (invite.ts): the link
-// out of the latest invitation letter to that address, opened with `cookie`
-// (or none). Answers the door's response, unread.
-export let clickInvite = async (k: Kernel, email: string, cookie?: string) => {
-  let l = await letter(k, email, '/invite?t=')
+// out of the latest invitation letter to that address, past `after` letters
+// (see `letter`), opened with `cookie` (or none). Answers the door's response,
+// unread.
+export let clickInvite = async (
+  k: Kernel,
+  email: string,
+  cookie?: string,
+  after = 0,
+) => {
+  let l = await letter(k, email, '/invite?t=', after)
   let link = new URL(/https:\/\/\S+\/invite\?t=\S+/.exec(l.body)![0])
   return k.at(link.host, link.pathname + link.search, {
     redirect: 'manual',
@@ -592,8 +601,13 @@ export let clickInvite = async (k: Kernel, email: string, cookie?: string) => {
 }
 
 // Accepted: the click, signed in as its person, landing where it points.
-export let accepted = async (k: Kernel, email: string, cookie: string) => {
-  let r = await clickInvite(k, email, cookie)
+export let accepted = async (
+  k: Kernel,
+  email: string,
+  cookie: string,
+  after = 0,
+) => {
+  let r = await clickInvite(k, email, cookie, after)
   await r.body?.cancel()
   if (r.status != 303) throw new Error(`accept: ${r.status}`)
   return r.headers.get('location')!
