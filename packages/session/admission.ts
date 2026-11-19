@@ -114,9 +114,12 @@ export let queue = async (g: Graph): Promise<Bundle[]> =>
     Number(dispatch(a)?.order ?? 0) - Number(dispatch(b)?.order ?? 0)
   )
 
+/** The children holding a place. Their transcript may have just ended. */
+export let activeChildren = (g: Graph): Promise<Bundle[]> => placed(g, 'active')
+
 /** How many children hold a place. */
 export let active = async (g: Graph): Promise<number> =>
-  (await placed(g, 'active')).length
+  (await activeChildren(g)).length
 
 /** The order a child joining the queue takes: behind every other holding a
  * place. A settled child's order no longer places anyone. */

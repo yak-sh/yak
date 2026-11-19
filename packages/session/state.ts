@@ -140,12 +140,22 @@ export let cold = (
   now: number = Date.now(),
 ): boolean => (expiry(entries, session) ?? Infinity) <= now
 
+let sessionOf = (b: Bundle | undefined) =>
+  (b?.entry as Comp | undefined)?.session
+
+// A fork inherits the prefix as history. A call there can still be open at
+// the fork point and finish later in its own transcript.
+let ownCalls = (all: Bundle[]) => {
+  let session = sessionOf(all.at(-1))
+  return all.filter((b) => kindOf(b) == 'call' && sessionOf(b) == session)
+}
+
 let callsIn = (all: Bundle[]): Bundle[] => {
   let answered = new Set(
     all.filter((b) => RESULT in b)
       .map((b) => String((b[RESULT] as Comp)?.call)),
   )
-  return all.filter((b) => kindOf(b) == 'call' && !answered.has(b.entity.eid))
+  return ownCalls(all).filter((b) => !answered.has(b.entity.eid))
 }
 
 /** The calls that no result answers — what the runner runs next, and what
@@ -256,7 +266,7 @@ let entriesSay = (entries: Bundle[]): TranscriptStatus => {
   // can outlive many asks, and asks while they run only for something new.
   let calls = callsIn(turn).filter((b) => !b.tool_async)
   let pending = callsIn(all).some((b) => b.tool_async)
-  let background = all.some((b) => b.call && b.tool_async)
+  let background = ownCalls(all).some((b) => b.tool_async)
   if (abandoned(calls)) return 'running'
   if (kind == 'exception') return 'failed'
   if (kind == 'interrupted' && newest.failed && !newest.ask && !newest.call) {

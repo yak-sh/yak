@@ -21,6 +21,7 @@ import {
 } from '@yaks/task'
 import {
   active,
+  activeChildren,
   admitNext,
   dispatchStatus,
   queue,
@@ -857,13 +858,18 @@ export let running = (
     let s = await react(g, String(session), deps, read)
     await r.each?.(s, String(session))
   }
-  // What a process finds as it starts: a background call still claimed by a
-  // holder that exited, or that the host says is gone (a Durable Object reset
-  // under it), has nobody to finish it. Each is taken up as session_tool takes
-  // one, so it is answered and its session moves on, however long ago its own
-  // run ended.
+  // Resume terminal children that still hold a place, and background calls
+  // claimed by a holder that exited or that the host says is gone.
   let recover = async () => {
     let r = await ready
+    if (pooled) {
+      for (let child of await activeChildren(g)) {
+        let session = child.entity.eid
+        if (ENDED.includes(await currentStatus(g, session))) {
+          await enqueue(g, 'session_run', session)
+        }
+      }
+    }
     if (!r.asyncTools) return
     for (let call of await g.read(HELD)) {
       let by = (call.execution as Comp | undefined)?.by

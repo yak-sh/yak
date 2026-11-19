@@ -26,7 +26,7 @@ import { sessions } from './plugin.ts'
 import { react, transcript } from './react.ts'
 import { kindOf, sessionDerived, statusOf } from './status.ts'
 import { answers } from './providers.ts'
-import { RUN, type Runner, settle } from './run.ts'
+import { RUN, type Runner, running, settle } from './run.ts'
 
 let vocab = loadVocab([
   sessionDoc,
@@ -76,7 +76,7 @@ let fixture = (bundles: Bundle[], watch?: Plugin) => {
     tools: [],
     maxChildren: 1,
   }
-  return { g, r, asked }
+  return { g, r, fx, asked }
 }
 
 let child = (eid: string, order?: number): Bundle[] => [
@@ -165,6 +165,56 @@ let output = (eid: string): Bundle => ({
   entry: { session: eid },
   output: {},
   content: { body: 'already done' },
+})
+
+test('startup delivers a settled fork whose prefix ends with a parent tool call', async () => {
+  let { g, r, fx } = fixture([
+    child('fork', 1)[0],
+    { ...child('fork', 1)[1], entry: { session: 'fork', seq: 1 } },
+    { entity: { eid: 'fork' }, dispatch: { state: 'settled' } },
+    { entity: { eid: toolEid('slow') }, tool: { name: 'slow' } },
+    {
+      entity: { eid: 'parent-call' },
+      entry: { session: 'fork', seq: 2 },
+      call: { to: toolEid('slow'), args: {} },
+      tool_async: {},
+    },
+    {
+      entity: { eid: 'parent-result' },
+      entry: { session: 'fork', seq: 3 },
+      result: { call: 'parent-call' },
+    },
+    { ...output('fork'), entry: { session: 'fork', seq: 4 } },
+    {
+      ...child('helper', 2)[0],
+      fork: { from: 'parent-call' },
+      spawned: { parent: 'fork' },
+      admitted: {},
+    },
+    { ...child('helper', 2)[1], entry: { session: 'helper', seq: 3 } },
+    {
+      entity: { eid: 'helper-ask' },
+      entry: { session: 'helper', seq: 4 },
+      ask: { through: 'helper:input' },
+      attempt: {},
+    },
+    {
+      ...output('helper'),
+      entry: { session: 'helper', seq: 5 },
+      output: { source: 'helper-ask' },
+    },
+  ])
+  fx.handle(running(g, r))
+  await fx.work(g)
+  assertEquals((await g.get(['helper']))[0].dispatch, undefined)
+  assertEquals(
+    (await transcript(g, 'fork')).flatMap((b) => b.delivery ?? []),
+    [{ child: 'helper', outcome: 'settled' }],
+  )
+  assertEquals(
+    (await transcript(g, 'root')).map((b) => b.delivery),
+    [{ child: 'fork', outcome: 'settled' }],
+  )
 })
 
 for (let mark of ['queued', 'admitted', 'waiting']) {

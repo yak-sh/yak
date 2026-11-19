@@ -418,8 +418,13 @@ let newest = (r: Read, qualifier: Built): Promise<Bundle | undefined> => {
   r.found.set(qualifier, found)
   return found
 }
-let every = async (r: Read, qualifier: Built): Promise<Bundle[]> =>
+let every = async (
+  r: Read,
+  qualify: (segment: Segment) => Built | undefined,
+): Promise<Bundle[]> =>
   (await Promise.all(r.segs.map(async (s) => {
+    let qualifier = qualify(s)
+    if (!qualifier) return []
     let { known, edge, ask } = await recall(r, s, qualifier)
     let q = line`${sub(within(s))}${sub(qualifier)}`
     let found = !known
@@ -626,7 +631,7 @@ export let saidOf = async (
 }
 
 // What a reading holds besides its newest rows, found by one lookup for all:
-// the open calls (which no result answers), the prompts for a model turn or a
+// its own calls (which no result answers), the prompts for a model turn or a
 // tool call, and the checkpoints for a model turn; and for a model turn the
 // asks the runner owes a retry, by a query of their own, since that mark is
 // set on an ask already written. The mark is named first: a query is driven
@@ -638,15 +643,18 @@ let named = async (r: Read, o: Reach): Promise<Bundle[]> => {
   let parts = [
     ...turn && has('checkpoint') ? [line`.checkpoint`] : [],
     ...(turn || o.call) && has('prompt') ? [line`.prompt`] : [],
-    ...has(CALL) && has(RESULT) ? [line`.${CALL} !${RESULT}s`] : [],
   ]
+  let own = r.segs.at(-1)
+  let calls = has(CALL) && has(RESULT) ? [line`.${CALL} !${RESULT}s`] : []
   return [
-    ...parts.length
-      ? await every(
-        r,
-        line`&(${sub(parts.reduce((q, p) => line`${sub(q)}|${sub(p)}`))})`,
-      )
-      : [],
+    ...await every(r, (s) => {
+      let terms = s == own ? [...parts, ...calls] : parts
+      if (terms.length) {
+        return line`&(${
+          sub(terms.reduce((q, p) => line`${sub(q)}|${sub(p)}`))
+        })`
+      }
+    }),
     ...turn && has('provisional')
       ? await selected(
         r,

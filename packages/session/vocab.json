@@ -1228,7 +1228,7 @@
     "session_recover": {
       "effect": true,
       "start": true,
-      "description": "whenever a process starts working the effects, take up each asynchronous call left running by a holder that has exited or that the host says is gone, through session_tool's path: the tool's recovery, else an answer that it was interrupted, and its turn goes on"
+      "description": "on pool startup, wake each ended child still holding a dispatch place so its receipt is delivered and its place released. Take up asynchronous calls left by a holder that has exited or that the host says is gone, through session_tool's recovery path"
     },
     "sending": {
       "component": true,
