@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { readTextFileSync } from '@yaks/file/io'
-import { audit, type Axe, report } from './accessibility.ts'
+import { audit, type Axe, report } from '@yaks/platform/preview-audit'
 
 // The bundle yak-browser runs for app_preview's check.
 let shipped = JSON.parse(

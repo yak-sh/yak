@@ -4,7 +4,12 @@
 // session interface lets the load, diagnostics and cleanup run in process
 // without a local browser.
 import { type Clock, sleep, system } from '@yaks/fp'
-import { audit, type Axe, type Checked } from '../accessibility.ts'
+import {
+  audit,
+  type Axe,
+  type Checked,
+  interruption,
+} from '@yaks/platform/preview-audit'
 
 export type View = { width: number; height: number; wait: number }
 /** A cookie the page is opened with: a private app's sign-in. */
@@ -66,11 +71,15 @@ export type Rendered = {
 /** A render that failed, and the browser time it held all the same. */
 export type Failed = { failed: string; stack?: string; duration: number }
 
-let message = (error: unknown) =>
-  (error instanceof Error ? error.stack ?? error.message : String(error)).slice(
-    0,
-    2000,
-  )
+let message = (error: unknown) => {
+  if (!(error instanceof Error)) return String(error).slice(0, 2000)
+  let { message, stack } = error
+  // Puppeteer can rewrite a protocol error's message after capturing the stack.
+  return (stack?.includes(message)
+    ? stack
+    : [message, stack].filter(Boolean).join('\n'))
+    .slice(0, 2000)
+}
 
 // The audit runs in its own JavaScript world over the page's DOM, so what a
 // page adds to its globals and prototypes never reaches axe-core.
@@ -152,11 +161,8 @@ export let CHECK = 10_000
 /** How much of a page's visible text a render carries. */
 export let TEXT = 6000
 
-// A check that fails is its own result: the preview keeps its screenshot,
-// console and errors, and the kernel reports the failure (../browser.ts). The
-// page's visible text is read in the same world after the audit, so nothing
-// the page adds to its globals changes how it is read; a check that failed
-// read none.
+// The preview keeps its screenshot, console and errors if the check cannot
+// finish. Read visible text in the same isolated world as the audit.
 let checked = async (
   page: Page,
   axe: Axe,
@@ -179,7 +185,11 @@ let checked = async (
       })),
     )
   } catch (e) {
-    return { accessibility: { failed: message(e) }, text: '' }
+    let interrupted = interruption(e)
+    return {
+      accessibility: interrupted ? { interrupted } : { failed: message(e) },
+      text: '',
+    }
   } finally {
     cancel()
   }

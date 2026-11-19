@@ -47,7 +47,7 @@ import {
   upload,
 } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
-import { report } from './accessibility.ts'
+import { report } from '@yaks/platform/preview-audit'
 import { ours } from './asking.ts'
 import { compiled, pageInputs } from './esbuild.ts'
 import { configured } from './deploy_worker.ts'

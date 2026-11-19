@@ -14,7 +14,7 @@ import {
   type Session,
 } from './browser/capture.ts'
 import { render } from './browser.ts'
-import { type Audit, report } from './accessibility.ts'
+import { type Audit, report } from '@yaks/platform/preview-audit'
 import { within } from './defects.ts'
 import type { Bundle } from '@yaks/graph'
 
@@ -213,6 +213,70 @@ test('a check that throws keeps the preview and the kernel reports its failure',
   assertStringIncludes(report(result.accessibility), 'RangeError: axe gave up')
   assertStringIncludes(reports, 'axe gave up')
   assertEquals(p.closed(), true)
+})
+
+// Puppeteer allocates the stack before Chrome answers, then updates the message.
+let protocol = (detail: string, originalMessage = detail) =>
+  Object.assign(new Error(`Protocol error (Runtime.evaluate): ${detail}`), {
+    stack: 'Error: ProtocolError\n    at CallbackRegistry.create',
+    originalMessage,
+  })
+
+for (
+  let [error, interrupted, explanation] of [
+    [protocol('Target closed', ''), 'target', 'browser closed or detached'],
+    [
+      protocol('Session with given id not found.'),
+      'target',
+      'browser closed or detached',
+    ],
+    [
+      protocol('Execution context was destroyed.'),
+      'document',
+      'page navigated or closed',
+    ],
+  ] as const
+) {
+  test(`an interrupted audit keeps the screenshot when ${error.message}`, async () => {
+    let p = page()
+    let cdp = await p.p.createCDPSession()
+    let send = cdp.send
+    cdp.send = (method, params) =>
+      method == 'Runtime.evaluate' &&
+        String(params?.expression).includes('axe.run(document')
+        ? Promise.reject(error)
+        : send(method, params)
+    let { result, reports } = await reported(() =>
+      render(bound(p.browsing), { url: 'https://x.invalid/', view })
+    )
+    assertEquals(result.image, 'png-bytes')
+    assertEquals(result.text, '')
+    assertEquals(result.accessibility, { interrupted })
+    assertStringIncludes(
+      report(result.accessibility).toLowerCase(),
+      explanation,
+    )
+    assertEquals(reports, '[]')
+    assertEquals(p.closed(), true)
+  })
+}
+
+test('an unexpected protocol error reaches the tracker with the browser reply', async () => {
+  let p = page()
+  let cdp = await p.p.createCDPSession()
+  let send = cdp.send
+  cdp.send = (method, params) =>
+    method == 'Runtime.evaluate'
+      ? Promise.reject(protocol('Internal error'))
+      : send(method, params)
+  let { result, reports } = await reported(() =>
+    render(bound(p.browsing), { url: 'https://x.invalid/', view })
+  )
+  assertEquals(result.image, 'png-bytes')
+  assertStringIncludes(
+    reports,
+    'Protocol error (Runtime.evaluate): Internal error',
+  )
 })
 
 test('a check that passes reports nothing', async () => {
