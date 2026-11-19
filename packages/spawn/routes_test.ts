@@ -81,6 +81,7 @@ let hosting = async (first: Actor | null) => {
     graph: g,
     who: () => actor,
     runner: runner(g, { tools }),
+    machine: 'workbench',
   }, { provider: PROVIDER })
   let at = (path: string) => (body: object) =>
     served.find((r) => r.path == path)!.handle(
@@ -116,6 +117,8 @@ test('a brief becomes a task and a run on it, written as the tunnel’s caller',
   equal(comp(first, 'using').provider, PROVIDER)
   equal(String(comp(first, 'content').body).includes('Fix the parser.'), true)
   equal(spawned.names.task.startsWith('T-'), true)
+  equal(spawned.machine, 'workbench')
+  equal(spawned.model, undefined)
 })
 
 test('a run asks for a model, and one its provider does not serve is refused', async () => {
@@ -126,6 +129,7 @@ test('a run asks for a model, and one its provider does not serve is refused', a
   )
   let refused = await ask({ brief: 'Go.', model: 'nobody-serves-this' })
   equal(comp(first, 'using').model, MODEL)
+  equal(spawned.model, 'opus')
   equal(refused.status, 422)
 })
 

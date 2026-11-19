@@ -4641,6 +4641,7 @@
             "npm:@yaks/process@0.2.28",
             "npm:@yaks/project@0.2.28",
             "npm:@yaks/provenance@0.2.28",
+            "npm:@yaks/query@0.2.32",
             "npm:@yaks/ram@0.2.24",
             "npm:@yaks/session@0.2.33",
             "npm:@yaks/sqlite@0.2.30",

@@ -94,6 +94,15 @@ Deno.test('a call reads as its step, filled in from its arguments and the person
         'Reading or writing app files…',
         'Read or wrote app files',
       ],
+      // A tool that says nothing of itself, or says it in blank steps.
+      [{}, {}, {}, 'Using a tool…', 'Used a tool'],
+      [
+        { step: { doing: ' ', done: '' } },
+        {},
+        {},
+        'Using a tool…',
+        'Used a tool',
+      ],
     ] as const
   ) {
     assertEquals(stepOf(tool, args, known as Record<string, string>), {

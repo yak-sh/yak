@@ -145,6 +145,8 @@ type Spawned = {
   task: string
   session: string
   names: { task: string; session: string }
+  machine?: string
+  model?: string
 }
 
 /** A helper on the machine `reached`: the run asked of it, and the child of
@@ -191,6 +193,8 @@ let onMachine = async (
         task: said.task,
         session: said.session,
         names,
+        ...said.machine ? { machine: said.machine } : {},
+        ...said.model ? { model: said.model } : {},
       },
       ...asked.title ? { doc: { title: asked.title } } : {},
     },

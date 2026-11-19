@@ -1869,7 +1869,7 @@ let helperBand = ({ parent, line }: HelperPage) =>
       h(Icon, { of: icons['arrow-left'] }),
       h(Toolbar.Label, {}, parentName(parent)),
     ),
-    h(Chip, null, 'Helper'),
+    h(Chip, { mod: 'accent' }, 'Helper'),
     line ? h(Rows, null, h(Work, { work: line })) : null,
   )
 
@@ -2455,6 +2455,7 @@ let unfold = (open) => {
   shown()
 }
 let turning = (turn) => {
+  if (happening.band) return
   happening.turn = turn ?? null
   let at = aside()?.querySelector('[data-turn]')
   if (at) at.replaceWith(drawn(turnHtml(happening.turn)))

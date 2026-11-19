@@ -301,7 +301,7 @@ export let operatorDoc: VocabDoc = {
     operator_machine: {
       component: true,
       description:
-        "A helper that runs on its person's own machine, reached through a space's tunnel, rather than in yaks.app's sandbox (workers/yak operator-helpers.ts): the space whose tunnel goes there, and the task and session the machine keeps the run as. The machine's word about that task is the helper's report.",
+        "A helper that runs on its person's own machine, reached through a space's tunnel, rather than in yaks.app's sandbox (workers/yak operator-helpers.ts): the space whose tunnel goes there, the task and session the machine keeps the run as, and the machine's name and the model asked of it. The machine's word about that task is the helper's report.",
       properties: {
         space: { type: 'string', ref: 'entity', death: 'keep' },
         task: {
@@ -317,6 +317,16 @@ export let operatorDoc: VocabDoc = {
           type: 'string',
           description:
             "The task's and the session's short ids there, as one line.",
+        },
+        machine: {
+          type: 'string',
+          description:
+            'The machine, by the name it gave itself in its answer (@yaks/spawn/routes `Spawned`).',
+        },
+        model: {
+          type: 'string',
+          description:
+            "The model the run was asked to use, by the machine's name for it; absent where it runs its provider's own.",
         },
       },
     },

@@ -2,7 +2,8 @@
    chip is underlined in the accent and drawn in pencil (on ::after, from a
    solid graphite line, as a press is), and a hover washes it in the accent;
    pressed, not read, its words never select. -quiet is a label on the floor
-   (the address in a window bar), -code words to copy, in the mono face. A
+   (the address in a window bar), -code words to copy, in the mono face; -accent a label in the accent, on a
+   place the accent tints. A
    hue (-0 … -5) inks and washes it in its colour, a link too; a ghost is
    dim, its edge dashed. What a variant changes rides a --chip-* property. */
 .Chip {
@@ -62,6 +63,12 @@ a.Chip:focus-visible {
   --chip-edge: 0;
   --chip-font: var(--mono);
   --chip-size: var(--small);
+}
+.Chip-accent {
+  --chip-hue: var(--accent);
+  --chip-fill: color-mix(in srgb, var(--accent) 22%, var(--bg));
+  --chip-edge: 1px solid var(--accent);
+  --chip-weight: 700;
 }
 .Chip-0 {
   --chip-hue: var(--hue-0);

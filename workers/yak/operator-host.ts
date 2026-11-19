@@ -280,9 +280,35 @@ let helpersBy = async (store: Store, calls: Set<string>): Promise<Helper[]> =>
       ),
     )
     : []
+// Where a helper runs and its model, from its own rows: the machine its run
+// went to (`operator_machine`) and the model asked of it there; else
+// yaks.app, and the model that answered its newest ask, or the one its
+// input names.
+let ranOn = async (
+  store: Store,
+  row: Bundle,
+  entries: Bundle[],
+): Promise<{ where: string; model?: string }> => {
+  let there = comp(row, 'operator_machine')
+  if (there) {
+    return {
+      where: String(there.machine || 'Your machine'),
+      ...there.model ? { model: String(there.model) } : {},
+    }
+  }
+  let ask = comp(entries.findLast((b) => b.ask), 'ask')
+  let eid = ask?.served ?? ask?.to ??
+    comp(entries.find((b) => comp(b, 'using')?.model), 'using')?.model
+  let [named] = eid ? await store.g.get([String(eid)], ['model']) : []
+  let model = comp(named, 'model')
+  let name = String(model?.label ?? model?.name ?? '')
+  return { where: 'yaks.app', ...name ? { model: name } : {} }
+}
+
 // A helper as the conversation's aside lists it (operator-view.ts
 // `helping`), from its own lines: what it was asked, when it began, its
-// place to run, and its run's page under `opens`.
+// place to run, where it runs and its model, and its run's page under
+// `opens`.
 let listedOf = async (
   store: Store,
   helper: Helper,
@@ -299,6 +325,7 @@ let listedOf = async (
     since: String(comp(row, 'created')?.at ?? ''),
     entries: helper.entries,
     place: (dispatchStatus(row) ?? null) as Place,
+    ...await ranOn(store, row, helper.entries),
     ...opens ? { href: `${opens}/${session}` } : {},
   }, names)
 }
@@ -347,10 +374,17 @@ let lined = (
   }))
 
 // The aside a conversation draws (operator-aside.ts): its turn under way,
-// and its helpers' rows, those at work first.
-let asideOf = (entries: Bundle[], helpers: Helper[], names: Names): Aside => ({
-  turn: turnOf(entries, names),
+// but on a helper's page (`band`), and its helpers' rows, those at work
+// first.
+let asideOf = (
+  entries: Bundle[],
+  helpers: Helper[],
+  names: Names,
+  band = false,
+): Aside => ({
+  turn: band ? null : turnOf(entries, names),
   helpers: ordered(helpers.flatMap((h) => h.line ? [h.line] : [])),
+  ...band ? { band: true } : {},
 })
 
 // The newest lines a conversation draws: a long one is read from its end.
@@ -607,6 +641,7 @@ let helperOf = async (store: Store, helper: Bundle, named: Named) => {
     title: await titleAt(store, helper),
     since: String(comp(helper, 'created')?.at ?? ''),
     entries: lines,
+    ...await ranOn(store, helper, lines),
   }, names)
   let at = String(comp(lines.at(-1), 'created')?.at ?? line.since)
   let worked: Worked & { standing: Standing } = { ...line, open: session, at }
@@ -1120,7 +1155,7 @@ export let conversationOf = async (
       ...helper
         ? { helper: await helperPage(store, row, entries, names, opens) }
         : {},
-      aside: asideOf(entries, seen.helpers, names),
+      aside: asideOf(entries, seen.helpers, names, helper),
       task: eid,
       begun: open,
       title: helper

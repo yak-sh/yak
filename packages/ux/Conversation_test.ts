@@ -289,6 +289,15 @@ test('a fold opened on the line the server drew stays open as its line is drawn 
   equal(p.folds(), [false, true], 'and as the server drew it')
 })
 
+test("a fold pressed on the server's line opens and closes as the page holds it, through every drawing between", () => {
+  using p = served()
+  for (let open of [true, false, true, false]) {
+    p.press(1)
+    p.draw(null, 1)
+    equal(p.folds(), [false, open])
+  }
+})
+
 test('a fold pressed open stays open as its line is drawn again, and closes when pressed', () => {
   using p = served()
   p.draw('Reading…')

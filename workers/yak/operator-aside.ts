@@ -25,8 +25,9 @@ export type Standing = 'running' | 'waiting' | 'done' | 'failed' | 'stopped'
 
 /** A piece of work as its row draws it: the session it is, the page it
  * opens, its title, how it stands (nothing yet for a conversation no one
- * has spoken in), its step under way, when it began, when it ended, and the
- * line its final reply opens with, what it found or did. */
+ * has spoken in), its step under way, when it began, when it ended, the
+ * line its final reply opens with, what it found or did, and for a helper,
+ * where it runs (yaks.app, or a machine by its name) and its model. */
 export type Work = {
   session: string
   href?: string
@@ -36,14 +37,18 @@ export type Work = {
   since: string
   until?: string
   recap?: string
+  where?: string
+  model?: string
 }
 
 /** A helper as the aside lists it: a piece of work, which always stands
  * some way. */
 export type HelperLine = Work & { standing: Standing }
 
-/** What the aside holds: the turn under way, and the helpers. */
-export type Aside = { turn: Turn | null; helpers: HelperLine[] }
+/** What the aside holds: the turn under way, and the helpers. On a helper's
+ * own page (`band`) it holds no turn: the helper's row in the band says how
+ * it stands, once. */
+export type Aside = { turn: Turn | null; helpers: HelperLine[]; band?: true }
 
 /** Whether a piece of work is still at it. */
 export let going = ({ standing }: { standing?: Standing }) =>
@@ -128,7 +133,8 @@ export let Stands = ({ standing }: { standing: Standing }) =>
 /** A piece of work as a row, wherever it is drawn: its title in a line,
  * linked to its page, its recap on hover, over what `about` says of it
  * first, how it stands and, while it works, its step and how long it has
- * taken, or once it ended, how long ago. The page puts a newer drawing of a
+ * taken, or once it ended, how long ago; then where it runs and its model,
+ * where it says. The page puts a newer drawing of a
  * helper in place of each by its session (`[data-help]`). */
 export let Work = (
   { work: x, about = [], now = Date.now() }: {
@@ -160,6 +166,13 @@ export let Work = (
             : h(Popover.Time, { at: x.since, now, lasting: true }),
         ].filter(Boolean).flatMap((part, i) => i ? [' · ', part] : [part]),
       ),
+      x.where || x.model
+        ? h(
+          Rows.Meta,
+          { mod: 'line', 'data-runs': '' },
+          [x.where, x.model].filter(Boolean).join(' · '),
+        )
+        : null,
     ),
   )
 
@@ -231,8 +244,9 @@ export let Glance = ({ aside, open }: { aside: Aside; open: boolean }) => {
   )
 }
 
-/** The aside: the summary, then Now, and Helpers while there are any.
- * Hidden while nothing runs and no helper was started. */
+/** The aside: the summary, then Now (but on a helper's page, whose band
+ * says it), and Helpers while there are any. Hidden while nothing runs and
+ * no helper was started. */
 export let Aside = (
   { aside, now, open = false }: { aside: Aside; now: number; open?: boolean },
 ) =>
@@ -250,7 +264,7 @@ export let Aside = (
     h(
       Popover.Body,
       { class: 'Talk_AsideIn', id: 'aside-now' },
-      h(
+      aside.band ? null : h(
         Card,
         null,
         h(Card.Head, null, h(Card.Title, null, 'Now')),

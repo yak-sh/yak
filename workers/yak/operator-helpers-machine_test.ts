@@ -49,7 +49,12 @@ let DISPATCH = {
         via: r.headers.get('x-via'),
         body: await r.json(),
       })
-      return Response.json({ ...BOX, names: { task: 'T-9', session: 'S-9' } })
+      return Response.json({
+        ...BOX,
+        names: { task: 'T-9', session: 'S-9' },
+        machine: 'jeffs-laptop',
+        model: 'opus',
+      })
     },
   }),
 } as unknown as Env['DISPATCH']
@@ -151,6 +156,8 @@ test('a helper on the machine is one spawn asked of it as the Operator, in the c
   assertEquals((row.spawned as Comp).parent, parent)
   assertEquals((row.operator_machine as Comp).task, BOX.task)
   assertEquals((row.operator_machine as Comp).names, 'T-9 S-9')
+  assertEquals((row.operator_machine as Comp).machine, 'jeffs-laptop')
+  assertEquals((row.operator_machine as Comp).model, 'opus')
   assertEquals((row.operator_session as Comp).person, jeff)
   assertEquals(row.dispatch, undefined)
   assertEquals(modelAsked, 0)

@@ -46,6 +46,10 @@ a.Chip:hover,
   font-family: inherit;
   background: none;
 }
+/* a label in the accent, on a place the accent tints */
+.Chip-accent {
+  --hue: var(--accent);
+}
 /* words to copy */
 .Chip-code {
   --hue: var(--text);

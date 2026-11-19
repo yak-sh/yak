@@ -18,6 +18,7 @@ import { rootOf } from './operator-root.ts'
 import { CONVERSATION } from './operator-host.ts'
 import { notification } from './operator-updates.ts'
 import { toolEid } from '@yaks/tools/result'
+import { identityEid } from '@yaks/graph'
 import {
   aboutPath,
   chatPage,
@@ -746,7 +747,9 @@ test('the Voice card shows back the voice, speed and model each save picked', as
 
 test('a helper’s page is zoomed in: held under the bar, the way back out, its row, and where words go', async () => {
   let helper = crypto.randomUUID()
+  let model = identityEid('model', ['claude-sonnet-5-5'])
   await service.store.g.apply([
+    { entity: { eid: model }, model: { name: 'claude-sonnet-5-5' } },
     {
       entity: { eid: helper },
       session: { id: helper },
@@ -757,6 +760,7 @@ test('a helper’s page is zoomed in: held under the bar, the way back out, its 
       entity: { eid: crypto.randomUUID() },
       entry: { session: helper },
       content: { body: 'Import the CSV' },
+      using: { model },
     },
   ], { trusted: true })
   let { document } = await sided('owner', helper)
@@ -768,11 +772,20 @@ test('a helper’s page is zoomed in: held under the bar, the way back out, its 
     [out.getAttribute('href'), out.textContent],
     [theirs, 'Your conversation'],
   )
-  assertStringIncludes(band.textContent!, 'Helper')
+  assertEquals(band.querySelector('.Chip-accent')?.textContent, 'Helper')
   assertEquals(
     band.querySelector('.Rows_Meta .State')?.textContent,
     'Running',
   )
+  // Where it runs and its model, in one line under its standing.
+  assertEquals(
+    band.querySelector('[data-runs]')?.textContent,
+    'yaks.app · claude-sonnet-5-5',
+  )
+  // Its row says how it stands, so the aside does not say it again.
+  let aside = document.querySelector('[data-aside]')!
+  assertEquals(aside.querySelector('[data-turn]'), null)
+  assertEquals(aside.textContent!.includes('Nothing running'), false)
   assertEquals(
     band.querySelector('[data-help] a')?.getAttribute('href'),
     `${managePath('operator', space.slug)}/${helper}`,

@@ -4,7 +4,8 @@
  * Which name wears which hue is the caller's. `Chip-ghost` is a name that is
  * there only as a possibility: absent, or not yet added. `Chip-quiet` is a
  * label that steps back (an address in a window bar), `Chip-code` words a
- * person copies (a URL), and a `Chip.Tag` inside one says what it is a
+ * person copies (a URL), `Chip-accent` a label in the accent, on a place the
+ * accent tints (a helper's band), and a `Chip.Tag` inside one says what it is a
  * kind of. Given an `href` a chip is a link (el.ts). A row of them is
  * `Chips`.
  *
@@ -28,13 +29,15 @@ export let hues = 6
 export let description =
   'A name set as a token, in one of six hues that tell names apart.'
 
-/** A hue is a colour; a ghost is dim; a tag and a quiet chip are muted. */
+/** A hue is a colour; a ghost is dim; a tag and a quiet chip are muted; an
+ * accent one is the accent. */
 export let sheet = (c: Colors): Sheet => ({
   Chip: { fg: c.muted },
   ...Object.fromEntries(c.hues.map((fg, i) => [`Chip-${i}`, { fg }])),
   'Chip-ghost': { fg: c.dim, dim: true },
   'Chip-quiet': { fg: c.muted },
   'Chip-code': { fg: c.text },
+  'Chip-accent': { fg: c.accent },
   Chip_Tag: { fg: c.muted },
 })
 
@@ -55,6 +58,7 @@ export let specimens = (): Specimen[] => [
   ['Chip-ghost', h(Chip, { mod: 'ghost' }, '+ memory')],
   ['Chip-quiet', h(Chip, { mod: 'quiet' }, 'ada.yaks.app/recipes')],
   ['Chip-code', h(Chip, { mod: 'code' }, 'https://yaks.app/mcp')],
+  ['Chip-accent', h(Chip, { mod: 'accent' }, 'Helper')],
   [
     'Chip, href, Tag',
     h(Chip, { href: '#Chip' }, 'Recipe box', h(Chip.Tag, {}, 'public')),

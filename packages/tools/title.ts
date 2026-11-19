@@ -9,7 +9,8 @@
 // what the view knows (the person it works for). A tool whose arguments choose
 // what it does keeps a step for each under `by`: by argument, then by that
 // argument's value ('' when left out). The first step whose names all fill in
-// is the one said; with none, the title is said in the tense of the call.
+// is the one said; with none, the title is said in the tense of the call, and
+// a tool that says nothing of itself is "Use a tool".
 
 /** How a call reads: while it runs, and once it answered. */
 export type Step = { doing: string; done: string }
@@ -56,11 +57,11 @@ export let stepOf = (
   for (let s of [...chosen, t.step]) {
     if (!s) continue
     let [running, answered] = [filled(s.doing, values), filled(s.done, values)]
-    if (running != null && answered != null) {
+    if (running?.trim() && answered?.trim()) {
       return { doing: running, done: answered }
     }
   }
-  let title = titleOf(t)
+  let title = titleOf(t) || 'Use a tool'
   return { doing: doing(title), done: did(title) }
 }
 
@@ -203,6 +204,7 @@ let VERBS = new Set([
   'unpublish',
   'update',
   'upload',
+  'use',
   'visualize',
   'wait',
   'watch',

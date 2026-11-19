@@ -20,6 +20,7 @@ import type { Authenticate, Route } from '@yaks/api'
 import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
 import { mint } from '@yaks/graph/identity'
 import { human } from '@yaks/id'
+import { line } from '@yaks/query'
 import type { Runner } from '@yaks/tools'
 import { answerOf, faultOf, toolEid } from '@yaks/tools/result'
 
@@ -41,19 +42,28 @@ export type Options = {
 export type Asked = { brief: string; title?: string; model?: string }
 
 /** What this machine answers: the task it filed the brief as and the session
- * running it, each by eid and short id. */
+ * running it, each by eid and short id, the machine, by its own name, and
+ * the model the run uses, by its name, where the run names one. */
 export type Spawned = {
   task: string
   session: string
   names: { task: string; session: string }
+  machine: string
+  model?: string
 }
 
 /** What another host sends to stop a run: its session, by eid here. */
 export type Stopping = { session: string }
 
-/** What this facet reads off the host: the graph, who a request is from, and
- * the runner its tools are called through. */
-export type Hosting = { graph: Graph; who: Authenticate; runner?: Runner }
+/** What this facet reads off the host: the graph, who a request is from, the
+ * runner its tools are called through, and the machine's own name (default
+ * its hostname). */
+export type Hosting = {
+  graph: Graph
+  who: Authenticate
+  runner?: Runner
+  machine?: string
+}
 
 let refused = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
@@ -69,13 +79,12 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => [{
   handle: asking(host, async (call, asked: Partial<Asked>) => {
     let brief = str(asked.brief)
     if (!brief) return refused(400, 'arguments', 'give the agent a brief')
-    return Response.json(
-      await spawn(host.graph, call, {
-        brief,
-        title: str(asked.title) || brief.split('\n')[0].slice(0, 120),
-        model: str(asked.model),
-      }, options.provider ?? 'claude'),
-    )
+    let run = await spawn(host.graph, call, {
+      brief,
+      title: str(asked.title) || brief.split('\n')[0].slice(0, 120),
+      model: str(asked.model),
+    }, options.provider ?? 'claude')
+    return Response.json({ ...run, machine: host.machine ?? Deno.hostname() })
   }),
 }, {
   method: 'POST',
@@ -147,7 +156,7 @@ let spawn = async (
   call: Call,
   asked: Required<Asked>,
   provider: string,
-): Promise<Spawned> => {
+): Promise<Omit<Spawned, 'machine'>> => {
   let made = await call('task_new', { title: asked.title, body: asked.brief })
   let task = made.find((b) => b.task)?.entity.eid
   if (!task) throw new Error('task_new answered no task')
@@ -163,9 +172,23 @@ let spawn = async (
   let rows = new Map<string, Bundle>(
     (await graph.get([task, session])).map((b) => [b.entity.eid, b]),
   )
+  let model = await modelOf(graph, session)
   return {
     task,
     session,
     names: { task: name(rows.get(task)!), session: name(rows.get(session)!) },
+    ...model ? { model } : {},
   }
+}
+
+// The model a session's input names, by its label or name; none where it
+// runs its provider's own.
+let modelOf = async (graph: Graph, session: string) => {
+  let [first] = await graph.read(
+    line`.entry.session=${session}&.using&.fields=using`,
+  )
+  let eid = (first?.using as Comp | undefined)?.model
+  let [row] = eid ? await graph.get([String(eid)], ['model']) : []
+  let m = row?.model as Comp | undefined
+  return String(m?.label ?? m?.name ?? '') || undefined
 }

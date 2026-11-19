@@ -427,9 +427,9 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
       if (!at.current.away && !address()?.over) newest()
     }
     let hash = () => address()?.line ? opened() : grown()
-    // A fold of a line kept as the server drew it opens and closes as a
-    // browser's does, and the page then holds it so; one drawn from its
-    // state only says what it was told.
+    // A fold of a line kept as the server drew it that the browser opened or
+    // closed by itself (a find in the page), which the page then holds so;
+    // one drawn from its state only says what it was told.
     let toggled = (ev: Event) => {
       let fold = ev.target as Element
       let eid = fold.getAttribute?.('data-disclosure')
@@ -438,17 +438,29 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
       let was = at.current.state?.(eid) ?? { entity: { eid } }
       if (isOpen(was) != open) at.current.onChange(disclosed(was, open))
     }
-    // Its marks too, which no script drawn there presses; a mark drawn from
-    // its state has said so already.
-    let marked = (ev: Event) => {
-      let mark = (ev.target as Element).closest?.('[data-disclosure-mark]')
-      let eid = mark?.getAttribute('data-disclosure-mark')
-      if (!eid || ev.defaultPrevented) return
+    // A press on such a fold's summary, or on a mark, which no script drawn
+    // there hears: the page holds the other state at once, as a fold drawn
+    // from its state does. Left to the browser, the fold would change first
+    // and the page hear of it later, and a drawing in between (a scroll, a
+    // word streamed) would put it back as the page last held it. A fold or
+    // mark drawn from its state has said so already.
+    let pressed = (ev: Event) => {
+      if (ev.defaultPrevented) return
+      let target = ev.target as Element
+      let mark = target.closest?.('[data-disclosure-mark]')
+      let summary = mark ? null : target.closest?.('summary')
+      let fold = summary?.parentElement
+      // A link or button in a summary is its own to press.
+      let own = summary?.contains(target.closest('a, button'))
+      let eid = mark?.getAttribute('data-disclosure-mark') ??
+        (own ? null : fold?.getAttribute('data-disclosure'))
+      if (!eid) return
+      if (!mark) ev.preventDefault()
       let was = at.current.state?.(eid) ?? { entity: { eid } }
       at.current.onChange(disclosed(was, !isOpen(was)))
     }
     el.addEventListener('toggle', toggled, true)
-    el.addEventListener('click', marked)
+    el.addEventListener('click', pressed)
     p.addEventListener('scroll', scroll, { passive: true })
     win.addEventListener('resize', grown)
     win.addEventListener('hashchange', hash)
@@ -457,7 +469,7 @@ export let Conversation: ((p: ConversationProps) => JSX.Element) & {
     sizes?.observe(el)
     return () => {
       el.removeEventListener('toggle', toggled, true)
-      el.removeEventListener('click', marked)
+      el.removeEventListener('click', pressed)
       p.removeEventListener('scroll', scroll)
       win.removeEventListener('resize', grown)
       win.removeEventListener('hashchange', hash)

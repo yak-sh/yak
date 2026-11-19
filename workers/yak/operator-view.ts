@@ -291,6 +291,8 @@ export let helping = (
     entries: Bundle[]
     place?: Place
     href?: string
+    where?: string
+    model?: string
   },
   names: Names,
 ): HelperLine => {
