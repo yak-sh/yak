@@ -498,16 +498,24 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
       body: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     })
     assertEquals(upload.status, 200)
-    let image = (await upload.json() as { eid: string }).eid
-    await agent.tool('app_set', {
-      space: mine,
-      app: 'recipes',
-      screenshot: image,
-    })
+    let { eid: image, attachment, url } = await upload.json() as Record<
+      string,
+      string
+    >
+    // The attachment the upload answers beside the eid is a row, not the
+    // image; the url it answers names the image as its eid does.
+    let shot = (screenshot: string) =>
+      agent.tool('app_set', { space: mine, app: 'recipes', screenshot })
+    assertStringIncludes(
+      (await assertRejects(() => shot(attachment), Error)).message,
+      'not the attachment it answered beside it',
+    )
+    await shot(`https://${mine}.yaks.app${url}`)
     page = await k.at('yaks.app', '/gallery').then((r) => r.text())
-    let shot = page.match(/https:\/\/yaks\.app(\/gallery\/image\/[^"]+)"/)?.[1]
-    assertEquals(shot?.endsWith(`/${image}`), true)
-    let served = await k.at('yaks.app', shot!)
+    let pictured = page.match(/https:\/\/yaks\.app(\/gallery\/image\/[^"]+)"/)
+      ?.[1]
+    assertEquals(pictured?.endsWith(`/${image}`), true)
+    let served = await k.at('yaks.app', pictured!)
     assertEquals(served.status, 200)
     await served.body?.cancel()
     assertEquals(page.includes('/recipes/card.png'), false)

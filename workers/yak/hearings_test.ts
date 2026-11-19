@@ -14,7 +14,7 @@ import { KERNEL, metaOf } from './meta.ts'
 import { budget } from '@yaks/platform/meter'
 import { ADA, as, platform, seeded, visit } from './serving-probe.ts'
 import { unread } from './speech.ts'
-import { shaOf } from './hearings.ts'
+import { shaOf } from './blob-key.ts'
 
 // Deepgram's answer to the bytes it is sent: two speakers' turns, or a 400
 // for bytes it can't hear.

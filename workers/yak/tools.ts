@@ -54,7 +54,7 @@ import { type Config, sourceOf } from './wrangler_app.ts'
 import { compiled } from './esbuild.ts'
 import { bindingLines, boundOf } from './bindings.ts'
 import { broken, mediaTypeOf, type Objects } from '@yaks/blob'
-import { blobPrefix } from './blob-key.ts'
+import { blobPrefix, shaOf } from './blob-key.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { filesAt, staged, viewOf } from './release.ts'
 import { fullFiles } from './usage.ts'
@@ -702,6 +702,20 @@ let access = (v: unknown): Access => {
   return s as Access
 }
 
+// Where app_set's screenshot comes from: an image among the app's uploads,
+// named as the call that kept it answered. An upload also answers an
+// attachment, the row naming the image, which is 64 hex characters too.
+let shotFrom = (app = '<app>') =>
+  `the eid POST /${app}/api/blob answered for it (64 hex characters, not ` +
+  'the attachment it answered beside it; the url it answered works too), ' +
+  'or the screenshot app_preview answered with released: true and keep: true'
+
+// What app_set says when its screenshot names no image among the app's
+// uploads.
+let unshot = (v: string, space: Space, app: App) =>
+  `no image ${v} among ${space.slug}/${app.slug}'s uploads: screenshot is ` +
+  shotFrom(app.slug)
+
 // A CSS colour (apps.ts `manifesting`/`pinned`, T-33055) — a hex triple like
 // `#4c773e`, an `rgb()`/`hsl()` function, or a named colour. Loose enough for
 // any of those, tight enough that it can never break out of the HTML
@@ -974,8 +988,8 @@ let toGallery = async (
     throw refuse(
       'conflict',
       `${space.slug}/${app.slug} needs a screenshot before gallery review — ` +
-        'upload an image to its /api/blob door and pass the returned eid to ' +
-        'app_set(screenshot: …), or give its index.html an og:image',
+        'pass app_set(screenshot: …) an image among its uploads: ' +
+        `${shotFrom(app.slug)}; or give its index.html an og:image`,
     )
   }
   if (skip) {
@@ -5488,9 +5502,9 @@ let OURS: Row[] = [
         },
         ...SKIP,
         screenshot: str(
-          'the eid returned by uploading an image to this app with ' +
-            'POST /<app>/api/blob, for its gallery card and the homepage ' +
-            "examples. Only the space owner may set it; '' clears it",
+          "an image among this app's uploads, for its gallery card and the " +
+            `homepage examples: ${shotFrom()}. Only the space owner may set it; ` +
+            "'' clears it",
         ),
         theme_color: str(
           "the browser or status-bar colour around the app's installed " +
@@ -5593,20 +5607,14 @@ let OURS: Row[] = [
           )
         }
         if (image) {
-          if (!/^[0-9a-f]{64}$/.test(image)) {
-            throw refuse(
-              'arguments',
-              'screenshot must be an uploaded image eid',
-            )
-          }
+          let sha = shaOf(image)
+          if (!sha) throw refuse('arguments', unshot(image, space, app))
+          image = sha
           let bytes = await r2Objects(ctx.env.BLOBS).read(
             blobPrefix(space, app) + image,
           )
           if (!bytes || !mediaTypeOf(bytes)) {
-            throw refuse(
-              'missing',
-              `no uploaded image ${image} in ${space.slug}/${app.slug}`,
-            )
+            throw refuse('missing', unshot(image, space, app))
           }
         }
       }

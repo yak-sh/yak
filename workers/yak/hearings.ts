@@ -15,11 +15,10 @@ import type { Attempt } from '@yaks/effects'
 import { type Bundle, type Comp, token } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { derivedEid } from '@yaks/graph/identity'
-import { addressed } from '@yaks/blob'
 import { ModelError } from '@yaks/model'
 import { heard, SpeechError, type Turn } from '@yaks/speech'
 import type { Asked } from './apps.ts'
-import { blobPrefix } from './blob-key.ts'
+import { blobPrefix, shaOf } from './blob-key.ts'
 import { appStore, directoryOf } from './directory.ts'
 import type { Stored } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
@@ -28,20 +27,6 @@ import { unaffordable } from '@yaks/platform/standing'
 import { hearing, paused, speechOf } from './speech.ts'
 import { blobKey } from './uploads.ts'
 import { useOf } from '@yaks/blob/upload'
-
-/// shaOf('/cookbook/api/blob/' + 'a'.repeat(64) + '/' + 'b'.repeat(64)) -> 'a'.repeat(64)
-/// shaOf('./api/blob/' + 'c'.repeat(64)) -> 'c'.repeat(64)
-/// shaOf('d'.repeat(64)) -> 'd'.repeat(64)
-/// shaOf('./api/blob/nope') -> null
-/** The upload an address names: what `POST ./api/blob` answered as its `url`,
- * relative or whole, or the bare SHA-256. */
-export let shaOf = (address: unknown): string | null => {
-  if (typeof address != 'string') return null
-  let path = address.split(/[?#]/)[0]
-  let at = path.lastIndexOf('/api/blob/')
-  return addressed(at < 0 ? path : path.slice(at + '/api/blob/'.length))?.sha ??
-    null
-}
 
 /// guessed(16_000 * 60) -> 60
 /** The seconds a recording of `bytes` is held as before it is heard: as long
