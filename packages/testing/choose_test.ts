@@ -152,3 +152,25 @@ test('a test of code calling an edited declaration comes before cheaper farther 
   equal((await chosen()).run, ['b_test.ts', 'c_test.ts'])
   equal((await chosen({ 'a.ts': ['render'] })).run, ['page_test.ts'])
 })
+
+test('an edit inside one declaration of a shared module keeps only the direct tests naming it', async () => {
+  let files = ['page_test.ts', 'other_test.ts']
+  let s = await importing(files)
+  let source = (f: string) =>
+    ({
+      'page_test.ts': "import { page } from './a.ts'",
+      'other_test.ts': "import { other } from './a.ts'",
+    })[f]
+  let chosen = (edits: Record<string, string[]>) =>
+    choose(files, {
+      changed: ['a.ts'],
+      all: true,
+      budget: 0,
+      cost: () => 1,
+      edits,
+      source,
+      inspect: () => Promise.resolve(s),
+    })
+  equal((await chosen({ 'a.ts': ['page'] })).run, ['page_test.ts'])
+  equal((await chosen({ 'a.ts': ['page', '*'] })).run, files)
+})

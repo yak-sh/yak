@@ -44,10 +44,13 @@ ability to see the platform_" (15ce9bf9). He would rather recover than gate
 breaks live, and a failure is fixed forward.
 
 Run `deno task test` without paths on your finished change, then land with
-`yak land`. Changed tests and examples, direct consumers of changed files,
-and tests importing an edited declaration through a re-export stay in the
-run even when they exceed the test budget. Farther consumers
-share the remaining budget, with declaration matches and changed packages
+`yak land`. Changed tests and examples, tests importing an edited
+declaration (directly or through a re-export), and direct consumers of a
+changed file whose edit reaches beyond its declarations (an import, a
+top-level statement, a non-code file) stay in the run even when they exceed
+the test budget. An edit inside one function of a shared fixture keeps the
+tests naming it, and its other importers compete for the budget. Farther
+consumers share the remaining budget, with declaration matches and changed packages
 first. The command also checks the changed files. A package-only run can miss
 a consumer outside that package. Main's CI runs every test after the
 push, and the closing line counts the consumers left to it. There is no

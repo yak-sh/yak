@@ -75,7 +75,9 @@ export let lines = (diff: string): Record<string, number[]> => {
 /** What this branch's changes edit in each module they change, staged,
  * unstaged or committed, but tests, which run for being changed: the
  * top-level declarations holding the lines they edit
- * (@yaks/testing/names `declared`). */
+ * (@yaks/testing/names `declared`), and `*` for a line outside every
+ * declaration, such as an import or a statement, which runs for every
+ * importer. */
 export let edits = async (
   { run = git, at, read = (p) => Deno.readTextFile(p) }: Comparison & {
     read?: (path: string) => Promise<string>
@@ -88,7 +90,7 @@ export let edits = async (
     let text = await read(path).catch(() => undefined)
     if (text == undefined) continue
     let owners = declared(text)
-    let names = at.map((l) => owners[l - 1]).filter((n) => n != undefined)
+    let names = at.map((l) => owners[l - 1] ?? '*')
     if (names.length) edited[path] = [...new Set(names)]
   }
   return edited

@@ -70,9 +70,11 @@ export let within = (
  * (./deps.ts `shared`); when a run is `observed` its runtimes see what each
  * file reads (./reads.ts), and a pass is kept by that too. `changed` first
  * narrows the files to those reached by these paths, even with no cache.
- * A narrowed run with a `budget` keeps changed files, their direct runtime
- * consumers and files importing an edited declaration, including through
- * re-exports. The rest compete for what remains by expected `cost` (`within`):
+ * A narrowed run with a `budget` keeps changed files, files importing an
+ * edited declaration, including through re-exports, and the direct runtime
+ * consumers of a changed module the change's `edits` do not place inside its
+ * declarations. The rest compete for what remains by expected `cost`
+ * (`within`):
  * first the files naming a declaration the change `edits`, or one naming it,
  * the fewest steps from it first (./names.ts `naming`, reading each file's
  * `source`), then the nearest to the change (./deps.ts `distance`), and only
@@ -216,8 +218,10 @@ export let choose = async (
       let named = info && edits
         ? naming(info, run, edits, source, root)
         : new Map<string, number>()
-      let direct = s.distance(changed)
-      let far = owner ? s.distance(changed, owner) : direct
+      // A module edited only inside its declarations reaches the tests
+      // naming them (`named`); any other change reaches every importer.
+      let direct = s.distance(changed.filter((p) => !edits?.[p]))
+      let far = s.distance(changed, owner)
       let touched = new Set(changed)
       let required = new Set(
         run.filter((f) =>

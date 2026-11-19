@@ -59,3 +59,18 @@ test('a copied checkout uses the supplied base without consulting local refs', a
     ['diff', '-U0', '--no-renames', 'HEAD'],
   ])
 })
+
+test('an edit is its declaration, and a line outside every declaration is the whole module', async () => {
+  let text =
+    "import { x } from './x.ts'\n\nexport let a = () =>\n  x\nlet b = 2"
+  let at = (diff: string) =>
+    edits({
+      run: () => Promise.resolve(diff),
+      at: 'HEAD',
+      read: () => Promise.resolve(text),
+    })
+  equal(await at('+++ b/m.ts\n@@ -4 +4 @@'), { 'm.ts': ['a'] })
+  equal(await at('+++ b/m.ts\n@@ -1 +1 @@\n@@ -5 +5 @@'), {
+    'm.ts': ['*', 'b'],
+  })
+})

@@ -41,6 +41,15 @@ test('a file naming an edited declaration, or one naming it, is as near as the s
   equal(near({ 'b.ts': ['g'] }), { 'barrel_test.ts': 0 })
 })
 
+test('every file loading a module, directly or through a re-export, is beside an edit of its top-level code', () => {
+  equal(near({ 'a.ts': ['*'] }), {
+    'direct_test.ts': 0,
+    'whole_test.ts': 0,
+    'barrel_test.ts': 0,
+  })
+  equal(near({ 'b.ts': ['*'] }), { 'barrel_test.ts': 0, 'other_test.ts': 0 })
+})
+
 test('a file naming a declaration that says an edited one is a step from it', () => {
   let stepped = checkout({
     'a.ts': 'export let f = () => 1',
