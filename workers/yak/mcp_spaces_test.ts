@@ -44,12 +44,16 @@ test('only a space owner can inspect and retry held store writes', async () => {
     let them = await seed(k, [{ slug, apps: ['notes'] }])
     let owner = connector(k, them.cookie)
     let guest = await signIn(k, `editor-${slug}@yaks.app`)
-    await owner.tool('member_add', {
-      space: slug,
-      email: guest.email,
-      role: 'editor',
+    await k.dir.stamp({
+      entities: [{
+        entity: { eid: crypto.randomUUID() },
+        member: {
+          space: them.eids[slug],
+          person: guest.person,
+          role: 'editor',
+        },
+      }],
     })
-    await accepted(k, guest.email, guest.cookie)
     let editor = connector(k, guest.cookie)
     for (
       let name of [
