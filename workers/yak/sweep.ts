@@ -307,7 +307,8 @@ let buried = async (req: Request, env: Env, who: Who): Promise<Response> => {
       query: (q) => dir.query(q as never),
       trash: (eids, page) => dir.trash!(eids, page),
     }, window)
-    await audit(env, who, { operation: 'graves' })
+    // A walk is recorded once, at its first page.
+    if (window.after == null) await audit(env, who, { operation: 'graves' })
     return Response.json(page, {
       headers: { 'cache-control': 'private, no-store' },
     })
