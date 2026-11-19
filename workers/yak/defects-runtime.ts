@@ -5,6 +5,7 @@ import { caught, defect, watched, within } from './defects.ts'
 import { instrument as tracked } from '@yaks/tracker/instrument'
 import { origin } from '@yaks/tracker/report'
 import type { Env } from './env.ts'
+import { PLATFORM_OBJECT } from './door.ts'
 import { learn, restarting } from './running.ts'
 import { type Own, replaced, vacating } from '@yaks/durable-object/resets'
 import { bounded, type Report } from '@yaks/durable-object/ceiling'
@@ -97,9 +98,12 @@ let costly = (kind: string, id?: { name?: string }): Report =>
 /** Construction, lifecycle callbacks and RPC methods enter {@link entry}
  * (@yaks/tracker/instrument), given the object's state and env. Every object
  * refuses past its windows (@yaks/durable-object `bounded`), so a runaway
- * costs at most its window's rows. The platform's directory is spared by its
- * Store once it knows its name (graph.ts `#start`): no id says it before
- * then. */
+ * costs at most its window's rows, but the platform's directory: every door
+ * reads it, so stopping it stops the platform, which costs more than its rows.
+ * It is told, never refused, from before its first statement, since a new
+ * instance goes on in the window an earlier one kept, and the statements that
+ * start it write. Its id names it (`PLATFORM_OBJECT`), as it names the object
+ * a report is filed under. */
 export let instrument = <C>(Original: C): C =>
   tracked(
     Original,
@@ -108,6 +112,9 @@ export let instrument = <C>(Original: C): C =>
     ([state], name) => {
       if (!own(state)) return
       let { id } = state as { id?: { name?: string } }
-      bounded(state.storage, { report: costly(name, id), refuse: true })
+      bounded(state.storage, {
+        report: costly(name, id),
+        refuse: id?.name != PLATFORM_OBJECT,
+      })
     },
   )

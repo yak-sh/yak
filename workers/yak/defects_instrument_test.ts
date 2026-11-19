@@ -9,7 +9,8 @@ import {
   WORKER_VERSION,
   WORKER_VERSION_AT,
 } from './running.ts'
-import { storeOf } from './door.ts'
+import { PLATFORM_OBJECT, storeOf } from './door.ts'
+import { bounded } from '@yaks/durable-object/ceiling'
 import { kvStorage } from './testing.ts'
 
 class Subject {
@@ -112,4 +113,23 @@ test('a deliberate restart is retried without reporting the retiring instance', 
   equal(await answer.text(), 'answered')
   equal(attempts, 2)
   equal(rows.filter((row) => row.error), [])
+})
+
+// A new instance goes on in the hour an earlier one kept, and the first
+// statement that starts a store writes: the directory must take it, or every
+// door that reads the directory fails until the hour ends.
+test('the directory is never stopped, even in an hour an earlier instance spent past its writes', () => {
+  let stopped = (name: string) => {
+    let kept = new Map<string, unknown>([['ceiling:spent', [
+      { ms: 3_600_000, since: Date.now(), read: 0, written: 500_001 },
+    ]]])
+    let storage = {
+      kv: { get: (k: string) => kept.get(k), put: kept.set.bind(kept) },
+      sql: { exec: () => [] },
+      transactionSync: <T>(run: () => T) => run(),
+    }
+    new (instrument(Subject))({ id: { name }, storage }, {})
+    return bounded(storage).refusal(true)?.name ?? null
+  }
+  equal([stopped(PLATFORM_OBJECT), stopped('ada/notes')], [null, 'Stopped'])
 })

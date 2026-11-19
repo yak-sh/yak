@@ -1340,9 +1340,10 @@ export class Store extends Durable {
     let remembered = this.#get('name')
     let name = request?.headers.get('x-store') ?? remembered ?? ''
     // The directory is never stopped, only told of: every door reads it, so
-    // stopping it would stop the whole platform, which costs more than its
-    // rows. Its name is first known here, after a handful of statements a new
-    // instance's empty windows always take.
+    // stopping it would stop the whole platform. The runtime's object is
+    // spared before its first statement, by its id (defects-runtime.ts
+    // `instrument`); an object whose id names nothing, as a platform in
+    // memory makes them, is spared here by the name its store answers to.
     if (name == PLATFORM_STORE) this.ceiling.spare()
     await this.#prepare(name)
     this.#atomic(() => {
